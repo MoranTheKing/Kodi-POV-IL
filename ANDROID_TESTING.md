@@ -37,3 +37,11 @@ Choose a fresh install if you want this test build to replace the old POV build 
 Direct GitHub download:
 
 `https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist/plugin.program.kodipovilwizard-0.1.1.zip`
+
+Kodi file source after GitHub Pages deploys:
+
+`https://morantheking.github.io/Kodi-POV-IL/`
+
+Path in Kodi:
+
+`Install from zip file -> Kodi POV IL -> wizard -> plugin.program.kodipovilwizard-0.1.1.zip`
