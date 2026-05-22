@@ -166,6 +166,54 @@ jobs:
           done
           ls -la out/
 
+      - name: Build LG webOS IPK
+        run: |
+          set -euo pipefail
+          VERSION="${{ github.event.inputs.version }}"
+          # webOS Kodi only has the 21.0 IPK published (no 21.x point
+          # releases for webOS yet); hardcode the URL.
+          WEBOS_IPK_URL="https://mirrors.kodi.tv/releases/webos/org.xbmc.kodi-webos_21.0.ipk"
+          WORK="$RUNNER_TEMP/build-webos"
+          mkdir -p "$WORK"
+          echo "::group::Download official Kodi webOS IPK"
+          curl -fL --retry 3 -o "$WORK/kodi-official.ipk" "$WEBOS_IPK_URL"
+          echo "::endgroup::"
+          echo "::group::Unwrap IPK (ar archive of debian-binary + control.tar.gz + data.tar.gz)"
+          (cd "$WORK" && ar x kodi-official.ipk)
+          ls "$WORK"
+          echo "::endgroup::"
+          echo "::group::Patch data.tar.gz: bundle wizard + build, register wizard in addon-manifest"
+          mkdir "$WORK/data"
+          tar -xzf "$WORK/data.tar.gz" -C "$WORK/data"
+          # webOS Kodi installs under /usr/palm/applications/org.xbmc.kodi
+          KODI_ROOT="$WORK/data/usr/palm/applications/org.xbmc.kodi"
+          test -d "$KODI_ROOT" || { echo "::error::webOS Kodi root not found at expected path"; exit 1; }
+          unzip -o src/dist/plugin.program.kodipovilwizard-0.1.2.zip -d "$KODI_ROOT/addons/" >/dev/null
+          unzip -o src/dist/Kodi-POV-IL-FENtastic-test-0.1.8.zip -d "$KODI_ROOT/" >/dev/null
+          MANIFEST_FILE="$KODI_ROOT/system/addon-manifest.xml"
+          for addon_id in plugin.program.kodipovilwizard script.module.requests script.module.six script.module.certifi script.module.urllib3 script.module.chardet script.module.idna; do
+            if grep -q "<addon>$addon_id</addon>" "$MANIFEST_FILE"; then
+              echo "already in manifest: $addon_id"
+            else
+              sed -i "s|</addons>|  <addon>$addon_id</addon>\n</addons>|" "$MANIFEST_FILE"
+              echo "added to manifest:   $addon_id"
+            fi
+          done
+          # Bump the appinfo version so webOS sees this as a newer build
+          APPINFO="$KODI_ROOT/appinfo.json"
+          if [ -f "$APPINFO" ]; then
+            sed -i 's/"version"[[:space:]]*:[[:space:]]*"[^"]*"/"version": "'"$VERSION"'"/' "$APPINFO"
+            echo "patched appinfo.json:" && grep -E '"version"|"title"' "$APPINFO" | head -3
+          fi
+          echo "::endgroup::"
+          echo "::group::Re-pack data.tar.gz + assemble IPK"
+          (cd "$WORK/data" && tar -czf "$WORK/data.tar.gz" .)
+          OUT_IPK="out/Kodi-POV-IL-${VERSION}-webos.ipk"
+          # ar order matters: debian-binary, control.tar.gz, data.tar.gz
+          (cd "$WORK" && ar -r "$OLDPWD/$OUT_IPK" debian-binary control.tar.gz data.tar.gz)
+          ls -la "$OUT_IPK"
+          echo "::endgroup::"
+
       - name: Build Windows installer
         run: |
           set -euo pipefail
@@ -193,22 +241,26 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release delete "$TAG" --yes --cleanup-tag
           fi
-          NOTES=$(printf '%s\n%s\n%s\n%s' \
+          NOTES=$(printf '%s\n%s\n%s\n%s\n%s' \
             "Built automatically by .github/workflows/build-apk.yml." \
-            "Android packages target ${PACKAGE_ID} (parallel install with official org.xbmc.kodi)." \
-            "Wizard 0.1.2 + FENtastic build pre-bundled in the APK assets, so first launch already has them loaded." \
-            "Windows installer wraps Kodi ${{ github.event.inputs.kodi_version }} and drops the wizard / build zips into Kodi's addons/packages folder.")
+            "Android APK: rebranded label 'Kodi POV IL', wizard + FENtastic build pre-bundled in assets/." \
+            "Windows installer: wraps Kodi ${{ github.event.inputs.kodi_version }} and drops the wizard / build zips into Kodi's addons/packages folder." \
+            "LG webOS IPK: rebranded webOS Kodi 21.0 with the same bundled wizard + build. Install via LG developer mode and ares-install." \
+            "All bundles share the same first-launch flow: wizard auto-runs and installs Kodi POV IL - FENtastic in the background.")
           # Also keep stable filenames (no version) so download pages
           # can use the /latest/download/ redirect without rewriting.
           cp "../out/Kodi-POV-IL-${VERSION}-32bit.apk" "../out/Kodi-POV-IL-32bit.apk"
           cp "../out/Kodi-POV-IL-${VERSION}-64bit.apk" "../out/Kodi-POV-IL-64bit.apk"
           cp "../out/Kodi-POV-IL-Setup-${VERSION}.exe" "../out/Kodi-POV-IL-Setup.exe"
+          cp "../out/Kodi-POV-IL-${VERSION}-webos.ipk" "../out/Kodi-POV-IL-webos.ipk"
           gh release create "$TAG" \
             --title "Kodi POV IL ${VERSION}" \
             --notes "$NOTES" \
             ../out/Kodi-POV-IL-${VERSION}-32bit.apk \
             ../out/Kodi-POV-IL-${VERSION}-64bit.apk \
             ../out/Kodi-POV-IL-Setup-${VERSION}.exe \
+            ../out/Kodi-POV-IL-${VERSION}-webos.ipk \
+            ../out/Kodi-POV-IL-webos.ipk \
             ../out/Kodi-POV-IL-32bit.apk \
             ../out/Kodi-POV-IL-64bit.apk \
             ../out/Kodi-POV-IL-Setup.exe
