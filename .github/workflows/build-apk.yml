@@ -62,25 +62,33 @@ jobs:
             "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" \
             src
 
-      - name: Decode keystore
+      - name: Decrypt release keystore
         env:
-          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: |
           set -euo pipefail
-          if [ -z "$KEYSTORE_B64" ]; then
-            echo "::error::KEYSTORE_B64 secret is empty. See APK_BUILD.md for setup."
+          if [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "::error::KEYSTORE_PASSWORD secret is not set. See APK_BUILD.md for setup."
             exit 1
           fi
-          echo "$KEYSTORE_B64" | base64 -d > $HOME/release.keystore
+          echo "::add-mask::$KEYSTORE_PASSWORD"
+          if [ ! -f src/.secrets/release.keystore.enc ]; then
+            echo "::error::No .secrets/release.keystore.enc in repo. Run the setup-keystore workflow first."
+            exit 1
+          fi
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+            -in src/.secrets/release.keystore.enc \
+            -out $HOME/release.keystore \
+            -pass env:KEYSTORE_PASSWORD
           test -s $HOME/release.keystore
 
       - name: Build both Android APKs
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           set -euo pipefail
+          echo "::add-mask::$KEYSTORE_PASSWORD"
+          KEY_ALIAS="kodipovil"
           VERSION="${{ github.event.inputs.version }}"
           VERSION_CODE="${{ github.event.inputs.version_code }}"
           KODI_VERSION="${{ github.event.inputs.kodi_version }}"
@@ -125,7 +133,7 @@ jobs:
               --ks $HOME/release.keystore \
               --ks-key-alias "$KEY_ALIAS" \
               --ks-pass "pass:$KEYSTORE_PASSWORD" \
-              --key-pass "pass:$KEY_PASSWORD" \
+              --key-pass "pass:$KEYSTORE_PASSWORD" \
               --out "$OUT_APK" \
               "$WORK/aligned.apk"
             apksigner verify --print-certs "$OUT_APK" | head -10
