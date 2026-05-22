@@ -122,6 +122,18 @@ jobs:
             mkdir -p "$ASSETS/addons"
             unzip -o src/dist/plugin.program.kodipovilwizard-0.1.2.zip -d "$ASSETS/addons/" >/dev/null
             unzip -o src/dist/Kodi-POV-IL-FENtastic-test-0.1.8.zip -d "$ASSETS/" >/dev/null
+            # Register the wizard as a system addon so Kodi auto-enables it
+            # on first launch. Its startup.py then detects no build is
+            # installed yet and auto-installs Kodi POV IL - FENtastic
+            # (there's only one entry in build.txt, so no menu prompt).
+            MANIFEST_FILE="$ASSETS/system/addon-manifest.xml"
+            if grep -q "plugin.program.kodipovilwizard" "$MANIFEST_FILE"; then
+              echo "wizard already in addon-manifest.xml"
+            else
+              sed -i 's|</addons>|  <addon>plugin.program.kodipovilwizard</addon>\n</addons>|' "$MANIFEST_FILE"
+              echo "added wizard to addon-manifest.xml"
+            fi
+            grep -E "kodipovilwizard|</addons>" "$MANIFEST_FILE" | tail -5
             echo "::endgroup::"
             echo "::group::apktool repack + zipalign + sign"
             apktool b -o "$WORK/unsigned.apk" "$WORK/decoded"
