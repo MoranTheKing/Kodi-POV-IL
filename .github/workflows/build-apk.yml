@@ -108,11 +108,8 @@ jobs:
             echo "::group::apktool decode"
             apktool d -f -o "$WORK/decoded" "$WORK/kodi-official.apk"
             echo "::endgroup::"
-            echo "::group::Rebrand manifest + strings"
+            echo "::group::Update label + version metadata (keep package id org.xbmc.kodi to avoid breaking hardcoded ContentProvider references)"
             MANIFEST="$WORK/decoded/AndroidManifest.xml"
-            sed -i 's/package="org\.xbmc\.kodi"/package="'"$PACKAGE_ID"'"/' "$MANIFEST"
-            sed -i 's/android:authorities="org\.xbmc\.kodi\./android:authorities="'"$PACKAGE_ID"'./g' "$MANIFEST"
-            sed -i 's/android:authorities="org\.xbmc\.kodi"/android:authorities="'"$PACKAGE_ID"'"/g' "$MANIFEST"
             sed -i 's/android:versionCode="[0-9]*"/android:versionCode="'"$VERSION_CODE"'"/' "$MANIFEST"
             sed -i 's/android:versionName="[^"]*"/android:versionName="'"$VERSION"'"/' "$MANIFEST"
             for f in "$WORK/decoded/res/values/strings.xml" "$WORK/decoded"/res/values-*/strings.xml; do
@@ -124,7 +121,7 @@ jobs:
             ASSETS="$WORK/decoded/assets"
             mkdir -p "$ASSETS/addons"
             unzip -o src/dist/plugin.program.kodipovilwizard-0.1.2.zip -d "$ASSETS/addons/" >/dev/null
-            unzip -o src/dist/Kodi-POV-IL-FENtastic-test-0.1.2.zip -d "$ASSETS/" >/dev/null
+            unzip -o src/dist/Kodi-POV-IL-FENtastic-test-0.1.8.zip -d "$ASSETS/" >/dev/null
             echo "::endgroup::"
             echo "::group::apktool repack + zipalign + sign"
             apktool b -o "$WORK/unsigned.apk" "$WORK/decoded"
@@ -151,7 +148,7 @@ jobs:
           curl -fL --retry 3 -o $RUNNER_TEMP/win/kodi-setup.exe \
             "https://mirrors.kodi.tv/releases/windows/win64/kodi-${KODI_VERSION}-Omega-x64.exe"
           cp src/dist/plugin.program.kodipovilwizard-0.1.2.zip $RUNNER_TEMP/win/wizard.zip
-          cp src/dist/Kodi-POV-IL-FENtastic-test-0.1.2.zip      $RUNNER_TEMP/win/build.zip
+          cp src/dist/Kodi-POV-IL-FENtastic-test-0.1.8.zip      $RUNNER_TEMP/win/build.zip
           cp src/dist/installer/build-windows-installer.nsi     $RUNNER_TEMP/win/installer.nsi
           (cd $RUNNER_TEMP/win && makensis -V2 -DVERSION="$VERSION" installer.nsi)
           cp $RUNNER_TEMP/win/Kodi-POV-IL-Setup-*.exe out/
