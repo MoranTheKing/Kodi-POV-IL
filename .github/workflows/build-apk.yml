@@ -126,14 +126,29 @@ jobs:
             # on first launch. Its startup.py then detects no build is
             # installed yet and auto-installs Kodi POV IL - FENtastic
             # (there's only one entry in build.txt, so no menu prompt).
+            # Also register the wizard's transitive imports (requests +
+            # urllib3 stack) so its `import requests` doesn't crash with
+            # ModuleNotFoundError before it can run.
             MANIFEST_FILE="$ASSETS/system/addon-manifest.xml"
-            if grep -q "plugin.program.kodipovilwizard" "$MANIFEST_FILE"; then
-              echo "wizard already in addon-manifest.xml"
-            else
-              sed -i 's|</addons>|  <addon>plugin.program.kodipovilwizard</addon>\n</addons>|' "$MANIFEST_FILE"
-              echo "added wizard to addon-manifest.xml"
-            fi
-            grep -E "kodipovilwizard|</addons>" "$MANIFEST_FILE" | tail -5
+            ADDONS_TO_ENABLE=(
+              "plugin.program.kodipovilwizard"
+              "script.module.requests"
+              "script.module.six"
+              "script.module.certifi"
+              "script.module.urllib3"
+              "script.module.chardet"
+              "script.module.idna"
+            )
+            for addon_id in "${ADDONS_TO_ENABLE[@]}"; do
+              if grep -q "<addon>$addon_id</addon>" "$MANIFEST_FILE"; then
+                echo "already in manifest: $addon_id"
+              else
+                sed -i "s|</addons>|  <addon>$addon_id</addon>\n</addons>|" "$MANIFEST_FILE"
+                echo "added to manifest:   $addon_id"
+              fi
+            done
+            echo "--- final manifest tail ---"
+            tail -15 "$MANIFEST_FILE"
             echo "::endgroup::"
             echo "::group::apktool repack + zipalign + sign"
             apktool b -o "$WORK/unsigned.apk" "$WORK/decoded"
