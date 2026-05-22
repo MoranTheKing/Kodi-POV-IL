@@ -1,0 +1,244 @@
+name: Build APK and Windows installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Build version (e.g., 21.3-povil.1)'
+        required: true
+        default: '21.3-povil.1'
+      version_code:
+        description: 'Android versionCode (integer, must increase each release)'
+        required: true
+        default: '21301'
+      kodi_version:
+        description: 'Upstream Kodi version to rebrand'
+        required: true
+        default: '21.3'
+
+permissions:
+  contents: write
+
+env:
+  PACKAGE_ID: 'org.xbmc.kodipovil'
+  APP_NAME: 'Kodi POV IL'
+  BUILD_ZIP: 'dist/Kodi-POV-IL-FENtastic-test-0.1.2.zip'
+  WIZARD_ZIP: 'dist/plugin.program.kodipovilwizard-0.1.2.zip'
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: armeabi-v7a
+            apk_label: '32bit'
+          - arch: arm64-v8a
+            apk_label: '64bit'
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install apktool, build-tools, NDK signer
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y zipalign apksigner
+          # apktool 2.9.3 -- compatible with API 34
+          curl -L -o /tmp/apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar
+          curl -L -o /tmp/apktool https://raw.githubusercontent.com/iBotPeaches/Apktool/v2.9.3/scripts/linux/apktool
+          chmod +x /tmp/apktool
+          sudo mv /tmp/apktool.jar /usr/local/bin/apktool.jar
+          sudo mv /tmp/apktool /usr/local/bin/apktool
+
+      - name: Decode keystore from secret
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::KEYSTORE_B64 secret is not set. See APK_BUILD.md."
+            exit 1
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > $HOME/release.keystore
+          ls -la $HOME/release.keystore
+
+      - name: Download official Kodi APK (${{ matrix.arch }})
+        run: |
+          set -euo pipefail
+          mkdir -p $RUNNER_TEMP/build
+          curl -fL --retry 3 -o $RUNNER_TEMP/build/kodi-official.apk \
+            "https://mirrors.kodi.tv/releases/android/${{ matrix.arch == 'armeabi-v7a' && 'arm' || 'arm64-v8a' }}/kodi-${{ github.event.inputs.kodi_version }}-Omega-${{ matrix.arch }}.apk"
+          ls -la $RUNNER_TEMP/build/kodi-official.apk
+
+      - name: Decompile APK with apktool
+        run: |
+          set -euo pipefail
+          apktool d -f -o $RUNNER_TEMP/build/decoded $RUNNER_TEMP/build/kodi-official.apk
+          # Inspect existing manifest
+          head -40 $RUNNER_TEMP/build/decoded/AndroidManifest.xml
+
+      - name: Rebrand AndroidManifest.xml (package id + authorities)
+        run: |
+          set -euo pipefail
+          MANIFEST=$RUNNER_TEMP/build/decoded/AndroidManifest.xml
+          # package attribute
+          sed -i 's/package="org\.xbmc\.kodi"/package="${{ env.PACKAGE_ID }}"/' $MANIFEST
+          # content provider authorities (e.g. "org.xbmc.kodi.file" -> "org.xbmc.kodipovil.file")
+          sed -i 's/android:authorities="org\.xbmc\.kodi\./android:authorities="${{ env.PACKAGE_ID }}./g' $MANIFEST
+          sed -i 's/android:authorities="org\.xbmc\.kodi"/android:authorities="${{ env.PACKAGE_ID }}"/g' $MANIFEST
+          # versionCode + versionName
+          sed -i 's/android:versionCode="[0-9]*"/android:versionCode="${{ github.event.inputs.version_code }}"/' $MANIFEST
+          sed -i 's/android:versionName="[^"]*"/android:versionName="${{ github.event.inputs.version }}"/' $MANIFEST
+          # Confirm
+          grep -E 'package=|authorities=|versionCode|versionName' $MANIFEST | head -20
+
+      - name: Rebrand strings.xml app name
+        run: |
+          set -euo pipefail
+          # Find the default strings.xml (English) and any value-* localizations
+          for f in $RUNNER_TEMP/build/decoded/res/values/strings.xml $RUNNER_TEMP/build/decoded/res/values-*/strings.xml; do
+            [ -f "$f" ] || continue
+            # Replace common Kodi label patterns. We don't trash other strings.
+            sed -i 's|<string name="app_name">[^<]*</string>|<string name="app_name">${{ env.APP_NAME }}</string>|' "$f" || true
+          done
+          grep -H 'app_name' $RUNNER_TEMP/build/decoded/res/values/strings.xml || true
+
+      - name: Bundle the wizard add-on into APK assets
+        run: |
+          set -euo pipefail
+          ASSETS=$RUNNER_TEMP/build/decoded/assets
+          mkdir -p $ASSETS/addons
+          # The wizard zip contains a top-level plugin.program.kodipovilwizard/ dir
+          unzip -o $WIZARD_ZIP -d $ASSETS/addons/
+          ls $ASSETS/addons/ | head -20
+
+      - name: Bundle the FENtastic build into APK assets
+        run: |
+          set -euo pipefail
+          ASSETS=$RUNNER_TEMP/build/decoded/assets
+          # 0.1.2 zip has top-level addons/ and userdata/ dirs -- extract straight into assets
+          unzip -o $BUILD_ZIP -d $ASSETS/
+          # Verify
+          ls $ASSETS/addons/ | head -10
+          ls $ASSETS/userdata/ 2>/dev/null | head -10 || true
+
+      - name: Repack APK
+        run: |
+          set -euo pipefail
+          apktool b -o $RUNNER_TEMP/build/kodi-unsigned.apk $RUNNER_TEMP/build/decoded
+          ls -la $RUNNER_TEMP/build/kodi-unsigned.apk
+
+      - name: Zipalign
+        run: |
+          set -euo pipefail
+          zipalign -p -f 4 $RUNNER_TEMP/build/kodi-unsigned.apk $RUNNER_TEMP/build/kodi-aligned.apk
+
+      - name: Sign with apksigner
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          OUT=$RUNNER_TEMP/build/Kodi-POV-IL-${{ github.event.inputs.version }}-${{ matrix.apk_label }}.apk
+          apksigner sign \
+            --ks $HOME/release.keystore \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass "pass:$KEYSTORE_PASSWORD" \
+            --key-pass "pass:$KEY_PASSWORD" \
+            --out $OUT \
+            $RUNNER_TEMP/build/kodi-aligned.apk
+          apksigner verify --print-certs $OUT | head -20
+          ls -la $OUT
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kodi-povil-${{ matrix.apk_label }}
+          path: ${{ runner.temp }}/build/Kodi-POV-IL-*.apk
+
+  build-windows-installer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install NSIS
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y nsis
+
+      - name: Build Windows installer
+        run: |
+          set -euo pipefail
+          mkdir -p $RUNNER_TEMP/win
+          # Download official Kodi installer
+          curl -fL --retry 3 -o $RUNNER_TEMP/win/kodi-setup.exe \
+            "https://mirrors.kodi.tv/releases/windows/win64/kodi-21.3-Omega-x64.exe"
+          # Copy the wizard zip and build zip alongside the NSIS script
+          cp dist/plugin.program.kodipovilwizard-0.1.1.zip $RUNNER_TEMP/win/wizard.zip
+          cp dist/Kodi-POV-IL-FENtastic-test-0.1.2.zip $RUNNER_TEMP/win/build.zip
+          cp dist/installer/build-windows-installer.nsi $RUNNER_TEMP/win/installer.nsi
+          cd $RUNNER_TEMP/win
+          makensis -V2 -DVERSION="${{ github.event.inputs.version }}" installer.nsi
+          ls -la *.exe
+
+      - name: Upload Windows installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kodi-povil-windows
+          path: ${{ runner.temp }}/win/Kodi-POV-IL-Setup-*.exe
+
+  publish:
+    needs: [build-android, build-windows-installer]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download Android artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: kodi-povil-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Stage artifacts into apk/ and windows/
+        run: |
+          set -euo pipefail
+          mkdir -p apk windows
+          # Move APKs
+          for f in artifacts/Kodi-POV-IL-*-32bit.apk artifacts/Kodi-POV-IL-*-64bit.apk; do
+            [ -f "$f" ] || continue
+            cp "$f" apk/
+          done
+          # Move Windows installer
+          for f in artifacts/Kodi-POV-IL-Setup-*.exe; do
+            [ -f "$f" ] || continue
+            cp "$f" windows/
+          done
+          # Write version pointer for the wizard's auto-update
+          mkdir -p wizard/assets/kodi_version_auto_update/apk wizard/assets/kodi_version_auto_update/windows
+          echo "${{ github.event.inputs.version }}" > wizard/assets/kodi_version_auto_update/apk/latest_apk_version.txt
+          echo "${{ github.event.inputs.version }}" > wizard/assets/kodi_version_auto_update/windows/latest_windows_version.txt
+          ls -la apk/ windows/
+
+      - name: Commit artifacts
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apk/ windows/ wizard/assets/kodi_version_auto_update/
+          MSG=$(printf 'Publish %s APKs and Windows installer\n\nBuilt automatically from .github/workflows/build-apk.yml.\nAndroid packages target %s (parallel install with official\norg.xbmc.kodi). Both APKs are signed with the repo release keystore.' \
+            "${{ github.event.inputs.version }}" "${{ env.PACKAGE_ID }}")
+          git commit -m "$MSG"
+          git push origin HEAD:${{ github.ref_name }}
