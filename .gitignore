@@ -1,0 +1,4 @@
+upstream/
+work/
+zips/
+*.log
