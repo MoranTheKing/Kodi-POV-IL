@@ -23,9 +23,6 @@ Unicode true
 Page directory
 Page instfiles
 
-; Bundle the official Kodi installer + our wizard + build zip
-File "/oname=$PLUGINSDIR\kodi-setup.exe" "kodi-setup.exe"
-
 Section "Install"
   SetOutPath "$PLUGINSDIR"
   File "kodi-setup.exe"
