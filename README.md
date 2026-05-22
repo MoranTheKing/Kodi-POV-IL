@@ -57,7 +57,7 @@
 
 For phone testing, install this Kodi add-on zip first:
 
-`dist/plugin.program.kodipovilwizard-0.1.0.zip`
+`dist/plugin.program.kodipovilwizard-0.1.1.zip`
 
 After installing it in Kodi, open:
 
