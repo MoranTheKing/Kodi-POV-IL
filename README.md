@@ -90,3 +90,13 @@ When the quick update number increases, installed builds receive the `gui` packa
 ## Upstream POV Watch
 
 `.github/workflows/check-upstream-pov.yml` checks the original kodi7rd build metadata every 6 hours and opens an issue if upstream POV changes.
+
+## Repository Protection
+
+See `SECURITY.md` for the GitHub settings that should be enabled to prevent accidental force-pushes, branch deletion, or unreviewed changes.
+
+`CODEOWNERS` is configured for `@MoranTheKing`; GitHub branch protection must enable "Require review from Code Owners" for this to be enforced.
+
+## APK Downloads
+
+The download pages are ready, but signed APK/Windows installer files are not published yet. See `APK_RELEASE.md`.
