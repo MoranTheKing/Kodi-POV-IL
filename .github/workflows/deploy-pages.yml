@@ -1,40 +1,60 @@
 name: Deploy GitHub Pages
 
+# Sync main into gh-pages so GitHub Pages serves the latest commit
+# from main. Uses only git + the workflow's automatic GITHUB_TOKEN --
+# no third-party actions (so the repo's "MoranTheKing actions only"
+# policy can stay locked down).
+#
+# Strategy: fetch the existing gh-pages branch, replace its tree with
+# whatever's currently on main, commit, and regular-push. This way
+# the gh-pages branch keeps a linear history -- no force push needed,
+# so the "Disable force pushes" branch protection rule stays satisfied.
+#
+# Requires GitHub Pages settings:
+#   Source = "Deploy from a branch", Branch = "gh-pages", Folder = "/".
+
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: pages
+  group: pages-sync
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  sync-main-to-gh-pages:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Skip Jekyll, publish as-is
-        run: touch .nojekyll
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: .
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Sync main tree to gh-pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_SLUG: ${{ github.repository }}
+          PUSHED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${REPO_SLUG}.git"
+          # Fetch existing gh-pages so we extend its history (no force push).
+          git clone --depth=1 --branch=gh-pages "$REMOTE" gh
+          cd gh
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          # Wipe everything except .git so we can replace with main's content.
+          find . -mindepth 1 -maxdepth 1 -not -name ".git" -exec rm -rf {} +
+          # Pull main's tree and drop it here.
+          cd ..
+          git clone --depth=1 --branch=main "$REMOTE" src
+          (cd src && git archive HEAD) | tar -x -C gh
+          touch gh/.nojekyll
+          cd gh
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Nothing to publish; gh-pages already matches main."
+            exit 0
+          fi
+          SHORT_SHA="$(echo "$PUSHED_SHA" | cut -c1-7)"
+          git commit -q -m "Publish main@${SHORT_SHA}"
+          git push "$REMOTE" gh-pages
