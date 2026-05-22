@@ -38,10 +38,10 @@
 
 - עץ קבצים מסודר של המיגרציה.
 - מסמך diff של `Twilight -> POV`.
-- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.1.zip`.
+- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.2.zip`.
 - הוראות התקנה ובדיקת smoke test לטלפון: `ANDROID_TESTING.md`.
 
-## חבילת בדיקה 0.1.1
+## חבילת בדיקה 0.1.2
 
 החבילה מבוססת על `build21_kodirdil_pov-1.0.0.zip` ומוסיפה:
 
