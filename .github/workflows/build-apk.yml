@@ -24,6 +24,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 env:
   PACKAGE_ID: 'org.xbmc.kodipovil'
