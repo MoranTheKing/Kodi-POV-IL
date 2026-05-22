@@ -22,3 +22,18 @@
 - זו חבילת בדיקה ראשונה, לא release סופי.
 - אם Kodi נפתח על `Estuary`, צריך לבדוק האם Android התעלם מ־`guisettings.xml` בזמן ההתקנה או אם הסקין לא הופעל במסד הנתונים.
 - אם כפתור מסוים נפתח למסך ריק, צריך לרשום את שם הכפתור ואת המסך שבו זה קרה.
+## Easier install path
+
+Install the wizard zip in Kodi:
+
+`dist/plugin.program.kodipovilwizard-0.1.0.zip`
+
+Then open:
+
+`Add-ons -> Program add-ons -> Kodi POV IL Wizard -> Builds -> Kodi POV IL - FENtastic`
+
+Choose a fresh install if you want this test build to replace the old POV build cleanly.
+
+Direct GitHub download:
+
+`https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist/plugin.program.kodipovilwizard-0.1.0.zip`
