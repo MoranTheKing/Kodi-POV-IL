@@ -1,0 +1,54 @@
+name: Check upstream POV
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check kodi7rd POV build metadata
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const res = await fetch("https://kodi7rd.github.io/wizard/assets/build.txt");
+            if (!res.ok) throw new Error(`Failed to fetch upstream build.txt: ${res.status}`);
+            const text = await res.text();
+            const nameMatch = text.match(/name="Kodi Real Debrid Israel - POV"[\s\S]*?version="([^"]+)"[\s\S]*?url="([^"]+)"/);
+            if (!nameMatch) throw new Error("Could not find upstream POV build in build.txt");
+            const [, version, url] = nameMatch;
+            const markerPath = "UPSTREAM_POV.md";
+            const current = fs.existsSync(markerPath) ? fs.readFileSync(markerPath, "utf8") : "";
+            if (current.includes(`version: ${version}`) && current.includes(`url: ${url}`)) {
+              core.info(`Upstream POV unchanged: ${version}`);
+              return;
+            }
+            const title = `Upstream POV changed to ${version}`;
+            const existing = await github.rest.search.issuesAndPullRequests({
+              q: `repo:${context.repo.owner}/${context.repo.repo} is:issue is:open in:title "${title}"`
+            });
+            if (existing.data.total_count > 0) {
+              core.info("Issue already exists");
+              return;
+            }
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body: [
+                "A new upstream POV build appears to be available.",
+                "",
+                `version: ${version}`,
+                `url: ${url}`,
+                "",
+                "Next step: rebuild Kodi POV IL FENtastic from the new upstream POV package, test on Android, then bump wizard/assets/build.txt."
+              ].join("\n")
+            });

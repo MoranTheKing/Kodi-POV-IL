@@ -66,3 +66,27 @@ After installing it in Kodi, open:
 The wizard reads build metadata from:
 
 `wizard/assets/build.txt`
+
+## Kodi File Source
+
+After GitHub Pages deploys, add this source in Kodi:
+
+`https://morantheking.github.io/Kodi-POV-IL/`
+
+Then open:
+
+`Settings -> File manager -> Add source -> Install from zip file -> Kodi POV IL -> wizard -> plugin.program.kodipovilwizard-0.1.1.zip`
+
+## Updates
+
+The wizard checks `wizard/assets/build.txt` every Kodi startup.
+
+Quick updates are controlled by:
+
+`wizard/assets/notification_files/quick_update.txt`
+
+When the quick update number increases, installed builds receive the `gui` package automatically on next Kodi startup.
+
+## Upstream POV Watch
+
+`.github/workflows/check-upstream-pov.yml` checks the original kodi7rd build metadata every 6 hours and opens an issue if upstream POV changes.
