@@ -1,0 +1,55 @@
+# Kodi RD IL POV Fentastic Migration
+
+מטרת הריפו הזה היא להכין גרסת `POV` עם `FENtastic` וכל ההגדרות הרלוונטיות, בהתבסס על הריפו הציבורי:
+
+- `https://github.com/kodi7rd/kodi7rd.github.io`
+
+## מה אומת עד כה
+
+- בבילד `Twillight` קיימים:
+  - `addons/skin.fentastic`
+  - `addons/script.fentastic.helper`
+  - `userdata/addon_data/skin.fentastic/settings.xml`
+- בבילד `POV` קיים כרגע `Estuary` כסקין הפעיל.
+- `POV` כן כולל `Torbox`:
+  - `tb.enabled=true`
+  - `tb.torrent.enabled=true`
+  - `provider.tb_cloud`
+  - `provider.torboxnews`
+  - `store_torrent.torbox`
+  - `store_usenet.torbox`
+- מנגנון החלפת הסקין בבילד המקורי אינו "סקין ברירת מחדל", אלא חוויית החלפה דרך הוויזארד/הבילד.
+
+## כיוון העבודה
+
+1. להעתיק ל־`POV` את רכיבי `FENtastic` עצמם.
+2. להתאים את הגדרות `FENtastic` לנתיבי `POV` במקום `Twilight`.
+3. לתרגם favourites, קיצורים ו־widgets מ־`plugin.video.twilight` ל־`plugin.video.pov`.
+4. לשמור אפשרות החלפה נוחה בין `Estuary` ל־`FENtastic`.
+5. להכין חבילת בדיקה להתקנה בטלפון.
+
+## מגבלות כרגע
+
+- הריפו המקורי ציבורי אך אין כאן הרשאת כתיבה אליו.
+- אין כרגע כלי זמין ליצירת ריפו GitHub חדש ישירות מתוך הסשן הזה.
+- לכן שלב ראשון הוא להכין עותק עבודה מקומי מלא, ואז לפרסם אותו לריפו חדש כשיהיה יעד.
+
+## תוצרים מתוכננים
+
+- עץ קבצים מסודר של המיגרציה.
+- מסמך diff של `Twilight -> POV`.
+- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.0.zip`.
+- הוראות התקנה ובדיקת smoke test לטלפון: `ANDROID_TESTING.md`.
+
+## חבילת בדיקה 0.1.0
+
+החבילה מבוססת על `build21_kodirdil_pov-1.0.0.zip` ומוסיפה:
+
+- `addons/skin.fentastic`
+- `addons/script.fentastic.helper`
+- `userdata/addon_data/skin.fentastic/settings.xml`
+- הפעלה של `skin.fentastic` כברירת מחדל ב־`userdata/guisettings.xml`
+- favourites מותאמים ל־`POV`, כולל כפתור `TorBox`
+- רישום `skin.fentastic` ו־`script.fentastic.helper` כמופעלים ב־`userdata/Database/Addons33.db`
+
+בוצעה התאמה של הפניות פנימיות מ־`plugin.video.twilight` ל־`plugin.video.pov`.
