@@ -53,3 +53,16 @@
 - רישום `skin.fentastic` ו־`script.fentastic.helper` כמופעלים ב־`userdata/Database/Addons33.db`
 
 בוצעה התאמה של הפניות פנימיות מ־`plugin.video.twilight` ל־`plugin.video.pov`.
+## Easy install via Wizard
+
+For phone testing, install this Kodi add-on zip first:
+
+`dist/plugin.program.kodipovilwizard-0.1.0.zip`
+
+After installing it in Kodi, open:
+
+`Add-ons -> Program add-ons -> Kodi POV IL Wizard -> Builds -> Kodi POV IL - FENtastic`
+
+The wizard reads build metadata from:
+
+`wizard/assets/build.txt`
