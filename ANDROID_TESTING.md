@@ -26,7 +26,7 @@
 
 Install the wizard zip in Kodi:
 
-`dist/plugin.program.kodipovilwizard-0.1.0.zip`
+`dist/plugin.program.kodipovilwizard-0.1.1.zip`
 
 Then open:
 
@@ -36,4 +36,4 @@ Choose a fresh install if you want this test build to replace the old POV build 
 
 Direct GitHub download:
 
-`https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist/plugin.program.kodipovilwizard-0.1.0.zip`
+`https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist/plugin.program.kodipovilwizard-0.1.1.zip`
