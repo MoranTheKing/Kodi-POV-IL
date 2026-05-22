@@ -1,30 +1,21 @@
-# APK Release Requirements
+# APK Release
 
-The GitHub Pages download pages are ready, but real APK files are not published yet.
+The Android APKs and Windows installer are now built automatically by the GitHub Actions workflow at `.github/workflows/build-apk.yml`.
 
-To publish working APK downloads, provide one of these:
+For build instructions, keystore setup, and release procedures see **[APK_BUILD.md](APK_BUILD.md)**.
 
-1. Original signed APK files that can be redistributed as-is.
-2. Kodi Android source/build output plus a release keystore for signing.
-3. A new APK package name and signing key for a separate app identity.
+## Current State
 
-## Required Files
+- Android APKs (32-bit + 64-bit) are produced from the official Kodi 21.3 APK, rebranded to `org.xbmc.kodipovil`, and signed with the repo's keystore.
+- Each APK ships with `plugin.program.kodipovilwizard` and the FENtastic build pre-bundled in `assets/`, so on first launch the user already has the wizard + build loaded.
+- The Windows installer is an NSIS wrapper that installs the official Kodi 21.3 and drops the wizard zip into `%APPDATA%\Kodi\addons\packages\`.
 
-- Android TV APK, usually 32-bit for many TV boxes.
-- Android phone / Shield APK, usually 64-bit.
-- Optional Windows installer.
+## Download pages
 
-## Signing Notes
+After a successful build the following links go live:
 
-- If users already installed an APK signed by another key, Android will not install an update signed by a different key over it.
-- If we use a new key, users may need to uninstall the old app before installing the new one.
-- Keystore files and passwords must be stored outside the repo or as GitHub Actions secrets.
+- `downloads/android-tv/` — 32-bit ARM APK
+- `downloads/android-phone/` — 64-bit ARM APK
+- `downloads/windows/` — Windows installer
 
-## Current Download Pages
-
-- `downloads/android-tv/`
-- `downloads/android-phone/`
-- `downloads/windows/`
-
-These pages currently explain that no signed installers are published yet and point users to the Kodi Wizard install path.
-
+The wizard's `uservar.py` reads the version pointer files under `wizard/assets/kodi_version_auto_update/` so the in-app "update available" prompt fires whenever a new build is published.
