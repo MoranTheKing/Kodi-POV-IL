@@ -1,2 +1,5 @@
-2
-Kodi POV IL - FENtastic 0.1.2 quick update is available.
+7
+|||
+תיקון חירום 0.1.7
+שחזור POV אחרי שגיאת ImportError
+POV אצלך הוא גרסה 6.05.12 - הפאטץ' הקודם דרס גרסה ישנה ושיברר אותו
