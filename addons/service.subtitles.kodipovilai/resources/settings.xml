@@ -5,6 +5,13 @@
       <group id="key">
         <setting id="info_key" type="action" label="32101"> <!-- Get a free Gemini API key -->
           <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32101</heading>
+          </control>
           <data>RunScript(service.subtitles.kodipovilai,action=open_aistudio)</data>
         </setting>
         <setting id="api_key" type="string" label="32102" help="32104"> <!-- Gemini API Key + leak-warning help -->
@@ -19,6 +26,13 @@
         </setting>
         <setting id="test_connection" type="action" label="32105"> <!-- Test connection -->
           <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32105</heading>
+          </control>
           <data>RunScript(service.subtitles.kodipovilai,action=test_connection)</data>
         </setting>
       </group>
@@ -86,6 +100,13 @@
       <group id="wyzie" label="32250"> <!-- Wyzie Subs (online source) -->
         <setting id="info_wyzie_key" type="action" label="32251"> <!-- Claim a free Wyzie key -->
           <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32251</heading>
+          </control>
           <data>RunScript(service.subtitles.kodipovilai,action=open_wyzie_signup)</data>
         </setting>
         <setting id="wyzie_api_key" type="string" label="32252" help="32253"> <!-- Wyzie API key + help -->
@@ -129,27 +150,42 @@
             <formatlabel>32304</formatlabel> <!-- {} days -->
           </control>
         </setting>
+        <!-- Both action buttons need an explicit <control type="button"
+             format="action"> block. Without it some Kodi 21 builds
+             silently drop action settings even when label + data are
+             present. The other action buttons in this file (info_key
+             etc.) also get this treatment for consistency. -->
         <setting id="clear_cache" type="action" label="32305"> <!-- Clear cache now -->
           <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32305</heading>
+          </control>
           <data>RunScript(service.subtitles.kodipovilai,action=clear_cache)</data>
         </setting>
         <setting id="purge_temp" type="action" label="32306"> <!-- Clear Kodi temp subtitle files -->
           <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32306</heading>
+          </control>
           <data>RunScript(service.subtitles.kodipovilai,action=purge_temp)</data>
         </setting>
-        <!-- internal: which TEMP_PURGE_VERSION has already run on this profile.
-             label="0" rather than "" because some Kodi 21 builds bail
-             out of rendering the rest of the group when they hit an
-             empty label attribute -- which was hiding the Clear-cache
-             and Clear-temp buttons above. -->
-        <setting id="_temp_purge_done" type="string" label="0" visible="false">
+        <!-- Hidden marker: which TEMP_PURGE_VERSION has run on this profile. -->
+        <setting id="_temp_purge_done" type="string" label="30000" visible="false">
           <level>3</level>
           <default></default>
         </setting>
-        <!-- internal: '1' once we've turned DarkSubs's auto_translate
-             off, so we don't keep flipping a setting the user may
-             have deliberately re-enabled. -->
-        <setting id="_darksubs_takeover_done" type="string" label="0" visible="false">
+        <!-- Hidden marker for DarkSubs hook bookkeeping (reserved -- the
+             patcher itself is idempotent and doesn't need a flag, but
+             we may use this for telemetry / migrations later). -->
+        <setting id="_darksubs_takeover_done" type="string" label="30000" visible="false">
           <level>3</level>
           <default></default>
         </setting>
