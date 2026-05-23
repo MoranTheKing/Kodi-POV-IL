@@ -23,11 +23,20 @@ ShowInstDetails show
 Page instfiles
 
 Section "Install"
+  ; Resolve $APPDATA to the *invoking* user's profile, not the
+  ; elevated admin's. Without this, $APPDATA under UAC elevation
+  ; points at C:\Users\Administrator\AppData\Roaming, which the user
+  ; never sees when they later launch Kodi from their own account.
+  SetShellVarContext current
+
   SetOutPath "$PLUGINSDIR"
   File "kodi-setup.exe"
   File "wizard.zip"
   File "build.zip"
   File "patch-kodi.ps1"
+
+  ; PowerShell writes a transcript here so failures are diagnosable.
+  StrCpy $1 "$TEMP\kodi-pov-il-setup.log"
 
   DetailPrint "Installing Kodi..."
   ExecWait '"$PLUGINSDIR\kodi-setup.exe" /S' $0
@@ -40,12 +49,17 @@ Section "Install"
   ; Kodi data dir and patches addon-manifest.xml so the wizard is
   ; auto-enabled on first launch. PowerShell ships with Windows 5.1+
   ; so no extra plugins or downloads are needed.
-  nsExec::ExecToLog 'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\patch-kodi.ps1" -KodiData "$APPDATA\Kodi" -KodiSystem "$PROGRAMFILES\Kodi\system" -WizardZip "$PLUGINSDIR\wizard.zip" -BuildZip "$PLUGINSDIR\build.zip"'
+  ;
+  ; Use $PROGRAMFILES64 -- Kodi 21 only ships a 64-bit installer so
+  ; it always lands in C:\Program Files\Kodi. NSIS itself is 32-bit
+  ; here, so $PROGRAMFILES would wrongly resolve to "Program Files
+  ; (x86)" and the manifest patch would fail.
+  nsExec::ExecToLog 'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\patch-kodi.ps1" -KodiData "$APPDATA\Kodi" -KodiSystem "$PROGRAMFILES64\Kodi\system" -WizardZip "$PLUGINSDIR\wizard.zip" -BuildZip "$PLUGINSDIR\build.zip" -LogPath "$1"'
   Pop $0
   StrCmp $0 "0" +3 0
-    MessageBox MB_OK|MB_ICONSTOP "PowerShell setup step failed (exit code $0). Open the installer log for details."
+    MessageBox MB_OK|MB_ICONSTOP "PowerShell setup step failed (exit code $0).$\r$\nDetailed log: $1$\r$\nPlease send that file to support."
     Abort
 
   DetailPrint "Launching Kodi POV IL..."
-  Exec '"$PROGRAMFILES\Kodi\kodi.exe"'
+  Exec '"$PROGRAMFILES64\Kodi\kodi.exe"'
 SectionEnd
