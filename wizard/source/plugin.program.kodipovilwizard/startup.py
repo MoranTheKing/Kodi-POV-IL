@@ -397,12 +397,50 @@ try:
             # fire on the next startup now that buildname is set. The
             # user has been using the build for a while, so suppress it.
             CONFIG.set_setting('build_skin_switch_notifcation_dismiss', 'true')
-            CONFIG.BUILDNAME = CONFIG.BUILDNAME_DEFAULT  # refresh in-memory cache
+
+            # CRITICAL: also set buildversion. Without this,
+            # check.check_build_update sees an empty buildversion and
+            # treats every published version as "newer", which fires
+            # a Fresh-Install dialog whose default action overwrites
+            # the user's entire userdata (wiping Real-Debrid, Trakt
+            # and other connected-services state -- happened to the
+            # first test user). Try to fetch the current published
+            # version from build.txt; fall back to the constant baked
+            # into uservar.py.
+            current_version = CONFIG.BUILDVERSION_DEFAULT
+            try:
+                v = check.check_build(CONFIG.BUILDNAME_DEFAULT, 'version')
+                if v:
+                    current_version = v
+            except Exception:
+                pass
+            CONFIG.set_setting('buildversion', current_version)
+            CONFIG.set_setting('latestversion', current_version)
+
+            # Belt-and-suspenders: also push the next build-update
+            # check 30 days into the future. Even if buildversion
+            # ends up wrong, this gives us a long window to ship a
+            # quickfix before any "update available" dialog fires.
+            future_check = (datetime.now() + timedelta(days=30)).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+            CONFIG.set_setting('nextbuildcheck', future_check)
+
+            # Refresh the in-memory cache so other startup steps see
+            # the new values immediately.
+            CONFIG.BUILDNAME = CONFIG.BUILDNAME_DEFAULT
+            CONFIG.BUILDVERSION = current_version
+            CONFIG.BUILDLATEST = current_version
             CONFIG.INSTALLED = 'true'
+            CONFIG.BUILDCHECK = future_check
+
             logging.log(
                 "[Auto-Set Buildname] APK install detected (plugin.video.pov "
                 "present, buildname was empty). Set buildname='{0}', "
-                "installed='true'.".format(CONFIG.BUILDNAME_DEFAULT),
+                "installed='true', buildversion='{1}', "
+                "nextbuildcheck='{2}'.".format(
+                    CONFIG.BUILDNAME_DEFAULT, current_version, future_check
+                ),
                 level=xbmc.LOGINFO,
             )
 except Exception as _autoset_err:
