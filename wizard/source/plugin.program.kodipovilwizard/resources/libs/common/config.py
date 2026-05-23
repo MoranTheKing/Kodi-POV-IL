@@ -48,8 +48,9 @@ class Config:
         # User Edit Variables
         self.ADDONTITLE = uservar.ADDONTITLE
         self.BUILDERNAME = uservar.BUILDERNAME
-        # KODI-RD-IL - Fallback build name for APK installs (see uservar.py)
+        # KODI-RD-IL - Fallback build name + version for APK installs (see uservar.py)
         self.BUILDNAME_DEFAULT = uservar.BUILDNAME_DEFAULT
+        self.BUILDVERSION_DEFAULT = uservar.BUILDVERSION_DEFAULT
         self.EXCLUDES = uservar.EXCLUDES
         self.BUILDFILE = uservar.BUILDFILE
         self.UPDATECHECK = uservar.UPDATECHECK

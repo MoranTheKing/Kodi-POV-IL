@@ -22,6 +22,14 @@ BUILDERNAME = '[COLOR yellow]Kodi POV IL[/COLOR]'
 # auto_quick_update path was getting silently no-op'd). Must match the
 # name="..." value in build.txt.
 BUILDNAME_DEFAULT = 'Kodi POV IL - FENtastic'
+# KODI-RD-IL - Fallback build VERSION. Used by startup.py to populate
+# the 'buildversion' setting at the same time we populate 'buildname'.
+# Without this, the wizard's build_update_check sees an empty
+# buildversion and thinks every published version is newer ->
+# triggers a destructive full-build-install dialog that wipes the
+# user's connected services. Should be kept aligned with the version
+# we ship in dist/Kodi-POV-IL-FENtastic-test-*.zip.
+BUILDVERSION_DEFAULT = '0.1.9'
 EXCLUDES = [ADDON_ID]
 # Text File with build info in it. Please read https://github.com/a4k-openproject/plugin.program.openwizard/wiki/Installing-Builds
 BUILDFILE = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/build.txt'

@@ -1,3 +1,10 @@
+[COLOR yellow][B]v0.1.4[/B][/COLOR]
+* Critical hotfix on top of v0.1.3: the auto-set step also populates
+  'buildversion', 'latestversion' and 'nextbuildcheck'. Without these
+  the next check_build_update saw buildversion='' and treated any
+  published version as newer, popping the Fresh-Install dialog that
+  overwrites the user's userdata (wiping connected services). Also
+  pushes nextbuildcheck 30 days out as a safety net.
 [COLOR yellow][B]v0.1.3[/B][/COLOR]
 * Auto-set 'buildname' setting on startup if empty and plugin.video.pov
   is present on disk. Fixes the silent breakage of auto_quick_update for
