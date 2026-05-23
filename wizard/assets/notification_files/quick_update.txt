@@ -1,4 +1,4 @@
-13
+14
 |||
-תיקון תרגום AI: API key של OpenSubtitles
-ה-API key של OpenSubtitles בתוסף הקודם לא היה תקין (403 Forbidden), ולכן ה-AI subtitles לא מצא כתוביות. עכשיו צריך להגדיר API key חינמי שלך בהגדרות התוסף - תיכנס ל-Settings → Add-ons → Subtitle add-ons → Kodi POV IL - AI Subtitles → Configure → Translation → OpenSubtitles API Key, ותלחץ על "הרשמה חינמית" שמופיע מעליו.
+תרגום AI: שינוי לוגיקה
+תוסף תרגום AI כבר לא מנסה למשוך כתוביות מ-OpenSubtitles בעצמו. במקום, הוא משתמש בכתוביות שהתוספים האחרים שלך כבר מורידים. ז"א: 1) פתח חיפוש כתוביות 2) בחר אנגלית/ספרדית/וכו' מ-DarkSubs או כל תוסף אחר 3) פתח חיפוש שוב 4) תראה אצלי "AI Hebrew (translate loaded English/Spanish)" 5) לחץ ותקבל תרגום עברי.
