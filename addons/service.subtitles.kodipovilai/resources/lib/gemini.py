@@ -34,6 +34,15 @@ class InvalidKey(GeminiError):
     """Key is missing / revoked / malformed."""
 
 
+class TruncatedResponse(GeminiError):
+    """Model hit its output-token cap mid-response. The text we
+    received is real but cut off (incomplete subtitle entries at
+    the end). Caller should re-issue with smaller input."""
+    def __init__(self, message, partial_text=''):
+        super().__init__(message)
+        self.partial_text = partial_text
+
+
 def test_key(api_key, model='gemini-3.1-flash-lite'):
     """Cheap sanity check: list the user's available models and
     confirm the chosen one is in the set. Returns the model id we
@@ -134,4 +143,20 @@ def generate(api_key, model, prompt, temperature=0.2,
     text = ''.join(chunks).strip()
     if not text:
         raise GeminiError('Empty text in response')
+
+    # If the model hit its output cap, the last entry in the
+    # returned SRT is almost always cut off and the chunk has a
+    # silent gap. Surface this so the caller can bisect and retry
+    # with a smaller request, rather than silently saving an
+    # incomplete translation. Flash Lite caps at 8192 output
+    # tokens, which Hebrew SRT can blow through around the
+    # 150-200 entry mark.
+    finish_reason = (cands[0].get('finishReason') or '').upper()
+    if finish_reason in ('MAX_TOKENS', 'LENGTH'):
+        raise TruncatedResponse(
+            'Gemini hit output-token cap (finishReason={0})'.format(
+                finish_reason),
+            partial_text=text,
+        )
+
     return text

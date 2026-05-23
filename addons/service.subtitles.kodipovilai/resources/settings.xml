@@ -155,10 +155,10 @@
         </setting>
         <setting id="chunk_lines" type="integer" label="32402"> <!-- Lines per translation request -->
           <level>2</level>
-          <default>250</default>
+          <default>100</default>
           <constraints>
-            <minimum>50</minimum>
-            <maximum>500</maximum>
+            <minimum>30</minimum>
+            <maximum>250</maximum>
             <step>10</step>
           </constraints>
           <control type="slider" format="integer">
