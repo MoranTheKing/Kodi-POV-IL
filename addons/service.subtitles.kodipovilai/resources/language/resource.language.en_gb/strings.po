@@ -162,6 +162,22 @@ msgstr "Translation failed: {0}"
 # falls back to the built-in lookup (same Videos/Music bug). The
 # first attempt at this fix used 33010-33013 and reproduced the bug
 # exactly. Moved into the gap inside the Translation category.
+msgctxt "#32240"
+msgid "OpenSubtitles"
+msgstr "OpenSubtitles"
+
+msgctxt "#32241"
+msgid "Sign up free at opensubtitles.com to get an API key"
+msgstr "Sign up free at opensubtitles.com to get an API key"
+
+msgctxt "#32242"
+msgid "OpenSubtitles API Key"
+msgstr "OpenSubtitles API Key"
+
+msgctxt "#32243"
+msgid "Optional. Required for online subtitle search. Register free at opensubtitles.com/en/consumers and paste the key here. Without it, only SRT files alongside the video file can be used."
+msgstr "Optional. Required for online subtitle search. Register free at opensubtitles.com/en/consumers and paste the key here. Without it, only SRT files alongside the video file can be used."
+
 msgctxt "#32230"
 msgid "3.1 Flash Lite (recommended, 500/day)"
 msgstr "3.1 Flash Lite (recommended, 500/day)"
