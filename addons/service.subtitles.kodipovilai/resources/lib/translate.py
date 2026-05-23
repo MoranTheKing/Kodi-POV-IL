@@ -1,14 +1,24 @@
 # Orchestration: take a video metadata dict and a target language,
-# return either a list of candidate subtitle entries (for the search
-# dialog) or a final SRT path (for the download step).
+# return either a list of candidate subtitle entries (for the
+# search dialog) or a final SRT path (for the download step).
+#
+# Source policy (we do NOT touch OpenSubtitles ourselves -- the
+# user's existing subtitle addons (DarkSubs, OS-by-OS, etc.) handle
+# all sourcing and have their own working quotas/keys, so we just
+# read whatever they drop into Kodi's temp dir):
+#
+#   1. Hebrew SRT next to the video         -> hand it back as-is
+#   2. Hebrew SRT in special://temp/         -> hand it back as-is
+#   3. Source-lang SRT next to the video    -> translate to Hebrew
+#   4. Source-lang SRT in special://temp/    -> translate to Hebrew
+#                                              (lets the user grab
+#                                              English from
+#                                              DarkSubs/OS, then
+#                                              come back to us)
 #
 # Two top-level entry points:
 #   list_candidates(info)  -> [{title, language, link, ...}]
 #   resolve(link, info)    -> path-to-srt-on-disk
-#
-# `link` is an opaque token we round-trip through Kodi -- it
-# encodes whether to translate (and from which source) or just
-# pass through an existing OS sub.
 
 import json
 import os
@@ -20,7 +30,6 @@ from . import gemini
 from . import kodi_utils
 from . import language_detect
 from . import local_subs
-from . import opensubs
 from . import prompt
 from . import srt
 from . import tmdb_helper
@@ -52,6 +61,13 @@ def _decode_link(link):
         return None
 
 
+def _lang_display(code):
+    return {
+        'en': 'English', 'es': 'Spanish', 'fr': 'French',
+        'de': 'German', 'pt': 'Portuguese', 'he': 'Hebrew',
+    }.get(code, code or 'Unknown')
+
+
 # ---- search ----------------------------------------------------------
 
 def list_candidates(info):
@@ -59,138 +75,87 @@ def list_candidates(info):
 
     Returns a list of dicts with keys: filename, language, link,
     sync, rating. Empty list if nothing plausible is available.
-
-    Policy: if real Hebrew subs exist and skip_if_hebrew is on, we
-    don't show an AI entry; the existing-Hebrew options are enough.
-    Otherwise we look for source-language SRTs to feed the
-    translator -- local files alongside the video first (free, no
-    API call), then OpenSubtitles if the user has set their api
-    key. We deliberately avoid querying OS when we have no
-    identifier at all -- the first version did that and OS happily
-    returned every Hebrew subtitle in the database, polluting the
-    search dialog with completely unrelated movies.
     """
-    imdb_id = (info.get('imdb_id') or '').strip()
-    season  = info.get('season') or ''
-    episode = info.get('episode') or ''
     filepath = info.get('filepath') or ''
-    title   = info.get('title') or ''
-    year    = info.get('year') or ''
+
+    # Collect candidate source files from the two filesystem
+    # locations we look at. By-language dicts, so first match wins
+    # per language.
+    alongside = {}
+    for path, lang in local_subs.find_alongside(filepath):
+        if lang and lang not in alongside:
+            alongside[lang] = path
+
+    in_temp = {}
+    for entry in local_subs.find_in_temp():
+        lang = entry['lang']
+        if lang and lang not in in_temp:
+            in_temp[lang] = entry['path']
 
     results = []
-    os_ready = opensubs.has_api_key()
-    sources = _enabled_sources()
 
-    # 0. Local SRTs alongside the video (free, no API calls).
-    local_by_lang = {}
-    for path, lang in local_subs.find_alongside(filepath):
-        if lang and lang not in local_by_lang:
-            local_by_lang[lang] = path
-
-    # 1. Hebrew. If found locally OR on OS, list them as passthrough
-    #    entries. If skip_if_hebrew is on AND any real Hebrew exists,
-    #    don't bother with an AI entry below.
+    # 1. Hebrew passthrough -- if there's already a Hebrew SRT we
+    #    can hand to Kodi, no need to translate anything.
     have_hebrew = False
-    if 'he' in local_by_lang:
+    if 'he' in alongside:
         have_hebrew = True
         results.append({
-            'filename': os.path.basename(local_by_lang['he']),
+            'filename': os.path.basename(alongside['he']),
             'language': 'he',
-            'link': _encode_link({'type': 'local',
-                                  'path': local_by_lang['he'],
-                                  'language': 'he'}),
-            'sync': 'true',  # local file is presumably already in sync
+            'link': _encode_link({
+                'type': 'passthrough', 'path': alongside['he'],
+            }),
+            'sync': 'true',
             'rating': '5',
             'is_hi': False, 'is_hd': False,
         })
-
-    if os_ready and (imdb_id or title):
-        try:
-            hebrew_hits = opensubs.search(
-                imdb_id=imdb_id or None,
-                query=title if not imdb_id else None,
-                year=year if not imdb_id else None,
-                season=season, episode=episode,
-                languages=('he',),
-            )
-        except Exception as e:
-            kodi_utils.log('OpenSubtitles he search failed: {0}'.format(e),
-                           level='WARNING')
-            hebrew_hits = []
-        for h in hebrew_hits[:5]:
-            have_hebrew = True
-            results.append({
-                'filename': h.get('release') or h.get('filename') or 'Hebrew',
-                'language': 'he',
-                'link': _encode_link({'type': 'os_passthrough',
-                                      'file_id': h.get('file_id'),
-                                      'language': 'he'}),
-                'sync': 'true' if (h.get('fps') or 0) else 'false',
-                'rating': str(min(5, max(0, int(h.get('download_count', 0) // 5000)))),
-                'is_hi': h.get('hi', False),
-                'is_hd': h.get('hd', False),
-            })
+    elif 'he' in in_temp:
+        # Already-loaded Hebrew sub from another addon -- nothing
+        # for us to do, just point Kodi at the file.
+        have_hebrew = True
+        results.append({
+            'filename': os.path.basename(in_temp['he']),
+            'language': 'he',
+            'link': _encode_link({
+                'type': 'passthrough', 'path': in_temp['he'],
+            }),
+            'sync': 'true',
+            'rating': '5',
+            'is_hi': False, 'is_hd': False,
+        })
 
     skip_when_hebrew = kodi_utils.get_bool('skip_if_hebrew', True)
     if have_hebrew and skip_when_hebrew:
         return results
 
     # 2. For each enabled source language, surface ONE "translate
-    #    me" entry. Prefer a local file; fall back to OS lookup.
+    #    this" entry. Prefer an alongside file (always available
+    #    re-watches), then a recently-downloaded sub in temp.
+    sources = _enabled_sources()
     seen_langs = set()
     for src_lang in sources:
         if src_lang in seen_langs:
             continue
 
-        local_path = local_by_lang.get(src_lang)
-        if local_path:
-            seen_langs.add(src_lang)
-            results.append({
-                'filename': 'AI Hebrew (translated from local {0})'.format(
-                    _lang_display(src_lang)),
-                'language': 'he',
-                'link': _encode_link({'type': 'ai',
-                                      'source_lang': src_lang,
-                                      'local_path': local_path}),
-                'sync': 'true',
-                'rating': '5',
-                'is_hi': False, 'is_hd': False,
-            })
+        local_path = alongside.get(src_lang) or in_temp.get(src_lang)
+        if not local_path:
             continue
 
-        # No local file in this language. Ask OS, but only if we
-        # have something to identify the video by AND the user has
-        # configured an API key. Otherwise skip silently rather
-        # than polluting the dialog with a fake entry.
-        if not os_ready:
-            continue
-        if not (imdb_id or title):
-            continue
-
-        try:
-            src_hits = opensubs.search(
-                imdb_id=imdb_id or None,
-                query=title if not imdb_id else None,
-                year=year if not imdb_id else None,
-                season=season, episode=episode,
-                languages=(src_lang,),
-            )
-        except Exception as e:
-            kodi_utils.log('OS {0} search failed: {1}'.format(src_lang, e),
-                           level='WARNING')
-            src_hits = []
-
-        if not src_hits:
-            continue
         seen_langs.add(src_lang)
-        top = src_hits[0]
+        source_label = _lang_display(src_lang)
+        # Hint to the user where the source came from so it's
+        # obvious why we're offering this in particular.
+        source_origin = ('local file' if alongside.get(src_lang)
+                         else 'loaded by another addon')
         results.append({
-            'filename': 'AI Hebrew (translated from {0})'.format(
-                _lang_display(src_lang)),
+            'filename': 'AI Hebrew (translate {0} {1})'.format(
+                source_label, source_origin),
             'language': 'he',
-            'link': _encode_link({'type': 'ai',
-                                  'source_lang': src_lang,
-                                  'file_id': top.get('file_id')}),
+            'link': _encode_link({
+                'type': 'ai',
+                'source_lang': src_lang,
+                'local_path': local_path,
+            }),
             'sync': 'false',
             'rating': '4' if src_lang == 'en' else '3',
             'is_hi': False, 'is_hd': False,
@@ -199,23 +164,15 @@ def list_candidates(info):
     return results
 
 
-def _lang_display(code):
-    return {
-        'en': 'English', 'es': 'Spanish', 'fr': 'French',
-        'de': 'German', 'pt': 'Portuguese',
-    }.get(code, code or 'Unknown')
-
-
 # ---- download / translate -------------------------------------------
 
 def resolve(link, info, progress_cb=None):
     """Return a filesystem path to the SRT for the chosen link.
 
-    For os_passthrough, we just download the OS file and return its
-    path. For ai entries, we translate (or read from cache) and
-    return the cached file's path.
-    progress_cb, if provided, is called as progress_cb(stage, pct).
-    """
+    For passthrough, hand back the existing file path. For ai
+    entries, translate (or read from cache) and return the cached
+    file's path. progress_cb, if provided, is called as
+    progress_cb(chunk_index, total_chunks)."""
     payload = _decode_link(link)
     if not payload:
         return None
@@ -226,24 +183,10 @@ def resolve(link, info, progress_cb=None):
     season  = info.get('season') or ''
     episode = info.get('episode') or ''
 
-    if kind == 'os_passthrough':
-        text = opensubs.download(payload.get('file_id'))
-        if not text:
-            return None
-        out = os.path.join(kodi_utils.cache_dir(), 'pass_he.srt')
-        try:
-            with open(out, 'w', encoding='utf-8') as f:
-                f.write(text)
-            return out
-        except OSError:
-            return None
-
-    if kind == 'local':
-        # Already-existing Hebrew file alongside the video. Hand
-        # Kodi the file path back directly.
-        local_path = payload.get('path')
-        if local_path and os.path.isfile(local_path):
-            return local_path
+    if kind == 'passthrough':
+        path = payload.get('path')
+        if path and os.path.isfile(path):
+            return path
         return None
 
     if kind != 'ai':
@@ -251,11 +194,10 @@ def resolve(link, info, progress_cb=None):
 
     source_lang = payload.get('source_lang') or 'en'
 
-    # Already translated this exact tuple? Hand back the cached file.
+    # Already translated this exact tuple? Return the cached file.
     translated = cache.translated_path(imdb_id, season, episode, source_lang)
     if os.path.isfile(translated):
         kodi_utils.log('Cache hit: ' + translated, level='INFO')
-        # Touch atime so eviction tracks usage.
         try:
             now = time.time()
             os.utime(translated, (now, now))
@@ -263,51 +205,32 @@ def resolve(link, info, progress_cb=None):
             pass
         return translated
 
-    # Fetch / cache the source SRT.
-    src_text = None
+    # Read the source SRT from the local path we recorded at list
+    # time. If for some reason it's gone (Kodi cleaned the temp
+    # dir between the dialog and our resolve call), bail with a
+    # friendly message.
     local_source = payload.get('local_path')
+    src_text = None
     if local_source and os.path.isfile(local_source):
         try:
-            with open(local_source, 'r', encoding='utf-8', errors='replace') as f:
+            with open(local_source, 'r', encoding='utf-8',
+                      errors='replace') as f:
                 src_text = f.read()
         except (IOError, OSError):
             src_text = None
     if not src_text:
-        src_path = cache.source_path(imdb_id, season, episode, source_lang)
-        src_text = cache.load_text(src_path)
-        if not src_text:
-            if not opensubs.has_api_key():
-                kodi_utils.notify(
-                    'הגדר OpenSubtitles API key בהגדרות התוסף')
-                return None
-            file_id = payload.get('file_id')
-            if not file_id:
-                # No file_id (happens when called from no-imdb path).
-                # Re-query OS now that we have time.
-                title = info.get('title') or ''
-                year = info.get('year') or ''
-                hits = opensubs.search(
-                    imdb_id=imdb_id or None,
-                    query=title if not imdb_id else None,
-                    year=year if not imdb_id else None,
-                    season=season, episode=episode,
-                    languages=(source_lang,),
-                )
-                if not hits:
-                    return None
-                file_id = hits[0].get('file_id')
-            src_text = opensubs.download(file_id)
-            if not src_text:
-                return None
-            cache.save_text(src_path, src_text)
+        kodi_utils.notify(
+            'הקובץ של הכתוביות המקור לא נמצא. בחר שוב כתובית בשפת מקור '
+            'ונסה שוב.')
+        return None
 
-    # Sanity: if the source happens to be Hebrew (mislabelled),
-    # don't translate it again -- just return it as the result.
+    # Sanity: if the source is actually Hebrew (mislabeled),
+    # don't translate -- pass through.
     if language_detect.detect(src_text[:8000]) == 'he':
         cache.save_text(translated, src_text)
         return translated
 
-    # Fetch cast metadata (cached).
+    # Cast metadata (cached per-imdb).
     meta_path = cache.metadata_path(imdb_id) if imdb_id else None
     cast = None
     title = info.get('title') or ''
@@ -337,7 +260,7 @@ def resolve(link, info, progress_cb=None):
                            level='WARNING')
             cast = []
 
-    # Build the prompt template + chunk + call the API.
+    # Prompt + chunk + translate via Gemini.
     api_key = kodi_utils.get_setting('api_key', '')
     if not api_key:
         kodi_utils.notify(kodi_utils.localised(33002))
@@ -360,7 +283,8 @@ def resolve(link, info, progress_cb=None):
 
     blocks = srt.parse_blocks(src_text)
     if not blocks:
-        kodi_utils.log('Source SRT had no parseable blocks', level='WARNING')
+        kodi_utils.log('Source SRT had no parseable blocks',
+                       level='WARNING')
         return None
 
     chunks = list(srt.chunk_blocks(blocks, per_chunk=chunk_lines))
@@ -393,17 +317,20 @@ def resolve(link, info, progress_cb=None):
             except gemini.InvalidKey as e:
                 kodi_utils.notify(kodi_utils.localised(33004,
                     'API key rejected'))
-                kodi_utils.log('InvalidKey: {0}'.format(e), level='ERROR')
+                kodi_utils.log('InvalidKey: {0}'.format(e),
+                               level='ERROR')
                 return None
             except gemini.GeminiError as e:
                 last_err = e
-                kodi_utils.log('Gemini error chunk {0}/{1} attempt {2}: {3}'
-                               .format(i, total, attempt + 1, e),
-                               level='WARNING')
+                kodi_utils.log(
+                    'Gemini error chunk {0}/{1} attempt {2}: {3}'
+                    .format(i, total, attempt + 1, e),
+                    level='WARNING')
                 time.sleep(2 * (attempt + 1))
                 continue
         if last_err is not None:
-            kodi_utils.notify(kodi_utils.localised(33008, str(last_err)[:80]))
+            kodi_utils.notify(kodi_utils.localised(33008,
+                                                   str(last_err)[:80]))
             return None
 
     final = srt.stitch_blocks(out_blocks)
