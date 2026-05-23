@@ -79,6 +79,7 @@ def list_candidates(info):
     """
     filepath = info.get('filepath') or ''
     imdb_id = (info.get('imdb_id') or '').strip()
+    tmdb_id = (info.get('tmdb_id') or '').strip()
     season  = info.get('season') or ''
     episode = info.get('episode') or ''
     sources = _enabled_sources()
@@ -111,12 +112,16 @@ def list_candidates(info):
     # Wyzie hits if the user has set their API key. Look up Hebrew
     # AND each source language in one round trip so we can offer
     # passthrough Hebrew if available, otherwise translate options.
+    # Accept either imdb_id (set by the library scraper) or tmdb_id
+    # (set by POV / FENtastic plugin streams via UniqueId(tmdb)).
     wyzie_by_lang = {}
-    if wyzie.has_api_key() and imdb_id:
+    if wyzie.has_api_key() and (imdb_id or tmdb_id):
         wanted = ['he'] + [l for l in sources if l != 'he']
         try:
             hits = wyzie.search(
-                imdb_id=imdb_id, season=season, episode=episode,
+                imdb_id=imdb_id or None,
+                tmdb_id=tmdb_id or None,
+                season=season, episode=episode,
                 languages=tuple(wanted),
             )
         except Exception as e:
@@ -127,6 +132,10 @@ def list_candidates(info):
             lang = h.get('language')
             if lang and lang not in wyzie_by_lang:
                 wyzie_by_lang[lang] = h
+        kodi_utils.log(
+            'Wyzie search: imdb={0} tmdb={1} -> {2} hits'.format(
+                imdb_id, tmdb_id, len(wyzie_by_lang)),
+            level='INFO')
 
     results = []
 
@@ -216,19 +225,24 @@ def list_candidates(info):
     if not results:
         # Give the user a hint about why we have nothing -- the
         # "no subtitles found" toast from Kodi alone is
-        # uninformative.
+        # uninformative. Each reason is conditional so the message
+        # only lists what's actually missing.
         reasons = []
-        if not imdb_id:
-            reasons.append('אין IMDB id מהנגן (פלאגין סטרימינג)')
+        if not imdb_id and not tmdb_id:
+            reasons.append('אין IMDB / TMDB id מהנגן')
         if not wyzie.has_api_key():
             reasons.append('לא הוגדר Wyzie API key')
+        elif (imdb_id or tmdb_id) and not wyzie_by_lang:
+            reasons.append('Wyzie לא מצא כתוביות לסרט הזה')
         if not alongside and not in_temp:
             reasons.append('אין קבצי SRT ב-temp או ליד הסרט')
-        msg = 'AI: אין מקור לתרגום. {0}. נסה לבחור כתובית באנגלית ' \
-              'מתוסף אחר קודם.'.format(' / '.join(reasons) or 'לא ידוע')
-        kodi_utils.notify(msg, time_ms=10000)
+        msg = 'AI: אין מקור לתרגום ({0}). אפשרויות: 1) בחר ' \
+              'כתובית באנגלית מתוסף אחר ופתח שוב חיפוש 2) הגדר ' \
+              'Wyzie API key 3) חפש סרט שיש לו IMDB id'.format(
+                ' / '.join(reasons) or 'לא ידוע')
+        kodi_utils.notify(msg, time_ms=12000)
         kodi_utils.log('list_candidates returned empty: ' + repr(
-            {'imdb_id': imdb_id,
+            {'imdb_id': imdb_id, 'tmdb_id': tmdb_id,
              'has_wyzie_key': wyzie.has_api_key(),
              'alongside_count': len(alongside),
              'in_temp_count': len(in_temp),
