@@ -1,3 +1,13 @@
+v0.1.4
+- CRITICAL FIX: undo the auto_translate=false state that v0.1.1
+  left behind. Without this, the v0.1.3 hook never fires (DarkSubs
+  only calls machine_translate_subs when auto_translate=true) and
+  users who'd been through the v0.1.1 takeover ended up getting
+  plain English subs on every DarkSubs pick -- no AI AND no Google.
+  The restore is gated on the takeover marker, so users who had
+  manually turned auto_translate off themselves (no marker) are
+  untouched.
+
 v0.1.3
 - DarkSubs handshake replaced with proper routing: when the user
   has a Gemini key, DarkSubs's machine-translate now calls into
