@@ -37,11 +37,17 @@ ICON_SRC_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), 'icons')
 ICON_FILENAMES = ('gemini.png', 'wyzie.png')
 
-INJECT_VERSION = 1
+INJECT_VERSION = 2
 MARKER = '# AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
 END_MARKER = '# END AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
 TUPLE_MARKER = "# AI_SUBS_MYSERVICES_TUPLE_v{0}".format(INJECT_VERSION)
-OLD_MARKERS = []
+# v1 (shipped in v0.1.8 of the addon) used 'tmdb.png' and 'mdblist.png'
+# as placeholder icons, which the user found confusing. v2 references
+# the real custom icons that v0.1.9 ships. Bumping the version forces
+# all users with v1 on disk to get the v1 block stripped and replaced
+# by v2 -- otherwise the marker-gated early return in ensure_patched()
+# means the icon names never get updated.
+OLD_MARKERS = ['# AI_SUBS_MYSERVICES_INJECT_v1']
 
 # Two service classes plus a hook that monkey-patches authorize()
 # to include them. We do NOT edit the authorize() function source --
