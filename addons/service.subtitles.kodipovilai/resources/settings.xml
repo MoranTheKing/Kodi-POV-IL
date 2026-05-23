@@ -137,6 +137,11 @@
           <level>0</level>
           <data>RunScript(service.subtitles.kodipovilai,action=purge_temp)</data>
         </setting>
+        <!-- internal: which TEMP_PURGE_VERSION has already run on this profile. -->
+        <setting id="_temp_purge_done" type="string" label="" visible="false">
+          <level>3</level>
+          <default></default>
+        </setting>
       </group>
     </category>
 
