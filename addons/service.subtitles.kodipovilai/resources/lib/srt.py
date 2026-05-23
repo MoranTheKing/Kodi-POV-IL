@@ -37,6 +37,50 @@ _TIMECODE_RE = re.compile(
 )
 
 
+# Hebrew letter range for RTL post-processing.
+_HEB_LETTER = r'֐-׿'
+# Punctuation that goes at the end of a Hebrew sentence but the AI
+# sometimes outputs at the start. Excludes ellipsis ("...") because
+# leading "..." is a legitimate continuation marker in some sources.
+_TRAILING_PUNCT = r'\.,;:!?'
+
+# Match a line that:
+#   - starts with one or more of the punctuation chars above
+#   - optionally a single space
+#   - then Hebrew text, ending with a Hebrew letter (NOT punctuation)
+# When matched, we move the leading punctuation to the end. This is
+# a defensive backstop -- the prompt itself instructs the model not
+# to do this, but Gemini still slips up occasionally on RTL.
+_MISPLACED_PUNCT_RE = re.compile(
+    r'^([' + _TRAILING_PUNCT + r']+)\s?'
+    r'([' + _HEB_LETTER + r'][^\n]*?[' + _HEB_LETTER + r'])\s*$'
+)
+
+
+def fix_rtl_punctuation(text):
+    """Move punctuation that the model put at the START of a Hebrew
+    line to the END. Idempotent. Returns the corrected text.
+
+    Operates on text lines only -- index lines and timecodes are
+    left alone."""
+    if not text:
+        return text
+    out_lines = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        # Skip index + timecode lines
+        if not stripped or _INDEX_RE.match(stripped) or \
+                _TIMECODE_RE.match(stripped):
+            out_lines.append(line)
+            continue
+        m = _MISPLACED_PUNCT_RE.match(stripped)
+        if m:
+            out_lines.append(m.group(2) + m.group(1))
+        else:
+            out_lines.append(line)
+    return '\n'.join(out_lines)
+
+
 def parse_blocks(text):
     """Return a list of raw entry blocks (still strings). We don't
     bother with a structured parse since the model handles the
