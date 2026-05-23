@@ -1,3 +1,14 @@
+v0.1.9
+- Custom icons for the Gemini AI and Wyzie entries in POV's
+  My Services menu (instead of the reused tmdb.png / mdblist.png
+  placeholders that v0.1.8 shipped). 512x512 RGBA, generated to
+  visually distinct: Gemini is a white four-point sparkle on a
+  blue->purple gradient, Wyzie is a stylised "W" with three
+  subtitle bars on a teal gradient. The pov_services_patcher now
+  also copies these icons into POV's media folder whenever it
+  runs (idempotent SHA1 comparison, no copy if already up to
+  date).
+
 v0.1.8
 - POV "My Services" patcher. The user was clicking on
   plugin.video.pov's own Connect Services menu (entry id 32455 =
