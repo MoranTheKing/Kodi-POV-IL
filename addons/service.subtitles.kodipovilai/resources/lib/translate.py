@@ -374,52 +374,46 @@ def resolve(link, info, progress_cb=None):
 
     chunks = list(srt.chunk_blocks(blocks, per_chunk=chunk_lines))
     total = len(chunks)
-    out_blocks = []
 
     # Backoff schedule for retryable Gemini failures (503 overload,
     # 500 / 502 / 504 transients). Google's published guidance is to
-    # wait at least a few seconds before retrying these; first user
-    # report hit 503 on chunk 6/9 and the old 2-attempt-with-2s-wait
-    # gave up. Give it real time to recover.
+    # wait at least a few seconds before retrying these.
     OVERLOAD_BACKOFF = [5, 15, 30, 60, 120]  # seconds
-    # Other transient (non-overload) Gemini errors get a much
-    # shorter pair of attempts -- they're usually parse / safety /
-    # content issues, not infra. Retrying immediately is fine.
+    # Other transient (non-overload) Gemini errors get a shorter
+    # schedule -- they're usually content / parse / safety issues,
+    # not infrastructure.
     GENERIC_BACKOFF = [2, 5]
 
-    for i, ch in enumerate(chunks, start=1):
-        if progress_cb:
-            try:
-                progress_cb(i, total)
-            except Exception:
-                pass
+    # Per-chunk translator. Holds the inner retry loop. Returns the
+    # raw Gemini response text, or raises a Stop-style exception
+    # that the orchestrator below catches and converts into a
+    # cancellation across all parallel chunks.
+    class _AbortTranslation(Exception):
+        def __init__(self, reason, user_msg):
+            self.reason = reason
+            self.user_msg = user_msg
+
+    def _translate_one(idx, ch):
         body = '\n\n'.join(ch)
         full_prompt = prompt_template.replace('{chunk}', body)
-
-        # Composite attempt loop: try once, then retry per the
-        # backoff schedule that matches the failure type.
-        response = None
         overload_attempts = 0
         generic_attempts = 0
-        while response is None:
+        while True:
             try:
-                response = gemini.generate(
+                return gemini.generate(
                     api_key=api_key,
                     model=model,
                     prompt=full_prompt,
                     temperature=temperature,
                 )
             except gemini.QuotaExceeded:
-                kodi_utils.notify(kodi_utils.localised(33005),
-                                  time_ms=10000)
-                return None
+                raise _AbortTranslation('quota',
+                    kodi_utils.localised(33005))
             except gemini.InvalidKey as e:
-                kodi_utils.notify(kodi_utils.localised(33004,
-                                  'API key rejected'),
-                                  time_ms=10000)
                 kodi_utils.log('InvalidKey: {0}'.format(e),
                                level='ERROR')
-                return None
+                raise _AbortTranslation('invalid_key',
+                    kodi_utils.localised(33004, 'API key rejected'))
             except gemini.OverloadError as e:
                 if overload_attempts < len(OVERLOAD_BACKOFF):
                     wait = OVERLOAD_BACKOFF[overload_attempts]
@@ -427,40 +421,96 @@ def resolve(link, info, progress_cb=None):
                     kodi_utils.log(
                         'Gemini overloaded chunk {0}/{1}, '
                         'retry {2}/{3} in {4}s'.format(
-                            i, total, overload_attempts,
+                            idx, total, overload_attempts,
                             len(OVERLOAD_BACKOFF), wait),
                         level='WARNING')
                     kodi_utils.notify(
-                        'AI: Gemini עמוס. ניסיון {0}/{1} בעוד {2}ש' \
+                        'AI: Gemini עמוס. ניסיון {0}/{1} בעוד {2}ש'
                         .format(overload_attempts,
                                 len(OVERLOAD_BACKOFF), wait),
                         time_ms=min(wait * 1000, 8000))
                     time.sleep(wait)
                     continue
-                else:
-                    kodi_utils.notify(
-                        'AI: Gemini עמוס מדי גם אחרי {0} ניסיונות. '
-                        'תרגום נכשל ב-chunk {1}/{2}.' \
-                        .format(len(OVERLOAD_BACKOFF), i, total),
-                        time_ms=12000)
-                    return None
+                raise _AbortTranslation('overload',
+                    'AI: Gemini עמוס מדי גם אחרי {0} ניסיונות. '
+                    'תרגום נכשל ב-chunk {1}/{2}.'.format(
+                        len(OVERLOAD_BACKOFF), idx, total))
             except gemini.GeminiError as e:
                 if generic_attempts < len(GENERIC_BACKOFF):
                     wait = GENERIC_BACKOFF[generic_attempts]
                     generic_attempts += 1
                     kodi_utils.log(
                         'Gemini error chunk {0}/{1} attempt {2}: {3}'
-                        .format(i, total, generic_attempts, e),
+                        .format(idx, total, generic_attempts, e),
                         level='WARNING')
                     time.sleep(wait)
                     continue
-                else:
-                    kodi_utils.notify(
-                        kodi_utils.localised(33008, str(e)[:80]),
-                        time_ms=10000)
-                    return None
+                raise _AbortTranslation('error',
+                    kodi_utils.localised(33008, str(e)[:80]))
 
-        out_blocks.extend(srt.parse_blocks(response))
+    # Parallel chunk dispatch. Gemini Flash Lite is 15 RPM, so 3
+    # in flight at once is safe and turns a ~2-3 minute sequential
+    # translation into ~30-60 seconds wall time. Users with the
+    # paid tiers can crank this via `parallel_chunks` in the
+    # advanced settings.
+    parallel = max(1, min(8, kodi_utils.get_int('parallel_chunks', 3)))
+    out_blocks_by_index = {}
+    completed = 0
+    abort_msg = None
+
+    try:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        with ThreadPoolExecutor(max_workers=parallel) as pool:
+            future_to_idx = {
+                pool.submit(_translate_one, i + 1, ch): i + 1
+                for i, ch in enumerate(chunks)
+            }
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                try:
+                    response = future.result()
+                except _AbortTranslation as e:
+                    abort_msg = e.user_msg
+                    # Try to cancel pending futures; in-flight ones
+                    # will run to completion but we ignore them.
+                    for f in future_to_idx:
+                        f.cancel()
+                    break
+                except Exception as e:
+                    abort_msg = 'AI: שגיאה בלתי צפויה: {0}'.format(
+                        str(e)[:80])
+                    for f in future_to_idx:
+                        f.cancel()
+                    break
+                out_blocks_by_index[idx] = srt.parse_blocks(response)
+                completed += 1
+                if progress_cb:
+                    try:
+                        progress_cb(completed, total)
+                    except Exception:
+                        pass
+    except ImportError:
+        # Older Python without concurrent.futures -- shouldn't
+        # happen on Kodi 21 but bail safely.
+        kodi_utils.notify('AI: שגיאה פנימית, התקן Python 3.6+',
+                          time_ms=8000)
+        return None
+
+    if abort_msg:
+        kodi_utils.notify(abort_msg, time_ms=12000)
+        return None
+
+    if completed != total:
+        kodi_utils.notify(
+            'AI: תרגום הסתיים חלקית ({0}/{1}). נסה שוב.'.format(
+                completed, total),
+            time_ms=10000)
+        return None
+
+    # Stitch in original order.
+    out_blocks = []
+    for i in sorted(out_blocks_by_index.keys()):
+        out_blocks.extend(out_blocks_by_index[i])
 
     final = srt.stitch_blocks(out_blocks)
     cache.save_text(translated, final)
