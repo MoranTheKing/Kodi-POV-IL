@@ -1,3 +1,10 @@
+[COLOR yellow][B]v0.1.6[/B][/COLOR]
+* Reverted the AI subtitle Connect Services entries that v0.1.5
+  shipped. They belonged in plugin.video.pov's My Services menu,
+  not the wizard's login_menu (two different UIs that I'd
+  conflated). The AI addon's pov_services_patcher now handles
+  the right place; the wizard menu goes back to the original
+  set of services.
 [COLOR yellow][B]v0.1.5[/B][/COLOR]
 * Connect Services menu: added two entries for the AI subtitles
   addon (service.subtitles.kodipovilai):
