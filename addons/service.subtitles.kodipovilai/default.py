@@ -84,6 +84,18 @@ def _handle_search(handle, params):
     the subtitle search dialog."""
     from resources.lib import kodi_utils, translate
 
+    # One-shot: if the user has adopted us (Gemini key set) and
+    # DarkSubs is around, turn DarkSubs's auto_translate off so its
+    # Google/Bing/Yandex Hebrew rows stop competing with (and
+    # outranking) ours. Gated by a "takeover done" marker so we
+    # never stomp on a user who deliberately re-enabled it.
+    try:
+        from resources.lib import dark_subs_integration
+        dark_subs_integration.maybe_disable_darksubs_translate()
+    except Exception as e:
+        _safe_log('darksubs takeover skipped: {0}'.format(e),
+                  level='DEBUG')
+
     info = kodi_utils.current_video_info()
     _safe_log('search: ' + repr({k: v for k, v in info.items() if v}))
 
@@ -226,6 +238,15 @@ def _handle_test_connection(_params):
 
     try:
         matched = gemini.test_key(api_key, model=model)
+        # Test-connection is the canonical "I've adopted this addon"
+        # moment; fire the DarkSubs takeover here too so the user
+        # doesn't have to wait until their next subtitle search for
+        # the Hebrew duplicates to stop.
+        try:
+            from resources.lib import dark_subs_integration
+            dark_subs_integration.maybe_disable_darksubs_translate()
+        except Exception:
+            pass
         xbmcgui.Dialog().ok('Kodi POV IL',
                             kodi_utils.localised(33003, matched))
     except gemini.InvalidKey as e:
