@@ -411,6 +411,34 @@ def resolve(link, info, progress_cb=None):
             self.user_msg = user_msg
 
     def _translate_one(idx, ch):
+        # Recursive bisection on TruncatedResponse: if Gemini
+        # cut us off, retry the same content split in half.
+        # The two halves are reassembled in order before return.
+        if len(ch) > 1:
+            try:
+                return _call_gemini(idx, ch)
+            except gemini.TruncatedResponse as e:
+                mid = len(ch) // 2
+                kodi_utils.log(
+                    'Chunk {0} truncated -- bisecting into {1} + {2}'
+                    .format(idx, mid, len(ch) - mid),
+                    level='WARNING')
+                left = _translate_one(idx, ch[:mid])
+                right = _translate_one(idx, ch[mid:])
+                return left + '\n\n' + right
+        # single-entry chunk that still truncates -- shouldn't
+        # happen (one SRT entry is < 100 tokens), but if it does
+        # we surface the partial text so the user sees something.
+        try:
+            return _call_gemini(idx, ch)
+        except gemini.TruncatedResponse as e:
+            kodi_utils.log(
+                'Chunk {0} truncated even at size 1 -- '
+                'returning partial'.format(idx),
+                level='ERROR')
+            return e.partial_text or ''
+
+    def _call_gemini(idx, ch):
         body = '\n\n'.join(ch)
         full_prompt = prompt_template.replace('{chunk}', body)
         overload_attempts = 0
@@ -431,6 +459,9 @@ def resolve(link, info, progress_cb=None):
                                level='ERROR')
                 raise _AbortTranslation('invalid_key',
                     kodi_utils.localised(33004, 'API key rejected'))
+            except gemini.TruncatedResponse:
+                # propagate up to _translate_one which will bisect
+                raise
             except gemini.OverloadError as e:
                 if overload_attempts < len(OVERLOAD_BACKOFF):
                     wait = OVERLOAD_BACKOFF[overload_attempts]
