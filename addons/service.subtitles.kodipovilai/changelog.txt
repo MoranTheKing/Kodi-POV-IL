@@ -1,3 +1,10 @@
+v0.1.1
+- One-shot DarkSubs handshake: when the user sets a Gemini key,
+  flip DarkSubs's auto_translate off so its built-in Google/Bing
+  Hebrew rows stop competing with (and outranking) ours. Gated
+  so we never re-stomp on a user who deliberately toggled it
+  back on.
+
 v0.1.0 (initial)
 - AI-translated Hebrew subtitles via Gemini 3.1 Flash Lite (free tier)
 - Sources from OpenSubtitles (anonymous, 200/day) + local SRT files
