@@ -114,6 +114,10 @@ msgctxt "#32403"
 msgid "Model temperature"
 msgstr "Temperature של המודל"
 
+msgctxt "#32404"
+msgid "Concurrent translation requests"
+msgstr "תרגומים במקביל (chunks)"
+
 msgctxt "#33000"
 msgid "AI Hebrew (translated from {0})"
 msgstr "עברית AI (מתורגם מ-{0})"
