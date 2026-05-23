@@ -142,6 +142,13 @@
           <level>3</level>
           <default></default>
         </setting>
+        <!-- internal: '1' once we've turned DarkSubs's auto_translate
+             off, so we don't keep flipping a setting the user may
+             have deliberately re-enabled. -->
+        <setting id="_darksubs_takeover_done" type="string" label="" visible="false">
+          <level>3</level>
+          <default></default>
+        </setting>
       </group>
     </category>
 
