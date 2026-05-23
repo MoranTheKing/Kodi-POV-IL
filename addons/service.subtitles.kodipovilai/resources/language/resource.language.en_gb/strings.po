@@ -118,6 +118,10 @@ msgctxt "#32403"
 msgid "Model temperature"
 msgstr "Model temperature"
 
+msgctxt "#32404"
+msgid "Concurrent translation requests"
+msgstr "Concurrent translation requests"
+
 # Runtime messages
 msgctxt "#33000"
 msgid "AI Hebrew (translated from {0})"

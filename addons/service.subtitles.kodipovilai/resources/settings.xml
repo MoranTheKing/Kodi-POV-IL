@@ -177,6 +177,18 @@
             <popup>true</popup>
           </control>
         </setting>
+        <setting id="parallel_chunks" type="integer" label="32404"> <!-- Concurrent translation requests -->
+          <level>2</level>
+          <default>3</default>
+          <constraints>
+            <minimum>1</minimum>
+            <maximum>8</maximum>
+            <step>1</step>
+          </constraints>
+          <control type="slider" format="integer">
+            <popup>true</popup>
+          </control>
+        </setting>
       </group>
     </category>
   </section>
