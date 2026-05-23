@@ -20,7 +20,14 @@ class GeminiError(Exception):
 
 
 class QuotaExceeded(GeminiError):
-    """Daily request limit hit. Caller may want to suggest waiting."""
+    """Daily request limit hit (HTTP 429). Caller may want to
+    suggest waiting until UTC midnight."""
+
+
+class OverloadError(GeminiError):
+    """Service-side overload (HTTP 503 / 500). Retryable with
+    longer backoff -- Google explicitly tells callers to wait at
+    least a few seconds before retrying these."""
 
 
 class InvalidKey(GeminiError):
@@ -99,6 +106,9 @@ def generate(api_key, model, prompt, temperature=0.2,
 
     if r.status_code == 429:
         raise QuotaExceeded('Daily quota exceeded')
+    if r.status_code in (500, 502, 503, 504):
+        raise OverloadError(
+            'Gemini overloaded (HTTP {0})'.format(r.status_code))
     if r.status_code in (400, 403):
         # Distinguish key-related vs content-related rejection by
         # looking at the body when we can.
