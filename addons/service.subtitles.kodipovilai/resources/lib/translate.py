@@ -213,6 +213,28 @@ def list_candidates(info):
                 'is_hi': False, 'is_hd': False,
             })
 
+    if not results:
+        # Give the user a hint about why we have nothing -- the
+        # "no subtitles found" toast from Kodi alone is
+        # uninformative.
+        reasons = []
+        if not imdb_id:
+            reasons.append('אין IMDB id מהנגן (פלאגין סטרימינג)')
+        if not wyzie.has_api_key():
+            reasons.append('לא הוגדר Wyzie API key')
+        if not alongside and not in_temp:
+            reasons.append('אין קבצי SRT ב-temp או ליד הסרט')
+        msg = 'AI: אין מקור לתרגום. {0}. נסה לבחור כתובית באנגלית ' \
+              'מתוסף אחר קודם.'.format(' / '.join(reasons) or 'לא ידוע')
+        kodi_utils.notify(msg, time_ms=10000)
+        kodi_utils.log('list_candidates returned empty: ' + repr(
+            {'imdb_id': imdb_id,
+             'has_wyzie_key': wyzie.has_api_key(),
+             'alongside_count': len(alongside),
+             'in_temp_count': len(in_temp),
+             'wyzie_hits_count': len(wyzie_by_lang)}),
+            level='WARNING')
+
     return results
 
 
