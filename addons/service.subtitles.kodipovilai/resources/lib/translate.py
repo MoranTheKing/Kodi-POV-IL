@@ -242,10 +242,18 @@ def resolve(link, info, progress_cb=None):
         return None
 
     if kind == 'wyzie_passthrough':
-        text = wyzie.download(payload.get('url'))
+        url = payload.get('url') or ''
+        text = wyzie.download(url)
         if not text:
             return None
-        out = os.path.join(kodi_utils.cache_dir(), 'wyzie_he.srt')
+        # Unique per Wyzie URL so different movies don't overwrite
+        # each other in the cache dir, and so Kodi doesn't see the
+        # same file path twice in a row and assume "same subtitle
+        # as last play".
+        import hashlib as _hashlib
+        url_hash = _hashlib.sha1(url.encode('utf-8')).hexdigest()[:16]
+        out = os.path.join(kodi_utils.cache_dir(),
+                           'wyzie_{0}.he.srt'.format(url_hash))
         try:
             with open(out, 'w', encoding='utf-8') as f:
                 f.write(text)
@@ -258,25 +266,31 @@ def resolve(link, info, progress_cb=None):
 
     source_lang = payload.get('source_lang') or 'en'
 
-    # Source identifier used in the cache key when imdb_id is
-    # empty (typical for POV / plugin:// streams). Without this,
-    # every cache-key collapses to 'unknown' and we'd serve the
-    # first-ever translated movie for every subsequent one.
     local_source = payload.get('local_path')
     wyzie_url = payload.get('wyzie_url')
-    source_id = wyzie_url or local_source or ''
 
-    # Already translated this exact tuple? Return the cached file.
-    translated = cache.translated_path(
-        imdb_id, season, episode, source_lang, source_id=source_id)
-    if os.path.isfile(translated):
-        kodi_utils.log('Cache hit: ' + translated, level='INFO')
-        try:
-            now = time.time()
-            os.utime(translated, (now, now))
-        except OSError:
-            pass
-        return translated
+    # Cache-key strategy: for Wyzie sources, the URL is uniquely
+    # tied to one subtitle file, so it's safe to key on without
+    # touching the source content. For local/temp sources, the
+    # filename is NOT a reliable identifier -- Kodi reuses the
+    # same TempSubtitle.X.srt filename across movies, so two
+    # different movies hash to the same source_id and serve each
+    # other's translations. In that case we'll content-hash AFTER
+    # reading the file (see below) and re-check the cache.
+    initial_source_id = wyzie_url or ''
+    if initial_source_id:
+        translated = cache.translated_path(
+            imdb_id, season, episode, source_lang,
+            source_id=initial_source_id)
+        if os.path.isfile(translated):
+            kodi_utils.log('Cache hit (early): ' + translated,
+                           level='INFO')
+            try:
+                now = time.time()
+                os.utime(translated, (now, now))
+            except OSError:
+                pass
+            return translated
 
     # Read the source SRT. Either we recorded a local path at list
     # time (alongside / temp dir) or a Wyzie download URL.
@@ -307,6 +321,29 @@ def resolve(link, info, progress_cb=None):
     if cleaned and srt.count_entries(cleaned) >= max(
             1, int(srt.count_entries(src_text) * 0.3)):
         src_text = cleaned
+
+    # Now we have actual content -- content-hash for a robust
+    # source_id. The earlier wyzie_url-based key was an
+    # optimisation; this is the canonical key. With this, two
+    # different movies whose Kodi temp file happens to land at the
+    # same path get DIFFERENT cache slots (their SRT contents
+    # differ), and the same source picked up via different
+    # routes (wyzie one time, local file another) still hits the
+    # same slot (same content).
+    import hashlib as _hashlib
+    content_id = _hashlib.sha1(
+        src_text.encode('utf-8', errors='replace')).hexdigest()[:16]
+    translated = cache.translated_path(
+        imdb_id, season, episode, source_lang, source_id=content_id)
+    if os.path.isfile(translated):
+        kodi_utils.log('Cache hit (content): ' + translated,
+                       level='INFO')
+        try:
+            now = time.time()
+            os.utime(translated, (now, now))
+        except OSError:
+            pass
+        return translated
 
     # Up-front heads-up so the user understands the wait. The
     # progress dialog itself is a DialogProgressBG which sits in
