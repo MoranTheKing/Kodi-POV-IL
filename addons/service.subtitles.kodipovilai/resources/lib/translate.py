@@ -261,8 +261,17 @@ def resolve(link, info, progress_cb=None):
 
     source_lang = payload.get('source_lang') or 'en'
 
+    # Source identifier used in the cache key when imdb_id is
+    # empty (typical for POV / plugin:// streams). Without this,
+    # every cache-key collapses to 'unknown' and we'd serve the
+    # first-ever translated movie for every subsequent one.
+    local_source = payload.get('local_path')
+    wyzie_url = payload.get('wyzie_url')
+    source_id = wyzie_url or local_source or ''
+
     # Already translated this exact tuple? Return the cached file.
-    translated = cache.translated_path(imdb_id, season, episode, source_lang)
+    translated = cache.translated_path(
+        imdb_id, season, episode, source_lang, source_id=source_id)
     if os.path.isfile(translated):
         kodi_utils.log('Cache hit: ' + translated, level='INFO')
         try:
@@ -274,8 +283,6 @@ def resolve(link, info, progress_cb=None):
 
     # Read the source SRT. Either we recorded a local path at list
     # time (alongside / temp dir) or a Wyzie download URL.
-    local_source = payload.get('local_path')
-    wyzie_url = payload.get('wyzie_url')
     src_text = None
     if local_source and os.path.isfile(local_source):
         try:
@@ -293,6 +300,16 @@ def resolve(link, info, progress_cb=None):
             time_ms=8000,
         )
         return None
+
+    # Strip hearing-impaired noise BEFORE translation. Source SRTs
+    # often have things like "[breathing heavily]" / "(music plays)"
+    # / "MABEL: ..." that aren't speech we want translated; they
+    # just clutter the Hebrew output. Skipped if the cleaner ate
+    # the entire file (it won't, but defend against it).
+    cleaned = srt.strip_hi_annotations(src_text)
+    if cleaned and srt.count_entries(cleaned) >= max(
+            1, int(srt.count_entries(src_text) * 0.3)):
+        src_text = cleaned
 
     # Up-front heads-up so the user understands the wait. The
     # progress dialog itself is a DialogProgressBG which sits in
