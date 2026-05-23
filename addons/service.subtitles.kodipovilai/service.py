@@ -137,12 +137,6 @@ def main():
     if _check_first_run_marker():
         return
 
-    # One-shot temp-dir cleanup. Runs at most once per
-    # TEMP_PURGE_VERSION bump. This particular bump exists to
-    # evict the cross-movie Hebrew leftovers from the bug fixed
-    # in this commit.
-    _maybe_purge_temp_once()
-
     # Initial prune.
     _prune_once()
 
