@@ -82,7 +82,25 @@ def _safe_log(msg, level='INFO'):
 def _handle_search(handle, params):
     """List available subtitles. Kodi calls this when the user opens
     the subtitle search dialog."""
-    from resources.lib import kodi_utils, translate
+    from resources.lib import kodi_utils, translate, local_subs
+
+    # Belt + braces for the temp-leak fix: also try the one-shot
+    # purge from here, in case the xbmc.service path didn't run.
+    # Kept gated by the same setting so we don't keep nuking
+    # subtitle downloads.
+    TEMP_PURGE_VERSION_HERE = '2'
+    try:
+        if kodi_utils.get_setting('_temp_purge_done', '') != \
+                TEMP_PURGE_VERSION_HERE:
+            n = local_subs.purge_temp_subs()
+            kodi_utils.set_setting('_temp_purge_done',
+                                   TEMP_PURGE_VERSION_HERE)
+            _safe_log(
+                'one-shot temp purge (via search): {0} files'
+                .format(n))
+    except Exception as e:
+        _safe_log('temp purge from search failed: {0}'.format(e),
+                  level='WARNING')
 
     info = kodi_utils.current_video_info()
     _safe_log('search: ' + repr({k: v for k, v in info.items() if v}))
