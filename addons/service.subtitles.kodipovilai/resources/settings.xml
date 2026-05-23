@@ -31,10 +31,16 @@
           <default>gemini-3.1-flash-lite</default>
           <constraints>
             <options>
-              <option label="3.1 Flash Lite (recommended, 500/day)">gemini-3.1-flash-lite</option>
-              <option label="3.1 Flash (premium, 250/day)">gemini-3.1-flash</option>
-              <option label="2.5 Flash Lite (fallback)">gemini-2.5-flash-lite</option>
-              <option label="2.5 Flash (fallback)">gemini-2.5-flash</option>
+              <!-- IMPORTANT: the `label` attribute MUST be a string ID,
+                   not literal text. Kodi 21 parses non-numeric labels
+                   by taking the leading integer characters, so e.g.
+                   label="3.1 Flash Lite" -> int 3 -> Kodi built-in
+                   string #3 = "Videos", which is why this dropdown
+                   was rendering as Video / Video / Music / Music. -->
+              <option label="33010">gemini-3.1-flash-lite</option>
+              <option label="33011">gemini-3.1-flash</option>
+              <option label="33012">gemini-2.5-flash-lite</option>
+              <option label="33013">gemini-2.5-flash</option>
             </options>
           </constraints>
           <control type="list" format="string">
