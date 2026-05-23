@@ -82,6 +82,23 @@
           <default>true</default>
         </setting>
       </group>
+
+      <group id="wyzie" label="32250"> <!-- Wyzie Subs (online source) -->
+        <setting id="info_wyzie_key" type="action" label="32251"> <!-- Claim a free Wyzie key -->
+          <level>0</level>
+          <data>RunScript(service.subtitles.kodipovilai,action=open_wyzie_signup)</data>
+        </setting>
+        <setting id="wyzie_api_key" type="string" label="32252" help="32253"> <!-- Wyzie API key + help -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="edit" format="string">
+            <heading>32252</heading>
+          </control>
+        </setting>
+      </group>
     </category>
 
     <category id="cache" label="32300"> <!-- Cache -->

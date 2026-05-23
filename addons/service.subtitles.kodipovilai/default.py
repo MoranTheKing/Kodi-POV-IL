@@ -191,6 +191,23 @@ def _handle_open_aistudio(_params):
         pass
 
 
+def _handle_open_wyzie_signup(_params):
+    """User clicked 'Claim a free Wyzie key' in settings."""
+    url = 'https://store.wyzie.io/redeem'
+    try:
+        xbmc.executebuiltin('System.Exec("xdg-open {0}")'.format(url))
+    except Exception:
+        pass
+    try:
+        xbmcgui.Dialog().ok(
+            'Kodi POV IL',
+            'פתח בדפדפן:\n{0}\n\nתקבל API key חינמי (1000 בקשות/יום). '
+            'העתק לשדה Wyzie API Key בהגדרות.'.format(url),
+        )
+    except Exception:
+        pass
+
+
 def _handle_test_connection(_params):
     """User clicked "Test connection" in settings."""
     try:
@@ -262,6 +279,8 @@ def main():
             _handle_download(handle, params)
         elif action == 'open_aistudio':
             _handle_open_aistudio(params)
+        elif action == 'open_wyzie_signup':
+            _handle_open_wyzie_signup(params)
         elif action == 'test_connection':
             _handle_test_connection(params)
         elif action == 'clear_cache':
