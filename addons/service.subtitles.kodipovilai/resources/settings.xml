@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings version="1">
+  <section id="kodipovilai">
+    <category id="api" label="32100"> <!-- Gemini API -->
+      <group id="key">
+        <setting id="info_key" type="action" label="32101"> <!-- Get a free Gemini API key -->
+          <level>0</level>
+          <data>RunScript(service.subtitles.kodipovilai,action=open_aistudio)</data>
+        </setting>
+        <setting id="api_key" type="string" label="32102" help="32104"> <!-- Gemini API Key + leak-warning help -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="edit" format="string">
+            <heading>32102</heading>
+          </control>
+        </setting>
+        <setting id="test_connection" type="action" label="32105"> <!-- Test connection -->
+          <level>0</level>
+          <data>RunScript(service.subtitles.kodipovilai,action=test_connection)</data>
+        </setting>
+      </group>
+    </category>
+
+    <category id="translation" label="32200"> <!-- Translation -->
+      <group id="model">
+        <setting id="model" type="string" label="32201"> <!-- Model -->
+          <level>0</level>
+          <default>gemini-3.1-flash-lite</default>
+          <constraints>
+            <options>
+              <option label="3.1 Flash Lite (recommended, 500/day)">gemini-3.1-flash-lite</option>
+              <option label="3.1 Flash (premium, 250/day)">gemini-3.1-flash</option>
+              <option label="2.5 Flash Lite (fallback)">gemini-2.5-flash-lite</option>
+              <option label="2.5 Flash (fallback)">gemini-2.5-flash</option>
+            </options>
+          </constraints>
+          <control type="list" format="string">
+            <heading>32201</heading>
+          </control>
+        </setting>
+      </group>
+
+      <group id="sources" label="32210"> <!-- Source language priority -->
+        <setting id="src_english" type="boolean" label="32211" help="32212"> <!-- English -->
+          <level>0</level>
+          <default>true</default>
+        </setting>
+        <setting id="src_spanish" type="boolean" label="32213">
+          <level>0</level>
+          <default>true</default>
+        </setting>
+        <setting id="src_german" type="boolean" label="32214">
+          <level>0</level>
+          <default>false</default>
+        </setting>
+        <setting id="src_french" type="boolean" label="32215">
+          <level>0</level>
+          <default>false</default>
+        </setting>
+        <setting id="src_portuguese" type="boolean" label="32216">
+          <level>0</level>
+          <default>false</default>
+        </setting>
+      </group>
+
+      <group id="policy" label="32220"> <!-- Behavior -->
+        <setting id="skip_if_hebrew" type="boolean" label="32221"> <!-- Skip translation if real Hebrew subs exist -->
+          <level>0</level>
+          <default>true</default>
+        </setting>
+      </group>
+    </category>
+
+    <category id="cache" label="32300"> <!-- Cache -->
+      <group id="limits">
+        <setting id="cache_size_mb" type="integer" label="32301"> <!-- Max cache size (MB) -->
+          <level>0</level>
+          <default>200</default>
+          <constraints>
+            <minimum>10</minimum>
+            <maximum>2000</maximum>
+            <step>10</step>
+          </constraints>
+          <control type="slider" format="integer">
+            <popup>true</popup>
+            <formatlabel>32302</formatlabel> <!-- {} MB -->
+          </control>
+        </setting>
+        <setting id="cache_ttl_days" type="integer" label="32303"> <!-- Auto-delete after N days no access -->
+          <level>0</level>
+          <default>180</default>
+          <constraints>
+            <minimum>7</minimum>
+            <maximum>730</maximum>
+            <step>1</step>
+          </constraints>
+          <control type="slider" format="integer">
+            <popup>true</popup>
+            <formatlabel>32304</formatlabel> <!-- {} days -->
+          </control>
+        </setting>
+        <setting id="clear_cache" type="action" label="32305"> <!-- Clear cache now -->
+          <level>0</level>
+          <data>RunScript(service.subtitles.kodipovilai,action=clear_cache)</data>
+        </setting>
+      </group>
+    </category>
+
+    <category id="advanced" label="32400"> <!-- Advanced -->
+      <group id="debug">
+        <setting id="log_level" type="string" label="32401"> <!-- Log level -->
+          <level>1</level>
+          <default>INFO</default>
+          <constraints>
+            <options>
+              <option>DEBUG</option>
+              <option>INFO</option>
+              <option>WARNING</option>
+              <option>ERROR</option>
+            </options>
+          </constraints>
+          <control type="list" format="string">
+            <heading>32401</heading>
+          </control>
+        </setting>
+        <setting id="chunk_lines" type="integer" label="32402"> <!-- Lines per translation request -->
+          <level>2</level>
+          <default>250</default>
+          <constraints>
+            <minimum>50</minimum>
+            <maximum>500</maximum>
+            <step>10</step>
+          </constraints>
+          <control type="slider" format="integer">
+            <popup>true</popup>
+          </control>
+        </setting>
+        <setting id="temperature" type="number" label="32403"> <!-- Model temperature -->
+          <level>2</level>
+          <default>0.2</default>
+          <constraints>
+            <minimum>0.0</minimum>
+            <maximum>1.0</maximum>
+            <step>0.05</step>
+          </constraints>
+          <control type="slider" format="number">
+            <popup>true</popup>
+          </control>
+        </setting>
+      </group>
+    </category>
+  </section>
+</settings>

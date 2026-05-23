@@ -1,0 +1,151 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Kodi POV IL AI Subtitles\n"
+"Language: he\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgctxt "#32100"
+msgid "Gemini API"
+msgstr "חיבור Gemini"
+
+msgctxt "#32101"
+msgid "Get a free Gemini API key (opens browser)"
+msgstr "צור API key חינמי ב-Google AI Studio"
+
+msgctxt "#32102"
+msgid "Gemini API Key"
+msgstr "Gemini API Key"
+
+msgctxt "#32103"
+msgid "Stored in plain text"
+msgstr "אזהרה: ה-key נשמר בלי הצפנה"
+
+msgctxt "#32104"
+msgid "Do not share your Kodi backup with anyone. Revoke and re-create the key in AI Studio if you suspect it was leaked."
+msgstr "אל תשתף את ה-Kodi backup שלך. אם חששת שה-key נחשף - בטל ויצור חדש ב-AI Studio."
+
+msgctxt "#32105"
+msgid "Test connection"
+msgstr "בדיקת חיבור"
+
+msgctxt "#32200"
+msgid "Translation"
+msgstr "תרגום"
+
+msgctxt "#32201"
+msgid "Model"
+msgstr "מודל"
+
+msgctxt "#32210"
+msgid "Source language priority"
+msgstr "שפות מקור (סדר עדיפות)"
+
+msgctxt "#32211"
+msgid "English"
+msgstr "אנגלית"
+
+msgctxt "#32212"
+msgid "Recommended primary source - best quality after translation"
+msgstr "מקור מומלץ - איכות תרגום הכי גבוהה"
+
+msgctxt "#32213"
+msgid "Spanish"
+msgstr "ספרדית"
+
+msgctxt "#32214"
+msgid "German"
+msgstr "גרמנית"
+
+msgctxt "#32215"
+msgid "French"
+msgstr "צרפתית"
+
+msgctxt "#32216"
+msgid "Portuguese"
+msgstr "פורטוגזית"
+
+msgctxt "#32220"
+msgid "Behavior"
+msgstr "התנהגות"
+
+msgctxt "#32221"
+msgid "Skip translation if Hebrew subs already exist"
+msgstr "דלג אם יש כתוביות עברית קיימות"
+
+msgctxt "#32300"
+msgid "Cache"
+msgstr "Cache"
+
+msgctxt "#32301"
+msgid "Maximum cache size (MB)"
+msgstr "גודל cache מקסימלי (MB)"
+
+msgctxt "#32302"
+msgid "{} MB"
+msgstr "{} MB"
+
+msgctxt "#32303"
+msgid "Delete entries not accessed for N days"
+msgstr "מחק קבצים שלא נגעו בהם N ימים"
+
+msgctxt "#32304"
+msgid "{} days"
+msgstr "{} ימים"
+
+msgctxt "#32305"
+msgid "Clear cache now"
+msgstr "נקה cache עכשיו"
+
+msgctxt "#32400"
+msgid "Advanced"
+msgstr "מתקדם"
+
+msgctxt "#32401"
+msgid "Log level"
+msgstr "רמת לוג"
+
+msgctxt "#32402"
+msgid "SRT lines per chunk"
+msgstr "שורות SRT לבקשה"
+
+msgctxt "#32403"
+msgid "Model temperature"
+msgstr "Temperature של המודל"
+
+msgctxt "#33000"
+msgid "AI Hebrew (translated from {0})"
+msgstr "עברית AI (מתורגם מ-{0})"
+
+msgctxt "#33001"
+msgid "Translating chunk {0}/{1}..."
+msgstr "מתרגם chunk {0}/{1}..."
+
+msgctxt "#33002"
+msgid "No API key configured. Open Settings to add one."
+msgstr "לא הוגדר API key. פתח Settings כדי להוסיף."
+
+msgctxt "#33003"
+msgid "Connection successful. Model: {0}"
+msgstr "החיבור הצליח. מודל: {0}"
+
+msgctxt "#33004"
+msgid "Connection failed: {0}"
+msgstr "החיבור נכשל: {0}"
+
+msgctxt "#33005"
+msgid "Daily quota exceeded. Try again after midnight UTC."
+msgstr "הקווטה היומית מוצתה. נסה שוב אחרי חצות UTC."
+
+msgctxt "#33006"
+msgid "No source subtitles found in supported languages."
+msgstr "לא נמצאו כתוביות בשפות הנתמכות."
+
+msgctxt "#33007"
+msgid "Cache cleared. {0} files removed."
+msgstr "ה-cache נוקה. {0} קבצים נמחקו."
+
+msgctxt "#33008"
+msgid "Translation failed: {0}"
+msgstr "התרגום נכשל: {0}"

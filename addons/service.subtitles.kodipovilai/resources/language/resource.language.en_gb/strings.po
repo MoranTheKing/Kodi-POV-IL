@@ -1,0 +1,156 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Kodi POV IL AI Subtitles\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+# Category: Gemini API
+msgctxt "#32100"
+msgid "Gemini API"
+msgstr "Gemini API"
+
+msgctxt "#32101"
+msgid "Get a free Gemini API key (opens browser)"
+msgstr "Get a free Gemini API key (opens browser)"
+
+msgctxt "#32102"
+msgid "Gemini API Key"
+msgstr "Gemini API Key"
+
+msgctxt "#32103"
+msgid "Stored in plain text"
+msgstr "Stored in plain text"
+
+msgctxt "#32104"
+msgid "Do not share your Kodi backup with anyone. Revoke and re-create the key in AI Studio if you suspect it was leaked."
+msgstr "Do not share your Kodi backup with anyone. Revoke and re-create the key in AI Studio if you suspect it was leaked."
+
+msgctxt "#32105"
+msgid "Test connection"
+msgstr "Test connection"
+
+# Category: Translation
+msgctxt "#32200"
+msgid "Translation"
+msgstr "Translation"
+
+msgctxt "#32201"
+msgid "Model"
+msgstr "Model"
+
+msgctxt "#32210"
+msgid "Source language priority"
+msgstr "Source language priority"
+
+msgctxt "#32211"
+msgid "English"
+msgstr "English"
+
+msgctxt "#32212"
+msgid "Recommended primary source - best quality after translation"
+msgstr "Recommended primary source - best quality after translation"
+
+msgctxt "#32213"
+msgid "Spanish"
+msgstr "Spanish"
+
+msgctxt "#32214"
+msgid "German"
+msgstr "German"
+
+msgctxt "#32215"
+msgid "French"
+msgstr "French"
+
+msgctxt "#32216"
+msgid "Portuguese"
+msgstr "Portuguese"
+
+msgctxt "#32220"
+msgid "Behavior"
+msgstr "Behavior"
+
+msgctxt "#32221"
+msgid "Skip translation if Hebrew subs already exist"
+msgstr "Skip translation if Hebrew subs already exist"
+
+# Category: Cache
+msgctxt "#32300"
+msgid "Cache"
+msgstr "Cache"
+
+msgctxt "#32301"
+msgid "Maximum cache size (MB)"
+msgstr "Maximum cache size (MB)"
+
+msgctxt "#32302"
+msgid "{} MB"
+msgstr "{} MB"
+
+msgctxt "#32303"
+msgid "Delete entries not accessed for N days"
+msgstr "Delete entries not accessed for N days"
+
+msgctxt "#32304"
+msgid "{} days"
+msgstr "{} days"
+
+msgctxt "#32305"
+msgid "Clear cache now"
+msgstr "Clear cache now"
+
+# Category: Advanced
+msgctxt "#32400"
+msgid "Advanced"
+msgstr "Advanced"
+
+msgctxt "#32401"
+msgid "Log level"
+msgstr "Log level"
+
+msgctxt "#32402"
+msgid "SRT lines per chunk"
+msgstr "SRT lines per chunk"
+
+msgctxt "#32403"
+msgid "Model temperature"
+msgstr "Model temperature"
+
+# Runtime messages
+msgctxt "#33000"
+msgid "AI Hebrew (translated from {0})"
+msgstr "AI Hebrew (translated from {0})"
+
+msgctxt "#33001"
+msgid "Translating chunk {0}/{1}..."
+msgstr "Translating chunk {0}/{1}..."
+
+msgctxt "#33002"
+msgid "No API key configured. Open Settings to add one."
+msgstr "No API key configured. Open Settings to add one."
+
+msgctxt "#33003"
+msgid "Connection successful. Model: {0}"
+msgstr "Connection successful. Model: {0}"
+
+msgctxt "#33004"
+msgid "Connection failed: {0}"
+msgstr "Connection failed: {0}"
+
+msgctxt "#33005"
+msgid "Daily quota exceeded. Try again after midnight UTC."
+msgstr "Daily quota exceeded. Try again after midnight UTC."
+
+msgctxt "#33006"
+msgid "No source subtitles found in supported languages."
+msgstr "No source subtitles found in supported languages."
+
+msgctxt "#33007"
+msgid "Cache cleared. {0} files removed."
+msgstr "Cache cleared. {0} files removed."
+
+msgctxt "#33008"
+msgid "Translation failed: {0}"
+msgstr "Translation failed: {0}"
