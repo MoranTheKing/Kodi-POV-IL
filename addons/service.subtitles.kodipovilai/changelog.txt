@@ -1,3 +1,21 @@
+v0.1.7
+- Self-healing wizard patcher: the wizard's AUTOUPDATE is
+  hardcoded 'No', so existing installs never pull the upstream
+  wizard updates. We patch the installed wizard's loginit.py on
+  disk to add the Gemini AI + Wyzie Connect Services entries.
+  Idempotent + re-injects on every Kodi startup. Now users get
+  the entries WITHOUT having to manually reinstall the wizard.
+- Wyzie timeout resilience: tightened per-request timeout from
+  15s to 8s, added one retry on connection-level failures (with
+  2s delay), and short-circuit the rest of a multi-language
+  search if Wyzie is clearly offline (no response on first call).
+  Prevents the user staring at a 45+ second wait for "no subs
+  found" when Wyzie's Cloudflare frontend is having a bad day.
+- Test connection + empty-result diagnostics now distinguish
+  timeout-vs-other-failure clearly and offer a workaround in
+  Hebrew ("click an English sub from All_Subs - the AI hook
+  will translate it").
+
 v0.1.6
 - RTL punctuation fix. Strengthened the prompt with explicit
   examples ("מה שלומך?" right, "?מה שלומך" wrong) AND added a
