@@ -92,6 +92,36 @@ def _prune_once():
             pass
 
 
+# Version tag of the "purge old temp subs once on next startup"
+# rollout. When it changes, the service does a one-shot purge of
+# .srt files in special://temp/ to evict the cross-movie leftovers
+# that the previous list_candidates would surface as Hebrew
+# passthrough for the wrong title.
+TEMP_PURGE_VERSION = '1'
+
+
+def _maybe_purge_temp_once():
+    try:
+        from resources.lib import local_subs, kodi_utils
+    except Exception:
+        return
+    try:
+        seen = kodi_utils.get_setting('_temp_purge_done', '')
+        if seen == TEMP_PURGE_VERSION:
+            return
+        n = local_subs.purge_temp_subs()
+        kodi_utils.set_setting('_temp_purge_done', TEMP_PURGE_VERSION)
+        kodi_utils.log(
+            'One-shot temp purge: removed {0} .srt files'.format(n),
+            level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log('Temp purge failed: {0}'.format(e),
+                           level='ERROR')
+        except Exception:
+            pass
+
+
 def main():
     if xbmc is None:
         return
@@ -102,6 +132,12 @@ def main():
     # subsequent enables behave normally.
     if _check_first_run_marker():
         return
+
+    # One-shot temp-dir cleanup. Runs at most once per
+    # TEMP_PURGE_VERSION bump. This particular bump exists to
+    # evict the cross-movie Hebrew leftovers from the bug fixed
+    # in this commit.
+    _maybe_purge_temp_once()
 
     # Initial prune.
     _prune_once()

@@ -256,6 +256,22 @@ def _handle_clear_cache(_params):
     xbmcgui.Dialog().ok('Kodi POV IL', kodi_utils.localised(33007, n))
 
 
+def _handle_purge_temp(_params):
+    """Wipe ALL .srt files in special://temp/. Used to clear out
+    stale subtitle leftovers from previous movies that Kodi keeps
+    in temp and would otherwise leak into the next movie's
+    subtitle search dialog."""
+    try:
+        from resources.lib import local_subs
+    except Exception as e:
+        xbmcgui.Dialog().ok('Kodi POV IL', 'Internal error: {0}'.format(e))
+        return
+    n = local_subs.purge_temp_subs()
+    xbmcgui.Dialog().ok(
+        'Kodi POV IL',
+        'נמחקו {0} קבצי כתוביות מ-temp.'.format(n))
+
+
 def main():
     if xbmc is None:
         _safe_log('default.py invoked outside Kodi -- nothing to do',
@@ -285,6 +301,8 @@ def main():
             _handle_test_connection(params)
         elif action == 'clear_cache':
             _handle_clear_cache(params)
+        elif action == 'purge_temp':
+            _handle_purge_temp(params)
         else:
             _safe_log('unknown action: ' + action, level='WARNING')
             if handle >= 0:
