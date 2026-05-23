@@ -94,8 +94,19 @@ def list_candidates(info):
     in_temp = {}
     for entry in local_subs.find_in_temp():
         lang = entry['lang']
-        if lang and lang not in in_temp:
-            in_temp[lang] = entry['path']
+        if not lang or lang in in_temp:
+            continue
+        # CRITICAL: never accept Hebrew from the temp dir as a
+        # passthrough candidate. The file Kodi keeps there
+        # (typically TempSubtitle.he.srt) is whatever was
+        # selected last -- which means after translating movie
+        # A, opening the subtitle dialog for movie B would
+        # surface movie A's Hebrew SRT as if it were a match
+        # for movie B. Only trust local files alongside the
+        # video or fresh Wyzie hits for Hebrew passthrough.
+        if lang == 'he':
+            continue
+        in_temp[lang] = entry['path']
 
     # Wyzie hits if the user has set their API key. Look up Hebrew
     # AND each source language in one round trip so we can offer
@@ -129,20 +140,6 @@ def list_candidates(info):
             'language': 'he',
             'link': _encode_link({
                 'type': 'passthrough', 'path': alongside['he'],
-            }),
-            'sync': 'true',
-            'rating': '5',
-            'is_hi': False, 'is_hd': False,
-        })
-    elif 'he' in in_temp:
-        # Already-loaded Hebrew sub from another addon -- nothing
-        # for us to do, just point Kodi at the file.
-        have_hebrew = True
-        results.append({
-            'filename': os.path.basename(in_temp['he']),
-            'language': 'he',
-            'link': _encode_link({
-                'type': 'passthrough', 'path': in_temp['he'],
             }),
             'sync': 'true',
             'rating': '5',
