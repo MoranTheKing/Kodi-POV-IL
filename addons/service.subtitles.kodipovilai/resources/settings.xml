@@ -137,15 +137,19 @@
           <level>0</level>
           <data>RunScript(service.subtitles.kodipovilai,action=purge_temp)</data>
         </setting>
-        <!-- internal: which TEMP_PURGE_VERSION has already run on this profile. -->
-        <setting id="_temp_purge_done" type="string" label="" visible="false">
+        <!-- internal: which TEMP_PURGE_VERSION has already run on this profile.
+             label="0" rather than "" because some Kodi 21 builds bail
+             out of rendering the rest of the group when they hit an
+             empty label attribute -- which was hiding the Clear-cache
+             and Clear-temp buttons above. -->
+        <setting id="_temp_purge_done" type="string" label="0" visible="false">
           <level>3</level>
           <default></default>
         </setting>
         <!-- internal: '1' once we've turned DarkSubs's auto_translate
              off, so we don't keep flipping a setting the user may
              have deliberately re-enabled. -->
-        <setting id="_darksubs_takeover_done" type="string" label="" visible="false">
+        <setting id="_darksubs_takeover_done" type="string" label="0" visible="false">
           <level>3</level>
           <default></default>
         </setting>

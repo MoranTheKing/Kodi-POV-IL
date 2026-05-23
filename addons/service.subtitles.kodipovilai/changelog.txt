@@ -1,9 +1,19 @@
+v0.1.2
+- (folded into v0.1.1 below -- shipped same quickfix)
+
 v0.1.1
 - One-shot DarkSubs handshake: when the user sets a Gemini key,
   flip DarkSubs's auto_translate off so its built-in Google/Bing
   Hebrew rows stop competing with (and outranking) ours. Gated
   so we never re-stomp on a user who deliberately toggled it
   back on.
+- Fix: Clear-cache / Clear-temp buttons were hidden because an
+  empty `label=""` on a sibling visible=false setting bailed Kodi
+  21 out of rendering the rest of the group. Now label="0".
+- Prompt: dedicated GENDER AGREEMENT section with concrete
+  Hebrew examples for 1st/2nd/3rd person, and an explicit
+  "double-check before finalising" instruction. Should reduce
+  the occasional male/female mix-ups.
 
 v0.1.0 (initial)
 - AI-translated Hebrew subtitles via Gemini 3.1 Flash Lite (free tier)
