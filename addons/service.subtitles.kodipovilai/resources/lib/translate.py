@@ -289,8 +289,25 @@ def resolve(link, info, progress_cb=None):
     if not src_text:
         kodi_utils.notify(
             'הקובץ של הכתוביות המקור לא נמצא. בחר שוב כתובית בשפת מקור '
-            'ונסה שוב.')
+            'ונסה שוב.',
+            time_ms=8000,
+        )
         return None
+
+    # Up-front heads-up so the user understands the wait. The
+    # progress dialog itself is a DialogProgressBG which sits in
+    # the corner during video playback, easy to miss. Kodi has an
+    # internal timeout on subtitle downloads and will likely show
+    # its own "subtitle download failed" toast before we finish on
+    # longer pieces -- the translation continues anyway and the
+    # result is cached, so on the next subtitle-search the user
+    # sees it as a cached entry and gets it instantly.
+    kodi_utils.notify(
+        'AI: מתחיל תרגום. יכול לקחת דקה-שתיים. '
+        'התקדמות תופיע בפינה. אם Kodi יציג "הורדה נכשלה" '
+        'באמצע - תתעלם, התרגום ממשיך וייושמר אוטומטית.',
+        time_ms=10000,
+    )
 
     # Sanity: if the source is actually Hebrew (mislabeled),
     # don't translate -- pass through.
@@ -359,6 +376,17 @@ def resolve(link, info, progress_cb=None):
     total = len(chunks)
     out_blocks = []
 
+    # Backoff schedule for retryable Gemini failures (503 overload,
+    # 500 / 502 / 504 transients). Google's published guidance is to
+    # wait at least a few seconds before retrying these; first user
+    # report hit 503 on chunk 6/9 and the old 2-attempt-with-2s-wait
+    # gave up. Give it real time to recover.
+    OVERLOAD_BACKOFF = [5, 15, 30, 60, 120]  # seconds
+    # Other transient (non-overload) Gemini errors get a much
+    # shorter pair of attempts -- they're usually parse / safety /
+    # content issues, not infra. Retrying immediately is fine.
+    GENERIC_BACKOFF = [2, 5]
+
     for i, ch in enumerate(chunks, start=1):
         if progress_cb:
             try:
@@ -367,8 +395,13 @@ def resolve(link, info, progress_cb=None):
                 pass
         body = '\n\n'.join(ch)
         full_prompt = prompt_template.replace('{chunk}', body)
-        last_err = None
-        for attempt in range(2):
+
+        # Composite attempt loop: try once, then retry per the
+        # backoff schedule that matches the failure type.
+        response = None
+        overload_attempts = 0
+        generic_attempts = 0
+        while response is None:
             try:
                 response = gemini.generate(
                     api_key=api_key,
@@ -376,31 +409,61 @@ def resolve(link, info, progress_cb=None):
                     prompt=full_prompt,
                     temperature=temperature,
                 )
-                out_blocks.extend(srt.parse_blocks(response))
-                last_err = None
-                break
             except gemini.QuotaExceeded:
-                kodi_utils.notify(kodi_utils.localised(33005))
+                kodi_utils.notify(kodi_utils.localised(33005),
+                                  time_ms=10000)
                 return None
             except gemini.InvalidKey as e:
                 kodi_utils.notify(kodi_utils.localised(33004,
-                    'API key rejected'))
+                                  'API key rejected'),
+                                  time_ms=10000)
                 kodi_utils.log('InvalidKey: {0}'.format(e),
                                level='ERROR')
                 return None
+            except gemini.OverloadError as e:
+                if overload_attempts < len(OVERLOAD_BACKOFF):
+                    wait = OVERLOAD_BACKOFF[overload_attempts]
+                    overload_attempts += 1
+                    kodi_utils.log(
+                        'Gemini overloaded chunk {0}/{1}, '
+                        'retry {2}/{3} in {4}s'.format(
+                            i, total, overload_attempts,
+                            len(OVERLOAD_BACKOFF), wait),
+                        level='WARNING')
+                    kodi_utils.notify(
+                        'AI: Gemini עמוס. ניסיון {0}/{1} בעוד {2}ש' \
+                        .format(overload_attempts,
+                                len(OVERLOAD_BACKOFF), wait),
+                        time_ms=min(wait * 1000, 8000))
+                    time.sleep(wait)
+                    continue
+                else:
+                    kodi_utils.notify(
+                        'AI: Gemini עמוס מדי גם אחרי {0} ניסיונות. '
+                        'תרגום נכשל ב-chunk {1}/{2}.' \
+                        .format(len(OVERLOAD_BACKOFF), i, total),
+                        time_ms=12000)
+                    return None
             except gemini.GeminiError as e:
-                last_err = e
-                kodi_utils.log(
-                    'Gemini error chunk {0}/{1} attempt {2}: {3}'
-                    .format(i, total, attempt + 1, e),
-                    level='WARNING')
-                time.sleep(2 * (attempt + 1))
-                continue
-        if last_err is not None:
-            kodi_utils.notify(kodi_utils.localised(33008,
-                                                   str(last_err)[:80]))
-            return None
+                if generic_attempts < len(GENERIC_BACKOFF):
+                    wait = GENERIC_BACKOFF[generic_attempts]
+                    generic_attempts += 1
+                    kodi_utils.log(
+                        'Gemini error chunk {0}/{1} attempt {2}: {3}'
+                        .format(i, total, generic_attempts, e),
+                        level='WARNING')
+                    time.sleep(wait)
+                    continue
+                else:
+                    kodi_utils.notify(
+                        kodi_utils.localised(33008, str(e)[:80]),
+                        time_ms=10000)
+                    return None
+
+        out_blocks.extend(srt.parse_blocks(response))
 
     final = srt.stitch_blocks(out_blocks)
     cache.save_text(translated, final)
+    kodi_utils.notify('AI: תרגום הסתיים בהצלחה ({0} chunks)'
+                      .format(total), time_ms=4000)
     return translated
