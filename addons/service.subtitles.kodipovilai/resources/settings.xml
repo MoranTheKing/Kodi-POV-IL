@@ -133,6 +133,10 @@
           <level>0</level>
           <data>RunScript(service.subtitles.kodipovilai,action=clear_cache)</data>
         </setting>
+        <setting id="purge_temp" type="action" label="32306"> <!-- Clear Kodi temp subtitle files -->
+          <level>0</level>
+          <data>RunScript(service.subtitles.kodipovilai,action=purge_temp)</data>
+        </setting>
       </group>
     </category>
 

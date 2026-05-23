@@ -71,16 +71,20 @@ def find_alongside(video_path):
         return []
 
 
-def find_in_temp(max_age_seconds=900):
+def find_in_temp(max_age_seconds=300):
     """Return [{path, lang, mtime, name}, ...] for .srt files in
     special://temp/ that were touched in the last max_age_seconds.
 
-    Kodi puts subtitles downloaded through any addon here (named
-    like Subtitle.X.srt or similar), so this lets us pick up
-    whatever the user just selected from another subtitle addon
-    and translate it.
+    Default window dropped from 15 minutes to 5 minutes -- the
+    previous window was wide enough to carry the just-applied
+    Hebrew sub from movie A into movie B's subtitle dialog, where
+    we'd offer it as a passthrough match.
 
-    Sorted by mtime descending (newest first)."""
+    Caller decides per-language what to do with the result. The
+    orchestrator in translate.py refuses to surface Hebrew matches
+    from this list (those are too likely to be cross-movie leakage
+    from a previous addon's TempSubtitle.he.srt).
+    """
     if xbmcvfs is None:
         return []
     try:
@@ -111,3 +115,32 @@ def find_in_temp(max_age_seconds=900):
         })
     out.sort(key=lambda r: -r['mtime'])
     return out
+
+
+def purge_temp_subs():
+    """Delete every .srt file in special://temp/. Used by the
+    'clear temp subtitles' settings action and by the one-shot
+    service-startup cleanup that ships with the temp-leak fix.
+    Returns the number of files removed."""
+    if xbmcvfs is None:
+        return 0
+    try:
+        temp_dir = xbmcvfs.translatePath('special://temp/')
+    except Exception:
+        return 0
+    if not temp_dir or not os.path.isdir(temp_dir):
+        return 0
+    removed = 0
+    try:
+        for name in os.listdir(temp_dir):
+            if not name.lower().endswith(SRT_SUFFIXES):
+                continue
+            full = os.path.join(temp_dir, name)
+            try:
+                os.remove(full)
+                removed += 1
+            except OSError:
+                pass
+    except OSError:
+        pass
+    return removed
