@@ -82,6 +82,23 @@
           <default>true</default>
         </setting>
       </group>
+
+      <group id="opensubtitles" label="32240"> <!-- OpenSubtitles -->
+        <setting id="info_os_key" type="action" label="32241"> <!-- Sign up free at opensubtitles.com -->
+          <level>0</level>
+          <data>RunScript(service.subtitles.kodipovilai,action=open_os_signup)</data>
+        </setting>
+        <setting id="os_api_key" type="string" label="32242" help="32243"> <!-- OpenSubtitles API key + help -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="edit" format="string">
+            <heading>32242</heading>
+          </control>
+        </setting>
+      </group>
     </category>
 
     <category id="cache" label="32300"> <!-- Cache -->
