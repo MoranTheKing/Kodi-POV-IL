@@ -248,8 +248,10 @@ def list_candidates(info):
             # for the user trying to debug.
             if wyzie_last_status is None:
                 reasons.append(
-                    'Wyzie לא הגיב (timeout / רשת). נסה שוב או '
-                    'בדוק חיבור ב-"בדיקת חיבור Wyzie".')
+                    'Wyzie לא הגיב (timeout). Wyzie מקרטעת לאחרונה '
+                    '(Cloudflare 522). זה אצלם, לא אצלך. אפשרות חלופית '
+                    'מיידית: לחץ על כתובית באנגלית מ-All_Subs - התוסף '
+                    'AI יתרגם אותה אוטומטית לעברית.')
             elif wyzie_last_status == 200:
                 reasons.append(
                     'Wyzie החזיר 0 תוצאות לסרט הזה גם תחת קודי שפה '

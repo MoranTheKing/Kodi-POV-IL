@@ -20,7 +20,18 @@ from . import kodi_utils
 
 API_BASE = 'https://sub.wyzie.io'
 USER_AGENT = 'KodiPovIlAI/0.1'
-DEFAULT_TIMEOUT = 15
+# Wyzie's API is Cloudflare-fronted and sometimes returns 522
+# (origin unreachable) or just hangs on the SSL handshake. Keeping
+# the per-request timeout tight so a single bad call doesn't lock
+# up subtitle search for a long time -- a per-call retry handles
+# the occasional transient.
+DEFAULT_TIMEOUT = 8
+# Number of retries on connection-level failure (timeout, DNS,
+# refused). NOT applied to HTTP error responses -- those mean we
+# reached Wyzie and got a real answer (e.g. 401, 429), retrying
+# wouldn't help.
+RETRY_ON_TIMEOUT = 1
+RETRY_DELAY = 2.0
 
 # Wyzie wraps OpenSubtitles, and OpenSubtitles is inconsistent about
 # whether Hebrew is 'he' (ISO 639-1, modern), 'heb' (ISO 639-2/B,
@@ -130,6 +141,13 @@ def test_key(api_key=None):
                      'Accept': 'application/json'},
             timeout=DEFAULT_TIMEOUT,
         )
+    except requests.Timeout:
+        return {'ok': False,
+                'message': 'Wyzie לא הגיב תוך {0} שניות. השירות שלהם '
+                           'מקרטע מדי פעם (Cloudflare 522 / origin '
+                           'unreachable). נסה שוב בעוד דקה-שתיים. '
+                           'אם זה נמשך - הבעיה אצלם, לא אצלך.'
+                           .format(DEFAULT_TIMEOUT)}
     except requests.RequestException as e:
         return {'ok': False,
                 'message': 'נכשל להתחבר ל-Wyzie: {0}'.format(str(e)[:80])}
@@ -187,34 +205,60 @@ def search(imdb_id=None, tmdb_id=None, season=None, episode=None,
     else:
         ident = str(tmdb_id)
 
+    import time as _time
     out = _SearchResult()
     last_http_status = None  # surface to caller for diagnostics
     last_error = None
+    # If the very first request times out, Wyzie is probably offline
+    # right now. Bail out of the whole search rather than chewing
+    # through 30+ seconds across multiple language aliases. The
+    # caller's empty-result diagnostic will explain.
+    service_offline = False
     for lang in languages:
+        if service_offline:
+            break
         # Try each language alias (e.g. 'he', 'heb', 'iw' for Hebrew).
         # As soon as one returns results, take them and don't retry
         # under another alias for this language slot.
         aliases = _LANG_ALIASES.get(lang, (lang,))
         for code in aliases:
+            if service_offline:
+                break
             params = {'id': ident, 'language': code, 'key': key}
             if season:
                 params['season'] = str(season)
             if episode:
                 params['episode'] = str(episode)
             url = API_BASE + '/search?' + urllib.parse.urlencode(params)
-            try:
-                r = requests.get(
-                    url,
-                    headers={'User-Agent': USER_AGENT,
-                             'Accept': 'application/json'},
-                    timeout=DEFAULT_TIMEOUT,
-                )
-            except requests.RequestException as e:
-                last_error = str(e)[:120]
-                kodi_utils.log(
-                    'wyzie search {0}/{1}: request failed: {2}'.format(
-                        lang, code, last_error),
-                    level='WARNING')
+            r = None
+            attempts = 0
+            while attempts <= RETRY_ON_TIMEOUT:
+                try:
+                    r = requests.get(
+                        url,
+                        headers={'User-Agent': USER_AGENT,
+                                 'Accept': 'application/json'},
+                        timeout=DEFAULT_TIMEOUT,
+                    )
+                    break
+                except requests.RequestException as e:
+                    last_error = str(e)[:120]
+                    kodi_utils.log(
+                        'wyzie search {0}/{1} attempt {2}: '
+                        'request failed: {3}'.format(
+                            lang, code, attempts + 1, last_error),
+                        level='WARNING')
+                    attempts += 1
+                    if attempts <= RETRY_ON_TIMEOUT:
+                        _time.sleep(RETRY_DELAY)
+            if r is None:
+                # All retries exhausted on a connection-level error.
+                # If this was the first lang/alias and nothing has
+                # come back at all so far, assume Wyzie is offline
+                # right now and stop chewing the user's time on
+                # subsequent language slots.
+                if not out and last_http_status is None:
+                    service_offline = True
                 continue
             last_http_status = r.status_code
             if r.status_code != 200:

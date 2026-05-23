@@ -104,6 +104,36 @@ def _prune_once():
 TEMP_PURGE_VERSION = '2'
 
 
+def _maybe_patch_wizard():
+    """Inject the 'Gemini AI' and 'Wyzie' entries into the wizard's
+    Connect Services menu. The wizard's AUTOUPDATE is hardcoded 'No'
+    so existing installs never pick up a newer wizard from the build
+    server -- we patch the installed wizard's loginit.py on disk
+    instead. Idempotent + self-healing on every Kodi startup."""
+    try:
+        from resources.lib import wizard_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        result = wizard_patcher.ensure_patched()
+        for step, status in result.items():
+            if status == 'patched':
+                kodi_utils.log(
+                    'wizard_patcher.{0} (re)injected on startup'.format(
+                        step), level='INFO')
+            elif status in ('unmatched', 'write_failed', 'read_failed'):
+                kodi_utils.log(
+                    'wizard_patcher.{0} skipped: {1}'.format(
+                        step, status), level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'wizard_patcher run failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_darksubs():
     """Self-healing patch of DarkSubs's machine_translate_subs so
     that when a user with a Gemini key picks a non-Hebrew subtitle
@@ -173,6 +203,11 @@ def main():
     # if upstream DarkSubs updates and overwrites our hook, it
     # comes back automatically on next Kodi launch.
     _maybe_patch_darksubs()
+
+    # Same pattern for the wizard's Connect Services menu, since
+    # the wizard never auto-updates itself (AUTOUPDATE='No' is
+    # hardcoded in uservar.py).
+    _maybe_patch_wizard()
 
     monitor = xbmc.Monitor()
     # 24h between passes. waitForAbort returns True when Kodi is
