@@ -33,6 +33,7 @@ from . import local_subs
 from . import prompt
 from . import srt
 from . import tmdb_helper
+from . import wyzie
 
 # Iteration order = priority order. settings.xml exposes
 # checkboxes -- we filter the disabled ones out at runtime.
@@ -77,6 +78,10 @@ def list_candidates(info):
     sync, rating. Empty list if nothing plausible is available.
     """
     filepath = info.get('filepath') or ''
+    imdb_id = (info.get('imdb_id') or '').strip()
+    season  = info.get('season') or ''
+    episode = info.get('episode') or ''
+    sources = _enabled_sources()
 
     # Collect candidate source files from the two filesystem
     # locations we look at. By-language dicts, so first match wins
@@ -91,6 +96,26 @@ def list_candidates(info):
         lang = entry['lang']
         if lang and lang not in in_temp:
             in_temp[lang] = entry['path']
+
+    # Wyzie hits if the user has set their API key. Look up Hebrew
+    # AND each source language in one round trip so we can offer
+    # passthrough Hebrew if available, otherwise translate options.
+    wyzie_by_lang = {}
+    if wyzie.has_api_key() and imdb_id:
+        wanted = ['he'] + [l for l in sources if l != 'he']
+        try:
+            hits = wyzie.search(
+                imdb_id=imdb_id, season=season, episode=episode,
+                languages=tuple(wanted),
+            )
+        except Exception as e:
+            kodi_utils.log('wyzie search failed: {0}'.format(e),
+                           level='WARNING')
+            hits = []
+        for h in hits:
+            lang = h.get('language')
+            if lang and lang not in wyzie_by_lang:
+                wyzie_by_lang[lang] = h
 
     results = []
 
@@ -123,43 +148,73 @@ def list_candidates(info):
             'rating': '5',
             'is_hi': False, 'is_hd': False,
         })
+    elif 'he' in wyzie_by_lang:
+        # Online Hebrew. Kodi will fetch it through us when picked.
+        have_hebrew = True
+        h = wyzie_by_lang['he']
+        results.append({
+            'filename': h.get('release') or h.get('name') or 'Hebrew',
+            'language': 'he',
+            'link': _encode_link({
+                'type': 'wyzie_passthrough', 'url': h['url'],
+            }),
+            'sync': 'false',
+            'rating': '4',
+            'is_hi': h.get('hi', False),
+            'is_hd': False,
+        })
 
     skip_when_hebrew = kodi_utils.get_bool('skip_if_hebrew', True)
     if have_hebrew and skip_when_hebrew:
         return results
 
     # 2. For each enabled source language, surface ONE "translate
-    #    this" entry. Prefer an alongside file (always available
-    #    re-watches), then a recently-downloaded sub in temp.
-    sources = _enabled_sources()
+    #    this" entry. Priority order:
+    #       (a) alongside file (local re-watch)
+    #       (b) temp-dir file (loaded by another addon)
+    #       (c) Wyzie online (single-click flow if user has key)
     seen_langs = set()
     for src_lang in sources:
         if src_lang in seen_langs:
             continue
 
         local_path = alongside.get(src_lang) or in_temp.get(src_lang)
-        if not local_path:
+        if local_path:
+            seen_langs.add(src_lang)
+            source_label = _lang_display(src_lang)
+            source_origin = ('local file' if alongside.get(src_lang)
+                             else 'loaded by another addon')
+            results.append({
+                'filename': 'AI Hebrew (translate {0} {1})'.format(
+                    source_label, source_origin),
+                'language': 'he',
+                'link': _encode_link({
+                    'type': 'ai',
+                    'source_lang': src_lang,
+                    'local_path': local_path,
+                }),
+                'sync': 'false',
+                'rating': '4' if src_lang == 'en' else '3',
+                'is_hi': False, 'is_hd': False,
+            })
             continue
 
-        seen_langs.add(src_lang)
-        source_label = _lang_display(src_lang)
-        # Hint to the user where the source came from so it's
-        # obvious why we're offering this in particular.
-        source_origin = ('local file' if alongside.get(src_lang)
-                         else 'loaded by another addon')
-        results.append({
-            'filename': 'AI Hebrew (translate {0} {1})'.format(
-                source_label, source_origin),
-            'language': 'he',
-            'link': _encode_link({
-                'type': 'ai',
-                'source_lang': src_lang,
-                'local_path': local_path,
-            }),
-            'sync': 'false',
-            'rating': '4' if src_lang == 'en' else '3',
-            'is_hi': False, 'is_hd': False,
-        })
+        wyzie_hit = wyzie_by_lang.get(src_lang)
+        if wyzie_hit:
+            seen_langs.add(src_lang)
+            results.append({
+                'filename': 'AI Hebrew (translate {0} via Wyzie)'.format(
+                    _lang_display(src_lang)),
+                'language': 'he',
+                'link': _encode_link({
+                    'type': 'ai',
+                    'source_lang': src_lang,
+                    'wyzie_url': wyzie_hit['url'],
+                }),
+                'sync': 'false',
+                'rating': '4' if src_lang == 'en' else '3',
+                'is_hi': False, 'is_hd': False,
+            })
 
     return results
 
@@ -189,6 +244,18 @@ def resolve(link, info, progress_cb=None):
             return path
         return None
 
+    if kind == 'wyzie_passthrough':
+        text = wyzie.download(payload.get('url'))
+        if not text:
+            return None
+        out = os.path.join(kodi_utils.cache_dir(), 'wyzie_he.srt')
+        try:
+            with open(out, 'w', encoding='utf-8') as f:
+                f.write(text)
+            return out
+        except OSError:
+            return None
+
     if kind != 'ai':
         return None
 
@@ -205,11 +272,10 @@ def resolve(link, info, progress_cb=None):
             pass
         return translated
 
-    # Read the source SRT from the local path we recorded at list
-    # time. If for some reason it's gone (Kodi cleaned the temp
-    # dir between the dialog and our resolve call), bail with a
-    # friendly message.
+    # Read the source SRT. Either we recorded a local path at list
+    # time (alongside / temp dir) or a Wyzie download URL.
     local_source = payload.get('local_path')
+    wyzie_url = payload.get('wyzie_url')
     src_text = None
     if local_source and os.path.isfile(local_source):
         try:
@@ -218,6 +284,8 @@ def resolve(link, info, progress_cb=None):
                 src_text = f.read()
         except (IOError, OSError):
             src_text = None
+    elif wyzie_url:
+        src_text = wyzie.download(wyzie_url)
     if not src_text:
         kodi_utils.notify(
             'הקובץ של הכתוביות המקור לא נמצא. בחר שוב כתובית בשפת מקור '
