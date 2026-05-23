@@ -225,7 +225,6 @@ jobs:
           cp src/dist/plugin.program.kodipovilwizard-0.1.2.zip $RUNNER_TEMP/win/wizard.zip
           cp src/dist/Kodi-POV-IL-FENtastic-test-0.1.8.zip      $RUNNER_TEMP/win/build.zip
           cp src/dist/installer/build-windows-installer.nsi     $RUNNER_TEMP/win/installer.nsi
-          cp src/dist/installer/patch-kodi.ps1                  $RUNNER_TEMP/win/patch-kodi.ps1
           (cd $RUNNER_TEMP/win && makensis -V2 -DVERSION="$VERSION" installer.nsi)
           cp $RUNNER_TEMP/win/Kodi-POV-IL-Setup-*.exe out/
           ls -la out/
