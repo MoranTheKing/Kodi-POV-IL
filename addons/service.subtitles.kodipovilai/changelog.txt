@@ -1,3 +1,21 @@
+v0.1.6
+- RTL punctuation fix. Strengthened the prompt with explicit
+  examples ("מה שלומך?" right, "?מה שלומך" wrong) AND added a
+  defensive post-processor that automatically moves misplaced
+  punctuation from the start of a Hebrew line to the end.
+  Verified with 5 unit cases.
+- Wyzie language-alias fallback. OpenSubtitles (which Wyzie wraps)
+  serves Hebrew under three different codes: 'he', 'heb', and the
+  legacy 'iw'. The search now tries all three for any Hebrew
+  request and unions the results, so titles indexed under the
+  legacy code finally surface. For other languages, no behaviour
+  change.
+- Detailed empty-result diagnostics. Instead of a generic "Wyzie
+  לא מצא כתוביות" the user now sees the actual reason: 0 results
+  across all three Hebrew codes (= title not in index), HTTP 401/
+  403 (= key rejected), 429 (= daily quota), 5xx (= service down),
+  or "no response" (= timeout/network).
+
 v0.1.5
 - Test connection button for Wyzie (mirrors the one for Gemini).
   Sanity-checks the key against the live Wyzie API and reports a

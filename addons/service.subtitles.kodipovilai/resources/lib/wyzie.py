@@ -22,6 +22,25 @@ API_BASE = 'https://sub.wyzie.io'
 USER_AGENT = 'KodiPovIlAI/0.1'
 DEFAULT_TIMEOUT = 15
 
+# Wyzie wraps OpenSubtitles, and OpenSubtitles is inconsistent about
+# whether Hebrew is 'he' (ISO 639-1, modern), 'heb' (ISO 639-2/B,
+# OpenSubtitles legacy), or even 'iw' (deprecated ISO 639-1, still
+# served by some scrapers). When we ask for Hebrew we try all three
+# variants and union the results -- some titles only show up under
+# the legacy code. For other languages this is a no-op since the
+# 2-letter form is universal.
+_LANG_ALIASES = {
+    'he':  ('he', 'heb', 'iw'),
+}
+
+
+class _SearchResult(list):
+    """List subclass that carries last-call diagnostics. Callers that
+    need to know WHY a search returned empty can read .last_http_status
+    and .last_error -- regular list code keeps working unchanged."""
+    last_http_status = None
+    last_error = None
+
 
 def _api_key():
     return (kodi_utils.get_setting('wyzie_api_key', '') or '').strip()
@@ -168,39 +187,81 @@ def search(imdb_id=None, tmdb_id=None, season=None, episode=None,
     else:
         ident = str(tmdb_id)
 
-    out = []
+    out = _SearchResult()
+    last_http_status = None  # surface to caller for diagnostics
+    last_error = None
     for lang in languages:
-        params = {'id': ident, 'language': lang, 'key': key}
-        if season:
-            params['season'] = str(season)
-        if episode:
-            params['episode'] = str(episode)
-        url = API_BASE + '/search?' + urllib.parse.urlencode(params)
-        try:
-            r = requests.get(
-                url,
-                headers={'User-Agent': USER_AGENT,
-                         'Accept': 'application/json'},
-                timeout=DEFAULT_TIMEOUT,
-            )
-            if r.status_code != 200:
+        # Try each language alias (e.g. 'he', 'heb', 'iw' for Hebrew).
+        # As soon as one returns results, take them and don't retry
+        # under another alias for this language slot.
+        aliases = _LANG_ALIASES.get(lang, (lang,))
+        for code in aliases:
+            params = {'id': ident, 'language': code, 'key': key}
+            if season:
+                params['season'] = str(season)
+            if episode:
+                params['episode'] = str(episode)
+            url = API_BASE + '/search?' + urllib.parse.urlencode(params)
+            try:
+                r = requests.get(
+                    url,
+                    headers={'User-Agent': USER_AGENT,
+                             'Accept': 'application/json'},
+                    timeout=DEFAULT_TIMEOUT,
+                )
+            except requests.RequestException as e:
+                last_error = str(e)[:120]
                 kodi_utils.log(
-                    'wyzie search {0}: HTTP {1}'.format(lang, r.status_code),
+                    'wyzie search {0}/{1}: request failed: {2}'.format(
+                        lang, code, last_error),
                     level='WARNING')
                 continue
-            body = r.json()
-        except (requests.RequestException, ValueError) as e:
-            kodi_utils.log('wyzie search {0} failed: {1}'.format(lang, e),
-                           level='WARNING')
-            continue
-        for item in _extract_list(body):
-            norm = _normalise_result(item)
-            if norm:
-                # Stamp the language we asked for, in case the
-                # response omits it.
-                if not norm['language']:
-                    norm['language'] = lang
-                out.append(norm)
+            last_http_status = r.status_code
+            if r.status_code != 200:
+                kodi_utils.log(
+                    'wyzie search {0}/{1}: HTTP {2}'.format(
+                        lang, code, r.status_code),
+                    level='WARNING')
+                # On 5xx, try another alias -- might be a per-code
+                # backend issue rather than a service-wide outage.
+                continue
+            try:
+                body = r.json()
+            except ValueError as e:
+                last_error = 'invalid JSON'
+                kodi_utils.log(
+                    'wyzie search {0}/{1}: invalid JSON'.format(
+                        lang, code), level='WARNING')
+                continue
+            items_before = len(out)
+            for item in _extract_list(body):
+                norm = _normalise_result(item)
+                if norm:
+                    if not norm['language']:
+                        norm['language'] = lang  # stamp the canonical code
+                    else:
+                        # Re-stamp any legacy code back to the canonical
+                        # 2-letter form so downstream code (which keys
+                        # by 'he') still finds Hebrew hits even if the
+                        # response came back as 'heb' or 'iw'.
+                        norm['language'] = lang
+                    out.append(norm)
+            if len(out) > items_before:
+                # Got hits under this alias; no need to try further aliases.
+                kodi_utils.log(
+                    'wyzie {0}: {1} hits via code "{2}"'.format(
+                        lang, len(out) - items_before, code),
+                    level='DEBUG')
+                break
+        else:
+            # all aliases exhausted, no hits
+            kodi_utils.log(
+                'wyzie {0}: 0 hits across aliases {1} (last HTTP {2})'
+                .format(lang, list(aliases), last_http_status),
+                level='INFO')
+
+    out.last_http_status = last_http_status
+    out.last_error = last_error
     return out
 
 

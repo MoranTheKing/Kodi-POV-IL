@@ -115,6 +115,8 @@ def list_candidates(info):
     # Accept either imdb_id (set by the library scraper) or tmdb_id
     # (set by POV / FENtastic plugin streams via UniqueId(tmdb)).
     wyzie_by_lang = {}
+    wyzie_last_status = None  # for diagnostics in the empty-results branch
+    wyzie_last_error = None
     if wyzie.has_api_key() and (imdb_id or tmdb_id):
         wanted = ['he'] + [l for l in sources if l != 'he']
         try:
@@ -132,9 +134,16 @@ def list_candidates(info):
             lang = h.get('language')
             if lang and lang not in wyzie_by_lang:
                 wyzie_by_lang[lang] = h
+        # Diagnostics: capture last HTTP status / error if the result
+        # list exposes them (the new _SearchResult subclass does).
+        wyzie_last_status = getattr(hits, 'last_http_status', None)
+        wyzie_last_error = getattr(hits, 'last_error', None)
         kodi_utils.log(
-            'Wyzie search: imdb={0} tmdb={1} -> {2} hits'.format(
-                imdb_id, tmdb_id, len(wyzie_by_lang)),
+            'Wyzie search: imdb={0} tmdb={1} -> {2} hits '
+            '(last HTTP {3}, err {4}). per-lang: {5}'.format(
+                imdb_id, tmdb_id, len(wyzie_by_lang),
+                wyzie_last_status, wyzie_last_error,
+                {k: 1 for k in wyzie_by_lang}),
             level='INFO')
 
     results = []
@@ -233,14 +242,42 @@ def list_candidates(info):
         if not wyzie.has_api_key():
             reasons.append('לא הוגדר Wyzie API key')
         elif (imdb_id or tmdb_id) and not wyzie_by_lang:
-            reasons.append('Wyzie לא מצא כתוביות לסרט הזה')
+            # Be specific about WHY Wyzie returned empty -- the
+            # difference between "service down", "key rejected" and
+            # "title genuinely not in their index" matters a lot
+            # for the user trying to debug.
+            if wyzie_last_status is None:
+                reasons.append(
+                    'Wyzie לא הגיב (timeout / רשת). נסה שוב או '
+                    'בדוק חיבור ב-"בדיקת חיבור Wyzie".')
+            elif wyzie_last_status == 200:
+                reasons.append(
+                    'Wyzie החזיר 0 תוצאות לסרט הזה גם תחת קודי שפה '
+                    'חלופיים (he/heb/iw). הסרט כנראה לא באינדקס שלהם.')
+            elif wyzie_last_status in (401, 403):
+                reasons.append(
+                    'Wyzie API key נדחה ({0}). בדוק ב-"בדיקת חיבור '
+                    'Wyzie".'.format(wyzie_last_status))
+            elif wyzie_last_status == 429:
+                reasons.append(
+                    'חרגת ממכסת Wyzie היומית (1000 בקשות). המתן '
+                    'עד מחר.')
+            elif 500 <= wyzie_last_status < 600:
+                reasons.append(
+                    'Wyzie במצב תקלה (HTTP {0}). נסה שוב מאוחר '
+                    'יותר.'.format(wyzie_last_status))
+            else:
+                reasons.append(
+                    'Wyzie החזיר HTTP {0} ({1}). נסה "בדיקת חיבור '
+                    'Wyzie".'.format(wyzie_last_status,
+                                     wyzie_last_error or '?'))
         if not alongside and not in_temp:
             reasons.append('אין קבצי SRT ב-temp או ליד הסרט')
         msg = 'AI: אין מקור לתרגום ({0}). אפשרויות: 1) בחר ' \
               'כתובית באנגלית מתוסף אחר ופתח שוב חיפוש 2) הגדר ' \
               'Wyzie API key 3) חפש סרט שיש לו IMDB id'.format(
                 ' / '.join(reasons) or 'לא ידוע')
-        kodi_utils.notify(msg, time_ms=12000)
+        kodi_utils.notify(msg, time_ms=15000)
         kodi_utils.log('list_candidates returned empty: ' + repr(
             {'imdb_id': imdb_id, 'tmdb_id': tmdb_id,
              'has_wyzie_key': wyzie.has_api_key(),
@@ -676,6 +713,12 @@ def resolve(link, info, progress_cb=None):
         out_blocks.extend(out_blocks_by_index[i])
 
     final = srt.stitch_blocks(out_blocks)
+    # Defensive backstop for RTL punctuation: Gemini sometimes puts
+    # punctuation at the logical start of a Hebrew line ("?שלום")
+    # when it belongs at the logical end ("שלום?"). The prompt
+    # instructs against this, but this post-processor catches any
+    # slips so the final SRT renders correctly in Kodi.
+    final = srt.fix_rtl_punctuation(final)
     cache.save_text(translated, final)
     kodi_utils.notify('AI: תרגום הסתיים בהצלחה ({0} chunks)'
                       .format(total), time_ms=4000)
