@@ -380,33 +380,33 @@ if CONFIG.get_setting('buildname') and CONFIG.get_setting('build_skin_switch_not
 #####################################
 
 ######################################
-# KODI-RD-IL - Auto-set buildname for APK installs where the user
-# never ran a wizard-driven Fresh Install. Without this the empty
-# 'buildname' setting silently disables the entire auto_quick_update
-# path below, so existing APK users would never receive quickfix
-# updates. Detect that POV is on disk (so the build really is
-# installed, just not registered with the wizard) and populate the
-# settings the wizard's update gates check.
+# KODI-RD-IL - Auto-populate the wizard's "build state" settings for
+# users who didn't go through a wizard Fresh Install (the usual case
+# for APK installs) or who installed an interim wizard version (0.1.3)
+# that set buildname but not buildversion. Each setting is checked
+# independently so we plug only the holes we find.
+#
+# Why this matters: each empty setting unlocks a different gate in
+# startup.py.
+#   - empty buildname     -> the entire auto_quick_update branch and
+#                            every notification gate stays no-op
+#   - empty buildversion  -> check_build_update sees "any version >
+#                            empty string" and fires the Fresh /
+#                            Normal Install dialog, whose default
+#                            action OVERWRITES userdata (wiping the
+#                            user's connected services). The first
+#                            user to upgrade to wizard 0.1.3 hit this.
+#   - installed != 'true' -> a few other branches think the build
+#                            isn't really installed.
 try:
-    if not CONFIG.get_setting('buildname'):
-        pov_addon_dir = os.path.join(CONFIG.ADDONS, 'plugin.video.pov')
-        if os.path.exists(pov_addon_dir):
-            CONFIG.set_setting('buildname', CONFIG.BUILDNAME_DEFAULT)
-            CONFIG.set_setting('installed', 'true')
-            # The skin-switch first-launch notification would otherwise
-            # fire on the next startup now that buildname is set. The
-            # user has been using the build for a while, so suppress it.
-            CONFIG.set_setting('build_skin_switch_notifcation_dismiss', 'true')
+    pov_addon_dir = os.path.join(CONFIG.ADDONS, 'plugin.video.pov')
+    if os.path.exists(pov_addon_dir):
+        needs_buildname = not CONFIG.get_setting('buildname')
+        needs_version   = not CONFIG.get_setting('buildversion')
+        needs_installed = CONFIG.get_setting('installed') != 'true'
 
-            # CRITICAL: also set buildversion. Without this,
-            # check.check_build_update sees an empty buildversion and
-            # treats every published version as "newer", which fires
-            # a Fresh-Install dialog whose default action overwrites
-            # the user's entire userdata (wiping Real-Debrid, Trakt
-            # and other connected-services state -- happened to the
-            # first test user). Try to fetch the current published
-            # version from build.txt; fall back to the constant baked
-            # into uservar.py.
+        if needs_buildname or needs_version or needs_installed:
+            # Compute current published version once (one HTTP roundtrip).
             current_version = CONFIG.BUILDVERSION_DEFAULT
             try:
                 v = check.check_build(CONFIG.BUILDNAME_DEFAULT, 'version')
@@ -414,39 +414,53 @@ try:
                     current_version = v
             except Exception:
                 pass
-            CONFIG.set_setting('buildversion', current_version)
-            CONFIG.set_setting('latestversion', current_version)
 
-            # Belt-and-suspenders: also push the next build-update
-            # check 30 days into the future. Even if buildversion
-            # ends up wrong, this gives us a long window to ship a
-            # quickfix before any "update available" dialog fires.
             future_check = (datetime.now() + timedelta(days=30)).strftime(
                 "%Y-%m-%d %H:%M:%S"
             )
-            CONFIG.set_setting('nextbuildcheck', future_check)
 
-            # Refresh the in-memory cache so other startup steps see
-            # the new values immediately.
-            CONFIG.BUILDNAME = CONFIG.BUILDNAME_DEFAULT
-            CONFIG.BUILDVERSION = current_version
-            CONFIG.BUILDLATEST = current_version
-            CONFIG.INSTALLED = 'true'
-            CONFIG.BUILDCHECK = future_check
+            if needs_buildname:
+                CONFIG.set_setting('buildname', CONFIG.BUILDNAME_DEFAULT)
+                CONFIG.BUILDNAME = CONFIG.BUILDNAME_DEFAULT
+                # The skin-switch first-launch notification would
+                # otherwise fire on the next startup now that buildname
+                # is set. The user has been using the build for a
+                # while, so suppress it.
+                CONFIG.set_setting(
+                    'build_skin_switch_notifcation_dismiss', 'true'
+                )
+
+            if needs_version:
+                CONFIG.set_setting('buildversion', current_version)
+                CONFIG.set_setting('latestversion', current_version)
+                # Belt-and-suspenders: also push the next build-update
+                # check 30 days out so any version drift doesn't pop
+                # the destructive dialog before we can ship a fix.
+                CONFIG.set_setting('nextbuildcheck', future_check)
+                CONFIG.BUILDVERSION = current_version
+                CONFIG.BUILDLATEST = current_version
+                CONFIG.BUILDCHECK = future_check
+
+            if needs_installed:
+                CONFIG.set_setting('installed', 'true')
+                CONFIG.INSTALLED = 'true'
 
             logging.log(
-                "[Auto-Set Buildname] APK install detected (plugin.video.pov "
-                "present, buildname was empty). Set buildname='{0}', "
-                "installed='true', buildversion='{1}', "
-                "nextbuildcheck='{2}'.".format(
-                    CONFIG.BUILDNAME_DEFAULT, current_version, future_check
+                "[Auto-Set Build State] POV present. Filled in: "
+                "buildname={0}, version={1}, installed={2}. "
+                "buildname='{3}', buildversion='{4}', "
+                "nextbuildcheck='{5}'.".format(
+                    needs_buildname, needs_version, needs_installed,
+                    CONFIG.BUILDNAME_DEFAULT, current_version, future_check,
                 ),
                 level=xbmc.LOGINFO,
             )
 except Exception as _autoset_err:
     try:
         logging.log(
-            "[Auto-Set Buildname] Failed (continuing): {0}".format(_autoset_err),
+            "[Auto-Set Build State] Failed (continuing): {0}".format(
+                _autoset_err
+            ),
             level=xbmc.LOGERROR,
         )
     except Exception:
