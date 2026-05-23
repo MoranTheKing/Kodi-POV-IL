@@ -227,9 +227,11 @@ def resolve(link, info, progress_cb=None):
     progress_cb(chunk_index, total_chunks)."""
     payload = _decode_link(link)
     if not payload:
+        kodi_utils.log('resolve: bad link', level='ERROR')
         return None
 
     kind = payload.get('type')
+    kodi_utils.log('resolve: kind={0}'.format(kind), level='INFO')
 
     imdb_id = (info.get('imdb_id') or '').strip()
     season  = info.get('season') or ''
@@ -237,14 +239,23 @@ def resolve(link, info, progress_cb=None):
 
     if kind == 'passthrough':
         path = payload.get('path')
+        kodi_utils.notify(
+            'AI: כתובית קיימת (passthrough) - {0}'.format(
+                os.path.basename(path) if path else '?'),
+            time_ms=4000)
         if path and os.path.isfile(path):
             return path
         return None
 
     if kind == 'wyzie_passthrough':
+        kodi_utils.notify(
+            'AI: מוריד עברית מ-Wyzie ישירות (לא תרגום AI)',
+            time_ms=4000)
         url = payload.get('url') or ''
         text = wyzie.download(url)
         if not text:
+            kodi_utils.notify('AI: Wyzie download נכשל',
+                              time_ms=8000)
             return None
         # Unique per Wyzie URL so different movies don't overwrite
         # each other in the cache dir, and so Kodi doesn't see the
@@ -258,10 +269,14 @@ def resolve(link, info, progress_cb=None):
             with open(out, 'w', encoding='utf-8') as f:
                 f.write(text)
             return out
-        except OSError:
+        except OSError as e:
+            kodi_utils.notify('AI: שמירה נכשלה - {0}'.format(e),
+                              time_ms=8000)
             return None
 
     if kind != 'ai':
+        kodi_utils.log('resolve: unknown kind ' + str(kind),
+                       level='WARNING')
         return None
 
     source_lang = payload.get('source_lang') or 'en'
@@ -285,6 +300,10 @@ def resolve(link, info, progress_cb=None):
         if os.path.isfile(translated):
             kodi_utils.log('Cache hit (early): ' + translated,
                            level='INFO')
+            kodi_utils.notify(
+                'AI: תרגום מ-cache (כבר תורגם בעבר). '
+                'אם זה לא הסרט הנכון, לחץ "נקה cache" בהגדרות.',
+                time_ms=8000)
             try:
                 now = time.time()
                 os.utime(translated, (now, now))
@@ -323,13 +342,7 @@ def resolve(link, info, progress_cb=None):
         src_text = cleaned
 
     # Now we have actual content -- content-hash for a robust
-    # source_id. The earlier wyzie_url-based key was an
-    # optimisation; this is the canonical key. With this, two
-    # different movies whose Kodi temp file happens to land at the
-    # same path get DIFFERENT cache slots (their SRT contents
-    # differ), and the same source picked up via different
-    # routes (wyzie one time, local file another) still hits the
-    # same slot (same content).
+    # source_id.
     import hashlib as _hashlib
     content_id = _hashlib.sha1(
         src_text.encode('utf-8', errors='replace')).hexdigest()[:16]
@@ -338,12 +351,21 @@ def resolve(link, info, progress_cb=None):
     if os.path.isfile(translated):
         kodi_utils.log('Cache hit (content): ' + translated,
                        level='INFO')
+        kodi_utils.notify(
+            'AI: תרגום מ-cache לפי תוכן (זהה לסרט אחר שתורגם בעבר). '
+            'אם זה לא נכון, לחץ "נקה cache" בהגדרות.',
+            time_ms=8000)
         try:
             now = time.time()
             os.utime(translated, (now, now))
         except OSError:
             pass
         return translated
+
+    kodi_utils.log(
+        'No cache hit. Starting translation. imdb={0} content_id={1} '
+        'src_len={2}'.format(imdb_id, content_id, len(src_text)),
+        level='INFO')
 
     # Up-front heads-up so the user understands the wait. The
     # progress dialog itself is a DialogProgressBG which sits in
