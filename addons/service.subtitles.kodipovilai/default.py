@@ -259,6 +259,69 @@ def _handle_test_connection(_params):
                             kodi_utils.localised(33004, str(e)[:120]))
 
 
+def _handle_open_tmdb_notice(_params):
+    """Explain that the gender-aware translation needs TMDB metadata
+    via tmdbhelper, and that the user should connect TMDB through
+    'Connect Services' in the wizard. Tries to open the wizard
+    services screen automatically; if that fails, just shows the
+    explanation."""
+    try:
+        from resources.lib import kodi_utils, tmdb_helper
+    except Exception as e:
+        xbmcgui.Dialog().ok('Kodi POV IL', 'Internal error: {0}'.format(e))
+        return
+
+    # Tell the user the current state -- have they wired it up?
+    has_key = False
+    try:
+        has_key = bool(tmdb_helper._get_tmdb_key())
+    except Exception:
+        pass
+
+    if has_key:
+        status_line = ('✓ נמצא TMDB API key דרך תוסף TMDB Helper. '
+                       'התרגום ידע לבחור צורות זכר/נקבה לפי הדמות.\n\n')
+    else:
+        status_line = ('✗ עדיין לא הוגדר TMDB API key.\n\n')
+
+    body = (
+        status_line +
+        'תרגום AI משתמש ב-TMDB כדי לדעת מי שחקן כל דמות (זכר / '
+        'נקבה), וככה לבחור צורות עברית נכונות לפי המגדר. בלי TMDB '
+        'התרגום עדיין יעבוד אבל הזכר/נקבה יהיו ניחוש מהקשר בלבד.\n\n'
+        'איך מחברים? פתח את ה-Wizard של POV IL → "Connect Services" '
+        '(חיבור שירותים) → TMDB. תוסף ה-TMDB Helper כבר מותקן '
+        'בבילד, רק צריך לאשר.'
+    )
+    xbmcgui.Dialog().ok('Kodi POV IL — TMDB', body)
+
+
+def _handle_test_wyzie_connection(_params):
+    """User clicked 'Test Wyzie connection' in settings. Mirrors
+    _handle_test_connection for Gemini."""
+    try:
+        from resources.lib import kodi_utils, wyzie
+    except Exception as e:
+        xbmcgui.Dialog().ok('Kodi POV IL', 'Internal error: {0}'.format(e))
+        return
+
+    key = kodi_utils.get_setting('wyzie_api_key', '')
+    if not (key or '').strip():
+        xbmcgui.Dialog().ok(
+            'Kodi POV IL',
+            'לא הוגדר Wyzie API key. לחץ על "השג מפתח Wyzie" '
+            'בהגדרות וקבל אחד חינמי (1000 בקשות ליום).')
+        return
+
+    result = wyzie.test_key(key)
+    if result.get('ok'):
+        xbmcgui.Dialog().ok('Kodi POV IL',
+                            '✓ Wyzie: ' + result.get('message', 'OK'))
+    else:
+        xbmcgui.Dialog().ok('Kodi POV IL',
+                            '✗ Wyzie: ' + result.get('message', 'נכשל'))
+
+
 def _handle_clear_cache(_params):
     """Wipe all cached translations + metadata."""
     try:
@@ -431,6 +494,10 @@ def main():
             _handle_open_wyzie_signup(params)
         elif action == 'test_connection':
             _handle_test_connection(params)
+        elif action == 'test_wyzie_connection':
+            _handle_test_wyzie_connection(params)
+        elif action == 'open_tmdb_notice':
+            _handle_open_tmdb_notice(params)
         elif action == 'clear_cache':
             _handle_clear_cache(params)
         elif action == 'purge_temp':
