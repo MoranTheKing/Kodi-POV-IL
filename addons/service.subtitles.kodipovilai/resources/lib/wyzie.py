@@ -81,6 +81,66 @@ def _extract_list(body):
 
 # ---- public API ----------------------------------------------------
 
+def test_key(api_key=None):
+    """Lightweight reachability check for the Wyzie API. Used by the
+    settings "Test Wyzie connection" button.
+
+    Returns a status dict:
+      {'ok': bool, 'message': str}
+    The message is short and user-facing (Hebrew). 'ok' is True if
+    the key is valid and reachable, False otherwise.
+
+    Strategy: hit /search with a known-good IMDB id (Inception,
+    tt1375666) requesting English. If we get an HTTP 200 with a
+    list of results, the key works. Anything else, classify and
+    explain.
+    """
+    if not requests:
+        return {'ok': False,
+                'message': 'requests library unavailable (Python issue)'}
+    key = (api_key if api_key is not None else _api_key())
+    if not key:
+        return {'ok': False, 'message': 'לא הוגדר API key'}
+
+    test_url = (API_BASE + '/search?id=tt1375666&language=en&key='
+                + urllib.parse.quote(key))
+    try:
+        r = requests.get(
+            test_url,
+            headers={'User-Agent': USER_AGENT,
+                     'Accept': 'application/json'},
+            timeout=DEFAULT_TIMEOUT,
+        )
+    except requests.RequestException as e:
+        return {'ok': False,
+                'message': 'נכשל להתחבר ל-Wyzie: {0}'.format(str(e)[:80])}
+
+    status = r.status_code
+    if status == 200:
+        try:
+            body = r.json()
+        except ValueError:
+            return {'ok': False,
+                    'message': 'תגובה לא תקינה מ-Wyzie (לא JSON)'}
+        items = _extract_list(body)
+        return {'ok': True,
+                'message': 'התחברות תקינה. נמצאו {0} כתוביות לסרט '
+                           'הבדיקה (Inception).'.format(len(items))}
+    if status == 401 or status == 403:
+        return {'ok': False,
+                'message': 'API key לא תקין או נדחה ({0}).'.format(status)}
+    if status == 429:
+        return {'ok': False,
+                'message': 'חרגת מהמכסה היומית (1000 בקשות ביום). '
+                           'המתן עד מחר או שדרג את החשבון.'}
+    if 500 <= status < 600:
+        return {'ok': False,
+                'message': 'Wyzie במצב תקלה ({0}). נסה שוב מאוחר '
+                           'יותר.'.format(status)}
+    return {'ok': False,
+            'message': 'תגובה בלתי צפויה מ-Wyzie (HTTP {0}).'.format(status)}
+
+
 def search(imdb_id=None, tmdb_id=None, season=None, episode=None,
            languages=('en',)):
     """Query Wyzie for subtitle candidates.

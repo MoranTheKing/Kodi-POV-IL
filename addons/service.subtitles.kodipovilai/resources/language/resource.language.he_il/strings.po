@@ -189,3 +189,15 @@ msgstr "2.5 Flash Lite (fallback)"
 msgctxt "#32233"
 msgid "2.5 Flash (fallback)"
 msgstr "2.5 Flash (fallback)"
+
+msgctxt "#32254"
+msgid "Test Wyzie connection"
+msgstr "בדיקת חיבור ל-Wyzie"
+
+msgctxt "#32260"
+msgid "TMDB (for gender-aware translation)"
+msgstr "TMDB (לתרגום מודע למגדר)"
+
+msgctxt "#32261"
+msgid "How to connect TMDB (required for gender-aware translation)"
+msgstr "איך מחברים TMDB (נדרש לתרגום מודע למגדר)"
