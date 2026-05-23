@@ -1,3 +1,12 @@
+[COLOR yellow][B]v0.1.5[/B][/COLOR]
+* Connect Services menu: added two entries for the AI subtitles
+  addon (service.subtitles.kodipovilai):
+    - 'Gemini AI - תרגום כתוביות' (api_key)
+    - 'Wyzie - מקור כתוביות לתרגום AI' (wyzie_api_key)
+  Both follow the same pattern as the existing TMDB / Trakt /
+  OpenSubtitles entries: shows current key status, lets the user
+  open the addon's settings, save the key to wizard backup, and
+  restore from backup on a fresh install.
 [COLOR yellow][B]v0.1.4[/B][/COLOR]
 * Critical hotfix on top of v0.1.3: the auto-set step also populates
   'buildversion', 'latestversion' and 'nextbuildcheck'. Without these
