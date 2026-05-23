@@ -1,3 +1,17 @@
+v0.1.5
+- Test connection button for Wyzie (mirrors the one for Gemini).
+  Sanity-checks the key against the live Wyzie API and reports a
+  clear Hebrew explanation if quota's exhausted, key's rejected,
+  or the service is down.
+- New "TMDB" group in settings with an info button explaining
+  that gender-aware translation needs TMDB API key wired up via
+  the wizard's "Connect Services" screen. The button checks the
+  current status (TMDB Helper installed + key set) and tells the
+  user what to do next.
+- This addon now shows up in the wizard's "Connect Services"
+  menu as two entries: "Gemini AI" and "Wyzie". Save / restore /
+  display key flow matches the other services there.
+
 v0.1.4
 - CRITICAL FIX: undo the auto_translate=false state that v0.1.1
   left behind. Without this, the v0.1.3 hook never fires (DarkSubs
