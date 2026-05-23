@@ -97,7 +97,11 @@ def _prune_once():
 # .srt files in special://temp/ to evict the cross-movie leftovers
 # that the previous list_candidates would surface as Hebrew
 # passthrough for the wrong title.
-TEMP_PURGE_VERSION = '1'
+# Bumped to 2: v1 didn't actually fire for the first user
+# (suspected: the _temp_purge_done setting wasn't declared in
+# settings.xml so the value didn't persist). v2 declares it AND
+# re-runs once.
+TEMP_PURGE_VERSION = '2'
 
 
 def _maybe_purge_temp_once():
