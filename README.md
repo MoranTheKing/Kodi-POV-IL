@@ -71,11 +71,11 @@ The wizard reads build metadata from:
 
 After GitHub Pages deploys, add this source in Kodi:
 
-`https://morantheking.github.io/Kodi-POV-IL/`
+`https://morantheking.github.io/Kodi-POV-IL/wizard/`
 
 Then open:
 
-`Settings -> File manager -> Add source -> Install from zip file -> Kodi POV IL -> wizard -> plugin.program.kodipovilwizard-0.1.1.zip`
+`Settings -> File manager -> Add source -> Install from zip file -> Kodi POV IL -> plugin.program.kodipovilwizard-X.X.X.zip`
 
 ## Updates
 
