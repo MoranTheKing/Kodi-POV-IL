@@ -40,7 +40,7 @@ Direct GitHub download:
 
 Kodi file source after GitHub Pages deploys:
 
-`https://morantheking.github.io/Kodi-POV-IL/`
+`https://morantheking.github.io/Kodi-POV-IL/wizard/`
 
 Path in Kodi:
 
