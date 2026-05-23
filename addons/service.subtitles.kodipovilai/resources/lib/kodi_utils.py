@@ -163,7 +163,14 @@ def current_video_info():
         except Exception:
             return ''
 
-    info['imdb_id']  = gi('VideoPlayer.IMDBNumber')
+    # IMDB id: prefer the explicit UniqueId fetcher because some
+    # plugins set that one without setting the legacy IMDBNumber.
+    info['imdb_id']  = gi('VideoPlayer.UniqueId(imdb)') or \
+                       gi('VideoPlayer.IMDBNumber')
+    # TMDB id: POV / FENtastic streaming surfaces this via the
+    # UniqueId mechanism even when imdb is empty. Wyzie accepts
+    # either, so this is our main fallback for streams.
+    info['tmdb_id']  = gi('VideoPlayer.UniqueId(tmdb)')
     info['title']    = gi('VideoPlayer.Title') or gi('VideoPlayer.OriginalTitle')
     info['year']     = gi('VideoPlayer.Year')
     info['season']   = gi('VideoPlayer.Season')
