@@ -50,10 +50,22 @@ def _check_first_run_marker():
             )
         except Exception:
             pass
+        # JSON-RPC is the canonical Kodi 19+ way to flip addon state.
+        # executebuiltin('DisableAddon(...)') exists but is flakier
+        # across Kodi versions, so we use it as a fallback only.
         try:
-            xbmc.executebuiltin('DisableAddon(' + ADDON_ID + ')')
+            import json as _json
+            xbmc.executeJSONRPC(_json.dumps({
+                'jsonrpc': '2.0',
+                'id': 1,
+                'method': 'Addons.SetAddonEnabled',
+                'params': {'addonid': ADDON_ID, 'enabled': False},
+            }))
         except Exception:
-            pass
+            try:
+                xbmc.executebuiltin('DisableAddon(' + ADDON_ID + ')')
+            except Exception:
+                pass
         return True
     except Exception:
         # Never let the first-run check itself crash the service.
@@ -104,5 +116,8 @@ def main():
         _prune_once()
 
 
-if __name__ == '__main__':
-    main()
+# Kodi loads xbmc.service scripts by executing the module body, not by
+# spawning them as `python service.py`, so __name__ is the module name
+# here -- the `if __name__ == '__main__':` guard would skip main()
+# entirely. Call it directly.
+main()
