@@ -411,12 +411,14 @@ def resolve(link, info, progress_cb=None):
             self.user_msg = user_msg
 
     def _translate_one(idx, ch):
-        # Recursive bisection on TruncatedResponse: if Gemini
-        # cut us off, retry the same content split in half.
-        # The two halves are reassembled in order before return.
+        # Recursive bisection on TruncatedResponse OR low-yield
+        # response (Gemini sometimes skips entries silently --
+        # observed in the first end-to-end test, a 5-minute gap
+        # in the middle of a translated movie). Bisecting forces
+        # the model to spend more attention per entry.
         if len(ch) > 1:
             try:
-                return _call_gemini(idx, ch)
+                response = _call_gemini(idx, ch)
             except gemini.TruncatedResponse as e:
                 mid = len(ch) // 2
                 kodi_utils.log(
@@ -426,6 +428,25 @@ def resolve(link, info, progress_cb=None):
                 left = _translate_one(idx, ch[:mid])
                 right = _translate_one(idx, ch[mid:])
                 return left + '\n\n' + right
+
+            # Yield check: did we get back roughly as many entries
+            # as we asked for? Gemini sometimes drops entries
+            # mid-chunk, leaving silent gaps in the final SRT.
+            # Threshold 85% -- below that, bisect and re-do.
+            got = len(srt.parse_blocks(response))
+            expected = len(ch)
+            if got < max(1, int(expected * 0.85)):
+                mid = expected // 2
+                kodi_utils.log(
+                    'Chunk {0} low yield ({1}/{2} entries) -- '
+                    'bisecting into {3} + {4}'.format(
+                        idx, got, expected, mid, expected - mid),
+                    level='WARNING')
+                left = _translate_one(idx, ch[:mid])
+                right = _translate_one(idx, ch[mid:])
+                return left + '\n\n' + right
+
+            return response
         # single-entry chunk that still truncates -- shouldn't
         # happen (one SRT entry is < 100 tokens), but if it does
         # we surface the partial text so the user sees something.
@@ -440,7 +461,9 @@ def resolve(link, info, progress_cb=None):
 
     def _call_gemini(idx, ch):
         body = '\n\n'.join(ch)
-        full_prompt = prompt_template.replace('{chunk}', body)
+        full_prompt = (prompt_template
+                       .replace('{entry_count}', str(len(ch)))
+                       .replace('{chunk}', body))
         overload_attempts = 0
         generic_attempts = 0
         while True:
