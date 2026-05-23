@@ -150,18 +150,18 @@ msgctxt "#33008"
 msgid "Translation failed: {0}"
 msgstr "התרגום נכשל: {0}"
 
-msgctxt "#33010"
+msgctxt "#32230"
 msgid "3.1 Flash Lite (recommended, 500/day)"
 msgstr "3.1 Flash Lite (מומלץ, 500 ביום)"
 
-msgctxt "#33011"
+msgctxt "#32231"
 msgid "3.1 Flash (premium, 250/day)"
 msgstr "3.1 Flash (פרימיום, 250 ביום)"
 
-msgctxt "#33012"
+msgctxt "#32232"
 msgid "2.5 Flash Lite (fallback)"
 msgstr "2.5 Flash Lite (fallback)"
 
-msgctxt "#33013"
+msgctxt "#32233"
 msgid "2.5 Flash (fallback)"
 msgstr "2.5 Flash (fallback)"
