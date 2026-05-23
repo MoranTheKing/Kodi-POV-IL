@@ -104,34 +104,51 @@ def _prune_once():
 TEMP_PURGE_VERSION = '2'
 
 
-def _maybe_patch_wizard():
-    """Inject the 'Gemini AI' and 'Wyzie' entries into the wizard's
-    Connect Services menu. The wizard's AUTOUPDATE is hardcoded 'No'
-    so existing installs never pick up a newer wizard from the build
-    server -- we patch the installed wizard's loginit.py on disk
-    instead. Idempotent + self-healing on every Kodi startup."""
+def _maybe_patch_pov_services():
+    """Inject Gemini AI + Wyzie entries into the POV plugin's
+    "My Services" menu (the one at /myservices in plugin.video.pov).
+    Same self-healing pattern as the wizard patcher -- POV's menu
+    has a hardcoded tuple of services with no extension point, so
+    we patch the source file on disk and re-inject on every Kodi
+    startup if the marker is missing."""
     try:
-        from resources.lib import wizard_patcher, kodi_utils
+        from resources.lib import pov_services_patcher, kodi_utils
     except Exception:
         return
     try:
-        result = wizard_patcher.ensure_patched()
-        for step, status in result.items():
-            if status == 'patched':
-                kodi_utils.log(
-                    'wizard_patcher.{0} (re)injected on startup'.format(
-                        step), level='INFO')
-            elif status in ('unmatched', 'write_failed', 'read_failed'):
-                kodi_utils.log(
-                    'wizard_patcher.{0} skipped: {1}'.format(
-                        step, status), level='WARNING')
+        status = pov_services_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_services_patcher (re)injected on startup',
+                level='INFO')
+        elif status in ('unmatched', 'write_failed', 'read_failed'):
+            kodi_utils.log(
+                'pov_services_patcher skipped: ' + status,
+                level='WARNING')
     except Exception as e:
         try:
             kodi_utils.log(
-                'wizard_patcher run failed: {0}'.format(e),
+                'pov_services_patcher run failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
+
+
+def _maybe_cleanup_wizard():
+    """Clean up the (incorrect) wizard "Connect Services" injection
+    that v0.1.5-v0.1.7 of this addon shipped. The right menu was
+    plugin.video.pov's My Services (handled separately by
+    pov_services_patcher); the wizard injection was misplaced and
+    we don't want stale rows lingering in the wizard's login_menu
+    UI after the user upgrades."""
+    try:
+        from resources.lib import wizard_patcher
+    except Exception:
+        return
+    try:
+        wizard_patcher.ensure_unpatched()
+    except Exception:
+        pass
 
 
 def _maybe_patch_darksubs():
@@ -204,10 +221,13 @@ def main():
     # comes back automatically on next Kodi launch.
     _maybe_patch_darksubs()
 
-    # Same pattern for the wizard's Connect Services menu, since
-    # the wizard never auto-updates itself (AUTOUPDATE='No' is
-    # hardcoded in uservar.py).
-    _maybe_patch_wizard()
+    # Remove the v0.1.5-v0.1.7 misplaced injection into the wizard's
+    # login_menu (the right menu was POV's, not the wizard's).
+    _maybe_cleanup_wizard()
+
+    # POV's own "My Services" menu -- THE correct place. Inject
+    # Gemini + Wyzie entries here on every startup; idempotent.
+    _maybe_patch_pov_services()
 
     monitor = xbmc.Monitor()
     # 24h between passes. waitForAbort returns True when Kodi is

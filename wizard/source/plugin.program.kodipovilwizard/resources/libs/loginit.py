@@ -51,8 +51,7 @@ ORDER = ['easynews-fen',
          'tvdb-metahandler', 'tvdb-openmeta', 'tvdb-premiumizer',
          'tvdb-realizer', 'tvdb-seren',
          'location-yahoo', 'login-youtube',
-         'ws-wonderfulsubs',
-         'gemini-kodipovilai', 'wyzie-kodipovilai']
+         'ws-wonderfulsubs']
 
 LOGINID = {
     'login-opensubtitles': {
@@ -738,30 +737,6 @@ LOGINID = {
         'settings' : os.path.join(CONFIG.ADDON_DATA, 'plugin.video.fen', 'settings.xml'),
         'default'  : 'furk_login',
         'data'     : ['furk_login', 'furk_password', 'furk_api_key'],
-        'activate' : ''},
-    'gemini-kodipovilai': {
-        'name'     : 'Gemini AI - תרגום כתוביות',
-        'saved'    : 'gemini-kodipovilai',
-        'plugin'   : 'service.subtitles.kodipovilai',
-        'path'     : os.path.join(CONFIG.ADDONS, 'service.subtitles.kodipovilai'),
-        'icon'     : os.path.join(CONFIG.ADDONS, 'service.subtitles.kodipovilai', 'icon.png'),
-        'fanart'   : os.path.join(CONFIG.ADDONS, 'service.subtitles.kodipovilai', 'icon.png'),
-        'file'     : os.path.join(CONFIG.LOGINFOLD, 'kodipovilai_gemini'),
-        'settings' : os.path.join(CONFIG.ADDON_DATA, 'service.subtitles.kodipovilai', 'settings.xml'),
-        'default'  : 'api_key',
-        'data'     : ['api_key'],
-        'activate' : ''},
-    'wyzie-kodipovilai': {
-        'name'     : 'Wyzie - מקור כתוביות לתרגום AI',
-        'saved'    : 'wyzie-kodipovilai',
-        'plugin'   : 'service.subtitles.kodipovilai',
-        'path'     : os.path.join(CONFIG.ADDONS, 'service.subtitles.kodipovilai'),
-        'icon'     : os.path.join(CONFIG.ADDONS, 'service.subtitles.kodipovilai', 'icon.png'),
-        'fanart'   : os.path.join(CONFIG.ADDONS, 'service.subtitles.kodipovilai', 'icon.png'),
-        'file'     : os.path.join(CONFIG.LOGINFOLD, 'kodipovilai_wyzie'),
-        'settings' : os.path.join(CONFIG.ADDON_DATA, 'service.subtitles.kodipovilai', 'settings.xml'),
-        'default'  : 'wyzie_api_key',
-        'data'     : ['wyzie_api_key'],
         'activate' : ''}
 }
 
