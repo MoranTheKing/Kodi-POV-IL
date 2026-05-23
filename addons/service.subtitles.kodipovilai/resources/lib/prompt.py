@@ -81,7 +81,11 @@ def build(source_lang, title, year, cast, is_episode=False,
         '5. Keep HTML tags like <i></i> intact.\n'
         '6. When truly ambiguous about gender, prefer the neutral/plural '
         'form over guessing.\n'
-        '7. Output ONLY the SRT content. No commentary, no preface.\n\n'
+        '7. Do NOT add hearing-impaired annotations like [breathing], '
+        '(music playing), {chuckles}, or ALL-CAPS speaker prefixes '
+        'like "MABEL: ". If the source contains any, drop them in the '
+        'translation.\n'
+        '8. Output ONLY the SRT content. No commentary, no preface.\n\n'
         'SRT to translate:\n\n'
         '{{chunk}}\n'
     ).format(src=src_name, ctx=context_line, cast=cast_block)
