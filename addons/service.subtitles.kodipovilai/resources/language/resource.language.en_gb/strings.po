@@ -154,3 +154,23 @@ msgstr "Cache cleared. {0} files removed."
 msgctxt "#33008"
 msgid "Translation failed: {0}"
 msgstr "Translation failed: {0}"
+
+# Model dropdown labels. Must use string IDs -- Kodi parses literal
+# `label="3.1 Flash Lite"` as a numeric string ID (leading "3" -> ID 3
+# = "Videos" in Kodi's built-in strings), so the dropdown showed
+# Video/Video/Music/Music instead of the model names.
+msgctxt "#33010"
+msgid "3.1 Flash Lite (recommended, 500/day)"
+msgstr "3.1 Flash Lite (recommended, 500/day)"
+
+msgctxt "#33011"
+msgid "3.1 Flash (premium, 250/day)"
+msgstr "3.1 Flash (premium, 250/day)"
+
+msgctxt "#33012"
+msgid "2.5 Flash Lite (fallback)"
+msgstr "2.5 Flash Lite (fallback)"
+
+msgctxt "#33013"
+msgid "2.5 Flash (fallback)"
+msgstr "2.5 Flash (fallback)"
