@@ -1,3 +1,15 @@
+v0.1.8
+- POV "My Services" patcher. The user was clicking on
+  plugin.video.pov's own Connect Services menu (entry id 32455 =
+  "My Services"), not the wizard's login_menu -- different menu,
+  same kind of hardcoded service list. v0.1.7 patched only the
+  wizard, so the rows still didn't appear where the user expected
+  them. This release adds a parallel patcher for
+  plugin.video.pov/resources/lib/modules/myservices.py that
+  defines Gemini and Wyzie auth classes and wraps the authorize()
+  function to include them in the My Services dialog. Same
+  pattern: idempotent, marker-gated, runs every Kodi startup.
+
 v0.1.7
 - Self-healing wizard patcher: the wizard's AUTOUPDATE is
   hardcoded 'No', so existing installs never pull the upstream

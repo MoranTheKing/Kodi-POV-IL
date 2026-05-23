@@ -1,20 +1,18 @@
-# Self-healing injection of the AI subtitle entries into the
-# wizard's "Connect Services" menu.
+# Cleanup utility for the (incorrect) wizard "Connect Services"
+# injection that v0.1.5-v0.1.7 of this addon shipped.
 #
-# The wizard has AUTOUPDATE='No' hardcoded -- it never updates
-# itself from build.txt. That means our v0.1.5 wizard (with the
-# Gemini + Wyzie LOGINID entries) is sitting on GitHub but no
-# existing user installation pulls it. Even after multiple Kodi
-# restarts, users stay on 0.1.4 forever unless they manually
-# reinstall the wizard.
+# Background: we originally added Gemini AI + Wyzie entries to
+# plugin.program.kodipovilwizard's loginit.py / settings.xml, on
+# the assumption that the wizard's login_menu was the "Connect
+# Services" UI the user was looking at. It wasn't -- the right
+# UI is plugin.video.pov's own My Services menu (handled by the
+# new pov_services_patcher). So this module now just REMOVES the
+# leftover injection from the wizard files if it's still there,
+# so the rows don't show up in the wrong place after upgrade.
 #
-# Workaround: same pattern as darksubs_patcher.py -- patch the
-# wizard's loginit.py on disk to add our entries at the end of
-# the file. Idempotent (marker-gated). Self-healing on every
-# Kodi startup. If the wizard updates legitimately later, our
-# patch gets wiped and we re-inject; if our patch sticks but the
-# user uninstalls our addon, the wizard's login_menu just doesn't
-# render those rows because System.HasAddon() returns False.
+# This file used to do the additive patching; the additive code
+# was deleted entirely in v0.1.8. Idempotent: if the marker
+# isn't found, no file write happens.
 
 import os
 import re
@@ -30,230 +28,115 @@ WIZARD_ADDON_ID = 'plugin.program.kodipovilwizard'
 LOGINIT_REL_PATH = 'resources/libs/loginit.py'
 SETTINGS_REL_PATH = 'resources/settings.xml'
 
-# Bump when the injected block changes.
-INJECT_VERSION = 1
-MARKER = '# AI_SUBS_LOGINIT_INJECT_v{0}'.format(INJECT_VERSION)
-END_MARKER = '# END AI_SUBS_LOGINIT_INJECT_v{0}'.format(INJECT_VERSION)
-# Older versions we should overwrite. Add to this list when bumping.
-OLD_MARKERS = []
-
-# Block appended to the end of loginit.py. Uses ORDER.extend +
-# LOGINID dict assignment so it doesn't care WHERE in the file the
-# upstream ORDER/LOGINID definitions are -- only that they exist as
-# module-level names by the time this block runs.
-INJECT_BLOCK = '''\
-
-{marker}
-# Injected by service.subtitles.kodipovilai. See wizard_patcher.py.
-# The wizard's AUTOUPDATE is 'No', so existing installs never pull
-# the upstream loginit.py changes that add these two entries -- we
-# add them at runtime instead. Idempotent: if the names are already
-# in ORDER (e.g. from a future fresh wizard install) we skip.
-try:
-    if 'gemini-kodipovilai' not in ORDER:
-        ORDER.append('gemini-kodipovilai')
-    if 'wyzie-kodipovilai' not in ORDER:
-        ORDER.append('wyzie-kodipovilai')
-    if 'gemini-kodipovilai' not in LOGINID:
-        LOGINID['gemini-kodipovilai'] = {{
-            'name'     : 'Gemini AI - תרגום כתוביות',
-            'saved'    : 'gemini-kodipovilai',
-            'plugin'   : 'service.subtitles.kodipovilai',
-            'path'     : os.path.join(CONFIG.ADDONS, 'service.subtitles.kodipovilai'),
-            'icon'     : os.path.join(CONFIG.ADDONS, 'service.subtitles.kodipovilai', 'icon.png'),
-            'fanart'   : os.path.join(CONFIG.ADDONS, 'service.subtitles.kodipovilai', 'icon.png'),
-            'file'     : os.path.join(CONFIG.LOGINFOLD, 'kodipovilai_gemini'),
-            'settings' : os.path.join(CONFIG.ADDON_DATA, 'service.subtitles.kodipovilai', 'settings.xml'),
-            'default'  : 'api_key',
-            'data'     : ['api_key'],
-            'activate' : ''}}
-    if 'wyzie-kodipovilai' not in LOGINID:
-        LOGINID['wyzie-kodipovilai'] = {{
-            'name'     : 'Wyzie - מקור כתוביות לתרגום AI',
-            'saved'    : 'wyzie-kodipovilai',
-            'plugin'   : 'service.subtitles.kodipovilai',
-            'path'     : os.path.join(CONFIG.ADDONS, 'service.subtitles.kodipovilai'),
-            'icon'     : os.path.join(CONFIG.ADDONS, 'service.subtitles.kodipovilai', 'icon.png'),
-            'fanart'   : os.path.join(CONFIG.ADDONS, 'service.subtitles.kodipovilai', 'icon.png'),
-            'file'     : os.path.join(CONFIG.LOGINFOLD, 'kodipovilai_wyzie'),
-            'settings' : os.path.join(CONFIG.ADDON_DATA, 'service.subtitles.kodipovilai', 'settings.xml'),
-            'default'  : 'wyzie_api_key',
-            'data'     : ['wyzie_api_key'],
-            'activate' : ''}}
-except Exception:
-    # Never let the inject crash the wizard. Worst case the rows
-    # don't appear; the user can wait for a real wizard update.
-    pass
-{end_marker}
-'''.format(marker=MARKER, end_marker=END_MARKER)
+# Markers we previously wrote. If any are present, strip them.
+LOGINIT_MARKER = '# AI_SUBS_LOGINIT_INJECT_v1'
+LOGINIT_END_MARKER = '# END AI_SUBS_LOGINIT_INJECT_v1'
+SETTINGS_MARKER = '<!-- ai-subs-injected-v1 -->'
 
 
-def _loginit_path():
+def _path(rel):
     if xbmcvfs is None:
         return None
     try:
         return xbmcvfs.translatePath(
             'special://home/addons/{0}/{1}'.format(
-                WIZARD_ADDON_ID, LOGINIT_REL_PATH))
+                WIZARD_ADDON_ID, rel))
     except Exception:
         return None
 
 
-def _settings_path():
-    if xbmcvfs is None:
-        return None
-    try:
-        return xbmcvfs.translatePath(
-            'special://home/addons/{0}/{1}'.format(
-                WIZARD_ADDON_ID, SETTINGS_REL_PATH))
-    except Exception:
-        return None
+def _strip_loginit_injection(content):
+    """Remove the AI_SUBS_LOGINIT_INJECT_v1 block (and any leading
+    whitespace line we may have left when appending). Returns
+    (new_content, changed_bool)."""
+    if LOGINIT_MARKER not in content:
+        return content, False
+    # The injection was appended at end of file as a multi-line
+    # try/except wrapped in MARKER ... END_MARKER. Match from the
+    # marker line through the end marker line inclusive.
+    pattern = re.compile(
+        r'[ \t]*' + re.escape(LOGINIT_MARKER) + r'\b.*?'
+        + re.escape(LOGINIT_END_MARKER) + r'\b[^\n]*\n?',
+        re.DOTALL,
+    )
+    new = pattern.sub('', content)
+    # Strip the trailing blank line(s) left by the appended block.
+    new = new.rstrip('\n') + '\n'
+    return new, True
 
 
-def _ensure_loginit_patched():
-    p = _loginit_path()
-    if not p or not os.path.isfile(p):
-        return 'no_wizard'
-    try:
-        with open(p, 'r', encoding='utf-8') as f:
-            content = f.read()
-    except OSError as e:
-        kodi_utils.log(
-            'wizard_patcher: read failed {0}: {1}'.format(p, e),
-            level='WARNING')
-        return 'read_failed'
-    if MARKER in content:
-        return 'already_patched'
-    # Sanity: confirm ORDER and LOGINID exist as module-level
-    # names. If the wizard's been refactored beyond recognition,
-    # bail without touching it.
-    if not re.search(r'^\s*ORDER\s*=\s*\[', content, re.MULTILINE):
-        kodi_utils.log(
-            'wizard_patcher: ORDER definition not found, skipping',
-            level='WARNING')
-        return 'unmatched'
-    if not re.search(r'^\s*LOGINID\s*=\s*\{', content, re.MULTILINE):
-        kodi_utils.log(
-            'wizard_patcher: LOGINID definition not found, skipping',
-            level='WARNING')
-        return 'unmatched'
-
-    # Strip old markers if we ever bump INJECT_VERSION.
-    for old in OLD_MARKERS:
-        old_end = old.replace('AI_SUBS_LOGINIT_INJECT',
-                              'END AI_SUBS_LOGINIT_INJECT', 1)
-        pattern = re.compile(
-            r'^[ \t]*' + re.escape(old) + r'\b.*?^[ \t]*'
-            + re.escape(old_end) + r'\b[^\n]*\n',
-            re.MULTILINE | re.DOTALL,
-        )
-        content = pattern.sub('', content)
-
-    # Append our block at the very end of the file.
-    if not content.endswith('\n'):
-        content += '\n'
-    new_content = content + INJECT_BLOCK
-
-    tmp_path = p + '.aitmp'
-    try:
-        with open(tmp_path, 'w', encoding='utf-8') as f:
-            f.write(new_content)
-        os.replace(tmp_path, p)
-    except OSError as e:
-        kodi_utils.log(
-            'wizard_patcher: write failed {0}: {1}'.format(p, e),
-            level='WARNING')
-        try:
-            os.remove(tmp_path)
-        except OSError:
-            pass
-        return 'write_failed'
-
-    kodi_utils.log(
-        'wizard_patcher: injected loginit entries v{0}'.format(
-            INJECT_VERSION),
-        level='INFO')
-    return 'patched'
-
-
-# Settings declarations the wizard needs to persist saved key data.
-# Without these, CONFIG.get_setting('gemini-kodipovilai') returns ''
-# and the "Saved Data" row would always be "Not Saved" even after
-# the user clicks save.
-SETTINGS_INJECT_LINES = (
-    '        <setting id="gemini-kodipovilai" type="text" default="" visible="false"/>\n'
-    '        <setting id="wyzie-kodipovilai" type="text" default="" visible="false"/>\n'
-)
-# Marker on the line above the closing </category> so we can detect
-# previous injection without parsing XML.
-SETTINGS_MARKER = '<!-- ai-subs-injected-v{0} -->'.format(INJECT_VERSION)
-
-
-def _ensure_settings_patched():
-    """Add our two <setting id="..."> entries to the wizard's
-    settings.xml inside the same <category> that holds the existing
-    login-* settings. We look for the line that contains
-    'ws-wonderfulsubs' (the LAST existing login id alphabetically
-    and definitionally) and insert our two lines right after it.
-    If the marker is already present we bail.
-
-    Editing XML by string surgery is fragile but the wizard's
-    settings.xml is hand-maintained and shape-stable. We sanity-
-    check that the closing </category> still appears after our
-    insertion point; if not, bail."""
-    p = _settings_path()
-    if not p or not os.path.isfile(p):
-        return 'no_wizard'
-    try:
-        with open(p, 'r', encoding='utf-8') as f:
-            content = f.read()
-    except OSError:
-        return 'read_failed'
-    if SETTINGS_MARKER in content:
-        return 'already_patched'
-
-    # Use the existing ws-wonderfulsubs line as the anchor.
-    anchor_re = re.compile(
-        r'^(\s*<setting id="ws-wonderfulsubs"[^/>]*/>\s*\n)',
+def _strip_settings_injection(content):
+    """Remove the two <setting id="gemini-kodipovilai"> /
+    <setting id="wyzie-kodipovilai"> lines + the marker comment
+    we inserted right after the existing ws-wonderfulsubs line."""
+    if SETTINGS_MARKER not in content:
+        return content, False
+    # We inserted: two <setting .../> lines + a <!-- marker -->
+    # line right after the ws-wonderfulsubs line. Match those
+    # three lines together.
+    pattern = re.compile(
+        r'^[ \t]*<setting id="gemini-kodipovilai"[^/>]*/>\s*\n'
+        r'[ \t]*<setting id="wyzie-kodipovilai"[^/>]*/>\s*\n'
+        r'[ \t]*' + re.escape(SETTINGS_MARKER) + r'\s*\n',
         re.MULTILINE,
     )
-    m = anchor_re.search(content)
-    if not m:
-        kodi_utils.log(
-            'wizard_patcher: settings.xml anchor not found, skipping',
-            level='WARNING')
-        return 'unmatched'
-    insertion = (m.group(1)
-                 + SETTINGS_INJECT_LINES
-                 + '        ' + SETTINGS_MARKER + '\n')
-    new_content = (content[:m.start()] + insertion
-                   + content[m.end():])
-    # Cheap sanity-check: still well-formed enough to have a
-    # </category> following our insertion.
-    if '</category>' not in new_content[m.end():]:
-        return 'unmatched'
+    new, n = pattern.subn('', content)
+    return new, n > 0
 
-    tmp_path = p + '.aitmp'
+
+def _atomic_write(path, content):
+    tmp = path + '.aitmp'
     try:
-        with open(tmp_path, 'w', encoding='utf-8') as f:
-            f.write(new_content)
-        os.replace(tmp_path, p)
+        with open(tmp, 'w', encoding='utf-8') as f:
+            f.write(content)
+        os.replace(tmp, path)
+        return True
     except OSError:
         try:
-            os.remove(tmp_path)
+            os.remove(tmp)
         except OSError:
             pass
-        return 'write_failed'
-    kodi_utils.log(
-        'wizard_patcher: injected settings entries v{0}'.format(
-            INJECT_VERSION),
-        level='INFO')
-    return 'patched'
+        return False
 
 
-def ensure_patched():
-    """Run both patches. Returns a dict of {step: status}."""
-    return {
-        'loginit':  _ensure_loginit_patched(),
-        'settings': _ensure_settings_patched(),
-    }
+def ensure_unpatched():
+    """If the loginit / settings files still carry our v1
+    injection markers, strip them. Idempotent + safe on every
+    Kodi startup."""
+    result = {'loginit': 'no_change', 'settings': 'no_change'}
+
+    li = _path(LOGINIT_REL_PATH)
+    if li and os.path.isfile(li):
+        try:
+            with open(li, 'r', encoding='utf-8') as f:
+                content = f.read()
+        except OSError:
+            content = None
+        if content is not None:
+            new, changed = _strip_loginit_injection(content)
+            if changed and _atomic_write(li, new):
+                result['loginit'] = 'cleaned'
+                kodi_utils.log(
+                    'wizard_patcher: removed stale loginit injection',
+                    level='INFO')
+            elif changed:
+                result['loginit'] = 'write_failed'
+
+    sx = _path(SETTINGS_REL_PATH)
+    if sx and os.path.isfile(sx):
+        try:
+            with open(sx, 'r', encoding='utf-8') as f:
+                content = f.read()
+        except OSError:
+            content = None
+        if content is not None:
+            new, changed = _strip_settings_injection(content)
+            if changed and _atomic_write(sx, new):
+                result['settings'] = 'cleaned'
+                kodi_utils.log(
+                    'wizard_patcher: removed stale settings injection',
+                    level='INFO')
+            elif changed:
+                result['settings'] = 'write_failed'
+
+    return result
