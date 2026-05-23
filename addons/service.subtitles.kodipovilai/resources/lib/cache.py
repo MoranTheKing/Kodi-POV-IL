@@ -32,25 +32,39 @@ def _ensure_subdir(name):
     return p
 
 
-def _key(imdb_id, season, episode, source_lang):
-    """Stable filename for one cached translation."""
-    if not imdb_id:
-        # Fall back to a content-less key -- caller should
-        # avoid caching in this case but we don't want to crash.
-        imdb_id = 'unknown'
-    parts = [str(imdb_id), str(season or '0'), str(episode or '0'), str(source_lang or 'en')]
+def _key(imdb_id, season, episode, source_lang, source_id=None):
+    """Stable filename for one cached translation.
+
+    Without imdb_id all streams collide on the same 'unknown' key,
+    which is how the first test user ended up seeing the first movie
+    he ever translated for every subsequent movie. When imdb_id is
+    missing, fall back to mixing in a `source_id` (Wyzie URL or
+    local file path) so each unique source SRT gets its own slot.
+    """
+    parts = [str(imdb_id or 'unknown'),
+             str(season or '0'),
+             str(episode or '0'),
+             str(source_lang or 'en')]
+    if not imdb_id and source_id:
+        parts.append(str(source_id))
     digest = hashlib.sha1('|'.join(parts).encode('utf-8')).hexdigest()[:16]
     return '{0}_S{1}E{2}_{3}_{4}'.format(parts[0], parts[1], parts[2], parts[3], digest)
 
 
-def translated_path(imdb_id, season, episode, source_lang):
-    return os.path.join(_ensure_subdir(CACHE_SUBDIR_TRANSLATED),
-                        _key(imdb_id, season, episode, source_lang) + '.he.srt')
+def translated_path(imdb_id, season, episode, source_lang,
+                    source_id=None):
+    return os.path.join(
+        _ensure_subdir(CACHE_SUBDIR_TRANSLATED),
+        _key(imdb_id, season, episode, source_lang, source_id) +
+        '.he.srt')
 
 
-def source_path(imdb_id, season, episode, source_lang):
-    return os.path.join(_ensure_subdir(CACHE_SUBDIR_SOURCE),
-                        _key(imdb_id, season, episode, source_lang) + '.{0}.srt'.format(source_lang))
+def source_path(imdb_id, season, episode, source_lang,
+                source_id=None):
+    return os.path.join(
+        _ensure_subdir(CACHE_SUBDIR_SOURCE),
+        _key(imdb_id, season, episode, source_lang, source_id) +
+        '.{0}.srt'.format(source_lang))
 
 
 def metadata_path(imdb_id):

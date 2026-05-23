@@ -1,4 +1,4 @@
-17
+18
 |||
-תרגום AI פי 3 מהיר
-התרגום עכשיו רץ במקביל - 3 chunks בו זמנית במקום אחד אחר השני. הזמן הכולל מתקצר משמעותית (מ-2-3 דקות ל-30-60 שניות עבור סרט). אם רוצים יותר מקבילים, אפשר להגדיר בהגדרות מתקדמות "תרגומים במקביל".
+תרגום AI: 3 תיקונים חשובים
+1) בעיית cache - תיקון: כל סרט שונה עכשיו מקבל cache key שונה (לפני זה היה מציג לכולם את התרגום הראשון). 2) הסרת אנוטציות [נושם], [מוזיקה מתנגנת], MABEL: וכו' - גם מהמקור לפני התרגום וגם בpromp עצמו. 3) Auto-select: כדי שזה יעבוד אוטומטית כמו Google Translate, צריך להגדיר ב-Kodi: Settings → Player → Languages → "Default movie/TV show subtitle service" = "Kodi POV IL - AI Subtitles" + "Search for subtitles on playback start" + "Auto-download first subtitle".

@@ -15,6 +15,27 @@ import re
 
 BLOCK_SEPARATOR = re.compile(r'\r?\n\r?\n')
 
+# Hearing-impaired annotations. Two flavours:
+#  - whole-line annotations like "[breathing heavily]" or "(music
+#    swells)" -- we want to drop the whole text line
+#  - inline annotations like "Hello! [chuckles] How are you?" --
+#    we want to drop just the bracketed part
+# Brackets we recognise: [] {} () and unicode equivalents that
+# show up in some sources.
+_BRACKET_RE = re.compile(
+    r'[\[\(\{][^\[\]\(\){}]*?[\]\)\}]'
+)
+# Also strip ALL-CAPS speaker prefixes like "MABEL: ..." that are
+# common in HI subs but redundant for translation.
+_SPEAKER_RE = re.compile(
+    r'^[A-Z][A-Z0-9 \'\.\-]{1,30}:\s*'
+)
+_INDEX_RE = re.compile(r'^\d+$')
+_TIMECODE_RE = re.compile(
+    r'^\d{1,2}:\d{2}:\d{2}[,\.]\d{1,3}\s*-->\s*'
+    r'\d{1,2}:\d{2}:\d{2}[,\.]\d{1,3}'
+)
+
 
 def parse_blocks(text):
     """Return a list of raw entry blocks (still strings). We don't
@@ -47,3 +68,51 @@ def stitch_blocks(blocks):
 
 def count_entries(text):
     return len(parse_blocks(text))
+
+
+def strip_hi_annotations(text):
+    """Remove hearing-impaired noise from an SRT body.
+
+    Drops bracketed sound cues like [breathing], (music playing),
+    {chuckles}, and ALL-CAPS speaker prefixes like 'MABEL: '. If an
+    entry's text was nothing but annotations, the whole entry is
+    dropped (its timecode goes too -- there's literally no speech
+    in that span, so an empty subtitle would be a visual gap with
+    nothing useful).
+
+    Returns the cleaned SRT body. Block order and numbering are
+    preserved for surviving entries (we keep the original index
+    numbers so the model sees stable references).
+    """
+    if not text:
+        return text
+    out_blocks = []
+    for block in parse_blocks(text):
+        lines = block.split('\n')
+        kept_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if _INDEX_RE.match(stripped):
+                kept_lines.append(line)
+                continue
+            if _TIMECODE_RE.match(stripped):
+                kept_lines.append(line)
+                continue
+            # text line -- strip annotations
+            cleaned = _BRACKET_RE.sub('', line)
+            cleaned = _SPEAKER_RE.sub('', cleaned)
+            # collapse whitespace runs that the strips may have
+            # left behind
+            cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip()
+            if cleaned:
+                kept_lines.append(cleaned)
+        # only keep the block if there's actual dialogue text left
+        # (more than just the index + timecode)
+        text_lines = [ln for ln in kept_lines
+                      if ln.strip() and not _INDEX_RE.match(ln.strip())
+                      and not _TIMECODE_RE.match(ln.strip())]
+        if text_lines and len(kept_lines) >= 3:
+            out_blocks.append('\n'.join(kept_lines))
+    return '\r\n\r\n'.join(out_blocks) + '\r\n' if out_blocks else ''
