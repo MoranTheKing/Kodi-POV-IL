@@ -98,6 +98,10 @@ msgctxt "#32305"
 msgid "Clear cache now"
 msgstr "נקה cache עכשיו"
 
+msgctxt "#32306"
+msgid "Clear Kodi temp subtitle files now"
+msgstr "נקה קבצי כתוביות temp של Kodi עכשיו"
+
 msgctxt "#32400"
 msgid "Advanced"
 msgstr "מתקדם"
