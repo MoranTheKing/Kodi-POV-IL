@@ -1,3 +1,13 @@
+v0.2.0
+- Force the icon update through. v0.1.9 shipped the new icons
+  and the corrected patcher code, but every existing install
+  already had the v0.1.8 injection block in POV's myservices.py
+  marked as v1, so the patcher saw 'already_patched' and bailed
+  before overwriting the icon names. Bumped INJECT_VERSION to v2
+  and added v1 to OLD_MARKERS, so on next startup the patcher
+  strips the v1 block (with the placeholder icon references) and
+  re-injects v2 (with the gemini.png / wyzie.png references).
+
 v0.1.9
 - Custom icons for the Gemini AI and Wyzie entries in POV's
   My Services menu (instead of the reused tmdb.png / mdblist.png
