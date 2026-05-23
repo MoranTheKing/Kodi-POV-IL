@@ -150,6 +150,22 @@ msgctxt "#33008"
 msgid "Translation failed: {0}"
 msgstr "התרגום נכשל: {0}"
 
+msgctxt "#32240"
+msgid "OpenSubtitles"
+msgstr "OpenSubtitles"
+
+msgctxt "#32241"
+msgid "Sign up free at opensubtitles.com to get an API key"
+msgstr "הרשמה חינמית ב-opensubtitles.com לקבלת API key"
+
+msgctxt "#32242"
+msgid "OpenSubtitles API Key"
+msgstr "OpenSubtitles API Key"
+
+msgctxt "#32243"
+msgid "Optional. Required for online subtitle search. Register free at opensubtitles.com/en/consumers and paste the key here. Without it, only SRT files alongside the video file can be used."
+msgstr "אופציונלי. נדרש לחיפוש כתוביות אונליין. הרשמה חינמית ב-opensubtitles.com/en/consumers, העתק את ה-key לפה. בלי זה, רק קבצי SRT שנמצאים ליד קובץ הוידאו יעבדו."
+
 msgctxt "#32230"
 msgid "3.1 Flash Lite (recommended, 500/day)"
 msgstr "3.1 Flash Lite (מומלץ, 500 ביום)"
