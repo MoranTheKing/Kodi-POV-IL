@@ -84,16 +84,16 @@ def _handle_search(handle, params):
     the subtitle search dialog."""
     from resources.lib import kodi_utils, translate
 
-    # One-shot: if the user has adopted us (Gemini key set) and
-    # DarkSubs is around, turn DarkSubs's auto_translate off so its
-    # Google/Bing/Yandex Hebrew rows stop competing with (and
-    # outranking) ours. Gated by a "takeover done" marker so we
-    # never stomp on a user who deliberately re-enabled it.
+    # Make sure DarkSubs's machine-translate hook is in place. The
+    # service runs this on Kodi startup too, but doing it here as
+    # well catches the case where DarkSubs was installed (or
+    # updated) AFTER Kodi started -- the patch goes in immediately,
+    # without needing a reboot. Idempotent.
     try:
         from resources.lib import dark_subs_integration
-        dark_subs_integration.maybe_disable_darksubs_translate()
+        dark_subs_integration.maybe_patch_darksubs()
     except Exception as e:
-        _safe_log('darksubs takeover skipped: {0}'.format(e),
+        _safe_log('darksubs patch skipped: {0}'.format(e),
                   level='DEBUG')
 
     info = kodi_utils.current_video_info()
@@ -239,12 +239,11 @@ def _handle_test_connection(_params):
     try:
         matched = gemini.test_key(api_key, model=model)
         # Test-connection is the canonical "I've adopted this addon"
-        # moment; fire the DarkSubs takeover here too so the user
-        # doesn't have to wait until their next subtitle search for
-        # the Hebrew duplicates to stop.
+        # moment; make sure DarkSubs's hook is in place right now so
+        # the next subtitle pick already routes through our AI.
         try:
             from resources.lib import dark_subs_integration
-            dark_subs_integration.maybe_disable_darksubs_translate()
+            dark_subs_integration.maybe_patch_darksubs()
         except Exception:
             pass
         xbmcgui.Dialog().ok('Kodi POV IL',
@@ -275,6 +274,118 @@ def _handle_clear_cache(_params):
         return
     n = cache.clear_all()
     xbmcgui.Dialog().ok('Kodi POV IL', kodi_utils.localised(33007, n))
+
+
+def _handle_translate_file(params):
+    """Translate an SRT file to Hebrew on disk.
+
+    Invoked by the DarkSubs engine.py hook via RunScript when the
+    user picks a non-Hebrew subtitle from DarkSubs and has a Gemini
+    key set. Reads input, translates, writes output, then touches
+    a `.ai_done` sentinel next to the output so DarkSubs knows to
+    pick it up instead of falling through to Google Translate.
+
+    Params (base64-encoded so they survive RunScript's parameter
+    parsing intact -- paths can contain commas, parens, quotes):
+      input_b64  : path to source SRT
+      output_b64 : path to write Hebrew SRT
+    """
+    import base64
+    try:
+        from resources.lib import kodi_utils, translate, srt
+    except Exception as e:
+        _safe_log('translate_file: import failed: {0}'.format(e),
+                  level='ERROR')
+        return
+
+    def _decode(b):
+        try:
+            return base64.b64decode(b.encode('ascii')).decode('utf-8')
+        except Exception:
+            return ''
+
+    in_path = _decode(params.get('input_b64', ''))
+    out_path = _decode(params.get('output_b64', ''))
+    if not in_path or not out_path:
+        _safe_log('translate_file: missing input/output paths',
+                  level='WARNING')
+        return
+    if not os.path.isfile(in_path):
+        _safe_log(
+            'translate_file: input not found: {0}'.format(in_path),
+            level='WARNING')
+        return
+
+    # Read source SRT.
+    try:
+        with open(in_path, 'r', encoding='utf-8', errors='replace') as f:
+            src_text = f.read()
+    except OSError as e:
+        _safe_log('translate_file: read failed: {0}'.format(e),
+                  level='ERROR')
+        return
+
+    if not src_text.strip():
+        _safe_log('translate_file: source empty', level='WARNING')
+        return
+
+    # We don't have video info here (the hook is running inside
+    # DarkSubs's process), so synthesize what we can. Cast metadata
+    # and proper title come from VideoPlayer InfoLabels if the
+    # video is currently playing; otherwise we degrade gracefully.
+    info = kodi_utils.current_video_info()
+
+    # Reuse the core orchestration: translate via a temp link payload
+    # that points at the source file we already have. resolve() does
+    # its own caching, chunking, Gemini calls, etc.
+    import json
+    import urllib.parse
+    payload = {
+        'type': 'ai',
+        'source_lang': 'en',  # DarkSubs's auto_translate only fires
+                              # on non-Hebrew; English is by far the
+                              # common case and the prompt is robust
+                              # to a misidentified source language.
+        'local_path': in_path,
+    }
+    link = urllib.parse.quote(
+        json.dumps(payload, ensure_ascii=False))
+
+    translated_path = None
+    try:
+        translated_path = translate.resolve(link, info)
+    except Exception as e:
+        _safe_log('translate_file: resolve crashed: {0}'.format(e),
+                  level='ERROR')
+
+    if not translated_path or not os.path.isfile(translated_path):
+        _safe_log('translate_file: resolve returned nothing',
+                  level='WARNING')
+        return
+
+    # Copy translated content to the output path DarkSubs expects.
+    try:
+        with open(translated_path, 'r', encoding='utf-8',
+                  errors='replace') as f:
+            hebrew = f.read()
+        # Write atomically: temp file in same dir, then rename. This
+        # avoids a half-written file being picked up by the hook.
+        tmp_out = out_path + '.aitmp'
+        with open(tmp_out, 'w', encoding='utf-8') as f:
+            f.write(hebrew)
+        os.replace(tmp_out, out_path)
+    except OSError as e:
+        _safe_log('translate_file: write failed: {0}'.format(e),
+                  level='ERROR')
+        return
+
+    # Touch the sentinel last -- the hook polls for it. Only after
+    # the output is complete on disk.
+    try:
+        open(out_path + '.ai_done', 'w').close()
+    except OSError as e:
+        _safe_log('translate_file: sentinel write failed: {0}'
+                  .format(e), level='WARNING')
 
 
 def _handle_purge_temp(_params):
@@ -324,6 +435,8 @@ def main():
             _handle_clear_cache(params)
         elif action == 'purge_temp':
             _handle_purge_temp(params)
+        elif action == 'translate_file':
+            _handle_translate_file(params)
         else:
             _safe_log('unknown action: ' + action, level='WARNING')
             if handle >= 0:

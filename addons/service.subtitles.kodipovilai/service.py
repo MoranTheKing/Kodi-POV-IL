@@ -104,6 +104,35 @@ def _prune_once():
 TEMP_PURGE_VERSION = '2'
 
 
+def _maybe_patch_darksubs():
+    """Self-healing patch of DarkSubs's machine_translate_subs so
+    that when a user with a Gemini key picks a non-Hebrew subtitle
+    from DarkSubs, the translation goes through our AI instead of
+    Google/Bing/Yandex. Idempotent, safe to re-run on every Kodi
+    startup -- if upstream DarkSubs updates and overwrites the
+    injected hook, this puts it back."""
+    try:
+        from resources.lib import dark_subs_integration, kodi_utils
+    except Exception:
+        return
+    try:
+        status = dark_subs_integration.maybe_patch_darksubs()
+        if status == 'patched':
+            kodi_utils.log('DarkSubs hook (re)injected on startup',
+                           level='INFO')
+        elif status in ('unmatched', 'write_failed', 'read_failed',
+                        'failed'):
+            kodi_utils.log(
+                'DarkSubs hook injection skipped: ' + status,
+                level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log('DarkSubs patch run failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_purge_temp_once():
     try:
         from resources.lib import local_subs, kodi_utils
@@ -139,6 +168,11 @@ def main():
 
     # Initial prune.
     _prune_once()
+
+    # Self-healing DarkSubs hook injection. Runs every startup so
+    # if upstream DarkSubs updates and overwrites our hook, it
+    # comes back automatically on next Kodi launch.
+    _maybe_patch_darksubs()
 
     monitor = xbmc.Monitor()
     # 24h between passes. waitForAbort returns True when Kodi is
