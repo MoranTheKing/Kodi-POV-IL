@@ -19,6 +19,7 @@ from . import cache
 from . import gemini
 from . import kodi_utils
 from . import language_detect
+from . import local_subs
 from . import opensubs
 from . import prompt
 from . import srt
@@ -56,31 +57,62 @@ def _decode_link(link):
 def list_candidates(info):
     """Build the list Kodi's subtitle dialog will render.
 
-    Returns a list of dicts with keys: filename, language,
-    language_name, link, sync, rating. Empty list if nothing
-    plausible is available.
+    Returns a list of dicts with keys: filename, language, link,
+    sync, rating. Empty list if nothing plausible is available.
 
-    Policy: if real Hebrew subs exist and skip_if_hebrew is on,
-    those float to the top; the AI entry still appears too so the
-    user can override if they want, but ranks lower.
+    Policy: if real Hebrew subs exist and skip_if_hebrew is on, we
+    don't show an AI entry; the existing-Hebrew options are enough.
+    Otherwise we look for source-language SRTs to feed the
+    translator -- local files alongside the video first (free, no
+    API call), then OpenSubtitles if the user has set their api
+    key. We deliberately avoid querying OS when we have no
+    identifier at all -- the first version did that and OS happily
+    returned every Hebrew subtitle in the database, polluting the
+    search dialog with completely unrelated movies.
     """
     imdb_id = (info.get('imdb_id') or '').strip()
     season  = info.get('season') or ''
     episode = info.get('episode') or ''
+    filepath = info.get('filepath') or ''
     title   = info.get('title') or ''
     year    = info.get('year') or ''
 
     results = []
+    os_ready = opensubs.has_api_key()
+    sources = _enabled_sources()
 
-    # 1. Look for existing Hebrew subs first. If found AND
-    #    skip_if_hebrew is on, we won't translate -- but we still
-    #    list them in the dialog (Kodi will fetch them, not us).
+    # 0. Local SRTs alongside the video (free, no API calls).
+    local_by_lang = {}
+    for path, lang in local_subs.find_alongside(filepath):
+        if lang and lang not in local_by_lang:
+            local_by_lang[lang] = path
+
+    # 1. Hebrew. If found locally OR on OS, list them as passthrough
+    #    entries. If skip_if_hebrew is on AND any real Hebrew exists,
+    #    don't bother with an AI entry below.
     have_hebrew = False
-    if imdb_id:
+    if 'he' in local_by_lang:
+        have_hebrew = True
+        results.append({
+            'filename': os.path.basename(local_by_lang['he']),
+            'language': 'he',
+            'link': _encode_link({'type': 'local',
+                                  'path': local_by_lang['he'],
+                                  'language': 'he'}),
+            'sync': 'true',  # local file is presumably already in sync
+            'rating': '5',
+            'is_hi': False, 'is_hd': False,
+        })
+
+    if os_ready and (imdb_id or title):
         try:
             hebrew_hits = opensubs.search(
-                imdb_id=imdb_id, season=season, episode=episode,
-                languages=('he',))
+                imdb_id=imdb_id or None,
+                query=title if not imdb_id else None,
+                year=year if not imdb_id else None,
+                season=season, episode=episode,
+                languages=('he',),
+            )
         except Exception as e:
             kodi_utils.log('OpenSubtitles he search failed: {0}'.format(e),
                            level='WARNING')
@@ -101,45 +133,54 @@ def list_candidates(info):
 
     skip_when_hebrew = kodi_utils.get_bool('skip_if_hebrew', True)
     if have_hebrew and skip_when_hebrew:
-        # Done -- no AI entry needed.
         return results
 
-    # 2. For each source language we have enabled, see if OS has a
-    #    sub for this title in that language; if yes, add an AI
-    #    entry that means "translate this".
-    sources = _enabled_sources()
+    # 2. For each enabled source language, surface ONE "translate
+    #    me" entry. Prefer a local file; fall back to OS lookup.
     seen_langs = set()
     for src_lang in sources:
-        if not imdb_id:
-            # Without an IMDB id we can't reliably search OS for
-            # the right title. Surface a single "AI from en" entry
-            # using local files only -- it'll resolve at download
-            # time using info dict alone.
-            if 'en' not in seen_langs:
-                seen_langs.add('en')
-                results.append({
-                    'filename': 'AI Hebrew (translated from English)',
-                    'language': 'he',
-                    'link': _encode_link({'type': 'ai',
-                                          'source_lang': 'en'}),
-                    'sync': 'false',
-                    'rating': '3',
-                    'is_hi': False, 'is_hd': False,
-                })
+        if src_lang in seen_langs:
+            continue
+
+        local_path = local_by_lang.get(src_lang)
+        if local_path:
+            seen_langs.add(src_lang)
+            results.append({
+                'filename': 'AI Hebrew (translated from local {0})'.format(
+                    _lang_display(src_lang)),
+                'language': 'he',
+                'link': _encode_link({'type': 'ai',
+                                      'source_lang': src_lang,
+                                      'local_path': local_path}),
+                'sync': 'true',
+                'rating': '5',
+                'is_hi': False, 'is_hd': False,
+            })
+            continue
+
+        # No local file in this language. Ask OS, but only if we
+        # have something to identify the video by AND the user has
+        # configured an API key. Otherwise skip silently rather
+        # than polluting the dialog with a fake entry.
+        if not os_ready:
+            continue
+        if not (imdb_id or title):
             continue
 
         try:
             src_hits = opensubs.search(
-                imdb_id=imdb_id, season=season, episode=episode,
-                languages=(src_lang,))
+                imdb_id=imdb_id or None,
+                query=title if not imdb_id else None,
+                year=year if not imdb_id else None,
+                season=season, episode=episode,
+                languages=(src_lang,),
+            )
         except Exception as e:
             kodi_utils.log('OS {0} search failed: {1}'.format(src_lang, e),
                            level='WARNING')
             src_hits = []
 
         if not src_hits:
-            continue
-        if src_lang in seen_langs:
             continue
         seen_langs.add(src_lang)
         top = src_hits[0]
@@ -197,6 +238,14 @@ def resolve(link, info, progress_cb=None):
         except OSError:
             return None
 
+    if kind == 'local':
+        # Already-existing Hebrew file alongside the video. Hand
+        # Kodi the file path back directly.
+        local_path = payload.get('path')
+        if local_path and os.path.isfile(local_path):
+            return local_path
+        return None
+
     if kind != 'ai':
         return None
 
@@ -215,22 +264,42 @@ def resolve(link, info, progress_cb=None):
         return translated
 
     # Fetch / cache the source SRT.
-    src_path = cache.source_path(imdb_id, season, episode, source_lang)
-    src_text = cache.load_text(src_path)
+    src_text = None
+    local_source = payload.get('local_path')
+    if local_source and os.path.isfile(local_source):
+        try:
+            with open(local_source, 'r', encoding='utf-8', errors='replace') as f:
+                src_text = f.read()
+        except (IOError, OSError):
+            src_text = None
     if not src_text:
-        file_id = payload.get('file_id')
-        if not file_id:
-            # No file_id (happens when called from no-imdb path).
-            # Re-query OS now that we have time.
-            hits = opensubs.search(imdb_id=imdb_id, season=season,
-                                   episode=episode, languages=(source_lang,))
-            if not hits:
-                return None
-            file_id = hits[0].get('file_id')
-        src_text = opensubs.download(file_id)
+        src_path = cache.source_path(imdb_id, season, episode, source_lang)
+        src_text = cache.load_text(src_path)
         if not src_text:
-            return None
-        cache.save_text(src_path, src_text)
+            if not opensubs.has_api_key():
+                kodi_utils.notify(
+                    'הגדר OpenSubtitles API key בהגדרות התוסף')
+                return None
+            file_id = payload.get('file_id')
+            if not file_id:
+                # No file_id (happens when called from no-imdb path).
+                # Re-query OS now that we have time.
+                title = info.get('title') or ''
+                year = info.get('year') or ''
+                hits = opensubs.search(
+                    imdb_id=imdb_id or None,
+                    query=title if not imdb_id else None,
+                    year=year if not imdb_id else None,
+                    season=season, episode=episode,
+                    languages=(source_lang,),
+                )
+                if not hits:
+                    return None
+                file_id = hits[0].get('file_id')
+            src_text = opensubs.download(file_id)
+            if not src_text:
+                return None
+            cache.save_text(src_path, src_text)
 
     # Sanity: if the source happens to be Hebrew (mislabelled),
     # don't translate it again -- just return it as the result.

@@ -1,4 +1,4 @@
-12
+13
 |||
-תיקון תפריט בחירת מודל (ניסיון שני)
-ה־IDs של הטקסטים בdropdown של בחירת מודל היו בטווח שמור של Kodi (33000+), ולכן Kodi התעלם מהם והציג את ה־built-in. הועברו לטווח התקין (32230+). אחרי העדכון הזה התפריט יראה "3.1 Flash Lite", "3.1 Flash" וכו'.
+תיקון תרגום AI: API key של OpenSubtitles
+ה-API key של OpenSubtitles בתוסף הקודם לא היה תקין (403 Forbidden), ולכן ה-AI subtitles לא מצא כתוביות. עכשיו צריך להגדיר API key חינמי שלך בהגדרות התוסף - תיכנס ל-Settings → Add-ons → Subtitle add-ons → Kodi POV IL - AI Subtitles → Configure → Translation → OpenSubtitles API Key, ותלחץ על "הרשמה חינמית" שמופיע מעליו.
