@@ -1,0 +1,7 @@
+v0.1.0 (initial)
+- AI-translated Hebrew subtitles via Gemini 3.1 Flash Lite (free tier)
+- Sources from OpenSubtitles (anonymous, 200/day) + local SRT files
+- Cast-aware gender forms via TMDB (script.module.tmdbhelper)
+- Caches translations under userdata/addon_data with TTL + size cap
+- Skips translation when real Hebrew subs already exist
+- Settings UI for API key, model, source language priority, cache
