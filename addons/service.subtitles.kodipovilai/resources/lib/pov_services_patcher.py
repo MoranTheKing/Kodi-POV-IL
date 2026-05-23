@@ -16,8 +16,10 @@
 # xbmcaddon directly because POV's get_setting/set_setting operate
 # on the POV addon's own settings, not ours.
 
+import hashlib
 import os
 import re
+import shutil
 
 try:
     import xbmcvfs
@@ -28,6 +30,12 @@ from . import kodi_utils
 
 POV_ADDON_ID = 'plugin.video.pov'
 MYSERVICES_REL_PATH = 'resources/lib/modules/myservices.py'
+POV_MEDIA_REL_PATH = 'resources/skins/Default/media'
+
+# Source paths for the two icons we ship.
+ICON_SRC_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), 'icons')
+ICON_FILENAMES = ('gemini.png', 'wyzie.png')
 
 INJECT_VERSION = 1
 MARKER = '# AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
@@ -55,7 +63,7 @@ def _ai_get_addon():
 
 
 class Gemini:
-    icon = 'tmdb.png'  # reused; we don't ship a separate icon for now
+    icon = 'gemini.png'  # copied into POV's media dir by pov_services_patcher
 
     def __init__(self):
         self._ai = _ai_get_addon()
@@ -112,7 +120,7 @@ class Gemini:
 
 
 class Wyzie:
-    icon = 'mdblist.png'  # reused placeholder
+    icon = 'wyzie.png'  # copied into POV's media dir by pov_services_patcher
 
     def __init__(self):
         self._ai = _ai_get_addon()
@@ -188,7 +196,70 @@ def _myservices_path():
         return None
 
 
+def _pov_media_dir():
+    if xbmcvfs is None:
+        return None
+    try:
+        return xbmcvfs.translatePath(
+            'special://home/addons/{0}/{1}'.format(
+                POV_ADDON_ID, POV_MEDIA_REL_PATH))
+    except Exception:
+        return None
+
+
+def _sha1(path):
+    try:
+        h = hashlib.sha1()
+        with open(path, 'rb') as f:
+            for chunk in iter(lambda: f.read(65536), b''):
+                h.update(chunk)
+        return h.hexdigest()
+    except OSError:
+        return None
+
+
+def _ensure_icons_copied():
+    """Copy gemini.png + wyzie.png from our addon's icons dir into
+    POV's media folder if missing or different. Idempotent.
+
+    Returns the number of icons newly written (0 = no change needed).
+    """
+    media_dir = _pov_media_dir()
+    if not media_dir or not os.path.isdir(media_dir):
+        return 0
+    written = 0
+    for name in ICON_FILENAMES:
+        src = os.path.join(ICON_SRC_DIR, name)
+        if not os.path.isfile(src):
+            kodi_utils.log(
+                'pov_services_patcher: icon source missing: {0}'.format(
+                    src), level='WARNING')
+            continue
+        dst = os.path.join(media_dir, name)
+        if os.path.isfile(dst) and _sha1(src) == _sha1(dst):
+            continue  # already up to date
+        try:
+            tmp = dst + '.aitmp'
+            shutil.copyfile(src, tmp)
+            os.replace(tmp, dst)
+            written += 1
+            kodi_utils.log(
+                'pov_services_patcher: installed icon {0}'.format(name),
+                level='INFO')
+        except OSError as e:
+            kodi_utils.log(
+                'pov_services_patcher: icon copy failed {0}: {1}'
+                .format(name, e), level='WARNING')
+    return written
+
+
 def ensure_patched():
+    # Always make sure the icons are in place, even when myservices.py
+    # is already patched -- handles the case where the icons got
+    # blown away by a POV update but the marker block in the .py is
+    # still there.
+    _ensure_icons_copied()
+
     p = _myservices_path()
     if not p or not os.path.isfile(p):
         return 'no_pov'
