@@ -268,9 +268,10 @@ def _handle_connect_gemini(_params):
 
 def _gemini_menu_existing(kodi_utils, gemini, gemini_pair, current_key):
     """User clicked Gemini in My Services and already has a key
-    set. Offer Test / Replace / Remove."""
+    set. Offer Test / Usage / Replace / Remove."""
     options = [
         '🔍 בדוק חיבור (Test connection)',
+        '📊 ניצול היום (Daily usage)',
         '🔄 החלף key (Replace)',
         '❌ מחק key (Remove)',
     ]
@@ -285,17 +286,48 @@ def _gemini_menu_existing(kodi_utils, gemini, gemini_pair, current_key):
         _test_key_show_result(kodi_utils, gemini, current_key)
         return
     if choice == 1:
+        _show_gemini_usage()
+        return
+    if choice == 2:
         # Clear current first so the new-key flow doesn't loop
         # back into the existing-key menu.
         kodi_utils.set_setting('api_key', '')
         _gemini_menu_new(kodi_utils, gemini, gemini_pair)
         return
-    if choice == 2:
+    if choice == 3:
         confirm = xbmcgui.Dialog().yesno(
             'Kodi POV IL', 'למחוק את ה-Gemini API key?')
         if confirm:
             kodi_utils.set_setting('api_key', '')
             kodi_utils.notify('Gemini key נמחק', time_ms=3000)
+
+
+def _show_gemini_usage():
+    """Render the daily quota status in a Dialog().ok(). Used by
+    the 'ניצול היום' menu entry and the runscript action."""
+    try:
+        from resources.lib import gemini_quota
+    except Exception as e:
+        try:
+            xbmcgui.Dialog().ok('Kodi POV IL',
+                                'Internal error: {0}'.format(e))
+        except Exception:
+            pass
+        return
+    try:
+        body = gemini_quota.format_status_long()
+    except Exception as e:
+        body = 'שגיאה בקריאת הנתונים: {0}'.format(e)
+    try:
+        xbmcgui.Dialog().ok('Gemini AI - ניצול היום', body)
+    except Exception:
+        pass
+
+
+def _handle_show_gemini_usage(_params):
+    """RunScript entry point so the dialog can be opened from
+    anywhere, e.g. a Wizard button or a remote shortcut."""
+    _show_gemini_usage()
 
 
 def _gemini_menu_new(kodi_utils, gemini, gemini_pair):
@@ -785,6 +817,8 @@ def main():
             _handle_test_connection(params)
         elif action == 'connect_gemini':
             _handle_connect_gemini(params)
+        elif action == 'show_gemini_usage':
+            _handle_show_gemini_usage(params)
         elif action == 'test_wyzie_connection':
             _handle_test_wyzie_connection(params)
         elif action == 'open_tmdb_notice':

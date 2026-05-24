@@ -1,3 +1,30 @@
+v0.2.13
+- Daily Gemini quota display. Free-tier gemini-3.1-flash-lite is
+  capped at ~500 requests/day and resets at UTC midnight. We now
+  surface today's usage in two places:
+    A) appended to the end-of-translation toast --
+       "AI: תרגום הסתיים בהצלחה (5 chunks · 47/500 ביום)"
+    B) a new "📊 ניצול היום" entry in the POV My Services ->
+       Gemini chooser menu (shown only when a key is already set).
+       Opens a Dialog().ok() with model, count, percentage,
+       remaining, and the reset boundary.
+- Scope is intentionally narrow: ONLY gemini-3.1-flash-lite is
+  counted. Other models (3.1 flash, 2.5 variants) silently
+  no-op through note_request() so the displayed number stays
+  meaningful. Per-device count (not synced across machines).
+- Storage: two new hidden settings, _usage_count and
+  _usage_date_utc. The counter is reset automatically the first
+  time note_request runs after the UTC date changes.
+- Hook point is inside gemini.generate() just before the success
+  return -- catches every counted request regardless of caller
+  (parallel translation, DarkSubs hook, future entry points).
+  Wrapped in try/except at every call site so a bug in the
+  quota module can never break translation.
+- New runscript action `show_gemini_usage` for opening the
+  status panel from anywhere (Wizard shortcut, remote, etc.).
+- No new dependencies; stdlib-only datetime + the existing
+  kodi_utils get/set_setting shims.
+
 v0.2.12
 - "Pair from another device" Gemini onboarding. New action
   `connect_gemini` in default.py spins up a tiny localhost HTTP
