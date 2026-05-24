@@ -137,16 +137,21 @@ def fix_rtl_punctuation(text, mode=None):
 
     `mode` controls the direction of the correction. Pulled from
     the addon's `rtl_punct_mode` setting if not explicitly passed:
-      'auto' (default)  -- move misplaced END-of-sentence punct
-                           from line START to line END (assumes
-                           Kodi does correct BiDi reordering so
-                           logical-end renders visually-left).
-      'reverse'         -- move END-of-sentence punct from line
-                           END to line START (for Kodi setups that
-                           render source order without RTL
-                           reorder, so a logical-START punct lands
-                           at the visual end of the reading flow).
-      'off'             -- no processing.
+      'reverse' (default) -- move END-of-sentence punct from line
+                             END to line START. Necessary because
+                             Kodi's subtitle renderer (across the
+                             observed setups -- Windows, Android,
+                             FENtastic skin) does NOT BiDi-reorder
+                             Hebrew lines, so a logical-START
+                             punct visually lands at the end of
+                             the Hebrew reader's reading flow.
+      'legacy'            -- the inverse: move leading punct to
+                             the logical end. Was the default in
+                             v0.2.0-v0.2.6 under the (wrong)
+                             assumption that Kodi reorders. Kept
+                             around in case any setup actually
+                             does reorder correctly.
+      'off'               -- no processing.
 
     Idempotent. Skips index + timecode lines. Preserves trailing
     newline so a benign re-run doesn't flag the file as changed."""
@@ -155,10 +160,14 @@ def fix_rtl_punctuation(text, mode=None):
     if mode is None:
         try:
             from . import kodi_utils
-            mode = (kodi_utils.get_setting('rtl_punct_mode', 'auto')
-                    or 'auto').lower()
+            mode = (kodi_utils.get_setting('rtl_punct_mode', 'reverse')
+                    or 'reverse').lower()
         except Exception:
-            mode = 'auto'
+            mode = 'reverse'
+    # 'auto' was the v0.2.7 name for what is now 'legacy'. Map for
+    # backwards compatibility with users who manually selected it.
+    if mode == 'auto':
+        mode = 'legacy'
     if mode == 'off':
         return text
     trailing_nl = '\n' if text.endswith(('\n', '\r')) else ''
@@ -169,10 +178,11 @@ def fix_rtl_punctuation(text, mode=None):
                 _TIMECODE_RE.match(stripped):
             out_lines.append(line)
             continue
-        if mode == 'reverse':
-            out_lines.append(_reverse_fix_one_text_line(line))
-        else:
+        if mode == 'legacy':
             out_lines.append(_fix_one_text_line(line))
+        else:
+            # 'reverse' (default) or anything unrecognised
+            out_lines.append(_reverse_fix_one_text_line(line))
     return '\n'.join(out_lines) + trailing_nl
 
 
