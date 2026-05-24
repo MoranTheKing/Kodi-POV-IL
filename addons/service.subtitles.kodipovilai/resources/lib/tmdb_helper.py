@@ -1,10 +1,25 @@
-# Read TMDB credentials from script.module.tmdbhelper, which POV
-# users already have configured via "חיבור שירותים". Fetch cast
-# data + try to determine each actor's gender so the translation
-# prompt can pick correct Hebrew gender forms.
+# Resolve a TMDB v3 API key for cast / gender lookups. Two
+# sources, in priority order:
 #
-# If tmdbhelper isn't installed or no key is set, return empty
-# metadata -- the translation still works, just less accurately.
+#   1. The user's own key in script.module.tmdbhelper. Anyone who
+#      hooked TMDB up through "חיבור שירותים" already has one
+#      there; that key takes precedence both today and in the
+#      future (if they connect a personal key tomorrow, we
+#      switch to it immediately because we re-read every call).
+#
+#   2. A bundled fallback key, copied from jurialmunkey's
+#      script.module.tmdbhelper upstream:
+#        https://github.com/jurialmunkey/plugin.video.themoviedb.helper/
+#                blob/nexus/resources/tmdbhelper/lib/api/api_keys/tmdb.py
+#      That key is published in the open-source addon and is shared
+#      by tens of thousands of tmdbhelper installs worldwide, so it
+#      is appropriate to bundle as a default. With it, the user no
+#      longer needs to do anything for TMDB beyond installing the
+#      build -- gender-aware translation works out of the box.
+#
+# We never write the bundled key into tmdbhelper's settings, so
+# user-facing TMDB integration is unchanged: tmdbhelper continues
+# to behave exactly as before this addon was installed.
 
 try:
     import requests
@@ -22,12 +37,17 @@ TMDB_HELPER_ID = 'script.module.tmdbhelper'
 # the key under different names; we try each in order.
 KEY_SETTING_CANDIDATES = ('api_key', 'tmdb_apikey', 'tmdb_api_key')
 
+# Public TMDB v3 key shipped in jurialmunkey's tmdbhelper. Used
+# only as a last-resort fallback when the user has not connected
+# their own. See module docstring for source + rationale.
+BUNDLED_TMDB_KEY = 'a07324c669cac4d96789197134ce272b'
+
 API_BASE = 'https://api.themoviedb.org/3'
 
 
-def _get_tmdb_key():
-    """Pull a TMDB v3 API key from script.module.tmdbhelper's
-    settings. Returns '' if helper is missing or unconfigured."""
+def _get_user_tmdb_key():
+    """The user's personal TMDB v3 key from tmdbhelper, or '' if
+    none configured. Never returns the bundled fallback."""
     if not xbmcaddon:
         return ''
     try:
@@ -42,6 +62,23 @@ def _get_tmdb_key():
         except Exception:
             continue
     return ''
+
+
+def _get_tmdb_key():
+    """Resolve a usable TMDB v3 key. User key wins; bundled
+    fallback ensures the addon works out of the box for everyone
+    else. Called on every lookup, so a key the user adds tomorrow
+    becomes effective immediately without restart."""
+    user = _get_user_tmdb_key()
+    if user:
+        return user
+    return BUNDLED_TMDB_KEY
+
+
+def using_bundled_key():
+    """True iff we'd fall back to the shipped key right now.
+    Used by the settings UI to render an accurate status line."""
+    return not _get_user_tmdb_key()
 
 
 def _get(url, params, timeout=15):
