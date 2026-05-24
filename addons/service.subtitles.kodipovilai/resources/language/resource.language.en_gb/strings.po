@@ -171,8 +171,8 @@ msgstr "Translation failed: {0}"
 # first attempt at this fix used 33010-33013 and reproduced the bug
 # exactly. Moved into the gap inside the Translation category.
 msgctxt "#32250"
-msgid "Wyzie Subs (optional - skip if you have All_Subs)"
-msgstr "Wyzie Subs (optional - skip if you have All_Subs)"
+msgid "Wyzie Subs (optional - skip if you have DarkSubs)"
+msgstr "Wyzie Subs (optional - skip if you have DarkSubs)"
 
 msgctxt "#32251"
 msgid "Claim a free Wyzie API key (opens browser)"
@@ -183,8 +183,8 @@ msgid "Wyzie API Key (optional)"
 msgstr "Wyzie API Key (optional)"
 
 msgctxt "#32253"
-msgid "Optional. If you have DarkSubs/All_Subs installed, you do not need Wyzie at all -- clicking any non-Hebrew subtitle in All_Subs will trigger AI translation automatically. Wyzie is only useful if you have NO other subtitle addon and want a one-click online source from inside this addon. 1000 requests/day on the free tier at store.wyzie.io/redeem."
-msgstr "Optional. If you have DarkSubs/All_Subs installed, you do not need Wyzie at all -- clicking any non-Hebrew subtitle in All_Subs will trigger AI translation automatically. Wyzie is only useful if you have NO other subtitle addon and want a one-click online source from inside this addon. 1000 requests/day on the free tier at store.wyzie.io/redeem."
+msgid "Optional. If you have DarkSubs installed, you do not need Wyzie at all -- clicking any non-Hebrew subtitle in DarkSubs will trigger AI translation automatically. Wyzie is only useful if you have NO other subtitle addon and want a one-click online source from inside this addon. 1000 requests/day on the free tier at store.wyzie.io/redeem."
+msgstr "Optional. If you have DarkSubs installed, you do not need Wyzie at all -- clicking any non-Hebrew subtitle in DarkSubs will trigger AI translation automatically. Wyzie is only useful if you have NO other subtitle addon and want a one-click online source from inside this addon. 1000 requests/day on the free tier at store.wyzie.io/redeem."
 
 msgctxt "#32230"
 msgid "3.1 Flash Lite (recommended, 500/day)"

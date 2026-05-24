@@ -219,19 +219,19 @@ def _handle_open_wyzie_signup(_params):
     try:
         if has_darksubs:
             msg = (
-                'שים לב: יש לך תוסף All_Subs (DarkSubs) מותקן, '
+                'שים לב: יש לך תוסף DarkSubs מותקן, '
                 'אז Wyzie בעצם לא נחוץ - לחיצה על כתובית באנגלית '
-                '(או כל שפה לא-עברית) ב-All_Subs כבר מפעילה את '
+                '(או כל שפה לא-עברית) ב-DarkSubs כבר מפעילה את '
                 'התרגום AI אוטומטית.\n\nאם בכל זאת אתה רוצה key '
-                '(למשל לגישה מהירה יותר מתוך התוסף שלי בלי לעבור '
-                'דרך All_Subs):\n{0}\n\n1000 בקשות ביום, חינם.'
+                '(למשל למקור אונליין נוסף מתוך התוסף שלי, בלי '
+                'לעבור דרך DarkSubs):\n{0}\n\n1000 בקשות ביום, חינם.'
             ).format(url)
         else:
             msg = (
                 'פתח בדפדפן:\n{0}\n\nתקבל API key חינמי '
                 '(1000 בקשות/יום). העתק לשדה Wyzie API Key '
                 'בהגדרות.\n\n(אופציונלי - אם תתקין בעתיד את '
-                'התוסף All_Subs, תוכל לוותר על Wyzie לגמרי.)'
+                'התוסף DarkSubs, תוכל לוותר על Wyzie לגמרי.)'
             ).format(url)
         xbmcgui.Dialog().ok('Kodi POV IL', msg)
     except Exception:

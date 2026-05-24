@@ -37,7 +37,7 @@ ICON_SRC_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), 'icons')
 ICON_FILENAMES = ('gemini.png', 'wyzie.png')
 
-INJECT_VERSION = 3
+INJECT_VERSION = 4
 MARKER = '# AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
 END_MARKER = '# END AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
 TUPLE_MARKER = "# AI_SUBS_MYSERVICES_TUPLE_v{0}".format(INJECT_VERSION)
@@ -46,12 +46,16 @@ TUPLE_MARKER = "# AI_SUBS_MYSERVICES_TUPLE_v{0}".format(INJECT_VERSION)
 #   v2 (addon v0.1.9-v0.2.1): custom gemini.png / wyzie.png icons.
 #   v3 (addon v0.2.2): Wyzie first-time setup dialog mentions that
 #     the All_Subs addon makes Wyzie redundant.
+#   v4 (addon v0.2.3): same dialog, but uses "DarkSubs" (the
+#     display name the user actually sees) instead of "All_Subs"
+#     (the addon-id / folder-name) which was confusing.
 # Each bump triggers a one-time re-patch on the next Kodi startup;
 # OLD_MARKERS lists every prior version's marker so the legacy
-# blocks get stripped cleanly before v3 is injected.
+# blocks get stripped cleanly before the new one is injected.
 OLD_MARKERS = [
     '# AI_SUBS_MYSERVICES_INJECT_v1',
     '# AI_SUBS_MYSERVICES_INJECT_v2',
+    '# AI_SUBS_MYSERVICES_INJECT_v3',
 ]
 
 # Two service classes plus a hook that monkey-patches authorize()
@@ -165,12 +169,12 @@ class Wyzie:
                 pass
             if _has_darksubs:
                 _msg = (
-                    'שים לב: יש לך תוסף All_Subs מותקן, אז Wyzie '
+                    'שים לב: יש לך תוסף DarkSubs מותקן, אז Wyzie '
                     'בעצם לא נחוץ -- לחיצה על כתובית באנגלית (או כל '
-                    'שפה לא-עברית) ב-All_Subs כבר מפעילה את התרגום '
+                    'שפה לא-עברית) ב-DarkSubs כבר מפעילה את התרגום '
                     'AI שלי אוטומטית.\\n\\nאם בכל זאת אתה רוצה Wyzie '
                     'key (למשל למקור אונליין נוסף לתוך התוסף שלי, '
-                    'בלי לעבור דרך All_Subs):\\n'
+                    'בלי לעבור דרך DarkSubs):\\n'
                     'https://store.wyzie.io/redeem\\n'
                     '1000 בקשות ביום, חינם.'
                 )
@@ -180,7 +184,7 @@ class Wyzie:
                     '(1000 בקשות ביום). הירשם ב-store.wyzie.io/'
                     'redeem, ואז הדבק את ה-key שתקבל במסך הבא.\\n\\n'
                     '(אופציונלי - אם תתקין בעתיד את התוסף '
-                    'All_Subs, תוכל לוותר על Wyzie לגמרי.)'
+                    'DarkSubs, תוכל לוותר על Wyzie לגמרי.)'
                 )
             kodi_utils.ok_dialog(
                 heading='Wyzie - איך משיגים API key', text=_msg)
