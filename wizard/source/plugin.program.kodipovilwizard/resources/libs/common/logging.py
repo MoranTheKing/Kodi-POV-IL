@@ -30,12 +30,18 @@ import _strptime
 from resources.libs.common import tools
 from resources.libs.common.config import CONFIG
 
-try:  # Python 3
-    from urllib.parse import urlencode
-    from urllib.request import FancyURLopener
-except ImportError:  # Python 2
-    from urllib import urlencode
-    from urllib import FancyURLopener
+# Python 3 only. The previous try/except wrapper here used to
+# probe `urllib.request.FancyURLopener` (Py3) with a fallback to
+# `urllib.FancyURLopener` (Py2). Python 3.14 REMOVED FancyURLopener
+# from urllib.request entirely (deprecated since 3.6), which made
+# the try branch raise ImportError, and the except branch then
+# raises again on `from urllib import urlencode` (a Py2-only
+# name that has never existed in Py3). Net effect: the whole
+# wizard refused to start on Arch Linux + Python 3.14. We don't
+# need either FancyURLopener or the Py2 fallback any more --
+# `requests` is already a wizard dependency and handles the
+# `post_log` HTTP POST much more cleanly. See post_log() below.
+from urllib.parse import urlencode
 
 
 URL = 'https://paste.ubuntu.com/'
@@ -241,19 +247,47 @@ def clean_log(content):
 
 
 def post_log(data, name):
-    params = {'poster': CONFIG.BUILDERNAME, 'content': data, 'syntax': 'text', 'expiration': 'week'}
-    params = urlencode(params)
+    """Upload the given log contents to paste.ubuntu.com and return
+    (success, url_or_error_msg).
 
+    Was implemented with urllib's FancyURLopener subclass. Rewritten
+    to use `requests.post()` because FancyURLopener was removed in
+    Python 3.14 (the previous try/except urllib import fallback was
+    crashing the whole wizard at module load on Arch Linux). The
+    requests library is already a wizard dependency
+    (script.module.requests, declared in addon.xml), so no new
+    runtime requirement."""
     try:
-        page = LogURLopener().open(URL, params)
+        import requests
+    except ImportError as e:
+        msg = 'requests module unavailable: {0}'.format(e)
+        log(msg, level=xbmc.LOGERROR)
+        return False, msg
+    params = {
+        'poster':     CONFIG.BUILDERNAME,
+        'content':    data,
+        'syntax':     'text',
+        'expiration': 'week',
+    }
+    headers = {
+        'User-Agent': '{0}: {1}'.format(
+            CONFIG.ADDON_ID, CONFIG.ADDON_VERSION),
+    }
+    try:
+        # paste.ubuntu.com responds with a 30x redirect to the
+        # paste's permalink. `requests` follows it by default and
+        # exposes the final URL via Response.url.
+        response = requests.post(URL, data=params, headers=headers,
+                                 timeout=30)
     except Exception as e:
         a = 'failed to connect to the server'
         log("{0}: {1}".format(a, str(e)), level=xbmc.LOGERROR)
         return False, a
 
     try:
-        page_url = page.url.strip()
-        # copy_to_clipboard(page_url)
+        page_url = (response.url or '').strip()
+        if not page_url:
+            raise ValueError('no url in response')
         log("URL for {0}: {1}".format(name, page_url))
         return True, page_url
     except Exception as e:
@@ -314,8 +348,9 @@ def copy_to_clipboard(txt):
         # return False, "Error Sending Email."
 
 
-class LogURLopener(FancyURLopener):
-    version = '{0}: {1}'.format(CONFIG.ADDON_ID, CONFIG.ADDON_VERSION)
+# LogURLopener class removed -- post_log() now uses requests.post()
+# instead of the deprecated urllib.request.FancyURLopener (which
+# Python 3.14 removed entirely). The class had no other callers.
 
 
 def show_result(message, url=None):
