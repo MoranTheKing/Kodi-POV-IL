@@ -55,21 +55,56 @@ _LEADING_PUNCT_RE = re.compile(
 _ELLIPSIS_RE = re.compile(r'^\.{2,}$')
 
 
+# Invisible BiDi / direction-control / BOM characters that Gemini
+# (and other LLMs) sometimes insert at the START of a Hebrew line.
+# When they're there, my leading-punct regex misses the punct that
+# follows them, so the line never gets corrected. We strip these
+# before checking, then drop them entirely from the output (they're
+# noise for SRT rendering -- Kodi handles RTL via the text content
+# alone).
+_INVISIBLE_BIDI = (
+    '‎'  # LRM
+    '‏'  # RLM
+    '‪'  # LRE
+    '‫'  # RLE
+    '‬'  # PDF
+    '‭'  # LRO
+    '‮'  # RLO
+    '⁦'  # LRI
+    '⁧'  # RLI
+    '⁨'  # FSI
+    '⁩'  # PDI
+    '﻿'  # BOM / ZWNBSP
+)
+
+
 def _fix_one_text_line(line):
     """Apply the RTL punctuation correction to a single text line
     (not an index or timecode line). Returns the corrected line."""
     stripped = line.strip()
+    # Strip any leading invisible BiDi / BOM characters that would
+    # otherwise hide the punct from our regex.
+    while stripped and stripped[0] in _INVISIBLE_BIDI:
+        stripped = stripped[1:]
+    # Also strip from the end -- Gemini occasionally appends them too.
+    while stripped and stripped[-1] in _INVISIBLE_BIDI:
+        stripped = stripped[:-1]
     if not stripped:
         return line
     m = _LEADING_PUNCT_RE.match(stripped)
     if not m:
+        # No leading punct -- but if we stripped invisible chars,
+        # the rewritten stripped line is itself cleaner. Return it
+        # so the invisible noise doesn't survive.
+        if stripped != line.strip():
+            return stripped
         return line
     leading, rest = m.group(1), m.group(2)
     # Leave legitimate ellipsis alone.
     if _ELLIPSIS_RE.match(leading):
-        return line
+        return stripped if stripped != line.strip() else line
     if not rest:
-        return line
+        return stripped if stripped != line.strip() else line
     # If the rest already ends with punctuation, the leading one is
     # redundant -- drop it instead of moving (which would double up).
     if rest[-1] in _TRAILING_PUNCT_CHARS:
