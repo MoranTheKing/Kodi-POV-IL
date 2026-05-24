@@ -1,3 +1,23 @@
+v0.2.9
+- FENtastic skin: self-healing patch of DialogNotification.xml
+  that swaps the message control from <fadelabel id="402">
+  to <wraplabel id="402">. The fadelabel widget scrolls long
+  text in a BiDi-deaf direction that reads backwards for Hebrew
+  users; wraplabel wraps to multiple lines and has no scroll
+  direction at all. Title (id 401) stays as fadelabel since
+  the title is always "Kodi POV IL" (short, no scroll).
+  - Idempotent + self-healing on every Kodi startup
+  - Sanity-checks the patched XML for well-formedness before
+    writing
+  - If FENtastic refactors away from the canonical id=402
+    fadelabel shape, the patcher bails without touching the
+    file ('unmatched' status logged to kodi.log)
+  - ensure_unpatched() available for users who want to revert
+  - Sandbox-tested: patched + reverted XML both parse cleanly,
+    idempotent on both directions
+  - Only patches when FENtastic skin is installed. Users on
+    Estuary / other skins are unaffected.
+
 v0.2.8
 - Default flipped to 'reverse'. User confirmed the wrong-side
   punctuation reproduces on every Hebrew subtitle for every user
