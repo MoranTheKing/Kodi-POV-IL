@@ -207,16 +207,16 @@ msgid "RTL punctuation fix direction"
 msgstr "כיוון תיקון ניקוד RTL"
 
 msgctxt "#32223"
-msgid "How to handle Hebrew end-of-sentence punctuation. Default 'auto' moves leading punct to the end -- correct when Kodi BiDi-reorders the line. If your Kodi setup renders source text in physical L-to-R order without RTL reorder (you'll see punctuation on the wrong side), try 'reverse' which moves trailing punct to the start. 'off' disables the post-processor entirely."
-msgstr "איך לטפל בניקוד סוף-משפט בעברית. 'auto' (ברירת מחדל) מזיז ניקוד מההתחלה לסוף הלוגי - נכון כש-Kodi עושה BiDi reorder. אם ה-Kodi שלך מציג את הסורס בסדר L-to-R בלי reorder (תראה ניקוד בצד הלא נכון), נסה 'reverse' שמזיז את הניקוד מהסוף להתחלה. 'off' מבטל את התיקון לגמרי."
+msgid "How to handle Hebrew end-of-sentence punctuation. Default 'reverse' moves trailing punct to the line start -- correct for Kodi setups that render source order without BiDi reorder (the observed default behaviour across Windows / Android / FENtastic). 'legacy' is the previous default (move leading punct to end) -- only use it if 'reverse' produces wrong output on your particular setup. 'off' disables the post-processor entirely."
+msgstr "איך לטפל בניקוד סוף-משפט בעברית. 'reverse' (ברירת מחדל) מזיז ניקוד מהסוף להתחלה - נכון לרוב המכשירים (Windows / אנדרואיד / FENtastic) שלא עושים BiDi reorder. 'legacy' היא ברירת המחדל הישנה (להזיז להפך) - השתמש רק אם 'reverse' לא נראה נכון אצלך. 'off' מבטל לגמרי."
 
 msgctxt "#32224"
-msgid "Auto (move punct to end - default)"
-msgstr "Auto (להזיז לסוף - ברירת מחדל)"
+msgid "Legacy (move punct to end - old default, usually wrong)"
+msgstr "Legacy (להזיז לסוף - ברירת מחדל ישנה, לרוב לא נכון)"
 
 msgctxt "#32225"
-msgid "Reverse (move punct to start - try if 'auto' looks wrong)"
-msgstr "Reverse (להזיז להתחלה - אם 'auto' נראה שגוי)"
+msgid "Reverse (move punct to start - default, correct on most setups)"
+msgstr "Reverse (להזיז להתחלה - ברירת מחדל, נכון לרוב המכשירים)"
 
 msgctxt "#32226"
 msgid "Off (no punctuation processing)"
