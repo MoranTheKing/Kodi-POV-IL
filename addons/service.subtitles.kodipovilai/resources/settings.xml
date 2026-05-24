@@ -207,6 +207,11 @@
           <level>3</level>
           <default></default>
         </setting>
+        <!-- Hidden marker: which CACHE_RTL_FIX_VERSION has run. -->
+        <setting id="_rtl_fix_done" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default></default>
+        </setting>
         <!-- Hidden marker for DarkSubs hook bookkeeping (reserved -- the
              patcher itself is idempotent and doesn't need a flag, but
              we may use this for telemetry / migrations later). -->

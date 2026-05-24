@@ -40,45 +40,63 @@ _TIMECODE_RE = re.compile(
 # Hebrew letter range for RTL post-processing.
 _HEB_LETTER = r'֐-׿'
 # Punctuation that goes at the end of a Hebrew sentence but the AI
-# sometimes outputs at the start. Excludes ellipsis ("...") because
-# leading "..." is a legitimate continuation marker in some sources.
-_TRAILING_PUNCT = r'\.,;:!?'
+# sometimes outputs at the start.
+_TRAILING_PUNCT_CHARS = '.,;:!?'
 
-# Match a line that:
-#   - starts with one or more of the punctuation chars above
-#   - optionally a single space
-#   - then Hebrew text, ending with a Hebrew letter (NOT punctuation)
-# When matched, we move the leading punctuation to the end. This is
-# a defensive backstop -- the prompt itself instructs the model not
-# to do this, but Gemini still slips up occasionally on RTL.
-_MISPLACED_PUNCT_RE = re.compile(
-    r'^([' + _TRAILING_PUNCT + r']+)\s?'
-    r'([' + _HEB_LETTER + r'][^\n]*?[' + _HEB_LETTER + r'])\s*$'
+# Match leading punctuation + optional whitespace + Hebrew-starting text.
+# Captures the leading puncts and the rest of the line separately so the
+# caller can decide what to do based on the rest's trailing character.
+_LEADING_PUNCT_RE = re.compile(
+    r'^([' + _TRAILING_PUNCT_CHARS + r']+)\s*'
+    r'([' + _HEB_LETTER + r'][^\n]*?)\s*$'
 )
+# Detect a pure ellipsis (".." or "..." or more) -- legitimate
+# continuation marker, don't move it.
+_ELLIPSIS_RE = re.compile(r'^\.{2,}$')
+
+
+def _fix_one_text_line(line):
+    """Apply the RTL punctuation correction to a single text line
+    (not an index or timecode line). Returns the corrected line."""
+    stripped = line.strip()
+    if not stripped:
+        return line
+    m = _LEADING_PUNCT_RE.match(stripped)
+    if not m:
+        return line
+    leading, rest = m.group(1), m.group(2)
+    # Leave legitimate ellipsis alone.
+    if _ELLIPSIS_RE.match(leading):
+        return line
+    if not rest:
+        return line
+    # If the rest already ends with punctuation, the leading one is
+    # redundant -- drop it instead of moving (which would double up).
+    if rest[-1] in _TRAILING_PUNCT_CHARS:
+        return rest
+    # Otherwise move leading punct to the end.
+    return rest + leading
 
 
 def fix_rtl_punctuation(text):
     """Move punctuation that the model put at the START of a Hebrew
-    line to the END. Idempotent. Returns the corrected text.
+    line to the END (or drop it if it's already duplicated at the
+    end). Idempotent. Skips index + timecode lines.
 
-    Operates on text lines only -- index lines and timecodes are
-    left alone."""
+    Preserves the trailing newline of the input so that idempotent
+    re-processing of a file doesn't keep flagging it as 'changed'."""
     if not text:
         return text
+    trailing_nl = '\n' if text.endswith(('\n', '\r')) else ''
     out_lines = []
     for line in text.splitlines():
         stripped = line.strip()
-        # Skip index + timecode lines
         if not stripped or _INDEX_RE.match(stripped) or \
                 _TIMECODE_RE.match(stripped):
             out_lines.append(line)
             continue
-        m = _MISPLACED_PUNCT_RE.match(stripped)
-        if m:
-            out_lines.append(m.group(2) + m.group(1))
-        else:
-            out_lines.append(line)
-    return '\n'.join(out_lines)
+        out_lines.append(_fix_one_text_line(line))
+    return '\n'.join(out_lines) + trailing_nl
 
 
 def parse_blocks(text):
