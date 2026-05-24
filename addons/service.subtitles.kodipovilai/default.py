@@ -453,6 +453,16 @@ def _handle_translate_file(params):
         with open(translated_path, 'r', encoding='utf-8',
                   errors='replace') as f:
             hebrew = f.read()
+        # Belt-and-suspenders: re-apply the RTL punctuation fix
+        # right before delivery. resolve() does this on cache hits
+        # too, but applying it again here catches the case where
+        # the cache file slipped through (e.g., a write race or a
+        # file the migration hasn't reached yet).
+        try:
+            from resources.lib import srt as _srt
+            hebrew = _srt.fix_rtl_punctuation(hebrew)
+        except Exception:
+            pass
         # Write atomically: temp file in same dir, then rename. This
         # avoids a half-written file being picked up by the hook.
         tmp_out = out_path + '.aitmp'
