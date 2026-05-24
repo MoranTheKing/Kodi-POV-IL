@@ -174,6 +174,36 @@ def _maybe_repair_rtl_cache():
             pass
 
 
+def _maybe_patch_fentastic_notification():
+    """Switch FENtastic's DialogNotification.xml message control
+    from fadelabel (which scrolls long Hebrew text in a
+    BiDi-deaf direction) to wraplabel (which wraps to multiple
+    lines, no scroll, no direction). Idempotent + self-healing
+    on every Kodi startup, so an upstream FENtastic update that
+    rewrites the file gets re-patched automatically."""
+    try:
+        from resources.lib import fentastic_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = fentastic_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'fentastic_patcher (re)applied on startup',
+                level='INFO')
+        elif status in ('unmatched', 'write_failed', 'read_failed'):
+            kodi_utils.log(
+                'fentastic_patcher skipped: ' + status,
+                level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'fentastic_patcher run failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_services():
     """Inject Gemini AI + Wyzie entries into the POV plugin's
     "My Services" menu (the one at /myservices in plugin.video.pov).
@@ -298,6 +328,10 @@ def main():
     # POV's own "My Services" menu -- THE correct place. Inject
     # Gemini + Wyzie entries here on every startup; idempotent.
     _maybe_patch_pov_services()
+
+    # FENtastic skin notification widget -- wrap instead of scroll
+    # so Hebrew notifications don't read backwards.
+    _maybe_patch_fentastic_notification()
 
     # One-shot RTL punctuation repair of any cached translations
     # that were written before the post-processor caught their
