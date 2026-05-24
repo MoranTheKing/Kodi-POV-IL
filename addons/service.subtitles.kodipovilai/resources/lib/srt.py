@@ -43,12 +43,21 @@ _HEB_LETTER = r'֐-׿'
 # sometimes outputs at the start.
 _TRAILING_PUNCT_CHARS = '.,;:!?'
 
-# Match leading punctuation + optional whitespace + Hebrew-starting text.
-# Captures the leading puncts and the rest of the line separately so the
-# caller can decide what to do based on the rest's trailing character.
+# Match a Hebrew text line that has a misplaced punctuation prefix.
+# Supports several common wrappers / decorations we need to ignore:
+#   - leading dialogue dash: "- " (single dash + space)
+#   - leading HTML tags (italic, bold, color, etc.): "<i>", "<b>"
+#   - trailing HTML close tags: "</i>"
+# The captured groups let us rebuild the line with the punct moved
+# to its correct position while preserving the wrappers around it.
 _LEADING_PUNCT_RE = re.compile(
-    r'^([' + _TRAILING_PUNCT_CHARS + r']+)\s*'
-    r'([' + _HEB_LETTER + r'][^\n]*?)\s*$'
+    r'^(?P<dash>-\s+)?'                                 # optional "- " dialogue marker
+    r'(?P<open_tags_a>(?:<[a-zA-Z!][^>]*>)*)'           # opening tags BEFORE the punct
+    r'(?P<leading>[' + _TRAILING_PUNCT_CHARS + r']+)\s*'  # the misplaced punct
+    r'(?P<open_tags_b>(?:<[a-zA-Z!][^>]*>)*)'           # opening tags AFTER the punct
+                                                         # (covers ".<i>text</i>")
+    r'(?P<rest>[' + _HEB_LETTER + r'][^\n]*?)'          # Hebrew body (non-greedy)
+    r'(?P<close_tags>(?:</[a-zA-Z][^>]*>)*)\s*$'        # zero or more closing tags
 )
 # Detect a pure ellipsis (".." or "..." or more) -- legitimate
 # continuation marker, don't move it.
@@ -99,7 +108,15 @@ def _fix_one_text_line(line):
         if stripped != line.strip():
             return stripped
         return line
-    leading, rest = m.group(1), m.group(2)
+    dash       = m.group('dash')        or ''
+    # Tags from EITHER side of the punct -- merge so the punct
+    # ends up inside the tag wrap regardless of where Gemini put
+    # the tag relative to the punct.
+    open_tags  = (m.group('open_tags_a') or '') + \
+                 (m.group('open_tags_b') or '')
+    leading    = m.group('leading')
+    rest       = m.group('rest')        or ''
+    close_tags = m.group('close_tags')  or ''
     # Leave legitimate ellipsis alone.
     if _ELLIPSIS_RE.match(leading):
         return stripped if stripped != line.strip() else line
@@ -108,9 +125,11 @@ def _fix_one_text_line(line):
     # If the rest already ends with punctuation, the leading one is
     # redundant -- drop it instead of moving (which would double up).
     if rest[-1] in _TRAILING_PUNCT_CHARS:
-        return rest
-    # Otherwise move leading punct to the end.
-    return rest + leading
+        return dash + open_tags + rest + close_tags
+    # Otherwise move leading punct to the end, INSIDE any closing
+    # tag (so "<i>.לעזאזל</i>" becomes "<i>לעזאזל.</i>", not
+    # "<i>לעזאזל</i>.").
+    return dash + open_tags + rest + leading + close_tags
 
 
 def fix_rtl_punctuation(text):
