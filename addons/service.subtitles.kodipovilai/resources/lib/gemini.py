@@ -159,4 +159,14 @@ def generate(api_key, model, prompt, temperature=0.2,
             partial_text=text,
         )
 
+    # Bump the daily-quota counter. Lazy import + try/except so a
+    # bug here can never break translation. We only count successful
+    # responses (i.e. after all the error branches above), and the
+    # tracker itself decides which models to actually record.
+    try:
+        from . import gemini_quota
+        gemini_quota.note_request(model)
+    except Exception:
+        pass
+
     return text
