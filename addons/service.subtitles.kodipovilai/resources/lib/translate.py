@@ -754,6 +754,16 @@ def resolve(link, info, progress_cb=None):
     # slips so the final SRT renders correctly in Kodi.
     final = srt.fix_rtl_punctuation(final)
     cache.save_text(translated, final)
-    kodi_utils.notify('AI: תרגום הסתיים בהצלחה ({0} chunks)'
-                      .format(total), time_ms=4000)
+    # Append today's Gemini quota usage to the success toast, but
+    # only if the user is on the tracked model (3.1 Flash Lite).
+    # Wrapped so a quota-module bug can't drop the toast itself.
+    quota_suffix = ''
+    try:
+        from . import gemini_quota
+        if gemini_quota.is_tracked(model):
+            quota_suffix = ' · ' + gemini_quota.format_status_short()
+    except Exception:
+        quota_suffix = ''
+    kodi_utils.notify('AI: תרגום הסתיים בהצלחה ({0} chunks){1}'
+                      .format(total, quota_suffix), time_ms=4000)
     return translated

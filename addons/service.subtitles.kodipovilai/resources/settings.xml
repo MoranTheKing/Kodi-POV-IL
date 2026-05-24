@@ -233,6 +233,17 @@
           <level>3</level>
           <default></default>
         </setting>
+        <!-- Hidden: daily Gemini Flash Lite request counter. Reset
+             at UTC midnight by gemini_quota.note_request. -->
+        <setting id="_usage_count" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default>0</default>
+        </setting>
+        <!-- Hidden: UTC date (YYYY-MM-DD) of the counter above. -->
+        <setting id="_usage_date_utc" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default></default>
+        </setting>
       </group>
     </category>
 
