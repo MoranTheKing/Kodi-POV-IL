@@ -219,16 +219,16 @@ msgid "RTL punctuation fix direction"
 msgstr "RTL punctuation fix direction"
 
 msgctxt "#32223"
-msgid "How to handle Hebrew end-of-sentence punctuation. Default 'auto' moves leading punct to the end -- correct when Kodi BiDi-reorders the line. If your Kodi setup renders source text in physical L-to-R order without RTL reorder (you'll see punctuation on the wrong side), try 'reverse' which moves trailing punct to the start. 'off' disables the post-processor entirely."
+msgid "How to handle Hebrew end-of-sentence punctuation. Default 'reverse' moves trailing punct to the line start -- correct for Kodi setups that render source order without BiDi reorder (the observed default behaviour across Windows / Android / FENtastic). 'legacy' is the previous default (move leading punct to end) -- only use it if 'reverse' produces wrong output on your particular setup. 'off' disables the post-processor entirely."
 msgstr ""
 
 msgctxt "#32224"
-msgid "Auto (move punct to end - default)"
-msgstr "Auto (move to end - default)"
+msgid "Legacy (move punct to end - old default, usually wrong)"
+msgstr "Legacy (move to end - old default, usually wrong)"
 
 msgctxt "#32225"
-msgid "Reverse (move punct to start - try if 'auto' looks wrong)"
-msgstr "Reverse (move to start - try if 'auto' looks wrong)"
+msgid "Reverse (move punct to start - default, correct on most setups)"
+msgstr "Reverse (move to start - default, correct on most setups)"
 
 msgctxt "#32226"
 msgid "Off (no punctuation processing)"
