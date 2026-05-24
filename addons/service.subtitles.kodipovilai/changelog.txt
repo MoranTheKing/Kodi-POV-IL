@@ -1,3 +1,37 @@
+v0.2.12
+- "Pair from another device" Gemini onboarding. New action
+  `connect_gemini` in default.py spins up a tiny localhost HTTP
+  server on a free port (8765-8769 preferred, OS-allocated
+  fallback), binds 0.0.0.0 so both LAN AND localhost work, and
+  shows the user a QR code + clickable URLs in a Kodi
+  DialogProgress. The user scans on their phone (or types
+  http://localhost:<port> if Kodi is on the phone with cellular
+  only), pastes the key into a small RTL Hebrew web form, and
+  hits submit. The addon polls the server's shared state for the
+  submitted key, then runs the same gemini.test_key validation
+  the typed-input flow uses -- if Gemini rejects the key, we
+  show the specific reason and DO NOT save.
+- Two onboarding paths now offered when the user clicks Gemini
+  in POV's My Services with no existing key:
+    📱 Pair from another device  (new)
+    ⌨️ Type the key here          (the existing flow)
+- For users WITH an existing key the menu stays: Test / Replace
+  / Remove. Replace re-runs the chooser (Pair or Type), so
+  switching keys via QR is just two clicks.
+- All the Gemini UX lives in default.py now; the POV
+  myservices.py patcher just shells out via
+  RunScript(...action=connect_gemini) so future UX iteration
+  doesn't require a patcher bump. INJECT_VERSION 5 -> 6 to roll
+  the simpler injected forwarder into existing installs.
+- New module resources/lib/gemini_pair.py owns the HTTP server,
+  LAN-IP detection, and the form HTML. Stdlib-only (http.server
+  + threading + socket), no new dependencies.
+- Pair server end-to-end-tested in sandbox: bind ok, GET form
+  serves RTL Hebrew + key field, POST empty key returns the
+  "field empty" page without saving, POST with key returns the
+  "sent to Kodi" page and stashes the key into the polling
+  dict, 404 for bogus paths, shutdown frees the port cleanly.
+
 v0.2.11
 - Gemini auth flow in POV's "My Services" menu rewritten:
   * First-time setup now shows a QR code for
