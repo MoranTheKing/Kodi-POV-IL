@@ -135,6 +135,18 @@ def notify(msg, title=None, icon=None, time_ms=4000):
             title = 'Kodi POV IL'
         if icon is None:
             icon = xbmcvfs.translatePath('special://home/addons/' + ADDON_ID + '/icon.png')
+        # Force RTL scrolling. Kodi's notification widget infers
+        # paragraph direction from the first strong character in
+        # the message body -- if a Hebrew message happens to start
+        # with a Latin letter, digit, or symbol (most of ours
+        # begin with "AI: ..."), the widget sets paragraph
+        # direction to LTR and scrolls left-to-right when the
+        # text overflows. Prepending U+200F (RIGHT-TO-LEFT MARK,
+        # an invisible strong-RTL character) flips the inference
+        # to RTL, so long messages scroll right-to-left as a
+        # Hebrew reader expects.
+        if msg and not msg.startswith('‏'):
+            msg = '‏' + msg
         xbmcgui.Dialog().notification(title, msg, icon, time_ms)
     except Exception:
         pass
