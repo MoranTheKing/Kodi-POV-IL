@@ -1,3 +1,17 @@
+[COLOR yellow][B]v0.1.7[/B][/COLOR]
+* Python 3.14 compatibility: resources/libs/common/logging.py
+  used to do `try: from urllib.request import FancyURLopener
+  except ImportError: from urllib import urlencode` -- both
+  paths break on Python 3.14 (FancyURLopener was removed,
+  `urllib.urlencode` was Py2-only). On Arch Linux + Py3.14 the
+  whole wizard refused to start (clear.py -> logging.py import
+  chain crashed at module load). Rewrote the failing import to
+  a single `from urllib.parse import urlencode`, and replaced
+  the `LogURLopener(FancyURLopener)` class + `post_log()` body
+  with a `requests.post()` call (requests is already a wizard
+  dependency). post_log behaviour is identical; the only
+  visible change is that Linux + Py3.14 users can now actually
+  launch the wizard.
 [COLOR yellow][B]v0.1.6[/B][/COLOR]
 * Reverted the AI subtitle Connect Services entries that v0.1.5
   shipped. They belonged in plugin.video.pov's My Services menu,
