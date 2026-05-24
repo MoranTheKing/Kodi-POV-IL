@@ -113,7 +113,10 @@ TEMP_PURGE_VERSION = '2'
 # through to already-cached translations.
 #   v1 -- initial post-processor, simple-text leading-punct only
 #   v2 -- HTML-tag-wrapped and dialogue-dash variants
-CACHE_RTL_FIX_VERSION = '2'
+#   v3 -- direction flipped: default is now 'reverse' (move punct
+#         to line start) since the original 'auto' direction was
+#         based on a wrong assumption about Kodi's BiDi behaviour
+CACHE_RTL_FIX_VERSION = '3'
 
 
 def _maybe_repair_rtl_cache():
