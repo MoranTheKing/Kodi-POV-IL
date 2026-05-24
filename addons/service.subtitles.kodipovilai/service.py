@@ -103,6 +103,69 @@ def _prune_once():
 # re-runs once.
 TEMP_PURGE_VERSION = '2'
 
+# Version tag of the "re-apply fix_rtl_punctuation to every cached
+# translated SRT" rollout. Translations cached before v0.1.6 didn't
+# get the post-processor run on them, and even later caches may
+# have slipped through if the regex didn't catch a specific edge.
+# Bump this whenever fix_rtl_punctuation gains coverage and we want
+# existing caches to benefit without the user manually clearing.
+CACHE_RTL_FIX_VERSION = '1'
+
+
+def _maybe_repair_rtl_cache():
+    """One-shot walk of cache/translated/, re-applying the current
+    fix_rtl_punctuation() to each file. Catches up translations
+    that got cached before the post-processor was in place or before
+    it handled a specific edge case. Marker-gated so it only runs
+    once per CACHE_RTL_FIX_VERSION bump."""
+    try:
+        from resources.lib import kodi_utils, srt
+    except Exception:
+        return
+    try:
+        if kodi_utils.get_setting('_rtl_fix_done', '') == \
+                CACHE_RTL_FIX_VERSION:
+            return
+        translated_dir = os.path.join(
+            kodi_utils.cache_dir(), 'translated')
+        n_scanned = n_repaired = 0
+        if os.path.isdir(translated_dir):
+            for fn in os.listdir(translated_dir):
+                if not fn.endswith('.srt'):
+                    continue
+                p = os.path.join(translated_dir, fn)
+                n_scanned += 1
+                try:
+                    with open(p, 'r', encoding='utf-8',
+                              errors='replace') as f:
+                        content = f.read()
+                except OSError:
+                    continue
+                fixed = srt.fix_rtl_punctuation(content)
+                if fixed == content:
+                    continue
+                tmp = p + '.aitmp'
+                try:
+                    with open(tmp, 'w', encoding='utf-8') as f:
+                        f.write(fixed)
+                    os.replace(tmp, p)
+                    n_repaired += 1
+                except OSError:
+                    try: os.remove(tmp)
+                    except OSError: pass
+        kodi_utils.set_setting('_rtl_fix_done', CACHE_RTL_FIX_VERSION)
+        kodi_utils.log(
+            'RTL cache repair v{0}: scanned {1}, repaired {2}'.format(
+                CACHE_RTL_FIX_VERSION, n_scanned, n_repaired),
+            level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'RTL cache repair failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
 
 def _maybe_patch_pov_services():
     """Inject Gemini AI + Wyzie entries into the POV plugin's
@@ -228,6 +291,11 @@ def main():
     # POV's own "My Services" menu -- THE correct place. Inject
     # Gemini + Wyzie entries here on every startup; idempotent.
     _maybe_patch_pov_services()
+
+    # One-shot RTL punctuation repair of any cached translations
+    # that were written before the post-processor caught their
+    # specific edge case. Marker-gated so it only runs once.
+    _maybe_repair_rtl_cache()
 
     monitor = xbmc.Monitor()
     # 24h between passes. waitForAbort returns True when Kodi is
