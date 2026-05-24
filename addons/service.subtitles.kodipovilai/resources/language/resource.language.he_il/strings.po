@@ -159,20 +159,20 @@ msgid "Translation failed: {0}"
 msgstr "התרגום נכשל: {0}"
 
 msgctxt "#32250"
-msgid "Wyzie Subs (online source)"
-msgstr "Wyzie Subs (מקור אונליין)"
+msgid "Wyzie Subs (optional - skip if you have All_Subs)"
+msgstr "Wyzie Subs (אופציונלי - לא חובה אם יש All_Subs)"
 
 msgctxt "#32251"
 msgid "Claim a free Wyzie API key (opens browser)"
 msgstr "צור API key חינמי ב-Wyzie (פותח דפדפן)"
 
 msgctxt "#32252"
-msgid "Wyzie API Key"
-msgstr "Wyzie API Key"
+msgid "Wyzie API Key (optional)"
+msgstr "Wyzie API Key (אופציונלי)"
 
 msgctxt "#32253"
-msgid "Optional. 1000 requests/day on the free tier. Claim at store.wyzie.io/redeem and paste the key here. With a key, the addon can search and translate in one click; without it, you have to download a source-language subtitle through another addon first and then come back to the search dialog to translate it."
-msgstr "אופציונלי. 1000 בקשות ביום בתוכנית החינמית. הירשם ב-store.wyzie.io/redeem והדבק את ה-key כאן. עם key, האדon מחפש ומתרגם בלחיצה אחת. בלי, צריך קודם להוריד כתובית בשפת מקור דרך תוסף אחר ואז לחזור לחיפוש כתוביות כדי לתרגם."
+msgid "Optional. If you have DarkSubs/All_Subs installed, you do not need Wyzie at all -- clicking any non-Hebrew subtitle in All_Subs will trigger AI translation automatically. Wyzie is only useful if you have NO other subtitle addon and want a one-click online source from inside this addon. 1000 requests/day on the free tier at store.wyzie.io/redeem."
+msgstr "אופציונלי - לא חובה. אם יש לך תוסף DarkSubs/All_Subs מותקן, אתה לא צריך את Wyzie בכלל. לחיצה על כל כתובית שאינה עברית מ-All_Subs תפעיל אוטומטית את התרגום AI שלי. Wyzie נחוץ רק אם אין לך תוסף כתוביות אחר ואתה רוצה מקור אונליין בלחיצה אחת מתוך התוסף הזה. 1000 בקשות ליום חינמיות ב-store.wyzie.io/redeem."
 
 msgctxt "#32230"
 msgid "3.1 Flash Lite (recommended, 500/day)"
