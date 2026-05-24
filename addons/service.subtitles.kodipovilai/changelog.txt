@@ -1,3 +1,28 @@
+v0.2.11
+- Gemini auth flow in POV's "My Services" menu rewritten:
+  * First-time setup now shows a QR code for
+    aistudio.google.com/apikey, same pattern as Trakt /
+    Real-Debrid / Premiumize. User scans with phone, opens
+    browser, creates key, comes back to Kodi.
+  * The entered key is VALIDATED against Gemini's /models
+    endpoint INLINE before saving. If Gemini rejects the key
+    (400/403), reports quota (429), is in a temporary outage
+    (5xx), or doesn't respond (timeout) -- we DO NOT write the
+    key to settings. Instead we show the specific reason and
+    offer to retry. Previously the addon silently saved any
+    string the user typed, leaving them "connected" with a
+    broken key.
+  * For users with a key already set, clicking Gemini now opens
+    a chooser: 🔍 Test connection / 🔄 Replace key / ❌ Remove.
+    "Test connection" makes the test button accessible from
+    the same place the user authenticates -- no need to dig
+    into the addon's own settings page.
+  * Validation is implemented inline (direct requests call) so
+    we don't have to wrestle with sys.path conflicts importing
+    our resources.lib.gemini from POV's namespace.
+  POV myservices INJECT_VERSION 4 -> 5 so existing patched
+  installs get the new dialog flow on the next Kodi startup.
+
 v0.2.10
 - HOTFIX: revert the v0.2.9 FENtastic DialogNotification patch.
   User report: "משהו נדפק שם. עכשיו יש הודעה ריקה והבחירה של
