@@ -40,45 +40,98 @@ _TIMECODE_RE = re.compile(
 # Hebrew letter range for RTL post-processing.
 _HEB_LETTER = r'֐-׿'
 # Punctuation that goes at the end of a Hebrew sentence but the AI
-# sometimes outputs at the start. Excludes ellipsis ("...") because
-# leading "..." is a legitimate continuation marker in some sources.
-_TRAILING_PUNCT = r'\.,;:!?'
+# sometimes outputs at the start.
+_TRAILING_PUNCT_CHARS = '.,;:!?'
 
-# Match a line that:
-#   - starts with one or more of the punctuation chars above
-#   - optionally a single space
-#   - then Hebrew text, ending with a Hebrew letter (NOT punctuation)
-# When matched, we move the leading punctuation to the end. This is
-# a defensive backstop -- the prompt itself instructs the model not
-# to do this, but Gemini still slips up occasionally on RTL.
-_MISPLACED_PUNCT_RE = re.compile(
-    r'^([' + _TRAILING_PUNCT + r']+)\s?'
-    r'([' + _HEB_LETTER + r'][^\n]*?[' + _HEB_LETTER + r'])\s*$'
+# Match leading punctuation + optional whitespace + Hebrew-starting text.
+# Captures the leading puncts and the rest of the line separately so the
+# caller can decide what to do based on the rest's trailing character.
+_LEADING_PUNCT_RE = re.compile(
+    r'^([' + _TRAILING_PUNCT_CHARS + r']+)\s*'
+    r'([' + _HEB_LETTER + r'][^\n]*?)\s*$'
 )
+# Detect a pure ellipsis (".." or "..." or more) -- legitimate
+# continuation marker, don't move it.
+_ELLIPSIS_RE = re.compile(r'^\.{2,}$')
+
+
+# Invisible BiDi / direction-control / BOM characters that Gemini
+# (and other LLMs) sometimes insert at the START of a Hebrew line.
+# When they're there, my leading-punct regex misses the punct that
+# follows them, so the line never gets corrected. We strip these
+# before checking, then drop them entirely from the output (they're
+# noise for SRT rendering -- Kodi handles RTL via the text content
+# alone).
+_INVISIBLE_BIDI = (
+    '‎'  # LRM
+    '‏'  # RLM
+    '‪'  # LRE
+    '‫'  # RLE
+    '‬'  # PDF
+    '‭'  # LRO
+    '‮'  # RLO
+    '⁦'  # LRI
+    '⁧'  # RLI
+    '⁨'  # FSI
+    '⁩'  # PDI
+    '﻿'  # BOM / ZWNBSP
+)
+
+
+def _fix_one_text_line(line):
+    """Apply the RTL punctuation correction to a single text line
+    (not an index or timecode line). Returns the corrected line."""
+    stripped = line.strip()
+    # Strip any leading invisible BiDi / BOM characters that would
+    # otherwise hide the punct from our regex.
+    while stripped and stripped[0] in _INVISIBLE_BIDI:
+        stripped = stripped[1:]
+    # Also strip from the end -- Gemini occasionally appends them too.
+    while stripped and stripped[-1] in _INVISIBLE_BIDI:
+        stripped = stripped[:-1]
+    if not stripped:
+        return line
+    m = _LEADING_PUNCT_RE.match(stripped)
+    if not m:
+        # No leading punct -- but if we stripped invisible chars,
+        # the rewritten stripped line is itself cleaner. Return it
+        # so the invisible noise doesn't survive.
+        if stripped != line.strip():
+            return stripped
+        return line
+    leading, rest = m.group(1), m.group(2)
+    # Leave legitimate ellipsis alone.
+    if _ELLIPSIS_RE.match(leading):
+        return stripped if stripped != line.strip() else line
+    if not rest:
+        return stripped if stripped != line.strip() else line
+    # If the rest already ends with punctuation, the leading one is
+    # redundant -- drop it instead of moving (which would double up).
+    if rest[-1] in _TRAILING_PUNCT_CHARS:
+        return rest
+    # Otherwise move leading punct to the end.
+    return rest + leading
 
 
 def fix_rtl_punctuation(text):
     """Move punctuation that the model put at the START of a Hebrew
-    line to the END. Idempotent. Returns the corrected text.
+    line to the END (or drop it if it's already duplicated at the
+    end). Idempotent. Skips index + timecode lines.
 
-    Operates on text lines only -- index lines and timecodes are
-    left alone."""
+    Preserves the trailing newline of the input so that idempotent
+    re-processing of a file doesn't keep flagging it as 'changed'."""
     if not text:
         return text
+    trailing_nl = '\n' if text.endswith(('\n', '\r')) else ''
     out_lines = []
     for line in text.splitlines():
         stripped = line.strip()
-        # Skip index + timecode lines
         if not stripped or _INDEX_RE.match(stripped) or \
                 _TIMECODE_RE.match(stripped):
             out_lines.append(line)
             continue
-        m = _MISPLACED_PUNCT_RE.match(stripped)
-        if m:
-            out_lines.append(m.group(2) + m.group(1))
-        else:
-            out_lines.append(line)
-    return '\n'.join(out_lines)
+        out_lines.append(_fix_one_text_line(line))
+    return '\n'.join(out_lines) + trailing_nl
 
 
 def parse_blocks(text):
