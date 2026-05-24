@@ -69,6 +69,36 @@ def _lang_display(code):
     }.get(code, code or 'Unknown')
 
 
+def _reapply_rtl_fix_in_place(path):
+    """Re-run srt.fix_rtl_punctuation() on a cached translation
+    file. Catches up files that were cached before the current
+    version's regex coverage was wired in. Idempotent: if the
+    file is already clean, no write happens.
+
+    Called on every cache hit in resolve() so a returning user
+    benefits from the latest fix without having to clear cache or
+    wait for the next service.py startup migration."""
+    try:
+        with open(path, 'r', encoding='utf-8', errors='replace') as f:
+            content = f.read()
+    except OSError:
+        return
+    fixed = srt.fix_rtl_punctuation(content)
+    if fixed == content:
+        return
+    tmp = path + '.aitmp'
+    try:
+        with open(tmp, 'w', encoding='utf-8') as f:
+            f.write(fixed)
+        os.replace(tmp, path)
+        kodi_utils.log(
+            'RTL fix reapplied on cache hit: ' + path,
+            level='INFO')
+    except OSError:
+        try: os.remove(tmp)
+        except OSError: pass
+
+
 # ---- search ----------------------------------------------------------
 
 def list_candidates(info):
@@ -384,6 +414,7 @@ def resolve(link, info, progress_cb=None):
                 os.utime(translated, (now, now))
             except OSError:
                 pass
+            _reapply_rtl_fix_in_place(translated)
             return translated
 
     # Read the source SRT. Either we recorded a local path at list
@@ -435,6 +466,7 @@ def resolve(link, info, progress_cb=None):
             os.utime(translated, (now, now))
         except OSError:
             pass
+        _reapply_rtl_fix_in_place(translated)
         return translated
 
     kodi_utils.log(
