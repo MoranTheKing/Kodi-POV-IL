@@ -3,14 +3,48 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kodi POV IL Wizard</title>
+  <title>Kodi POV IL - Wizard & תוספים</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 32px; background: #101820; color: #f6f1df; }
-    a { color: #ffd166; font-size: 1.2rem; display: block; margin: 14px 0; }
+    h1 { color: #ffd166; }
+    h2 { color: #ffd166; margin-top: 32px; }
+    .card { max-width: 760px; padding: 20px 24px; border: 1px solid #34495e; border-radius: 12px; background: #172635; margin: 20px 0; }
+    a { color: #ffd166; font-size: 1.15rem; display: inline-block; margin: 8px 0; }
+    p, li { line-height: 1.6; }
+    code { background: #0a0f15; padding: 2px 6px; border-radius: 4px; font-size: 0.95rem; }
+    .note { color: #b7c4cf; font-size: 0.95rem; }
   </style>
 </head>
 <body>
-  <h1>Kodi POV IL Wizard</h1>
-  <a href="plugin.program.kodipovilwizard-0.1.2.zip">plugin.program.kodipovilwizard-0.1.2.zip</a>
+  <h1>Kodi POV IL — קבצים להתקנה</h1>
+
+  <div class="card">
+    <h2>1. ה-Wizard המלא (התקנת בילד POV+FENtastic)</h2>
+    <p>מתקין את כל הבילד: סקין, תוספים, ותוסף ה-AI לתרגום כתוביות בעברית — הכל ביחד.</p>
+    <a href="plugin.program.kodipovilwizard-0.1.6.zip">⬇ plugin.program.kodipovilwizard-0.1.6.zip</a>
+    <p class="note">
+      ב-Kodi: הגדרות → תוספים → התקן מקובץ zip → בחר את הזיפ.
+      <br>אחרי ההתקנה ה-Wizard יציע את התקנת הבילד אוטומטית.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>2. רק תוסף תרגום AI (לבילד אחר/קודי משלך)</h2>
+    <p>אם יש לך כבר Kodi עם בילד אחר ואתה רוצה רק את תוסף תרגום הכתוביות AI לעברית — תוריד את הזיפ הזה ולא צריך את ה-Wizard למעלה.</p>
+    <a href="service.subtitles.kodipovilai-0.2.3.zip">⬇ service.subtitles.kodipovilai-0.2.3.zip</a>
+    <p class="note">
+      ב-Kodi: הגדרות → תוספים → התקן מקובץ zip → בחר את הזיפ.
+      <br>אחרי ההתקנה: הגדרות התוסף → API → הדבק Gemini API key (חינמי מ-
+      <code>https://aistudio.google.com/apikey</code>).
+      <br>אופציונלי: התקנת <code>DarkSubs</code> (תוסף כתוביות) — אם הוא מותקן,
+      התרגום AI יופעל אוטומטית בלחיצה על כל כתובית לא-עברית.
+    </p>
+  </div>
+
+  <p class="note" style="margin-top: 32px;">
+    התקנה ידנית דרך File manager של Kodi? הוסף את הסורס
+    <code>https://morantheking.github.io/Kodi-POV-IL/wizard/</code>
+    ב-File manager → Install from zip file → בחר את התוסף.
+  </p>
 </body>
 </html>
