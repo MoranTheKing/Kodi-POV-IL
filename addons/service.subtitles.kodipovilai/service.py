@@ -193,6 +193,41 @@ def _maybe_unpatch_fentastic_notification():
         pass
 
 
+def _maybe_fix_pov_favourites_typo():
+    """One-shot rewrite of POV's bundled navigator.db so the
+    Favorites tile on the home screen points at the method POV
+    actually defines (navigator.favorites, US spelling). The
+    shipped DB has 'navigator.favourites' (UK spelling, with 'u')
+    which doesn't match POV's method name, so the plugin invocation
+    returns None, never calls endOfDirectory(), and Kodi kills the
+    script after its 5-second timeout -- experienced by the user
+    as "click Favorites, Kodi freezes for ~a minute, bounces back
+    to home". Idempotent + defensive; future installs ship a
+    corrected DB so this patcher is belt-and-braces."""
+    try:
+        from resources.lib import pov_navigator_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_navigator_patcher.maybe_fix_favourites_typo()
+        if status == 'fixed':
+            kodi_utils.log(
+                'pov_navigator_patcher: rewrote favourites typo '
+                'in navigator.db', level='INFO')
+        elif status == 'failed':
+            kodi_utils.log(
+                'pov_navigator_patcher: skipped (will retry next '
+                'startup)', level='WARNING')
+        # 'unchanged' / 'no_db' -- silent; the common steady state
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_navigator_patcher run failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_services():
     """Inject Gemini AI + Wyzie entries into the POV plugin's
     "My Services" menu (the one at /myservices in plugin.video.pov).
@@ -317,6 +352,11 @@ def main():
     # POV's own "My Services" menu -- THE correct place. Inject
     # Gemini + Wyzie entries here on every startup; idempotent.
     _maybe_patch_pov_services()
+
+    # Fix the home-screen Favorites tile typo in POV's bundled
+    # navigator.db (one-shot, idempotent). See function docstring
+    # for the gory details.
+    _maybe_fix_pov_favourites_typo()
 
     # v0.2.9 tried patching FENtastic's notification widget but
     # it broke things; this cleans up the leftover patch on disk
