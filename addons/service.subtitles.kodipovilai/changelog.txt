@@ -1,3 +1,19 @@
+v0.2.5
+- RTL punctuation fix now handles HTML-wrapped lines. Gemini
+  often emits italicised speech as "<i>.לעזאזל</i>" -- the
+  previous regex couldn't see past the opening tag and left the
+  period at the start. The screenshot the user kept hitting was
+  exactly this case. Also covers:
+    - period BEFORE the tag: ".<i>לעזאזל</i>" -> "<i>לעזאזל.</i>"
+    - dialogue dash + punct + tag: "- <i>.שלום</i>" -> "- <i>שלום.</i>"
+    - bold and other tag types (<b>, <font>, ...) -- any tag of
+      the shape <name...> at line start.
+  Ellipsis still respected (left at start as a continuation
+  marker). Existing tests + 16-case unit suite all green.
+- CACHE_RTL_FIX_VERSION 1 -> 2 so the migration re-runs over the
+  whole cached-translation pool on next startup, applying the
+  updated regex to already-saved files that were affected.
+
 v0.2.4
 - Toast notifications now scroll right-to-left as Hebrew should.
   Kodi's notification widget infers paragraph direction from the

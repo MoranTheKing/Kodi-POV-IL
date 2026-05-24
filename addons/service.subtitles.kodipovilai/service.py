@@ -109,7 +109,11 @@ TEMP_PURGE_VERSION = '2'
 # have slipped through if the regex didn't catch a specific edge.
 # Bump this whenever fix_rtl_punctuation gains coverage and we want
 # existing caches to benefit without the user manually clearing.
-CACHE_RTL_FIX_VERSION = '1'
+# Bump when fix_rtl_punctuation gains coverage that needs to flow
+# through to already-cached translations.
+#   v1 -- initial post-processor, simple-text leading-punct only
+#   v2 -- HTML-tag-wrapped and dialogue-dash variants
+CACHE_RTL_FIX_VERSION = '2'
 
 
 def _maybe_repair_rtl_cache():
