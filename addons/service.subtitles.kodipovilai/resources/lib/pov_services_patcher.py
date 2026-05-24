@@ -37,17 +37,22 @@ ICON_SRC_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), 'icons')
 ICON_FILENAMES = ('gemini.png', 'wyzie.png')
 
-INJECT_VERSION = 2
+INJECT_VERSION = 3
 MARKER = '# AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
 END_MARKER = '# END AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
 TUPLE_MARKER = "# AI_SUBS_MYSERVICES_TUPLE_v{0}".format(INJECT_VERSION)
-# v1 (shipped in v0.1.8 of the addon) used 'tmdb.png' and 'mdblist.png'
-# as placeholder icons, which the user found confusing. v2 references
-# the real custom icons that v0.1.9 ships. Bumping the version forces
-# all users with v1 on disk to get the v1 block stripped and replaced
-# by v2 -- otherwise the marker-gated early return in ensure_patched()
-# means the icon names never get updated.
-OLD_MARKERS = ['# AI_SUBS_MYSERVICES_INJECT_v1']
+# Version log:
+#   v1 (addon v0.1.8): placeholder tmdb.png / mdblist.png icons.
+#   v2 (addon v0.1.9-v0.2.1): custom gemini.png / wyzie.png icons.
+#   v3 (addon v0.2.2): Wyzie first-time setup dialog mentions that
+#     the All_Subs addon makes Wyzie redundant.
+# Each bump triggers a one-time re-patch on the next Kodi startup;
+# OLD_MARKERS lists every prior version's marker so the legacy
+# blocks get stripped cleanly before v3 is injected.
+OLD_MARKERS = [
+    '# AI_SUBS_MYSERVICES_INJECT_v1',
+    '# AI_SUBS_MYSERVICES_INJECT_v2',
+]
 
 # Two service classes plus a hook that monkey-patches authorize()
 # to include them. We do NOT edit the authorize() function source --
@@ -146,6 +151,41 @@ class Wyzie:
             try: self._ai.setSetting('wyzie_api_key', '')
             except Exception: pass
             return notification('Removed %s Authorization' % cls_name)
+        # First-time setup: nudge that Wyzie is optional. The build
+        # ships DarkSubs (service.subtitles.All_Subs) which already
+        # gives non-Hebrew sources -- clicking those triggers our AI
+        # via the engine.py hook, no Wyzie needed. Users without
+        # DarkSubs DO benefit from Wyzie, so we still offer it.
+        try:
+            _has_darksubs = False
+            try:
+                _ai_xbmcaddon.Addon('service.subtitles.All_Subs')
+                _has_darksubs = True
+            except Exception:
+                pass
+            if _has_darksubs:
+                _msg = (
+                    'שים לב: יש לך תוסף All_Subs מותקן, אז Wyzie '
+                    'בעצם לא נחוץ -- לחיצה על כתובית באנגלית (או כל '
+                    'שפה לא-עברית) ב-All_Subs כבר מפעילה את התרגום '
+                    'AI שלי אוטומטית.\\n\\nאם בכל זאת אתה רוצה Wyzie '
+                    'key (למשל למקור אונליין נוסף לתוך התוסף שלי, '
+                    'בלי לעבור דרך All_Subs):\\n'
+                    'https://store.wyzie.io/redeem\\n'
+                    '1000 בקשות ביום, חינם.'
+                )
+            else:
+                _msg = (
+                    'Wyzie נותן מקור כתוביות אונליין חינמי '
+                    '(1000 בקשות ביום). הירשם ב-store.wyzie.io/'
+                    'redeem, ואז הדבק את ה-key שתקבל במסך הבא.\\n\\n'
+                    '(אופציונלי - אם תתקין בעתיד את התוסף '
+                    'All_Subs, תוכל לוותר על Wyzie לגמרי.)'
+                )
+            kodi_utils.ok_dialog(
+                heading='Wyzie - איך משיגים API key', text=_msg)
+        except Exception:
+            pass
         api_key = kodi_utils.dialog.input('Wyzie API Key:').strip()
         if not api_key: return
         try: self._ai.setSetting('wyzie_api_key', api_key)
