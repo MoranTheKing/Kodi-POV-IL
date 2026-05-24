@@ -1,3 +1,14 @@
+v0.2.3
+- Display-name fix: the bundled subtitle addon's ID is
+  service.subtitles.All_Subs but its visible name in the UI is
+  "DarkSubs". User-facing strings now say "DarkSubs" everywhere
+  so users aren't confused by an addon name they don't recognise
+  in the menu. Internal Python references still use the addon ID
+  (that's what xbmcaddon.Addon() and the patcher path resolution
+  need).
+- POV myservices INJECT_VERSION 3 -> 4 to roll the renamed
+  dialog text into existing patched installs.
+
 v0.2.2
 - Wyzie is now clearly labelled as OPTIONAL across the UI. The
   setting category, field label, and help text all say so. When
