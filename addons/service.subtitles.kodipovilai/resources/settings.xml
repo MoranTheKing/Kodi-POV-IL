@@ -95,6 +95,20 @@
           <level>0</level>
           <default>true</default>
         </setting>
+        <setting id="rtl_punct_mode" type="string" label="32222" help="32223"> <!-- RTL punctuation fix direction -->
+          <level>0</level>
+          <default>auto</default>
+          <constraints>
+            <options>
+              <option label="32224">auto</option>
+              <option label="32225">reverse</option>
+              <option label="32226">off</option>
+            </options>
+          </constraints>
+          <control type="list" format="string">
+            <heading>32222</heading>
+          </control>
+        </setting>
       </group>
 
       <group id="wyzie" label="32250"> <!-- Wyzie Subs (online source) -->

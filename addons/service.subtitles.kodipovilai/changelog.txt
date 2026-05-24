@@ -1,3 +1,18 @@
+v0.2.7
+- User-selectable RTL punctuation fix direction. The previous
+  versions assumed Kodi does proper BiDi reorder on subtitle
+  lines (logical-end Hebrew punct -> visual-left), so we moved
+  the misplaced punct from line start to line end. For some
+  Kodi setups -- specific skins, certain Android configurations,
+  versions that render source order without RTL reorder -- the
+  opposite is true: a logical-START punct ends up at visual-end
+  of the reading flow. The user observed this consistently
+  across all their subtitles even after the v0.2.5/v0.2.6 fixes.
+  New setting `rtl_punct_mode` (Translation -> Behavior) with
+  three choices: 'auto' (default, move to end), 'reverse' (move
+  to start, for non-BiDi renderers), 'off' (no processing).
+  Migration + cache-hit reapply respect the chosen mode.
+
 v0.2.6
 - RTL punctuation fix now runs on EVERY cache hit, not just on
   first translation. The v0.2.5 migration (re-running the fix
