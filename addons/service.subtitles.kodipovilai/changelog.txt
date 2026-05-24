@@ -1,3 +1,17 @@
+v0.2.10
+- HOTFIX: revert the v0.2.9 FENtastic DialogNotification patch.
+  User report: "משהו נדפק שם. עכשיו יש הודעה ריקה והבחירה של
+  הכתוביות מאוד באגית, הייתי מחזיר לאיך שהיה". The wraplabel
+  swap evidently broke more than it fixed -- empty notifications
+  + buggy subtitle picker. service.py now calls
+  fentastic_patcher.ensure_unpatched() on every startup, so any
+  install that got v0.2.9 on disk gets the upstream FENtastic
+  file restored automatically. The original LTR-scroll-for-
+  Hebrew quirk comes back, but the user is OK with that --
+  better than a broken picker.
+  Note: the patcher module is kept (with the unpatch routine
+  driving it now), in case a better skin-side fix is found later.
+
 v0.2.9
 - FENtastic skin: self-healing patch of DialogNotification.xml
   that swaps the message control from <fadelabel id="402">

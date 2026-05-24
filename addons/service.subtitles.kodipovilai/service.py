@@ -174,34 +174,23 @@ def _maybe_repair_rtl_cache():
             pass
 
 
-def _maybe_patch_fentastic_notification():
-    """Switch FENtastic's DialogNotification.xml message control
-    from fadelabel (which scrolls long Hebrew text in a
-    BiDi-deaf direction) to wraplabel (which wraps to multiple
-    lines, no scroll, no direction). Idempotent + self-healing
-    on every Kodi startup, so an upstream FENtastic update that
-    rewrites the file gets re-patched automatically."""
+def _maybe_unpatch_fentastic_notification():
+    """v0.2.9 patched FENtastic's DialogNotification.xml to swap
+    the message control from fadelabel to wraplabel, trying to
+    work around a BiDi-deaf marquee that scrolls Hebrew the wrong
+    way. It produced regressions in the user's UI (empty
+    notifications + buggy subtitle picker), so v0.2.10 reverts
+    the patch and never re-applies it. For users who got v0.2.9
+    on disk, this restores the upstream FENtastic file on next
+    Kodi startup. Idempotent + safe to call every startup."""
     try:
-        from resources.lib import fentastic_patcher, kodi_utils
+        from resources.lib import fentastic_patcher
     except Exception:
         return
     try:
-        status = fentastic_patcher.ensure_patched()
-        if status == 'patched':
-            kodi_utils.log(
-                'fentastic_patcher (re)applied on startup',
-                level='INFO')
-        elif status in ('unmatched', 'write_failed', 'read_failed'):
-            kodi_utils.log(
-                'fentastic_patcher skipped: ' + status,
-                level='WARNING')
-    except Exception as e:
-        try:
-            kodi_utils.log(
-                'fentastic_patcher run failed: {0}'.format(e),
-                level='WARNING')
-        except Exception:
-            pass
+        fentastic_patcher.ensure_unpatched()
+    except Exception:
+        pass
 
 
 def _maybe_patch_pov_services():
@@ -329,9 +318,10 @@ def main():
     # Gemini + Wyzie entries here on every startup; idempotent.
     _maybe_patch_pov_services()
 
-    # FENtastic skin notification widget -- wrap instead of scroll
-    # so Hebrew notifications don't read backwards.
-    _maybe_patch_fentastic_notification()
+    # v0.2.9 tried patching FENtastic's notification widget but
+    # it broke things; this cleans up the leftover patch on disk
+    # for anyone who got that version.
+    _maybe_unpatch_fentastic_notification()
 
     # One-shot RTL punctuation repair of any cached translations
     # that were written before the post-processor caught their
