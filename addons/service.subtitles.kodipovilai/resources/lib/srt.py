@@ -132,14 +132,34 @@ def _fix_one_text_line(line):
     return dash + open_tags + rest + leading + close_tags
 
 
-def fix_rtl_punctuation(text):
-    """Move punctuation that the model put at the START of a Hebrew
-    line to the END (or drop it if it's already duplicated at the
-    end). Idempotent. Skips index + timecode lines.
+def fix_rtl_punctuation(text, mode=None):
+    """Normalize RTL punctuation placement in a Hebrew SRT body.
 
-    Preserves the trailing newline of the input so that idempotent
-    re-processing of a file doesn't keep flagging it as 'changed'."""
+    `mode` controls the direction of the correction. Pulled from
+    the addon's `rtl_punct_mode` setting if not explicitly passed:
+      'auto' (default)  -- move misplaced END-of-sentence punct
+                           from line START to line END (assumes
+                           Kodi does correct BiDi reordering so
+                           logical-end renders visually-left).
+      'reverse'         -- move END-of-sentence punct from line
+                           END to line START (for Kodi setups that
+                           render source order without RTL
+                           reorder, so a logical-START punct lands
+                           at the visual end of the reading flow).
+      'off'             -- no processing.
+
+    Idempotent. Skips index + timecode lines. Preserves trailing
+    newline so a benign re-run doesn't flag the file as changed."""
     if not text:
+        return text
+    if mode is None:
+        try:
+            from . import kodi_utils
+            mode = (kodi_utils.get_setting('rtl_punct_mode', 'auto')
+                    or 'auto').lower()
+        except Exception:
+            mode = 'auto'
+    if mode == 'off':
         return text
     trailing_nl = '\n' if text.endswith(('\n', '\r')) else ''
     out_lines = []
@@ -149,8 +169,55 @@ def fix_rtl_punctuation(text):
                 _TIMECODE_RE.match(stripped):
             out_lines.append(line)
             continue
-        out_lines.append(_fix_one_text_line(line))
+        if mode == 'reverse':
+            out_lines.append(_reverse_fix_one_text_line(line))
+        else:
+            out_lines.append(_fix_one_text_line(line))
     return '\n'.join(out_lines) + trailing_nl
+
+
+# Match a Hebrew text line that has punctuation at the END (the
+# "normal" Hebrew sentence shape). Used by the reverse-mode fix to
+# move that punct to the START of the line.
+_TRAILING_PUNCT_RE = re.compile(
+    r'^(?P<dash>-\s+)?'
+    r'(?P<open_tags>(?:<[a-zA-Z!][^>]*>)*)'
+    r'(?P<rest>[' + _HEB_LETTER + r'][^\n]*?[' + _HEB_LETTER + r'])'
+    r'(?P<trailing>[' + _TRAILING_PUNCT_CHARS + r']+)'
+    r'(?P<close_tags>(?:</[a-zA-Z][^>]*>)*)\s*$'
+)
+
+
+def _reverse_fix_one_text_line(line):
+    """Move END-of-line punctuation to the START. Used by the
+    'reverse' rtl_punct_mode for Kodi setups whose subtitle
+    renderer doesn't BiDi-reorder Hebrew lines and shows source
+    text in physical L-to-R order."""
+    stripped = line.strip()
+    while stripped and stripped[0] in _INVISIBLE_BIDI:
+        stripped = stripped[1:]
+    while stripped and stripped[-1] in _INVISIBLE_BIDI:
+        stripped = stripped[:-1]
+    if not stripped:
+        return line
+    m = _TRAILING_PUNCT_RE.match(stripped)
+    if not m:
+        if stripped != line.strip():
+            return stripped
+        return line
+    dash       = m.group('dash')       or ''
+    open_tags  = m.group('open_tags')  or ''
+    rest       = m.group('rest')       or ''
+    trailing   = m.group('trailing')
+    close_tags = m.group('close_tags') or ''
+    if not rest:
+        return stripped if stripped != line.strip() else line
+    # If a leading punct is already present too, don't double up:
+    # the trailing one is redundant, drop it. Detection: rest
+    # itself starts with punct (after the optional dash/tag prefix).
+    if rest[0] in _TRAILING_PUNCT_CHARS:
+        return dash + open_tags + rest + close_tags
+    return dash + open_tags + trailing + rest + close_tags
 
 
 def parse_blocks(text):
