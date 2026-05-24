@@ -242,6 +242,263 @@ def _handle_open_wyzie_signup(_params):
         pass
 
 
+def _handle_connect_gemini(_params):
+    """Full Gemini auth flow invoked from POV's My Services menu
+    (or from anywhere via RunScript). Provides two onboarding
+    paths -- pair-from-phone via local HTTP server, or type the
+    key directly -- and validates against Gemini's /models
+    endpoint INLINE before writing to settings, so a bad key
+    never lands in the addon's persistent state."""
+    try:
+        from resources.lib import kodi_utils, gemini, gemini_pair
+    except Exception as e:
+        try:
+            xbmcgui.Dialog().ok('Kodi POV IL',
+                                'Internal error: {0}'.format(e))
+        except Exception:
+            pass
+        return
+
+    current = (kodi_utils.get_setting('api_key', '') or '').strip()
+    if current:
+        _gemini_menu_existing(kodi_utils, gemini, gemini_pair, current)
+    else:
+        _gemini_menu_new(kodi_utils, gemini, gemini_pair)
+
+
+def _gemini_menu_existing(kodi_utils, gemini, gemini_pair, current_key):
+    """User clicked Gemini in My Services and already has a key
+    set. Offer Test / Replace / Remove."""
+    options = [
+        '🔍 בדוק חיבור (Test connection)',
+        '🔄 החלף key (Replace)',
+        '❌ מחק key (Remove)',
+    ]
+    try:
+        choice = xbmcgui.Dialog().select(
+            'Gemini AI - מה לעשות?', options)
+    except Exception:
+        choice = -1
+    if choice < 0:
+        return
+    if choice == 0:
+        _test_key_show_result(kodi_utils, gemini, current_key)
+        return
+    if choice == 1:
+        # Clear current first so the new-key flow doesn't loop
+        # back into the existing-key menu.
+        kodi_utils.set_setting('api_key', '')
+        _gemini_menu_new(kodi_utils, gemini, gemini_pair)
+        return
+    if choice == 2:
+        confirm = xbmcgui.Dialog().yesno(
+            'Kodi POV IL', 'למחוק את ה-Gemini API key?')
+        if confirm:
+            kodi_utils.set_setting('api_key', '')
+            kodi_utils.notify('Gemini key נמחק', time_ms=3000)
+
+
+def _gemini_menu_new(kodi_utils, gemini, gemini_pair):
+    """No key set yet. Let the user pick onboarding method."""
+    options = [
+        '📱 התאמה מטלפון / מכשיר אחר (QR + URL)',
+        '⌨️ הזנת ה-key ידנית כאן',
+    ]
+    try:
+        choice = xbmcgui.Dialog().select(
+            'Gemini AI - איך להתחבר?', options)
+    except Exception:
+        choice = -1
+    if choice < 0:
+        return
+    if choice == 0:
+        _gemini_pair_flow(kodi_utils, gemini, gemini_pair)
+        return
+    if choice == 1:
+        _gemini_type_flow(kodi_utils, gemini)
+
+
+def _gemini_pair_flow(kodi_utils, gemini, gemini_pair):
+    """Spin up the local pair server, show QR + URLs in a
+    countdown dialog, poll for the submitted key, validate."""
+    import time as _time
+    try:
+        ps = gemini_pair.PairServer()
+    except Exception as e:
+        xbmcgui.Dialog().ok(
+            'Kodi POV IL',
+            'נכשלה הפעלת שרת התאמה: {0}\n\n'
+            'אפשר לחזור לתפריט ולבחור "הזנה ידנית" במקום.'
+            .format(str(e)[:80]))
+        return
+
+    # Primary URL: prefer LAN IP (works for other devices), fall
+    # back to localhost (works on the same device, e.g., user
+    # running Kodi on their phone with cellular only).
+    primary = ps.url_lan or ps.url_local
+    qr_link = ('https://api.qrserver.com/v1/create-qr-code/'
+               '?size=320x320&qzone=1&data=' +
+               _url_quote(primary))
+
+    # Detailed instructions in the body.
+    if ps.url_lan:
+        url_lines = (
+            'מכשיר אחר ב-WiFi: {0}'.format(ps.url_lan),
+            'אותו מכשיר: {0}'.format(ps.url_local),
+        )
+    else:
+        url_lines = (
+            'פתח בדפדפן: {0}'.format(ps.url_local),
+            '(אם לא ב-WiFi, רק מאותו מכשיר)',
+        )
+
+    deadline = _time.time() + 300  # 5 min cap
+    dialog = None
+    try:
+        dialog = xbmcgui.DialogProgress()
+        dialog.create(
+            'Gemini AI - התאמה מטלפון',
+            'סרוק את ה-QR מהטלפון, או פתח את הכתובת בדפדפן.\n'
+            '\n'.join(url_lines) + '\n\n' +
+            'QR: ' + qr_link + '\n\n' +
+            'ממתין לקבלת ה-key...')
+
+        while _time.time() < deadline:
+            if dialog.iscanceled():
+                break
+            key = ps.received_key()
+            if key:
+                break
+            remaining = int(deadline - _time.time())
+            dialog.update(
+                100 - int(100 * remaining / 300),
+                'סרוק QR או פתח URL בדפדפן:\n' +
+                '\n'.join(url_lines) +
+                '\n\nממתין לקבלת ה-key... ({0:02d}:{1:02d})'.format(
+                    remaining // 60, remaining % 60))
+            xbmc.sleep(1000)
+    finally:
+        try:
+            if dialog: dialog.close()
+        except Exception:
+            pass
+        ps.shutdown()
+
+    key = ps.received_key()
+    if not key:
+        return  # user cancelled or timeout
+    _test_save_or_retry(kodi_utils, gemini, key, retry_cb=None)
+
+
+def _gemini_type_flow(kodi_utils, gemini):
+    """Original typed-input flow, but with inline validation
+    before save and a retry loop on failure."""
+    xbmcgui.Dialog().ok(
+        'Gemini AI - איך משיגים API key',
+        'כדי שתרגום ה-AI יעבוד צריך API key חינמי של Gemini:\n\n'
+        '1) פתח בדפדפן (במחשב/טלפון):\n'
+        '   https://aistudio.google.com/apikey\n\n'
+        '2) התחבר עם חשבון Google. לחץ Create API key.\n\n'
+        '3) העתק את המחרוזת והדבק במסך הבא.\n\n'
+        'התוכנית החינמית מאפשרת ~500 בקשות ביום של Flash Lite.')
+    while True:
+        try:
+            key = (xbmcgui.Dialog().input('Gemini API Key:') or '').strip()
+        except Exception:
+            key = ''
+        if not key:
+            return
+        ok = _test_save_or_retry(kodi_utils, gemini, key,
+                                  retry_cb='loop')
+        if ok != 'retry':
+            return
+
+
+def _test_save_or_retry(kodi_utils, gemini, api_key, retry_cb):
+    """Run gemini.test_key on the supplied key. On success: save
+    to settings + show success + nudge TMDB. On failure: show the
+    specific reason and (if retry_cb='loop') ask whether to try
+    again, returning 'retry' if yes."""
+    kodi_utils.notify('Gemini: בודק...', time_ms=2000)
+    err = None
+    try:
+        matched = gemini.test_key(api_key)
+    except gemini.InvalidKey as e:
+        err = 'ה-key נדחה ע"י Gemini ({0})'.format(str(e)[:80])
+    except gemini.GeminiError as e:
+        err = 'בדיקה נכשלה: {0}'.format(str(e)[:80])
+    except Exception as e:
+        err = 'שגיאה בלתי צפויה: {0}'.format(str(e)[:80])
+
+    if err is None:
+        # Success -- save the key, show confirmation, nudge TMDB.
+        kodi_utils.set_setting('api_key', api_key)
+        xbmcgui.Dialog().ok(
+            'Gemini AI', '✓ החיבור הצליח. מודל: {0}'.format(matched))
+        _nudge_tmdb()
+        return 'ok'
+
+    # Failure. DON'T save. Optionally offer retry.
+    if retry_cb == 'loop':
+        retry = xbmcgui.Dialog().yesno(
+            'Gemini AI - בדיקה נכשלה',
+            err + '\n\nלנסות שוב?',
+            nolabel='ביטול', yeslabel='נסה שוב')
+        return 'retry' if retry else 'cancel'
+    xbmcgui.Dialog().ok('Gemini AI - בדיקה נכשלה', err)
+    return 'cancel'
+
+
+def _test_key_show_result(kodi_utils, gemini, api_key):
+    """Re-test an existing key and show the result in a dialog.
+    Does NOT change the saved key either way (this is the
+    "🔍 Test connection" entry point from the existing-key
+    menu)."""
+    kodi_utils.notify('Gemini: בודק...', time_ms=2000)
+    try:
+        matched = gemini.test_key(api_key)
+        xbmcgui.Dialog().ok(
+            'Gemini AI',
+            '✓ החיבור תקין. מודל: {0}'.format(matched))
+    except gemini.InvalidKey as e:
+        xbmcgui.Dialog().ok(
+            'Gemini AI',
+            '✗ ה-key נדחה ע"י Gemini: {0}'.format(str(e)[:120]))
+    except gemini.GeminiError as e:
+        xbmcgui.Dialog().ok(
+            'Gemini AI',
+            '✗ בדיקה נכשלה: {0}'.format(str(e)[:120]))
+    except Exception as e:
+        xbmcgui.Dialog().ok(
+            'Gemini AI',
+            '✗ שגיאה בלתי צפויה: {0}'.format(str(e)[:120]))
+
+
+def _nudge_tmdb():
+    """After a successful Gemini connect, remind the user that
+    TMDB connection improves gender-aware translation. Same text
+    as the previous TMDB notice button."""
+    try:
+        xbmcgui.Dialog().ok(
+            'שלב הבא (אופציונלי): TMDB',
+            'כדי שהתרגום יבחין בזכר/נקבה לפי הדמויות בסרט, '
+            'התוסף משתמש ב-API של TMDB דרך תוסף "TMDb Helper" '
+            'שכבר מותקן בבילד.\n\n'
+            'אם לא חיברת אותו עדיין, ב-"חיבור שירותים להרחבת POV" '
+            'תמצא את "TMDB" - חבר אותו עם API key חינמי מ-'
+            'themoviedb.org. בלי TMDB התרגום עובד אבל הזכר/נקבה '
+            'הוא ניחוש מהקשר.')
+    except Exception:
+        pass
+
+
+def _url_quote(s):
+    try:
+        return urllib.parse.quote(s, safe='')
+    except Exception:
+        return s
+
+
 def _handle_test_connection(_params):
     """User clicked "Test connection" in settings."""
     try:
@@ -526,6 +783,8 @@ def main():
             _handle_open_wyzie_signup(params)
         elif action == 'test_connection':
             _handle_test_connection(params)
+        elif action == 'connect_gemini':
+            _handle_connect_gemini(params)
         elif action == 'test_wyzie_connection':
             _handle_test_wyzie_connection(params)
         elif action == 'open_tmdb_notice':
