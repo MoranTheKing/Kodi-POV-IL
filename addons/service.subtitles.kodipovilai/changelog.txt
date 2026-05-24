@@ -1,3 +1,28 @@
+v0.2.14
+- TMDB out of the box. The addon now ships with a public TMDB v3
+  key copied from jurialmunkey's script.module.tmdbhelper (an
+  open-source addon that publishes the same key to tens of
+  thousands of installs). With it, gender-aware translation
+  works for every user the moment they connect Gemini -- no
+  more "next step: connect TMDB" tutorial.
+- Resolution order in tmdb_helper._get_tmdb_key():
+    1. The user's own key, if tmdbhelper has one set in its
+       settings (candidate fields: api_key, tmdb_apikey,
+       tmdb_api_key). Personal keys still win, both for users
+       who already connected and for users who connect later --
+       we re-read on every lookup.
+    2. The bundled fallback. Only used when no personal key
+       is configured.
+  We NEVER write the bundled key into tmdbhelper's settings,
+  so tmdbhelper itself is untouched and behaves exactly as
+  before.
+- New helper tmdb_helper.using_bundled_key() exposes the state
+  so the settings UI can render an accurate status line.
+- The "🛈 TMDB" notice button (and Gemini-connect success
+  dialog) was rewritten to reflect the new reality: TMDB is
+  no longer a required setup step, just an optional override
+  for power users who want to use their own quota.
+
 v0.2.13
 - Daily Gemini quota display. Free-tier gemini-3.1-flash-lite is
   capped at ~500 requests/day and resets at UTC midnight. We now
