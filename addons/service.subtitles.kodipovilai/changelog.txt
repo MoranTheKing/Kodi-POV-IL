@@ -1,3 +1,32 @@
+v0.2.15
+- Fix the home-screen Favorites tile freezing Kodi. POV ships
+  userdata/addon_data/plugin.video.pov/navigator.db with the
+  RootList row's Favorites entry pointing at
+      mode=navigator.favourites    (UK spelling, with 'u')
+  but plugin.video.pov's navigator.py defines the method as
+  `def favorites(self):` (US spelling, no 'u'). POV's router
+  uses getattr(cls, mode, None) and silently returns None when
+  the method is missing -- endOfDirectory() never runs, Kodi
+  hits its 5-second script-didn't-finish timeout, the plugin is
+  killed, and the user is bounced back to the previous screen.
+  Manifests as: click Favorites, Kodi freezes for ~a minute,
+  ends up on the home screen.
+- Two-pronged fix:
+  1. New module resources/lib/pov_navigator_patcher.py opens the
+     navigator.db on every Kodi startup and rewrites the bad
+     'navigator.favourites' token to 'navigator.favorites' in
+     the RootList row. Idempotent (re-run is a no-op),
+     defensive (any error path leaves the DB alone), narrow
+     (only the one substring is touched). Wired into
+     service.py alongside the existing patchers.
+  2. The DB shipped in the FENtastic build zip is pre-corrected,
+     so future fresh installs don't carry the bug.
+- The long-press "Favorites Manager" context-menu and POV's
+  own dialogs.favorites_choice were never affected -- they
+  call the underlying favorites_cache.Favorites.add() directly
+  rather than going through the broken URL. Only the home-
+  screen tile was hitting the typo.
+
 v0.2.14
 - TMDB out of the box. The addon now ships with a public TMDB v3
   key copied from jurialmunkey's script.module.tmdbhelper (an
