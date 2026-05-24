@@ -1,3 +1,14 @@
+v0.2.4
+- Toast notifications now scroll right-to-left as Hebrew should.
+  Kodi's notification widget infers paragraph direction from the
+  first strong character in the message body. Most of our
+  notifications start with "AI: ..." (Latin 'A' = strong LTR),
+  so the widget set paragraph direction to LTR and scrolled
+  left-to-right when the text overflowed. Prepending an invisible
+  RIGHT-TO-LEFT MARK (U+200F) in kodi_utils.notify() flips the
+  inference to RTL. Single point of fix; applies to every notify
+  call site in the addon automatically.
+
 v0.2.3
 - Display-name fix: the bundled subtitle addon's ID is
   service.subtitles.All_Subs but its visible name in the UI is
