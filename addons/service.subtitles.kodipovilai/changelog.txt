@@ -1,3 +1,15 @@
+v0.2.2
+- Wyzie is now clearly labelled as OPTIONAL across the UI. The
+  setting category, field label, and help text all say so. When
+  the user clicks "Claim a free Wyzie key" or opens the Wyzie
+  row in POV's My Services, the dialog first checks whether
+  All_Subs (DarkSubs) is installed -- if it is, the dialog tells
+  the user up front that Wyzie is redundant for them (clicking a
+  non-Hebrew subtitle in All_Subs already triggers AI translation
+  via the hook). Users without All_Subs see the original flow.
+- POV myservices INJECT_VERSION bumped 2 -> 3 to re-roll the
+  Wyzie auth dialog into existing patched installs.
+
 v0.2.1
 - RTL punctuation: strip invisible BiDi / direction-control / BOM
   characters (U+200E/F, U+202A-E, U+2066-9, U+FEFF) from line
