@@ -213,3 +213,23 @@ msgstr ""
 msgctxt "#32261"
 msgid "How to connect TMDB (required for gender-aware translation)"
 msgstr ""
+
+msgctxt "#32222"
+msgid "RTL punctuation fix direction"
+msgstr "RTL punctuation fix direction"
+
+msgctxt "#32223"
+msgid "How to handle Hebrew end-of-sentence punctuation. Default 'auto' moves leading punct to the end -- correct when Kodi BiDi-reorders the line. If your Kodi setup renders source text in physical L-to-R order without RTL reorder (you'll see punctuation on the wrong side), try 'reverse' which moves trailing punct to the start. 'off' disables the post-processor entirely."
+msgstr ""
+
+msgctxt "#32224"
+msgid "Auto (move punct to end - default)"
+msgstr "Auto (move to end - default)"
+
+msgctxt "#32225"
+msgid "Reverse (move punct to start - try if 'auto' looks wrong)"
+msgstr "Reverse (move to start - try if 'auto' looks wrong)"
+
+msgctxt "#32226"
+msgid "Off (no punctuation processing)"
+msgstr "Off (no punctuation processing)"
