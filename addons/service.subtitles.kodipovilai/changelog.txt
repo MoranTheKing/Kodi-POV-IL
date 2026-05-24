@@ -1,5 +1,12 @@
 v0.2.1
-- RTL punctuation: tightened the post-processor. Now also handles
+- RTL punctuation: strip invisible BiDi / direction-control / BOM
+  characters (U+200E/F, U+202A-E, U+2066-9, U+FEFF) from line
+  starts and ends BEFORE the leading-punct regex runs. Gemini and
+  similar LLMs occasionally insert U+200F (RLM) before a Hebrew
+  line, which used to hide the trailing period from our matcher
+  -- the user observed this on a freshly-translated subtitle where
+  the period stayed on the wrong side despite the post-processor.
+  Also: tightened the post-processor. Now also handles
   "punct at both start AND end of line" -> drop the leading
   duplicate (was previously leaving it untouched). Ellipsis at
   start of line ("..." -- a legitimate continuation marker) is
