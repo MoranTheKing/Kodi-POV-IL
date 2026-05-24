@@ -1,3 +1,17 @@
+v0.2.1
+- RTL punctuation: tightened the post-processor. Now also handles
+  "punct at both start AND end of line" -> drop the leading
+  duplicate (was previously leaving it untouched). Ellipsis at
+  start of line ("..." -- a legitimate continuation marker) is
+  explicitly excluded so we don't shift it to the end. 12-case
+  unit suite added.
+- One-shot cache repair: on next Kodi startup the service walks
+  cache/translated/ and re-applies fix_rtl_punctuation() to every
+  cached SRT. Marker-gated (_rtl_fix_done = '1'), so it runs once
+  per profile and doesn't re-run after that. Means existing
+  translations with periods/question-marks in the wrong place get
+  fixed without the user having to clear cache manually.
+
 v0.2.0
 - Force the icon update through. v0.1.9 shipped the new icons
   and the corrected patcher code, but every existing install
