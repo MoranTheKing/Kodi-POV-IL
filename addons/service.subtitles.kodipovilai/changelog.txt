@@ -1,3 +1,18 @@
+v0.2.6
+- RTL punctuation fix now runs on EVERY cache hit, not just on
+  first translation. The v0.2.5 migration (re-running the fix
+  over the cached-translation pool) only fires once on Kodi
+  startup; users who didn't restart -- or whose cache was
+  written between two migration versions -- could still see
+  files with the old, broken layout. resolve() now re-applies
+  fix_rtl_punctuation in-place on every cache hit (idempotent
+  -- if the file is already clean, no write happens), and
+  _handle_translate_file applies it once more at the final
+  delivery to DarkSubs as belt-and-suspenders. This means the
+  user no longer needs to restart Kodi for the fix to roll out
+  -- the next time they play a previously-translated subtitle,
+  it gets cleaned up on the spot.
+
 v0.2.5
 - RTL punctuation fix now handles HTML-wrapped lines. Gemini
   often emits italicised speech as "<i>.לעזאזל</i>" -- the
