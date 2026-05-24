@@ -97,11 +97,11 @@
         </setting>
         <setting id="rtl_punct_mode" type="string" label="32222" help="32223"> <!-- RTL punctuation fix direction -->
           <level>0</level>
-          <default>auto</default>
+          <default>reverse</default>
           <constraints>
             <options>
-              <option label="32224">auto</option>
               <option label="32225">reverse</option>
+              <option label="32224">legacy</option>
               <option label="32226">off</option>
             </options>
           </constraints>

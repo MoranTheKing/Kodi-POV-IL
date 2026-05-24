@@ -1,3 +1,20 @@
+v0.2.8
+- Default flipped to 'reverse'. User confirmed the wrong-side
+  punctuation reproduces on every Hebrew subtitle for every user
+  -- not just specific lines. That means Kodi's subtitle renderer
+  (across all observed setups: Windows, Android, FENtastic skin)
+  is NOT BiDi-reordering Hebrew lines, so the v0.2.0-v0.2.7
+  "auto" direction (move punct to logical end) was producing
+  visually-wrong output everywhere. The 'reverse' mode (move
+  punct to logical start) introduced in v0.2.7 produces the
+  correct visual placement. Made it the default; renamed 'auto'
+  to 'legacy' and kept it as an option for the rare setup where
+  BiDi reorder DOES happen. CACHE_RTL_FIX_VERSION bumped 2 -> 3
+  so the migration re-runs over already-cached translations and
+  applies the new direction on next Kodi startup. Backwards-
+  compat: users who manually picked 'auto' in v0.2.7 settings
+  are silently mapped to 'legacy'.
+
 v0.2.7
 - User-selectable RTL punctuation fix direction. The previous
   versions assumed Kodi does proper BiDi reorder on subtitle
