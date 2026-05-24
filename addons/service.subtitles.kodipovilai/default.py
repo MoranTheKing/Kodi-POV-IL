@@ -206,16 +206,38 @@ def _handle_open_aistudio(_params):
 def _handle_open_wyzie_signup(_params):
     """User clicked 'Claim a free Wyzie key' in settings."""
     url = 'https://store.wyzie.io/redeem'
+    # Check whether DarkSubs is installed -- if it is, Wyzie is
+    # redundant for most users and we should say so up front so they
+    # don't waste time signing up.
+    has_darksubs = False
     try:
-        xbmc.executebuiltin('System.Exec("xdg-open {0}")'.format(url))
+        import xbmcaddon as _xa
+        _xa.Addon('service.subtitles.All_Subs')
+        has_darksubs = True
     except Exception:
         pass
     try:
-        xbmcgui.Dialog().ok(
-            'Kodi POV IL',
-            'פתח בדפדפן:\n{0}\n\nתקבל API key חינמי (1000 בקשות/יום). '
-            'העתק לשדה Wyzie API Key בהגדרות.'.format(url),
-        )
+        if has_darksubs:
+            msg = (
+                'שים לב: יש לך תוסף All_Subs (DarkSubs) מותקן, '
+                'אז Wyzie בעצם לא נחוץ - לחיצה על כתובית באנגלית '
+                '(או כל שפה לא-עברית) ב-All_Subs כבר מפעילה את '
+                'התרגום AI אוטומטית.\n\nאם בכל זאת אתה רוצה key '
+                '(למשל לגישה מהירה יותר מתוך התוסף שלי בלי לעבור '
+                'דרך All_Subs):\n{0}\n\n1000 בקשות ביום, חינם.'
+            ).format(url)
+        else:
+            msg = (
+                'פתח בדפדפן:\n{0}\n\nתקבל API key חינמי '
+                '(1000 בקשות/יום). העתק לשדה Wyzie API Key '
+                'בהגדרות.\n\n(אופציונלי - אם תתקין בעתיד את '
+                'התוסף All_Subs, תוכל לוותר על Wyzie לגמרי.)'
+            ).format(url)
+        xbmcgui.Dialog().ok('Kodi POV IL', msg)
+    except Exception:
+        pass
+    try:
+        xbmc.executebuiltin('System.Exec("xdg-open {0}")'.format(url))
     except Exception:
         pass
 
