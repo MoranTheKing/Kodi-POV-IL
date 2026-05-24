@@ -463,11 +463,15 @@ def _test_save_or_retry(kodi_utils, gemini, api_key, retry_cb):
         err = 'שגיאה בלתי צפויה: {0}'.format(str(e)[:80])
 
     if err is None:
-        # Success -- save the key, show confirmation, nudge TMDB.
+        # Success -- save the key, show confirmation. TMDB no
+        # longer needs nudging: the addon ships with a bundled
+        # TMDB key, so the user is fully set up the moment Gemini
+        # connects.
         kodi_utils.set_setting('api_key', api_key)
         xbmcgui.Dialog().ok(
-            'Gemini AI', '✓ החיבור הצליח. מודל: {0}'.format(matched))
-        _nudge_tmdb()
+            'Gemini AI',
+            '✓ החיבור הצליח. מודל: {0}\n\n'
+            'מוכן לתרגם. אין צורך בהגדרות נוספות.'.format(matched))
         return 'ok'
 
     # Failure. DON'T save. Optionally offer retry.
@@ -504,24 +508,6 @@ def _test_key_show_result(kodi_utils, gemini, api_key):
         xbmcgui.Dialog().ok(
             'Gemini AI',
             '✗ שגיאה בלתי צפויה: {0}'.format(str(e)[:120]))
-
-
-def _nudge_tmdb():
-    """After a successful Gemini connect, remind the user that
-    TMDB connection improves gender-aware translation. Same text
-    as the previous TMDB notice button."""
-    try:
-        xbmcgui.Dialog().ok(
-            'שלב הבא (אופציונלי): TMDB',
-            'כדי שהתרגום יבחין בזכר/נקבה לפי הדמויות בסרט, '
-            'התוסף משתמש ב-API של TMDB דרך תוסף "TMDb Helper" '
-            'שכבר מותקן בבילד.\n\n'
-            'אם לא חיברת אותו עדיין, ב-"חיבור שירותים להרחבת POV" '
-            'תמצא את "TMDB" - חבר אותו עם API key חינמי מ-'
-            'themoviedb.org. בלי TMDB התרגום עובד אבל הזכר/נקבה '
-            'הוא ניחוש מהקשר.')
-    except Exception:
-        pass
 
 
 def _url_quote(s):
@@ -571,38 +557,40 @@ def _handle_test_connection(_params):
 
 
 def _handle_open_tmdb_notice(_params):
-    """Explain that the gender-aware translation needs TMDB metadata
-    via tmdbhelper, and that the user should connect TMDB through
-    'Connect Services' in the wizard. Tries to open the wizard
-    services screen automatically; if that fails, just shows the
-    explanation."""
+    """Explain the current TMDB state. Since v0.2.13 the addon
+    ships with a bundled fallback key from the upstream
+    tmdbhelper project, so gender-aware translation works out of
+    the box. Connecting a personal key remains optional and
+    unchanged -- a user key, if present, takes precedence over
+    the bundled one."""
     try:
-        from resources.lib import kodi_utils, tmdb_helper
+        from resources.lib import tmdb_helper
     except Exception as e:
         xbmcgui.Dialog().ok('Kodi POV IL', 'Internal error: {0}'.format(e))
         return
 
-    # Tell the user the current state -- have they wired it up?
-    has_key = False
     try:
-        has_key = bool(tmdb_helper._get_tmdb_key())
+        using_bundled = tmdb_helper.using_bundled_key()
     except Exception:
-        pass
+        using_bundled = True
 
-    if has_key:
-        status_line = ('✓ נמצא TMDB API key דרך תוסף TMDB Helper. '
-                       'התרגום ידע לבחור צורות זכר/נקבה לפי הדמות.\n\n')
+    if using_bundled:
+        status_line = ('✓ TMDB עובד אוטומטית (key מובנה).\n'
+                       'אין צורך לעשות כלום — תרגום AI כבר יודע '
+                       'לבחור צורות זכר/נקבה לפי הדמויות.\n\n')
     else:
-        status_line = ('✗ עדיין לא הוגדר TMDB API key.\n\n')
+        status_line = ('✓ נמצא TMDB API key אישי דרך תוסף TMDB '
+                       'Helper. הוא בשימוש במקום ה-key המובנה.\n\n')
 
     body = (
         status_line +
-        'תרגום AI משתמש ב-TMDB כדי לדעת מי שחקן כל דמות (זכר / '
-        'נקבה), וככה לבחור צורות עברית נכונות לפי המגדר. בלי TMDB '
-        'התרגום עדיין יעבוד אבל הזכר/נקבה יהיו ניחוש מהקשר בלבד.\n\n'
-        'איך מחברים? פתח את ה-Wizard של POV IL → "Connect Services" '
-        '(חיבור שירותים) → TMDB. תוסף ה-TMDB Helper כבר מותקן '
-        'בבילד, רק צריך לאשר.'
+        'תרגום AI משתמש ב-TMDB כדי לזהות את מין כל דמות (זכר / '
+        'נקבה) ולבחור צורות עברית נכונות.\n\n'
+        'אופציונלי: אם תרצה להשתמש ב-key משלך (למשל אם ה-key '
+        'המשותף נחסם זמנית, או אם אתה משתמש ב-TMDB Helper '
+        'באופן כללי), פתח את ה-Wizard → "חיבור שירותים" → TMDB '
+        'וחבר key אישי. הוא יוחל אוטומטית מאותו רגע, בלי '
+        'restart, וידרוס את ה-key המובנה.'
     )
     xbmcgui.Dialog().ok('Kodi POV IL — TMDB', body)
 
