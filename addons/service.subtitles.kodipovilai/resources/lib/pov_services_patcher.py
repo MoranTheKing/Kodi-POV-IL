@@ -37,7 +37,7 @@ ICON_SRC_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), 'icons')
 ICON_FILENAMES = ('gemini.png', 'wyzie.png')
 
-INJECT_VERSION = 5
+INJECT_VERSION = 6
 MARKER = '# AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
 END_MARKER = '# END AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
 TUPLE_MARKER = "# AI_SUBS_MYSERVICES_TUPLE_v{0}".format(INJECT_VERSION)
@@ -49,13 +49,15 @@ TUPLE_MARKER = "# AI_SUBS_MYSERVICES_TUPLE_v{0}".format(INJECT_VERSION)
 #   v4 (addon v0.2.3): same dialog, but uses "DarkSubs" (the
 #     display name the user actually sees) instead of "All_Subs"
 #     (the addon-id / folder-name) which was confusing.
-#   v5 (addon v0.2.11): Gemini auth dialog gets a QR code for the
-#     AI Studio URL (so users on a TV can scan with their phone)
-#     and validates the entered key INLINE before saving -- if
-#     Gemini rejects the key, we don't write it to settings and
-#     instead loop with a retry prompt. Also gives users with an
-#     already-set key a Test / Remove / Cancel chooser instead of
-#     jumping straight to remove.
+#   v5 (addon v0.2.11): Gemini auth dialog got a QR + inline
+#     validation. The full flow lived in the injected code, which
+#     meant every UX tweak required a patcher bump.
+#   v6 (addon v0.2.12): Gemini class now just shells out to our
+#     addon's action=connect_gemini handler. ALL the Gemini UI
+#     (pair-from-phone vs type, key validation, retry, etc.)
+#     lives in default.py going forward -- the patcher only
+#     handles the "icon + click forwarder" pieces, which are
+#     stable. Future Gemini UX changes won't touch this file.
 # Each bump triggers a one-time re-patch on the next Kodi startup;
 # OLD_MARKERS lists every prior version's marker so the legacy
 # blocks get stripped cleanly before the new one is injected.
@@ -64,6 +66,7 @@ OLD_MARKERS = [
     '# AI_SUBS_MYSERVICES_INJECT_v2',
     '# AI_SUBS_MYSERVICES_INJECT_v3',
     '# AI_SUBS_MYSERVICES_INJECT_v4',
+    '# AI_SUBS_MYSERVICES_INJECT_v5',
 ]
 
 # Two service classes plus a hook that monkey-patches authorize()
@@ -85,96 +88,14 @@ def _ai_get_addon():
         return None
 
 
-_AI_GEMINI_KEY_URL = 'https://aistudio.google.com/apikey'
-
-
-def _ai_gemini_validate(api_key):
-    """Inline test of a Gemini API key. Hits the public /models
-    endpoint with the supplied key and returns (ok, message). Done
-    here rather than via `from resources.lib import gemini` to avoid
-    sys.path conflicts inside POV's own resources namespace.
-
-    Status mapping mirrors gemini.test_key:
-      200 + models present     -> ok
-      400 / 403                -> key rejected
-      429                      -> quota
-      5xx                      -> service issue
-      timeout / network        -> reachable error
-    """
-    try:
-        import requests as _ai_req
-        import urllib.parse as _ai_up
-    except ImportError:
-        return False, 'requests library not available'
-    if not api_key:
-        return False, 'אין key להזנה'
-    url = ('https://generativelanguage.googleapis.com/v1/models'
-           '?key=' + _ai_up.quote(api_key, safe=''))
-    try:
-        r = _ai_req.get(url, timeout=10)
-    except _ai_req.Timeout:
-        return False, ('Gemini לא הגיב תוך 10 שניות. נסה שוב או '
-                       'בדוק שיש לך חיבור אינטרנט.')
-    except _ai_req.RequestException as e:
-        return False, 'שגיאת רשת: {0}'.format(str(e)[:80])
-    s = r.status_code
-    if s in (400, 403):
-        return False, ('ה-key נדחה ע"י Gemini (HTTP {0}). '
-                       'בדוק שהעתקת אותו במלואו ושהוא תקין.'.format(s))
-    if s == 429:
-        return False, ('חרגת מהמכסה היומית. נסה שוב מאוחר יותר.')
-    if 500 <= s < 600:
-        return False, ('Gemini במצב תקלה זמני (HTTP {0}). נסה שוב '
-                       'בעוד מספר דקות.'.format(s))
-    if s != 200:
-        return False, 'תגובה בלתי צפויה (HTTP {0})'.format(s)
-    try:
-        data = r.json()
-    except Exception:
-        return False, 'תגובה לא תקינה מ-Gemini (לא JSON)'
-    n = len(data.get('models', []))
-    if not n:
-        return False, ('Gemini החזיר 0 מודלים זמינים -- ה-key '
-                       'כנראה מוגבל או לא מאופשר.')
-    return True, '✓ ה-key תקין. {0} מודלים זמינים.'.format(n)
-
-
-def _ai_gemini_show_qr_and_get_key():
-    """Show a progress dialog with a QR code for the Gemini API
-    Studio URL, count down 3 minutes, and let the user dismiss
-    early. Then prompt for the API key string. Returns the
-    typed key (stripped) or '' if the user cancelled."""
-    try:
-        from urllib.parse import quote as _ai_quote
-    except ImportError:
-        _ai_quote = lambda x: x
-    qr_icon = qr_str % '&data=%s' % _ai_quote(_AI_GEMINI_KEY_URL)
-    meta = {**dict.fromkeys(meta_keys.split(), ''), 'poster': qr_icon}
-    detail = (
-        'סרוק את ה-QR או פתח: %s' % _AI_GEMINI_KEY_URL,
-        '1) Sign in -> "Create API key" -> בחר Project',
-        '2) העתק את ה-key, חזור לכאן ולחץ סגור',
-        '3) הדבק את ה-key במסך הבא',
-    )
-    expires_in = 180
-    progress_dialog = _make_progress_dialog(meta=meta)
-    for i in range(1, expires_in + 1):
-        if progress_dialog.iscanceled():
-            break
-        remaining = expires_in - i
-        lines = (await_str % divmod(remaining, 60),) + detail
-        progress = 100 - int(100 * i / expires_in)
-        try: progress_dialog.update('[CR]'.join(lines), progress)
-        except Exception: pass
-        sleep(1000)
-    progress_dialog.close()
-    try:
-        return (kodi_utils.dialog.input('Gemini API Key:') or '').strip()
-    except Exception:
-        return ''
-
-
 class Gemini:
+    """Forwarder. The actual UX (pair vs type, validation, retry,
+    TMDB nudge) lives in the addon's default.py under the
+    `connect_gemini` action -- a separate Python invocation we
+    spawn via RunScript. Keeping the injected code this small
+    means future Gemini-flow tweaks don't require a patcher
+    bump (which would re-run on every Kodi launch for every
+    user)."""
     icon = 'gemini.png'  # copied into POV's media dir by pov_services_patcher
 
     def __init__(self):
@@ -185,105 +106,25 @@ class Gemini:
             v = ''
         self.token = (v or '').strip()
 
-    def _save_and_nudge_tmdb(self, api_key):
-        try:
-            self._ai.setSetting('api_key', api_key)
-        except Exception:
-            notification('Failed to write to AI subs addon')
-            return False
-        notification('Set Gemini AI Authorization')
-        kodi_utils.ok_dialog(
-            heading='שלב הבא (אופציונלי): TMDB',
-            text=(
-                'כדי שהתרגום יבחין בזכר/נקבה לפי הדמויות בסרט, '
-                'התוסף משתמש ב-API של TMDB דרך תוסף "TMDb Helper" '
-                'שכבר מותקן בבילד.\\n\\n'
-                'אם לא חיברת אותו עדיין, ב-"חיבור שירותים להרחבת POV" '
-                'תמצא את "TMDB" - חבר אותו עם API key חינמי מ-'
-                'themoviedb.org. בלי TMDB התרגום עובד אבל הזכר/נקבה '
-                'הוא ניחוש מהקשר.'
-            ),
-        )
-        return True
-
-    def _input_validate_loop(self):
-        """Show QR + URL, ask for key, validate, retry on failure.
-        Returns True if a valid key was saved, False otherwise."""
-        # First-time setup primer.
-        kodi_utils.ok_dialog(
-            heading='Gemini AI - איך משיגים API key',
-            text=(
-                'כדי שתרגום ה-AI יעבוד צריך API key חינמי של Gemini.\\n\\n'
-                'במסך הבא יוצג QR code שמוביל ל-AI Studio של Google. '
-                'סרוק עם הטלפון, או פתח את הקישור בדפדפן.\\n\\n'
-                'התוכנית החינמית של Gemini מאפשרת ~500 בקשות ביום של '
-                'מודל Flash Lite - מספיק לעשרות סרטים בלי לשלם.'
-            ),
-        )
-        while True:
-            api_key = _ai_gemini_show_qr_and_get_key()
-            if not api_key:
-                return False  # user cancelled the input dialog
-            # Show a brief "checking..." notification so the user
-            # knows we're doing something during the HTTP round-trip.
-            notification('Gemini: בודק את ה-key...')
-            ok, msg = _ai_gemini_validate(api_key)
-            if ok:
-                kodi_utils.ok_dialog(
-                    heading='Gemini AI', text=msg)
-                return self._save_and_nudge_tmdb(api_key)
-            # Failure -- show the specific reason and offer retry.
-            retry = confirm_dialog(
-                heading='Gemini AI - הבדיקה נכשלה',
-                text=msg + '\\n\\nלנסות שוב?')
-            if not retry:
-                return False  # user cancelled retry
-
-    def _menu_for_existing_token(self):
-        """Already-configured Gemini: let the user pick between
-        testing the connection, replacing the key, or removing it.
-        (Was just "remove?" yes/no in v4 and earlier.)"""
-        choices = [
-            '🔍 בדוק חיבור (Test connection)',
-            '🔄 החלף key (Replace)',
-            '❌ מחק key (Remove)',
-        ]
-        try:
-            choice = kodi_utils.dialog.select(
-                'Gemini AI - מה לעשות?', choices)
-        except Exception:
-            choice = -1
-        if choice < 0:
-            return  # user cancelled the chooser
-        if choice == 0:
-            notification('Gemini: בודק את ה-key...')
-            ok, msg = _ai_gemini_validate(self.token)
-            kodi_utils.ok_dialog(
-                heading='Gemini AI', text=msg)
-            return
-        if choice == 1:
-            # Replace: clear current token and run the input loop.
-            self.token = ''
-            try: self._ai.setSetting('api_key', '')
-            except Exception: pass
-            self._input_validate_loop()
-            return
-        if choice == 2:
-            if not confirm_dialog():
-                return
-            try: self._ai.setSetting('api_key', '')
-            except Exception: pass
-            notification('Removed Gemini AI Authorization')
-            return
-
     def set(self):
         if not self._ai:
             notification('Kodi POV IL AI subtitles addon not installed')
             return
-        if self.token:
-            self._menu_for_existing_token()
-            return
-        return self._input_validate_loop()
+        # Hand off to our addon. RunScript spawns a new Python
+        # process; the dialog comes from our default.py so it
+        # has access to the full gemini_pair / gemini modules
+        # without sys.path tricks.
+        try:
+            import xbmc as _aix
+            _aix.executebuiltin(
+                'RunScript(service.subtitles.kodipovilai,'
+                'action=connect_gemini)')
+        except Exception as e:
+            notification('Failed to launch Gemini setup: %s' % str(e)[:60])
+        # Returning True so POV's authorize() treats the click as
+        # handled (not as a failure). The actual save/notify
+        # happens in our default.py process.
+        return True
 
 
 class Wyzie:
