@@ -1,3 +1,19 @@
+v0.2.24
+- Personal-area widget header now spells out the recommended
+  workflow explicitly. Previously the subtitle said only
+  "connect TMDB + Trakt" -- which left newer users wondering
+  what to do after connecting. The new subtitle says to ADD
+  items in TMDB / Trakt before falling back to POV-local:
+      איזור אישי
+      · מומלץ להוסיף ב-TMDB + Trakt לפני POV-מקומי
+- fentastic_widget_patcher pattern extended to recognise three
+  earlier states (A: original "(חובה...)", B: v0.2.18+ plain
+  "איזור אישי", C: v0.2.20+ with "מומלץ לחבר TMDB + Trakt")
+  and migrate any of them to the new D state. NEW_TOKEN bumped
+  to 'לפני POV-מקומי' so idempotency check keys off the v0.2.24
+  text. Sandbox tested with all three legacy headers; each
+  migrates cleanly and re-runs as 'unchanged'.
+
 v0.2.23
 - Context menu on movies / tvshows / episodes: each list-manager
   entry is now shown independently based on whether its service
