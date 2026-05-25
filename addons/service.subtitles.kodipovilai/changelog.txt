@@ -1,3 +1,43 @@
+v0.2.18
+- Self-heal four POV/skin/userdata customizations on existing
+  installs so users get the recent UX improvements without a
+  full build reinstall (which would wipe their connected service
+  tokens). The wizard's quickfix mechanism delivers this addon
+  but doesn't touch POV/skin/userdata files; the patchers below
+  bridge that gap.
+
+  All patchers are surgical and idempotent -- they verify the
+  shipped baseline byte-for-byte before rewriting, so any user
+  customization aborts the patch cleanly without overwriting.
+
+  - pov_menus_patcher (new): force-syncs POV's three context-menu
+    builders (movies.py, tvshows.py, episodes.py) to the canonical
+    PR #98 versions bundled in resources/lib/pov_overrides/menus/.
+    Whole-file copy when bytes differ (vs the marker-inject pattern
+    used by pov_services_patcher.py, because PR #98 replaces an
+    existing block rather than appending one). Drops the matching
+    __pycache__ entry so the next plugin invocation picks up the
+    new code without waiting for Kodi to recompile.
+  - pov_navigator_patcher (extended): added
+    maybe_fix_personal_area_lists() which rewrites the two
+    "FENtastic - <type> - איזור אישי" rows in POV's navigator.db
+    to insert a TMDB Favorites entry before the existing Trakt
+    Collection entry. Only rewrites rows that match the shipped
+    baseline exactly. Doesn't touch the existing favourites
+    typo fix.
+  - fentastic_widget_patcher (new): drops the "(must connect
+    to Trakt)" subtitle from the personal-area widget header in
+    skin.fentastic's two widget XMLs.
+  - favourites_xml_patcher (new): migrates the two Trakt
+    collection home-screen tiles in userdata/favourites.xml to
+    TMDB Favorites equivalents. Surgical -- if the line doesn't
+    match the shipped baseline (user renamed/edited the tile),
+    leaves it alone.
+
+  service.py wires all four patchers into the startup sequence
+  alongside the existing pov_services / pov_navigator /
+  fentastic_notification / darksubs patchers.
+
 v0.2.17
 - Fix: clicking "Replace key" in the Gemini menu no longer wipes
   the existing key before the new one is confirmed. v0.2.16 and
