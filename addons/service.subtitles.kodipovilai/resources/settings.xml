@@ -14,6 +14,17 @@
           </control>
           <data>RunScript(service.subtitles.kodipovilai,action=open_aistudio)</data>
         </setting>
+        <setting id="qr_pair" type="action" label="32106"> <!-- Pair via QR or typed, same flow as Connect Services -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32106</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=connect_gemini)</data>
+        </setting>
         <setting id="api_key" type="string" label="32102" help="32104"> <!-- Gemini API Key + leak-warning help -->
           <level>0</level>
           <default></default>

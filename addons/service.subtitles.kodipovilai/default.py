@@ -289,9 +289,13 @@ def _gemini_menu_existing(kodi_utils, gemini, gemini_pair, current_key):
         _show_gemini_usage()
         return
     if choice == 2:
-        # Clear current first so the new-key flow doesn't loop
-        # back into the existing-key menu.
-        kodi_utils.set_setting('api_key', '')
+        # Don't clear the existing key here -- if the user cancels
+        # mid-flow (closes the QR dialog, dismisses the keyboard,
+        # taps outside the screen) they'd lose a working key with
+        # no replacement. The new key, once validated, overwrites
+        # the old one via set_setting in _test_save_or_retry, so
+        # replace happens atomically on success; on cancel the old
+        # key stays put.
         _gemini_menu_new(kodi_utils, gemini, gemini_pair)
         return
     if choice == 3:
@@ -467,7 +471,19 @@ def _test_save_or_retry(kodi_utils, gemini, api_key, retry_cb):
         # longer needs nudging: the addon ships with a bundled
         # TMDB key, so the user is fully set up the moment Gemini
         # connects.
-        kodi_utils.set_setting('api_key', api_key)
+        saved = kodi_utils.set_setting('api_key', api_key)
+        if not saved:
+            # Kodi silently rejected our setSetting -- happens on
+            # some Kodi/Android combos where the addon UI doesn't
+            # commit to settings.xml. Surface the failure instead
+            # of showing a false success dialog.
+            xbmcgui.Dialog().ok(
+                'Gemini AI - שמירה נכשלה',
+                'ה-key אומת בהצלחה מול Gemini, אבל Kodi לא שמר '
+                'אותו בקובץ ההגדרות.\n\n'
+                'נסה לסגור את Kodi לחלוטין ולהפעיל מחדש, ואז לחזור '
+                'לכאן ולהריץ שוב את ההתאמה.')
+            return 'cancel'
         xbmcgui.Dialog().ok(
             'Gemini AI',
             '✓ החיבור הצליח. מודל: {0}\n\n'

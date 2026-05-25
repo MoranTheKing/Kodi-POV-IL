@@ -1,3 +1,34 @@
+v0.2.17
+- Fix: clicking "Replace key" in the Gemini menu no longer wipes
+  the existing key before the new one is confirmed. v0.2.16 and
+  earlier called set_setting('api_key', '') the moment the user
+  picked Replace, so any cancel mid-flow (closing the QR dialog,
+  dismissing the on-screen keyboard, tapping outside) destroyed
+  the working key with nothing to replace it. Now we leave the
+  current key in place; the new one overwrites atomically when
+  validation succeeds, and the original survives any cancel.
+- Defensive: kodi_utils.set_setting() now reads the value back
+  after writing and returns False if Kodi didn't actually
+  persist the change. _test_save_or_retry uses this to surface
+  a "Kodi didn't save the key" dialog instead of a false
+  "Connection succeeded" dialog when the underlying
+  addon().setSetting() call silently fails (reported on certain
+  Kodi 21 / Android combinations). Caller-side change only --
+  the set_setting signature stays backward compatible because
+  the previous implementation implicitly returned None.
+
+v0.2.16
+- Add "Pair with QR (scan from another device)" button inside the
+  addon's settings, next to the existing "Get a free Gemini API
+  key" button. Triggers the same connect_gemini flow that the POV
+  "Connect Services" menu uses, so users who install only the
+  addon zip (without our build) have a working onboarding path
+  that doesn't depend on the Kodi settings UI persisting a typed
+  string -- some users reported the manual api_key field not
+  saving on certain Kodi/Android combinations; QR pairing writes
+  the key directly via setSetting after validation, bypassing
+  whatever Kodi UI state was preventing the save.
+
 v0.2.15
 - Fix the home-screen Favorites tile freezing Kodi. POV ships
   userdata/addon_data/plugin.video.pov/navigator.db with the
