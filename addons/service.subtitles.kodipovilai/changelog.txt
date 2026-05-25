@@ -1,3 +1,22 @@
+v0.2.20
+- Personal-area widget header on the Movies / TV Shows pages now
+  carries a visible recommendation to connect both TMDB and Trakt:
+      איזור אישי   · מומלץ לחבר TMDB + Trakt
+  (main label yellow bold, recommendation gray italic.)
+  Rationale: TMDB handles Favorites / Watchlist / custom lists
+  cleanly with no rate limits and a working mobile app; Trakt is
+  the only service with a /sync/playback API that powers cross-
+  device Continue Watching / Next Episode -- TMDB doesn't expose
+  that. Combining the two gives the user the best of both.
+- fentastic_widget_patcher upgraded to recognise BOTH legacy
+  headers and migrate them to the new one:
+    State A: "...איזור אישי (חובה להתחבר לTrakt)..." (very
+             original baseline)
+    State B: "...איזור אישי..." (what v0.2.18 wrote)
+  Either matches the regex, both rewrite to State C with the
+  recommendation. Re-run is unchanged (idempotent). Custom user
+  headers don't match the pattern and are left alone.
+
 v0.2.19
 - Three patchers from v0.2.18 didn't take effect for at least one
   user even though the addon was delivered via quickfix and the
