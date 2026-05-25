@@ -30,6 +30,10 @@ msgctxt "#32105"
 msgid "Test connection"
 msgstr "בדיקת חיבור"
 
+msgctxt "#32106"
+msgid "Pair with QR (scan from another device)"
+msgstr "התאם מטלפון / מכשיר אחר (QR + URL)"
+
 msgctxt "#32200"
 msgid "Translation"
 msgstr "תרגום"
