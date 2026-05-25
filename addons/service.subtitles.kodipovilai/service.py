@@ -315,6 +315,29 @@ def _maybe_patch_fentastic_widgets():
             pass
 
 
+def _maybe_install_build_icons():
+    """Install the bundled TMDB-branded home-tile icons under
+    media/build_icons/ so the favourites_xml_patcher can point at
+    them. Idempotent -- skips files that already exist."""
+    try:
+        from resources.lib import build_icons_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        result = build_icons_patcher.ensure_installed()
+        if isinstance(result, dict) and result.get('installed'):
+            kodi_utils.log(
+                'build_icons_patcher: installed {0}'.format(
+                    ', '.join(result['installed'])), level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'build_icons_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_favourites_xml():
     """Migrate the two Trakt-collection home tiles to TMDB
     Favorites equivalents in userdata/favourites.xml. Surgical --
@@ -488,6 +511,10 @@ def main():
     # customizations are left alone.
     _maybe_patch_pov_personal_area()
     _maybe_patch_fentastic_widgets()
+    # Install the TMDB-branded home-tile icons before the
+    # favourites_xml patcher rewrites the thumb paths, otherwise
+    # the TMDB tile would briefly point at a missing file.
+    _maybe_install_build_icons()
     _maybe_patch_favourites_xml()
 
     # v0.2.9 tried patching FENtastic's notification widget but
