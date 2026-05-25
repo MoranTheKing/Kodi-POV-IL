@@ -1,3 +1,46 @@
+v0.2.21
+- Two follow-ups to the home-tile migration after user feedback:
+
+  (a) The TMDB home tiles created by v0.2.18+ pointed at the
+      original Trakt-branded icons (the My_Shows.png / My_Movies.png
+      from the Twilight build, both with a red TRAKT badge in the
+      upper-right of the folder graphic). Now ships two TMDB-branded
+      variants -- My_Shows_TMDB.png and My_Movies_TMDB.png -- inside
+      the addon at resources/lib/media_assets/build_icons/Twilight/
+      (Shows|Movies)/. A new build_icons_patcher copies any
+      bundled icons that are missing from the live
+      media/build_icons/ tree on every Kodi startup.
+      Defensive: never overwrites pre-existing icons, so a user
+      who placed a custom icon at the same path keeps it.
+
+  (b) The favourites_xml_patcher previously REPLACED the
+      Trakt-collection home tiles with TMDB-favourites tiles,
+      leaving users with both services connected unable to reach
+      their Trakt collection from the home screen. Now it RESTORES
+      a Trakt tile right after the matching TMDB tile when the
+      user has Trakt configured (POV setting trakt_user non-empty).
+      Detection reads POV's settings.xml directly because POV
+      isn't importable from inside our addon's process. Users
+      without Trakt see only TMDB tiles -- clean home screen.
+
+  Same patcher pass also updates any existing TMDB tile whose
+  thumb still points at the old Trakt-branded icon, swapping it
+  to the new My_(Shows|Movies)_TMDB.png path so the visible
+  branding matches the tile name.
+
+  All three responsibilities (migrate Trakt->TMDB, fix thumb,
+  restore Trakt) happen in one read-modify-write of
+  userdata/favourites.xml. Sandbox tested with two scenarios:
+    * trakt_connected=True  -> 4 tiles (TMDB+Trakt for both
+      mediatypes), thumbs correct, custom user tile preserved,
+      idempotent on re-run
+    * trakt_connected=False -> 2 tiles (only TMDB for both),
+      idempotent on re-run
+
+  service.py wires the new build_icons_patcher BEFORE
+  favourites_xml_patcher so the TMDB-branded icons exist on
+  disk by the time the XML starts pointing at them.
+
 v0.2.20
 - Personal-area widget header on the Movies / TV Shows pages now
   carries a visible recommendation to connect both TMDB and Trakt:
