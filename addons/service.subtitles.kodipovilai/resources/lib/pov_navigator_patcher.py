@@ -59,17 +59,25 @@ GOOD_TOKEN   = "'navigator.favorites'"
 
 # Personal-area lists -- the FENtastic widget on the movies/tvshows
 # pages reads these two rows from POV's navigator.db. The shipped
-# baseline only had a Trakt collection entry; we want TMDB favorites
-# to lead, with Trakt kept as a secondary option for users still on
-# Trakt. Match the OLD content byte-for-byte before rewriting, so any
-# user customization elsewhere in the list aborts the rewrite cleanly.
+# baseline only had a Trakt collection entry; the v0.2.18 patcher
+# added a TMDB tile. v0.2.22 also appends a POV-local-favorites
+# tile so users with no service connected still have a working
+# personal area. Migration table:
+#   V1 = baseline (Continue/Next + Trakt)
+#   V2 = post-v0.2.18 (Continue/Next + TMDB + Trakt)
+#   V3 = target (Continue/Next + TMDB + Trakt + POV)
+# Each row is rewritten only if its current list_contents matches
+# one of the known older versions exactly. User customizations
+# don't match and are left alone.
 MOVIES_PA_NAME = 'FENtastic - סרטים - איזור אישי'
-MOVIES_PA_OLD = "[{'action': 'in_progress_movies', 'iconImage': 'player', 'mode': 'build_movie_list', 'name': '[B]המשך צפייה[/B]'}, {'action': 'trakt_collection', 'category_name': 'Movies Collection', 'iconImage': 'trakt', 'mode': 'build_movie_list', 'name': '[B]הסרטים שלי (Trakt)[/B]'}]"
-MOVIES_PA_NEW = "[{'action': 'in_progress_movies', 'iconImage': 'player', 'mode': 'build_movie_list', 'name': '[B]המשך צפייה[/B]'}, {'action': 'tmdb_favorites', 'iconImage': 'tmdb', 'mode': 'build_movie_list', 'name': '[B]הסרטים שלי (TMDB)[/B]'}, {'action': 'trakt_collection', 'category_name': 'Movies Collection', 'iconImage': 'trakt', 'mode': 'build_movie_list', 'name': '[B]הסרטים שלי (Trakt)[/B]'}]"
+MOVIES_PA_V1 = "[{'action': 'in_progress_movies', 'iconImage': 'player', 'mode': 'build_movie_list', 'name': '[B]המשך צפייה[/B]'}, {'action': 'trakt_collection', 'category_name': 'Movies Collection', 'iconImage': 'trakt', 'mode': 'build_movie_list', 'name': '[B]הסרטים שלי (Trakt)[/B]'}]"
+MOVIES_PA_V2 = "[{'action': 'in_progress_movies', 'iconImage': 'player', 'mode': 'build_movie_list', 'name': '[B]המשך צפייה[/B]'}, {'action': 'tmdb_favorites', 'iconImage': 'tmdb', 'mode': 'build_movie_list', 'name': '[B]הסרטים שלי (TMDB)[/B]'}, {'action': 'trakt_collection', 'category_name': 'Movies Collection', 'iconImage': 'trakt', 'mode': 'build_movie_list', 'name': '[B]הסרטים שלי (Trakt)[/B]'}]"
+MOVIES_PA_V3 = "[{'action': 'in_progress_movies', 'iconImage': 'player', 'mode': 'build_movie_list', 'name': '[B]המשך צפייה[/B]'}, {'action': 'tmdb_favorites', 'iconImage': 'tmdb', 'mode': 'build_movie_list', 'name': '[B]הסרטים שלי (TMDB)[/B]'}, {'action': 'trakt_collection', 'category_name': 'Movies Collection', 'iconImage': 'trakt', 'mode': 'build_movie_list', 'name': '[B]הסרטים שלי (Trakt)[/B]'}, {'action': 'favorites_movies', 'iconImage': 'favorites', 'mode': 'build_movie_list', 'name': '[B]הסרטים שלי (POV)[/B]'}]"
 
 TVSHOWS_PA_NAME = 'FENtastic - סדרות - איזור אישי'
-TVSHOWS_PA_OLD = "[{'iconImage': 'next_episodes', 'mode': 'build_next_episode', 'name': '[B]הפרק הבא[/B]'}, {'action': 'trakt_collection', 'category_name': 'TV Shows Collection', 'iconImage': 'trakt', 'mode': 'build_tvshow_list', 'name': '[B]הסדרות שלי (Trakt)[/B]'}]"
-TVSHOWS_PA_NEW = "[{'iconImage': 'next_episodes', 'mode': 'build_next_episode', 'name': '[B]הפרק הבא[/B]'}, {'action': 'tmdb_favorites', 'iconImage': 'tmdb', 'mode': 'build_tvshow_list', 'name': '[B]הסדרות שלי (TMDB)[/B]'}, {'action': 'trakt_collection', 'category_name': 'TV Shows Collection', 'iconImage': 'trakt', 'mode': 'build_tvshow_list', 'name': '[B]הסדרות שלי (Trakt)[/B]'}]"
+TVSHOWS_PA_V1 = "[{'iconImage': 'next_episodes', 'mode': 'build_next_episode', 'name': '[B]הפרק הבא[/B]'}, {'action': 'trakt_collection', 'category_name': 'TV Shows Collection', 'iconImage': 'trakt', 'mode': 'build_tvshow_list', 'name': '[B]הסדרות שלי (Trakt)[/B]'}]"
+TVSHOWS_PA_V2 = "[{'iconImage': 'next_episodes', 'mode': 'build_next_episode', 'name': '[B]הפרק הבא[/B]'}, {'action': 'tmdb_favorites', 'iconImage': 'tmdb', 'mode': 'build_tvshow_list', 'name': '[B]הסדרות שלי (TMDB)[/B]'}, {'action': 'trakt_collection', 'category_name': 'TV Shows Collection', 'iconImage': 'trakt', 'mode': 'build_tvshow_list', 'name': '[B]הסדרות שלי (Trakt)[/B]'}]"
+TVSHOWS_PA_V3 = "[{'iconImage': 'next_episodes', 'mode': 'build_next_episode', 'name': '[B]הפרק הבא[/B]'}, {'action': 'tmdb_favorites', 'iconImage': 'tmdb', 'mode': 'build_tvshow_list', 'name': '[B]הסדרות שלי (TMDB)[/B]'}, {'action': 'trakt_collection', 'category_name': 'TV Shows Collection', 'iconImage': 'trakt', 'mode': 'build_tvshow_list', 'name': '[B]הסדרות שלי (Trakt)[/B]'}, {'action': 'favorites_tvshows', 'iconImage': 'favorites', 'mode': 'build_tvshow_list', 'name': '[B]הסדרות שלי (POV)[/B]'}]"
 
 
 def _db_path():
@@ -173,9 +181,13 @@ def maybe_fix_personal_area_lists():
     if not path:
         return {'_status': 'no_db'}
 
+    # (row_name, known_old_versions, target_version) -- the patcher
+    # rewrites the row to `target` if its current content matches
+    # any of the known_old_versions exactly. Anything else is treated
+    # as user customization and left alone.
     targets = (
-        (MOVIES_PA_NAME, MOVIES_PA_OLD, MOVIES_PA_NEW),
-        (TVSHOWS_PA_NAME, TVSHOWS_PA_OLD, TVSHOWS_PA_NEW),
+        (MOVIES_PA_NAME, (MOVIES_PA_V1, MOVIES_PA_V2), MOVIES_PA_V3),
+        (TVSHOWS_PA_NAME, (TVSHOWS_PA_V1, TVSHOWS_PA_V2), TVSHOWS_PA_V3),
     )
     out = {}
     conn = None
@@ -183,7 +195,7 @@ def maybe_fix_personal_area_lists():
         conn = sqlite3.connect(path, timeout=2.0, isolation_level=None)
         conn.execute('PRAGMA busy_timeout=2000')
         cur = conn.cursor()
-        for row_name, old, new in targets:
+        for row_name, known_old_versions, target in targets:
             try:
                 cur.execute(
                     "SELECT list_contents FROM navigator "
@@ -196,18 +208,18 @@ def maybe_fix_personal_area_lists():
                 out[row_name] = 'no_row'
                 continue
             current = row[0] or ''
-            if current == new:
+            if current == target:
                 out[row_name] = 'unchanged'
                 continue
-            if current != old:
-                # User customized or partially-migrated -- don't touch.
+            if current not in known_old_versions:
+                # User customized or in an unknown state -- don't touch.
                 out[row_name] = 'unchanged'
                 continue
             try:
                 cur.execute('BEGIN IMMEDIATE')
                 cur.execute(
                     "UPDATE navigator SET list_contents=? "
-                    "WHERE list_name=?", (new, row_name))
+                    "WHERE list_name=?", (target, row_name))
                 cur.execute('COMMIT')
                 out[row_name] = 'fixed'
             except Exception:
