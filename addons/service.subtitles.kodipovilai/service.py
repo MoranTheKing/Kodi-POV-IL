@@ -365,6 +365,35 @@ def _maybe_patch_favourites_xml():
             pass
 
 
+def _maybe_patch_pov_repeat_timer():
+    """Wrap POV's myservices.py RepeatTimer.run() in try/except so
+    auth-polling threads survive single-iteration failures. Without
+    this, transient errors (network blip, malformed response, etc.)
+    kill the polling thread silently and the user's auth dialog
+    for Trakt / RD / TorBox / PM / AD hangs forever after they
+    authorize on the website."""
+    try:
+        from resources.lib import pov_repeat_timer_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_repeat_timer_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_repeat_timer_patcher: applied auth polling '
+                'try/except wrap', level='INFO')
+        elif status in ('unmatched', 'write_failed', 'read_failed'):
+            kodi_utils.log(
+                'pov_repeat_timer_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_repeat_timer_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_services():
     """Inject Gemini AI + Wyzie entries into the POV plugin's
     "My Services" menu (the one at /myservices in plugin.video.pov).
@@ -489,6 +518,11 @@ def main():
     # POV's own "My Services" menu -- THE correct place. Inject
     # Gemini + Wyzie entries here on every startup; idempotent.
     _maybe_patch_pov_services()
+
+    # Resilient device-flow auth polling -- wraps POV's RepeatTimer
+    # so a single failed poll doesn't silently kill the whole auth
+    # thread for Trakt / RD / TorBox / PM / AD.
+    _maybe_patch_pov_repeat_timer()
 
     # Fix the home-screen Favorites tile typo in POV's bundled
     # navigator.db (one-shot, idempotent). See function docstring
