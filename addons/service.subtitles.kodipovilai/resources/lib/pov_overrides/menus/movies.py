@@ -15,8 +15,15 @@ fanart_empty = kodi_utils.get_addoninfo('fanart')
 poster_empty = kodi_utils.media_path('box_office.png')
 item_jump = kodi_utils.media_path('item_jump.png')
 item_next = kodi_utils.media_path('item_next.png')
-watched_str, unwatched_str, traktmanager_str, tmdbmanager_str, mdblmanager_str = ls(32642), ls(32643), ls(32198), '[B]TMDB Lists Manager[/B]', ls(32200)
-favmanager_str, extras_str, options_str, recomm_str = ls(32197), ls(32645), ls(32646), '[B]%s...[/B]' % ls(32503)
+watched_str = '[B]סמן כנצפה (%s)[/B]'
+unwatched_str = '[B]סמן כלא נצפה (%s)[/B]'
+traktmanager_str = '[B]ניהול רשימות (Trakt)[/B]'
+tmdbmanager_str = '[B]ניהול רשימות (TMDB)[/B]'
+mdblmanager_str = '[B]ניהול רשימות (MDBList)[/B]'
+favmanager_str = '[B]ניהול מועדפים (POV)[/B]'
+extras_str = '[B]אקסטרות...[/B]'
+options_str = '[B]אפשרויות...[/B]'
+recomm_str = '[B]%s...[/B]' % ls(32503)
 hide_str, exit_str, clearprog_str, play_str = ls(32648), ls(32649), ls(32651), '[B]%s...[/B]' % ls(32174)
 nextpage_str, switchjump_str, jumpto_str = ls(32799), ls(32784), ls(32964)
 
@@ -96,17 +103,17 @@ class Movies:
 			else:
 				url_params = play_params
 				cm_append((self.cm_sort['extras'], extras_str, run_plugin % extras_params))
-			# Show only the list-managers the user is actually
-			# connected to. When TMDB is personally connected it
-			# takes the top slot (above any other list manager)
-			# and Trakt is hidden -- TMDB has no rate limits or
-			# restricted Collections UI. The bundled default TMDB
-			# key is read-only and doesn't set account_id, so
-			# users without a personal connection still see Trakt.
+			# Show every list-manager whose service is connected --
+			# user can have all four side by side (TMDB, Trakt,
+			# MDBList, POV-local). The bundled default TMDB key is
+			# read-only and doesn't set account_id, so users without
+			# a personal TMDB connection don't see the TMDB Manager.
+			# TMDB takes the top slot (above Trakt/MDBList) when
+			# personally connected.
 			if kodi_utils.get_setting('tmdb.account_id'):
 				tmdb_sort_key = min(self.cm_sort['trakt'], self.cm_sort['mdblist']) - 1
 				cm_append((tmdb_sort_key, tmdbmanager_str, run_plugin % tmdb_manager_params))
-			elif kodi_utils.get_setting('trakt_user', ''):
+			if kodi_utils.get_setting('trakt_user', ''):
 				cm_append((self.cm_sort['trakt'], traktmanager_str, run_plugin % trakt_manager_params))
 			if kodi_utils.get_setting('mdblist.token'):
 				cm_append((self.cm_sort['mdblist'], mdblmanager_str, run_plugin % mdbl_manager_params))
