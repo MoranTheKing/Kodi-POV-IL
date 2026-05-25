@@ -1,3 +1,42 @@
+v0.2.26
+- Fix a systemic bug in POV's device-flow auth (Trakt, Real Debrid,
+  TorBox, Premiumize, AllDebrid) where the auth dialog would stay
+  stuck on screen with the same code/URL even after the user
+  authorized on the website.
+
+  Root cause: POV's RepeatTimer.run() in myservices.py polls the
+  service's auth endpoint every N seconds. The polling call is
+  NOT wrapped in try/except. Any exception from the user-function
+  (network timeout, SSLError, malformed JSON, KeyError on
+  unexpected response structure) propagates up to threading.Timer
+  which doesn't catch it -- the polling thread dies silently and
+  the auth detection logic stops running entirely. The dialog
+  stays up because nothing was telling it the auth completed.
+
+  This isn't a per-service bug. Any device-flow service POV
+  integrates with hits the same fragility -- single transient
+  failure on poll #1 = the rest of the user's auth flow is dead.
+
+  Fix is one try/except wrap. Successive polls keep retrying;
+  eventually one returns 200 with the token and the auth gets
+  captured normally.
+
+  Delivered through a new patcher:
+    addons/service.subtitles.kodipovilai/resources/lib/
+      pov_repeat_timer_patcher.py
+  Wired into service.py's startup hook right after
+  _maybe_patch_pov_services() (both modify the same file). Marker
+  AI_SUBS_REPEAT_TIMER_PATCH gates idempotency. Defensive: if
+  upstream POV restructures RepeatTimer in a way our pattern
+  can't match, the patcher skips with a log and POV continues
+  working as upstream (auth dialogs go back to being fragile but
+  nothing breaks).
+
+  Sandbox tested end-to-end against the current shipped
+  myservices.py: first run reports 'patched' and wraps the body
+  correctly, re-run reports 'unchanged', py_compile of the
+  patched file passes.
+
 v0.2.25
 - Smooth out the DarkSubs <-> AI integration so users don't have
   to know that DarkSubs's "Enable machine translation" toggle is
