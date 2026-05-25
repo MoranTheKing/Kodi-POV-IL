@@ -1,3 +1,30 @@
+v0.2.23
+- Context menu on movies / tvshows / episodes: each list-manager
+  entry is now shown independently based on whether its service
+  is connected. Previously TMDB and Trakt were mutually exclusive
+  (Trakt hidden when TMDB connected). Now a user with all four
+  services connected (TMDB + Trakt + MDBList + POV-local) sees
+  four "Manager" entries in the context menu, one per service.
+  Users with only the services they care about see exactly those.
+- All context-menu labels translated to Hebrew (service names
+  TRAKT / TMDB / MDBLIST / POV stay in English -- they're brand
+  names). Changes apply to movies.py, tvshows.py, episodes.py
+  in the pov_overrides bundle:
+    [B]Options...[/B]                 -> [B]אפשרויות...[/B]
+    [B]Extras...[/B]                  -> [B]אקסטרות...[/B]
+    [B]Mark Watched %s[/B]            -> [B]סמן כנצפה (%s)[/B]
+    [B]Mark Unwatched %s[/B]          -> [B]סמן כלא נצפה (%s)[/B]
+    [B]TMDB Lists Manager[/B]         -> [B]ניהול רשימות (TMDB)[/B]
+    [B]Trakt Lists Manager[/B]        -> [B]ניהול רשימות (Trakt)[/B]
+    [B]MDBList Manager[/B]            -> [B]ניהול רשימות (MDBList)[/B]
+    [B]Favorites Manager[/B]          -> [B]ניהול מועדפים (POV)[/B]
+- pov_menus_patcher marker bumped from
+    kodi_utils.get_setting('trakt_user'
+  (which was the v0.2.18+ marker) to
+    [B]ניהול רשימות (Trakt)[/B]
+  so existing-install users on the older Hebrew-less version get
+  the v0.2.23 files copied over via quickfix.
+
 v0.2.22
 - Add a POV-local-favorites tile to both the home favourites bar
   and the FENtastic personal-area widget on the Movies / TV Shows
