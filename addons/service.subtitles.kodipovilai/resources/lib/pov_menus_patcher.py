@@ -4,23 +4,21 @@
 # Manager entries that correspond to actually-connected services,
 # with TMDB at the top when personally connected.
 #
-# These files don't fit the marker-inject pattern used by
-# pov_services_patcher.py because PR #98 *replaces* an existing
-# block rather than appending one. The safest delivery for code
-# we already control is to ship the canonical version inside our
-# own addon and copy it over POV's copy whenever the bytes differ
-# (idempotent: noop when already up to date).
+# Detection by marker substring (not byte-exact compare) so future
+# inconsequential edits to upstream POV (whitespace, a comment
+# tweak) don't trip the patcher into unnecessary rewrites. The
+# marker is a phrase that only exists in the PR #98 version of
+# these files:
 #
-# Trade-off: any future upstream POV update to these specific
-# files would be clobbered. Acceptable because the Kodi POV IL
-# build ships a frozen POV version we maintain ourselves; users
-# don't get POV updates from POV upstream, they get whatever the
-# FENtastic build zip carries.
+#     tmdb_sort_key = min(self.cm_sort[
 #
-# Defensive: if POV isn't installed at all, or the target dir
-# doesn't exist, skip. If the write fails (permissions, disk
-# full, file locked), log and continue -- the patcher will
-# retry on the next Kodi startup.
+# If the marker is present, the file is already migrated. If not,
+# we copy our bundled canonical version over.
+#
+# Defensive: if POV isn't installed, if the bundled overrides are
+# missing (zip extraction edge case), or if the write fails
+# (permission denied on Android), log and skip -- the patcher
+# retries on the next Kodi startup.
 
 import os
 import shutil
@@ -30,9 +28,31 @@ try:
 except Exception:
     xbmcvfs = None
 
+try:
+    from resources.lib import kodi_utils
+except Exception:
+    kodi_utils = None
+
 
 POV_ADDON_ID = 'plugin.video.pov'
 MENU_FILES = ('movies.py', 'tvshows.py', 'episodes.py')
+
+# Substring that the PR #98 version of all three menu files
+# contains and pre-PR-#97 baselines do not. Cheaper than
+# byte-compare and more tolerant of benign upstream tweaks.
+# (The earlier `tmdb_sort_key` marker only worked for movies.py
+# and tvshows.py -- episodes.py doesn't compute a custom sort key
+# but does add the trakt_user connection check.)
+PR98_MARKER = "kodi_utils.get_setting('trakt_user'"
+
+
+def _log(msg, level='INFO'):
+    if kodi_utils is None:
+        return
+    try:
+        kodi_utils.log('pov_menus_patcher: ' + msg, level=level)
+    except Exception:
+        pass
 
 
 def _bundled_dir():
@@ -53,64 +73,88 @@ def _target_dir():
         return ''
 
 
-def _files_identical(a, b):
+def _has_marker(path):
     try:
-        with open(a, 'rb') as fa, open(b, 'rb') as fb:
-            return fa.read() == fb.read()
+        with open(path, 'rb') as f:
+            return PR98_MARKER.encode('utf-8') in f.read()
     except OSError:
         return False
 
 
+def _drop_pyc(dst, name):
+    """Drop the matching __pycache__ entry so the next plugin
+    invocation picks up the new code without waiting for Kodi
+    to recompile."""
+    pycache_dir = os.path.join(os.path.dirname(dst), '__pycache__')
+    if not os.path.isdir(pycache_dir):
+        return
+    stem = name.replace('.py', '.')
+    for fn in os.listdir(pycache_dir):
+        if fn.startswith(stem) and fn.endswith('.pyc'):
+            try:
+                os.remove(os.path.join(pycache_dir, fn))
+            except OSError:
+                pass
+
+
 def ensure_patched():
-    """Copy each bundled menu file over to the user's POV addon if
-    the bytes differ. Returns a {filename: status} dict where status
-    is one of:
-      'unchanged'    -- already identical, no write needed
-      'patched'      -- file rewritten
+    """Copy each bundled menu file over to the user's POV addon
+    when the destination lacks the PR #98 marker. Returns a
+    {filename: status} dict where status is one of:
+      'unchanged'    -- marker present, no write needed
+      'patched'      -- file rewritten with canonical version
       'no_source'    -- bundled copy missing (shouldn't happen)
-      'no_target'    -- POV addon file not present (POV not installed?)
+      'no_target'    -- POV addon file not present
       'failed'       -- write error; will retry next startup
+    Plus a special key '_status' with values:
+      'no_bundled'   -- our pov_overrides/menus dir missing
+      'no_pov'       -- POV addon not installed
     """
     bdir = _bundled_dir()
     tdir = _target_dir()
-    results = {}
     if not os.path.isdir(bdir):
+        _log('bundled dir missing at {0}'.format(bdir),
+             level='WARNING')
         return {'_status': 'no_bundled'}
     if not tdir or not os.path.isdir(tdir):
+        _log('POV target dir missing at {0}'.format(tdir),
+             level='INFO')
         return {'_status': 'no_pov'}
 
+    results = {}
     for name in MENU_FILES:
         src = os.path.join(bdir, name)
         dst = os.path.join(tdir, name)
         if not os.path.isfile(src):
             results[name] = 'no_source'
+            _log('{0}: bundled source missing at {1}'.format(name, src),
+                 level='WARNING')
             continue
         if not os.path.isfile(dst):
             results[name] = 'no_target'
+            _log('{0}: POV target missing at {1}'.format(name, dst),
+                 level='INFO')
             continue
-        if _files_identical(src, dst):
+        if _has_marker(dst):
             results[name] = 'unchanged'
+            _log('{0}: marker present, already migrated'.format(name),
+                 level='DEBUG')
             continue
-        # Drop pycache for this file if present, otherwise Kodi may
-        # keep executing the old compiled bytecode until next launch.
-        pycache_dir = os.path.join(os.path.dirname(dst), '__pycache__')
-        if os.path.isdir(pycache_dir):
-            for f in os.listdir(pycache_dir):
-                if f.startswith(name.replace('.py', '.')) and \
-                        f.endswith('.pyc'):
-                    try:
-                        os.remove(os.path.join(pycache_dir, f))
-                    except OSError:
-                        pass
+        # Marker missing -- copy our canonical version over.
         tmp = dst + '.aitmp'
         try:
             shutil.copyfile(src, tmp)
             os.replace(tmp, dst)
+            _drop_pyc(dst, name)
             results[name] = 'patched'
-        except OSError:
+            _log('{0}: copied canonical PR #98 version over'.format(
+                name), level='INFO')
+        except OSError as e:
             try:
                 os.remove(tmp)
             except OSError:
                 pass
             results[name] = 'failed'
+            _log('{0}: write failed: {1}'.format(name, e),
+                 level='WARNING')
     return results

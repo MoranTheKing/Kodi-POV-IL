@@ -37,6 +37,20 @@ try:
 except Exception:
     xbmcvfs = None
 
+try:
+    from resources.lib import kodi_utils
+except Exception:
+    kodi_utils = None
+
+
+def _log(msg, level='INFO'):
+    if kodi_utils is None:
+        return
+    try:
+        kodi_utils.log('pov_navigator_patcher: ' + msg, level=level)
+    except Exception:
+        pass
+
 
 POV_ADDON_ID = 'plugin.video.pov'
 DB_RELATIVE  = 'navigator.db'
@@ -200,12 +214,18 @@ def maybe_fix_personal_area_lists():
                 try: cur.execute('ROLLBACK')
                 except Exception: pass
                 out[row_name] = 'failed'
-    except sqlite3.OperationalError:
+    except sqlite3.OperationalError as e:
+        _log('personal-area: DB locked or unreadable: {0}'.format(e),
+             level='WARNING')
         return {'_status': 'failed'}
-    except Exception:
+    except Exception as e:
+        _log('personal-area: {0}'.format(e), level='WARNING')
         return {'_status': 'failed'}
     finally:
         if conn is not None:
             try: conn.close()
             except Exception: pass
+    _log('personal-area: {0}'.format(
+        ', '.join('{0}={1}'.format(k.split(' - ')[1], v)
+                  for k, v in out.items())), level='INFO')
     return out

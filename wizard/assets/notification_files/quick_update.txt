@@ -1,14 +1,13 @@
-53
+54
 |||
-תיקון אוטומטי בלי reinstall — כל ההגדרות נשמרות
-שלוש בעיות שכמעט הצריכו אותך לבצע reinstall של הבילד (ולאבד את כל ההגדרות והחיבורים שלך) — עכשיו ייפתרו אוטומטית בעלייה הבאה של Kodi, בלי שתצטרך לעשות שום דבר:
+v0.2.19 — תיקון לפאצ'רים שלא תפסו אצל חלק מהמשתמשים
+לפי דיווח: ב-v0.2.18 ה-patcher של ה-personal-area widget עבד (TMDB נוסף לסעיף "איזור אישי" בעמודי סרטים/סדרות), אבל שלושה patchers אחרים לא תפסו: ה-context menu עדיין הציג Trakt+MDBList גם כשלא היו רלוונטיים, מסך הבית עדיין הראה את ה-tiles הישנים, וכותרת ה-widget עדיין אמרה "(חובה להתחבר ל-Trakt)".
 
-1) 🎯 **תפריט הקשר על סרטים/סדרות** — Trakt Lists Manager / MDBList Manager / TMDB Lists Manager שראית את כולם יחד, יסתננו לפי מה שמחובר: TMDB ראשון (כשמחובר אישית), Trakt רק אם Trakt מחובר ו-TMDB לא, MDBList רק אם חיברת. ההיגיון הזה היה ב-PR #98 אבל הוא קוד שמלא ב-POV — לא בתוסף שלי. עכשיו patcher חדש בתוסף ה-AI subs מעתיק את הקבצים הנכונים של POV בכל עליית Kodi.
+הסיבה: ה-matching שלי על שורות היה byte-exact. Kodi לפעמים משכתב את `favourites.xml` כשהמשתמש מסדר tiles דרך ה-GUI, ונורמליזציה של whitespace/סדר attributes שברה את ההתאמה. גם marker זיהוי של ה-POV menus היה ספציפי ל-movies.py/tvshows.py ולא תפס ב-episodes.py.
 
-2) ⭐ **"אזור אישי" בעמודי סרטים/סדרות** — הכותרת "איזור אישי (חובה להתחבר ל-Trakt)" משתנה ל-"איזור אישי" סתם. בתוך הסעיף, מופיע עכשיו "הסדרות/הסרטים שלי (TMDB)" לפני "הסדרות/הסרטים שלי (Trakt)". patcher חדש מעדכן את ה-XML של FENtastic וגם את navigator.db של POV.
+**v0.2.19**:
+- `favourites_xml_patcher` ו-`fentastic_widget_patcher` עברו לזיהוי **regex**: דורש את אותה זהות (שם של tile + action + mode) אבל סובלני ל-whitespace, סדר attributes, וסגנון מרכאות.
+- `pov_menus_patcher` עם marker חדש (`kodi_utils.get_setting('trakt_user'`) שמופיע בכל שלושת קבצי PR #98 ולא היה באף baseline קודם.
+- **לוגינג מפורט** בכל patcher — אם משהו לא תפס בעתיד, ניתן לראות את הסיבה ב-Kodi log תחת `kodipovilai: <patcher>: <event>`.
 
-3) ⭐ **מסך הבית — tiles "הסרטים/הסדרות שלי (Trakt)"** מתחלפים ל-"(TMDB)" ע"י patcher שעובד surgically: אם השורה ב-favourites.xml שלך עדיין תואמת את הברירת מחדל המקורית של הבילד, היא תתעדכן. אם שינית/העברת/מחקת — הוא לא יגע. כך לא נדרס לך שום dabbling אישי בסידור ה-tiles.
-
-**איך זה עובד**: התוסף `service.subtitles.kodipovilai` בגרסה 0.2.18 כולל 4 patchers חדשים שרצים בכל עליית Kodi. הם idempotent (בדיקה כפולה לא משפיעה) ו-defensive (אם משהו לא תואם את הברירת מחדל המקורית, לא נוגעים). תקבל את התוסף החדש דרך quick_update, ושינוייו יחולו אוטומטית ב-restart הבא.
-
-אין מה לעשות — restart אחד ל-Kodi אחרי שה-quickfix נכנס יבצע את הכל.
+אין מה לעשות — אחרי quick_update + restart ל-Kodi, ה-patchers יבצעו את כל השינויים שהיו אמורים לבצע ב-v0.2.18.
