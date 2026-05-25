@@ -1,12 +1,19 @@
-56
+57
 |||
-אייקוני TMDB ב-tiles של מסך הבית + החזרת tiles של Trakt
-שני תיקונים שמשתמש דיווח עליהם:
+Tile של POV-מקומי במסך הבית ובאזור האישי
+המשתמש העלה נקודה חשובה: משתמש שלא מחובר ל-TMDB ולא ל-Trakt עדיין יכול להוסיף סדרות/סרטים ל-favorites של POV (יש לו DB מקומי משלו ב-POV), אבל אין tile במסך הבית שמראה אותם.
 
-1) 🎨 **האייקונים של ה-tiles "הסרטים/הסדרות שלי (TMDB)" במסך הבית** הציגו לוגו של Trakt (כי המשתמשים את ה-PNG הישן של "Twilight" שמגיע עם תג TRAKT אדום בפינה). עכשיו יש לוגו TMDB ב-tiles האלה — שני אייקונים חדשים `My_Shows_TMDB.png` ו-`My_Movies_TMDB.png` נוצרו (מבוססים על האייקונים המקוריים אבל עם לוגו TMDB במקום Trakt) ומותקנים אוטומטית ב-restart הבא.
+תיקנתי גם במסך הבית וגם באזור האישי בעמודי סרטים/סדרות:
 
-2) ↩️ **ה-tiles של Trakt חזרו במסך הבית** למי שמחובר ל-Trakt. בעדכון הקודם הם הוחלפו ב-TMDB לחלוטין, מה שמנע ממשתמשים עם שני השירותים גישה ל-Collection של Trakt דרך מסך הבית. עכשיו: אם POV מזהה שאתה מחובר ל-Trakt (יש לך `trakt_user`), ה-patcher יוסיף את ה-tiles של Trakt **מיד אחרי** ה-tiles של TMDB. סדר סופי: TMDB Shows → Trakt Shows → TMDB Movies → Trakt Movies. למשתמשים שלא חיברו Trakt — רק tiles של TMDB (מסך נקי).
+🌟 **שני tiles חדשים** — "הסדרות שלי (POV)" ו-"הסרטים שלי (POV)" — מובילים ישירות ל-favorites המקומי של POV (`favorites_tvshows` / `favorites_movies`).
 
-**איך זה עובד**: התוסף `service.subtitles.kodipovilai` עבר ל-0.2.21. הוא כולל patcher חדש (`build_icons_patcher`) שמתקין את האייקונים החדשים בעלייה הבאה של Kodi, ועדכון של `favourites_xml_patcher` שמטפל בעדכון ה-thumb ובהחזרת ה-Trakt tiles בעת הצורך. הכל idempotent ו-defensive — לא נדרס שום customization של המשתמש.
+🎨 **אייקונים ייעודיים** — `My_Shows_POV.png` ו-`My_Movies_POV.png` (לוגו כוכב לבן במקום לוגו Trakt/TMDB בפינת ה-folder). מותקנים אוטומטית דרך ה-`build_icons_patcher`.
 
-אין מה לעשות — quick_update + restart לKodi.
+📍 **מיקום** — ב-3 מקומות:
+- מסך הבית: 6 tiles בסדר TMDB→Trakt→POV (לסדרות ולסרטים)
+- "אזור אישי" בעמוד סרטים: המשך צפייה → TMDB → Trakt → POV
+- "אזור אישי" בעמוד סדרות: הפרק הבא → TMDB → Trakt → POV
+
+זה לכולם, ללא תנאי (option A — תמיד גלוי) — גם משתמשים עם TMDB+Trakt מקבלים את ה-tile של POV כתוספת.
+
+המעבר אוטומטי דרך quick_update + restart. ה-patcher עכשיו מזהה שלושה מצבי baseline (V1=Trakt בלבד, V2=TMDB+Trakt, V3=TMDB+Trakt+POV) ועובר ל-V3 בכל אחד מהם.
