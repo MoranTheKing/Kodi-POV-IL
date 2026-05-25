@@ -354,9 +354,97 @@ def _gemini_menu_new(kodi_utils, gemini, gemini_pair):
         _gemini_type_flow(kodi_utils, gemini)
 
 
+class _PairWindow(xbmcgui.WindowDialog):
+    """Full-screen-ish dialog showing a real scannable QR image
+    (fetched from qrserver.com), the URL as fallback text, and a
+    countdown. The previous implementation used DialogProgress
+    which is text-only -- the QR was a URL printed as text, which
+    is useless for non-technical users.
+
+    Closes on Back/Esc (cancellation) or via close() called
+    externally when the main flow detects the key arrived."""
+
+    ACTION_PREVIOUS_MENU = 10
+    ACTION_NAV_BACK = 92
+    ACTION_STOP = 13
+
+    def __init__(self, *args, **kwargs):
+        # WindowDialog quirk: don't pass args to super, just init state
+        self.cancelled = False
+        self._countdown_lbl = None
+
+    def setup(self, qr_url, url_lines, instructions_header):
+        # WindowDialog coordinate space is 1280x720 by default.
+        # Layout:
+        #   y=0-720    full-screen semi-opaque dark background
+        #   y=30-90    title
+        #   y=120-500  QR image (380x380, centered)
+        #   y=520-650  instruction text + URL fallback
+        #   y=670-700  countdown + cancel hint
+
+        # Dim background so QR is readable and Kodi behind is muted.
+        bg_path = ('special://home/addons/service.subtitles.kodipovilai/'
+                   'resources/lib/icons/dark_bg.png')
+        bg = xbmcgui.ControlImage(0, 0, 1280, 720, bg_path,
+                                  colorDiffuse='EE000000', aspectRatio=2)
+        self.addControl(bg)
+
+        # Title bar
+        title = xbmcgui.ControlLabel(
+            340, 30, 600, 60,
+            '[B][COLOR=ffd166]Gemini AI - התאמה מטלפון[/COLOR][/B]',
+            alignment=2 | 4, font='font30')
+        self.addControl(title)
+
+        # QR image (large, centered) -- this is the real fix. Kodi
+        # fetches the URL on first display and caches the PNG.
+        qr_size = 380
+        qr_x = (1280 - qr_size) // 2
+        qr = xbmcgui.ControlImage(qr_x, 110, qr_size, qr_size, qr_url,
+                                  aspectRatio=2)
+        self.addControl(qr)
+
+        # Instructions + URL fallback
+        instr = xbmcgui.ControlTextBox(150, 510, 980, 140, font='font13')
+        self.addControl(instr)
+        text = '[B]סרוק את ה-QR עם המצלמה של הטלפון[/B] '
+        text += '(אפליקציית מצלמה רגילה — לא צריך אפליקציה מיוחדת).\n\n'
+        text += '[COLOR=b7c4cf]' + instructions_header + ':[/COLOR]\n'
+        for line in url_lines:
+            text += '   • ' + line + '\n'
+        instr.setText(text)
+
+        # Countdown / cancel hint
+        self._countdown_lbl = xbmcgui.ControlLabel(
+            340, 668, 600, 30, '',
+            alignment=2 | 4, font='font12')
+        self.addControl(self._countdown_lbl)
+
+    def update_countdown(self, seconds_left):
+        if self._countdown_lbl is None:
+            return
+        try:
+            mm, ss = divmod(int(max(0, seconds_left)), 60)
+            self._countdown_lbl.setLabel(
+                '[COLOR=b7c4cf]ממתין לקבלת ה-key... '
+                '({0:02d}:{1:02d} עד פג תוקף)  •  '
+                'לביטול: Back[/COLOR]'.format(mm, ss))
+        except Exception:
+            pass
+
+    def onAction(self, action):
+        if action.getId() in (
+            self.ACTION_PREVIOUS_MENU,
+            self.ACTION_NAV_BACK,
+            self.ACTION_STOP,
+        ):
+            self.cancelled = True
+            self.close()
+
+
 def _gemini_pair_flow(kodi_utils, gemini, gemini_pair):
-    """Spin up the local pair server, show QR + URLs in a
-    countdown dialog, poll for the submitted key, validate."""
+    """Spin up the local pair server, show a scannable QR image in
+    a custom window, poll for the submitted key, validate."""
     import time as _time
     try:
         ps = gemini_pair.PairServer()
@@ -368,54 +456,50 @@ def _gemini_pair_flow(kodi_utils, gemini, gemini_pair):
             .format(str(e)[:80]))
         return
 
-    # Primary URL: prefer LAN IP (works for other devices), fall
-    # back to localhost (works on the same device, e.g., user
-    # running Kodi on their phone with cellular only).
+    # Primary URL: prefer LAN IP (works for other devices on the
+    # same WiFi AND on the same device's browser via localhost
+    # because the pair server binds 0.0.0.0). Fall back to
+    # localhost-only when LAN detection failed (e.g. cellular).
     primary = ps.url_lan or ps.url_local
-    qr_link = ('https://api.qrserver.com/v1/create-qr-code/'
-               '?size=320x320&qzone=1&data=' +
-               _url_quote(primary))
+    qr_url = ('https://api.qrserver.com/v1/create-qr-code/'
+              '?size=380x380&qzone=1&data=' +
+              _url_quote(primary))
 
-    # Detailed instructions in the body.
     if ps.url_lan:
         url_lines = (
-            'מכשיר אחר ב-WiFi: {0}'.format(ps.url_lan),
-            'אותו מכשיר: {0}'.format(ps.url_local),
+            'מטלפון אחר ב-WiFi:  ' + ps.url_lan,
+            'מאותו מכשיר:  ' + ps.url_local,
         )
+        instructions_header = (
+            'או פתח אחת מהכתובות בדפדפן')
     else:
         url_lines = (
-            'פתח בדפדפן: {0}'.format(ps.url_local),
-            '(אם לא ב-WiFi, רק מאותו מכשיר)',
+            'פתח בדפדפן:  ' + ps.url_local,
+            '(אם לא ב-WiFi, נגיש רק מאותו מכשיר)',
         )
+        instructions_header = (
+            'או פתח את הכתובת בדפדפן')
 
     deadline = _time.time() + 300  # 5 min cap
-    dialog = None
+    window = None
     try:
-        dialog = xbmcgui.DialogProgress()
-        dialog.create(
-            'Gemini AI - התאמה מטלפון',
-            'סרוק את ה-QR מהטלפון, או פתח את הכתובת בדפדפן.\n'
-            '\n'.join(url_lines) + '\n\n' +
-            'QR: ' + qr_link + '\n\n' +
-            'ממתין לקבלת ה-key...')
+        window = _PairWindow()
+        window.setup(qr_url, url_lines, instructions_header)
+        window.show()
 
         while _time.time() < deadline:
-            if dialog.iscanceled():
+            if window.cancelled:
                 break
             key = ps.received_key()
             if key:
                 break
-            remaining = int(deadline - _time.time())
-            dialog.update(
-                100 - int(100 * remaining / 300),
-                'סרוק QR או פתח URL בדפדפן:\n' +
-                '\n'.join(url_lines) +
-                '\n\nממתין לקבלת ה-key... ({0:02d}:{1:02d})'.format(
-                    remaining // 60, remaining % 60))
-            xbmc.sleep(1000)
+            window.update_countdown(deadline - _time.time())
+            xbmc.sleep(500)
     finally:
         try:
-            if dialog: dialog.close()
+            if window:
+                window.close()
+                del window
         except Exception:
             pass
         ps.shutdown()

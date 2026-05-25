@@ -1,3 +1,27 @@
+v0.2.27
+- Gemini "Pair from phone" flow now shows an actual scannable QR
+  image instead of printing the qrserver.com URL as text. The
+  previous DialogProgress-based UI only had a text body, so the
+  QR URL was useless to anyone who wasn't going to manually
+  type a 80-char qrserver.com URL into a browser.
+- Replaced the DialogProgress with a custom WindowDialog
+  (_PairWindow in default.py) that programmatically lays out:
+    1. Title bar at the top
+    2. Real 380x380 QR image (fetched from qrserver.com on
+       first display, Kodi caches the PNG)
+    3. The two URLs as text below the QR for fallback (the
+       user can type them manually if their phone camera
+       doesn't pick up the QR)
+    4. A live countdown + Back-to-cancel hint
+  Same poll loop semantics as before: 5 minute deadline, polled
+  every 500ms, closes on key arrival or user cancel.
+- Tiny `dark_bg.png` bundled in resources/lib/icons/ as the
+  semi-opaque overlay background. 78 bytes.
+- The QR encodes ps.url_lan when available (accessible both
+  from other phones on the same WiFi AND from the local
+  device's own browser since the pair server binds 0.0.0.0)
+  or falls back to ps.url_local when LAN detection failed.
+
 v0.2.26
 - Fix a systemic bug in POV's device-flow auth (Trakt, Real Debrid,
   TorBox, Premiumize, AllDebrid) where the auth dialog would stay
