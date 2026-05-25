@@ -1,19 +1,27 @@
-57
+58
 |||
-Tile של POV-מקומי במסך הבית ובאזור האישי
-המשתמש העלה נקודה חשובה: משתמש שלא מחובר ל-TMDB ולא ל-Trakt עדיין יכול להוסיף סדרות/סרטים ל-favorites של POV (יש לו DB מקומי משלו ב-POV), אבל אין tile במסך הבית שמראה אותם.
+ניהול רשימות עצמאי לכל שירות + עברית בתפריט ההקשר
+שני שינויים שביקשת:
 
-תיקנתי גם במסך הבית וגם באזור האישי בעמודי סרטים/סדרות:
+1) 🔀 **כל ה-Managers מופיעים במקביל לפי מה שמחובר** — בעדכון הקודם, אם היה לך TMDB מחובר, ה-Trakt Lists Manager היה מוסתר (וההפך). מעכשיו כל שירות מחובר מקבל כפתור משלו ב-context menu:
+- TMDB מחובר → "ניהול רשימות (TMDB)"
+- Trakt מחובר → "ניהול רשימות (Trakt)"
+- MDBList מחובר → "ניהול רשימות (MDBList)"
+- POV-מקומי → "ניהול מועדפים (POV)" (תמיד)
+- *לא* מחובר → לא מופיע
 
-🌟 **שני tiles חדשים** — "הסדרות שלי (POV)" ו-"הסרטים שלי (POV)" — מובילים ישירות ל-favorites המקומי של POV (`favorites_tvshows` / `favorites_movies`).
+חל גם על תפריט ההקשר של סדרות, סרטים, ופרקים.
 
-🎨 **אייקונים ייעודיים** — `My_Shows_POV.png` ו-`My_Movies_POV.png` (לוגו כוכב לבן במקום לוגו Trakt/TMDB בפינת ה-folder). מותקנים אוטומטית דרך ה-`build_icons_patcher`.
+2) 🇮🇱 **תפריט ההקשר עכשיו בעברית** — תרגום של כל הפעולות הגנריות:
+- Options... → **אפשרויות...**
+- Extras... → **אקסטרות...**
+- Mark Watched (Trakt) → **סמן כנצפה (Trakt)**
+- Mark Unwatched (Trakt) → **סמן כלא נצפה (Trakt)**
+- TMDB/Trakt/MDBList Lists Manager → **ניהול רשימות (TMDB/Trakt/MDBList)**
+- Favorites Manager → **ניהול מועדפים (POV)**
 
-📍 **מיקום** — ב-3 מקומות:
-- מסך הבית: 6 tiles בסדר TMDB→Trakt→POV (לסדרות ולסרטים)
-- "אזור אישי" בעמוד סרטים: המשך צפייה → TMDB → Trakt → POV
-- "אזור אישי" בעמוד סדרות: הפרק הבא → TMDB → Trakt → POV
+שמות השירותים (TRAKT/TMDB/MDBLIST/POV) נשארים באנגלית כי הם שמות מותגים.
 
-זה לכולם, ללא תנאי (option A — תמיד גלוי) — גם משתמשים עם TMDB+Trakt מקבלים את ה-tile של POV כתוספת.
+**איך זה מגיע**: שלושת קבצי ה-context menu של POV (movies.py, tvshows.py, episodes.py) מסונכרנים אוטומטית מ-`pov_overrides` של תוסף ה-AI subs דרך `pov_menus_patcher` בעלייה הבאה של Kodi. ה-marker זוהי השפעה רק על אלה שעוד לא קיבלו את הגרסה החדשה.
 
-המעבר אוטומטי דרך quick_update + restart. ה-patcher עכשיו מזהה שלושה מצבי baseline (V1=Trakt בלבד, V2=TMDB+Trakt, V3=TMDB+Trakt+POV) ועובר ל-V3 בכל אחד מהם.
+אין מה לעשות — quick_update + restart.

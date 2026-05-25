@@ -20,9 +20,13 @@ dt_formats = ('%Y-%m-%d %H:%M:%S', '2000-01-01 00:00:00'), ('%Y-%m-%dT%H:%M:%S.0
 run_plugin, container_refresh, container_update = 'RunPlugin(%s)', 'Container.Refresh(%s)', 'Container.Update(%s)'
 fanart_empty = kodi_utils.get_addoninfo('fanart')
 poster_empty = kodi_utils.media_path('box_office.png')
-watched_str, unwatched_str, extras_str, options_str = ls(32642), ls(32643), ls(32645), ls(32646)
+watched_str = '[B]סמן כנצפה (%s)[/B]'
+unwatched_str = '[B]סמן כלא נצפה (%s)[/B]'
+extras_str = '[B]אקסטרות...[/B]'
+options_str = '[B]אפשרויות...[/B]'
 clearprog_str, browse_str, browse_seas_str, today_str = ls(32651), ls(32652), ls(32544), ls(32849).upper()
-traktmanager_str, mdblmanager_str = ls(32198), ls(32200)
+traktmanager_str = '[B]ניהול רשימות (Trakt)[/B]'
+mdblmanager_str = '[B]ניהול רשימות (MDBList)[/B]'
 
 class Episodes:
 	def __init__(self, params):
@@ -163,23 +167,22 @@ class Episodes:
 						'mode': 'mark_as_watched_unwatched_episode', 'action': 'mark_as_watched', 'year': year,
 						'tmdb_id': tmdb_id, 'tvdb_id': tvdb_id, 'season': season, 'episode': episode,  'title': title
 				})))
-			# Show Trakt Manager only if the user is on Trakt AND
-			# hasn't connected a personal TMDB account (TMDB
-			# Manager covers the same actions with no rate
-			# limits or restricted Collections UI).
-			if (self.watched_indicators == 1
-			    and kodi_utils.get_setting('trakt_user', '')
-			    and not kodi_utils.get_setting('tmdb.account_id')):
+			# Show every list-manager whose service is connected --
+			# user can have both Trakt and MDBList side by side.
+			# Independent of watched_indicators (which only controls
+			# progress sync, not list-manager visibility).
+			if kodi_utils.get_setting('trakt_user', ''):
 				cm_append((
 					self.cm_sort['trakt'], traktmanager_str, run_plugin % build_url({
 						'mode': 'trakt_manager_choice', 'mediatype': 'tvshow',
 						'tmdb_id': tmdb_id, 'imdb_id': imdb_id, 'tvdb_id': tvdb_id
 				})))
-			if self.watched_indicators == 2: cm_append((
-				self.cm_sort['mdblist'], mdblmanager_str, run_plugin % build_url({
-					'mode': 'mdbl_manager_choice', 'mediatype': 'tvshow',
-					'tmdb_id': tmdb_id, 'imdb_id': imdb_id, 'tvdb_id': tvdb_id
-			})))
+			if kodi_utils.get_setting('mdblist.token'):
+				cm_append((
+					self.cm_sort['mdblist'], mdblmanager_str, run_plugin % build_url({
+						'mode': 'mdbl_manager_choice', 'mediatype': 'tvshow',
+						'tmdb_id': tmdb_id, 'imdb_id': imdb_id, 'tvdb_id': tvdb_id
+				})))
 			cm.sort(key=lambda k: k[0])
 			cm = [v for k, *v in cm if k]
 			props['episode_type'] = item_get('episode_type')
