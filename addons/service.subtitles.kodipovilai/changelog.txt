@@ -1,3 +1,50 @@
+v0.2.19
+- Three patchers from v0.2.18 didn't take effect for at least one
+  user even though the addon was delivered via quickfix and the
+  service.py runs them on every Kodi startup. Visible improvement
+  was the personal-area widget (which our navigator.db patcher
+  worked for), but the context menu, the widget header, and the
+  home tiles still showed the old layout.
+- Two suspected root causes addressed:
+
+  (a) Exact-string matching was too strict. The
+      favourites_xml_patcher and fentastic_widget_patcher used
+      byte-exact substring match against the lines they expected
+      to find. Kodi sometimes rewrites favourites.xml after the
+      user reorders tiles via the GUI, normalizing whitespace or
+      attribute order in ways that broke the match. Same risk for
+      the widget XML across skin updates. Both patchers now use
+      regex matching that requires the SAME tile identity (visible
+      name + action + mode) but tolerates whitespace, attribute
+      order, quote style, and similar incidental variations.
+
+  (b) The pov_menus_patcher detection marker was specific to
+      movies.py and tvshows.py and didn't appear in episodes.py,
+      so episodes.py was being needlessly re-copied on every
+      Kodi startup (correct behaviour but wasteful logs). Marker
+      changed to a substring that all three PR #98 versions share
+      and no earlier baseline had:
+        kodi_utils.get_setting('trakt_user'
+      Also clarified the rewrite path: detection by marker
+      presence/absence rather than byte-compare of two files.
+
+- Every patcher now logs explicit INFO/WARNING entries to the
+  Kodi log so the next "patcher didn't work" report can be
+  diagnosed from the log file alone. Look for
+      kodipovilai: <patcher>: <event>
+  in xbmc.log -- entries cover not just successes but also
+  no_match, no_file, write_failed, etc.
+
+- Sandbox tested end-to-end:
+    * First run from pre-PR-#97 baseline: all 4 patchers report
+      'patched'/'fixed'
+    * Idempotent re-run: all 4 patchers report 'unchanged' (no
+      writes, no log spam)
+    * Tolerance test: a favourites.xml with double-space between
+      attributes, different thumb path, and different name= URL
+      param still gets correctly migrated; a custom unrelated
+      <favourite> in the same file is left untouched
+
 v0.2.18
 - Self-heal four POV/skin/userdata customizations on existing
   installs so users get the recent UX improvements without a
