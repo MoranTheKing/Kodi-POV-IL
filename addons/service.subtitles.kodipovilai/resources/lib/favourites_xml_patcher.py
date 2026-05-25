@@ -1,17 +1,30 @@
-# Self-healing migration of two home-screen tiles in
-# userdata/favourites.xml so users who haven't customized their
-# favorites bar get the new TMDB-default home tiles without having
-# to reinstall the build (which would wipe their connected
-# services like Gemini / TMDB tokens).
+# Self-healing migration of home-screen "My shows / My movies" tiles
+# in userdata/favourites.xml.
 #
-# Uses regex matching instead of byte-exact line match so we
-# tolerate variations in whitespace, attribute order, or quote
-# styles that Kodi may introduce when it rewrites the file (e.g.
-# after the user reorders tiles via the GUI). Each pattern is
-# strict about identity -- the visible label AND the action+mode
-# combination AND the plugin URL must all match -- so legitimate
-# user customizations (renamed tile, different action, custom
-# plugin) are left alone.
+# Two responsibilities, both surgical and idempotent:
+#
+# 1. MIGRATE legacy Trakt-collection tiles to TMDB-favourites tiles.
+#    Matches on tile identity (visible label + action + mode) so
+#    that whitespace and attribute order differences from a Kodi
+#    GUI rewrite don't break the migration.
+#
+# 2. ENSURE the TMDB tile thumb points at the TMDB-branded icon
+#    (My_Shows_TMDB.png / My_Movies_TMDB.png) -- earlier patcher
+#    versions left the thumb pointing at the original Trakt-branded
+#    icon, which looked misleading.
+#
+# 3. RESTORE Trakt-collection tiles for users who DO have a Trakt
+#    account configured. Earlier patcher versions REPLACED the
+#    Trakt tiles with TMDB ones, leaving users with both services
+#    connected unable to access their Trakt collection from the
+#    home screen. Now: if the user has Trakt connected
+#    (POV setting `trakt_user` non-empty) and the Trakt tile is
+#    missing, append it just after the matching TMDB tile.
+#
+# Defensive: if the user customized one of the tiles (different
+# action / name / thumb that doesn't match our patterns) the
+# patcher leaves it alone. If the user has Trakt disconnected,
+# Trakt tiles are not added (clean home screen for TMDB-only).
 
 import os
 import re
@@ -29,54 +42,96 @@ except Exception:
 
 FAVOURITES_RELATIVE = 'favourites.xml'
 
-# (regex, replacement) -- one pair per tile to migrate. The regex
-# is non-greedy and stops at the closing </favourite>, so it can
-# never accidentally swallow a neighbouring favourite element.
-PATTERNS = (
-    # TV shows: any <favourite> element whose name is exactly
-    # "[B]הסדרות שלי (Trakt)[/B]" and whose URL has the trakt_collection
-    # action with build_tvshow_list mode.
-    (
-        re.compile(
+# Per-mediatype constants: regex to find an existing TMDB tile, an
+# OLD Trakt-collection tile, and a baked Trakt-tile-line we add when
+# restoring. Order kept consistent so loops can iterate by index.
+MEDIA = (
+    {
+        'label': 'shows',
+        'name_token': 'הסדרות שלי',
+        'mode': 'build_tvshow_list',
+        # TMDB favourite tile, current (post-v0.2.18) form. Used both
+        # to find the tile and to test "has TMDB tile already".
+        'tmdb_pattern': re.compile(
+            r'<favourite\s[^>]*?name="\[B\]הסדרות שלי \(TMDB\)\[/B\]"[^>]*>'
+            r'(?:(?!</favourite>).)*?action=tmdb_favorites'
+            r'(?:(?!</favourite>).)*?mode=build_tvshow_list'
+            r'(?:(?!</favourite>).)*?</favourite>',
+            re.DOTALL,
+        ),
+        # Trakt-collection tile (the legacy original, also what we
+        # restore for users with Trakt connected).
+        'trakt_pattern': re.compile(
             r'<favourite\s[^>]*?name="\[B\]הסדרות שלי \(Trakt\)\[/B\]"[^>]*>'
             r'(?:(?!</favourite>).)*?action=trakt_collection'
             r'(?:(?!</favourite>).)*?mode=build_tvshow_list'
             r'(?:(?!</favourite>).)*?</favourite>',
             re.DOTALL,
         ),
-        '<favourite name="[B]הסדרות שלי (TMDB)[/B]" '
-        'thumb="special://home/media/build_icons/Twilight/Shows/'
-        'My_Shows.png">'
-        'ActivateWindow(10025,"plugin://plugin.video.pov/?'
-        'action=tmdb_favorites&amp;iconImage=special%3a%2f%2fhome%2f'
-        'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
-        'media%2ftmdb.png&amp;mode=build_tvshow_list&amp;'
-        'name=TV%20Show%20Favorites",return)</favourite>',
-    ),
-    # Movies: same logic with build_movie_list.
-    (
-        re.compile(
+        # Canonical TMDB tile with the new TMDB-branded thumb.
+        'tmdb_canonical': (
+            '<favourite name="[B]הסדרות שלי (TMDB)[/B]" '
+            'thumb="special://home/media/build_icons/Twilight/Shows/'
+            'My_Shows_TMDB.png">'
+            'ActivateWindow(10025,"plugin://plugin.video.pov/?'
+            'action=tmdb_favorites&amp;iconImage=special%3a%2f%2fhome%2f'
+            'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
+            'media%2ftmdb.png&amp;mode=build_tvshow_list&amp;'
+            'name=TV%20Show%20Favorites",return)</favourite>'
+        ),
+        # Canonical Trakt tile, restored after the TMDB one when the
+        # user has Trakt connected.
+        'trakt_canonical': (
+            '<favourite name="[B]הסדרות שלי (Trakt)[/B]" '
+            'thumb="special://home/media/build_icons/Twilight/Shows/'
+            'My_Shows.png">'
+            'ActivateWindow(10025,"plugin://plugin.video.pov/?'
+            'action=trakt_collection&amp;iconImage=special%3a%2f%2fhome%2f'
+            'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
+            'media%2ftrakt.png&amp;mode=build_tvshow_list&amp;'
+            'name=TV%20Shows",return)</favourite>'
+        ),
+    },
+    {
+        'label': 'movies',
+        'name_token': 'הסרטים שלי',
+        'mode': 'build_movie_list',
+        'tmdb_pattern': re.compile(
+            r'<favourite\s[^>]*?name="\[B\]הסרטים שלי \(TMDB\)\[/B\]"[^>]*>'
+            r'(?:(?!</favourite>).)*?action=tmdb_favorites'
+            r'(?:(?!</favourite>).)*?mode=build_movie_list'
+            r'(?:(?!</favourite>).)*?</favourite>',
+            re.DOTALL,
+        ),
+        'trakt_pattern': re.compile(
             r'<favourite\s[^>]*?name="\[B\]הסרטים שלי \(Trakt\)\[/B\]"[^>]*>'
             r'(?:(?!</favourite>).)*?action=trakt_collection'
             r'(?:(?!</favourite>).)*?mode=build_movie_list'
             r'(?:(?!</favourite>).)*?</favourite>',
             re.DOTALL,
         ),
-        '<favourite name="[B]הסרטים שלי (TMDB)[/B]" '
-        'thumb="special://home/media/build_icons/Twilight/Movies/'
-        'My_Movies.png">'
-        'ActivateWindow(10025,"plugin://plugin.video.pov/?'
-        'action=tmdb_favorites&amp;iconImage=special%3a%2f%2fhome%2f'
-        'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
-        'media%2ftmdb.png&amp;mode=build_movie_list&amp;'
-        'name=Movie%20Favorites",return)</favourite>',
-    ),
+        'tmdb_canonical': (
+            '<favourite name="[B]הסרטים שלי (TMDB)[/B]" '
+            'thumb="special://home/media/build_icons/Twilight/Movies/'
+            'My_Movies_TMDB.png">'
+            'ActivateWindow(10025,"plugin://plugin.video.pov/?'
+            'action=tmdb_favorites&amp;iconImage=special%3a%2f%2fhome%2f'
+            'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
+            'media%2ftmdb.png&amp;mode=build_movie_list&amp;'
+            'name=Movie%20Favorites",return)</favourite>'
+        ),
+        'trakt_canonical': (
+            '<favourite name="[B]הסרטים שלי (Trakt)[/B]" '
+            'thumb="special://home/media/build_icons/Twilight/Movies/'
+            'My_Movies.png">'
+            'ActivateWindow(10025,"plugin://plugin.video.pov/?'
+            'action=trakt_collection&amp;iconImage=special%3a%2f%2fhome%2f'
+            'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
+            'media%2ftrakt.png&amp;mode=build_movie_list&amp;'
+            'name=Movies",return)</favourite>'
+        ),
+    },
 )
-
-# Short-circuit tokens: if these are already present in the file
-# we know that tile has been migrated and we can skip touching it.
-NEW_TOKEN_SHOWS = 'הסדרות שלי (TMDB)'
-NEW_TOKEN_MOVIES = 'הסרטים שלי (TMDB)'
 
 
 def _log(msg, level='INFO'):
@@ -99,53 +154,153 @@ def _favourites_path():
     return p if os.path.isfile(p) else ''
 
 
+def _trakt_connected():
+    """Return True when POV settings indicate a Trakt account is
+    configured. We read POV's settings.xml directly because POV
+    isn't importable from inside our addon's process."""
+    if xbmcvfs is None:
+        return False
+    try:
+        pov_settings = xbmcvfs.translatePath(
+            'special://profile/addon_data/plugin.video.pov/'
+            'settings.xml')
+    except Exception:
+        return False
+    if not os.path.isfile(pov_settings):
+        return False
+    try:
+        with open(pov_settings, 'r', encoding='utf-8') as f:
+            content = f.read()
+    except OSError:
+        return False
+    # Look for the trakt_user setting line with a non-empty value.
+    m = re.search(
+        r'<setting\s+id="trakt_user"[^>]*>([^<]*)</setting>',
+        content)
+    if not m:
+        return False
+    return bool(m.group(1).strip())
+
+
+def _process_one(content, media, trakt_connected):
+    """Apply migrate + thumb-update + restore-Trakt for one
+    mediatype. Returns (new_content, dict_of_actions)."""
+    label = media['label']
+    actions = {}
+
+    # 1. Migration: convert any leftover Trakt-collection tile to
+    #    its canonical TMDB form.
+    if media['tmdb_pattern'].search(content):
+        # TMDB tile already present. Make sure thumb is canonical.
+        actions[label + '_migrate'] = 'already'
+    else:
+        # No TMDB tile yet -- look for a Trakt-collection tile to
+        # replace with the canonical TMDB form.
+        new_content, n = media['trakt_pattern'].subn(
+            media['tmdb_canonical'], content, count=1)
+        if n:
+            content = new_content
+            actions[label + '_migrate'] = 'patched'
+        else:
+            actions[label + '_migrate'] = 'no_match'
+
+    # 2. Thumb-update: rewrite any TMDB tile whose thumb still
+    #    points at the OLD Trakt-branded icon.
+    old_thumb_pat = (
+        'thumb="special://home/media/build_icons/Twilight/'
+        + ('Shows/My_Shows.png' if label == 'shows'
+           else 'Movies/My_Movies.png') + '"'
+    )
+    new_thumb_pat = (
+        'thumb="special://home/media/build_icons/Twilight/'
+        + ('Shows/My_Shows_TMDB.png' if label == 'shows'
+           else 'Movies/My_Movies_TMDB.png') + '"'
+    )
+    # Be careful: we only want to rewrite the thumb on the TMDB
+    # tile, not on the Trakt one (which legitimately uses the
+    # Trakt-branded icon). Match a tile that has tmdb_favorites
+    # action AND the old thumb.
+    thumb_pat = re.compile(
+        r'<favourite\s[^>]*?name="\[B\]' + media['name_token']
+        + r' \(TMDB\)\[/B\]"[^>]*?'
+        + re.escape(old_thumb_pat)
+        + r'[^>]*?>',
+        re.DOTALL,
+    )
+    fix_count = 0
+    def _swap_thumb(m):
+        nonlocal fix_count
+        fix_count += 1
+        return m.group(0).replace(old_thumb_pat, new_thumb_pat)
+    content = thumb_pat.sub(_swap_thumb, content)
+    actions[label + '_thumb'] = (
+        'fixed_{0}'.format(fix_count) if fix_count else 'ok')
+
+    # 3. Restore Trakt tile if user has Trakt connected and the
+    #    Trakt tile is missing. Append it right after the TMDB
+    #    tile so the visual ordering is "TMDB first, then Trakt".
+    if trakt_connected and not media['trakt_pattern'].search(content):
+        m = media['tmdb_pattern'].search(content)
+        if m:
+            insert_at = m.end()
+            # Match the indentation prefix of the TMDB tile so the
+            # restored Trakt tile lines up visually in the XML.
+            line_start = content.rfind('\n', 0, m.start()) + 1
+            indent = content[line_start:m.start()]
+            content = (
+                content[:insert_at] + '\n' + indent
+                + media['trakt_canonical'] + content[insert_at:]
+            )
+            actions[label + '_restore'] = 'added'
+        else:
+            actions[label + '_restore'] = 'no_anchor'
+    elif trakt_connected:
+        actions[label + '_restore'] = 'already'
+    else:
+        actions[label + '_restore'] = 'trakt_disconnected'
+
+    return content, actions
+
+
 def ensure_patched():
+    """Run all three steps for both mediatypes. Writes the file
+    once at the end if anything changed."""
     path = _favourites_path()
     if not path:
         _log('no favourites.xml found', level='INFO')
         return 'no_file'
     try:
         with open(path, 'r', encoding='utf-8') as f:
-            content = f.read()
+            original = f.read()
     except OSError as e:
         _log('read failed: {0}'.format(e), level='WARNING')
         return 'read_failed'
 
-    # Quick check: if both tiles already migrated, nothing to do.
-    if NEW_TOKEN_SHOWS in content and NEW_TOKEN_MOVIES in content:
-        _log('both tiles already migrated -- no-op', level='DEBUG')
-        return 'unchanged'
+    trakt_on = _trakt_connected()
+    content = original
+    all_actions = {}
+    for media in MEDIA:
+        content, actions = _process_one(content, media, trakt_on)
+        all_actions.update(actions)
 
-    new_content = content
-    rewrites = 0
-    pattern_results = []
-    for i, (pattern, replacement) in enumerate(PATTERNS):
-        tile_label = ('shows', 'movies')[i]
-        # Skip if this tile already migrated.
-        token = (NEW_TOKEN_SHOWS, NEW_TOKEN_MOVIES)[i]
-        if token in new_content:
-            pattern_results.append('{0}=already'.format(tile_label))
-            continue
-        new_content, n = pattern.subn(replacement, new_content, count=1)
-        if n == 0:
-            pattern_results.append('{0}=no_match'.format(tile_label))
-        else:
-            pattern_results.append('{0}=patched'.format(tile_label))
-            rewrites += n
+    _log(
+        'trakt_connected={0} | {1}'.format(
+            trakt_on,
+            ', '.join('{0}={1}'.format(k, v)
+                      for k, v in all_actions.items())),
+        level='INFO',
+    )
 
-    _log('scan: ' + ', '.join(pattern_results), level='INFO')
-
-    if rewrites == 0:
+    if content == original:
         return 'unchanged'
 
     tmp = path + '.aitmp'
     try:
         with open(tmp, 'w', encoding='utf-8') as f:
-            f.write(new_content)
+            f.write(content)
         os.replace(tmp, path)
-        _log('wrote {0} rewrites to {1}'.format(rewrites, path),
-             level='INFO')
-        return 'patched_{0}'.format(rewrites)
+        _log('wrote favourites.xml', level='INFO')
+        return 'patched'
     except OSError as e:
         try:
             os.remove(tmp)
