@@ -228,6 +228,120 @@ def _maybe_fix_pov_favourites_typo():
             pass
 
 
+def _maybe_patch_pov_menus():
+    """Force-sync POV's three context-menu builders (movies.py,
+    tvshows.py, episodes.py) to the canonical versions bundled in
+    this addon. Same self-healing pattern as pov_services_patcher
+    but using a whole-file copy instead of marker-inject, since
+    PR #98 replaces an existing block rather than appending one.
+    """
+    try:
+        from resources.lib import pov_menus_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        results = pov_menus_patcher.ensure_patched()
+        patched = [k for k, v in results.items() if v == 'patched']
+        if patched:
+            kodi_utils.log(
+                'pov_menus_patcher: synced {0} on startup'.format(
+                    ', '.join(patched)), level='INFO')
+        failed = [k for k, v in results.items()
+                  if v in ('failed', 'no_target', 'no_source')]
+        if failed:
+            kodi_utils.log(
+                'pov_menus_patcher: skipped {0}'.format(
+                    ', '.join(failed)), level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_menus_patcher run failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_personal_area():
+    """Rewrite POV's navigator.db personal-area rows so the
+    FENtastic widget on the movies/shows pages leads with TMDB
+    Favorites instead of Trakt Collection. Only rewrites rows
+    that match the shipped baseline byte-for-byte (any user
+    customization aborts the rewrite cleanly).
+    """
+    try:
+        from resources.lib import pov_navigator_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        results = pov_navigator_patcher.maybe_fix_personal_area_lists()
+        # results is either {'_status': '...'} or {row_name: status}
+        if isinstance(results, dict) and '_status' not in results:
+            fixed = [k for k, v in results.items() if v == 'fixed']
+            if fixed:
+                kodi_utils.log(
+                    'pov_navigator_patcher: rewrote personal-area '
+                    'rows: {0}'.format(', '.join(fixed)),
+                    level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_navigator_patcher (personal area) failed: '
+                '{0}'.format(e), level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_fentastic_widgets():
+    """Drop the "(must connect to Trakt)" subtitle from the
+    FENtastic personal-area widget header on movies/shows pages.
+    """
+    try:
+        from resources.lib import fentastic_widget_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        results = fentastic_widget_patcher.ensure_patched()
+        patched = [k for k, v in results.items() if v == 'patched']
+        if patched:
+            kodi_utils.log(
+                'fentastic_widget_patcher: updated header in '
+                '{0}'.format(', '.join(patched)), level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'fentastic_widget_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_favourites_xml():
+    """Migrate the two Trakt-collection home tiles to TMDB
+    Favorites equivalents in userdata/favourites.xml. Surgical --
+    only touches lines that match the shipped baseline.
+    """
+    try:
+        from resources.lib import favourites_xml_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = favourites_xml_patcher.ensure_patched()
+        if status.startswith('patched'):
+            kodi_utils.log(
+                'favourites_xml_patcher: ' + status, level='INFO')
+        elif status in ('write_failed', 'read_failed'):
+            kodi_utils.log(
+                'favourites_xml_patcher skipped: ' + status,
+                level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'favourites_xml_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_services():
     """Inject Gemini AI + Wyzie entries into the POV plugin's
     "My Services" menu (the one at /myservices in plugin.video.pov).
@@ -357,6 +471,24 @@ def main():
     # navigator.db (one-shot, idempotent). See function docstring
     # for the gory details.
     _maybe_fix_pov_favourites_typo()
+
+    # PR #98 context-menu cleanup -- force-sync POV's movies.py /
+    # tvshows.py / episodes.py to the canonical versions bundled
+    # in this addon so existing-install users get the change via
+    # quickfix instead of needing a full build reinstall.
+    _maybe_patch_pov_menus()
+
+    # PR #99 personal-area widget -- rewrite the FENtastic widget's
+    # two "personal area" lists in POV's navigator.db so they lead
+    # with TMDB Favorites; rewrite the widget XML header so it no
+    # longer says "(must connect to Trakt)"; migrate the home-screen
+    # Trakt-collection tiles in userdata/favourites.xml to TMDB
+    # Favorites equivalents. Each one is surgical and only touches
+    # rows/lines/files that match the shipped baseline -- user
+    # customizations are left alone.
+    _maybe_patch_pov_personal_area()
+    _maybe_patch_fentastic_widgets()
+    _maybe_patch_favourites_xml()
 
     # v0.2.9 tried patching FENtastic's notification widget but
     # it broke things; this cleans up the leftover patch on disk

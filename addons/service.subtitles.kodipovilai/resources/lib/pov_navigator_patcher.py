@@ -43,6 +43,20 @@ DB_RELATIVE  = 'navigator.db'
 BAD_TOKEN    = "'navigator.favourites'"
 GOOD_TOKEN   = "'navigator.favorites'"
 
+# Personal-area lists -- the FENtastic widget on the movies/tvshows
+# pages reads these two rows from POV's navigator.db. The shipped
+# baseline only had a Trakt collection entry; we want TMDB favorites
+# to lead, with Trakt kept as a secondary option for users still on
+# Trakt. Match the OLD content byte-for-byte before rewriting, so any
+# user customization elsewhere in the list aborts the rewrite cleanly.
+MOVIES_PA_NAME = 'FENtastic - סרטים - איזור אישי'
+MOVIES_PA_OLD = "[{'action': 'in_progress_movies', 'iconImage': 'player', 'mode': 'build_movie_list', 'name': '[B]המשך צפייה[/B]'}, {'action': 'trakt_collection', 'category_name': 'Movies Collection', 'iconImage': 'trakt', 'mode': 'build_movie_list', 'name': '[B]הסרטים שלי (Trakt)[/B]'}]"
+MOVIES_PA_NEW = "[{'action': 'in_progress_movies', 'iconImage': 'player', 'mode': 'build_movie_list', 'name': '[B]המשך צפייה[/B]'}, {'action': 'tmdb_favorites', 'iconImage': 'tmdb', 'mode': 'build_movie_list', 'name': '[B]הסרטים שלי (TMDB)[/B]'}, {'action': 'trakt_collection', 'category_name': 'Movies Collection', 'iconImage': 'trakt', 'mode': 'build_movie_list', 'name': '[B]הסרטים שלי (Trakt)[/B]'}]"
+
+TVSHOWS_PA_NAME = 'FENtastic - סדרות - איזור אישי'
+TVSHOWS_PA_OLD = "[{'iconImage': 'next_episodes', 'mode': 'build_next_episode', 'name': '[B]הפרק הבא[/B]'}, {'action': 'trakt_collection', 'category_name': 'TV Shows Collection', 'iconImage': 'trakt', 'mode': 'build_tvshow_list', 'name': '[B]הסדרות שלי (Trakt)[/B]'}]"
+TVSHOWS_PA_NEW = "[{'iconImage': 'next_episodes', 'mode': 'build_next_episode', 'name': '[B]הפרק הבא[/B]'}, {'action': 'tmdb_favorites', 'iconImage': 'tmdb', 'mode': 'build_tvshow_list', 'name': '[B]הסדרות שלי (TMDB)[/B]'}, {'action': 'trakt_collection', 'category_name': 'TV Shows Collection', 'iconImage': 'trakt', 'mode': 'build_tvshow_list', 'name': '[B]הסדרות שלי (Trakt)[/B]'}]"
+
 
 def _db_path():
     """Resolve the on-disk path to POV's navigator.db. Returns ''
@@ -122,3 +136,76 @@ def maybe_fix_favourites_typo():
         if conn is not None:
             try: conn.close()
             except Exception: pass
+
+
+def maybe_fix_personal_area_lists():
+    """Replace the FENtastic personal-area rows in POV's navigator.db
+    so the widget on movies/shows pages leads with TMDB Favorites
+    instead of Trakt Collection. Each row is rewritten only if its
+    current list_contents matches the shipped baseline byte-for-byte;
+    if the user (or some other patcher) has touched the row, leave it
+    alone.
+
+    Returns a {row_name: status} dict, with status one of:
+      'fixed'     -- row matched baseline, rewrite committed
+      'unchanged' -- row already migrated (or already different)
+      'no_row'    -- row missing from DB (POV schema changed?)
+      'failed'    -- any error path
+    Or {'_status': 'no_db'} if POV isn't installed yet.
+    """
+    if sqlite3 is None:
+        return {'_status': 'failed'}
+    path = _db_path()
+    if not path:
+        return {'_status': 'no_db'}
+
+    targets = (
+        (MOVIES_PA_NAME, MOVIES_PA_OLD, MOVIES_PA_NEW),
+        (TVSHOWS_PA_NAME, TVSHOWS_PA_OLD, TVSHOWS_PA_NEW),
+    )
+    out = {}
+    conn = None
+    try:
+        conn = sqlite3.connect(path, timeout=2.0, isolation_level=None)
+        conn.execute('PRAGMA busy_timeout=2000')
+        cur = conn.cursor()
+        for row_name, old, new in targets:
+            try:
+                cur.execute(
+                    "SELECT list_contents FROM navigator "
+                    "WHERE list_name=?", (row_name,))
+                row = cur.fetchone()
+            except sqlite3.DatabaseError:
+                out[row_name] = 'failed'
+                continue
+            if not row:
+                out[row_name] = 'no_row'
+                continue
+            current = row[0] or ''
+            if current == new:
+                out[row_name] = 'unchanged'
+                continue
+            if current != old:
+                # User customized or partially-migrated -- don't touch.
+                out[row_name] = 'unchanged'
+                continue
+            try:
+                cur.execute('BEGIN IMMEDIATE')
+                cur.execute(
+                    "UPDATE navigator SET list_contents=? "
+                    "WHERE list_name=?", (new, row_name))
+                cur.execute('COMMIT')
+                out[row_name] = 'fixed'
+            except Exception:
+                try: cur.execute('ROLLBACK')
+                except Exception: pass
+                out[row_name] = 'failed'
+    except sqlite3.OperationalError:
+        return {'_status': 'failed'}
+    except Exception:
+        return {'_status': 'failed'}
+    finally:
+        if conn is not None:
+            try: conn.close()
+            except Exception: pass
+    return out
