@@ -59,10 +59,21 @@ def get_float(key, default=0.0):
 
 
 def set_setting(key, value):
+    """Set an addon setting. Returns True if the write persisted,
+    False otherwise -- some Kodi/Android combinations silently
+    swallow setSetting calls (the API returns ok but the value
+    never reaches settings.xml on disk). Reading back is the only
+    way to know whether the save actually took. Callers that don't
+    care just ignore the return value -- backward compatible."""
+    str_value = str(value)
     try:
-        addon().setSetting(key, str(value))
+        addon().setSetting(key, str_value)
     except Exception:
-        pass
+        return False
+    try:
+        return addon().getSetting(key) == str_value
+    except Exception:
+        return False
 
 
 def localised(strid, *args):
