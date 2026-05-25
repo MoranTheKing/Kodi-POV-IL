@@ -4,17 +4,23 @@
 # with the post-PR-#95 reality where TMDB Favorites cover the same
 # use case without requiring a Trakt account.
 #
-# Surgical: only rewrites the specific widget_header line that
-# matches the shipped baseline byte-for-byte. Any user or upstream
-# customization to that line leaves it alone (the file is left
-# untouched and the patcher moves on).
+# Regex-based match so we tolerate small whitespace variations
+# (different leading-space count, different attribute order) that
+# may exist between the shipped XML and what the user actually has
+# on disk after a skin update or other patcher run.
 
 import os
+import re
 
 try:
     import xbmcvfs
 except Exception:
     xbmcvfs = None
+
+try:
+    from resources.lib import kodi_utils
+except Exception:
+    kodi_utils = None
 
 
 SKIN_ADDON_ID = 'skin.fentastic'
@@ -22,19 +28,33 @@ WIDGET_FILES = (
     'script-fentastic-widget_movies.xml',
     'script-fentastic-widget_tvshows.xml',
 )
-OLD_LINE = (
-    '            <param name="widget_header" '
-    'value="[B][COLOR yellow]איזור אישי '
-    '(חובה להתחבר לTrakt)[/COLOR][/B]"/>'
+
+# Match the widget_header param that has the "(must connect to
+# Trakt)" subtitle. Tolerant of whitespace before <param, and any
+# colour/style markup around the Hebrew text.
+PATTERN = re.compile(
+    r'<param\s+name="widget_header"\s+'
+    r'value="\[B\]\[COLOR\s+yellow\]איזור אישי\s*'
+    r'\(\s*חובה\s+להתחבר\s+ל?\s*Trakt\s*\)\s*\[/COLOR\]\[/B\]"\s*/>',
+    re.DOTALL,
 )
-NEW_LINE = (
-    '            <param name="widget_header" '
+REPLACEMENT = (
+    '<param name="widget_header" '
     'value="[B][COLOR yellow]איזור אישי[/COLOR][/B]"/>'
 )
+NEW_TOKEN = 'value="[B][COLOR yellow]איזור אישי[/COLOR][/B]"'
+
+
+def _log(msg, level='INFO'):
+    if kodi_utils is None:
+        return
+    try:
+        kodi_utils.log('fentastic_widget_patcher: ' + msg, level=level)
+    except Exception:
+        pass
 
 
 def _widget_path(filename):
-    """Resolve full path to a FENtastic widget XML."""
     if xbmcvfs is None:
         return ''
     try:
@@ -49,28 +69,37 @@ def _widget_path(filename):
 def _patch_one(filename):
     path = _widget_path(filename)
     if not path:
+        _log('{0}: file not found'.format(filename), level='INFO')
         return 'no_file'
     try:
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
-    except OSError:
+    except OSError as e:
+        _log('{0}: read failed: {1}'.format(filename, e),
+             level='WARNING')
         return 'read_failed'
-    if NEW_LINE in content:
+    if NEW_TOKEN in content:
+        _log('{0}: already migrated'.format(filename), level='DEBUG')
         return 'unchanged'
-    if OLD_LINE not in content:
+    new_content, n = PATTERN.subn(REPLACEMENT, content, count=1)
+    if n == 0:
+        _log('{0}: no Trakt-subtitle header found -- '
+             'leaving file alone'.format(filename), level='INFO')
         return 'unmatched'
-    new_content = content.replace(OLD_LINE, NEW_LINE, 1)
     tmp = path + '.aitmp'
     try:
         with open(tmp, 'w', encoding='utf-8') as f:
             f.write(new_content)
         os.replace(tmp, path)
+        _log('{0}: header rewritten'.format(filename), level='INFO')
         return 'patched'
-    except OSError:
+    except OSError as e:
         try:
             os.remove(tmp)
         except OSError:
             pass
+        _log('{0}: write failed: {1}'.format(filename, e),
+             level='WARNING')
         return 'write_failed'
 
 
