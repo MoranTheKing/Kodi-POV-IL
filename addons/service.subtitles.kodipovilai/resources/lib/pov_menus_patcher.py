@@ -37,13 +37,14 @@ except Exception:
 POV_ADDON_ID = 'plugin.video.pov'
 MENU_FILES = ('movies.py', 'tvshows.py', 'episodes.py')
 
-# Substring that the PR #98 version of all three menu files
-# contains and pre-PR-#97 baselines do not. Cheaper than
-# byte-compare and more tolerant of benign upstream tweaks.
-# (The earlier `tmdb_sort_key` marker only worked for movies.py
-# and tvshows.py -- episodes.py doesn't compute a custom sort key
-# but does add the trakt_user connection check.)
-PR98_MARKER = "kodi_utils.get_setting('trakt_user'"
+# Substring that the v0.2.23 version of all three menu files
+# contains and earlier versions do not. The Hebrew "ניהול רשימות (Trakt)"
+# label was introduced in v0.2.23 alongside the move to fully-
+# independent service-Manager visibility (no longer mutually
+# exclusive between TMDB and Trakt). When this substring is
+# present, the file is already up to date; when absent, the
+# canonical bundled version gets copied in.
+MARKER = '[B]ניהול רשימות (Trakt)[/B]'
 
 
 def _log(msg, level='INFO'):
@@ -76,7 +77,7 @@ def _target_dir():
 def _has_marker(path):
     try:
         with open(path, 'rb') as f:
-            return PR98_MARKER.encode('utf-8') in f.read()
+            return MARKER.encode('utf-8') in f.read()
     except OSError:
         return False
 
