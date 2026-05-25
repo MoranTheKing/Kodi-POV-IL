@@ -29,29 +29,35 @@ WIDGET_FILES = (
     'script-fentastic-widget_tvshows.xml',
 )
 
-# Match the widget_header param for the personal-area widget. The
-# pattern tolerates two pre-existing baselines that should both be
-# upgraded to the current recommended header (with the TMDB + Trakt
-# nudge):
-#   A. shipped v0 baseline:  [B][COLOR yellow]איזור אישי
-#                            (חובה להתחבר לTrakt)[/COLOR][/B]
-#   B. v0.2.18 patcher result: [B][COLOR yellow]איזור אישי[/COLOR][/B]
-# Anything else (user customized the header) is left alone.
+# Match the widget_header param for the personal-area widget.
+# The pattern tolerates three pre-existing baselines and migrates
+# all of them to the current recommended header (which advises
+# users to add items to TMDB / Trakt before POV-local):
+#   A. shipped v0 baseline:        [B][COLOR yellow]איזור אישי
+#                                  (חובה להתחבר לTrakt)[/COLOR][/B]
+#   B. v0.2.18 patcher result:     [B][COLOR yellow]איזור אישי[/COLOR][/B]
+#   C. v0.2.20 patcher result:     [B][COLOR yellow]איזור אישי[/COLOR][/B]
+#                                  [COLOR gray][I]· מומלץ לחבר TMDB + Trakt[/I][/COLOR]
+# Anything else (user customized) is left alone.
 PATTERN = re.compile(
     r'<param\s+name="widget_header"\s+'
     r'value="\[B\]\[COLOR\s+yellow\]איזור אישי'
     r'(?:\s*\(\s*חובה\s+להתחבר\s+ל?\s*Trakt\s*\))?'
-    r'\[/COLOR\]\[/B\]"\s*/>',
+    r'\[/COLOR\]\[/B\]'
+    r'(?:\s+\[COLOR\s+gray\]\[I\]·\s*מומלץ\s+לחבר\s+TMDB\s*\+\s*Trakt'
+    r'\[/I\]\[/COLOR\])?'
+    r'"\s*/>',
     re.DOTALL,
 )
 REPLACEMENT = (
     '<param name="widget_header" '
     'value="[B][COLOR yellow]איזור אישי[/COLOR][/B]   '
-    '[COLOR gray][I]· מומלץ לחבר TMDB + Trakt[/I][/COLOR]"/>'
+    '[COLOR gray][I]· מומלץ להוסיף ב-TMDB + Trakt לפני POV-מקומי'
+    '[/I][/COLOR]"/>'
 )
-# Token unique to the new (post-recommendation) header. If this is
-# present in the file the header is already up to date.
-NEW_TOKEN = 'מומלץ לחבר TMDB + Trakt'
+# Token unique to the new (post-recommendation) header. Present in
+# v0.2.24+ only; absent from all earlier baselines.
+NEW_TOKEN = 'לפני POV-מקומי'
 
 
 def _log(msg, level='INFO'):
