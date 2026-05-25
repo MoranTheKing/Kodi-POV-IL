@@ -266,13 +266,12 @@
     <ul>
       <li><a href="#choose">איזו שיטה מתאימה לי?</a></li>
       <li><a href="#bits">⚠️ 32-bit vs 64-bit</a></li>
-      <li><a href="#android">📱 שיטה 1 — APK לאנדרואיד</a></li>
-      <li><a href="#downloader">📡 שיטה 2 — Downloader (קוד 6699594)</a></li>
-      <li><a href="#windows">💻 שיטה 3 — Windows</a></li>
-      <li><a href="#webos">📺 שיטה 4 — LG webOS</a></li>
-      <li><a href="#wizard">🧙 שיטה 5 — דרך Wizard</a></li>
-      <li><a href="#filemanager">📂 שיטה 6 — File Manager</a></li>
-      <li><a href="#ai-only">🤖 שיטה 7 — רק תוסף AI</a></li>
+      <li><a href="#downloader">📱 שיטה 1 — Android (טלפון / סטרימר / Fire TV) דרך Downloader</a></li>
+      <li><a href="#windows">💻 שיטה 2 — Windows</a></li>
+      <li><a href="#webos">📺 שיטה 3 — LG webOS</a></li>
+      <li><a href="#wizard">🧙 שיטה 4 — דרך Wizard</a></li>
+      <li><a href="#filemanager">📂 שיטה 5 — File Manager</a></li>
+      <li><a href="#ai-only">🤖 שיטה 6 — רק תוסף AI</a></li>
       <li><a href="#gemini">🔑 חיבור Gemini AI</a></li>
       <li><a href="#tmdb">⭐ חיבור TMDB</a></li>
       <li><a href="#trakt">🎬 חיבור Trakt</a></li>
@@ -293,11 +292,11 @@
       <h2>📌 איזו שיטת התקנה מתאימה לי?</h2>
       <p>בחר את המצב שלך — ועבור ישר לשיטה הרלוונטית:</p>
       <div class="intro-grid">
-        <div class="row"><strong>אין לי Kodi בכלל, יש לי טלפון אנדרואיד / סטרימר / Fire TV</strong><br>→ <a href="#android">שיטה 1 (APK)</a> או <a href="#downloader">שיטה 2 (Downloader)</a></div>
-        <div class="row"><strong>אין לי Kodi, יש לי מחשב Windows</strong><br>→ <a href="#windows">שיטה 3 (Windows Setup)</a></div>
-        <div class="row"><strong>אין לי Kodi, יש לי טלוויזיית LG (webOS)</strong><br>→ <a href="#webos">שיטה 4 (IPK)</a></div>
-        <div class="row"><strong>יש לי Kodi מותקן (ריק או עם משהו אחר)</strong><br>→ <a href="#wizard">שיטה 5 (Wizard)</a> או <a href="#filemanager">שיטה 6 (File Manager)</a></div>
-        <div class="row"><strong>יש לי בילד אחר ורק רוצה תרגום AI</strong><br>→ <a href="#ai-only">שיטה 7 (תוסף בודד)</a></div>
+        <div class="row"><strong>אין לי Kodi בכלל, יש לי טלפון אנדרואיד / סטרימר / Fire TV</strong><br>→ <a href="#downloader">שיטה 1 (Downloader)</a></div>
+        <div class="row"><strong>אין לי Kodi, יש לי מחשב Windows</strong><br>→ <a href="#windows">שיטה 2 (Windows Setup)</a></div>
+        <div class="row"><strong>אין לי Kodi, יש לי טלוויזיית LG (webOS)</strong><br>→ <a href="#webos">שיטה 3 (IPK)</a></div>
+        <div class="row"><strong>יש לי Kodi מותקן (ריק או עם משהו אחר)</strong><br>→ <a href="#wizard">שיטה 4 (Wizard)</a> או <a href="#filemanager">שיטה 5 (File Manager)</a></div>
+        <div class="row"><strong>יש לי בילד אחר ורק רוצה תרגום AI</strong><br>→ <a href="#ai-only">שיטה 6 (תוסף בודד)</a></div>
       </div>
     </section>
 
@@ -308,45 +307,16 @@
       </div>
     </section>
 
-    <section id="android">
-      <h2>📱 שיטה 1 — התקנה ל-Android (טלפון / סטרימר / Android TV)</h2>
-
-      <div class="step">
-        <h4>שלב א' — הורדה</h4>
-        <ol>
-          <li>במכשיר עצמו פתח דפדפן</li>
-          <li>כנס ל: <a href="https://github.com/MoranTheKing/Kodi-POV-IL/releases/latest" target="_blank">github.com/MoranTheKing/Kodi-POV-IL/releases/latest</a></li>
-          <li>הורד: <code>Kodi-POV-IL-32bit.apk</code> (אם זה לא עובד — חזור והורד את 64bit)</li>
-        </ol>
-      </div>
-
-      <div class="step">
-        <h4>שלב ב' — התקנה</h4>
-        <ul>
-          <li>פתח את הקובץ שהורדת (דרך אפליקציית הקבצים או הודעת ההורדה)</li>
-          <li>אם מבקש "אפשר התקנה ממקורות לא ידועים" → אפשר (זה חד פעמי)</li>
-          <li>לחץ "התקן"</li>
-          <li>אם אנטי-וירוס מזהיר — אפשר להמשיך, ה-APK בטוח</li>
-        </ul>
-      </div>
-
-      <div class="step">
-        <h4>שלב ג' — הפעלה ראשונה</h4>
-        <ul>
-          <li>פתח את <strong>"Kodi POV IL"</strong> מתפריט האפליקציות</li>
-          <li>חכה 30-60 שניות — הוויזרד יותקן אוטומטית ויטעין את הבילד</li>
-          <li>בסיום יופיע מסך הבית עם POV מותקן</li>
-        </ul>
-      </div>
-    </section>
-
     <section id="downloader">
-      <h2>📡 שיטה 2 — התקנה דרך Downloader (Fire Stick / Android TV ללא דפדפן)</h2>
-      <p>הכי מתאים ל-Fire Stick, Fire TV, Android TV עם שלט בלבד.</p>
+      <h2>📱 שיטה 1 — התקנה ל-Android דרך Downloader (טלפון / סטרימר / Fire TV / Android TV)</h2>
+      <p>הדרך המומלצת לכל מכשיר אנדרואיד — טלפון, סטרימר, Fire Stick, או Android TV. Downloader מספק עמוד בחירה אחד שמוביל לקובץ המתאים לכל מכשיר.</p>
 
       <div class="step">
-        <h4>שלב א' — התקן את Downloader</h4>
-        <p>בחנות האפליקציות → חפש <strong>"Downloader"</strong> (של AFTVnews) → התקן.</p>
+        <h4>שלב א' — התקן את אפליקציית Downloader</h4>
+        <ul>
+          <li><strong>טלפון אנדרואיד:</strong> Google Play → חפש <strong>"Downloader"</strong> של AFTVnews → התקן</li>
+          <li><strong>Fire Stick / Fire TV / Android TV / סטרימר:</strong> בחנות האפליקציות של המכשיר → חפש <strong>"Downloader"</strong> של AFTVnews → התקן</li>
+        </ul>
       </div>
 
       <div class="step">
@@ -359,7 +329,7 @@
           <li>אחרי הבחירה — Downloader יוריד את הקובץ אוטומטית</li>
         </ul>
         <div class="callout warn">
-          <strong>תזכורת:</strong> בסטרימרים תתחיל מ-<strong>אנדרואיד 32-bit</strong>. אם זה לא נתקן או לא רץ — תחזור ל-Downloader ובחר 64-bit.
+          <strong>תזכורת:</strong> ברוב המכשירים (כולל רוב הטלפונים והסטרימרים) — תתחיל מ-<strong>אנדרואיד 32-bit</strong>. אם זה לא נתקן או לא רץ — תחזור ל-Downloader ובחר 64-bit.
         </div>
       </div>
 
@@ -367,15 +337,29 @@
         <h4>שלב ג' — התקן</h4>
         <ul>
           <li>בסיום ההורדה → לחץ <strong>Install</strong></li>
-          <li>אם זו הפעם הראשונה — אפשר ל-Fire Stick להתקין אפליקציות מ-Downloader</li>
-          <li>בסיום → לחץ <strong>Done</strong> (לא Open עדיין) → חזור ל-Downloader → <strong>Delete</strong> את הקובץ (כדי לא לבזבז מקום)</li>
-          <li>עכשיו פתח את Kodi POV IL מתפריט האפליקציות</li>
+          <li>אם זו הפעם הראשונה — המכשיר יבקש לאפשר ל-Downloader להתקין אפליקציות. <strong>אפשר</strong> (זה חד פעמי)</li>
+          <li>אם אנטי-וירוס מזהיר — אפשר להמשיך, ה-APK בטוח</li>
+          <li>בסיום ההתקנה → לחץ <strong>Done</strong> (לא Open עדיין) → חזור ל-Downloader → <strong>Delete</strong> את הקובץ (כדי לא לבזבז מקום)</li>
+          <li>עכשיו פתח את <strong>Kodi POV IL</strong> מתפריט האפליקציות</li>
         </ul>
+      </div>
+
+      <div class="step">
+        <h4>שלב ד' — הפעלה ראשונה</h4>
+        <ul>
+          <li>פתח את <strong>"Kodi POV IL"</strong></li>
+          <li>חכה 30-60 שניות — הוויזרד יותקן אוטומטית ויטעין את הבילד</li>
+          <li>בסיום יופיע מסך הבית עם POV מותקן</li>
+        </ul>
+      </div>
+
+      <div class="callout tip">
+        <strong>אלטרנטיבה למתקדמים:</strong> אם אתה לא רוצה Downloader — אפשר להוריד את ה-APK ישירות מ-<a href="https://github.com/MoranTheKing/Kodi-POV-IL/releases/latest" target="_blank">GitHub Releases</a> דרך דפדפן במכשיר ולפתוח לאחר ההורדה.
       </div>
     </section>
 
     <section id="windows">
-      <h2>💻 שיטה 3 — התקנה ל-Windows</h2>
+      <h2>💻 שיטה 2 — התקנה ל-Windows</h2>
 
       <div class="step">
         <h4>שלב א' — הורד את ה-Setup</h4>
@@ -401,7 +385,7 @@
     </section>
 
     <section id="webos">
-      <h2>📺 שיטה 4 — התקנה ל-LG TV (webOS)</h2>
+      <h2>📺 שיטה 3 — התקנה ל-LG TV (webOS)</h2>
       <div class="callout warn">דורש את Developer Mode של LG. למתקדמים בלבד.</div>
       <ul>
         <li>הורד <code>Kodi-POV-IL-webos.ipk</code> מ-GitHub Releases</li>
@@ -411,7 +395,7 @@
     </section>
 
     <section id="wizard">
-      <h2>🧙 שיטה 5 — התקנה דרך Wizard (אם כבר יש Kodi)</h2>
+      <h2>🧙 שיטה 4 — התקנה דרך Wizard (אם כבר יש Kodi)</h2>
       <p>מתאים לך אם יש לך Kodi 21+ ריק או עם בילד אחר ואתה רוצה להתקין את POV IL FENtastic.</p>
 
       <div class="step">
@@ -449,7 +433,7 @@
     </section>
 
     <section id="filemanager">
-      <h2>📂 שיטה 6 — התקנה דרך File Manager (ידנית מלאה)</h2>
+      <h2>📂 שיטה 5 — התקנה דרך File Manager (ידנית מלאה)</h2>
       <p>עבור מי שרוצה שליטה מלאה ולא רוצה Source.</p>
       <ul>
         <li>הורד ידנית מ-GitHub: <code>plugin.program.kodipovilwizard-0.1.7.zip</code> (הוויזרד) ו-<code>Kodi-POV-IL-FENtastic-test-0.1.9.zip</code> (הבילד)</li>
@@ -460,7 +444,7 @@
     </section>
 
     <section id="ai-only">
-      <h2>🤖 שיטה 7 — רק תוסף ה-AI על בילד קיים</h2>
+      <h2>🤖 שיטה 6 — רק תוסף ה-AI על בילד קיים</h2>
       <p>עבור מי שיש לו כבר בילד אחר (Twilight / FEN / Diggz / וכו') ורק רוצה תרגום AI איכותי.</p>
 
       <div class="step">
