@@ -29,20 +29,29 @@ WIDGET_FILES = (
     'script-fentastic-widget_tvshows.xml',
 )
 
-# Match the widget_header param that has the "(must connect to
-# Trakt)" subtitle. Tolerant of whitespace before <param, and any
-# colour/style markup around the Hebrew text.
+# Match the widget_header param for the personal-area widget. The
+# pattern tolerates two pre-existing baselines that should both be
+# upgraded to the current recommended header (with the TMDB + Trakt
+# nudge):
+#   A. shipped v0 baseline:  [B][COLOR yellow]איזור אישי
+#                            (חובה להתחבר לTrakt)[/COLOR][/B]
+#   B. v0.2.18 patcher result: [B][COLOR yellow]איזור אישי[/COLOR][/B]
+# Anything else (user customized the header) is left alone.
 PATTERN = re.compile(
     r'<param\s+name="widget_header"\s+'
-    r'value="\[B\]\[COLOR\s+yellow\]איזור אישי\s*'
-    r'\(\s*חובה\s+להתחבר\s+ל?\s*Trakt\s*\)\s*\[/COLOR\]\[/B\]"\s*/>',
+    r'value="\[B\]\[COLOR\s+yellow\]איזור אישי'
+    r'(?:\s*\(\s*חובה\s+להתחבר\s+ל?\s*Trakt\s*\))?'
+    r'\[/COLOR\]\[/B\]"\s*/>',
     re.DOTALL,
 )
 REPLACEMENT = (
     '<param name="widget_header" '
-    'value="[B][COLOR yellow]איזור אישי[/COLOR][/B]"/>'
+    'value="[B][COLOR yellow]איזור אישי[/COLOR][/B]   '
+    '[COLOR gray][I]· מומלץ לחבר TMDB + Trakt[/I][/COLOR]"/>'
 )
-NEW_TOKEN = 'value="[B][COLOR yellow]איזור אישי[/COLOR][/B]"'
+# Token unique to the new (post-recommendation) header. If this is
+# present in the file the header is already up to date.
+NEW_TOKEN = 'מומלץ לחבר TMDB + Trakt'
 
 
 def _log(msg, level='INFO'):
