@@ -1,3 +1,38 @@
+v0.2.22
+- Add a POV-local-favorites tile to both the home favourites bar
+  and the FENtastic personal-area widget on the Movies / TV Shows
+  pages. Users without a TMDB or Trakt account now have a working
+  personal area: POV maintains its own local favorites DB
+  (caches/favorites_cache.py), so "Favorites Manager" from POV's
+  context menu always writes somewhere reachable.
+  Tile names match the existing pattern:
+    "הסדרות שלי (POV)"   action=favorites_tvshows
+    "הסרטים שלי (POV)"   action=favorites_movies
+  Tile thumbs: new My_Shows_POV.png and My_Movies_POV.png shipped
+  alongside the TMDB variants in resources/lib/media_assets/
+  build_icons/Twilight/. Generated from the same Twilight My_Shows
+  base graphic by clearing the upper-right service badge and
+  compositing POV's existing favorites.png (a clean white star)
+  in its place.
+- favourites_xml_patcher gained a 4th pass that always ensures
+  the POV tile exists (option A in chat -- always visible
+  regardless of which services are connected). Insertion anchor
+  is the just-restored Trakt tile when present, else the TMDB
+  tile, so the natural reading order on the home bar is:
+    TMDB Shows -> Trakt Shows -> POV Shows
+    TMDB Movies -> Trakt Movies -> POV Movies
+- pov_navigator_patcher migration table extended:
+    V1 = baseline (Continue + Trakt)
+    V2 = v0.2.18+ (Continue + TMDB + Trakt)
+    V3 = target (Continue + TMDB + Trakt + POV)
+  Rows in either V1 or V2 are rewritten to V3 directly. V3
+  passes through unchanged. Anything else is treated as user
+  customization and left alone.
+- Sandbox tested end-to-end with two starting points:
+    V1 favourites.xml -> 6 personal tiles in correct order
+    V2 favourites.xml -> 6 personal tiles in correct order
+  Both idempotent on re-run, custom user tile preserved.
+
 v0.2.21
 - Two follow-ups to the home-tile migration after user feedback:
 
