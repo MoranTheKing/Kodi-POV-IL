@@ -1,3 +1,42 @@
+v0.2.25
+- Smooth out the DarkSubs <-> AI integration so users don't have
+  to know that DarkSubs's "Enable machine translation" toggle is
+  the on/off switch for the AI hook. Three changes, all inside
+  dark_subs_integration.py and run from
+  service.py's _maybe_patch_darksubs() startup hook:
+
+  (1) Auto-enable DarkSubs's auto_translate on first run.
+      When the user has a Gemini key but the toggle is currently
+      off, the patcher flips it to true exactly once and remembers
+      having done so (marker `_darksubs_autoenable_done` in our
+      addon's settings). After that we respect any subsequent
+      explicit user choice -- if they later turn it off, we
+      don't fight them. Skipped entirely when no Gemini key is
+      set (we don't want to wake up Google Translate fallback
+      for users who haven't opted in to AI).
+
+  (2) Relabel the toggle so the AI hook is visible in DarkSubs's
+      own settings UI. Patches resources/settings.xml: the
+      shipped baseline
+          label="הפעל תרגום מכונה"
+      becomes
+          label="הפעל תרגום מכונה (Gemini AI)"
+      Surgical: only replaces the exact baseline string, so any
+      user/upstream edit is left alone. Idempotent via a marker
+      substring in the new label. Self-healing across DarkSubs
+      updates (if upstream rewrites settings.xml, we re-apply
+      on the next Kodi startup).
+
+  (3) One-time toast on the auto-enable. Shows "תרגום AI הופעל
+      ב-DarkSubs" so the user knows what changed without
+      having to dig into DarkSubs's settings.
+
+  None of this changes the actual translation flow -- the
+  existing engine.py hook from v0.2.x still intercepts the
+  call before DarkSubs would fall through to Google Translate.
+  These changes just make the integration self-configuring
+  instead of requiring the user to know to flip a toggle.
+
 v0.2.24
 - Personal-area widget header now spells out the recommended
   workflow explicitly. Previously the subtitle said only
