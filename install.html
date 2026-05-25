@@ -266,7 +266,7 @@
     <ul>
       <li><a href="#choose">איזו שיטה מתאימה לי?</a></li>
       <li><a href="#bits">⚠️ 32-bit vs 64-bit</a></li>
-      <li><a href="#downloader">📱 שיטה 1 — Android (טלפון / סטרימר / Fire TV) דרך Downloader</a></li>
+      <li><a href="#downloader">📱 שיטה 1 — Android (טלפון / טאבלט / סטרימר) דרך Downloader</a></li>
       <li><a href="#windows">💻 שיטה 2 — Windows</a></li>
       <li><a href="#webos">📺 שיטה 3 — LG webOS</a></li>
       <li><a href="#wizard">🧙 שיטה 4 — דרך Wizard</a></li>
@@ -292,7 +292,7 @@
       <h2>📌 איזו שיטת התקנה מתאימה לי?</h2>
       <p>בחר את המצב שלך — ועבור ישר לשיטה הרלוונטית:</p>
       <div class="intro-grid">
-        <div class="row"><strong>אין לי Kodi בכלל, יש לי טלפון אנדרואיד / סטרימר / Fire TV</strong><br>→ <a href="#downloader">שיטה 1 (Downloader)</a></div>
+        <div class="row"><strong>אין לי Kodi בכלל, יש לי טלפון אנדרואיד / טאבלט / סטרימר Android TV</strong><br>→ <a href="#downloader">שיטה 1 (Downloader)</a></div>
         <div class="row"><strong>אין לי Kodi, יש לי מחשב Windows</strong><br>→ <a href="#windows">שיטה 2 (Windows Setup)</a></div>
         <div class="row"><strong>אין לי Kodi, יש לי טלוויזיית LG (webOS)</strong><br>→ <a href="#webos">שיטה 3 (IPK)</a></div>
         <div class="row"><strong>יש לי Kodi מותקן (ריק או עם משהו אחר)</strong><br>→ <a href="#wizard">שיטה 4 (Wizard)</a> או <a href="#filemanager">שיטה 5 (File Manager)</a></div>
@@ -302,20 +302,26 @@
 
     <section id="bits">
       <h2>⚠️ הערה חשובה — 32-bit מול 64-bit</h2>
-      <div class="callout warn">
-        <strong>ברוב המכשירים — 32-bit עובד הכי טוב.</strong> אפילו מכשירים שתומכים ב-64-bit לרוב יתקעו בהתקנת גרסת 64-bit. <strong>התחל תמיד מ-32-bit.</strong> רק אם זה לא עובד או שיש לך מכשיר עוצמתי מאוד (Nvidia Shield, Fire TV Cube דור 3 וכו') — תנסה 64-bit.
+      <p>זה <strong>לא קשור לעוצמת המכשיר</strong> — זה רק עניין של ארכיטקטורת המעבד שהמכשיר תומך בה. כלל פשוט:</p>
+      <ul>
+        <li><strong>אנדרואיד 64-bit</strong> → טלפונים, טאבלטים, ו-<strong>Nvidia Shield Pro 2019</strong>. (הסטרימר היחיד שתומך ב-64-bit. הגרסה הלא-Pro של Shield היא 32-bit!)</li>
+        <li><strong>אנדרואיד 32-bit</strong> → כל שאר הסטרימרים והטלוויזיות החכמות (Android TV boxes, Onn 4K, Xiaomi Mi Box, Chromecast with Google TV, וכו')</li>
+        <li><strong>Windows / מחשב נייד</strong> → השתמש ב-Installer הייעודי (שיטה 2). אין צורך לבחור 32 או 64 ידנית.</li>
+      </ul>
+      <div class="callout tip">
+        ב-Downloader (שיטה 1) — תבחר ה-APK שמתאים למכשיר שלך לפי הסיווג למעלה. אם בטעות תוריד את הלא נכון — ההתקנה פשוט תיכשל ותחזור לבחור אחר.
       </div>
     </section>
 
     <section id="downloader">
-      <h2>📱 שיטה 1 — התקנה ל-Android דרך Downloader (טלפון / סטרימר / Fire TV / Android TV)</h2>
-      <p>הדרך המומלצת לכל מכשיר אנדרואיד — טלפון, סטרימר, Fire Stick, או Android TV. Downloader מספק עמוד בחירה אחד שמוביל לקובץ המתאים לכל מכשיר.</p>
+      <h2>📱 שיטה 1 — התקנה ל-Android דרך Downloader (טלפון / טאבלט / סטרימר)</h2>
+      <p>הדרך המומלצת לכל מכשיר אנדרואיד — טלפון, טאבלט, או סטרימר Android TV. Downloader מספק עמוד בחירה אחד שמוביל לקובץ המתאים לכל מכשיר.</p>
 
       <div class="step">
         <h4>שלב א' — התקן את אפליקציית Downloader</h4>
         <ul>
-          <li><strong>טלפון אנדרואיד:</strong> Google Play → חפש <strong>"Downloader"</strong> של AFTVnews → התקן</li>
-          <li><strong>Fire Stick / Fire TV / Android TV / סטרימר:</strong> בחנות האפליקציות של המכשיר → חפש <strong>"Downloader"</strong> של AFTVnews → התקן</li>
+          <li><strong>טלפון / טאבלט אנדרואיד:</strong> Google Play → חפש <strong>"Downloader"</strong> של AFTVnews → התקן</li>
+          <li><strong>סטרימר Android TV:</strong> בחנות האפליקציות של המכשיר → חפש <strong>"Downloader"</strong> של AFTVnews → התקן</li>
         </ul>
       </div>
 
@@ -329,7 +335,7 @@
           <li>אחרי הבחירה — Downloader יוריד את הקובץ אוטומטית</li>
         </ul>
         <div class="callout warn">
-          <strong>תזכורת:</strong> ברוב המכשירים (כולל רוב הטלפונים והסטרימרים) — תתחיל מ-<strong>אנדרואיד 32-bit</strong>. אם זה לא נתקן או לא רץ — תחזור ל-Downloader ובחר 64-bit.
+          <strong>איזו גרסה לבחור?</strong> טלפון / טאבלט / Shield Pro 2019 → <strong>64-bit</strong>. כל סטרימר אחר וטלוויזיה חכמה → <strong>32-bit</strong>. ראה <a href="#bits">סעיף 32/64-bit</a> להסבר מלא.
         </div>
       </div>
 
@@ -421,14 +427,16 @@
       </div>
 
       <div class="step">
-        <h4>שלב ג' — הפעל את הוויזרד</h4>
+        <h4>שלב ג' — אוטומטי</h4>
+        <p>הוויזרד יזהה שאין בילד מותקן ויפעיל את עצמו אוטומטית. אין צורך לעשות כלום ידנית.</p>
         <ul>
-          <li>Kodi → Programs (בתפריט הראשי) → Kodi POV IL Wizard</li>
-          <li>בחר Install Build → Kodi POV IL — FENtastic</li>
-          <li>הוויזרד ישאל אם לשמור הגדרות (Trakt, Debrid, Favorites וכו') — <strong>אשר את כולן</strong> אלא אם רוצה התקנה נקייה לחלוטין</li>
+          <li>הוויזרד ישאל אם לשמור הגדרות קיימות (Trakt, Debrid, Favorites וכו') — <strong>אשר את כולן</strong> אלא אם רוצה התקנה נקייה לחלוטין</li>
           <li>חכה — הוויזרד יוריד את הבילד (~50MB), ינקה ויתקין הכל</li>
           <li>בסיום Kodi יבקש סגירה ופתיחה מחדש → אשר</li>
         </ul>
+        <div class="callout tip">
+          <strong>אם משום מה לא התחיל אוטומטית:</strong> אפשר להפעיל ידנית דרך Kodi → Programs (בתפריט הראשי) → Kodi POV IL Wizard → Install Build → Kodi POV IL — FENtastic.
+        </div>
       </div>
     </section>
 
@@ -545,7 +553,7 @@
 
     <section id="trakt">
       <h2>🎬 חיבור Trakt — אופציונלי, מומלץ למי שצופה בכמה מכשירים</h2>
-      <p>Trakt הוא השירות <strong>היחיד</strong> שמסנכרן progress של נגינה בין מכשירים. אם התחלת סרט בטלפון ורוצה להמשיך ב-Fire Stick — חייבים Trakt. TMDB לא תומך ב-progress sync.</p>
+      <p>Trakt הוא השירות <strong>היחיד</strong> שמסנכרן progress של נגינה בין מכשירים. אם התחלת סרט בטלפון ורוצה להמשיך בסטרימר — חייבים Trakt. TMDB לא תומך ב-progress sync.</p>
 
       <h3>איך לחבר</h3>
       <ul>
@@ -629,7 +637,7 @@
       <h2>⚠️ פתרון בעיות נפוצות</h2>
 
       <h3>"ההתקנה נכשלה" באנדרואיד</h3>
-      <p>ייתכן שיש לך גרסה קודמת מותקנת עם חתימה שונה → הסר את האפליקציה הקיימת → התקן מחדש. בסטרימרים — אם 64-bit לא רץ או לא מתקין, תנסה 32-bit.</p>
+      <p>ייתכן שיש לך גרסה קודמת מותקנת עם חתימה שונה → הסר את האפליקציה הקיימת → התקן מחדש. בדוק שבחרת את הגרסה הנכונה (32-bit לרוב הסטרימרים, 64-bit לטלפונים / טאבלטים / Shield Pro 2019) — ראה <a href="#bits">סעיף 32/64-bit</a>.</p>
 
       <h3>הוויזרד תקוע בהתקנה הראשונית</h3>
       <p>בדוק שיש אינטרנט יציב (לפחות 5Mbps). אם תקוע יותר מ-2 דקות — סגור את Kodi לחלוטין (לחיצה ארוכה על Home, בחירת Force Stop) ופתח מחדש. בפעם השנייה הוויזרד ימשיך מאיפה שעצר.</p>
