@@ -91,6 +91,27 @@ MEDIA = (
             'media%2ftrakt.png&amp;mode=build_tvshow_list&amp;'
             'name=TV%20Shows",return)</favourite>'
         ),
+        # POV local-favorites tile -- always present (independent of
+        # TMDB / Trakt connection), since POV maintains its own
+        # local favorites DB. Lets users keep a personal list
+        # without depending on any external service.
+        'pov_pattern': re.compile(
+            r'<favourite\s[^>]*?name="\[B\]הסדרות שלי \(POV\)\[/B\]"[^>]*>'
+            r'(?:(?!</favourite>).)*?action=favorites_tvshows'
+            r'(?:(?!</favourite>).)*?mode=build_tvshow_list'
+            r'(?:(?!</favourite>).)*?</favourite>',
+            re.DOTALL,
+        ),
+        'pov_canonical': (
+            '<favourite name="[B]הסדרות שלי (POV)[/B]" '
+            'thumb="special://home/media/build_icons/Twilight/Shows/'
+            'My_Shows_POV.png">'
+            'ActivateWindow(10025,"plugin://plugin.video.pov/?'
+            'action=favorites_tvshows&amp;iconImage=special%3a%2f%2fhome%2f'
+            'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
+            'media%2ffavorites.png&amp;mode=build_tvshow_list&amp;'
+            'name=TV%20Show%20Favorites%20(POV)",return)</favourite>'
+        ),
     },
     {
         'label': 'movies',
@@ -129,6 +150,23 @@ MEDIA = (
             'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
             'media%2ftrakt.png&amp;mode=build_movie_list&amp;'
             'name=Movies",return)</favourite>'
+        ),
+        'pov_pattern': re.compile(
+            r'<favourite\s[^>]*?name="\[B\]הסרטים שלי \(POV\)\[/B\]"[^>]*>'
+            r'(?:(?!</favourite>).)*?action=favorites_movies'
+            r'(?:(?!</favourite>).)*?mode=build_movie_list'
+            r'(?:(?!</favourite>).)*?</favourite>',
+            re.DOTALL,
+        ),
+        'pov_canonical': (
+            '<favourite name="[B]הסרטים שלי (POV)[/B]" '
+            'thumb="special://home/media/build_icons/Twilight/Movies/'
+            'My_Movies_POV.png">'
+            'ActivateWindow(10025,"plugin://plugin.video.pov/?'
+            'action=favorites_movies&amp;iconImage=special%3a%2f%2fhome%2f'
+            'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
+            'media%2ffavorites.png&amp;mode=build_movie_list&amp;'
+            'name=Movie%20Favorites%20(POV)",return)</favourite>'
         ),
     },
 )
@@ -258,6 +296,26 @@ def _process_one(content, media, trakt_connected):
         actions[label + '_restore'] = 'already'
     else:
         actions[label + '_restore'] = 'trakt_disconnected'
+
+    # 4. Ensure the POV local-favorites tile is present (always --
+    #    independent of TMDB / Trakt connection). Insert it after the
+    #    Trakt tile if one exists, otherwise after the TMDB tile.
+    if media['pov_pattern'].search(content):
+        actions[label + '_pov'] = 'already'
+    else:
+        anchor = (media['trakt_pattern'].search(content)
+                  or media['tmdb_pattern'].search(content))
+        if anchor:
+            insert_at = anchor.end()
+            line_start = content.rfind('\n', 0, anchor.start()) + 1
+            indent = content[line_start:anchor.start()]
+            content = (
+                content[:insert_at] + '\n' + indent
+                + media['pov_canonical'] + content[insert_at:]
+            )
+            actions[label + '_pov'] = 'added'
+        else:
+            actions[label + '_pov'] = 'no_anchor'
 
     return content, actions
 
