@@ -31,6 +31,10 @@ msgctxt "#32105"
 msgid "Test connection"
 msgstr "Test connection"
 
+msgctxt "#32106"
+msgid "Pair with QR (scan from another device)"
+msgstr "Pair with QR (scan from another device)"
+
 # Category: Translation
 msgctxt "#32200"
 msgid "Translation"
