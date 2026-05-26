@@ -1,3 +1,33 @@
+v0.2.34
+- Fix the Gemini pair form returning a 400 from Google's API on
+  every iPhone Safari paste. Symptom: pair-from-phone flow works
+  perfectly on Android, Mac, Windows -- but iOS users always see
+  "ה-key נדחה ע"י Gemini" right after the page accepts their key.
+  The form HTML had autocomplete/autocapitalize/spellcheck off but
+  was missing the iOS-only `autocorrect="off"` attribute. Without
+  it, Safari quietly mutates the pasted string -- smart quotes
+  around it, non-breaking spaces inserted mid-key, zero-width
+  marks from text direction inference -- and Google's API
+  rejects the corrupted result.
+- Three layers of fix:
+  * gemini_pair.py form: adds `autocorrect="off"` and
+    `inputmode="verbatim"` to the API-key input. These together
+    disable Safari's pasted-text rewrites and the iOS keyboard's
+    word-suggestion bar.
+  * gemini_pair.py server: new `_sanitize_key()` runs NFKC unicode
+    normalisation then keeps only the ASCII alphanumeric +
+    dash/underscore charset Gemini keys actually use. Strips out
+    NBSP, ZWSP, BOM, RTL/LTR marks, smart quotes, full-width
+    characters -- every byte iOS has been observed to insert.
+    Sanitised against 11 known iOS-corruption patterns
+    end-to-end.
+  * The "key sent" confirmation page now echoes a fingerprint
+    (first 4 chars … last 4 chars (length)) so the iPhone user can
+    eyeball-compare against the key they copied from AI Studio.
+    If sanitisation dropped the wrong thing or Safari mangled the
+    inner characters somehow, the fingerprint mismatch makes it
+    obvious -- no need to wait for the Gemini API call to fail.
+
 v0.2.33
 - A CoreELEC user reported: passes the diagnostic but AI still
   doesn't translate his manual subtitle picks. Reason: he keeps
