@@ -1,3 +1,28 @@
+v0.2.40
+- User report: didn't see ANY progress feedback when DarkSubs picks
+  a subtitle and the AI translation runs. AI works (translated SRT
+  appears) but during the 30-90s wait there's nothing on screen and
+  the user can't tell if the hook even fired.
+- Root cause: `_handle_download` (when the user picks our AI Subs
+  service directly) creates a DialogProgressBG and passes its
+  updater as `progress_cb` to `translate.resolve`. But
+  `_handle_translate_file` (the entry point DarkSubs's hook
+  RunScripts into) called `translate.resolve(link, info)` with NO
+  progress_cb, so no UI update path existed. Translation ran
+  silently end-to-end.
+- Fix: `_handle_translate_file` now creates its own
+  DialogProgressBG ("Kodi POV IL - AI Subtitles") and passes a
+  matching `report` callback to `translate.resolve`. The
+  background progress bar at the bottom-right of Kodi now ticks
+  through "מתרגם chunk X/Y..." for the DarkSubs path too. Closes
+  cleanly on completion, error, or crash via a finally block;
+  if DialogProgressBG creation itself fails, translation
+  proceeds silently (no regression vs. v0.2.39 behaviour).
+- The existing initial "AI: מתחיל תרגום..." toast and the final
+  "AI: תרגום הסתיים בהצלחה" toast are both already in place from
+  earlier versions -- this PR is purely about the missing
+  MID-translation progress feedback.
+
 v0.2.39
 - AI translation is now the DEFAULT whenever a Gemini API key is
   set -- no second toggle to find. Users had been hitting the
