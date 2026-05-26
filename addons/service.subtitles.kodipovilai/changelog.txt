@@ -1,3 +1,36 @@
+v0.2.45
+- Reverted the custom WindowDialog progress overlay entirely. The
+  v0.2.42-0.2.44 attempts kept breaking in successive ways:
+    * v0.2.42 -- WindowDialog.show() rendered BEHIND DarkSubs's
+      pyxbmct MySubs picker (z-order issue, invisible to user)
+    * v0.2.42 doModal() -- finally rendered on top, but ...
+    * v0.2.43 -- the card came up as a solid BLACK BOX because
+      dark_bg.png * dark colorDiffuse = unreadable
+    * v0.2.43 white_pixel.png fix -- card looked right, but ...
+    * v0.2.44 -- percent / chunks labels never updated, stuck at
+      "0% / מתחיל תרגום..." while translation proceeded silently
+      in the background. Cross-thread xbmcgui control updates
+      apparently don't land reliably even via Window properties
+      and $INFO[] binding on this Kodi configuration.
+- Stripped the _AITranslateProgressWindow class, the
+  _resolve_with_progress_window helper, the doModal+worker
+  architecture, the heartbeat ticker, and the white_pixel.png
+  asset. _handle_download and _handle_translate_file now use the
+  simple inline DialogProgressBG (bottom-right banner) + 25/50/75 %
+  milestone toast notifications -- the exact pattern from v0.2.41
+  that the user confirmed worked in their first screenshot.
+- Toasts always layer above any window (DarkSubs MySubs, video OSD,
+  Kodi standard dialogs). The user sees:
+    - The existing "AI: מתחיל תרגום..." kickoff toast
+    - DialogProgressBG bottom-right banner when no full-screen
+      window covers it
+    - 25/50/75 % milestone toasts -- guaranteed visible regardless
+    - The existing "AI: תרגום הסתיים בהצלחה" completion toast
+- No more fancy overlay; this is the reliable path. The "nicer
+  visual window" goal will be revisited later, possibly via a
+  skin XML approach instead of WindowDialog, when we have more
+  bandwidth to debug Kodi's cross-thread rendering quirks.
+
 v0.2.44
 - v0.2.43 finally rendered the modal correctly (white_pixel.png as
   the colorDiffuse base fixed the all-black box). User screenshot
