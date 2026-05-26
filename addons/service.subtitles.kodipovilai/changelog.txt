@@ -1,3 +1,48 @@
+v0.2.28
+- Fix DarkSubs subtitle-match percentages and dialog title for all
+  debrid services. Two complementary patchers:
+
+  * pov_source_name_patcher: patches POV's sources.py so that the
+    moment POV picks a source from the source-select dialog (the
+    one with cached/uncached/quality flags), it stashes the picked
+    item's release name and unrestricted URL in a Window(10000)
+    property. Window properties cross the addon-dispatch boundary
+    so DarkSubs (separate addon) can read them.
+
+  * darksubs_filename_fallback_patcher: patches DarkSubs's
+    get_playing_filename() to prefer the release name stashed by
+    POV. A URL-equality guard (stored URL == currently-playing URL)
+    prevents stale values from a previous POV play leaking into a
+    later non-POV play. Falls back to synthesising a release-style
+    filename from VideoPlayer / ListItem info-labels for the rare
+    case where no POV property is available AND the URL basename
+    looks like an opaque hash (TorBox CDN without our POV patch).
+
+- Why this matters: for TorBox sources, the CDN returns URLs like
+  `https://store-N.torbox.app/<uuid>?token=...` -- no filename in
+  the path. Without the fix, DarkSubs sees only the UUID:
+  * The dialog title shows the UUID -- the user can't visually
+    compare it to subtitle release names to pick one manually
+  * Token overlap with subtitle release names is 0%, so every
+    subtitle shows 0% and ranking is useless
+  With the fix, both the dialog title AND the percentage matching
+  use the real release name (e.g.
+  `War.Machine.2026.1080p.NF.WEB-DL.DDP5.1.Atmos.H.264-RYNDR.mkv`)
+  that POV picked from the source list.
+
+- Real Debrid / AllDebrid / Premiumize also benefit: even though
+  their URLs do include the release filename, it may not exactly
+  match the source POV picked (the CDN sometimes returns a
+  different variant). Using POV's picked name gives consistent
+  matching across all services. Expected match: 70-95%, depending
+  on how closely the release name matches the subtitle authoring.
+
+- Self-healing: both patchers re-apply on every Kodi startup. If
+  POV or DarkSubs upstream restructures the patched function in a
+  way our pattern doesn't match, we skip with a log warning -- the
+  affected playback path goes back to its pre-patch behaviour but
+  nothing else breaks.
+
 v0.2.27
 - Gemini "Pair from phone" flow now shows an actual scannable QR
   image instead of printing the qrserver.com URL as text. The
