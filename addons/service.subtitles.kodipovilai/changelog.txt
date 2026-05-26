@@ -1,3 +1,40 @@
+v0.2.41
+- v0.2.40 added DialogProgressBG to the DarkSubs-triggered path, but
+  a user screenshot confirmed the dialog isn't visible in practice:
+  DarkSubs's MySubs picker is a full-screen pyxbmct AddonDialogWindow
+  that completely covers the bottom-right corner where
+  DialogProgressBG normally appears. The dialog was being updated but
+  hidden behind the picker -- user saw the start toast and then
+  silence until translation finished.
+
+- Two-layer fix:
+
+  1. NEW WindowDialog overlay (_AITranslateProgressWindow). A
+     proper full-screen centered card with dimmed backdrop, big
+     title, branded "Gemini AI · Kodi POV IL" subtitle, visual
+     progress bar, large percentage number, chunk counter, and
+     reassuring "translation continues even if you close this
+     window" copy. WindowDialog is a top-level Kodi window so it
+     layers above EVERY other window -- including DarkSubs's
+     pyxbmct picker. This is now the primary progress UI for
+     both translation entry points.
+
+  2. Kodi notification toasts at 25 / 50 / 75 % milestones as a
+     guaranteed-visible backup. Toasts always layer above
+     WindowDialog too, in the rare case some Kodi-skin combination
+     hides our overlay. Throttled via a closed-over milestone dict
+     so a 20-chunk file fires at most 3 progress toasts.
+
+- Both _handle_download (direct AI Subs path) and
+  _handle_translate_file (DarkSubs hook path) now route through a
+  shared `_resolve_with_progress_window(link, info)` helper that
+  creates the overlay, wires the progress callback, and closes
+  the overlay in `finally`. Identical visual UX regardless of
+  which entry point triggered the translation.
+
+- The existing start toast ("AI: מתחיל תרגום...") and end toast
+  ("AI: תרגום הסתיים בהצלחה") in translate.resolve are unchanged.
+
 v0.2.40
 - User report: didn't see ANY progress feedback when DarkSubs picks
   a subtitle and the AI translation runs. AI works (translated SRT
