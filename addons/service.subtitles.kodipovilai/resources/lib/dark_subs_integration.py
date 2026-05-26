@@ -104,8 +104,17 @@ def maybe_patch_darksubs():
     # override has it false).
     _maybe_auto_enable_translate()
 
-    # Third: relabel DarkSubs's "Enable machine translation" toggle
-    # to hint at the AI integration.
+    # Third: one-time auto-enable of OUR force_ai_when_auto_translate_off
+    # toggle so users with a Gemini key automatically get AI translation
+    # without having to discover the second toggle. New installs ship
+    # with default=true in settings.xml; this is the migration path
+    # for users who installed before that default changed.
+    _maybe_auto_enable_force_ai()
+
+    # Fourth: relabel DarkSubs's "Enable machine translation" toggle
+    # AND surrounding settings.xml elements (section heading, source
+    # dropdown) so the user understands the whole section runs via
+    # Gemini AI when a key is connected.
     _maybe_relabel_auto_translate()
 
     try:
@@ -175,9 +184,76 @@ def _maybe_auto_enable_translate():
             '{0}'.format(e), level='WARNING')
 
 
+def _maybe_auto_enable_force_ai():
+    """One-time auto-enable of our own `force_ai_when_auto_translate_off`
+    toggle when a Gemini key is configured. Without this, users who
+    have an API key still need to navigate to a second toggle in
+    OUR addon to make AI translation activate when DarkSubs's
+    `auto_translate` setting is off -- the "two-toggle confusion"
+    real users have hit.
+
+    New installs ship `force_ai_when_auto_translate_off=true` by
+    default (see settings.xml). This function is the migration
+    path for users who installed v0.2.33 - v0.2.38 (where the
+    default was `false`). Marker-gated so we only flip ONCE; if
+    the user later disables the toggle deliberately (e.g. wants
+    English-only subs for language learning) we respect that.
+
+    No-ops if:
+      - No Gemini key set (the toggle has no effect without a key)
+      - Marker already set (we already migrated, or the user
+        upgraded a v0.2.39+ install with default=true)
+      - kodi_utils unavailable
+    """
+    if not _gemini_key_set():
+        return
+    if kodi_utils.get_setting('_force_ai_autoenable_done', '') == '1':
+        return
+    try:
+        current = (kodi_utils.get_setting(
+            'force_ai_when_auto_translate_off', '') or '').lower()
+        if current == 'true':
+            # Already on (either from the new default or a previous
+            # manual flip). Just mark the migration as done.
+            kodi_utils.set_setting('_force_ai_autoenable_done', '1')
+            return
+        kodi_utils.set_setting(
+            'force_ai_when_auto_translate_off', 'true')
+        kodi_utils.set_setting('_force_ai_autoenable_done', '1')
+        kodi_utils.log(
+            'Auto-enabled force_ai_when_auto_translate_off so AI '
+            'translation is the default whenever an API key is set',
+            level='INFO')
+        try:
+            kodi_utils.notify(
+                'תרגום AI הוגדר כברירת מחדל (כל עוד API key מחובר)',
+                time_ms=5000)
+        except Exception:
+            pass
+    except Exception as e:
+        kodi_utils.log(
+            'Auto-enable of force_ai_when_auto_translate_off '
+            'failed: {0}'.format(e), level='WARNING')
+
+
 _SETTINGS_REL_PATH = 'resources/settings.xml'
 _OLD_LABEL = 'label="הפעל תרגום מכונה"'
 _NEW_LABEL = 'label="הפעל תרגום מכונה (Gemini AI)"'
+
+# Extended relabel patches for v0.2.39: clarify that the ENTIRE
+# "machine translation" section runs via Gemini AI when a key is
+# connected. Without these, users still see "Google Translate" in
+# the source dropdown and wonder which engine actually translates
+# their subs -- the screenshot-driven UX bug.
+_OLD_HEADING = '<setting label="תרגום מכונה" type="lsep"/>'
+_NEW_HEADING = ('<setting label="תרגום מכונה — דרך Gemini AI (POV IL) '
+                'כשמפתח מחובר" type="lsep"/>')
+
+_OLD_SOURCE_LABEL = ('<setting id="translate_p" type="enum" '
+                     'label="מקור תרגום"')
+_NEW_SOURCE_LABEL = ('<setting id="translate_p" type="enum" '
+                     'label="מקור fallback (לא בשימוש כש-Gemini AI '
+                     'מחובר)"')
 
 
 def _settings_xml_path():
@@ -198,11 +274,24 @@ def _settings_xml_path():
 
 
 def _maybe_relabel_auto_translate():
-    """Rewrite the label of DarkSubs's auto_translate toggle so the
-    settings UI hints that AI is the translator. Surgical: only
-    touches the exact baseline label string; user/upstream edits
-    don't match and are left alone. Idempotent via a marker
-    substring in the new label (Gemini AI)."""
+    """Rewrite three labels in DarkSubs's settings.xml so the UI
+    makes clear that the whole "machine translation" section runs
+    via Gemini AI (when a key is connected). Each rewrite is
+    independent and idempotent via a marker substring; users /
+    upstream edits that don't match are left alone.
+
+    The three rewrites:
+      1. Toggle "הפעל תרגום מכונה" -> "הפעל תרגום מכונה (Gemini AI)"
+         (this was the original v0.2.x behaviour, kept verbatim).
+      2. Section heading "תרגום מכונה" (lsep) -> "...— דרך Gemini AI
+         (POV IL) כשמפתח מחובר".
+      3. Source dropdown "מקור תרגום" -> "מקור fallback (לא בשימוש
+         כש-Gemini AI מחובר)" so users stop reading "Google Translate"
+         in the dropdown and assuming Google is what they get.
+
+    The dropdown VALUES (Google Translate|Bing Web|Yandex) are left
+    untouched -- those describe the literal fallback path that runs
+    when no AI key is configured, so they're honest information."""
     path = _settings_xml_path()
     if not path:
         return
@@ -214,11 +303,29 @@ def _maybe_relabel_auto_translate():
             'DarkSubs settings.xml read failed: {0}'.format(e),
             level='WARNING')
         return
-    if _NEW_LABEL in content:
-        return  # already relabelled
-    if _OLD_LABEL not in content:
-        return  # upstream changed the label; leave alone
-    new_content = content.replace(_OLD_LABEL, _NEW_LABEL, 1)
+
+    new_content = content
+    changes = []
+    # 1. Toggle label (the v0.2.x relabel; still the primary marker).
+    if _NEW_LABEL not in new_content and _OLD_LABEL in new_content:
+        new_content = new_content.replace(_OLD_LABEL, _NEW_LABEL, 1)
+        changes.append('toggle')
+    # 2. Section heading (lsep).
+    if (_NEW_HEADING not in new_content
+            and _OLD_HEADING in new_content):
+        new_content = new_content.replace(
+            _OLD_HEADING, _NEW_HEADING, 1)
+        changes.append('heading')
+    # 3. Source dropdown label.
+    if (_NEW_SOURCE_LABEL not in new_content
+            and _OLD_SOURCE_LABEL in new_content):
+        new_content = new_content.replace(
+            _OLD_SOURCE_LABEL, _NEW_SOURCE_LABEL, 1)
+        changes.append('source_dropdown')
+
+    if not changes:
+        return  # everything already in its target state
+
     import os
     tmp = path + '.aitmp'
     try:
@@ -226,8 +333,8 @@ def _maybe_relabel_auto_translate():
             f.write(new_content)
         os.replace(tmp, path)
         kodi_utils.log(
-            'Relabelled DarkSubs auto_translate to indicate '
-            'Gemini AI integration', level='INFO')
+            'Relabelled DarkSubs settings.xml: ' + ', '.join(changes),
+            level='INFO')
     except OSError as e:
         try: os.remove(tmp)
         except OSError: pass
