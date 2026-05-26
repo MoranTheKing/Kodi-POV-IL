@@ -39,6 +39,10 @@ msgctxt "#32107"
 msgid "Test DarkSubs integration"
 msgstr "Test DarkSubs integration"
 
+msgctxt "#32108"
+msgid "Translate via AI even when DarkSubs auto_translate is OFF"
+msgstr "Translate via AI even when DarkSubs auto_translate is OFF"
+
 # Category: Translation
 msgctxt "#32200"
 msgid "Translation"

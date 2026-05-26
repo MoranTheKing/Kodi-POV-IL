@@ -1,3 +1,52 @@
+v0.2.33
+- A CoreELEC user reported: passes the diagnostic but AI still
+  doesn't translate his manual subtitle picks. Reason: he keeps
+  DarkSubs's auto_translate setting OFF (so DarkSubs doesn't auto-
+  translate with Google) and expected AI to take over instead.
+  But the hook lives inside machine_translate_subs, which DarkSubs
+  only calls when auto_translate=true. With auto_translate=false
+  the hook never fires -- English subs go straight to the screen.
+
+- Two complementary changes resolve this without breaking users
+  who deliberately want subs in the source language (e.g. language
+  learners watching English-with-English-subs):
+
+  * Hook bumped to v3. When AI is configured (api_key set), the
+    hook NO LONGER falls back to Google on AI timeout/crash/empty
+    output. Instead, on any AI failure it copies the original
+    English subtitle to the output path and short-circuits -- the
+    user sees the English subs on screen instead of being silently
+    "rescued" by Google Translate. Google fallback is preserved
+    ONLY when no AI key is configured (so non-AI users behave
+    identically to upstream DarkSubs).
+
+  * New patcher (darksubs_download_sub_patcher) widens the elif in
+    download_sub so it ALSO fires when the user has explicitly
+    opted in via a new toggle. The toggle lives in our addon
+    settings:
+        "Translate via AI even when DarkSubs auto_translate is OFF"
+        (id: force_ai_when_auto_translate_off, default: false)
+    With this on, picking a non-Hebrew subtitle while
+    auto_translate=false routes through machine_translate_subs (and
+    thus through our hook). With it off (default), behaviour is
+    identical to upstream DarkSubs for users who deliberately keep
+    auto_translate off.
+
+- Bug fix: the existing hook patcher silently rewrote DarkSubs's
+  engine.py from CRLF to LF on every Kodi startup. Text-mode read
+  with universal newlines + text-mode write with default newline=
+  was doing the conversion. Hook patcher now uses BINARY read/write
+  end-to-end, preserves original line endings, and detects the EOL
+  style of the source file when writing the injected hook body.
+
+- Diagnostic checklist now has 10 rows. New rows:
+  * "פאצ' download_sub פעיל" -- whether the elif rewrite is on disk.
+  * "הוק AI יפעל על כתוביות לא-עבריות" -- the TRUTHFUL "does this
+    setup actually translate anything?" check. Considers
+    auto_translate + force_ai toggle + download_sub marker to give
+    a concrete yes/no plus an explanation of which lever to flip
+    if the user wants different behaviour.
+
 v0.2.32
 - 0.2.31's diagnostic surfaced a real failure mode: a CoreELEC user
   reported all 8 checks green BUT the hook still doesn't fire --
