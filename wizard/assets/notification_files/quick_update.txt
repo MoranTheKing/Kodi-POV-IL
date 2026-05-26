@@ -1,20 +1,35 @@
-65
+66
 |||
-תיקון אמיתי לבעיית ה-UUID בכותרת הדיאלוג — סוף סוף, פעמיים בטוח
-המשתמש דיווח שאחרי v0.2.29 הכותרת בדיאלוג של DarkSubs **עדיין** מציגה UUID `4218f4e3-9d2f-4272-a073-13bbdb0f08c5` בטורבוקס. גם אחוזים עלו רק בלגל (43-48% במקום 33-37%). חקירה לעומק חשפה שתי בעיות נסתרות:
+דיאגנוסטיקה גלויה לבעיות אצל משתמשי CoreELEC ואחרים
+משתמש CoreELEC דיווח שהתקין את התוסף, חיבר את ה-Gemini key, אבל עדיין מתורגם דרך גוגל תרגום. בלי הודעת שגיאה. בלי log. בלי שום סימן למה זה לא עובד. זה היה הסיוט הכי גדול בדיבוג עד היום — failure שקט שמתחזה ל-"AI subs לא עובד".
 
-**1. POV משתמש ב-`<reuselanguageinvoker>true</reuselanguageinvoker>`** — Kodi משאיר את אינטרפרטר ה-Python של POV בזיכרון בין הקראות. אנחנו כתבנו את ה-sources.py החדש לדיסק, אבל הקוד הישן עדיין רץ בזיכרון עד **restart מלא של Kodi** (לא רק quick_update). אז ה-pov_source_name_patcher לא קופץ בכלל בהפעלות הראשונות אחרי השדרוג — ה-property `subs.player_filename` נשאר ריק.
+חקרתי כל ה-failure modes האפשריים והוספתי **דיאגנוסטיקה גלויה** שמאתרת אותם ב-real-time:
 
-**2. כותרת הדיאלוג מורנדרת מ-XML של ה-skin** — `addons/skin.fentastic/xml/DialogSubtitles.xml` משתמש ב-`$INFO[Player.Filename]`, info-label built-in של Kodi שלא מסתכל על Window properties בכלל. גם אם היינו מצליחים לקבוע את `subs.player_filename` בסוף, הכותרת היתה ממשיכה להציג את ה-basename של ה-URL.
+**א. Toast אוטומטי בכל הפעלת Kodi** — אם הפאצ' של DarkSubs נכשל לאיזושהי סיבה, מופיע toast בעברית **אוטומטית** עם הסיבה הספציפית. למשל:
+- "אין הרשאת כתיבה ל-DarkSubs engine.py" (read-only FS, בעיה ב-CoreELEC)
+- "גרסת DarkSubs שלך השתנתה ולא תאמה לפאצ'ר שלי" (upstream signature change)
+- "אין מפתח Gemini — DarkSubs ישתמש בגוגל תרגום עד שתחבר"
+- "DarkSubs auto_translate כבוי — הפעל בהגדרות DarkSubs"
 
-**שני פאצ'ים משלימים שעוקפים שתי הבעיות:**
+Toast פעם אחת לכל failure-class (לא מטרידים בכל boot).
 
-1. **fentastic_dialog_subtitles_patcher** — כותב מחדש את `DialogSubtitles.xml` של FENtastic כך שהכותרת קודם מנסה את `Window(10000).Property(subs.player_filename)` ורק אם הוא ריק נופלת חזרה ל-`Player.Filename`. שתי label controls עם `<visible>` mutually-exclusive — שיטה bullet-proof שלא תלויה ב-Kodi internals.
+**ב. כפתור "בדוק חיבור DarkSubs" בהגדרות התוסף** — נכנסים ל:
+Settings → Add-ons → My Add-ons → Subtitle services → Kodi POV IL - AI Subtitles → Configure → "בדוק חיבור DarkSubs"
 
-2. **subs_filename_publisher** — `xbmc.Player` subclass שחי בתהליך השירות שלנו ומאזין ל-`onAVStarted`. בכל הפעלה הוא קורא את `pov_picked_source_name` (אם הפאצ' של POV כן עבד הפעם) או מסנתז שם release מ-VideoPlayer info-labels, וכותב ל-`subs.player_filename`. **רץ ב-process נפרד מ-POV** — לא מושפע מ-reuselanguageinvoker. הproperty נכתב **בכל playback ראשון** אחרי השדרוג בלי צורך ב-restart של Kodi.
+לוחצים, ומקבלים דיאלוג עם 8 בדיקות מפורטות עם ✓/✗:
+1. DarkSubs מותקן?
+2. engine.py נמצא על הדיסק?
+3. engine.py נקרא?
+4. הוק AI מוזרק (marker)?
+5. machine_translate_subs בצורה מצופה?
+6. engine.py כתיב?
+7. Gemini API key מוגדר?
+8. DarkSubs auto_translate מופעל?
 
-**שאלת המשתמש: למה ב-RD/AllDebrid אין גיבריש?** כי ה-URL של RD/AD כולל את שם הקובץ בנתיב (`https://x.real-debrid.com/d/<id>/Title.S01E01.mkv`). ה-`Player.Filename` של Kodi לוקח את ה-basename וזה באמת שם אמיתי. ב-TorBox ה-URL הוא `store-N.torbox.app/<uuid>?token=...` — basename הוא UUID בלבד. ההבדל הוא רק בפורמט ה-URL של ה-CDN.
+כל ✗ מציג בדיוק מה הסיבה ומה הצעד הבא. במקום שמשתמש יצטרך לפתוח Kodi log או לשלוח לי screenshot של פיצ'ר שלא עובד, הוא יכול בעצמו לראות מה לא תפס.
 
-**שאלת המשתמש: למי בבילד עצמאי מה להוריד?** רק `service.subtitles.kodipovilai-latest.zip` (תוסף ה-AI Subs). הוא מכיל את כל ה-patchers שמתקנים אוטומטית את POV, DarkSubs, ועכשיו גם את FENtastic skin בכל הפעלה. אין צורך להוריד POV או DarkSubs בנפרד.
+**הכי חשוב לגבי ההפצה:** המשתמש שלך ב-CoreELEC לא צריך את הבילד המלא. כל מי שהתקין את ה-zip של תוסף ה-AI Subs (גם בנפרד) יראה את ה-toast וגם את הכפתור. ה-button יושב בתוך ה-settings.xml של התוסף עצמו, נגיש מ-Settings → Add-ons → My Add-ons.
+
+**תהליך עבודה מומלץ לבעיה הנוכחית:** בקש מהמשתמש ב-CoreELEC להתקין את 0.2.31, להפעיל Kodi מחדש. אם מופיע toast — הוא יראה את הסיבה הספציפית. אם לא מופיע toast — שיפתח את "בדוק חיבור DarkSubs" וישלח לך screenshot של הדיאלוג. עם זה ניתן לדעת בדיוק איזה שלב נכשל ולפתור.
 
 quick_update + restart.

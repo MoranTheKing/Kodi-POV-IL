@@ -476,6 +476,29 @@ def _maybe_patch_darksubs():
             pass
 
 
+def _maybe_surface_darksubs_status():
+    """Run the DarkSubs hook diagnostic at startup. If the integration
+    has an actionable problem (e.g. signature mismatch, read-only
+    filesystem -- CoreELEC has shown up in user reports), pop a
+    Hebrew toast pointing the user at the settings 'Test DarkSubs
+    integration' entry. Only once per failure-class-version so we
+    don't spam on every boot."""
+    try:
+        from resources.lib import darksubs_hook_diagnostics
+    except Exception:
+        return
+    try:
+        darksubs_hook_diagnostics.surface_status_if_problem()
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'darksubs_hook_diagnostics.surface_status_if_problem '
+                'failed: {0}'.format(e), level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_source_name():
     """Self-healing patch of POV's sources.py so that when POV picks
     a source from the source-select dialog (the one with cached/
@@ -621,6 +644,14 @@ def main():
     # if upstream DarkSubs updates and overwrites our hook, it
     # comes back automatically on next Kodi launch.
     _maybe_patch_darksubs()
+
+    # Now that the hook injection has had its shot, run a structural
+    # check end-to-end and pop a toast if something is broken (e.g.
+    # DarkSubs signature changed, engine.py not writable on CoreELEC,
+    # API key missing). Without this, hook failures cascade silently
+    # into "AI subs not working" with no signal to the user. Only
+    # toasts once per failure-class.
+    _maybe_surface_darksubs_status()
 
     # Stash POV's picked release name (from the source-select dialog)
     # in a Window(10000) property before play() so DarkSubs can use
