@@ -868,11 +868,46 @@ def _handle_translate_file(params):
         json.dumps(payload, ensure_ascii=False))
 
     translated_path = None
+    # Background progress dialog -- matches what _handle_download
+    # already shows when the user picks our AI Subs service
+    # directly. Without this, a user picking an English subtitle
+    # via DarkSubs sees NOTHING while the 30-90s translation runs
+    # in the background -- they don't even know AI is working,
+    # which is exactly the "is the hook even firing?" confusion
+    # we kept getting. DialogProgressBG is non-blocking and shows
+    # in the bottom-right banner area, doesn't interfere with
+    # DarkSubs's own UI.
+    progress = None
     try:
-        translated_path = translate.resolve(link, info)
+        progress = xbmcgui.DialogProgressBG()
+        progress.create('Kodi POV IL - AI Subtitles',
+                        'תרגום AI מתחיל...')
+    except Exception:
+        progress = None
+
+    def report(stage, total):
+        if not progress:
+            return
+        try:
+            from resources.lib import kodi_utils as _ku
+            pct = int(stage * 100 / max(1, total))
+            progress.update(pct, 'Kodi POV IL - AI Subtitles',
+                            _ku.localised(33001, stage, total))
+        except Exception:
+            pass
+
+    try:
+        translated_path = translate.resolve(link, info,
+                                            progress_cb=report)
     except Exception as e:
         _safe_log('translate_file: resolve crashed: {0}'.format(e),
                   level='ERROR')
+    finally:
+        if progress is not None:
+            try:
+                progress.close()
+            except Exception:
+                pass
 
     if not translated_path or not os.path.isfile(translated_path):
         _safe_log('translate_file: resolve returned nothing',
