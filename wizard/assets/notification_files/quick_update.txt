@@ -1,31 +1,20 @@
-64
+65
 |||
-תיקון כותרת UUID בדיאלוג כתוביות — עכשיו רואים שם קובץ אמיתי גם בטורבוקס
-המשתמש הראה צילום מסך אחרי quick_update הקודם: האחוזים עלו (33-50% ב-TorBox במקום 0%), אבל למעלה בכותרת הדיאלוג עדיין הופיע ה-UUID `1f1203d5-fc0e-481f-a93a-83584b6cad28` — גיבריש שאי אפשר להשוות אליו ויזואלית את שמות הכתוביות.
+תיקון אמיתי לבעיית ה-UUID בכותרת הדיאלוג — סוף סוף, פעמיים בטוח
+המשתמש דיווח שאחרי v0.2.29 הכותרת בדיאלוג של DarkSubs **עדיין** מציגה UUID `4218f4e3-9d2f-4272-a073-13bbdb0f08c5` בטורבוקס. גם אחוזים עלו רק בלגל (43-48% במקום 33-37%). חקירה לעומק חשפה שתי בעיות נסתרות:
 
-**הסיבה שמצאתי:** בdarksubs general.py:517, DarkSubs קוראת native Window property בשם `subs.player_filename`:
-```python
-video_data['Tagline_From_Fen'] = xbmcgui.Window(10000).getProperty("subs.player_filename")
-video_data['Tagline'] = video_data['Tagline_From_Fen'] or video_data['VideoPlayer.Tagline']
-```
-ובsub_window.py:59 הכותרת בדיאלוג מורכבת מ:
-```python
-self.video_file_name_label = self.video_data['Tagline'] or self.video_data['file_original_path']
-```
+**1. POV משתמש ב-`<reuselanguageinvoker>true</reuselanguageinvoker>`** — Kodi משאיר את אינטרפרטר ה-Python של POV בזיכרון בין הקראות. אנחנו כתבנו את ה-sources.py החדש לדיסק, אבל הקוד הישן עדיין רץ בזיכרון עד **restart מלא של Kodi** (לא רק quick_update). אז ה-pov_source_name_patcher לא קופץ בכלל בהפעלות הראשונות אחרי השדרוג — ה-property `subs.player_filename` נשאר ריק.
 
-הפאצ' הקודם תיקן את `file_original_path` (האחוזים) אבל לא כתב ל-`subs.player_filename` (הכותרת). POV (fork של FEN) פשוט שכח לכתוב לproperty הזה.
+**2. כותרת הדיאלוג מורנדרת מ-XML של ה-skin** — `addons/skin.fentastic/xml/DialogSubtitles.xml` משתמש ב-`$INFO[Player.Filename]`, info-label built-in של Kodi שלא מסתכל על Window properties בכלל. גם אם היינו מצליחים לקבוע את `subs.player_filename` בסוף, הכותרת היתה ממשיכה להציג את ה-basename של ה-URL.
 
-**v2 patchers:**
+**שני פאצ'ים משלימים שעוקפים שתי הבעיות:**
 
-1. **pov_source_name_patcher v2** — מוסיף `Window(10000).setProperty('subs.player_filename', item['name'])` לצד ה-props הקיימים. עכשיו DarkSubs מקבל את שם ה-release האמיתי דרך ה-API שלה עצמה גם לכותרת וגם ל-Tagline branch של חישוב האחוזים (engine.py:197 לוקח max ביניהם — אז המעבר ל-Tagline מקפיץ את האחוזים מ-30-50% ל-70-95%).
+1. **fentastic_dialog_subtitles_patcher** — כותב מחדש את `DialogSubtitles.xml` של FENtastic כך שהכותרת קודם מנסה את `Window(10000).Property(subs.player_filename)` ורק אם הוא ריק נופלת חזרה ל-`Player.Filename`. שתי label controls עם `<visible>` mutually-exclusive — שיטה bullet-proof שלא תלויה ב-Kodi internals.
 
-2. **darksubs_filename_fallback_patcher v2** — מנקה את `subs.player_filename` כש-URL guard נכשל. מונע ערך ישן ממשחק קודם של POV לדלוף ל-playback חדש מ-addon אחר.
+2. **subs_filename_publisher** — `xbmc.Player` subclass שחי בתהליך השירות שלנו ומאזין ל-`onAVStarted`. בכל הפעלה הוא קורא את `pov_picked_source_name` (אם הפאצ' של POV כן עבד הפעם) או מסנתז שם release מ-VideoPlayer info-labels, וכותב ל-`subs.player_filename`. **רץ ב-process נפרד מ-POV** — לא מושפע מ-reuselanguageinvoker. הproperty נכתב **בכל playback ראשון** אחרי השדרוג בלי צורך ב-restart של Kodi.
 
-**מיגרציה:** שני הפאצ'ים מזהים את ההזרקה של v0.2.28 בקבצים על הדיסק, מבצעים revert ל-original ואז מחילים את גרסת v2. אידמפוטנטי בכל הפעלה.
+**שאלת המשתמש: למה ב-RD/AllDebrid אין גיבריש?** כי ה-URL של RD/AD כולל את שם הקובץ בנתיב (`https://x.real-debrid.com/d/<id>/Title.S01E01.mkv`). ה-`Player.Filename` של Kodi לוקח את ה-basename וזה באמת שם אמיתי. ב-TorBox ה-URL הוא `store-N.torbox.app/<uuid>?token=...` — basename הוא UUID בלבד. ההבדל הוא רק בפורמט ה-URL של ה-CDN.
 
-**תוצאה צפויה:**
-- TorBox: כותרת הדיאלוג מציגה `War.Machine.2026.1080p.NF.WEB-DL.DDP5.1.Atmos.H.264-RYNDR.mkv` במקום UUID
-- אחוזים מקפיצים מ-30-50% ל-70-95% (כי Tagline branch של engine.py יקבל עכשיו את שם ה-release המלא)
-- אפשר סוף סוף להשוות ויזואלית בקלות בין שם הקובץ למעלה לשמות הכתוביות
+**שאלת המשתמש: למי בבילד עצמאי מה להוריד?** רק `service.subtitles.kodipovilai-latest.zip` (תוסף ה-AI Subs). הוא מכיל את כל ה-patchers שמתקנים אוטומטית את POV, DarkSubs, ועכשיו גם את FENtastic skin בכל הפעלה. אין צורך להוריד POV או DarkSubs בנפרד.
 
 quick_update + restart.

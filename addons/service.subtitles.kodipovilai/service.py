@@ -25,6 +25,12 @@ except ImportError:
 ADDON_ID = 'service.subtitles.kodipovilai'
 FIRST_RUN_MARKER = '.disable_on_first_run'
 
+# Strong reference to the SubsFilenamePublisher player monitor,
+# kept alive for the lifetime of the service. xbmc.Player subclasses
+# stop receiving callbacks when garbage-collected, so this MUST not
+# be a local variable.
+_subs_filename_publisher = None
+
 
 def _check_first_run_marker():
     """Return True iff we self-disabled (caller should exit)."""
@@ -540,6 +546,41 @@ def _maybe_patch_darksubs_filename():
             pass
 
 
+def _maybe_patch_fentastic_dialog_subtitles():
+    """Self-healing patch of FENtastic skin's DialogSubtitles.xml so
+    the subtitle-picker dialog HEADER prefers the window property
+    `subs.player_filename` (set by POV's source picker AND/OR our
+    own SubsFilenamePublisher player monitor) over the built-in
+    `Player.Filename`. Without this, the header shows the UUID
+    basename of TorBox CDN URLs even when our property is set --
+    because Kodi's DialogSubtitles XML resolves Player.Filename
+    directly from the player URL, not from any addon-settable
+    state. Patching the XML makes the header read our property
+    first."""
+    try:
+        from resources.lib import fentastic_dialog_subtitles_patcher, \
+            kodi_utils
+    except Exception:
+        return
+    try:
+        status = fentastic_dialog_subtitles_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'fentastic_dialog_subtitles_patcher: dialog header '
+                'now prefers subs.player_filename', level='INFO')
+        elif status in ('unmatched', 'write_failed', 'read_failed'):
+            kodi_utils.log(
+                'fentastic_dialog_subtitles_patcher: ' + status,
+                level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'fentastic_dialog_subtitles_patcher failed: '
+                '{0}'.format(e), level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_purge_temp_once():
     try:
         from resources.lib import local_subs, kodi_utils
@@ -596,6 +637,13 @@ def main():
     # AND the basename looks like an opaque hash (TorBox CDN behaviour).
     _maybe_patch_darksubs_filename()
 
+    # Fix the subtitle-picker dialog HEADER (rendered by Kodi from
+    # the skin's DialogSubtitles.xml) to prefer our subs.player_filename
+    # property over the built-in Player.Filename. Without this, even
+    # if our other patchers set the property, the dialog title still
+    # shows the URL basename / UUID.
+    _maybe_patch_fentastic_dialog_subtitles()
+
     # Remove the v0.1.5-v0.1.7 misplaced injection into the wizard's
     # login_menu (the right menu was POV's, not the wizard's).
     _maybe_cleanup_wizard()
@@ -645,6 +693,25 @@ def main():
     # that were written before the post-processor caught their
     # specific edge case. Marker-gated so it only runs once.
     _maybe_repair_rtl_cache()
+
+    # Spin up the SubsFilenamePublisher player monitor. It needs to
+    # outlive this function's local scope -- xbmc.Player subclasses
+    # only receive callbacks while a strong reference exists. Pinning
+    # it to the module is sufficient since `main` runs for the
+    # lifetime of the service.
+    global _subs_filename_publisher  # noqa: PLW0603
+    try:
+        from resources.lib import subs_filename_publisher
+        _subs_filename_publisher = \
+            subs_filename_publisher.SubsFilenamePublisher()
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'SubsFilenamePublisher init failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
 
     monitor = xbmc.Monitor()
     # 24h between passes. waitForAbort returns True when Kodi is
