@@ -443,18 +443,18 @@ class _PairWindow(xbmcgui.WindowDialog):
 
 class _AITranslateProgressWindow(xbmcgui.WindowDialog):
     """Full-screen overlay shown while AI translation is running.
-    Layers above ANY other window including DarkSubs's full-screen
-    pyxbmct MySubs picker -- the v0.2.40 DialogProgressBG was
-    hidden behind that picker because BG dialogs are anchored to
-    the bottom-right corner which DarkSubs's window covered.
-    WindowDialog is a top-level Kodi window so this stays visible
-    no matter what's behind it.
+    Shown via doModal() (see _resolve_with_progress_window) so it
+    layers above DarkSubs's pyxbmct MySubs picker -- the v0.2.41
+    show()-based version was being rendered behind that picker
+    because pyxbmct AddonDialogWindow captures z-order.
 
-    Non-blocking from the user's perspective: while shown, the
-    translation continues in the background. Closing this window
-    early (via close()) doesn't cancel the translation; it just
-    hides the visual. The picker behind us still blocks until
-    DarkSubs's machine_translate_subs returns, by design."""
+    User can dismiss via Back/Esc. That just closes the modal --
+    translation continues in the background worker thread and the
+    output file is still written when ready."""
+
+    # Standard Kodi remote/keyboard action codes for Back/Esc.
+    ACTION_PREVIOUS_MENU = 10
+    ACTION_NAV_BACK = 92
 
     def __init__(self, *args, **kwargs):
         # WindowDialog quirk: do NOT call super().__init__ with
@@ -463,6 +463,21 @@ class _AITranslateProgressWindow(xbmcgui.WindowDialog):
         self._chunks_lbl = None
         self._progress_bar = None
         self._status_lbl = None
+
+    def onAction(self, action):
+        try:
+            aid = action.getId()
+        except Exception:
+            return
+        if aid in (self.ACTION_PREVIOUS_MENU, self.ACTION_NAV_BACK):
+            # User wants to dismiss -- close the modal so doModal()
+            # in _resolve_with_progress_window returns. The worker
+            # thread keeps translating; its final close() call below
+            # will be a no-op since we're already closed.
+            try:
+                self.close()
+            except Exception:
+                pass
 
     def setup(self):
         # WindowDialog coordinate space is 1280x720 by default.
@@ -551,13 +566,30 @@ def _resolve_with_progress_window(link, info):
     overlay PLUS the milestone toasts as a guaranteed-visible
     backup. Both _handle_download and _handle_translate_file call
     this so the visual progress UX is identical regardless of which
-    entry point triggered the translation."""
+    entry point triggered the translation.
+
+    Architecture: doModal() + worker-thread translation. The earlier
+    show() approach left the WindowDialog as a non-modal child window
+    behind DarkSubs's pyxbmct AddonDialogWindow (which is modal and
+    captures z-order). doModal() forces our window to render ABOVE
+    every other window unconditionally; the trade-off is that
+    doModal blocks the calling thread, so we move translate.resolve
+    into a daemon thread and have it close() the window when done --
+    which un-blocks doModal and lets the function return.
+
+    User can also dismiss the modal early via Back/Esc. In that case
+    translate.resolve continues running in the worker thread
+    (translation isn't cancelled), and the final result is still
+    written to disk -- DarkSubs picks it up when the download_sub
+    flow checks for trans_file. So early-dismiss costs only the
+    visual; the translation itself isn't lost."""
+    import threading as _threading
+    result = {'path': None, 'error': None}
     window = None
     try:
         try:
             window = _AITranslateProgressWindow()
             window.setup()
-            window.show()
         except Exception:
             window = None
 
@@ -566,16 +598,17 @@ def _resolve_with_progress_window(link, info):
         def report(stage, total):
             try:
                 pct = int(stage * 100 / max(1, total))
-                # 1. Update the WindowDialog overlay (primary UX).
+                # 1. Update the WindowDialog overlay (primary UX,
+                #    visible while the modal is open).
                 if window is not None:
                     try:
                         window.update_progress(stage, total)
                     except Exception:
                         pass
                 # 2. Toast at 25 / 50 / 75 % as a guaranteed-visible
-                #    backup (toasts always layer above WindowDialog
-                #    too, in case some Kodi-skin combination hides
-                #    our overlay).
+                #    backup -- toasts always layer above WindowDialog
+                #    too, and they also survive the case where the
+                #    user dismissed the modal early.
                 milestone = (pct // 25) * 25
                 if (milestone in (25, 50, 75)
                         and milestone > _milestone_state['last']):
@@ -590,15 +623,50 @@ def _resolve_with_progress_window(link, info):
             except Exception:
                 pass
 
-        return translate.resolve(link, info, progress_cb=report)
+        def _worker():
+            try:
+                result['path'] = translate.resolve(
+                    link, info, progress_cb=report)
+            except Exception as _e:
+                result['error'] = _e
+            finally:
+                # Close from the worker so the main thread's
+                # doModal() returns. Wrapped in try/except because
+                # the user may have already dismissed the modal.
+                if window is not None:
+                    try:
+                        window.close()
+                    except Exception:
+                        pass
+
+        worker = _threading.Thread(target=_worker, daemon=True)
+        worker.start()
+
+        # doModal() blocks here until the worker calls window.close()
+        # (translation finished) OR the user presses Back/Esc on the
+        # modal. If window creation failed, skip the modal and just
+        # join the worker -- translation still proceeds, just with
+        # toast-only progress UX.
+        if window is not None:
+            try:
+                window.doModal()
+            except Exception:
+                pass
+
+        # Always wait for the worker -- if the user dismissed the
+        # modal early, translation is still in flight in the background.
+        # We need its result before returning. 10-minute cap covers
+        # the worst-case Gemini outage retry chain (5 backoff steps
+        # of up to 120s each = ~10min).
+        worker.join(timeout=600)
+
+        if result['error']:
+            raise result['error']
+        return result['path']
     finally:
         if window is not None:
             try:
                 window.close()
-            except Exception:
-                pass
-            try:
-                del window
             except Exception:
                 pass
 
