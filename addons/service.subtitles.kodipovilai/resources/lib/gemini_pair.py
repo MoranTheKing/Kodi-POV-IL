@@ -237,15 +237,17 @@ def _make_handler(state):
             # error in the Kodi UI, not in the browser.
             state['received_key'] = key
             # Build a fingerprint the user can sanity-check against
-            # the key they actually copied. If iOS managed to corrupt
-            # something despite our sanitiser, the first-4/last-4
-            # comparison surfaces it immediately.
-            first4 = (key[:4] if len(key) >= 4 else key) or '?'
-            last4 = (key[-4:] if len(key) >= 8 else '') or '...'
+            # the key they actually copied. Show first 8 + last 8
+            # chars: a 39-char Gemini key has its middle 23 hidden,
+            # which is plenty for shoulder-surf safety while giving
+            # the user enough material to confirm no mid-string
+            # corruption survived our sanitiser.
+            head = (key[:8] if len(key) >= 8 else key) or '?'
+            tail = (key[-8:] if len(key) >= 16 else '') or '...'
             fingerprint = '{0}…{1}   ({2} chars)'.format(
-                first4, last4, len(key))
+                head, tail, len(key))
             self._send(200, _HTML_DONE_OK.format(
-                fingerprint=fingerprint, first4=first4, last4=last4))
+                fingerprint=fingerprint, first4=head, last4=tail))
 
         # Silence stderr access-log spam.
         def log_message(self, fmt, *args):
@@ -260,33 +262,135 @@ class _ThreadingServer(socketserver.ThreadingMixIn,
     allow_reuse_address = True
 
 
-def get_lan_ip():
-    """Best-effort detection of this machine's LAN IP. Tries the
-    "connect to a public address" trick (no packets actually sent
-    on UDP) and falls back to hostname resolution.
-
-    Returns the IP as a string, or None if we couldn't figure out
-    a non-loopback one."""
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.settimeout(0.5)
+def _is_private_lan_ip(ip):
+    """True for the RFC 1918 ranges + 100.64/10 (CGNAT-ish, occasionally
+    seen on home routers). Excludes 127/8 (loopback), 169.254/16
+    (link-local that means "DHCP failed"), VPN tunnel typical ranges
+    are NOT excluded because we want them surfaced -- the user can
+    pick which one matches their phone."""
+    if not ip or ip.startswith('127.') or ip.startswith('169.254.'):
+        return False
+    if ip.startswith('10.') or ip.startswith('192.168.'):
+        return True
+    if ip.startswith('172.'):
         try:
-            s.connect(('8.8.8.8', 1))
-            ip = s.getsockname()[0]
-        finally:
-            s.close()
-        if ip and not ip.startswith('127.'):
-            return ip
-    except Exception:
-        pass
+            second = int(ip.split('.')[1])
+            return 16 <= second <= 31
+        except (ValueError, IndexError):
+            return False
+    if ip.startswith('100.'):
+        try:
+            second = int(ip.split('.')[1])
+            return 64 <= second <= 127
+        except (ValueError, IndexError):
+            return False
+    return False
+
+
+def _probe_outbound_ip(target):
+    """Open a UDP socket "connected" to `target` (no packets sent)
+    and read the local address the OS picked. Returns '' on failure."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        host = socket.gethostname()
-        ip = socket.gethostbyname(host)
-        if ip and not ip.startswith('127.'):
-            return ip
+        s.settimeout(0.5)
+        s.connect((target, 1))
+        return s.getsockname()[0]
+    except Exception:
+        return ''
+    finally:
+        s.close()
+
+
+def _ips_from_subprocess():
+    """Enumerate IPv4 addresses on every interface using the `ip`
+    or `ifconfig` CLI. Reliable on Android (which always ships
+    `ip` via toybox), Linux desktops, and most BSDs. Returns an
+    empty list if neither command is available. This is the
+    cleanest way to catch IPs on interfaces that AREN'T the
+    default route -- a WiFi + Ethernet multi-NIC Android TV
+    where the user's phone might only reach one of them."""
+    import subprocess
+    out = ''
+    for cmd in (['ip', '-4', '-o', 'addr'],
+                ['ifconfig'], ['ifconfig', '-a']):
+        try:
+            out = subprocess.check_output(
+                cmd, stderr=subprocess.DEVNULL,
+                timeout=2).decode('utf-8', errors='replace')
+            if out:
+                break
+        except Exception:
+            continue
+    if not out:
+        return []
+    # IPv4 dotted-quad regex; tolerates `ip addr` ("inet 192.168.1.5/24")
+    # and ifconfig ("inet 192.168.1.5 netmask ...").
+    import re as _re
+    found = _re.findall(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', out)
+    # Dedupe preserving order.
+    seen, ips = set(), []
+    for ip in found:
+        if ip not in seen:
+            seen.add(ip)
+            ips.append(ip)
+    return ips
+
+
+def get_lan_ips():
+    """Return ALL plausible LAN IPv4 addresses for this machine, in
+    priority order. The dialog shows every entry so a user with
+    multiple interfaces (WiFi + Ethernet on an Android TV, VPN
+    + WiFi on a laptop, etc.) can pick the one their phone is on
+    -- the single-IP heuristic in the older version would silently
+    pick the wrong interface for VPN/multi-NIC setups, leaving
+    the phone unable to reach the server."""
+    candidates = []
+
+    # 1. The "connect to 8.8.8.8" trick -- gives us the IP of the
+    #    interface used for the default route. PRIORITISED first
+    #    because in single-NIC cases this is always correct.
+    ip = _probe_outbound_ip('8.8.8.8')
+    if ip and ip not in candidates:
+        candidates.append(ip)
+
+    # 2. Subprocess-based interface enumeration -- catches IPs on
+    #    non-default-route interfaces (the case behind every
+    #    "phone says address not found" report when the user has
+    #    WiFi + Ethernet both up). `ip addr` on Android, `ifconfig`
+    #    on POSIX.
+    for ip in _ips_from_subprocess():
+        if ip and ip not in candidates:
+            candidates.append(ip)
+
+    # 3. Probe each private-LAN range -- in some routing-table
+    #    configurations a probe to a specific range binds to the
+    #    matching interface.
+    for probe_target in ('10.0.0.1', '192.168.1.1', '172.16.0.1',
+                         '100.64.0.1'):
+        ip = _probe_outbound_ip(probe_target)
+        if ip and ip not in candidates:
+            candidates.append(ip)
+
+    # 4. Hostname-based fallback (sometimes lists more interfaces).
+    try:
+        _, _, hostname_ips = socket.gethostbyname_ex(socket.gethostname())
+        for ip in hostname_ips:
+            if ip and ip not in candidates:
+                candidates.append(ip)
     except Exception:
         pass
-    return None
+
+    # Keep only private-LAN-looking IPs -- VPN/Internet IPs would
+    # never be reachable from the phone anyway, and the user
+    # gets confused if we show them.
+    return [ip for ip in candidates if _is_private_lan_ip(ip)]
+
+
+def get_lan_ip():
+    """Back-compat shim for callers that want just one IP -- returns
+    the first (= default-route) LAN candidate or None."""
+    ips = get_lan_ips()
+    return ips[0] if ips else None
 
 
 def find_free_port(preferred=(8765, 8766, 8767, 8768, 8769)):
@@ -313,8 +417,16 @@ class PairServer:
     """Tiny wrapper so the caller can `with PairServer() as ps:`
     style use it. After construction:
       ps.port           -- the bound port number
-      ps.lan_ip         -- detected LAN IP or None
+      ps.lan_ip         -- detected primary LAN IP or None
+      ps.lan_ips        -- list of ALL plausible LAN IPv4 addresses
+                           (one per interface). The dialog should
+                           show every entry because a user on
+                           Android-TV-with-Ethernet-AND-WiFi might
+                           need a different one than the
+                           default-route IP we'd otherwise pick.
       ps.url_lan        -- 'http://<lan_ip>:<port>' or None
+                           (primary URL -- first entry of url_lans)
+      ps.url_lans       -- list of 'http://<ip>:<port>' for every IP
       ps.url_local      -- 'http://localhost:<port>'
       ps.received_key() -- returns the submitted key or '' if none yet
       ps.shutdown()     -- stops the server thread (idempotent)
@@ -323,14 +435,16 @@ class PairServer:
     def __init__(self):
         self._state = {'received_key': None}
         self.port = find_free_port()
-        self.lan_ip = get_lan_ip()
+        self.lan_ips = get_lan_ips()
+        self.lan_ip = self.lan_ips[0] if self.lan_ips else None
         handler = _make_handler(self._state)
         self._server = _ThreadingServer(('', self.port), handler)
         self._thread = threading.Thread(
             target=self._server.serve_forever, daemon=True)
         self._thread.start()
-        self.url_lan = ('http://{0}:{1}'.format(self.lan_ip, self.port)
-                        if self.lan_ip else None)
+        self.url_lans = ['http://{0}:{1}'.format(ip, self.port)
+                         for ip in self.lan_ips]
+        self.url_lan = self.url_lans[0] if self.url_lans else None
         self.url_local = 'http://localhost:{0}'.format(self.port)
         self._closed = False
 

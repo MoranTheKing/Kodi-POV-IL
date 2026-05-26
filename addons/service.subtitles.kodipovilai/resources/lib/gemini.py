@@ -59,7 +59,21 @@ def test_key(api_key, model='gemini-3.1-flash-lite'):
         raise GeminiError('Network error: {0}'.format(e))
 
     if r.status_code == 400 or r.status_code == 403:
-        raise InvalidKey('Key rejected by Gemini ({0})'.format(r.status_code))
+        # Surface Google's actual error reason -- the API returns JSON
+        # like {"error":{"code":400,"message":"API key not valid. ..."}}
+        # and the user otherwise sees only "rejected (400)" with no
+        # clue WHY (typo'd key vs revoked vs quota vs project not
+        # enabled all show the same way). Trim to a sensible length.
+        reason = ''
+        try:
+            err = (r.json() or {}).get('error') or {}
+            reason = err.get('message') or err.get('status') or ''
+        except Exception:
+            pass
+        if not reason:
+            reason = (r.text or '').strip()[:140]
+        raise InvalidKey('Gemini rejected the key ({0}): {1}'.format(
+            r.status_code, reason or '(no reason returned)'))
     if r.status_code != 200:
         raise GeminiError('HTTP {0}: {1}'.format(r.status_code, r.text[:200]))
 
