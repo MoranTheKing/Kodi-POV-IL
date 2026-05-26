@@ -1,3 +1,36 @@
+v0.2.43
+- v0.2.42's doModal() switch fixed z-order -- the progress overlay
+  finally renders on top of DarkSubs's MySubs picker. But a new
+  screenshot revealed it renders as a SOLID BLACK BOX: title,
+  percent, chunks counter, all invisible. The card looks broken
+  rather than busy.
+
+- Root cause: ControlImage uses colorDiffuse as a MULTIPLIER on
+  the base texture. The previous code used dark_bg.png (already
+  dark) as both backdrop and card, then multiplied by more dark
+  colors (DD000000, F0172635). Dark * dark = black. The yellow
+  title, the percent number, the chunk counter were all there but
+  invisible against the unintentionally-black card.
+
+- Fix: ship a 16x16 fully-opaque WHITE pixel PNG
+  (resources/lib/icons/white_pixel.png, 79 bytes) and use it as
+  the base texture for every colorDiffuse fill in the modal.
+  White * navy = navy. White * yellow stripe = yellow. Colors
+  finally come through.
+
+- Bonus polish while we were already in the file:
+  * Card widened 800 -> 900, repositioned to better center.
+  * Added a soft shadow (4px offset, semi-opaque black) behind
+    the card for depth.
+  * Top accent stripe (yellow, 6px tall) marks the title area.
+  * Title moved to textColor on the ControlLabel (instead of a
+    [COLOR=...] BBCode wrap inside the label string), same for
+    all other text controls. Cleaner; same render.
+  * Progress bar widened 600 -> 640 and made taller (26 -> 32 px)
+    for TV-viewing-distance visibility.
+  * "Back תסגור את החלון; התרגום ממשיך ברקע" copy at the bottom
+    now explicit about the early-dismiss behaviour added in v0.2.42.
+
 v0.2.42
 - v0.2.41 introduced _AITranslateProgressWindow but a user screenshot
   confirmed it STILL doesn't show on top of DarkSubs's MySubs picker.
