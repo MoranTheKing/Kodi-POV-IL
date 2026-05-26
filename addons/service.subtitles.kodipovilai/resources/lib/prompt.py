@@ -108,7 +108,28 @@ def build(source_lang, title, year, cast, is_episode=False,
         '-- don\'t switch mid-scene.\n'
         '- Only when the speaker / addressee is genuinely unknowable '
         'from context AND the cast block (very rare), prefer a neutral '
-        'or plural-form phrasing over guessing wrong.\n\n'
+        'or plural-form phrasing over guessing wrong. (Better still, '
+        'restructure the sentence to avoid the gendered form entirely '
+        'rather than guess.)\n'
+        '- SPEAKER-PREFIX HINT (use this -- do NOT just drop it as I '
+        'used to instruct): if a line starts with an ALL-CAPS speaker '
+        'tag like "MABEL:" or "JOHN-PAUL:" or "DR. SMITH:", that is '
+        'the explicit speaker. Match the name (case-insensitively) '
+        'against the cast block above; if you find them, use their '
+        'gender for first-person forms in that line AND for context '
+        'when the next reply addresses them. THEN drop the tag from '
+        'your Hebrew output (do not translate the prefix itself). If '
+        'the prefix names a character NOT in the cast block, still '
+        'use it as a consistent speaker identifier across the chunk -- '
+        'pick a gender from contextual cues on first encounter, then '
+        'keep it.\n'
+        '- REPLY HEURISTIC: in two-character dialogue, a short line '
+        '(typically 1-5 words, often a confirmation / denial / '
+        'rhetorical question like "Right.", "No way.", "You sure?", '
+        '"I told you.") that immediately follows another line is most '
+        'likely a REPLY from the OTHER person. Speakers ALTERNATE '
+        'unless context says otherwise. Apply the alternation rule '
+        'before falling back to "guess gender from cast".\n\n'
         'PUNCTUATION POSITION (critical for RTL rendering):\n'
         '- In the SOURCE TEXT you write, punctuation that belongs at '
         'the end of a Hebrew sentence (period, question mark, '
@@ -132,12 +153,40 @@ def build(source_lang, title, year, cast, is_episode=False,
         'native, not literal.\n'
         '2. Keep HTML tags like <i></i> intact.\n'
         '3. Do NOT add hearing-impaired annotations like [breathing], '
-        '(music playing), {{chuckles}}, or ALL-CAPS speaker prefixes '
-        'like "MABEL: ". If the source contains any, drop them in the '
-        'translation.\n'
+        '(music playing), {{chuckles}}, or [BACKGROUND NOISE]. Drop '
+        'them in the Hebrew output. (NOTE: ALL-CAPS speaker prefixes '
+        '"NAME:" are handled by the SPEAKER-PREFIX HINT rule above -- '
+        'USE them for gender inference, then drop only the prefix '
+        'from the output.)\n'
         '4. Output ONLY the SRT content. No commentary, no preface, no '
         'closing remarks.\n\n'
+        '{{prev_context_block}}'
         'SRT to translate ({entry_count} entries):\n\n'
         '{{chunk}}\n'
     ).format(src=src_name, ctx=context_line, cast=cast_block,
              entry_count='{entry_count}')
+
+
+def build_prev_context_block(prev_context_lines):
+    """Format the cross-chunk continuity block. `prev_context_lines`
+    is a list of strings -- the dialogue text from the last few
+    entries of the PREVIOUS chunk. Returns the prompt section as a
+    string, or '' for the first chunk (no previous context).
+
+    Keeping this as a helper rather than building inline so the
+    string formatting stays out of the chunk-dispatch hot path in
+    translate.py.
+    """
+    if not prev_context_lines:
+        return ''
+    body = '\n'.join('   ' + ln for ln in prev_context_lines
+                     if ln and ln.strip())
+    if not body.strip():
+        return ''
+    return (
+        'PREVIOUS DIALOGUE CONTEXT (for continuity only -- ALREADY '
+        'translated in a previous chunk; DO NOT include these in '
+        'your output, just use them to remember who was just '
+        'speaking and which gender forms apply):\n'
+        + body + '\n\n'
+    )

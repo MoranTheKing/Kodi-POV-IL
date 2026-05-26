@@ -500,12 +500,24 @@ def resolve(link, info, progress_cb=None):
     cast = None
     title = info.get('title') or ''
     year = info.get('year') or ''
+    # Bumped cap (Oct 2026 -- minor characters were missing from
+    # top-12). A cached cast with fewer than this many entries is
+    # stale; treat as a cache miss so we re-fetch and store the
+    # expanded list.
+    MIN_CAST_FOR_CACHE = 20
     if meta_path:
         cached_meta = cache.load_json(meta_path)
         if cached_meta:
-            cast = cached_meta.get('cast') or []
-            title = cached_meta.get('title') or title
-            year = cached_meta.get('year') or year
+            cached_cast = cached_meta.get('cast') or []
+            if len(cached_cast) >= MIN_CAST_FOR_CACHE:
+                cast = cached_cast
+                title = cached_meta.get('title') or title
+                year = cached_meta.get('year') or year
+            else:
+                kodi_utils.log(
+                    'Cached cast has only {0} entries -- refetching '
+                    'for expanded coverage'.format(len(cached_cast)),
+                    level='DEBUG')
     if cast is None:
         try:
             cast = tmdb_helper.fetch_cast(
@@ -622,9 +634,30 @@ def resolve(link, info, progress_cb=None):
                 level='ERROR')
             return e.partial_text or ''
 
+    # Cross-chunk continuity. For chunk N, give the model the last
+    # PREV_CONTEXT_LINES dialogue lines from chunk N-1's SOURCE so
+    # the model has the same conversational thread it would have
+    # had if everything ran in one giant chunk. Computed once
+    # up-front (deterministic per index) so parallel chunk
+    # dispatch still works -- no inter-chunk dependency.
+    prev_context_lines = max(0, kodi_utils.get_int(
+        'prev_context_lines', 5))
+    prev_context_by_idx = {}
+    if prev_context_lines > 0:
+        for i in range(1, len(chunks)):
+            prev_block_texts = []
+            for block in chunks[i - 1][-prev_context_lines:]:
+                t = srt.block_text_only(block)
+                if t:
+                    prev_block_texts.append(t)
+            prev_context_by_idx[i] = prev_block_texts
+
     def _call_gemini(idx, ch):
         body = '\n\n'.join(ch)
+        prev_ctx_block = prompt.build_prev_context_block(
+            prev_context_by_idx.get(idx) or [])
         full_prompt = (prompt_template
+                       .replace('{prev_context_block}', prev_ctx_block)
                        .replace('{entry_count}', str(len(ch)))
                        .replace('{chunk}', body))
         overload_attempts = 0

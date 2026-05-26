@@ -252,6 +252,33 @@ def chunk_blocks(blocks, per_chunk=250):
         yield blocks[i:i + per_chunk]
 
 
+def block_text_only(block):
+    """Return just the dialogue text from a single SRT entry block,
+    stripping the entry number and the timecode line. Returns ''
+    if the block isn't shaped like SRT.
+
+    Used by the cross-chunk context feature in translate.py: we
+    feed the last N source-text lines of the previous chunk to the
+    AI as "PREVIOUS DIALOGUE CONTEXT" so the model has the same
+    conversational thread it would have had if everything ran in
+    one giant chunk -- which catches the cross-chunk gender drift
+    that the per-chunk-cast block alone can't prevent.
+    """
+    if not block:
+        return ''
+    lines = block.strip().split('\n')
+    # First line: entry number. Second line: timecode arrow.
+    # Everything from line 3 onward is the dialogue text.
+    # We're tolerant: if the entry number is missing (some scrapers
+    # emit unnumbered SRT) we accept and start at the timecode.
+    start = 0
+    if lines and lines[0].strip().isdigit():
+        start = 1
+    if start < len(lines) and '-->' in lines[start]:
+        start += 1
+    return '\n'.join(lines[start:]).strip()
+
+
 def stitch_blocks(blocks):
     """Join blocks back into a single SRT body using CRLF blank lines
     between entries (standard SRT delimiter). Trailing newline so
