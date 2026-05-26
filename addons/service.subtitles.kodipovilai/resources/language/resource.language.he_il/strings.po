@@ -34,6 +34,10 @@ msgctxt "#32106"
 msgid "Pair with QR (scan from another device)"
 msgstr "התאם מטלפון / מכשיר אחר (QR + URL)"
 
+msgctxt "#32107"
+msgid "Test DarkSubs integration"
+msgstr "בדוק חיבור DarkSubs"
+
 msgctxt "#32200"
 msgid "Translation"
 msgstr "תרגום"
