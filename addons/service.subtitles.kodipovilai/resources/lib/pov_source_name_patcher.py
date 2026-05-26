@@ -48,7 +48,7 @@ except Exception:
 POV_ADDON_ID = 'plugin.video.pov'
 SOURCES_REL_PATH = 'resources/lib/modules/sources.py'
 
-MARKER = '# AI_SUBS_POV_SOURCE_NAME'
+MARKER = '# AI_SUBS_POV_SOURCE_NAME_v2'
 
 # Match the single-line yield inside _process() in play_file().
 # POV uses tabs for indentation (4 tabs deep inside the generator
@@ -57,17 +57,53 @@ OLD_BLOCK = (
     '\t\t\t\tif link is not None: yield link\r\n'
 )
 
-NEW_BLOCK = (
+# Legacy v1 injection (shipped in v0.2.28). The patcher detects it
+# on the user's disk and reverts it before applying v2, so users who
+# already merged the previous version get the upgrade cleanly. v1
+# only set `pov_picked_source_name` / `pov_picked_source_url`; v2
+# also sets `subs.player_filename`, which is the Window property
+# DarkSubs natively reads into `Tagline_From_Fen` (the value used
+# by sub_window.py for the dialog HEADER -- without writing that
+# property the dialog title stays as the URL basename / UUID even
+# when our get_playing_filename patch is in place).
+V1_INJECTION = (
     '\t\t\t\tif link is not None:\r\n'
-    '\t\t\t\t\t' + MARKER + ': stash the picked release name + URL\r\n'
-    '\t\t\t\t\t# in a Window property so DarkSubs (separate addon) can\r\n'
-    '\t\t\t\t\t# read it and use the real filename for subtitle matching\r\n'
-    '\t\t\t\t\t# instead of the opaque CDN basename (TorBox UUID, etc.).\r\n'
+    '\t\t\t\t\t# AI_SUBS_POV_SOURCE_NAME: stash the picked release '
+    'name + URL\r\n'
+    '\t\t\t\t\t# in a Window property so DarkSubs (separate addon) can'
+    '\r\n'
+    '\t\t\t\t\t# read it and use the real filename for subtitle '
+    'matching\r\n'
+    '\t\t\t\t\t# instead of the opaque CDN basename (TorBox UUID, etc.)'
+    '.\r\n'
     '\t\t\t\t\ttry:\r\n'
     '\t\t\t\t\t\timport xbmcgui as _aix_gui_pov\r\n'
     '\t\t\t\t\t\t_aix_w_pov = _aix_gui_pov.Window(10000)\r\n'
     "\t\t\t\t\t\t_aix_w_pov.setProperty('pov_picked_source_name', "
     "item.get('name', '') or '')\r\n"
+    "\t\t\t\t\t\t_aix_w_pov.setProperty('pov_picked_source_url', "
+    "link or '')\r\n"
+    '\t\t\t\t\texcept Exception: pass\r\n'
+    '\t\t\t\t\tyield link\r\n'
+)
+
+NEW_BLOCK = (
+    '\t\t\t\tif link is not None:\r\n'
+    '\t\t\t\t\t' + MARKER + ': stash picked name + URL in Window props.\r\n'
+    "\t\t\t\t\t# `subs.player_filename` is the property DarkSubs reads\r\n"
+    "\t\t\t\t\t# natively into Tagline_From_Fen -- both the subtitle\r\n"
+    "\t\t\t\t\t# dialog HEADER and the percentage matcher's Tagline\r\n"
+    "\t\t\t\t\t# branch use it. The other two props are read by the\r\n"
+    "\t\t\t\t\t# AI Subs patch of get_playing_filename() to override\r\n"
+    "\t\t\t\t\t# file_original_path with a URL-equality guard.\r\n"
+    '\t\t\t\t\ttry:\r\n'
+    '\t\t\t\t\t\timport xbmcgui as _aix_gui_pov\r\n'
+    '\t\t\t\t\t\t_aix_w_pov = _aix_gui_pov.Window(10000)\r\n'
+    "\t\t\t\t\t\t_aix_name = item.get('name', '') or ''\r\n"
+    "\t\t\t\t\t\t_aix_w_pov.setProperty('subs.player_filename', "
+    "_aix_name)\r\n"
+    "\t\t\t\t\t\t_aix_w_pov.setProperty('pov_picked_source_name', "
+    "_aix_name)\r\n"
     "\t\t\t\t\t\t_aix_w_pov.setProperty('pov_picked_source_url', "
     "link or '')\r\n"
     '\t\t\t\t\texcept Exception: pass\r\n'
@@ -121,9 +157,16 @@ def ensure_patched():
     eol = _detect_lineendings(content)
     old_bytes = OLD_BLOCK.encode('utf-8')
     new_bytes = NEW_BLOCK.encode('utf-8')
+    v1_bytes = V1_INJECTION.encode('utf-8')
     if eol == b'\n':
         old_bytes = old_bytes.replace(b'\r\n', b'\n')
         new_bytes = new_bytes.replace(b'\r\n', b'\n')
+        v1_bytes = v1_bytes.replace(b'\r\n', b'\n')
+    # Revert legacy v1 injection if present so the v2 anchor (the
+    # original single-line yield) is back in place before we patch.
+    if v1_bytes in content:
+        content = content.replace(v1_bytes, old_bytes, 1)
+        _log('reverted v1 injection before applying v2', level='INFO')
     if old_bytes not in content:
         _log('_process() yield shape changed upstream -- skipping',
              level='WARNING')

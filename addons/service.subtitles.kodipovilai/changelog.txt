@@ -1,3 +1,30 @@
+v0.2.29
+- Fix the DarkSubs subtitle-dialog HEADER showing the UUID/hash for
+  TorBox playbacks. v0.2.28 raised the match percentages off 0% by
+  patching get_playing_filename(), but the dialog title is rendered
+  from a separate code path in DarkSubs (sub_window.py uses
+  `video_data['Tagline'] or video_data['file_original_path']`) and
+  Tagline is read from `xbmcgui.Window(10000).getProperty(
+  "subs.player_filename")`. v0.2.28 wasn't writing that property,
+  so the Tagline branch was empty and DarkSubs displayed only the
+  URL basename.
+- v2 of pov_source_name_patcher now also writes
+  `subs.player_filename` (the property DarkSubs natively reads into
+  Tagline_From_Fen, intended for FEN-family scrapers to expose the
+  picked release name). Setting it gives DarkSubs:
+    * the real release name in the dialog HEADER (no more UUID)
+    * the same name fed to the Tagline percentage branch, which
+      engine.py:197 takes the max of with the file_original_path
+      branch -- so matches climb from 30-50% to 70-95% routinely
+- v2 of darksubs_filename_fallback_patcher clears
+  `subs.player_filename` (plus pov_picked_source_name/url) when the
+  URL guard fails. Prevents a stale property from a previous POV
+  play leaking into a later non-POV play (e.g. the next time the
+  user plays a video from a different addon).
+- Migration: both patchers detect the v0.2.28 injection state on
+  disk, revert it back to the original, then apply the v2 form.
+  Idempotent across reboots; safe to re-apply.
+
 v0.2.28
 - Fix DarkSubs subtitle-match percentages and dialog title for all
   debrid services. Two complementary patchers:
