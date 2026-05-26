@@ -1,3 +1,50 @@
+v0.2.30
+- After v0.2.29 the dialog header still showed the UUID for TorBox
+  playbacks even though the property writes were in place. Two
+  root causes discovered:
+
+  1. POV's addon.xml declares <reuselanguageinvoker>true</...> which
+     means Kodi keeps the Python interpreter in memory across plugin
+     invocations. Our pov_source_name_patcher writes the patched
+     sources.py to disk, but POV's in-memory copy of _process() is
+     the OLD pre-patch version until the user does a FULL Kodi
+     restart -- quick_update + addon reload isn't enough. So on the
+     first playbacks after upgrade, subs.player_filename was never
+     getting written.
+
+  2. The subtitle dialog HEADER is rendered by Kodi's
+     DialogSubtitles.xml in the skin via `$INFO[Player.Filename]`,
+     which Kodi computes directly from the player URL. No amount of
+     Window property writes affects it -- the skin XML has to point
+     at our property instead.
+
+- Two complementary fixes:
+
+  * fentastic_dialog_subtitles_patcher: rewrites FENtastic's
+    DialogSubtitles.xml so the header label first checks
+    Window(10000).Property(subs.player_filename) and only falls
+    back to Player.Filename when our property is empty. Two stacked
+    `<control type="label">` controls with mutually-exclusive
+    `<visible>` conditions. Self-healing -- re-applies on every
+    Kodi startup so a FENtastic update can't permanently revert it.
+
+  * subs_filename_publisher: an xbmc.Player subclass living in
+    our addon's service process that publishes subs.player_filename
+    on every onAVStarted. Reads pov_picked_source_name first (set
+    by POV's inline patch when it does apply), falls back to
+    synthesising a release-style filename from VideoPlayer info-
+    labels. Because our service runs in its own Python process,
+    it's orthogonal to POV's reuselanguageinvoker behaviour --
+    the property gets set on EVERY playback, no Kodi restart
+    required.
+
+- Net effect: TorBox playbacks now show the real release name (or
+  synthesised Title.SxxExx.QUALITYp.mkv when the picked-source
+  property hasn't been set yet) as the dialog header from the
+  first playback after upgrade, with NO Kodi restart needed. Match
+  percentages also improve since the Tagline branch of engine.py
+  now has a real value to work with.
+
 v0.2.29
 - Fix the DarkSubs subtitle-dialog HEADER showing the UUID/hash for
   TorBox playbacks. v0.2.28 raised the match percentages off 0% by
