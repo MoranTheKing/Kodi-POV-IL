@@ -1,3 +1,26 @@
+v0.2.35
+- Make the port number in the Gemini pair-from-phone URL visually
+  unmissable so users can manually type the right URL even when
+  their phone's QR scanner truncates the displayed result.
+- Background: I verified end-to-end that our QR API call already
+  encodes the full URL including the port (decoded the actual
+  generated QR with pyzbar) -- so the QR itself is correct. But
+  Android OEM camera apps (Samsung Bixby Vision, Xiaomi MIUI
+  scanner, etc.) sometimes display the URL truncated at the colon,
+  so users see "http://10.0.0.5" and type that into their browser,
+  missing the ":8765" suffix that we actually need them to use.
+- The text below the QR now:
+  * Renders the `:port` portion in bright yellow (#ffd166), the
+    same accent colour as the page title -- visually impossible to
+    miss.
+  * Increases the body font from font13 to font14 and widens the
+    text region so it doesn't wrap awkwardly.
+  * The "or open one of the URLs in a browser" header is now bold
+    red (#bf7f7f) and explicitly says "חובה כולל החלק הצהוב — הפורט"
+    ("must include the yellow part — the port") so users who type
+    the URL manually after a truncated scan know exactly which
+    piece they're missing.
+
 v0.2.34
 - Fix the Gemini pair form returning a 400 from Google's API on
   every iPhone Safari paste. Symptom: pair-from-phone flow works

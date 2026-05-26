@@ -404,12 +404,18 @@ class _PairWindow(xbmcgui.WindowDialog):
                                   aspectRatio=2)
         self.addControl(qr)
 
-        # Instructions + URL fallback
-        instr = xbmcgui.ControlTextBox(150, 510, 980, 140, font='font13')
+        # Instructions + URL fallback. Bigger font (font14 vs font13)
+        # because some users read this from across the room before
+        # typing the URL into their phone manually. The instructions
+        # header is now BOLD red to draw attention to the
+        # "include the yellow port" warning -- common failure mode
+        # for OEM Android scanners that truncate URLs at colons.
+        instr = xbmcgui.ControlTextBox(120, 505, 1040, 165, font='font14')
         self.addControl(instr)
         text = '[B]סרוק את ה-QR עם המצלמה של הטלפון[/B] '
         text += '(אפליקציית מצלמה רגילה — לא צריך אפליקציה מיוחדת).\n\n'
-        text += '[COLOR=b7c4cf]' + instructions_header + ':[/COLOR]\n'
+        text += ('[B][COLOR=bf7f7f]' + instructions_header
+                 + ':[/COLOR][/B]\n')
         for line in url_lines:
             text += '   • ' + line + '\n'
         instr.setText(text)
@@ -465,20 +471,38 @@ def _gemini_pair_flow(kodi_utils, gemini, gemini_pair):
               '?size=380x380&qzone=1&data=' +
               _url_quote(primary))
 
+    # The QR encodes the full URL with port -- we've verified this
+    # with a real QR decoder. The text fallback below the QR is what
+    # we worry about, because some Android OEM camera apps (Samsung
+    # Bixby Vision, Xiaomi MIUI scanner) display the URL truncated
+    # at the colon -- the user sees "http://10.0.0.5" and types
+    # that, missing the port. So we render the port in a bright
+    # accent colour and add an explicit note about it.
+    def _highlight_port(url):
+        # url is 'http://host:port' or 'http://[v6]:port' etc.
+        # Find the LAST colon (port separator). If there's no port
+        # we just return the URL as-is.
+        if url.count(':') < 2:
+            return url
+        host_part, port_part = url.rsplit(':', 1)
+        return '{0}[COLOR=ffd166]:{1}[/COLOR]'.format(host_part, port_part)
+
     if ps.url_lan:
         url_lines = (
-            'מטלפון אחר ב-WiFi:  ' + ps.url_lan,
-            'מאותו מכשיר:  ' + ps.url_local,
+            'מטלפון אחר ב-WiFi:  ' + _highlight_port(ps.url_lan),
+            'מאותו מכשיר:  ' + _highlight_port(ps.url_local),
         )
         instructions_header = (
-            'או פתח אחת מהכתובות בדפדפן')
+            'או פתח אחת מהכתובות בדפדפן (חובה כולל החלק הצהוב — '
+            'הפורט)')
     else:
         url_lines = (
-            'פתח בדפדפן:  ' + ps.url_local,
+            'פתח בדפדפן:  ' + _highlight_port(ps.url_local),
             '(אם לא ב-WiFi, נגיש רק מאותו מכשיר)',
         )
         instructions_header = (
-            'או פתח את הכתובת בדפדפן')
+            'או פתח את הכתובת בדפדפן (חובה כולל החלק הצהוב — '
+            'הפורט)')
 
     deadline = _time.time() + 300  # 5 min cap
     window = None
