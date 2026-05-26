@@ -1,3 +1,33 @@
+v0.2.28
+- Fix DarkSubs subtitle-match percentages always showing 0% when
+  the source is TorBox. Root cause: TorBox's CDN returns URLs like
+  `https://store-N.torbox.app/<uuid>?token=...` -- the release
+  filename is not in the URL path. DarkSubs's
+  `get_playing_filename()` does `os.path.basename(url.split("?")[0])`
+  which strips it down to just the UUID. The percentage matcher
+  then tokenises the UUID against subtitle release names and gets
+  0% overlap regardless of how well the subtitle actually syncs.
+- Fix: new self-healing patcher (darksubs_filename_fallback_patcher)
+  injects a fallback step into DarkSubs's `get_playing_filename()`:
+  when the basename looks like an opaque hash (no video extension,
+  no release tokens like 1080p/web-dl/x264, no SxxExx, >80% hex
+  chars), it synthesises a release-style filename from
+  VideoPlayer / ListItem info-labels:
+      `Title.SxxExx.QUALITYp.mkv`
+  This gives the matcher real tokens to compare against subtitle
+  release names. Expected: 30-50% match for TorBox going forward
+  (still lower than Real Debrid / AllDebrid -- their URLs carry the
+  release filename in the path so they include encoder + group
+  tokens we can't reconstruct -- but high enough to rank subtitles
+  meaningfully instead of all showing 0%).
+- Real Debrid / AllDebrid / Premiumize behaviour is unchanged: the
+  fallback only kicks in for hash-like basenames, real filenames
+  with extensions or release tokens are passed through untouched.
+- Self-healing: re-applies on every Kodi startup. If DarkSubs
+  upstream restructures `get_playing_filename` in a way our pattern
+  doesn't match, we skip with a log warning -- the percentage matcher
+  goes back to being broken for TorBox but nothing else breaks.
+
 v0.2.27
 - Gemini "Pair from phone" flow now shows an actual scannable QR
   image instead of printing the qrserver.com URL as text. The

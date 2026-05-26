@@ -470,6 +470,40 @@ def _maybe_patch_darksubs():
             pass
 
 
+def _maybe_patch_darksubs_filename():
+    """Self-healing patch of DarkSubs's get_playing_filename so that
+    when the played URL has an opaque hash basename (TorBox CDN
+    behaviour: https://store-N.torbox.app/<uuid>?token=...), DarkSubs
+    falls back to a synthetic release-name-style filename built from
+    VideoPlayer/ListItem info-labels. Without this, DarkSubs's
+    percentage matcher tokenises the UUID, gets 0% overlap with every
+    subtitle in the list, and the user picks subtitles blind. Real
+    Debrid / AllDebrid URLs already include the release filename in
+    the path so they are unaffected. Idempotent + defensive."""
+    try:
+        from resources.lib import darksubs_filename_fallback_patcher, \
+            kodi_utils
+    except Exception:
+        return
+    try:
+        status = darksubs_filename_fallback_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'darksubs_filename_fallback_patcher: applied '
+                'hash-filename fallback', level='INFO')
+        elif status in ('unmatched', 'write_failed', 'read_failed'):
+            kodi_utils.log(
+                'darksubs_filename_fallback_patcher: ' + status,
+                level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'darksubs_filename_fallback_patcher failed: '
+                '{0}'.format(e), level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_purge_temp_once():
     try:
         from resources.lib import local_subs, kodi_utils
@@ -510,6 +544,12 @@ def main():
     # if upstream DarkSubs updates and overwrites our hook, it
     # comes back automatically on next Kodi launch.
     _maybe_patch_darksubs()
+
+    # Self-healing DarkSubs get_playing_filename() patch so that
+    # subtitles for TorBox sources (whose CDN strips the release
+    # filename from URLs, leaving an opaque hash) get matched against
+    # a synthetic release-name-style filename instead of the hash.
+    _maybe_patch_darksubs_filename()
 
     # Remove the v0.1.5-v0.1.7 misplaced injection into the wizard's
     # login_menu (the right menu was POV's, not the wizard's).
