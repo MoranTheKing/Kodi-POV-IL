@@ -481,65 +481,88 @@ class _AITranslateProgressWindow(xbmcgui.WindowDialog):
 
     def setup(self):
         # WindowDialog coordinate space is 1280x720 by default.
-        # Centered card: 800x400, x=240..1040, y=160..560.
-        bg_path = ('special://home/addons/service.subtitles.kodipovilai/'
-                   'resources/lib/icons/dark_bg.png')
+        # Centered card: 900x440, x=190..1090, y=140..580.
+        #
+        # CRITICAL: we use a WHITE base texture (white_pixel.png) for
+        # backdrops, then tint via colorDiffuse. The previous version
+        # used dark_bg.png (already dark) and got "dark * dark = black"
+        # everywhere, which made the whole modal render as an
+        # unreadable black rectangle. With a white base the tint
+        # colors come through accurately: ffd166 stays yellow, 1e3a5f
+        # stays navy, etc.
+        white_px = ('special://home/addons/service.subtitles.kodipovilai/'
+                    'resources/lib/icons/white_pixel.png')
 
-        # Dim full-screen backdrop -- mutes Kodi behind us.
+        # 1. Full-screen semi-opaque dark backdrop -- mutes Kodi
+        #    behind us so the modal stands out.
         backdrop = xbmcgui.ControlImage(
-            0, 0, 1280, 720, bg_path,
-            colorDiffuse='DD000000', aspectRatio=2)
+            0, 0, 1280, 720, white_px,
+            colorDiffuse='DD0A0F15', aspectRatio=2)
         self.addControl(backdrop)
 
-        # Centered card.
+        # 2. Outer card shadow (slightly wider than the card, sits
+        #    behind it for a subtle depth effect).
+        shadow = xbmcgui.ControlImage(
+            186, 144, 908, 448, white_px,
+            colorDiffuse='80000000', aspectRatio=2)
+        self.addControl(shadow)
+
+        # 3. Card body (the visible navy panel).
         card = xbmcgui.ControlImage(
-            240, 160, 800, 400, bg_path,
-            colorDiffuse='F0172635', aspectRatio=2)
+            190, 140, 900, 440, white_px,
+            colorDiffuse='FF1E3A5F', aspectRatio=2)
         self.addControl(card)
 
-        # Title bar (yellow accent, big font).
+        # 4. Top accent stripe (yellow, marks the title area).
+        stripe = xbmcgui.ControlImage(
+            190, 140, 900, 6, white_px,
+            colorDiffuse='FFFFD166', aspectRatio=2)
+        self.addControl(stripe)
+
+        # 5. Title (yellow, large font, centered).
         title = xbmcgui.ControlLabel(
-            240, 190, 800, 50,
-            '[B][COLOR=ffd166]AI מתרגם כתוביות לעברית[/COLOR][/B]',
-            alignment=2 | 4, font='font30')
+            190, 170, 900, 50,
+            '[B]AI מתרגם כתוביות לעברית[/B]',
+            alignment=2 | 4, font='font30', textColor='FFFFD166')
         self.addControl(title)
 
-        # Brand line under the title.
+        # 6. Brand line under the title (light grey).
         subtitle = xbmcgui.ControlLabel(
-            240, 245, 800, 30,
-            '[COLOR=b7c4cf]Gemini AI · Kodi POV IL[/COLOR]',
-            alignment=2 | 4, font='font13')
+            190, 230, 900, 30,
+            'Gemini AI · Kodi POV IL',
+            alignment=2 | 4, font='font13', textColor='FFB7C4CF')
         self.addControl(subtitle)
 
-        # Visual progress bar -- 600 wide, centered.
+        # 7. Visual progress bar -- 640 wide, centered, taller (32px)
+        #    so it's clearly visible at TV viewing distance.
         self._progress_bar = xbmcgui.ControlProgress(
-            340, 320, 600, 26)
+            320, 300, 640, 32)
         self.addControl(self._progress_bar)
         try:
             self._progress_bar.setPercent(0)
         except Exception:
             pass
 
-        # Big percentage number in the middle.
+        # 8. Big percentage number in the middle (yellow, very large).
         self._percent_lbl = xbmcgui.ControlLabel(
-            240, 360, 800, 60,
-            '[B][COLOR=ffd166]0%[/COLOR][/B]',
-            alignment=2 | 4, font='font45')
+            190, 350, 900, 70,
+            '[B]0%[/B]',
+            alignment=2 | 4, font='font45', textColor='FFFFD166')
         self.addControl(self._percent_lbl)
 
-        # Chunks counter (smaller, below the percent).
+        # 9. Chunks counter (light grey, below the percent).
         self._chunks_lbl = xbmcgui.ControlLabel(
-            240, 425, 800, 30,
-            '[COLOR=b7c4cf]מתחיל תרגום...[/COLOR]',
-            alignment=2 | 4, font='font14')
+            190, 425, 900, 30,
+            'מתחיל תרגום...',
+            alignment=2 | 4, font='font14', textColor='FFB7C4CF')
         self.addControl(self._chunks_lbl)
 
-        # Reassurance copy at the bottom.
+        # 10. Reassurance copy at the bottom of the card.
         self._status_lbl = xbmcgui.ControlLabel(
-            260, 470, 760, 70,
-            '[COLOR=b7c4cf]הקובץ ייטען אוטומטית כשהתרגום יסתיים. '
-            'התרגום ממשיך גם אם תסגור את החלון הזה.[/COLOR]',
-            alignment=2 | 4, font='font12')
+            210, 480, 860, 90,
+            'הקובץ ייטען אוטומטית כשהתרגום יסתיים.\n'
+            'לחיצה על Back תסגור את החלון; התרגום ממשיך ברקע.',
+            alignment=2 | 4, font='font12', textColor='FFB7C4CF')
         self.addControl(self._status_lbl)
 
     def update_progress(self, stage, total):
@@ -551,12 +574,12 @@ class _AITranslateProgressWindow(xbmcgui.WindowDialog):
                 except Exception:
                     pass
             if self._percent_lbl is not None:
-                self._percent_lbl.setLabel(
-                    '[B][COLOR=ffd166]{0}%[/COLOR][/B]'.format(pct))
+                # textColor is set on the control; just update the
+                # text content (no BBCode COLOR wrap needed).
+                self._percent_lbl.setLabel('[B]{0}%[/B]'.format(pct))
             if self._chunks_lbl is not None:
                 self._chunks_lbl.setLabel(
-                    '[COLOR=b7c4cf]chunk {0} / {1}[/COLOR]'.format(
-                        stage, total))
+                    'chunk {0} / {1}'.format(stage, total))
         except Exception:
             pass
 
