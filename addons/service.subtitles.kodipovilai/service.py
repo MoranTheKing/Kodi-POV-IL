@@ -476,6 +476,41 @@ def _maybe_patch_darksubs():
             pass
 
 
+def _maybe_patch_darksubs_download_sub():
+    """Self-healing patch of DarkSubs's download_sub() elif so the
+    AI hook (in machine_translate_subs, see _maybe_patch_darksubs)
+    also fires when the user has DarkSubs's `auto_translate` setting
+    turned OFF. Without this, picking a non-Hebrew subtitle manually
+    leaves the original English on screen -- the AI hook never gets
+    a chance to run because machine_translate_subs is never called.
+    User-reported on CoreELEC: explicitly turned auto_translate off
+    because they didn't want DarkSubs's Google fallback, expected
+    AI to still pick up manual selections."""
+    try:
+        from resources.lib import darksubs_download_sub_patcher, \
+            kodi_utils
+    except Exception:
+        return
+    try:
+        status = darksubs_download_sub_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'darksubs_download_sub_patcher: rewrote elif so AI '
+                'fires with auto_translate=OFF', level='INFO')
+        elif status in ('unmatched', 'write_failed', 'read_failed'):
+            kodi_utils.log(
+                'darksubs_download_sub_patcher: ' + status,
+                level='WARNING')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'darksubs_download_sub_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_surface_darksubs_status():
     """Run the DarkSubs hook diagnostic at startup. If the integration
     has an actionable problem (e.g. signature mismatch, read-only
@@ -644,6 +679,12 @@ def main():
     # if upstream DarkSubs updates and overwrites our hook, it
     # comes back automatically on next Kodi launch.
     _maybe_patch_darksubs()
+
+    # Companion patch: extends download_sub's elif so the hook above
+    # ALSO gets a chance to run when DarkSubs's auto_translate
+    # setting is OFF (user manually picks a non-Hebrew sub). Without
+    # this, the v3 hook only ever fires when auto_translate=true.
+    _maybe_patch_darksubs_download_sub()
 
     # Now that the hook injection has had its shot, run a structural
     # check end-to-end and pop a toast if something is broken (e.g.

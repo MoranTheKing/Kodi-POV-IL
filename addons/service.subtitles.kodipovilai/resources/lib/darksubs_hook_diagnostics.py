@@ -140,8 +140,29 @@ def _diagnose():
                 '{0} תווים'.format(len(api_key)) if has_key
                 else 'ריק -- הוק יחזור לגוגל תרגום'))
 
-    # 8. DarkSubs auto_translate is on (otherwise machine_translate_subs
-    #    is never called and the hook can't fire).
+    # 8. download_sub elif patch present + force-toggle status. The
+    #    patch is always applied; whether the AI-key arm of the elif
+    #    actually fires also depends on the user's
+    #    force_ai_when_auto_translate_off setting (default off so we
+    #    don't surprise-translate the subs of users who want them
+    #    in the source language).
+    try:
+        from . import darksubs_download_sub_patcher as _dl_patcher
+        dl_marker_present = bool(content) and (
+            _dl_patcher.MARKER in content)
+    except Exception:
+        dl_marker_present = False
+    force_toggle_on = (kodi_utils.get_setting(
+        'force_ai_when_auto_translate_off', '') == 'true')
+    out.append(('פאצ\' download_sub פעיל', dl_marker_present,
+                'מותקן' if dl_marker_present else
+                'לא מותקן — הוק יפעל רק עם auto_translate=ON'))
+
+    # 9. AI will actually fire on a non-Hebrew subtitle pick. This is
+    #    the "does this whole stack actually do anything" check. It's
+    #    OK to be ✗ if the user has deliberately configured AI to NOT
+    #    fire (e.g. they keep auto_translate off because they want
+    #    English subs on screen).
     auto_translate_on = False
     if ds_installed and xbmcaddon is not None:
         try:
@@ -150,9 +171,26 @@ def _diagnose():
             auto_translate_on = (v == 'true')
         except Exception:
             auto_translate_on = False
-    out.append(('DarkSubs auto_translate מופעל', auto_translate_on,
-                'מופעל' if auto_translate_on else
-                'כבוי -- DarkSubs לא יקרא לתרגום מכונה בכלל'))
+    will_fire = auto_translate_on or (
+        dl_marker_present and force_toggle_on)
+    if auto_translate_on:
+        detail = 'auto_translate=ON ב-DarkSubs → הוק יפעל'
+    elif force_toggle_on and dl_marker_present:
+        detail = ('auto_translate=OFF ב-DarkSubs, אבל force-toggle '
+                  'מופעל ב-AI Subs → הוק יפעל בכל זאת')
+    elif force_toggle_on and not dl_marker_present:
+        detail = ('force-toggle מופעל אבל פאצ\' download_sub חסר — '
+                  'הוק לא יפעל')
+    elif dl_marker_present:
+        detail = ('auto_translate=OFF + force-toggle כבוי. הוק לא '
+                  'יפעל על בחירות ידניות (כתוביות לא-עבריות יישארו '
+                  'בשפת המקור). הפעל את "תרגם דרך AI גם כש-'
+                  'auto_translate כבוי" אם רוצה התנהגות אחרת.')
+    else:
+        detail = ('auto_translate=OFF ופאצ\' download_sub חסר — '
+                  'הוק לא יפעל')
+    out.append(('הוק AI יפעל על כתוביות לא-עבריות', will_fire,
+                detail))
 
     # 9. Heartbeat: did the hook ACTUALLY fire from inside DarkSubs's
     #    process? The hook v2 writes a timestamp to a Window property
@@ -250,8 +288,16 @@ def _failure_class(results):
         return 'hook_not_injected'
     if not by_label.get('Gemini API key מוגדר'):
         return 'no_api_key'
-    if not by_label.get('DarkSubs auto_translate מופעל'):
-        return 'auto_translate_off'
+    # "Will the hook actually fire?" is the truthful check. Failure
+    # here might be the user's deliberate choice (auto_translate off
+    # because they want English subs), so it's not necessarily a
+    # bug -- but worth nagging once so they know they have to flip
+    # force_ai_when_auto_translate_off if they DO want AI on manual
+    # picks.
+    will_fire_label = next((k for k in by_label if k.startswith(
+        'הוק AI יפעל על כתוביות לא-עבריות')), None)
+    if will_fire_label and not by_label.get(will_fire_label):
+        return 'wont_fire'
     return ''
 
 
@@ -268,8 +314,9 @@ _FAILURE_NAGS = {
                          '"בדיקת חיבור DarkSubs" בתפריט',
     'no_api_key': 'אין מפתח Gemini -- DarkSubs ישתמש בגוגל תרגום '
                   'עד שתחבר',
-    'auto_translate_off': 'DarkSubs auto_translate כבוי -- AI '
-                          'לא יתורגם, הפעל בהגדרות DarkSubs',
+    'wont_fire': 'AI לא יתרגם כתוביות לא-עבריות במצב הנוכחי. אם '
+                 'רוצה AI על בחירות ידניות, הפעל בהגדרות AI Subs '
+                 'את "תרגם דרך AI גם כש-auto_translate כבוי"',
 }
 
 
