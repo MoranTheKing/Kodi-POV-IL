@@ -410,7 +410,13 @@ class _PairWindow(xbmcgui.WindowDialog):
         # header is now BOLD red to draw attention to the
         # "include the yellow port" warning -- common failure mode
         # for OEM Android scanners that truncate URLs at colons.
-        instr = xbmcgui.ControlTextBox(120, 505, 1040, 165, font='font14')
+        # We also include Android-Chrome-specific troubleshooting
+        # because modern Chrome (113+) defaults to "Always use
+        # secure connections" which refuses HTTP loads to private
+        # IPs -- failure is silent for the user, browser just
+        # spins or shows an error page. iOS doesn't do this so
+        # iPhone users typically don't hit it.
+        instr = xbmcgui.ControlTextBox(120, 480, 1040, 210, font='font13')
         self.addControl(instr)
         text = '[B]סרוק את ה-QR עם המצלמה של הטלפון[/B] '
         text += '(אפליקציית מצלמה רגילה — לא צריך אפליקציה מיוחדת).\n\n'
@@ -418,6 +424,16 @@ class _PairWindow(xbmcgui.WindowDialog):
                  + ':[/COLOR][/B]\n')
         for line in url_lines:
             text += '   • ' + line + '\n'
+        text += ('\n[B][COLOR=ffd166]ה-Chrome של אנדרואיד '
+                 'לא נפתח?[/COLOR][/B] כבה ב-Chrome: '
+                 'Settings → Privacy → "Always use secure '
+                 'connections", או נסה דפדפן אחר (Firefox/Brave/'
+                 'Samsung Internet). או חזור ל-Kodi ובחר "הזנה '
+                 'ידנית".\n')
+        text += ('[B][COLOR=ffd166]באייפון קיבלת 400?[/COLOR][/B] '
+                 'הסתכל ב-fingerprint בעמוד "ה-key נשלח" וודא '
+                 'שתואם בדיוק למפתח שהעתקת מ-AI Studio. אם תואם '
+                 'אבל עדיין נדחה — המפתח עצמו לא תקין; צור חדש.')
         instr.setText(text)
 
         # Countdown / cancel hint
@@ -487,18 +503,32 @@ def _gemini_pair_flow(kodi_utils, gemini, gemini_pair):
         host_part, port_part = url.rsplit(':', 1)
         return '{0}[COLOR=ffd166]:{1}[/COLOR]'.format(host_part, port_part)
 
-    if ps.url_lan:
-        url_lines = (
-            'מטלפון אחר ב-WiFi:  ' + _highlight_port(ps.url_lan),
-            'מאותו מכשיר:  ' + _highlight_port(ps.url_local),
-        )
+    # Show EVERY detected LAN IP. On devices with multiple network
+    # interfaces (Android TV with WiFi+Ethernet, laptop with VPN+WiFi)
+    # the single default-route IP we used to pick can be on a
+    # different subnet from the user's phone -- the phone tries to
+    # reach it, fails with "address not found", and the user assumes
+    # the addon is broken. Listing all candidates lets them try each.
+    lan_urls = ps.url_lans or []
+    if lan_urls:
+        url_lines = []
+        if len(lan_urls) == 1:
+            url_lines.append('מטלפון אחר ב-WiFi:  '
+                             + _highlight_port(lan_urls[0]))
+        else:
+            url_lines.append('מטלפון אחר ב-WiFi (נסה כל אחת עד שאחת '
+                             'תיפתח):')
+            for u in lan_urls:
+                url_lines.append('     • ' + _highlight_port(u))
+        url_lines.append('מאותו מכשיר:  '
+                         + _highlight_port(ps.url_local))
         instructions_header = (
-            'או פתח אחת מהכתובות בדפדפן (חובה כולל החלק הצהוב — '
+            'או פתח את אחת מהכתובות בדפדפן (חובה כולל החלק הצהוב — '
             'הפורט)')
     else:
         url_lines = (
             'פתח בדפדפן:  ' + _highlight_port(ps.url_local),
-            '(אם לא ב-WiFi, נגיש רק מאותו מכשיר)',
+            '(לא זוהתה כתובת LAN -- נגיש רק מאותו מכשיר)',
         )
         instructions_header = (
             'או פתח את הכתובת בדפדפן (חובה כולל החלק הצהוב — '

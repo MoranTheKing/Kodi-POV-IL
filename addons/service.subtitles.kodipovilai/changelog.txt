@@ -1,3 +1,52 @@
+v0.2.37
+- User report: Android phone says "address not found" when opening
+  the pair URL, even though the phone is on the same WiFi as Kodi
+  and the user typed the URL with the port. Multiple Android devices
+  fail the same way; the user's iPhone on the same network works.
+  Not an HTTPS-cleartext issue (we'd see a different error) -- the
+  phone genuinely can't reach the IP we displayed.
+
+- Root cause: `get_lan_ip()` only ever returned ONE IP -- whichever
+  the default route happened to bind to. On any device with multiple
+  network interfaces (Android TV with WiFi + Ethernet, laptop with
+  WiFi + VPN, PC with Docker bridge active) that single IP can be
+  on a subnet the user's phone is NOT on. Phone tries to reach it,
+  fails silently, user blames the addon.
+
+- `gemini_pair` now enumerates ALL plausible LAN IPv4 addresses:
+  * The 8.8.8.8-probe trick (default-route interface)
+  * `ip -4 addr` / `ifconfig` via subprocess (works on Android,
+    Linux, BSD -- catches non-default-route interfaces)
+  * Per-private-range probes (sometimes routing tables bind
+    different ranges to different NICs)
+  * Hostname lookup as final fallback
+  All results are filtered through `_is_private_lan_ip()` (RFC 1918
+  + 100.64/10 CGNAT, excluding 127.x and 169.254.x) so VPN
+  tunnel IPs etc. don't pollute the list.
+
+- The pair dialog now renders every detected LAN URL. With two or
+  more interfaces, the text says "מטלפון אחר ב-WiFi (נסה כל אחת עד
+  שאחת תיפתח):" and lists them as bullets so the user can try each.
+
+- Better Gemini error surfacing: when Google returns 400/403,
+  `gemini.test_key()` now parses the JSON `error.message` (e.g.
+  "API key not valid. Please pass a valid API key.") and includes
+  it in the user-facing dialog. Previously the user only saw
+  "Key rejected by Gemini (400)" with no clue WHY -- typo'd vs
+  revoked vs quota vs project-not-enabled all looked identical.
+
+- Pair dialog text now includes explicit troubleshooting for the
+  two known phone-side failure modes:
+  * Chrome on Android refusing HTTP: pointer to "Always use secure
+    connections" toggle + Firefox/Brave alternatives.
+  * iPhone 400 from Gemini after paste: compare the fingerprint
+    against AI Studio's key, regenerate if it matches.
+
+- Pair confirmation fingerprint widened from first-4/last-4 to
+  first-8/last-8 chars (still hides the middle 23 of a 39-char
+  Gemini key for shoulder-surf safety). Easier eyeball-compare
+  against the AI Studio source.
+
 v0.2.36
 - Two regressions surfaced on the latest version: (a) iPhone users
   STILL got Google API 400 even with v0.2.34's autocorrect=off +
