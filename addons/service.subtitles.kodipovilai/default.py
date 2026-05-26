@@ -479,41 +479,58 @@ class _AITranslateProgressWindow(xbmcgui.WindowDialog):
             except Exception:
                 pass
 
+    # Window(10000) property keys used for cross-thread updates.
+    # Worker thread writes -> Kodi UI thread auto-renders via $INFO[]
+    # bindings in the label text. xbmcgui control method calls
+    # (setLabel, setPercent) from non-UI threads were not landing
+    # on screen reliably -- the previous v0.2.42/0.2.43 modal stuck
+    # at "0% / מתחיל תרגום..." because update_progress() was running
+    # in the worker thread and Kodi's UI thread never picked up the
+    # changes. Property-based binding IS the canonical Kodi thread-
+    # safe path: setProperty is documented thread-safe and the UI
+    # thread re-reads $INFO[Window(10000).Property(...)] on every
+    # render tick, so updates appear within ~50ms regardless of
+    # which thread wrote them.
+    _PROP_PCT = 'ai_subs.progress_pct'
+    _PROP_CHUNKS = 'ai_subs.progress_chunks'
+    _PROP_HEARTBEAT = 'ai_subs.progress_heartbeat'
+
     def setup(self):
         # WindowDialog coordinate space is 1280x720 by default.
         # Centered card: 900x440, x=190..1090, y=140..580.
-        #
-        # CRITICAL: we use a WHITE base texture (white_pixel.png) for
-        # backdrops, then tint via colorDiffuse. The previous version
-        # used dark_bg.png (already dark) and got "dark * dark = black"
-        # everywhere, which made the whole modal render as an
-        # unreadable black rectangle. With a white base the tint
-        # colors come through accurately: ffd166 stays yellow, 1e3a5f
-        # stays navy, etc.
         white_px = ('special://home/addons/service.subtitles.kodipovilai/'
                     'resources/lib/icons/white_pixel.png')
 
-        # 1. Full-screen semi-opaque dark backdrop -- mutes Kodi
-        #    behind us so the modal stands out.
+        # Initialize the Window(10000) properties BEFORE creating the
+        # labels that bind to them, so the first render shows the
+        # initial values instead of a blank ("").
+        try:
+            _w = xbmcgui.Window(10000)
+            _w.setProperty(self._PROP_PCT, '0')
+            _w.setProperty(self._PROP_CHUNKS, 'מתחיל תרגום...')
+            _w.setProperty(self._PROP_HEARTBEAT, '')
+        except Exception:
+            pass
+
+        # 1. Full-screen semi-opaque dark backdrop.
         backdrop = xbmcgui.ControlImage(
             0, 0, 1280, 720, white_px,
             colorDiffuse='DD0A0F15', aspectRatio=2)
         self.addControl(backdrop)
 
-        # 2. Outer card shadow (slightly wider than the card, sits
-        #    behind it for a subtle depth effect).
+        # 2. Outer card shadow.
         shadow = xbmcgui.ControlImage(
             186, 144, 908, 448, white_px,
             colorDiffuse='80000000', aspectRatio=2)
         self.addControl(shadow)
 
-        # 3. Card body (the visible navy panel).
+        # 3. Card body.
         card = xbmcgui.ControlImage(
             190, 140, 900, 440, white_px,
             colorDiffuse='FF1E3A5F', aspectRatio=2)
         self.addControl(card)
 
-        # 4. Top accent stripe (yellow, marks the title area).
+        # 4. Top accent stripe.
         stripe = xbmcgui.ControlImage(
             190, 140, 900, 6, white_px,
             colorDiffuse='FFFFD166', aspectRatio=2)
@@ -533,53 +550,69 @@ class _AITranslateProgressWindow(xbmcgui.WindowDialog):
             alignment=2 | 4, font='font13', textColor='FFB7C4CF')
         self.addControl(subtitle)
 
-        # 7. Visual progress bar -- 640 wide, centered, taller (32px)
-        #    so it's clearly visible at TV viewing distance.
-        self._progress_bar = xbmcgui.ControlProgress(
-            320, 300, 640, 32)
-        self.addControl(self._progress_bar)
-        try:
-            self._progress_bar.setPercent(0)
-        except Exception:
-            pass
+        # 7. Dropped the ControlProgress bar in this version -- it
+        #    can't bind to a Window property the way ControlLabel can,
+        #    so it would still need cross-thread setPercent() calls
+        #    that don't land reliably. The big percent number + the
+        #    chunk text below convey the same information and DO
+        #    auto-update via $INFO[] binding.
 
-        # 8. Big percentage number in the middle (yellow, very large).
+        # 8. Big percentage number (yellow, font45). Auto-updates
+        #    from Window property via $INFO[] binding.
         self._percent_lbl = xbmcgui.ControlLabel(
-            190, 350, 900, 70,
-            '[B]0%[/B]',
+            190, 320, 900, 80,
+            '[B]$INFO[Window(10000).Property('
+            + self._PROP_PCT + ')]%[/B]',
             alignment=2 | 4, font='font45', textColor='FFFFD166')
         self.addControl(self._percent_lbl)
 
-        # 9. Chunks counter (light grey, below the percent).
+        # 9. Chunks counter / status line, auto-updates from property.
         self._chunks_lbl = xbmcgui.ControlLabel(
-            190, 425, 900, 30,
-            'מתחיל תרגום...',
+            190, 410, 900, 30,
+            '$INFO[Window(10000).Property('
+            + self._PROP_CHUNKS + ')]',
             alignment=2 | 4, font='font14', textColor='FFB7C4CF')
         self.addControl(self._chunks_lbl)
 
-        # 10. Reassurance copy at the bottom of the card.
+        # 10. Heartbeat line ("מתרגם... 12s") shows the clock is
+        #     advancing even when chunks haven't completed yet --
+        #     reassures the user that the addon isn't frozen during
+        #     long stretches (Gemini overload retries, slow TMDB
+        #     lookups, large chunks etc.).
+        self._heartbeat_lbl = xbmcgui.ControlLabel(
+            190, 445, 900, 26,
+            '$INFO[Window(10000).Property('
+            + self._PROP_HEARTBEAT + ')]',
+            alignment=2 | 4, font='font12', textColor='FF7F8C9E')
+        self.addControl(self._heartbeat_lbl)
+
+        # 11. Reassurance copy at the bottom of the card.
         self._status_lbl = xbmcgui.ControlLabel(
-            210, 480, 860, 90,
+            210, 485, 860, 80,
             'הקובץ ייטען אוטומטית כשהתרגום יסתיים.\n'
             'לחיצה על Back תסגור את החלון; התרגום ממשיך ברקע.',
             alignment=2 | 4, font='font12', textColor='FFB7C4CF')
         self.addControl(self._status_lbl)
 
     def update_progress(self, stage, total):
+        """Thread-safe update path: write to Window(10000) properties
+        and let Kodi's UI thread re-render the bound $INFO[] labels
+        on the next tick. Safe to call from any thread."""
         try:
             pct = int(stage * 100 / max(1, total))
-            if self._progress_bar is not None:
-                try:
-                    self._progress_bar.setPercent(pct)
-                except Exception:
-                    pass
-            if self._percent_lbl is not None:
-                # textColor is set on the control; just update the
-                # text content (no BBCode COLOR wrap needed).
-                self._percent_lbl.setLabel('[B]{0}%[/B]'.format(pct))
-            if self._chunks_lbl is not None:
-                self._chunks_lbl.setLabel(
-                    'chunk {0} / {1}'.format(stage, total))
+            w = xbmcgui.Window(10000)
+            w.setProperty(self._PROP_PCT, str(pct))
+            w.setProperty(self._PROP_CHUNKS,
+                          'chunk {0} / {1}'.format(stage, total))
+        except Exception:
+            pass
+
+    def update_heartbeat(self, text):
+        """Same property-based path, for the slow-progress reassurance
+        line that ticks even when no chunk has completed."""
+        try:
+            xbmcgui.Window(10000).setProperty(
+                self._PROP_HEARTBEAT, text)
         except Exception:
             pass
 
@@ -607,7 +640,9 @@ def _resolve_with_progress_window(link, info):
     flow checks for trans_file. So early-dismiss costs only the
     visual; the translation itself isn't lost."""
     import threading as _threading
+    import time as _time
     result = {'path': None, 'error': None}
+    done_flag = {'done': False}
     window = None
     try:
         try:
@@ -621,17 +656,13 @@ def _resolve_with_progress_window(link, info):
         def report(stage, total):
             try:
                 pct = int(stage * 100 / max(1, total))
-                # 1. Update the WindowDialog overlay (primary UX,
-                #    visible while the modal is open).
+                # Thread-safe property-based update.
                 if window is not None:
                     try:
                         window.update_progress(stage, total)
                     except Exception:
                         pass
-                # 2. Toast at 25 / 50 / 75 % as a guaranteed-visible
-                #    backup -- toasts always layer above WindowDialog
-                #    too, and they also survive the case where the
-                #    user dismissed the modal early.
+                # Toast at 25/50/75 % as a guaranteed-visible backup.
                 milestone = (pct // 25) * 25
                 if (milestone in (25, 50, 75)
                         and milestone > _milestone_state['last']):
@@ -653,6 +684,7 @@ def _resolve_with_progress_window(link, info):
             except Exception as _e:
                 result['error'] = _e
             finally:
+                done_flag['done'] = True
                 # Close from the worker so the main thread's
                 # doModal() returns. Wrapped in try/except because
                 # the user may have already dismissed the modal.
@@ -662,14 +694,34 @@ def _resolve_with_progress_window(link, info):
                     except Exception:
                         pass
 
+        def _heartbeat():
+            """Tick the 'מתרגם... Ns' line so the user sees the modal
+            is alive even when no chunk has completed yet. This is
+            critical during long stretches: Gemini overload retries
+            can add 230s to the FIRST-chunk latency, and the user
+            would otherwise see '0% / מתחיל תרגום...' frozen for
+            multiple minutes and assume the addon is broken."""
+            start = _time.time()
+            while not done_flag['done']:
+                elapsed = int(_time.time() - start)
+                # Three dots, animated by tick mod 4. Pure cosmetic;
+                # makes the elapsed counter feel alive.
+                dots = '.' * ((elapsed % 3) + 1)
+                if window is not None:
+                    try:
+                        window.update_heartbeat(
+                            'מתרגם{0} ({1}ש)'.format(dots, elapsed))
+                    except Exception:
+                        pass
+                _time.sleep(1)
+
         worker = _threading.Thread(target=_worker, daemon=True)
         worker.start()
+        ticker = _threading.Thread(target=_heartbeat, daemon=True)
+        ticker.start()
 
         # doModal() blocks here until the worker calls window.close()
-        # (translation finished) OR the user presses Back/Esc on the
-        # modal. If window creation failed, skip the modal and just
-        # join the worker -- translation still proceeds, just with
-        # toast-only progress UX.
+        # (translation finished) OR the user presses Back/Esc.
         if window is not None:
             try:
                 window.doModal()
@@ -678,10 +730,8 @@ def _resolve_with_progress_window(link, info):
 
         # Always wait for the worker -- if the user dismissed the
         # modal early, translation is still in flight in the background.
-        # We need its result before returning. 10-minute cap covers
-        # the worst-case Gemini outage retry chain (5 backoff steps
-        # of up to 120s each = ~10min).
         worker.join(timeout=600)
+        # Ticker exits on its own once done_flag flips.
 
         if result['error']:
             raise result['error']
