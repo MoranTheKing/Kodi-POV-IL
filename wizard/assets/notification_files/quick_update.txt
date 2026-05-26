@@ -1,35 +1,28 @@
-66
+67
 |||
-דיאגנוסטיקה גלויה לבעיות אצל משתמשי CoreELEC ואחרים
-משתמש CoreELEC דיווח שהתקין את התוסף, חיבר את ה-Gemini key, אבל עדיין מתורגם דרך גוגל תרגום. בלי הודעת שגיאה. בלי log. בלי שום סימן למה זה לא עובד. זה היה הסיוט הכי גדול בדיבוג עד היום — failure שקט שמתחזה ל-"AI subs לא עובד".
+תיקון אמיתי לבעיית Google Translate ב-CoreELEC + בעיות "פאצ' תקין אבל לא רץ"
+משתמש CoreELEC ב-v0.2.31 הריץ את הדיאגנוסטיק החדש וכל ה-8 בדיקות ירוקות — אבל כשהוא הפעיל auto_translate, התרגום עדיין הלך דרך Google Translate, לא דרך ה-AI. זה תרחיש חמור: הפאצ' לכאורה תקין, אבל ה-hook לא רץ.
 
-חקרתי כל ה-failure modes האפשריים והוספתי **דיאגנוסטיקה גלויה** שמאתרת אותם ב-real-time:
+גיליתי שתי סיבות שורש שהאבחון הקודם לא תפס:
 
-**א. Toast אוטומטי בכל הפעלת Kodi** — אם הפאצ' של DarkSubs נכשל לאיזושהי סיבה, מופיע toast בעברית **אוטומטית** עם הסיבה הספציפית. למשל:
-- "אין הרשאת כתיבה ל-DarkSubs engine.py" (read-only FS, בעיה ב-CoreELEC)
-- "גרסת DarkSubs שלך השתנתה ולא תאמה לפאצ'ר שלי" (upstream signature change)
-- "אין מפתח Gemini — DarkSubs ישתמש בגוגל תרגום עד שתחבר"
-- "DarkSubs auto_translate כבוי — הפעל בהגדרות DarkSubs"
+**1. Python bytecode cache (.pyc) של DarkSubs לא נמחק** — DarkSubs מצהיר `<reuselanguageinvoker>true</reuselanguageinvoker>`. אז גם אחרי שכתבנו engine.py חדש, ה-Python interpreter של DarkSubs ממשיך לרוץ עם ה-bytecode הישן מ-`__pycache__/engine.cpython-*.pyc`. הפאצ' חי על הדיסק אבל לא מגיע ל-RAM.
 
-Toast פעם אחת לכל failure-class (לא מטרידים בכל boot).
+**2. ה-hook אולי כן רץ אבל נופל בשקט** — `_aix_key` ריק מתוך התהליך של DarkSubs, או RunScript timeout, או crash. אין שום סימן למשתמש.
 
-**ב. כפתור "בדוק חיבור DarkSubs" בהגדרות התוסף** — נכנסים ל:
-Settings → Add-ons → My Add-ons → Subtitle services → Kodi POV IL - AI Subtitles → Configure → "בדוק חיבור DarkSubs"
+**שלושה תיקונים ב-v0.2.32:**
 
-לוחצים, ומקבלים דיאלוג עם 8 בדיקות מפורטות עם ✓/✗:
-1. DarkSubs מותקן?
-2. engine.py נמצא על הדיסק?
-3. engine.py נקרא?
-4. הוק AI מוזרק (marker)?
-5. machine_translate_subs בצורה מצופה?
-6. engine.py כתיב?
-7. Gemini API key מוגדר?
-8. DarkSubs auto_translate מופעל?
+**א. הפאצ'ר עכשיו מוחק את `__pycache__/engine.cpython-*.pyc`** בכל כתיבה מוצלחת. כך Python נאלץ לקמפל מחדש מ-engine.py החדש ב-import הבא. ללא זה — reuselanguageinvoker פלוס .pyc ישן = פאצ' שלא מגיע לזיכרון.
 
-כל ✗ מציג בדיוק מה הסיבה ומה הצעד הבא. במקום שמשתמש יצטרך לפתוח Kodi log או לשלוח לי screenshot של פיצ'ר שלא עובד, הוא יכול בעצמו לראות מה לא תפס.
+**ב. Hook v2 — חזק וקולני.** בכל הפעלה הוא כותב:
+- `Window(10000).Property('ai_subs.hook_last_fire')` = timestamp
+- `Window(10000).Property('ai_subs.hook_last_outcome')` = `ok` / `timeout` / `no_key` / `crash:<msg>`
+פלוס `xbmc.log` בכל branch, פלוס **Kodi Notification ויזואלי** בכל פעם שה-hook ירה אבל נפל לאחור (timeout/no key/crash). המשתמש יראה למה במקום לקבל פלט Google בשקט.
 
-**הכי חשוב לגבי ההפצה:** המשתמש שלך ב-CoreELEC לא צריך את הבילד המלא. כל מי שהתקין את ה-zip של תוסף ה-AI Subs (גם בנפרד) יראה את ה-toast וגם את הכפתור. ה-button יושב בתוך ה-settings.xml של התוסף עצמו, נגיש מ-Settings → Add-ons → My Add-ons.
+**ג. Diagnostic checklist קיבל שורה 9** — "הוק AI ירה בפועל מ-DarkSubs". קורא את ה-heartbeat property ומדווח מתי ההוק ירה לאחרונה ומה היה ה-outcome. אם שורה 4 (marker בקובץ) ירוקה אבל שורה 9 (heartbeat) אדומה — זה smoking gun ל-issue של .pyc cache (הפאצ' על הדיסק אבל ההוק מעולם לא רץ ב-DarkSubs).
 
-**תהליך עבודה מומלץ לבעיה הנוכחית:** בקש מהמשתמש ב-CoreELEC להתקין את 0.2.31, להפעיל Kodi מחדש. אם מופיע toast — הוא יראה את הסיבה הספציפית. אם לא מופיע toast — שיפתח את "בדוק חיבור DarkSubs" וישלח לך screenshot של הדיאלוג. עם זה ניתן לדעת בדיוק איזה שלב נכשל ולפתור.
+**מה לעשות עם המשתמש ב-CoreELEC:**
+1. quick_update + restart מלא של Kodi (לא רק exit-enter — כיבוי-הדלקה)
+2. אם רוצה לאמת ידנית: לפתוח DarkSubs → לבחור כתובית באנגלית. אם יש בעיה יופיע Notification עם הסיבה. אחרת — תרגום AI אמור לעבוד.
+3. אם רוצה דיאגנוסטיק: Settings → Add-ons → My Add-ons → Subtitle services → Kodi POV IL - AI Subtitles → Configure → "בדוק חיבור DarkSubs". יראה גם את ה-heartbeat.
 
 quick_update + restart.
