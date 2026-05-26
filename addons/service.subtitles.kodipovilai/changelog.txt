@@ -1,3 +1,37 @@
+v0.2.39
+- AI translation is now the DEFAULT whenever a Gemini API key is
+  set -- no second toggle to find. Users had been hitting the
+  "two-toggle confusion": one toggle in DarkSubs ("Enable machine
+  translation"), one in our addon ("Translate via AI even when
+  DarkSubs auto_translate is OFF"). If the second wasn't on, the
+  hook never fired for users who deliberately keep DarkSubs's
+  auto_translate off, and they wondered why they got Google
+  output sometimes.
+
+- Two changes that together fix the default:
+  * settings.xml ships `force_ai_when_auto_translate_off=true`
+    by default for new installs.
+  * dark_subs_integration auto-flips the toggle ON for existing
+    users (one-shot, marker-gated as _force_ai_autoenable_done).
+    Users who explicitly turn the toggle OFF later are respected:
+    the migration marker stays set, we never re-flip.
+
+- DarkSubs settings.xml is also rebranded to make clear the whole
+  "machine translation" section runs via Gemini AI when a key is
+  connected -- prior versions only relabelled the toggle, leaving
+  the section heading "תרגום מכונה" and the source dropdown "מקור
+  תרגום: Google Translate" looking like Google was still in
+  charge. Three label rewrites now applied (each independent,
+  idempotent, surgical):
+  * Section heading -> "תרגום מכונה — דרך Gemini AI (POV IL)
+    כשמפתח מחובר"
+  * Toggle -> "(Gemini AI)" suffix (unchanged from v0.2.x)
+  * Source dropdown -> "מקור fallback (לא בשימוש כש-Gemini AI
+    מחובר)"
+  The dropdown VALUES (Google Translate | Bing Web | Yandex) are
+  left untouched -- those describe the true fallback path that
+  runs when no AI key is configured, so they remain honest.
+
 v0.2.38
 - Four targeted improvements to Hebrew gender (זכר/נקבה) accuracy
   in AI translation. Today the gender form is right ~90% of the
