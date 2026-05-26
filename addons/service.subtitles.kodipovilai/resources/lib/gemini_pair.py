@@ -26,10 +26,38 @@
 # ships.
 
 import http.server
+import re
 import socket
 import socketserver
 import threading
+import unicodedata
 import urllib.parse
+
+
+# Gemini API keys are ASCII alphanumeric + dash + underscore, ~39 chars.
+# We keep this filter intentionally tight: anything outside it is
+# either iOS autocorrect garbage (curly quotes, NBSP, ZWSP) or
+# user typo from manual entry. Stripping it gives the API key it
+# actually expected, not the version iOS Safari rewrote.
+_KEY_CHARSET_RE = re.compile(r'[^A-Za-z0-9_\-]')
+
+
+def _sanitize_key(raw):
+    """Strip every byte iOS Safari might have inserted into a pasted
+    API key. Order matters: NFKC normalises full-width / smart-quoted
+    variants to their ASCII equivalents BEFORE we filter, so e.g. a
+    smart-quoted "AIza..." becomes plain quotes (then stripped) and
+    a full-width A maps to ASCII A. Surface a (`raw`, `cleaned`) pair
+    so the caller can warn if anything was dropped."""
+    if not raw:
+        return ''
+    # Normalize unicode confusables to their ASCII canonical form.
+    normalised = unicodedata.normalize('NFKC', raw)
+    # Remove ASCII whitespace plus NBSP, ZWSP, BOM, RTL/LTR marks etc.
+    # _KEY_CHARSET_RE catches all of these by allow-listing only the
+    # chars Gemini keys actually use.
+    cleaned = _KEY_CHARSET_RE.sub('', normalised)
+    return cleaned
 
 
 # Form served on GET /. Plain UTF-8 HTML with inline CSS, RTL.
@@ -72,8 +100,20 @@ _HTML_FORM = '''<!doctype html>
     </p>
     <form method="POST" action="/submit">
       <label for="key">Gemini API Key</label>
-      <input type="text" id="key" name="key" autocomplete="off"
-             autocapitalize="off" spellcheck="false"
+      <!--
+        iOS Safari note: in addition to the W3C attributes
+        (autocomplete, autocapitalize, spellcheck), iOS-only
+        autocorrect MUST be explicitly disabled. Without it,
+        Safari quietly modifies the pasted key (smart quotes,
+        non-breaking spaces, mid-word capitalization) and the
+        server receives a corrupted string that Google's API
+        rejects with a 400. inputmode=verbatim also helps disable
+        keyboard suggestions on iOS / Android.
+      -->
+      <input type="text" id="key" name="key"
+             autocomplete="off" autocapitalize="off"
+             autocorrect="off" spellcheck="false"
+             inputmode="verbatim"
              placeholder="AIza..." required>
       <button type="submit">שלח ל-Kodi</button>
     </form>
@@ -86,14 +126,24 @@ _HTML_FORM = '''<!doctype html>
 </html>
 '''
 
+# Echoes a fingerprint of the received key so the user can verify
+# nothing got corrupted in transit (iOS autocorrect, etc.). Format
+# is FIRST-FOUR…LAST-FOUR + length, e.g. "AIza…9xY7 (39 chars)".
+# We deliberately do NOT show the full key (the page might be
+# screenshotted/photographed by support or shoulder-surfed).
 _HTML_DONE_OK = '''<!doctype html>
 <html lang="he" dir="rtl"><head><meta charset="utf-8">
 <title>נשלח</title>
-<style>body{font-family:Arial,sans-serif;background:#101820;color:#f6f1df;
-text-align:center;padding:60px 20px}h1{color:#7fbf7f;font-size:2rem}
-p{color:#b7c4cf}</style></head>
+<style>body{{font-family:Arial,sans-serif;background:#101820;color:#f6f1df;
+text-align:center;padding:60px 20px}}h1{{color:#7fbf7f;font-size:2rem}}
+p{{color:#b7c4cf}}code{{background:#0a0f15;padding:6px 12px;border-radius:6px;
+display:inline-block;margin:8px;direction:ltr;font-size:1.1rem}}</style></head>
 <body><h1>✓ ה-key נשלח ל-Kodi</h1>
-<p>אפשר לסגור את הדף הזה ולחזור ל-Kodi.</p></body></html>
+<p>השרת קיבל:</p>
+<p><code>{fingerprint}</code></p>
+<p>ודא ש-{first4} ו-{last4} תואמים את ה-key המקורי שהעתקת.
+אם לא — לחץ <a href="/" style="color:#ffd166">חזור</a> והדבק שוב.</p>
+<p>אפשר לסגור את הדף ולחזור ל-Kodi.</p></body></html>
 '''
 
 _HTML_DONE_EMPTY = '''<!doctype html>
@@ -140,7 +190,14 @@ def _make_handler(state):
                 self._send(400, '<h1>400</h1>')
                 return
             fields = urllib.parse.parse_qs(raw)
-            key = (fields.get('key', [''])[0] or '').strip()
+            submitted = (fields.get('key', [''])[0] or '').strip()
+            # Aggressive sanitisation: iOS Safari can sneak smart
+            # quotes / non-breaking spaces / zero-width chars into a
+            # pasted API key even with autocorrect=off. The Gemini
+            # API rejects those with 400 and the user sees no clue
+            # why. _sanitize_key normalises NFKC then keeps only the
+            # ASCII charset Google's keys actually use.
+            key = _sanitize_key(submitted)
             if not key:
                 self._send(200, _HTML_DONE_EMPTY)
                 return
@@ -149,7 +206,16 @@ def _make_handler(state):
             # full Gemini test_key flow so the user sees the
             # error in the Kodi UI, not in the browser.
             state['received_key'] = key
-            self._send(200, _HTML_DONE_OK)
+            # Build a fingerprint the user can sanity-check against
+            # the key they actually copied. If iOS managed to corrupt
+            # something despite our sanitiser, the first-4/last-4
+            # comparison surfaces it immediately.
+            first4 = (key[:4] if len(key) >= 4 else key) or '?'
+            last4 = (key[-4:] if len(key) >= 8 else '') or '...'
+            fingerprint = '{0}…{1}   ({2} chars)'.format(
+                first4, last4, len(key))
+            self._send(200, _HTML_DONE_OK.format(
+                fingerprint=fingerprint, first4=first4, last4=last4))
 
         # Silence stderr access-log spam.
         def log_message(self, fmt, *args):
