@@ -1,22 +1,43 @@
-75
+76
 |||
-תיקון progress missing במסלול של DarkSubs hook
-דיווחת: לא ראית notification של התקדמות כשבחרת כתוביות באנגלית מ-DarkSubs וה-AI תרגם. צודק לחלוטין — היה באג שעוד לא תפסתי.
+חלון progress מעוצב מעל הכל — לא רק toasts
+ראיתי את הצילום מסך שלך. **DarkSubs MySubs היא pyxbmct AddonDialogWindow מלאת מסך** שמכסה את הפינה הימנית-תחתונה — בדיוק איפה ש-DialogProgressBG אמור להופיע. הdialog נוצר ומעודכן, אבל מוסתר מאחורי הפיקר של DarkSubs.
 
-**שורש הבעיה:** ל-`_handle_download` (המסלול שבו המשתמש בוחר ב-AI Subs כשירות ישירות) **כן** הייתה DialogProgressBG עם עדכון לכל chunk. אבל ל-`_handle_translate_file` (המסלול שאליו DarkSubs hook קופץ דרך RunScript) — **לא היה** progress UI בכלל. הקריאה ל-`translate.resolve(link, info)` הייתה בלי `progress_cb`, אז שום מסלול עדכון UI לא קיים. התרגום פעל בשקט מתחילתו ועד סופו.
+ביקשת חלון התקדמות יפה ומגניב שיעלה על הכל — בנוי, על אותו המבנה של ה-_PairWindow ל-QR שכבר עובד מצוין.
 
-**התיקון:** הוספתי DialogProgressBG ל-`_handle_translate_file` שמטפל ב-3 המקרים:
-- **התחלה**: יוצר dialog "Kodi POV IL - AI Subtitles"
-- **תוך כדי**: report callback מתעדכן עם כל chunk שמסתיים → "מתרגם chunk 5/20..." בפינה הימנית-תחתונה של Kodi
-- **סיום/קריסה**: `finally` block סוגר את ה-dialog נקי
+**חלון חדש: `_AITranslateProgressWindow`**
 
-אם יצירת ה-dialog עצמה נכשלת (נדיר) — התרגום ממשיך בשקט כמו ב-v0.2.39 (אין regression).
+מבוסס על `xbmcgui.WindowDialog` שהוא top-level window — עולה מעל **כל חלון אחר ב-Kodi כולל ה-pyxbmct של DarkSubs**. מבנה הכרטיס:
 
-**מה כבר היה ועכשיו נוסף:**
-- Toast "AI: מתחיל תרגום..." — כבר היה
-- Progress bar למטה "מתרגם chunk X/Y..." — **חדש** במסלול DarkSubs (היה רק במסלול AI Subs ישיר)
-- Toast "AI: תרגום הסתיים בהצלחה" — כבר היה
+```
++------------------------------------------+
+|  [רקע כהה דהוי על כל המסך]               |
+|                                          |
+|     +------------------------------+     |
+|     |  AI מתרגם כתוביות לעברית     |     |
+|     |    Gemini AI · Kodi POV IL   |     |
+|     |                              |     |
+|     |   [============>     ]       |     |
+|     |                              |     |
+|     |          72%                 |     |  ← מספר ענק
+|     |       chunk 14 / 20          |     |
+|     |                              |     |
+|     |  הקובץ ייטען אוטומטית        |     |
+|     |  כשהתרגום יסתיים             |     |
+|     +------------------------------+     |
+|                                          |
++------------------------------------------+
+```
 
-עכשיו לא משנה אם המשתמש בוחר דרך AI Subs ישירות או דרך DarkSubs — הוא יראה את אותו progress bar.
+- **כותרת**: "AI מתרגם כתוביות לעברית" (font30, צהוב)
+- **שורה משנית**: "Gemini AI · Kodi POV IL" (font13, אפור בהיר)
+- **פס התקדמות ויזואלי** (`ControlProgress`): רוחב 600, מתעדכן בכל chunk
+- **מספר אחוזים ענק**: "72%" בfont45 צהוב — בולט מאוד
+- **מונה chunks**: "chunk 14 / 20" — תמיד יודעים איפה עומדים
+- **טקסט מרגיע למטה**: "הקובץ ייטען אוטומטית כשהתרגום יסתיים. התרגום ממשיך גם אם תסגור את החלון."
+
+**גיבוי דרך toasts**: בנוסף ל-WindowDialog, נשארות הודעות toast ב-25%/50%/75% — נחתות תמיד מעל גם אם איזה skin משונה יסתיר את ה-WindowDialog שלנו. (Throttled — לכל היותר 3 toasts בקובץ).
+
+**helper משותף**: שני המסלולים (`_handle_download` ישיר ו-`_handle_translate_file` מהוק DarkSubs) קוראים ל-`_resolve_with_progress_window(link, info)` החדש — אותו UX ויזואלי בדיוק בלי קשר מאיפה הופעל.
 
 quick_update + restart.
