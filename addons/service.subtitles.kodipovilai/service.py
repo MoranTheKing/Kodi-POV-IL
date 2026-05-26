@@ -604,36 +604,50 @@ def _maybe_patch_darksubs_filename():
             pass
 
 
-def _maybe_patch_fentastic_dialog_subtitles():
-    """Self-healing patch of FENtastic skin's DialogSubtitles.xml so
-    the subtitle-picker dialog HEADER prefers the window property
+def _maybe_patch_skin_dialog_subtitles():
+    """Self-healing patch of the ACTIVE skin's DialogSubtitles.xml
+    so the subtitle-picker dialog HEADER prefers our window property
     `subs.player_filename` (set by POV's source picker AND/OR our
     own SubsFilenamePublisher player monitor) over the built-in
     `Player.Filename`. Without this, the header shows the UUID
     basename of TorBox CDN URLs even when our property is set --
     because Kodi's DialogSubtitles XML resolves Player.Filename
     directly from the player URL, not from any addon-settable
-    state. Patching the XML makes the header read our property
-    first."""
+    state. Patching the skin's XML makes the header read our
+    property first.
+
+    This patcher auto-detects the active skin via xbmc.getSkinDir()
+    and works against FENtastic, Arctic Zephyr (any variant),
+    Estuary, Aeon Nox -- any skin whose DialogSubtitles.xml has a
+    `<control type="label">…$INFO[Player.Filename]…</control>`
+    element. Users who chose a non-FENtastic skin previously saw
+    the UUID gibberish in the header even on the latest addon
+    version because the old FENtastic-only patcher returned
+    'no_file' for them.
+
+    Self-migrates the old FENtastic-specific v1 inject so users
+    upgrading don't end up with stale v1 dual-control blocks
+    sitting next to the new v2 ones."""
     try:
-        from resources.lib import fentastic_dialog_subtitles_patcher, \
+        from resources.lib import skin_dialog_subtitles_patcher, \
             kodi_utils
     except Exception:
         return
     try:
-        status = fentastic_dialog_subtitles_patcher.ensure_patched()
+        status = skin_dialog_subtitles_patcher.ensure_patched()
         if status == 'patched':
             kodi_utils.log(
-                'fentastic_dialog_subtitles_patcher: dialog header '
-                'now prefers subs.player_filename', level='INFO')
-        elif status in ('unmatched', 'write_failed', 'read_failed'):
+                'skin_dialog_subtitles_patcher: dialog header now '
+                'prefers subs.player_filename', level='INFO')
+        elif status in ('unmatched', 'write_failed', 'read_failed',
+                        'no_target'):
             kodi_utils.log(
-                'fentastic_dialog_subtitles_patcher: ' + status,
+                'skin_dialog_subtitles_patcher: ' + status,
                 level='WARNING')
     except Exception as e:
         try:
             kodi_utils.log(
-                'fentastic_dialog_subtitles_patcher failed: '
+                'skin_dialog_subtitles_patcher failed: '
                 '{0}'.format(e), level='WARNING')
         except Exception:
             pass
@@ -714,7 +728,7 @@ def main():
     # property over the built-in Player.Filename. Without this, even
     # if our other patchers set the property, the dialog title still
     # shows the URL basename / UUID.
-    _maybe_patch_fentastic_dialog_subtitles()
+    _maybe_patch_skin_dialog_subtitles()
 
     # Remove the v0.1.5-v0.1.7 misplaced injection into the wizard's
     # login_menu (the right menu was POV's, not the wizard's).
