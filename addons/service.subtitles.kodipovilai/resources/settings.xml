@@ -46,6 +46,17 @@
           </control>
           <data>RunScript(service.subtitles.kodipovilai,action=test_connection)</data>
         </setting>
+        <setting id="darksubs_status" type="action" label="32107"> <!-- Test DarkSubs integration -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32107</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=darksubs_status)</data>
+        </setting>
       </group>
     </category>
 
