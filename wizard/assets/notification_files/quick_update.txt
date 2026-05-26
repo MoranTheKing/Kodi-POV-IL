@@ -1,18 +1,29 @@
-78
+79
 |||
-חלון התקדמות סוף סוף נראה — תיקון של תמונת ה-backdrop השחורה
-מצוין שהראית צילום מסך — חשף את הבאג המדויק. ב-v0.2.42 ה-doModal() כן עבד והחלון נכון קופץ מעל DarkSubs, **אבל הכרטיס נרנדר כריבוע שחור לחלוטין**. כותרת, פס התקדמות, אחוזים — הכל היה שם אבל בלתי נראה על רקע שחור-על-שחור.
+תיקון התקיעות ב-0% — עדכוני UI thread-safe + heartbeat
+מצוין שראיתי את הצילום מסך. החלון נראה עכשיו יפה (כל הצבעים נכונים), **אבל ה-percent לא מתעדכן.** תקוע על 0% ל-3 דקות בזמן שהתרגום עובד ברקע.
 
-**שורש הבעיה:** `ControlImage` משתמש ב-`colorDiffuse` כ**מכפיל** על הטקסטורה הבסיסית. השתמשתי ב-`dark_bg.png` (תמונה כהה ממילא) ב-backdrop וב-card, ואז הוספתי `colorDiffuse` של צבעים כהים (`DD000000`, `F0172635`). כהה כפול כהה = שחור.
+**שורש הבעיה:** ב-architecture של doModal() + worker thread של v0.2.42-43, התרגום רץ ב-daemon thread. הוא קורא ל-`window.update_progress()` שקורא ל-`setLabel()` ו-`setPercent()` ישירות על ה-controls. **קריאות xbmcgui מ-non-UI thread לא תמיד נוחתות על המסך** ב-Kodi — הם לא thread-safe באמת.
 
-**התיקון:** הוספתי `white_pixel.png` — תמונת PNG לבנה מלאת אטימות בגודל 16x16 (79 בייט) — כבסיס לכל ה-fill-ים ב-modal. **לבן כפול navy = navy. לבן כפול צהוב = צהוב.** הצבעים סוף סוף עוברים נכון.
+**התיקון: הדפוס הקנוני של Kodi לעדכוני UI cross-thread** — `Window(10000)` properties + `$INFO[]` binding ב-label text:
 
-**שיפורים נוספים בעיצוב (כי הייתי באזור):**
-- כרטיס הורחב מ-800 ל-900 פיקסל, ממורכז יותר
-- צל רך (4px offset, semi-opaque) מאחורי הכרטיס לעומק ויזואלית
-- פס accent צהוב (6px) למעלה מסמן את אזור הכותרת
-- כל הצבעים על `textColor` של ה-ControlLabel ישירות (לא BBCode wrap בתוך המחרוזת) — נקי יותר, אותו רינדור
-- פס התקדמות הורחב מ-600 ל-640 והוגבה (26→32 פיקסל) לראייה ממרחק שלט-טלוויזיה
-- טקסט בתחתית הכרטיס מסביר במפורש: "Back תסגור את החלון; התרגום ממשיך ברקע"
+```python
+# בlabel
+'$INFO[Window(10000).Property(ai_subs.progress_pct)]%'
+
+# בworker thread
+xbmcgui.Window(10000).setProperty('ai_subs.progress_pct', '45')
+```
+
+`setProperty` הוא thread-safe מתועד; ה-UI thread של Kodi קורא מחדש את `$INFO[...]` בכל render tick (~50ms), אז עדכון מכל thread נוחת על המסך באופן מיידי.
+
+**Properties שהוספתי:**
+- `ai_subs.progress_pct` — אחוזים נוכחיים
+- `ai_subs.progress_chunks` — "chunk X / Y"
+- `ai_subs.progress_heartbeat` — **ticker חדש** ("מתרגם... 12ש")
+
+**ה-heartbeat ticker** הוא thread נפרד שמעדכן את ה-property כל שנייה עם השנייה הנוכחית + נקודות אנימציה. **קריטי למקרה של Gemini עמוס** — ה-chunk הראשון יכול לקחת עד 230 שניות (5 שלבי backoff) אם Google מגביל את ה-rate. עם ה-heartbeat המשתמש רואה את המונה מתקדם — החלון מרגיש חי, לא קפוא.
+
+**הסרתי את פס ה-ControlProgress הויזואלי** — הוא לא יכול לבייןד ל-property כמו ControlLabel, אז היה צריך קריאות cross-thread שלא עובדות. המספר הענק + טקסט ה-chunks + ה-heartbeat counter מעבירים את אותה אינפורמציה.
 
 quick_update + restart.
