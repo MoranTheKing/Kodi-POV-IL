@@ -1,40 +1,26 @@
-68
+69
 |||
-תיקון לבחירה ידנית של כתובית באנגלית כש-auto_translate כבוי + הגנה על משתמשים שרוצים כתוביות בשפת המקור
-שני תרחישים שעלו במקביל:
+תיקון 400 מ-Gemini בחיבור מ-iPhone Safari
+משתמשים דיווחו: pair מטלפון אנדרואיד או מ-Mac/PC עובד מצוין, אבל **כל אייפון** מקבל "ה-key נדחה ע"י Gemini" (400) מיד אחרי שדיף ה-pair מאשר שהמפתח התקבל. 100% רוחבי לכל ה-iPhones.
 
-**1. משתמש ב-CoreELEC**: השאיר auto_translate=OFF בכוונה (לא רצה את Google Translate של DarkSubs) וציפה שכשהוא בוחר ידנית כתובית באנגלית, ה-AI יתרגם. אבל ההוק שלנו ב-`machine_translate_subs` נקראת רק כש-auto_translate=ON. עם OFF, ההוק לא רץ — האנגלית הולכת ישר למסך.
+**שורש הבעיה:** ל-iOS Safari תכונה משלו בשם `autocorrect` שמפעילה אוטו-תיקון על כל input element. גם כש-בעבר הוספתי `autocomplete=off` + `autocapitalize=off` + `spellcheck=false`, **שכחתי את `autocorrect="off"`** (יחודי ל-iOS). בלי זה, Safari עושה דברים סמויים על מחרוזת ה-key שמודבקת:
+- מקיף אותה ב-smart quotes (״)
+- מכניס non-breaking space באמצע
+- מוסיף zero-width marks מזיהוי כיוון טקסט
+- ממיר תווי full-width לתקן ASCII הפוך
 
-**2. אבל מנגד**: יש משתמשים שמשאירים auto_translate=OFF **כי הם רוצים כתוביות באנגלית** (ללימוד שפה, סרטים שבהם הם רוצים לראות את המקור). אם אנחנו פשוט נכפה AI גם כש-OFF, נהרוס להם את החוויה — הם יקבלו עברית בעל כורחם.
+המפתח שמגיע לשרת שלי מקולקל. Google's API דוחה אותו עם 400.
 
-**הפתרון: הגדרה חדשה ב-AI Subs לבחירה מודעת:**
+**3 שכבות של תיקון:**
 
-`"תרגם דרך AI גם כש-auto_translate של DarkSubs כבוי"` — ברירת מחדל **OFF**. רק משתמש שמסמן אותה בכוונה (כמו המשתמש ב-CoreELEC) יקבל את ההתנהגות הזאת. שאר המשתמשים — הכל כרגיל לפי דרך DarkSubs.
+**א. בHTML form:** הוספתי `autocorrect="off"` ו-`inputmode="verbatim"` (מבטל גם את שורת ההמלצות מעל המקלדת ב-iOS).
 
-נמצא ב: Settings → Add-ons → My Add-ons → Subtitle services → Kodi POV IL - AI Subtitles → Configure → קטגוריית "Gemini API" → התיבה החדשה.
+**ב. סניטציה אגרסיבית בצד השרת:** פונקציה חדשה `_sanitize_key()` עושה:
+1. `unicodedata.normalize('NFKC', raw)` — ממירה full-width לתקן ASCII
+2. Regex שמשאיר רק `[A-Za-z0-9_\\-]` (התווים שמופיעים במפתחות Gemini בפועל)
 
-**טבלת התנהגות (4 מצבים מלאים):**
-| auto_translate | force-toggle | api_key | תוצאה |
-|---|---|---|---|
-| ON | * | מוגדר | AI מתרגם (התנהגות קיימת) |
-| ON | * | ריק | Google של DarkSubs |
-| OFF | OFF | מוגדר | **כתוביות במקור (אנגלית) — שמירה על כוונת המשתמש** |
-| OFF | OFF | ריק | אין תרגום, כתוביות באנגלית |
-| OFF | ON | מוגדר | **AI מתרגם (החדש — בדיוק מה שביקש המשתמש ב-CoreELEC)** |
-| OFF | ON | ריק | אין תרגום, כתוביות באנגלית |
+זה מנקה **כל** תו בלתי-נראה ש-iOS היה יכול להכניס: NBSP, ZWSP, BOM, RTL/LTR marks, smart quotes — הכל נופל. נבדק מול 11 תרחישי קלקול אופייניים של iOS.
 
-**בנוסף — תיקוני באג קריטיים:**
-
-**א. Hook v3**: כש-AI מוגדר, ההוק לא נופל יותר ל-Google על failure (timeout/crash/empty). במקום זה הוא מעתיק את הכתובית המקורית באנגלית ל-output ו-short-circuits. המשתמש רואה אנגלית במקום Google Hebrew מקולקל. רק כשאין מפתח AI, Google נשמר כ-fallback (תאימות לאחור).
-
-**ב. תיקון line-endings**: ה-hook patcher היה רושם מחדש את engine.py מ-CRLF ל-LF בכל הפעלה (בגלל text-mode read/write). זה שבר את ה-patcher החדש שלי שצריך לתאם CRLF. עכשיו עובר ל-binary mode end-to-end ושומר את ה-EOL המקורי.
-
-**ג. דיאגנוסטיק עודכן ל-10 שורות**: הוספתי בדיקה "הוק AI יפעל על כתוביות לא-עבריות" שעונה אמיתית — בהתחשב ב-auto_translate + force-toggle + download_sub patch ביחד. אם משתמש רוצה התנהגות אחרת, הדיאלוג אומר בדיוק איזה toggle לכוון.
-
-**מה שיגיד למשתמש ב-CoreELEC:**
-1. quick_update + restart
-2. Settings → Add-ons → My Add-ons → Subtitle services → Kodi POV IL - AI Subtitles → Configure
-3. תחת "Gemini API" — להפעיל את "תרגם דרך AI גם כש-auto_translate של DarkSubs כבוי"
-4. לבחור כתובית באנגלית מ-DarkSubs → AI מתרגם.
+**ג. עמוד "נשלח" עכשיו מציג fingerprint** — 4 תווים ראשונים + ... + 4 אחרונים + (אורך). המשתמש יכול לוודא ויזואלית שמה שהגיע לשרת תואם למה שהוא העתיק. אם משהו השתבש (גם אחרי הסניטציה), הוא רואה את זה מיד במקום לחכות לשגיאת Gemini API.
 
 quick_update + restart.
