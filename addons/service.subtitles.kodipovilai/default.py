@@ -135,34 +135,11 @@ def _handle_download(handle, params):
     link = params.get('link', '')
     info = kodi_utils.current_video_info()
 
-    progress = None
     try:
-        progress = xbmcgui.DialogProgressBG()
-        progress.create('Kodi POV IL', 'AI Hebrew')
-    except Exception:
-        progress = None
-
-    def report(stage, total):
-        if not progress:
-            return
-        try:
-            pct = int(stage * 100 / max(1, total))
-            progress.update(pct, 'Kodi POV IL',
-                            kodi_utils.localised(33001, stage, total))
-        except Exception:
-            pass
-
-    try:
-        path = translate.resolve(link, info, progress_cb=report)
+        path = _resolve_with_progress_window(link, info)
     except Exception as e:
         _safe_log('resolve crashed: {0}'.format(e), level='ERROR')
         path = None
-
-    if progress is not None:
-        try:
-            progress.close()
-        except Exception:
-            pass
 
     if path and os.path.isfile(path):
         listitem = xbmcgui.ListItem(label=path)
@@ -462,6 +439,168 @@ class _PairWindow(xbmcgui.WindowDialog):
         ):
             self.cancelled = True
             self.close()
+
+
+class _AITranslateProgressWindow(xbmcgui.WindowDialog):
+    """Full-screen overlay shown while AI translation is running.
+    Layers above ANY other window including DarkSubs's full-screen
+    pyxbmct MySubs picker -- the v0.2.40 DialogProgressBG was
+    hidden behind that picker because BG dialogs are anchored to
+    the bottom-right corner which DarkSubs's window covered.
+    WindowDialog is a top-level Kodi window so this stays visible
+    no matter what's behind it.
+
+    Non-blocking from the user's perspective: while shown, the
+    translation continues in the background. Closing this window
+    early (via close()) doesn't cancel the translation; it just
+    hides the visual. The picker behind us still blocks until
+    DarkSubs's machine_translate_subs returns, by design."""
+
+    def __init__(self, *args, **kwargs):
+        # WindowDialog quirk: do NOT call super().__init__ with
+        # positional args -- it confuses the binding. State only.
+        self._percent_lbl = None
+        self._chunks_lbl = None
+        self._progress_bar = None
+        self._status_lbl = None
+
+    def setup(self):
+        # WindowDialog coordinate space is 1280x720 by default.
+        # Centered card: 800x400, x=240..1040, y=160..560.
+        bg_path = ('special://home/addons/service.subtitles.kodipovilai/'
+                   'resources/lib/icons/dark_bg.png')
+
+        # Dim full-screen backdrop -- mutes Kodi behind us.
+        backdrop = xbmcgui.ControlImage(
+            0, 0, 1280, 720, bg_path,
+            colorDiffuse='DD000000', aspectRatio=2)
+        self.addControl(backdrop)
+
+        # Centered card.
+        card = xbmcgui.ControlImage(
+            240, 160, 800, 400, bg_path,
+            colorDiffuse='F0172635', aspectRatio=2)
+        self.addControl(card)
+
+        # Title bar (yellow accent, big font).
+        title = xbmcgui.ControlLabel(
+            240, 190, 800, 50,
+            '[B][COLOR=ffd166]AI מתרגם כתוביות לעברית[/COLOR][/B]',
+            alignment=2 | 4, font='font30')
+        self.addControl(title)
+
+        # Brand line under the title.
+        subtitle = xbmcgui.ControlLabel(
+            240, 245, 800, 30,
+            '[COLOR=b7c4cf]Gemini AI · Kodi POV IL[/COLOR]',
+            alignment=2 | 4, font='font13')
+        self.addControl(subtitle)
+
+        # Visual progress bar -- 600 wide, centered.
+        self._progress_bar = xbmcgui.ControlProgress(
+            340, 320, 600, 26)
+        self.addControl(self._progress_bar)
+        try:
+            self._progress_bar.setPercent(0)
+        except Exception:
+            pass
+
+        # Big percentage number in the middle.
+        self._percent_lbl = xbmcgui.ControlLabel(
+            240, 360, 800, 60,
+            '[B][COLOR=ffd166]0%[/COLOR][/B]',
+            alignment=2 | 4, font='font45')
+        self.addControl(self._percent_lbl)
+
+        # Chunks counter (smaller, below the percent).
+        self._chunks_lbl = xbmcgui.ControlLabel(
+            240, 425, 800, 30,
+            '[COLOR=b7c4cf]מתחיל תרגום...[/COLOR]',
+            alignment=2 | 4, font='font14')
+        self.addControl(self._chunks_lbl)
+
+        # Reassurance copy at the bottom.
+        self._status_lbl = xbmcgui.ControlLabel(
+            260, 470, 760, 70,
+            '[COLOR=b7c4cf]הקובץ ייטען אוטומטית כשהתרגום יסתיים. '
+            'התרגום ממשיך גם אם תסגור את החלון הזה.[/COLOR]',
+            alignment=2 | 4, font='font12')
+        self.addControl(self._status_lbl)
+
+    def update_progress(self, stage, total):
+        try:
+            pct = int(stage * 100 / max(1, total))
+            if self._progress_bar is not None:
+                try:
+                    self._progress_bar.setPercent(pct)
+                except Exception:
+                    pass
+            if self._percent_lbl is not None:
+                self._percent_lbl.setLabel(
+                    '[B][COLOR=ffd166]{0}%[/COLOR][/B]'.format(pct))
+            if self._chunks_lbl is not None:
+                self._chunks_lbl.setLabel(
+                    '[COLOR=b7c4cf]chunk {0} / {1}[/COLOR]'.format(
+                        stage, total))
+        except Exception:
+            pass
+
+
+def _resolve_with_progress_window(link, info):
+    """Wrap translate.resolve() with the AITranslateProgressWindow
+    overlay PLUS the milestone toasts as a guaranteed-visible
+    backup. Both _handle_download and _handle_translate_file call
+    this so the visual progress UX is identical regardless of which
+    entry point triggered the translation."""
+    window = None
+    try:
+        try:
+            window = _AITranslateProgressWindow()
+            window.setup()
+            window.show()
+        except Exception:
+            window = None
+
+        _milestone_state = {'last': 0}
+
+        def report(stage, total):
+            try:
+                pct = int(stage * 100 / max(1, total))
+                # 1. Update the WindowDialog overlay (primary UX).
+                if window is not None:
+                    try:
+                        window.update_progress(stage, total)
+                    except Exception:
+                        pass
+                # 2. Toast at 25 / 50 / 75 % as a guaranteed-visible
+                #    backup (toasts always layer above WindowDialog
+                #    too, in case some Kodi-skin combination hides
+                #    our overlay).
+                milestone = (pct // 25) * 25
+                if (milestone in (25, 50, 75)
+                        and milestone > _milestone_state['last']):
+                    _milestone_state['last'] = milestone
+                    try:
+                        kodi_utils.notify(
+                            'AI: {0}% תורגם ({1}/{2} chunks)'.format(
+                                milestone, stage, total),
+                            time_ms=3500)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+        return translate.resolve(link, info, progress_cb=report)
+    finally:
+        if window is not None:
+            try:
+                window.close()
+            except Exception:
+                pass
+            try:
+                del window
+            except Exception:
+                pass
 
 
 def _gemini_pair_flow(kodi_utils, gemini, gemini_pair):
@@ -868,46 +1007,11 @@ def _handle_translate_file(params):
         json.dumps(payload, ensure_ascii=False))
 
     translated_path = None
-    # Background progress dialog -- matches what _handle_download
-    # already shows when the user picks our AI Subs service
-    # directly. Without this, a user picking an English subtitle
-    # via DarkSubs sees NOTHING while the 30-90s translation runs
-    # in the background -- they don't even know AI is working,
-    # which is exactly the "is the hook even firing?" confusion
-    # we kept getting. DialogProgressBG is non-blocking and shows
-    # in the bottom-right banner area, doesn't interfere with
-    # DarkSubs's own UI.
-    progress = None
     try:
-        progress = xbmcgui.DialogProgressBG()
-        progress.create('Kodi POV IL - AI Subtitles',
-                        'תרגום AI מתחיל...')
-    except Exception:
-        progress = None
-
-    def report(stage, total):
-        if not progress:
-            return
-        try:
-            from resources.lib import kodi_utils as _ku
-            pct = int(stage * 100 / max(1, total))
-            progress.update(pct, 'Kodi POV IL - AI Subtitles',
-                            _ku.localised(33001, stage, total))
-        except Exception:
-            pass
-
-    try:
-        translated_path = translate.resolve(link, info,
-                                            progress_cb=report)
+        translated_path = _resolve_with_progress_window(link, info)
     except Exception as e:
         _safe_log('translate_file: resolve crashed: {0}'.format(e),
                   level='ERROR')
-    finally:
-        if progress is not None:
-            try:
-                progress.close()
-            except Exception:
-                pass
 
     if not translated_path or not os.path.isfile(translated_path):
         _safe_log('translate_file: resolve returned nothing',
