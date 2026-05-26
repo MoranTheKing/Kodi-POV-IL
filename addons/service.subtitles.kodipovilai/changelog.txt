@@ -1,3 +1,51 @@
+v0.2.38
+- Four targeted improvements to Hebrew gender (זכר/נקבה) accuracy
+  in AI translation. Today the gender form is right ~90% of the
+  time; the remaining 10% mostly traces to four specific failure
+  modes that these changes address. No behavioural change for any
+  non-Hebrew code path.
+
+- (a) Cross-chunk context carry-over: we translate in parallel
+  chunks (default 250 entries each). Until now, each chunk was
+  translated INDEPENDENTLY: the AI saw the cast block but no
+  recent conversational thread, so a character finishing a line
+  at the end of chunk N would sometimes get a different gender
+  the moment they spoke at the start of chunk N+1. We now feed
+  the last 5 SOURCE-text lines of chunk N-1 into chunk N's
+  prompt as a "PREVIOUS DIALOGUE CONTEXT" section -- AI sees the
+  thread, picks up the gender consistently. The previous chunk's
+  source is precomputed up-front (deterministic per index) so
+  parallel dispatch still works -- no inter-chunk dependency.
+  Tunable via the `prev_context_lines` setting (default 5;
+  0 disables the feature).
+
+- (b) Speaker-prefix hints: SRT entries that start with an
+  ALL-CAPS speaker tag like "MABEL:" or "DR. SMITH:" used to be
+  dropped on instruction ("do NOT include speaker prefixes in
+  the Hebrew"). The prompt now tells the AI to MATCH the prefix
+  name against the cast block, use that person's gender for
+  first-person forms in the line, then drop only the prefix
+  from the output. Speaker prefixes are common in SDH /
+  Telegram SRTs and were previously thrown away even though
+  they're the strongest gender signal we ever get.
+
+- (c) Reply heuristic: in two-character dialogues, short
+  follow-up lines ("Right.", "No way.", "You sure?", "I told
+  you.") are almost always REPLIES from the OTHER speaker.
+  New explicit prompt rule: "speakers alternate unless context
+  says otherwise; apply alternation before falling back to a
+  gender guess." Catches the most common single-line gender
+  flip in dialogue.
+
+- (d) Cast list widened from top-12 to top-25 (`tmdb_helper`
+  default). Minor characters (waiters, partners, one-scene
+  parents) whose gender mattered for the line they spoke were
+  often outside the top-12 cut and defaulted to the AI's
+  best guess. Existing cached cast lookups with fewer than
+  20 entries are treated as cache misses and re-fetched on
+  next translation, so users with prior watches get the
+  expanded list automatically without manual cache clear.
+
 v0.2.37
 - User report: Android phone says "address not found" when opening
   the pair URL, even though the phone is on the same WiFi as Kodi

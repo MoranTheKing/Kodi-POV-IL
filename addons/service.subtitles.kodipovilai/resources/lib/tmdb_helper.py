@@ -98,7 +98,7 @@ GENDER_MAP = {0: 'unknown', 1: 'female', 2: 'male', 3: 'non-binary'}
 
 
 def fetch_cast(imdb_id=None, tmdb_id=None, media_type=None,
-               season=None, episode=None, max_actors=12):
+               season=None, episode=None, max_actors=25):
     """Look up a film or episode and return its main cast.
 
     Returns a list of dicts:
@@ -107,6 +107,13 @@ def fetch_cast(imdb_id=None, tmdb_id=None, media_type=None,
 
     Best-effort: missing pieces (no IMDB id, no TMDB key, etc.)
     return whatever we could resolve. Empty list on full failure.
+
+    max_actors default raised from 12 -> 25 (Oct 2026): top-12 was
+    missing scene-relevant minor characters (waiters, partners,
+    one-scene parents) whose gender then defaulted in the model's
+    inference and tripped up Hebrew verb / adjective agreement.
+    25 covers virtually every named role without bloating the
+    prompt (extra ~13 short lines, < 1 KB).
     """
     key = _get_tmdb_key()
     if not key:
