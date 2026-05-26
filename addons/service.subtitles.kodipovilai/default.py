@@ -860,6 +860,21 @@ def _handle_translate_file(params):
                   .format(e), level='WARNING')
 
 
+def _handle_darksubs_status(_params):
+    """User-triggered self-test of the DarkSubs hook integration.
+    Pops a dialog with a checklist explaining exactly what's
+    working and what isn't. Triggered by the settings-menu entry
+    that calls RunPlugin/RunScript with action=darksubs_status.
+    """
+    try:
+        from resources.lib import darksubs_hook_diagnostics
+    except Exception as e:
+        xbmcgui.Dialog().ok(
+            'Kodi POV IL', 'Internal error: {0}'.format(e))
+        return
+    darksubs_hook_diagnostics.run_full_check()
+
+
 def _handle_purge_temp(_params):
     """Wipe ALL .srt files in special://temp/. Used to clear out
     stale subtitle leftovers from previous movies that Kodi keeps
@@ -917,6 +932,8 @@ def main():
             _handle_purge_temp(params)
         elif action == 'translate_file':
             _handle_translate_file(params)
+        elif action == 'darksubs_status':
+            _handle_darksubs_status(params)
         else:
             _safe_log('unknown action: ' + action, level='WARNING')
             if handle >= 0:

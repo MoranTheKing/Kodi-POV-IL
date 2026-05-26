@@ -1,3 +1,35 @@
+v0.2.31
+- Add visible diagnostics for the DarkSubs hook integration. CoreELEC
+  reports surfaced that the hook can silently fail to inject (engine.py
+  not writable, signature mismatch from an upstream DarkSubs update,
+  etc.) and the user has no signal -- they see Google Translate output
+  and assume "AI subs not working" with no idea why. Two new entry
+  points fix that:
+
+  * Automatic startup toast: surface_status_if_problem() runs once per
+    Kodi launch from service.py. If the integration has an actionable
+    problem (engine missing/unreadable, signature changed, read-only
+    filesystem, no API key, auto_translate off), pops a Hebrew toast
+    explaining the specific failure class. Only once per failure-class
+    + nag-version, so it doesn't spam on every boot.
+
+  * Manual "Test DarkSubs integration" button: new entry in the
+    addon's settings (under the Gemini API category, next to "Test
+    connection"). Triggers RunScript -> default.py action
+    `darksubs_status` -> a textviewer dialog with an 8-point
+    checklist (DarkSubs installed, engine.py reachable/readable,
+    hook marker present, signature matches, file writable, API key
+    set, auto_translate on). Each line is green-✓ or red-✗ with a
+    one-line explanation, so when a user reports "AI subs not
+    working" we get an exact failure mode instead of guessing.
+
+- Why this matters more than any silent fix: the previous releases
+  added several patchers without any way for the user to verify the
+  end-to-end chain. When ONE link silently broke (read-only fs on
+  CoreELEC, an upstream signature change in DarkSubs, etc.), the
+  whole feature silently regressed. From 0.2.31 forward, any such
+  break is immediately visible.
+
 v0.2.30
 - After v0.2.29 the dialog header still showed the UUID for TorBox
   playbacks even though the property writes were in place. Two
