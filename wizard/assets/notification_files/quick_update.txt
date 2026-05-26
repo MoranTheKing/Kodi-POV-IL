@@ -1,23 +1,22 @@
-74
+75
 |||
-תרגום AI כברירת מחדל כשמפתח מחובר + מיתוג ברור ב-DarkSubs
-משתמש דיווח: יש 2 כפתורים — אחד ב-DarkSubs ("הפעל תרגום מכונה") ואחד בתוסף שלי ("תרגם דרך AI גם כש-auto_translate כבוי"). מבלבל. אם השני לא דלוק, ההוק לפעמים לא קופץ ומשתמש מקבל Google Translate במקום AI.
+תיקון progress missing במסלול של DarkSubs hook
+דיווחת: לא ראית notification של התקדמות כשבחרת כתוביות באנגלית מ-DarkSubs וה-AI תרגם. צודק לחלוטין — היה באג שעוד לא תפסתי.
 
-**התיקון: AI דיפולטית מיד ברגע שמפתח מחובר.**
+**שורש הבעיה:** ל-`_handle_download` (המסלול שבו המשתמש בוחר ב-AI Subs כשירות ישירות) **כן** הייתה DialogProgressBG עם עדכון לכל chunk. אבל ל-`_handle_translate_file` (המסלול שאליו DarkSubs hook קופץ דרך RunScript) — **לא היה** progress UI בכלל. הקריאה ל-`translate.resolve(link, info)` הייתה בלי `progress_cb`, אז שום מסלול עדכון UI לא קיים. התרגום פעל בשקט מתחילתו ועד סופו.
 
-**(1) ברירת מחדל הפכה ל-ON:** `force_ai_when_auto_translate_off` עכשיו `true` כברירת מחדל בהתקנות חדשות. אין צורך לחפש toggle שני.
+**התיקון:** הוספתי DialogProgressBG ל-`_handle_translate_file` שמטפל ב-3 המקרים:
+- **התחלה**: יוצר dialog "Kodi POV IL - AI Subtitles"
+- **תוך כדי**: report callback מתעדכן עם כל chunk שמסתיים → "מתרגם chunk 5/20..." בפינה הימנית-תחתונה של Kodi
+- **סיום/קריסה**: `finally` block סוגר את ה-dialog נקי
 
-**(2) מיגרציה אוטומטית למשתמשים קיימים:** התוסף בודק במהלך startup — אם יש API key אבל ה-toggle עדיין `false` (כי הוא הותקן מ-v0.2.33-v0.2.38 שברירת המחדל הייתה false) — הופך אוטומטית ל-`true` פעם אחת, שומר marker, ומציג notification: "תרגום AI הוגדר כברירת מחדל". משתמש שמכבה ידנית אחר כך — נשאר כבוי (לא נדרוס).
+אם יצירת ה-dialog עצמה נכשלת (נדיר) — התרגום ממשיך בשקט כמו ב-v0.2.39 (אין regression).
 
-**(3) מיתוג ברור ב-DarkSubs settings:** שלושה עדכוני label בקובץ של DarkSubs, כל אחד idempotent:
-- **כותרת קטגוריה**: "תרגום מכונה" → "תרגום מכונה — **דרך Gemini AI (POV IL) כשמפתח מחובר**"
-- **Toggle**: "(Gemini AI)" suffix (כבר היה מ-v0.2.x)
-- **Dropdown source**: "מקור תרגום" → "מקור **fallback** (לא בשימוש כש-Gemini AI מחובר)"
+**מה כבר היה ועכשיו נוסף:**
+- Toast "AI: מתחיל תרגום..." — כבר היה
+- Progress bar למטה "מתרגם chunk X/Y..." — **חדש** במסלול DarkSubs (היה רק במסלול AI Subs ישיר)
+- Toast "AI: תרגום הסתיים בהצלחה" — כבר היה
 
-הvalues של ה-dropdown (Google Translate | Bing Web | Yandex) **נשארים בלי שינוי** — כי הם תיאור מדויק של ה-fallback האמיתי כשאין מפתח.
-
-עכשיו המשתמש שרואה את ה-settings מבין מיד שכשמפתח מחובר — Gemini AI שולט. אם הוא קיבל Google output ובכותרת רואה "Gemini AI ✓" — זה סימן שמשהו תקול ויפנה אליך, לא יחשוב שזה תקין.
-
-נבדק sandbox: 6 cases (מיגרציה ראשונה, מיגרציה חוזרת = no-op, ללא מפתח = no-op, 3 ה-labels מוחלים, idempotent, dropdown VALUES נשמרים).
+עכשיו לא משנה אם המשתמש בוחר דרך AI Subs ישירות או דרך DarkSubs — הוא יראה את אותו progress bar.
 
 quick_update + restart.
