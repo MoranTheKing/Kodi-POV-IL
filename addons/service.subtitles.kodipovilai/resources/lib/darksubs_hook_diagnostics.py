@@ -154,6 +154,41 @@ def _diagnose():
                 'מופעל' if auto_translate_on else
                 'כבוי -- DarkSubs לא יקרא לתרגום מכונה בכלל'))
 
+    # 9. Heartbeat: did the hook ACTUALLY fire from inside DarkSubs's
+    #    process? The hook v2 writes a timestamp to a Window property
+    #    every time it executes. If the marker is on disk but the
+    #    heartbeat is missing or stale, Python is running cached
+    #    bytecode without the hook (reuselanguageinvoker pitfall).
+    last_fire, last_outcome = '', ''
+    if xbmcgui is not None:
+        try:
+            w = xbmcgui.Window(10000)
+            last_fire = w.getProperty('ai_subs.hook_last_fire') or ''
+            last_outcome = w.getProperty(
+                'ai_subs.hook_last_outcome') or ''
+        except Exception:
+            pass
+    if last_fire:
+        try:
+            import time as _t
+            ago = int(_t.time()) - int(last_fire)
+            if ago < 60:
+                ago_text = '{0}s ago'.format(ago)
+            elif ago < 3600:
+                ago_text = '{0}m ago'.format(ago // 60)
+            else:
+                ago_text = '{0}h ago'.format(ago // 3600)
+        except (ValueError, TypeError):
+            ago_text = '?'
+        detail = ('הוק רץ ' + ago_text +
+                  ' (outcome=' + (last_outcome or '?') + ')')
+        ok = (last_outcome == 'ok')
+    else:
+        detail = ('עוד לא ירה אף פעם -- בחר כתובית באנגלית '
+                  'מ-DarkSubs ובדוק שוב')
+        ok = False
+    out.append(('הוק AI ירה בפועל מ-DarkSubs', ok, detail))
+
     return out
 
 

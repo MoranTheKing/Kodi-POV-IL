@@ -1,3 +1,48 @@
+v0.2.32
+- 0.2.31's diagnostic surfaced a real failure mode: a CoreELEC user
+  reported all 8 checks green BUT the hook still doesn't fire --
+  picking an English subtitle in DarkSubs with auto_translate ON
+  still routes through Google Translate, never reaches our AI.
+  Root cause boils down to one of:
+
+  * Python bytecode cache (.pyc): DarkSubs declares
+    <reuselanguageinvoker>true</...> so its interpreter caches the
+    OLD engine.py bytecode -- even though we wrote a new engine.py
+    to disk, the running process keeps executing pre-patch code.
+  * Silent fall-through inside the hook (key check returns empty
+    inside DarkSubs's process, RunScript times out, hook crashes).
+
+  Both look identical from the user's side: AI subs settings show
+  the key is set, the file on disk has the marker, but Google
+  Translate text appears anyway.
+
+- Three fixes in 0.2.32:
+
+  1. Patcher now invalidates engine's __pycache__ on every successful
+     write. Wipes engine.cpython-*.pyc so Python is forced to
+     re-compile from the new .py the next time DarkSubs imports it.
+     Without this, reuselanguageinvoker + an existing stale .pyc
+     means the patch lives on disk but never reaches RAM.
+
+  2. Hook v2 (HOOK_VERSION = 2) is loud. Every fire writes:
+       * Window(10000).Property('ai_subs.hook_last_fire')  = timestamp
+       * Window(10000).Property('ai_subs.hook_last_key_len') = key len
+       * Window(10000).Property('ai_subs.hook_last_outcome') =
+         ok | timeout | no_key | crash:<msg>
+     Plus xbmc.log lines at each branch and a visible Kodi
+     Notification toast whenever the hook fires but falls back
+     (timeout / no key / crash) -- so the user SEES why instead of
+     just getting Google Translate output silently. Marker bumped
+     to v2; v1 → v2 migration handled by the existing OLD_MARKERS
+     mechanism (the patcher strips v1 block before injecting v2).
+
+  3. Diagnostic checklist gained a 9th row: "הוק AI ירה בפועל
+     מ-DarkSubs". Reads the heartbeat Window property and reports
+     when the hook last fired and what the outcome was. If row 4
+     (marker in engine.py) is ✓ but row 9 (heartbeat) is ✗, that's
+     the smoking gun for the .pyc caching issue -- the patch is on
+     disk but the hook never executed in DarkSubs's process.
+
 v0.2.31
 - Add visible diagnostics for the DarkSubs hook integration. CoreELEC
   reports surfaced that the hook can silently fail to inject (engine.py
