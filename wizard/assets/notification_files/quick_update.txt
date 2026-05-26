@@ -1,21 +1,34 @@
-71
+72
 |||
-2 תיקונים יחד: iPhone 400 + כותרת דיאלוג בכל סקין (לא רק FENtastic)
-שני באגים שצפו ב-0.2.35:
+אנדרואיד לא מוצא כתובת + הודעת שגיאה מפורטת מ-Gemini
+**הבעיה של האנדרואיד**: המשתמש חיבר את הטלפון לאותה רשת, הקליד את ה-URL עם הפורט, וקיבל "כתובת לא נמצאה". כל הטלפונים שלו שעבד עליהם הצליחו לפתוח (iPhone), Android כולם נכשלו.
 
-**1. iPhone עדיין נדחה 400 מ-Gemini.** גם אחרי v0.2.34 (autocorrect=off + NFKC + ASCII allow-list). חקרתי לעומק וגיליתי תכונה ב-iOS בשם **Smart Punctuation** שממירה אוטומטית `-` ל-em-dash (`—`) או en-dash (`–`) במחרוזת המודבקת. אלו תווי Unicode **נפרדים**. NFKC לא ממיר אותם חזרה. ה-allow-list שלי השליך אותם → המפתח הגיע חתוך 2 תווים → Google דחה.
+**מה זה אומר**: הטלפון באמת לא מצליח להגיע ל-IP שאני מציג. **לא** קשור ל-HTTPS-cleartext (שגיאה אחרת לגמרי).
 
-**התיקון:** הוספתי טבלת המרה של 11 וריאציות של תווים דמויי-מקף (em-dash, en-dash, unicode hyphen, non-breaking hyphen, figure dash, horizontal bar, hyphen bullet, minus sign, small/full-width) חזרה ל-ASCII `-` **לפני** ה-allow-list. נבדק end-to-end דרך PairServer חי עם מפתח שעבר Smart Punctuation — חוזר ל-ASCII המקורי בדיוק.
+**שורש הבעיה**: `get_lan_ip()` שלי החזיר רק **כתובת אחת** — זאת של ה-default route. אם למכשיר של Kodi יש **יותר ממסך אחד** (Android TV עם WiFi+Ethernet, מחשב נייד עם WiFi+VPN, PC עם Docker bridge), ה-IP היחיד שזיהינו יכול להיות ב-subnet שונה ממה שהטלפון רואה. הטלפון מנסה להגיע אליו → נכשל → "כתובת לא נמצאה".
 
-**2. משתמשים על Arctic Zephyr (וכל סקין שאינו FENtastic) רואים UUID בכותרת הדיאלוג.** האחוזים תקינים — אבל בכותרת למעלה עדיין הגיבריש. הסיבה: הפאצ'ר הקודם שלי `fentastic_dialog_subtitles_patcher` היה קודד דווקא ל-XML של FENtastic. למשתמשים על סקין אחר הוא החזיר `'no_file'` והדיאלוג נשאר עם `$INFO[Player.Filename]` (= UUID לטורבוקס).
+**התיקון:** `gemini_pair` עכשיו מזהה את **כל** ה-LAN IPv4 שיש במכשיר:
+1. הטריק של "התחבר ל-8.8.8.8" (default route)
+2. **`ip -4 addr` / `ifconfig` דרך subprocess** — חדש, תופס interfaces שאינם default route (Android תומך)
+3. Probes לכל טווח פרטי (10.x, 192.168.x, 172.16-31.x, 100.64-127.x)
+4. Hostname lookup
 
-**התיקון:** פאצ'ר חדש `skin_dialog_subtitles_patcher` שמזהה אוטומטית את ה-skin הפעיל דרך `xbmc.getSkinDir()`, מאתר את `DialogSubtitles.xml` שלו (במיקומים `xml/`, `720p/`, או `1080i/`), ומשתמש ב-regex case-insensitive (למקרים של `Player.Filename` מול `Player.FileName` שמשתנה בין סקין-ים) כדי להחליף את ה-label.
+כל התוצאות מסוננות דרך `_is_private_lan_ip()` (RFC 1918 + 100.64/10) אז IPs של VPN/אינטרנט לא נכנסים.
 
-נבדק כעובד על:
-- **FENtastic** (xml/)
-- **Arctic Zephyr Mod** (1080i/) — הסקין של המשתמש
-- **Estuary** (xml/) — סקין ברירת מחדל של Kodi
+**בדיאלוג ב-Kodi**: עכשיו מציג **כל הכתובות שזוהו**. עם יותר מ-interface אחד, רואים:
+```
+מטלפון אחר ב-WiFi (נסה כל אחת עד שאחת תיפתח):
+   • http://10.0.0.5:8765
+   • http://192.168.1.10:8765
+מאותו מכשיר: http://localhost:8765
+```
 
-כל ה-3 מקבלים את ה-XML החדש, מתקמפלים תקין, idempotent. הפאצ'ר גם מנקה את ההזרקה של v1 (FENtastic-only) אם המשתמש כבר עבר את זה.
+**בנוסף — הודעת שגיאה מפורטת מ-Gemini**: כש-Google מחזיר 400/403, `gemini.test_key()` עכשיו מפענח את ה-JSON `error.message` (לדוגמה "API key not valid. Please pass a valid API key." או "Daily quota exceeded") ומציג ב-Kodi. עד עכשיו ראינו רק "rejected by Gemini (400)" בלי לדעת **למה**.
+
+**טקסט troubleshooting בדיאלוג**: הוספתי 2 הסברים קצרים:
+- Chrome אנדרואיד לא נפתח? תיקון של הגדרת "Always use secure connections", או נסה Firefox/Brave/Samsung Internet
+- אייפון מקבל 400? השווה את ה-fingerprint למפתח ב-AI Studio; אם תואם — המפתח עצמו לא תקין, צור חדש
+
+**Fingerprint הורחב** מ-4 ראשונים+4 אחרונים ל-**8+8** — קל יותר לוודא ויזואלית בלי לחשוף את האמצע.
 
 quick_update + restart.
