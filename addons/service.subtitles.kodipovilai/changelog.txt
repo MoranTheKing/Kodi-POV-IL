@@ -1,3 +1,48 @@
+v0.2.44
+- v0.2.43 finally rendered the modal correctly (white_pixel.png as
+  the colorDiffuse base fixed the all-black box). User screenshot
+  confirmed: the card LOOKS right -- yellow title, navy panel,
+  branded subtitle, status text. But the percent number stayed at
+  "0%" and the status at "מתחיל תרגום..." for 3 minutes while
+  translation actually progressed in the background. The labels
+  were never updating.
+
+- Root cause: xbmcgui control updates (setLabel, setPercent) called
+  from a non-UI thread don't reliably land on screen. The doModal()
+  architecture in v0.2.42 moved translate.resolve into a daemon
+  worker thread; that thread's calls to window.update_progress()
+  hit the controls but Kodi's UI thread, busy rendering doModal,
+  apparently didn't pick the changes up.
+
+- Fix: switch to Kodi's canonical cross-thread UI pattern --
+  Window(10000) properties + $INFO[] binding in the label text.
+  setProperty is documented thread-safe; the UI thread re-reads
+  $INFO[Window(10000).Property(...)] on every render tick so
+  updates land within ~50 ms regardless of which thread wrote them.
+
+  Properties used:
+    ai_subs.progress_pct        -- current %
+    ai_subs.progress_chunks     -- "chunk X / Y" or status text
+    ai_subs.progress_heartbeat  -- "מתרגם... Ns" elapsed-seconds ticker
+
+  Labels in the modal now contain literal $INFO[...] markers that
+  Kodi auto-expands; update_progress() and update_heartbeat()
+  just call setProperty.
+
+- NEW heartbeat ticker thread updates `progress_heartbeat` every
+  second with the elapsed-seconds count + an animated dots glyph
+  ("מתרגם... 12ש"). Critical for the Gemini-overload-retry case:
+  the first chunk can take up to 230 s before completing if Google
+  is rate-limiting (5 backoff steps of up to 120 s each). With the
+  heartbeat, the user sees the elapsed counter advancing the whole
+  time -- the modal feels alive, not frozen.
+
+- Dropped the visible ControlProgress bar in this revision. It
+  can't bind to a Window property the way ControlLabel can, so it
+  would still need cross-thread setPercent() calls. The big
+  percent number + chunk text + heartbeat counter convey the same
+  information and DO auto-update correctly.
+
 v0.2.43
 - v0.2.42's doModal() switch fixed z-order -- the progress overlay
   finally renders on top of DarkSubs's MySubs picker. But a new
