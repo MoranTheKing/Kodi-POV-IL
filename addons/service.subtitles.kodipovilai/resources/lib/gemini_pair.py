@@ -41,18 +41,48 @@ import urllib.parse
 # actually expected, not the version iOS Safari rewrote.
 _KEY_CHARSET_RE = re.compile(r'[^A-Za-z0-9_\-]')
 
+# iOS Smart Punctuation replaces ASCII hyphen-minus (U+002D) with
+# typographically "pretty" dash variants -- em-dash for `--`, sometimes
+# en-dash for stand-alone `-`. Those are SEPARATE Unicode codepoints
+# from U+002D and NFKC normalisation does NOT collapse them back.
+# Without explicit handling, the allow-list above would STRIP them
+# entirely and an iPhone-pasted key like `AIza...XYZ-ABC` would
+# arrive at our server as `AIza...XYZABC` -- Google rejects it as
+# malformed. Mapping every dash-shaped Unicode codepoint back to
+# ASCII `-` BEFORE the allow-list preserves the key.
+_DASH_LIKE = (
+    '‐'  # hyphen
+    '‑'  # non-breaking hyphen
+    '‒'  # figure dash
+    '–'  # en dash         <- iOS often picks this
+    '—'  # em dash         <- iOS for "--"
+    '―'  # horizontal bar
+    '⁃'  # hyphen bullet
+    '−'  # minus sign
+    '﹘'  # small em dash
+    '﹣'  # small hyphen-minus
+    '－'  # full-width hyphen-minus
+)
+_DASH_TO_ASCII = str.maketrans({c: '-' for c in _DASH_LIKE})
+
 
 def _sanitize_key(raw):
     """Strip every byte iOS Safari might have inserted into a pasted
     API key. Order matters: NFKC normalises full-width / smart-quoted
     variants to their ASCII equivalents BEFORE we filter, so e.g. a
     smart-quoted "AIza..." becomes plain quotes (then stripped) and
-    a full-width A maps to ASCII A. Surface a (`raw`, `cleaned`) pair
-    so the caller can warn if anything was dropped."""
+    a full-width A maps to ASCII A. THEN we coerce every dash-shaped
+    codepoint back to ASCII `-` (iOS Smart Punctuation substitution
+    that NFKC misses). Finally the allow-list keeps only the charset
+    Gemini keys actually use."""
     if not raw:
         return ''
     # Normalize unicode confusables to their ASCII canonical form.
     normalised = unicodedata.normalize('NFKC', raw)
+    # Convert iOS smart-dashes (em-dash, en-dash, etc.) back to '-'.
+    # Without this, the allow-list would drop them and shorten the
+    # key, which Google rejects.
+    normalised = normalised.translate(_DASH_TO_ASCII)
     # Remove ASCII whitespace plus NBSP, ZWSP, BOM, RTL/LTR marks etc.
     # _KEY_CHARSET_RE catches all of these by allow-listing only the
     # chars Gemini keys actually use.
