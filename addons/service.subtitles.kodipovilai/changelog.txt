@@ -1,3 +1,37 @@
+v0.2.42
+- v0.2.41 introduced _AITranslateProgressWindow but a user screenshot
+  confirmed it STILL doesn't show on top of DarkSubs's MySubs picker.
+  The previous WindowDialog.show() approach left our window as a
+  non-modal child window -- pyxbmct's AddonDialogWindow is itself
+  modal and captures z-order, so our overlay rendered BEHIND it
+  (invisible to the user).
+
+- Switched the progress overlay from `show()` to `doModal()` +
+  worker-thread translation. doModal() forces the window above
+  every other window unconditionally because it IS modal. The
+  trade-off: doModal blocks the calling thread, so translate.resolve
+  now runs in a daemon thread; when it finishes, the worker calls
+  window.close() which un-blocks doModal and lets the helper return
+  the translated path.
+
+- User can dismiss the modal early via Back / Esc -- new onAction
+  override on _AITranslateProgressWindow catches the two
+  Kodi action codes (10 and 92) and calls self.close(). Translation
+  continues in the background thread even after the user dismisses
+  the modal; the final SRT is still written to disk so DarkSubs
+  picks it up via its normal trans_file path. Early-dismiss costs
+  only the visual, not the translation.
+
+- worker.join() has a 10-minute cap (covers the worst-case Gemini
+  retry chain: 5 backoff steps of up to 120s each). If translation
+  somehow takes longer than that, we return None and the user falls
+  through to DarkSubs's standard behaviour for an empty trans_file
+  -- same as if our hook had timed out.
+
+- The 25 / 50 / 75 % toast milestones remain in place as a backup,
+  primarily for the early-dismiss case (modal closed, translation
+  still running, toasts surface the ongoing progress).
+
 v0.2.41
 - v0.2.40 added DialogProgressBG to the DarkSubs-triggered path, but
   a user screenshot confirmed the dialog isn't visible in practice:
