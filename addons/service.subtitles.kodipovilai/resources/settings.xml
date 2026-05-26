@@ -46,6 +46,11 @@
           </control>
           <data>RunScript(service.subtitles.kodipovilai,action=test_connection)</data>
         </setting>
+        <setting id="force_ai_when_auto_translate_off" type="boolean" label="32108"> <!-- Translate via AI even when DarkSubs auto_translate is OFF -->
+          <level>0</level>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
         <setting id="darksubs_status" type="action" label="32107"> <!-- Test DarkSubs integration -->
           <level>0</level>
           <default></default>
