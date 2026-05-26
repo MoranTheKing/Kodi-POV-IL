@@ -1,3 +1,40 @@
+v0.2.36
+- Two regressions surfaced on the latest version: (a) iPhone users
+  STILL got Google API 400 even with v0.2.34's autocorrect=off +
+  NFKC + ASCII allow-list; (b) users on non-FENtastic skins (Arctic
+  Zephyr was the reported case) still saw the UUID gibberish in
+  the subtitle-dialog header even though the percentages were fine.
+
+- Fix (a): iOS Smart Punctuation replaces ASCII hyphen-minus
+  (U+002D) with em-dash (U+2014) for `--` and en-dash (U+2013) for
+  a lone `-`. NFKC does NOT collapse these back to ASCII -- they're
+  distinct Unicode codepoints. v0.2.34's allow-list regex stripped
+  them entirely, so an iPhone-pasted `AIza...XYZ-ABC` arrived at
+  our server as `AIza...XYZABC`, two characters short, and Google
+  rejected the truncated string with 400.
+  `_sanitize_key()` now coerces every dash-shaped Unicode codepoint
+  back to ASCII `-` BEFORE the allow-list runs. Covers 11 variants:
+  em-dash, en-dash, minus sign, unicode hyphen, non-breaking
+  hyphen, figure dash, horizontal bar, hyphen bullet, full-width
+  hyphen-minus, and the small-form variants. Verified against an
+  end-to-end PairServer POST with em-dash corruption.
+
+- Fix (b): the old `fentastic_dialog_subtitles_patcher` was
+  hard-coded to FENtastic's XML structure. Users on Arctic Zephyr,
+  Estuary, Aeon Nox etc. got `'no_file'` from it -- the dialog
+  header kept reading `$INFO[Player.Filename]` (the UUID for
+  TorBox URLs). The new `skin_dialog_subtitles_patcher`
+  auto-detects the active skin via `xbmc.getSkinDir()`, locates
+  `DialogSubtitles.xml` in the skin's `xml/`, `720p/`, or `1080i/`
+  directory, and uses a regex-based match (case-insensitive on
+  the `.Filename` vs `.FileName` capitalisation that varies
+  across skins) to swap the label out.
+  Self-migrates from the v1 FENtastic-only inject so users
+  upgrading don't end up with stale duplicated controls. Verified
+  end-to-end against FENtastic, Arctic Zephyr Mod, and Estuary
+  XMLs -- all three parse as valid XML after patching, with the
+  v2 marker and dual-visibility-gated label pair in place.
+
 v0.2.35
 - Make the port number in the Gemini pair-from-phone URL visually
   unmissable so users can manually type the right URL even when
