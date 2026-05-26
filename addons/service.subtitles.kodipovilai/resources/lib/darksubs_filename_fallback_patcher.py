@@ -48,7 +48,7 @@ except Exception:
 DARKSUBS_ADDON_ID = 'service.subtitles.All_Subs'
 GENERAL_REL_PATH = 'resources/modules/general.py'
 
-MARKER = '# AI_SUBS_FILENAME_FALLBACK'
+MARKER = '# AI_SUBS_FILENAME_FALLBACK_v2'
 
 # Match: original "    file_original_path = os.path.basename(...)" +
 # the indented blank line + "    return file_original_path"
@@ -57,6 +57,51 @@ MARKER = '# AI_SUBS_FILENAME_FALLBACK'
 OLD_BLOCK = (
     '    file_original_path = os.path.basename(file_original_path)\r\n'
     '            \r\n'
+    '    return file_original_path\r\n'
+)
+
+# Legacy v1 NEW_BLOCK that was shipped in v0.2.28 (already on users'
+# disks). The patcher detects this and reverts it to OLD_BLOCK before
+# applying v2, so users upgrading from v0.2.28 get the new logic
+# (the v2 NEW_BLOCK adds stale-property clearance so non-POV plays
+# after a POV play don't get a stale Tagline / dialog header).
+V1_NEW_BLOCK = (
+    '    file_original_path = os.path.basename(file_original_path)\r\n'
+    '            \r\n'
+    '    # AI_SUBS_FILENAME_FALLBACK: prefer the release name POV '
+    'picked from the\r\n'
+    '    # source-select dialog (stashed in a Window(10000) property '
+    'by\r\n'
+    '    # POV before play()). This gives the matcher the real release'
+    '\r\n'
+    '    # name -- complete with encoder/source/group tokens -- '
+    'regardless\r\n'
+    '    # of what the debrid CDN URL looks like. Stale-property '
+    'guard:\r\n'
+    '    # only trust the property if the URL POV stored alongside '
+    'the\r\n'
+    '    # name matches the currently-playing URL. Falls back to the'
+    '\r\n'
+    '    # synthetic-from-info-labels path for non-POV playbacks where'
+    '\r\n'
+    '    # the basename still looks like an opaque hash.\r\n'
+    '    try:\r\n'
+    '        import xbmcgui as _aix_gui\r\n'
+    '        _aix_w = _aix_gui.Window(10000)\r\n'
+    "        _aix_pn = _aix_w.getProperty('pov_picked_source_name')\r\n"
+    "        _aix_pu = _aix_w.getProperty('pov_picked_source_url')\r\n"
+    '        _aix_cu = xbmc.Player().getPlayingFile() or ""\r\n'
+    '        if _aix_pn and _aix_pu and _aix_pu == _aix_cu:\r\n'
+    '            file_original_path = _aix_pn\r\n'
+    '        elif _ai_subs_filename_looks_like_hash(file_original_path):'
+    '\r\n'
+    '            _synthetic = _ai_subs_synthesize_filename_from_metadata()'
+    '\r\n'
+    '            if _synthetic:\r\n'
+    '                file_original_path = _synthetic\r\n'
+    '    except Exception:\r\n'
+    '        pass\r\n'
+    '    \r\n'
     '    return file_original_path\r\n'
 )
 
@@ -78,7 +123,17 @@ NEW_BLOCK = (
     "        _aix_pn = _aix_w.getProperty('pov_picked_source_name')\r\n"
     "        _aix_pu = _aix_w.getProperty('pov_picked_source_url')\r\n"
     '        _aix_cu = xbmc.Player().getPlayingFile() or ""\r\n'
-    '        if _aix_pn and _aix_pu and _aix_pu == _aix_cu:\r\n'
+    '        if _aix_pu and _aix_pu != _aix_cu:\r\n'
+    '            # Stale window state from an earlier POV playback.\r\n'
+    '            # Clear our own props AND the native subs.player_filename\r\n'
+    '            # so the dialog header / Tagline path do not surface a\r\n'
+    '            # stale value for whatever the user is playing now.\r\n'
+    "            for _k in ('pov_picked_source_name',\r\n"
+    "                       'pov_picked_source_url',\r\n"
+    "                       'subs.player_filename'):\r\n"
+    '                _aix_w.clearProperty(_k)\r\n'
+    "            _aix_pn = ''\r\n"
+    '        if _aix_pn:\r\n'
     '            file_original_path = _aix_pn\r\n'
     '        elif _ai_subs_filename_looks_like_hash(file_original_path):\r\n'
     '            _synthetic = _ai_subs_synthesize_filename_from_metadata()\r\n'
@@ -195,14 +250,22 @@ def ensure_patched():
     if MARKER.encode('utf-8') in content:
         return 'unchanged'
     old_bytes = OLD_BLOCK.encode('utf-8')
+    v1_bytes = V1_NEW_BLOCK.encode('utf-8')
+    # Detect legacy v1 injection (shipped in v0.2.28). Revert it so
+    # the v2 anchor (the vanilla OLD_BLOCK) is back in the file
+    # before we re-patch with v2. v1's HELPER_BLOCK is preserved --
+    # the helper functions themselves are unchanged in v2.
+    helpers_already = b'_ai_subs_filename_looks_like_hash' in content
+    if v1_bytes in content:
+        content = content.replace(v1_bytes, old_bytes, 1)
+        _log('reverted v1 injection before applying v2', level='INFO')
     if old_bytes not in content:
         _log('get_playing_filename body shape changed upstream -- '
              'skipping', level='WARNING')
         return 'unmatched'
-    new_content = (
-        content.replace(old_bytes, NEW_BLOCK.encode('utf-8'), 1)
-        + HELPER_BLOCK.encode('utf-8')
-    )
+    new_content = content.replace(old_bytes, NEW_BLOCK.encode('utf-8'), 1)
+    if not helpers_already:
+        new_content = new_content + HELPER_BLOCK.encode('utf-8')
     tmp = path + '.aitmp'
     try:
         with open(tmp, 'wb') as f:
