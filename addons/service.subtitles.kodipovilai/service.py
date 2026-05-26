@@ -470,6 +470,42 @@ def _maybe_patch_darksubs():
             pass
 
 
+def _maybe_patch_pov_source_name():
+    """Self-healing patch of POV's sources.py so that when POV picks
+    a source from the source-select dialog (the one with cached/
+    uncached/quality flags), it stashes the picked release name +
+    URL in a Window(10000) property right before yielding the link
+    to the player. DarkSubs (separate addon) reads the property and
+    uses the real release name -- complete with encoder/source/group
+    tokens -- as the filename for subtitle matching, instead of
+    whatever opaque basename the debrid CDN URL happens to have.
+    Without this, TorBox playbacks get 0% on every subtitle (URL is
+    a UUID) and the user sees the UUID as the dialog title -- they
+    can't even visually compare it to subtitle release names to pick
+    one manually. With this, the dialog title shows the real release
+    name and the percentages reflect actual sync quality."""
+    try:
+        from resources.lib import pov_source_name_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_source_name_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_source_name_patcher: applied source-name '
+                'window-property stash', level='INFO')
+        elif status in ('unmatched', 'write_failed', 'read_failed'):
+            kodi_utils.log(
+                'pov_source_name_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_source_name_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_darksubs_filename():
     """Self-healing patch of DarkSubs's get_playing_filename so that
     when the played URL has an opaque hash basename (TorBox CDN
@@ -545,10 +581,19 @@ def main():
     # comes back automatically on next Kodi launch.
     _maybe_patch_darksubs()
 
-    # Self-healing DarkSubs get_playing_filename() patch so that
-    # subtitles for TorBox sources (whose CDN strips the release
-    # filename from URLs, leaving an opaque hash) get matched against
-    # a synthetic release-name-style filename instead of the hash.
+    # Stash POV's picked release name (from the source-select dialog)
+    # in a Window(10000) property before play() so DarkSubs can use
+    # it as the filename for subtitle matching. Solves both the
+    # TorBox UUID-as-title problem AND raises the % match across all
+    # debrid services to ~85-95% (the full release name has the
+    # encoder/source/group tokens that subtitle releases carry).
+    _maybe_patch_pov_source_name()
+
+    # Self-healing DarkSubs get_playing_filename() patch. Prefers
+    # the picked release name set by the pov_source_name_patcher
+    # above. Falls back to synthesising a release-name-style filename
+    # from VideoPlayer info-labels when no POV property is available
+    # AND the basename looks like an opaque hash (TorBox CDN behaviour).
     _maybe_patch_darksubs_filename()
 
     # Remove the v0.1.5-v0.1.7 misplaced injection into the wizard's

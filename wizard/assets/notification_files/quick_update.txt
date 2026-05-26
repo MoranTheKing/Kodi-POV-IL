@@ -1,16 +1,23 @@
 63
 |||
-תיקון התאמת אחוזי כתוביות לטורבוקס — סוף סוף לא 0% כל הזמן
-המשתמש דיווח: בDarkSubs, כשהמקור מגיע מטורבוקס, אחוזי ההתאמה של הכתוביות תמיד 0%. ב-RD/AllDebrid האחוזים נעים בין 40% ל-73%, אבל בטורבוקס — אפס באופן עקבי. גילתי מהצילום מסך שהכותרת בדיאלוג הראתה UUID (`3b4159de-e38e-46b9-942d-e0ee1eb03846`) במקום שם הקובץ.
+התאמת כתוביות אמיתית — שם ה-release שPOV בחר משמש לכל השירותים
+המשתמש הראה הבדל ויזואלי בולט בין השירותים: בטורבוקס כותרת הדיאלוג של DarkSubs מציגה UUID גיבריש (`c6104883-71f0-46fb-b65a-72a22d7f4baf`) וכל הכתוביות 0%; ב-AllDebrid הכותרת מציגה את שם ה-release וכתוביות מקבלות 41-53%. שתי בעיות בו-זמנית: גם אין על מה להתבסס ויזואלית כדי לבחור ידנית, וגם האלגוריתם נכשל.
 
-**שורש הבעיה:** ה-CDN של טורבוקס מחזיר כתובות כמו `https://store-N.torbox.app/<uuid>?token=...` — שם הקובץ פשוט לא בנתיב ה-URL. DarkSubs עושה `os.path.basename(url.split("?")[0])` ונשאר עם רק ה-UUID. אז אחר כך הוא מנסה להתאים את ה-UUID לשמות הקבצים של הכתוביות ב-Wizdom/OpenSubtitles ומקבל 0% תמיד.
+**גישה חדשה שעובדת לכל השירותים, לא רק טורבוקס:**
 
-**מנגד**, ב-RD/AllDebrid הכתובות כוללות את שם הקובץ בנתיב (`https://x.real-debrid.com/d/<id>/Daredevil.Born.Again.S02E05.1080p.WEB-DL.mkv`), אז זה עובד.
+POV יודע את שם ה-release האמיתי ברגע שהמשתמש בוחר מקור מדיאלוג הבחירה — לפני שזה הולך לכל debrid. השם מאוחסן ב-`item['name']` בתוך הגנרטור `_process` ב-sources.py. הוא הולך לאיבוד מיד אחר כך כי לא מועבר ל-player.
 
-**התיקון:** patcher עצמי-מרפא חדש שמזריק לתוך `get_playing_filename` של DarkSubs נפילה-לאחור — כש-basename נראה כמו hash אטום (בלי סיומת וידאו, בלי טוקני release כמו 1080p/web-dl/x264, בלי SxxExx, מעל 80% תווי hex), הוא יוצר שם קובץ סינתטי בסגנון `Title.SxxExx.QUALITYp.mkv` מתוך VideoPlayer / ListItem info-labels.
+**2 פאצ'ים משלימים:**
 
-צפוי: התאמה של 30-50% לטורבוקס מעכשיו (עדיין נמוך יותר מ-RD/AD כי חסרים לנו טוקני encoder + group, אבל מספיק גבוה כדי לדרג כתוביות במקום שכולם יהיו 0%). RD/AllDebrid לא מושפעים — הנפילה-לאחור רק נכנסת לפעולה ל-basename דמוי-hash.
+1. **pov_source_name_patcher** — מזריק לתוך POV's `_process()` הוראה לשמור את שם ה-release וה-URL ב-`Window(10000).setProperty('pov_picked_source_name', ...)`. Window properties חוצים את גבול ה-addon dispatch — DarkSubs (שרץ ב-Python process נפרד) יכול לקרוא אותם.
 
-עצמי-מרפא: רץ בכל הפעלה של Kodi. אם DarkSubs ישונה בעתיד באופן שהדפוס שלנו לא יתפוס — נדלג עם log warning ולא נשבור כלום.
+2. **darksubs_filename_fallback_patcher (v2)** — מעדיף את שם ה-release מ-POV. שומר על URL guard (ה-URL ששמרנו צריך להיות שווה ל-`xbmc.Player().getPlayingFile()`) כדי שערך ישן ממשחק קודם של POV לא ידלוף לתוך משחק חדש דרך addon אחר. נופל חזרה לסינתזה מ-VideoPlayer info-labels רק במקרה הנדיר שאין property של POV וגם ה-basename נראה כמו hash.
+
+**תוצאה צפויה:**
+- TorBox: כותרת הדיאלוג מציגה את שם ה-release האמיתי (`War.Machine.2026.1080p.NF.WEB-DL.DDP5.1.Atmos.H.264-RYNDR.mkv`) במקום UUID, ואחוזים 70-95% במקום 0%
+- RD/AllDebrid/Premiumize: עקביות מלאה — תמיד שם ה-release שPOV בחר, גם אם ה-CDN מחזיר variant אחר ב-URL
+- אפשר עכשיו גם לראות את שם הקובץ בכותרת ולהשוות ויזואלית לכתוביות בלי להסתמך על האחוזים
+
+עצמי-מרפא: מתחדש בכל הפעלת Kodi. אם POV או DarkSubs ישונו בעתיד באופן שהדפוס לא יתפוס — דילוג עם log warning, ולא נשבר כלום.
 
 quick_update + restart.
