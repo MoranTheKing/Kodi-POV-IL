@@ -38,6 +38,10 @@ msgctxt "#32107"
 msgid "Test DarkSubs integration"
 msgstr "בדוק חיבור DarkSubs"
 
+msgctxt "#32108"
+msgid "Translate via AI even when DarkSubs auto_translate is OFF"
+msgstr "תרגם דרך AI גם כש-auto_translate של DarkSubs כבוי (אחרת — כתוביות לא-עבריות יישארו בשפת המקור)"
+
 msgctxt "#32200"
 msgid "Translation"
 msgstr "תרגום"
