@@ -41,44 +41,47 @@ ENGINE_REL_PATH = 'resources/modules/engine.py'
 
 # Bump this number whenever the hook body materially changes. The
 # patcher detects an old marker and re-injects the new version.
-HOOK_VERSION = 1
+HOOK_VERSION = 2
 MARKER = '# AI_TRANSLATE_HOOK_v{0}'.format(HOOK_VERSION)
 END_MARKER = '# END AI_TRANSLATE_HOOK_v{0}'.format(HOOK_VERSION)
 # Any previous-version markers we should rewrite over. Add to this
 # list when bumping HOOK_VERSION.
-OLD_MARKERS = []
+OLD_MARKERS = ['# AI_TRANSLATE_HOOK_v1']
 
 # The hook body, indented 4 spaces (DarkSubs uses 4-space indent
 # inside function bodies). Inserted as the first statement of
 # machine_translate_subs.
 #
-# Behaviour:
-#   1. If no Gemini key set in our addon's settings, do nothing.
-#      DarkSubs falls through to its own translator.
-#   2. Otherwise base64-encode the input/output paths (paths can
-#      contain commas/parens/quotes that would break RunScript's
-#      parameter parsing), then fire our addon's `translate_file`
-#      action via RunScript.
-#   3. Poll for the `<output>.ai_done` sentinel file. Timeout 5
-#      minutes -- typical translation of a 2-hour movie with 3-way
-#      parallel chunks is 30-90 seconds, so 5 minutes is well above
-#      99th percentile.
-#   4. On success: read the output file (DarkSubs's caller doesn't
-#      use our return value -- it just expects output_file to exist
-#      on disk -- but returning the text is consistent with the
-#      original function shape).
-#   5. On any failure (no key, timeout, exception, empty result):
-#      fall through to the original DarkSubs logic. DarkSubs's UX
-#      is unchanged in that case.
+# v2 changes vs v1:
+#   * Heartbeat: every fire writes a timestamp to
+#     Window(10000).Property('ai_subs.hook_last_fire'). The diagnostic
+#     reads this to confirm the hook actually executed in DarkSubs's
+#     process (vs only being present in engine.py on disk).
+#   * Visible notification on every "would-have-AI'd-but-fell-back"
+#     branch so the user SEES when AI translation is supposed to
+#     happen but doesn't (key missing, RunScript timeout, exception).
+#     Replaces silent fall-through that masquerades as a "Google
+#     Translate output" bug.
+#   * Explicit xbmc.log line per branch so debugging from the Kodi
+#     log doesn't require guessing which path was taken.
 HOOK_BODY = '''\
     {marker}
     # Injected by service.subtitles.kodipovilai. See darksubs_patcher.py.
     try:
         import xbmcaddon as _aix_a, xbmc as _aix_x, os as _aix_os
         import time as _aix_t, base64 as _aix_b
+        import xbmcgui as _aix_g
+        _aix_g.Window(10000).setProperty(
+            'ai_subs.hook_last_fire', str(int(_aix_t.time())))
+        _aix_x.log('[AI hook v2] entered for ' + str(input_file),
+                   level=1)
         _aix_ad = _aix_a.Addon('service.subtitles.kodipovilai')
         _aix_key = (_aix_ad.getSetting('api_key') or '').strip()
+        _aix_g.Window(10000).setProperty(
+            'ai_subs.hook_last_key_len', str(len(_aix_key)))
         if _aix_key:
+            _aix_x.log('[AI hook v2] key len=' + str(len(_aix_key))
+                       + ' -> firing RunScript', level=1)
             _aix_done = output_file + '.ai_done'
             try: _aix_os.remove(_aix_done)
             except OSError: pass
@@ -101,16 +104,61 @@ HOOK_BODY = '''\
                             with open(output_file, 'r',
                                       encoding='utf-8',
                                       errors='replace') as _aix_f:
+                                _aix_x.log(
+                                    '[AI hook v2] AI output ready, '
+                                    'returning translated content',
+                                    level=1)
+                                _aix_g.Window(10000).setProperty(
+                                    'ai_subs.hook_last_outcome', 'ok')
                                 return _aix_f.read()
                         except Exception:
                             break
                     break
                 _aix_t.sleep(0.5)
+            # If we got here, we either timed out or got an empty
+            # output. Surface a notification so the user knows AI
+            # translation tried and failed, instead of silently
+            # falling through to Google.
+            _aix_x.log('[AI hook v2] timed out / empty output, '
+                       'falling back to engine default', level=3)
+            _aix_g.Window(10000).setProperty(
+                'ai_subs.hook_last_outcome', 'timeout')
+            try:
+                _aix_x.executebuiltin(
+                    'Notification(Kodi POV IL - AI Subtitles,'
+                    'AI translation timed out -- using Google '
+                    'Translate fallback,8000)')
+            except Exception: pass
+        else:
+            _aix_x.log('[AI hook v2] api_key empty in DarkSubs '
+                       'process -- check that service.subtitles.'
+                       'kodipovilai is enabled and key is saved',
+                       level=3)
+            _aix_g.Window(10000).setProperty(
+                'ai_subs.hook_last_outcome', 'no_key')
+            try:
+                _aix_x.executebuiltin(
+                    'Notification(Kodi POV IL - AI Subtitles,'
+                    'AI key not visible to DarkSubs -- using Google '
+                    'fallback. Open AI Subs settings and re-save '
+                    'the key.,8000)')
+            except Exception: pass
     except Exception as _aix_e:
         try:
             import xbmc as _aix_x
-            _aix_x.log('[AI hook] falling back to engine default: '
-                       + str(_aix_e), level=2)
+            import xbmcgui as _aix_g
+            _aix_x.log('[AI hook v2] crashed, falling back to engine '
+                       'default: ' + str(_aix_e), level=3)
+            _aix_g.Window(10000).setProperty(
+                'ai_subs.hook_last_outcome',
+                'crash: ' + str(_aix_e)[:80])
+            try:
+                _aix_x.executebuiltin(
+                    'Notification(Kodi POV IL - AI Subtitles,'
+                    'AI hook crashed: '
+                    + str(_aix_e).replace(',', ';')[:80]
+                    + ',8000)')
+            except Exception: pass
         except Exception:
             pass
     {end_marker}
@@ -214,8 +262,47 @@ def ensure_patched():
             pass
         return 'write_failed'
 
+    # Force Python to re-compile from the new .py on next import by
+    # wiping any cached .pyc bytecode. Without this, DarkSubs's
+    # interpreter (reuselanguageinvoker=true) can keep running the
+    # OLD engine.py from its in-memory bytecode cache even though
+    # we've replaced the source file. Survives until the .pyc is
+    # regenerated from the new .py.
+    _invalidate_pyc_cache(engine)
+
     kodi_utils.log(
         'darksubs_patcher: injected AI hook v{0} into {1}'.format(
             HOOK_VERSION, engine),
         level='INFO')
     return 'patched'
+
+
+def _invalidate_pyc_cache(py_path):
+    """Delete any __pycache__/*.pyc entries that correspond to the
+    given .py file. Best-effort; never raises (we're called from a
+    hot path that already wrote the .py successfully)."""
+    try:
+        pkg_dir = os.path.dirname(py_path)
+        base = os.path.splitext(os.path.basename(py_path))[0]
+        cache_dir = os.path.join(pkg_dir, '__pycache__')
+        if not os.path.isdir(cache_dir):
+            return
+        prefix = base + '.cpython-'
+        removed = 0
+        for fname in os.listdir(cache_dir):
+            if fname.startswith(prefix) and fname.endswith('.pyc'):
+                try:
+                    os.remove(os.path.join(cache_dir, fname))
+                    removed += 1
+                except OSError:
+                    pass
+        if removed:
+            try:
+                kodi_utils.log(
+                    'darksubs_patcher: invalidated {0} stale .pyc '
+                    'file(s) for {1}'.format(removed, py_path),
+                    level='INFO')
+            except Exception:
+                pass
+    except Exception:
+        pass
