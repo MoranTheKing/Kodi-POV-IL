@@ -41,46 +41,50 @@ ENGINE_REL_PATH = 'resources/modules/engine.py'
 
 # Bump this number whenever the hook body materially changes. The
 # patcher detects an old marker and re-injects the new version.
-HOOK_VERSION = 2
+HOOK_VERSION = 3
 MARKER = '# AI_TRANSLATE_HOOK_v{0}'.format(HOOK_VERSION)
 END_MARKER = '# END AI_TRANSLATE_HOOK_v{0}'.format(HOOK_VERSION)
 # Any previous-version markers we should rewrite over. Add to this
 # list when bumping HOOK_VERSION.
-OLD_MARKERS = ['# AI_TRANSLATE_HOOK_v1']
+OLD_MARKERS = ['# AI_TRANSLATE_HOOK_v1', '# AI_TRANSLATE_HOOK_v2']
 
 # The hook body, indented 4 spaces (DarkSubs uses 4-space indent
 # inside function bodies). Inserted as the first statement of
 # machine_translate_subs.
 #
-# v2 changes vs v1:
-#   * Heartbeat: every fire writes a timestamp to
-#     Window(10000).Property('ai_subs.hook_last_fire'). The diagnostic
-#     reads this to confirm the hook actually executed in DarkSubs's
-#     process (vs only being present in engine.py on disk).
-#   * Visible notification on every "would-have-AI'd-but-fell-back"
-#     branch so the user SEES when AI translation is supposed to
-#     happen but doesn't (key missing, RunScript timeout, exception).
-#     Replaces silent fall-through that masquerades as a "Google
-#     Translate output" bug.
-#   * Explicit xbmc.log line per branch so debugging from the Kodi
-#     log doesn't require guessing which path was taken.
+# v3 changes vs v2:
+#   * No more Google Translate fallback when our API key IS set. v2
+#     fell through to Google on AI timeout / crash / empty output --
+#     which surfaced as "I told you I don't want Google" complaints
+#     from users who had explicitly set up Gemini and didn't want
+#     DarkSubs's bundled Google translator to take over on AI hiccups.
+#     v3 honours the AI-key-as-explicit-preference contract: if a
+#     key is set and AI fails, we copy the ORIGINAL (English)
+#     subtitle to the output path and return -- DarkSubs sees a
+#     valid file and the user gets English subs on screen instead
+#     of bad Google Hebrew. Google is preserved as the upstream
+#     default ONLY when no AI key is configured.
+#   * Heartbeat outcomes extended: 'kept_original' is the new
+#     "AI failed, keeping English" status.
 HOOK_BODY = '''\
     {marker}
     # Injected by service.subtitles.kodipovilai. See darksubs_patcher.py.
+    _aix_tried_ai = False
     try:
         import xbmcaddon as _aix_a, xbmc as _aix_x, os as _aix_os
         import time as _aix_t, base64 as _aix_b
         import xbmcgui as _aix_g
         _aix_g.Window(10000).setProperty(
             'ai_subs.hook_last_fire', str(int(_aix_t.time())))
-        _aix_x.log('[AI hook v2] entered for ' + str(input_file),
+        _aix_x.log('[AI hook v3] entered for ' + str(input_file),
                    level=1)
         _aix_ad = _aix_a.Addon('service.subtitles.kodipovilai')
         _aix_key = (_aix_ad.getSetting('api_key') or '').strip()
         _aix_g.Window(10000).setProperty(
             'ai_subs.hook_last_key_len', str(len(_aix_key)))
         if _aix_key:
-            _aix_x.log('[AI hook v2] key len=' + str(len(_aix_key))
+            _aix_tried_ai = True
+            _aix_x.log('[AI hook v3] key len=' + str(len(_aix_key))
                        + ' -> firing RunScript', level=1)
             _aix_done = output_file + '.ai_done'
             try: _aix_os.remove(_aix_done)
@@ -105,7 +109,7 @@ HOOK_BODY = '''\
                                       encoding='utf-8',
                                       errors='replace') as _aix_f:
                                 _aix_x.log(
-                                    '[AI hook v2] AI output ready, '
+                                    '[AI hook v3] AI output ready, '
                                     'returning translated content',
                                     level=1)
                                 _aix_g.Window(10000).setProperty(
@@ -115,25 +119,16 @@ HOOK_BODY = '''\
                             break
                     break
                 _aix_t.sleep(0.5)
-            # If we got here, we either timed out or got an empty
-            # output. Surface a notification so the user knows AI
-            # translation tried and failed, instead of silently
-            # falling through to Google.
-            _aix_x.log('[AI hook v2] timed out / empty output, '
-                       'falling back to engine default', level=3)
-            _aix_g.Window(10000).setProperty(
-                'ai_subs.hook_last_outcome', 'timeout')
-            try:
-                _aix_x.executebuiltin(
-                    'Notification(Kodi POV IL - AI Subtitles,'
-                    'AI translation timed out -- using Google '
-                    'Translate fallback,8000)')
-            except Exception: pass
-        else:
-            _aix_x.log('[AI hook v2] api_key empty in DarkSubs '
-                       'process -- check that service.subtitles.'
-                       'kodipovilai is enabled and key is saved',
+            # Reached only on timeout or empty/bad output. AI was
+            # tried; fall through to the post-try block below which
+            # copies English -> output and short-circuits Google.
+            _aix_x.log('[AI hook v3] AI did not produce a usable '
+                       'output -- will keep original English',
                        level=3)
+        else:
+            _aix_x.log('[AI hook v3] api_key empty in DarkSubs '
+                       'process -- falling through to engine default '
+                       '(Google translator)', level=3)
             _aix_g.Window(10000).setProperty(
                 'ai_subs.hook_last_outcome', 'no_key')
             try:
@@ -147,8 +142,8 @@ HOOK_BODY = '''\
         try:
             import xbmc as _aix_x
             import xbmcgui as _aix_g
-            _aix_x.log('[AI hook v2] crashed, falling back to engine '
-                       'default: ' + str(_aix_e), level=3)
+            _aix_x.log('[AI hook v3] crashed: ' + str(_aix_e),
+                       level=3)
             _aix_g.Window(10000).setProperty(
                 'ai_subs.hook_last_outcome',
                 'crash: ' + str(_aix_e)[:80])
@@ -159,6 +154,32 @@ HOOK_BODY = '''\
                     + str(_aix_e).replace(',', ';')[:80]
                     + ',8000)')
             except Exception: pass
+        except Exception:
+            pass
+    # If AI was actually attempted (key was set), the user has opted
+    # into AI translation and we must NOT fall through to Google.
+    # Copy the English original to output_file so DarkSubs sees a
+    # valid file -- user gets English subs on screen, not Google
+    # Translate junk. If even that fails, last resort is to let
+    # Google run.
+    if _aix_tried_ai:
+        try:
+            import shutil as _aix_shutil
+            import xbmc as _aix_x
+            import xbmcgui as _aix_g
+            _aix_shutil.copyfile(input_file, output_file)
+            _aix_g.Window(10000).setProperty(
+                'ai_subs.hook_last_outcome', 'kept_original')
+            _aix_x.log('[AI hook v3] copied English -> output, '
+                       'short-circuiting Google fallback',
+                       level=1)
+            try:
+                _aix_x.executebuiltin(
+                    'Notification(Kodi POV IL - AI Subtitles,'
+                    'AI translation failed -- keeping original '
+                    'English (no Google fallback),8000)')
+            except Exception: pass
+            return ''
         except Exception:
             pass
     {end_marker}
@@ -206,8 +227,15 @@ def ensure_patched():
         return 'no_engine'
 
     try:
-        with open(engine, 'r', encoding='utf-8') as f:
-            content = f.read()
+        # Binary mode: preserve original line endings exactly.
+        # Text mode (open('r', encoding='utf-8') with default newline=None)
+        # would convert all \r\n to \n on read, and on Linux the
+        # subsequent write would emit only \n -- silently rewriting
+        # a CRLF source file to LF and breaking any other patcher
+        # that pattern-matches on \r\n.
+        with open(engine, 'rb') as f:
+            raw = f.read()
+        content = raw.decode('utf-8', errors='replace')
     except OSError as e:
         kodi_utils.log(
             'darksubs_patcher: read failed for {0}: {1}'.format(
@@ -217,6 +245,11 @@ def ensure_patched():
     if MARKER in content:
         return 'already_patched'
 
+    # Detect line endings actually in use so we can write HOOK_BODY
+    # with matching style. DarkSubs ships engine.py as CRLF; LF-only
+    # also exists in the wild (after user edits / git autocrlf).
+    eol = '\r\n' if '\r\n' in content[:8192] else '\n'
+
     # Cleanup of any older-version markers, if we ever bump HOOK_VERSION.
     for old in OLD_MARKERS:
         old_end = old.replace('AI_TRANSLATE_HOOK', 'END AI_TRANSLATE_HOOK', 1)
@@ -224,7 +257,7 @@ def ensure_patched():
         # old marker line and its matching end marker line.
         pattern = re.compile(
             r'^[ \t]*' + re.escape(old) + r'\b.*?^[ \t]*'
-            + re.escape(old_end) + r'\b[^\n]*\n',
+            + re.escape(old_end) + r'\b[^\r\n]*\r?\n',
             re.MULTILINE | re.DOTALL,
         )
         content = pattern.sub('', content)
@@ -238,19 +271,21 @@ def ensure_patched():
             level='WARNING')
         return 'unmatched'
 
-    # Insert hook immediately after the def line. Adds a blank line
-    # of separation so the original first statement (global trans_result)
-    # stays readable.
+    # Insert hook immediately after the def line. HOOK_BODY is built
+    # with LF line terminators; convert to the file's actual EOL so we
+    # don't end up with a mixed-EOL file (which Python tolerates but
+    # tools like grep -c get confused by).
     insert_at = m.end()
-    new_content = (content[:insert_at] + '\n' + HOOK_BODY
+    hook_body = HOOK_BODY if eol == '\n' else HOOK_BODY.replace('\n', eol)
+    new_content = (content[:insert_at] + eol + hook_body
                    + content[insert_at:])
 
-    # Atomic write: write to .aitmp, then rename. Avoids leaving a
-    # half-written engine.py if anything goes wrong mid-write.
+    # Atomic write: write to .aitmp, then rename. Binary mode so we
+    # preserve the exact line-ending bytes built above.
     tmp_path = engine + '.aitmp'
     try:
-        with open(tmp_path, 'w', encoding='utf-8') as f:
-            f.write(new_content)
+        with open(tmp_path, 'wb') as f:
+            f.write(new_content.encode('utf-8'))
         os.replace(tmp_path, engine)
     except OSError as e:
         kodi_utils.log(
