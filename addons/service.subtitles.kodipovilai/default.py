@@ -135,11 +135,61 @@ def _handle_download(handle, params):
     link = params.get('link', '')
     info = kodi_utils.current_video_info()
 
+    # DialogProgressBG (bottom-right banner) PLUS milestone toasts.
+    # The toasts at 25/50/75 % are the guaranteed-visible backup --
+    # DialogProgressBG can be hidden behind a full-screen window
+    # (DarkSubs MySubs, the video OSD) but toasts always layer on
+    # top of everything. v0.2.42-0.2.44 tried a custom WindowDialog
+    # overlay; that approach kept failing in various ways (hidden
+    # behind pyxbmct, then all-black render, then thread-update
+    # blackhole) so we reverted to the simple toast-driven pattern
+    # that worked reliably in v0.2.41.
+    progress = None
     try:
-        path = _resolve_with_progress_window(link, info)
+        progress = xbmcgui.DialogProgressBG()
+        progress.create('Kodi POV IL - AI Subtitles',
+                        'AI Hebrew')
+    except Exception:
+        progress = None
+
+    _milestone_state = {'last': 0}
+
+    def report(stage, total):
+        try:
+            pct = int(stage * 100 / max(1, total))
+            if progress is not None:
+                try:
+                    progress.update(
+                        pct, 'Kodi POV IL - AI Subtitles',
+                        kodi_utils.localised(33001, stage, total))
+                except Exception:
+                    pass
+            # Milestone toasts -- always visible above any window.
+            milestone = (pct // 25) * 25
+            if (milestone in (25, 50, 75)
+                    and milestone > _milestone_state['last']):
+                _milestone_state['last'] = milestone
+                try:
+                    kodi_utils.notify(
+                        'AI: {0}% תורגם ({1}/{2} chunks)'.format(
+                            milestone, stage, total),
+                        time_ms=3500)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    try:
+        path = translate.resolve(link, info, progress_cb=report)
     except Exception as e:
         _safe_log('resolve crashed: {0}'.format(e), level='ERROR')
         path = None
+    finally:
+        if progress is not None:
+            try:
+                progress.close()
+            except Exception:
+                pass
 
     if path and os.path.isfile(path):
         listitem = xbmcgui.ListItem(label=path)
@@ -439,309 +489,6 @@ class _PairWindow(xbmcgui.WindowDialog):
         ):
             self.cancelled = True
             self.close()
-
-
-class _AITranslateProgressWindow(xbmcgui.WindowDialog):
-    """Full-screen overlay shown while AI translation is running.
-    Shown via doModal() (see _resolve_with_progress_window) so it
-    layers above DarkSubs's pyxbmct MySubs picker -- the v0.2.41
-    show()-based version was being rendered behind that picker
-    because pyxbmct AddonDialogWindow captures z-order.
-
-    User can dismiss via Back/Esc. That just closes the modal --
-    translation continues in the background worker thread and the
-    output file is still written when ready."""
-
-    # Standard Kodi remote/keyboard action codes for Back/Esc.
-    ACTION_PREVIOUS_MENU = 10
-    ACTION_NAV_BACK = 92
-
-    def __init__(self, *args, **kwargs):
-        # WindowDialog quirk: do NOT call super().__init__ with
-        # positional args -- it confuses the binding. State only.
-        self._percent_lbl = None
-        self._chunks_lbl = None
-        self._progress_bar = None
-        self._status_lbl = None
-
-    def onAction(self, action):
-        try:
-            aid = action.getId()
-        except Exception:
-            return
-        if aid in (self.ACTION_PREVIOUS_MENU, self.ACTION_NAV_BACK):
-            # User wants to dismiss -- close the modal so doModal()
-            # in _resolve_with_progress_window returns. The worker
-            # thread keeps translating; its final close() call below
-            # will be a no-op since we're already closed.
-            try:
-                self.close()
-            except Exception:
-                pass
-
-    # Window(10000) property keys used for cross-thread updates.
-    # Worker thread writes -> Kodi UI thread auto-renders via $INFO[]
-    # bindings in the label text. xbmcgui control method calls
-    # (setLabel, setPercent) from non-UI threads were not landing
-    # on screen reliably -- the previous v0.2.42/0.2.43 modal stuck
-    # at "0% / מתחיל תרגום..." because update_progress() was running
-    # in the worker thread and Kodi's UI thread never picked up the
-    # changes. Property-based binding IS the canonical Kodi thread-
-    # safe path: setProperty is documented thread-safe and the UI
-    # thread re-reads $INFO[Window(10000).Property(...)] on every
-    # render tick, so updates appear within ~50ms regardless of
-    # which thread wrote them.
-    _PROP_PCT = 'ai_subs.progress_pct'
-    _PROP_CHUNKS = 'ai_subs.progress_chunks'
-    _PROP_HEARTBEAT = 'ai_subs.progress_heartbeat'
-
-    def setup(self):
-        # WindowDialog coordinate space is 1280x720 by default.
-        # Centered card: 900x440, x=190..1090, y=140..580.
-        white_px = ('special://home/addons/service.subtitles.kodipovilai/'
-                    'resources/lib/icons/white_pixel.png')
-
-        # Initialize the Window(10000) properties BEFORE creating the
-        # labels that bind to them, so the first render shows the
-        # initial values instead of a blank ("").
-        try:
-            _w = xbmcgui.Window(10000)
-            _w.setProperty(self._PROP_PCT, '0')
-            _w.setProperty(self._PROP_CHUNKS, 'מתחיל תרגום...')
-            _w.setProperty(self._PROP_HEARTBEAT, '')
-        except Exception:
-            pass
-
-        # 1. Full-screen semi-opaque dark backdrop.
-        backdrop = xbmcgui.ControlImage(
-            0, 0, 1280, 720, white_px,
-            colorDiffuse='DD0A0F15', aspectRatio=2)
-        self.addControl(backdrop)
-
-        # 2. Outer card shadow.
-        shadow = xbmcgui.ControlImage(
-            186, 144, 908, 448, white_px,
-            colorDiffuse='80000000', aspectRatio=2)
-        self.addControl(shadow)
-
-        # 3. Card body.
-        card = xbmcgui.ControlImage(
-            190, 140, 900, 440, white_px,
-            colorDiffuse='FF1E3A5F', aspectRatio=2)
-        self.addControl(card)
-
-        # 4. Top accent stripe.
-        stripe = xbmcgui.ControlImage(
-            190, 140, 900, 6, white_px,
-            colorDiffuse='FFFFD166', aspectRatio=2)
-        self.addControl(stripe)
-
-        # 5. Title (yellow, large font, centered).
-        title = xbmcgui.ControlLabel(
-            190, 170, 900, 50,
-            '[B]AI מתרגם כתוביות לעברית[/B]',
-            alignment=2 | 4, font='font30', textColor='FFFFD166')
-        self.addControl(title)
-
-        # 6. Brand line under the title (light grey).
-        subtitle = xbmcgui.ControlLabel(
-            190, 230, 900, 30,
-            'Gemini AI · Kodi POV IL',
-            alignment=2 | 4, font='font13', textColor='FFB7C4CF')
-        self.addControl(subtitle)
-
-        # 7. Dropped the ControlProgress bar in this version -- it
-        #    can't bind to a Window property the way ControlLabel can,
-        #    so it would still need cross-thread setPercent() calls
-        #    that don't land reliably. The big percent number + the
-        #    chunk text below convey the same information and DO
-        #    auto-update via $INFO[] binding.
-
-        # 8. Big percentage number (yellow, font45). Auto-updates
-        #    from Window property via $INFO[] binding.
-        self._percent_lbl = xbmcgui.ControlLabel(
-            190, 320, 900, 80,
-            '[B]$INFO[Window(10000).Property('
-            + self._PROP_PCT + ')]%[/B]',
-            alignment=2 | 4, font='font45', textColor='FFFFD166')
-        self.addControl(self._percent_lbl)
-
-        # 9. Chunks counter / status line, auto-updates from property.
-        self._chunks_lbl = xbmcgui.ControlLabel(
-            190, 410, 900, 30,
-            '$INFO[Window(10000).Property('
-            + self._PROP_CHUNKS + ')]',
-            alignment=2 | 4, font='font14', textColor='FFB7C4CF')
-        self.addControl(self._chunks_lbl)
-
-        # 10. Heartbeat line ("מתרגם... 12s") shows the clock is
-        #     advancing even when chunks haven't completed yet --
-        #     reassures the user that the addon isn't frozen during
-        #     long stretches (Gemini overload retries, slow TMDB
-        #     lookups, large chunks etc.).
-        self._heartbeat_lbl = xbmcgui.ControlLabel(
-            190, 445, 900, 26,
-            '$INFO[Window(10000).Property('
-            + self._PROP_HEARTBEAT + ')]',
-            alignment=2 | 4, font='font12', textColor='FF7F8C9E')
-        self.addControl(self._heartbeat_lbl)
-
-        # 11. Reassurance copy at the bottom of the card.
-        self._status_lbl = xbmcgui.ControlLabel(
-            210, 485, 860, 80,
-            'הקובץ ייטען אוטומטית כשהתרגום יסתיים.\n'
-            'לחיצה על Back תסגור את החלון; התרגום ממשיך ברקע.',
-            alignment=2 | 4, font='font12', textColor='FFB7C4CF')
-        self.addControl(self._status_lbl)
-
-    def update_progress(self, stage, total):
-        """Thread-safe update path: write to Window(10000) properties
-        and let Kodi's UI thread re-render the bound $INFO[] labels
-        on the next tick. Safe to call from any thread."""
-        try:
-            pct = int(stage * 100 / max(1, total))
-            w = xbmcgui.Window(10000)
-            w.setProperty(self._PROP_PCT, str(pct))
-            w.setProperty(self._PROP_CHUNKS,
-                          'chunk {0} / {1}'.format(stage, total))
-        except Exception:
-            pass
-
-    def update_heartbeat(self, text):
-        """Same property-based path, for the slow-progress reassurance
-        line that ticks even when no chunk has completed."""
-        try:
-            xbmcgui.Window(10000).setProperty(
-                self._PROP_HEARTBEAT, text)
-        except Exception:
-            pass
-
-
-def _resolve_with_progress_window(link, info):
-    """Wrap translate.resolve() with the AITranslateProgressWindow
-    overlay PLUS the milestone toasts as a guaranteed-visible
-    backup. Both _handle_download and _handle_translate_file call
-    this so the visual progress UX is identical regardless of which
-    entry point triggered the translation.
-
-    Architecture: doModal() + worker-thread translation. The earlier
-    show() approach left the WindowDialog as a non-modal child window
-    behind DarkSubs's pyxbmct AddonDialogWindow (which is modal and
-    captures z-order). doModal() forces our window to render ABOVE
-    every other window unconditionally; the trade-off is that
-    doModal blocks the calling thread, so we move translate.resolve
-    into a daemon thread and have it close() the window when done --
-    which un-blocks doModal and lets the function return.
-
-    User can also dismiss the modal early via Back/Esc. In that case
-    translate.resolve continues running in the worker thread
-    (translation isn't cancelled), and the final result is still
-    written to disk -- DarkSubs picks it up when the download_sub
-    flow checks for trans_file. So early-dismiss costs only the
-    visual; the translation itself isn't lost."""
-    import threading as _threading
-    import time as _time
-    result = {'path': None, 'error': None}
-    done_flag = {'done': False}
-    window = None
-    try:
-        try:
-            window = _AITranslateProgressWindow()
-            window.setup()
-        except Exception:
-            window = None
-
-        _milestone_state = {'last': 0}
-
-        def report(stage, total):
-            try:
-                pct = int(stage * 100 / max(1, total))
-                # Thread-safe property-based update.
-                if window is not None:
-                    try:
-                        window.update_progress(stage, total)
-                    except Exception:
-                        pass
-                # Toast at 25/50/75 % as a guaranteed-visible backup.
-                milestone = (pct // 25) * 25
-                if (milestone in (25, 50, 75)
-                        and milestone > _milestone_state['last']):
-                    _milestone_state['last'] = milestone
-                    try:
-                        kodi_utils.notify(
-                            'AI: {0}% תורגם ({1}/{2} chunks)'.format(
-                                milestone, stage, total),
-                            time_ms=3500)
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-
-        def _worker():
-            try:
-                result['path'] = translate.resolve(
-                    link, info, progress_cb=report)
-            except Exception as _e:
-                result['error'] = _e
-            finally:
-                done_flag['done'] = True
-                # Close from the worker so the main thread's
-                # doModal() returns. Wrapped in try/except because
-                # the user may have already dismissed the modal.
-                if window is not None:
-                    try:
-                        window.close()
-                    except Exception:
-                        pass
-
-        def _heartbeat():
-            """Tick the 'מתרגם... Ns' line so the user sees the modal
-            is alive even when no chunk has completed yet. This is
-            critical during long stretches: Gemini overload retries
-            can add 230s to the FIRST-chunk latency, and the user
-            would otherwise see '0% / מתחיל תרגום...' frozen for
-            multiple minutes and assume the addon is broken."""
-            start = _time.time()
-            while not done_flag['done']:
-                elapsed = int(_time.time() - start)
-                # Three dots, animated by tick mod 4. Pure cosmetic;
-                # makes the elapsed counter feel alive.
-                dots = '.' * ((elapsed % 3) + 1)
-                if window is not None:
-                    try:
-                        window.update_heartbeat(
-                            'מתרגם{0} ({1}ש)'.format(dots, elapsed))
-                    except Exception:
-                        pass
-                _time.sleep(1)
-
-        worker = _threading.Thread(target=_worker, daemon=True)
-        worker.start()
-        ticker = _threading.Thread(target=_heartbeat, daemon=True)
-        ticker.start()
-
-        # doModal() blocks here until the worker calls window.close()
-        # (translation finished) OR the user presses Back/Esc.
-        if window is not None:
-            try:
-                window.doModal()
-            except Exception:
-                pass
-
-        # Always wait for the worker -- if the user dismissed the
-        # modal early, translation is still in flight in the background.
-        worker.join(timeout=600)
-        # Ticker exits on its own once done_flag flips.
-
-        if result['error']:
-            raise result['error']
-        return result['path']
-    finally:
-        if window is not None:
-            try:
-                window.close()
-            except Exception:
-                pass
 
 
 def _gemini_pair_flow(kodi_utils, gemini, gemini_pair):
@@ -1148,11 +895,57 @@ def _handle_translate_file(params):
         json.dumps(payload, ensure_ascii=False))
 
     translated_path = None
+    # Same toast-milestone-driven pattern as _handle_download.
+    # DialogProgressBG may be hidden behind DarkSubs's MySubs
+    # picker, but the 25/50/75 % toast notifications always layer
+    # above any window so the user gets clear progress feedback.
+    progress = None
     try:
-        translated_path = _resolve_with_progress_window(link, info)
+        progress = xbmcgui.DialogProgressBG()
+        progress.create('Kodi POV IL - AI Subtitles',
+                        'תרגום AI מתחיל...')
+    except Exception:
+        progress = None
+
+    _milestone_state = {'last': 0}
+
+    def report(stage, total):
+        try:
+            from resources.lib import kodi_utils as _ku
+            pct = int(stage * 100 / max(1, total))
+            if progress is not None:
+                try:
+                    progress.update(
+                        pct, 'Kodi POV IL - AI Subtitles',
+                        _ku.localised(33001, stage, total))
+                except Exception:
+                    pass
+            milestone = (pct // 25) * 25
+            if (milestone in (25, 50, 75)
+                    and milestone > _milestone_state['last']):
+                _milestone_state['last'] = milestone
+                try:
+                    _ku.notify(
+                        'AI: {0}% תורגם ({1}/{2} chunks)'.format(
+                            milestone, stage, total),
+                        time_ms=3500)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    try:
+        translated_path = translate.resolve(
+            link, info, progress_cb=report)
     except Exception as e:
         _safe_log('translate_file: resolve crashed: {0}'.format(e),
                   level='ERROR')
+    finally:
+        if progress is not None:
+            try:
+                progress.close()
+            except Exception:
+                pass
 
     if not translated_path or not os.path.isfile(translated_path):
         _safe_log('translate_file: resolve returned nothing',

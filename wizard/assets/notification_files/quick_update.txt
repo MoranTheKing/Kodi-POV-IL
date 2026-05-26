@@ -1,29 +1,27 @@
-79
+80
 |||
-תיקון התקיעות ב-0% — עדכוני UI thread-safe + heartbeat
-מצוין שראיתי את הצילום מסך. החלון נראה עכשיו יפה (כל הצבעים נכונים), **אבל ה-percent לא מתעדכן.** תקוע על 0% ל-3 דקות בזמן שהתרגום עובד ברקע.
+החזרה למצב שעבד — toasts ב-25/50/75% בלי מודאל
+ניסיון אחר ניסיון של החלון המעוצב (v0.2.42-0.2.44) נכשל בדרכים שונות:
+- v0.2.42: WindowDialog.show() — מוסתר מאחורי DarkSubs (z-order)
+- v0.2.42 doModal() — סוף סוף מעל, אבל...
+- v0.2.43: רינדור שחור-על-שחור (dark_bg.png × colorDiffuse כהה)
+- v0.2.43 white_pixel.png — נראה תקין, אבל...
+- v0.2.44: ה-labels תקועים על "0%" כי עדכוני xbmcgui מ-thread אחר לא נוחתים על המסך, גם עם Window properties + $INFO[] binding
 
-**שורש הבעיה:** ב-architecture של doModal() + worker thread של v0.2.42-43, התרגום רץ ב-daemon thread. הוא קורא ל-`window.update_progress()` שקורא ל-`setLabel()` ו-`setPercent()` ישירות על ה-controls. **קריאות xbmcgui מ-non-UI thread לא תמיד נוחתות על המסך** ב-Kodi — הם לא thread-safe באמת.
+החזרה לדפוס הפשוט והאמין שעבד ב-v0.2.41:
 
-**התיקון: הדפוס הקנוני של Kodi לעדכוני UI cross-thread** — `Window(10000)` properties + `$INFO[]` binding ב-label text:
+**הסרתי:** ה-class `_AITranslateProgressWindow`, ה-helper `_resolve_with_progress_window`, ה-doModal+worker architecture, ה-heartbeat ticker, וה-asset של white_pixel.png.
 
-```python
-# בlabel
-'$INFO[Window(10000).Property(ai_subs.progress_pct)]%'
+**נשאר:** ב-`_handle_download` וב-`_handle_translate_file` יש כעת **DialogProgressBG פשוט בפינה ימנית-תחתונה + toast notifications ב-25/50/75%**. הtoasts תמיד עולים מעל **כל** חלון (DarkSubs MySubs, OSD של נגן וידאו, דיאלוגים סטנדרטיים של Kodi).
 
-# בworker thread
-xbmcgui.Window(10000).setProperty('ai_subs.progress_pct', '45')
-```
+**מה המשתמש יראה עכשיו:**
+- "AI: מתחיל תרגום..." (toast התחלתי — היה קיים)
+- DialogProgressBG בפינה ימנית-תחתונה כשאין חלון מלא שמסתיר
+- "AI: 25% תורגם (X/Y chunks)" — toast מובטח לראייה
+- "AI: 50% תורגם (X/Y chunks)" — toast מובטח לראייה
+- "AI: 75% תורגם (X/Y chunks)" — toast מובטח לראייה
+- "AI: תרגום הסתיים בהצלחה" (toast סופי — היה קיים)
 
-`setProperty` הוא thread-safe מתועד; ה-UI thread של Kodi קורא מחדש את `$INFO[...]` בכל render tick (~50ms), אז עדכון מכל thread נוחת על המסך באופן מיידי.
-
-**Properties שהוספתי:**
-- `ai_subs.progress_pct` — אחוזים נוכחיים
-- `ai_subs.progress_chunks` — "chunk X / Y"
-- `ai_subs.progress_heartbeat` — **ticker חדש** ("מתרגם... 12ש")
-
-**ה-heartbeat ticker** הוא thread נפרד שמעדכן את ה-property כל שנייה עם השנייה הנוכחית + נקודות אנימציה. **קריטי למקרה של Gemini עמוס** — ה-chunk הראשון יכול לקחת עד 230 שניות (5 שלבי backoff) אם Google מגביל את ה-rate. עם ה-heartbeat המשתמש רואה את המונה מתקדם — החלון מרגיש חי, לא קפוא.
-
-**הסרתי את פס ה-ControlProgress הויזואלי** — הוא לא יכול לבייןד ל-property כמו ControlLabel, אז היה צריך קריאות cross-thread שלא עובדות. המספר הענק + טקסט ה-chunks + ה-heartbeat counter מעבירים את אותה אינפורמציה.
+המטרה של "חלון יפה ויזואלי" נדחתה לעתיד — אולי דרך skin XML במקום WindowDialog שהתנהג בצורה לא צפויה במספר תרחישים.
 
 quick_update + restart.
