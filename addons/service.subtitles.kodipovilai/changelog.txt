@@ -1,3 +1,23 @@
+v0.2.36
+- Even after v0.2.34's autocorrect="off" + NFKC normalisation + ASCII
+  allow-list, iPhone users STILL got Google API 400 on paste. Root
+  cause was a known-unknown in v0.2.34's sanitiser: iOS "Smart
+  Punctuation" replaces ASCII hyphen-minus (U+002D) with em-dash
+  (U+2014, when iOS sees `--`) or en-dash (U+2013, sometimes for a
+  lone `-`). Those are SEPARATE Unicode codepoints and NFKC
+  normalisation does NOT collapse them back. The v0.2.34 allow-list
+  regex `[^A-Za-z0-9_\-]` then STRIPPED them entirely -- so an
+  iPhone-pasted Gemini key `AIza...XYZ-ABC` arrived at our server as
+  `AIza...XYZABC`, missing the hyphens, two characters short. Google
+  rejected the truncated key with 400.
+- _sanitize_key() now coerces every dash-shaped Unicode codepoint
+  back to ASCII `-` BEFORE the allow-list runs. Covers em-dash,
+  en-dash, minus sign, unicode hyphen, non-breaking hyphen, figure
+  dash, horizontal bar, hyphen bullet, full-width hyphen-minus, and
+  the small-form variants. 9 unit tests + an end-to-end PairServer
+  POST round-trip verifying an em-dash-corrupted iPhone paste sanitises
+  back to the original ASCII key.
+
 v0.2.35
 - Make the port number in the Gemini pair-from-phone URL visually
   unmissable so users can manually type the right URL even when
