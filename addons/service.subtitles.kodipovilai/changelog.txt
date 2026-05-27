@@ -1,3 +1,35 @@
+v0.2.48
+- Fix cache collision: every distinct source SRT for the same
+  movie/episode/source-language now gets its OWN cache slot.
+  User report: "אם לחצתי על כתוביות מסוימות וזה תרגם עם ai ואז
+  אני מנסה כתוביות אחרות לתרגם עם ai (שלא נמצאות עכשיו בcache)
+  זה כותב לי שיש כבר כתוביות בcache". Root cause: cache._key()
+  only mixed `source_id` into the digest when imdb_id was MISSING,
+  so two different SRTs for the same movie collided on one cache
+  filename and the second click was served the first SRT's
+  translation. Now source_id is ALWAYS part of the digest.
+- Cache hits are surfaced in the subtitle picker list: any AI
+  entry whose translation is already cached is sorted to the top
+  of the AI section (just under Hebrew passthrough, if any) AND
+  labeled with `[CACHE]` so the user can spot the instant pick
+  at a glance.
+- Two-tier cache strategy:
+   * Early lookup uses the input source identity (Wyzie URL or
+     sha1 of local file content). Same key the [CACHE] marker in
+     the list uses, so a list-time `[CACHE]` mark is honoured by
+     resolve() without any redundant work.
+   * After the SRT is in memory we ALSO check (and store at) a
+     content-hash slot, catching the rare case where two
+     different Wyzie URLs / local paths point to byte-identical
+     SRTs (so the same translation answers both).
+- Notification wording unified: "AI: כתוביות מ-cache (תרגום קודם)"
+  for an early-source-id hit, "AI: כתוביות מ-cache (זהה לתרגום
+  קיים)" for the content-hash hit.
+- Cache TTL stays at 180 days (default unchanged). The eviction
+  pass refreshes atime+mtime on every read AND every cache hit
+  in resolve(), so a file that gets used regularly never ages
+  out -- only genuinely abandoned translations get pruned.
+
 v0.2.47
 - v0.2.46 added RLE/PDF wrapping to force RTL paragraph direction
   in toast notifications. That correctly fixed the within-line
