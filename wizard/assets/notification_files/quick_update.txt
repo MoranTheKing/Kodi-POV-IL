@@ -1,27 +1,21 @@
-80
+81
 |||
-החזרה למצב שעבד — toasts ב-25/50/75% בלי מודאל
-ניסיון אחר ניסיון של החלון המעוצב (v0.2.42-0.2.44) נכשל בדרכים שונות:
-- v0.2.42: WindowDialog.show() — מוסתר מאחורי DarkSubs (z-order)
-- v0.2.42 doModal() — סוף סוף מעל, אבל...
-- v0.2.43: רינדור שחור-על-שחור (dark_bg.png × colorDiffuse כהה)
-- v0.2.43 white_pixel.png — נראה תקין, אבל...
-- v0.2.44: ה-labels תקועים על "0%" כי עדכוני xbmcgui מ-thread אחר לא נוחתים על המסך, גם עם Window properties + $INFO[] binding
+תיקון אמיתי ל-RTL בtoasts — RLE+PDF במקום RLM
+משתמש דיווח: "ההודעה של התוסף שקופץ במסך בזמן תרגום, הפוך. הוא מקריא מהסוף להתחלה (משמאל לימין) ואז לא ממש אפשר להבין מה הוא אומר. אולי תחליף שהוא יתחיל מימין". ניסיתי לתקן בעבר ולא הצליח לגמרי.
 
-החזרה לדפוס הפשוט והאמין שעבד ב-v0.2.41:
+**שורש הבעיה ב-`kodi_utils.notify()`:** השתמשתי ב-**U+200F (RLM)** כקידומת. RLM הוא ה-RTL marker **הכי חלש** — הוא רק *רומז* לאלגוריתם ה-BiDi של Kodi לבחור בכיוון RTL, לא מאלץ. במחרוזות כמו "AI: 25% תורגם (5/20 chunks)" יש **משקל LTR גדול יותר** (אותיות לטיניות + ספרות + סוגריים) ממה ש-RLM אחד מסוגל לבטל. ה-first-strong heuristic של BiDi מצביע על "AI" → Kodi מרנדר LTR → לעברית זה נראה הפוך.
 
-**הסרתי:** ה-class `_AITranslateProgressWindow`, ה-helper `_resolve_with_progress_window`, ה-doModal+worker architecture, ה-heartbeat ticker, וה-asset של white_pixel.png.
+**התיקון:** מעבר ל-**U+202B (RIGHT-TO-LEFT EMBEDDING)** + **U+202C (POP DIRECTIONAL FORMATTING)** עוטף את כל ההודעה:
 
-**נשאר:** ב-`_handle_download` וב-`_handle_translate_file` יש כעת **DialogProgressBG פשוט בפינה ימנית-תחתונה + toast notifications ב-25/50/75%**. הtoasts תמיד עולים מעל **כל** חלון (DarkSubs MySubs, OSD של נגן וידאו, דיאלוגים סטנדרטיים של Kodi).
+```
+לפני: '‏AI: 25% תורגם (5/20 chunks)'             ← RLM חלש
+אחרי:  '‫AI: 25% תורגם (5/20 chunks)‬'            ← RLE forces RTL paragraph
+```
 
-**מה המשתמש יראה עכשיו:**
-- "AI: מתחיל תרגום..." (toast התחלתי — היה קיים)
-- DialogProgressBG בפינה ימנית-תחתונה כשאין חלון מלא שמסתיר
-- "AI: 25% תורגם (X/Y chunks)" — toast מובטח לראייה
-- "AI: 50% תורגם (X/Y chunks)" — toast מובטח לראייה
-- "AI: 75% תורגם (X/Y chunks)" — toast מובטח לראייה
-- "AI: תרגום הסתיים בהצלחה" (toast סופי — היה קיים)
+RLE/PDF הוא המנגנון התקני של Unicode ש**מאלץ** את כיוון הפסקה ל-RTL, ועדיין מאפשר לרצפי לטינית/ספרות בתוכה ("AI: 25%", "(5/20 chunks)") להופיע בכיוון הטבעי שלהם LTR בתוך מסגרת ה-RTL.
 
-המטרה של "חלון יפה ויזואלי" נדחתה לעתיד — אולי דרך skin XML במקום WindowDialog שהתנהג בצורה לא צפויה במספר תרחישים.
+**הגנה נוספת:** ה-notify החדש מקלף כל קידומת BiDi קיימת (כולל U+200F הישן) **לפני** שהוא עוטף — כך גם אם קוד אחר כבר עטף את ההודעה, לא נקבל wrapping כפול.
+
+נבדק על 6 דוגמאות אמיתיות מהקוד שלנו (toast התחלה, toast חצי, toast סוף, retry overload, מחרוזת עם RLM ישן, מחרוזת ריקה) — כולן עוטפות נכון, ה-RLM הישן מוסר, אין double-wrap.
 
 quick_update + restart.
