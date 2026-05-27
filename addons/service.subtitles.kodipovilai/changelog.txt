@@ -1,3 +1,28 @@
+v0.2.46
+- Fix Hebrew toast notifications reading left-to-right (visually
+  reversed for Hebrew readers). User report: "ההודעה של התוסף
+  שקופץ במסך בזמן תרגום, הפוך. הוא מקריא מהסוף להתחלה (משמאל
+  לימין)."
+- Previous attempt used U+200F (RIGHT-TO-LEFT MARK) as a prefix.
+  RLM is just a strong-RTL invisible character that BIASES the
+  BiDi algorithm's first-strong heuristic but doesn't OVERRIDE
+  the paragraph direction. When messages like "AI: 25% תורגם
+  (5/20 chunks)" have more LTR character weight than RTL, RLM
+  loses to first-strong from "AI:" and Kodi renders the toast
+  left-to-right -- which to a Hebrew reader looks reversed.
+- Switched to U+202B (RIGHT-TO-LEFT EMBEDDING) + U+202C (POP
+  DIRECTIONAL FORMATTING) wrap. RLE/PDF is the proper Unicode
+  mechanism to FORCE a paragraph's base direction to RTL while
+  still letting embedded Latin/digit runs ("AI: 25%", "(5/20
+  chunks)") read left-to-right within the RTL paragraph. The
+  whole toast now scrolls and aligns from the right as a Hebrew
+  reader expects, with Latin segments rendered in their natural
+  LTR order inside the RTL frame.
+- notify() also strips any existing BiDi-marker prefix from old
+  messages before wrapping, so we don't end up double-wrapped
+  if a caller (or a future re-call) re-passes an already-RTL'd
+  string.
+
 v0.2.45
 - Reverted the custom WindowDialog progress overlay entirely. The
   v0.2.42-0.2.44 attempts kept breaking in successive ways:
