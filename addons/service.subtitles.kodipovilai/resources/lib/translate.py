@@ -69,6 +69,34 @@ def _lang_display(code):
     }.get(code, code or 'Unknown')
 
 
+def _source_id_for_ai(payload):
+    """Stable identifier for one source SRT, used as part of the
+    cache key. Wyzie URLs are stable per SRT so we use them as-is.
+    Local files get content-hashed because Kodi reuses temp paths
+    like TempSubtitle.0.srt across movies -- the filename alone
+    is NOT a reliable identifier. Returns '' if we can't compute
+    one cheaply (caller will fall back to content-hash after the
+    SRT is in memory)."""
+    wyzie_url = payload.get('wyzie_url')
+    if wyzie_url:
+        return wyzie_url
+    local_path = payload.get('local_path')
+    if local_path and os.path.isfile(local_path):
+        try:
+            import hashlib as _hashlib
+            h = _hashlib.sha1()
+            with open(local_path, 'rb') as f:
+                while True:
+                    chunk = f.read(65536)
+                    if not chunk:
+                        break
+                    h.update(chunk)
+            return h.hexdigest()[:16]
+        except (IOError, OSError):
+            return ''
+    return ''
+
+
 def _reapply_rtl_fix_in_place(path):
     """Re-run srt.fix_rtl_punctuation() on a cached translation
     file. Catches up files that were cached before the current
@@ -218,6 +246,9 @@ def list_candidates(info):
     #       (a) alongside file (local re-watch)
     #       (b) temp-dir file (loaded by another addon)
     #       (c) Wyzie online (single-click flow if user has key)
+    #    Built into a separate list so cache hits can be sorted to
+    #    the top of the AI section (just under Hebrew passthrough).
+    ai_entries = []
     seen_langs = set()
     for src_lang in sources:
         if src_lang in seen_langs:
@@ -229,7 +260,7 @@ def list_candidates(info):
             source_label = _lang_display(src_lang)
             source_origin = ('local file' if alongside.get(src_lang)
                              else 'loaded by another addon')
-            results.append({
+            ai_entries.append({
                 'filename': 'AI Hebrew (translate {0} {1})'.format(
                     source_label, source_origin),
                 'language': 'he',
@@ -241,13 +272,15 @@ def list_candidates(info):
                 'sync': 'false',
                 'rating': '4' if src_lang == 'en' else '3',
                 'is_hi': False, 'is_hd': False,
+                '_payload': {'source_lang': src_lang,
+                             'local_path': local_path},
             })
             continue
 
         wyzie_hit = wyzie_by_lang.get(src_lang)
         if wyzie_hit:
             seen_langs.add(src_lang)
-            results.append({
+            ai_entries.append({
                 'filename': 'AI Hebrew (translate {0} via Wyzie)'.format(
                     _lang_display(src_lang)),
                 'language': 'he',
@@ -259,7 +292,33 @@ def list_candidates(info):
                 'sync': 'false',
                 'rating': '4' if src_lang == 'en' else '3',
                 'is_hi': False, 'is_hd': False,
+                '_payload': {'source_lang': src_lang,
+                             'wyzie_url': wyzie_hit['url']},
             })
+
+    # Mark cached entries with a visible label and sort them to the
+    # top of the AI section so a returning user picks the
+    # already-translated copy first (instant) instead of re-paying
+    # for translation by clicking a fresh source.
+    for entry in ai_entries:
+        payload = entry.pop('_payload', {})
+        try:
+            src_id = _source_id_for_ai(payload)
+            if src_id:
+                translated = cache.translated_path(
+                    imdb_id, season, episode,
+                    payload.get('source_lang') or 'en',
+                    source_id=src_id)
+                if os.path.isfile(translated):
+                    entry['is_cached'] = True
+                    entry['rating'] = '5'
+                    entry['sync'] = 'true'
+                    entry['filename'] = '[CACHE] ' + entry['filename']
+        except Exception as e:
+            kodi_utils.log('cache marker check failed: {0}'.format(e),
+                           level='DEBUG')
+    ai_entries.sort(key=lambda e: 0 if e.get('is_cached') else 1)
+    results.extend(ai_entries)
 
     if not results:
         # Give the user a hint about why we have nothing -- the
@@ -389,24 +448,25 @@ def resolve(link, info, progress_cb=None):
     local_source = payload.get('local_path')
     wyzie_url = payload.get('wyzie_url')
 
-    # Cache-key strategy: for Wyzie sources, the URL is uniquely
-    # tied to one subtitle file, so it's safe to key on without
-    # touching the source content. For local/temp sources, the
-    # filename is NOT a reliable identifier -- Kodi reuses the
-    # same TempSubtitle.X.srt filename across movies, so two
-    # different movies hash to the same source_id and serve each
-    # other's translations. In that case we'll content-hash AFTER
-    # reading the file (see below) and re-check the cache.
-    initial_source_id = wyzie_url or ''
-    if initial_source_id:
+    # Two-tier cache strategy:
+    #  1. EARLY lookup: Wyzie URL is stable per-SRT; local path is
+    #     hashed by content (cheap because the file is small).
+    #     This avoids a redundant Wyzie download / re-translation
+    #     for entries the user already translated. Same key the
+    #     [CACHE] marker in list_candidates uses.
+    #  2. CONTENT-HASH lookup after the source is in memory: catches
+    #     the rare case where two different Wyzie URLs / local
+    #     paths point to byte-identical SRTs.
+    early_source_id = _source_id_for_ai(payload)
+    if early_source_id:
         translated = cache.translated_path(
             imdb_id, season, episode, source_lang,
-            source_id=initial_source_id)
+            source_id=early_source_id)
         if os.path.isfile(translated):
             kodi_utils.log('Cache hit (early): ' + translated,
                            level='INFO')
             kodi_utils.notify(
-                'AI: תרגום מ-cache (כבר תורגם)',
+                'AI: כתוביות מ-cache (תרגום קודם)',
                 time_ms=4000)
             try:
                 now = time.time()
@@ -445,26 +505,40 @@ def resolve(link, info, progress_cb=None):
             1, int(srt.count_entries(src_text) * 0.3)):
         src_text = cleaned
 
-    # Now we have actual content -- content-hash for a robust
-    # source_id.
+    # Content-hash lookup: only catches a hit when SOURCE bytes
+    # match a previously translated SRT served from a different
+    # url/path. Translation is saved to the early-source-id slot
+    # (so list_candidates can pre-mark it as [CACHE]) and ALSO
+    # to the content-hash slot so a future click of a different
+    # url with identical content also hits cache.
     import hashlib as _hashlib
     content_id = _hashlib.sha1(
         src_text.encode('utf-8', errors='replace')).hexdigest()[:16]
+    if content_id != early_source_id:
+        translated_by_content = cache.translated_path(
+            imdb_id, season, episode, source_lang,
+            source_id=content_id)
+        if os.path.isfile(translated_by_content):
+            kodi_utils.log(
+                'Cache hit (content): ' + translated_by_content,
+                level='INFO')
+            kodi_utils.notify(
+                'AI: כתוביות מ-cache (זהה לתרגום קיים)',
+                time_ms=4000)
+            try:
+                now = time.time()
+                os.utime(translated_by_content, (now, now))
+            except OSError:
+                pass
+            _reapply_rtl_fix_in_place(translated_by_content)
+            return translated_by_content
+
+    # No hit: settle on the early-source-id slot as the canonical
+    # cache path for this translation; falls back to content_id
+    # when we have no stable source_id at all.
     translated = cache.translated_path(
-        imdb_id, season, episode, source_lang, source_id=content_id)
-    if os.path.isfile(translated):
-        kodi_utils.log('Cache hit (content): ' + translated,
-                       level='INFO')
-        kodi_utils.notify(
-            'AI: תרגום מ-cache (זהה לסרט אחר)',
-            time_ms=4000)
-        try:
-            now = time.time()
-            os.utime(translated, (now, now))
-        except OSError:
-            pass
-        _reapply_rtl_fix_in_place(translated)
-        return translated
+        imdb_id, season, episode, source_lang,
+        source_id=(early_source_id or content_id))
 
     kodi_utils.log(
         'No cache hit. Starting translation. imdb={0} content_id={1} '
@@ -788,6 +862,23 @@ def resolve(link, info, progress_cb=None):
     # slips so the final SRT renders correctly in Kodi.
     final = srt.fix_rtl_punctuation(final)
     cache.save_text(translated, final)
+    # Also save under the content-hash slot when it differs from
+    # the early-source-id slot. That way the same translation
+    # answers a future lookup whether the user comes back via the
+    # same URL/local path OR via a different source whose bytes
+    # happen to match (e.g. a re-download of the same SRT from a
+    # different Wyzie URL).
+    if early_source_id and content_id and content_id != early_source_id:
+        try:
+            cache.save_text(
+                cache.translated_path(
+                    imdb_id, season, episode, source_lang,
+                    source_id=content_id),
+                final)
+        except Exception as e:
+            kodi_utils.log(
+                'content-hash duplicate save failed: {0}'.format(e),
+                level='DEBUG')
     # Append today's Gemini quota usage to the success toast, but
     # only if the user is on the tracked model (3.1 Flash Lite).
     # Wrapped so a quota-module bug can't drop the toast itself.
