@@ -146,18 +146,25 @@ def notify(msg, title=None, icon=None, time_ms=4000):
             title = 'Kodi POV IL'
         if icon is None:
             icon = xbmcvfs.translatePath('special://home/addons/' + ADDON_ID + '/icon.png')
-        # Force RTL scrolling. Kodi's notification widget infers
-        # paragraph direction from the first strong character in
-        # the message body -- if a Hebrew message happens to start
-        # with a Latin letter, digit, or symbol (most of ours
-        # begin with "AI: ..."), the widget sets paragraph
-        # direction to LTR and scrolls left-to-right when the
-        # text overflows. Prepending U+200F (RIGHT-TO-LEFT MARK,
-        # an invisible strong-RTL character) flips the inference
-        # to RTL, so long messages scroll right-to-left as a
-        # Hebrew reader expects.
-        if msg and not msg.startswith('‏'):
-            msg = '‏' + msg
+        # Force RTL paragraph direction. The previous version used
+        # U+200F (RLM) as a prefix -- that's just a strong-RTL
+        # invisible character that BIASES the BiDi algorithm but
+        # doesn't OVERRIDE it. When a message like "AI: 25% תורגם
+        # (5/20 chunks)" has more LTR weight than RTL, RLM loses
+        # and Kodi renders the toast left-to-right -- which for a
+        # Hebrew reader looks "reversed", reading from the end to
+        # the beginning.
+        #
+        # U+202B (RIGHT-TO-LEFT EMBEDDING) + U+202C (POP DIRECTIONAL
+        # FORMATTING) is the proper Unicode mechanism to FORCE a
+        # paragraph's base direction to RTL while still letting
+        # embedded Latin/digit runs read left-to-right within the
+        # paragraph. We strip any pre-existing RLM/RLE the message
+        # might already carry so we don't double-wrap.
+        if msg:
+            stripped = msg.lstrip('‏‪‫‬‭‮')
+            stripped = stripped.rstrip('‬')
+            msg = '‫' + stripped + '‬'
         xbmcgui.Dialog().notification(title, msg, icon, time_ms)
     except Exception:
         pass
