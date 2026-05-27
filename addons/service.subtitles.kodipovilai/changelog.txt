@@ -1,3 +1,36 @@
+v0.2.47
+- v0.2.46 added RLE/PDF wrapping to force RTL paragraph direction
+  in toast notifications. That correctly fixed the within-line
+  character order so each Hebrew word renders properly, but a
+  user screenshot showed the toast STILL appearing to read
+  "backwards" -- because Kodi's notification widget SCROLLS long
+  text and the scroll direction is hard-coded LTR in most skin
+  XMLs. Unicode BiDi markers can't change the scroll direction;
+  only the per-line character layout.
+- Fix: shortened every long notification so it fits on one
+  screen without scrolling at all. Kodi only scrolls text past
+  ~50 visible chars; staying under that ceiling sidesteps the
+  scroll-direction problem entirely.
+- Three messages cropped:
+    * Kickoff: 118 -> 44 chars. "AI מתרגם (כדקה-שתיים). תתעלם
+      משגיאות ביניים." -- dropped the obsolete "התקדמות תופיע
+      בפינה" line (replaced by 25/50/75 % milestone toasts in
+      0.2.45) and the verbose "Kodi might show download failed"
+      explanation (kept just the "תתעלם משגיאות" bottom line).
+    * Cache hit (by IMDB): 70 -> 30 chars. "AI: תרגום מ-cache
+      (כבר תורגם)". Dropped the "click Clear Cache in settings"
+      pointer; that's documented in settings UI anyway.
+    * Cache hit (by content hash): 83 -> 32 chars. Same
+      treatment: "AI: תרגום מ-cache (זהה לסרט אחר)".
+    * Missing source: 67 -> 30 chars. "מקור הכתוביות לא נמצא
+      — בחר שוב".
+- The RLE/PDF wrap from 0.2.46 stays in place. Combined: short
+  text + forced RTL paragraph direction = the toast both
+  RENDERS in correct Hebrew order AND doesn't scroll at all.
+- Other toasts (Wyzie download fail, save fail, end-of-job
+  success, milestone toasts, etc.) were already under 50 chars
+  and unchanged.
+
 v0.2.46
 - Fix Hebrew toast notifications reading left-to-right (visually
   reversed for Hebrew readers). User report: "ההודעה של התוסף
