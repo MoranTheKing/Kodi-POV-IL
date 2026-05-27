@@ -406,9 +406,8 @@ def resolve(link, info, progress_cb=None):
             kodi_utils.log('Cache hit (early): ' + translated,
                            level='INFO')
             kodi_utils.notify(
-                'AI: תרגום מ-cache (כבר תורגם בעבר). '
-                'אם זה לא הסרט הנכון, לחץ "נקה cache" בהגדרות.',
-                time_ms=8000)
+                'AI: תרגום מ-cache (כבר תורגם)',
+                time_ms=4000)
             try:
                 now = time.time()
                 os.utime(translated, (now, now))
@@ -431,9 +430,8 @@ def resolve(link, info, progress_cb=None):
         src_text = wyzie.download(wyzie_url)
     if not src_text:
         kodi_utils.notify(
-            'הקובץ של הכתוביות המקור לא נמצא. בחר שוב כתובית בשפת מקור '
-            'ונסה שוב.',
-            time_ms=8000,
+            'מקור הכתוביות לא נמצא — בחר שוב',
+            time_ms=5000,
         )
         return None
 
@@ -458,9 +456,8 @@ def resolve(link, info, progress_cb=None):
         kodi_utils.log('Cache hit (content): ' + translated,
                        level='INFO')
         kodi_utils.notify(
-            'AI: תרגום מ-cache לפי תוכן (זהה לסרט אחר שתורגם בעבר). '
-            'אם זה לא נכון, לחץ "נקה cache" בהגדרות.',
-            time_ms=8000)
+            'AI: תרגום מ-cache (זהה לסרט אחר)',
+            time_ms=4000)
         try:
             now = time.time()
             os.utime(translated, (now, now))
@@ -482,11 +479,15 @@ def resolve(link, info, progress_cb=None):
     # longer pieces -- the translation continues anyway and the
     # result is cached, so on the next subtitle-search the user
     # sees it as a cached entry and gets it instantly.
+    # Kept VERY short on purpose -- Kodi's notification widget
+    # scrolls anything past ~50 visible chars, and the scroll
+    # direction in most skins is hardcoded LTR which makes a long
+    # Hebrew message read "backwards" to the user. The 25/50/75 %
+    # milestone toasts later replace the old "התקדמות תופיע בפינה"
+    # explanation that used to bloat this kickoff line.
     kodi_utils.notify(
-        'AI: מתחיל תרגום. יכול לקחת דקה-שתיים. '
-        'התקדמות תופיע בפינה. אם Kodi יציג "הורדה נכשלה" '
-        'באמצע - תתעלם, התרגום ממשיך וייושמר אוטומטית.',
-        time_ms=10000,
+        'AI מתרגם (כדקה-שתיים). תתעלם משגיאות ביניים.',
+        time_ms=8000,
     )
 
     # Sanity: if the source is actually Hebrew (mislabeled),
