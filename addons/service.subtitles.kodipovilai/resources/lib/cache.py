@@ -35,18 +35,18 @@ def _ensure_subdir(name):
 def _key(imdb_id, season, episode, source_lang, source_id=None):
     """Stable filename for one cached translation.
 
-    Without imdb_id all streams collide on the same 'unknown' key,
-    which is how the first test user ended up seeing the first movie
-    he ever translated for every subsequent movie. When imdb_id is
-    missing, fall back to mixing in a `source_id` (Wyzie URL or
-    local file path) so each unique source SRT gets its own slot.
+    source_id (Wyzie URL or sha1 of source SRT content) is ALWAYS
+    mixed into the digest when provided. Before v0.2.48 it was only
+    mixed in when imdb_id was missing, which meant two different
+    source SRTs for the same movie/episode collided on one cache
+    slot -- clicking subtitle B after caching A would serve A's
+    translation as if it were B's.
     """
     parts = [str(imdb_id or 'unknown'),
              str(season or '0'),
              str(episode or '0'),
-             str(source_lang or 'en')]
-    if not imdb_id and source_id:
-        parts.append(str(source_id))
+             str(source_lang or 'en'),
+             str(source_id or '')]
     digest = hashlib.sha1('|'.join(parts).encode('utf-8')).hexdigest()[:16]
     return '{0}_S{1}E{2}_{3}_{4}'.format(parts[0], parts[1], parts[2], parts[3], digest)
 
