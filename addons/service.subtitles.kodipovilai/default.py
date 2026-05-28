@@ -253,6 +253,16 @@ def _try_fast_download(handle, link, info):
     season  = info.get('season') or ''
     episode = info.get('episode') or ''
 
+    # Fast path briefly shows the SOURCE SRT to the user (until the
+    # first Hebrew chunk arrives). English is broadly readable in
+    # our user base; Spanish / Portuguese / German / French are not.
+    # For non-English sources fall through to the legacy slow path
+    # so the user only ever sees Hebrew (after a longer wait).
+    # Unlike the DarkSubs path where we hardcode source_lang='en',
+    # here the payload carries the actual configured source language.
+    if source_lang != 'en':
+        return False
+
     source_id = translate._source_id_for_ai(payload)
 
     # Cache hit fast path: serve cached Hebrew immediately. The
@@ -1233,6 +1243,34 @@ def _handle_translate_file(params):
     # chunk lands. Default OFF so the legacy "wait for full Hebrew"
     # behavior is unchanged unless the user opts in.
     fast_mode = kodi_utils.get_bool('fast_first_chunk', False)
+
+    # Pre-flight: the fast path briefly shows the SOURCE SRT to the
+    # user (until the first Hebrew chunk arrives). That's acceptable
+    # when the source is English -- most users can skim it for the
+    # 10-15 seconds it takes Hebrew to start landing. But for
+    # Spanish / Portuguese / German / French sources it's just
+    # disorienting characters the user can't read. Detect the actual
+    # language of the source text and downgrade non-English to the
+    # slow path. NOTE: the payload above hardcodes source_lang='en'
+    # because the AI prompt is robust to a misidentified language,
+    # so we can't trust payload['source_lang'] here -- we have to
+    # peek at the bytes.
+    if fast_mode:
+        try:
+            from resources.lib import language_detect as _ld
+            _peek_lang = _ld.detect(src_text[:8000])
+            if _peek_lang and _peek_lang != 'en':
+                fast_mode = False
+                _safe_log(
+                    'translate_file: fast mode skipped (detected '
+                    'src lang = {0}, not en)'.format(_peek_lang),
+                    level='INFO')
+        except Exception as _e:
+            # Detection failure: err on the safe side and use slow.
+            fast_mode = False
+            _safe_log(
+                'translate_file: lang detect failed, falling '
+                'back to slow: {0}'.format(_e), level='WARNING')
 
     if not fast_mode:
         try:
