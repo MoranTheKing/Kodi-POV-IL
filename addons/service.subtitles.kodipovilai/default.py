@@ -451,11 +451,16 @@ def _handle_bg_translate_picker(params):
                             'ai_subs.live_translate_source')
                         != payload['source_id']):
                     return
-                _ver['n'] += 1
+                # Alternating-slot write (same approach as DarkSubs
+                # path). Caps Kodi subtitle-stream accumulation at 2
+                # during translation instead of 1 per chunk -- user
+                # reported "10/10" piling up in the picker.
+                slot = 'b' if _ver.get('slot', 'b') == 'a' else 'a'
+                _ver['slot'] = slot
                 ver_path = os.path.join(
                     kodi_utils.cache_dir(),
-                    'progressive_{0}_v{1}.he.srt'.format(
-                        payload['source_id'], _ver['n']))
+                    'progressive_{0}_{1}.he.srt'.format(
+                        payload['source_id'], slot))
                 _tmp = ver_path + '.aitmp'
                 with open(_tmp, 'w', encoding='utf-8') as _f:
                     _f.write(payload['merged_text'])
@@ -509,6 +514,21 @@ def _handle_bg_translate_picker(params):
                                     p = xbmc.Player()
                                     p.setSubtitles(_final_path)
                                     p.showSubtitles(True)
+                                    # Force-pick our newly-added
+                                    # stream so Kodi doesn't auto-
+                                    # revert to a pre-existing
+                                    # Hebrew subtitle (user-reported
+                                    # "jumps back to Hebrew" bug
+                                    # when an existing he-SRT was
+                                    # already loaded before picking
+                                    # English for AI translation).
+                                    try:
+                                        _streams = p.getAvailableSubtitleStreams()
+                                        if _streams:
+                                            p.setSubtitleStream(
+                                                len(_streams) - 1)
+                                    except Exception:
+                                        pass
                                     _canonical_swap_succeeded = True
                                 except Exception as _se:
                                     _safe_log(
@@ -524,15 +544,27 @@ def _handle_bg_translate_picker(params):
                 if _canonical_swap_succeeded:
                     try:
                         import glob as _glob
-                        _pattern = os.path.join(
-                            kodi_utils.cache_dir(),
+                        # Patterns cover BOTH legacy (_v*) from
+                        # pre-alternation builds AND the new _a/_b
+                        # alternation slots. _final stays as the
+                        # canonical stream Kodi is on.
+                        _patterns = [
                             'progressive_{0}_v*.he.srt'.format(
-                                payload['source_id']))
-                        for _stale in _glob.glob(_pattern):
-                            try:
-                                os.remove(_stale)
-                            except OSError:
-                                pass
+                                payload['source_id']),
+                            'progressive_{0}_a.he.srt'.format(
+                                payload['source_id']),
+                            'progressive_{0}_b.he.srt'.format(
+                                payload['source_id']),
+                        ]
+                        for _pat in _patterns:
+                            for _stale in _glob.glob(
+                                    os.path.join(
+                                        kodi_utils.cache_dir(),
+                                        _pat)):
+                                try:
+                                    os.remove(_stale)
+                                except OSError:
+                                    pass
                     except Exception:
                         pass
                 xbmcgui.Window(10000).clearProperty(
@@ -1475,11 +1507,19 @@ def _handle_translate_file(params):
                             'ai_subs.live_translate_source')
                         != payload['source_id']):
                     return  # stale or user moved on; stop swapping
-                _ver['n'] += 1
+                # Alternate between two slot files instead of writing
+                # a fresh v1, v2, v3... per chunk. Each setSubtitles
+                # call ADDS a stream to Kodi's player list -- with N
+                # chunks the user saw N Hebrew entries pile up in the
+                # subtitle picker (the 10/10 screenshot). Cycling
+                # 'a' and 'b' caps the streams at 2 during streaming
+                # (plus _final after done) instead of N.
+                slot = 'b' if _ver.get('slot', 'b') == 'a' else 'a'
+                _ver['slot'] = slot
                 ver_path = os.path.join(
                     kodi_utils.cache_dir(),
-                    'progressive_{0}_v{1}.he.srt'.format(
-                        payload['source_id'], _ver['n']))
+                    'progressive_{0}_{1}.he.srt'.format(
+                        payload['source_id'], slot))
                 _tmp = ver_path + '.aitmp'
                 with open(_tmp, 'w', encoding='utf-8') as _f:
                     _f.write(payload['merged_text'])
@@ -1541,6 +1581,25 @@ def _handle_translate_file(params):
                                     p = xbmc.Player()
                                     p.setSubtitles(_final_path)
                                     p.showSubtitles(True)
+                                    # Explicit stream selection: when
+                                    # the user already had a Hebrew
+                                    # SRT loaded BEFORE picking
+                                    # English for AI translation,
+                                    # Kodi's language preference can
+                                    # auto-revert to the FIRST Hebrew
+                                    # stream after our setSubtitles
+                                    # adds a second one. Forcing the
+                                    # most-recently-added stream
+                                    # (always ours) pins the active
+                                    # selection to the translation we
+                                    # just produced.
+                                    try:
+                                        _streams = p.getAvailableSubtitleStreams()
+                                        if _streams:
+                                            p.setSubtitleStream(
+                                                len(_streams) - 1)
+                                    except Exception:
+                                        pass
                                     _canonical_swap_succeeded = True
                                 except Exception as _se:
                                     _safe_log(
@@ -1561,15 +1620,27 @@ def _handle_translate_file(params):
                 if _canonical_swap_succeeded:
                     try:
                         import glob as _glob
-                        _pattern = os.path.join(
-                            kodi_utils.cache_dir(),
+                        # Patterns cover BOTH legacy (_v*) from
+                        # pre-alternation builds AND the new _a/_b
+                        # alternation slots. _final stays as the
+                        # canonical stream Kodi is on.
+                        _patterns = [
                             'progressive_{0}_v*.he.srt'.format(
-                                payload['source_id']))
-                        for _stale in _glob.glob(_pattern):
-                            try:
-                                os.remove(_stale)
-                            except OSError:
-                                pass
+                                payload['source_id']),
+                            'progressive_{0}_a.he.srt'.format(
+                                payload['source_id']),
+                            'progressive_{0}_b.he.srt'.format(
+                                payload['source_id']),
+                        ]
+                        for _pat in _patterns:
+                            for _stale in _glob.glob(
+                                    os.path.join(
+                                        kodi_utils.cache_dir(),
+                                        _pat)):
+                                try:
+                                    os.remove(_stale)
+                                except OSError:
+                                    pass
                     except Exception:
                         pass
                 xbmcgui.Window(10000).clearProperty(
