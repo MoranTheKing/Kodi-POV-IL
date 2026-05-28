@@ -382,13 +382,28 @@ def list_candidates(info):
 
 # ---- download / translate -------------------------------------------
 
-def resolve(link, info, progress_cb=None):
+def resolve(link, info, progress_cb=None, progressive_cb=None):
     """Return a filesystem path to the SRT for the chosen link.
 
     For passthrough, hand back the existing file path. For ai
     entries, translate (or read from cache) and return the cached
     file's path. progress_cb, if provided, is called as
-    progress_cb(chunk_index, total_chunks)."""
+    progress_cb(chunk_index, total_chunks).
+
+    progressive_cb, if provided, is an opt-in fast-first-chunk
+    callback used by the DarkSubs auto_translate path to release the
+    English fallback to Kodi immediately and then swap subtitles in
+    flight as each Hebrew chunk lands. Signature:
+        progressive_cb(phase, payload)
+    where phase is one of:
+        'first_ready'  payload={'fallback_text', 'source_id'}
+        'chunk_ready'  payload={'completed','total','merged_text',
+                                'source_id'}
+        'done'         payload={'success', 'source_id'}
+    Quality is unchanged: the final canonical Hebrew bytes written
+    via cache.save_text() are byte-identical to today's output for
+    the same source SRT; only the timing of delivery differs.
+    A callback exception NEVER aborts the translation."""
     payload = _decode_link(link)
     if not payload:
         kodi_utils.log('resolve: bad link', level='ERROR')
@@ -539,6 +554,29 @@ def resolve(link, info, progress_cb=None):
     translated = cache.translated_path(
         imdb_id, season, episode, source_lang,
         source_id=(early_source_id or content_id))
+
+    # Captured once and reused for ALL progressive callback emissions
+    # so the caller can correlate first_ready/chunk_ready/done into a
+    # single in-flight translation. Same value the cache key uses
+    # above. Safe to evaluate here -- both ids are now stable.
+    _progressive_source_id = early_source_id or content_id
+
+    # Fast-first-chunk hand-off: release the English fallback to the
+    # caller (e.g. DarkSubs) so Kodi can start showing SOMETHING in
+    # seconds while we translate in the background. The bytes are
+    # the POST-strip src_text -- the same source we'll feed to
+    # Gemini -- so what the user sees onscreen matches what gets
+    # translated. A buggy callback must not abort us.
+    if progressive_cb is not None:
+        try:
+            progressive_cb('first_ready', {
+                'fallback_text': src_text,
+                'source_id': _progressive_source_id,
+            })
+        except Exception as e:
+            kodi_utils.log(
+                'progressive_cb first_ready raised: ' + str(e),
+                level='WARNING')
 
     kodi_utils.log(
         'No cache hit. Starting translation. imdb={0} content_id={1} '
@@ -831,6 +869,34 @@ def resolve(link, info, progress_cb=None):
                         progress_cb(completed, total)
                     except Exception:
                         pass
+                if progressive_cb is not None:
+                    try:
+                        # Merge: Hebrew where done, source English
+                        # where pending. Inline (not a srt.py helper)
+                        # because this view is meaningful only here.
+                        _merged_blocks = []
+                        for _i, _ch in enumerate(chunks):
+                            # chunks is 0-indexed; out_blocks_by_index
+                            # is 1-indexed (idx = i + 1 above).
+                            _key = _i + 1
+                            if _key in out_blocks_by_index:
+                                _merged_blocks.extend(
+                                    out_blocks_by_index[_key])
+                            else:
+                                _merged_blocks.extend(_ch)
+                        _merged_text = srt.fix_rtl_punctuation(
+                            srt.stitch_blocks(_merged_blocks))
+                        progressive_cb('chunk_ready', {
+                            'completed': completed,
+                            'total': total,
+                            'merged_text': _merged_text,
+                            'source_id': _progressive_source_id,
+                        })
+                    except Exception as e:
+                        kodi_utils.log(
+                            'progressive_cb chunk_ready raised: '
+                            + str(e),
+                            level='WARNING')
     except ImportError:
         # Older Python without concurrent.futures -- shouldn't
         # happen on Kodi 21 but bail safely.
@@ -840,6 +906,16 @@ def resolve(link, info, progress_cb=None):
 
     if abort_msg:
         kodi_utils.notify(abort_msg, time_ms=12000)
+        if progressive_cb is not None:
+            try:
+                progressive_cb('done', {
+                    'success': False,
+                    'source_id': _progressive_source_id,
+                })
+            except Exception as e:
+                kodi_utils.log(
+                    'progressive_cb done(abort) raised: ' + str(e),
+                    level='WARNING')
         return None
 
     if completed != total:
@@ -847,6 +923,16 @@ def resolve(link, info, progress_cb=None):
             'AI: תרגום הסתיים חלקית ({0}/{1}). נסה שוב.'.format(
                 completed, total),
             time_ms=10000)
+        if progressive_cb is not None:
+            try:
+                progressive_cb('done', {
+                    'success': False,
+                    'source_id': _progressive_source_id,
+                })
+            except Exception as e:
+                kodi_utils.log(
+                    'progressive_cb done(partial) raised: ' + str(e),
+                    level='WARNING')
         return None
 
     # Stitch in original order.
@@ -891,4 +977,14 @@ def resolve(link, info, progress_cb=None):
         quota_suffix = ''
     kodi_utils.notify('AI: תרגום הסתיים בהצלחה ({0} chunks){1}'
                       .format(total, quota_suffix), time_ms=4000)
+    if progressive_cb is not None:
+        try:
+            progressive_cb('done', {
+                'success': True,
+                'source_id': _progressive_source_id,
+            })
+        except Exception as e:
+            kodi_utils.log(
+                'progressive_cb done(success) raised: ' + str(e),
+                level='WARNING')
     return translated
