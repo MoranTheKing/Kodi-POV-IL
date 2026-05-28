@@ -934,57 +934,162 @@ def _handle_translate_file(params):
         except Exception:
             pass
 
+    # Opt-in fast-first-chunk: write English to disk + touch sentinel
+    # as soon as resolve() has read the source, so DarkSubs releases
+    # in seconds. Hebrew swaps in via Player().setSubtitles() as each
+    # chunk lands. Default OFF so the legacy "wait for full Hebrew"
+    # behavior is unchanged unless the user opts in.
+    fast_mode = kodi_utils.get_bool('fast_first_chunk', False)
+
+    if not fast_mode:
+        try:
+            translated_path = translate.resolve(
+                link, info, progress_cb=report)
+        except Exception as e:
+            _safe_log('translate_file: resolve crashed: {0}'.format(e),
+                      level='ERROR')
+        finally:
+            if progress is not None:
+                try:
+                    progress.close()
+                except Exception:
+                    pass
+
+        if not translated_path or not os.path.isfile(translated_path):
+            _safe_log('translate_file: resolve returned nothing',
+                      level='WARNING')
+            return
+
+        # Copy translated content to the output path DarkSubs expects.
+        try:
+            with open(translated_path, 'r', encoding='utf-8',
+                      errors='replace') as f:
+                hebrew = f.read()
+            # Belt-and-suspenders: re-apply the RTL punctuation fix
+            # right before delivery. resolve() does this on cache hits
+            # too, but applying it again here catches the case where
+            # the cache file slipped through (e.g., a write race or a
+            # file the migration hasn't reached yet).
+            try:
+                from resources.lib import srt as _srt
+                hebrew = _srt.fix_rtl_punctuation(hebrew)
+            except Exception:
+                pass
+            # Write atomically: temp file in same dir, then rename. This
+            # avoids a half-written file being picked up by the hook.
+            tmp_out = out_path + '.aitmp'
+            with open(tmp_out, 'w', encoding='utf-8') as f:
+                f.write(hebrew)
+            os.replace(tmp_out, out_path)
+        except OSError as e:
+            _safe_log('translate_file: write failed: {0}'.format(e),
+                      level='ERROR')
+            return
+
+        # Touch the sentinel last -- the hook polls for it. Only after
+        # the output is complete on disk.
+        try:
+            open(out_path + '.ai_done', 'w').close()
+        except OSError as e:
+            _safe_log('translate_file: sentinel write failed: {0}'
+                      .format(e), level='WARNING')
+        return
+
+    # ---- fast_first_chunk path ------------------------------------
+    # progressive_cb gets called from resolve() at three phases:
+    #   first_ready  -- English source is ready; write it to out_path
+    #                   and touch the sentinel so DarkSubs releases
+    #                   immediately. User sees subtitles in ~3s
+    #                   instead of 1-3 min.
+    #   chunk_ready  -- a Hebrew chunk landed; write a versioned
+    #                   .vN.srt to cache_dir and swap in via
+    #                   Player().setSubtitles() so the user sees
+    #                   Hebrew creep in as chunks complete.
+    #   done         -- translation finished (success or failure);
+    #                   we clear the active-translation Window prop.
+    #                   On success the canonical cache file is
+    #                   already saved by resolve() so the NEXT pick
+    #                   shows [CACHE]. On failure we leave the
+    #                   English on disk and the progressive .vN
+    #                   files for TTL prune to clean up later --
+    #                   we explicitly do NOT save a partial Hebrew
+    #                   file to canonical cache.
+    _ver = {'n': 0, 'last_path': None}
+
+    def on_phase(phase, payload):
+        try:
+            if phase == 'first_ready':
+                _tmp = out_path + '.aitmp'
+                with open(_tmp, 'w', encoding='utf-8') as _f:
+                    _f.write(payload['fallback_text'])
+                os.replace(_tmp, out_path)
+                xbmcgui.Window(10000).setProperty(
+                    'ai_subs.live_translate_active', '1')
+                xbmcgui.Window(10000).setProperty(
+                    'ai_subs.live_translate_source', payload['source_id'])
+                try:
+                    open(out_path + '.ai_done', 'w').close()
+                except OSError as e:
+                    _safe_log('translate_file fast: sentinel write '
+                              'failed: {0}'.format(e), level='WARNING')
+                kodi_utils.notify('AI: כתוביות מוכנות, מתרגם ברקע',
+                                  time_ms=4000)
+            elif phase == 'chunk_ready':
+                if (xbmcgui.Window(10000).getProperty(
+                        'ai_subs.live_translate_active') != '1'):
+                    return  # user moved on; stop swapping
+                _ver['n'] += 1
+                ver_path = os.path.join(
+                    kodi_utils.cache_dir(),
+                    'progressive_{0}_v{1}.he.srt'.format(
+                        payload['source_id'], _ver['n']))
+                _tmp = ver_path + '.aitmp'
+                with open(_tmp, 'w', encoding='utf-8') as _f:
+                    _f.write(payload['merged_text'])
+                os.replace(_tmp, ver_path)
+                _ver['last_path'] = ver_path
+                try:
+                    if xbmc.Player().isPlayingVideo():
+                        xbmc.Player().setSubtitles(ver_path)
+                except Exception as e:
+                    _safe_log(
+                        'translate_file fast: setSubtitles raised: '
+                        '{0}'.format(e), level='DEBUG')
+            elif phase == 'done':
+                xbmcgui.Window(10000).clearProperty(
+                    'ai_subs.live_translate_active')
+                xbmcgui.Window(10000).clearProperty(
+                    'ai_subs.live_translate_source')
+                # On success the canonical cache file is already saved
+                # by resolve(); the next pick gets [CACHE] marker.
+                # On failure we do nothing -- partial Hebrew lives in
+                # the progressive .vN files which TTL prune handles.
+        except Exception as _e:
+            _safe_log(
+                'translate_file fast on_phase({0}) raised: {1}'.format(
+                    phase, _e), level='WARNING')
+
     try:
-        translated_path = translate.resolve(
-            link, info, progress_cb=report)
-    except Exception as e:
-        _safe_log('translate_file: resolve crashed: {0}'.format(e),
-                  level='ERROR')
+        try:
+            translate.resolve(link, info, progress_cb=report,
+                              progressive_cb=on_phase)
+        except Exception as e:
+            _safe_log(
+                'translate_file fast: resolve crashed: {0}'.format(e),
+                level='ERROR')
     finally:
         if progress is not None:
             try:
                 progress.close()
             except Exception:
                 pass
-
-    if not translated_path or not os.path.isfile(translated_path):
-        _safe_log('translate_file: resolve returned nothing',
-                  level='WARNING')
-        return
-
-    # Copy translated content to the output path DarkSubs expects.
-    try:
-        with open(translated_path, 'r', encoding='utf-8',
-                  errors='replace') as f:
-            hebrew = f.read()
-        # Belt-and-suspenders: re-apply the RTL punctuation fix
-        # right before delivery. resolve() does this on cache hits
-        # too, but applying it again here catches the case where
-        # the cache file slipped through (e.g., a write race or a
-        # file the migration hasn't reached yet).
         try:
-            from resources.lib import srt as _srt
-            hebrew = _srt.fix_rtl_punctuation(hebrew)
+            xbmcgui.Window(10000).clearProperty(
+                'ai_subs.live_translate_active')
+            xbmcgui.Window(10000).clearProperty(
+                'ai_subs.live_translate_source')
         except Exception:
             pass
-        # Write atomically: temp file in same dir, then rename. This
-        # avoids a half-written file being picked up by the hook.
-        tmp_out = out_path + '.aitmp'
-        with open(tmp_out, 'w', encoding='utf-8') as f:
-            f.write(hebrew)
-        os.replace(tmp_out, out_path)
-    except OSError as e:
-        _safe_log('translate_file: write failed: {0}'.format(e),
-                  level='ERROR')
-        return
-
-    # Touch the sentinel last -- the hook polls for it. Only after
-    # the output is complete on disk.
-    try:
-        open(out_path + '.ai_done', 'w').close()
-    except OSError as e:
-        _safe_log('translate_file: sentinel write failed: {0}'
-                  .format(e), level='WARNING')
 
 
 def _handle_darksubs_status(_params):
