@@ -463,6 +463,7 @@ def _handle_bg_translate_picker(params):
                 try:
                     if xbmc.Player().isPlayingVideo():
                         xbmc.Player().setSubtitles(ver_path)
+                        xbmc.Player().showSubtitles(True)
                 except Exception as _e:
                     _safe_log(
                         'bg_translate_picker setSubtitles raised: '
@@ -1363,6 +1364,38 @@ def _handle_translate_file(params):
                 except OSError as e:
                     _safe_log('translate_file fast: sentinel write '
                               'failed: {0}'.format(e), level='WARNING')
+                # Belt-and-suspenders: load the fallback ourselves
+                # instead of trusting DarkSubs's post-hook code to
+                # do it. Reports from users on v0.2.49 showed the
+                # picker closing + our toast firing but no subtitle
+                # ever appearing on screen -- consistent with
+                # DarkSubs's caller either filtering on Hebrew chars
+                # or relying on a code path that doesn't fire on the
+                # fast return. Also force subtitle display on so a
+                # disabled subtitle stream from a previous playback
+                # doesn't suppress us.
+                #
+                # Brief polling because at this exact moment Kodi may
+                # still be mid-handoff -- DarkSubs's hook just
+                # returned, the player might be a few hundred ms away
+                # from isPlayingVideo() flipping True. Up to 3s of
+                # 250ms checks gives us a reasonable shot at landing
+                # the setSubtitles call without blocking the
+                # remainder of translation behind it.
+                try:
+                    _attempts = 0
+                    while _attempts < 12:
+                        if xbmc.Player().isPlayingVideo():
+                            xbmc.Player().setSubtitles(out_path)
+                            xbmc.Player().showSubtitles(True)
+                            break
+                        xbmc.sleep(250)
+                        _attempts += 1
+                except Exception as e:
+                    _safe_log(
+                        'translate_file fast first_ready '
+                        'setSubtitles raised: {0}'.format(e),
+                        level='DEBUG')
                 kodi_utils.notify('AI: כתוביות מוכנות, מתרגם ברקע',
                                   time_ms=4000)
             elif phase == 'chunk_ready':
@@ -1393,6 +1426,7 @@ def _handle_translate_file(params):
                 try:
                     if xbmc.Player().isPlayingVideo():
                         xbmc.Player().setSubtitles(ver_path)
+                        xbmc.Player().showSubtitles(True)
                 except Exception as e:
                     _safe_log(
                         'translate_file fast: setSubtitles raised: '
