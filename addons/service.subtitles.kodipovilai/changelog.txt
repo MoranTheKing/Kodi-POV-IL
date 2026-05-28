@@ -37,6 +37,17 @@ v0.2.49
   existing TTL prune to clean up.
 - Also wired into the native subtitle picker -- click an AI
   entry there and you get the same fast experience.
+- English-source only. The fast path briefly shows the SOURCE SRT
+  to the user (until Hebrew chunks land) -- that's fine for
+  English (broadly readable in our user base) but disorienting
+  for Spanish / Portuguese / German / French sources where the
+  user can't read the placeholder text. For non-English sources
+  the addon transparently falls through to the legacy slow path
+  (1-3 min wait, Hebrew only). DarkSubs path detects via
+  language_detect.detect() on the source bytes (the AI payload
+  hardcodes source_lang='en' for prompt-robustness, so we can't
+  trust the label here); native-picker path uses the configured
+  source_lang in the link payload directly.
 
 v0.2.48
 - Fix cache collision: every distinct source SRT for the same
