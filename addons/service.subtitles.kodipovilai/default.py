@@ -1035,9 +1035,20 @@ def _handle_translate_file(params):
                 kodi_utils.notify('AI: כתוביות מוכנות, מתרגם ברקע',
                                   time_ms=4000)
             elif phase == 'chunk_ready':
+                # Two gates: active flag AND source_id match.
+                # If the user picked a different subtitle while we're
+                # translating, the new pick overwrites
+                # 'ai_subs.live_translate_source'. A late chunk_ready
+                # from the previous translation would otherwise swap
+                # the player to its own .vN file, clobbering the new
+                # pick. The source_id check pins each chunk_ready to
+                # its originating translation.
                 if (xbmcgui.Window(10000).getProperty(
-                        'ai_subs.live_translate_active') != '1'):
-                    return  # user moved on; stop swapping
+                        'ai_subs.live_translate_active') != '1'
+                        or xbmcgui.Window(10000).getProperty(
+                            'ai_subs.live_translate_source')
+                        != payload['source_id']):
+                    return  # stale or user moved on; stop swapping
                 _ver['n'] += 1
                 ver_path = os.path.join(
                     kodi_utils.cache_dir(),
@@ -1069,14 +1080,57 @@ def _handle_translate_file(params):
                 'translate_file fast on_phase({0}) raised: {1}'.format(
                     phase, _e), level='WARNING')
 
+    translated_path = None
     try:
         try:
-            translate.resolve(link, info, progress_cb=report,
-                              progressive_cb=on_phase)
+            translated_path = translate.resolve(
+                link, info, progress_cb=report,
+                progressive_cb=on_phase)
         except Exception as e:
             _safe_log(
                 'translate_file fast: resolve crashed: {0}'.format(e),
                 level='ERROR')
+
+        # Sentinel safety net. Two paths land us here without a
+        # touched .ai_done:
+        #   (1) resolve() hit an early cache return (translate.py
+        #       cache-hit branches return BEFORE emitting first_ready)
+        #       -- translated_path holds the cached Hebrew file.
+        #   (2) first_ready threw on the fallback SRT write (disk
+        #       full, permission denied) -- translated_path may
+        #       still be None or, on later resolve() success, a path.
+        # Either way, if no sentinel exists yet, DarkSubs would
+        # poll for 300s and then give up. We avoid that by writing
+        # whatever Hebrew we have to out_path and touching the
+        # sentinel now.
+        sentinel_path = out_path + '.ai_done'
+        if not os.path.isfile(sentinel_path):
+            try:
+                if (translated_path
+                        and os.path.isfile(translated_path)):
+                    with open(translated_path, 'r',
+                              encoding='utf-8',
+                              errors='replace') as _f:
+                        _content = _f.read()
+                    try:
+                        from resources.lib import srt as _srt
+                        _content = _srt.fix_rtl_punctuation(_content)
+                    except Exception:
+                        pass
+                    _tmp_out = out_path + '.aitmp'
+                    with open(_tmp_out, 'w',
+                              encoding='utf-8') as _f:
+                        _f.write(_content)
+                    os.replace(_tmp_out, out_path)
+                # Touch sentinel even if we couldn't write a usable
+                # output -- letting DarkSubs's hook return quickly
+                # is strictly better than the 300s hang.
+                open(sentinel_path, 'w').close()
+            except OSError as _e:
+                _safe_log(
+                    'translate_file fast: post-resolve sentinel '
+                    'recovery failed: {0}'.format(_e),
+                    level='ERROR')
     finally:
         if progress is not None:
             try:
