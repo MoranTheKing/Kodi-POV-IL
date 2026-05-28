@@ -1,4 +1,18 @@
 v0.2.49
+- Subtitle-display safety net: after our hook returns the English
+  fallback to DarkSubs we now ALSO load it as the active subtitle
+  via xbmc.Player().setSubtitles() + showSubtitles(True). User
+  reports showed the picker closing + our toast firing but NO
+  subtitle ever appearing on screen -- consistent with DarkSubs's
+  caller either filtering on Hebrew chars or relying on a code
+  path that doesn't fire on the fast return. We now drive Kodi's
+  subtitle player directly rather than trusting the handoff. Same
+  showSubtitles(True) added after each chunk_ready setSubtitles
+  swap (DarkSubs + native picker paths).
+- Brief 3-second poll at first_ready to wait for the player to
+  flip isPlayingVideo() -> True before calling setSubtitles, so
+  the call doesn't no-op when DarkSubs's hook returns slightly
+  before Kodi finishes its own handoff.
 - New opt-in `fast_first_chunk` setting (Advanced > default OFF).
   Only the DarkSubs auto-translate flow uses it; the regular
   subtitle picker is unchanged in this version.
