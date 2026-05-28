@@ -1,4 +1,27 @@
 v0.2.49
+- Two fixes addressing the (10/10) subtitle-stream pile-up and
+  the "Kodi reverts to a pre-existing Hebrew stream" reports:
+  * Alternating-slot writes during translation: chunk_ready now
+    cycles between progressive_<id>_a.he.srt and ..._b.he.srt
+    instead of incrementing _v1, _v2, _v3.... Each setSubtitles
+    call ADDS a stream to Kodi's player list -- with N chunks
+    the user saw N Hebrew entries pile up in the picker. The
+    alternation caps live streams at 2 (a + b) during
+    translation, plus _final after done = 3 max.
+  * Explicit `setSubtitleStream(last_index)` after the canonical
+    setSubtitles in the done callback. Kodi's language-preference
+    auto-selection sometimes reverts to the FIRST Hebrew stream
+    after we add a second one (user report: "I pick English with
+    existing Hebrew present, translation finishes, picker jumps
+    back to the existing Hebrew and I have to re-click English").
+    Pinning the most-recently-added stream stops this. Wrapped
+    in its own try/except so an old Kodi build without the API
+    just no-ops.
+- Cleanup pattern extended to catch BOTH the legacy _v* names
+  (so users coming from #151/#152 builds get those files cleaned
+  up on their next translation) AND the new _a/_b slots. The
+  _final.he.srt is left alone so Kodi keeps its canonical stream.
+
 - Robustness on the final-canonical swap (3 fixes after user
   reported "Hebrew at start, NOTHING crossing into chunk 2's
   time range" persisted even after the first canonical-swap fix):
