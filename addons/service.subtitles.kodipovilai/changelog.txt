@@ -1,4 +1,19 @@
 v0.2.49
+- Final-canonical swap when translation completes: on success the
+  `done` callback now calls Player().setSubtitles() with the
+  CANONICAL Hebrew cache file -- not the last in-flight .vN. User
+  report: subtitles Hebrew at start of file, but seeking 20 min
+  ahead -> no subtitles at all. Root cause: each chunk_ready
+  ADDS a subtitle stream in Kodi (screenshot showed "(10/10)").
+  The user was stranded on the last mid-translation .vN, which
+  had English placeholders for chunks completed AFTER that .vN
+  was written. The final-canonical swap eliminates that window.
+- Progressive .vN cleanup: on `done` (success or failure) we now
+  remove all progressive_<source_id>_v*.he.srt files for this
+  translation. Without it, every translation left ~5-10 stale
+  files on disk for the 180-day TTL prune to handle, AND every
+  setSubtitles call accumulated a subtitle stream in Kodi's UI
+  ("10/10" instead of "1/1"). Now we end clean.
 - Subtitle-display safety net: after our hook returns the English
   fallback to DarkSubs we now ALSO load it as the active subtitle
   via xbmc.Player().setSubtitles() + showSubtitles(True). User
