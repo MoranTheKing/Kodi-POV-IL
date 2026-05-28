@@ -35,9 +35,8 @@ v0.2.49
 - Abort path: a partial Hebrew translation never lands in the
   canonical cache. The .vN files are left on disk for the
   existing TTL prune to clean up.
-- Limitations: the regular subtitle picker (search/download
-  action) is unchanged in this version. A future version may
-  extend the same pattern to that flow.
+- Also wired into the native subtitle picker -- click an AI
+  entry there and you get the same fast experience.
 
 v0.2.48
 - Fix cache collision: every distinct source SRT for the same
