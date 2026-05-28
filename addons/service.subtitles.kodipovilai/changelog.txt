@@ -1,4 +1,21 @@
 v0.2.49
+- Robustness on the final-canonical swap (3 fixes after user
+  reported "Hebrew at start, NOTHING crossing into chunk 2's
+  time range" persisted even after the first canonical-swap fix):
+  * Copy canonical bytes to a FRESH `progressive_<id>_final.he.srt`
+    path before calling setSubtitles. Kodi caches the parsed SRT
+    per-path; reusing the canonical path can no-op silently on
+    some Kodi builds. The fresh _final name guarantees reload.
+  * Drop the isPlayingVideo() gate -- the player may briefly
+    flip False mid-`done` (user paused, end-of-chapter handoff)
+    and we don't want to silently skip the swap. setSubtitles
+    on a not-yet-resumed player is safe.
+  * Cleanup of progressive_<id>_v*.he.srt files now happens ONLY
+    after canonical swap actually succeeded. On abort/failure we
+    keep the .vN files: they're the user's only Hebrew and
+    deleting them strands Kodi pointing at a removed file = no
+    subtitles for the rest of playback. TTL prune sweeps them
+    later if we don't clean up.
 - Final-canonical swap when translation completes: on success the
   `done` callback now calls Player().setSubtitles() with the
   CANONICAL Hebrew cache file -- not the last in-flight .vN. User

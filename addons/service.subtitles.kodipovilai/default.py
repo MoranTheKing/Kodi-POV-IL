@@ -470,7 +470,13 @@ def _handle_bg_translate_picker(params):
                         '{0}'.format(_e), level='DEBUG')
                 return
             if phase == 'done':
-                # Same canonical-swap fix as the DarkSubs path.
+                # Same robust canonical-swap pattern as the DarkSubs
+                # path: copy canonical bytes to a fresh _final.he.srt
+                # path to defeat Kodi's parse cache; don't gate on
+                # isPlayingVideo (let the try/except handle a paused
+                # player); only delete .vN files when the swap
+                # actually landed.
+                _canonical_swap_succeeded = False
                 if payload.get('success'):
                     try:
                         from resources.lib import cache as _cache
@@ -480,29 +486,55 @@ def _handle_bg_translate_picker(params):
                             info.get('episode') or '',
                             'en',
                             source_id=payload['source_id'])
-                        if (os.path.isfile(canonical)
-                                and xbmc.Player().isPlayingVideo()):
-                            xbmc.Player().setSubtitles(canonical)
-                            xbmc.Player().showSubtitles(True)
+                        if os.path.isfile(canonical):
+                            _final_path = os.path.join(
+                                kodi_utils.cache_dir(),
+                                'progressive_{0}_final.he.srt'.format(
+                                    payload['source_id']))
+                            try:
+                                with open(canonical, 'rb') as _src_f:
+                                    _bytes = _src_f.read()
+                                _tmp_final = _final_path + '.aitmp'
+                                with open(_tmp_final, 'wb') as _dst_f:
+                                    _dst_f.write(_bytes)
+                                os.replace(_tmp_final, _final_path)
+                            except OSError as _we:
+                                _safe_log(
+                                    'bg_translate_picker done copy '
+                                    'failed: {0}'.format(_we),
+                                    level='WARNING')
+                                _final_path = None
+                            if _final_path:
+                                try:
+                                    p = xbmc.Player()
+                                    p.setSubtitles(_final_path)
+                                    p.showSubtitles(True)
+                                    _canonical_swap_succeeded = True
+                                except Exception as _se:
+                                    _safe_log(
+                                        'bg_translate_picker done '
+                                        'setSubtitles raised: {0}'
+                                        .format(_se), level='DEBUG')
                     except Exception as _e:
                         _safe_log(
                             'bg_translate_picker done canonical '
                             'swap failed: {0}'.format(_e),
                             level='DEBUG')
-                # Cleanup stale .vN progressive files for this run.
-                try:
-                    import glob as _glob
-                    _pattern = os.path.join(
-                        kodi_utils.cache_dir(),
-                        'progressive_{0}_v*.he.srt'.format(
-                            payload['source_id']))
-                    for _stale in _glob.glob(_pattern):
-                        try:
-                            os.remove(_stale)
-                        except OSError:
-                            pass
-                except Exception:
-                    pass
+                # Cleanup ONLY when the canonical swap succeeded.
+                if _canonical_swap_succeeded:
+                    try:
+                        import glob as _glob
+                        _pattern = os.path.join(
+                            kodi_utils.cache_dir(),
+                            'progressive_{0}_v*.he.srt'.format(
+                                payload['source_id']))
+                        for _stale in _glob.glob(_pattern):
+                            try:
+                                os.remove(_stale)
+                            except OSError:
+                                pass
+                    except Exception:
+                        pass
                 xbmcgui.Window(10000).clearProperty(
                     'ai_subs.live_translate_active')
                 xbmcgui.Window(10000).clearProperty(
@@ -1466,12 +1498,12 @@ def _handle_translate_file(params):
                 # the user isn't stranded on the last .vN file (which
                 # may still hold English placeholders for chunks that
                 # completed AFTER our final chunk_ready setSubtitles
-                # call). User report from v0.2.49: at start of file
-                # Hebrew was showing; seeking 20 min ahead -> no subs
-                # because that timestamp range fell in a chunk that
-                # finished translating after the .vN we were viewing
-                # was written. Final-canonical swap eliminates the
-                # window.
+                # call). Copy the canonical bytes to a FRESH versioned
+                # path before calling setSubtitles -- Kodi caches the
+                # parsed SRT per-path, so reusing the canonical path
+                # directly may no-op silently on some Kodi builds.
+                # The fresh `_final.he.srt` name guarantees a reload.
+                _canonical_swap_succeeded = False
                 if payload.get('success'):
                     try:
                         from resources.lib import cache as _cache
@@ -1481,33 +1513,65 @@ def _handle_translate_file(params):
                             info.get('episode') or '',
                             'en',
                             source_id=payload['source_id'])
-                        if (os.path.isfile(canonical)
-                                and xbmc.Player().isPlayingVideo()):
-                            xbmc.Player().setSubtitles(canonical)
-                            xbmc.Player().showSubtitles(True)
+                        if os.path.isfile(canonical):
+                            _final_path = os.path.join(
+                                kodi_utils.cache_dir(),
+                                'progressive_{0}_final.he.srt'.format(
+                                    payload['source_id']))
+                            try:
+                                with open(canonical, 'rb') as _src_f:
+                                    _bytes = _src_f.read()
+                                _tmp_final = _final_path + '.aitmp'
+                                with open(_tmp_final, 'wb') as _dst_f:
+                                    _dst_f.write(_bytes)
+                                os.replace(_tmp_final, _final_path)
+                            except OSError as _we:
+                                _safe_log(
+                                    'translate_file fast done copy '
+                                    'failed: {0}'.format(_we),
+                                    level='WARNING')
+                                _final_path = None
+                            if _final_path:
+                                # NOT gated on isPlayingVideo -- if
+                                # the user paused mid-translation,
+                                # setSubtitles is still useful for
+                                # the resume. try/except is the only
+                                # guard we need.
+                                try:
+                                    p = xbmc.Player()
+                                    p.setSubtitles(_final_path)
+                                    p.showSubtitles(True)
+                                    _canonical_swap_succeeded = True
+                                except Exception as _se:
+                                    _safe_log(
+                                        'translate_file fast done '
+                                        'setSubtitles raised: {0}'
+                                        .format(_se), level='DEBUG')
                     except Exception as _e:
                         _safe_log(
                             'translate_file fast done canonical '
                             'swap failed: {0}'.format(_e),
                             level='DEBUG')
-                # Cleanup: delete the stale progressive .vN files for
-                # this source_id. They served their purpose; keeping
-                # them around accumulates subtitle streams in Kodi's
-                # UI (the "(10/10)" issue users reported) and clutters
-                # cache_dir.
-                try:
-                    import glob as _glob
-                    _pattern = os.path.join(
-                        kodi_utils.cache_dir(),
-                        'progressive_{0}_v*.he.srt'.format(
-                            payload['source_id']))
-                    for _stale in _glob.glob(_pattern):
-                        try:
-                            os.remove(_stale)
-                        except OSError:
-                            pass
-                except Exception:
-                    pass
+                # Cleanup ONLY when the canonical swap succeeded. On
+                # failure / abort the user's only Hebrew lives in the
+                # .vN files; deleting them would strand Kodi pointing
+                # at a removed file = no subtitles for the rest of
+                # playback. The 180-day TTL prune sweeps them up
+                # eventually if we don't.
+                if _canonical_swap_succeeded:
+                    try:
+                        import glob as _glob
+                        _pattern = os.path.join(
+                            kodi_utils.cache_dir(),
+                            'progressive_{0}_v*.he.srt'.format(
+                                payload['source_id']))
+                        for _stale in _glob.glob(_pattern):
+                            try:
+                                os.remove(_stale)
+                            except OSError:
+                                pass
+                    except Exception:
+                        pass
                 xbmcgui.Window(10000).clearProperty(
                     'ai_subs.live_translate_active')
                 xbmcgui.Window(10000).clearProperty(
