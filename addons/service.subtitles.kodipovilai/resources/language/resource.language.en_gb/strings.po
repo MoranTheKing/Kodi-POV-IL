@@ -138,6 +138,14 @@ msgctxt "#32404"
 msgid "Concurrent translation requests"
 msgstr "Concurrent translation requests"
 
+msgctxt "#32405"
+msgid "Fast subtitles (experimental)"
+msgstr "Fast subtitles (experimental)"
+
+msgctxt "#32406"
+msgid "Show English fallback in seconds, swap to Hebrew as chunks land. DarkSubs path only."
+msgstr "Show English fallback in seconds, swap to Hebrew as chunks land. DarkSubs path only."
+
 # Runtime messages
 msgctxt "#33000"
 msgid "AI Hebrew (translated from {0})"
