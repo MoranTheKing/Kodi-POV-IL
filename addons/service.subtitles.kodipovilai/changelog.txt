@@ -1,3 +1,44 @@
+v0.2.49
+- New opt-in `fast_first_chunk` setting (Advanced > default OFF).
+  Only the DarkSubs auto-translate flow uses it; the regular
+  subtitle picker is unchanged in this version.
+- What it does: when DarkSubs hands an English SRT to translate,
+  resolve() now emits a `first_ready` callback the moment the
+  source is in memory (~3 seconds in). default.py uses that to
+  write the English fallback to DarkSubs's output path and touch
+  the `.ai_done` sentinel so DarkSubs releases immediately --
+  Kodi shows English subtitles in seconds instead of 1-3 minutes.
+- The same RunScript subprocess keeps translating (existing
+  parallel chunked Gemini flow). As each chunk lands, resolve()
+  emits a `chunk_ready` callback with a Hebrew-where-done /
+  English-where-pending merged SRT; default.py writes that to a
+  versioned `progressive_<id>_vN.he.srt` file in cache_dir and
+  calls `xbmc.Player().setSubtitles(new_path)` to swap subtitles
+  in flight. By the time the user is 1-2 minutes into the movie,
+  all Hebrew has arrived.
+- Quality preserved: NOT a fork of resolve(). Same chunks, same
+  prompt, same model, same bisection, same final stitch. The
+  callback is invoked AFTER `out_blocks_by_index[idx] =
+  srt.parse_blocks(response); completed += 1` -- it only OBSERVES
+  the existing translation pipeline. The canonical Hebrew bytes
+  saved via `cache.save_text(translated, final)` at the end are
+  byte-identical to v0.2.48 for the same source SRT. Only the
+  timing of delivery differs.
+- Edge cases handled: if the user stops playback / picks a
+  different subtitle / reopens the dialog mid-translation, the
+  `ai_subs.live_translate_active` Window(10000) property is
+  cleared (or never set) so chunk_ready stops calling
+  setSubtitles and stops writing .vN files. The translation
+  itself still runs to completion (and lands in the canonical
+  cache) so the NEXT pick of that same source shows `[CACHE]`
+  and resolves instantly.
+- Abort path: a partial Hebrew translation never lands in the
+  canonical cache. The .vN files are left on disk for the
+  existing TTL prune to clean up.
+- Limitations: the regular subtitle picker (search/download
+  action) is unchanged in this version. A future version may
+  extend the same pattern to that flow.
+
 v0.2.48
 - Fix cache collision: every distinct source SRT for the same
   movie/episode/source-language now gets its OWN cache slot.
