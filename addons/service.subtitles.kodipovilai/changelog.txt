@@ -1,4 +1,13 @@
 v0.2.49
+- fast_first_chunk now default ON. New users get the fast
+  experience out of the box. service.py includes a one-shot
+  migration (gated by _fast_first_chunk_default_v2 marker)
+  that flips existing users currently on the old default 'false'
+  to 'true' once. Users who later turn it off intentionally
+  won't be re-flipped on subsequent startups.
+- Setting label dropped "(experimental)" since the feature is
+  no longer behind an opt-in flag.
+
 - Two fixes addressing the (10/10) subtitle-stream pile-up and
   the "Kodi reverts to a pre-existing Hebrew stream" reports:
   * Alternating-slot writes during translation: chunk_ready now

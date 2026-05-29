@@ -328,9 +328,9 @@
           </control>
         </setting>
         <setting id="fast_first_chunk" type="boolean"
-                 label="32405" help="32406"> <!-- Fast subtitles (experimental) -->
+                 label="32405" help="32406"> <!-- Fast subtitles -->
           <level>2</level>
-          <default>false</default>
+          <default>true</default>
           <control type="toggle"/>
         </setting>
       </group>
