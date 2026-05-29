@@ -1,3 +1,13 @@
+[COLOR yellow][B]v0.1.10[/B][/COLOR]
+* quick_update: now passes ignore=True to extract.all so the
+  wizard's own files inside the quickfix zip actually get
+  written to disk. Without this, every wizard-update shipped
+  via quick_update was silently skipped (extract.all has a
+  safety guard that excludes anything whose path contains the
+  wizard's addon id). End-user symptom: after quick_update +
+  restart, Switch Skin kept showing the pre-update list and
+  the addon DB version disagreed with the code on disk. PR #161
+  Arctic Fuse 3 support was the first user-visible breakage.
 [COLOR yellow][B]v0.1.9[/B][/COLOR]
 * Switch Skin: added Arctic Fuse 3 as a third skin option
   alongside Estuary and FENtastic. AF3 is jurialmunkey's modern

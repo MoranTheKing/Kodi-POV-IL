@@ -295,7 +295,15 @@ class Wizard:
                 return False
             
             title = '[COLOR {0}][B]Installing:[/B][/COLOR] [COLOR {1}]{2}[/COLOR]'.format(CONFIG.COLOR2, CONFIG.COLOR1, name)
-            extract.all(lib, CONFIG.HOME, title=title)
+            # ignore=True bypasses extract.all's self-skip of any file
+            # whose path contains CONFIG.ADDON_ID (the wizard's own id).
+            # Without this, every wizard-addon file inside the quickfix
+            # zip is silently skipped, so wizard updates shipped via
+            # quick_update never reach disk -- Switch Skin keeps showing
+            # the pre-update list, the addon DB lies about the version,
+            # etc. The user-triggered manual install still has its own
+            # safety prompt; this code path is the auto/manual quickfix.
+            extract.all(lib, CONFIG.HOME, ignore=True, title=title)
             # skin.skin_to_default('Build Install')
             # skin.look_and_feel_data('save')
             installed = db.grab_addons(lib)
