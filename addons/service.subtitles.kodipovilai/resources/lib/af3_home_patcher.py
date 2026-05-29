@@ -10,6 +10,7 @@
 import json
 import os
 import time
+from urllib.parse import quote
 
 try:
     import xbmc
@@ -20,10 +21,47 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-05-29-pov-home-v1'
+PATCH_VERSION = '2026-05-30-pov-home-v2'
 
 BASE_NODES = 'special://profile/addon_data/script.skinvariables/nodes/'
 AF3_NODES = BASE_NODES + AF3_SKIN_ID + '/'
+AF3_FONT_XML = 'special://home/addons/' + AF3_SKIN_ID + '/1080i/Font.xml'
+
+
+FONT_XML = '''<?xml version="1.0" encoding="UTF-8"?>
+<fonts>
+
+    <fontset id="Default" unicode="true">
+        <include content="Font_Default">
+            <param name="font_bold">resource://resource.font.robotocjksc/Inter-Unicode-Bold.ttf</param>
+            <param name="font_regular">resource://resource.font.robotocjksc/Inter-Unicode-Regular.ttf</param>
+            <param name="font_light">resource://resource.font.robotocjksc/Inter-Unicode-Regular.ttf</param>
+            <param name="style_light">light</param>
+
+            <param name="plot_linespacing_head">1.03</param>
+            <param name="plot_linespacing_midi">1.45</param>
+            <param name="plot_linespacing_main">1.13</param>
+            <param name="plot_linespacing_mini">1.20</param>
+            <param name="plot_linespacing_tiny">1.11</param>
+        </include>
+    </fontset>
+
+    <fontset id="Default (Unicode)" unicode="true">
+        <include content="Font_Default">
+            <param name="font_bold">resource://resource.font.robotocjksc/Inter-Unicode-Bold.ttf</param>
+            <param name="font_regular">resource://resource.font.robotocjksc/Inter-Unicode-Regular.ttf</param>
+            <param name="font_light">resource://resource.font.robotocjksc/Inter-Unicode-Regular.ttf</param>
+            <param name="style_light">light</param>
+
+            <param name="plot_linespacing_head">1.03</param>
+            <param name="plot_linespacing_midi">1.45</param>
+            <param name="plot_linespacing_main">1.13</param>
+            <param name="plot_linespacing_mini">1.20</param>
+            <param name="plot_linespacing_tiny">1.11</param>
+        </include>
+    </fontset>
+</fonts>
+'''
 
 
 def _pov(action='', mode='', name='', icon='', extra=''):
@@ -43,6 +81,16 @@ def _pov(action='', mode='', name='', icon='', extra=''):
                 params.append((key, value))
     return 'plugin://plugin.video.pov/?' + '&'.join(
         '{0}={1}'.format(k, v) for k, v in params)
+
+
+def _shortcut_folder(name, icon='folder.png'):
+    return (
+        'plugin://plugin.video.pov/?external_list_item=True'
+        '&iconImage={0}'
+        '&mode=navigator.build_shortcut_folder_list'
+        '&name={1}'
+        '&shortcut_folder=True'
+    ).format(quote(icon, safe=''), quote(name, safe=''))
 
 
 HOME_WIDGETS = [
@@ -97,17 +145,19 @@ HOME_WIDGETS = [
         'widget_limit': '20',
     },
     {
-        'label': 'סרטים לפי זאנר',
+        'label': 'סרטים לפי ז׳אנר',
         'icon': 'special://home/media/build_icons/Twilight/Movies/Movies_Genres.png',
-        'path': _pov('', 'navigator.genres', '32470', 'genres.png', 'menu_type=movie'),
+        'path': _shortcut_folder('FENtastic - סרטים - זאנרים',
+                                 'special://home/media/build_icons/Twilight/Movies/Movies_Genres.png'),
         'target': 'videos',
         'widget_style': 'Landscape',
         'widget_limit': '20',
     },
     {
-        'label': 'סדרות לפי זאנר',
+        'label': 'סדרות לפי ז׳אנר',
         'icon': 'special://home/media/build_icons/Twilight/Shows/Shows_Genres.png',
-        'path': _pov('', 'navigator.genres', '32470', 'genres.png', 'menu_type=tvshow'),
+        'path': _shortcut_folder('FENtastic - סדרות - זאנרים',
+                                 'special://home/media/build_icons/Twilight/Shows/Shows_Genres.png'),
         'target': 'videos',
         'widget_style': 'Landscape',
         'widget_limit': '20',
@@ -231,6 +281,16 @@ def _write_if_changed(filename, data):
     return True
 
 
+def _patch_font_xml():
+    try:
+        if _exists(AF3_FONT_XML) and _read(AF3_FONT_XML) == FONT_XML:
+            return False
+    except Exception:
+        pass
+    _write(AF3_FONT_XML, FONT_XML)
+    return True
+
+
 def _is_af3_active():
     if xbmc is None:
         return False
@@ -260,6 +320,7 @@ def ensure_patched():
     changed = False
     for filename, data in FILES.items():
         changed = _write_if_changed(filename, data) or changed
+    changed = _patch_font_xml() or changed
 
     marker = AF3_NODES + '.pov_home_version'
     marker_changed = True
