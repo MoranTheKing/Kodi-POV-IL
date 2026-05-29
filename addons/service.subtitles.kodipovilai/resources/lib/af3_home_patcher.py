@@ -28,7 +28,7 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-05-30-pov-home-v3'
+PATCH_VERSION = '2026-05-30-pov-home-v4'
 
 BASE_NODES = 'special://profile/addon_data/script.skinvariables/nodes/'
 AF3_NODES = BASE_NODES + AF3_SKIN_ID + '/'
@@ -108,46 +108,6 @@ def _shortcut_folder(name, icon='folder.png'):
 
 
 HOME_WIDGETS = [
-    {
-        'label': 'כלים וחיבורים',
-        'icon': 'special://home/media/build_icons/POV/Connect_Services.png',
-        'path': 'Custom_Submenu',
-        'target': 'videos',
-        'widget_style': 'Landscape',
-        'widget_limit': '20',
-        'submenu': [
-            {
-                'label': 'חיבור שירותים',
-                'icon': 'special://home/media/build_icons/POV/Connect_Services.png',
-                'path': 'RunPlugin("plugin://plugin.video.pov/?mode=myservices")',
-                'target': '',
-            },
-            {
-                'label': 'תרגום AI',
-                'icon': 'special://home/addons/service.subtitles.kodipovilai/icon.png',
-                'path': 'Addon.OpenSettings(service.subtitles.kodipovilai)',
-                'target': '',
-            },
-            {
-                'label': 'החלף סקין',
-                'icon': 'special://home/media/build_icons/Wizard/wizard.png',
-                'path': 'RunPlugin("plugin://plugin.program.kodipovilwizard/?mode=install&action=build_switch_skin")',
-                'target': '',
-            },
-            {
-                'label': 'עדכון מהיר',
-                'icon': 'special://home/media/build_icons/Wizard/fast_update.png',
-                'path': 'PlayMedia("plugin://plugin.program.kodipovilwizard/?mode=install&action=quick_update&name=Kodi+POV+IL+-+FENtastic&auto_quick_update=false")',
-                'target': '',
-            },
-            {
-                'label': 'שליחת לוג',
-                'icon': 'special://home/media/build_icons/Twilight/Send_Log/twilight_send_log.png',
-                'path': 'ActivateWindow(10025,"plugin://plugin.video.pov/?mode=navigator.log_utils&name=Changelog%20%26%20Log%20Utils",return)',
-                'target': '',
-            },
-        ],
-    },
     {
         'label': 'סרטים חדשים',
         'icon': 'special://home/media/build_icons/Twilight/Movies/Movies_Popular.png',
@@ -248,6 +208,30 @@ HOME_SUBMENU = [
 
 
 POWER_MENU = [
+    {
+        'label': 'POV',
+        'icon': 'special://home/media/build_icons/POV/Logo_POV.png',
+        'path': 'RunAddon("plugin.video.pov")',
+        'target': '',
+    },
+    {
+        'label': 'חיבור שירותים',
+        'icon': 'special://home/media/build_icons/POV/Connect_Services.png',
+        'path': 'RunPlugin("plugin://plugin.video.pov/?mode=myservices")',
+        'target': '',
+    },
+    {
+        'label': 'תרגום AI',
+        'icon': 'special://home/addons/service.subtitles.kodipovilai/icon.png',
+        'path': 'Addon.OpenSettings(service.subtitles.kodipovilai)',
+        'target': '',
+    },
+    {
+        'label': 'שליחת לוג',
+        'icon': 'special://home/media/build_icons/Twilight/Send_Log/twilight_send_log.png',
+        'path': 'ActivateWindow(10025,"plugin://plugin.video.pov/?mode=navigator.log_utils&name=Changelog%20%26%20Log%20Utils",return)',
+        'target': '',
+    },
     {
         'label': 'החלף סקין',
         'icon': 'special://home/media/build_icons/Wizard/wizard.png',
