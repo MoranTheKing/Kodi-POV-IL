@@ -731,6 +731,44 @@ def _maybe_patch_skin_dialog_subtitles_rows():
             pass
 
 
+def _maybe_patch_af3_dialog_subtitles():
+    """Self-healing patch of Arctic Fuse 3's Dialog_DialogSubtitles.xml
+    so the subtitle picker dialog HEADER prefers our window property
+    `subs.player_filename` over the built-in `Player.FileName`. AF3's
+    structure differs from FENtastic/Estuary (the layout lives in a
+    secondary file referenced by `<include>DialogSubtitles</include>`,
+    not in DialogSubtitles.xml directly), so the generic header
+    patcher bails with 'no_target'. This dedicated AF3 patcher injects
+    a `<variable>` with conditional fallback semantics + swaps the
+    param-label to reference it. No-op if AF3 isn't installed."""
+    try:
+        from resources.lib import (
+            af3_dialog_subtitles_patcher, kodi_utils)
+    except Exception:
+        return
+    try:
+        status = af3_dialog_subtitles_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'af3_dialog_subtitles_patcher: header label now '
+                'prefers subs.player_filename with fallback to '
+                'Player.FileName', level='INFO')
+        elif status in ('no_af3', 'no_file', 'already_patched'):
+            pass  # quiet steady-state -- AF3 not installed yet or
+                  # patch already in place
+        else:
+            kodi_utils.log(
+                'af3_dialog_subtitles_patcher: ' + status,
+                level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'af3_dialog_subtitles_patcher failed: '
+                '{0}'.format(e), level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_darksubs_picker_height():
     """Self-healing patch of DarkSubs's sub_window.py so the picker's
     per-row height is doubled. The default pyxbmct.List _itemHeight
@@ -932,6 +970,15 @@ def main():
     # textbox heights) so two wrapped lines of font12 fit without
     # clipping the bottom of the second line.
     _maybe_patch_skin_dialog_subtitles_rows()
+
+    # Arctic Fuse 3 ships its subtitle dialog layout in a separate
+    # file (Dialog_DialogSubtitles.xml) referenced via a named
+    # include. The generic skin header patcher above won't find
+    # $INFO[Player.FileName] there because it's wrapped in a
+    # <param> rather than a <control type="label">. Dedicated AF3
+    # patcher handles that file -- skin-gated, no-op when AF3 isn't
+    # installed.
+    _maybe_patch_af3_dialog_subtitles()
 
     # Remove the v0.1.5-v0.1.7 misplaced injection into the wizard's
     # login_menu (the right menu was POV's, not the wizard's).

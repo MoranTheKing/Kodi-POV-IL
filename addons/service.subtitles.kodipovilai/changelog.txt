@@ -1,4 +1,20 @@
 v0.2.50
+- Arctic Fuse 3 subtitle-picker header now prefers our
+  subs.player_filename window property over Player.FileName (fixes
+  the TorBox CDN UUID-as-title regression that AF3 users would
+  have seen — same fix we shipped for FENtastic via
+  skin_dialog_subtitles_patcher, but adapted to AF3's structure).
+  Dedicated patcher af3_dialog_subtitles_patcher targets
+  skin.arctic.fuse.3/1080i/Dialog_DialogSubtitles.xml directly.
+  AF3 puts the header label in a <param> inside an include block
+  (not a <control type="label"> the generic patcher matches), so
+  this needs its own regex + injection logic. Solution: inject a
+  conditional <variable name="ai_subs_header_label"> at the top of
+  the file's <includes> root (priority: our window property; fallback:
+  Player.FileName), then swap the param value to $VAR[...]. Both
+  edits in the same file, atomic write, marker-gated, idempotent.
+  No-op when AF3 isn't installed -- self-heals on the next Kodi
+  startup after the user switches to AF3.
 - Arctic Fuse 3 first-launch dialog: when the user activates the
   new third skin option (skin.arctic.fuse.3) for the first time,
   show a one-shot Hebrew dialog offering to open POV's Connect
