@@ -1,3 +1,18 @@
+v0.2.56
+- New self-healing patcher all_subs_samefile_patcher: wraps the 6
+  shutil.copy() calls in service.subtitles.all_subs_plus's
+  setLanguageSettings() in try/except shutil.SameFileError. On
+  Windows (NTFS junctions/hardlinks) the unpatched AllSubs raises
+  SameFileError at module-load time when source and destination
+  language .po files resolve to the same inode, killing autosub.py
+  before Kodi even shows the home screen -- user-visible Python
+  error every PC boot, AllSubs functionality fully broken. Patch
+  is idempotent, marker-gated (AI_SUBS_ALL_SUBS_SAMEFILE_v1), and
+  no-op on installs without AllSubs. Smoke tested against the real
+  user's service.py: 7 copy lines wrapped (6 in setLanguageSettings
+  + 1 unrelated where the wrap is a harmless no-op for non-
+  SameFileError failures), patched file compiles cleanly, raw
+  SameFileError confirmed crashing pre-patch and absorbed post-patch.
 v0.2.55
 - Refreshed bundled staged_wizard.zip to wizard 0.1.12, which adds
   the missing transitive AF3 Python deps pack (jurialmunkey,

@@ -767,6 +767,45 @@ def _maybe_heal_wizard():
             pass
 
 
+def _maybe_patch_all_subs_samefile():
+    """Self-healing patch of service.subtitles.all_subs_plus/service.py
+    so that setLanguageSettings() can survive shutil.SameFileError on
+    Windows (NTFS junction / hardlink). The unpatched AllSubs raises
+    SameFileError at module-load time, which kills autosub.py before
+    Kodi even shows the home screen -- user-visible Python error every
+    boot, AllSubs functionality fully broken. We wrap each of the six
+    shutil.copy(src, dst) call sites inside setLanguageSettings in a
+    try/except shutil.SameFileError that silently absorbs the error
+    (intended behaviour: the destination is byte-identical to the
+    source already, so the copy is a no-op). Marker-gated, idempotent,
+    no-op on platforms where AllSubs isn't installed."""
+    try:
+        from resources.lib import (
+            all_subs_samefile_patcher, kodi_utils)
+    except Exception:
+        return
+    try:
+        status = all_subs_samefile_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'all_subs_samefile_patcher: setLanguageSettings '
+                'now absorbs SameFileError on Windows', level='INFO')
+        elif status in ('no_addon', 'no_file', 'already_patched'):
+            pass  # quiet steady-state -- AllSubs not installed or
+                  # patch already in place
+        else:
+            kodi_utils.log(
+                'all_subs_samefile_patcher: ' + status,
+                level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'all_subs_samefile_patcher failed: '
+                '{0}'.format(e), level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_af3_dialog_subtitles():
     """Self-healing patch of Arctic Fuse 3's Dialog_DialogSubtitles.xml
     so the subtitle picker dialog HEADER prefers our window property
@@ -1022,6 +1061,12 @@ def main():
     # patcher handles that file -- skin-gated, no-op when AF3 isn't
     # installed.
     _maybe_patch_af3_dialog_subtitles()
+
+    # AllSubs Plus crashes at import on Windows when shutil.copy hits a
+    # NTFS junction/hardlink (SameFileError). Patch its 6 copy lines in
+    # setLanguageSettings to absorb that specific exception so the
+    # addon survives to actually serve subtitles.
+    _maybe_patch_all_subs_samefile()
 
     # Remove the v0.1.5-v0.1.7 misplaced injection into the wizard's
     # login_menu (the right menu was POV's, not the wizard's).
