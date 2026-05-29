@@ -1,12 +1,20 @@
-109
+110
 |||
-תיקון נוחות מגע ל-Arctic Fuse 3 בטלפון
+תיקון AllSubs ב-Windows — שגיאת shutil.SameFileError בכל הפעלה
+**הבעיה שדיווחת:** בכל פעם שאתה נכנס ל-Kodi מהמחשב, מקבל תקלה של AllSubs בכניסה.
 
-**מה תוקן:**
-- מסך הבית של AF3 חוזר למצב שורות רגיל במקום בורר קטגוריות Combined, כי בטלפון הבורר הזה גרם ללחיצות לא מדויקות.
-- נוספה שורת בית גלויה בשם "כלים וחיבורים": חיבור שירותים, POV, הגדרות AI, עדכון מהיר, החלף סקין, שליחת לוג, טעינת סקין מחדש, הגדרות Kodi ויציאה.
-- השורה החדשה לא משתמשת ב-Custom_Submenu, אלא בתפריט אמיתי של ה-wizard, כדי שהלחיצות בטלפון יהיו יציבות יותר.
-- העלילה/פירוט הסרט במסך הבית עוברת ל-textbox עם גלילה אוטומטית, כדי שטקסט ארוך לא ייחתך אחרי כמה שורות.
+**הסיבה (מהלוג שלך):** ב-`service.subtitles.all_subs_plus/service.py:177` הקוד עושה `shutil.copy(source_file_en, __languageDirEn__)`. ב-NTFS של Windows, שני הנתיבים האלה (`resources/language_sources/original_en_gb_strings.po` ו-`resources/language/resource.language.en_gb/strings.po`) מצביעים על אותו inode פיזי (junction/hardlink). `shutil.copy` של Python זורק `SameFileError` בדיוק במצב הזה — autosub.py קורס בייבוא, כל התוסף AllSubs נשבר בהפעלה.
 
-**מה לעשות:**
-לאחר העדכון סגור ופתח את Kodi. אם AF3 עדיין נשאר על layout ישן, עבור רגע ל-FENtastic וחזרה ל-Arctic Fuse 3 כדי להכריח בנייה מחדש של מסך הבית.
+זה באג בקוד של AllSubs עצמו (לא שלנו).
+
+**מה תוקן (AI subs 0.2.62):**
+- patcher חדש self-healing שעוטף את 6 קריאות ה-`shutil.copy` ב-`setLanguageSettings` ב-`try/except shutil.SameFileError`. הקובץ הזהה כבר על הדיסק → ההעתקה מיותרת → הקריאה הופכת ל-no-op בשקט במקום קריסה.
+- marker-gated, idempotent — רץ פעם אחת, נשמר. אם AllSubs לא מותקן: no-op.
+- בדקתי על ה-service.py האמיתי שלך: 7 שורות נעטפו, הקובץ עובר py_compile נקי, ה-scenario של SameFileError אומת כקורס לפני התיקון ונעצר אחריו.
+
+**זרימה צפויה:**
+1. quick_update + restart.
+2. AI subs service רץ → מזהה service.py של AllSubs ללא marker → עוטף את 6 הקריאות → מסמן.
+3. הפעלות הבאות של Kodi: AllSubs יעלה נקי, בלי שגיאת SameFileError.
+
+quick_update + restart.
