@@ -416,18 +416,30 @@
       </div>
 
       <div class="step">
-        <h4>שלב ב' — התקן את ה-Wizard</h4>
+        <h4>שלב ב' — אפשר התקנה ממקורות לא ידועים (חובה ב-Kodi 21!)</h4>
+        <p><strong>בלי השלב הזה ההתקנה תיכשל בלי הסבר ברור.</strong> Kodi 21 חוסם התקנה מ-zip כברירת מחדל לאבטחה.</p>
+        <ul>
+          <li>Kodi → הגדרות (גלגל שיניים) → מערכת (System)</li>
+          <li>גלול ל-Add-ons (תוספים)</li>
+          <li>"Unknown sources" (מקורות לא ידועים) → הפעל ל-<strong>ON</strong></li>
+          <li>תופיע התראה — אישור</li>
+        </ul>
+      </div>
+
+      <div class="step">
+        <h4>שלב ג' — התקן את ה-Wizard</h4>
         <ul>
           <li>חזור ל-Kodi → Add-ons (בתפריט הראשי)</li>
           <li>לחץ על כפתור הקופסה בפינה השמאלית למעלה</li>
           <li>Install from zip file</li>
           <li>בחר <code>pov</code> → <code>plugin.program.kodipovilwizard-latest.zip</code></li>
+          <li>אם תופיע התראת אזהרה על מקור לא ידוע — אישור</li>
           <li>חכה להודעה "הותקן בהצלחה"</li>
         </ul>
       </div>
 
       <div class="step">
-        <h4>שלב ג' — אוטומטי</h4>
+        <h4>שלב ד' — אוטומטי</h4>
         <p>הוויזרד יזהה שאין בילד מותקן ויפעיל את עצמו אוטומטית. אין צורך לעשות כלום ידנית.</p>
         <ul>
           <li>הוויזרד ישאל אם לשמור הגדרות קיימות (Trakt, Debrid, Favorites וכו') — <strong>אשר את כולן</strong> אלא אם רוצה התקנה נקייה לחלוטין</li>
@@ -443,8 +455,11 @@
     <section id="filemanager">
       <h2>📂 שיטה 5 — התקנה דרך File Manager (ידנית מלאה)</h2>
       <p>עבור מי שרוצה שליטה מלאה ולא רוצה Source.</p>
+      <div class="callout warn">
+        <strong>חובה לפני התחלה ב-Kodi 21:</strong> Settings → System → Add-ons → "Unknown sources" → ON (ולאשר את ההתראה). בלי זה התקנת ה-zip תיכשל עם ההודעה "נכשל בהתקנת הרחבה מקובץ".
+      </div>
       <ul>
-        <li>הורד ידנית מ-GitHub: <code>plugin.program.kodipovilwizard-latest.zip</code> (הוויזרד) ו-<code>Kodi-POV-IL-FENtastic-test-0.1.9.zip</code> (הבילד)</li>
+        <li>הורד ידנית מ-GitHub: <code>plugin.program.kodipovilwizard-latest.zip</code> (הוויזרד) ו-<code>Kodi-POV-IL-FENtastic-test-0.1.10.zip</code> (הבילד)</li>
         <li>העתק את שני הקבצים למכשיר</li>
         <li>ב-Kodi: Add-ons → קופסה → Install from zip file → בחר את הוויזרד</li>
         <li>הפעל את הוויזרד דרך Programs ובחר Install Build → Install from local zip (ובחר את הזיפ של הבילד)</li>
@@ -462,7 +477,17 @@
       </div>
 
       <div class="step">
-        <h4>שלב ב' — התקן</h4>
+        <h4>שלב ב' — אפשר התקנה ממקורות לא ידועים (חובה ב-Kodi 21!)</h4>
+        <p><strong>בלי השלב הזה ההתקנה תיכשל עם ההודעה "נכשל בהתקנת הרחבה מקובץ".</strong></p>
+        <ul>
+          <li>Kodi → הגדרות (גלגל שיניים) → System → Add-ons</li>
+          <li>"Unknown sources" → ON</li>
+          <li>אשר את התראת האזהרה</li>
+        </ul>
+      </div>
+
+      <div class="step">
+        <h4>שלב ג' — התקן</h4>
         <ul>
           <li>ב-Kodi: Add-ons → קופסה → Install from zip file</li>
           <li>נווט לזיפ שהורדת → אשר</li>
@@ -471,7 +496,7 @@
       </div>
 
       <div class="step">
-        <h4>שלב ג' — הפעל אם דרוש</h4>
+        <h4>שלב ד' — הפעל אם דרוש</h4>
         <p>Add-ons → My add-ons → Subtitles → אם רואה את התוסף כ-Disabled → לחץ Enable</p>
       </div>
 
@@ -638,6 +663,16 @@
 
       <h3>"ההתקנה נכשלה" באנדרואיד</h3>
       <p>ייתכן שיש לך גרסה קודמת מותקנת עם חתימה שונה → הסר את האפליקציה הקיימת → התקן מחדש. בדוק שבחרת את הגרסה הנכונה (32-bit לרוב הסטרימרים, 64-bit לטלפונים / טאבלטים / Shield Pro 2019) — ראה <a href="#bits">סעיף 32/64-bit</a>.</p>
+
+      <h3>"נכשל בהתקנת הרחבה מקובץ" בתוך Kodi 21 (התקנת zip)</h3>
+      <p>זה Kodi 21 שחוסם <strong>Install from zip file</strong> כברירת מחדל לאבטחה. הפתרון:</p>
+      <ul>
+        <li>Kodi → הגדרות (גלגל שיניים) → System → Add-ons</li>
+        <li>"Unknown sources" → <strong>ON</strong></li>
+        <li>תופיע התראת אבטחה — אישור</li>
+        <li>חזור ל-Add-ons → Install from zip file → נסה שוב</li>
+      </ul>
+      <p class="muted">זה לא קשור ל-POV — Kodi 21 דורש את זה לכל זיפ של תוסף שלא מהמאגר הרשמי.</p>
 
       <h3>הוויזרד תקוע בהתקנה הראשונית</h3>
       <p>בדוק שיש אינטרנט יציב (לפחות 5Mbps). אם תקוע יותר מ-2 דקות — סגור את Kodi לחלוטין (לחיצה ארוכה על Home, בחירת Force Stop) ופתח מחדש. בפעם השנייה הוויזרד ימשיך מאיפה שעצר.</p>
