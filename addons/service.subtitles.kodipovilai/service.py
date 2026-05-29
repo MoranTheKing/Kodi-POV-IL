@@ -805,6 +805,39 @@ def _maybe_patch_af3_dialog_subtitles():
             pass
 
 
+def _maybe_patch_af3_home():
+    """Seed Arctic Fuse 3 with POV/FENtastic-style home widgets.
+
+    AF3's default home widgets are Kodi-library smart playlists, which
+    are empty in this streaming build and show "No Results" on fresh
+    installs. This writes script.skinvariables' per-user node JSON so
+    the AF3 home screen opens directly into POV rows: new movies,
+    trending shows, continue watching, personal lists, genres, AI
+    settings, and working wizard/power-menu actions."""
+    try:
+        from resources.lib import af3_home_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = af3_home_patcher.ensure_patched()
+        if status in ('patched', 'patched_rebuilt'):
+            kodi_utils.log(
+                'af3_home_patcher: seeded POV home nodes ({0})'
+                .format(status),
+                level='INFO')
+        elif status in ('no_af3', 'already_patched'):
+            pass
+        else:
+            kodi_utils.log('af3_home_patcher: ' + status,
+                           level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log('af3_home_patcher failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_darksubs_picker_height():
     """Self-healing patch of DarkSubs's sub_window.py so the picker's
     per-row height is doubled. The default pyxbmct.List _itemHeight
@@ -1022,6 +1055,12 @@ def main():
     # patcher handles that file -- skin-gated, no-op when AF3 isn't
     # installed.
     _maybe_patch_af3_dialog_subtitles()
+
+    # Arctic Fuse 3's upstream home is library-first and therefore
+    # empty in this POV streaming build. Seed script.skinvariables'
+    # per-user nodes so AF3 has useful POV rows and working power-menu
+    # actions on existing installs as soon as the quickfix lands.
+    _maybe_patch_af3_home()
 
     # Remove the v0.1.5-v0.1.7 misplaced injection into the wizard's
     # login_menu (the right menu was POV's, not the wizard's).

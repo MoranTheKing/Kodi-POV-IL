@@ -1,3 +1,22 @@
+v0.2.56
+- Arctic Fuse 3 POV home seed: AF3's upstream widgets point at Kodi
+  library smart-playlists (`InProgressMovies.xsp`, `NewMovies.xsp`,
+  etc.), which are empty in this streaming build and render as "No
+  Results" everywhere. New `af3_home_patcher` writes
+  script.skinvariables' per-user node JSON for `skin.arctic.fuse.3`
+  so existing installs receive POV/FENtastic-style rows on next Kodi
+  launch: new movies, trending shows, next episodes, in-progress
+  movies, TMDb personal lists, and Hebrew genre entry points.
+- AF3 submenu/power menu now includes working build actions: POV,
+  Connect Services, AI subtitle settings, Switch Skin, Quick Update,
+  Settings, Reload Skin, and Quit. This fixes the "power menu buttons
+  do nothing / no Switch Skin button" report without patching AF3 XML
+  directly, keeping the skin itself updatable.
+- The patch is idempotent and retroactive: if AF3 is already active it
+  forces a script.skinvariables rebuild + ReloadSkin; if AF3 is merely
+  installed it seeds the nodes silently so the next switch starts with
+  the POV home.
+
 v0.2.55
 - Refreshed bundled staged_wizard.zip to wizard 0.1.12, which adds
   the missing transitive AF3 Python deps pack (jurialmunkey,
