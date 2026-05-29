@@ -1,3 +1,20 @@
+[COLOR yellow][B]v0.1.12[/B][/COLOR]
+* AF3 Switch Skin fix #2: ship 4 transitive Python deps that the
+  AF3 skin scripts need (script.module.jurialmunkey 0.2.35,
+  script.module.infotagger 0.0.8, script.module.addon.signals,
+  script.module.qrcode). 0.1.11 finally let AF3 LOAD instead of
+  silently falling back to Estuary -- but it then hung forever on
+  "Initialising Skin..." because script.skinvariables crashed
+  with ModuleNotFoundError: No module named 'jurialmunkey'. With
+  skinvariables dead, the dynamically-generated includes file
+  (script-skinvariables-generator-includes-.xml) never landed, so
+  AF3's Startup.xml had no home content to render -> black screen.
+  Same root failure also blew up plugin.video.themoviedb.helper.
+  New tiny pack (139 KB) Kodi-POV-IL-AF3-deps-pack.zip pre-installs
+  + DB-registers the missing modules before the skin pack runs.
+* The packs list now leads with the deps pack so it's already on
+  disk by the time skinvariables / texturemaker / tmdbhelper try
+  to import anything.
 [COLOR yellow][B]v0.1.11[/B][/COLOR]
 * Switch Skin -> Arctic Fuse 3 now actually loads AF3 instead of
   silently falling back to Estuary. Root cause: ensure_arctic_
