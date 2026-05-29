@@ -1,3 +1,14 @@
+v0.2.59
+- AF3 mobile hotfix: removes the experimental "כלים וחיבורים"
+  `Custom_Submenu` home widget because it could trap focus/touch on
+  phones and leave the AF3 home screen blank or impossible to scroll.
+- The same critical actions are still available, but now through the
+  AF3 power menu: POV, Connect Services, AI subtitle settings, Send
+  Log, Switch Skin, Quick Update, Settings, Reload Skin, and Quit.
+- Patch marker bumped again so existing installs rewrite the AF3 home
+  nodes on the next Kodi launch/update and recover from the stuck
+  screen without reinstalling the full build.
+
 v0.2.58
 - AF3 tools row: adds a visible "כלים וחיבורים" home row so mobile
   users do not need to hunt through AF3's hidden submenu/power tray
