@@ -1,3 +1,15 @@
+v0.2.62
+- New self-healing patcher all_subs_samefile_patcher: wraps the 6
+  shutil.copy() calls in service.subtitles.all_subs_plus's
+  setLanguageSettings() in try/except shutil.SameFileError. On
+  Windows (NTFS junctions/hardlinks) the unpatched AllSubs raises
+  SameFileError at module-load time when source and destination
+  language .po files resolve to the same inode, killing autosub.py
+  before Kodi even shows the home screen -- user-visible Python
+  error every PC boot, AllSubs functionality fully broken. Patch
+  is idempotent, marker-gated (AI_SUBS_ALL_SUBS_SAMEFILE_v1), and
+  no-op on installs without AllSubs.
+
 v0.2.61
 - AF3 phone/touch pass: the home screen now uses Standard rows again
   instead of the Combined category selector, because the selector is
