@@ -135,12 +135,12 @@ msgid "Concurrent translation requests"
 msgstr "תרגומים במקביל (chunks)"
 
 msgctxt "#32405"
-msgid "Fast subtitles (experimental)"
-msgstr "כתוביות מהירות (ניסיוני)"
+msgid "Fast subtitles"
+msgstr "כתוביות מהירות"
 
 msgctxt "#32406"
-msgid "Show English fallback in seconds, swap to Hebrew as chunks land. DarkSubs path only."
-msgstr "מציג אנגלית מיד, מחליף לעברית תוך שניות. רק במסלול DarkSubs."
+msgid "English appears in seconds, swaps to Hebrew gradually as translation progresses."
+msgstr "אנגלית מופיעה תוך שניות, מתחלפת לעברית בהדרגה ככל שהתרגום מתקדם."
 
 msgctxt "#33000"
 msgid "AI Hebrew (translated from {0})"
