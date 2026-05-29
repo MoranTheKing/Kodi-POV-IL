@@ -271,6 +271,13 @@
           <level>3</level>
           <default></default>
         </setting>
+        <!-- Hidden marker: AF3 first-launch dialog has been shown
+             (and the user picked something other than 'remind me
+             later' / ESC). Read by af3_first_launch.py. -->
+        <setting id="af3_first_launch_dialog_done" type="boolean" label="30000" visible="false">
+          <level>3</level>
+          <default>false</default>
+        </setting>
       </group>
     </category>
 

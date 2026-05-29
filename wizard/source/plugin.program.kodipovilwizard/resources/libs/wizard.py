@@ -474,9 +474,22 @@ def wizard(action, name, url):
 # KODI-RD-IL - BUILD SKIN SWITCH
 def update_favourites_xml_file(gotoskin):
     try:
+        import os as _os
         import xbmcvfs
         source_favourites_xml = xbmcvfs.translatePath(f"special://home/media/builds_favourites_xml/{gotoskin}/favourites.xml")
         destination_favourites_xml = xbmcvfs.translatePath("special://userdata/favourites.xml")
+        # Some skins (e.g. skin.arctic.fuse.3) drive their home menu via
+        # script.skinvariables, not Kodi's favourites.xml. If we don't
+        # have a favourites.xml seed for the target skin, don't fail
+        # the switch -- the Kodi Favourites window will simply show
+        # whatever was last there. Skin switching itself should still
+        # succeed.
+        if not _os.path.isfile(source_favourites_xml):
+            logging.log(
+                f"DEBUG | update_favourites_xml_file | "
+                f"no seed at {source_favourites_xml}, leaving existing "
+                f"favourites.xml in place")
+            return True
         from shutil import copyfile
         copyfile(source_favourites_xml,destination_favourites_xml)
         return True
@@ -486,6 +499,172 @@ def update_favourites_xml_file(gotoskin):
         logging.log(f"DEBUG | update_favourites_xml_file | Exception: {str(e)}")
         return False
     
+
+#####################################################
+# KODI-POV-IL - ARCTIC FUSE 3 SUPPLEMENTAL INSTALL
+# AF3 + its 6 deps are too big to bundle inside the
+# regular build zip (font + studio assets push the
+# total past GitHub's 100 MB single-file limit). So
+# we ship them as 3 separate "pack" zips in dist/
+# and download+extract them on demand when the user
+# picks AF3 from Switch Skin. Idempotent: skips any
+# pack whose payload is already present on disk.
+
+# Per-pack URL + sentinel file. Sentinel is something
+# inside the pack that proves the pack was extracted.
+# If the sentinel exists, we skip the download.
+AF3_PACK_BASE_URL = "https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist"
+AF3_PACKS = [
+    {
+        'name': 'Arctic Fuse 3 - סקין + תוספים נדרשים',
+        'url': '{0}/Kodi-POV-IL-AF3-skin-pack.zip'.format(AF3_PACK_BASE_URL),
+        'filename': 'af3_skin_pack.zip',
+        'sentinel': 'special://home/addons/skin.arctic.fuse.3/addon.xml',
+    },
+    {
+        'name': 'Arctic Fuse 3 - פונטים',
+        'url': '{0}/Kodi-POV-IL-AF3-fonts-pack.zip'.format(AF3_PACK_BASE_URL),
+        'filename': 'af3_fonts_pack.zip',
+        'sentinel': 'special://home/addons/resource.font.robotocjksc/addon.xml',
+    },
+    {
+        'name': 'Arctic Fuse 3 - אייקוני סטודיו',
+        'url': '{0}/Kodi-POV-IL-AF3-studios-pack.zip'.format(AF3_PACK_BASE_URL),
+        'filename': 'af3_studios_pack.zip',
+        'sentinel': ('special://home/addons/'
+                     'resource.images.studios.coloured/addon.xml'),
+    },
+]
+
+
+def _af3_pack_installed(sentinel):
+    try:
+        import xbmcvfs
+        return xbmcvfs.exists(xbmcvfs.translatePath(sentinel))
+    except Exception:
+        return False
+
+
+def ensure_arctic_fuse_3_installed():
+    """Download + extract any AF3 packs that aren't already on disk.
+    Returns True if all packs are present at the end; False if any
+    failed. Best-effort: shows a progress dialog with per-pack labels;
+    on failure, surfaces a Hebrew notification and bails.
+
+    Reuses the wizard's existing Downloader + extract.all machinery
+    -- the same code that powers quick_update and Fresh Install --
+    so progress / cancel / error reporting all behave the same way."""
+    try:
+        all_ok = True
+        dialog_progress = xbmcgui.DialogProgress()
+        dialog_progress.create(
+            CONFIG.ADDONTITLE,
+            '[COLOR {0}][B]מוריד את Arctic Fuse 3 ותלויות[/B][/COLOR]'.format(
+                CONFIG.COLOR2))
+
+        for i, pack in enumerate(AF3_PACKS, start=1):
+            if dialog_progress.iscanceled():
+                dialog_progress.close()
+                return False
+
+            label = '[COLOR {0}][B]{1}/{2}[/B][/COLOR] - {3}'.format(
+                CONFIG.COLOR1, i, len(AF3_PACKS), pack['name'])
+            dialog_progress.update(
+                int((i - 1) / len(AF3_PACKS) * 100), label)
+
+            if _af3_pack_installed(pack['sentinel']):
+                logging.log(
+                    'AF3 pack already installed, skipping: {0}'.format(
+                        pack['name']))
+                continue
+
+            lib = os.path.join(CONFIG.PACKAGES, pack['filename'])
+            try:
+                if os.path.exists(lib):
+                    os.remove(lib)
+            except Exception:
+                pass
+
+            response = tools.open_url(pack['url'], check=True)
+            if not response:
+                dialog_progress.close()
+                logging.log_notify(
+                    CONFIG.ADDONTITLE,
+                    '[COLOR {0}]חבילת AF3 לא זמינה: {1}[/COLOR]'.format(
+                        CONFIG.COLOR2, pack['name']))
+                logging.log(
+                    'DEBUG | ensure_arctic_fuse_3_installed | '
+                    '{0} not reachable: {1}'.format(
+                        pack['name'], pack['url']))
+                return False
+
+            try:
+                Downloader().download(pack['url'], lib)
+            except Exception as e:
+                dialog_progress.close()
+                logging.log(
+                    'DEBUG | ensure_arctic_fuse_3_installed | '
+                    'download failed for {0}: {1}'.format(
+                        pack['name'], str(e)))
+                logging.log_notify(
+                    CONFIG.ADDONTITLE,
+                    '[COLOR {0}]כשל בהורדת חבילת AF3![/COLOR]'.format(
+                        CONFIG.COLOR2))
+                return False
+
+            xbmc.sleep(300)
+            if not os.path.exists(lib) or os.path.getsize(lib) == 0:
+                dialog_progress.close()
+                logging.log_notify(
+                    CONFIG.ADDONTITLE,
+                    '[COLOR {0}]חבילת AF3 ריקה: {1}[/COLOR]'.format(
+                        CONFIG.COLOR2, pack['name']))
+                return False
+
+            extract_title = (
+                '[COLOR {0}][B]מתקין:[/B][/COLOR] [COLOR {1}]{2}[/COLOR]'
+                .format(CONFIG.COLOR2, CONFIG.COLOR1, pack['name']))
+            try:
+                extract.all(lib, CONFIG.HOME, title=extract_title)
+            except Exception as e:
+                dialog_progress.close()
+                logging.log(
+                    'DEBUG | ensure_arctic_fuse_3_installed | '
+                    'extract failed for {0}: {1}'.format(
+                        pack['name'], str(e)))
+                logging.log_notify(
+                    CONFIG.ADDONTITLE,
+                    '[COLOR {0}]כשל בחילוץ חבילת AF3![/COLOR]'.format(
+                        CONFIG.COLOR2))
+                all_ok = False
+
+            try:
+                os.remove(lib)
+            except Exception:
+                pass
+
+        dialog_progress.update(
+            100,
+            '[COLOR {0}][B]Arctic Fuse 3 מוכן לשימוש[/B][/COLOR]'.format(
+                CONFIG.COLOR1))
+        xbmc.sleep(800)
+        dialog_progress.close()
+        return all_ok
+
+    except Exception as e:
+        try:
+            dialog_progress.close()
+        except Exception:
+            pass
+        logging.log(
+            'DEBUG | ensure_arctic_fuse_3_installed | '
+            'unexpected exception: {0}'.format(str(e)))
+        logging.log_notify(
+            CONFIG.ADDONTITLE,
+            '[COLOR {0}]שגיאה בהתקנת Arctic Fuse 3[/COLOR]'.format(
+                CONFIG.COLOR2))
+        return False
+
 
 def switch_skin_in_gui_settings(gotoskin):
     try:
@@ -519,13 +698,14 @@ def build_switch_skin():
         return
 
 
-    from resources.libs.gui import window   
-    msg = f"הסקינים הקיימים בבילד:\n1. סקין Estuary\n2. סקין FENtastic"
+    from resources.libs.gui import window
+    msg = f"הסקינים הקיימים בבילד:\n1. סקין Estuary\n2. סקין FENtastic\n3. סקין Arctic Fuse 3"
     window.show_notification_with_extra_image(msg, 888, CONFIG.BUILD_SKIN_SWITCH_IMAGE_URL)
 
     skin_mapping = {
         'סקין Estuary - מראה פשוט עם כפתורים': 'skin.estuary',
-        'סקין FENtastic - יפהפה': 'skin.fentastic'
+        'סקין FENtastic - יפהפה': 'skin.fentastic',
+        'סקין Arctic Fuse 3 - מודרני (ניסיוני)': 'skin.arctic.fuse.3'
     }
         
     # Get the name of the current active skin. If the user manually
@@ -559,13 +739,26 @@ def build_switch_skin():
                        yeslabel='[B][COLOR springgreen]החלף סקין[/COLOR][/B]')
 
     if yes_pressed:
+        # Arctic Fuse 3 is too big to bundle in the regular build
+        # zip (font + studio asset packs blow past GitHub's 100 MB
+        # per-file limit). Download + extract the supplemental packs
+        # on first switch to AF3. Idempotent: skips packs already on
+        # disk so re-switching is fast.
+        if gotoskin == 'skin.arctic.fuse.3':
+            if not ensure_arctic_fuse_3_installed():
+                logging.log_notify(
+                    CONFIG.ADDONTITLE,
+                    '[COLOR {0}]Arctic Fuse 3 לא הותקן - מבטל[/COLOR]'.format(
+                        CONFIG.COLOR2))
+                return
+
         dialogProgress = xbmcgui.DialogProgress()
         dialog_text = '[COLOR {0}][B]מחליף סקין ומגדיר את מסך הבית של:[/B][/COLOR]\n[COLOR {1}][B]{2}[/B][/COLOR]'.format(CONFIG.COLOR2, CONFIG.COLOR1, selected_skin)
         dialogProgress.create(CONFIG.ADDONTITLE, dialog_text)
         for s in range(3, -1, -1):
             dialogProgress.update(int((3 - s) / 3.0 * 100), dialog_text)
             xbmc.sleep(1000)
-            
+
         # guisettings.xml | Configure lookandfeel.skin setting
         if not switch_skin_in_gui_settings(gotoskin): return
         

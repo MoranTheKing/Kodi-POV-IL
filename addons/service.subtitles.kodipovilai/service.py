@@ -731,6 +731,44 @@ def _maybe_patch_skin_dialog_subtitles_rows():
             pass
 
 
+def _maybe_patch_af3_dialog_subtitles():
+    """Self-healing patch of Arctic Fuse 3's Dialog_DialogSubtitles.xml
+    so the subtitle picker dialog HEADER prefers our window property
+    `subs.player_filename` over the built-in `Player.FileName`. AF3's
+    structure differs from FENtastic/Estuary (the layout lives in a
+    secondary file referenced by `<include>DialogSubtitles</include>`,
+    not in DialogSubtitles.xml directly), so the generic header
+    patcher bails with 'no_target'. This dedicated AF3 patcher injects
+    a `<variable>` with conditional fallback semantics + swaps the
+    param-label to reference it. No-op if AF3 isn't installed."""
+    try:
+        from resources.lib import (
+            af3_dialog_subtitles_patcher, kodi_utils)
+    except Exception:
+        return
+    try:
+        status = af3_dialog_subtitles_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'af3_dialog_subtitles_patcher: header label now '
+                'prefers subs.player_filename with fallback to '
+                'Player.FileName', level='INFO')
+        elif status in ('no_af3', 'no_file', 'already_patched'):
+            pass  # quiet steady-state -- AF3 not installed yet or
+                  # patch already in place
+        else:
+            kodi_utils.log(
+                'af3_dialog_subtitles_patcher: ' + status,
+                level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'af3_dialog_subtitles_patcher failed: '
+                '{0}'.format(e), level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_darksubs_picker_height():
     """Self-healing patch of DarkSubs's sub_window.py so the picker's
     per-row height is doubled. The default pyxbmct.List _itemHeight
@@ -783,6 +821,42 @@ def _maybe_purge_temp_once():
         try:
             kodi_utils.log('Temp purge failed: {0}'.format(e),
                            level='ERROR')
+        except Exception:
+            pass
+
+
+def _maybe_show_af3_first_launch_dialog():
+    """One-shot: if Arctic Fuse 3 is the active skin and we've never
+    shown the first-launch dialog before, prompt the user to connect
+    Trakt + TMDb via POV's Connect Services. AF3 needs both to
+    populate its hubs; without them the home screen is empty and
+    new users assume the skin is broken.
+
+    Runs once per profile; the marker lives in our addon's settings.
+    Has its own internal "remind me later" path that intentionally
+    doesn't set the marker, so the user gets re-prompted next launch.
+
+    Skin-gated -- a no-op on FENtastic / Estuary / any other skin --
+    so existing-build users aren't disturbed when this addon ships
+    via quickfix."""
+    try:
+        from resources.lib import af3_first_launch, kodi_utils
+    except Exception:
+        return
+    try:
+        status = af3_first_launch.maybe_show()
+        if status not in ('not_af3', 'already_done'):
+            try:
+                kodi_utils.log(
+                    'af3_first_launch dialog status: {0}'.format(status),
+                    level='INFO')
+            except Exception:
+                pass
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'af3_first_launch failed: {0}'.format(e),
+                level='WARNING')
         except Exception:
             pass
 
@@ -897,6 +971,15 @@ def main():
     # clipping the bottom of the second line.
     _maybe_patch_skin_dialog_subtitles_rows()
 
+    # Arctic Fuse 3 ships its subtitle dialog layout in a separate
+    # file (Dialog_DialogSubtitles.xml) referenced via a named
+    # include. The generic skin header patcher above won't find
+    # $INFO[Player.FileName] there because it's wrapped in a
+    # <param> rather than a <control type="label">. Dedicated AF3
+    # patcher handles that file -- skin-gated, no-op when AF3 isn't
+    # installed.
+    _maybe_patch_af3_dialog_subtitles()
+
     # Remove the v0.1.5-v0.1.7 misplaced injection into the wizard's
     # login_menu (the right menu was POV's, not the wizard's).
     _maybe_cleanup_wizard()
@@ -950,6 +1033,15 @@ def main():
     # One-shot: flip `fast_first_chunk` default from off -> on for
     # existing users on the old default. Marker-gated.
     _maybe_default_fast_first_chunk()
+
+    # One-shot first-launch dialog for Arctic Fuse 3. Skin-gated +
+    # marker-gated so it only fires for users who have actually
+    # switched to AF3 (via the wizard's Switch Skin dialog or Kodi's
+    # own Interface settings) and haven't been prompted before. POV's
+    # Connect Services is opened on the user's behalf for the
+    # service(s) they pick. Best-effort: this addon doesn't own AF3's
+    # OAuth flows -- POV does.
+    _maybe_show_af3_first_launch_dialog()
 
     # Spin up the SubsFilenamePublisher player monitor. It needs to
     # outlive this function's local scope -- xbmc.Player subclasses

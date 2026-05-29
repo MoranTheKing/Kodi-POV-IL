@@ -1,3 +1,35 @@
+v0.2.50
+- Arctic Fuse 3 subtitle-picker header now prefers our
+  subs.player_filename window property over Player.FileName (fixes
+  the TorBox CDN UUID-as-title regression that AF3 users would
+  have seen — same fix we shipped for FENtastic via
+  skin_dialog_subtitles_patcher, but adapted to AF3's structure).
+  Dedicated patcher af3_dialog_subtitles_patcher targets
+  skin.arctic.fuse.3/1080i/Dialog_DialogSubtitles.xml directly.
+  AF3 puts the header label in a <param> inside an include block
+  (not a <control type="label"> the generic patcher matches), so
+  this needs its own regex + injection logic. Solution: inject a
+  conditional <variable name="ai_subs_header_label"> at the top of
+  the file's <includes> root (priority: our window property; fallback:
+  Player.FileName), then swap the param value to $VAR[...]. Both
+  edits in the same file, atomic write, marker-gated, idempotent.
+  No-op when AF3 isn't installed -- self-heals on the next Kodi
+  startup after the user switches to AF3.
+- Arctic Fuse 3 first-launch dialog: when the user activates the
+  new third skin option (skin.arctic.fuse.3) for the first time,
+  show a one-shot Hebrew dialog offering to open POV's Connect
+  Services so they can authorise Trakt + TMDb. AF3 populates its
+  home hubs from those services; without them the home screen is
+  empty and looks broken. The dialog options are: Connect both /
+  Just Trakt / Just TMDb / Remind me later / No thanks. We just
+  open POV's Connect Services dialog -- we don't run Trakt's or
+  TMDb's OAuth ourselves. Marker-gated on a hidden addon setting
+  (`af3_first_launch_dialog_done`); skin-gated on
+  `xbmc.getSkinDir() == 'skin.arctic.fuse.3'` so this is a no-op
+  for FENtastic / Estuary / any other skin -- existing users
+  receiving this via quickfix are not disturbed. New module:
+  resources/lib/af3_first_launch.py.
+
 v0.2.49
 - Subtitle picker (round 3, the actually-right target): the dialog
   the user sees with the services panel + per-row flag + filename
