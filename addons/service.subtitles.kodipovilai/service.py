@@ -653,6 +653,41 @@ def _maybe_patch_skin_dialog_subtitles():
             pass
 
 
+def _maybe_patch_darksubs_picker_label():
+    """Self-healing patch of DarkSubs's custom picker dialog XML so
+    long release-name labels in each row marquee-scroll horizontally
+    instead of getting cut off mid-wrap. Idempotent via marker; only
+    touches `<control type="label">` blocks that reference
+    ListItem.Label / ListItem.Label2 (the per-row provider + release
+    name)."""
+    try:
+        from resources.lib import darksubs_picker_label_patcher, \
+            kodi_utils
+    except Exception:
+        return
+    try:
+        status = darksubs_picker_label_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'darksubs_picker_label_patcher: row labels now '
+                'marquee-scroll instead of truncating',
+                level='INFO')
+        elif status in ('no_darksubs', 'already_patched',
+                        'nothing_to_patch'):
+            pass  # quiet steady-state
+        else:
+            kodi_utils.log(
+                'darksubs_picker_label_patcher: ' + status,
+                level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'darksubs_picker_label_patcher failed: '
+                '{0}'.format(e), level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_purge_temp_once():
     try:
         from resources.lib import local_subs, kodi_utils
@@ -760,6 +795,12 @@ def main():
     # if our other patchers set the property, the dialog title still
     # shows the URL basename / UUID.
     _maybe_patch_skin_dialog_subtitles()
+
+    # Patch DarkSubs's custom picker XML so long release-name labels
+    # in each row marquee-scroll instead of getting clipped mid-wrap
+    # (user-reported: release group at the END of the filename was
+    # invisible because the second wrap line got cut off).
+    _maybe_patch_darksubs_picker_label()
 
     # Remove the v0.1.5-v0.1.7 misplaced injection into the wizard's
     # login_menu (the right menu was POV's, not the wizard's).

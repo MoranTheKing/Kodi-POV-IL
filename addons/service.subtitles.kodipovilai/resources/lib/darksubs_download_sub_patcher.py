@@ -35,6 +35,7 @@
 # -- see darksubs_patcher.py).
 
 import os
+import re
 
 try:
     import xbmcvfs
@@ -58,30 +59,49 @@ OLD_MARKERS = ['# AI_DOWNLOAD_SUB_ELIF_v1']
 # (matches DarkSubs's style in download_sub) followed by a line
 # terminator -- handled in ensure_patched() with both \r\n and \n
 # variants so we work on whichever line-ending style the file is in.
+# Kept for the v1 self-migration path below (which matched on it).
 OLD_LINE_BODY = (
     '    elif Addon.getSetting("auto_translate")==\'true\':'
 )
 
-# v2 NEW_LINE: gates the AI-key arm of the elif behind both
-#   1. our api_key being set, AND
-#   2. our explicit "force_ai_when_auto_translate_off" toggle being
-#      enabled in service.subtitles.kodipovilai's settings.
-# Without (2), users who deliberately keep auto_translate OFF
-# *because they want subtitles in the source language* (e.g.
-# language learners watching English with English subs) would get
-# their subs surprise-translated to Hebrew -- which is the exact
-# opposite of what they wanted from "auto_translate=off". The
-# default for force_ai_when_auto_translate_off is false, so this
-# is opt-in: users who want AI even with auto_translate off flip
-# the toggle in our addon settings.
-NEW_LINE_BODY = (
-    '    elif Addon.getSetting("auto_translate")==\'true\' or ('
-    '(__import__(\'xbmcaddon\').Addon(\'service.subtitles.kodipovilai\')'
-    '.getSetting(\'api_key\') or \'\').strip() and '
-    '__import__(\'xbmcaddon\').Addon(\'service.subtitles.kodipovilai\')'
-    '.getSetting(\'force_ai_when_auto_translate_off\') == \'true\''
-    '):  ' + MARKER
+# Flexible matcher for the auto_translate elif. Different DarkSubs
+# builds vary on:
+#   * indentation (kept verbatim via group 'indent')
+#   * the addon-handle variable name (Addon / _Addon / addon ...),
+#     captured via group 'addon' so the rewrite reuses it
+#   * quote style around 'auto_translate' and 'true' (" vs ')
+#   * spacing around == and inside getSetting(...)
+# User report (v0.2.49): a wizard-on-existing-Kodi install had a
+# DarkSubs whose elif line didn't byte-match OLD_LINE_BODY, so the
+# patch returned 'unmatched', the hook never fired on manual picks,
+# and English stayed on screen. The regex below matches the
+# semantically-equivalent line regardless of those cosmetic
+# differences. Anchored per-line; we require EXACTLY ONE match or
+# we bail (so we never rewrite the wrong line).
+_ELIF_RE = re.compile(
+    rb'^(?P<indent>[ \t]*)elif[ \t]+'
+    rb'(?P<addon>[A-Za-z_][A-Za-z0-9_.]*)\.getSetting\([ \t]*'
+    rb'["\']auto_translate["\'][ \t]*\)[ \t]*==[ \t]*'
+    rb'["\']true["\'][ \t]*:[ \t]*(?:\r?\n|$)',
+    re.MULTILINE,
 )
+
+
+def _build_new_line(indent, addon, eol):
+    """Reconstruct the elif preserving the file's own indentation and
+    addon-handle variable name, appending the AI-key OR-arm + marker.
+    Operates on bytes."""
+    return (
+        indent + b'elif ' + addon
+        + b'.getSetting("auto_translate")==\'true\' or ('
+        b'(__import__(\'xbmcaddon\').Addon('
+        b'\'service.subtitles.kodipovilai\')'
+        b'.getSetting(\'api_key\') or \'\').strip() and '
+        b'__import__(\'xbmcaddon\').Addon('
+        b'\'service.subtitles.kodipovilai\')'
+        b'.getSetting(\'force_ai_when_auto_translate_off\') == \'true\''
+        b'):  ' + MARKER.encode('utf-8') + eol
+    )
 
 
 def _log(msg, level='INFO'):
@@ -131,7 +151,9 @@ def ensure_patched():
     """Rewrite download_sub's auto_translate elif so it ALSO fires
     when our AI key is set AND the force_ai_when_auto_translate_off
     toggle is on. Idempotent. Self-migrates a v1-shipped variant
-    that did not gate on the toggle.
+    that did not gate on the toggle. Matching is regex-based so it
+    tolerates cosmetic differences across DarkSubs builds (quote
+    style, spacing, indentation, addon-handle variable name).
     """
     path = _engine_path()
     if not path:
@@ -145,35 +167,46 @@ def ensure_patched():
     if MARKER.encode('utf-8') in content:
         return 'already_patched'
 
-    # Detect EOL style and rebuild patterns to match.
+    # Detect EOL style.
     eol = b'\r\n' if b'\r\n' in content[:8192] else b'\n'
-    vanilla_line = OLD_LINE_BODY.encode('utf-8') + eol
 
     # Self-migration: if a previous version of this patch (gated on
     # AI key only, no toggle) is present, revert it back to the
     # vanilla line first so the v2 rewrite below can do the right
-    # substitution. The previous lines we shipped all started with
-    # OLD_LINE_BODY and ended with one of the OLD_MARKERS as a
-    # trailing comment.
-    import re as _re
+    # substitution. The v1 line we shipped started with the exact
+    # OLD_LINE_BODY and ended with the old marker as a trailing
+    # comment, so an exact-style revert is correct here.
+    vanilla_line_exact = OLD_LINE_BODY.encode('utf-8') + eol
     for old_marker in OLD_MARKERS:
-        # Match: indent + the elif line body + anything ending with
-        # the old marker + EOL.
-        pat = (_re.escape(OLD_LINE_BODY.encode('utf-8'))
-               + b'[^\r\n]*?' + _re.escape(old_marker.encode('utf-8'))
-               + b'[^\r\n]*?' + _re.escape(eol))
-        if _re.search(pat, content):
-            content = _re.sub(pat, vanilla_line, content, count=1)
+        pat = (re.escape(OLD_LINE_BODY.encode('utf-8'))
+               + b'[^\r\n]*?' + re.escape(old_marker.encode('utf-8'))
+               + b'[^\r\n]*?' + re.escape(eol))
+        if re.search(pat, content):
+            content = re.sub(pat, vanilla_line_exact, content, count=1)
             _log('reverted older v1 inject before re-applying v2',
                  level='INFO')
 
-    if vanilla_line not in content:
+    # Flexible match of the (now-vanilla) elif line. Require EXACTLY
+    # ONE match -- 0 means DarkSubs upstream changed beyond what we
+    # recognise (leave it alone; auto_translate=ON still routes
+    # through the main hook), >1 means an ambiguous file we refuse
+    # to rewrite blind.
+    matches = list(_ELIF_RE.finditer(content))
+    if len(matches) == 0:
         _log('download_sub auto_translate elif not found -- '
-             'DarkSubs upstream may have changed', level='WARNING')
+             'DarkSubs upstream may have changed. auto_translate=ON '
+             'still works via the main hook.', level='WARNING')
+        return 'unmatched'
+    if len(matches) > 1:
+        _log('download_sub auto_translate elif matched {0} times -- '
+             'refusing to rewrite ambiguously'.format(len(matches)),
+             level='WARNING')
         return 'unmatched'
 
-    new_line = NEW_LINE_BODY.encode('utf-8') + eol
-    new_content = content.replace(vanilla_line, new_line, 1)
+    m = matches[0]
+    new_line = _build_new_line(m.group('indent'), m.group('addon'), eol)
+    new_content = content[:m.start()] + new_line + content[m.end():]
+
     tmp_path = path + '.aitmp'
     try:
         with open(tmp_path, 'wb') as f:
@@ -188,7 +221,7 @@ def ensure_patched():
         return 'write_failed'
 
     _invalidate_pyc_cache(path)
-    _log('rewrote download_sub elif so AI key + force-toggle '
-         'triggers translation with auto_translate=OFF',
+    _log('rewrote download_sub elif (flexible match) so AI key + '
+         'force-toggle triggers translation with auto_translate=OFF',
          level='INFO')
     return 'patched'
