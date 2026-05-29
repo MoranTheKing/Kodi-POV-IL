@@ -1,3 +1,18 @@
+v0.2.52
+- Wizard self-healer v2: bundled instead of downloaded. User
+  report after v1 ship: no toast appeared after quick_update +
+  restart -- the v1 healer was silently failing (most likely an
+  SSL/urllib edge case on the user's Android Kodi build). v2 ships
+  the wizard zip *inside* this addon (resources/staged_wizard.zip)
+  and the healer reads from disk. No network, no SSL, no CDN. Also
+  swapped the success-path notification from a transient toast
+  (8s) to a modal Dialog().ok the user must acknowledge -- prevents
+  the "didn't see the message, didn't know to restart" failure
+  mode. Failure paths now toast Hebrew error text so users have
+  signal when something can't complete (was completely silent in
+  v1). Adds best-effort __pycache__ cleanup so Python picks up the
+  new .py files cleanly on next boot. Marker bumped to v2 so
+  installs that ran v1 (and got nothing) re-try with v2's path.
 v0.2.51
 - Wizard self-healer (new module wizard_self_healer.py) rides this
   addon's quickfix path to recover users stuck on a pre-0.1.10
