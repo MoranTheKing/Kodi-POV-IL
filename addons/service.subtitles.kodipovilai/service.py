@@ -659,7 +659,15 @@ def _maybe_patch_darksubs_picker_label():
     instead of getting cut off mid-wrap. Idempotent via marker; only
     touches `<control type="label">` blocks that reference
     ListItem.Label / ListItem.Label2 (the per-row provider + release
-    name)."""
+    name).
+
+    NOTE (post-#157 retrospective): DarkSubs ships no
+    resources/skins/ folder at all -- the picker is a pyxbmct dialog
+    built in Python (resources/modules/sub_window.py). This patcher
+    is kept around for self-healing (no-op when there's no skins
+    folder) and to cover any future DarkSubs version that does add
+    skin XMLs. The actual fix for the wrap-clip issue lives in
+    _maybe_patch_darksubs_picker_height() below."""
     try:
         from resources.lib import darksubs_picker_label_patcher, \
             kodi_utils
@@ -683,6 +691,40 @@ def _maybe_patch_darksubs_picker_label():
         try:
             kodi_utils.log(
                 'darksubs_picker_label_patcher failed: '
+                '{0}'.format(e), level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_darksubs_picker_height():
+    """Self-healing patch of DarkSubs's sub_window.py so the picker's
+    per-row height is doubled. The default pyxbmct.List _itemHeight
+    of 27 px fits only one line; long release names wrap to a second
+    line that the row clips, hiding the release group at the end
+    (the part the user actually needs to identify the file). 60 px
+    fits both lines cleanly."""
+    try:
+        from resources.lib import darksubs_picker_height_patcher, \
+            kodi_utils
+    except Exception:
+        return
+    try:
+        status = darksubs_picker_height_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'darksubs_picker_height_patcher: row height bumped '
+                'so wrapped release names display fully',
+                level='INFO')
+        elif status in ('no_darksubs', 'already_patched'):
+            pass  # quiet steady-state
+        else:
+            kodi_utils.log(
+                'darksubs_picker_height_patcher: ' + status,
+                level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'darksubs_picker_height_patcher failed: '
                 '{0}'.format(e), level='WARNING')
         except Exception:
             pass
@@ -797,10 +839,19 @@ def main():
     _maybe_patch_skin_dialog_subtitles()
 
     # Patch DarkSubs's custom picker XML so long release-name labels
-    # in each row marquee-scroll instead of getting clipped mid-wrap
-    # (user-reported: release group at the END of the filename was
-    # invisible because the second wrap line got cut off).
+    # in each row marquee-scroll instead of getting clipped mid-wrap.
+    # (No-op when DarkSubs has no skins folder, which it doesn't on
+    # current builds -- the real fix for that case is the height
+    # patcher below.)
     _maybe_patch_darksubs_picker_label()
+
+    # Bump DarkSubs's pyxbmct picker row height so wrapped release
+    # names display fully. User report (post-#157): release group at
+    # the end of the filename still clipped on the picker because
+    # the dialog is a Python-built pyxbmct.List, not an XML file --
+    # so the XML patcher above had nothing to bite into. This one
+    # rewrites sub_window.py to pass _itemHeight=60 to the list.
+    _maybe_patch_darksubs_picker_height()
 
     # Remove the v0.1.5-v0.1.7 misplaced injection into the wizard's
     # login_menu (the right menu was POV's, not the wizard's).
