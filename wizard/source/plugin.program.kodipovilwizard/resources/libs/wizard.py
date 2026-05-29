@@ -522,6 +522,7 @@ def update_favourites_xml_file(gotoskin):
 # inside the pack that proves the pack was extracted.
 # If the sentinel exists, we skip the download.
 AF3_PACK_BASE_URL = "https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist"
+AF3_CE_SKIN_VERSION = '6.3.2.9'
 # 'addon_ids' lists every addon folder the pack ships. We register
 # these in Kodi's Addons DB (enabled) whether the pack is freshly
 # extracted OR already on disk from a previous switch attempt --
@@ -557,6 +558,7 @@ AF3_PACKS = [
         'url': '{0}/Kodi-POV-IL-AF3-skin-pack.zip'.format(AF3_PACK_BASE_URL),
         'filename': 'af3_skin_pack.zip',
         'sentinel': 'special://home/addons/skin.arctic.fuse.3/addon.xml',
+        'expected_version': AF3_CE_SKIN_VERSION,
         'addon_ids': [
             'skin.arctic.fuse.3',
             'script.skinvariables',
@@ -612,6 +614,35 @@ def _af3_pack_installed(sentinel):
         return False
 
 
+def _af3_read_addon_version(addon_xml):
+    try:
+        import re
+        import xbmcvfs
+        path = xbmcvfs.translatePath(addon_xml)
+        with open(path, 'r', encoding='utf-8') as fh:
+            text = fh.read(400)
+        match = re.search(r'\bversion="([^"]+)"', text)
+        return match.group(1) if match else ''
+    except Exception:
+        return ''
+
+
+def _af3_pack_current(pack):
+    if not _af3_pack_installed(pack['sentinel']):
+        return False
+    expected = pack.get('expected_version')
+    if not expected:
+        return True
+    current = _af3_read_addon_version(pack['sentinel'])
+    if current == expected:
+        return True
+    logging.log(
+        'AF3 pack version mismatch, forcing reinstall: {0} '
+        'current={1} expected={2}'.format(
+            pack['name'], current or 'missing', expected))
+    return False
+
+
 def ensure_arctic_fuse_3_installed():
     """Download + extract any AF3 packs that aren't already on disk.
     Returns True if all packs are present at the end; False if any
@@ -639,7 +670,7 @@ def ensure_arctic_fuse_3_installed():
             dialog_progress.update(
                 int((i - 1) / len(AF3_PACKS) * 100), label)
 
-            if _af3_pack_installed(pack['sentinel']):
+            if _af3_pack_current(pack):
                 # Files already on disk (this user switched to AF3
                 # before, possibly with the old DB-less code). Skip the
                 # 50-60 MB re-download/extract -- but STILL re-register

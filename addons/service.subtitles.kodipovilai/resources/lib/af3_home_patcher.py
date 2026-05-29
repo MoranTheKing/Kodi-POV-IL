@@ -28,7 +28,8 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-05-30-pov-home-v4'
+PATCH_VERSION = '2026-05-30-pov-home-v5'
+AF3_CE_VERSION = '6.3.2.9'
 
 BASE_NODES = 'special://profile/addon_data/script.skinvariables/nodes/'
 AF3_NODES = BASE_NODES + AF3_SKIN_ID + '/'
@@ -36,6 +37,9 @@ AF3_FONT_XML = 'special://home/addons/' + AF3_SKIN_ID + '/1080i/Font.xml'
 AF3_FONT_DIR = 'special://home/addons/' + AF3_SKIN_ID + '/fonts/'
 AF3_NOTO_FONT = AF3_FONT_DIR + 'NotoSans-Regular.ttf'
 AF3_XML_DIR = 'special://home/addons/' + AF3_SKIN_ID + '/1080i/'
+AF3_HEBREW_PO = (
+    'special://home/addons/' + AF3_SKIN_ID +
+    '/language/resource.language.he_il/strings.po')
 POV_NAVIGATOR_DB = 'special://profile/addon_data/plugin.video.pov/navigator.db'
 POV_MEDIA_BASE = 'special://home/addons/plugin.video.pov/resources/skins/Default/media/'
 BUNDLED_NOTO_FONT = os.path.join(
@@ -75,6 +79,28 @@ FONT_XML = '''<?xml version="1.0" encoding="UTF-8"?>
         </include>
     </fontset>
 </fonts>
+'''
+
+
+HEBREW_STRINGS_PO = '''# Kodi Media Center language file
+# Addon Name: Arctic Fuse 3
+# Language: Hebrew
+
+msgid ""
+msgstr ""
+"Project-Id-Version: Arctic Fuse 3 POV IL\\n"
+"Language: he_IL\\n"
+"MIME-Version: 1.0\\n"
+"Content-Type: text/plain; charset=UTF-8\\n"
+"Content-Transfer-Encoding: 8bit\\n"
+
+msgctxt "#31077"
+msgid "More Information"
+msgstr "מידע נוסף"
+
+msgctxt "#31600"
+msgid "Ends at"
+msgstr "מסתיים ב-"
 '''
 
 
@@ -330,6 +356,37 @@ def _copy(src, dst):
         fh.write(data)
 
 
+def _read_af3_version():
+    addon_xml = 'special://home/addons/' + AF3_SKIN_ID + '/addon.xml'
+    if not _exists(addon_xml):
+        return ''
+    try:
+        text = _read(addon_xml)[:400]
+    except Exception:
+        return ''
+    marker = 'version="'
+    pos = text.find(marker)
+    if pos < 0:
+        return ''
+    start = pos + len(marker)
+    end = text.find('"', start)
+    return text[start:end] if end > start else ''
+
+
+def _request_ce_skin_upgrade():
+    if xbmc is None:
+        return False
+    if _read_af3_version() == AF3_CE_VERSION:
+        return False
+    try:
+        xbmc.executebuiltin(
+            'RunPlugin("plugin://plugin.program.kodipovilwizard/'
+            '?mode=install&action=install_af3_ce")')
+        return True
+    except Exception:
+        return False
+
+
 def _json(data):
     return json.dumps(data, ensure_ascii=False, indent=4) + '\n'
 
@@ -364,6 +421,22 @@ def _patch_font_xml():
         pass
     _write(AF3_FONT_XML, FONT_XML)
     return True
+
+
+def _patch_hebrew_language():
+    current = ''
+    if _exists(AF3_HEBREW_PO):
+        try:
+            current = _read(AF3_HEBREW_PO)
+        except Exception:
+            current = ''
+    if current == HEBREW_STRINGS_PO:
+        return False
+    try:
+        _write(AF3_HEBREW_PO, HEBREW_STRINGS_PO)
+        return True
+    except Exception:
+        return False
 
 
 def _patch_pov_genre_icons():
@@ -454,9 +527,20 @@ def _set_af3_runtime_defaults():
         return
     commands = [
         'Skin.SetString(CustomRating.Movies.Item01,TMDb)',
-        'Skin.SetString(CustomRating.Movies.Item02,Trakt)',
+        'Skin.SetString(CustomRating.Movies.Item02,IMDb)',
+        'Skin.SetString(CustomRating.Movies.Item03,RottenTomatoesUser)',
         'Skin.SetString(CustomRating.TVShows.Item01,TMDb)',
-        'Skin.SetString(CustomRating.TVShows.Item02,Trakt)',
+        'Skin.SetString(CustomRating.TVShows.Item02,IMDb)',
+        'Skin.SetString(CustomRating.TVShows.Item03,Trakt)',
+        'Skin.Reset(HomeSwitcher.Vertical)',
+        'Skin.SetString(HomeSwitcher.Home.Mode,Combined)',
+        'Skin.SetString(HomeSwitcher.1101.Mode,Combined)',
+        'Skin.SetString(HomeSwitcher.1102.Mode,Combined)',
+        'Skin.SetString(HomeSwitcher.Home.Spotlight.Path,plugin://plugin.video.pov/?action=tmdb_movies_latest_releases&iconImage=dvd.png&mode=build_movie_list&name=32461)',
+        'Skin.SetString(HomeSwitcher.Home.Spotlight.Target,videos)',
+        'Skin.SetString(HomeSwitcher.Home.Spotlight.Label,סרטים חדשים)',
+        'Skin.SetString(HomeSwitcher.Home.Spotlight.Limit,10)',
+        'Skin.SetString(HomeSwitcher.Home.Shortcut.Path,ActivateWindow(1181))',
         'Skin.Reset(TMDbHelper.DisableRatings)',
         'Skin.SetBool(TMDbHelper.EnableData)',
         'Skin.SetBool(TMDbHelper.Service)',
@@ -490,6 +574,9 @@ def _rebuild_af3_shortcuts():
     xbmc.executebuiltin('RunScript(script.skinvariables,action=buildtemplate,force=True,background=true)')
     xbmc.sleep(1200)
     xbmc.executebuiltin('ReloadSkin()')
+    xbmc.sleep(1800)
+    xbmc.executebuiltin('SetFocus(310)')
+    xbmc.executebuiltin('AlarmClock(POVAF3FocusSpotlight,SetFocus(310),00:02,silent)')
 
 
 def ensure_patched():
@@ -498,11 +585,14 @@ def ensure_patched():
     if not _exists('special://home/addons/' + AF3_SKIN_ID + '/addon.xml'):
         return 'no_af3'
 
+    upgrade_requested = _request_ce_skin_upgrade()
+
     _mkdir(AF3_NODES)
     changed = False
     for filename, data in FILES.items():
         changed = _write_if_changed(filename, data) or changed
     changed = _patch_font_xml() or changed
+    changed = _patch_hebrew_language() or changed
     changed = _patch_pov_genre_icons() or changed
     changed = _patch_touch_cleanup_xml() or changed
     if _is_af3_active():
@@ -521,6 +611,8 @@ def ensure_patched():
     if changed and _is_af3_active():
         _rebuild_af3_shortcuts()
         return 'patched_rebuilt'
+    if upgrade_requested:
+        return 'upgrade_requested'
     if changed:
         return 'patched'
     return 'already_patched'
