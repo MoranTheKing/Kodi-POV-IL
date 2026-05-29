@@ -1,4 +1,19 @@
 v0.2.49
+- DarkSubs picker: long release-name labels in each row now
+  marquee-scroll horizontally instead of getting cut off mid-wrap.
+  User screenshot showed entries like "Legends.2026.S01E03.This.is.
+  Liverpool.720p.NF.WEB-DL..." wrapping to a second line that the
+  fixed row height clipped, hiding the release group at the end --
+  the part the user actually needs to identify the file. New
+  darksubs_picker_label_patcher walks DarkSubs's resources/skins/
+  XMLs and adds `<scroll>true</scroll>` to label controls that
+  reference ListItem.Label / ListItem.Label2 (only the per-row
+  labels, never the dialog header or buttons). Idempotent via
+  marker, self-healing on every Kodi startup so a DarkSubs update
+  can't permanently revert it. Skips files that already have
+  scroll set; skips files with no matching labels (no false
+  positives on misc XML).
+
 - DarkSubs download_sub patch now matches flexibly. User report:
   a wizard-on-existing-Kodi install had a DarkSubs whose
   download_sub auto_translate elif didn't byte-match our hardcoded
