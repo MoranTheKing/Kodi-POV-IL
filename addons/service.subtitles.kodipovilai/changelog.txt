@@ -1,4 +1,18 @@
 v0.2.49
+- CRITICAL fix: Gemini's new "AQ.Ab..." API key format (rolled
+  out late 2025) was being silently corrupted by our paste
+  sanitizer. The allow-list regex only kept A-Z, a-z, 0-9, `_`
+  and `-` -- the PERIODS in the new format were being stripped,
+  so what we sent Google was `AQAb...` instead of `AQ.Ab...`,
+  and Google rejected the key with a 400 "API key not valid".
+  Existing users on the legacy AIza... format were unaffected
+  because that format has no periods. Fix: add `.` to the
+  sanitizer's allow-list. New-format keys now pass through
+  intact while the iOS Safari smart-quote / NBSP / dash-variant
+  protection stays in place.
+- HTML form placeholder updated to show both formats so users
+  aren't surprised when their new key doesn't start with AIza.
+
 - fast_first_chunk now default ON. New users get the fast
   experience out of the box. service.py includes a one-shot
   migration (gated by _fast_first_chunk_default_v2 marker)
