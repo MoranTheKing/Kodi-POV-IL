@@ -696,6 +696,41 @@ def _maybe_patch_darksubs_picker_label():
             pass
 
 
+def _maybe_patch_skin_dialog_subtitles_rows():
+    """Self-healing patch of the ACTIVE skin's DialogSubtitles.xml
+    so the per-row layout in the subtitle picker is tall enough for
+    long release names to display both wrapped lines without
+    clipping. Idempotent (marker-gated). Bumps itemlayout +
+    focusedlayout heights by +40 px and any inner textbox control
+    referencing $INFO[ListItem.Label2] by the same."""
+    try:
+        from resources.lib import (
+            skin_dialog_subtitles_row_patcher, kodi_utils)
+    except Exception:
+        return
+    try:
+        status = skin_dialog_subtitles_row_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'skin_dialog_subtitles_row_patcher: row height '
+                'bumped so wrapped release names display fully',
+                level='INFO')
+        elif status in ('no_skin', 'no_file', 'no_target',
+                        'already_patched'):
+            pass  # quiet steady-state
+        else:
+            kodi_utils.log(
+                'skin_dialog_subtitles_row_patcher: ' + status,
+                level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'skin_dialog_subtitles_row_patcher failed: '
+                '{0}'.format(e), level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_darksubs_picker_height():
     """Self-healing patch of DarkSubs's sub_window.py so the picker's
     per-row height is doubled. The default pyxbmct.List _itemHeight
@@ -846,12 +881,21 @@ def main():
     _maybe_patch_darksubs_picker_label()
 
     # Bump DarkSubs's pyxbmct picker row height so wrapped release
-    # names display fully. User report (post-#157): release group at
-    # the end of the filename still clipped on the picker because
-    # the dialog is a Python-built pyxbmct.List, not an XML file --
-    # so the XML patcher above had nothing to bite into. This one
-    # rewrites sub_window.py to pass _itemHeight=60 to the list.
+    # names display fully. (For the alternate flow where DarkSubs's
+    # standalone MySubs dialog is opened directly. Most users won't
+    # see this dialog -- it's a Python-built pyxbmct.List inside
+    # DarkSubs's sub_window.py.)
     _maybe_patch_darksubs_picker_height()
+
+    # The picker users actually see when they hit "Choose subtitles"
+    # is Kodi's NATIVE DialogSubtitles, rendered by the active skin
+    # (FENtastic in this build). DarkSubs is just one of the listed
+    # services. The row layout (height, label/textbox dimensions)
+    # is in skin.fentastic/xml/DialogSubtitles.xml. We bump
+    # itemlayout/focusedlayout heights (and the inner Label2
+    # textbox heights) so two wrapped lines of font12 fit without
+    # clipping the bottom of the second line.
+    _maybe_patch_skin_dialog_subtitles_rows()
 
     # Remove the v0.1.5-v0.1.7 misplaced injection into the wizard's
     # login_menu (the right menu was POV's, not the wizard's).
