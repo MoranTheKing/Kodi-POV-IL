@@ -1,3 +1,17 @@
+v0.2.57
+- Arctic Fuse 3 Hebrew font fix: AF3's active "Default" fontset used
+  bundled Inter fonts that do not contain Hebrew glyphs, so Hebrew
+  labels/plots/quick-update text rendered as boxes. The AF3 patcher
+  now rewrites `skin.arctic.fuse.3/1080i/Font.xml` so the Default
+  fontset uses the already-shipped `resource.font.robotocjksc`
+  Unicode Inter fonts.
+- AF3 genre rows now use the FENtastic shortcut-folder lists from
+  POV's `navigator.db` instead of the generic `navigator.genres`
+  entry. This restores the Hebrew genre names and POV genre artwork
+  that the FENtastic build already ships.
+- Patch marker bumped to force all existing AF3 users to receive the
+  rebuilt home nodes + Unicode font on next Kodi launch.
+
 v0.2.56
 - Arctic Fuse 3 POV home seed: AF3's upstream widgets point at Kodi
   library smart-playlists (`InProgressMovies.xsp`, `NewMovies.xsp`,
