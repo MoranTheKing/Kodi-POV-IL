@@ -528,8 +528,17 @@ def build_switch_skin():
         'סקין FENtastic - יפהפה': 'skin.fentastic'
     }
         
-    # Get the name of the current active skin   
-    current_skin_name = next((skin_name for skin_name, skin_addon_name in skin_mapping.items() if skin_addon_name in CONFIG.SKIN))
+    # Get the name of the current active skin. If the user manually
+    # switched to a skin not in our mapping (e.g. via Kodi's own
+    # Settings -> Interface -> Skin), `next()` without a default
+    # would raise StopIteration and crash the whole wizard. Default
+    # to a generic Hebrew label so the dialog still renders and the
+    # user can pick a known skin to recover.
+    current_skin_name = next(
+        (skin_name for skin_name, skin_addon_name in
+         skin_mapping.items() if skin_addon_name in CONFIG.SKIN),
+        'סקין לא מזוהה'
+    )
 
     # Filter out the current active skin from the list
     skins_list = [skin_name for skin_name, skin_addon_name in skin_mapping.items() if skin_addon_name not in CONFIG.SKIN]
