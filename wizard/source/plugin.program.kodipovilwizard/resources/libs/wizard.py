@@ -522,18 +522,32 @@ def update_favourites_xml_file(gotoskin):
 # inside the pack that proves the pack was extracted.
 # If the sentinel exists, we skip the download.
 AF3_PACK_BASE_URL = "https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist"
+# 'addon_ids' lists every addon folder the pack ships. We register
+# these in Kodi's Addons DB (enabled) whether the pack is freshly
+# extracted OR already on disk from a previous switch attempt --
+# this is what makes the fix retroactive for users who already
+# "installed" AF3 with the old (DB-less) code and got the silent
+# Estuary fallback.
 AF3_PACKS = [
     {
         'name': 'Arctic Fuse 3 - סקין + תוספים נדרשים',
         'url': '{0}/Kodi-POV-IL-AF3-skin-pack.zip'.format(AF3_PACK_BASE_URL),
         'filename': 'af3_skin_pack.zip',
         'sentinel': 'special://home/addons/skin.arctic.fuse.3/addon.xml',
+        'addon_ids': [
+            'skin.arctic.fuse.3',
+            'script.skinvariables',
+            'script.texturemaker',
+            'plugin.video.themoviedb.helper',
+            'resource.images.weathericons.white',
+        ],
     },
     {
         'name': 'Arctic Fuse 3 - פונטים',
         'url': '{0}/Kodi-POV-IL-AF3-fonts-pack.zip'.format(AF3_PACK_BASE_URL),
         'filename': 'af3_fonts_pack.zip',
         'sentinel': 'special://home/addons/resource.font.robotocjksc/addon.xml',
+        'addon_ids': ['resource.font.robotocjksc'],
     },
     {
         'name': 'Arctic Fuse 3 - אייקוני סטודיו',
@@ -541,8 +555,30 @@ AF3_PACKS = [
         'filename': 'af3_studios_pack.zip',
         'sentinel': ('special://home/addons/'
                      'resource.images.studios.coloured/addon.xml'),
+        'addon_ids': ['resource.images.studios.coloured'],
     },
 ]
+
+
+def _af3_register_pack_in_db(pack):
+    """Register + enable a pack's addons in Kodi's Addons DB. Safe to
+    call repeatedly (INSERT OR IGNORE + UPDATE enabled). This is the
+    retroactive-fix entry point: it works off the static addon_ids
+    list, so it does NOT need the pack zip on disk -- which means we
+    can heal users whose files were already extracted by the old
+    code path."""
+    try:
+        db.addon_database(pack['addon_ids'], 1, True)
+        logging.log(
+            'DEBUG | ensure_arctic_fuse_3_installed | '
+            'DB enabled (static list): {0}'.format(pack['addon_ids']))
+        return True
+    except Exception as e:
+        logging.log(
+            'DEBUG | ensure_arctic_fuse_3_installed | '
+            'DB enable failed for {0}: {1}'.format(
+                pack['name'], str(e)))
+        return False
 
 
 def _af3_pack_installed(sentinel):
@@ -581,9 +617,17 @@ def ensure_arctic_fuse_3_installed():
                 int((i - 1) / len(AF3_PACKS) * 100), label)
 
             if _af3_pack_installed(pack['sentinel']):
+                # Files already on disk (this user switched to AF3
+                # before, possibly with the old DB-less code). Skip the
+                # 50-60 MB re-download/extract -- but STILL re-register
+                # in the Addons DB so the retroactive fix lands. This is
+                # the path that heals everyone already stuck on the
+                # Estuary fallback.
                 logging.log(
-                    'AF3 pack already installed, skipping: {0}'.format(
-                        pack['name']))
+                    'AF3 pack files present, skipping download but '
+                    're-registering in DB: {0}'.format(pack['name']))
+                if not _af3_register_pack_in_db(pack):
+                    all_ok = False
                 continue
 
             lib = os.path.join(CONFIG.PACKAGES, pack['filename'])
@@ -646,10 +690,36 @@ def ensure_arctic_fuse_3_installed():
                         CONFIG.COLOR2))
                 all_ok = False
 
+            # CRITICAL: register every addon in this pack in Kodi's
+            # Addons DB and mark it enabled. extract.all only writes
+            # files to disk -- it does NOT tell Kodi the addons exist.
+            # Without this, AF3 and its dependencies (skinvariables,
+            # texturemaker, tmdbhelper, the two resource.* addons, the
+            # weather icons, the cjk font) sit on disk but are 'not
+            # installed' from Kodi's POV. When the skin is then set to
+            # AF3, Kodi finds the dependencies unmet, refuses to load
+            # the skin, and SILENTLY FALLS BACK TO skin.estuary -- the
+            # "it says switched but I get the simple skin" bug. This
+            # mirrors what quick_update / Fresh Install do after their
+            # own extract.all calls.
+            if not _af3_register_pack_in_db(pack):
+                all_ok = False
+
             try:
                 os.remove(lib)
             except Exception:
                 pass
+
+        # Force Kodi to scan the freshly-extracted addon folders so the
+        # dependency graph is satisfiable in THIS session as well as
+        # after the restart. Without the scan, the addon manager's
+        # in-memory view is stale and the skin load on next boot can
+        # still race the DB read on some Android builds.
+        try:
+            xbmc.executebuiltin('UpdateLocalAddons')
+            xbmc.sleep(2500)
+        except Exception:
+            pass
 
         dialog_progress.update(
             100,

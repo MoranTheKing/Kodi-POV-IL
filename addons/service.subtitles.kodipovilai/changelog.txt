@@ -1,3 +1,11 @@
+v0.2.54
+- Refreshed the bundled staged_wizard.zip to wizard 0.1.11, which
+  fixes the "Switch Skin -> Arctic Fuse 3 silently falls back to
+  Estuary" bug (AF3 packs were extracted but their addons were
+  never registered/enabled in Kodi's Addons DB, so the skin's
+  dependencies looked unmet and Kodi refused to load it). Anyone
+  the self-healer recovers from a pre-0.1.10 wizard now lands on
+  0.1.11 directly with the AF3 fix already in place.
 v0.2.53
 - Wizard self-healer v3: APK-override. Real-user log after v2
   ship showed zero healer log lines AND wizard staying at 0.1.4
