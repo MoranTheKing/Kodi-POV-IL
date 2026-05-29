@@ -1,3 +1,9 @@
+v0.2.55
+- Refreshed bundled staged_wizard.zip to wizard 0.1.12, which adds
+  the missing transitive AF3 Python deps pack (jurialmunkey,
+  infotagger, addon.signals, qrcode). Without this the user who
+  recovered from the 0.1.11 ship was getting "Initialising
+  Skin..." -> black screen.
 v0.2.54
 - Refreshed the bundled staged_wizard.zip to wizard 0.1.11, which
   fixes the "Switch Skin -> Arctic Fuse 3 silently falls back to
