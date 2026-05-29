@@ -1,3 +1,23 @@
+v0.2.53
+- Wizard self-healer v3: APK-override. Real-user log after v2
+  ship showed zero healer log lines AND wizard staying at 0.1.4
+  -- root cause: on the Android APK build the wizard ships
+  inside the APK at /data/.../cache/apk/assets/addons/, which
+  is read-only; the writable mirror at special://home/addons/
+  may not exist at all. v2 checked the writable dir, found
+  nothing, returned 'no_wizard' silently and did nothing.
+  v3 fix: don't require the writable dir to pre-exist. If
+  xbmcaddon.Addon('plugin.program.kodipovilwizard') resolves
+  (which it does for APK-bundled installs), we extract the
+  staged zip into the writable path -- creating the directory
+  if needed. Kodi's normal addon-resolution picks the higher-
+  versioned writable copy over the APK's 0.1.4 (proven in the
+  same user's log via skin.fentastic: APK ships its own copy
+  but Kodi loads writable v1.0.25). Also: every return code
+  now logs at INFO (was silent on 'quiet steady-state' return
+  codes in v2 -- absence-of-logs vs absence-of-bug is invisible
+  to remote diagnosis). Marker bumped to v3 so v2-stuck installs
+  re-try with v3's correct path.
 v0.2.52
 - Wizard self-healer v2: bundled instead of downloaded. User
   report after v1 ship: no toast appeared after quick_update +
