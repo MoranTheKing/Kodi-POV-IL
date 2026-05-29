@@ -1,3 +1,22 @@
+[COLOR yellow][B]v0.1.11[/B][/COLOR]
+* Switch Skin -> Arctic Fuse 3 now actually loads AF3 instead of
+  silently falling back to Estuary. Root cause: ensure_arctic_
+  fuse_3_installed() extracted the AF3 packs to disk but never
+  registered the skin + its 6 dependencies (script.skinvariables,
+  script.texturemaker, plugin.video.themoviedb.helper,
+  resource.images.weathericons.white, resource.font.robotocjksc,
+  resource.images.studios.coloured) in Kodi's Addons DB. From
+  Kodi's POV the deps were "not installed", so it refused to load
+  AF3 and fell back to skin.estuary -- the "it says switched but I
+  get the simple skin" bug. Fix: register + enable every pack's
+  addons in the Addons DB after extraction (mirrors quick_update /
+  Fresh Install), then UpdateLocalAddons so the dependency graph
+  is satisfiable in-session too.
+* RETROACTIVE: users who already switched to AF3 with the old
+  (DB-less) code are healed automatically -- the "files already on
+  disk" fast-path now ALSO re-registers the addons in the DB
+  instead of skipping outright. Re-pick AF3 from Switch Skin and
+  it will stick after the restart, no re-download needed.
 [COLOR yellow][B]v0.1.10[/B][/COLOR]
 * quick_update: now passes ignore=True to extract.all so the
   wizard's own files inside the quickfix zip actually get
