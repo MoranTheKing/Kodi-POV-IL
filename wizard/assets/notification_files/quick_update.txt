@@ -1,20 +1,33 @@
-102
+103
 |||
-Arctic Fuse 3 סוף סוף ייטען — תוקן ה-fallback ל-Estuary
-**הבעיה שדיווחת:** אחרי שהוויזרד תוקן ו-AF3 הופיע ברשימת "החלף סקין", בחירה בו אמרה "הוחלף בהצלחה" אבל בפועל חזרת לסקין הפשוט (Estuary). זה לא היה רנדומלי — זו התנהגות מובנית של Kodi.
+AF3 סוף סוף ייטען בלי מסך שחור — חסרו 4 מודולי Python
+**הבעיה שדיווחת:** אחרי 0.1.11 ה-AF3 כן ניסה להיטען (במקום לדלוג ל-Estuary), אבל נתקע על "Initialising Skin..." 30 שניות ואז מסך שחור — נאלצת לערוך guisettings.xml ידנית כדי לצאת מהבריקה.
 
-**הסיבה:** הפונקציה שמתקינה את AF3 חילצה את הקבצים לדיסק אבל **לא רשמה את הסקין ו-6 התלויות שלו ב-database של Kodi** (script.skinvariables, script.texturemaker, plugin.video.themoviedb.helper, ושלוש חבילות resource). מבחינת Kodi התלויות "לא מותקנות" → הוא מסרב לטעון את AF3 → נופל אוטומטית ל-Estuary. (זה בדיוק "כתב שהחליף אבל קיבלתי את הפשוט".)
+**הסיבה המדויקת (מהלוג שלך):** ב-line 374 נמצאה השגיאה:
+```
+ModuleNotFoundError: No module named 'jurialmunkey'
+File ".../script.skinvariables/script.py", line 6
+```
 
-**מה תוקן (wizard 0.1.11):**
-- אחרי החילוץ, כל תוסף של AF3 נרשם ומופעל ב-Addons DB (בדיוק כמו שהתקנה מלאה / quick_update עושים).
-- `UpdateLocalAddons` מריץ סריקה כדי שהתלויות יהיו זמינות כבר באותו session.
+ב-AF3 מסך הבית בנוי דינמית על-ידי `script.skinvariables` שמייצר את הקובץ `script-skinvariables-generator-includes-.xml`. ה-script הזה דורש 4 מודולי Python שלא היו ב-build:
+- `script.module.jurialmunkey` v0.2.35
+- `script.module.infotagger` v0.0.8
+- `script.module.addon.signals` v0.0.6
+- `script.module.qrcode` v6.1.0
 
-**רטרואקטיבי — חשוב לך:** מי שכבר ניסה לעבור ל-AF3 עם הקוד הישן **יתוקן אוטומטית**. המסלול של "הקבצים כבר על הדיסק" עכשיו עדיין רושם אותם ב-DB במקום לדלג. אין צורך בהורדה מחדש של 170MB.
+בלעדיהם — skinvariables קורס → הקובץ הדינמי לא נוצר (ראינו "Failed to open file" ב-line 324) → Startup.xml טוען אבל אין לו תוכן → מסך שחור.
+
+**מה תוקן (wizard 0.1.12):**
+- נוסף Pack חדש זעיר (139KB בלבד): `Kodi-POV-IL-AF3-deps-pack.zip` עם 4 המודולים החסרים.
+- ה-Pack הזה ראשון ברשימת ההתקנה של AF3, כך שהמודולים יושבים על הדיסק לפני ש-skinvariables/tmdbhelper מנסים לייבא אותם.
+- כל המודולים נרשמים ב-Addons DB אחרי החילוץ.
 
 **זרימה צפויה:**
-1. quick_update + restart (כדי לקבל wizard 0.1.11).
+1. quick_update + restart (מקבל wizard 0.1.12 + ה-deps pack).
 2. כיבוי → החלף סקין → Arctic Fuse 3 → אישור.
-3. הוויזרד ירשום את התלויות ב-DB (מהיר, הקבצים כבר אצלך) → Kodi נסגר ונפתח.
-4. הפעם AF3 ייטען באמת. ✅
+3. הוויזרד מוריד 139KB נוספים → רושם ב-DB → Kodi נסגר ונפתח.
+4. הפעם AF3 ייטען נכון עם מסך בית מלא. ✅
+
+**אם בכל זאת ייתקע שוב** — תעשה את ההצלה הידנית של guisettings.xml ותשלח לי לוג חדש. אבל יחד עם 4 המודולים האלה אין סיבה שיתקע.
 
 quick_update + restart, ואז החלף סקין ל-AF3.

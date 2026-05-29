@@ -530,6 +530,29 @@ AF3_PACK_BASE_URL = "https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist"
 # Estuary fallback.
 AF3_PACKS = [
     {
+        'name': 'Arctic Fuse 3 - מודולי קוד נדרשים',
+        'url': '{0}/Kodi-POV-IL-AF3-deps-pack.zip'.format(AF3_PACK_BASE_URL),
+        'filename': 'af3_deps_pack.zip',
+        'sentinel': 'special://home/addons/script.module.jurialmunkey/addon.xml',
+        # script.skinvariables, script.texturemaker, and
+        # plugin.video.themoviedb.helper all transitively depend on
+        # these. Without them AF3 hangs forever on "Initialising
+        # Skin..." -- skinvariables' generator fails to import
+        # jurialmunkey, so the dynamically-built includes file
+        # (script-skinvariables-generator-includes-.xml) never lands,
+        # and AF3's Startup.xml has nothing to populate the home with.
+        # First version of the AF3 install path missed these because
+        # they aren't direct requires of the SKIN itself -- they're
+        # only declared inside the SCRIPT dependencies' addon.xmls.
+        # 139 KB total, so it's a tiny extra download.
+        'addon_ids': [
+            'script.module.jurialmunkey',
+            'script.module.infotagger',
+            'script.module.addon.signals',
+            'script.module.qrcode',
+        ],
+    },
+    {
         'name': 'Arctic Fuse 3 - סקין + תוספים נדרשים',
         'url': '{0}/Kodi-POV-IL-AF3-skin-pack.zip'.format(AF3_PACK_BASE_URL),
         'filename': 'af3_skin_pack.zip',
