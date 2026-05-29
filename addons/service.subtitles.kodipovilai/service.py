@@ -731,6 +731,47 @@ def _maybe_patch_skin_dialog_subtitles_rows():
             pass
 
 
+def _maybe_heal_wizard():
+    """One-shot recovery for users stuck on a pre-0.1.10 wizard.
+    The wizard's quick_update extract.all silently skips the wizard's
+    own files, so wizard updates shipped via quickfix never reached
+    disk. Users who already received the broken quick_update (PR #161
+    AF3 ship + PR #162 wizard-bundle ship) are stranded on the old
+    wizard.py. This rides the AI subs quickfix path (different addon
+    id, not skipped), detects the stuck wizard via a sentinel check,
+    downloads the latest wizard zip from GitHub, and writes it over
+    the installed wizard's addon dir. Toasts the user to restart.
+    Self-disarms via a marker once the installed wizard.py is on
+    0.1.10+ -- after that the normal quick_update flow takes over."""
+    try:
+        from resources.lib import wizard_self_healer, kodi_utils
+    except Exception:
+        return
+    try:
+        status = wizard_self_healer.ensure_healed()
+        if status == 'healed':
+            kodi_utils.log(
+                'wizard_self_healer: wizard files refreshed; '
+                'user prompted to restart Kodi',
+                level='INFO')
+        elif status in (
+            'no_wizard',
+            'wizard_already_healthy',
+            'already_healed',
+        ):
+            pass  # quiet steady-state
+        else:
+            kodi_utils.log(
+                'wizard_self_healer: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'wizard_self_healer failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_af3_dialog_subtitles():
     """Self-healing patch of Arctic Fuse 3's Dialog_DialogSubtitles.xml
     so the subtitle picker dialog HEADER prefers our window property
@@ -905,6 +946,13 @@ def main():
 
     # Initial prune.
     _prune_once()
+
+    # Recover users stuck on a pre-0.1.10 wizard (see function
+    # docstring for the extract.all self-skip bug). Runs before
+    # the other patchers because if the heal succeeds the user
+    # will restart Kodi anyway, and we don't want to spend cycles
+    # patching things they'll re-run on the next boot.
+    _maybe_heal_wizard()
 
     # Self-healing DarkSubs hook injection. Runs every startup so
     # if upstream DarkSubs updates and overwrites our hook, it
