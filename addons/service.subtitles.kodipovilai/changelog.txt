@@ -1,3 +1,20 @@
+v0.2.51
+- Wizard self-healer (new module wizard_self_healer.py) rides this
+  addon's quickfix path to recover users stuck on a pre-0.1.10
+  wizard. Root cause: the wizard's quick_update extract.all
+  silently skips every file whose path contains the wizard's own
+  addon id (a safety guard against the wizard trashing itself
+  mid-extract), so every wizard update shipped via quickfix was
+  dropped on the floor. End-user symptom: after PR #161 (Arctic
+  Fuse 3 third skin) + PR #162 (quickfix-bundles-wizard) +
+  quick_update + restart, Switch Skin still listed only Estuary
+  and FENtastic. Healer fingerprints the installed wizard.py for a
+  0.1.10-or-newer sentinel; if absent, downloads the latest wizard
+  zip from GitHub Pages and force-writes the files into the
+  wizard's addon dir (different addon id = not skipped by anyone).
+  Toasts the user to restart so Python re-imports the new wizard.
+  Marker-gated, no-op on healthy wizards, no-op on AI-only
+  installs (no wizard addon present).
 v0.2.50
 - Arctic Fuse 3 subtitle-picker header now prefers our
   subs.player_filename window property over Player.FileName (fixes
