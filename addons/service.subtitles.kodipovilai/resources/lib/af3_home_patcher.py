@@ -13,6 +13,13 @@ import time
 from urllib.parse import quote
 
 try:
+    import ast
+    import sqlite3
+except Exception:
+    ast = None
+    sqlite3 = None
+
+try:
     import xbmc
     import xbmcvfs
 except ImportError:
@@ -21,11 +28,18 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-05-30-pov-home-v2'
+PATCH_VERSION = '2026-05-30-pov-home-v3'
 
 BASE_NODES = 'special://profile/addon_data/script.skinvariables/nodes/'
 AF3_NODES = BASE_NODES + AF3_SKIN_ID + '/'
 AF3_FONT_XML = 'special://home/addons/' + AF3_SKIN_ID + '/1080i/Font.xml'
+AF3_FONT_DIR = 'special://home/addons/' + AF3_SKIN_ID + '/fonts/'
+AF3_NOTO_FONT = AF3_FONT_DIR + 'NotoSans-Regular.ttf'
+AF3_XML_DIR = 'special://home/addons/' + AF3_SKIN_ID + '/1080i/'
+POV_NAVIGATOR_DB = 'special://profile/addon_data/plugin.video.pov/navigator.db'
+POV_MEDIA_BASE = 'special://home/addons/plugin.video.pov/resources/skins/Default/media/'
+BUNDLED_NOTO_FONT = os.path.join(
+    os.path.dirname(__file__), 'media_assets', 'fonts', 'NotoSans-Regular.ttf')
 
 
 FONT_XML = '''<?xml version="1.0" encoding="UTF-8"?>
@@ -33,9 +47,9 @@ FONT_XML = '''<?xml version="1.0" encoding="UTF-8"?>
 
     <fontset id="Default" unicode="true">
         <include content="Font_Default">
-            <param name="font_bold">resource://resource.font.robotocjksc/Inter-Unicode-Bold.ttf</param>
-            <param name="font_regular">resource://resource.font.robotocjksc/Inter-Unicode-Regular.ttf</param>
-            <param name="font_light">resource://resource.font.robotocjksc/Inter-Unicode-Regular.ttf</param>
+            <param name="font_bold">NotoSans-Regular.ttf</param>
+            <param name="font_regular">NotoSans-Regular.ttf</param>
+            <param name="font_light">NotoSans-Regular.ttf</param>
             <param name="style_light">light</param>
 
             <param name="plot_linespacing_head">1.03</param>
@@ -48,9 +62,9 @@ FONT_XML = '''<?xml version="1.0" encoding="UTF-8"?>
 
     <fontset id="Default (Unicode)" unicode="true">
         <include content="Font_Default">
-            <param name="font_bold">resource://resource.font.robotocjksc/Inter-Unicode-Bold.ttf</param>
-            <param name="font_regular">resource://resource.font.robotocjksc/Inter-Unicode-Regular.ttf</param>
-            <param name="font_light">resource://resource.font.robotocjksc/Inter-Unicode-Regular.ttf</param>
+            <param name="font_bold">NotoSans-Regular.ttf</param>
+            <param name="font_regular">NotoSans-Regular.ttf</param>
+            <param name="font_light">NotoSans-Regular.ttf</param>
             <param name="style_light">light</param>
 
             <param name="plot_linespacing_head">1.03</param>
@@ -94,6 +108,46 @@ def _shortcut_folder(name, icon='folder.png'):
 
 
 HOME_WIDGETS = [
+    {
+        'label': 'כלים וחיבורים',
+        'icon': 'special://home/media/build_icons/POV/Connect_Services.png',
+        'path': 'Custom_Submenu',
+        'target': 'videos',
+        'widget_style': 'Landscape',
+        'widget_limit': '20',
+        'submenu': [
+            {
+                'label': 'חיבור שירותים',
+                'icon': 'special://home/media/build_icons/POV/Connect_Services.png',
+                'path': 'RunPlugin("plugin://plugin.video.pov/?mode=myservices")',
+                'target': '',
+            },
+            {
+                'label': 'תרגום AI',
+                'icon': 'special://home/addons/service.subtitles.kodipovilai/icon.png',
+                'path': 'Addon.OpenSettings(service.subtitles.kodipovilai)',
+                'target': '',
+            },
+            {
+                'label': 'החלף סקין',
+                'icon': 'special://home/media/build_icons/Wizard/wizard.png',
+                'path': 'RunPlugin("plugin://plugin.program.kodipovilwizard/?mode=install&action=build_switch_skin")',
+                'target': '',
+            },
+            {
+                'label': 'עדכון מהיר',
+                'icon': 'special://home/media/build_icons/Wizard/fast_update.png',
+                'path': 'PlayMedia("plugin://plugin.program.kodipovilwizard/?mode=install&action=quick_update&name=Kodi+POV+IL+-+FENtastic&auto_quick_update=false")',
+                'target': '',
+            },
+            {
+                'label': 'שליחת לוג',
+                'icon': 'special://home/media/build_icons/Twilight/Send_Log/twilight_send_log.png',
+                'path': 'ActivateWindow(10025,"plugin://plugin.video.pov/?mode=navigator.log_utils&name=Changelog%20%26%20Log%20Utils",return)',
+                'target': '',
+            },
+        ],
+    },
     {
         'label': 'סרטים חדשים',
         'icon': 'special://home/media/build_icons/Twilight/Movies/Movies_Popular.png',
@@ -233,6 +287,21 @@ FILES = {
     'skinvariables-shortcut-powermenu.json': POWER_MENU,
 }
 
+TOUCH_CLEANUP_FILES = (
+    'DialogVideoInfo.xml',
+    'DialogContextMenu.xml',
+    'Custom_1172_Dialog_InfoOptions.xml',
+    'Custom_1190_TMDbHelper.xml',
+)
+
+TOUCH_CLEANUP_BLOCK = '''    <!-- POV_AF3_TOUCH_CLEANUP_v1 -->
+    <onunload>ClearProperty(InfoPanel.FullSwitch,Home)</onunload>
+    <onunload>ClearProperty(SubGroup.IsVisible,Home)</onunload>
+    <onunload>ClearProperty(TMDbHelper.ContextMenu,Home)</onunload>
+    <onunload>ClearProperty(TMDbHelper.WidgetContainer,Home)</onunload>
+    <onunload>ClearProperty(CurrentID)</onunload>
+'''
+
 
 def _translate(path):
     return xbmcvfs.translatePath(path) if xbmcvfs else path
@@ -265,6 +334,18 @@ def _write(path, content):
         fh.write(content)
 
 
+def _copy(src, dst):
+    real_src = _translate(src)
+    real_dst = _translate(dst)
+    parent = os.path.dirname(real_dst)
+    if parent and not os.path.isdir(parent):
+        os.makedirs(parent)
+    with open(real_src, 'rb') as fh:
+        data = fh.read()
+    with open(real_dst, 'wb') as fh:
+        fh.write(data)
+
+
 def _json(data):
     return json.dumps(data, ensure_ascii=False, indent=4) + '\n'
 
@@ -282,13 +363,129 @@ def _write_if_changed(filename, data):
 
 
 def _patch_font_xml():
+    changed = False
+    if os.path.isfile(BUNDLED_NOTO_FONT):
+        try:
+            if (not _exists(AF3_NOTO_FONT)
+                    or os.path.getsize(_translate(AF3_NOTO_FONT))
+                    != os.path.getsize(BUNDLED_NOTO_FONT)):
+                _copy(BUNDLED_NOTO_FONT, AF3_NOTO_FONT)
+                changed = True
+        except Exception:
+            pass
     try:
         if _exists(AF3_FONT_XML) and _read(AF3_FONT_XML) == FONT_XML:
-            return False
+            return changed
     except Exception:
         pass
     _write(AF3_FONT_XML, FONT_XML)
     return True
+
+
+def _patch_pov_genre_icons():
+    if sqlite3 is None or ast is None:
+        return False
+    db_path = _translate(POV_NAVIGATOR_DB)
+    if not os.path.isfile(db_path):
+        return False
+
+    changed = False
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path, timeout=2.0, isolation_level=None)
+        conn.execute('PRAGMA busy_timeout=2000')
+        cur = conn.cursor()
+        for row_name in (
+                'FENtastic - סרטים - זאנרים',
+                'FENtastic - סדרות - זאנרים'):
+            cur.execute(
+                'SELECT list_contents FROM navigator WHERE list_name=?',
+                (row_name,))
+            row = cur.fetchone()
+            if not row:
+                continue
+            try:
+                items = ast.literal_eval(row[0] or '[]')
+            except Exception:
+                continue
+            row_changed = False
+            for item in items:
+                icon = item.get('iconImage', '')
+                if icon.startswith('genres/'):
+                    item['iconImage'] = POV_MEDIA_BASE + icon
+                    row_changed = True
+            if not row_changed:
+                continue
+            cur.execute('BEGIN IMMEDIATE')
+            try:
+                cur.execute(
+                    'UPDATE navigator SET list_contents=? WHERE list_name=?',
+                    (repr(items), row_name))
+                cur.execute('COMMIT')
+                changed = True
+            except Exception:
+                try:
+                    cur.execute('ROLLBACK')
+                except Exception:
+                    pass
+    except Exception:
+        return changed
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+    return changed
+
+
+def _patch_touch_cleanup_xml():
+    changed = False
+    for filename in TOUCH_CLEANUP_FILES:
+        path = AF3_XML_DIR + filename
+        if not _exists(path):
+            continue
+        try:
+            text = _read(path)
+        except Exception:
+            continue
+        if 'POV_AF3_TOUCH_CLEANUP_v1' in text:
+            continue
+        if '<window' not in text:
+            continue
+        marker = text.find('>', text.find('<window'))
+        if marker < 0:
+            continue
+        new_text = text[:marker + 1] + '\n' + TOUCH_CLEANUP_BLOCK + text[marker + 1:]
+        try:
+            _write(path, new_text)
+            changed = True
+        except Exception:
+            pass
+    return changed
+
+
+def _set_af3_runtime_defaults():
+    if xbmc is None:
+        return
+    commands = [
+        'Skin.SetString(CustomRating.Movies.Item01,TMDb)',
+        'Skin.SetString(CustomRating.Movies.Item02,Trakt)',
+        'Skin.SetString(CustomRating.TVShows.Item01,TMDb)',
+        'Skin.SetString(CustomRating.TVShows.Item02,Trakt)',
+        'Skin.Reset(TMDbHelper.DisableRatings)',
+        'Skin.SetBool(TMDbHelper.EnableData)',
+        'Skin.SetBool(TMDbHelper.Service)',
+        'Skin.SetBool(TMDbHelper.DirectCallAuto)',
+        'Skin.SetBool(TMDbHelper.UseLocalWidgetContainer)',
+        'ClearProperty(InfoPanel.FullSwitch,Home)',
+        'ClearProperty(SubGroup.IsVisible,Home)',
+    ]
+    for command in commands:
+        try:
+            xbmc.executebuiltin(command)
+        except Exception:
+            pass
 
 
 def _is_af3_active():
@@ -303,6 +500,7 @@ def _is_af3_active():
 def _rebuild_af3_shortcuts():
     if xbmc is None:
         return
+    _set_af3_runtime_defaults()
     stamp = '{0}-{1}'.format(PATCH_VERSION, int(time.time()))
     xbmc.executebuiltin('Skin.SetString(Shortcuts.RebuildDateTime,{0})'.format(stamp))
     xbmc.executebuiltin('RunScript(script.skinvariables,action=buildtemplate,force=True,background=true)')
@@ -321,6 +519,10 @@ def ensure_patched():
     for filename, data in FILES.items():
         changed = _write_if_changed(filename, data) or changed
     changed = _patch_font_xml() or changed
+    changed = _patch_pov_genre_icons() or changed
+    changed = _patch_touch_cleanup_xml() or changed
+    if _is_af3_active():
+        _set_af3_runtime_defaults()
 
     marker = AF3_NODES + '.pov_home_version'
     marker_changed = True

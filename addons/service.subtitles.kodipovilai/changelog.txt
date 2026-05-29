@@ -1,3 +1,23 @@
+v0.2.58
+- AF3 tools row: adds a visible "כלים וחיבורים" home row so mobile
+  users do not need to hunt through AF3's hidden submenu/power tray
+  for critical build actions. Includes Connect Services, AI settings,
+  Switch Skin, Quick Update, and Send Log.
+- AF3 genre artwork: patches POV's `navigator.db` genre shortcut
+  rows so relative `genres/...png` icons become absolute POV media
+  paths. AF3 could not resolve the relative paths and displayed the
+  generic POV logo for every genre.
+- AF3 Hebrew font v2: bundles FENtastic/Estuary's NotoSans-Regular
+  and copies it into AF3's font folder, then points AF3's Default
+  fontset at it. This covers Hebrew punctuation/control edge cases
+  that still rendered as boxes with the previous CJK Unicode font.
+- AF3 touch cleanup: injects unload cleanup into AF3 info/context
+  dialogs to clear sticky InfoPanel/SubGroup/TMDbHelper properties
+  after long-press/info use on phones.
+- Ratings defaults: sets AF3/TMDbHelper rating defaults to TMDb +
+  Trakt and ensures ratings are not disabled. IMDb/RT/Metacritic may
+  still require external keys, but TMDb/Trakt should be the baseline.
+
 v0.2.57
 - Arctic Fuse 3 Hebrew font fix: AF3's active "Default" fontset used
   bundled Inter fonts that do not contain Hebrew glyphs, so Hebrew
