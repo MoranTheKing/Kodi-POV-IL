@@ -1,3 +1,22 @@
+v0.2.60
+- AF3 CoreELEC build: the Arctic Fuse 3 skin pack now uses the
+  CoreELEC-friendly CE-Repo mod (skin version 6.3.2.9) instead of the
+  older upstream-only 3.2.9 package.
+- Existing AF3 installs are upgraded automatically: the wizard now
+  checks the installed skin version instead of only checking that
+  `addon.xml` exists, and the background service requests the CE skin
+  pack when it detects an older AF3 package.
+- AF3 mobile home defaults: forces horizontal/Combined home mode,
+  seeds a POV spotlight from "סרטים חדשים", and refocuses the
+  spotlight after rebuild so Play / More Information are available
+  instead of opening directly on the lower movie row.
+- AF3 ratings: expands the default rating slots to TMDb + IMDb +
+  RottenTomatoesUser for movies, and TMDb + IMDb + Trakt for shows.
+  External providers still depend on TMDbHelper/metadata availability.
+- AF3 Hebrew: adds a small he_IL language file for skin strings we
+  actually see on the home screen, including "Ends at" -> "מסתיים ב-"
+  and "More Information" -> "מידע נוסף".
+
 v0.2.59
 - AF3 mobile hotfix: removes the experimental "כלים וחיבורים"
   `Custom_Submenu` home widget because it could trap focus/touch on

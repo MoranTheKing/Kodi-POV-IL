@@ -100,6 +100,9 @@ class Router:
             elif action == 'build_switch_skin':
                 from resources.libs.wizard import build_switch_skin
                 build_switch_skin()
+            elif action == 'install_af3_ce':
+                from resources.libs.wizard import ensure_arctic_fuse_3_installed
+                ensure_arctic_fuse_3_installed()
             # KODI-RD-IL
             elif action == 'kodi_version_update_check':
                 from resources.libs.wizard import kodi_version_update_check
