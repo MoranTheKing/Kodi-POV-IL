@@ -1,4 +1,20 @@
 v0.2.49
+- DarkSubs picker (round 2 after #157 was a no-op): the picker is
+  actually a pyxbmct.AddonDialogWindow built in Python, not skin
+  XML -- DarkSubs ships no resources/skins/ folder at all, so the
+  XML patcher I wrote in #157 had nothing to bite into. The real
+  fix lives in resources/modules/sub_window.py, where the dialog
+  creates a pyxbmct.List() with the default _itemHeight=27 (one
+  line). Long release names wrap to a second line that the
+  27-pixel row clips. New darksubs_picker_height_patcher rewrites
+  the call to pyxbmct.List(_itemHeight=60), doubling the row so
+  both lines fit. Regex-anchored to the exact one-line call so it
+  refuses to touch a future DarkSubs version that already passes
+  arguments. Marker-gated, idempotent, .pyc cache invalidated so
+  the change takes effect on next DarkSubs import without a Kodi
+  restart strictly required. Verified end-to-end against the
+  actual sub_window.py shipped in the build.
+
 - DarkSubs picker: long release-name labels in each row now
   marquee-scroll horizontally instead of getting cut off mid-wrap.
   User screenshot showed entries like "Legends.2026.S01E03.This.is.
