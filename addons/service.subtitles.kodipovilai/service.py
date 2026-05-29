@@ -787,6 +787,42 @@ def _maybe_purge_temp_once():
             pass
 
 
+def _maybe_show_af3_first_launch_dialog():
+    """One-shot: if Arctic Fuse 3 is the active skin and we've never
+    shown the first-launch dialog before, prompt the user to connect
+    Trakt + TMDb via POV's Connect Services. AF3 needs both to
+    populate its hubs; without them the home screen is empty and
+    new users assume the skin is broken.
+
+    Runs once per profile; the marker lives in our addon's settings.
+    Has its own internal "remind me later" path that intentionally
+    doesn't set the marker, so the user gets re-prompted next launch.
+
+    Skin-gated -- a no-op on FENtastic / Estuary / any other skin --
+    so existing-build users aren't disturbed when this addon ships
+    via quickfix."""
+    try:
+        from resources.lib import af3_first_launch, kodi_utils
+    except Exception:
+        return
+    try:
+        status = af3_first_launch.maybe_show()
+        if status not in ('not_af3', 'already_done'):
+            try:
+                kodi_utils.log(
+                    'af3_first_launch dialog status: {0}'.format(status),
+                    level='INFO')
+            except Exception:
+                pass
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'af3_first_launch failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_default_fast_first_chunk():
     """One-shot: flip `fast_first_chunk` from the old default-off to
     the new default-on for existing users. Gated by a marker so it
@@ -950,6 +986,15 @@ def main():
     # One-shot: flip `fast_first_chunk` default from off -> on for
     # existing users on the old default. Marker-gated.
     _maybe_default_fast_first_chunk()
+
+    # One-shot first-launch dialog for Arctic Fuse 3. Skin-gated +
+    # marker-gated so it only fires for users who have actually
+    # switched to AF3 (via the wizard's Switch Skin dialog or Kodi's
+    # own Interface settings) and haven't been prompted before. POV's
+    # Connect Services is opened on the user's behalf for the
+    # service(s) they pick. Best-effort: this addon doesn't own AF3's
+    # OAuth flows -- POV does.
+    _maybe_show_af3_first_launch_dialog()
 
     # Spin up the SubsFilenamePublisher player monitor. It needs to
     # outlive this function's local scope -- xbmc.Player subclasses

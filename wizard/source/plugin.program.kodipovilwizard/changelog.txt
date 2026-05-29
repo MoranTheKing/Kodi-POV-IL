@@ -1,3 +1,19 @@
+[COLOR yellow][B]v0.1.9[/B][/COLOR]
+* Switch Skin: added Arctic Fuse 3 as a third skin option
+  alongside Estuary and FENtastic. AF3 is jurialmunkey's modern
+  skin (CC BY-NC-SA 4.0); shipping it as experimental so users
+  can try it without breaking the existing FENtastic flow.
+* update_favourites_xml_file(): now tolerates a missing
+  favourites.xml seed for the target skin and leaves the
+  existing file in place instead of failing the whole switch.
+  Required for AF3 which drives its home via skinvariables,
+  not Kodi's favourites.xml.
+[COLOR yellow][B]v0.1.8[/B][/COLOR]
+* Switch Skin crash-fix: when the active skin isn't in our
+  mapping (e.g. user manually picked AF3 via Settings ->
+  Interface), `next()` no longer raises StopIteration and
+  crashes the wizard. Falls back to a generic Hebrew label so
+  the dialog still renders and the user can recover.
 [COLOR yellow][B]v0.1.7[/B][/COLOR]
 * Python 3.14 compatibility: resources/libs/common/logging.py
   used to do `try: from urllib.request import FancyURLopener
