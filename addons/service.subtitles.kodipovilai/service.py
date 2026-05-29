@@ -749,20 +749,15 @@ def _maybe_heal_wizard():
         return
     try:
         status = wizard_self_healer.ensure_healed()
-        if status == 'healed':
-            kodi_utils.log(
-                'wizard_self_healer: wizard files refreshed; '
-                'user prompted to restart Kodi',
-                level='INFO')
-        elif status in (
-            'no_wizard',
-            'wizard_already_healthy',
-            'already_healed',
-        ):
-            pass  # quiet steady-state
-        else:
-            kodi_utils.log(
-                'wizard_self_healer: ' + status, level='WARNING')
+        # v3: always log the return code (was 'quiet steady-state'
+        # in v2, which made remote diagnosis impossible -- a real
+        # user log showed zero healer traces and we had to deduce
+        # 'no_wizard' from absence-of-logs alone).
+        kodi_utils.log(
+            'wizard_self_healer status: ' + status,
+            level=('WARNING' if status in (
+                'no_staged_zip', 'bad_zip', 'write_failed') else 'INFO'),
+        )
     except Exception as e:
         try:
             kodi_utils.log(
