@@ -187,8 +187,12 @@ def _diagnose():
                   'בשפת המקור). הפעל את "תרגם דרך AI גם כש-'
                   'auto_translate כבוי" אם רוצה התנהגות אחרת.')
     else:
-        detail = ('auto_translate=OFF ופאצ\' download_sub חסר — '
-                  'הוק לא יפעל')
+        detail = ('auto_translate=OFF ופאצ\' download_sub חסר '
+                  '(גרסת DarkSubs לא מוכרת). פתרון מיידי: הדלק '
+                  '"auto_translate" בהגדרות DarkSubs — אז ההוק '
+                  'הראשי (שמותקן ✓) יורה והתרגום AI יעבוד. לא '
+                  'תקבל Google translate כי ה-AI מחזיר עברית לפני '
+                  'שגוגל נכנס לתמונה.')
     out.append(('הוק AI יפעל על כתוביות לא-עבריות', will_fire,
                 detail))
 
