@@ -1,55 +1,63 @@
 # One-shot self-healer for the bundled Kodi POV IL Wizard.
 #
-# Why this lives in the AI subs addon: the wizard's quick_update
-# extracts the quickfix via extract.all (resources/libs/extract.py),
-# which has a safety guard that skips any file whose path contains
-# CONFIG.ADDON_ID -- the wizard's own id. The intent is "don't let
-# the wizard trash itself mid-extract." The side effect is that
-# every wizard-update shipped via quick_update is silently dropped:
-# the addon DB record is bumped, but the .py files on disk stay at
-# the pre-update version. PR #161 (Arctic Fuse 3 third-skin support)
-# was the first time users could *see* this breakage -- Switch Skin
+# v2 (bundled): the wizard zip travels INSIDE this addon at
+# resources/staged_wizard.zip. No download, no SSL, no network --
+# all of which were failing silently in v1 against an Android Kodi
+# user (no toast appeared after quick_update + restart).
+#
+# Why this healer exists at all: the wizard's quick_update extracts
+# the quickfix via extract.all (resources/libs/extract.py), which
+# has a safety guard that skips any file whose path contains
+# CONFIG.ADDON_ID -- the wizard's own id. The intent was "don't
+# let the wizard trash itself mid-extract." The side effect was
+# that every wizard-update shipped via quick_update was silently
+# dropped: the addon DB record got bumped, but the .py files on
+# disk stayed at the pre-update version. PR #161 (AF3 third skin)
+# was the first time the bug was *visible* to users -- Switch Skin
 # kept listing only Estuary + FENtastic after quick_update + restart.
 #
-# Wizard 0.1.10 patches extract.all to take ignore=True so future
+# Wizard 0.1.10 patches extract.all to take ignore=True, so future
 # quick_updates ship the wizard cleanly. But users currently stuck
-# on 0.1.9-or-older can't get the fix via the broken pipe. This
-# healer rides the AI subs quickfix path (different addon id, not
-# skipped), detects the stuck-wizard fingerprint, downloads the
-# latest wizard zip from GitHub, and force-extracts it over the
-# installed wizard's addon dir. Toasts the user to restart so the
-# new Python files get re-imported.
+# on the pre-fix wizard can't get the fix via the broken pipe.
+# This healer rides the AI subs quickfix path (different addon id,
+# not skipped), detects the stuck-wizard fingerprint via a sentinel
+# byte string in the installed wizard.py, and extracts the bundled
+# zip directly over the installed wizard's addon dir.
 #
 # Idempotent: a marker file inside the wizard's addon dir gates
 # re-runs. Self-disarms once the installed wizard.py contains the
 # 0.1.10 ignore-bypass fingerprint -- after that the regular
 # quick_update path takes over and this healer becomes a no-op.
+#
+# UX: on successful heal a MODAL Dialog().ok pops -- user must
+# tap OK before continuing, then must restart Kodi for Python to
+# reload the new wizard module. A toast also fires on most
+# failure modes so users have signal even when the heal can't
+# complete.
 
-import io
 import os
 import shutil
 import zipfile
 
 try:
-    import urllib.request as urllib_req
-except ImportError:
-    urllib_req = None
-
-try:
+    import xbmcaddon
     import xbmcgui
     import xbmcvfs
 except ImportError:
+    xbmcaddon = None
     xbmcgui = None
     xbmcvfs = None
+
+try:
+    import xbmc
+except ImportError:
+    xbmc = None
 
 from . import kodi_utils
 
 
+AI_SUBS_ADDON_ID = 'service.subtitles.kodipovilai'
 WIZARD_ADDON_ID = 'plugin.program.kodipovilwizard'
-WIZARD_ZIP_URL = (
-    'https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/'
-    'wizard/plugin.program.kodipovilwizard-latest.zip'
-)
 
 # Sentinel inside the installed wizard.py that proves the
 # extract.all self-skip bug has been fixed (wizard >= 0.1.10).
@@ -58,12 +66,11 @@ WIZARD_ZIP_URL = (
 HEALED_SENTINEL = b'ignore=True bypasses extract.all'
 
 # Marker file written into the wizard's addon dir on success so
-# repeated boots don't re-download a healthy wizard. Versioned so
-# we can re-trigger the healer if a future bug requires it.
-MARKER_NAME = '.ai_subs_wizard_healed_v1'
+# repeated boots don't repeat the work on a healthy install.
+# Versioned so we can re-trigger if a future bug requires it.
+MARKER_NAME = '.ai_subs_wizard_healed_v2'
 
-REQUEST_TIMEOUT = 30
-USER_AGENT = 'Kodi-POV-IL-AISubs-WizardHealer/1'
+STAGED_ZIP_REL = os.path.join('resources', 'staged_wizard.zip')
 
 
 def _log(msg, level='INFO'):
@@ -71,7 +78,27 @@ def _log(msg, level='INFO'):
         kodi_utils.log(
             'wizard_self_healer: ' + msg, level=level)
     except Exception:
-        pass
+        if xbmc is not None:
+            try:
+                xbmc.log(
+                    '[wizard_self_healer] ' + msg,
+                    level=xbmc.LOGINFO if level == 'INFO'
+                    else xbmc.LOGWARNING,
+                )
+            except Exception:
+                pass
+
+
+def _ai_subs_base():
+    """Path to this addon's directory -- the staged zip lives
+    inside it. translatePath handles Android's split-storage."""
+    if xbmcaddon is None:
+        return ''
+    try:
+        return xbmcvfs.translatePath(
+            xbmcaddon.Addon(AI_SUBS_ADDON_ID).getAddonInfo('path'))
+    except Exception:
+        return ''
 
 
 def _wizard_base():
@@ -98,16 +125,30 @@ def _wizard_needs_heal(base):
         return False
 
 
-def _notify(msg):
+def _notify(msg, header='Kodi POV IL', timeout=8000, error=False):
     if xbmcgui is None:
         return
     try:
         xbmcgui.Dialog().notification(
-            'Kodi POV IL',
+            header,
             msg,
-            xbmcgui.NOTIFICATION_INFO,
-            8000,
+            (xbmcgui.NOTIFICATION_ERROR if error
+             else xbmcgui.NOTIFICATION_INFO),
+            timeout,
         )
+    except Exception:
+        pass
+
+
+def _modal_ok(msg, header='Kodi POV IL'):
+    """Blocking modal -- user MUST tap OK. Used for the success
+    path so the restart prompt can't be missed (toast disappears
+    in 8s; a lot of Android users boot Kodi, look at the home
+    screen for 10s deciding what to do, and miss the toast)."""
+    if xbmcgui is None:
+        return
+    try:
+        xbmcgui.Dialog().ok(header, msg)
     except Exception:
         pass
 
@@ -116,8 +157,7 @@ def ensure_healed():
     """Self-heal the bundled wizard if it's still on the
     extract.all-skip-bug version. Returns one of:
     'no_wizard' | 'wizard_already_healthy' | 'already_healed'
-    | 'no_urllib' | 'download_failed' | 'bad_zip'
-    | 'write_failed' | 'healed'.
+    | 'no_staged_zip' | 'bad_zip' | 'write_failed' | 'healed'.
     """
     base = _wizard_base()
     if not base or not os.path.isdir(base):
@@ -134,30 +174,36 @@ def ensure_healed():
         except OSError:
             pass
         return 'wizard_already_healthy'
-    if urllib_req is None:
-        return 'no_urllib'
+
+    ai_base = _ai_subs_base()
+    if not ai_base:
+        _log('cannot locate AI subs addon path', level='WARNING')
+        return 'no_staged_zip'
+    staged = os.path.join(ai_base, STAGED_ZIP_REL)
+    if not os.path.isfile(staged):
+        _log('staged zip missing at ' + staged, level='WARNING')
+        _notify(
+            'תיקון הוויזרד נכשל: קובץ התיקון חסר. '
+            'התקן ידנית מ-Install from zip.',
+            timeout=12000, error=True,
+        )
+        return 'no_staged_zip'
 
     _log('installed wizard lacks ignore-bypass sentinel; '
-         'downloading latest from GitHub to heal',
+         'extracting bundled wizard zip to heal',
          level='INFO')
     try:
-        req = urllib_req.Request(
-            WIZARD_ZIP_URL,
-            headers={'User-Agent': USER_AGENT},
-        )
-        with urllib_req.urlopen(req, timeout=REQUEST_TIMEOUT) as resp:
-            data = resp.read()
-    except Exception as e:
-        _log('download failed: {0}'.format(e), level='WARNING')
-        return 'download_failed'
-
-    try:
-        zf = zipfile.ZipFile(io.BytesIO(data), 'r')
+        zf = zipfile.ZipFile(staged, 'r')
     except Exception as e:
         _log('zip parse failed: {0}'.format(e), level='WARNING')
+        _notify(
+            'תיקון הוויזרד נכשל: קובץ התיקון פגום. '
+            'התקן ידנית מ-Install from zip.',
+            timeout=12000, error=True,
+        )
         return 'bad_zip'
 
-    # The published zip wraps its tree in `plugin.program.kodipovilwizard/`.
+    # The staged zip wraps its tree in `plugin.program.kodipovilwizard/`.
     # Strip that prefix when writing so files land directly under the
     # installed wizard's addon dir.
     prefix = WIZARD_ADDON_ID + '/'
@@ -174,8 +220,7 @@ def ensure_healed():
                 rel = m
             if not rel or rel.endswith('/'):
                 continue
-            # Path traversal guard -- the zip is ours, but defence
-            # in depth never hurts when we're shelling out file writes.
+            # Path traversal guard -- defence in depth.
             parts = rel.replace('\\', '/').split('/')
             if '..' in parts or '' in parts:
                 continue
@@ -188,6 +233,11 @@ def ensure_healed():
             written += 1
     except OSError as e:
         _log('write failed: {0}'.format(e), level='WARNING')
+        _notify(
+            'תיקון הוויזרד נכשל: בעיית כתיבה לדיסק. '
+            'בדוק הרשאות אחסון של Kodi.',
+            timeout=12000, error=True,
+        )
         return 'write_failed'
     finally:
         try:
@@ -195,9 +245,21 @@ def ensure_healed():
         except Exception:
             pass
 
+    # Best-effort cleanup of stale bytecode so Python picks up
+    # the new .py files cleanly on next boot. Not critical -- .pyc
+    # mtime checks will recompile anyway -- but on Android Kodi
+    # we've seen stale cached imports.
+    try:
+        pycache_root = os.path.join(base, 'resources', 'libs',
+                                    '__pycache__')
+        if os.path.isdir(pycache_root):
+            shutil.rmtree(pycache_root, ignore_errors=True)
+    except Exception:
+        pass
+
     try:
         with open(marker, 'wb') as f:
-            f.write(b'healed by AI subs wizard_self_healer\n')
+            f.write(b'healed by AI subs wizard_self_healer v2\n')
     except OSError:
         # Marker write failure is non-fatal; the sentinel check
         # next boot will see the new wizard.py and short-circuit.
@@ -208,9 +270,14 @@ def ensure_healed():
          'the old import for the lifetime of this process).'
          .format(written), level='INFO')
 
-    # Hebrew toast so the user knows to restart -- otherwise the
-    # next quick_update + Switch Skin path stays on the cached
-    # old wizard module and nothing visibly changes.
-    _notify('הוויזרד עודכן. אנא הפעל מחדש את Kodi כדי לראות Arctic Fuse 3.')
-
+    # Modal dialog so the user CANNOT miss the restart instruction.
+    # The v1 toast (8s) was getting missed -- user reported "no
+    # notification appeared at all" after quick_update + restart.
+    _modal_ok(
+        'הוויזרד עודכן בהצלחה ל-0.1.10.\n\n'
+        'כדי להפעיל את המצב החדש (כולל Arctic Fuse 3 ברשימת '
+        'החלפת סקין):\n\n'
+        '[B]סגור את Kodi לחלוטין ופתח מחדש[/B]\n\n'
+        '(אנדרואיד: לחיצה ארוכה על Home → Force Stop → פתח שוב)'
+    )
     return 'healed'
