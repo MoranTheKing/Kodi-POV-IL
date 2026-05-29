@@ -34,12 +34,17 @@ import unicodedata
 import urllib.parse
 
 
-# Gemini API keys are ASCII alphanumeric + dash + underscore, ~39 chars.
-# We keep this filter intentionally tight: anything outside it is
-# either iOS autocorrect garbage (curly quotes, NBSP, ZWSP) or
-# user typo from manual entry. Stripping it gives the API key it
-# actually expected, not the version iOS Safari rewrote.
-_KEY_CHARSET_RE = re.compile(r'[^A-Za-z0-9_\-]')
+# Gemini API keys come in two formats Google issues from AI Studio:
+#   * Legacy "AIza..." -- 39 ASCII chars, alphanumeric + dash + underscore.
+#   * New "AQ.AbcDef..." (rolled out late 2025) -- ~50 ASCII chars and
+#     INCLUDES PERIODS as part of the key body. Without `.` in the
+#     allow-list below the sanitizer would strip every period and ship
+#     `AQAbcDef...` to Google -- which is rejected as malformed (400).
+# The filter stays tight on every OTHER non-key codepoint (curly
+# quotes, NBSP, ZWSP, RTL marks etc. that iOS Safari inserts) so a
+# corrupted paste still gets cleaned up; we just add `.` to the
+# allow-set so new-format keys pass through intact.
+_KEY_CHARSET_RE = re.compile(r'[^A-Za-z0-9_\-\.]')
 
 # iOS Smart Punctuation replaces ASCII hyphen-minus (U+002D) with
 # typographically "pretty" dash variants -- em-dash for `--`, sometimes
@@ -144,7 +149,7 @@ _HTML_FORM = '''<!doctype html>
              autocomplete="off" autocapitalize="off"
              autocorrect="off" spellcheck="false"
              inputmode="verbatim"
-             placeholder="AIza..." required>
+             placeholder="AIza... או AQ.Ab8..." required>
       <button type="submit">שלח ל-Kodi</button>
     </form>
     <p class="small">
