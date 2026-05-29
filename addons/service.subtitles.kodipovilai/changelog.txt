@@ -1,4 +1,25 @@
 v0.2.49
+- Subtitle picker (round 3, the actually-right target): the dialog
+  the user sees with the services panel + per-row flag + filename
+  is Kodi's NATIVE DialogSubtitles, rendered by the ACTIVE SKIN
+  (FENtastic in this build). DarkSubs is just a listed service.
+  The previous two attempts targeted the wrong files. New
+  skin_dialog_subtitles_row_patcher rewrites
+  skin.fentastic/xml/DialogSubtitles.xml directly: bumps the
+  per-row itemlayout + focusedlayout heights from 100 to 140 px
+  AND bumps the inner textbox control (the $INFO[ListItem.Label2]
+  release-name display) by the same +40. Two wrapped lines of
+  font12 now fit cleanly without the second line getting clipped.
+  Verified against the actual FENtastic XML shipped in the build:
+  both itemlayout and focusedlayout rewritten, both inner Label2
+  textboxes rewritten, final XML stayed well-formed (ET clean).
+- Same patcher works on any skin whose DialogSubtitles.xml uses
+  the standard <itemlayout height="N"> + textbox-referencing-
+  Label2 idiom (matches Estuary, Arctic Zephyr variants and most
+  modern skins). Skips layouts without ListItem.Label2 so it
+  never touches unrelated containers. Skips layouts already >=140
+  px so a skin author who already handled this gets a no-op.
+
 - DarkSubs picker (round 2 after #157 was a no-op): the picker is
   actually a pyxbmct.AddonDialogWindow built in Python, not skin
   XML -- DarkSubs ships no resources/skins/ folder at all, so the
