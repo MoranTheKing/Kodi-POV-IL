@@ -1,3 +1,15 @@
+v0.2.61
+- AF3 phone/touch pass: the home screen now uses Standard rows again
+  instead of the Combined category selector, because the selector is
+  awkward and can mis-target taps on phones.
+- Adds a real "כלים וחיבורים" widget row backed by the wizard. This
+  makes Connect Services, POV, AI settings, Quick Update, Switch Skin,
+  Send Log, Reload Skin, Kodi Settings, and Quit visible on the home
+  screen even when AF3's power icon is hidden or hard to tap.
+- Plot text now uses a real textbox with autoscroll enabled, so long
+  Hebrew plots can continue scrolling instead of being cut after a few
+  lines.
+
 v0.2.60
 - AF3 CoreELEC build: the Arctic Fuse 3 skin pack now uses the
   CoreELEC-friendly CE-Repo mod (skin version 6.3.2.9) instead of the

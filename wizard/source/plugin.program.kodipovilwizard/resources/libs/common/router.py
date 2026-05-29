@@ -103,6 +103,12 @@ class Router:
             elif action == 'install_af3_ce':
                 from resources.libs.wizard import ensure_arctic_fuse_3_installed
                 ensure_arctic_fuse_3_installed()
+            elif action == 'af3_tools':
+                from resources.libs.wizard import af3_tools_menu
+                af3_tools_menu()
+            elif action == 'af3_tool':
+                from resources.libs.wizard import af3_tool_action
+                af3_tool_action(self.params.get('tool', ''))
             # KODI-RD-IL
             elif action == 'kodi_version_update_check':
                 from resources.libs.wizard import kodi_version_update_check

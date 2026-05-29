@@ -28,7 +28,7 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-05-30-pov-home-v5'
+PATCH_VERSION = '2026-05-30-pov-home-v6'
 AF3_CE_VERSION = '6.3.2.9'
 
 BASE_NODES = 'special://profile/addon_data/script.skinvariables/nodes/'
@@ -37,6 +37,7 @@ AF3_FONT_XML = 'special://home/addons/' + AF3_SKIN_ID + '/1080i/Font.xml'
 AF3_FONT_DIR = 'special://home/addons/' + AF3_SKIN_ID + '/fonts/'
 AF3_NOTO_FONT = AF3_FONT_DIR + 'NotoSans-Regular.ttf'
 AF3_XML_DIR = 'special://home/addons/' + AF3_SKIN_ID + '/1080i/'
+AF3_INFO_XML = AF3_XML_DIR + 'Includes_Info.xml'
 AF3_HEBREW_PO = (
     'special://home/addons/' + AF3_SKIN_ID +
     '/language/resource.language.he_il/strings.po')
@@ -134,6 +135,14 @@ def _shortcut_folder(name, icon='folder.png'):
 
 
 HOME_WIDGETS = [
+    {
+        'label': 'כלים וחיבורים',
+        'icon': 'special://home/media/build_icons/POV/Connect_Services.png',
+        'path': 'plugin://plugin.program.kodipovilwizard/?mode=install&action=af3_tools',
+        'target': 'programs',
+        'widget_style': 'Landscape',
+        'widget_limit': '20',
+    },
     {
         'label': 'סרטים חדשים',
         'icon': 'special://home/media/build_icons/Twilight/Movies/Movies_Popular.png',
@@ -522,6 +531,36 @@ def _patch_touch_cleanup_xml():
     return changed
 
 
+def _patch_info_plot_autoscroll_xml():
+    if not _exists(AF3_INFO_XML):
+        return False
+    try:
+        text = _read(AF3_INFO_XML)
+    except Exception:
+        return False
+    if 'POV_AF3_PLOT_AUTOSCROLL_v1' in text:
+        return False
+    needle = (
+        '                <height>$PARAM[height]</height>\n'
+        '                <left>40</left>\n'
+        '                <font>font_main_plot</font>\n'
+        '                <nested />')
+    repl = (
+        '                <height>$PARAM[height]</height>\n'
+        '                <left>40</left>\n'
+        '                <font>font_main_plot</font>\n'
+        '                <!-- POV_AF3_PLOT_AUTOSCROLL_v1 -->\n'
+        '                <autoscroll delay="3000" time="26000" repeat="10000">true</autoscroll>\n'
+        '                <nested />')
+    if needle not in text:
+        return False
+    try:
+        _write(AF3_INFO_XML, text.replace(needle, repl, 1))
+        return True
+    except Exception:
+        return False
+
+
 def _set_af3_runtime_defaults():
     if xbmc is None:
         return
@@ -533,9 +572,10 @@ def _set_af3_runtime_defaults():
         'Skin.SetString(CustomRating.TVShows.Item02,IMDb)',
         'Skin.SetString(CustomRating.TVShows.Item03,Trakt)',
         'Skin.Reset(HomeSwitcher.Vertical)',
-        'Skin.SetString(HomeSwitcher.Home.Mode,Combined)',
-        'Skin.SetString(HomeSwitcher.1101.Mode,Combined)',
-        'Skin.SetString(HomeSwitcher.1102.Mode,Combined)',
+        'Skin.SetString(HomeSwitcher.Home.Mode,Standard)',
+        'Skin.SetString(HomeSwitcher.1101.Mode,Standard)',
+        'Skin.SetString(HomeSwitcher.1102.Mode,Standard)',
+        'Skin.SetBool(Textboxes.DisableFakeBox)',
         'Skin.SetString(HomeSwitcher.Home.Spotlight.Path,plugin://plugin.video.pov/?action=tmdb_movies_latest_releases&iconImage=dvd.png&mode=build_movie_list&name=32461)',
         'Skin.SetString(HomeSwitcher.Home.Spotlight.Target,videos)',
         'Skin.SetString(HomeSwitcher.Home.Spotlight.Label,סרטים חדשים)',
@@ -595,6 +635,7 @@ def ensure_patched():
     changed = _patch_hebrew_language() or changed
     changed = _patch_pov_genre_icons() or changed
     changed = _patch_touch_cleanup_xml() or changed
+    changed = _patch_info_plot_autoscroll_xml() or changed
     if _is_af3_active():
         _set_af3_runtime_defaults()
 
