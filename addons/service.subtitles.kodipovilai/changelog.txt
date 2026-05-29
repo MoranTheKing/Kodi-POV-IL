@@ -1,3 +1,19 @@
+v0.2.50
+- Arctic Fuse 3 first-launch dialog: when the user activates the
+  new third skin option (skin.arctic.fuse.3) for the first time,
+  show a one-shot Hebrew dialog offering to open POV's Connect
+  Services so they can authorise Trakt + TMDb. AF3 populates its
+  home hubs from those services; without them the home screen is
+  empty and looks broken. The dialog options are: Connect both /
+  Just Trakt / Just TMDb / Remind me later / No thanks. We just
+  open POV's Connect Services dialog -- we don't run Trakt's or
+  TMDb's OAuth ourselves. Marker-gated on a hidden addon setting
+  (`af3_first_launch_dialog_done`); skin-gated on
+  `xbmc.getSkinDir() == 'skin.arctic.fuse.3'` so this is a no-op
+  for FENtastic / Estuary / any other skin -- existing users
+  receiving this via quickfix are not disturbed. New module:
+  resources/lib/af3_first_launch.py.
+
 v0.2.49
 - Subtitle picker (round 3, the actually-right target): the dialog
   the user sees with the services panel + per-row flag + filename
