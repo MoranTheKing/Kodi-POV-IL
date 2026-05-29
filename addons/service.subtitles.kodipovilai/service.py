@@ -675,6 +675,37 @@ def _maybe_purge_temp_once():
             pass
 
 
+def _maybe_default_fast_first_chunk():
+    """One-shot: flip `fast_first_chunk` from the old default-off to
+    the new default-on for existing users. Gated by a marker so it
+    fires once per install; if the user later turns it off manually
+    we don't re-flip on subsequent startups."""
+    try:
+        from resources.lib import kodi_utils
+    except Exception:
+        return
+    try:
+        if kodi_utils.get_setting(
+                '_fast_first_chunk_default_v2', '') == '1':
+            return
+        # Only flip users currently on the old default 'false' --
+        # leaves any explicit 'true' alone.
+        if kodi_utils.get_setting('fast_first_chunk',
+                                  'false') == 'false':
+            kodi_utils.set_setting('fast_first_chunk', 'true')
+            kodi_utils.log(
+                'fast_first_chunk flipped to True (default v2 '
+                'migration)', level='INFO')
+        kodi_utils.set_setting('_fast_first_chunk_default_v2', '1')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'fast_first_chunk migration failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def main():
     if xbmc is None:
         return
@@ -779,6 +810,10 @@ def main():
     # that were written before the post-processor caught their
     # specific edge case. Marker-gated so it only runs once.
     _maybe_repair_rtl_cache()
+
+    # One-shot: flip `fast_first_chunk` default from off -> on for
+    # existing users on the old default. Marker-gated.
+    _maybe_default_fast_first_chunk()
 
     # Spin up the SubsFilenamePublisher player monitor. It needs to
     # outlive this function's local scope -- xbmc.Player subclasses
