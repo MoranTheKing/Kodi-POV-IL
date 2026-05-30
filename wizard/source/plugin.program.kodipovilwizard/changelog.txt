@@ -1,3 +1,11 @@
+[COLOR yellow][B]v0.1.14[/B][/COLOR]
+* Fix the version gate from 0.1.13: _af3_read_addon_version() was matching
+  the FIRST version=" in the file, which is the XML declaration
+  (<?xml version="1.0"?>), not the <addon> tag. So jurialmunkey 0.2.28 read
+  as "1.0", 1.0 >= 0.2.35 passed, and the deps pack was skipped -> the
+  TMDbHelper crash persisted after "fixing" it. Now we search from the
+  '<addon' tag so the real addon version is read.
+
 [COLOR yellow][B]v0.1.13[/B][/COLOR]
 * AF3 deps pack now has a VERSION GATE on jurialmunkey (>= 0.2.35).
   Previously _af3_pack_current() returned True as soon as the addon.xml
