@@ -1,3 +1,21 @@
+v0.2.82
+- Genre icons FOR REAL (both skins). The v0.2.81 approach (repaint AF3
+  navigator.db rows + ship icons to build_icons/Genres) didn't fix
+  FENtastic, because FENtastic opens genres via mode=navigator.genres --
+  a LIVE POV menu that ignores navigator.db. Real root cause: POV's
+  menus/navigator.py genres()/anime_genres() hard-code the single generic
+  'genres.png' for every genre in the _add_item call, even though POV's
+  own meta_lists.py already stores a per-genre icon in value[1]
+  (e.g. ['28','genre_action.png']) and ships those PNGs in
+  media/genres/. The icon was there; the menu never used it.
+  * New pov_genre_icons_patcher rewrites the two per-genre _add_item
+    calls from 'genres.png' to 'genres/%s' % value[1], so each genre gets
+    its own icon. Both FENtastic and AF3 route through navigator.genres,
+    so this fixes BOTH. Also installs our line-art genre PNGs into POV's
+    media/genres/ (and adds the one missing stock icon, genre_tv.png).
+    Marker-gated, idempotent, .pyc dropped; verified: matches exactly the
+    2 genre calls, patched navigator.py compiles, idempotent.
+
 v0.2.81
 - Skin polish batch (AF3 + genre icons + embedded-sub ordering):
   * Embedded "תרגום מובנה אנגלית" no longer sits above real English
