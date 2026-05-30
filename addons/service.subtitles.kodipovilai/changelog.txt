@@ -1,3 +1,28 @@
+v0.2.80
+- ROOT CAUSE FOUND + FIXED. The instrumented outer except (v0.2.79)
+  finally logged it on the device:
+    POV_RUN_ERROR: tmdb_favorites() takes 2 positional arguments but 3
+      were given | action='tmdb_favorites'
+    POV_RUN_ERROR: trakt_collection() takes 2 ... but 3 were given
+    POV_RUN_ERROR: get_favorites() takes 3 ... but 4 were given
+  Our pov_menus_patcher force-syncs movies.py/tvshows.py onto the device,
+  but POV auto-updates its OWN indexers/caches independently. The device
+  ended up with a NEWER POV core whose read functions take fewer args
+  (the trailing `letter` was dropped) than our synced movies.py passes ->
+  every personal list (TMDB/Trakt/POV favorites, movies AND shows) raised
+  TypeError in run() and came back empty. "Continue Watching" survived
+  only because get_in_progress_items(watched_info, mediatype, *args) has
+  *args that swallows the extra arg.
+  Fix: new _flex_call(function, *args) wrapper in movies.py/tvshows.py
+  (and episodes.py for marker consistency). It calls the read function
+  with the full args and, ONLY on a "takes N positional arguments but M
+  were given" TypeError, retries with one fewer trailing arg until it
+  fits -- so it works against ANY POV arity, present or future. All
+  personal-list call sites (tmdb_personal/trakt_personal/mdblist_personal/
+  personal_dict) now go through it. Unrelated TypeErrors still propagate.
+  pov_menus_patcher freshness MARKER bumped to `_flex_call` so existing
+  installs re-sync the fixed menu files once.
+
 v0.2.79
 - WIDEN the instrumentation: v0.2.78 logged the per-item build except,
   but the on-device log showed NO POV_BUILD_ITEM_ERROR at all -- the
