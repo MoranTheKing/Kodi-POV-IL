@@ -1,3 +1,10 @@
+v0.2.67
+- Actually fix the jurialmunkey upgrade (0.2.66 didn't take). The wizard's
+  AF3 version gate read the XML declaration's version="1.0" instead of the
+  addon's real version, so every installed addon looked like "1.0" and
+  1.0 >= 0.2.35 passed -> the deps pack was still skipped and jurialmunkey
+  stayed at 0.2.28. Requires wizard 0.1.14 (shipped in the same quickfix).
+
 v0.2.66
 - Fix AF3 TMDbHelper crash ("No module named 'jurialmunkey.ftools'"):
   AF3's bundled TMDbHelper 6.15.6 needs script.module.jurialmunkey >= 0.2.35,
