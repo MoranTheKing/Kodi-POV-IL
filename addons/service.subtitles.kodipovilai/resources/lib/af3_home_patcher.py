@@ -28,8 +28,15 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-05-30-pov-home-v7'
+PATCH_VERSION = '2026-05-30-pov-home-v8'
 AF3_CE_VERSION = '6.3.2.9'
+# AF3's bundled TMDbHelper 6.15.6 imports jurialmunkey.ftools, which only
+# exists from script.module.jurialmunkey 0.2.35. Users who switched to AF3
+# while an older jurialmunkey (e.g. 0.2.28) was on disk get a TMDbHelper that
+# crash-loops its service on every startup -> AF3 widgets/ratings break. If we
+# detect an older jurialmunkey we re-trigger the deps-pack install (which now
+# has a version gate and overwrites the stale copy).
+JURIALMUNKEY_MIN_VERSION = '0.2.35'
 
 BASE_NODES = 'special://profile/addon_data/script.skinvariables/nodes/'
 AF3_NODES = BASE_NODES + AF3_SKIN_ID + '/'
@@ -365,16 +372,29 @@ def _copy(src, dst):
         fh.write(data)
 
 
-def _read_af3_version():
-    addon_xml = 'special://home/addons/' + AF3_SKIN_ID + '/addon.xml'
+def _version_tuple(ver):
+    parts = []
+    for chunk in str(ver).split('.'):
+        num = ''.join(ch for ch in chunk if ch.isdigit())
+        parts.append(int(num) if num else 0)
+    return tuple(parts)
+
+
+def _read_addon_version(addon_id):
+    addon_xml = 'special://home/addons/' + addon_id + '/addon.xml'
     if not _exists(addon_xml):
         return ''
     try:
-        text = _read(addon_xml)[:400]
+        text = _read(addon_xml)[:600]
     except Exception:
         return ''
+    # jurialmunkey declares version= on the <addon> tag, but the file also
+    # opens with <?xml version="1.0"?>. Find the addon-tag version, not the
+    # XML-decl one, by searching after the addon id.
+    anchor = text.find(addon_id)
+    search_from = anchor if anchor >= 0 else 0
     marker = 'version="'
-    pos = text.find(marker)
+    pos = text.find(marker, search_from)
     if pos < 0:
         return ''
     start = pos + len(marker)
@@ -382,10 +402,29 @@ def _read_af3_version():
     return text[start:end] if end > start else ''
 
 
+def _read_af3_version():
+    return _read_addon_version(AF3_SKIN_ID)
+
+
+def _jurialmunkey_too_old():
+    """True only when jurialmunkey is installed AND older than the minimum
+    TMDbHelper needs. Missing entirely -> not our problem to detect here
+    (the normal deps-pack install handles a fresh switch)."""
+    current = _read_addon_version('script.module.jurialmunkey')
+    if not current:
+        return False
+    try:
+        return _version_tuple(current) < _version_tuple(JURIALMUNKEY_MIN_VERSION)
+    except Exception:
+        return False
+
+
 def _request_ce_skin_upgrade():
     if xbmc is None:
         return False
-    if _read_af3_version() == AF3_CE_VERSION:
+    # Re-run the AF3 deps/skin install when EITHER the skin is on an older
+    # version OR jurialmunkey is too old for the bundled TMDbHelper.
+    if _read_af3_version() == AF3_CE_VERSION and not _jurialmunkey_too_old():
         return False
     try:
         xbmc.executebuiltin(
