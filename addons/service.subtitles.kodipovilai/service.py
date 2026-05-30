@@ -827,6 +827,38 @@ def _maybe_patch_darksubs_embedded_demote():
             pass
 
 
+def _maybe_patch_darksubs_embedded_insert():
+    """THE root-cause fix for embedded English on top. DarkSubs's
+    autosub.py inserts the embedded English entry at "right after the
+    last Hebrew subtitle", i.e. ABOVE the real English subs -- and it
+    does this AFTER engine.sort_subtitles, which is why the engine/picker
+    demotes never moved it. This patches autosub.py to insert embedded
+    English at the END of the list instead."""
+    try:
+        from resources.lib import darksubs_embedded_insert_patcher, \
+            kodi_utils
+    except Exception:
+        return
+    try:
+        status = darksubs_embedded_insert_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'darksubs_embedded_insert_patcher: embedded English now '
+                'inserted at the bottom of the list', level='INFO')
+        elif status in ('unmatched', 'write_failed', 'read_failed'):
+            kodi_utils.log(
+                'darksubs_embedded_insert_patcher: ' + status,
+                level='WARNING')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'darksubs_embedded_insert_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_darksubs_subwindow_demote():
     """Final-point embedded-English demote: patch DarkSubs's picker
     dialog sub_window.py so the embedded 'תרגום מובנה אנגלית' ([LOC])
@@ -1387,6 +1419,9 @@ def main():
     # short-circuits embedded picks before our hook runs) -- so we want
     # the external, translatable English source to be the first pick.
     _maybe_patch_darksubs_embedded_demote()
+    # ROOT-CAUSE fix: autosub.py inserts embedded English right after the
+    # Hebrew group (above real English). Make it insert at the end.
+    _maybe_patch_darksubs_embedded_insert()
     # Belt-and-braces: also demote at the picker dialog itself, the last
     # point before display, so embedded English can't slip back to the
     # top regardless of engine ordering.
