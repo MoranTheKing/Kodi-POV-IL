@@ -27,13 +27,14 @@ permissions:
   pull-requests: write
 
 env:
-  # applicationId for our build. Deliberately NOT org.xbmc.kodi so it installs
-  # as a separate app and never collides with the official Kodi from Play Store.
-  # NOTE: only the applicationId / provider authorities / permission names are
-  # renamed - the code package (smali classes org.xbmc.kodi.*) is left intact so
-  # Kodi's native JNI lookups (FindClass("org/xbmc/kodi/...")) still resolve.
-  PACKAGE_ID: 'org.moran.kodi'
-  OLD_PACKAGE_ID: 'org.xbmc.kodi'
+  # applicationId for our build. MUST stay org.xbmc.kodi when building via
+  # apktool-rebrand: changing the manifest package="" alone (without rebuilding
+  # the smali code package) breaks Kodi's native JNI lookups
+  # (FindClass("org/xbmc/kodi/...") + getPackageName()) and the app crashes on
+  # launch before the home screen loads. Renaming the applicationId properly
+  # requires a from-source xbmc/xbmc build (see APK_BUILD.md). The earlier
+  # org.moran.kodi attempt shipped in 21.3-povil.26 and crash-looped on boot.
+  PACKAGE_ID: 'org.xbmc.kodi'
   APP_NAME: 'Kodi POV IL'
 
 jobs:
@@ -114,25 +115,10 @@ jobs:
             echo "::group::apktool decode"
             apktool d -f -o "$WORK/decoded" "$WORK/kodi-official.apk"
             echo "::endgroup::"
-            echo "::group::Update label + version metadata + rebrand applicationId to $PACKAGE_ID"
+            echo "::group::Update label + version metadata (keep package id org.xbmc.kodi -- an apktool-only manifest package rename breaks Kodi's native JNI lookups and crash-loops on boot; a real applicationId change needs a from-source build, see APK_BUILD.md)"
             MANIFEST="$WORK/decoded/AndroidManifest.xml"
             sed -i 's/android:versionCode="[0-9]*"/android:versionCode="'"$VERSION_CODE"'"/' "$MANIFEST"
             sed -i 's/android:versionName="[^"]*"/android:versionName="'"$VERSION"'"/' "$MANIFEST"
-            # Rebrand the applicationId only. We must NOT touch component class
-            # names (activities/services live in the smali package org.xbmc.kodi
-            # and are referenced by full name), so we rename just:
-            #   - the root manifest package="" attribute (== applicationId)
-            #   - ContentProvider android:authorities (avoid clashing with the
-            #     official Kodi's providers, which would block side-by-side install)
-            #   - custom permission names declared/used by Kodi
-            # If a component used a relative name (".Foo"), expand it to the old
-            # fully-qualified form first so the package rename can't break it.
-            sed -i 's/android:name="\.\([A-Za-z0-9_]\)/android:name="'"$OLD_PACKAGE_ID"'.\1/g' "$MANIFEST"
-            sed -i 's/package="'"$OLD_PACKAGE_ID"'"/package="'"$PACKAGE_ID"'"/' "$MANIFEST"
-            sed -i 's/android:authorities="'"$OLD_PACKAGE_ID"'/android:authorities="'"$PACKAGE_ID"'/g' "$MANIFEST"
-            sed -i 's/android:name="'"$OLD_PACKAGE_ID"'\.permission/android:name="'"$PACKAGE_ID"'.permission/g' "$MANIFEST"
-            echo "--- manifest package line after rebrand ---"
-            grep -o 'package="[^"]*"' "$MANIFEST" | head -1
             for f in "$WORK/decoded/res/values/strings.xml" "$WORK/decoded"/res/values-*/strings.xml; do
               [ -f "$f" ] || continue
               sed -i 's|<string name="app_name">[^<]*</string>|<string name="app_name">'"$APP_NAME"'</string>|' "$f" || true
