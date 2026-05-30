@@ -1,3 +1,14 @@
+v0.2.66
+- Fix AF3 TMDbHelper crash ("No module named 'jurialmunkey.ftools'"):
+  AF3's bundled TMDbHelper 6.15.6 needs script.module.jurialmunkey >= 0.2.35,
+  but users who switched to AF3 with an older jurialmunkey (e.g. 0.2.28) kept
+  the stale copy -- the deps pack was skipped because it only checked the file
+  EXISTED, not its version. TMDbHelper's service then crash-looped on every
+  startup and AF3 widgets/ratings broke. Now: the AF3 home patcher detects an
+  old jurialmunkey and re-triggers the deps install, and the wizard's deps
+  pack gained a version gate (>= 0.2.35) so the re-extract actually overwrites
+  the stale module instead of skipping it.
+
 v0.2.65
 - Fix: the embedded-demote re-sort is now scoped to the English group
   ONLY. The 0.2.64 cut re-sorted the combined list by site_id '[LOC]',
