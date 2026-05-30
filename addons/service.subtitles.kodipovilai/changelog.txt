@@ -1,3 +1,23 @@
+v0.2.76
+- DIAGNOSTIC v3 (decisive): the v0.2.75 fix ran on-device (log confirms
+  "blank_entry purge ran: deleted 0" + "widened timeout") yet lists are
+  still empty -- which DISPROVES the poisoned-cache theory (there were 0
+  blank rows) and the timeout theory (favorites_movies returned in
+  ~218ms with ZERO network calls). Offline replay of get_favorites
+  against the user's real watched.db returns all 6 rows, so the read
+  layer is fine too. Three unknowns remain and v3 checks all three on
+  the device, once, with a screenshot popup:
+  * tmdb_read_token presence (the token movie_details/tvshow_details
+    actually use for per-item meta -- never inspected before; empty =>
+    every favorite resolves blank while popular lists still work since
+    they use tmdb.token).
+  * the EXACT watched.db path POV resolves + its movie-row count (in
+    case adds land in one db and the list reads another/empty one).
+  * a LIVE GET /3/movie/<fav id> with Bearer <tmdb_read_token> -> prints
+    HTTP status (200 success vs 401 unauthorized vs timeout). This single
+    call definitively separates token/fetch failure from a render bug.
+  No behaviour change to favorites; read-only.
+
 v0.2.75
 - ACTUALLY apply the favorites fix (v0.2.74 shipped the right idea but
   didn't take effect on devices). On-device proof: watched.db held 6
