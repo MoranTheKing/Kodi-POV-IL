@@ -62,38 +62,51 @@ from . import kodi_utils
 DARKSUBS_ADDON_ID = 'service.subtitles.All_Subs'
 ENGINE_REL_PATH = 'resources/modules/engine.py'
 
-MARKER = '# AI_EMBEDDED_DEMOTE_v1'
+MARKER = '# AI_EMBEDDED_DEMOTE_v2'
 
-# The site_id DarkSubs stamps on embedded-stream entries
-# (All_Subs/autosub.py: 'site_id':'[LOC]'). Index 9 in the result
-# tuple the list builder assembles. We demote on this exact token so
-# we never touch real online providers.
+# v2 -- why the v1 (english-group-only) demote did not help this user:
+#   The embedded entry is classified into a language group SOLELY by its
+#   label/url string (its url is an integer stream index, not
+#   'language=English', so engine.py's `'English' in label` /
+#   `'Hebrew' in label` checks decide the bucket). On a Hebrew Kodi the
+#   embedded English track's label is the Hebrew phrase
+#   "תרגום מובנה אנגלית" -- which contains neither the ASCII word
+#   'English' nor 'Hebrew', so it does NOT land in english_subtitles
+#   (where v1 re-sorted) and instead floats ABOVE the English subs.
+#   That's exactly the user's report: the embedded "תרגום מובנה אנגלית"
+#   sits above every real English subtitle.
+#
+# v2 fix -- anchor on the COMBINE line
+#   `sorted_subtitles = hebrew_subtitles + telegram_... + english_... +
+#    other_languages_subtitles`
+#   and inject ONE stable re-sort of the whole combined list that sinks
+#   to the bottom ONLY the [LOC] embedded entries whose LABEL marks them
+#   as English (ASCII 'English'/'Eng' or Hebrew 'אנגלית'). A stable sort
+#   keeps every other entry's order, so:
+#     * a genuine embedded HEBREW track ([LOC] with a Hebrew/'עברית'
+#       label, NOT 'אנגלית') keeps its top position -- still the best
+#       pick, untouched;
+#     * online English/Hebrew providers keep their order;
+#     * only the embedded-English line drops to the bottom, regardless of
+#       which language bucket engine.py happened to file it under.
+#
+# This is robust to the misclassification because it acts on the final
+# combined list by label, not on one pre-sorted group.
+
+# The exact embedded site_id DarkSubs stamps (All_Subs/autosub.py).
 LOC_SITE_ID = '[LOC]'
 
-# We anchor on the per-group sort of the ENGLISH list specifically:
-#   english_subtitles = custom_sort(english_subtitles, site_id_order)
-# and inject our re-sort right AFTER it. This is deliberately scoped to
-# the English group ONLY -- we must NOT touch the Hebrew group.
-#
-# Why Hebrew must be left alone: DarkSubs stamps site_id '[LOC]' on BOTH
-# the embedded-English AND the embedded-Hebrew entries (All_Subs/
-# autosub.py). A Hebrew embedded track is the BEST possible pick -- native
-# Hebrew, perfectly synced, no translation needed -- and its hard-coded
-# 101% sync correctly floats it to the top of the Hebrew group, which the
-# concat (`hebrew + telegram_mt + english + other`) already puts first in
-# the whole list. Re-sorting the COMBINED list by '[LOC]' would have sunk
-# the Hebrew embedded entry below the English ones -- exactly wrong. By
-# only re-sorting english_subtitles we leave Hebrew (embedded or not)
-# untouched. '[LOC]' only ever appears in the Hebrew or English groups
-# (autosub builds embedded entries for 'heb'/'eng' only), so the English
-# group is the only place we need to act.
-#
-# Whitespace/indent tolerant. Require EXACTLY ONE match or we bail.
-_ENGLISH_SORT_RE = re.compile(
-    rb'^(?P<indent>[ \t]*)english_subtitles[ \t]*=[ \t]*'
-    rb'custom_sort[ \t]*\([^\r\n]*\)[ \t]*(?P<eol>\r?\n)',
+# Anchor: the combine line that concatenates the four language groups
+# into the final sorted_subtitles. Whitespace tolerant. Require EXACTLY
+# ONE match (there are two `sorted_subtitles =` lines in engine.py -- an
+# empty-init `= []` and this `= hebrew_subtitles + ...` one; we match
+# only the concat by requiring `hebrew_subtitles +`).
+_COMBINE_RE = re.compile(
+    rb'^(?P<indent>[ \t]*)sorted_subtitles[ \t]*=[ \t]*'
+    rb'hebrew_subtitles[ \t]*\+[^\r\n]*(?P<eol>\r?\n)',
     re.MULTILINE,
 )
+
 
 
 def _log(msg, level='INFO'):
@@ -137,34 +150,54 @@ def _invalidate_pyc_cache(py_path):
 
 
 def _build_inject_line(indent, eol):
-    """One self-contained statement that stable-sorts sorted_subtitles
-    so [LOC] (embedded) entries sink to the bottom. site_id is the
-    last element of each result tuple. Guarded with a try/except via a
-    list comprehension fallback isn't needed -- sorted() with a tuple
-    index can only fail if the tuples are malformed, which would have
-    crashed DarkSubs's own custom_sort already. Kept as a single line
-    so the injection stays trivially reversible by an upstream update.
+    """One self-contained statement that stable-sorts the combined
+    sorted_subtitles so an EMBEDDED ENGLISH entry sinks to the bottom,
+    while a genuine embedded HEBREW track stays put.
+
+    Per result tuple: index 9 = site_id ('[LOC]' for embedded), index 0
+    = label. We sink an entry only when it is BOTH embedded ([LOC]) AND
+    its label marks it English -- ASCII 'english'/'eng' or the Hebrew
+    word 'אנגלית'. A stable sort preserves all other ordering, so the
+    Hebrew embedded entry (label has 'עברית'/'hebrew', not 'אנגלית')
+    keeps its top spot. Single line so an upstream update reverts it
+    cleanly.
     """
+    # Build the key predicate. We keep it inline and defensive: tolerate
+    # short tuples and non-str labels.
     return (
         indent
-        + b'english_subtitles = sorted(english_subtitles, '
-        b'key=lambda _s: 1 if (len(_s) > 9 and _s[9] == '
+        + b'sorted_subtitles = sorted(sorted_subtitles, key=lambda _s: 1 '
+        b'if (len(_s) > 9 and _s[9] == '
         + repr(LOC_SITE_ID).encode('utf-8')
-        + b') else 0)  ' + MARKER.encode('utf-8') + eol
+        + b' and ('
+        b'"english" in str(_s[0]).lower() or '
+        b'"eng" in str(_s[0]).lower() or '
+        + b'"\\u05d0\\u05e0\\u05d2\\u05dc\\u05d9\\u05ea" in str(_s[0])'
+        + b')) else 0)  ' + MARKER.encode('utf-8') + eol
     )
 
 
+# Old v1 injected line (english-group-only). When we upgrade to v2 we
+# strip any leftover v1 line so the two don't coexist. Matches the whole
+# physical line (indent..eol) ending in the v1 marker.
+_V1_LINE_RE = re.compile(
+    rb'^[ \t]*english_subtitles[ \t]*=[ \t]*sorted\([^\r\n]*'
+    rb'# AI_EMBEDDED_DEMOTE_v1[ \t]*\r?\n',
+    re.MULTILINE,
+)
+
+
 def ensure_patched():
-    """Inject the embedded-demote re-sort right after engine.py's
-    `english_subtitles = custom_sort(...)` line, scoped to the English
-    group only so the Hebrew group (incl. a Hebrew embedded track, which
-    SHOULD stay first) is never touched.
+    """Inject a combined-list embedded-English demote right after
+    engine.py's `sorted_subtitles = hebrew_subtitles + ...` combine line.
+    Sinks only [LOC] entries whose label marks them English; a genuine
+    embedded Hebrew track keeps its top spot (stable sort).
 
     Returns one of:
       'patched'          -- injected the re-sort line
-      'already_patched'  -- marker present, no change
+      'already_patched'  -- v2 marker present, no change
       'no_engine'        -- DarkSubs not installed / path unreachable
-      'unmatched'        -- english_subtitles sort not found or ambiguous
+      'unmatched'        -- combine line not found or ambiguous
       'read_failed' / 'write_failed'
     """
     path = _engine_path()
@@ -180,14 +213,17 @@ def ensure_patched():
     if MARKER.encode('utf-8') in content:
         return 'already_patched'
 
-    matches = list(_ENGLISH_SORT_RE.finditer(content))
+    # Strip any stale v1 line first (best-effort; harmless if absent).
+    content = _V1_LINE_RE.sub(b'', content)
+
+    matches = list(_COMBINE_RE.finditer(content))
     if len(matches) == 0:
-        _log('english_subtitles custom_sort line not found -- DarkSubs '
+        _log('sorted_subtitles combine line not found -- DarkSubs '
              'upstream may have changed. Leaving native ordering.',
              level='WARNING')
         return 'unmatched'
     if len(matches) > 1:
-        _log('english_subtitles custom_sort matched {0} times -- '
+        _log('sorted_subtitles combine line matched {0} times -- '
              'refusing to inject ambiguously'.format(len(matches)),
              level='WARNING')
         return 'unmatched'
@@ -196,7 +232,7 @@ def ensure_patched():
     indent = m.group('indent')
     eol = m.group('eol')
     inject = _build_inject_line(indent, eol)
-    # Insert immediately AFTER the matched concat line so we re-sort
+    # Insert immediately AFTER the matched combine line so we re-sort
     # the list it just built.
     insert_at = m.end()
     new_content = content[:insert_at] + inject + content[insert_at:]
