@@ -1,20 +1,13 @@
-110
+111
 |||
-תיקון AllSubs ב-Windows — שגיאת shutil.SameFileError בכל הפעלה
-**הבעיה שדיווחת:** בכל פעם שאתה נכנס ל-Kodi מהמחשב, מקבל תקלה של AllSubs בכניסה.
+תיקון סדר כתוביות — תרגום מובנה באנגלית יורד לתחתית, עברית נשארת ראשונה
 
-**הסיבה (מהלוג שלך):** ב-`service.subtitles.all_subs_plus/service.py:177` הקוד עושה `shutil.copy(source_file_en, __languageDirEn__)`. ב-NTFS של Windows, שני הנתיבים האלה (`resources/language_sources/original_en_gb_strings.po` ו-`resources/language/resource.language.en_gb/strings.po`) מצביעים על אותו inode פיזי (junction/hardlink). `shutil.copy` של Python זורק `SameFileError` בדיוק במצב הזה — autosub.py קורס בייבוא, כל התוסף AllSubs נשבר בהפעלה.
+**מה תוקן (AI subs 0.2.65):**
+- בחלון בחירת הכתוביות (DarkSubs), כתובית "תרגום מובנה באנגלית" קיבלה 101% וצפה לראש קבוצת האנגלית. אבל כתובית מובנה לא ניתנת לתרגום AI (DarkSubs בוחר את ה-stream הפנימי לפני שה-hook שלנו רץ), אז היית נופל עליה ונתקע באנגלית לא מתורגמת.
+- מעכשיו: "תרגום מובנה באנגלית" יורד לתחתית קבוצת האנגלית, כך שמקור אנגלית חיצוני (שמתורגם אוטומטית ל-AI) הוא הבחירה הראשונה הטבעית.
+- **חשוב: תרגום מובנה בעברית לא נגעתי בו בכלל** — הוא נשאר ראשון תמיד, כמו שצריך (עברית מקורית, מסונכרנת, בלי צורך בתרגום).
 
-זה באג בקוד של AllSubs עצמו (לא שלנו).
-
-**מה תוקן (AI subs 0.2.62):**
-- patcher חדש self-healing שעוטף את 6 קריאות ה-`shutil.copy` ב-`setLanguageSettings` ב-`try/except shutil.SameFileError`. הקובץ הזהה כבר על הדיסק → ההעתקה מיותרת → הקריאה הופכת ל-no-op בשקט במקום קריסה.
-- marker-gated, idempotent — רץ פעם אחת, נשמר. אם AllSubs לא מותקן: no-op.
-- בדקתי על ה-service.py האמיתי שלך: 7 שורות נעטפו, הקובץ עובר py_compile נקי, ה-scenario של SameFileError אומת כקורס לפני התיקון ונעצר אחריו.
-
-**זרימה צפויה:**
-1. quick_update + restart.
-2. AI subs service רץ → מזהה service.py של AllSubs ללא marker → עוטף את 6 הקריאות → מסמן.
-3. הפעלות הבאות של Kodi: AllSubs יעלה נקי, בלי שגיאת SameFileError.
+**איך זה עובד:**
+patcher self-healing חדש (AI_EMBEDDED_DEMOTE_v1) שמזריק מיון מחדש ל-engine.py של DarkSubs, ממוקד לקבוצת האנגלית בלבד. no-op אם DarkSubs לא מותקן או אם המבנה שלו השתנה. נבדק על ה-engine.py האמיתי: עברית מובנה ← ראשון, אנגלית חיצונית ← אמצע, אנגלית מובנה ← אחרון.
 
 quick_update + restart.
