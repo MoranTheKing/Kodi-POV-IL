@@ -346,13 +346,7 @@ def _maybe_install_build_icons():
 
 def _maybe_patch_pov_genre_icons():
     """Re-icon POV's genre navigator rows to the stable
-    media/build_icons/Genres/ set we ship. Runs for ANY skin (FENtastic
-    AND AF3) since the genre rows live in POV's shared navigator.db --
-    the genre icons were blank on both skins because POV's own
-    media/genres/ folder isn't shipped by us and is wiped on POV
-    self-update. Separate from af3_home_patcher.ensure_patched(), which
-    early-returns 'no_af3' when AF3 isn't installed and so never ran the
-    genre fix on FENtastic-only devices."""
+    media/build_icons/Genres/ set we ship (AF3 cached shortcut rows)."""
     try:
         from resources.lib import af3_home_patcher, kodi_utils
     except Exception:
@@ -366,6 +360,37 @@ def _maybe_patch_pov_genre_icons():
         try:
             kodi_utils.log(
                 'pov genre icons patch failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_genre_menu_icons():
+    """THE real genre-icon fix for BOTH skins: patch POV's
+    menus/navigator.py genres()/anime_genres() so each genre uses its own
+    icon (value[1]) instead of the single generic 'genres.png'. Both
+    FENtastic and AF3 open genres via mode=navigator.genres, so this one
+    change gives every genre a distinct icon everywhere. Also installs our
+    line-art genre PNGs into POV's media/genres/."""
+    try:
+        from resources.lib import pov_genre_icons_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_genre_icons_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_genre_icons_patcher: per-genre icons enabled in '
+                'navigator.py', level='INFO')
+        elif status in ('no_pov', 'no_file', 'already_patched'):
+            pass
+        else:
+            kodi_utils.log(
+                'pov_genre_icons_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_genre_icons_patcher failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
@@ -1457,6 +1482,9 @@ def main():
     # Re-icon POV genre rows for BOTH skins (must run after build_icons
     # so the Genres/ PNGs are on disk; independent of AF3 install).
     _maybe_patch_pov_genre_icons()
+    # The REAL per-genre icon fix: patch POV navigator.py so genres()
+    # uses each genre's own icon (works on FENtastic AND AF3).
+    _maybe_patch_pov_genre_menu_icons()
     _maybe_patch_favourites_xml()
 
     # Restore the 6 personal "הסרטים שלי / הסדרות שלי" home tiles
