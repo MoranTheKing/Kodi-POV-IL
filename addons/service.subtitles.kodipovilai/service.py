@@ -442,6 +442,42 @@ def _maybe_patch_pov_cache_empty():
             pass
 
 
+def _maybe_patch_pov_trakt_cache_empty():
+    """Patch POV's caches/trakt_cache.py so cache_trakt_object()
+    refuses to store empty results. Companion to _maybe_patch_pov_
+    cache_empty (which only handles main_cache.py). Trakt's cache is
+    in a SEPARATE database (trakt.db) and -- critically -- has NO
+    expiration, so a single transient empty caches forever until an
+    explicit clear. Fixes the "My Movies (Trakt) tile shows empty
+    even though trakt.tv has the items" symptom that survived the
+    first PR's main_cache patch."""
+    try:
+        from resources.lib import (
+            pov_trakt_cache_empty_patcher, kodi_utils)
+    except Exception:
+        return
+    try:
+        status = pov_trakt_cache_empty_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_trakt_cache_empty_patcher: cache_trakt_object '
+                'now skips empty results; stale Trakt list rows '
+                'cleared', level='INFO')
+        elif status in ('no_pov', 'no_file', 'already_patched'):
+            pass  # quiet steady-state
+        else:
+            kodi_utils.log(
+                'pov_trakt_cache_empty_patcher: ' + status,
+                level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_trakt_cache_empty_patcher failed: '
+                '{0}'.format(e), level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_repeat_timer():
     """Wrap POV's myservices.py RepeatTimer.run() in try/except so
     auth-polling threads survive single-iteration failures. Without
@@ -1273,6 +1309,13 @@ def main():
     # keeps showing "No results". Patch caches.main_cache to skip
     # the set() when result is empty.
     _maybe_patch_pov_cache_empty()
+
+    # Sibling patch for trakt_cache.py (separate cache layer, no
+    # expiration -- empty results stuck FOREVER, not just 24h).
+    # Needed because the "My Movies (Trakt)" tile stayed empty even
+    # after the main_cache patch landed; trakt.db has its own cached
+    # empty list that PR #187 never touched.
+    _maybe_patch_pov_trakt_cache_empty()
 
     # v0.2.9 tried patching FENtastic's notification widget but
     # it broke things; this cleans up the leftover patch on disk
