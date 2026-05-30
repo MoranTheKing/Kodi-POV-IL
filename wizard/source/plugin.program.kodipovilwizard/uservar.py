@@ -52,14 +52,15 @@ WINDOWS_INSTALLATION_PATH = "C:\\Program Files\\Kodi"
 # ANDROID APK
 LATEST_APK_VERSION_TEXT_FILE = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/kodi_version_auto_update/apk/latest_apk_version.txt'
 APK_DOWNLOAD_URL = 'https://morantheking.github.io/Kodi-POV-IL/downloads/'
-# Primary package id our APK ships under. Stays org.xbmc.kodi because the
-# apktool-rebrand build can't safely change the applicationId (see
-# .github/workflows/build-apk.yml + APK_BUILD.md).
-APK_PACKAGE_ID = 'org.xbmc.kodi'
+# Primary package id our APK now ships under. The build renames the whole
+# code package + applicationId org.xbmc.kodi -> org.mora.kodi in lockstep
+# (same length, so nothing binary shifts), so our app installs SEPARATELY
+# from the official Kodi. See .github/workflows/build-apk.yml + APK_BUILD.md.
+APK_PACKAGE_ID = 'org.mora.kodi'
 # Every package id we have ever shipped. The update check treats all of these
-# as "our app" so people on an older org.xbmc.kodirdil build (or the short-lived
-# org.moran.kodi 21.3-povil.26 attempt) still get the update prompt.
-APK_PACKAGE_IDS = ['org.xbmc.kodi', 'org.xbmc.kodirdil', 'org.moran.kodi']
+# as "our app" so people on an older org.xbmc.kodi / org.xbmc.kodirdil build
+# (or the short-lived org.moran.kodi 21.3-povil.26 attempt) still get prompted.
+APK_PACKAGE_IDS = ['org.mora.kodi', 'org.xbmc.kodi', 'org.xbmc.kodirdil', 'org.moran.kodi']
 APK_DOWNLOADER_CODE = ''
 APK_DOWNLOADER_CODE_IMAGE_URL = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/kodi_version_auto_update/apk/apk_downloader_code.png'
 #########################################################
