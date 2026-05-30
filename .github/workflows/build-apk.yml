@@ -27,14 +27,31 @@ permissions:
   pull-requests: write
 
 env:
-  # applicationId for our build. MUST stay org.xbmc.kodi when building via
-  # apktool-rebrand: changing the manifest package="" alone (without rebuilding
-  # the smali code package) breaks Kodi's native JNI lookups
-  # (FindClass("org/xbmc/kodi/...") + getPackageName()) and the app crashes on
-  # launch before the home screen loads. Renaming the applicationId properly
-  # requires a from-source xbmc/xbmc build (see APK_BUILD.md). The earlier
-  # org.moran.kodi attempt shipped in 21.3-povil.26 and crash-looped on boot.
-  PACKAGE_ID: 'org.xbmc.kodi'
+  # Old (upstream) package id and code namespace, and the new ones we rename
+  # to. CRITICAL: we rename the WHOLE Java code package (org/xbmc/kodi -> the
+  # new namespace) AND the applicationId TOGETHER, consistently, across smali +
+  # manifest + res. The 21.3-povil.26 crash happened because only the manifest
+  # package="" was changed while the smali classes stayed org.xbmc.kodi -- an
+  # inconsistent state that crash-loops on boot. Renaming everything in lockstep
+  # keeps the app self-consistent.
+  #
+  # The native libkodi.so does NOT bind to the class namespace (zero
+  # Java_org_xbmc_kodi_* exports, zero "org/xbmc/kodi" class strings -- it uses
+  # RegisterNatives with a class passed from Java), so the .so files are left
+  # untouched and the rename is safe. Verified by decoding kodi-21.3.
+  OLD_PKG_DOT: 'org.xbmc.kodi'
+  OLD_PKG_SLASH: 'org/xbmc/kodi'
+  # Dash form appears in synthetic lambda method names
+  # (e.g. lambda$execute$0$org-xbmc-kodi-Splash). Must be renamed too, or
+  # apktool b chokes on the mismatched method name.
+  OLD_PKG_DASH: 'org-xbmc-kodi'
+  # sed BRE pattern with the literal dots ESCAPED. Without this, the regex
+  # '.' wildcard also matches the dash form and corrupts lambda names into
+  # 'org.mora.kodi-Splash' -- an invalid smali directive (learned the hard way).
+  OLD_PKG_DOT_RE: 'org\.xbmc\.kodi'
+  NEW_PKG_DOT: 'org.mora.kodi'
+  NEW_PKG_SLASH: 'org/mora/kodi'
+  NEW_PKG_DASH: 'org-mora-kodi'
   APP_NAME: 'Kodi POV IL'
 
 jobs:
@@ -115,14 +132,62 @@ jobs:
             echo "::group::apktool decode"
             apktool d -f -o "$WORK/decoded" "$WORK/kodi-official.apk"
             echo "::endgroup::"
-            echo "::group::Update label + version metadata (keep package id org.xbmc.kodi -- an apktool-only manifest package rename breaks Kodi's native JNI lookups and crash-loops on boot; a real applicationId change needs a from-source build, see APK_BUILD.md)"
-            MANIFEST="$WORK/decoded/AndroidManifest.xml"
+            echo "::group::Rename code package + applicationId $OLD_PKG_DOT -> $NEW_PKG_DOT (smali + manifest + res, in lockstep)"
+            DEC="$WORK/decoded"
+            MANIFEST="$DEC/AndroidManifest.xml"
+            # 1) Rewrite ALL THREE forms inside every smali file's CONTENTS
+            #    first, while the files are still under their old org/xbmc/kodi
+            #    path:
+            #      - slash form  (class refs:        Lorg/xbmc/kodi/Main;)
+            #      - dotted form (authorities etc.:  org.xbmc.kodi.media) -- dots
+            #        ESCAPED so the regex wildcard doesn't eat the dash form
+            #      - dash form   (lambda methods:    ...$org-xbmc-kodi-Splash)
+            find "$DEC"/smali* -name '*.smali' -type f -exec sed -i \
+              -e "s#${OLD_PKG_SLASH}#${NEW_PKG_SLASH}#g" \
+              -e "s#${OLD_PKG_DOT_RE}#${NEW_PKG_DOT}#g" \
+              -e "s#${OLD_PKG_DASH}#${NEW_PKG_DASH}#g" {} +
+            # 2) Physically move the class dir tree to the new namespace, in
+            #    every smali_classesN folder apktool may have produced.
+            for SMALI_DIR in "$DEC"/smali "$DEC"/smali_classes*; do
+              [ -d "$SMALI_DIR/$OLD_PKG_SLASH" ] || continue
+              NEW_PARENT="$SMALI_DIR/$(dirname "$NEW_PKG_SLASH")"
+              mkdir -p "$NEW_PARENT"
+              mv "$SMALI_DIR/$OLD_PKG_SLASH" "$NEW_PARENT/$(basename "$NEW_PKG_SLASH")"
+              # prune now-empty old parent (org/xbmc) if nothing else lives there
+              rmdir "$SMALI_DIR/$(dirname "$OLD_PKG_SLASH")" 2>/dev/null || true
+            done
+            # 3) Manifest: package="", authorities, component + permission names
+            #    (escaped dots -- literal match).
+            sed -i "s#${OLD_PKG_DOT_RE}#${NEW_PKG_DOT}#g" "$MANIFEST"
+            # 4) Any res/*.xml that references the package (searchable.xml etc.).
+            find "$DEC/res" -name '*.xml' -type f -exec sed -i \
+              "s#${OLD_PKG_DOT_RE}#${NEW_PKG_DOT}#g" {} +
+            # 5) Version metadata.
             sed -i 's/android:versionCode="[0-9]*"/android:versionCode="'"$VERSION_CODE"'"/' "$MANIFEST"
             sed -i 's/android:versionName="[^"]*"/android:versionName="'"$VERSION"'"/' "$MANIFEST"
-            for f in "$WORK/decoded/res/values/strings.xml" "$WORK/decoded"/res/values-*/strings.xml; do
+            # 6) App label.
+            for f in "$DEC/res/values/strings.xml" "$DEC"/res/values-*/strings.xml; do
               [ -f "$f" ] || continue
               sed -i 's|<string name="app_name">[^<]*</string>|<string name="app_name">'"$APP_NAME"'</string>|' "$f" || true
             done
+            # 7) Sanity gates -- fail the build loudly rather than ship a broken
+            #    half-renamed APK. Both must hold or we abort.
+            echo "--- package line ---"; grep -oE 'package="[^"]*"' "$MANIFEST" | head -1
+            if grep -q "package=\"$NEW_PKG_DOT\"" "$MANIFEST"; then
+              echo "OK: manifest package is $NEW_PKG_DOT"
+            else
+              echo "::error::manifest package was not renamed to $NEW_PKG_DOT"; exit 1
+            fi
+            LEFT_SLASH=$(grep -rl "$OLD_PKG_SLASH" "$DEC"/smali* 2>/dev/null | wc -l)
+            LEFT_DASH=$(grep -rl "$OLD_PKG_DASH" "$DEC"/smali* 2>/dev/null | wc -l)
+            LEFT_DOT=$(grep -rlE "$OLD_PKG_DOT_RE" "$DEC"/smali* 2>/dev/null | wc -l)
+            if [ "$LEFT_SLASH" -ne 0 ] || [ "$LEFT_DASH" -ne 0 ] || [ "$LEFT_DOT" -ne 0 ]; then
+              echo "::error::leftover old-package refs in smali (slash=$LEFT_SLASH dash=$LEFT_DASH dot=$LEFT_DOT)"; exit 1
+            fi
+            echo "OK: zero smali files still reference the old package (any form)"
+            test -f "$DEC/smali/$NEW_PKG_SLASH/Main.smali" \
+              || { echo "::error::Main.smali missing at new namespace path"; exit 1; }
+            echo "OK: Main.smali present at $NEW_PKG_SLASH"
             echo "::endgroup::"
             echo "::group::Bundle wizard and build into assets/"
             ASSETS="$WORK/decoded/assets"
