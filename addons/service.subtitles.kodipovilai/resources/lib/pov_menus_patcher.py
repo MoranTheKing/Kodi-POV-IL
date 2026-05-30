@@ -37,14 +37,18 @@ except Exception:
 POV_ADDON_ID = 'plugin.video.pov'
 MENU_FILES = ('movies.py', 'tvshows.py', 'episodes.py')
 
-# Substring that the v0.2.23 version of all three menu files
-# contains and earlier versions do not. The Hebrew "ניהול רשימות (Trakt)"
-# label was introduced in v0.2.23 alongside the move to fully-
-# independent service-Manager visibility (no longer mutually
-# exclusive between TMDB and Trakt). When this substring is
-# present, the file is already up to date; when absent, the
-# canonical bundled version gets copied in.
-MARKER = '[B]ניהול רשימות (Trakt)[/B]'
+# Substring that ONLY the current canonical menu files contain, so we
+# know whether the device's copy is up to date. Bumped to the
+# `_flex_call` helper name in v0.2.80: that version-resilient call
+# wrapper was added to movies.py/tvshows.py to fix the
+# "tmdb_favorites() takes 2 positional arguments but 3 were given"
+# TypeError that emptied every personal list when POV auto-updated its
+# indexers/caches to a different arity than our synced movies.py
+# expected. Earlier synced copies lack `_flex_call`, so this marker
+# forces a one-time re-sync of the fixed files onto existing installs.
+# (The previous marker, the Hebrew "ניהול רשימות (Trakt)" label, is
+# still in the files but is no longer the freshness signal.)
+MARKER = '_flex_call'
 
 
 def _log(msg, level='INFO'):
