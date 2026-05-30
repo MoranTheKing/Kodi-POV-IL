@@ -1,12 +1,14 @@
 v0.2.64
-- Embedded ("[LOC]") subtitles now sink to the BOTTOM of their
-  language group in the DarkSubs picker instead of floating to the top
-  on their hard-coded 101% sync. On this streaming build the embedded
-  track can't be AI-translated (DarkSubs short-circuits embedded picks
-  with setSubtitleStream before the AI hook runs), so demoting it makes
-  the external, AI-translatable English source the natural first pick.
-  New self-healing patcher (AI_EMBEDDED_DEMOTE_v1), no-op when DarkSubs
-  isn't installed or its engine.py has changed shape.
+- Embedded ENGLISH ("[LOC]") subtitles now sink to the bottom of the
+  English group in the DarkSubs picker instead of floating to the top on
+  their hard-coded 101% sync. On this streaming build the embedded track
+  can't be AI-translated (DarkSubs short-circuits embedded picks with
+  setSubtitleStream before the AI hook runs), so demoting it makes the
+  external, AI-translatable English source the natural first pick.
+  Embedded HEBREW is deliberately left untouched -- it stays first, as
+  it should (native Hebrew, perfectly synced, no translation needed).
+  New self-healing patcher (AI_EMBEDDED_DEMOTE_v1), scoped to the English
+  group only; no-op when DarkSubs isn't installed or engine.py changed.
 
 v0.2.63
 - AF3 phone/touch pass (iteration 1): enable Kodi's mouse/pointer support
