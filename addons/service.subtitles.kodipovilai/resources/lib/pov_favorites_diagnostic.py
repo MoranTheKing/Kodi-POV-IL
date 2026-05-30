@@ -230,12 +230,11 @@ def run(force=False):
         except Exception as e:
             _log('file write failed: %s' % e, level='WARNING')
 
-        # popup so the user can just screenshot it
-        try:
-            xbmcgui.Dialog().textviewer(
-                'אבחון מועדפים — צלם מסך ושלח', report)
-        except Exception:
-            pass
+        # NOTE: the textviewer popup was intentionally removed in
+        # v0.2.73. It annoyed the general userbase on every rollout.
+        # The report still lands in kodi.log and in
+        # <POV profile>/POV_FAV_DIAGNOSTIC.txt, which is all we need to
+        # diagnose -- silently, with no on-screen interruption.
 
         _our_set('_fav_diag_done', DIAG_VERSION)
         return 'done'
