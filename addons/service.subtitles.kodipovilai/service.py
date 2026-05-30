@@ -400,6 +400,36 @@ def _maybe_patch_pov_repeat_timer():
             pass
 
 
+def _maybe_patch_pov_favorites_refresh():
+    """Make POV's dialogs.py refresh the open container when an item is
+    ADDED to a list, not only when removed. Without this, adding a title
+    to "My Movies"/"My Shows" (TMDB Favorites/Watchlist, a custom list,
+    or POV-local favorites) shows the "added" toast but the item only
+    appears after navigating away and back -- removing already refreshes
+    instantly. Self-healing: re-applies every startup if POV wiped the
+    marker; skips silently if the upstream shape changed."""
+    try:
+        from resources.lib import pov_favorites_refresh_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_favorites_refresh_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_favorites_refresh_patcher: container now refreshes '
+                'on add too', level='INFO')
+        elif status in ('unmatched', 'write_failed', 'read_failed'):
+            kodi_utils.log(
+                'pov_favorites_refresh_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_favorites_refresh_patcher run failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_services():
     """Inject Gemini AI + Wyzie entries into the POV plugin's
     "My Services" menu (the one at /myservices in plugin.video.pov).
@@ -1119,6 +1149,12 @@ def main():
     # so a single failed poll doesn't silently kill the whole auth
     # thread for Trakt / RD / TorBox / PM / AD.
     _maybe_patch_pov_repeat_timer()
+
+    # Make adding to a list refresh the open container (POV core only
+    # refreshes on remove), so "My Movies"/"My Shows" and other lists
+    # show a just-added title immediately instead of after navigating
+    # away and back.
+    _maybe_patch_pov_favorites_refresh()
 
     # Fix the home-screen Favorites tile typo in POV's bundled
     # navigator.db (one-shot, idempotent). See function docstring
