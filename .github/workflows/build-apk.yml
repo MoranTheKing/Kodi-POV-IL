@@ -27,26 +27,14 @@ permissions:
   pull-requests: write
 
 env:
-  # We rename the whole package org.xbmc.kodi -> org.mora.kodi (a SEPARATE
-  # app that installs alongside official Kodi). Two halves, both consistent:
-  #   - AndroidManifest.xml + res/*.xml: renamed in apktool's decoded text
-  #     (sed, dots escaped via OLD_PKG_DOT_RE).
-  #   - classes.dex + resources.arsc: NOT re-assembled by apktool (its smali
-  #     round-trip broke Kodi's JNI registration and crash-looped 21.3-povil.27
-  #     in System.loadLibrary). Instead the ORIGINAL dex is byte-patched in
-  #     place by .github/scripts/patch_dex_package.py -- same-length rename
-  #     (org.xbmc.kodi and org.mora.kodi are both 13 chars) + fixed dex
-  #     checksum/signature, so the compiled bytecode stays identical to upstream.
-  # The native .so files are left untouched: libkodi.so has zero
-  # Java_org_xbmc_kodi_* exports / class strings (it binds natives via
-  # RegisterNatives with a class handed in from Java). Verified on kodi-21.3.
-  OLD_PKG_DOT: 'org.xbmc.kodi'
-  OLD_PKG_SLASH: 'org/xbmc/kodi'
-  # sed BRE pattern with literal dots ESCAPED (so the regex '.' wildcard can't
-  # also eat unrelated chars). Used only for the manifest/res text rename.
-  OLD_PKG_DOT_RE: 'org\.xbmc\.kodi'
-  NEW_PKG_DOT: 'org.mora.kodi'
-  NEW_PKG_SLASH: 'org/mora/kodi'
+  # applicationId for our build. MUST stay org.xbmc.kodi when building via
+  # apktool-rebrand: changing the manifest package="" alone (without rebuilding
+  # the smali code package) breaks Kodi's native JNI lookups
+  # (FindClass("org/xbmc/kodi/...") + getPackageName()) and the app crashes on
+  # launch before the home screen loads. Renaming the applicationId properly
+  # requires a from-source xbmc/xbmc build (see APK_BUILD.md). The earlier
+  # org.moran.kodi attempt shipped in 21.3-povil.26 and crash-looped on boot.
+  PACKAGE_ID: 'org.xbmc.kodi'
   APP_NAME: 'Kodi POV IL'
 
 jobs:
@@ -127,45 +115,25 @@ jobs:
             echo "::group::apktool decode"
             apktool d -f -o "$WORK/decoded" "$WORK/kodi-official.apk"
             echo "::endgroup::"
-            echo "::group::Rename $OLD_PKG_DOT -> $NEW_PKG_DOT (manifest + res via apktool; dex via in-place binary patch)"
-            DEC="$WORK/decoded"
-            MANIFEST="$DEC/AndroidManifest.xml"
-            # WHY THIS IS NOT A SMALI EDIT:
-            #   apktool's baksmali->smali round-trip RE-ASSEMBLES classes.dex,
-            #   and on Kodi that subtly broke JNI native registration ->
-            #   System.loadLibrary("kodi") crashed in nativeLoad on launch
-            #   (21.3-povil.27). So we do NOT touch smali and we do NOT let
-            #   apktool rebuild the dex. Instead:
-            #     - apktool handles AndroidManifest.xml + res (package=,
-            #       authorities, component names, version) -- the parts it's
-            #       reliable at; its rebuilt dex is thrown away below.
-            #     - classes*.dex are taken from the ORIGINAL apk and patched
-            #       BYTE-FOR-BYTE: org/xbmc/kodi -> org/mora/kodi is the same
-            #       length (13 chars), so every string offset/length in the dex
-            #       stays valid; we just fix the dex header checksum (Adler-32)
-            #       and SHA-1 signature. The compiled bytecode is otherwise
-            #       identical to upstream Kodi -- nothing for apktool to break.
-            #   The three string forms in the dex/manifest:
-            #     slash  Lorg/xbmc/kodi/Main;     (class descriptors)
-            #     dotted org.xbmc.kodi.media      (authorities / getName)
-            #     dash   ...$org-xbmc-kodi-Splash (synthetic lambda names)
-            #
-            # 1) Manifest (decoded to text by apktool): rename + version.
-            sed -i "s#${OLD_PKG_DOT_RE}#${NEW_PKG_DOT}#g" "$MANIFEST"
-            find "$DEC/res" -name '*.xml' -type f -exec sed -i \
-              "s#${OLD_PKG_DOT_RE}#${NEW_PKG_DOT}#g" {} +
+            echo "::group::Update label + version metadata (keep package id org.xbmc.kodi -- an apktool-only manifest package rename breaks Kodi's native JNI lookups and crash-loops on boot; a real applicationId change needs a from-source build, see APK_BUILD.md)"
+            MANIFEST="$WORK/decoded/AndroidManifest.xml"
             sed -i 's/android:versionCode="[0-9]*"/android:versionCode="'"$VERSION_CODE"'"/' "$MANIFEST"
             sed -i 's/android:versionName="[^"]*"/android:versionName="'"$VERSION"'"/' "$MANIFEST"
-            for f in "$DEC/res/values/strings.xml" "$DEC"/res/values-*/strings.xml; do
+            for f in "$WORK/decoded/res/values/strings.xml" "$WORK/decoded"/res/values-*/strings.xml; do
               [ -f "$f" ] || continue
               sed -i 's|<string name="app_name">[^<]*</string>|<string name="app_name">'"$APP_NAME"'</string>|' "$f" || true
             done
-            echo "--- package line ---"; { grep -oE 'package="[^"]*"' "$MANIFEST" || true; } | head -1
-            if grep -q "package=\"$NEW_PKG_DOT\"" "$MANIFEST"; then
-              echo "OK: manifest package is $NEW_PKG_DOT"
-            else
-              echo "::error::manifest package was not renamed to $NEW_PKG_DOT"; exit 1
-            fi
+            # Custom launcher icon. Kodi uses plain @drawable/ic_launcher PNGs
+            # (no adaptive/mipmap), so we overwrite the 6 density variants with
+            # our Kodi POV IL icon. This is independent of the package id.
+            for dens in ldpi mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+              ICON_SRC="src/.github/assets/ic_launcher/ic_launcher-${dens}.png"
+              ICON_DST="$WORK/decoded/res/drawable-${dens}/ic_launcher.png"
+              if [ -f "$ICON_SRC" ] && [ -f "$ICON_DST" ]; then
+                cp "$ICON_SRC" "$ICON_DST"
+                echo "icon: replaced drawable-${dens}/ic_launcher.png"
+              fi
+            done
             echo "::endgroup::"
             echo "::group::Bundle wizard and build into assets/"
             ASSETS="$WORK/decoded/assets"
@@ -200,39 +168,8 @@ jobs:
             echo "--- final manifest tail ---"
             tail -15 "$MANIFEST_FILE"
             echo "::endgroup::"
-            echo "::group::apktool repack, then swap in ONLY the binary-patched original dex"
+            echo "::group::apktool repack + zipalign + sign"
             apktool b -o "$WORK/unsigned.apk" "$WORK/decoded"
-            # apktool's repacked dex is the broken one (re-assembled), which
-            # crash-looped Kodi in System.loadLibrary (21.3-povil.27). Replace
-            # ONLY classes*.dex with the ORIGINAL Kodi dex, binary-patched in
-            # place (same-length package rename + fixed checksums) so the
-            # compiled bytecode stays byte-identical to upstream and JNI native
-            # registration still works.
-            #
-            # We deliberately do NOT touch resources.arsc here: apktool's own
-            # rebuilt arsc already carries the renamed package (org.mora.kodi)
-            # AND is correctly STORED (uncompressed). Injecting our own arsc via
-            # `zip` re-COMPRESSED it -> Android 11+/targetSdk30+ refuses to
-            # install an apk whose resources.arsc is compressed ("App not
-            # installed", 21.3-povil.28). So we leave apktool's arsc alone.
-            DEXDIR="$WORK/dexpatch"; mkdir -p "$DEXDIR"
-            ( cd "$DEXDIR" && unzip -oq "$WORK/kodi-official.apk" 'classes*.dex' )
-            python3 src/.github/scripts/patch_dex_package.py \
-              "$DEXDIR" "$OLD_PKG_DOT" "$NEW_PKG_DOT"
-            # Overwrite the apk's re-assembled dex with the patched original.
-            ( cd "$DEXDIR" && zip -q "$WORK/unsigned.apk" classes*.dex )
-            # Guard: resources.arsc MUST be stored (uncompressed) or the install
-            # is rejected on modern Android. apktool stores it; assert it stayed
-            # that way after our dex injection.
-            if unzip -v "$WORK/unsigned.apk" resources.arsc | awk 'NR>3 && /resources\.arsc/ {print $2}' | grep -q '^Stored$'; then
-              echo "OK: resources.arsc is Stored (uncompressed)"
-            else
-              echo "::error::resources.arsc is compressed -- modern Android will refuse to install"; exit 1
-            fi
-            # Final guard: the repacked apk's dex must be the patched-original
-            # (zero old refs, and Main at the new path).
-            python3 src/.github/scripts/verify_apk_package.py \
-              "$WORK/unsigned.apk" "$OLD_PKG_SLASH" "$NEW_PKG_SLASH"
             zipalign -p -f 4 "$WORK/unsigned.apk" "$WORK/aligned.apk"
             OUT_APK="out/Kodi-POV-IL-${VERSION}-${LABEL}.apk"
             apksigner sign \
