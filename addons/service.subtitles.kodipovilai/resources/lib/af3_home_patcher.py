@@ -28,7 +28,7 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-05-31-pov-home-v11'
+PATCH_VERSION = '2026-05-31-pov-home-v12'
 AF3_CE_VERSION = '6.3.2.9'
 # AF3's bundled TMDbHelper 6.15.6 imports jurialmunkey.ftools, which only
 # exists from script.module.jurialmunkey 0.2.35. Users who switched to AF3
@@ -269,6 +269,27 @@ HOME_WIDGETS = [
         'widget_limit': '20',
     },
     {
+        # Trakt collection -- movies (online Trakt list, like FENtastic's
+        # 'הסרטים שלי (Trakt)' favourite). action=trakt_collection.
+        'label': 'הסרטים שלי (Trakt)',
+        'icon': 'special://home/media/build_icons/Twilight/Movies/My_Movies.png',
+        'path': _pov('trakt_collection', 'build_movie_list', 'Movies',
+                     'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftrakt.png'),
+        'target': 'videos',
+        'widget_style': 'Poster',
+        'widget_limit': '20',
+    },
+    {
+        # Trakt collection -- shows.
+        'label': 'הסדרות שלי (Trakt)',
+        'icon': 'special://home/media/build_icons/Twilight/Shows/My_Shows.png',
+        'path': _pov('trakt_collection', 'build_tvshow_list', 'TV%20Shows',
+                     'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftrakt.png'),
+        'target': 'videos',
+        'widget_style': 'Poster',
+        'widget_limit': '20',
+    },
+    {
         'label': 'סרטים לפי ז׳אנר',
         'icon': 'special://home/media/build_icons/Twilight/Movies/Movies_Genres.png',
         'path': _shortcut_folder('FENtastic - סרטים - זאנרים',
@@ -288,13 +309,14 @@ HOME_WIDGETS = [
     },
 ] + STREAMING_NETWORK_WIDGETS + [
     {
-        # עידן פלוס -- launches the idanplus addon directly. It's not a
-        # TMDB list, so the tile just runs the addon (FENtastic does the
-        # same via a favourites.xml RunAddon entry).
+        # עידן פלוס -- a CONTENT widget must point at a browsable plugin
+        # directory, not a RunAddon() command (that gave "No Results").
+        # plugin://plugin.video.idanplus/ lists idanplus's own category
+        # menu, so the row shows its categories and clicking browses in.
         'label': 'עידן פלוס',
         'icon': 'special://home/media/build_icons/Idan_Plus/idan_plus.png',
-        'path': 'RunAddon("plugin.video.idanplus")',
-        'target': '',
+        'path': 'plugin://plugin.video.idanplus/',
+        'target': 'videos',
         'widget_style': 'Landscape',
         'widget_limit': '20',
     },
