@@ -7,6 +7,27 @@ from modules import kodi_utils, settings
 from modules.utils import manual_function_import, get_datetime, TaskPool, chunks
 # logger = kodi_utils.logger
 
+def _flex_call(_function, *args):
+	# Version-resilient call: POV auto-updates its indexers/caches and
+	# sometimes changes a read function's arity (e.g. tmdb_favorites /
+	# trakt_collection / get_favorites dropping the trailing `letter`
+	# arg). Our synced movies.py may call with one extra trailing arg
+	# than the device's POV core accepts, raising "takes N positional
+	# arguments but M were given" -> the whole list comes back empty.
+	# Try the full call, and on that specific TypeError retry with one
+	# fewer trailing arg until it fits (or args run out).
+	_args = list(args)
+	while True:
+		try:
+			return _function(*_args)
+		except TypeError as e:
+			msg = str(e)
+			if _args and 'positional argument' in msg and (
+					'were given' in msg or 'was given' in msg):
+				_args = _args[:-1]
+				continue
+			raise
+
 movie_meta_function, default_duration = movie_meta, 5400
 KODI_VERSION, make_cast_list = kodi_utils.get_kodi_version(), kodi_utils.make_cast_list
 string, ls, build_url, get_infolabel = str, kodi_utils.local_string, kodi_utils.build_url, kodi_utils.get_infolabel
@@ -231,12 +252,12 @@ class Menu(Movies):
 				self.list = [i['movie']['ids'] for i in data]
 				if total_pages > page_no: self.new_page = {'new_page': string(page_no + 1)}
 			elif self.action in Menu.tmdb_personal:
-				data, total_pages = function('movie', page_no, letter)
+				data, total_pages = _flex_call(function, 'movie', page_no, letter)
 				self.list = [i['id'] for i in data]
 				if total_pages > page_no: self.new_page = {'new_page': string(page_no + 1), 'new_letter': letter}
 			elif self.action in Menu.trakt_personal:
 				self.id_type = 'trakt_dict'
-				data, total_pages = function('movies', page_no, letter)
+				data, total_pages = _flex_call(function, 'movies', page_no, letter)
 				self.list = [i['media_ids'] for i in data]
 				if total_pages > 2: self.total_pages = total_pages
 				try:
@@ -244,7 +265,7 @@ class Menu(Movies):
 				except: pass
 			elif self.action in Menu.mdblist_personal:
 				self.id_type = 'trakt_dict'
-				data, total_pages = function('movies', page_no, letter)
+				data, total_pages = _flex_call(function, 'movies', page_no, letter)
 				self.list = [{'imdb': i['imdb_id'], 'tmdb': i['id']} for i in data]
 				if total_pages > 2: self.total_pages = total_pages
 				try:
@@ -252,7 +273,7 @@ class Menu(Movies):
 				except: pass
 			elif self.action in Menu.personal_dict:
 				watched_info = self.bookmarks if self.action == 'in_progress_movies' else self.watched_info
-				data, total_pages = function(watched_info, 'movie', page_no, letter)
+				data, total_pages = _flex_call(function, watched_info, 'movie', page_no, letter)
 				self.list = [i['media_id'] for i in data]
 				if total_pages > 2: self.total_pages = total_pages
 				if total_pages > page_no: self.new_page = {'new_page': string(page_no + 1), 'new_letter': letter}
