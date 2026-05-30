@@ -639,8 +639,16 @@ def _af3_read_addon_version(addon_xml):
         import xbmcvfs
         path = xbmcvfs.translatePath(addon_xml)
         with open(path, 'r', encoding='utf-8') as fh:
-            text = fh.read(400)
-        match = re.search(r'\bversion="([^"]+)"', text)
+            text = fh.read(600)
+        # IMPORTANT: skip the XML declaration's version (<?xml version="1.0"?>)
+        # and read the <addon> tag's version instead. Anchoring on 'version='
+        # alone matches the declaration first, so every addon looked like
+        # "1.0" -- which made the deps-pack version gate think a stale
+        # jurialmunkey 0.2.28 was already current (1.0 >= 0.2.35) and skip the
+        # upgrade. Search from the '<addon' tag so we get the real version.
+        anchor = text.find('<addon')
+        search_from = anchor if anchor >= 0 else 0
+        match = re.search(r'\bversion="([^"]+)"', text[search_from:])
         return match.group(1) if match else ''
     except Exception:
         return ''
