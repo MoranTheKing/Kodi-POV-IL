@@ -6,7 +6,8 @@ v0.2.76
   ~218ms with ZERO network calls). Offline replay of get_favorites
   against the user's real watched.db returns all 6 rows, so the read
   layer is fine too. Three unknowns remain and v3 checks all three on
-  the device, once, with a screenshot popup:
+  the device, once (silent -- written to log + POV_FAV_DIAGNOSTIC.txt,
+  no popup):
   * tmdb_read_token presence (the token movie_details/tvshow_details
     actually use for per-item meta -- never inspected before; empty =>
     every favorite resolves blank while popular lists still work since
