@@ -507,6 +507,29 @@ def _maybe_patch_pov_repeat_timer():
             pass
 
 
+def _maybe_run_fav_diagnostic():
+    """One-shot diagnostic for the 'Add to My List shows 0 results' bug:
+    reads (never writes) POV's TMDB/Trakt auth state, the POV-local
+    favorites DB, and the TMDB/Trakt list caches, then logs + writes a
+    file + pops a textviewer the user can screenshot. Gated so it runs
+    once per DIAG_VERSION."""
+    try:
+        from resources.lib import pov_favorites_diagnostic, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_favorites_diagnostic.run()
+        kodi_utils.log('pov_favorites_diagnostic: ' + str(status),
+                       level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_favorites_diagnostic run failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_favorites_refresh():
     """Make POV's dialogs.py refresh the open container when an item is
     ADDED to a list, not only when removed. Without this, adding a title
@@ -1303,6 +1326,11 @@ def main():
     # show a just-added title immediately instead of after navigating
     # away and back.
     _maybe_patch_pov_favorites_refresh()
+
+    # One-shot read-only diagnostic for the "Add to list shows 0
+    # results" report: dumps POV TMDB/Trakt auth + favorites DB +
+    # caches so we can see the real on-device state.
+    _maybe_run_fav_diagnostic()
 
     # Fix the home-screen Favorites tile typo in POV's bundled
     # navigator.db (one-shot, idempotent). See function docstring
