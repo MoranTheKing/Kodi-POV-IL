@@ -1,3 +1,22 @@
+v0.2.78
+- INSTRUMENT the swallowed error that empties favorites lists. v4 proved
+  every upstream piece is fine: auth valid, live GET /3/movie/<fav>=200,
+  watched.db path correct with 6 rows, get_favorites returns all 6, and
+  movie_meta(<fav>) returns a FULL meta dict (all keys, blank_entry
+  False) with director/genre/writer/country/duration all valid. So
+  build_movie_content SHOULD succeed -- yet the live list is empty in
+  ~218ms. That means it raises in the LIVE Kodi context (a listitem op
+  we can't simulate offline: make_listitem/setArt/getVideoInfoTag/
+  setCast/setCountries/setRating...) and the error is eaten by the bare
+  `except: pass` at menus/movies.py:174 / menus/tvshows.py:183.
+  * New pov_build_content_logger_patcher rewrites those two bare
+    excepts into `except Exception as e: logger("POV_BUILD_ITEM_ERROR",
+    repr(e)+tag)` -- same catch+skip behaviour, but the real exception
+    (type, message, the tmdb_id it died on) now lands in kodi.log on the
+    next favorites open. That single line identifies the bug exactly.
+  Marker-gated, idempotent, atomic, .pyc dropped; both patched files
+  py_compile-verified.
+
 v0.2.77
 - DIAGNOSTIC v4 (final): v3 proved the per-item TMDB fetch SUCCEEDS
   (HTTP 200, "The Mummy"), tmdb_read_token is valid, the watched.db path
