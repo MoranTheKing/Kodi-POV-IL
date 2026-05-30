@@ -1,3 +1,24 @@
+v0.2.72
+- DIAGNOSTIC build (no behaviour change to favorites): the user still
+  sees "Add to list" report success but "My Movies"/"My Shows" stay at
+  0 results even after leaving and re-entering -- which means the READ
+  genuinely returns empty, not a refresh problem. Rather than guess
+  again, this ships a one-shot, read-only diagnostic
+  (pov_favorites_diagnostic) that dumps the real on-device state:
+    * TMDB auth: tmdb.account_id (v4 READ id) vs tmdb.session_account_id
+      (v3 WRITE id) -- if account_id is empty the favorites read URL
+      breaks and POV returns [] forever regardless of cache. Tokens are
+      shown as presence/length only, never in full.
+    * Trakt auth: trakt_user / token / expires presence.
+    * POV-local favorites DB (watched.db -> favorites): row counts per
+      type + a small sample, to see if items actually saved and whether
+      their tmdb_id looks valid (vs null/empty).
+    * TMDB list cache (maincache.db) + Trakt cache (traktcache.db):
+      which list ids are cached and whether they're empty/near-empty.
+  Output goes to kodi.log, to <POV profile>/POV_FAV_DIAGNOSTIC.txt, and
+  to a textviewer dialog popped once so it can be screenshotted. Gated
+  to run once. Nothing in POV is modified.
+
 v0.2.71
 - HOTFIX for v0.2.70: adding to a list crashed Kodi. v0.2.70's
   pov_favorites_refresh_patcher, besides the (correct) container_refresh()
