@@ -1,3 +1,28 @@
+v0.2.74
+- FIX the real "favorites added but list shows 0" bug (root cause found
+  via the v0.2.72/0.2.73 diagnostic). The diagnostic proved on-device:
+  the favorite rows ARE saved (watched.db -> favorites) and TMDB/Trakt
+  auth is fully valid -- yet both the POV-local and TMDB favorites tiles
+  showed 0, in BOTH skins, while normal browsing worked. Root cause was
+  the PER-ITEM metadata cache: POV's movie_meta/tvshow_meta persist a
+  {'blank_entry': True} into metacache.db for 2 DAYS whenever a single
+  movie_details() fetch fails transiently (3.05s timeout / blip), and
+  menus drop any item whose meta is blank_entry. So one hiccup hid a
+  favorite for ~48h regardless of skin or tile. This was the one cache
+  neither pov_cache_empty_patcher (maincache.db) nor
+  pov_trakt_cache_empty_patcher (trakt.db) covered.
+  * New pov_meta_blank_patcher: stops movie_meta/tvshow_meta from
+    persisting transient blank_entry (mirrors the "never cache a
+    failure" approach of the two sibling cache patchers), and one-shot-
+    clears any rows already poisoned with blank_entry from metacache.db
+    so existing favorites recover immediately instead of waiting 2 days.
+- AF3 home: show BOTH a POV-local favorites tile ("הסרטים שלי" ->
+  favorites_movies/favorites_tvshows, the store the in-app add writes
+  to, so it populates instantly) AND the online TMDB.org tile
+  ("...(TMDB)" -> tmdb_favorites), side by side, for movies and shows.
+  Bumped AF3 home PATCH_VERSION so existing installs rebuild the
+  shortcuts and pick up the new tiles.
+
 v0.2.73
 - Make the favorites diagnostic SILENT: the v0.2.72 diagnostic popped a
   full-screen textviewer on every device that applied it, which is fine
