@@ -18,19 +18,24 @@
 # for TMDB, direct DB write for POV-local), so a fresh navigation shows
 # the item -- but the currently-open container is never reloaded.
 #
-# Fix: drop the gate so the refresh fires on add as well as remove
-# (mirroring how it already behaves on remove), and also call POV's
-# own kodi_utils.widget_refresh() so the *home-screen widget tiles*
-# ("My Movies"/"My Shows") reload too -- Container.Refresh alone only
-# reloads the open list, not a home widget. (POV uses widget_refresh()
-# the same way in entry.py after a Trakt/MDBList sync.) Three surgical,
-# context-anchored string replacements; idempotent via a marker.
+# Fix: drop the gate so container_refresh() fires on add as well as
+# remove (mirroring how it already behaves on remove).
 #
-# Self-healing: ensure_patched() runs every Kodi startup. If upstream
-# POV rewrites dialogs.py and wipes our marker we re-apply; if the
-# surrounding shape changed so our anchors no longer match we skip
-# that anchor silently and log -- POV keeps working, the add just
-# goes back to needing a manual refresh.
+# v2 history -- IMPORTANT: v1 (AI subs 0.2.70) ALSO called POV's
+# kodi_utils.widget_refresh() here to reload the home-screen widget
+# tiles. That turned out to CRASH Kodi when adding to a list (its
+# UpdateLibrary(video, special://skin/foo) trick is why POV itself
+# gates widget_refresh behind an opt-in setting and never calls it
+# from a context-menu action). v2 removes the widget_refresh() call
+# entirely and keeps only container_refresh() -- exactly what POV
+# already does safely on remove, just extended to add. The home
+# widget tile still refreshes on the next return to the home screen
+# because the list cache is busted on add. This patcher also heals
+# installs that already received the crashing v1 line.
+#
+# Self-healing: ensure_patched() runs every Kodi startup. Idempotent
+# via the v2 marker; converts both pristine POV and any v1-patched
+# install to the safe v2 form; skips+logs if upstream shape changed.
 
 import os
 
@@ -48,17 +53,24 @@ except Exception:
 POV_ADDON_ID = 'plugin.video.pov'
 DIALOGS_REL_PATH = 'resources/lib/modules/dialogs.py'
 
-MARKER = '# AI_SUBS_FAV_REFRESH'
+MARKER = '# AI_SUBS_FAV_REFRESH_v2'
 
-# Each entry: (old_substring, new_substring). The old strings are
-# anchored with their neighbouring lines so each match is unique
-# (two of them share the literal `if not action: container_refresh()`
-# but at different indentation / context). Tabs match POV's source.
-_REFRESH = 'container_refresh(); kodi_utils.widget_refresh()  ' + MARKER \
-    + ': refresh open list + home widgets on add too, not just remove'
+# The safe v2 refresh line: container refresh only, no widget_refresh.
+_REFRESH = 'container_refresh()  ' + MARKER \
+    + ': refresh open list on add too (widget_refresh removed -- it crashed Kodi on add)'
 
+# The exact tail the crashing v1 (0.2.70) appended after container_refresh().
+# Stripping it turns a v1-patched line back into the safe v2 line.
+_V1_TAIL = '; kodi_utils.widget_refresh()  # AI_SUBS_FAV_REFRESH' \
+    ': refresh open list + home widgets on add too, not just remove'
+_V1_TAIL_REPLACEMENT = '  ' + MARKER \
+    + ': container refresh only (widget_refresh removed -- it crashed Kodi on add)'
+
+# Pristine-POV anchors: original gated line -> safe v2 line. Anchored
+# with neighbouring lines so each of the three sites is unique. Tabs
+# match POV's source.
 REPLACEMENTS = (
-    # tmdb_manager_choice -- favorites / watchlist add+remove
+    # tmdb_manager_choice -- favorites / watchlist
     (
         '\t\t\ttmdb_api.clear_tmdbl_cache()\n'
         '\t\t\tif not action: container_refresh()\n'
@@ -67,7 +79,7 @@ REPLACEMENTS = (
         '\t\t\t' + _REFRESH + '\n'
         '\t\t\treturn notification(32576)',
     ),
-    # tmdb_manager_choice -- custom list add+remove
+    # tmdb_manager_choice -- custom list
     (
         '\t\ttmdb_api.clear_tmdbl_cache()\n'
         '\t\tif not action: container_refresh()\n'
@@ -76,7 +88,7 @@ REPLACEMENTS = (
         '\t\t' + _REFRESH + '\n'
         '\t\tnotification(32576)',
     ),
-    # favorites_choice -- POV-local favorites add+remove
+    # favorites_choice -- POV-local favorites
     (
         '\t\tnotification(32576) if action(mediatype, tmdb_id, title) else notification(32574)\n'
         '\t\tif refresh: container_refresh()',
@@ -109,8 +121,10 @@ def _dialogs_path():
 
 def ensure_patched():
     """Make container_refresh() fire on add as well as remove in POV's
-    dialogs.py. Idempotent (skip if marker present), defensive (apply
-    each anchor independently; skip+log any that no longer match).
+    dialogs.py, WITHOUT the crashing widget_refresh() call. Heals both
+    pristine POV and any install that received the v1 (0.2.70) line.
+    Idempotent (skip if v2 marker present), defensive (apply each
+    transform independently; skip+log if nothing matches).
     """
     path = _dialogs_path()
     if not path:
@@ -127,17 +141,22 @@ def ensure_patched():
 
     new_content = content
     applied = 0
-    missed = 0
+
+    # Step 1: heal any crashing v1 line (remove widget_refresh, retag v2).
+    if _V1_TAIL in new_content:
+        n = new_content.count(_V1_TAIL)
+        new_content = new_content.replace(_V1_TAIL, _V1_TAIL_REPLACEMENT)
+        applied += n
+
+    # Step 2: patch any still-pristine gated lines straight to v2.
     for old, new in REPLACEMENTS:
         if old in new_content:
             new_content = new_content.replace(old, new, 1)
             applied += 1
-        else:
-            missed += 1
 
     if applied == 0:
-        _log('no add-refresh anchors matched -- dialogs.py shape '
-             'changed upstream, skipping', level='WARNING')
+        _log('no add-refresh anchors matched (pristine or v1) -- '
+             'dialogs.py shape changed upstream, skipping', level='WARNING')
         return 'unmatched'
 
     tmp = path + '.aitmp'
@@ -145,8 +164,8 @@ def ensure_patched():
         with open(tmp, 'w', encoding='utf-8') as f:
             f.write(new_content)
         os.replace(tmp, path)
-        _log('patched {0}/{1} add-refresh anchors (missed {2})'.format(
-            applied, len(REPLACEMENTS), missed), level='INFO')
+        _log('healed/patched {0} add-refresh site(s) to safe v2 '
+             '(container_refresh only)'.format(applied), level='INFO')
         return 'patched'
     except OSError as e:
         try:
