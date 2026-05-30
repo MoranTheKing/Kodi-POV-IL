@@ -511,6 +511,40 @@ def _maybe_patch_darksubs_download_sub():
             pass
 
 
+def _maybe_patch_darksubs_embedded_demote():
+    """Self-healing patch of DarkSubs's engine.py so embedded ('[LOC]')
+    subtitle entries sink to the BOTTOM of their language group instead
+    of floating to the top on their hard-coded 101% sync. On this
+    streaming build the embedded track can't be AI-translated (DarkSubs
+    short-circuits embedded picks with setSubtitleStream before our
+    hook runs), so demoting it makes an external, AI-translatable
+    English source the natural first pick."""
+    try:
+        from resources.lib import darksubs_embedded_demote_patcher, \
+            kodi_utils
+    except Exception:
+        return
+    try:
+        status = darksubs_embedded_demote_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'darksubs_embedded_demote_patcher: [LOC] embedded '
+                'entries now sort to the bottom of their group',
+                level='INFO')
+        elif status in ('unmatched', 'write_failed', 'read_failed'):
+            kodi_utils.log(
+                'darksubs_embedded_demote_patcher: ' + status,
+                level='WARNING')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'darksubs_embedded_demote_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_surface_darksubs_status():
     """Run the DarkSubs hook diagnostic at startup. If the integration
     has an actionable problem (e.g. signature mismatch, read-only
@@ -1031,6 +1065,13 @@ def main():
     # setting is OFF (user manually picks a non-Hebrew sub). Without
     # this, the v3 hook only ever fires when auto_translate=true.
     _maybe_patch_darksubs_download_sub()
+
+    # Push embedded ('[LOC]') subtitle entries to the bottom of their
+    # language group. They carry a hard-coded 101% sync that otherwise
+    # floats them to the top, and they can't be AI-translated (DarkSubs
+    # short-circuits embedded picks before our hook runs) -- so we want
+    # the external, translatable English source to be the first pick.
+    _maybe_patch_darksubs_embedded_demote()
 
     # Now that the hook injection has had its shot, run a structural
     # check end-to-end and pop a toast if something is broken (e.g.
