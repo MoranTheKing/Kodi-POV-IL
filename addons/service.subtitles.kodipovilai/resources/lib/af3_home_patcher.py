@@ -28,7 +28,7 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-05-30-pov-home-v9'
+PATCH_VERSION = '2026-05-31-pov-home-v10'
 AF3_CE_VERSION = '6.3.2.9'
 # AF3's bundled TMDbHelper 6.15.6 imports jurialmunkey.ftools, which only
 # exists from script.module.jurialmunkey 0.2.35. Users who switched to AF3
@@ -141,6 +141,48 @@ def _shortcut_folder(name, icon='folder.png'):
     ).format(quote(icon, safe=''), quote(name, safe=''))
 
 
+# Streaming-network rows (Netflix/Disney+/…). FENtastic ships these as
+# individual favourites.xml tiles that open a POV tmdb_tv_networks list
+# filtered by network_id; AF3 had none, so we generate one POV widget per
+# network. These are POV ListItems -> Hebrew + play through POV scrapers.
+# (name, tmdb network_id, icon filename under Twilight/Shows/Networks/)
+_NETWORKS = (
+    ('Netflix',    '213',  'Shows_Netflix.png'),
+    ('Disney+',    '2739', 'Shows_Disney.png'),
+    ('Apple TV+',  '2552', 'Shows_Apple_TV.png'),
+    ('HBO',        '49',   'Shows_HBO.png'),
+    ('HBO Max',    '3186', 'Shows_HBO_Max.png'),
+    ('FOX',        '19',   'Shows_FOX.png'),
+    ('Amazon',     '1024', 'Shows_Amazon.png'),
+    ('Hulu',       '453',  'Shows_Hulu.png'),
+    ('The CW',     '71',   'Shows_The_CW.png'),
+)
+
+def _net_widget(name, net_id, icon_file):
+    icon_path = ('special://home/media/build_icons/Twilight/Shows/Networks/'
+                 + icon_file)
+    # _pov() does NOT url-encode its args (the existing tiles pass a
+    # pre-encoded iconImage and %20-escaped name), so encode here: the
+    # icon contains '://' and '/', and names like "The CW"/"Disney+"
+    # contain a space/'+' that would corrupt the query string raw.
+    return {
+        'label': name,
+        'icon': icon_path,
+        'path': _pov('tmdb_tv_networks', 'build_tvshow_list',
+                     quote(name, safe=''), quote(icon_path, safe=''),
+                     extra='network_id=' + net_id),
+        'target': 'videos',
+        'widget_style': 'Poster',
+        'widget_limit': '20',
+    }
+
+
+STREAMING_NETWORK_WIDGETS = [
+    _net_widget(name, net_id, icon_file)
+    for (name, net_id, icon_file) in _NETWORKS
+]
+
+
 HOME_WIDGETS = [
     {
         'label': 'כלים וחיבורים',
@@ -241,6 +283,18 @@ HOME_WIDGETS = [
         'path': _shortcut_folder('FENtastic - סדרות - זאנרים',
                                  'special://home/media/build_icons/Twilight/Shows/Shows_Genres.png'),
         'target': 'videos',
+        'widget_style': 'Landscape',
+        'widget_limit': '20',
+    },
+] + STREAMING_NETWORK_WIDGETS + [
+    {
+        # עידן פלוס -- launches the idanplus addon directly. It's not a
+        # TMDB list, so the tile just runs the addon (FENtastic does the
+        # same via a favourites.xml RunAddon entry).
+        'label': 'עידן פלוס',
+        'icon': 'special://home/media/build_icons/Idan_Plus/idan_plus.png',
+        'path': 'RunAddon("plugin.video.idanplus")',
+        'target': '',
         'widget_style': 'Landscape',
         'widget_limit': '20',
     },
@@ -513,6 +567,63 @@ def _patch_hebrew_language():
         return False
 
 
+# Stable genre-icon location we control + ship via build_icons_patcher
+# (resources/lib/media_assets/build_icons/Genres/genre_*.png). We point
+# every genre row's iconImage here instead of POV's own media/genres/
+# folder, which isn't shipped by us and vanishes on POV self-updates --
+# the reason genre icons were blank on BOTH skins.
+GENRE_ICON_BASE = 'special://home/media/build_icons/Genres/'
+
+# Map of Hebrew genre label (stripped of [B]/[/B]) -> icon filename, so
+# we can re-icon a row even when POV rebuilt it WITHOUT the original
+# 'genres/...' iconImage prefix (the case the old prefix-only check
+# silently skipped). Covers both the movie and TV genre sets.
+GENRE_NAME_TO_ICON = {
+    'אקשן': 'genre_action.png',
+    'הרפתקאות': 'genre_adventure.png',
+    'אקשן והרפתקאות': 'genre_action_adventure.png',
+    'אנימציה': 'genre_animation.png',
+    'קומדיה': 'genre_comedy.png',
+    'פשע': 'genre_crime.png',
+    'דוקומנטרי': 'genre_documentary.png',
+    'דרמה': 'genre_drama.png',
+    'משפחה': 'genre_family.png',
+    'פנטזיה': 'genre_fantasy.png',
+    'היסטוריה': 'genre_history.png',
+    'אימה': 'genre_horror.png',
+    'מוזיקה': 'genre_music.png',
+    'מסתורין': 'genre_mystery.png',
+    'רומנטיקה': 'genre_romance.png',
+    'מדע בדיוני': 'genre_scifi.png',
+    'מדע בדיוני ופנטזיה': 'genre_scifi_fantasy.png',
+    'מתח': 'genre_thriller.png',
+    'מלחמה': 'genre_war.png',
+    'מלחמה ופוליטיקה': 'genre_war_politics.png',
+    'מערבון': 'genre_western.png',
+    'ילדים': 'genre_kids.png',
+    'חדשות': 'genre_news.png',
+    'ריאליטי': 'genre_reality.png',
+    'אופרת סבון': 'genre_soap.png',
+    'אירוח': 'genre_talk.png',
+}
+
+
+def _genre_icon_for(item):
+    """Return the stable build_icons/Genres icon path for a genre row
+    item, or '' if we can't map it. Tries the original 'genres/<file>'
+    suffix first, then the Hebrew label."""
+    icon = item.get('iconImage', '') or ''
+    if icon.startswith('genres/'):
+        return GENRE_ICON_BASE + icon[len('genres/'):]
+    # Fall back to the Hebrew name (strip [B]..[/B] and whitespace).
+    name = (item.get('name', '') or '')
+    name = name.replace('[B]', '').replace('[/B]', '').strip()
+    fn = GENRE_NAME_TO_ICON.get(name)
+    if fn:
+        return GENRE_ICON_BASE + fn
+    return ''
+
+
 def _patch_pov_genre_icons():
     if sqlite3 is None or ast is None:
         return False
@@ -541,9 +652,9 @@ def _patch_pov_genre_icons():
                 continue
             row_changed = False
             for item in items:
-                icon = item.get('iconImage', '')
-                if icon.startswith('genres/'):
-                    item['iconImage'] = POV_MEDIA_BASE + icon
+                new_icon = _genre_icon_for(item)
+                if new_icon and item.get('iconImage', '') != new_icon:
+                    item['iconImage'] = new_icon
                     row_changed = True
             if not row_changed:
                 continue
