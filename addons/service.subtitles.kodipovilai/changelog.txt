@@ -1,3 +1,17 @@
+v0.2.77
+- DIAGNOSTIC v4 (final): v3 proved the per-item TMDB fetch SUCCEEDS
+  (HTTP 200, "The Mummy"), tmdb_read_token is valid, the watched.db path
+  is correct with 6 rows, and get_favorites returns all 6 -- yet the
+  list still renders empty in ~218ms with ZERO network calls. The only
+  remaining explanation: meta is served from metacache.db and POV's
+  per-item BUILD (menus/movies.py build_movie_content) throws on a
+  missing/None meta key and is swallowed by its bare `except: pass`
+  (movies.py:174), dropping every item silently. v4 replays POV's REAL
+  movie_meta() + the exact meta-dependent ops (director/genre/writer
+  .split, country, duration int()) for one favorite and prints which one
+  raises + the traceback. That line IS the bug. Read-only, silent
+  (writes to log + POV_FAV_DIAGNOSTIC.txt).
+
 v0.2.76
 - DIAGNOSTIC v3 (decisive): the v0.2.75 fix ran on-device (log confirms
   "blank_entry purge ran: deleted 0" + "widened timeout") yet lists are
