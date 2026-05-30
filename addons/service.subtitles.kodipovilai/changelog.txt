@@ -1,3 +1,12 @@
+v0.2.73
+- Make the favorites diagnostic SILENT: the v0.2.72 diagnostic popped a
+  full-screen textviewer on every device that applied it, which is fine
+  for one debugging session but annoying as a general rollout. The
+  popup is removed; the diagnostic still writes its report to kodi.log
+  and to <POV profile>/POV_FAV_DIAGNOSTIC.txt so we can still read the
+  on-device state when needed, with zero on-screen interruption. No
+  behaviour change to favorites themselves.
+
 v0.2.72
 - DIAGNOSTIC build (no behaviour change to favorites): the user still
   sees "Add to list" report success but "My Movies"/"My Shows" stay at

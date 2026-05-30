@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <addon id="service.subtitles.kodipovilai"
        name="Kodi POV IL - AI Subtitles"
-       version="0.2.72"
+       version="0.2.73"
        provider-name="MoranTheKing">
   <requires>
     <import addon="xbmc.python" version="3.0.0"/>
