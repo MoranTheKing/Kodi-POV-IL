@@ -1,3 +1,21 @@
+v0.2.69
+- Follow-up fix: POV's TRAKT cache is in a separate DB
+  (trakt.db) and uses a separate function (cache_trakt_object) that
+  v0.2.68 did NOT patch. Critically, that cache has NO expiration --
+  empty results cached there stay forever until an explicit
+  clear_trakt_collection_watchlist_data() call. End-user report: the
+  "My Movies (Trakt)" tile stayed empty even after v0.2.68 landed,
+  because the trakt.db row was still poisoned with a stuck empty.
+  New pov_trakt_cache_empty_patcher mirrors v0.2.68's main_cache fix
+  for trakt_cache.py: inserts `if not result: return result` before
+  the `dbcur.execute(TC_BASE_SET, ...)` line so empty results are
+  no longer persisted, and one-shot-clears any
+  trakt_collection_* / trakt_watchlist_* / trakt_favorites_* /
+  trakt_user_lists* / trakt_lists_* rows currently sitting in
+  trakt.db so existing victims don't have to wait for an explicit
+  clear. Marker-gated (AI_SUBS_POV_TRAKT_CACHE_EMPTY_v1),
+  idempotent, no-op on installs without POV.
+
 v0.2.68
 - Two fixes for the "Add to My List" buttons that stopped working
   in the latest updates:
