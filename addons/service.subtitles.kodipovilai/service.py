@@ -478,6 +478,43 @@ def _maybe_patch_pov_trakt_cache_empty():
             pass
 
 
+def _maybe_patch_pov_meta_blank():
+    """Patch POV's indexers/metadata.py so a transient per-item
+    metadata fetch failure (movie_details timeout/blip) doesn't persist
+    a blank_entry into metacache.db for 2 days. Third sibling to the
+    main_cache and trakt_cache empty patchers -- those fix the LIST
+    caches; this fixes the PER-ITEM meta cache, the one neither touched.
+    Fixes the diagnosed bug where favorites ARE saved (watched.db has
+    the rows, auth valid) but both POV-local and TMDB favorites tiles
+    show 0 in BOTH skins because the items' metadata is cached blank.
+    Also one-shot-clears already-poisoned blank_entry rows so existing
+    favorites recover immediately."""
+    try:
+        from resources.lib import (
+            pov_meta_blank_patcher, kodi_utils)
+    except Exception:
+        return
+    try:
+        status = pov_meta_blank_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_meta_blank_patcher: movie_meta/tvshow_meta no '
+                'longer persist transient blank_entry; poisoned rows '
+                'cleared', level='INFO')
+        elif status in ('no_pov', 'no_file', 'already_patched'):
+            pass  # quiet steady-state
+        else:
+            kodi_utils.log(
+                'pov_meta_blank_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_meta_blank_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_repeat_timer():
     """Wrap POV's myservices.py RepeatTimer.run() in try/except so
     auth-polling threads survive single-iteration failures. Without
@@ -1380,6 +1417,16 @@ def main():
     # after the main_cache patch landed; trakt.db has its own cached
     # empty list that PR #187 never touched.
     _maybe_patch_pov_trakt_cache_empty()
+
+    # Third cache sibling: the PER-ITEM metadata cache (metacache.db).
+    # The two patchers above fix the LIST caches, but a favorite still
+    # vanishes if its OWN metadata was cached as a blank_entry after a
+    # single transient movie_details() fetch failure -- POV persists
+    # that blank for 2 days, so the item stays hidden in every skin and
+    # every tile (POV-local AND TMDB) even though the favorite row
+    # exists and auth is valid. This stops the 2-day poison and clears
+    # any rows already stuck blank.
+    _maybe_patch_pov_meta_blank()
 
     # v0.2.9 tried patching FENtastic's notification widget but
     # it broke things; this cleans up the leftover patch on disk
