@@ -1,3 +1,41 @@
+v0.2.68
+- Two fixes for the "Add to My List" buttons that stopped working
+  in the latest updates:
+
+  1) favourites_personal_tiles_patcher (new): restores the 6 personal
+     home tiles ("הסרטים שלי / הסדרות שלי" in TMDB / Trakt / POV
+     variants) when they're missing from userdata/favourites.xml.
+     Root cause: the wizard's per-skin seed at
+     media/builds_favourites_xml/skin.fentastic/favourites.xml only
+     contains 11 service tiles, while the build's install default
+     ships 32. When the user switches skin to AF3 and back to
+     FENtastic, the wizard's update_favourites_xml_file() copies the
+     stripped 11-tile seed over the working 32-tile favourites.xml,
+     wiping every content tile including the 6 personal ones. The
+     patcher detects the missing tiles by name substring and
+     restores them from a bundled canonical fixture.
+
+  2) pov_cache_empty_patcher (new): inserts `if not result: return
+     result` into plugin.video.pov/.../caches/main_cache.py's
+     cache_object(). POV's pattern of caching API results for 24h
+     unconditionally meant that any transient TMDB/Trakt list-read
+     failure (returning empty by the defensive `except: return []`
+     in _get_tmdblist_paginated_list and similar) would cache the
+     empty list for a full 24h. End-user symptom: add an item via
+     "ניהול רשימות (TMDB)" -> success notification -> "הסרטים שלי
+     (TMDB)" home tile shows "No results" until cache expires.
+     User confirmed items DO get added on themoviedb.org / trakt.tv
+     -- the write works, just the read returns the stuck-empty cache.
+     With this patch empty results are never persisted; next tile open
+     re-fetches. Also one-shot clears any tmdblist_* / trakt_* rows
+     already sitting empty in maincache.db so existing victims don't
+     need to wait out the 24h.
+
+  Both patchers are marker-gated, idempotent, atomic writes, no-op
+  on installs without the affected files. Smoke-tested against the
+  real user's favourites.xml shape (4 cases) and the real POV
+  main_cache.py shape (5 cases).
+
 v0.2.67
 - Actually fix the jurialmunkey upgrade (0.2.66 didn't take). The wizard's
   AF3 version gate read the XML declaration's version="1.0" instead of the
