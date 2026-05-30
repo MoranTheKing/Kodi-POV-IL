@@ -1,3 +1,28 @@
+v0.2.81
+- Skin polish batch (AF3 + genre icons + embedded-sub ordering):
+  * Embedded "תרגום מובנה אנגלית" no longer sits above real English
+    subtitles. darksubs_embedded_demote_patcher v2: the v1 patch only
+    re-sorted DarkSubs's english_subtitles group, but the embedded
+    English entry is classified by its Hebrew label ("...אנגלית"), so it
+    never landed in that group. v2 anchors on the final combined-list
+    line and stable-sinks any [LOC] entry whose label is English
+    (ASCII 'english'/'eng' or Hebrew 'אנגלית'), while a genuine embedded
+    HEBREW track stays on top. Strips the stale v1 line on upgrade.
+  * AF3 home: added עידן פלוס tile (RunAddon plugin.video.idanplus) and
+    9 streaming-network rows (Netflix/Disney+/Apple TV+/HBO/HBO Max/FOX/
+    Amazon/Hulu/The CW) as POV tmdb_tv_networks widgets -- Hebrew + play
+    through POV scrapers. AF3 PATCH_VERSION bumped v9 -> v10 so existing
+    installs rebuild and show them.
+  * Genre icons restored on BOTH skins: the per-genre icons pointed at
+    POV's own media/genres/ folder, which we don't ship and POV wipes on
+    self-update, so they were blank. Now we ship a clean line-art genre
+    icon set (resources/lib/media_assets/build_icons/Genres/, 26 PNGs)
+    via build_icons_patcher and repoint POV's genre navigator rows at
+    media/build_icons/Genres/. Mapping works by the original 'genres/'
+    suffix OR the Hebrew genre name, so it re-icons even rows POV rebuilt
+    without the prefix. Runs for FENtastic too (not AF3-gated), since the
+    rows live in POV's shared navigator.db.
+
 v0.2.80
 - ROOT CAUSE FOUND + FIXED. The instrumented outer except (v0.2.79)
   finally logged it on the device:
