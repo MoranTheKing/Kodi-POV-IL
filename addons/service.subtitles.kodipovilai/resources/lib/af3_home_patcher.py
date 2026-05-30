@@ -28,7 +28,7 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-05-30-pov-home-v8'
+PATCH_VERSION = '2026-05-30-pov-home-v9'
 AF3_CE_VERSION = '6.3.2.9'
 # AF3's bundled TMDbHelper 6.15.6 imports jurialmunkey.ftools, which only
 # exists from script.module.jurialmunkey 0.2.35. Users who switched to AF3
@@ -183,18 +183,44 @@ HOME_WIDGETS = [
         'widget_limit': '20',
     },
     {
+        # POV-LOCAL favorites: reads watched.db -> favorites (the store
+        # the in-app "add to favorites" context menu writes to). This is
+        # what populates immediately when the user adds a movie, with no
+        # dependency on the online TMDB.org account list.
         'label': 'הסרטים שלי',
         'icon': 'special://home/media/build_icons/Twilight/Movies/My_Movies_TMDB.png',
-        'path': _pov('tmdb_favorites', 'build_movie_list', 'Movie%20Favorites',
+        'path': _pov('favorites_movies', 'build_movie_list', 'Movie%20Favorites',
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftmdb.png'),
         'target': 'videos',
         'widget_style': 'Poster',
         'widget_limit': '20',
     },
     {
+        # TMDB.org account favorites (the online list, synced across
+        # devices). Kept alongside the local one so the user has both.
+        'label': 'הסרטים שלי (TMDB)',
+        'icon': 'special://home/media/build_icons/Twilight/Movies/My_Movies_TMDB.png',
+        'path': _pov('tmdb_favorites', 'build_movie_list', 'Movie%20Favorites%20(TMDB)',
+                     'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftmdb.png'),
+        'target': 'videos',
+        'widget_style': 'Poster',
+        'widget_limit': '20',
+    },
+    {
+        # POV-LOCAL show favorites (watched.db -> favorites).
         'label': 'הסדרות שלי',
         'icon': 'special://home/media/build_icons/Twilight/Shows/My_Shows_TMDB.png',
-        'path': _pov('tmdb_favorites', 'build_tvshow_list', 'TV%20Show%20Favorites',
+        'path': _pov('favorites_tvshows', 'build_tvshow_list', 'TV%20Show%20Favorites',
+                     'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftmdb.png'),
+        'target': 'videos',
+        'widget_style': 'Poster',
+        'widget_limit': '20',
+    },
+    {
+        # TMDB.org account show favorites (online list).
+        'label': 'הסדרות שלי (TMDB)',
+        'icon': 'special://home/media/build_icons/Twilight/Shows/My_Shows_TMDB.png',
+        'path': _pov('tmdb_favorites', 'build_tvshow_list', 'TV%20Show%20Favorites%20(TMDB)',
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftmdb.png'),
         'target': 'videos',
         'widget_style': 'Poster',
