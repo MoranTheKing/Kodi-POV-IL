@@ -1,3 +1,22 @@
+v0.2.79
+- WIDEN the instrumentation: v0.2.78 logged the per-item build except,
+  but the on-device log showed NO POV_BUILD_ITEM_ERROR at all -- the
+  favorites list still came back empty in ~213ms. Crucial new clue from
+  the user: the "Continue Watching" (in_progress_movies) list WORKS,
+  while favorites/tmdb/trakt are all empty. Both go through the identical
+  build path, so the failure is OUTSIDE build_movie_content -- in run()'s
+  OUTER `except: pass` (menus/movies.py:319 / tvshows.py): the import of
+  the read function, the function() call/list-comp, or build_*_results'
+  unguarded `self.items.sort(key=int(getProperty('pov_sort_order')))` at
+  movies.py:189 (which raises if any item lacks a numeric sort prop, and
+  zeroes the WHOLE list).
+  * pov_build_content_logger_patcher v2 now instruments BOTH excepts:
+    the per-item one (POV_BUILD_ITEM_ERROR) AND run()'s outer one
+    (POV_RUN_ERROR, logging action + list length). One of those two will
+    fire on the next favorites open and name the exact failure.
+  Same catch+skip behaviour, logging only. Both patched files
+  py_compile-verified (offline + in-zip).
+
 v0.2.78
 - INSTRUMENT the swallowed error that empties favorites lists. v4 proved
   every upstream piece is fine: auth valid, live GET /3/movie/<fav>=200,
