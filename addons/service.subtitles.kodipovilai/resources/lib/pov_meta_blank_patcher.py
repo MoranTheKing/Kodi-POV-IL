@@ -66,8 +66,37 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 METADATA_REL = 'resources/lib/indexers/metadata.py'
+TMDB_API_REL = 'resources/lib/indexers/tmdb_api.py'
 
-MARKER = '# AI_SUBS_POV_META_BLANK_v1'
+MARKER = '# AI_SUBS_POV_META_BLANK_v2'
+
+# v2 (the on-device log + watched.db proved why v1 didn't help this user):
+#  - watched.db had 6 valid favorite rows, yet the POV-local favorites
+#    list returned in 212ms with ZERO network calls and rendered empty.
+#    That can only mean every one of those 6 ids was served from the
+#    per-item meta cache (metacache.db) as a blank_entry and dropped at
+#    menus/movies.py:57 -- the cache was poisoned and never cleared.
+#  - v1 tied the one-shot blank-row purge to the SUCCESS of rewriting
+#    metadata.py: the purge ran only on the 'patched'/'already_patched'
+#    return paths. If the file rewrite path returned 'no_file' /
+#    'unmatched' / a stale-marker mismatch, the purge was SKIPPED, so
+#    the poisoned rows survived forever and the list stayed empty.
+#  - The log showed pov_meta_blank_patcher never logged at all on the
+#    user's device, i.e. the purge never ran.
+# v2 fixes this by ALWAYS purging the poisoned rows first, unconditionally
+# and on every startup (cheap DELETE), independent of the file-rewrite
+# outcome -- and additionally widening tmdb_api's aggressive 3.05s
+# per-item timeout (the root reason the fetch failed and got cached blank
+# in the first place, especially on mobile/slow links) so the re-fetch
+# actually succeeds and the posters fill in.
+
+# tmdb_api.py ships `timeout = 3.05` at module level (verified: the only
+# such assignment). 3.05s is too aggressive for per-item /movie/{id}
+# detail calls on mobile; a single slow response -> blank_entry cached
+# for 2 days. Widen to 15.05s. Marker via the value itself (idempotent:
+# we only rewrite if the exact old literal is present).
+_TMDB_TIMEOUT_OLD = b'\ntimeout = 3.05\n'
+_TMDB_TIMEOUT_NEW = b'\ntimeout = 15.05  # AI_SUBS widened from 3.05 (mobile per-item fetch)\n'
 
 # Match BOTH the movie and tvshow blank_entry cache-write lines:
 #   <indent>metacache_set('movie',  id_type, meta, EXPIRES_2_DAYS)
@@ -104,7 +133,23 @@ def _metadata_path():
 def ensure_patched():
     """Idempotent. Returns one of:
     'no_pov' | 'no_file' | 'already_patched' | 'unmatched'
-    | 'read_failed' | 'write_failed' | 'patched'."""
+    | 'read_failed' | 'write_failed' | 'patched'.
+
+    v2: the poisoned-row purge and the tmdb timeout widening run
+    UNCONDITIONALLY and FIRST, every startup, regardless of whether the
+    metadata.py rewrite below matches. This is the actual fix for the
+    user whose 6 valid favorites stayed invisible: v1 only purged on the
+    rewrite-success paths, so a skipped/odd rewrite left the cache
+    poisoned forever."""
+    # (1) ALWAYS purge poisoned blank_entry rows first -- this is the
+    # part that makes the user's existing 6 favorites reappear, and it
+    # must not depend on anything else succeeding.
+    _clear_blank_meta_rows()
+
+    # (2) ALWAYS try to widen the aggressive per-item TMDB timeout so the
+    # re-fetch succeeds instead of re-poisoning. Independent + idempotent.
+    _widen_tmdb_timeout()
+
     path = _metadata_path()
     if not path:
         return 'no_pov' if xbmcvfs is None else 'no_file'
@@ -117,9 +162,6 @@ def ensure_patched():
         return 'read_failed'
 
     if MARKER.encode('utf-8') in content:
-        # Already patched in code; still make sure existing poisoned
-        # rows are cleared (cheap, idempotent) before returning.
-        _clear_blank_meta_rows()
         return 'already_patched'
 
     matches = list(_BLANK_SET_RE.finditer(content))
@@ -173,12 +215,61 @@ def ensure_patched():
          'blank_entry for 2 days (favorites no longer vanish on a single '
          'fetch hiccup)', level='INFO')
 
-    # ONE-SHOT: clear any rows already poisoned with blank_entry so the
-    # user's existing favorites recover now instead of waiting up to 2
-    # days for the cache to expire. Best-effort; failure is non-fatal.
-    _clear_blank_meta_rows()
-
+    # Note: the poisoned-row purge already ran unconditionally at the top
+    # of ensure_patched (v2), so no need to repeat it here.
     return 'patched'
+
+
+def _widen_tmdb_timeout():
+    """Widen tmdb_api.py's module-level `timeout = 3.05` to 15.05s. The
+    3.05s per-item /movie/{id} timeout is the root reason favorites get
+    cached as blank_entry on mobile/slow links: one slow detail call ->
+    movie_meta returns blank -> menus drop the item. Idempotent: only
+    rewrites when the exact old literal is present; logs nothing if the
+    file is missing or already widened. Drops stale .pyc on change."""
+    if xbmcvfs is None:
+        return
+    try:
+        base = xbmcvfs.translatePath(
+            'special://home/addons/' + POV_ADDON_ID + '/')
+    except Exception:
+        return
+    path = os.path.join(base, TMDB_API_REL)
+    if not os.path.isfile(path):
+        return
+    try:
+        with open(path, 'rb') as f:
+            content = f.read()
+    except OSError:
+        return
+    if _TMDB_TIMEOUT_NEW.strip() in content:
+        return  # already widened
+    if _TMDB_TIMEOUT_OLD not in content:
+        return  # POV changed the line; leave it alone
+    new_content = content.replace(_TMDB_TIMEOUT_OLD, _TMDB_TIMEOUT_NEW, 1)
+    tmp_path = path + '.aitmp'
+    try:
+        with open(tmp_path, 'wb') as f:
+            f.write(new_content)
+        os.replace(tmp_path, path)
+    except OSError as e:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        _log('tmdb timeout widen write failed: {0}'.format(e),
+             level='WARNING')
+        return
+    pycache_dir = os.path.join(os.path.dirname(path), '__pycache__')
+    if os.path.isdir(pycache_dir):
+        for fn in os.listdir(pycache_dir):
+            if fn.startswith('tmdb_api.') and fn.endswith('.pyc'):
+                try:
+                    os.remove(os.path.join(pycache_dir, fn))
+                except OSError:
+                    pass
+    _log('widened tmdb_api per-item timeout 3.05s -> 15.05s (slow-link '
+         'favorites no longer fail and cache blank)', level='INFO')
 
 
 def _clear_blank_meta_rows():
@@ -196,6 +287,7 @@ def _clear_blank_meta_rows():
     except Exception:
         return
     if not os.path.isfile(db_path):
+        _log('metacache.db not found; nothing to purge', level='INFO')
         return
     try:
         import sqlite3
@@ -206,9 +298,11 @@ def _clear_blank_meta_rows():
         deleted = cur.rowcount
         cur.close()
         conn.close()
-        if deleted:
-            _log('cleared {0} poisoned blank_entry meta row(s)'.format(
-                deleted), level='INFO')
+        # Always log (even 0) so we can confirm from kodi.log that the
+        # purge actually ran on the device -- v1's silence is what hid
+        # the fact that it was being skipped.
+        _log('blank_entry purge ran: deleted {0} poisoned meta row(s)'
+             .format(deleted), level='INFO')
     except Exception as e:
         _log('could not clear poisoned rows: {0}'.format(e),
              level='WARNING')
