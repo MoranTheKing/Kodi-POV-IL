@@ -478,6 +478,39 @@ def _maybe_patch_pov_trakt_cache_empty():
             pass
 
 
+def _maybe_patch_pov_build_content_logger():
+    """Instrument POV's per-item list builders (menus/movies.py +
+    tvshows.py) so the SWALLOWED exception that empties favorites lists
+    is logged. We proved auth/fetch/db/meta are all fine yet the list
+    renders empty in ~218ms -- meaning build_movie_content raises in the
+    live Kodi context and its bare `except: pass` eats it. This turns
+    that into a POV_BUILD_ITEM_ERROR log line with the real exception."""
+    try:
+        from resources.lib import (
+            pov_build_content_logger_patcher, kodi_utils)
+    except Exception:
+        return
+    try:
+        status = pov_build_content_logger_patcher.ensure_patched()
+        if 'patched' in status and 'already' not in status:
+            kodi_utils.log(
+                'pov_build_content_logger_patcher: ' + status,
+                level='INFO')
+        elif status in ('no_pov',):
+            pass
+        else:
+            kodi_utils.log(
+                'pov_build_content_logger_patcher: ' + status,
+                level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_build_content_logger_patcher failed: '
+                '{0}'.format(e), level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_meta_blank():
     """Patch POV's indexers/metadata.py so a transient per-item
     metadata fetch failure (movie_details timeout/blip) doesn't persist
@@ -1427,6 +1460,13 @@ def main():
     # exists and auth is valid. This stops the 2-day poison and clears
     # any rows already stuck blank.
     _maybe_patch_pov_meta_blank()
+
+    # Instrument POV's build_movie_content/build_tvshow_content bare
+    # `except: pass` so the swallowed exception that empties favorites
+    # lists is logged as POV_BUILD_ITEM_ERROR. Everything upstream
+    # (auth/fetch/db/meta) is proven fine; the failure is in the live
+    # listitem build and is currently invisible.
+    _maybe_patch_pov_build_content_logger()
 
     # v0.2.9 tried patching FENtastic's notification widget but
     # it broke things; this cleans up the leftover patch on disk
