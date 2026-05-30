@@ -1,3 +1,12 @@
+v0.2.65
+- Fix: the embedded-demote re-sort is now scoped to the English group
+  ONLY. The 0.2.64 cut re-sorted the combined list by site_id '[LOC]',
+  which DarkSubs also stamps on the embedded HEBREW entry -- that would
+  have sunk native Hebrew embedded subs below English. Hebrew (embedded
+  or not) is now never touched and stays first, as it must.
+- Shipped via quickfix so it reaches existing installs without a full
+  build reinstall.
+
 v0.2.64
 - Embedded ENGLISH ("[LOC]") subtitles now sink to the bottom of the
   English group in the DarkSubs picker instead of floating to the top on
