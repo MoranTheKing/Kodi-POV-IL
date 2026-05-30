@@ -39,7 +39,7 @@ except Exception:
     kodi_utils = None
 
 
-DIAG_VERSION = '3'
+DIAG_VERSION = '4'
 OUR_ADDON_ID = 'service.subtitles.kodipovilai'
 POV_ADDON_ID = 'plugin.video.pov'
 POV_PROFILE = 'special://profile/addon_data/plugin.video.pov/'
@@ -282,6 +282,93 @@ def _collect():
                                  "tmdb_read_token to POV's default.")
         except Exception as e:
             lines.append("  fetch raised: %s" % e)
+
+    # --- v4: run POV's REAL build path for one favorite and catch the
+    # swallowed exception. The live HTTP fetch (v3) returned 200, the DB
+    # has 6 rows, get_favorites returns 6, yet the list renders empty in
+    # ~218ms with no network -> meta is served from metacache.db and the
+    # per-item BUILD (movies.py build_movie_content) throws and is
+    # swallowed by its bare `except: pass` (movies.py:174). This replays
+    # movie_meta + the meta-dependent calls to surface the real error. ---
+    lines.append("")
+    lines.append("[POV real build-path test for one favorite]")
+    test_id = None
+    s = _q(WATCHED_DB,
+           "SELECT tmdb_id FROM favorites WHERE db_type='movie' LIMIT 1")
+    if isinstance(s, list) and s:
+        test_id = str(s[0][0])
+    if not test_id:
+        lines.append("  no favorite movie id to test")
+    else:
+        lines.append("  testing id: %s" % test_id)
+        pov_lib = _tp('special://home/addons/%s/resources/lib' % POV_ADDON_ID)
+        added = False
+        try:
+            import sys
+            if pov_lib not in sys.path:
+                sys.path.insert(0, pov_lib)
+                added = True
+            # 1) resolve meta exactly as POV does (hits metacache.db first)
+            meta = None
+            try:
+                from indexers import metadata as _md
+                from modules import settings as _st
+                try:
+                    ui = _st.metadata_user_info()
+                except Exception as e:
+                    ui = None
+                    lines.append("  metadata_user_info() raised: %r" % e)
+                try:
+                    from modules.kodi_utils import get_datetime as _gd
+                    cur = _gd()
+                except Exception:
+                    cur = None
+                meta = _md.movie_meta('tmdb_id', test_id, ui, cur)
+            except Exception as e:
+                import traceback
+                lines.append("  movie_meta() raised: %r" % e)
+                lines.append("  " + traceback.format_exc().replace(
+                    "\n", "\n  "))
+            if meta is not None:
+                mg = meta.get
+                lines.append("  meta keys present: %s"
+                             % sorted(list(meta.keys()))[:40])
+                lines.append("  blank_entry: %r" % mg('blank_entry', False))
+                # 2) exercise the exact meta-dependent ops that
+                # build_movie_content does (movies.py:155-172) and that
+                # throw on a missing/None key under bare except.
+                for key in ('director', 'genre', 'writer'):
+                    try:
+                        _ = mg(key).split(', ')
+                        lines.append("    %s.split OK (value=%r)"
+                                     % (key, mg(key)))
+                    except Exception as e:
+                        lines.append("    >> %s.split RAISES %r  <-- this "
+                                     "drops the item at movies.py:174"
+                                     % (key, e))
+                for key in ('country',):
+                    try:
+                        v = mg(key)
+                        lines.append("    %s = %r (type %s)"
+                                     % (key, v, type(v).__name__))
+                    except Exception as e:
+                        lines.append("    >> %s RAISES %r" % (key, e))
+                try:
+                    _ = int(mg('duration') or 5400)
+                    lines.append("    duration int() OK")
+                except Exception as e:
+                    lines.append("    >> duration int() RAISES %r" % e)
+        except Exception as e:
+            import traceback
+            lines.append("  build-path test crashed: %r" % e)
+            lines.append("  " + traceback.format_exc().replace("\n", "\n  "))
+        finally:
+            if added:
+                try:
+                    import sys
+                    sys.path.remove(pov_lib)
+                except Exception:
+                    pass
 
     lines.append("")
     lines.append("=== END DIAGNOSTIC ===")
