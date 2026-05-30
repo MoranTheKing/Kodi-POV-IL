@@ -172,15 +172,20 @@ jobs:
             done
             # 7) Sanity gates -- fail the build loudly rather than ship a broken
             #    half-renamed APK. Both must hold or we abort.
-            echo "--- package line ---"; grep -oE 'package="[^"]*"' "$MANIFEST" | head -1
+            echo "--- package line ---"; { grep -oE 'package="[^"]*"' "$MANIFEST" || true; } | head -1
             if grep -q "package=\"$NEW_PKG_DOT\"" "$MANIFEST"; then
               echo "OK: manifest package is $NEW_PKG_DOT"
             else
               echo "::error::manifest package was not renamed to $NEW_PKG_DOT"; exit 1
             fi
-            LEFT_SLASH=$(grep -rl "$OLD_PKG_SLASH" "$DEC"/smali* 2>/dev/null | wc -l)
-            LEFT_DASH=$(grep -rl "$OLD_PKG_DASH" "$DEC"/smali* 2>/dev/null | wc -l)
-            LEFT_DOT=$(grep -rlE "$OLD_PKG_DOT_RE" "$DEC"/smali* 2>/dev/null | wc -l)
+            # NOTE: `grep -rl` exits 1 when it finds NOTHING -- which is exactly
+            # the success case here (zero leftover refs). Under `set -o pipefail`
+            # that non-zero status propagates through the pipe and `set -e` kills
+            # the build on the happy path. `|| true` neutralises it so we read the
+            # real count from `wc -l`. (This is what failed run #27.)
+            LEFT_SLASH=$( { grep -rl "$OLD_PKG_SLASH" "$DEC"/smali* 2>/dev/null || true; } | wc -l)
+            LEFT_DASH=$( { grep -rl "$OLD_PKG_DASH" "$DEC"/smali* 2>/dev/null || true; } | wc -l)
+            LEFT_DOT=$( { grep -rlE "$OLD_PKG_DOT_RE" "$DEC"/smali* 2>/dev/null || true; } | wc -l)
             if [ "$LEFT_SLASH" -ne 0 ] || [ "$LEFT_DASH" -ne 0 ] || [ "$LEFT_DOT" -ne 0 ]; then
               echo "::error::leftover old-package refs in smali (slash=$LEFT_SLASH dash=$LEFT_DASH dot=$LEFT_DOT)"; exit 1
             fi
