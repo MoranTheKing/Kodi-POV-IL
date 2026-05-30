@@ -200,21 +200,35 @@ jobs:
             echo "--- final manifest tail ---"
             tail -15 "$MANIFEST_FILE"
             echo "::endgroup::"
-            echo "::group::apktool repack, then swap in the binary-patched original dex"
+            echo "::group::apktool repack, then swap in ONLY the binary-patched original dex"
             apktool b -o "$WORK/unsigned.apk" "$WORK/decoded"
-            # apktool's repacked dex is the broken one (re-assembled). Replace
-            # classes*.dex inside the repacked apk with the ORIGINAL Kodi dex,
-            # binary-patched in place (same-length package rename + fixed
-            # checksums). This keeps Kodi's compiled bytecode byte-identical to
-            # upstream so JNI native registration still works. resources.arsc is
-            # also patched in place (it holds the package name in its UTF-16
-            # string pool) in case apktool's arsc rebuild dropped/changed it.
+            # apktool's repacked dex is the broken one (re-assembled), which
+            # crash-looped Kodi in System.loadLibrary (21.3-povil.27). Replace
+            # ONLY classes*.dex with the ORIGINAL Kodi dex, binary-patched in
+            # place (same-length package rename + fixed checksums) so the
+            # compiled bytecode stays byte-identical to upstream and JNI native
+            # registration still works.
+            #
+            # We deliberately do NOT touch resources.arsc here: apktool's own
+            # rebuilt arsc already carries the renamed package (org.mora.kodi)
+            # AND is correctly STORED (uncompressed). Injecting our own arsc via
+            # `zip` re-COMPRESSED it -> Android 11+/targetSdk30+ refuses to
+            # install an apk whose resources.arsc is compressed ("App not
+            # installed", 21.3-povil.28). So we leave apktool's arsc alone.
             DEXDIR="$WORK/dexpatch"; mkdir -p "$DEXDIR"
-            ( cd "$DEXDIR" && unzip -oq "$WORK/kodi-official.apk" 'classes*.dex' resources.arsc )
+            ( cd "$DEXDIR" && unzip -oq "$WORK/kodi-official.apk" 'classes*.dex' )
             python3 src/.github/scripts/patch_dex_package.py \
               "$DEXDIR" "$OLD_PKG_DOT" "$NEW_PKG_DOT"
-            # Overwrite the apk's re-assembled dex/arsc with the patched originals.
-            ( cd "$DEXDIR" && zip -q "$WORK/unsigned.apk" classes*.dex resources.arsc )
+            # Overwrite the apk's re-assembled dex with the patched original.
+            ( cd "$DEXDIR" && zip -q "$WORK/unsigned.apk" classes*.dex )
+            # Guard: resources.arsc MUST be stored (uncompressed) or the install
+            # is rejected on modern Android. apktool stores it; assert it stayed
+            # that way after our dex injection.
+            if unzip -v "$WORK/unsigned.apk" resources.arsc | awk 'NR>3 && /resources\.arsc/ {print $2}' | grep -q '^Stored$'; then
+              echo "OK: resources.arsc is Stored (uncompressed)"
+            else
+              echo "::error::resources.arsc is compressed -- modern Android will refuse to install"; exit 1
+            fi
             # Final guard: the repacked apk's dex must be the patched-original
             # (zero old refs, and Main at the new path).
             python3 src/.github/scripts/verify_apk_package.py \
