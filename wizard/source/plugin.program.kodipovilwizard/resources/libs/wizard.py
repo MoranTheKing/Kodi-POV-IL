@@ -1042,8 +1042,16 @@ def kodi_apk_update_check(kodi_version_update_check_manual, os_type_label):
         
         if is_new_version_available:
 
+            # Users on an old package id (org.xbmc.kodi / org.xbmc.kodirdil)
+            # can't update in place onto the new org.mora.kodi app -- Android
+            # treats a different applicationId as a different app. Warn them the
+            # new app installs alongside and the old one should be removed once.
+            on_new_package = check_if_running_custom_kodi(CONFIG.APK_PACKAGE_ID)
+            migration_note = '' if on_new_package else \
+                '\n[COLOR orange]שים לב: זו גרסה חדשה. היא תותקן כאפליקציה נפרדת לצד הקיימת - לאחר ההתקנה אפשר למחוק את הישנה.[/COLOR]'
+
             yes_pressed = dialog.yesno(f"{CONFIG.ADDONTITLE} ({os_type_label})",
-                               f'[COLOR yellow][B]קיים עדכון גרסה לאפליקציה שלנו![/B][/COLOR]\nגרסת קודי נוכחית: [B][COLOR red]{CONFIG.KODIV}[/COLOR][/B]\nגרסת קודי מעודכנת: [B][COLOR limegreen]{LATEST_APK_VERSION_TEXT_FILE}[/COLOR][/B]\nהאם ברצונך לעדכן את האפליקציה?',
+                               f'[COLOR yellow][B]קיים עדכון גרסה לאפליקציה שלנו![/B][/COLOR]\nגרסת קודי נוכחית: [B][COLOR red]{CONFIG.KODIV}[/COLOR][/B]\nגרסת קודי מעודכנת: [B][COLOR limegreen]{LATEST_APK_VERSION_TEXT_FILE}[/COLOR][/B]\nהאם ברצונך לעדכן את האפליקציה?{migration_note}',
                                nolabel='[B][COLOR red]מאוחר יותר[/COLOR][/B]',
                                yeslabel='[B][COLOR springgreen]עדכן[/COLOR][/B]')
                                
