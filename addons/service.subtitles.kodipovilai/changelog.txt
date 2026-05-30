@@ -1,3 +1,29 @@
+v0.2.70
+- Follow-up to #187/#188 (the "Add to My List" saga): those fixed the
+  READ side -- POV was caching empty list results (main_cache.py 24h,
+  trakt_cache.py forever) so a just-added title never showed. With the
+  caches no longer stuck-empty, the remaining gap is the WRITE side:
+  POV's modules/dialogs.py only refreshes the screen after a REMOVE,
+  never after an ADD. The container-refresh call is gated:
+    - tmdb_manager_choice (favorites/watchlist): if not action: container_refresh()
+    - tmdb_manager_choice (custom list):         if not action: container_refresh()
+    - favorites_choice    (POV-local):           if refresh: container_refresh()
+  On add, action/refresh is truthy/False, so nothing refreshes -- you
+  get the "added" toast but the open "My Movies"/"My Shows" list (and
+  the home widget tile) keeps showing the old contents until you leave
+  and come back. Removing already refreshed instantly, which is why the
+  asymmetry looked like "adding is broken".
+  New pov_favorites_refresh_patcher drops the gate so the refresh fires
+  on add as well as remove, and additionally calls POV's own
+  kodi_utils.widget_refresh() so the home-screen widget tiles reload too
+  (Container.Refresh alone only reloads an open list, not a home widget;
+  POV uses widget_refresh() the same way in entry.py after a Trakt sync).
+  Three context-anchored replacements, marker-gated (AI_SUBS_FAV_REFRESH),
+  idempotent, atomic write, no-op on installs without POV. Verified
+  against the real bundled POV dialogs.py (3/3 anchors matched, result
+  parses). Covers the TMDB Favorites/Watchlist, custom-list, and
+  POV-local favorites paths.
+
 v0.2.69
 - Follow-up fix: POV's TRAKT cache is in a separate DB
   (trakt.db) and uses a separate function (cache_trakt_object) that
