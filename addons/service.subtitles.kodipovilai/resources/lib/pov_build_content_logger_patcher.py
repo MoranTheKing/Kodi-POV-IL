@@ -52,7 +52,21 @@ TARGETS = (
      'self.append((url_params, listitem, self.is_folder))'),
 )
 
-MARKER = '# AI_SUBS_POV_BUILD_LOGGER_v1'
+# v2: also instrument run()'s OUTER `except: pass` -- the one that wraps
+# the whole method (import of the read function, the function() call, the
+# list comprehension, AND build_*_results incl. the .sort() at
+# movies.py:189). favorites lists come back empty in ~213ms with NO
+# POV_BUILD_ITEM_ERROR, which means the failure is OUTSIDE
+# build_*_content -- caught here. This except sits immediately BEFORE the
+# `kodi_utils.set_category(...)` line, so we locate it by that follower.
+OUTER_TARGETS = (
+    ('resources/lib/menus/movies.py', 'movies',
+     'kodi_utils.set_category(__handle__, ls(params_get('),
+    ('resources/lib/menus/tvshows.py', 'tvshows',
+     'kodi_utils.set_category(__handle__, ls(params_get('),
+)
+
+MARKER = '# AI_SUBS_POV_BUILD_LOGGER_v2'
 
 
 def _log(msg, level='INFO'):
@@ -75,9 +89,23 @@ def _pov_base():
         return ''
 
 
-def _patch_one(base, rel, pyc_prefix, anchor):
-    """Instrument the FIRST `except: pass` that follows `anchor` in the
-    file at base/rel. Returns a status string."""
+def _make_replacement(indent, label, ctx_expr):
+    """Build the `except Exception as _e: log` block at `indent`.
+    label distinguishes ITEM vs RUN; ctx_expr is a python expr (bytes-
+    safe text) giving extra context, evaluated under its own try."""
+    return (
+        '\n' + indent + MARKER + '\n'
+        + indent + 'except Exception as _e:\n'
+        + indent + '\ttry: kodi_utils.logger("' + label + '",'
+        ' "%s | %s" % (repr(_e), ' + ctx_expr + '))\n'
+        + indent + '\texcept Exception: pass'
+    )
+
+
+def _patch_file(base, rel, pyc_prefix, item_anchor, outer_anchor):
+    """Instrument BOTH the per-item build except (after item_anchor) and
+    run()'s outer except (the bare `except: pass` immediately BEFORE
+    outer_anchor) in one read/write. Returns a status string."""
     path = os.path.join(base, rel)
     if not os.path.isfile(path):
         return 'no_file'
@@ -91,36 +119,57 @@ def _patch_one(base, rel, pyc_prefix, anchor):
     if MARKER.encode('utf-8') in content:
         return 'already_patched'
 
-    anchor_b = anchor.encode('utf-8')
-    a_idx = content.find(anchor_b)
-    if a_idx == -1:
-        _log('anchor not found in {0}; POV may have refactored'.format(rel),
-             level='WARNING')
+    # --- (1) per-item except: first bare `except: pass` AFTER item_anchor
+    ia = content.find(item_anchor.encode('utf-8'))
+    if ia == -1:
+        _log('item anchor not found in {0}'.format(rel), level='WARNING')
         return 'unmatched'
-
-    # Find the bare `except: pass` that comes right after the anchor.
-    # Match its exact indentation so we can replace in place.
-    tail = content[a_idx:]
-    m = re.search(rb'\n(?P<indent>[ \t]+)except:\s*pass', tail)
-    if not m:
-        _log('no bare `except: pass` after anchor in {0}'.format(rel),
-             level='WARNING')
+    m_item = re.search(rb'\n(?P<indent>[ \t]+)except:\s*pass', content[ia:])
+    if not m_item:
+        _log('no item `except: pass` in {0}'.format(rel), level='WARNING')
         return 'unmatched'
+    item_start = ia + m_item.start()
+    item_end = ia + m_item.end()
+    item_indent = m_item.group('indent').decode('utf-8')
 
-    indent = m.group('indent').decode('utf-8')
-    # Replacement: keep catching + skipping the item (unchanged
-    # behaviour), but log the exception + the id it died on first.
-    replacement = (
-        '\n' + indent + MARKER + '\n'
-        + indent + 'except Exception as _e:\n'
-        + indent + '\ttry: kodi_utils.logger("POV_BUILD_ITEM_ERROR",'
-        ' "%s on tag=%s" % (repr(_e), repr(tag)))\n'
-        + indent + '\texcept Exception: pass'
-    )
-    abs_start = a_idx + m.start()
-    abs_end = a_idx + m.end()
-    new_content = content[:abs_start] + replacement.encode('utf-8') \
-        + content[abs_end:]
+    # --- (2) outer except: the bare `except: pass` immediately BEFORE
+    # outer_anchor (set_category line). Search the region preceding it.
+    oa = content.find(outer_anchor.encode('utf-8'))
+    if oa == -1:
+        _log('outer anchor not found in {0}'.format(rel), level='WARNING')
+        return 'unmatched'
+    # last `except: pass` before oa
+    outer_matches = list(re.finditer(
+        rb'\n(?P<indent>[ \t]+)except:\s*pass', content[:oa]))
+    if not outer_matches:
+        _log('no outer `except: pass` in {0}'.format(rel), level='WARNING')
+        return 'unmatched'
+    m_outer = outer_matches[-1]
+    outer_start = m_outer.start()
+    outer_end = m_outer.end()
+    outer_indent = m_outer.group('indent').decode('utf-8')
+
+    item_repl = _make_replacement(
+        item_indent, 'POV_BUILD_ITEM_ERROR', '"tag=%s" % repr(tag)').encode(
+        'utf-8')
+    outer_repl = _make_replacement(
+        outer_indent, 'POV_RUN_ERROR',
+        '"action=%s list_len=%s" % (repr(self.action),'
+        ' repr(len(getattr(self, "list", []))))').encode('utf-8')
+
+    # Apply the LATER offset first so earlier offsets stay valid. The
+    # item except (line ~174) comes before the outer except (line ~319),
+    # so replace outer first.
+    if outer_start > item_start:
+        new_content = (content[:outer_start] + outer_repl
+                       + content[outer_end:])
+        new_content = (new_content[:item_start] + item_repl
+                       + new_content[item_end:])
+    else:
+        new_content = (content[:item_start] + item_repl
+                       + content[item_end:])
+        new_content = (new_content[:outer_start] + outer_repl
+                       + new_content[outer_end:])
 
     tmp_path = path + '.aitmp'
     try:
@@ -147,21 +196,25 @@ def _patch_one(base, rel, pyc_prefix, anchor):
 
 
 def ensure_patched():
-    """Instrument both movies.py and tvshows.py build bodies. Returns a
-    short summary string. Never raises."""
+    """Instrument both the per-item and outer excepts in movies.py and
+    tvshows.py. Returns a short summary string. Never raises."""
     base = _pov_base()
     if not base or not os.path.isdir(base):
         return 'no_pov'
+    item_map = {t[1]: t[2] for t in TARGETS}
+    outer_map = {t[1]: t[2] for t in OUTER_TARGETS}
+    rel_map = {t[1]: t[0] for t in TARGETS}
     results = []
-    for rel, pyc_prefix, anchor in TARGETS:
+    for pyc_prefix in ('movies', 'tvshows'):
         try:
-            st = _patch_one(base, rel, pyc_prefix, anchor)
+            st = _patch_file(base, rel_map[pyc_prefix], pyc_prefix,
+                             item_map[pyc_prefix], outer_map[pyc_prefix])
         except Exception as e:
             st = 'error:%r' % e
         results.append('%s=%s' % (pyc_prefix, st))
     summary = ', '.join(results)
     if any('=patched' in r for r in results):
-        _log('instrumented build bodies (%s) -- next favorites open will '
-             'log POV_BUILD_ITEM_ERROR with the real exception' % summary,
+        _log('instrumented item+outer excepts (%s) -- next favorites open '
+             'logs POV_BUILD_ITEM_ERROR and/or POV_RUN_ERROR' % summary,
              level='INFO')
     return summary
