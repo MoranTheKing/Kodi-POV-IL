@@ -28,7 +28,7 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-05-31-pov-home-v10'
+PATCH_VERSION = '2026-05-31-pov-home-v11'
 AF3_CE_VERSION = '6.3.2.9'
 # AF3's bundled TMDbHelper 6.15.6 imports jurialmunkey.ftools, which only
 # exists from script.module.jurialmunkey 0.2.35. Users who switched to AF3
@@ -624,6 +624,37 @@ def _genre_icon_for(item):
     return ''
 
 
+def _heal_genre_icon(item):
+    """Return the CORRECT relative iconImage for a genre row item, or ''
+    to leave it. POV's build_shortcut_folder_list (navigator.py:446)
+    unconditionally prepends media_path() to a non-network item's
+    iconImage, so the value MUST be a bare relative path like
+    'genres/genre_action.png' -- POV ships those icons in its media dir.
+    An earlier version of this patcher wrongly stored an ABSOLUTE
+    'special://home/media/build_icons/Genres/...' path, which POV then
+    doubled into a broken '.../media/special://home/...' -> POV-logo
+    fallback. This heals that: any absolute special:// value (or a
+    bare filename without the 'genres/' dir) is mapped back to
+    'genres/<file>' by the Hebrew genre name."""
+    icon = item.get('iconImage', '') or ''
+    # Already the correct relative form -> leave it.
+    if icon.startswith('genres/'):
+        return ''
+    # Map by Hebrew name to the canonical relative path.
+    name = (item.get('name', '') or '')
+    name = name.replace('[B]', '').replace('[/B]', '').strip()
+    fn = GENRE_NAME_TO_ICON.get(name)
+    if fn:
+        return 'genres/' + fn
+    # If it's an absolute special:// path ending in a known genre file,
+    # salvage the filename.
+    if 'special://' in icon and icon.lower().endswith('.png'):
+        base = icon.rsplit('/', 1)[-1]
+        if base.startswith('genre_'):
+            return 'genres/' + base
+    return ''
+
+
 def _patch_pov_genre_icons():
     if sqlite3 is None or ast is None:
         return False
@@ -652,7 +683,7 @@ def _patch_pov_genre_icons():
                 continue
             row_changed = False
             for item in items:
-                new_icon = _genre_icon_for(item)
+                new_icon = _heal_genre_icon(item)
                 if new_icon and item.get('iconImage', '') != new_icon:
                     item['iconImage'] = new_icon
                     row_changed = True
@@ -853,15 +884,30 @@ def ensure_patched():
         marker_changed = (not _exists(marker)) or (_read(marker).strip() != PATCH_VERSION)
     except Exception:
         pass
-    if marker_changed:
-        _write(marker, PATCH_VERSION + '\n')
-        changed = True
+    # NOTE: do NOT write the marker yet. Earlier code wrote it here and
+    # set changed=True, but then only rebuilt when _is_af3_active() was
+    # true at THIS instant. If AF3 wasn't reported active during the
+    # boot-time run (skin still loading), the nodes were written but the
+    # skin was never rebuilt -- and because the marker had already
+    # advanced to the new PATCH_VERSION, every later boot returned
+    # 'already_patched' and never rebuilt. So new tiles (networks,
+    # idanplus) never surfaced. We now treat a marker bump as a reason to
+    # rebuild, and only persist the marker AFTER a rebuild actually runs,
+    # so a missed rebuild is retried on the next boot.
+    want_rebuild = changed or marker_changed
 
-    if changed and _is_af3_active():
+    if want_rebuild and _is_af3_active():
         _rebuild_af3_shortcuts()
+        try:
+            _write(marker, PATCH_VERSION + '\n')
+        except Exception:
+            pass
         return 'patched_rebuilt'
     if upgrade_requested:
         return 'upgrade_requested'
-    if changed:
+    if want_rebuild:
+        # Content/version changed but AF3 wasn't active to rebuild. Leave
+        # the marker UNwritten so the next boot (or next AF3 activation)
+        # retries the rebuild instead of being suppressed as up-to-date.
         return 'patched'
     return 'already_patched'
