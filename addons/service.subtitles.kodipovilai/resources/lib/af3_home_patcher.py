@@ -28,7 +28,7 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-05-30-pov-home-v6'
+PATCH_VERSION = '2026-05-30-pov-home-v7'
 AF3_CE_VERSION = '6.3.2.9'
 
 BASE_NODES = 'special://profile/addon_data/script.skinvariables/nodes/'
@@ -561,6 +561,36 @@ def _patch_info_plot_autoscroll_xml():
         return False
 
 
+def _enable_touch_input():
+    # AF3's home was built for a remote: the main menu is an off-screen list
+    # driven by an invisible focus-holder button, so taps on the visible menu
+    # items do nothing. Enabling Kodi's mouse/pointer support is the safe first
+    # step for phones - it makes the *real* controls (widget rows, spotlight,
+    # the submenu buttons once visible) respond to taps and lets lists be
+    # drag-scrolled. It has no effect on remote/TV navigation.
+    if xbmc is None:
+        return False
+    settings = (
+        ('input.enablemouse', True),
+        # Show the pointer so users can see where their tap lands.
+        ('input.enablepointer', True),
+    )
+    changed = False
+    for setting_id, value in settings:
+        payload = json.dumps({
+            'jsonrpc': '2.0',
+            'id': 1,
+            'method': 'Settings.SetSettingValue',
+            'params': {'setting': setting_id, 'value': value},
+        })
+        try:
+            xbmc.executeJSONRPC(payload)
+            changed = True
+        except Exception:
+            pass
+    return changed
+
+
 def _set_af3_runtime_defaults():
     if xbmc is None:
         return
@@ -626,6 +656,8 @@ def ensure_patched():
         return 'no_af3'
 
     upgrade_requested = _request_ce_skin_upgrade()
+
+    _enable_touch_input()
 
     _mkdir(AF3_NODES)
     changed = False
