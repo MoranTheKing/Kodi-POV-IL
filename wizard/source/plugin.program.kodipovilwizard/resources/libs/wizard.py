@@ -542,6 +542,18 @@ AF3_PACKS = [
         'url': '{0}/Kodi-POV-IL-AF3-deps-pack.zip'.format(AF3_PACK_BASE_URL),
         'filename': 'af3_deps_pack.zip',
         'sentinel': 'special://home/addons/script.module.jurialmunkey/addon.xml',
+        # Force a re-extract when the installed jurialmunkey is OLDER than
+        # what the pack ships. Without a version gate, _af3_pack_current()
+        # returned True as soon as the addon.xml merely EXISTED -- so a user
+        # who already had an old jurialmunkey (e.g. 0.2.28 from their base
+        # build) was never upgraded. But the bundled TMDbHelper 6.15.6
+        # requires jurialmunkey >= 0.2.35 (it imports jurialmunkey.ftools,
+        # which only exists from 0.2.35), so TMDbHelper's whole service
+        # crashed on startup -> AF3 widgets/ratings broke. Gating on the
+        # jurialmunkey version forces the deps pack to re-extract and
+        # overwrite the stale copy. Keep this in sync with the version
+        # bundled in dist/Kodi-POV-IL-AF3-deps-pack.zip.
+        'expected_version': '0.2.35',
         # script.skinvariables, script.texturemaker, and
         # plugin.video.themoviedb.helper all transitively depend on
         # these. Without them AF3 hangs forever on "Initialising
@@ -634,6 +646,16 @@ def _af3_read_addon_version(addon_xml):
         return ''
 
 
+def _version_tuple(ver):
+    """Best-effort numeric version tuple for comparison. Non-numeric
+    parts degrade to 0 so a malformed version never raises."""
+    parts = []
+    for chunk in str(ver).split('.'):
+        num = ''.join(ch for ch in chunk if ch.isdigit())
+        parts.append(int(num) if num else 0)
+    return tuple(parts)
+
+
 def _af3_pack_current(pack):
     if not _af3_pack_installed(pack['sentinel']):
         return False
@@ -641,11 +663,19 @@ def _af3_pack_current(pack):
     if not expected:
         return True
     current = _af3_read_addon_version(pack['sentinel'])
-    if current == expected:
-        return True
+    # "Current" means installed >= expected. A newer installed version is
+    # fine (don't force a needless downgrade/re-extract); only an OLDER or
+    # missing version triggers a reinstall. Falls back to exact-match if
+    # either version can't be parsed.
+    try:
+        if _version_tuple(current) >= _version_tuple(expected):
+            return True
+    except Exception:
+        if current == expected:
+            return True
     logging.log(
-        'AF3 pack version mismatch, forcing reinstall: {0} '
-        'current={1} expected={2}'.format(
+        'AF3 pack version too old, forcing reinstall: {0} '
+        'current={1} expected>={2}'.format(
             pack['name'], current or 'missing', expected))
     return False
 

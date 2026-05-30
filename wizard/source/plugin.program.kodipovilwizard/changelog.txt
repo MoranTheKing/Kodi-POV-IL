@@ -1,3 +1,13 @@
+[COLOR yellow][B]v0.1.13[/B][/COLOR]
+* AF3 deps pack now has a VERSION GATE on jurialmunkey (>= 0.2.35).
+  Previously _af3_pack_current() returned True as soon as the addon.xml
+  merely existed, so users who switched to AF3 with an old jurialmunkey
+  (e.g. 0.2.28) were never upgraded -- but the bundled TMDbHelper 6.15.6
+  needs jurialmunkey.ftools (0.2.35+) and crash-looped its service on
+  startup, breaking AF3 widgets/ratings. The gate forces a re-extract that
+  overwrites the stale module. Version compare is now ">= expected" so a
+  newer installed version is never needlessly downgraded.
+
 [COLOR yellow][B]v0.1.12[/B][/COLOR]
 * AF3 Switch Skin fix #2: ship 4 transitive Python deps that the
   AF3 skin scripts need (script.module.jurialmunkey 0.2.35,
