@@ -8,6 +8,24 @@ from modules import kodi_utils, settings
 from modules.utils import jsondate_to_datetime, adjust_premiered_date, make_day, get_datetime, title_key, date_difference, TaskPool
 # logger = kodi_utils.logger
 
+def _flex_call(_function, *args):
+	# Version-resilient call helper (see movies.py/tvshows.py). episodes.py
+	# has no variable-arity personal-list calls today, but it carries the
+	# same helper so the pov_menus_patcher freshness marker (`_flex_call`)
+	# is present in all three synced menu files and the patcher doesn't
+	# re-copy this file on every startup.
+	_args = list(args)
+	while True:
+		try:
+			return _function(*_args)
+		except TypeError as e:
+			msg = str(e)
+			if _args and 'positional argument' in msg and (
+					'were given' in msg or 'was given' in msg):
+				_args = _args[:-1]
+				continue
+			raise
+
 tv_meta_function, season_meta_function, default_duration = tvshow_meta, season_episodes_meta, 3600
 KODI_VERSION, make_cast_list = kodi_utils.get_kodi_version(), kodi_utils.make_cast_list
 string, ls, build_url, get_infolabel = str, kodi_utils.local_string, kodi_utils.build_url, kodi_utils.get_infolabel
