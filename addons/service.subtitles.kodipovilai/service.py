@@ -371,6 +371,113 @@ def _maybe_patch_favourites_xml():
             pass
 
 
+def _maybe_patch_favourites_personal_tiles():
+    """Restore the 6 personal home tiles ("הסרטים שלי / הסדרות שלי"
+    in TMDB / Trakt / POV variants) when they're missing from
+    userdata/favourites.xml. Triggered when the user switched skin to
+    AF3 and back to FENtastic, which caused the wizard to overwrite
+    their 32-tile install default with the 11-tile skin seed --
+    wiping the personal tiles. The patcher appends the missing tiles
+    from a bundled canonical fixture so the user gets their tiles
+    back on the next boot."""
+    try:
+        from resources.lib import (
+            favourites_personal_tiles_patcher, kodi_utils)
+    except Exception:
+        return
+    try:
+        status = favourites_personal_tiles_patcher.ensure_patched()
+        if status == 'restored':
+            kodi_utils.log(
+                'favourites_personal_tiles_patcher: restored missing '
+                'personal home tiles', level='INFO')
+        elif status in ('no_kodi', 'no_favourites', 'no_fixture',
+                        'already_complete'):
+            pass  # quiet steady-state
+        else:
+            kodi_utils.log(
+                'favourites_personal_tiles_patcher: ' + status,
+                level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'favourites_personal_tiles_patcher failed: '
+                '{0}'.format(e), level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_cache_empty():
+    """Patch POV's caches/main_cache.py so cache_object() refuses to
+    store empty API results in the 24-hour cache. Fixes the
+    real-user bug where adding to TMDB favorites via the in-app
+    context menu succeeds on themoviedb.org but the "My Movies
+    (TMDB)" tile keeps showing "No results" until the cache row
+    naturally expires. Also one-shot-clears any tmdblist_* /
+    trakt_* rows already sitting empty in maincache.db."""
+    try:
+        from resources.lib import (
+            pov_cache_empty_patcher, kodi_utils)
+    except Exception:
+        return
+    try:
+        status = pov_cache_empty_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_cache_empty_patcher: cache_object now skips '
+                'empty results; stale list rows cleared',
+                level='INFO')
+        elif status in ('no_pov', 'no_file', 'already_patched'):
+            pass  # quiet steady-state
+        else:
+            kodi_utils.log(
+                'pov_cache_empty_patcher: ' + status,
+                level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_cache_empty_patcher failed: '
+                '{0}'.format(e), level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_trakt_cache_empty():
+    """Patch POV's caches/trakt_cache.py so cache_trakt_object()
+    refuses to store empty results. Companion to _maybe_patch_pov_
+    cache_empty (which only handles main_cache.py). Trakt's cache is
+    in a SEPARATE database (trakt.db) and -- critically -- has NO
+    expiration, so a single transient empty caches forever until an
+    explicit clear. Fixes the "My Movies (Trakt) tile shows empty
+    even though trakt.tv has the items" symptom that survived the
+    first PR's main_cache patch."""
+    try:
+        from resources.lib import (
+            pov_trakt_cache_empty_patcher, kodi_utils)
+    except Exception:
+        return
+    try:
+        status = pov_trakt_cache_empty_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_trakt_cache_empty_patcher: cache_trakt_object '
+                'now skips empty results; stale Trakt list rows '
+                'cleared', level='INFO')
+        elif status in ('no_pov', 'no_file', 'already_patched'):
+            pass  # quiet steady-state
+        else:
+            kodi_utils.log(
+                'pov_trakt_cache_empty_patcher: ' + status,
+                level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_trakt_cache_empty_patcher failed: '
+                '{0}'.format(e), level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_repeat_timer():
     """Wrap POV's myservices.py RepeatTimer.run() in try/except so
     auth-polling threads survive single-iteration failures. Without
@@ -536,6 +643,40 @@ def _maybe_patch_darksubs_download_sub():
             from resources.lib import kodi_utils
             kodi_utils.log(
                 'darksubs_download_sub_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_darksubs_embedded_demote():
+    """Self-healing patch of DarkSubs's engine.py so embedded ('[LOC]')
+    subtitle entries sink to the BOTTOM of their language group instead
+    of floating to the top on their hard-coded 101% sync. On this
+    streaming build the embedded track can't be AI-translated (DarkSubs
+    short-circuits embedded picks with setSubtitleStream before our
+    hook runs), so demoting it makes an external, AI-translatable
+    English source the natural first pick."""
+    try:
+        from resources.lib import darksubs_embedded_demote_patcher, \
+            kodi_utils
+    except Exception:
+        return
+    try:
+        status = darksubs_embedded_demote_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'darksubs_embedded_demote_patcher: [LOC] embedded '
+                'entries now sort to the bottom of their group',
+                level='INFO')
+        elif status in ('unmatched', 'write_failed', 'read_failed'):
+            kodi_utils.log(
+                'darksubs_embedded_demote_patcher: ' + status,
+                level='WARNING')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'darksubs_embedded_demote_patcher failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
@@ -1062,6 +1203,13 @@ def main():
     # this, the v3 hook only ever fires when auto_translate=true.
     _maybe_patch_darksubs_download_sub()
 
+    # Push embedded ('[LOC]') subtitle entries to the bottom of their
+    # language group. They carry a hard-coded 101% sync that otherwise
+    # floats them to the top, and they can't be AI-translated (DarkSubs
+    # short-circuits embedded picks before our hook runs) -- so we want
+    # the external, translatable English source to be the first pick.
+    _maybe_patch_darksubs_embedded_demote()
+
     # Now that the hook injection has had its shot, run a structural
     # check end-to-end and pop a toast if something is broken (e.g.
     # DarkSubs signature changed, engine.py not writable on CoreELEC,
@@ -1182,6 +1330,28 @@ def main():
     # the TMDB tile would briefly point at a missing file.
     _maybe_install_build_icons()
     _maybe_patch_favourites_xml()
+
+    # Restore the 6 personal "הסרטים שלי / הסדרות שלי" home tiles
+    # if they're missing -- happens to users who switched skin to
+    # AF3 and back, because the wizard's per-skin seed only contains
+    # 11 service tiles and overwrites the 32-tile install default.
+    _maybe_patch_favourites_personal_tiles()
+
+    # POV's cache_object treats empty API results the same as full
+    # ones and caches them for 24h. When a TMDB/Trakt list read
+    # hits a transient failure, the cached empty list shadows the
+    # user's real list for the next 24h -- they add an item via
+    # context menu, see the success notification, but the home tile
+    # keeps showing "No results". Patch caches.main_cache to skip
+    # the set() when result is empty.
+    _maybe_patch_pov_cache_empty()
+
+    # Sibling patch for trakt_cache.py (separate cache layer, no
+    # expiration -- empty results stuck FOREVER, not just 24h).
+    # Needed because the "My Movies (Trakt)" tile stayed empty even
+    # after the main_cache patch landed; trakt.db has its own cached
+    # empty list that PR #187 never touched.
+    _maybe_patch_pov_trakt_cache_empty()
 
     # v0.2.9 tried patching FENtastic's notification widget but
     # it broke things; this cleans up the leftover patch on disk
