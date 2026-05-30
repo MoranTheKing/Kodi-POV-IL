@@ -39,7 +39,7 @@ except Exception:
     kodi_utils = None
 
 
-DIAG_VERSION = '1'
+DIAG_VERSION = '3'
 OUR_ADDON_ID = 'service.subtitles.kodipovilai'
 POV_ADDON_ID = 'plugin.video.pov'
 POV_PROFILE = 'special://profile/addon_data/plugin.video.pov/'
@@ -48,8 +48,14 @@ WATCHED_DB = POV_PROFILE + 'watched.db'        # favorites table lives here
 MAINCACHE_DB = POV_PROFILE + 'maincache.db'    # tmdblist_* cache
 TRAKT_DB = POV_PROFILE + 'traktcache.db'       # trakt_* cache
 
+# NOTE: tmdb_read_token added in v3 -- this is the token movie_details /
+# tvshow_details (the per-item meta fetch) actually use, and it was
+# never checked before. Empty/invalid here => every favorite resolves
+# blank => list empty, while LIST endpoints (popular) use tmdb.token and
+# still work. That asymmetry is exactly the reported symptom.
 TMDB_KEYS = ('tmdb.account_id', 'tmdb.session_account_id',
-             'tmdb.token', 'tmdb.session_id', 'tmdb.username')
+             'tmdb.token', 'tmdb.session_id', 'tmdb.username',
+             'tmdb_read_token')
 TRAKT_KEYS = ('trakt_user', 'trakt.token', 'trakt.expires', 'trakt.refresh')
 
 
@@ -200,6 +206,83 @@ def _collect():
             empty = " <EMPTY/near-empty>" if (r[1] or 0) <= 4 else ""
             lines.append("  %s: data_len=%s%s" % (r[0], r[1], empty))
 
+    # --- v3: the EXACT watched.db path POV itself resolves, + row count
+    # there. If POV reads a different file than the one we inspected,
+    # this reveals it (adds succeed in one db, list reads an empty one). ---
+    lines.append("")
+    lines.append("[watched.db path POV actually uses]")
+    real_watched = _tp(WATCHED_DB)
+    lines.append("  resolved: %s" % real_watched)
+    lines.append("  exists: %s" % os.path.isfile(real_watched))
+    try:
+        lines.append("  size: %s bytes" % (os.path.getsize(real_watched)
+                     if os.path.isfile(real_watched) else 'n/a'))
+    except Exception:
+        pass
+    cnt = _q(WATCHED_DB,
+             "SELECT COUNT(*) FROM favorites WHERE db_type='movie'")
+    if isinstance(cnt, list) and cnt:
+        lines.append("  favorites movie rows AT THIS PATH: %s" % cnt[0][0])
+
+    # --- v3: LIVE TMDB per-item fetch test. This is the decisive check.
+    # Replays exactly what build_movie_content does for a favorite:
+    # GET /3/movie/<id> with Bearer <tmdb_read_token>. Tells us if the
+    # per-item resolve SUCCEEDS, 401s (bad/empty token), or times out. ---
+    lines.append("")
+    lines.append("[LIVE TMDB per-item fetch test]")
+    read_token = _pov_setting('tmdb_read_token')
+    lines.append("  tmdb_read_token: %s" % _mask(read_token))
+    test_id = None
+    s = _q(WATCHED_DB,
+           "SELECT tmdb_id FROM favorites WHERE db_type='movie' LIMIT 1")
+    if isinstance(s, list) and s:
+        test_id = str(s[0][0])
+    if not test_id:
+        lines.append("  no favorite movie id to test with")
+    else:
+        lines.append("  testing id: %s" % test_id)
+        try:
+            import json as _json
+            try:
+                import requests as _rq
+            except Exception:
+                _rq = None
+            url = ('https://api.themoviedb.org/3/movie/%s?language=en-US'
+                   % test_id)
+            if _rq is None:
+                lines.append("  requests module unavailable; skipped")
+            elif not read_token:
+                lines.append("  >> tmdb_read_token EMPTY -> per-item "
+                             "fetch sends 'Bearer ' and TMDB 401s -> every "
+                             "favorite resolves blank -> list empty. "
+                             "THIS is the root cause if status=401 below.")
+            else:
+                resp = _rq.get(url, headers={
+                    'Authorization': 'Bearer %s' % read_token},
+                    timeout=15.05)
+                lines.append("  HTTP status: %s" % resp.status_code)
+                try:
+                    j = resp.json()
+                    lines.append("  body 'title': %r" % j.get('title'))
+                    lines.append("  body 'success': %r"
+                                 % j.get('success', '<no key>'))
+                    if resp.status_code != 200:
+                        lines.append("  body 'status_message': %r"
+                                     % j.get('status_message'))
+                except Exception as e:
+                    lines.append("  (non-JSON body: %s)" % e)
+                if resp.status_code == 200:
+                    lines.append("  >> per-item fetch SUCCEEDS. So the "
+                                 "empty list is NOT a token/fetch problem; "
+                                 "look at build/render or a different "
+                                 "watched.db path above.")
+                elif resp.status_code == 401:
+                    lines.append("  >> 401 UNAUTHORIZED: tmdb_read_token is "
+                                 "invalid -> ROOT CAUSE. Fix: reset "
+                                 "tmdb_read_token to POV's default.")
+        except Exception as e:
+            lines.append("  fetch raised: %s" % e)
+
     lines.append("")
     lines.append("=== END DIAGNOSTIC ===")
     return "\n".join(lines)
@@ -230,11 +313,14 @@ def run(force=False):
         except Exception as e:
             _log('file write failed: %s' % e, level='WARNING')
 
-        # NOTE: the textviewer popup was intentionally removed in
-        # v0.2.73. It annoyed the general userbase on every rollout.
-        # The report still lands in kodi.log and in
-        # <POV profile>/POV_FAV_DIAGNOSTIC.txt, which is all we need to
-        # diagnose -- silently, with no on-screen interruption.
+        # v3 re-enables the popup for THIS targeted debugging round only
+        # (the live-fetch result is the decisive datapoint and we need a
+        # screenshot). It's one-shot per DIAG_VERSION, so it shows once.
+        try:
+            xbmcgui.Dialog().textviewer(
+                'אבחון מועדפים v3 — צלם מסך ושלח', report)
+        except Exception:
+            pass
 
         _our_set('_fav_diag_done', DIAG_VERSION)
         return 'done'
