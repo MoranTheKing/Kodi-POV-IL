@@ -16,12 +16,15 @@ Three string forms get renamed in the dex:
   dotted org.xbmc.kodi.media       authorities / Class.getName()
   dash   ...$org-xbmc-kodi-Splash  synthetic-lambda method names
 
-resources.arsc holds the package name in its UTF-16 string pool, so it's
-patched there too (same length, no structural change).
+Only classes*.dex are patched here. resources.arsc is intentionally NOT
+touched: apktool's own rebuilt arsc already carries the renamed package and
+stays STORED (uncompressed); re-injecting/patching arsc via zip recompresses
+it, and modern Android refuses to install an apk with a compressed
+resources.arsc. (If a resources.arsc happens to be present in the dir it is
+patched in place for completeness, but the workflow does not pass one.)
 
 Usage:
-    patch_dex_package.py <dir-with-classes.dex-and-resources.arsc> \
-        <old.pkg> <new.pkg>
+    patch_dex_package.py <dir-with-classes.dex> <old.pkg> <new.pkg>
 
 <old.pkg>/<new.pkg> are the dotted ids, e.g. org.xbmc.kodi org.mora.kodi.
 They MUST be the same length. Exits non-zero (failing the build) if any
