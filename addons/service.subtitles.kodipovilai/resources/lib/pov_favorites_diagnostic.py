@@ -313,14 +313,9 @@ def run(force=False):
         except Exception as e:
             _log('file write failed: %s' % e, level='WARNING')
 
-        # v3 re-enables the popup for THIS targeted debugging round only
-        # (the live-fetch result is the decisive datapoint and we need a
-        # screenshot). It's one-shot per DIAG_VERSION, so it shows once.
-        try:
-            xbmcgui.Dialog().textviewer(
-                'אבחון מועדפים v3 — צלם מסך ושלח', report)
-        except Exception:
-            pass
+        # No popup (user asked to keep it silent). The report lands in
+        # kodi.log and in <POV profile>/POV_FAV_DIAGNOSTIC.txt -- send
+        # that file.
 
         _our_set('_fav_diag_done', DIAG_VERSION)
         return 'done'
