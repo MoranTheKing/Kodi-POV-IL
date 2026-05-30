@@ -160,6 +160,18 @@ jobs:
               [ -f "$f" ] || continue
               sed -i 's|<string name="app_name">[^<]*</string>|<string name="app_name">'"$APP_NAME"'</string>|' "$f" || true
             done
+            # Custom launcher icon. Kodi uses plain @drawable/ic_launcher PNGs
+            # (no adaptive/mipmap), so we just overwrite the 6 density variants
+            # with our Kodi POV IL icon. apktool re-encodes them on rebuild;
+            # the package strings in resources.arsc are untouched.
+            for dens in ldpi mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+              ICON_SRC="src/.github/assets/ic_launcher/ic_launcher-${dens}.png"
+              ICON_DST="$DEC/res/drawable-${dens}/ic_launcher.png"
+              if [ -f "$ICON_SRC" ] && [ -f "$ICON_DST" ]; then
+                cp "$ICON_SRC" "$ICON_DST"
+                echo "icon: replaced drawable-${dens}/ic_launcher.png"
+              fi
+            done
             echo "--- package line ---"; { grep -oE 'package="[^"]*"' "$MANIFEST" || true; } | head -1
             if grep -q "package=\"$NEW_PKG_DOT\"" "$MANIFEST"; then
               echo "OK: manifest package is $NEW_PKG_DOT"
