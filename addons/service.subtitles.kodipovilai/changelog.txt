@@ -1,3 +1,10 @@
+v0.2.62
+- AF3 phone/touch pass (iteration 1): enable Kodi's mouse/pointer support
+  so the real home controls (widget rows, spotlight, the submenu buttons
+  once open) respond to taps and lists can be drag-scrolled on a phone.
+  AF3's main menu items are off-screen "fake-focus" controls, so a deeper
+  overlay fix is still planned - this is the safe first step.
+
 v0.2.61
 - AF3 phone/touch pass: the home screen now uses Standard rows again
   instead of the Combined category selector, because the selector is
