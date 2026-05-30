@@ -344,6 +344,33 @@ def _maybe_install_build_icons():
             pass
 
 
+def _maybe_patch_pov_genre_icons():
+    """Re-icon POV's genre navigator rows to the stable
+    media/build_icons/Genres/ set we ship. Runs for ANY skin (FENtastic
+    AND AF3) since the genre rows live in POV's shared navigator.db --
+    the genre icons were blank on both skins because POV's own
+    media/genres/ folder isn't shipped by us and is wiped on POV
+    self-update. Separate from af3_home_patcher.ensure_patched(), which
+    early-returns 'no_af3' when AF3 isn't installed and so never ran the
+    genre fix on FENtastic-only devices."""
+    try:
+        from resources.lib import af3_home_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        if af3_home_patcher._patch_pov_genre_icons():
+            kodi_utils.log(
+                'pov genre icons: repointed navigator rows to '
+                'build_icons/Genres', level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov genre icons patch failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_favourites_xml():
     """Migrate the two Trakt-collection home tiles to TMDB
     Favorites equivalents in userdata/favourites.xml. Surgical --
@@ -1427,6 +1454,9 @@ def main():
     # favourites_xml patcher rewrites the thumb paths, otherwise
     # the TMDB tile would briefly point at a missing file.
     _maybe_install_build_icons()
+    # Re-icon POV genre rows for BOTH skins (must run after build_icons
+    # so the Genres/ PNGs are on disk; independent of AF3 install).
+    _maybe_patch_pov_genre_icons()
     _maybe_patch_favourites_xml()
 
     # Restore the 6 personal "הסרטים שלי / הסדרות שלי" home tiles
