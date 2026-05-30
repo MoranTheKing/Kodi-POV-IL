@@ -1,3 +1,24 @@
+v0.2.75
+- ACTUALLY apply the favorites fix (v0.2.74 shipped the right idea but
+  didn't take effect on devices). On-device proof: watched.db held 6
+  valid favorite rows, yet the POV-local favorites list returned in
+  212ms with ZERO network calls and rendered empty -- i.e. all 6 ids
+  were served from the per-item meta cache as blank_entry and dropped,
+  and kodi.log showed the patcher never logged at all. Root problem:
+  v0.2.74 tied the poisoned-row purge to the SUCCESS of rewriting
+  metadata.py, so if that rewrite path was skipped the purge never ran
+  and the cache stayed poisoned forever.
+  * pov_meta_blank_patcher v2: the metacache.db blank_entry purge now
+    runs UNCONDITIONALLY and FIRST on every startup, independent of the
+    metadata.py rewrite, and ALWAYS logs how many rows it deleted (v1's
+    silence is what hid the skip). This makes existing favorites
+    reappear immediately.
+  * Also widen tmdb_api's aggressive per-item timeout 3.05s -> 15.05s --
+    the actual reason a /movie/{id} detail fetch failed and got cached
+    blank in the first place on mobile/slow links. With the wider
+    timeout the re-fetch succeeds and posters fill in instead of
+    re-poisoning.
+
 v0.2.74
 - FIX the real "favorites added but list shows 0" bug (root cause found
   via the v0.2.72/0.2.73 diagnostic). The diagnostic proved on-device:
