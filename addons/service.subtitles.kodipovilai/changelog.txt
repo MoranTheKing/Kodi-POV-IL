@@ -1,3 +1,29 @@
+v0.2.84
+- Round 2 of deep-audit fixes (the previous demote/genre/tile attempts
+  didn't take on-device; found the true causes):
+  * EMBEDDED ENGLISH at the ROOT. DarkSubs autosub.py
+    add_embedded_sub_if_exists() computes the embedded-English insert
+    index as "right after the last Hebrew subtitle" -- so it lands ABOVE
+    the real English subs -- and it does this AFTER engine.sort_subtitles
+    runs, which is exactly why both the engine-level and picker-level
+    demotes never moved it. New darksubs_embedded_insert_patcher rewrites
+    that index to len(f_result) so embedded English is always inserted
+    LAST. Verified against the real autosub.py: anchors uniquely on the
+    `index = 0` + Hebrew loop (not the earlier settings block), compiles
+    (spaces preserved, no TabError), idempotent. Kept the engine + picker
+    demotes as belt-and-braces.
+  * עידן פלוס "No Results": its AF3 tile had path RunAddon(...), a
+    COMMAND, which a CONTENT widget can't list. Changed to
+    plugin://plugin.video.idanplus/ (its browsable root) + target=videos,
+    so the row shows idanplus's own categories.
+  * Trakt tab ADDED to AF3 home: there was never a Trakt tile -- only
+    TMDB + POV-local. Added 'הסרטים שלי (Trakt)' and 'הסדרות שלי (Trakt)'
+    (action=trakt_collection, build_movie_list/build_tvshow_list) next to
+    the TMDB ones.
+  * Genre icons on AF3: the v0.2.83 heal is correct but only surfaces
+    after a skin rebuild; PATCH_VERSION bumped (v11->v12) so the AF3 home
+    rebuilds and re-queries the healed navigator.db rows.
+
 v0.2.83
 - Deep-audit fixes for AF3 home + embedded subs (after video/screenshots):
   * EMBEDDED ENGLISH demote that actually works. The engine-level v2
