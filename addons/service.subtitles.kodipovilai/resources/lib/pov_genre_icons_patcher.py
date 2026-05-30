@@ -49,7 +49,7 @@ POV_ADDON_ID = 'plugin.video.pov'
 NAVIGATOR_REL = 'resources/lib/menus/navigator.py'
 POV_GENRE_MEDIA_REL = 'resources/skins/Default/media/genres'
 
-MARKER = '# AI_SUBS_POV_GENRE_ICONS_v1'
+MARKER = '# AI_SUBS_POV_GENRE_ICONS_v2'
 
 # The exact per-genre _add_item call (in genres() AND anime_genres()):
 #   self._add_item({...}, 'genres.png', list_name=list_name)
@@ -59,6 +59,24 @@ _GENRE_CALL_RE = re.compile(
     rb"(?P<head>self\._add_item\(\{[^}]*'genre_id': value\[0\][^}]*\}, )"
     rb"'genres\.png'(?P<tail>, list_name=list_name\))",
 )
+
+# build_shortcut_folder_list (the path AF3's genre WIDGETS use) blindly
+# prepends media_path() to a non-network item's iconImage:
+#   icon = item_get('iconImage') if item_get('network_id','') != '' \
+#          else '%s%s' % (icon_path, item_get('iconImage'))
+# So an ABSOLUTE special:// iconImage gets doubled into a broken path ->
+# POV-logo fallback. Harden it to pass absolute paths through unchanged
+# (and keep prepending media_path only for bare relative names). This
+# makes genre icons robust no matter what value the navigator.db rows
+# hold.
+_SHORTCUT_ICON_OLD = (
+    b"icon = item_get('iconImage') if item_get('network_id', '') != '' "
+    b"else '%s%s' % (icon_path, item_get('iconImage'))")
+_SHORTCUT_ICON_NEW = (
+    b"icon = (item_get('iconImage') if (item_get('network_id', '') != '' "
+    b"or str(item_get('iconImage') or '').startswith(('special://', "
+    b"'http', 'resource://'))) else '%s%s' % (icon_path, "
+    b"item_get('iconImage')))")
 
 
 def _log(msg, level='INFO'):
@@ -149,6 +167,12 @@ def ensure_patched():
                 + b"'genres/%s' % value[1]"
                 + m.group('tail'))
     new_content = _GENRE_CALL_RE.sub(_repl, content)
+    # Harden build_shortcut_folder_list so an absolute special:// icon
+    # isn't doubled into a broken path (best-effort; only if the exact
+    # line is present).
+    if _SHORTCUT_ICON_OLD in new_content:
+        new_content = new_content.replace(
+            _SHORTCUT_ICON_OLD, _SHORTCUT_ICON_NEW, 1)
     # Tag with the marker on its own line right after the genres() def so
     # re-runs are detected. (Append a comment near the top of the file.)
     new_content = new_content.replace(
