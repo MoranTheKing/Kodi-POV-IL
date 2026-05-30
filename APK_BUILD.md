@@ -3,7 +3,7 @@
 Two workflows live under `.github/workflows/`:
 
 - **`setup-keystore.yml`** — runs once. Generates an Android release keystore on the runner, encrypts it with your `KEYSTORE_PASSWORD` secret, and opens a PR adding `.secrets/release.keystore.enc` to the repo. The unencrypted keystore never leaves the runner.
-- **`build-apk.yml`** — runs each time you cut a release. Decrypts the in-repo keystore, downloads the official Kodi 21.3 APK, rebrands it to `org.moran.kodi` (applicationId / provider authorities / permissions only — the code package is left intact so Kodi's native JNI still resolves), bundles the wizard + FENtastic build into `assets/`, signs both architectures, and attaches them (plus an NSIS Windows installer) to a GitHub Release.
+- **`build-apk.yml`** — runs each time you cut a release. Decrypts the in-repo keystore, downloads the official Kodi 21.3 APK, relabels it to "Kodi POV IL" and swaps in the custom launcher icon (keeping the package id `org.xbmc.kodi` — see below), bundles the wizard + FENtastic build into `assets/`, signs both architectures, and attaches them (plus an NSIS Windows installer) to a GitHub Release.
 
 Neither workflow uses any third-party `actions/*` — just system tools and the preinstalled `gh` CLI. The repo's restrictive Actions policy doesn't block them.
 
@@ -24,27 +24,38 @@ Neither workflow uses any third-party `actions/*` — just system tools and the 
 
 6. **Optional — register a Downloader code.** Submit one of the public URLs (e.g. `https://github.com/MoranTheKing/Kodi-POV-IL/releases/latest/download/Kodi-POV-IL-64bit.apk`) to `https://www.aftvnews.com/downloader/`, copy the numeric code it returns, and ask Claude to wire it into `uservar.py`.
 
-## Package id: org.moran.kodi (one-time migration)
+## Package id: org.xbmc.kodi (label-only rebrand — the working config)
 
-The build now ships as `org.moran.kodi`, **not** `org.xbmc.kodi`. This means:
+The build keeps the package id **`org.xbmc.kodi`** and only relabels the app
+("Kodi POV IL") + swaps the launcher icon. This is the configuration that
+installs and runs reliably, and it's what shipped in every working release.
 
-- New installs no longer collide with the official Kodi from the Play Store —
-  both can live on the device side by side.
-- **Existing `org.xbmc.kodi` installs cannot update in place onto this build.**
-  Android treats a different applicationId as a different app, so the first
-  `org.moran.kodi` release installs *alongside* the old one. The wizard's
-  update prompt now detects the old package id too and shows a one-time note
-  telling the user the new app installs separately and the old one can be
-  removed afterwards.
-- From the *next* `org.moran.kodi` release onward, updates are in-place again
-  (same package id, same keystore).
+History of why we're here (three failed attempts at a separate package id, all
+reverted):
+
+- **`21.3-povil.26`** renamed only the manifest `package=""` → inconsistent with
+  the smali classes → crash-looped on boot.
+- **`21.3-povil.27`** renamed the whole package incl. a binary dex patch. apktool
+  still re-assembled `classes.dex`, which broke Kodi's JNI registration →
+  `System.loadLibrary("kodi")` crashed in `nativeLoad`.
+- **`21.3-povil.28`** kept the dex byte-identical but the re-injected
+  `resources.arsc` came out compressed → modern Android refused to install
+  ("App not installed").
+
+Net: apktool simply cannot produce a renamed-package Kodi APK that both installs
+and launches. A *real* separate applicationId needs a **from-source `xbmc/xbmc`
+Gradle build** (45–90 min/arch, tighter CI). Until that's worth doing, we stay
+on `org.xbmc.kodi`.
+
+Trade-off: shares the package id with the official Kodi from Play Store, so the
+two can't be installed side by side. Existing installs update in place normally.
 
 ## Bumping a release later
 
 - Bump the `version_code` integer (Android will refuse downgrade installs).
-- Choose a new `version` label (e.g. `21.3-povil.26`).
-- Run `build-apk.yml`. Same keystore, same `org.moran.kodi` package id, so
-  installs from the previous `org.moran.kodi` release update in place.
+- Choose a new `version` label (e.g. `21.3-povil.29`).
+- Run `build-apk.yml`. Same keystore, same `org.xbmc.kodi` package id, so
+  existing installs update in place.
 - Merge the auto-PR that bumps `wizard/assets/kodi_version_auto_update/{apk,windows}/latest_*.txt` so installed clients notice the new release.
 
 ## What gets published in each release
@@ -62,7 +73,7 @@ If `KEYSTORE_PASSWORD` is lost:
 1. Delete the `.secrets/release.keystore.enc` file (via PR or web edit).
 2. Rotate `KEYSTORE_PASSWORD` to a new value.
 3. Run `setup-keystore.yml` again to mint a fresh keystore.
-4. Cut a new release with a new package id (e.g. `org.moran.kodi2`) — Android refuses to update an app signed with a different key, so existing installs cannot be upgraded. New users get the new package; existing users have to uninstall the old one first.
+4. Cut a new release. Android refuses to update an app signed with a different key, so existing installs cannot be upgraded onto the new keystore — existing users have to uninstall the old app first, then install the new one.
 
 This is the same constraint the kodi7rd build operates under.
 
