@@ -827,6 +827,39 @@ def _maybe_patch_darksubs_embedded_demote():
             pass
 
 
+def _maybe_patch_darksubs_subwindow_demote():
+    """Final-point embedded-English demote: patch DarkSubs's picker
+    dialog sub_window.py so the embedded 'תרגום מובנה אנגלית' ([LOC])
+    row sinks to the bottom of the list right before it's drawn --
+    independent of engine.sort_subtitles ordering (which didn't move it
+    on the user's device). Reorders the display list and the parallel
+    download list in lockstep so picking still downloads the right sub;
+    a genuine embedded Hebrew track stays on top."""
+    try:
+        from resources.lib import darksubs_subwindow_demote_patcher, \
+            kodi_utils
+    except Exception:
+        return
+    try:
+        status = darksubs_subwindow_demote_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'darksubs_subwindow_demote_patcher: embedded English now '
+                'sinks to the bottom of the picker', level='INFO')
+        elif status in ('unmatched', 'write_failed', 'read_failed'):
+            kodi_utils.log(
+                'darksubs_subwindow_demote_patcher: ' + status,
+                level='WARNING')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'darksubs_subwindow_demote_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_surface_darksubs_status():
     """Run the DarkSubs hook diagnostic at startup. If the integration
     has an actionable problem (e.g. signature mismatch, read-only
@@ -1354,6 +1387,10 @@ def main():
     # short-circuits embedded picks before our hook runs) -- so we want
     # the external, translatable English source to be the first pick.
     _maybe_patch_darksubs_embedded_demote()
+    # Belt-and-braces: also demote at the picker dialog itself, the last
+    # point before display, so embedded English can't slip back to the
+    # top regardless of engine ordering.
+    _maybe_patch_darksubs_subwindow_demote()
 
     # Now that the hook injection has had its shot, run a structural
     # check end-to-end and pop a toast if something is broken (e.g.

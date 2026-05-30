@@ -1,3 +1,41 @@
+v0.2.83
+- Deep-audit fixes for AF3 home + embedded subs (after video/screenshots):
+  * EMBEDDED ENGLISH demote that actually works. The engine-level v2
+    demote didn't move it on-device. DarkSubs's picker (sub_window.py)
+    renders the list in the order it receives and never re-sorts, so we
+    now demote at the LAST point -- new darksubs_subwindow_demote_patcher
+    injects a reorder right after self.list.reset() in
+    set_active_controls that sinks any [LOC] embedded row whose label is
+    English ('english'/'eng'/'אנגלית'), permuting BOTH the display list
+    (list_o) AND the parallel download list (full_list) in lockstep so
+    the pick still downloads the right sub. Genuine embedded Hebrew stays
+    on top. Self-tested incl. the lockstep guarantee.
+  * Genre icons: UNDO the v0.2.81/0.2.82 navigator.db rewrite, which was
+    the cause, not the cure. POV's build_shortcut_folder_list
+    (navigator.py:446) prepends media_path() to a row's iconImage, so the
+    shipped relative 'genres/genre_*.png' already resolved correctly to
+    POV's own (shipped) media/genres/ icons. Our patch had rewritten
+    those to an ABSOLUTE special:// path, which POV then doubled into a
+    broken '.../media/special://...' path -> POV-logo fallback. Now
+    _heal_genre_icon() restores any absolute/empty genre iconImage back
+    to the working relative 'genres/<file>' by Hebrew name, and
+    pov_genre_icons_patcher additionally hardens navigator.py:446 to pass
+    absolute special://‌/http/resource:// icons through unchanged so they
+    can never be doubled again. Fixes both skins.
+  * AF3 new tiles (networks + idanplus) reliably appear. The rebuild was
+    gated on _is_af3_active() at boot AND the version marker was written
+    even when the rebuild was skipped -- so if AF3 wasn't reported active
+    during the startup run, the nodes were written, the marker advanced,
+    and every later boot returned 'already_patched' without ever
+    rebuilding. Now the marker is persisted ONLY after a rebuild actually
+    runs; a missed rebuild is retried next boot. PATCH_VERSION -> v11 so
+    everyone rebuilds once.
+  * Note on "הסרטים שלי (TMDB)" = No Results: the widget path is correct;
+    it's empty because POV's TMDB favorites READ uses the v4 account id
+    (tmdb.account_id), which is empty when only the v3 session is
+    connected. The POV-local "הסרטים שלי" tile (watched.db) is unaffected.
+    A v4-account-id resolver is the follow-up.
+
 v0.2.82
 - Genre icons FOR REAL (both skins). The v0.2.81 approach (repaint AF3
   navigator.db rows + ship icons to build_icons/Genres) didn't fix
