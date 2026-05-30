@@ -1,3 +1,26 @@
+v0.2.71
+- HOTFIX for v0.2.70: adding to a list crashed Kodi. v0.2.70's
+  pov_favorites_refresh_patcher, besides the (correct) container_refresh()
+  on add, also called POV's kodi_utils.widget_refresh() to reload the
+  home-screen widget tiles. That refresh uses UpdateLibrary(video,
+  special://skin/foo) -- the same trick POV itself only ever runs from
+  a background thread, gated behind an opt-in setting, never from a
+  context-menu action -- and it crashed Kodi every time the user hit
+  "Add to list".
+  v2 of the patcher removes the widget_refresh() call entirely and keeps
+  ONLY container_refresh(), which is exactly what POV already does
+  safely on remove (just now extended to add). New marker
+  AI_SUBS_FAV_REFRESH_v2; the patcher heals installs that already got
+  the crashing v1 line (strips the widget_refresh() off all three sites)
+  as well as pristine POV. Verified: pristine->v2 and v1->v2 both leave
+  no kodi_utils.widget_refresh() call, 3 sites patched, result parses,
+  idempotent.
+  Trade-off: the home-screen widget tile now refreshes on the next
+  return to the home screen (the list cache is still busted on add)
+  rather than instantly -- a small delay in exchange for not crashing.
+  The in-list refresh (open "My Movies"/"My Shows" -> add -> appears
+  immediately) is unchanged and still works.
+
 v0.2.70
 - Follow-up to #187/#188 (the "Add to My List" saga): those fixed the
   READ side -- POV was caching empty list results (main_cache.py 24h,
