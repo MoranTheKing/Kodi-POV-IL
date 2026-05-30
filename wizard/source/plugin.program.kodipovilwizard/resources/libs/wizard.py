@@ -542,6 +542,18 @@ AF3_PACKS = [
         'url': '{0}/Kodi-POV-IL-AF3-deps-pack.zip'.format(AF3_PACK_BASE_URL),
         'filename': 'af3_deps_pack.zip',
         'sentinel': 'special://home/addons/script.module.jurialmunkey/addon.xml',
+        # Force a re-extract when the installed jurialmunkey is OLDER than
+        # what the pack ships. Without a version gate, _af3_pack_current()
+        # returned True as soon as the addon.xml merely EXISTED -- so a user
+        # who already had an old jurialmunkey (e.g. 0.2.28 from their base
+        # build) was never upgraded. But the bundled TMDbHelper 6.15.6
+        # requires jurialmunkey >= 0.2.35 (it imports jurialmunkey.ftools,
+        # which only exists from 0.2.35), so TMDbHelper's whole service
+        # crashed on startup -> AF3 widgets/ratings broke. Gating on the
+        # jurialmunkey version forces the deps pack to re-extract and
+        # overwrite the stale copy. Keep this in sync with the version
+        # bundled in dist/Kodi-POV-IL-AF3-deps-pack.zip.
+        'expected_version': '0.2.35',
         # script.skinvariables, script.texturemaker, and
         # plugin.video.themoviedb.helper all transitively depend on
         # these. Without them AF3 hangs forever on "Initialising
@@ -627,11 +639,29 @@ def _af3_read_addon_version(addon_xml):
         import xbmcvfs
         path = xbmcvfs.translatePath(addon_xml)
         with open(path, 'r', encoding='utf-8') as fh:
-            text = fh.read(400)
-        match = re.search(r'\bversion="([^"]+)"', text)
+            text = fh.read(600)
+        # IMPORTANT: skip the XML declaration's version (<?xml version="1.0"?>)
+        # and read the <addon> tag's version instead. Anchoring on 'version='
+        # alone matches the declaration first, so every addon looked like
+        # "1.0" -- which made the deps-pack version gate think a stale
+        # jurialmunkey 0.2.28 was already current (1.0 >= 0.2.35) and skip the
+        # upgrade. Search from the '<addon' tag so we get the real version.
+        anchor = text.find('<addon')
+        search_from = anchor if anchor >= 0 else 0
+        match = re.search(r'\bversion="([^"]+)"', text[search_from:])
         return match.group(1) if match else ''
     except Exception:
         return ''
+
+
+def _version_tuple(ver):
+    """Best-effort numeric version tuple for comparison. Non-numeric
+    parts degrade to 0 so a malformed version never raises."""
+    parts = []
+    for chunk in str(ver).split('.'):
+        num = ''.join(ch for ch in chunk if ch.isdigit())
+        parts.append(int(num) if num else 0)
+    return tuple(parts)
 
 
 def _af3_pack_current(pack):
@@ -641,11 +671,19 @@ def _af3_pack_current(pack):
     if not expected:
         return True
     current = _af3_read_addon_version(pack['sentinel'])
-    if current == expected:
-        return True
+    # "Current" means installed >= expected. A newer installed version is
+    # fine (don't force a needless downgrade/re-extract); only an OLDER or
+    # missing version triggers a reinstall. Falls back to exact-match if
+    # either version can't be parsed.
+    try:
+        if _version_tuple(current) >= _version_tuple(expected):
+            return True
+    except Exception:
+        if current == expected:
+            return True
     logging.log(
-        'AF3 pack version mismatch, forcing reinstall: {0} '
-        'current={1} expected={2}'.format(
+        'AF3 pack version too old, forcing reinstall: {0} '
+        'current={1} expected>={2}'.format(
             pack['name'], current or 'missing', expected))
     return False
 
@@ -1042,16 +1080,8 @@ def kodi_apk_update_check(kodi_version_update_check_manual, os_type_label):
         
         if is_new_version_available:
 
-            # Users still on an old package id (org.xbmc.kodi / org.xbmc.kodirdil)
-            # cannot update in place onto the new org.moran.kodi app - Android
-            # treats it as a different app. Warn them it installs alongside and
-            # the old one should be removed once.
-            on_new_package = check_if_running_custom_kodi(CONFIG.APK_PACKAGE_ID)
-            migration_note = '' if on_new_package else \
-                '\n[COLOR orange]שים לב: זו גרסה חדשה של האפליקציה. היא תותקן כאפליקציה נפרדת לצד הקיימת - לאחר ההתקנה אפשר למחוק את הישנה.[/COLOR]'
-
             yes_pressed = dialog.yesno(f"{CONFIG.ADDONTITLE} ({os_type_label})",
-                               f'[COLOR yellow][B]קיים עדכון גרסה לאפליקציה שלנו![/B][/COLOR]\nגרסת קודי נוכחית: [B][COLOR red]{CONFIG.KODIV}[/COLOR][/B]\nגרסת קודי מעודכנת: [B][COLOR limegreen]{LATEST_APK_VERSION_TEXT_FILE}[/COLOR][/B]\nהאם ברצונך לעדכן את האפליקציה?{migration_note}',
+                               f'[COLOR yellow][B]קיים עדכון גרסה לאפליקציה שלנו![/B][/COLOR]\nגרסת קודי נוכחית: [B][COLOR red]{CONFIG.KODIV}[/COLOR][/B]\nגרסת קודי מעודכנת: [B][COLOR limegreen]{LATEST_APK_VERSION_TEXT_FILE}[/COLOR][/B]\nהאם ברצונך לעדכן את האפליקציה?',
                                nolabel='[B][COLOR red]מאוחר יותר[/COLOR][/B]',
                                yeslabel='[B][COLOR springgreen]עדכן[/COLOR][/B]')
                                

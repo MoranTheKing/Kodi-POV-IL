@@ -1,20 +1,22 @@
-110
+115
 |||
-תיקון AllSubs ב-Windows — שגיאת shutil.SameFileError בכל הפעלה
-**הבעיה שדיווחת:** בכל פעם שאתה נכנס ל-Kodi מהמחשב, מקבל תקלה של AllSubs בכניסה.
+תיקון המשך — האריח "הסרטים שלי (Trakt)" עדיין היה ריק
+**הבעיה שדיווחת:** אחרי העדכון הקודם, באג 2 עוד לא נפתר — האריחים עדיין ריקים גם אחרי שהוספת סרטים חדשים.
 
-**הסיבה (מהלוג שלך):** ב-`service.subtitles.all_subs_plus/service.py:177` הקוד עושה `shutil.copy(source_file_en, __languageDirEn__)`. ב-NTFS של Windows, שני הנתיבים האלה (`resources/language_sources/original_en_gb_strings.po` ו-`resources/language/resource.language.en_gb/strings.po`) מצביעים על אותו inode פיזי (junction/hardlink). `shutil.copy` של Python זורק `SameFileError` בדיוק במצב הזה — autosub.py קורס בייבוא, כל התוסף AllSubs נשבר בהפעלה.
+**הסיבה:** ב-PR הקודם תיקנתי את ה-cache של TMDB ב-`main_cache.py`, אבל **Trakt משתמש ב-cache אחר לגמרי**:
+- TMDB → `main_cache.py` / `maincache.db` (כן תוקן)
+- **Trakt → `trakt_cache.py` / `trakt.db` — לא תוקן, ובלי שום תפוגה (cache שנשמר לנצח!)**
 
-זה באג בקוד של AllSubs עצמו (לא שלנו).
+ה-cache של Trakt נשאר עם הריק התקוע שלך מהפעם שהקריאה נכשלה ארעי. הוספות חדשות הולכות ל-trakt.tv (אתה רואה אותן באתר) אבל ה-tile מציג את הריק הקפוא.
 
-**מה תוקן (AI subs 0.2.62):**
-- patcher חדש self-healing שעוטף את 6 קריאות ה-`shutil.copy` ב-`setLanguageSettings` ב-`try/except shutil.SameFileError`. הקובץ הזהה כבר על הדיסק → ההעתקה מיותרת → הקריאה הופכת ל-no-op בשקט במקום קריסה.
-- marker-gated, idempotent — רץ פעם אחת, נשמר. אם AllSubs לא מותקן: no-op.
-- בדקתי על ה-service.py האמיתי שלך: 7 שורות נעטפו, הקובץ עובר py_compile נקי, ה-scenario של SameFileError אומת כקורס לפני התיקון ונעצר אחריו.
+**מה תוקן (AI subs 0.2.69):**
+- patcher חדש `pov_trakt_cache_empty_patcher` שמכניס את אותה שורה לפני שמירה ב-cache של Trakt: `if not result: return result` — תוצאה ריקה לא נשמרת.
+- בהפעלה הראשונה מנקה one-shot את כל `trakt_collection_*` / `trakt_watchlist_*` / `trakt_favorites_*` / `trakt_user_lists_*` / `trakt_lists_*` שעשויים להיות תקועים אצלך עכשיו ב-trakt.db.
 
-**זרימה צפויה:**
-1. quick_update + restart.
-2. AI subs service רץ → מזהה service.py של AllSubs ללא marker → עוטף את 6 הקריאות → מסמן.
-3. הפעלות הבאות של Kodi: AllSubs יעלה נקי, בלי שגיאת SameFileError.
+**מה לעשות:**
+1. quick_update + restart
+2. לחץ על אריח "הסרטים שלי (Trakt)" — אמור להופיע מה שיש לך ב-trakt.tv
+
+**אם גם POV-local עדיין ריק** (האריח "הסרטים שלי (POV)") — שלח לי לוג אחרי שהוספת סרט דרך "ניהול מועדפים (POV)" ופתחת את ה-tile. אין שם cache layer, אז יש מצב שזה בכלל לא קשור ולוגית אמור לעבוד — אצטרך לראות בדיוק מה קורה.
 
 quick_update + restart.
