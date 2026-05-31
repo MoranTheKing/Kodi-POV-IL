@@ -1,3 +1,24 @@
+v0.2.99
+- AF3 home widgets now SURVIVE updates: customizing your widget rows
+  (removing "My Movies & Shows", reordering, adding your own) is no longer
+  wiped on the next update. Previously we rewrote the homewidgets node
+  verbatim every boot, so any user edit was overwritten. Now we 3-way
+  MERGE (per the build owner's intent -- respect user edits, but still
+  deliver important changes to everyone):
+    * a removed widget stays removed;
+    * reordering and user-added rows are preserved;
+    * widgets we still ship get their fields refreshed (so future tweaks
+      propagate) in the user's chosen position;
+    * BRAND-NEW widgets we add in an update are appended for everyone.
+  Implemented via a per-node "baseline" of what we last shipped, stored in
+  our OWN addon_data (widget_baselines/) so script.skinvariables never
+  parses it. On the first boot with this version the device's current
+  widget layout becomes the baseline, so existing customizations are
+  respected from here on. (homesubmenu/powermenu stay plain-overwrite --
+  they're not user-curated lists.) Self-tested: removal persists, new
+  tiles delivered, reorder/user tiles kept, field updates propagate,
+  idempotent, nodes dir stays clean.
+
 v0.2.98
 - AF3 home widgets are now a clean "teaser + drill-down": each row shows
   7 posters and ends with a "More..." tile that opens the FULL category
