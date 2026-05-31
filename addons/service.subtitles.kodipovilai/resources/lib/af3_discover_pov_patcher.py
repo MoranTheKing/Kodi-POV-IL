@@ -50,24 +50,28 @@ AF3_SKIN_ID = 'skin.arctic.fuse.3'
 CUSTOM_1105_REL = 'addons/' + AF3_SKIN_ID + '/1080i/Custom_1105_Search.xml'
 INCLUDES_SEARCH_REL = 'addons/' + AF3_SKIN_ID + '/1080i/Includes_Search.xml'
 
-MARKER = '<!-- AI_SUBS_POV_DISCOVER_v5_rollback -->'
-# Older markers (our #207 v1 + Codex's broken v2/v3). When any of these is
-# present we STRIP it and re-apply, so a device stuck on a Codex build is
-# forced back to the #207 target. This is the "restore to PR #207 even for
-# existing users" guarantee.
+MARKER = '<!-- AI_SUBS_POV_DISCOVER_v6_unified -->'
+# Older markers (our #207 v1 + Codex's broken v2/v3 + the v5 rollback).
+# When any of these is present we STRIP it and re-apply, so a device on an
+# earlier build is forced to the current (unified Discover) target.
 OLD_MARKERS = (
     '<!-- AI_SUBS_POV_DISCOVER_v1 -->',
     '<!-- AI_SUBS_POV_DISCOVER_v2 -->',
     '<!-- AI_SUBS_POV_DISCOVER_v3 -->',
+    '<!-- AI_SUBS_POV_DISCOVER_v5_rollback -->',
 )
 
-# The POV grid path the discover grid should show (popular movies, Hebrew,
-# posters warm from normal browsing). '&' is plain here -- this is the
-# value of a SetProperty inside an onload, same escaping as the original
-# TMDbHelper line (which uses &amp; in XML for the literal &).
-_POV_GRID_PATH = ('plugin://plugin.video.pov/?mode=build_movie_list'
-                  '&amp;action=tmdb_movies_popular'
-                  '&amp;name=32461&amp;iconImage=dvd.png')
+# The POV grid path the discover grid should show. UNIFIED movie+tv,
+# ranked by popularity: POV's build_tmdb_list with action=search_multi
+# (added by pov_combined_discover_patcher) shows trending movies+tv mixed
+# when nothing is typed, and a combined movie+tv search when the user
+# types. We append the SAME single-encoded search term the search ROWS
+# use so the grid follows the typed query. '&' is plain here -- this is
+# the value of a SetProperty inside an onload, same XML escaping as the
+# original TMDbHelper line.
+_POV_GRID_PATH = ('plugin://plugin.video.pov/?mode=build_tmdb_list'
+                  '&amp;action=search_multi&amp;name=32461'
+                  '&amp;iconImage=dvd.png')
 
 # Codex's combined-search content paths it wrote into the skin (v2/v3).
 # We must recognise them to roll a Codex device back to the #207 target.
@@ -89,9 +93,17 @@ _C1105_NEW_PATH = (
     'SetProperty(TMDbHelper.UserDiscover.FolderPath,'
     + _POV_GRID_PATH + ',Home)')
 # The #207/Codex path is already the POV grid path -- so a device may
-# already have _C1105_NEW_PATH in place. Accept BOTH the original
-# TMDbHelper line and the already-POV line as the "from" state.
-_C1105_PATH_CANDIDATES = (_C1105_OLD_PATH, _C1105_NEW_PATH)
+# already have _C1105_NEW_PATH in place. Accept the original TMDbHelper
+# line, the already-unified line, AND the previous popular-movies-only POV
+# line (v5 rollback target) as the "from" state, so a device on any of
+# them migrates to the unified target.
+_C1105_PREV_POV_PATH = (
+    'SetProperty(TMDbHelper.UserDiscover.FolderPath,'
+    'plugin://plugin.video.pov/?mode=build_movie_list'
+    '&amp;action=tmdb_movies_popular'
+    '&amp;name=32461&amp;iconImage=dvd.png,Home)')
+_C1105_PATH_CANDIDATES = (
+    _C1105_OLD_PATH, _C1105_NEW_PATH, _C1105_PREV_POV_PATH)
 
 _C1105_OLD_NAME = (
     'SetProperty(TMDbHelper.UserDiscover.FolderPath.Name,'
@@ -109,12 +121,19 @@ _INCSRCH_OLD_CONTENT = (
 _INCSRCH_NEW_CONTENT = (
     '<param name="content">'
     '$INFO[window(home).property(tmdbhelper.userdiscover.folderpath)]'
+    '$VAR[Path_SearchTerm_SingleEncoded,&amp;query=,]'
     '</param>')
-# Codex replaced this with its combined-search content. Accept the
-# original, our #207 target, and Codex's v2/v3 as the "from" state, and
-# force them all to the #207 target.
+# The v5 rollback target = bare folderpath (no query suffix). Accept the
+# original TMDbHelper suffix line, the v5 bare line, our new unified line,
+# and Codex's v2/v3 as the "from" state, and force them all to the unified
+# target (bare folderpath + single-encoded &query= suffix).
+_INCSRCH_V5_CONTENT = (
+    '<param name="content">'
+    '$INFO[window(home).property(tmdbhelper.userdiscover.folderpath)]'
+    '</param>')
 _INCSRCH_CONTENT_CANDIDATES = (
     _INCSRCH_OLD_CONTENT,
+    _INCSRCH_V5_CONTENT,
     _INCSRCH_NEW_CONTENT,
     '<param name="content">' + _CODEX_V2_CONTENT + '</param>',
     '<param name="content">' + _CODEX_V3_CONTENT + '</param>',
