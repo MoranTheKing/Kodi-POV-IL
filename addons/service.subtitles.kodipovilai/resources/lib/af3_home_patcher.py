@@ -173,7 +173,7 @@ def _net_widget(name, net_id, icon_file):
                      extra='network_id=' + net_id),
         'target': 'videos',
         'widget_style': 'Poster',
-        'widget_limit': '20',
+        'widget_limit': '7',
     }
 
 
@@ -190,7 +190,7 @@ HOME_WIDGETS = [
         'path': 'plugin://plugin.program.kodipovilwizard/?mode=install&action=af3_tools',
         'target': 'programs',
         'widget_style': 'Landscape',
-        'widget_limit': '20',
+        'widget_limit': '7',
     },
     {
         'label': 'סרטים חדשים',
@@ -198,7 +198,7 @@ HOME_WIDGETS = [
         'path': _pov('tmdb_movies_latest_releases', 'build_movie_list', '32461', 'dvd.png'),
         'target': 'videos',
         'widget_style': 'Poster',
-        'widget_limit': '20',
+        'widget_limit': '7',
     },
     {
         'label': 'סדרות פופולריות',
@@ -206,7 +206,7 @@ HOME_WIDGETS = [
         'path': _pov('trakt_tv_trending', 'build_tvshow_list', '32458', 'trending.png'),
         'target': 'videos',
         'widget_style': 'Poster',
-        'widget_limit': '20',
+        'widget_limit': '7',
     },
     {
         'label': 'פרקים להמשך צפייה',
@@ -214,7 +214,7 @@ HOME_WIDGETS = [
         'path': _pov('', 'build_next_episode', '32483', 'next_episodes.png'),
         'target': 'videos',
         'widget_style': 'Landscape',
-        'widget_limit': '20',
+        'widget_limit': '7',
     },
     {
         'label': 'סרטים להמשך צפייה',
@@ -222,7 +222,7 @@ HOME_WIDGETS = [
         'path': _pov('in_progress_movies', 'build_movie_list', '32476', 'player.png'),
         'target': 'videos',
         'widget_style': 'Poster',
-        'widget_limit': '20',
+        'widget_limit': '7',
     },
     {
         # POV-LOCAL favorites: reads watched.db -> favorites (the store
@@ -235,7 +235,7 @@ HOME_WIDGETS = [
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftmdb.png'),
         'target': 'videos',
         'widget_style': 'Poster',
-        'widget_limit': '20',
+        'widget_limit': '7',
     },
     {
         # TMDB.org account favorites (the online list, synced across
@@ -246,7 +246,7 @@ HOME_WIDGETS = [
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftmdb.png'),
         'target': 'videos',
         'widget_style': 'Poster',
-        'widget_limit': '20',
+        'widget_limit': '7',
     },
     {
         # Trakt collection -- movies. Grouped with the other movie tiles:
@@ -257,7 +257,7 @@ HOME_WIDGETS = [
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftrakt.png'),
         'target': 'videos',
         'widget_style': 'Poster',
-        'widget_limit': '20',
+        'widget_limit': '7',
     },
     {
         # POV-LOCAL show favorites (watched.db -> favorites).
@@ -267,7 +267,7 @@ HOME_WIDGETS = [
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftmdb.png'),
         'target': 'videos',
         'widget_style': 'Poster',
-        'widget_limit': '20',
+        'widget_limit': '7',
     },
     {
         # TMDB.org account show favorites (online list).
@@ -277,7 +277,7 @@ HOME_WIDGETS = [
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftmdb.png'),
         'target': 'videos',
         'widget_style': 'Poster',
-        'widget_limit': '20',
+        'widget_limit': '7',
     },
     {
         # Trakt collection -- shows. Grouped after 'הסדרות שלי (TMDB)'.
@@ -287,7 +287,7 @@ HOME_WIDGETS = [
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftrakt.png'),
         'target': 'videos',
         'widget_style': 'Poster',
-        'widget_limit': '20',
+        'widget_limit': '7',
     },
     {
         'label': 'סרטים לפי ז׳אנר',
@@ -296,7 +296,7 @@ HOME_WIDGETS = [
                                  'special://home/media/build_icons/Twilight/Movies/Movies_Genres.png'),
         'target': 'videos',
         'widget_style': 'Landscape',
-        'widget_limit': '20',
+        'widget_limit': '7',
     },
     {
         'label': 'סדרות לפי ז׳אנר',
@@ -305,7 +305,7 @@ HOME_WIDGETS = [
                                  'special://home/media/build_icons/Twilight/Shows/Shows_Genres.png'),
         'target': 'videos',
         'widget_style': 'Landscape',
-        'widget_limit': '20',
+        'widget_limit': '7',
     },
 ] + STREAMING_NETWORK_WIDGETS + [
     {
@@ -318,7 +318,7 @@ HOME_WIDGETS = [
         'path': 'plugin://plugin.video.idanplus/',
         'target': 'videos',
         'widget_style': 'Landscape',
-        'widget_limit': '20',
+        'widget_limit': '7',
     },
 ]
 
