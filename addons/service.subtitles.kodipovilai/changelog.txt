@@ -1,3 +1,22 @@
+v0.2.98
+- AF3 home widgets now have a "More..." tile that opens the FULL list of
+  the category. Widgets still keep their fast per-row limit (~20 posters),
+  but a group member rightly noted there was no quick way to reach the
+  whole category (e.g. all 70 shows in a Trakt collection) without digging
+  into POV manually. AF3 already supports this natively -- its widget
+  content uses browse="$VAR[Defs_BrowseLimitedLists]", which is "auto" ONLY
+  when the skin setting Widgets.EnableShowMore is on (off by default, which
+  is why we never saw it). With browse="auto", Kodi appends a "More..."
+  tile at the end of every limited widget; selecting it opens that widget's
+  POV path with no limit -> the full list, clickable into sources as usual.
+  Fix: _set_af3_runtime_defaults() now sets Skin.SetBool(
+  Widgets.EnableShowMore). It runs every boot when AF3 is active, so
+  existing devices get it automatically; PATCH_VERSION v16 -> v17 also
+  forces a clean rebuild so the tiles appear right away.
+  (Verified against the real AF3 skin: Defs_BrowseLimitedLists at
+  Includes_Defaults.xml:333-336 gates on Widgets.EnableShowMore; the
+  widget <content> at Includes_Hubs.xml:121/166 consumes it.)
+
 v0.2.97
 - The "ניהול רשימות (Trakt)" context-menu item now actually opens the
   TRAKT list manager (add to Trakt collection/lists), instead of opening
