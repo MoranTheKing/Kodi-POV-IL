@@ -1,3 +1,24 @@
+v0.2.88
+- AF3 Discover GRID now POV too (#5 continued). The search ROWS already
+  worked (Hebrew + sources), but the Discover grid itself was still
+  TMDbHelper (English posters, click didn't open) -- the property seed we
+  tried sat behind the _is_af3_active() boot gate and lost the race to
+  the window's own onload. Fixed deterministically by patching the skin
+  files directly (new af3_discover_pov_patcher, marker-gated, idempotent,
+  re-applied each boot, XML-validated):
+  * Custom_1105_Search.xml onload -> POV popular-movies path (Hebrew,
+    posters warm from browsing) + Hebrew name 'גלה', replacing the
+    TMDbHelper discover path.
+  * Includes_Search.xml line 54 -> stripped the TMDbHelper-only
+    '&with_text_query=' suffix so POV gets a clean path (POV doesn't
+    understand that param; the search ROWS serve typed queries).
+  Clicking a grid item now follows the POV item's own path (play_media)
+  exactly like the home widgets, so it opens sources. Removed the old,
+  race-prone SetProperty seed from _set_af3_runtime_defaults.
+  PATCH_VERSION v13 -> v14 forces the rebuild.
+  Note on posters in the typed-search ROW: POV sets poster art identically
+  to the home widget; a blank poster there is cache-warmth (search hits
+  fresh tmdb_ids) and fills in on re-fetch -- not a widget bug.
 v0.2.87
 - AF3 Discover/Search now uses POV instead of TMDbHelper (#5). The
   Discover area was wired to plugin.video.themoviedb.helper -> English
