@@ -40,6 +40,10 @@ JURIALMUNKEY_MIN_VERSION = '0.2.35'
 
 BASE_NODES = 'special://profile/addon_data/script.skinvariables/nodes/'
 AF3_NODES = BASE_NODES + AF3_SKIN_ID + '/'
+# Our merge "baseline" sidecars live in OUR addon_data, NOT in the
+# skinvariables nodes folder, so skinvariables never sees/parses them.
+POV_BASELINE_DIR = ('special://profile/addon_data/'
+                    'service.subtitles.kodipovilai/widget_baselines/')
 AF3_FONT_XML = 'special://home/addons/' + AF3_SKIN_ID + '/1080i/Font.xml'
 AF3_FONT_DIR = 'special://home/addons/' + AF3_SKIN_ID + '/fonts/'
 AF3_NOTO_FONT = AF3_FONT_DIR + 'NotoSans-Regular.ttf'
@@ -593,6 +597,111 @@ def _write_if_changed(filename, data):
     return True
 
 
+# Node files the user can reorder/remove/add to via AF3's own widget editor.
+# For these we MERGE instead of overwrite, so user customizations survive
+# updates while we can still deliver new/changed tiles. (homesubmenu /
+# powermenu are not user-curated lists, so they keep plain overwrite.)
+_MERGE_FILES = ('skinvariables-shortcut-homewidgets.json',)
+
+
+def _item_key(item):
+    """Stable identity for a widget item across our updates and user edits.
+    'path' is unique per tile and present whether or not the user edited
+    the node (the skinvariables editor preserves it)."""
+    try:
+        return item.get('path', '') or item.get('label', '')
+    except Exception:
+        return ''
+
+
+def _merge_widget_nodes(filename, canonical):
+    """3-way merge for a user-curated widget node, honoring the user's
+    intent (keep removals + user-added tiles + their order) while still
+    delivering our changes:
+      * baseline = what WE last wrote (sidecar .<filename>.povbase).
+      * current  = what's on disk now (may be user-edited).
+      * canonical= what we ship now.
+    Rules per tile keyed by path:
+      - in current: keep the USER's copy BUT, if we still ship it, refresh
+        its fields to ours (so e.g. limit/style updates propagate) while
+        keeping the user's position; tiles the user added (not ours) stay.
+      - removed by user (in baseline, not in current): do NOT re-add.
+      - brand-new (in canonical, not in baseline, not in current): append
+        so everyone gets new tiles.
+    On first run (no baseline) we seed canonical verbatim. Returns True if
+    the on-disk node changed. Always (re)writes the baseline to canonical.
+    """
+    path = AF3_NODES + filename
+    base_path = POV_BASELINE_DIR + filename
+    try:
+        _mkdir(POV_BASELINE_DIR)
+    except Exception:
+        pass
+
+    def _load(p):
+        try:
+            if _exists(p):
+                return json.loads(_read(p))
+        except Exception:
+            pass
+        return None
+
+    canon_content = _json(canonical)
+
+    # First run for this device, or node missing -> seed verbatim.
+    current = _load(path)
+    if current is None or not isinstance(current, list):
+        wrote = _write_if_changed(filename, canonical)
+        _write(base_path, canon_content)
+        return wrote
+
+    baseline = _load(base_path)
+    if baseline is None or not isinstance(baseline, list):
+        # We've written this node before the merge feature existed (or the
+        # baseline was lost). Treat the CURRENT on-disk state as the
+        # baseline so we never resurrect what the user already removed;
+        # only genuinely NEW canonical tiles get added below.
+        baseline = current
+
+    canon_by_key = {}
+    canon_order = []
+    for it in canonical:
+        k = _item_key(it)
+        if k and k not in canon_by_key:
+            canon_by_key[k] = it
+            canon_order.append(k)
+    base_keys = {_item_key(it) for it in baseline}
+    cur_keys = {_item_key(it) for it in current}
+
+    merged = []
+    # 1) walk the user's current node in order: keep user-added tiles as-is;
+    #    for tiles we still ship, refresh fields to ours (keep position).
+    for it in current:
+        k = _item_key(it)
+        if k in canon_by_key:
+            merged.append(canon_by_key[k])
+        else:
+            merged.append(it)  # user-added (or a tile we dropped) -> keep
+    # 2) append brand-new canonical tiles: ours, never seen by this device
+    #    (not in baseline) and not already present.
+    for k in canon_order:
+        if k not in base_keys and k not in cur_keys:
+            merged.append(canon_by_key[k])
+
+    merged_content = _json(merged)
+    changed = False
+    try:
+        changed = (not _exists(path)) or (_read(path) != merged_content)
+    except Exception:
+        changed = True
+    if changed:
+        _write(path, merged_content)
+    # Always refresh the baseline to the current canonical so the next
+    # update's "brand-new" detection is correct.
+    _write(base_path, canon_content)
+    return changed
+
+
 def _patch_font_xml():
     changed = False
     if os.path.isfile(BUNDLED_NOTO_FONT):
@@ -935,7 +1044,10 @@ def ensure_patched():
     _mkdir(AF3_NODES)
     changed = False
     for filename, data in FILES.items():
-        changed = _write_if_changed(filename, data) or changed
+        if filename in _MERGE_FILES:
+            changed = _merge_widget_nodes(filename, data) or changed
+        else:
+            changed = _write_if_changed(filename, data) or changed
     changed = _patch_font_xml() or changed
     changed = _patch_hebrew_language() or changed
     changed = _patch_pov_genre_icons() or changed
