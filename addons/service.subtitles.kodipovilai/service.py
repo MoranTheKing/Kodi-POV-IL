@@ -396,6 +396,37 @@ def _maybe_patch_pov_genre_menu_icons():
             pass
 
 
+def _maybe_patch_pov_combined_discover():
+    """Add a unified movie+tv data source to POV (tmdb_search_multi /
+    tmdb_trending_all + a build_tmdb_list branch) so AF3's Discover grid
+    can show movies AND tv together, ranked by popularity. Reuses POV's
+    existing mixed-media merge/sort/render path. Marker-gated, idempotent,
+    re-applied each boot."""
+    try:
+        from resources.lib import pov_combined_discover_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_combined_discover_patcher.ensure_patched()
+        if isinstance(status, str) and '=patched' in status:
+            kodi_utils.log(
+                'pov_combined_discover_patcher: unified discover data '
+                'source added to POV (' + status + ')', level='INFO')
+        elif status == 'no_pov':
+            pass
+        else:
+            kodi_utils.log(
+                'pov_combined_discover_patcher: ' + str(status),
+                level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_combined_discover_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_favourites_xml():
     """Migrate the two Trakt-collection home tiles to TMDB
     Favorites equivalents in userdata/favourites.xml. Surgical --
@@ -1538,6 +1569,7 @@ def main():
     _maybe_install_build_icons()
     _maybe_patch_pov_genre_icons()
     _maybe_patch_pov_genre_menu_icons()
+    _maybe_patch_pov_combined_discover()
     _maybe_patch_af3_home()
 
     # Remove the v0.1.5-v0.1.7 misplaced injection into the wizard's
