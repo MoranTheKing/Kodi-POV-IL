@@ -28,7 +28,7 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-05-31-pov-home-v14'
+PATCH_VERSION = '2026-05-31-pov-home-v16'
 AF3_CE_VERSION = '6.3.2.9'
 # AF3's bundled TMDbHelper 6.15.6 imports jurialmunkey.ftools, which only
 # exists from script.module.jurialmunkey 0.2.35. Users who switched to AF3
@@ -414,8 +414,23 @@ POWER_MENU = [
 # injects matching rules (POV search path + single-encoded query). This
 # replaces AF3's default Movies/TVShows(library) + TMDb rows so typed
 # search returns POV results in Hebrew that play through POV scrapers.
+# Search rows -> POV. NOTE the explicit 'guid' on each item: AF3's
+# script.skinvariables generator assigns a RANDOM guid to any node item
+# that lacks one (node.py assign_guid -> f'guid-{random:08x}'), and it
+# generates the selector buttons (container 601) and the result rows from
+# SEPARATE template passes. Because we rewrite this node on every boot, the
+# selector and the rows ended up with DIFFERENT random guids -- and each
+# row's visibility is gated on
+#   String.IsEqual(Container(601).ListItem.Property(guid), <row guid>)
+# so the focused selector button's guid never matched the row's guid and
+# the result tiles stayed permanently invisible (blank), while Discover --
+# hardcoded with the literal guid 'discover' on both sides -- worked. We
+# pin a STABLE explicit guid per item (assign_guid keeps item.get('guid')),
+# so the selector button and its row always share the same guid and the
+# rows render. The guids just need to be unique + stable; these are.
 SEARCH_WIDGETS = [
     {
+        'guid': 'pov-search-movies',
         'label': 'סרטים',
         'icon': 'special://home/media/build_icons/Twilight/Movies/Movies_Popular.png',
         'path': 'DefaultSearch-POVMovies',
@@ -423,6 +438,7 @@ SEARCH_WIDGETS = [
         'widget_style': 'Poster',
     },
     {
+        'guid': 'pov-search-tv',
         'label': 'סדרות',
         'icon': 'special://home/media/build_icons/Twilight/Shows/Shows_Popular.png',
         'path': 'DefaultSearch-POVTv',

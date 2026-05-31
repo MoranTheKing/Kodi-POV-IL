@@ -1,3 +1,28 @@
+v0.2.94
+- AF3 SEARCH result tiles now render (movies + tv). Root cause found by
+  dumping the skin's runtime-generated includes from the device: each
+  search result ROW gates its visibility on
+    String.IsEqual(Container(601).ListItem.Property(guid), <row guid>)
+  but AF3's script.skinvariables generator (node.py assign_guid) assigns a
+  RANDOM guid (f'guid-{random:08x}') to any node item lacking one, and it
+  generates the selector buttons (container 601) and the result rows in
+  SEPARATE passes. Since we rewrite the searchwidgets node every boot, the
+  selector button and its row got DIFFERENT random guids -- e.g. row wanted
+  guid-2a0ba77b while the button carried guid-b7c7a8f6 -- so the focused
+  category's guid never matched the row's guid and the result tiles stayed
+  permanently invisible (blank), even though POV returned valid Art(poster)
+  for every item (verified live via JSON-RPC: 20/20 items had posters).
+  Discover worked only because it is hardcoded with the literal guid
+  'discover' on both sides.
+  Fix: pin a STABLE explicit guid on each searchwidgets node item
+  ('pov-search-movies' / 'pov-search-tv'). assign_guid preserves an
+  existing item guid, so the selector button and its row now always share
+  the same guid and the rows render. Verified against the REAL
+  skinvariables generator code: with explicit guids all generation passes
+  produce identical per-item guids; without them they diverge (reproduces
+  the bug). PATCH_VERSION v14 -> v16 rewrites the node + rebuilds on
+  existing devices.
+
 v0.2.93
 - Genre icons fixed for real, on BOTH skins (root cause found via live
   JSON-RPC + a full skin-variable trace, not guesswork). POV's
