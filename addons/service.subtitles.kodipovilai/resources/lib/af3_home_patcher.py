@@ -28,7 +28,7 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-05-31-pov-home-v12'
+PATCH_VERSION = '2026-05-31-pov-home-v13'
 AF3_CE_VERSION = '6.3.2.9'
 # AF3's bundled TMDbHelper 6.15.6 imports jurialmunkey.ftools, which only
 # exists from script.module.jurialmunkey 0.2.35. Users who switched to AF3
@@ -409,10 +409,34 @@ POWER_MENU = [
 ]
 
 
+# Search rows -> POV. The `path` tokens (DefaultSearch-POVMovies/POVTv)
+# are resolved by search_path.xml, into which af3_search_pov_patcher
+# injects matching rules (POV search path + single-encoded query). This
+# replaces AF3's default Movies/TVShows(library) + TMDb rows so typed
+# search returns POV results in Hebrew that play through POV scrapers.
+SEARCH_WIDGETS = [
+    {
+        'label': 'סרטים',
+        'icon': 'special://home/media/build_icons/Twilight/Movies/Movies_Popular.png',
+        'path': 'DefaultSearch-POVMovies',
+        'target': 'videos',
+        'widget_style': 'Poster',
+    },
+    {
+        'label': 'סדרות',
+        'icon': 'special://home/media/build_icons/Twilight/Shows/Shows_Popular.png',
+        'path': 'DefaultSearch-POVTv',
+        'target': 'videos',
+        'widget_style': 'Poster',
+    },
+]
+
+
 FILES = {
     'skinvariables-shortcut-homewidgets.json': HOME_WIDGETS,
     'skinvariables-shortcut-homesubmenu.json': HOME_SUBMENU,
     'skinvariables-shortcut-powermenu.json': POWER_MENU,
+    'skinvariables-shortcut-searchwidgets.json': SEARCH_WIDGETS,
 }
 
 TOUCH_CLEANUP_FILES = (
@@ -840,6 +864,17 @@ def _set_af3_runtime_defaults():
         'Skin.SetBool(TMDbHelper.UseLocalWidgetContainer)',
         'ClearProperty(InfoPanel.FullSwitch,Home)',
         'ClearProperty(SubGroup.IsVisible,Home)',
+        # Repoint the Discover grid (Custom_1105_Search.xml container 501)
+        # from TMDbHelper to a POV popular-movies grid -> Hebrew items
+        # that play through POV scrapers. The window's own onload only
+        # sets this when String.IsEmpty, so seeding it here (we run on
+        # every AF3 activation) wins. Home properties reset on reboot,
+        # which is why we MUST re-seed each activation rather than once.
+        'SetProperty(TMDbHelper.UserDiscover.FolderPath,'
+        'plugin://plugin.video.pov/?mode=build_movie_list'
+        '&action=tmdb_movies_popular&name=32461&iconImage=dvd.png,Home)',
+        'SetProperty(TMDbHelper.UserDiscover.FolderPath.Name,'
+        'גלה,Home)',
     ]
     for command in commands:
         try:
@@ -890,6 +925,17 @@ def ensure_patched():
     changed = _patch_pov_genre_icons() or changed
     changed = _patch_touch_cleanup_xml() or changed
     changed = _patch_info_plot_autoscroll_xml() or changed
+    # Inject POV search rules into search_path.xml BEFORE the rebuild, so
+    # buildtemplate regenerates the search includes with our POV rows
+    # resolving to real POV search paths. Must precede _rebuild_af3_
+    # shortcuts (below). Best-effort; never blocks the rest.
+    try:
+        from resources.lib import af3_search_pov_patcher
+        st = af3_search_pov_patcher.ensure_patched()
+        if st == 'patched':
+            changed = True
+    except Exception:
+        pass
     if _is_af3_active():
         _set_af3_runtime_defaults()
 
