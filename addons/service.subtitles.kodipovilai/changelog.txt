@@ -1,3 +1,25 @@
+v0.2.93
+- Genre icons fixed for real, on BOTH skins (root cause found via live
+  JSON-RPC + a full skin-variable trace, not guesswork). POV's
+  build_shortcut_folder_list stamps the GENERIC POV-logo as Art(fanart) on
+  every folder row, including genre rows:
+      listitem.setArt({'icon': icon, 'poster': icon, 'thumb': icon,
+                       'fanart': fanart, 'banner': icon})
+  AF3's genre rows use the Landscape widget style, whose image variable
+  ($VAR[Image_Landscape]) prefers Art(fanart) (resolved early) over the
+  per-genre icon (resolved last), so the POV logo always won and the real
+  genre icon never showed. FENtastic's landscape view has the same
+  fanart-first order -- which is why the icons were blank/POV-logo on BOTH
+  skins even though navigator.py already emitted the correct per-genre
+  icon path and all 28 PNGs were present and valid on disk (verified live:
+  every genre item carried Art(fanart)=pov_fanart.png).
+  Fix (pov_genre_icons_patcher v2 -> v3): for GENRE rows only (iconImage
+  under 'genres/'), use the genre icon as the fanart too, so whichever art
+  key the skin prefers lands on the genre icon. Non-genre rows keep the
+  normal POV fanart (guarded). Self-tested against real POV source: stock
+  and v2 devices both converge, idempotent, patched navigator.py compiles.
+  A device on the old v2 marker auto-upgrades on next boot.
+
 v0.2.92
 - ROLLBACK to the known-good PR #207 state (addon v0.2.88), including for
   existing devices that already received the later (regressed) builds.
