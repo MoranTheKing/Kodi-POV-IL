@@ -48,19 +48,19 @@ AF3_SKIN_ID = 'skin.arctic.fuse.3'
 SEARCH_PATH_REL = ('addons/' + AF3_SKIN_ID +
                    '/shortcuts/generator/data/setup/search_path.xml')
 
-MARKER = '<!-- AI_SUBS_POV_SEARCH_v2 -->'
-OLD_MARKER = '<!-- AI_SUBS_POV_SEARCH_v1 -->'
+MARKER = '<!-- AI_SUBS_POV_SEARCH_v1 -->'
+ROLLBACK_MARKERS = (
+    '<!-- AI_SUBS_POV_SEARCH_v2 -->',
+)
 
 # POV search path prefixes (the generator appends the encoded query, then
 # our empty suffix). Note: in search_path.xml, '&' is written as the
 # double-escaped '&amp;amp;' because the value is XML text that the
 # generator later parses again. We mirror the existing TMDb rows exactly.
-_POV_DISCOVER_PREFIX = ('plugin://plugin.video.pov/?mode=ai_pov_combined_search'
-                        '&amp;amp;media_type=all&amp;amp;name=Discover&amp;amp;query=')
-_POV_MOVIE_PREFIX = ('plugin://plugin.video.pov/?mode=ai_pov_combined_search'
-                     '&amp;amp;media_type=movie&amp;amp;name=Movies&amp;amp;query=')
-_POV_TV_PREFIX = ('plugin://plugin.video.pov/?mode=ai_pov_combined_search'
-                  '&amp;amp;media_type=tvshow&amp;amp;name=Shows&amp;amp;query=')
+_POV_MOVIE_PREFIX = ('plugin://plugin.video.pov/?mode=build_movie_list'
+                     '&amp;amp;action=tmdb_movies_search&amp;amp;query=')
+_POV_TV_PREFIX = ('plugin://plugin.video.pov/?mode=build_tvshow_list'
+                  '&amp;amp;action=tmdb_tv_search&amp;amp;query=')
 
 
 def _log(msg, level='INFO'):
@@ -106,6 +106,21 @@ def _inject_after(text, rules_open, blocks):
     return text[:eol + 1] + blocks + text[eol + 1:]
 
 
+def _strip_ai_search_rules(text):
+    """Remove every previous AI-injected search rule so rollback from the
+    v2 combined-search attempt does not leave duplicate/invalid rules."""
+    for marker in (MARKER,) + ROLLBACK_MARKERS:
+        text = text.replace(marker, '')
+    pattern = re.compile(
+        r'\n?        <rule>\n'
+        r'            <condition>\{item_path\}==DefaultSearch-POV'
+        r'(?:Discover|Movies|Tv)</condition>\n'
+        r'            <value>.*?</value>\n'
+        r'        </rule>\n',
+        re.DOTALL)
+    return pattern.sub('\n', text)
+
+
 def ensure_patched():
     """Returns 'patched' | 'already_patched' | 'no_af3' | 'no_file'
     | 'unmatched' | 'read_failed' | 'write_failed'."""
@@ -128,30 +143,29 @@ def ensure_patched():
         _log('read failed: {0}'.format(e), level='WARNING')
         return 'read_failed'
 
-    if MARKER in text:
+    needs_rollback_cleanup = (
+        any(marker in text for marker in ROLLBACK_MARKERS) or
+        'DefaultSearch-POVDiscover' in text or
+        'mode=ai_pov_combined_search' in text)
+    if MARKER in text and not needs_rollback_cleanup:
         return 'already_patched'
-    if OLD_MARKER in text:
-        text = text.replace(OLD_MARKER, '', 1)
+    text = _strip_ai_search_rules(text)
 
     # Build the per-rule-set injections.
     path_rules = (
-        _rule('DefaultSearch-POVDiscover', _POV_DISCOVER_PREFIX)
-        + _rule('DefaultSearch-POVMovies', _POV_MOVIE_PREFIX)
+        _rule('DefaultSearch-POVMovies', _POV_MOVIE_PREFIX)
         + _rule('DefaultSearch-POVTv', _POV_TV_PREFIX))
     # suffix empty for both
     end_rules = (
-        _rule('DefaultSearch-POVDiscover', '')
-        + _rule('DefaultSearch-POVMovies', '')
+        _rule('DefaultSearch-POVMovies', '')
         + _rule('DefaultSearch-POVTv', ''))
     # single-encoded query (POV decodes once via parse_qsl)
     var_rules = (
-        _rule('DefaultSearch-POVDiscover', 'Path_SearchTerm_SingleEncoded')
-        + _rule('DefaultSearch-POVMovies', 'Path_SearchTerm_SingleEncoded')
+        _rule('DefaultSearch-POVMovies', 'Path_SearchTerm_SingleEncoded')
         + _rule('DefaultSearch-POVTv', 'Path_SearchTerm_SingleEncoded'))
     # target: videos for both
     target_rules = (
-        _rule('DefaultSearch-POVDiscover', 'videos')
-        + _rule('DefaultSearch-POVMovies', 'videos')
+        _rule('DefaultSearch-POVMovies', 'videos')
         + _rule('DefaultSearch-POVTv', 'videos'))
 
     new_text = text
