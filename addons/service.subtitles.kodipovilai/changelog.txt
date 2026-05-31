@@ -1,3 +1,14 @@
+v0.2.90
+- AF3 Search now includes a permanent Hebrew Discover tab in the search
+  switcher, so Discover no longer disappears when its dynamic container
+  is still loading or returns late.
+- Movies, Shows, and Discover search tabs now all use the same POV-native
+  ai_pov_combined_search route with media_type filtering. This avoids the
+  old POV search builders that produced valid item counts/background art
+  but blank poster rows in Arctic Fuse 3.
+- PATCH_VERSION v15 -> v16 forces existing AF3 installs to rebuild the
+  generated search widgets and pick up the permanent Discover item.
+
 v0.2.89
 - AF3 Discover search now uses a POV-native combined movie + TV route
   instead of the old static popular-movies grid. Typed searches return
