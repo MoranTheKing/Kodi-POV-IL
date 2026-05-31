@@ -27,6 +27,11 @@
 #      AF3's HOME widgets re-query after clear-progress / mark-watched --
 #      which otherwise only showed after a manual skin reload (uses its own
 #      marker so it applies independently of edits 1/2).
+#   4) resources/lib/modules/dialogs.py trakt_manager_choice(): drop POV's
+#      redirect that sent the "Trakt list manager" context item to the
+#      TMDB manager whenever a personal TMDB account is connected, so the
+#      Trakt item actually opens Trakt (the separate TMDB item still opens
+#      TMDB). Own marker; idempotent.
 #
 # Safe no-op if POV isn't installed or was refactored away from the anchors.
 
@@ -47,9 +52,11 @@ POV_ADDON_ID = 'plugin.video.pov'
 TMDB_API_REL = 'resources/lib/indexers/tmdb_api.py'
 TMDB_MENU_REL = 'resources/lib/menus/tmdb.py'
 KODI_UTILS_REL = 'resources/lib/modules/kodi_utils.py'
+DIALOGS_REL = 'resources/lib/modules/dialogs.py'
 
 MARKER = '# AI_SUBS_POV_COMBINED_DISCOVER_v1'
 MARKER_REFRESH = '# AI_SUBS_POV_WIDGET_REFRESH_v1'
+MARKER_TRAKT = '# AI_SUBS_POV_TRAKT_MANAGER_v1'
 
 # --- edit 1: tmdb_api.py -- add the two data functions after the existing
 #     tmdb_movies_search (exact-string anchor; both funcs reuse base_url,
@@ -126,6 +133,23 @@ _REFRESH_REPLACEMENT = (
     "alone;\n"
     "\t# this ping makes them re-query (no-op for the library).\n"
     "\treturn execute_builtin('UpdateLibrary(video,special://skin/foo)')\n")
+
+# --- edit 4: modules/dialogs.py trakt_manager_choice() -- the context
+#     menu has THREE separate manager items ("ניהול רשימות (Trakt)",
+#     "(TMDB)", "מועדפים (POV)"). POV deliberately redirects the Trakt one
+#     to the TMDB manager whenever a personal TMDB account is connected
+#     (first line of the function). The user wants the Trakt item to
+#     actually open Trakt. We remove ONLY that redirect line; the rest of
+#     trakt_manager_choice already works with just trakt_user, and the
+#     separate "(TMDB)" item still opens the TMDB manager for those who
+#     want it. Exact-string, own marker, idempotent.
+_TRAKT_ANCHOR = (
+    "\tif get_setting('tmdb.account_id'): "
+    "return tmdb_manager_choice(params)\n")
+_TRAKT_REPLACEMENT = (
+    "\t# AI_SUBS: redirect removed so the Trakt manager opens Trakt even "
+    "when a TMDB account is connected (the separate TMDB item still opens "
+    "TMDB).\n")
 
 
 def _log(msg, level='INFO'):
@@ -240,6 +264,19 @@ def ensure_patched():
         results.append('refresh=' + st)
     else:
         results.append('refresh=no_file')
+
+    # edit 4: make the "Trakt list manager" context item actually open
+    # Trakt (drop POV's redirect to the TMDB manager when a TMDB account
+    # is connected).
+    dlg_path = os.path.join(base, *DIALOGS_REL.split('/'))
+    if os.path.isfile(dlg_path):
+        st = _patch_one(
+            dlg_path, _TRAKT_ANCHOR,
+            lambda t: t.replace(_TRAKT_ANCHOR, _TRAKT_REPLACEMENT, 1),
+            'dialogs.py(trakt_manager_choice)', marker=MARKER_TRAKT)
+        results.append('trakt=' + st)
+    else:
+        results.append('trakt=no_file')
 
     summary = ', '.join(results)
     if any('=patched' in r for r in results):
