@@ -1,33 +1,27 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-POV LIVE container diagnostic (read only).
+POV LIVE container diagnostic v2 -- AUTO-CAPTURE (read only).
 
-We proved: POV returns Art(poster) for search (21/21), the skin renders
-Art(poster) on the same path as the working widgets, and the texture cache
-is healthy (40/40 posters present). Yet the SEARCH rows show blank posters
-while DISCOVER (same render path) shows them. So we must read what the skin
-ACTUALLY has loaded in the search containers at runtime.
+Earlier captures landed on the Home screen, so the "search" containers were
+actually home widgets. This version removes the timing problem: you START
+the script, it then WAITS and polls Kodi until the SEARCH window (1105) is
+the active window, and only THEN snapshots the search containers. It also
+snapshots the genre menu when you open it.
 
-This asks Kodi (over JSON-RPC, GetInfoLabels) for the live contents of the
-search/discover containers -- exactly what the skin sees right now:
-  * 501 = Discover grid (shows posters -> our control/baseline)
-  * 502 = Movies search results (blank posters -> the problem)
-  * 503 = TV search results   (blank posters -> the problem)
-  * 601 = the category selector
-For each, it reads NumItems and, per item, the Label and every art key the
-skin's Image_Poster variable tries: Art(poster), Art(tvshow.poster),
-Art(season.poster), Icon, plus Art(thumb). Read only; changes nothing.
+It changes/deletes nothing -- pure read over JSON-RPC.
 
->>> IMPORTANT -- do this FIRST, then run the script:
-  1. Open Kodi. Enable the web server (Settings > Services > Control >
-     "Allow remote control via HTTP", port 8080) if not already.
-  2. Go to the SEARCH screen, type:  mario
-  3. Click into the "סרטים" (Movies) category so the results SHOW.
-  4. LEAVE that screen open (don't go back), then run this script.
-
-  Windows:  py POV_LIVE_DIAGNOSTIC.py
-  Mac:      python3 POV_LIVE_DIAGNOSTIC.py
+>>> HOW TO RUN (order no longer matters much):
+  1. Make sure Kodi's web server is on (Settings > Services > Control >
+     "Allow remote control via HTTP", port 8080).
+  2. Start this script:
+        Windows:  py POV_LIVE_DIAGNOSTIC.py
+        Mac:      python3 POV_LIVE_DIAGNOSTIC.py
+  3. It will say "waiting...". NOW go to Kodi:
+        - open Search, type  mario , and open the "סרטים" category.
+     The script auto-captures the search screen within ~1 second.
+  4. (optional) It then waits again -- open "סרטים לפי ז׳אנר" (genres) so
+     it can also capture the genre icons. Or just let it time out.
 
 If you set a web password/port, edit the four values below.
 Writes POV_LIVE_DIAGNOSTIC.txt next to the script. Send it back.
@@ -35,6 +29,7 @@ Writes POV_LIVE_DIAGNOSTIC.txt next to the script. Send it back.
 
 import json
 import os
+import time
 import base64
 import urllib.request
 import urllib.error
@@ -47,6 +42,8 @@ PASSWORD = ""       # your Kodi web password, if any
 # ----------------------------------------------------------
 
 URL = "http://{0}:{1}/jsonrpc".format(HOST, PORT)
+WAIT_SECONDS = 120      # how long to wait for the search window
+GENRE_WAIT = 45         # extra wait to also capture the genre screen
 
 
 def rpc(method, params):
@@ -58,7 +55,7 @@ def rpc(method, params):
         tok = base64.b64encode(
             ("%s:%s" % (USERNAME, PASSWORD)).encode("utf-8")).decode()
         req.add_header("Authorization", "Basic " + tok)
-    with urllib.request.urlopen(req, timeout=60) as r:
+    with urllib.request.urlopen(req, timeout=30) as r:
         return json.loads(r.read().decode("utf-8"))
 
 
@@ -67,116 +64,190 @@ def get_labels(labels):
     return res.get("result", {}) if isinstance(res, dict) else {}
 
 
+ART_KEYS = ["Art(poster)", "Art(tvshow.poster)", "Art(season.poster)",
+            "Icon", "Art(thumb)", "Art(fanart)"]
+
+
+def dump_container(w, cid, label):
+    head = get_labels(["Container(%d).NumItems" % cid,
+                       "Container(%d).IsUpdating" % cid])
+    num = head.get("Container(%d).NumItems" % cid, "")
+    upd = head.get("Container(%d).IsUpdating" % cid, "")
+    w("")
+    w("-" * 70)
+    w("### container %d  %s" % (cid, label))
+    w("-" * 70)
+    w("  NumItems=%s  IsUpdating=%s" % (num, upd))
+    try:
+        n = int(num)
+    except Exception:
+        n = 0
+    if n == 0:
+        w("  (empty)")
+        return
+    for i in range(1, min(n, 6) + 1):
+        labels = ["Container(%d).ListItem(%d).Label" % (cid, i)]
+        for ak in ART_KEYS:
+            labels.append("Container(%d).ListItem(%d).%s" % (cid, i, ak))
+        d = get_labels(labels)
+        lab = d.get("Container(%d).ListItem(%d).Label" % (cid, i), "")
+        w("  [%d] %s" % (i, lab))
+        anyart = False
+        for ak in ART_KEYS:
+            v = d.get("Container(%d).ListItem(%d).%s" % (cid, i, ak), "")
+            if v:
+                anyart = True
+                sv = v if len(v) <= 95 else v[:95] + "..."
+                w("        %-20s = %s" % (ak, sv))
+        if not anyart:
+            w("        (no art of any kind on this item!)")
+
+
+def snapshot_search(w):
+    w("")
+    w("=" * 70)
+    w("SEARCH WINDOW SNAPSHOT")
+    w("=" * 70)
+    ctx = get_labels([
+        "System.CurrentWindow", "System.CurrentControl",
+        "Window(Home).Property(TMDbHelper.WidgetContainer)",
+        "Control.GetLabel(3000)",
+        "Container(601).ListItem.Property(guid)",
+    ])
+    for k, v in ctx.items():
+        w("  %-55s = %s" % (k, v))
+    # scan
+    w("")
+    w("  container scan (NumItems):")
+    for cid in list(range(501, 513)) + [601, 602]:
+        d = get_labels(["Container(%d).NumItems" % cid])
+        num = d.get("Container(%d).NumItems" % cid, "")
+        if num not in ("", "0"):
+            w("    Container(%d) = %s" % (cid, num))
+    dump_container(w, 501, "DISCOVER (baseline)")
+    dump_container(w, 502, "search row 1 (movies?)")
+    dump_container(w, 503, "search row 2 (tv?)")
+
+
+def snapshot_genres(w):
+    w("")
+    w("=" * 70)
+    w("GENRE WINDOW SNAPSHOT")
+    w("=" * 70)
+    ctx = get_labels(["System.CurrentWindow", "Container.NumItems",
+                      "Container.Content"])
+    for k, v in ctx.items():
+        w("  %-55s = %s" % (k, v))
+    # the focused container varies; dump the main content container plus a scan
+    w("")
+    w("  container scan (NumItems):")
+    found = []
+    for cid in list(range(50, 70)) + list(range(500, 560)):
+        d = get_labels(["Container(%d).NumItems" % cid])
+        num = d.get("Container(%d).NumItems" % cid, "")
+        if num not in ("", "0"):
+            w("    Container(%d) = %s" % (cid, num))
+            found.append(cid)
+    # dump the current/focused container generically
+    w("")
+    w("  FOCUSED container items (Container.ListItem):")
+    head = get_labels(["Container.NumItems"])
+    num = head.get("Container.NumItems", "")
+    try:
+        n = int(num)
+    except Exception:
+        n = 0
+    for i in range(1, min(n, 8) + 1):
+        labels = ["Container.ListItem(%d).Label" % i]
+        for ak in ART_KEYS:
+            labels.append("Container.ListItem(%d).%s" % (i, ak))
+        d = get_labels(labels)
+        lab = d.get("Container.ListItem(%d).Label" % i, "")
+        w("  [%d] %s" % (i, lab))
+        for ak in ART_KEYS:
+            v = d.get("Container.ListItem(%d).%s" % (i, ak), "")
+            if v:
+                sv = v if len(v) <= 95 else v[:95] + "..."
+                w("        %-20s = %s" % (ak, sv))
+
+
 def main():
     out = []
 
     def w(s=""):
         out.append(s)
+        print(s)
 
     w("=" * 70)
-    w("POV LIVE CONTAINER DIAGNOSTIC (read only)")
+    w("POV LIVE AUTO-CAPTURE (read only)")
     w("Endpoint: " + URL)
     w("=" * 70)
 
     try:
-        png = rpc("JSONRPC.Ping", {})
-        w("Ping: " + json.dumps(png))
+        rpc("JSONRPC.Ping", {})
     except urllib.error.HTTPError as e:
-        w("HTTP ERROR: %s %s" % (e.code, e.reason))
-        w(">>> check web server ON, port, and USERNAME/PASSWORD above.")
+        w("HTTP ERROR: %s %s -- check web server/port/user/pass." %
+          (e.code, e.reason))
         save(out)
         return
     except Exception as e:
-        w("CANNOT REACH KODI: %s" % e)
-        w(">>> is Kodi running with the web server enabled?")
+        w("CANNOT REACH KODI: %s -- is Kodi running with web server on?" % e)
         save(out)
         return
 
-    # context
-    ctx = get_labels([
-        "System.CurrentWindow",
-        "System.CurrentControl",
-        "Window(Home).Property(TMDbHelper.WidgetContainer)",
-        "Control.GetLabel(3000)",
-        "Container(601).ListItem.Property(guid)",
-    ])
     w("")
-    w("-" * 70)
-    w("### context (where you are right now)")
-    w("-" * 70)
-    for k, v in ctx.items():
-        w("  %-55s = %s" % (k, v))
+    w(">>> Connected. NOW in Kodi: open Search, type 'mario', open the")
+    w(">>> 'סרטים' category. Waiting up to %d s for the search window..."
+      % WAIT_SECONDS)
 
-    # First, scan a range of container IDs and report which ones hold items,
-    # so we don't depend on the exact search-widget id (501=discover,
-    # 502/503 = movies/tv search rows, but be robust if numbering differs).
-    art_keys = ["Art(poster)", "Art(tvshow.poster)", "Art(season.poster)",
-                "Icon", "Art(thumb)", "Art(fanart)"]
-    w("")
-    w("-" * 70)
-    w("### container scan (NumItems for 501-512, 601, 602)")
-    w("-" * 70)
-    scan_ids = list(range(501, 513)) + [601, 602]
-    populated = []
-    for cid in scan_ids:
-        d = get_labels(["Container(%d).NumItems" % cid])
-        num = d.get("Container(%d).NumItems" % cid, "")
+    deadline = time.time() + WAIT_SECONDS
+    captured_search = False
+    while time.time() < deadline:
         try:
-            n = int(num)
+            cw = get_labels(["System.CurrentWindow",
+                             "Window.Property(xmlfile)"])
         except Exception:
-            n = 0
-        if num not in ("", "0"):
-            w("  Container(%d).NumItems = %s" % (cid, num))
-        if n > 0:
-            populated.append(cid)
-    if not populated:
-        w("  (no populated containers found -- did you search 'mario' and")
-        w("   open the Movies category, leaving that screen on top?)")
-
-    # Always dump these known roles, plus any other populated container.
-    labelled = {501: "DISCOVER (baseline -- shows posters)",
-                502: "MOVIES search (suspect)",
-                503: "TV search (suspect)",
-                601: "selector"}
-    dump_ids = sorted(set([501, 502, 503, 601] + populated))
-    for cid in dump_ids:
-        title = "%d  %s" % (cid, labelled.get(cid, "(populated)"))
-        w("")
-        w("-" * 70)
-        w("### container %s" % title)
-        w("-" * 70)
-        head = get_labels(["Container(%d).NumItems" % cid,
-                            "Container(%d).IsUpdating" % cid,
-                            "Container(%d).ListItem.Label" % cid])
-        num = head.get("Container(%d).NumItems" % cid, "")
-        upd = head.get("Container(%d).IsUpdating" % cid, "")
-        w("  NumItems=%s  IsUpdating=%s" % (num, upd))
-        try:
-            n = int(num)
-        except Exception:
-            n = 0
-        if n == 0:
-            w("  (empty -- if this is 502/503, make sure you searched and")
-            w("   selected that category so the row is loaded)")
+            time.sleep(1)
             continue
-        show = min(n, 6)
-        for i in range(1, show + 1):
-            labels = ["Container(%d).ListItem(%d).Label" % (cid, i)]
-            for ak in art_keys:
-                labels.append("Container(%d).ListItem(%d).%s" % (cid, i, ak))
-            d = get_labels(labels)
-            lab = d.get("Container(%d).ListItem(%d).Label" % (cid, i), "")
-            w("  [%d] %s" % (i, lab))
-            for ak in art_keys:
-                v = d.get("Container(%d).ListItem(%d).%s" % (cid, i, ak), "")
-                if v:
-                    sv = v if len(v) <= 95 else v[:95] + "..."
-                    w("        %-20s = %s" % (ak, sv))
-            # flag if NOTHING resolved
-            anyart = any(d.get("Container(%d).ListItem(%d).%s" % (cid, i, ak))
-                         for ak in art_keys)
-            if not anyart:
-                w("        (no art of any kind on this item!)")
+        win = (cw.get("System.CurrentWindow", "") or "")
+        xml = (cw.get("Window.Property(xmlfile)", "") or "")
+        # search window is id 1105 -> xmlfile Custom_1105_Search.xml; the
+        # localized name may be Hebrew, so match on the xml or the id label.
+        if "1105" in xml or "Search" in xml or "Custom_1105" in xml:
+            time.sleep(0.6)  # let items settle
+            snapshot_search(w)
+            captured_search = True
+            break
+        time.sleep(1)
+
+    if not captured_search:
+        w("")
+        w("!! Did not detect the search window in time. Capturing whatever")
+        w("   is on screen now as a fallback:")
+        snapshot_search(w)
+
+    # optional genre capture
+    w("")
+    w(">>> (optional) Now open 'סרטים לפי ז׳אנר' (genres). Waiting %d s..."
+      % GENRE_WAIT)
+    gdeadline = time.time() + GENRE_WAIT
+    grabbed = False
+    while time.time() < gdeadline:
+        try:
+            d = get_labels(["Container.Content", "Container.NumItems"])
+        except Exception:
+            time.sleep(1)
+            continue
+        content = (d.get("Container.Content", "") or "")
+        # genres list usually reports content 'genres'
+        if content == "genres":
+            time.sleep(0.5)
+            snapshot_genres(w)
+            grabbed = True
+            break
+        time.sleep(1)
+    if not grabbed:
+        w("  (genre window not detected -- skipping; that's fine.)")
 
     w("")
     w("=" * 70)
@@ -194,7 +265,6 @@ def save(out):
         print("Report written to: " + p)
     except Exception as e:
         print("Could not write report: %s" % e)
-        print("\n".join(out))
 
 
 if __name__ == "__main__":
