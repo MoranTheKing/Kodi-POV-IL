@@ -1,3 +1,13 @@
+v0.2.89
+- AF3 Discover search now uses a POV-native combined movie + TV route
+  instead of the old static popular-movies grid. Typed searches return
+  mixed results that click through POV.
+- Added a POV-side ai_pov_combined_search helper with explicit poster,
+  thumb, icon, fanart, and tvshow.poster artwork fallbacks, so AF3 has
+  real artwork even when per-item metadata is slow or incomplete.
+- PATCH_VERSION v14 -> v15 forces existing AF3 installs to rebuild the
+  generated search/Discover includes after the quickfix lands.
+
 v0.2.88
 - AF3 Discover GRID now POV too (#5 continued). The search ROWS already
   worked (Hebrew + sources), but the Discover grid itself was still
