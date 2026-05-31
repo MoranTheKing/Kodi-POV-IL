@@ -1,23 +1,30 @@
-v0.2.91
-- Roll back the AF3 search/discover changes from v0.2.90.
-- Existing users who already received v0.2.90 are repaired forward:
-  search_path.xml removes the temporary DefaultSearch-POVDiscover and
-  ai_pov_combined_search movie/show rules, then restores the previous
-  POV movie/show search rules.
-- Includes_Search.xml removes the temporary permanent "גלה" item and
-  restores the previous Discover visibility/onclick behavior.
-- PATCH_VERSION bumped to force AF3 to rebuild the generated search
-  widgets after rollback.
-
-v0.2.89
-- AF3 Discover search now uses a POV-native combined movie + TV route
-  instead of the old static popular-movies grid. Typed searches return
-  mixed results that click through POV.
-- Added a POV-side ai_pov_combined_search helper with explicit poster,
-  thumb, icon, fanart, and tvshow.poster artwork fallbacks, so AF3 has
-  real artwork even when per-item metadata is slow or incomplete.
-- PATCH_VERSION v14 -> v15 forces existing AF3 installs to rebuild the
-  generated search/Discover includes after the quickfix lands.
+v0.2.92
+- ROLLBACK to the known-good PR #207 state (addon v0.2.88), including for
+  existing devices that already received the later (regressed) builds.
+  The intermediate versions changed the AF3 Discover/Search to a combined
+  "ai_pov_combined_search" flow that did not behave as intended; this
+  release returns everything to the #207 behaviour with certainty:
+  * af3_discover_pov_patcher upgraded to a ROLLBACK patcher (v5_rollback):
+    it now detects ANY prior on-device state (stock, #207, or the later
+    combined-search edits / flipped onclick+visible) in
+    Custom_1105_Search.xml and Includes_Search.xml and forces both files
+    back to the exact #207 target (POV popular grid, Hebrew name 'גלה',
+    bare folderpath content, stock TMDbHelper onclick/visible). Old
+    markers (v1/v2/v3) are stripped and re-stamped. Self-tested
+    byte-for-byte against real AF3 skin files for stock/#207/combined.
+  * af3_search_pov_patcher upgraded to a ROLLBACK patcher (v2_rollback):
+    it strips ALL previously-injected POV rules from search_path.xml --
+    including the later DefaultSearch-POVDiscover / ai_pov_combined_search
+    rules -- from every rule-set, then re-injects ONLY the #207
+    DefaultSearch-POVMovies / DefaultSearch-POVTv rules. Self-tested to
+    produce the #207 search_path.xml byte-for-byte from a combined-search
+    device.
+  * af3_home_patcher restored to #207 (PATCH_VERSION v14). A device left
+    on a later marker differs from v14, so the rebuild fires and the home
+    layout returns to #207.
+  All other addon code is restored to #207. Existing users receive this
+  via quick_update (note id bumped above the highest later build so the
+  update actually reaches devices that progressed past #207).
 
 v0.2.88
 - AF3 Discover GRID now POV too (#5 continued). The search ROWS already

@@ -48,10 +48,36 @@ AF3_SKIN_ID = 'skin.arctic.fuse.3'
 SEARCH_PATH_REL = ('addons/' + AF3_SKIN_ID +
                    '/shortcuts/generator/data/setup/search_path.xml')
 
-MARKER = '<!-- AI_SUBS_POV_SEARCH_v1 -->'
-ROLLBACK_MARKERS = (
+MARKER = '<!-- AI_SUBS_POV_SEARCH_v2_rollback -->'
+# Older markers: our #207 v1 marker plus any Codex search markers. When any
+# of these (or a Codex artifact below) is present we STRIP everything and
+# re-inject ONLY the #207 rules, forcing a device stuck on a Codex build
+# back to the PR #207 target. This is the "restore to #207 even for
+# existing users" guarantee.
+OLD_MARKERS = (
+    '<!-- AI_SUBS_POV_SEARCH_v1 -->',
     '<!-- AI_SUBS_POV_SEARCH_v2 -->',
+    '<!-- AI_SUBS_POV_SEARCH_v3 -->',
 )
+
+# Any of these in the file means a Codex build wrote combined-search /
+# POVDiscover rules we must strip before re-injecting the #207 set.
+_CODEX_ARTIFACTS = (
+    'DefaultSearch-POVDiscover',
+    'ai_pov_combined_search',
+)
+
+# Matches ANY of our injected POV rule blocks (POVMovies, POVTv, and
+# Codex's POVDiscover) in any of the four rule-sets, regardless of value,
+# so we can strip them all and re-inject only the #207 set. The blocks are
+# written by _rule() at a fixed 8/12-space indent.
+_POV_RULE_RE = re.compile(
+    r'        <rule>\n'
+    r'            <condition>\{item_path\}=='
+    r'DefaultSearch-POV(?:Discover|Movies|Tv)</condition>\n'
+    r'            <value>.*?</value>\n'
+    r'        </rule>\n',
+    re.DOTALL)
 
 # POV search path prefixes (the generator appends the encoded query, then
 # our empty suffix). Note: in search_path.xml, '&' is written as the
@@ -106,21 +132,6 @@ def _inject_after(text, rules_open, blocks):
     return text[:eol + 1] + blocks + text[eol + 1:]
 
 
-def _strip_ai_search_rules(text):
-    """Remove every previous AI-injected search rule so rollback from the
-    v2 combined-search attempt does not leave duplicate/invalid rules."""
-    for marker in (MARKER,) + ROLLBACK_MARKERS:
-        text = text.replace(marker, '')
-    pattern = re.compile(
-        r'\n?        <rule>\n'
-        r'            <condition>\{item_path\}==DefaultSearch-POV'
-        r'(?:Discover|Movies|Tv)</condition>\n'
-        r'            <value>.*?</value>\n'
-        r'        </rule>\n',
-        re.DOTALL)
-    return pattern.sub('\n', text)
-
-
 def ensure_patched():
     """Returns 'patched' | 'already_patched' | 'no_af3' | 'no_file'
     | 'unmatched' | 'read_failed' | 'write_failed'."""
@@ -143,13 +154,20 @@ def ensure_patched():
         _log('read failed: {0}'.format(e), level='WARNING')
         return 'read_failed'
 
-    needs_rollback_cleanup = (
-        any(marker in text for marker in ROLLBACK_MARKERS) or
-        'DefaultSearch-POVDiscover' in text or
-        'mode=ai_pov_combined_search' in text)
-    if MARKER in text and not needs_rollback_cleanup:
+    # Already exactly at the #207 target (current marker, no stale marker
+    # and no Codex artifact to clean up) -> nothing to do.
+    has_old = any(m in text for m in OLD_MARKERS)
+    has_codex = any(a in text for a in _CODEX_ARTIFACTS)
+    if MARKER in text and not has_old and not has_codex:
         return 'already_patched'
-    text = _strip_ai_search_rules(text)
+
+    # Strip ALL of our prior POV rule blocks (POVMovies/POVTv AND Codex's
+    # POVDiscover) from every rule-set, and drop every marker we've ever
+    # stamped, returning the file to a clean stock state before we
+    # re-inject ONLY the #207 rules below.
+    text = _POV_RULE_RE.sub('', text)
+    for m in (MARKER,) + OLD_MARKERS:
+        text = text.replace(m + '\n', '').replace(m, '')
 
     # Build the per-rule-set injections.
     path_rules = (
