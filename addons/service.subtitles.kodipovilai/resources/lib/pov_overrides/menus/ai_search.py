@@ -16,7 +16,7 @@ except Exception:
 	settings = None
 
 
-AI_SUBS_COMBINED_SEARCH_MARKER = 'ai_pov_combined_search_v1'
+AI_SUBS_COMBINED_SEARCH_MARKER = 'ai_pov_combined_search_v2'
 
 
 def _as_int(value, default=1):
@@ -185,21 +185,44 @@ def _interleave(movie_results, tv_results):
 	return out
 
 
+def _media_type(params):
+	value = (params.get('media_type') or params.get('type') or 'all').lower()
+	if value in ('movie', 'movies'):
+		return 'movie'
+	if value in ('tv', 'show', 'shows', 'tvshow', 'tvshows'):
+		return 'tvshow'
+	return 'all'
+
+
 def run(params):
 	handle = int(sys.argv[1])
 	query = (params.get('query') or '').strip()
+	media_type = _media_type(params)
 	page_no = _as_int(params.get('new_page') or params.get('page'), 1)
-	if query:
+	if query and media_type in ('all', 'movie'):
 		movie_data = tmdb_api.tmdb_movies_search(query, page_no) or {}
-		tv_data = tmdb_api.tmdb_tv_search(query, page_no) or {}
-	else:
+	elif not query and media_type in ('all', 'movie'):
 		movie_data = tmdb_api.tmdb_movies_popular(page_no) or {}
+	else:
+		movie_data = {}
+
+	if query and media_type in ('all', 'tvshow'):
+		tv_data = tmdb_api.tmdb_tv_search(query, page_no) or {}
+	elif not query and media_type in ('all', 'tvshow'):
 		tv_data = tmdb_api.tmdb_tv_popular(page_no) or {}
+	else:
+		tv_data = {}
 	movie_results = movie_data.get('results') or []
 	tv_results = tv_data.get('results') or []
 
 	items = []
-	for pos, (mediatype, item) in enumerate(_interleave(movie_results, tv_results), 1):
+	if media_type == 'movie':
+		iterable = [('movie', item) for item in movie_results]
+	elif media_type == 'tvshow':
+		iterable = [('tvshow', item) for item in tv_results]
+	else:
+		iterable = _interleave(movie_results, tv_results)
+	for pos, (mediatype, item) in enumerate(iterable, 1):
 		try:
 			built = _make_movie(item, pos) if mediatype == 'movie' else _make_tvshow(item, pos)
 			if built:
@@ -221,6 +244,7 @@ def run(params):
 			{
 				'mode': 'ai_pov_combined_search',
 				'query': query,
+				'media_type': media_type,
 				'new_page': str(page_no + 1),
 				'name': params.get('name') or 'Search Results',
 			},
@@ -230,5 +254,6 @@ def run(params):
 		)
 	kodi_utils.set_category(handle, params.get('name') or 'Search Results')
 	kodi_utils.set_sort_method(handle, 'unsorted')
-	kodi_utils.set_content(handle, 'movies')
+	content_type = 'tvshows' if media_type == 'tvshow' else 'movies'
+	kodi_utils.set_content(handle, content_type)
 	kodi_utils.end_directory(handle, False)

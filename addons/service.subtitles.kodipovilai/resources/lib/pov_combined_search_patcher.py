@@ -18,7 +18,7 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 HELPER_NAME = 'ai_search.py'
-MARKER = 'ai_pov_combined_search_v1'
+MARKER = 'ai_pov_combined_search_v2'
 ENTRY_MARKER = '# AI_SUBS_POV_COMBINED_SEARCH_v1'
 
 ENTRY_OLD = (

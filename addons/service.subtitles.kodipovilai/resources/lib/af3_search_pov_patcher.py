@@ -48,16 +48,19 @@ AF3_SKIN_ID = 'skin.arctic.fuse.3'
 SEARCH_PATH_REL = ('addons/' + AF3_SKIN_ID +
                    '/shortcuts/generator/data/setup/search_path.xml')
 
-MARKER = '<!-- AI_SUBS_POV_SEARCH_v1 -->'
+MARKER = '<!-- AI_SUBS_POV_SEARCH_v2 -->'
+OLD_MARKER = '<!-- AI_SUBS_POV_SEARCH_v1 -->'
 
 # POV search path prefixes (the generator appends the encoded query, then
 # our empty suffix). Note: in search_path.xml, '&' is written as the
 # double-escaped '&amp;amp;' because the value is XML text that the
 # generator later parses again. We mirror the existing TMDb rows exactly.
-_POV_MOVIE_PREFIX = ('plugin://plugin.video.pov/?mode=build_movie_list'
-                     '&amp;amp;action=tmdb_movies_search&amp;amp;query=')
-_POV_TV_PREFIX = ('plugin://plugin.video.pov/?mode=build_tvshow_list'
-                  '&amp;amp;action=tmdb_tv_search&amp;amp;query=')
+_POV_DISCOVER_PREFIX = ('plugin://plugin.video.pov/?mode=ai_pov_combined_search'
+                        '&amp;amp;media_type=all&amp;amp;name=Discover&amp;amp;query=')
+_POV_MOVIE_PREFIX = ('plugin://plugin.video.pov/?mode=ai_pov_combined_search'
+                     '&amp;amp;media_type=movie&amp;amp;name=Movies&amp;amp;query=')
+_POV_TV_PREFIX = ('plugin://plugin.video.pov/?mode=ai_pov_combined_search'
+                  '&amp;amp;media_type=tvshow&amp;amp;name=Shows&amp;amp;query=')
 
 
 def _log(msg, level='INFO'):
@@ -127,22 +130,28 @@ def ensure_patched():
 
     if MARKER in text:
         return 'already_patched'
+    if OLD_MARKER in text:
+        text = text.replace(OLD_MARKER, '', 1)
 
     # Build the per-rule-set injections.
     path_rules = (
-        _rule('DefaultSearch-POVMovies', _POV_MOVIE_PREFIX)
+        _rule('DefaultSearch-POVDiscover', _POV_DISCOVER_PREFIX)
+        + _rule('DefaultSearch-POVMovies', _POV_MOVIE_PREFIX)
         + _rule('DefaultSearch-POVTv', _POV_TV_PREFIX))
     # suffix empty for both
     end_rules = (
-        _rule('DefaultSearch-POVMovies', '')
+        _rule('DefaultSearch-POVDiscover', '')
+        + _rule('DefaultSearch-POVMovies', '')
         + _rule('DefaultSearch-POVTv', ''))
     # single-encoded query (POV decodes once via parse_qsl)
     var_rules = (
-        _rule('DefaultSearch-POVMovies', 'Path_SearchTerm_SingleEncoded')
+        _rule('DefaultSearch-POVDiscover', 'Path_SearchTerm_SingleEncoded')
+        + _rule('DefaultSearch-POVMovies', 'Path_SearchTerm_SingleEncoded')
         + _rule('DefaultSearch-POVTv', 'Path_SearchTerm_SingleEncoded'))
     # target: videos for both
     target_rules = (
-        _rule('DefaultSearch-POVMovies', 'videos')
+        _rule('DefaultSearch-POVDiscover', 'videos')
+        + _rule('DefaultSearch-POVMovies', 'videos')
         + _rule('DefaultSearch-POVTv', 'videos'))
 
     new_text = text
