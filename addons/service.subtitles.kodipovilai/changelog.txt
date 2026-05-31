@@ -1,3 +1,19 @@
+v0.2.97
+- The "ניהול רשימות (Trakt)" context-menu item now actually opens the
+  TRAKT list manager (add to Trakt collection/lists), instead of opening
+  the TMDB list manager. Root cause was POV's own design, not a skin bug:
+  modules/dialogs.py trakt_manager_choice() began with
+    if get_setting('tmdb.account_id'): return tmdb_manager_choice(params)
+  i.e. whenever a personal TMDB account is connected it deliberately
+  redirected the Trakt manager to the TMDB manager (POV's comment: "TMDB
+  beats Trakt -- no rate limits"). Identical on both skins. Per user
+  request, pov_combined_discover_patcher gains a 4th edit (own marker) that
+  removes ONLY that redirect line, so the Trakt item opens Trakt; the rest
+  of the function is unchanged (still guarded by trakt_user), and the
+  separate "ניהול רשימות (TMDB)" item still opens the TMDB manager for
+  those who prefer it. Self-tested against real POV source: redirect gone,
+  function still compiles + keeps its trakt_user guard, idempotent.
+
 v0.2.96
 - AF3: "Clear Progress" / "Mark as watched" now take effect IMMEDIATELY
   (previously the change showed only after a manual skin reload). Root
