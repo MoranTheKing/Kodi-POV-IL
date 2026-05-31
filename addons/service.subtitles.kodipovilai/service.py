@@ -1240,31 +1240,6 @@ def _maybe_patch_all_subs_samefile():
             pass
 
 
-def _maybe_patch_pov_combined_search():
-    """Install POV's combined movie+TV search route for AF3 Discover."""
-    try:
-        from resources.lib import pov_combined_search_patcher, kodi_utils
-    except Exception:
-        return
-    try:
-        status = pov_combined_search_patcher.ensure_patched()
-        if 'patched' in status:
-            kodi_utils.log(
-                'pov_combined_search_patcher: ' + status,
-                level='INFO')
-        elif status not in ('no_pov', 'helper=unchanged, entry=unchanged'):
-            kodi_utils.log(
-                'pov_combined_search_patcher: ' + status,
-                level='WARNING')
-    except Exception as e:
-        try:
-            kodi_utils.log(
-                'pov_combined_search_patcher failed: {0}'.format(e),
-                level='WARNING')
-        except Exception:
-            pass
-
-
 def _maybe_patch_af3_home():
     """Seed Arctic Fuse 3 with POV/FENtastic-style home widgets.
 
@@ -1563,7 +1538,6 @@ def main():
     _maybe_install_build_icons()
     _maybe_patch_pov_genre_icons()
     _maybe_patch_pov_genre_menu_icons()
-    _maybe_patch_pov_combined_search()
     _maybe_patch_af3_home()
 
     # Remove the v0.1.5-v0.1.7 misplaced injection into the wizard's
