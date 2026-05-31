@@ -1,3 +1,27 @@
+v0.2.87
+- AF3 Discover/Search now uses POV instead of TMDbHelper (#5). The
+  Discover area was wired to plugin.video.themoviedb.helper -> English
+  content + clicking a title couldn't scrape sources (no POV player).
+  Repointed BOTH halves to POV, so it's Hebrew and plays through POV's
+  own source scraping, with the IDENTICAL AF3 layout (same Hub_Combined_
+  Widget / List_Poster_Row -- only the content source changed):
+  * Search ROWS: write our own skinvariables-shortcut-searchwidgets.json
+    (movies + shows) via af3_home_patcher FILES, with path tokens
+    DefaultSearch-POVMovies / DefaultSearch-POVTv.
+  * New af3_search_pov_patcher injects matching rules into AF3's
+    generator search_path.xml (all 4 rule-sets) so those tokens resolve
+    to plugin://plugin.video.pov/?mode=build_movie_list&action=
+    tmdb_movies_search&query= (and tmdb_tv_search), with the query
+    single-encoded (Path_SearchTerm_SingleEncoded) -- verified end-to-end
+    that a Hebrew query round-trips correctly through POV's parse_qsl.
+    Idempotent + re-applied each startup so a skin update can't strip it;
+    patched search_path.xml verified well-formed XML.
+  * Discover GRID: _set_af3_runtime_defaults now seeds
+    TMDbHelper.UserDiscover.FolderPath to a POV popular-movies grid on
+    every AF3 activation (the window's String.IsEmpty onload then leaves
+    it alone), so the grid shows POV content.
+  PATCH_VERSION v12 -> v13 forces the AF3 rebuild so the regenerated
+  search includes pick up our node + rules in the same session.
 v0.2.86
 - Embedded English now sinks to the BOTTOM OF THE ENGLISH GROUP only,
   not below other languages. v0.2.84 inserted it at len(f_result) (very
