@@ -45,30 +45,33 @@ from . import kodi_utils
 DARKSUBS_ADDON_ID = 'service.subtitles.All_Subs'
 AUTOSUB_REL_PATH = 'autosub.py'
 
-MARKER = '# AI_SUBS_EMBED_ENG_LAST_v1'
+MARKER = '# AI_SUBS_EMBED_ENG_LAST_v2'
 
 # Match the UNIQUE index-calculation block in add_embedded_sub_if_exists,
-# anchored on `index = 0` ... through the `if embedded_language=='eng':`
-# Hebrew loop ... up to (not including) the `f_result.insert(` line:
+# from `index = 0` through the `if embedded_language=='eng':` body, up to
+# (not including) the `f_result.insert(` line. The body may be EITHER the
+# original Hebrew loop OR a prior v1 patch (`index = len(f_result)`), so
+# we capture any body up to the insert -- this lets v2 re-patch a device
+# that already has v1.
 #
-#     index = 0
-#     if embedded_language=='eng':
-#         # Find the index where English subtitles should be inserted
-#         for i, sub in enumerate(f_result):
-#             if sub[0] == 'Hebrew':
-#                 index = i + 1  # Insert after the last Hebrew subtitle
-#     f_result.insert( ... )
+# v2 places the embedded English at the END OF THE ENGLISH GROUP (right
+# after the last 'English' entry), not at the very end of the list, so it
+# no longer sinks below other languages. f_result at insert time is
+# ordered hebrew + telegram_mt + english + other (engine.sort_subtitles),
+# so "after the last English row" == bottom of the English block, above
+# 'other languages'. Falls back to end-of-list if there's no English row.
 #
-# We require the `index = 0` start AND the `for ... enumerate(f_result)`
-# inside, so it can't accidentally match the earlier
-# `elif embedded_language=='eng':` settings block (which has no `index`).
-# CRLF-tolerant; preserves the file's existing indentation style by
-# reusing the captured indents (so we never mix tabs/spaces).
+# We require BOTH `index = 0` AND `if embedded_language=='eng'` so we
+# never touch the earlier `elif embedded_language=='eng':` settings block.
+# CRLF-tolerant; reuses captured indents (never mixes tabs/spaces).
 _BLOCK_RE = re.compile(
     rb"(?P<indent>[ \t]*)index[ \t]*=[ \t]*0[ \t]*\r?\n"
+    # allow our own prior marker/comment lines between `index = 0` and the
+    # `if` (a v1 patch left a '# AI_SUBS_EMBED_ENG_LAST_v1' line here),
+    # so v2 can re-patch a device that already has v1 applied.
+    rb"(?P<mid>(?:[ \t]*#[^\r\n]*\r?\n)*)"
     rb"(?P<body>[ \t]*if[ \t]+embedded_language[ \t]*==[ \t]*"
-    rb"['\"]eng['\"].*?for[ \t]+i,[ \t]*sub[ \t]+in[ \t]+"
-    rb"enumerate\(f_result\).*?)"
+    rb"['\"]eng['\"].*?)"
     rb"(?P<insert_indent>[ \t]*)f_result\.insert\(",
     re.DOTALL,
 )
@@ -143,17 +146,25 @@ def ensure_patched():
     # to 4 spaces (the file uses spaces). NEVER mix.
     if indent and b'\t' in indent:
         inner = indent + b'\t'
+        inner2 = indent + b'\t\t'
     else:
         inner = indent + b'    '
-    # Replacement (anchored from `index = 0`): set index unconditionally
-    # for embedded English to the end of the list, dropping the
-    # after-Hebrew loop entirely. Hebrew-embedded path is elsewhere and
-    # untouched. Re-emit the `f_result.insert(` we matched up to.
+        inner2 = indent + b'        '
+    # Replacement (anchored from `index = 0`): for embedded English, set
+    # index to the END OF THE ENGLISH GROUP -- right after the last row
+    # whose language label (sub[0]) is 'English' -- so it sits at the
+    # bottom of the English subs but ABOVE other languages. Default to
+    # end-of-list only if no English row exists. Hebrew-embedded path is
+    # untouched (handled elsewhere). Re-emit the matched `f_result.insert(`.
     body = (
         indent + b'index = 0' + eol
         + indent + MARKER.encode('utf-8') + eol
         + indent + b"if embedded_language=='eng':" + eol
-        + inner + b'index = len(f_result)  # embedded English LAST' + eol
+        + inner + b'index = len(f_result)  # default: end of list' + eol
+        + inner + b'for _i, _sub in enumerate(f_result):' + eol
+        + inner2 + b"if _sub[0] == 'English':  # bottom of English group"
+        + eol
+        + inner2 + b'    index = _i + 1' + eol
         + insert_indent + b'f_result.insert('
     )
     new_content = content[:m.start()] + body + content[m.end():]
