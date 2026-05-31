@@ -28,7 +28,7 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-05-31-pov-home-v16'
+PATCH_VERSION = '2026-05-31-pov-home-v17'
 AF3_CE_VERSION = '6.3.2.9'
 # AF3's bundled TMDbHelper 6.15.6 imports jurialmunkey.ftools, which only
 # exists from script.module.jurialmunkey 0.2.35. Users who switched to AF3
@@ -878,6 +878,12 @@ def _set_af3_runtime_defaults():
         'Skin.SetBool(TMDbHelper.Service)',
         'Skin.SetBool(TMDbHelper.DirectCallAuto)',
         'Skin.SetBool(TMDbHelper.UseLocalWidgetContainer)',
+        # Widgets keep their fast per-row limit, but enabling "Show More"
+        # makes AF3 append a "More..." tile at the end of every limited
+        # widget (browse="auto" via Defs_BrowseLimitedLists). Selecting it
+        # opens the FULL list of that widget's POV path (e.g. all 70 Trakt
+        # collection shows) -- the quick "view all" the build was missing.
+        'Skin.SetBool(Widgets.EnableShowMore)',
         'ClearProperty(InfoPanel.FullSwitch,Home)',
         'ClearProperty(SubGroup.IsVisible,Home)',
         # NOTE: the Discover grid is repointed to POV by patching
