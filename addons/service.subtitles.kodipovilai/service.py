@@ -813,6 +813,11 @@ def _maybe_patch_darksubs_embedded_demote():
                 'darksubs_embedded_demote_patcher: [LOC] embedded '
                 'entries now sort to the bottom of their group',
                 level='INFO')
+            try:
+                from resources.lib import darksubs_reload
+                darksubs_reload.note_patched()
+            except Exception:
+                pass
         elif status in ('unmatched', 'write_failed', 'read_failed'):
             kodi_utils.log(
                 'darksubs_embedded_demote_patcher: ' + status,
@@ -845,6 +850,11 @@ def _maybe_patch_darksubs_embedded_insert():
             kodi_utils.log(
                 'darksubs_embedded_insert_patcher: embedded English now '
                 'inserted at the bottom of the list', level='INFO')
+            try:
+                from resources.lib import darksubs_reload
+                darksubs_reload.note_patched()
+            except Exception:
+                pass
         elif status in ('unmatched', 'write_failed', 'read_failed'):
             kodi_utils.log(
                 'darksubs_embedded_insert_patcher: ' + status,
@@ -878,6 +888,11 @@ def _maybe_patch_darksubs_subwindow_demote():
             kodi_utils.log(
                 'darksubs_subwindow_demote_patcher: embedded English now '
                 'sinks to the bottom of the picker', level='INFO')
+            try:
+                from resources.lib import darksubs_reload
+                darksubs_reload.note_patched()
+            except Exception:
+                pass
         elif status in ('unmatched', 'write_failed', 'read_failed'):
             kodi_utils.log(
                 'darksubs_subwindow_demote_patcher: ' + status,
@@ -1495,6 +1510,19 @@ def main():
     # setLanguageSettings to absorb that specific exception so the
     # addon survives to actually serve subtitles.
     _maybe_patch_all_subs_samefile()
+
+    # DarkSubs has reuselanguageinvoker=true and runs autosub.py as a
+    # persistent xbmc.service, so editing its .py files on disk does NOT
+    # take effect until its interpreter is torn down. If any DarkSubs
+    # source patch changed a file this run, cycle the addon (disable+
+    # enable) so it re-imports the patched source -- otherwise the
+    # embedded-subtitle ordering (and every other DarkSubs source patch)
+    # stays stale for the whole session.
+    try:
+        from resources.lib import darksubs_reload
+        darksubs_reload.reload_if_patched()
+    except Exception:
+        pass
 
     # Arctic Fuse 3's upstream home is library-first and therefore
     # empty in this POV streaming build. Seed script.skinvariables'
