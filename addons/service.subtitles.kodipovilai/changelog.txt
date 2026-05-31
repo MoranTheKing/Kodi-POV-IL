@@ -1,3 +1,28 @@
+v0.2.95
+- AF3 Discover is now UNIFIED: movies AND tv shows together, ranked by
+  popularity. Empty (nothing typed) -> trending movies+tv mixed; typed ->
+  a combined movie+tv search. Done the SAFE way (unlike the earlier
+  ai_pov_combined_search attempt): reuse POV's existing mixed-media list
+  builder menus/tmdb.py build_tmdb_list(), which already merges
+  Movies+TVShows and sorts, rendering Hebrew posters that click straight
+  into POV source scraping. New pov_combined_discover_patcher adds only the
+  missing data source to POV (exact-string, marker-gated, idempotent,
+  re-applied each boot, .pyc invalidated, self-tested against real POV
+  source):
+  * indexers/tmdb_api.py: tmdb_search_multi(query) -> TMDB /search/multi,
+    and tmdb_trending_all() -> /trending/all/week, each filtered to
+    movie/tv (drops person).
+  * menus/tmdb.py build_tmdb_list(): action=search_multi uses the query
+    (or trending when empty); everything downstream (merge/sort/render) is
+    unchanged.
+  af3_discover_pov_patcher (v5_rollback -> v6_unified) repoints the
+  Discover grid (Custom_1105_Search.xml onload + Includes_Search.xml
+  content) at plugin://plugin.video.pov/?mode=build_tmdb_list&action=
+  search_multi with the single-encoded typed query appended, so the grid
+  follows the search. Existing devices on the v5 popular-movies grid
+  migrate automatically. Self-tested: stock + v5 devices converge to the
+  unified target, valid XML, idempotent.
+
 v0.2.94
 - AF3 SEARCH result tiles now render (movies + tv). Root cause found by
   dumping the skin's runtime-generated includes from the device: each
