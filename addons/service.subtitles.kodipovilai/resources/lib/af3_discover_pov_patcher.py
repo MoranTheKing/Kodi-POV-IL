@@ -1,6 +1,7 @@
 # Repoint Arctic Fuse 3's DISCOVER GRID (window 1105 / container 501)
-# from TMDbHelper to POV, so it shows Hebrew POV content with posters and
-# clicking an item plays through POV's source scraping.
+# from TMDbHelper to POV. v1 made this a stable POV popular grid. v2 makes
+# the grid respond to the typed search term and returns mixed movie + TV
+# POV results via our ai_pov_combined_search route.
 #
 # The search ROWS were already repointed (af3_search_pov_patcher +
 # searchwidgets node) and work. This handles the discover GRID, which is
@@ -50,15 +51,17 @@ AF3_SKIN_ID = 'skin.arctic.fuse.3'
 CUSTOM_1105_REL = 'addons/' + AF3_SKIN_ID + '/1080i/Custom_1105_Search.xml'
 INCLUDES_SEARCH_REL = 'addons/' + AF3_SKIN_ID + '/1080i/Includes_Search.xml'
 
-MARKER = '<!-- AI_SUBS_POV_DISCOVER_v1 -->'
+MARKER = '<!-- AI_SUBS_POV_DISCOVER_v2 -->'
+OLD_MARKER = '<!-- AI_SUBS_POV_DISCOVER_v1 -->'
 
-# The POV grid path the discover grid should show (popular movies, Hebrew,
-# posters warm from normal browsing). '&' is plain here -- this is the
-# value of a SetProperty inside an onload, same escaping as the original
-# TMDbHelper line (which uses &amp; in XML for the literal &).
+# The fallback POV grid path for an empty search box.
 _POV_GRID_PATH = ('plugin://plugin.video.pov/?mode=build_movie_list'
                   '&amp;action=tmdb_movies_popular'
                   '&amp;name=32461&amp;iconImage=dvd.png')
+_POV_COMBINED_SEARCH_CONTENT = (
+    'plugin://plugin.video.pov/?mode=ai_pov_combined_search'
+    '&amp;name=Search%20Results&amp;query='
+    '$VAR[Path_SearchTerm_SingleEncoded]')
 
 # --- Custom_1105_Search.xml exact replacements (LF line endings) ---
 _C1105_OLD_PATH = (
@@ -68,12 +71,15 @@ _C1105_OLD_PATH = (
 _C1105_NEW_PATH = (
     'SetProperty(TMDbHelper.UserDiscover.FolderPath,'
     + _POV_GRID_PATH + ',Home)')
+_C1105_V1_PATH = _C1105_NEW_PATH
 
 _C1105_OLD_NAME = (
     'SetProperty(TMDbHelper.UserDiscover.FolderPath.Name,'
     '$LOCALIZE[467] $LOCALIZE[342],Home)')
 _C1105_NEW_NAME = (
     'SetProperty(TMDbHelper.UserDiscover.FolderPath.Name,גלה,Home)')
+
+_C1105_V1_NAME = _C1105_NEW_NAME
 
 # --- Includes_Search.xml: strip the &with_text_query suffix on line 54 ---
 _INCSRCH_OLD_CONTENT = (
@@ -82,6 +88,10 @@ _INCSRCH_OLD_CONTENT = (
     '$INFO[Control.GetLabel(3000).index(1),&amp;with_text_query=,]'
     '</param>')
 _INCSRCH_NEW_CONTENT = (
+    '<param name="content">'
+    + _POV_COMBINED_SEARCH_CONTENT +
+    '</param>')
+_INCSRCH_V1_CONTENT = (
     '<param name="content">'
     '$INFO[window(home).property(tmdbhelper.userdiscover.folderpath)]'
     '</param>')
@@ -120,9 +130,24 @@ def _patch_file(path, replacements, label):
 
     if MARKER in text:
         return 'already_patched'
+    if OLD_MARKER in text:
+        text = text.replace(OLD_MARKER, '', 1)
 
     new_text = text
     for old, new in replacements:
+        if isinstance(old, tuple):
+            matched = None
+            for candidate in old:
+                if candidate in new_text:
+                    matched = candidate
+                    break
+            if not matched:
+                _log('{0}: expected string not found -- AF3 may have changed '
+                     'this file; leaving it alone'.format(label),
+                     level='WARNING')
+                return 'unmatched'
+            new_text = new_text.replace(matched, new, 1)
+            continue
         if old not in new_text:
             _log('{0}: expected string not found -- AF3 may have changed '
                  'this file; leaving it alone'.format(label),
@@ -160,13 +185,12 @@ def ensure_patched():
     results = []
     if c1105:
         st = _patch_file(c1105, (
-            (_C1105_OLD_PATH, _C1105_NEW_PATH),
-            (_C1105_OLD_NAME, _C1105_NEW_NAME),
+            ((_C1105_OLD_PATH, _C1105_V1_PATH), _C1105_NEW_PATH),
         ), 'Custom_1105_Search.xml')
         results.append('1105=' + st)
     if incsrch:
         st = _patch_file(incsrch, (
-            (_INCSRCH_OLD_CONTENT, _INCSRCH_NEW_CONTENT),
+            ((_INCSRCH_OLD_CONTENT, _INCSRCH_V1_CONTENT), _INCSRCH_NEW_CONTENT),
         ), 'Includes_Search.xml')
         results.append('search=' + st)
 
