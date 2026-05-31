@@ -28,7 +28,7 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-05-31-pov-home-v13'
+PATCH_VERSION = '2026-05-31-pov-home-v14'
 AF3_CE_VERSION = '6.3.2.9'
 # AF3's bundled TMDbHelper 6.15.6 imports jurialmunkey.ftools, which only
 # exists from script.module.jurialmunkey 0.2.35. Users who switched to AF3
@@ -864,17 +864,11 @@ def _set_af3_runtime_defaults():
         'Skin.SetBool(TMDbHelper.UseLocalWidgetContainer)',
         'ClearProperty(InfoPanel.FullSwitch,Home)',
         'ClearProperty(SubGroup.IsVisible,Home)',
-        # Repoint the Discover grid (Custom_1105_Search.xml container 501)
-        # from TMDbHelper to a POV popular-movies grid -> Hebrew items
-        # that play through POV scrapers. The window's own onload only
-        # sets this when String.IsEmpty, so seeding it here (we run on
-        # every AF3 activation) wins. Home properties reset on reboot,
-        # which is why we MUST re-seed each activation rather than once.
-        'SetProperty(TMDbHelper.UserDiscover.FolderPath,'
-        'plugin://plugin.video.pov/?mode=build_movie_list'
-        '&action=tmdb_movies_popular&name=32461&iconImage=dvd.png,Home)',
-        'SetProperty(TMDbHelper.UserDiscover.FolderPath.Name,'
-        'גלה,Home)',
+        # NOTE: the Discover grid is repointed to POV by patching
+        # Custom_1105_Search.xml's onload directly (af3_discover_pov_
+        # patcher) -- a deterministic file edit, not a Home-property seed.
+        # The earlier SetProperty seed here was unreliable: it sat behind
+        # the _is_af3_active() gate and raced the window's own onload.
     ]
     for command in commands:
         try:
@@ -933,6 +927,17 @@ def ensure_patched():
         from resources.lib import af3_search_pov_patcher
         st = af3_search_pov_patcher.ensure_patched()
         if st == 'patched':
+            changed = True
+    except Exception:
+        pass
+    # Repoint the DISCOVER GRID (window 1105) from TMDbHelper to POV by
+    # patching Custom_1105_Search.xml's onload + stripping the TMDbHelper
+    # with_text_query suffix in Includes_Search.xml. Deterministic file
+    # edit (no Home-property race). Also before the rebuild.
+    try:
+        from resources.lib import af3_discover_pov_patcher
+        st2 = af3_discover_pov_patcher.ensure_patched()
+        if isinstance(st2, str) and '=patched' in st2:
             changed = True
     except Exception:
         pass
