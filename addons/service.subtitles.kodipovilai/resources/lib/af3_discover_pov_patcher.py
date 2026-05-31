@@ -51,10 +51,10 @@ AF3_SKIN_ID = 'skin.arctic.fuse.3'
 CUSTOM_1105_REL = 'addons/' + AF3_SKIN_ID + '/1080i/Custom_1105_Search.xml'
 INCLUDES_SEARCH_REL = 'addons/' + AF3_SKIN_ID + '/1080i/Includes_Search.xml'
 
-MARKER = '<!-- AI_SUBS_POV_DISCOVER_v3 -->'
+MARKER = '<!-- AI_SUBS_POV_DISCOVER_v2 -->'
 OLD_MARKERS = (
     '<!-- AI_SUBS_POV_DISCOVER_v1 -->',
-    '<!-- AI_SUBS_POV_DISCOVER_v2 -->',
+    '<!-- AI_SUBS_POV_DISCOVER_v3 -->',
 )
 
 # The fallback POV grid path for an empty search box.
@@ -63,7 +63,7 @@ _POV_GRID_PATH = ('plugin://plugin.video.pov/?mode=build_movie_list'
                   '&amp;name=32461&amp;iconImage=dvd.png')
 _POV_COMBINED_SEARCH_CONTENT = (
     'plugin://plugin.video.pov/?mode=ai_pov_combined_search'
-    '&amp;media_type=all&amp;name=Discover&amp;query='
+    '&amp;name=Search%20Results&amp;query='
     '$VAR[Path_SearchTerm_SingleEncoded]')
 
 # --- Custom_1105_Search.xml exact replacements (LF line endings) ---
@@ -98,21 +98,21 @@ _INCSRCH_V1_CONTENT = (
     '<param name="content">'
     '$INFO[window(home).property(tmdbhelper.userdiscover.folderpath)]'
     '</param>')
-_INCSRCH_V2_CONTENT = (
+_INCSRCH_V3_CONTENT = (
     '<param name="content">'
     'plugin://plugin.video.pov/?mode=ai_pov_combined_search'
-    '&amp;name=Search%20Results&amp;query='
+    '&amp;media_type=all&amp;name=Discover&amp;query='
     '$VAR[Path_SearchTerm_SingleEncoded]'
     '</param>')
-_INCSRCH_OLD_DISCOVER_LABEL = '<label>$LOCALIZE[31066]</label>'
-_INCSRCH_NEW_DISCOVER_LABEL = '<label>גלה</label>'
-_INCSRCH_OLD_DISCOVER_ONCLICK = (
+_INCSRCH_V3_DISCOVER_LABEL = '<label>גלה</label>'
+_INCSRCH_DEFAULT_DISCOVER_LABEL = '<label>$LOCALIZE[31066]</label>'
+_INCSRCH_V3_DISCOVER_ONCLICK = '<onclick>SetFocus(501)</onclick>'
+_INCSRCH_DEFAULT_DISCOVER_ONCLICK = (
     '<onclick>RunPlugin(plugin://plugin.video.themoviedb.helper/?info=user_discover'
     '$INFO[Window(Home).Property(TMDbHelper.UserDiscover.Folderpath.ParamString),&amp;,])</onclick>')
-_INCSRCH_NEW_DISCOVER_ONCLICK = '<onclick>SetFocus(501)</onclick>'
-_INCSRCH_OLD_DISCOVER_VISIBLE = (
+_INCSRCH_V3_DISCOVER_VISIBLE = '<visible>true</visible>'
+_INCSRCH_DEFAULT_DISCOVER_VISIBLE = (
     '<visible>!Integer.IsEqual(Container(501).NumItems,0)</visible>')
-_INCSRCH_NEW_DISCOVER_VISIBLE = '<visible>true</visible>'
 
 
 def _log(msg, level='INFO'):
@@ -146,11 +146,11 @@ def _patch_file(path, replacements, label):
         _log('{0}: read failed: {1}'.format(label, e), level='WARNING')
         return 'read_failed'
 
-    if MARKER in text:
+    needs_rollback_cleanup = any(old_marker in text for old_marker in OLD_MARKERS)
+    if MARKER in text and not needs_rollback_cleanup:
         return 'already_patched'
-    for old_marker in OLD_MARKERS:
-        if old_marker in text:
-            text = text.replace(old_marker, '', 1)
+    for old_marker in (MARKER,) + OLD_MARKERS:
+        text = text.replace(old_marker, '')
 
     new_text = text
     for old, new in replacements:
@@ -209,11 +209,12 @@ def ensure_patched():
         results.append('1105=' + st)
     if incsrch:
         st = _patch_file(incsrch, (
-            ((_INCSRCH_OLD_CONTENT, _INCSRCH_V1_CONTENT, _INCSRCH_V2_CONTENT),
-             _INCSRCH_NEW_CONTENT),
-            (_INCSRCH_OLD_DISCOVER_LABEL, _INCSRCH_NEW_DISCOVER_LABEL),
-            (_INCSRCH_OLD_DISCOVER_ONCLICK, _INCSRCH_NEW_DISCOVER_ONCLICK),
-            (_INCSRCH_OLD_DISCOVER_VISIBLE, _INCSRCH_NEW_DISCOVER_VISIBLE),
+            ((_INCSRCH_OLD_CONTENT, _INCSRCH_V1_CONTENT, _INCSRCH_NEW_CONTENT,
+              _INCSRCH_V3_CONTENT), _INCSRCH_NEW_CONTENT),
+            ((_INCSRCH_V3_DISCOVER_ONCLICK, _INCSRCH_DEFAULT_DISCOVER_ONCLICK),
+             _INCSRCH_DEFAULT_DISCOVER_ONCLICK),
+            ((_INCSRCH_V3_DISCOVER_VISIBLE, _INCSRCH_DEFAULT_DISCOVER_VISIBLE),
+             _INCSRCH_DEFAULT_DISCOVER_VISIBLE),
         ), 'Includes_Search.xml')
         results.append('search=' + st)
 

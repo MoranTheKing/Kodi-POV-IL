@@ -28,7 +28,7 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-05-31-pov-home-v16'
+PATCH_VERSION = '2026-05-31-pov-home-v17-rollback'
 AF3_CE_VERSION = '6.3.2.9'
 # AF3's bundled TMDbHelper 6.15.6 imports jurialmunkey.ftools, which only
 # exists from script.module.jurialmunkey 0.2.35. Users who switched to AF3
@@ -415,13 +415,6 @@ POWER_MENU = [
 # replaces AF3's default Movies/TVShows(library) + TMDb rows so typed
 # search returns POV results in Hebrew that play through POV scrapers.
 SEARCH_WIDGETS = [
-    {
-        'label': 'גלה',
-        'icon': 'special://home/media/build_icons/Twilight/Movies/Movies_Popular.png',
-        'path': 'DefaultSearch-POVDiscover',
-        'target': 'videos',
-        'widget_style': 'Poster',
-    },
     {
         'label': 'סרטים',
         'icon': 'special://home/media/build_icons/Twilight/Movies/Movies_Popular.png',
