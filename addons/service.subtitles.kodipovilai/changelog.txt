@@ -1,18 +1,27 @@
 v0.2.98
-- AF3 home widgets now have a "More..." tile that opens the FULL list of
-  the category. Widgets still keep their fast per-row limit (~20 posters),
-  but a group member rightly noted there was no quick way to reach the
-  whole category (e.g. all 70 shows in a Trakt collection) without digging
-  into POV manually. AF3 already supports this natively -- its widget
-  content uses browse="$VAR[Defs_BrowseLimitedLists]", which is "auto" ONLY
-  when the skin setting Widgets.EnableShowMore is on (off by default, which
-  is why we never saw it). With browse="auto", Kodi appends a "More..."
-  tile at the end of every limited widget; selecting it opens that widget's
-  POV path with no limit -> the full list, clickable into sources as usual.
+- AF3 home widgets are now a clean "teaser + drill-down": each row shows
+  7 posters and ends with a "More..." tile that opens the FULL category
+  list. A group member rightly noted the rows should show only a handful
+  as a teaser, with a button for the full list -- so a user on a weak
+  device gets a fast home screen and can disable rows they don't use in
+  skin settings, keeping just the 3-4 they care about.
+  Two parts:
+  * Widget display lowered from 20 -> 7 posters per row (widget_limit on
+    every home/network widget node). Note: this is the DISPLAY count;
+    POV's own page_limit (20) is unchanged per the build owner, so POV's
+    build cost is the same -- the row is just a tidy 7-item teaser.
+  * "More..." tile enabled: AF3 supports it natively via widget content
+    browse="$VAR[Defs_BrowseLimitedLists]", which is "auto" ONLY when the
+    skin setting Widgets.EnableShowMore is on (off by default, which is
+    why we never saw it). With "auto", because POV returns more (20) than
+    the row shows (7), Kodi appends a "More..." tile; selecting it opens
+    POV's normal list view for that path -- paginated 20/page WITH a Next
+    button + jump-to-letter -- so all items (e.g. all 70 Trakt-collection
+    shows) are reachable, clickable into sources as usual.
   Fix: _set_af3_runtime_defaults() now sets Skin.SetBool(
   Widgets.EnableShowMore). It runs every boot when AF3 is active, so
   existing devices get it automatically; PATCH_VERSION v16 -> v17 also
-  forces a clean rebuild so the tiles appear right away.
+  forces a clean rebuild so the change appears right away.
   (Verified against the real AF3 skin: Defs_BrowseLimitedLists at
   Includes_Defaults.xml:333-336 gates on Widgets.EnableShowMore; the
   widget <content> at Includes_Hubs.xml:121/166 consumes it.)
