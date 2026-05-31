@@ -1,3 +1,23 @@
+v0.2.85
+- THE reason every DarkSubs source patch "didn't apply": DarkSubs
+  (service.subtitles.All_Subs) declares reuselanguageinvoker=true and
+  runs autosub.py as a persistent xbmc.service. Its Python interpreter
+  loads autosub.py/engine.py/sub_window.py into memory at boot and stays
+  alive all session, so rewriting those files on disk + dropping the .pyc
+  never takes effect this session (and a restart races and loses). That's
+  why the embedded-subtitle demote/insert (and other DarkSubs patches)
+  appeared to do nothing.
+  * New darksubs_reload: after any DarkSubs source patch actually changes
+    a file, disable+enable the DarkSubs addon via JSON-RPC so its
+    interpreter is torn down and re-imports the PATCHED source. Debounced
+    to once per startup; only cycles when something changed (no churn on
+    steady-state boots). Wired so the embedded-insert / embedded-demote /
+    subwindow-demote patches trigger it. This is what makes the
+    embedded-English-at-the-bottom fix finally take effect.
+- AF3 home tile ORDER: grouped the Trakt tiles with their media type --
+  movies now go הסרטים שלי / (TMDB) / (Trakt), then shows go הסדרות שלי /
+  (TMDB) / (Trakt), instead of all movies+shows TMDB then both Trakt.
+
 v0.2.84
 - Round 2 of deep-audit fixes (the previous demote/genre/tile attempts
   didn't take on-device; found the true causes):

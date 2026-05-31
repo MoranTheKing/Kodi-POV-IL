@@ -249,6 +249,17 @@ HOME_WIDGETS = [
         'widget_limit': '20',
     },
     {
+        # Trakt collection -- movies. Grouped with the other movie tiles:
+        # right after 'הסרטים שלי (TMDB)' and above the shows.
+        'label': 'הסרטים שלי (Trakt)',
+        'icon': 'special://home/media/build_icons/Twilight/Movies/My_Movies.png',
+        'path': _pov('trakt_collection', 'build_movie_list', 'Movies',
+                     'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftrakt.png'),
+        'target': 'videos',
+        'widget_style': 'Poster',
+        'widget_limit': '20',
+    },
+    {
         # POV-LOCAL show favorites (watched.db -> favorites).
         'label': 'הסדרות שלי',
         'icon': 'special://home/media/build_icons/Twilight/Shows/My_Shows_TMDB.png',
@@ -269,18 +280,7 @@ HOME_WIDGETS = [
         'widget_limit': '20',
     },
     {
-        # Trakt collection -- movies (online Trakt list, like FENtastic's
-        # 'הסרטים שלי (Trakt)' favourite). action=trakt_collection.
-        'label': 'הסרטים שלי (Trakt)',
-        'icon': 'special://home/media/build_icons/Twilight/Movies/My_Movies.png',
-        'path': _pov('trakt_collection', 'build_movie_list', 'Movies',
-                     'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftrakt.png'),
-        'target': 'videos',
-        'widget_style': 'Poster',
-        'widget_limit': '20',
-    },
-    {
-        # Trakt collection -- shows.
+        # Trakt collection -- shows. Grouped after 'הסדרות שלי (TMDB)'.
         'label': 'הסדרות שלי (Trakt)',
         'icon': 'special://home/media/build_icons/Twilight/Shows/My_Shows.png',
         'path': _pov('trakt_collection', 'build_tvshow_list', 'TV%20Shows',
@@ -594,7 +594,6 @@ def _patch_hebrew_language():
 # every genre row's iconImage here instead of POV's own media/genres/
 # folder, which isn't shipped by us and vanishes on POV self-updates --
 # the reason genre icons were blank on BOTH skins.
-GENRE_ICON_BASE = 'special://home/media/build_icons/Genres/'
 
 # Map of Hebrew genre label (stripped of [B]/[/B]) -> icon filename, so
 # we can re-icon a row even when POV rebuilt it WITHOUT the original
@@ -630,20 +629,14 @@ GENRE_NAME_TO_ICON = {
 }
 
 
-def _genre_icon_for(item):
-    """Return the stable build_icons/Genres icon path for a genre row
-    item, or '' if we can't map it. Tries the original 'genres/<file>'
-    suffix first, then the Hebrew label."""
-    icon = item.get('iconImage', '') or ''
-    if icon.startswith('genres/'):
-        return GENRE_ICON_BASE + icon[len('genres/'):]
-    # Fall back to the Hebrew name (strip [B]..[/B] and whitespace).
-    name = (item.get('name', '') or '')
-    name = name.replace('[B]', '').replace('[/B]', '').strip()
-    fn = GENRE_NAME_TO_ICON.get(name)
-    if fn:
-        return GENRE_ICON_BASE + fn
-    return ''
+# NOTE: the old _genre_icon_for()/GENRE_ICON_BASE helpers (which returned
+# an ABSOLUTE special://home/media/build_icons/Genres/... path) were
+# REMOVED in v0.2.85. They were the bug: POV's build_shortcut_folder_list
+# prepends media_path() to a non-network iconImage, so an absolute value
+# got doubled into a broken '.../media/special://...' path -> POV-logo
+# fallback. The correct approach is _heal_genre_icon() below, which writes
+# the RELATIVE 'genres/<file>' POV already ships and resolves. Keeping the
+# dead absolute helpers risked a future re-corruption, so they're gone.
 
 
 def _heal_genre_icon(item):
