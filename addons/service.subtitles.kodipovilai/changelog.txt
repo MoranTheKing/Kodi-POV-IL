@@ -1,3 +1,21 @@
+v0.2.86
+- Embedded English now sinks to the BOTTOM OF THE ENGLISH GROUP only,
+  not below other languages. v0.2.84 inserted it at len(f_result) (very
+  end, under French/Spanish/etc); v2 of the insert patcher places it
+  right after the last 'English' row instead -- so order is Hebrew,
+  English subs, embedded English, then other languages. The patcher now
+  also re-patches a device that already had v1 applied (regex tolerates
+  the v1 marker comment between `index = 0` and the `if`). Verified vs
+  the original AND a v1-patched autosub.py: both match, compile, and the
+  runtime test confirms embedded English lands at the bottom of English,
+  above other langs.
+- Genre icons on AF3 -- fixed the ORDER bug: the genre navigator-row
+  heal + the navigator.py per-genre patch were running AFTER
+  _maybe_patch_af3_home(), so AF3's home rebuild rendered the still-broken
+  rows and cached the POV-logo tiles. Moved build_icons install + genre
+  heal + genre menu-icon patch to BEFORE _maybe_patch_af3_home(), so the
+  rebuild repaints the already-healed rows in the same session.
+
 v0.2.85
 - THE reason every DarkSubs source patch "didn't apply": DarkSubs
   (service.subtitles.All_Subs) declares reuselanguageinvoker=true and

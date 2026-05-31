@@ -1528,6 +1528,16 @@ def main():
     # empty in this POV streaming build. Seed script.skinvariables'
     # per-user nodes so AF3 has useful POV rows and working power-menu
     # actions on existing installs as soon as the quickfix lands.
+    #
+    # IMPORTANT ORDER: install genre icons + heal POV's genre navigator
+    # rows + patch navigator.py BEFORE _maybe_patch_af3_home(), because
+    # AF3's home rebuild renders the genre shortcut-folder rows -- if we
+    # heal them AFTER the rebuild, the rebuilt (cached) tiles keep the old
+    # broken POV-logo icons until the next restart. Doing it first means
+    # the rebuild repaints the already-healed rows in the same session.
+    _maybe_install_build_icons()
+    _maybe_patch_pov_genre_icons()
+    _maybe_patch_pov_genre_menu_icons()
     _maybe_patch_af3_home()
 
     # Remove the v0.1.5-v0.1.7 misplaced injection into the wizard's
@@ -1575,16 +1585,9 @@ def main():
     # customizations are left alone.
     _maybe_patch_pov_personal_area()
     _maybe_patch_fentastic_widgets()
-    # Install the TMDB-branded home-tile icons before the
-    # favourites_xml patcher rewrites the thumb paths, otherwise
-    # the TMDB tile would briefly point at a missing file.
-    _maybe_install_build_icons()
-    # Re-icon POV genre rows for BOTH skins (must run after build_icons
-    # so the Genres/ PNGs are on disk; independent of AF3 install).
-    _maybe_patch_pov_genre_icons()
-    # The REAL per-genre icon fix: patch POV navigator.py so genres()
-    # uses each genre's own icon (works on FENtastic AND AF3).
-    _maybe_patch_pov_genre_menu_icons()
+    # (build_icons + genre heal + genre menu-icon patch already ran
+    # above, before _maybe_patch_af3_home, so AF3's rebuild repaints the
+    # healed genre rows in the same session.)
     _maybe_patch_favourites_xml()
 
     # Restore the 6 personal "הסרטים שלי / הסדרות שלי" home tiles
