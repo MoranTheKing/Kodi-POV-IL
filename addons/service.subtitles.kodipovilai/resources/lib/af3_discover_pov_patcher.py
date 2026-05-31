@@ -1,0 +1,176 @@
+# Repoint Arctic Fuse 3's DISCOVER GRID (window 1105 / container 501)
+# from TMDbHelper to POV, so it shows Hebrew POV content with posters and
+# clicking an item plays through POV's source scraping.
+#
+# The search ROWS were already repointed (af3_search_pov_patcher +
+# searchwidgets node) and work. This handles the discover GRID, which is
+# wired differently and more deeply to TMDbHelper. Two skin files:
+#
+# 1) Custom_1105_Search.xml line 3 -- the window's onload sets the grid's
+#    content path. Default points at TMDbHelper:
+#      SetProperty(TMDbHelper.UserDiscover.FolderPath,
+#        plugin://plugin.video.themoviedb.helper/?info=discover&with_id=
+#        True&tmdb_type=movie, Home)
+#    We change ONLY the path to POV popular movies (Hebrew, warm posters):
+#      plugin://plugin.video.pov/?mode=build_movie_list&
+#        action=tmdb_movies_popular&name=32461&iconImage=dvd.png
+#    (We patch the onload itself -- deterministic -- instead of racing to
+#    pre-seed the Home property from the service at boot, which the
+#    _is_af3_active() gate made unreliable.)
+#    Line 4 sets the grid's display name; we set it to a Hebrew label.
+#
+# 2) Includes_Search.xml line 54 -- the grid's content binding appends a
+#    TMDbHelper-only suffix:
+#      $INFO[...folderpath]$INFO[Control.GetLabel(3000).index(1),
+#        &with_text_query=,]
+#    POV doesn't understand &with_text_query, so as soon as the user types
+#    in the search box the grid path becomes invalid. We strip the suffix
+#    so the grid stays a clean POV popular grid (the POV search ROWS, not
+#    this grid, serve typed queries). Result: the grid is a stable Hebrew
+#    POV "discover/popular" row, clickable straight into POV sources.
+#
+# Marker-gated, idempotent, atomic, re-applied each startup (a skin update
+# re-ships the originals). Exact-string match; safe no-op if AF3 absent or
+# the lines changed.
+
+import os
+
+try:
+    import xbmcvfs
+except Exception:
+    xbmcvfs = None
+
+try:
+    from resources.lib import kodi_utils
+except Exception:
+    kodi_utils = None
+
+
+AF3_SKIN_ID = 'skin.arctic.fuse.3'
+CUSTOM_1105_REL = 'addons/' + AF3_SKIN_ID + '/1080i/Custom_1105_Search.xml'
+INCLUDES_SEARCH_REL = 'addons/' + AF3_SKIN_ID + '/1080i/Includes_Search.xml'
+
+MARKER = '<!-- AI_SUBS_POV_DISCOVER_v1 -->'
+
+# The POV grid path the discover grid should show (popular movies, Hebrew,
+# posters warm from normal browsing). '&' is plain here -- this is the
+# value of a SetProperty inside an onload, same escaping as the original
+# TMDbHelper line (which uses &amp; in XML for the literal &).
+_POV_GRID_PATH = ('plugin://plugin.video.pov/?mode=build_movie_list'
+                  '&amp;action=tmdb_movies_popular'
+                  '&amp;name=32461&amp;iconImage=dvd.png')
+
+# --- Custom_1105_Search.xml exact replacements (LF line endings) ---
+_C1105_OLD_PATH = (
+    'SetProperty(TMDbHelper.UserDiscover.FolderPath,'
+    'plugin://plugin.video.themoviedb.helper/?info=discover'
+    '&amp;with_id=True&amp;tmdb_type=movie,Home)')
+_C1105_NEW_PATH = (
+    'SetProperty(TMDbHelper.UserDiscover.FolderPath,'
+    + _POV_GRID_PATH + ',Home)')
+
+_C1105_OLD_NAME = (
+    'SetProperty(TMDbHelper.UserDiscover.FolderPath.Name,'
+    '$LOCALIZE[467] $LOCALIZE[342],Home)')
+_C1105_NEW_NAME = (
+    'SetProperty(TMDbHelper.UserDiscover.FolderPath.Name,גלה,Home)')
+
+# --- Includes_Search.xml: strip the &with_text_query suffix on line 54 ---
+_INCSRCH_OLD_CONTENT = (
+    '<param name="content">'
+    '$INFO[window(home).property(tmdbhelper.userdiscover.folderpath)]'
+    '$INFO[Control.GetLabel(3000).index(1),&amp;with_text_query=,]'
+    '</param>')
+_INCSRCH_NEW_CONTENT = (
+    '<param name="content">'
+    '$INFO[window(home).property(tmdbhelper.userdiscover.folderpath)]'
+    '</param>')
+
+
+def _log(msg, level='INFO'):
+    if kodi_utils is None:
+        return
+    try:
+        kodi_utils.log('af3_discover_pov_patcher: ' + msg, level=level)
+    except Exception:
+        pass
+
+
+def _path(rel):
+    if xbmcvfs is None:
+        return ''
+    try:
+        base = xbmcvfs.translatePath('special://home/')
+    except Exception:
+        return ''
+    p = os.path.join(base, *rel.split('/'))
+    return p if os.path.isfile(p) else ''
+
+
+def _patch_file(path, replacements, label):
+    """Apply (old,new) replacements to a file, marker-gated. Returns
+    'patched' | 'already_patched' | 'unmatched' | 'read_failed'
+    | 'write_failed'."""
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            text = f.read()
+    except OSError as e:
+        _log('{0}: read failed: {1}'.format(label, e), level='WARNING')
+        return 'read_failed'
+
+    if MARKER in text:
+        return 'already_patched'
+
+    new_text = text
+    for old, new in replacements:
+        if old not in new_text:
+            _log('{0}: expected string not found -- AF3 may have changed '
+                 'this file; leaving it alone'.format(label),
+                 level='WARNING')
+            return 'unmatched'
+        new_text = new_text.replace(old, new, 1)
+
+    # marker after the first '>' (root tag) so re-runs skip.
+    g = new_text.find('>')
+    if g != -1:
+        new_text = new_text[:g + 1] + '\n' + MARKER + new_text[g + 1:]
+
+    tmp = path + '.aitmp'
+    try:
+        with open(tmp, 'w', encoding='utf-8') as f:
+            f.write(new_text)
+        os.replace(tmp, path)
+    except OSError as e:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        _log('{0}: write failed: {1}'.format(label, e), level='WARNING')
+        return 'write_failed'
+    return 'patched'
+
+
+def ensure_patched():
+    """Returns a short summary. Never raises."""
+    c1105 = _path(CUSTOM_1105_REL)
+    incsrch = _path(INCLUDES_SEARCH_REL)
+    if not c1105 and not incsrch:
+        return 'no_af3'
+
+    results = []
+    if c1105:
+        st = _patch_file(c1105, (
+            (_C1105_OLD_PATH, _C1105_NEW_PATH),
+            (_C1105_OLD_NAME, _C1105_NEW_NAME),
+        ), 'Custom_1105_Search.xml')
+        results.append('1105=' + st)
+    if incsrch:
+        st = _patch_file(incsrch, (
+            (_INCSRCH_OLD_CONTENT, _INCSRCH_NEW_CONTENT),
+        ), 'Includes_Search.xml')
+        results.append('search=' + st)
+
+    summary = ', '.join(results)
+    if any('=patched' in r for r in results):
+        _log('discover grid repointed to POV (' + summary + ')', 'INFO')
+    return summary
