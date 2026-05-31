@@ -29,6 +29,7 @@ Writes POV_LIVE_DIAGNOSTIC.txt next to the script. Send it back.
 
 import json
 import os
+import sys
 import time
 import base64
 import urllib.request
@@ -44,6 +45,42 @@ PASSWORD = ""       # your Kodi web password, if any
 URL = "http://{0}:{1}/jsonrpc".format(HOST, PORT)
 WAIT_SECONDS = 120      # how long to wait for the search window
 GENRE_WAIT = 45         # extra wait to also capture the genre screen
+POV = "plugin.video.pov"
+
+
+def find_kodi_home(argv):
+    if len(argv) > 1 and os.path.isdir(argv[1]):
+        return argv[1]
+    cands = []
+    ap = os.environ.get("APPDATA")
+    if ap:
+        cands.append(os.path.join(ap, "Kodi"))
+    home = os.path.expanduser("~")
+    cands += [
+        os.path.join(home, ".kodi"),
+        os.path.join(home, "Library", "Application Support", "Kodi"),
+        os.path.join(home, ".var", "app", "tv.kodi.Kodi", "data", ".kodi"),
+        "/storage/.kodi",
+    ]
+    for c in cands:
+        if c and os.path.isdir(os.path.join(c, "addons")):
+            return c
+    for c in cands:
+        if c and os.path.isdir(c):
+            return c
+    return None
+
+
+def special_to_real(kodi, p):
+    """Best-effort special:// -> real path for existence checks."""
+    if not p:
+        return ""
+    if p.startswith("special://home/"):
+        return os.path.join(kodi, *p[len("special://home/"):].split("/"))
+    if p.startswith("special://skin/"):
+        return os.path.join(kodi, "addons", "skin.arctic.fuse.3",
+                            *p[len("special://skin/"):].split("/"))
+    return p
 
 
 def rpc(method, params):
@@ -247,7 +284,48 @@ def main():
             break
         time.sleep(1)
     if not grabbed:
-        w("  (genre window not detected -- skipping; that's fine.)")
+        w("  (genre window not detected -- skipping live genre dump.)")
+
+    # --- genre-icon ON-DISK check (always runs, no navigation needed) ---
+    w("")
+    w("=" * 70)
+    w("GENRE ICONS -- on-disk check")
+    w("=" * 70)
+    kodi = find_kodi_home(sys.argv)
+    w("Kodi home: " + str(kodi))
+    if kodi:
+        # 1) Did POV's navigator.py get patched (marker present)?
+        nav = os.path.join(kodi, "addons", POV, "resources", "lib",
+                           "menus", "navigator.py")
+        w("navigator.py exists: " + str(os.path.isfile(nav)))
+        if os.path.isfile(nav):
+            try:
+                with open(nav, "r", encoding="utf-8", errors="replace") as f:
+                    navtxt = f.read()
+                w("  AI genre-icons patch marker present: " +
+                  str("AI_SUBS_POV_GENRE_ICONS" in navtxt))
+                w("  still hardcodes 'genres.png' in a genre loop: " +
+                  str("'genres.png', list_name=list_name" in navtxt))
+            except Exception as e:
+                w("  (could not read navigator.py: %s)" % e)
+        # 2) Do the per-genre PNGs exist where POV points?
+        gdir = os.path.join(kodi, "addons", POV, "resources", "skins",
+                            "Default", "media", "genres")
+        w("POV genre media dir: " + gdir)
+        w("  dir exists: " + str(os.path.isdir(gdir)))
+        if os.path.isdir(gdir):
+            pngs = [f for f in os.listdir(gdir)
+                    if f.lower().endswith(".png")]
+            w("  PNG count: %d" % len(pngs))
+            for sample in ("genres.png", "genre_action.png",
+                           "genre_adventure.png", "genre_comedy.png",
+                           "genre_animation.png", "genre_tv.png"):
+                fp = os.path.join(gdir, sample)
+                ex = os.path.isfile(fp)
+                sz = os.path.getsize(fp) if ex else -1
+                w("    %-22s exists=%-5s size=%s" % (sample, ex, sz))
+    else:
+        w("(Kodi home not found -- pass it as an argument to enable this.)")
 
     w("")
     w("=" * 70)
