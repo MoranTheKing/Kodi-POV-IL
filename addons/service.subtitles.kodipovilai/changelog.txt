@@ -1,3 +1,21 @@
+v0.2.96
+- AF3: "Clear Progress" / "Mark as watched" now take effect IMMEDIATELY
+  (previously the change showed only after a manual skin reload). Root
+  cause: POV's clear-progress + mark-watched both funnel through
+  kodi_utils.container_refresh(), which only did Container.Refresh -- that
+  updates POV's own focused list but NOT AF3's home widgets, so on AF3 the
+  movie stayed in "Continue Watching" until a skin reload (FENtastic's
+  widgets re-run the raw POV path on Container.Refresh, hence it worked
+  there). The DB delete itself always worked (verified: progress table
+  emptied). Fix (pov_combined_discover_patcher, 3rd edit, own marker):
+  make container_refresh() ALSO fire POV's existing widget-reload ping
+  UpdateLibrary(video,special://skin/foo) -- the standard no-op
+  library-scan signal AF3/TMDbHelper widgets listen for -- so home widgets
+  re-query right away. Self-tested against real POV source (all 3 POV
+  edits apply, compile, idempotent). (The earlier "Continue Watching shows
+  only 1 movie" report is now resolved on the user's device -- the
+  widget_limit=20 widget shows all in-progress movies.)
+
 v0.2.95
 - AF3 Discover is now UNIFIED: movies AND tv shows together, ranked by
   popularity. Empty (nothing typed) -> trending movies+tv mixed; typed ->
