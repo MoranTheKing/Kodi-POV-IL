@@ -12,16 +12,21 @@
 # merge+sort+render path -- a minimal, surgical change instead of a whole
 # parallel builder.
 #
-# Two edits, both exact-string, marker-gated, idempotent, atomic, .pyc
-# invalidated, re-applied each boot (so a POV self-update can't strip it):
+# Three edits, all exact-string, marker-gated, idempotent, atomic, .pyc
+# invalidated, re-applied each boot (so a POV self-update can't strip them):
 #   1) resources/lib/indexers/tmdb_api.py: add tmdb_search_multi(query) and
 #      tmdb_trending_all(), each returning the TMDB results filtered to
 #      movie/tv (drops 'person'), mirroring the existing search functions'
 #      caching exactly.
 #   2) resources/lib/menus/tmdb.py build_tmdb_list(): branch on the params
-#      so action=search_multi&query=... uses tmdb_search_multi, and
-#      action=trending_all uses tmdb_trending_all; otherwise unchanged
-#      (list_details). Everything downstream (merge/sort/render) is reused.
+#      so action=search_multi&query=... uses tmdb_search_multi (or trending
+#      when the query is empty); otherwise unchanged (list_details).
+#      Everything downstream (merge/sort/render) is reused.
+#   3) resources/lib/modules/kodi_utils.py container_refresh(): ALSO fire
+#      the widget-reload ping (UpdateLibrary(video,special://skin/foo)) so
+#      AF3's HOME widgets re-query after clear-progress / mark-watched --
+#      which otherwise only showed after a manual skin reload (uses its own
+#      marker so it applies independently of edits 1/2).
 #
 # Safe no-op if POV isn't installed or was refactored away from the anchors.
 
@@ -41,8 +46,10 @@ except Exception:
 POV_ADDON_ID = 'plugin.video.pov'
 TMDB_API_REL = 'resources/lib/indexers/tmdb_api.py'
 TMDB_MENU_REL = 'resources/lib/menus/tmdb.py'
+KODI_UTILS_REL = 'resources/lib/modules/kodi_utils.py'
 
 MARKER = '# AI_SUBS_POV_COMBINED_DISCOVER_v1'
+MARKER_REFRESH = '# AI_SUBS_POV_WIDGET_REFRESH_v1'
 
 # --- edit 1: tmdb_api.py -- add the two data functions after the existing
 #     tmdb_movies_search (exact-string anchor; both funcs reuse base_url,
@@ -96,6 +103,30 @@ _MENU_REPLACEMENT = (
     "\telse:\n"
     "\t\tresults = tmdb_api.list_details(list_id)\n")
 
+# --- edit 3: kodi_utils.py container_refresh() -- ALSO fire the AF3/
+#     TMDbHelper widget-reload signal so HOME widgets re-query after a
+#     watched/progress change. POV's clear-progress + mark-watched (and
+#     several others) all funnel through container_refresh(), which today
+#     only does Container.Refresh -- that updates POV's own focused list
+#     but NOT AF3's home widgets, so on AF3 the change shows only after a
+#     manual skin reload (FENtastic's widgets re-run the raw POV path on
+#     Container.Refresh, which is why it works there). POV already ships
+#     the right helper (widget_refresh -> UpdateLibrary(video,
+#     special://skin/foo), the standard no-op library-scan ping that AF3 /
+#     TMDbHelper widgets listen for); we just make container_refresh fire
+#     it too. Exact-string, marker-gated (separate marker so it applies
+#     even on a POV that lacks the tmdb.py anchors), idempotent.
+_REFRESH_ANCHOR = (
+    "def container_refresh():\n"
+    "\treturn execute_builtin('Container.Refresh')\n")
+_REFRESH_REPLACEMENT = (
+    "def container_refresh():\n"
+    "\texecute_builtin('Container.Refresh')\n"
+    "\t# AF3/TMDbHelper home widgets don't reload on Container.Refresh "
+    "alone;\n"
+    "\t# this ping makes them re-query (no-op for the library).\n"
+    "\treturn execute_builtin('UpdateLibrary(video,special://skin/foo)')\n")
+
 
 def _log(msg, level='INFO'):
     if kodi_utils is None:
@@ -129,7 +160,7 @@ def _invalidate_pyc(py_path):
                 pass
 
 
-def _patch_one(path, anchor, make_new, label):
+def _patch_one(path, anchor, make_new, label, marker=MARKER):
     """Apply one exact-string edit. make_new(text)->new_text. Returns
     'patched' | 'already_patched' | 'unmatched' | 'read_failed' |
     'write_failed'."""
@@ -140,7 +171,7 @@ def _patch_one(path, anchor, make_new, label):
         _log('{0}: read failed: {1}'.format(label, e), level='WARNING')
         return 'read_failed'
 
-    if MARKER in text:
+    if marker in text:
         return 'already_patched'
     if anchor not in text:
         _log('{0}: anchor not found -- POV may have changed; skipping'
@@ -152,7 +183,7 @@ def _patch_one(path, anchor, make_new, label):
         return 'unmatched'
     # stamp marker on its own line at the very top (after any shebang/coding
     # is unnecessary here; these files start with imports).
-    new_text = MARKER + '\n' + new_text
+    new_text = marker + '\n' + new_text
 
     tmp = path + '.aitmp'
     try:
@@ -197,6 +228,18 @@ def ensure_patched():
         results.append('menu=' + st)
     else:
         results.append('menu=no_file')
+
+    # edit 3: make container_refresh() also reload home widgets, so
+    # clear-progress / mark-watched show up on AF3 without a skin reload.
+    ku_path = os.path.join(base, *KODI_UTILS_REL.split('/'))
+    if os.path.isfile(ku_path):
+        st = _patch_one(
+            ku_path, _REFRESH_ANCHOR,
+            lambda t: t.replace(_REFRESH_ANCHOR, _REFRESH_REPLACEMENT, 1),
+            'kodi_utils.py(container_refresh)', marker=MARKER_REFRESH)
+        results.append('refresh=' + st)
+    else:
+        results.append('refresh=no_file')
 
     summary = ', '.join(results)
     if any('=patched' in r for r in results):
