@@ -28,7 +28,7 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-05-31-pov-home-v17-rollback'
+PATCH_VERSION = '2026-05-31-pov-home-v14'
 AF3_CE_VERSION = '6.3.2.9'
 # AF3's bundled TMDbHelper 6.15.6 imports jurialmunkey.ftools, which only
 # exists from script.module.jurialmunkey 0.2.35. Users who switched to AF3
