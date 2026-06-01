@@ -1,3 +1,11 @@
+v0.2.110
+- Rebranded the remaining legacy Real-Debrid/KODI artwork in the build.
+- Existing users now receive the POV IL APK-style icon for the startup
+  splash, FENtastic top-left build logo, POV home tile and both Wizard
+  tiles (install wizard + quick update).
+- The branding sync is limited to those controlled build assets so it does
+  not overwrite unrelated custom home icons.
+
 v0.2.109
 - Favourites personal-tile self-heal now respects intentional user deletion.
   Once the shipped personal tiles have existed in favourites.xml, we mark

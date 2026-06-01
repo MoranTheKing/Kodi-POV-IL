@@ -496,10 +496,37 @@ def _maybe_install_build_icons():
             kodi_utils.log(
                 'build_icons_patcher: installed {0}'.format(
                     ', '.join(result['installed'])), level='INFO')
+        if isinstance(result, dict) and result.get('updated'):
+            kodi_utils.log(
+                'build_icons_patcher: updated {0}'.format(
+                    ', '.join(result['updated'])), level='INFO')
     except Exception as e:
         try:
             kodi_utils.log(
                 'build_icons_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_brand_assets():
+    """Replace legacy Real-Debrid/KODI build branding with POV IL branding."""
+    try:
+        from resources.lib import brand_assets_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        result = brand_assets_patcher.ensure_patched()
+        if isinstance(result, dict):
+            updated = [k for k, v in result.items() if v == 'updated']
+            if updated:
+                kodi_utils.log(
+                    'brand_assets_patcher: updated {0}'.format(
+                        ', '.join(updated)), level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'brand_assets_patcher failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
@@ -1778,6 +1805,7 @@ def main():
         # IMPORTANT ORDER: install genre icons + heal POV's genre navigator
         # rows + patch navigator.py BEFORE _maybe_patch_af3_home(), because
         # AF3's home rebuild renders the genre shortcut-folder rows.
+        _maybe_patch_brand_assets()
         _maybe_install_build_icons()
         _maybe_patch_pov_genre_icons()
         _maybe_patch_pov_genre_menu_icons()

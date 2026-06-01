@@ -13,9 +13,9 @@
 # subtree, and on every Kodi startup it copies any that are
 # missing from the live media/ directory.
 #
-# Defensive: only writes files that don't exist on disk. Never
-# overwrites pre-existing icons (so user-installed custom icons
-# survive). Logs each install.
+# Defensive by default: only writes files that don't exist on disk.
+# A tiny allow-list is force-synced for build branding assets that
+# must replace the legacy Real-Debrid/KODI artwork on existing installs.
 
 import os
 import shutil
@@ -29,6 +29,12 @@ try:
     from resources.lib import kodi_utils
 except Exception:
     kodi_utils = None
+
+FORCE_SYNC = set([
+    'POV/Logo_POV.png',
+    'Wizard/fast_update.png',
+    'Wizard/wizard.png',
+])
 
 
 def _log(msg, level='INFO'):
@@ -69,6 +75,18 @@ def _walk_pngs(root):
             yield full, rel
 
 
+def _same_file(src, dst):
+    try:
+        if not os.path.isfile(dst):
+            return False
+        if os.path.getsize(src) != os.path.getsize(dst):
+            return False
+        with open(src, 'rb') as a, open(dst, 'rb') as b:
+            return a.read() == b.read()
+    except Exception:
+        return False
+
+
 def ensure_installed():
     """Copy each bundled PNG into the live media/build_icons/
     subtree, skipping files that already exist there. Returns
@@ -82,10 +100,13 @@ def ensure_installed():
     if not dst_root:
         return {'_status': 'no_kodi'}
 
-    installed, skipped = [], []
+    installed, updated, skipped = [], [], []
     for src, rel in _walk_pngs(src_root):
+        rel_key = rel.replace(os.sep, '/')
         dst = os.path.join(dst_root, rel)
-        if os.path.isfile(dst):
+        force = rel_key in FORCE_SYNC
+        existed = os.path.isfile(dst)
+        if existed and (not force or _same_file(src, dst)):
             skipped.append(rel)
             continue
         dst_dir = os.path.dirname(dst)
@@ -95,8 +116,12 @@ def ensure_installed():
             tmp = dst + '.aitmp'
             shutil.copyfile(src, tmp)
             os.replace(tmp, dst)
-            installed.append(rel)
-            _log('installed {0}'.format(rel), level='INFO')
+            if force and existed:
+                updated.append(rel)
+                _log('updated {0}'.format(rel), level='INFO')
+            else:
+                installed.append(rel)
+                _log('installed {0}'.format(rel), level='INFO')
         except OSError as e:
             _log('failed {0}: {1}'.format(rel, e), level='WARNING')
             try:
@@ -104,6 +129,6 @@ def ensure_installed():
             except (OSError, UnboundLocalError):
                 pass
 
-    if not installed:
+    if not installed and not updated:
         _log('all bundled icons already on disk', level='DEBUG')
-    return {'installed': installed, 'skipped': skipped}
+    return {'installed': installed, 'updated': updated, 'skipped': skipped}
