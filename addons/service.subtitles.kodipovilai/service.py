@@ -321,6 +321,31 @@ def _maybe_patch_fentastic_widgets():
             pass
 
 
+def _maybe_patch_fentastic_search():
+    """Repoint FENtastic's home SEARCH button to POV's search node so
+    pressing search lands directly on SEARCH: Movies / TV Shows / People
+    / Movies Collection, instead of FENtastic's own search dialog. Only
+    relevant on skin.fentastic; on other skins Home.xml is absent and the
+    patcher is a no-op. Idempotent + self-healing each startup."""
+    try:
+        from resources.lib import fentastic_search_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = fentastic_search_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'fentastic_search_patcher: home search now opens POV '
+                'search node', level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'fentastic_search_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_install_build_icons():
     """Install the bundled TMDB-branded home-tile icons under
     media/build_icons/ so the favourites_xml_patcher can point at
@@ -1617,6 +1642,7 @@ def main():
     # customizations are left alone.
     _maybe_patch_pov_personal_area()
     _maybe_patch_fentastic_widgets()
+    _maybe_patch_fentastic_search()
     # (build_icons + genre heal + genre menu-icon patch already ran
     # above, before _maybe_patch_af3_home, so AF3's rebuild repaints the
     # healed genre rows in the same session.)

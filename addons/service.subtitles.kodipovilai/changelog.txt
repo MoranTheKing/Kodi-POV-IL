@@ -1,3 +1,18 @@
+v0.2.100
+- FENtastic ("simple" skin): the home SEARCH button now opens POV's
+  search node directly (SEARCH: Movies / TV Shows / People / Movies
+  Collection), instead of FENtastic's own search dialog. Before, reaching
+  POV search meant drilling manually through Search -> video add-ons ->
+  POV -> Search; now the button lands there in one press, matching how
+  search behaves on the AF3 skin. New self-healing patcher
+  (fentastic_search_patcher) repoints all three search-icon variants in
+  Home.xml (controls 804/805/806, gated by skin settings) to
+  ActivateWindow(videos,plugin://plugin.video.pov/?mode=navigator.search,
+  return). Idempotent, reversible, shape-tolerant, and a no-op on non-
+  FENtastic skins. Self-tested against the shipped Home.xml: all three
+  onclicks repointed, idempotent on rerun, cleanly reversible, no other
+  bytes touched.
+
 v0.2.99
 - AF3 home widgets now SURVIVE updates: customizing your widget rows
   (removing "My Movies & Shows", reordering, adding your own) is no longer
