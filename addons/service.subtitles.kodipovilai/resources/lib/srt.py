@@ -192,10 +192,23 @@ def fix_rtl_punctuation(text, mode=None):
 _TRAILING_PUNCT_RE = re.compile(
     r'^(?P<dash>-\s+)?'
     r'(?P<open_tags>(?:<[a-zA-Z!][^>]*>)*)'
-    r'(?P<rest>[' + _HEB_LETTER + r'][^\n]*?[' + _HEB_LETTER + r'])'
+    r'(?P<rest>(?=[^\n]*[' + _HEB_LETTER + r'])[^\n]*?[^'
+    + _TRAILING_PUNCT_CHARS + r'\s])'
     r'(?P<trailing>[' + _TRAILING_PUNCT_CHARS + r']+)'
     r'(?P<close_tags>(?:</[a-zA-Z][^>]*>)*)\s*$'
 )
+_REVERSE_DASHED_LEADING_PUNCT_RE = re.compile(
+    r'^(?P<dash>-\s+)'
+    r'(?P<open_tags>(?:<[a-zA-Z!][^>]*>)*)'
+    r'(?P<leading>[' + _TRAILING_PUNCT_CHARS + r']+)'
+    r'(?P<rest>(?=[^\n]*[' + _HEB_LETTER + r'])[^\n]*?[^'
+    + _TRAILING_PUNCT_CHARS + r'\s])'
+    r'(?P<close_tags>(?:</[a-zA-Z][^>]*>)*)\s*$'
+)
+
+
+def _reverse_dash_suffix(dash):
+    return ' -' if dash else ''
 
 
 def _reverse_fix_one_text_line(line):
@@ -210,6 +223,14 @@ def _reverse_fix_one_text_line(line):
         stripped = stripped[:-1]
     if not stripped:
         return line
+    dashed_leading = _REVERSE_DASHED_LEADING_PUNCT_RE.match(stripped)
+    if dashed_leading:
+        open_tags = dashed_leading.group('open_tags') or ''
+        leading = dashed_leading.group('leading')
+        rest = dashed_leading.group('rest') or ''
+        close_tags = dashed_leading.group('close_tags') or ''
+        if rest:
+            return open_tags + leading + rest + close_tags + ' -'
     m = _TRAILING_PUNCT_RE.match(stripped)
     if not m:
         if stripped != line.strip():
@@ -226,8 +247,9 @@ def _reverse_fix_one_text_line(line):
     # the trailing one is redundant, drop it. Detection: rest
     # itself starts with punct (after the optional dash/tag prefix).
     if rest[0] in _TRAILING_PUNCT_CHARS:
-        return dash + open_tags + rest + close_tags
-    return dash + open_tags + trailing + rest + close_tags
+        return open_tags + rest + close_tags + _reverse_dash_suffix(dash)
+    return open_tags + trailing + rest + close_tags + \
+        _reverse_dash_suffix(dash)
 
 
 def parse_blocks(text):

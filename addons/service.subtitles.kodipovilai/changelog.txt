@@ -1,3 +1,15 @@
+v0.2.103
+- RTL reverse-mode dialogue dash fix: dashed dialogue lines now move the
+  leading "- " marker to the logical line end so Kodi renders the dash on
+  the right side, while preserving the existing reverse punctuation behavior.
+  Mixed Hebrew/English lines are now treated as RTL whenever they contain
+  Hebrew anywhere in the line, so punctuation is also fixed when the final
+  token is English or a number (for example: Hebrew text + Netflix.). The
+  post-processor still works line-by-line and does not swap stacked subtitle
+  line order. The prompt now explicitly tells the model not to swap physical
+  line order inside two-line entries. Bumped the RTL cache repair marker to
+  v4 so existing cached translations are reprocessed once.
+
 v0.2.102
 - Split the addon startup into managed-build mode and standalone mode.
   Standalone installs keep the AI subtitles / DarkSubs / Gemini integration,
