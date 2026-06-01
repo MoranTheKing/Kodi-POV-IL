@@ -631,12 +631,13 @@ def _maybe_patch_favourites_personal_tiles():
         return
     try:
         status = favourites_personal_tiles_patcher.ensure_patched()
-        if status in ('restored', 'fixed', 'restored_and_fixed'):
+        if status in ('restored', 'fixed', 'restored_and_fixed',
+                      'marked', 'marked_and_fixed'):
             kodi_utils.log(
                 'favourites_personal_tiles_patcher: {0}'.format(status),
                 level='INFO')
         elif status in ('no_kodi', 'no_favourites', 'no_fixture',
-                        'already_complete'):
+                        'already_complete', 'user_removed_tiles'):
             pass  # quiet steady-state
         else:
             kodi_utils.log(

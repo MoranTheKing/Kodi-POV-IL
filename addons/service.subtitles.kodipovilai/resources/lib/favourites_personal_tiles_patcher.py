@@ -63,11 +63,13 @@ PERSONAL_TILE_NAMES = (
     '[B]הסרטים שלי (POV)[/B]',
 )
 
-# Marker comment we write inside favourites.xml after a successful
-# restore. Lets a future iteration of this patcher detect "we touched
-# this once already; don't redo unnecessary work" without a separate
-# marker file in addon_data.
+# Marker comments written into favourites.xml. RESTORE_MARKER keeps
+# compatibility with earlier restores. SEEN_MARKER means "the build
+# already had these tiles at least once"; if the user deletes them after
+# that, we respect the deletion and do not bring them back on every boot.
 MARKER = '<!-- AI_SUBS_FAVOURITES_PERSONAL_TILES_v1 -->'
+SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_PERSONAL_TILES_SEEN_v2 -->'
+RESTORE_MARKERS = (MARKER, SEEN_MARKER)
 BROKEN_DEBRID_NOTICE_ACTION = (
     'RunPlugin("plugin://service.subtitles.kodipovilai/?'
     'action=open_pov_settings")')
@@ -145,6 +147,24 @@ def _fix_existing_debrid_notice_action(content):
     return fixed, fixed != content
 
 
+def _has_restore_marker(content):
+    return any(marker.encode('utf-8') in content
+               for marker in RESTORE_MARKERS)
+
+
+def _insert_marker(content):
+    if _has_restore_marker(content):
+        return content, False
+    closing_tag = b'</favourites>'
+    close_idx = content.rfind(closing_tag)
+    if close_idx == -1:
+        return content, False
+    marker_line = ('    ' + SEEN_MARKER + '\n').encode('utf-8')
+    return (
+        content[:close_idx] + marker_line + content[close_idx:],
+        True)
+
+
 def ensure_patched():
     """Returns one of:
     'no_kodi' | 'no_favourites' | 'no_fixture' | 'fixture_unreadable'
@@ -172,9 +192,23 @@ def ensure_patched():
              level='WARNING')
         return 'read_failed'
 
+    had_restore_marker = _has_restore_marker(content)
     content, fixed_existing = _fix_existing_debrid_notice_action(content)
     missing = _missing_tiles(content)
-    if not missing and not fixed_existing:
+    if missing and had_restore_marker:
+        if not fixed_existing:
+            return 'user_removed_tiles'
+        # A user may delete the tiles after receiving the broken-action
+        # version. Keep the deletion respected, but still persist the
+        # action fix if that old action exists elsewhere in favourites.
+        missing = ()
+
+    new_content = content
+    marker_added = False
+    if not missing:
+        new_content, marker_added = _insert_marker(new_content)
+
+    if not missing and not fixed_existing and not marker_added:
         return 'already_complete'
 
     try:
@@ -184,7 +218,6 @@ def ensure_patched():
         _log('fixture read failed: {0}'.format(e), level='WARNING')
         return 'fixture_unreadable'
 
-    new_content = content
     if missing:
         tiles_to_inject = []
         for name in missing:
@@ -205,7 +238,7 @@ def ensure_patched():
                  level='WARNING')
             return 'unparseable_fixture'
 
-        marker_line = ('    ' + MARKER + '\n').encode('utf-8')
+        marker_line = ('    ' + SEEN_MARKER + '\n').encode('utf-8')
         new_content = (
             new_content[:close_idx]
             + marker_line
@@ -232,8 +265,14 @@ def ensure_patched():
             len(missing), ', '.join(missing)), level='INFO')
     if fixed_existing:
         _log('fixed debrid notification settings tile action', level='INFO')
+    if marker_added:
+        _log('marked favourites personal tiles as seen', level='INFO')
     if missing and fixed_existing:
         return 'restored_and_fixed'
     if missing:
         return 'restored'
+    if marker_added and fixed_existing:
+        return 'marked_and_fixed'
+    if marker_added:
+        return 'marked'
     return 'fixed'

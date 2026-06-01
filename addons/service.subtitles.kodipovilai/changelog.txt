@@ -1,3 +1,13 @@
+v0.2.109
+- Favourites personal-tile self-heal now respects intentional user deletion.
+  Once the shipped personal tiles have existed in favourites.xml, we mark
+  that state. If the user later deletes those tiles manually, the AI addon
+  will not re-add them on the next Kodi startup.
+- The restore still works for the original build problem: when the Wizard
+  overwrites favourites.xml during a skin switch, the marker is lost with
+  the overwritten file, so the build can still restore missing personal
+  tiles after that accidental wipe.
+
 v0.2.108
 - Replaced the debrid-notification shortcut target with a dedicated Hebrew
   settings dialog instead of opening POV's generic Addon.OpenSettings screen,
