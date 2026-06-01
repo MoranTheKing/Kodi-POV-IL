@@ -1,0 +1,255 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Kodi POV IL AI Subtitles\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+# Category: Gemini API
+msgctxt "#32100"
+msgid "Gemini API"
+msgstr "Gemini API"
+
+msgctxt "#32101"
+msgid "Get a free Gemini API key (opens browser)"
+msgstr "Get a free Gemini API key (opens browser)"
+
+msgctxt "#32102"
+msgid "Gemini API Key"
+msgstr "Gemini API Key"
+
+msgctxt "#32103"
+msgid "Stored in plain text"
+msgstr "Stored in plain text"
+
+msgctxt "#32104"
+msgid "Do not share your Kodi backup with anyone. Revoke and re-create the key in AI Studio if you suspect it was leaked."
+msgstr "Do not share your Kodi backup with anyone. Revoke and re-create the key in AI Studio if you suspect it was leaked."
+
+msgctxt "#32105"
+msgid "Test connection"
+msgstr "Test connection"
+
+msgctxt "#32106"
+msgid "Pair with QR (scan from another device)"
+msgstr "Pair with QR (scan from another device)"
+
+msgctxt "#32107"
+msgid "Test DarkSubs integration"
+msgstr "Test DarkSubs integration"
+
+msgctxt "#32108"
+msgid "Translate via AI even when DarkSubs auto_translate is OFF"
+msgstr "Translate via AI even when DarkSubs auto_translate is OFF"
+
+# Category: Translation
+msgctxt "#32200"
+msgid "Translation"
+msgstr "Translation"
+
+msgctxt "#32201"
+msgid "Model"
+msgstr "Model"
+
+msgctxt "#32210"
+msgid "Source language priority"
+msgstr "Source language priority"
+
+msgctxt "#32211"
+msgid "English"
+msgstr "English"
+
+msgctxt "#32212"
+msgid "Recommended primary source - best quality after translation"
+msgstr "Recommended primary source - best quality after translation"
+
+msgctxt "#32213"
+msgid "Spanish"
+msgstr "Spanish"
+
+msgctxt "#32214"
+msgid "German"
+msgstr "German"
+
+msgctxt "#32215"
+msgid "French"
+msgstr "French"
+
+msgctxt "#32216"
+msgid "Portuguese"
+msgstr "Portuguese"
+
+msgctxt "#32220"
+msgid "Behavior"
+msgstr "Behavior"
+
+msgctxt "#32221"
+msgid "Skip translation if Hebrew subs already exist"
+msgstr "Skip translation if Hebrew subs already exist"
+
+# Category: Cache
+msgctxt "#32300"
+msgid "Cache"
+msgstr "Cache"
+
+msgctxt "#32301"
+msgid "Maximum cache size (MB)"
+msgstr "Maximum cache size (MB)"
+
+msgctxt "#32302"
+msgid "{} MB"
+msgstr "{} MB"
+
+msgctxt "#32303"
+msgid "Delete entries not accessed for N days"
+msgstr "Delete entries not accessed for N days"
+
+msgctxt "#32304"
+msgid "{} days"
+msgstr "{} days"
+
+msgctxt "#32305"
+msgid "Clear cache now"
+msgstr "Clear cache now"
+
+msgctxt "#32306"
+msgid "Clear Kodi temp subtitle files now"
+msgstr "Clear Kodi temp subtitle files now"
+
+# Category: Advanced
+msgctxt "#32400"
+msgid "Advanced"
+msgstr "Advanced"
+
+msgctxt "#32401"
+msgid "Log level"
+msgstr "Log level"
+
+msgctxt "#32402"
+msgid "SRT lines per chunk"
+msgstr "SRT lines per chunk"
+
+msgctxt "#32403"
+msgid "Model temperature"
+msgstr "Model temperature"
+
+msgctxt "#32404"
+msgid "Concurrent translation requests"
+msgstr "Concurrent translation requests"
+
+msgctxt "#32405"
+msgid "Fast subtitles"
+msgstr "Fast subtitles"
+
+msgctxt "#32406"
+msgid "English appears in seconds, swaps to Hebrew gradually as translation progresses."
+msgstr "English appears in seconds, swaps to Hebrew gradually as translation progresses."
+
+# Runtime messages
+msgctxt "#33000"
+msgid "AI Hebrew (translated from {0})"
+msgstr "AI Hebrew (translated from {0})"
+
+msgctxt "#33001"
+msgid "Translating chunk {0}/{1}..."
+msgstr "Translating chunk {0}/{1}..."
+
+msgctxt "#33002"
+msgid "No API key configured. Open Settings to add one."
+msgstr "No API key configured. Open Settings to add one."
+
+msgctxt "#33003"
+msgid "Connection successful. Model: {0}"
+msgstr "Connection successful. Model: {0}"
+
+msgctxt "#33004"
+msgid "Connection failed: {0}"
+msgstr "Connection failed: {0}"
+
+msgctxt "#33005"
+msgid "Daily quota exceeded. Try again after midnight UTC."
+msgstr "Daily quota exceeded. Try again after midnight UTC."
+
+msgctxt "#33006"
+msgid "No source subtitles found in supported languages."
+msgstr "No source subtitles found in supported languages."
+
+msgctxt "#33007"
+msgid "Cache cleared. {0} files removed."
+msgstr "Cache cleared. {0} files removed."
+
+msgctxt "#33008"
+msgid "Translation failed: {0}"
+msgstr "Translation failed: {0}"
+
+# Model dropdown labels. MUST be string IDs (Kodi parses literal
+# label="3.1 Flash Lite" as integer 3 -> built-in string "Videos").
+# MUST also be in the 30000-32999 addon range -- anything 33000+ is
+# reserved for Kodi built-ins, so Kodi ignores our po entry and
+# falls back to the built-in lookup (same Videos/Music bug). The
+# first attempt at this fix used 33010-33013 and reproduced the bug
+# exactly. Moved into the gap inside the Translation category.
+msgctxt "#32250"
+msgid "Wyzie Subs (optional - skip if you have DarkSubs)"
+msgstr "Wyzie Subs (optional - skip if you have DarkSubs)"
+
+msgctxt "#32251"
+msgid "Claim a free Wyzie API key (opens browser)"
+msgstr "Claim a free Wyzie API key (opens browser)"
+
+msgctxt "#32252"
+msgid "Wyzie API Key (optional)"
+msgstr "Wyzie API Key (optional)"
+
+msgctxt "#32253"
+msgid "Optional. If you have DarkSubs installed, you do not need Wyzie at all -- clicking any non-Hebrew subtitle in DarkSubs will trigger AI translation automatically. Wyzie is only useful if you have NO other subtitle addon and want a one-click online source from inside this addon. 1000 requests/day on the free tier at store.wyzie.io/redeem."
+msgstr "Optional. If you have DarkSubs installed, you do not need Wyzie at all -- clicking any non-Hebrew subtitle in DarkSubs will trigger AI translation automatically. Wyzie is only useful if you have NO other subtitle addon and want a one-click online source from inside this addon. 1000 requests/day on the free tier at store.wyzie.io/redeem."
+
+msgctxt "#32230"
+msgid "3.1 Flash Lite (recommended, 500/day)"
+msgstr "3.1 Flash Lite (recommended, 500/day)"
+
+msgctxt "#32231"
+msgid "3.1 Flash (premium, 250/day)"
+msgstr "3.1 Flash (premium, 250/day)"
+
+msgctxt "#32232"
+msgid "2.5 Flash Lite (fallback)"
+msgstr "2.5 Flash Lite (fallback)"
+
+msgctxt "#32233"
+msgid "2.5 Flash (fallback)"
+msgstr "2.5 Flash (fallback)"
+
+msgctxt "#32254"
+msgid "Test Wyzie connection"
+msgstr ""
+
+msgctxt "#32260"
+msgid "TMDB (for gender-aware translation)"
+msgstr ""
+
+msgctxt "#32261"
+msgid "How to connect TMDB (required for gender-aware translation)"
+msgstr ""
+
+msgctxt "#32222"
+msgid "RTL punctuation fix direction"
+msgstr "RTL punctuation fix direction"
+
+msgctxt "#32223"
+msgid "How to handle Hebrew end-of-sentence punctuation. Default 'reverse' moves trailing punct to the line start -- correct for Kodi setups that render source order without BiDi reorder (the observed default behaviour across Windows / Android / FENtastic). 'legacy' is the previous default (move leading punct to end) -- only use it if 'reverse' produces wrong output on your particular setup. 'off' disables the post-processor entirely."
+msgstr ""
+
+msgctxt "#32224"
+msgid "Legacy (move punct to end - old default, usually wrong)"
+msgstr "Legacy (move to end - old default, usually wrong)"
+
+msgctxt "#32225"
+msgid "Reverse (move punct to start - default, correct on most setups)"
+msgstr "Reverse (move to start - default, correct on most setups)"
+
+msgctxt "#32226"
+msgid "Off (no punctuation processing)"
+msgstr "Off (no punctuation processing)"

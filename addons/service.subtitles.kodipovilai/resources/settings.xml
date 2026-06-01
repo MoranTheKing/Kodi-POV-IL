@@ -1,0 +1,354 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings version="1">
+  <section id="kodipovilai">
+    <category id="api" label="32100"> <!-- Gemini API -->
+      <group id="key">
+        <setting id="info_key" type="action" label="32101"> <!-- Get a free Gemini API key -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32101</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=open_aistudio)</data>
+        </setting>
+        <setting id="qr_pair" type="action" label="32106"> <!-- Pair via QR or typed, same flow as Connect Services -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32106</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=connect_gemini)</data>
+        </setting>
+        <setting id="api_key" type="string" label="32102" help="32104"> <!-- Gemini API Key + leak-warning help -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="edit" format="string">
+            <heading>32102</heading>
+          </control>
+        </setting>
+        <setting id="test_connection" type="action" label="32105"> <!-- Test connection -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32105</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=test_connection)</data>
+        </setting>
+        <setting id="force_ai_when_auto_translate_off" type="boolean" label="32108"> <!-- Translate via AI even when DarkSubs auto_translate is OFF -->
+          <level>0</level>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
+        <setting id="darksubs_status" type="action" label="32107"> <!-- Test DarkSubs integration -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32107</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=darksubs_status)</data>
+        </setting>
+      </group>
+    </category>
+
+    <category id="translation" label="32200"> <!-- Translation -->
+      <group id="model">
+        <setting id="model" type="string" label="32201"> <!-- Model -->
+          <level>0</level>
+          <default>gemini-3.1-flash-lite</default>
+          <constraints>
+            <options>
+              <!-- IMPORTANT: the `label` attribute MUST be a string
+                   ID, not literal text. Two separate gotchas:
+                   1. Kodi parses non-numeric labels by taking the
+                      leading integer, so label="3.1 Flash Lite" ->
+                      ID 3 -> Kodi built-in #3 "Videos".
+                   2. The ID MUST be in 30000-32999 (addon range).
+                      Anything 33000+ is reserved for Kodi's own
+                      strings, so even a valid po entry there gets
+                      ignored and Kodi falls back to the built-in
+                      lookup (giving us the same Videos/Music bug). -->
+              <option label="32230">gemini-3.1-flash-lite</option>
+              <option label="32231">gemini-3.1-flash</option>
+              <option label="32232">gemini-2.5-flash-lite</option>
+              <option label="32233">gemini-2.5-flash</option>
+            </options>
+          </constraints>
+          <control type="list" format="string">
+            <heading>32201</heading>
+          </control>
+        </setting>
+      </group>
+
+      <group id="sources" label="32210"> <!-- Source language priority -->
+        <setting id="src_english" type="boolean" label="32211" help="32212"> <!-- English -->
+          <level>0</level>
+          <default>true</default>
+        </setting>
+        <setting id="src_spanish" type="boolean" label="32213">
+          <level>0</level>
+          <default>true</default>
+        </setting>
+        <setting id="src_german" type="boolean" label="32214">
+          <level>0</level>
+          <default>false</default>
+        </setting>
+        <setting id="src_french" type="boolean" label="32215">
+          <level>0</level>
+          <default>false</default>
+        </setting>
+        <setting id="src_portuguese" type="boolean" label="32216">
+          <level>0</level>
+          <default>false</default>
+        </setting>
+      </group>
+
+      <group id="policy" label="32220"> <!-- Behavior -->
+        <setting id="skip_if_hebrew" type="boolean" label="32221"> <!-- Skip translation if real Hebrew subs exist -->
+          <level>0</level>
+          <default>true</default>
+        </setting>
+        <setting id="rtl_punct_mode" type="string" label="32222" help="32223"> <!-- RTL punctuation fix direction -->
+          <level>0</level>
+          <default>reverse</default>
+          <constraints>
+            <options>
+              <option label="32225">reverse</option>
+              <option label="32224">legacy</option>
+              <option label="32226">off</option>
+            </options>
+          </constraints>
+          <control type="list" format="string">
+            <heading>32222</heading>
+          </control>
+        </setting>
+      </group>
+
+      <group id="wyzie" label="32250"> <!-- Wyzie Subs (online source) -->
+        <setting id="info_wyzie_key" type="action" label="32251"> <!-- Claim a free Wyzie key -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32251</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=open_wyzie_signup)</data>
+        </setting>
+        <setting id="wyzie_api_key" type="string" label="32252" help="32253"> <!-- Wyzie API key + help -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="edit" format="string">
+            <heading>32252</heading>
+          </control>
+        </setting>
+        <setting id="test_wyzie_connection" type="action" label="32254"> <!-- Test Wyzie connection -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32254</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=test_wyzie_connection)</data>
+        </setting>
+      </group>
+
+      <group id="tmdb_notice" label="32260"> <!-- TMDB (for gender-aware translation) -->
+        <setting id="info_tmdb_notice" type="action" label="32261"> <!-- Static notice text + open services screen -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32261</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=open_tmdb_notice)</data>
+        </setting>
+      </group>
+    </category>
+
+    <category id="cache" label="32300"> <!-- Cache -->
+      <group id="limits">
+        <setting id="cache_size_mb" type="integer" label="32301"> <!-- Max cache size (MB) -->
+          <level>0</level>
+          <default>200</default>
+          <constraints>
+            <minimum>10</minimum>
+            <maximum>2000</maximum>
+            <step>10</step>
+          </constraints>
+          <control type="slider" format="integer">
+            <popup>true</popup>
+            <formatlabel>32302</formatlabel> <!-- {} MB -->
+          </control>
+        </setting>
+        <setting id="cache_ttl_days" type="integer" label="32303"> <!-- Auto-delete after N days no access -->
+          <level>0</level>
+          <default>180</default>
+          <constraints>
+            <minimum>7</minimum>
+            <maximum>730</maximum>
+            <step>1</step>
+          </constraints>
+          <control type="slider" format="integer">
+            <popup>true</popup>
+            <formatlabel>32304</formatlabel> <!-- {} days -->
+          </control>
+        </setting>
+        <!-- Both action buttons need an explicit <control type="button"
+             format="action"> block. Without it some Kodi 21 builds
+             silently drop action settings even when label + data are
+             present. The other action buttons in this file (info_key
+             etc.) also get this treatment for consistency. -->
+        <setting id="clear_cache" type="action" label="32305"> <!-- Clear cache now -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32305</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=clear_cache)</data>
+        </setting>
+        <setting id="purge_temp" type="action" label="32306"> <!-- Clear Kodi temp subtitle files -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32306</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=purge_temp)</data>
+        </setting>
+        <!-- Hidden marker: which TEMP_PURGE_VERSION has run on this profile. -->
+        <setting id="_temp_purge_done" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default></default>
+        </setting>
+        <!-- Hidden marker: which CACHE_RTL_FIX_VERSION has run. -->
+        <setting id="_rtl_fix_done" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default></default>
+        </setting>
+        <!-- Hidden marker for DarkSubs hook bookkeeping (reserved -- the
+             patcher itself is idempotent and doesn't need a flag, but
+             we may use this for telemetry / migrations later). -->
+        <setting id="_darksubs_takeover_done" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default></default>
+        </setting>
+        <setting id="_darksubs_hook_last_fire" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default></default>
+        </setting>
+        <setting id="_darksubs_hook_last_outcome" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default></default>
+        </setting>
+        <!-- Hidden: daily Gemini Flash Lite request counter. Reset
+             at UTC midnight by gemini_quota.note_request. -->
+        <setting id="_usage_count" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default>0</default>
+        </setting>
+        <!-- Hidden: UTC date (YYYY-MM-DD) of the counter above. -->
+        <setting id="_usage_date_utc" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default></default>
+        </setting>
+        <!-- Hidden marker: AF3 first-launch dialog has been shown
+             (and the user picked something other than 'remind me
+             later' / ESC). Read by af3_first_launch.py. -->
+        <setting id="af3_first_launch_dialog_done" type="boolean" label="30000" visible="false">
+          <level>3</level>
+          <default>false</default>
+        </setting>
+      </group>
+    </category>
+
+    <category id="advanced" label="32400"> <!-- Advanced -->
+      <group id="debug">
+        <setting id="log_level" type="string" label="32401"> <!-- Log level -->
+          <level>1</level>
+          <default>INFO</default>
+          <constraints>
+            <options>
+              <option>DEBUG</option>
+              <option>INFO</option>
+              <option>WARNING</option>
+              <option>ERROR</option>
+            </options>
+          </constraints>
+          <control type="list" format="string">
+            <heading>32401</heading>
+          </control>
+        </setting>
+        <setting id="chunk_lines" type="integer" label="32402"> <!-- Lines per translation request -->
+          <level>2</level>
+          <default>100</default>
+          <constraints>
+            <minimum>30</minimum>
+            <maximum>250</maximum>
+            <step>10</step>
+          </constraints>
+          <control type="slider" format="integer">
+            <popup>true</popup>
+          </control>
+        </setting>
+        <setting id="temperature" type="number" label="32403"> <!-- Model temperature -->
+          <level>2</level>
+          <default>0.2</default>
+          <constraints>
+            <minimum>0.0</minimum>
+            <maximum>1.0</maximum>
+            <step>0.05</step>
+          </constraints>
+          <control type="slider" format="number">
+            <popup>true</popup>
+          </control>
+        </setting>
+        <setting id="parallel_chunks" type="integer" label="32404"> <!-- Concurrent translation requests -->
+          <level>2</level>
+          <default>3</default>
+          <constraints>
+            <minimum>1</minimum>
+            <maximum>8</maximum>
+            <step>1</step>
+          </constraints>
+          <control type="slider" format="integer">
+            <popup>true</popup>
+          </control>
+        </setting>
+        <setting id="fast_first_chunk" type="boolean"
+                 label="32405" help="32406"> <!-- Fast subtitles -->
+          <level>2</level>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
+      </group>
+    </category>
+  </section>
+</settings>

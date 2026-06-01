@@ -1,0 +1,8 @@
+upstream/
+work/
+zips/
+*.log
+
+# Python bytecode (e.g. from local py_compile verification runs)
+__pycache__/
+*.pyc

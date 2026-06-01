@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kodi POV IL - LG TV (webOS)</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 32px; background: #101820; color: #f6f1df; }
+    a { color: #ffd166; }
+    .card { max-width: 760px; padding: 24px; border: 1px solid #34495e; border-radius: 16px; background: #172635; }
+    .primary { display: inline-block; padding: 12px 24px; margin: 16px 0; background: #ffd166; color: #101820; border-radius: 10px; font-size: 1.1rem; font-weight: bold; text-decoration: none; }
+    .muted { color: #b7c4cf; font-size: 0.95rem; }
+    code { direction: ltr; display: inline-block; background: #0b1118; padding: 3px 6px; border-radius: 6px; }
+    .step { margin: 8px 0; }
+    .warn { background: #2d1f0b; border: 1px solid #6a4a0a; border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Kodi POV IL — LG TV (webOS)</h1>
+    <p>קובץ IPK ל־LG smart TVs עם webOS 5+ ‏(2019 והלאה). מבוסס על Kodi 21.0 הרשמי ל־webOS עם ה־wizard וה־FENtastic build כבר מוטמעים.</p>
+
+    <a class="primary" href="https://github.com/MoranTheKing/Kodi-POV-IL/releases/latest/download/Kodi-POV-IL-webos.ipk">הורד IPK — גרסה אחרונה</a>
+
+    <div class="warn">
+      <strong>⚠️ דורש developer mode על ה־TV.</strong> LG חוסמת התקנה ישירה ב־TVs רגילים. צריך לפתוח חשבון מפתח אצל LG, להפעיל developer mode על הטלוויזיה, ולהשתמש ב־<code>ares-cli</code> מהמחשב כדי להעלות את ה־IPK. תהליך חד־פעמי של ~15 דקות.
+    </div>
+
+    <h2>איך מתקינים</h2>
+    <p class="step">1. פתח חשבון מפתח חינמי ב־<a href="https://webostv.developer.lge.com/" target="_blank">webostv.developer.lge.com</a>.</p>
+    <p class="step">2. ב־TV: התקן את ה־app <strong>"Developer Mode"</strong> מה־LG Content Store, פתח, התחבר עם החשבון, והפעל <code>Dev Mode Status: ON</code>. רשום את ה־IP שמוצג.</p>
+    <p class="step">3. במחשב (Linux / macOS / Windows עם Node.js): התקן את ה־CLI:
+      <br><code>npm install -g @webosose/ares-cli</code></p>
+    <p class="step">4. הגדר את ה־TV ב־CLI:
+      <br><code>ares-setup-device</code>
+      <br>(בחר Add, שם <code>MyTV</code>, IP מהשלב הקודם, פורט <code>9922</code>, password <code>alpine</code>).</p>
+    <p class="step">5. הורד את ה־IPK מהקישור הצהוב למעלה, ואז:
+      <br><code>ares-install -d MyTV Kodi-POV-IL-webos.ipk</code></p>
+    <p class="step">6. אחרי ההתקנה האפליקציה <strong>"Kodi POV IL"</strong> תופיע במגירת האפליקציות של ה־TV.</p>
+    <p class="step">7. בהפעלה הראשונה Kodi עולה → ה־wizard מתחיל אוטומטית להוריד ולהתקין את הבילד (~דקה־שתיים) → Kodi נסגר ונפתח עם POV+FENtastic.</p>
+
+    <h2>הערות חשובות</h2>
+    <p class="muted">• Developer mode פוקע אחרי 50 שעות עד שתאריך אותו דרך ה־app — לא נורא, רק לחיצה אחת.</p>
+    <p class="muted">• אין אפשרות להפיץ דרך ה־LG Content Store הרשמי בלי תהליך publishing יקר. הזרימה הזו (sideload דרך dev mode) היא הדרך הסטנדרטית של קהילת ה־homebrew של webOS.</p>
+    <p class="muted">• TVs ישנים יותר מ־2019 (webOS 3-4) לא נתמכים על־ידי Kodi 21 בכלל — אין IPK ל־webOS הישן.</p>
+    <p class="muted">• מדריך מפורט יותר ב־<a href="https://kodi.wiki/view/HOW-TO:Install_Kodi_on_LG_webOS" target="_blank">Kodi Wiki</a>.</p>
+  </main>
+</body>
+</html>
