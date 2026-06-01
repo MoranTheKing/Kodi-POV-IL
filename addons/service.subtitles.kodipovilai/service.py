@@ -232,7 +232,9 @@ TEMP_PURGE_VERSION = '2'
 #   v3 -- direction flipped: default is now 'reverse' (move punct
 #         to line start) since the original 'auto' direction was
 #         based on a wrong assumption about Kodi's BiDi behaviour
-CACHE_RTL_FIX_VERSION = '3'
+#   v4 -- reverse-mode dialogue dash fix: move leading "- " to the
+#         logical line end so Kodi renders it on the right side.
+CACHE_RTL_FIX_VERSION = '4'
 
 
 def _maybe_repair_rtl_cache():
