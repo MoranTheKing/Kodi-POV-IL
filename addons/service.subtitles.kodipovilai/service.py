@@ -322,11 +322,11 @@ def _maybe_patch_fentastic_widgets():
 
 
 def _maybe_patch_fentastic_search():
-    """Repoint FENtastic's home SEARCH button to POV's search node so
-    pressing search lands directly on SEARCH: Movies / TV Shows / People
-    / Movies Collection, instead of FENtastic's own search dialog. Only
-    relevant on skin.fentastic; on other skins Home.xml is absent and the
-    patcher is a no-op. Idempotent + self-healing each startup."""
+    """Repoint the "simple" skins' home SEARCH button to POV's search node
+    so pressing search lands directly on SEARCH: Movies / TV Shows / People
+    / Movies Collection, instead of the skin's own search dialog. Covers
+    skin.fentastic and skin.estuary; a skin that isn't installed has no
+    Home.xml and is a no-op. Idempotent + self-healing each startup."""
     try:
         from resources.lib import fentastic_search_patcher, kodi_utils
     except Exception:
