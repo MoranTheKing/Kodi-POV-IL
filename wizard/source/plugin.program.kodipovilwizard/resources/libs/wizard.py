@@ -851,6 +851,12 @@ AF3_TOOLS = [
         'builtin': 'RunPlugin("plugin://plugin.video.pov/?mode=myservices")',
     },
     {
+        'id': 'debrid_notice_settings',
+        'label': 'הגדרת התראות מנוי',
+        'icon': 'special://home/media/build_icons/POV/Connect_Services.png',
+        'builtin': 'RunPlugin("plugin://service.subtitles.kodipovilai/?action=open_pov_settings")',
+    },
+    {
         'id': 'pov',
         'label': 'כניסה ל-POV',
         'icon': 'special://home/media/build_icons/POV/Logo_POV.png',

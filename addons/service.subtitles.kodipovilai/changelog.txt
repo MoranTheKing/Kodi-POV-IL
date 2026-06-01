@@ -1,3 +1,12 @@
+v0.2.106
+- Added a build home-screen shortcut for configuring debrid subscription
+  notification thresholds. The new Hebrew button opens POV settings so users
+  can quickly change each service's Premium Expires Notification value.
+- Restores the new shortcut into existing FENtastic/Estuary-style
+  favourites.xml installs when missing, and adds it to Arctic Fuse 3 home and
+  power/submenu shortcuts. Arctic Fuse 3 home patch version bumped so existing
+  installs rebuild and receive the new button.
+
 v0.2.105
 - Replaced the TorBox-only startup status toast with a unified build-only
   premium status notifier for Real-Debrid, TorBox, Premiumize and AllDebrid.

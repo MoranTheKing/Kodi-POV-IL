@@ -54,6 +54,7 @@ FAVOURITES_REL = 'favourites.xml'
 # name attribute. If any is missing from the user's favourites.xml,
 # we restore it from the bundled canonical fixture.
 PERSONAL_TILE_NAMES = (
+    '[B][COLOR orange]הגדרת התראות מנוי[/COLOR][/B]',
     '[B]הסדרות שלי (TMDB)[/B]',
     '[B]הסדרות שלי (Trakt)[/B]',
     '[B]הסדרות שלי (POV)[/B]',
