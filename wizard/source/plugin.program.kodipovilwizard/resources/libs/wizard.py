@@ -859,7 +859,7 @@ AF3_TOOLS = [
     {
         'id': 'pov',
         'label': 'כניסה ל-POV',
-        'icon': 'special://home/media/build_icons/POV/Logo_POV.png',
+        'icon': 'special://home/media/build_icons/POV/Logo_POV_IL.png',
         'builtin': 'RunAddon("plugin.video.pov")',
     },
     {
@@ -871,13 +871,13 @@ AF3_TOOLS = [
     {
         'id': 'quick_update',
         'label': 'עדכון מהיר',
-        'icon': 'special://home/media/build_icons/Wizard/fast_update.png',
+        'icon': 'special://home/media/build_icons/Wizard/fast_update_pov_il.png',
         'builtin': 'PlayMedia("plugin://plugin.program.kodipovilwizard/?mode=install&action=quick_update&name=Kodi+POV+IL+-+FENtastic&auto_quick_update=false")',
     },
     {
         'id': 'switch_skin',
         'label': 'החלף סקין',
-        'icon': 'special://home/media/build_icons/Wizard/wizard.png',
+        'icon': 'special://home/media/build_icons/Wizard/wizard_pov_il.png',
         'builtin': 'RunPlugin("plugin://plugin.program.kodipovilwizard/?mode=install&action=build_switch_skin")',
     },
     {
@@ -929,7 +929,7 @@ def af3_tools_menu():
             'icon': tool['icon'],
             'thumb': tool['icon'],
             'poster': tool['icon'],
-            'fanart': 'special://home/media/build_icons/POV/Logo_POV.png',
+            'fanart': 'special://home/media/build_icons/POV/Logo_POV_IL.png',
         })
         li.setProperty('IsPlayable', 'false')
         url = _plugin_url('af3_tool', tool=tool['id'])

@@ -532,6 +532,27 @@ def _maybe_patch_brand_assets():
             pass
 
 
+def _maybe_patch_brand_favourites():
+    """Move home favourites to cache-busting POV IL icon filenames."""
+    try:
+        from resources.lib import brand_favourites_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = brand_favourites_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'brand_favourites_patcher: updated home icon paths',
+                level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'brand_favourites_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_genre_icons():
     """Re-icon POV's genre navigator rows to the stable
     media/build_icons/Genres/ set we ship (AF3 cached shortcut rows)."""
@@ -1807,6 +1828,7 @@ def main():
         # AF3's home rebuild renders the genre shortcut-folder rows.
         _maybe_patch_brand_assets()
         _maybe_install_build_icons()
+        _maybe_patch_brand_favourites()
         _maybe_patch_pov_genre_icons()
         _maybe_patch_pov_genre_menu_icons()
         _maybe_patch_pov_combined_discover()

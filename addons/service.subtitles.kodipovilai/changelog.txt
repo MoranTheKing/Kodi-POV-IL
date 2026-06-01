@@ -1,3 +1,10 @@
+v0.2.111
+- Fixed clean Wizard installs still receiving the old Real-Debrid/KODI media
+  from the full build zip.
+- Added cache-busting POV IL icon filenames for the POV and Wizard home tiles,
+  then migrates existing favourites.xml paths to those new filenames on startup.
+  This avoids Kodi's image cache keeping the old Real-Debrid tile artwork.
+
 v0.2.110
 - Rebranded the remaining legacy Real-Debrid/KODI artwork in the build.
 - Existing users now receive the POV IL APK-style icon for the startup
