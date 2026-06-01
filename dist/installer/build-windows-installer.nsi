@@ -1,10 +1,10 @@
 ; Kodi POV IL -- Windows installer.
 ;
-; Installs official Kodi silently, extracts our wizard + build into
-; %APPDATA%\Kodi\, registers the wizard as a system addon in Kodi's
-; addon-manifest.xml so it auto-runs on first launch, then launches
-; Kodi. The wizard's startup.py opens its Builds menu immediately, so
-; the user lands on the install-build page just like on the APK.
+; Installs official Kodi silently into a separate "Kodi POV IL" program
+; folder, extracts our wizard + build into portable_data, registers the wizard
+; as a system addon in Kodi's addon-manifest.xml so it auto-runs on first
+; launch, then launches Kodi with -p. This keeps Kodi POV IL independent from
+; any normal Kodi install that uses %APPDATA%\Kodi.
 ;
 ; Design choices:
 ;   - Uses tar.exe (Windows 10 1803+) for zip extraction instead of
@@ -28,6 +28,7 @@
 
 Name "${APP_NAME} ${VERSION}"
 OutFile "Kodi-POV-IL-Setup-${VERSION}.exe"
+InstallDir "$PROGRAMFILES64\Kodi POV IL"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 Unicode true
@@ -53,7 +54,7 @@ Function ResolveTar
 FunctionEnd
 
 ; --------- Helper: register addons in addon-manifest.xml --------------
-; Reads $PROGRAMFILES64\Kodi\system\addon-manifest.xml line by line,
+; Reads $INSTDIR\system\addon-manifest.xml line by line,
 ; copies to a temp file, and just before the closing </addons> tag
 ; inserts our system addon entries. The manifest has short lines so
 ; the 1024-char NSIS string limit isn't a concern. If the manifest
@@ -68,7 +69,7 @@ Function PatchAddonManifest
   Push $4
   Push $5
 
-  StrCpy $0 "$PROGRAMFILES64\Kodi\system\addon-manifest.xml"
+  StrCpy $0 "$INSTDIR\system\addon-manifest.xml"
   IfFileExists "$0" 0 manifest_missing
 
   StrCpy $1 "$0.kpov-new"
@@ -204,14 +205,16 @@ Section "Install"
   File "wizard.zip"
   File "build.zip"
 
-  ; Pre-create Kodi's data dir (Kodi normally does this on first
-  ; launch; we need it now so the build can land in it).
-  CreateDirectory "$APPDATA\Kodi"
-  CreateDirectory "$APPDATA\Kodi\addons"
-  CreateDirectory "$APPDATA\Kodi\userdata"
+  ; Pre-create Kodi POV IL's portable data dir (Kodi normally does this on
+  ; first launch with -p; we need it now so the build can land in it). This is
+  ; intentionally NOT %APPDATA%\Kodi, so official Kodi remains untouched.
+  CreateDirectory "$INSTDIR"
+  CreateDirectory "$INSTDIR\portable_data"
+  CreateDirectory "$INSTDIR\portable_data\addons"
+  CreateDirectory "$INSTDIR\portable_data\userdata"
 
-  DetailPrint "Installing Kodi..."
-  ExecWait '"$2\kodi-setup.exe" /S' $0
+  DetailPrint "Installing Kodi POV IL runtime..."
+  ExecWait '"$2\kodi-setup.exe" /S /D=$INSTDIR' $0
   StrCmp $0 "0" +3 0
     MessageBox MB_OK|MB_ICONSTOP "Kodi installer failed with exit code $0. Aborting."
     Abort
@@ -222,14 +225,14 @@ Section "Install"
   ; already has the correct top-level structure (addons/, userdata/,
   ; etc.) so files land where Kodi expects.
   DetailPrint "Extracting Kodi POV IL build..."
-  nsExec::ExecToLog '"$TarExe" -xf "$2\build.zip" -C "$APPDATA\Kodi"'
+  nsExec::ExecToLog '"$TarExe" -xf "$2\build.zip" -C "$INSTDIR\portable_data"'
   Pop $0
   StrCmp $0 "0" +3 0
     MessageBox MB_OK|MB_ICONSTOP "Build extraction failed (tar exit $0).$\r$\nStaging dir: $2"
     Abort
 
   DetailPrint "Overlaying latest wizard..."
-  nsExec::ExecToLog '"$TarExe" -xf "$2\wizard.zip" -C "$APPDATA\Kodi\addons"'
+  nsExec::ExecToLog '"$TarExe" -xf "$2\wizard.zip" -C "$INSTDIR\portable_data\addons"'
   Pop $0
   StrCmp $0 "0" +3 0
     MessageBox MB_OK|MB_ICONSTOP "Wizard extraction failed (tar exit $0).$\r$\nStaging dir: $2"
@@ -239,7 +242,7 @@ Section "Install"
   Call PatchAddonManifest
 
   DetailPrint "Launching Kodi POV IL..."
-  Exec '"$PROGRAMFILES64\Kodi\kodi.exe"'
+  Exec '"$INSTDIR\kodi.exe" -p'
 
   ; Best-effort cleanup of the staging dir. Leaves nothing behind
   ; under APPDATA except the actual Kodi data tree.
