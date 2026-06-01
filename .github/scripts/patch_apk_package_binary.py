@@ -23,7 +23,7 @@ import zlib
 
 
 TEXT_SUFFIXES = {
-    '.xml', '.yml', '.yaml', '.json', '.txt', '.properties', '.cfg',
+    '.py', '.xml', '.yml', '.yaml', '.json', '.txt', '.properties', '.cfg',
 }
 BINARY_SUFFIXES = {
     '.so', '.arsc',
