@@ -854,7 +854,7 @@ AF3_TOOLS = [
         'id': 'debrid_notice_settings',
         'label': 'הגדרת התראות מנוי',
         'icon': 'special://home/media/build_icons/POV/Connect_Services.png',
-        'builtin': 'RunPlugin("plugin://service.subtitles.kodipovilai/?action=open_pov_settings")',
+        'builtin': 'Addon.OpenSettings(plugin.video.pov)',
     },
     {
         'id': 'pov',
