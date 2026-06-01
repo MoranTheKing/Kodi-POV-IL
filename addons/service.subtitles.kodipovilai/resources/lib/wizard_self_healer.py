@@ -32,8 +32,9 @@
 #   place).
 # - __pycache__ cleanup so Python recompiles cleanly on next boot.
 #
-# Marker bumped to v3 so v2 installs that bailed 'no_wizard'
-# silently get a fresh attempt with v3's path.
+# Marker bumped to v4 so installs that previously looked "healthy"
+# by wizard.py alone still get healed if custom_save_data_config.py
+# contains the old crashing network import path.
 #
 # Steady-state logging at INFO level for every return code now
 # (v2 was 'pass'-on-no-op which made remote diagnosis a nightmare).
@@ -70,7 +71,7 @@ HEALED_SENTINEL = b'ignore=True bypasses extract.all'
 # Marker file written into the writable wizard addon dir once a
 # heal has been attempted. Bumped per healer version so previous
 # attempts that may have left a stale marker get a fresh try.
-MARKER_NAME = '.ai_subs_wizard_healed_v3'
+MARKER_NAME = '.ai_subs_wizard_healed_v4'
 
 STAGED_ZIP_REL = os.path.join('resources', 'staged_wizard.zip')
 
@@ -128,17 +129,35 @@ def _wizard_known_to_kodi():
 
 
 def _writable_wizard_is_healthy(writable_dir):
-    """True iff the writable copy of wizard.py contains the
-    post-fix sentinel. Used to short-circuit further heals once
-    a newer wizard has landed in the writable mirror."""
-    p = os.path.join(writable_dir, 'resources', 'libs', 'wizard.py')
-    if not os.path.isfile(p):
+    """True iff the writable wizard has both the older extract fix
+    and the newer custom_save_data_config bootstrap fix."""
+    wizard_py = os.path.join(writable_dir, 'resources', 'libs', 'wizard.py')
+    save_config_py = os.path.join(
+        writable_dir, 'resources', 'libs', 'common',
+        'custom_save_data_config.py')
+    if not os.path.isfile(wizard_py) or not os.path.isfile(save_config_py):
         return False
     try:
-        with open(p, 'rb') as f:
-            return HEALED_SENTINEL in f.read()
+        with open(wizard_py, 'rb') as f:
+            wizard_ok = HEALED_SENTINEL in f.read()
+        with open(save_config_py, 'rb') as f:
+            save_config = f.read()
     except OSError:
         return False
+
+    if not wizard_ok:
+        return False
+    if b'kodi7rd.github.io' in save_config:
+        return False
+    if b'urlopen(custom_save_data_config_github_url' in save_config:
+        return False
+
+    before_main = save_config.split(b'def main():', 1)[0]
+    if b'custom_save_data_config = _load_config()' in before_main:
+        return False
+    if b"custom_save_data_config = {'USE_JSON_FILE': 'false'}" not in before_main:
+        return False
+    return True
 
 
 def _ai_subs_base():
@@ -321,7 +340,7 @@ def ensure_healed():
 
     try:
         with open(marker, 'wb') as f:
-            f.write(b'healed by AI subs wizard_self_healer v3\n')
+            f.write(b'healed by AI subs wizard_self_healer v4\n')
     except OSError:
         # Marker write failure is non-fatal; sentinel check next
         # boot will short-circuit if files landed correctly.
@@ -333,7 +352,7 @@ def ensure_healed():
 
     # Modal dialog -- user CANNOT miss the restart instruction.
     _modal_ok(
-        'הוויזרד עודכן בהצלחה ל-0.1.10.\n\n'
+        'הוויזרד עודכן בהצלחה ל-0.1.16.\n\n'
         'כדי להפעיל את המצב החדש (כולל Arctic Fuse 3 ברשימת '
         'החלפת סקין):\n\n'
         '[B]סגור את Kodi לחלוטין ופתח מחדש[/B]\n\n'

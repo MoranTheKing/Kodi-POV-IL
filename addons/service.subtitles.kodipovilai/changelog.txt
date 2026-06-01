@@ -1,3 +1,9 @@
+v0.2.114
+- Wizard self-healer v4 now detects the custom_save_data_config.py bootstrap
+  crash, even on wizards that already passed the older wizard.py sentinel.
+- Existing build users who receive this service update will get the Wizard
+  0.1.16 repair written automatically from staged_wizard.zip, then restart.
+
 v0.2.113
 - Rebuilt the embedded staged_wizard.zip with Wizard 0.1.16 so service/APK
   updates cannot restore the old kodi7rd custom_save_data_config URL.
