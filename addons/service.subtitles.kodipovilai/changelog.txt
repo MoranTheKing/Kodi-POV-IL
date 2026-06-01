@@ -1,3 +1,18 @@
+v0.2.101
+- Estuary ("simple" skin): the home SEARCH button now opens POV's search
+  node directly too. The previous fix covered only skin.fentastic, but the
+  build also ships skin.estuary, where the home search icon (control 801)
+  opened a generic search dialog (ActivateWindow(1107)) instead of POV
+  search. The home-search patcher now repoints Estuary's search button to
+  ActivateWindow(videos,plugin://plugin.video.pov/?mode=navigator.search,
+  return) as well, so search lands on POV's node (Movies / TV Shows /
+  People / Movies Collection) on whichever simple skin you use. Each skin
+  is patched against its own Home.xml; idempotent, reversible, and a no-op
+  for any skin that isn't installed. Self-tested against both shipped
+  Home.xml files: search buttons repointed on both, idempotent on rerun,
+  cleanly reversible, and for Estuary exactly control 801 was changed with
+  no other bytes touched.
+
 v0.2.100
 - FENtastic ("simple" skin): the home SEARCH button now opens POV's
   search node directly (SEARCH: Movies / TV Shows / People / Movies
