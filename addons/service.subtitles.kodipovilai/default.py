@@ -1749,6 +1749,15 @@ def _handle_purge_temp(_params):
         'נמחקו {0} קבצי כתוביות מ-temp.'.format(n))
 
 
+def _handle_open_pov_settings(_params):
+    """Open POV's addon settings. Used by build home-screen buttons so
+    users can quickly change Premium Expires Notification thresholds."""
+    try:
+        xbmc.executebuiltin('Addon.OpenSettings(plugin.video.pov)')
+    except Exception as e:
+        xbmcgui.Dialog().ok('Kodi POV IL', 'Internal error: {0}'.format(e))
+
+
 def main():
     if xbmc is None:
         _safe_log('default.py invoked outside Kodi -- nothing to do',
@@ -1794,6 +1803,8 @@ def main():
             _handle_bg_translate_picker(params)
         elif action == 'darksubs_status':
             _handle_darksubs_status(params)
+        elif action == 'open_pov_settings':
+            _handle_open_pov_settings(params)
         else:
             _safe_log('unknown action: ' + action, level='WARNING')
             if handle >= 0:
