@@ -68,6 +68,10 @@ PERSONAL_TILE_NAMES = (
 # this once already; don't redo unnecessary work" without a separate
 # marker file in addon_data.
 MARKER = '<!-- AI_SUBS_FAVOURITES_PERSONAL_TILES_v1 -->'
+BROKEN_DEBRID_NOTICE_ACTION = (
+    'RunPlugin("plugin://service.subtitles.kodipovilai/?'
+    'action=open_pov_settings")')
+FIXED_DEBRID_NOTICE_ACTION = 'Addon.OpenSettings(plugin.video.pov)'
 
 
 def _log(msg, level='INFO'):
@@ -126,6 +130,16 @@ def _extract_tile(fixture_text, tile_name):
     return m.group(1)
 
 
+def _fix_existing_debrid_notice_action(content):
+    """Fix v0.2.106 installs where the tile existed but used a
+    plugin:// URL against our subtitle/service addon, which Kodi does
+    not execute as a normal plugin from favourites."""
+    fixed = content.replace(
+        BROKEN_DEBRID_NOTICE_ACTION.encode('utf-8'),
+        FIXED_DEBRID_NOTICE_ACTION.encode('utf-8'))
+    return fixed, fixed != content
+
+
 def ensure_patched():
     """Returns one of:
     'no_kodi' | 'no_favourites' | 'no_fixture' | 'fixture_unreadable'
@@ -153,8 +167,9 @@ def ensure_patched():
              level='WARNING')
         return 'read_failed'
 
+    content, fixed_existing = _fix_existing_debrid_notice_action(content)
     missing = _missing_tiles(content)
-    if not missing:
+    if not missing and not fixed_existing:
         return 'already_complete'
 
     try:
@@ -164,32 +179,34 @@ def ensure_patched():
         _log('fixture read failed: {0}'.format(e), level='WARNING')
         return 'fixture_unreadable'
 
-    tiles_to_inject = []
-    for name in missing:
-        snippet = _extract_tile(fixture_text, name)
-        if snippet is None:
-            _log('fixture is missing the canonical entry for {0}; '
-                 'cannot restore'.format(name), level='WARNING')
+    new_content = content
+    if missing:
+        tiles_to_inject = []
+        for name in missing:
+            snippet = _extract_tile(fixture_text, name)
+            if snippet is None:
+                _log('fixture is missing the canonical entry for {0}; '
+                     'cannot restore'.format(name), level='WARNING')
+                return 'unparseable_fixture'
+            tiles_to_inject.append(snippet.encode('utf-8'))
+
+        # Insert the missing tiles just before the closing </favourites>
+        # tag, preserving everything the user already has.
+        closing_tag = b'</favourites>'
+        close_idx = new_content.rfind(closing_tag)
+        if close_idx == -1:
+            _log('userdata/favourites.xml has no </favourites> closing tag '
+                 '-- file structure unrecognised, leaving alone',
+                 level='WARNING')
             return 'unparseable_fixture'
-        tiles_to_inject.append(snippet.encode('utf-8'))
 
-    # Insert the missing tiles just before the closing </favourites>
-    # tag, preserving everything the user already has.
-    closing_tag = b'</favourites>'
-    close_idx = content.rfind(closing_tag)
-    if close_idx == -1:
-        _log('userdata/favourites.xml has no </favourites> closing tag '
-             '-- file structure unrecognised, leaving alone',
-             level='WARNING')
-        return 'unparseable_fixture'
-
-    marker_line = ('    ' + MARKER + '\n').encode('utf-8')
-    new_content = (
-        content[:close_idx]
-        + marker_line
-        + b''.join(tiles_to_inject)
-        + content[close_idx:]
-    )
+        marker_line = ('    ' + MARKER + '\n').encode('utf-8')
+        new_content = (
+            new_content[:close_idx]
+            + marker_line
+            + b''.join(tiles_to_inject)
+            + new_content[close_idx:]
+        )
 
     tmp_path = fav_path + '.aitmp'
     try:
@@ -205,6 +222,13 @@ def ensure_patched():
              level='WARNING')
         return 'write_failed'
 
-    _log('restored {0} missing personal tile(s): {1}'.format(
-        len(missing), ', '.join(missing)), level='INFO')
-    return 'restored'
+    if missing:
+        _log('restored {0} missing personal tile(s): {1}'.format(
+            len(missing), ', '.join(missing)), level='INFO')
+    if fixed_existing:
+        _log('fixed debrid notification settings tile action', level='INFO')
+    if missing and fixed_existing:
+        return 'restored_and_fixed'
+    if missing:
+        return 'restored'
+    return 'fixed'
