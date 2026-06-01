@@ -57,9 +57,10 @@ def _load_config():
         return {}
 
 
-# Load the configuration from the JSON file. This must never raise during
-# import, otherwise startup quick-update cannot repair a broken wizard.
-custom_save_data_config = _load_config()
+# Keep import side-effect free. The wizard imports this module while building
+# the update/extract stack, so a network read here can break quick-update before
+# it has a chance to repair the installed wizard.
+custom_save_data_config = {'USE_JSON_FILE': 'false'}
     
 # Log JSON
 logging.log("custom_save_data_config.py | custom_save_data_config.json: " + str(custom_save_data_config), level=xbmc.LOGINFO)
@@ -201,6 +202,11 @@ def delete_addons_whitelist_file():
 
 # Main
 def main():
+    global custom_save_data_config, USE_JSON_FILE
+
+    custom_save_data_config = _load_config()
+    USE_JSON_FILE = str(custom_save_data_config.get('USE_JSON_FILE', 'false')).lower()
+
     # Exit if USE_JSON_FILE is false.
     if USE_JSON_FILE == 'false':
         logging.log("custom_save_data_config.py | USE_JSON_FILE is: " + USE_JSON_FILE + ". Exiting custom_save_data_config.py..", level=xbmc.LOGINFO)
