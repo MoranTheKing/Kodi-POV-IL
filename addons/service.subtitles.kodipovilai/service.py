@@ -1557,6 +1557,33 @@ def _maybe_show_af3_first_launch_dialog():
             pass
 
 
+def _maybe_show_torbox_status():
+    """Build-only TorBox subscription toast on Kodi startup.
+
+    This intentionally lives outside POV so it applies consistently in
+    Estuary, FENtastic and Arctic Fuse 3, while the build_mode gate keeps
+    standalone AI-subtitle installs from changing user navigation/state.
+    """
+    try:
+        from resources.lib import torbox_status_notifier, kodi_utils
+    except Exception:
+        return
+    try:
+        status = torbox_status_notifier.maybe_notify()
+        if status == 'shown':
+            kodi_utils.log('TorBox startup subscription status shown',
+                           level='INFO')
+        elif status not in ('no_pov', 'not_connected', 'already_shown'):
+            kodi_utils.log('TorBox startup status: {0}'.format(status),
+                           level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log('TorBox startup status failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_default_fast_first_chunk():
     """One-shot: flip `fast_first_chunk` from the old default-off to
     the new default-on for existing users. Gated by a marker so it
@@ -1783,6 +1810,7 @@ def main():
     # OAuth flows -- POV does.
     if build_mode:
         _maybe_show_af3_first_launch_dialog()
+        _maybe_show_torbox_status()
 
     # Spin up the SubsFilenamePublisher player monitor. It needs to
     # outlive this function's local scope -- xbmc.Player subclasses
