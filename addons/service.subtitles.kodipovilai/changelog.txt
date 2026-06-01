@@ -1,3 +1,9 @@
+v0.2.113
+- Rebuilt the embedded staged_wizard.zip with Wizard 0.1.16 so service/APK
+  updates cannot restore the old kodi7rd custom_save_data_config URL.
+- The embedded Wizard no longer performs any custom_save_data_config network
+  read while being imported, preventing 404 crashes before quick-update starts.
+
 v0.2.112
 - Fixed the Wizard quick-update crash caused by importing
   custom_save_data_config.py while the old kodi7rd config URL returns 404.
