@@ -71,7 +71,10 @@ MARKER = '<!-- AI_SUBS_FAVOURITES_PERSONAL_TILES_v1 -->'
 BROKEN_DEBRID_NOTICE_ACTION = (
     'RunPlugin("plugin://service.subtitles.kodipovilai/?'
     'action=open_pov_settings")')
-FIXED_DEBRID_NOTICE_ACTION = 'Addon.OpenSettings(plugin.video.pov)'
+OLD_DEBRID_NOTICE_ACTION = 'Addon.OpenSettings(plugin.video.pov)'
+FIXED_DEBRID_NOTICE_ACTION = (
+    'RunScript(service.subtitles.kodipovilai,'
+    'action=debrid_notice_settings)')
 
 
 def _log(msg, level='INFO'):
@@ -134,9 +137,11 @@ def _fix_existing_debrid_notice_action(content):
     """Fix v0.2.106 installs where the tile existed but used a
     plugin:// URL against our subtitle/service addon, which Kodi does
     not execute as a normal plugin from favourites."""
-    fixed = content.replace(
-        BROKEN_DEBRID_NOTICE_ACTION.encode('utf-8'),
-        FIXED_DEBRID_NOTICE_ACTION.encode('utf-8'))
+    fixed = content
+    for old in (BROKEN_DEBRID_NOTICE_ACTION, OLD_DEBRID_NOTICE_ACTION):
+        fixed = fixed.replace(
+            old.encode('utf-8'),
+            FIXED_DEBRID_NOTICE_ACTION.encode('utf-8'))
     return fixed, fixed != content
 
 
