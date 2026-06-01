@@ -1,0 +1,326 @@
+name: Build APK and Windows installer
+
+# Builds rebranded Kodi APKs (32-bit + 64-bit) and a Windows installer,
+# then attaches them to a GitHub Release. Uses only system tools and
+# `gh` (GitHub CLI, preinstalled on the runner) -- no `actions/*`
+# imports -- so the repo's "MoranTheKing actions only" policy doesn't
+# block it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release tag / version label (e.g., 21.3-povil.1)'
+        required: true
+        default: '21.3-povil.1'
+      version_code:
+        description: 'Android versionCode (integer, must increase each release)'
+        required: true
+        default: '21301'
+      kodi_version:
+        description: 'Upstream Kodi version to rebrand (e.g., 21.3)'
+        required: true
+        default: '21.3'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  # Separate applicationId so Kodi POV IL can live side-by-side with official
+  # Kodi. This must stay the same length as OLD_PACKAGE_ID because we patch
+  # Kodi's original DEX/native package strings in place and intentionally avoid
+  # apktool's smali reassembly path, which crash-looped previous attempts.
+  OLD_PACKAGE_ID: 'org.xbmc.kodi'
+  PACKAGE_ID: 'org.xbmc.povi'
+  APP_NAME: 'Kodi POV IL'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Install build prerequisites
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            openjdk-17-jdk-headless \
+            zipalign \
+            apksigner \
+            nsis \
+            unzip \
+            curl \
+            git
+          # apktool 2.9.3 -- matches API 34
+          sudo curl -fsSL -o /usr/local/bin/apktool.jar \
+            https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar
+          sudo curl -fsSL -o /usr/local/bin/apktool \
+            https://raw.githubusercontent.com/iBotPeaches/Apktool/v2.9.3/scripts/linux/apktool
+          sudo chmod +x /usr/local/bin/apktool
+
+      - name: Clone main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git clone --depth=1 --branch=main \
+            "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" \
+            src
+
+      - name: Decrypt release keystore
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "::error::KEYSTORE_PASSWORD secret is not set. See APK_BUILD.md for setup."
+            exit 1
+          fi
+          echo "::add-mask::$KEYSTORE_PASSWORD"
+          if [ ! -f src/.secrets/release.keystore.enc ]; then
+            echo "::error::No .secrets/release.keystore.enc in repo. Run the setup-keystore workflow first."
+            exit 1
+          fi
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+            -in src/.secrets/release.keystore.enc \
+            -out $HOME/release.keystore \
+            -pass env:KEYSTORE_PASSWORD
+          test -s $HOME/release.keystore
+
+      - name: Build both Android APKs
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$KEYSTORE_PASSWORD"
+          KEY_ALIAS="kodipovil"
+          VERSION="${{ github.event.inputs.version }}"
+          VERSION_CODE="${{ github.event.inputs.version_code }}"
+          KODI_VERSION="${{ github.event.inputs.kodi_version }}"
+          mkdir -p out
+          for arch in armeabi-v7a arm64-v8a; do
+            case "$arch" in
+              armeabi-v7a) MIRROR_DIR="arm";    LABEL="32bit" ;;
+              arm64-v8a)   MIRROR_DIR="arm64-v8a"; LABEL="64bit" ;;
+            esac
+            WORK="$RUNNER_TEMP/build-$arch"
+            mkdir -p "$WORK"
+            echo "::group::Download official Kodi APK ($arch)"
+            curl -fL --retry 3 -o "$WORK/kodi-official.apk" \
+              "https://mirrors.kodi.tv/releases/android/${MIRROR_DIR}/kodi-${KODI_VERSION}-Omega-${arch}.apk"
+            echo "::endgroup::"
+            echo "::group::apktool decode (keep original dex; no smali rebuild)"
+            apktool d -f -s -o "$WORK/decoded" "$WORK/kodi-official.apk"
+            echo "::endgroup::"
+            echo "::group::Update package id, label + version metadata"
+            if [ "${#OLD_PACKAGE_ID}" -ne "${#PACKAGE_ID}" ]; then
+              echo "::error::OLD_PACKAGE_ID and PACKAGE_ID must be the same length for binary patching"
+              exit 1
+            fi
+            MANIFEST="$WORK/decoded/AndroidManifest.xml"
+            python3 src/.github/scripts/patch_apk_package_binary.py \
+              "$WORK/decoded" "$OLD_PACKAGE_ID" "$PACKAGE_ID"
+            sed -i 's/android:versionCode="[0-9]*"/android:versionCode="'"$VERSION_CODE"'"/' "$MANIFEST"
+            sed -i 's/android:versionName="[^"]*"/android:versionName="'"$VERSION"'"/' "$MANIFEST"
+            for f in "$WORK/decoded/res/values/strings.xml" "$WORK/decoded"/res/values-*/strings.xml; do
+              [ -f "$f" ] || continue
+              sed -i 's|<string name="app_name">[^<]*</string>|<string name="app_name">'"$APP_NAME"'</string>|' "$f" || true
+            done
+            # Custom launcher icon. Kodi uses plain @drawable/ic_launcher PNGs
+            # (no adaptive/mipmap), so we overwrite the 6 density variants with
+            # our Kodi POV IL icon. This is independent of the package id.
+            for dens in ldpi mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+              ICON_SRC="src/.github/assets/ic_launcher/ic_launcher-${dens}.png"
+              ICON_DST="$WORK/decoded/res/drawable-${dens}/ic_launcher.png"
+              if [ -f "$ICON_SRC" ] && [ -f "$ICON_DST" ]; then
+                cp "$ICON_SRC" "$ICON_DST"
+                echo "icon: replaced drawable-${dens}/ic_launcher.png"
+              fi
+            done
+            echo "::endgroup::"
+            echo "::group::Bundle wizard and build into assets/"
+            ASSETS="$WORK/decoded/assets"
+            mkdir -p "$ASSETS/addons"
+            unzip -o src/dist/plugin.program.kodipovilwizard-0.1.16.zip -d "$ASSETS/addons/" >/dev/null
+            unzip -o src/dist/Kodi-POV-IL-FENtastic-test-0.1.13.zip -d "$ASSETS/" >/dev/null
+            # Register the wizard as a system addon so Kodi auto-enables it
+            # on first launch. Its startup.py then detects no build is
+            # installed yet and auto-installs Kodi POV IL - FENtastic
+            # (there's only one entry in build.txt, so no menu prompt).
+            # Also register the wizard's transitive imports (requests +
+            # urllib3 stack) so its `import requests` doesn't crash with
+            # ModuleNotFoundError before it can run.
+            MANIFEST_FILE="$ASSETS/system/addon-manifest.xml"
+            ADDONS_TO_ENABLE=(
+              "plugin.program.kodipovilwizard"
+              "script.module.requests"
+              "script.module.six"
+              "script.module.certifi"
+              "script.module.urllib3"
+              "script.module.chardet"
+              "script.module.idna"
+            )
+            for addon_id in "${ADDONS_TO_ENABLE[@]}"; do
+              if grep -q "<addon>$addon_id</addon>" "$MANIFEST_FILE"; then
+                echo "already in manifest: $addon_id"
+              else
+                sed -i "s|</addons>|  <addon>$addon_id</addon>\n</addons>|" "$MANIFEST_FILE"
+                echo "added to manifest:   $addon_id"
+              fi
+            done
+            echo "--- final manifest tail ---"
+            tail -15 "$MANIFEST_FILE"
+            # The bundled wizard/build are copied into assets after the first
+            # package patch. Patch the decoded tree again so payload files such
+            # as assets/addons/plugin.program.kodipovilwizard/uservar.py don't
+            # reintroduce org.xbmc.kodi and make the final verifier fail.
+            python3 src/.github/scripts/patch_apk_package_binary.py \
+              "$WORK/decoded" "$OLD_PACKAGE_ID" "$PACKAGE_ID"
+            echo "::endgroup::"
+            echo "::group::apktool repack + zipalign + sign"
+            apktool b -o "$WORK/unsigned.apk" "$WORK/decoded"
+            python3 src/.github/scripts/verify_apk_package.py \
+              "$WORK/unsigned.apk" \
+              "${OLD_PACKAGE_ID//./\/}" \
+              "${PACKAGE_ID//./\/}"
+            zipalign -p -f 4 "$WORK/unsigned.apk" "$WORK/aligned.apk"
+            OUT_APK="out/Kodi-POV-IL-${VERSION}-${LABEL}.apk"
+            apksigner sign \
+              --ks $HOME/release.keystore \
+              --ks-key-alias "$KEY_ALIAS" \
+              --ks-pass "pass:$KEYSTORE_PASSWORD" \
+              --key-pass "pass:$KEYSTORE_PASSWORD" \
+              --out "$OUT_APK" \
+              "$WORK/aligned.apk"
+            apksigner verify --print-certs "$OUT_APK" | head -10
+            echo "::endgroup::"
+          done
+          ls -la out/
+
+      - name: Build LG webOS IPK
+        run: |
+          set -euo pipefail
+          VERSION="${{ github.event.inputs.version }}"
+          # webOS Kodi only has the 21.0 IPK published (no 21.x point
+          # releases for webOS yet); hardcode the URL.
+          WEBOS_IPK_URL="https://mirrors.kodi.tv/releases/webos/org.xbmc.kodi-webos_21.0.ipk"
+          WORK="$RUNNER_TEMP/build-webos"
+          mkdir -p "$WORK"
+          echo "::group::Download official Kodi webOS IPK"
+          curl -fL --retry 3 -o "$WORK/kodi-official.ipk" "$WEBOS_IPK_URL"
+          echo "::endgroup::"
+          echo "::group::Unwrap IPK (ar archive of debian-binary + control.tar.gz + data.tar.gz)"
+          (cd "$WORK" && ar x kodi-official.ipk)
+          ls "$WORK"
+          echo "::endgroup::"
+          echo "::group::Patch data.tar.gz: bundle wizard + build, register wizard in addon-manifest"
+          mkdir "$WORK/data"
+          tar -xzf "$WORK/data.tar.gz" -C "$WORK/data"
+          # webOS Kodi installs under /usr/palm/applications/org.xbmc.kodi
+          KODI_ROOT="$WORK/data/usr/palm/applications/org.xbmc.kodi"
+          test -d "$KODI_ROOT" || { echo "::error::webOS Kodi root not found at expected path"; exit 1; }
+          unzip -o src/dist/plugin.program.kodipovilwizard-0.1.16.zip -d "$KODI_ROOT/addons/" >/dev/null
+          unzip -o src/dist/Kodi-POV-IL-FENtastic-test-0.1.13.zip -d "$KODI_ROOT/" >/dev/null
+          MANIFEST_FILE="$KODI_ROOT/system/addon-manifest.xml"
+          for addon_id in plugin.program.kodipovilwizard script.module.requests script.module.six script.module.certifi script.module.urllib3 script.module.chardet script.module.idna; do
+            if grep -q "<addon>$addon_id</addon>" "$MANIFEST_FILE"; then
+              echo "already in manifest: $addon_id"
+            else
+              sed -i "s|</addons>|  <addon>$addon_id</addon>\n</addons>|" "$MANIFEST_FILE"
+              echo "added to manifest:   $addon_id"
+            fi
+          done
+          # Bump the appinfo version so webOS sees this as a newer build
+          APPINFO="$KODI_ROOT/appinfo.json"
+          if [ -f "$APPINFO" ]; then
+            sed -i 's/"version"[[:space:]]*:[[:space:]]*"[^"]*"/"version": "'"$VERSION"'"/' "$APPINFO"
+            echo "patched appinfo.json:" && grep -E '"version"|"title"' "$APPINFO" | head -3
+          fi
+          echo "::endgroup::"
+          echo "::group::Re-pack data.tar.gz + assemble IPK"
+          (cd "$WORK/data" && tar -czf "$WORK/data.tar.gz" .)
+          OUT_IPK="out/Kodi-POV-IL-${VERSION}-webos.ipk"
+          # ar order matters: debian-binary, control.tar.gz, data.tar.gz
+          (cd "$WORK" && ar -r "$OLDPWD/$OUT_IPK" debian-binary control.tar.gz data.tar.gz)
+          ls -la "$OUT_IPK"
+          echo "::endgroup::"
+
+      - name: Build Windows installer
+        run: |
+          set -euo pipefail
+          VERSION="${{ github.event.inputs.version }}"
+          KODI_VERSION="${{ github.event.inputs.kodi_version }}"
+          mkdir -p $RUNNER_TEMP/win
+          curl -fL --retry 3 -o $RUNNER_TEMP/win/kodi-setup.exe \
+            "https://mirrors.kodi.tv/releases/windows/win64/kodi-${KODI_VERSION}-Omega-x64.exe"
+          cp src/dist/plugin.program.kodipovilwizard-0.1.16.zip $RUNNER_TEMP/win/wizard.zip
+          cp src/dist/Kodi-POV-IL-FENtastic-test-0.1.13.zip     $RUNNER_TEMP/win/build.zip
+          cp src/dist/installer/build-windows-installer.nsi     $RUNNER_TEMP/win/installer.nsi
+          (cd $RUNNER_TEMP/win && makensis -V2 -DVERSION="$VERSION" installer.nsi)
+          cp $RUNNER_TEMP/win/Kodi-POV-IL-Setup-*.exe out/
+          ls -la out/
+
+      - name: Create / update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: src
+        run: |
+          set -euo pipefail
+          VERSION="${{ github.event.inputs.version }}"
+          TAG="v${VERSION}"
+          # Delete the release if it already exists (gh CLI is preinstalled)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release delete "$TAG" --yes --cleanup-tag
+          fi
+          NOTES=$(printf '%s\n%s\n%s\n%s\n%s' \
+            "Built automatically by .github/workflows/build-apk.yml." \
+            "Android APK: separate package id '${PACKAGE_ID}', rebranded label 'Kodi POV IL', wizard + FENtastic build pre-bundled in assets/." \
+            "Windows installer: installs Kodi POV IL separately and launches it with -p, so its portable_data profile does not touch normal Kodi." \
+            "LG webOS IPK: rebranded webOS Kodi 21.0 with the same bundled wizard + build. Install via LG developer mode and ares-install." \
+            "All bundles share the same first-launch flow: wizard auto-runs and installs Kodi POV IL - FENtastic in the background.")
+          # Also keep stable filenames (no version) so download pages
+          # can use the /latest/download/ redirect without rewriting.
+          cp "../out/Kodi-POV-IL-${VERSION}-32bit.apk" "../out/Kodi-POV-IL-32bit.apk"
+          cp "../out/Kodi-POV-IL-${VERSION}-64bit.apk" "../out/Kodi-POV-IL-64bit.apk"
+          cp "../out/Kodi-POV-IL-Setup-${VERSION}.exe" "../out/Kodi-POV-IL-Setup.exe"
+          cp "../out/Kodi-POV-IL-${VERSION}-webos.ipk" "../out/Kodi-POV-IL-webos.ipk"
+          gh release create "$TAG" \
+            --title "Kodi POV IL ${VERSION}" \
+            --notes "$NOTES" \
+            ../out/Kodi-POV-IL-${VERSION}-32bit.apk \
+            ../out/Kodi-POV-IL-${VERSION}-64bit.apk \
+            ../out/Kodi-POV-IL-Setup-${VERSION}.exe \
+            ../out/Kodi-POV-IL-${VERSION}-webos.ipk \
+            ../out/Kodi-POV-IL-webos.ipk \
+            ../out/Kodi-POV-IL-32bit.apk \
+            ../out/Kodi-POV-IL-64bit.apk \
+            ../out/Kodi-POV-IL-Setup.exe
+
+      - name: Update version pointer files on main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: src
+        run: |
+          set -euo pipefail
+          VERSION="${{ github.event.inputs.version }}"
+          mkdir -p wizard/assets/kodi_version_auto_update/apk wizard/assets/kodi_version_auto_update/windows
+          echo "$VERSION" > wizard/assets/kodi_version_auto_update/apk/latest_apk_version.txt
+          echo "$VERSION" > wizard/assets/kodi_version_auto_update/windows/latest_windows_version.txt
+          # Commit only if there's actually a change.
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add wizard/assets/kodi_version_auto_update/
+          if git diff --cached --quiet; then
+            echo "Version pointer files already up to date."
+            exit 0
+          fi
+          # Branch protection on main blocks direct push, so open a PR
+          # the user can merge with one click.
+          BRANCH="bot/apk-release-${VERSION}"
+          git checkout -b "$BRANCH"
+          git commit -m "Publish APK ${VERSION} pointer files"
+          git push origin "$BRANCH"
+          gh pr create --base main --head "$BRANCH" \
+            --title "Publish APK ${VERSION} pointer files" \
+            --body "Auto-generated by build-apk workflow run ${{ github.run_id }}. Bumps the wizard's latest_apk_version.txt and latest_windows_version.txt to ${VERSION}, so installed Kodi POV IL clients notice the new release."
