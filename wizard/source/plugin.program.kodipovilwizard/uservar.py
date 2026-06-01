@@ -41,7 +41,7 @@ APKFILE = 'http://'
 
 #########################################################
 # KODI-RD-IL - BUILD SKIN SWITCH
-BUILD_SKIN_SWITCH_IMAGE_URL = 'https://kodi7rd.github.io/wizard/assets/build_menu_screenshots/kodirdil21.png'
+BUILD_SKIN_SWITCH_IMAGE_URL = 'https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/wizard/assets/build_menu_screenshots/pov_il_splash.jpg'
 # KODI-RD-IL - AUTO QUICK UPDATES
 QUICK_UPDATE_NOTIFICATION_URL = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/notification_files/quick_update.txt'
 # KODI-RD-IL - AUTO ANDROID/WINDOWS UPDATE
