@@ -631,10 +631,10 @@ def _maybe_patch_favourites_personal_tiles():
         return
     try:
         status = favourites_personal_tiles_patcher.ensure_patched()
-        if status == 'restored':
+        if status in ('restored', 'fixed', 'restored_and_fixed'):
             kodi_utils.log(
-                'favourites_personal_tiles_patcher: restored missing '
-                'personal home tiles', level='INFO')
+                'favourites_personal_tiles_patcher: {0}'.format(status),
+                level='INFO')
         elif status in ('no_kodi', 'no_favourites', 'no_fixture',
                         'already_complete'):
             pass  # quiet steady-state

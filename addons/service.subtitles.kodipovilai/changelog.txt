@@ -1,3 +1,13 @@
+v0.2.107
+- Fixed the "הגדרת התראות מנוי" home button. v0.2.106 used a plugin://
+  route against the AI subtitle/service addon, which Kodi does not execute
+  reliably from favourites. The button now uses Kodi's direct
+  Addon.OpenSettings(plugin.video.pov) builtin.
+- Existing users who already received the broken favourite are migrated in
+  place on the next boot, without replacing their other favourites.
+- Arctic Fuse 3 home/power shortcut version bumped again so the rebuilt
+  shortcut uses the working builtin.
+
 v0.2.106
 - Added a build home-screen shortcut for configuring debrid subscription
   notification thresholds. The new Hebrew button opens POV settings so users

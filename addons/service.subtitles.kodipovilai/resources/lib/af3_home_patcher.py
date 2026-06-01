@@ -30,7 +30,7 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-06-01-pov-home-v18'
+PATCH_VERSION = '2026-06-01-pov-home-v19'
 AF3_CE_VERSION = '6.3.2.9'
 # AF3's bundled TMDbHelper 6.15.6 imports jurialmunkey.ftools, which only
 # exists from script.module.jurialmunkey 0.2.35. Users who switched to AF3
@@ -345,7 +345,7 @@ HOME_SUBMENU = [
     {
         'label': 'הגדרת התראות מנוי',
         'icon': 'special://home/media/build_icons/POV/Connect_Services.png',
-        'path': 'RunPlugin("plugin://service.subtitles.kodipovilai/?action=open_pov_settings")',
+        'path': 'Addon.OpenSettings(plugin.video.pov)',
         'target': '',
     },
     {
@@ -379,7 +379,7 @@ POWER_MENU = [
     {
         'label': 'הגדרת התראות מנוי',
         'icon': 'special://home/media/build_icons/POV/Connect_Services.png',
-        'path': 'RunPlugin("plugin://service.subtitles.kodipovilai/?action=open_pov_settings")',
+        'path': 'Addon.OpenSettings(plugin.video.pov)',
         'target': '',
     },
     {
