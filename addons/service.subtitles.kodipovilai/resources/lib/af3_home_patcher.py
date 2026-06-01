@@ -21,9 +21,11 @@ except Exception:
 
 try:
     import xbmc
+    import xbmcaddon
     import xbmcvfs
 except ImportError:
     xbmc = None
+    xbmcaddon = None
     xbmcvfs = None
 
 
@@ -1017,6 +1019,42 @@ def _is_af3_active():
         return False
 
 
+def _quick_update_notice_pending():
+    """Avoid AF3 rebuild/reload while the wizard's quick-update
+    changelog is waiting to be read.
+
+    Other skins do not run our skinvariables rebuild path, so the issue
+    is AF3-specific: ReloadSkin()/script.skinvariables can close or cover
+    the wizard's notification immediately after an update. If the wizard
+    says the quick-update notice is still not dismissed, defer this AF3
+    rebuild. The marker is written only after a successful rebuild, so the
+    next startup retries normally after the user closes the notice.
+    """
+    if xbmcaddon is None:
+        return False
+    try:
+        wizard = xbmcaddon.Addon('plugin.program.kodipovilwizard')
+        return (wizard.getSetting('quick_update_notedismiss') == 'false'
+                and bool(wizard.getSetting('quick_update_noteid')))
+    except Exception:
+        return False
+
+
+def _wait_for_quick_update_notice(max_seconds=180):
+    if xbmc is None:
+        return False
+    if not _quick_update_notice_pending():
+        return False
+    monitor = xbmc.Monitor()
+    deadline = time.time() + max_seconds
+    while time.time() < deadline:
+        if monitor.waitForAbort(1):
+            return True
+        if not _quick_update_notice_pending():
+            return False
+    return _quick_update_notice_pending()
+
+
 def _rebuild_af3_shortcuts():
     if xbmc is None:
         return
@@ -1097,6 +1135,8 @@ def ensure_patched():
     want_rebuild = changed or marker_changed
 
     if want_rebuild and _is_af3_active():
+        if _wait_for_quick_update_notice():
+            return 'rebuild_deferred_quick_update_notice'
         _rebuild_af3_shortcuts()
         try:
             _write(marker, PATCH_VERSION + '\n')

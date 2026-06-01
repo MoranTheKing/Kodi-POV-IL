@@ -1,3 +1,17 @@
+v0.2.104
+- Build-only TorBox subscription startup status: if the user is connected
+  to TorBox in POV, Kodi POV IL now shows a Hebrew TorBox premium status
+  toast on Kodi startup with the number of days remaining. When Real-Debrid
+  is connected too, TorBox waits a few seconds so the two status toasts are
+  shown one after the other instead of colliding. Standalone AI-subtitle
+  installs are not affected.
+- Arctic Fuse 3 quick-update notice protection: AF3 now waits while the
+  wizard's quick-update changelog notice is still open/unread before running
+  script.skinvariables rebuild + ReloadSkin. It checks once per second for
+  up to 180 seconds and continues immediately after the notice is dismissed,
+  so frequent quick updates still install normally while the changelog is
+  no longer closed by the Skin Variables rebuild.
+
 v0.2.103
 - RTL reverse-mode dialogue dash fix: dashed dialogue lines now move the
   leading "- " marker to the logical line end so Kodi renders the dash on
