@@ -1557,28 +1557,50 @@ def _maybe_show_af3_first_launch_dialog():
             pass
 
 
-def _maybe_show_torbox_status():
-    """Build-only TorBox subscription toast on Kodi startup.
+def _maybe_show_debrid_status():
+    """Build-only premium debrid subscription toasts on Kodi startup.
 
     This intentionally lives outside POV so it applies consistently in
     Estuary, FENtastic and Arctic Fuse 3, while the build_mode gate keeps
     standalone AI-subtitle installs from changing user navigation/state.
     """
     try:
-        from resources.lib import torbox_status_notifier, kodi_utils
+        from resources.lib import debrid_status_notifier, kodi_utils
     except Exception:
         return
     try:
-        status = torbox_status_notifier.maybe_notify()
-        if status == 'shown':
-            kodi_utils.log('TorBox startup subscription status shown',
+        status = debrid_status_notifier.maybe_notify()
+        if status.startswith('shown:'):
+            kodi_utils.log('Debrid startup subscription status shown: {0}'
+                           .format(status.split(':', 1)[1]),
                            level='INFO')
-        elif status not in ('no_pov', 'not_connected', 'already_shown'):
-            kodi_utils.log('TorBox startup status: {0}'.format(status),
+        elif status not in ('no_pov', 'nothing_to_show', 'already_shown'):
+            kodi_utils.log('Debrid startup status: {0}'.format(status),
                            level='INFO')
     except Exception as e:
         try:
-            kodi_utils.log('TorBox startup status failed: {0}'.format(e),
+            kodi_utils.log('Debrid startup status failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_debrid_status():
+    """Build-only: make POV's premium-expiry settings suitable for
+    our Hebrew/icon-aware startup toasts and prevent duplicate generic
+    POV expiry notifications."""
+    try:
+        from resources.lib import pov_debrid_status_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_debrid_status_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log('POV debrid status settings patched',
+                           level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log('POV debrid status patch failed: {0}'.format(e),
                            level='WARNING')
         except Exception:
             pass
@@ -1809,8 +1831,9 @@ def main():
     # service(s) they pick. Best-effort: this addon doesn't own AF3's
     # OAuth flows -- POV does.
     if build_mode:
+        _maybe_patch_pov_debrid_status()
         _maybe_show_af3_first_launch_dialog()
-        _maybe_show_torbox_status()
+        _maybe_show_debrid_status()
 
     # Spin up the SubsFilenamePublisher player monitor. It needs to
     # outlive this function's local scope -- xbmc.Player subclasses

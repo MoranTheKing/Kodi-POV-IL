@@ -41,12 +41,16 @@ ENGINE_REL_PATH = 'resources/modules/engine.py'
 
 # Bump this number whenever the hook body materially changes. The
 # patcher detects an old marker and re-injects the new version.
-HOOK_VERSION = 3
+HOOK_VERSION = 4
 MARKER = '# AI_TRANSLATE_HOOK_v{0}'.format(HOOK_VERSION)
 END_MARKER = '# END AI_TRANSLATE_HOOK_v{0}'.format(HOOK_VERSION)
 # Any previous-version markers we should rewrite over. Add to this
 # list when bumping HOOK_VERSION.
-OLD_MARKERS = ['# AI_TRANSLATE_HOOK_v1', '# AI_TRANSLATE_HOOK_v2']
+OLD_MARKERS = [
+    '# AI_TRANSLATE_HOOK_v1',
+    '# AI_TRANSLATE_HOOK_v2',
+    '# AI_TRANSLATE_HOOK_v3',
+]
 
 # The hook body, indented 4 spaces (DarkSubs uses 4-space indent
 # inside function bodies). Inserted as the first statement of
@@ -74,17 +78,22 @@ HOOK_BODY = '''\
         import xbmcaddon as _aix_a, xbmc as _aix_x, os as _aix_os
         import time as _aix_t, base64 as _aix_b
         import xbmcgui as _aix_g
+        _aix_now = str(int(_aix_t.time()))
         _aix_g.Window(10000).setProperty(
-            'ai_subs.hook_last_fire', str(int(_aix_t.time())))
-        _aix_x.log('[AI hook v3] entered for ' + str(input_file),
+            'ai_subs.hook_last_fire', _aix_now)
+        _aix_x.log('[AI hook v4] entered for ' + str(input_file),
                    level=1)
         _aix_ad = _aix_a.Addon('service.subtitles.kodipovilai')
+        try:
+            _aix_ad.setSetting('_darksubs_hook_last_fire', _aix_now)
+        except Exception:
+            pass
         _aix_key = (_aix_ad.getSetting('api_key') or '').strip()
         _aix_g.Window(10000).setProperty(
             'ai_subs.hook_last_key_len', str(len(_aix_key)))
         if _aix_key:
             _aix_tried_ai = True
-            _aix_x.log('[AI hook v3] key len=' + str(len(_aix_key))
+            _aix_x.log('[AI hook v4] key len=' + str(len(_aix_key))
                        + ' -> firing RunScript', level=1)
             _aix_done = output_file + '.ai_done'
             try: _aix_os.remove(_aix_done)
@@ -109,11 +118,16 @@ HOOK_BODY = '''\
                                       encoding='utf-8',
                                       errors='replace') as _aix_f:
                                 _aix_x.log(
-                                    '[AI hook v3] AI output ready, '
+                                    '[AI hook v4] AI output ready, '
                                     'returning translated content',
                                     level=1)
                                 _aix_g.Window(10000).setProperty(
                                     'ai_subs.hook_last_outcome', 'ok')
+                                try:
+                                    _aix_ad.setSetting(
+                                        '_darksubs_hook_last_outcome', 'ok')
+                                except Exception:
+                                    pass
                                 return _aix_f.read()
                         except Exception:
                             break
@@ -122,15 +136,20 @@ HOOK_BODY = '''\
             # Reached only on timeout or empty/bad output. AI was
             # tried; fall through to the post-try block below which
             # copies English -> output and short-circuits Google.
-            _aix_x.log('[AI hook v3] AI did not produce a usable '
+            _aix_x.log('[AI hook v4] AI did not produce a usable '
                        'output -- will keep original English',
                        level=3)
         else:
-            _aix_x.log('[AI hook v3] api_key empty in DarkSubs '
+            _aix_x.log('[AI hook v4] api_key empty in DarkSubs '
                        'process -- falling through to engine default '
                        '(Google translator)', level=3)
             _aix_g.Window(10000).setProperty(
                 'ai_subs.hook_last_outcome', 'no_key')
+            try:
+                _aix_ad.setSetting(
+                    '_darksubs_hook_last_outcome', 'no_key')
+            except Exception:
+                pass
             try:
                 _aix_x.executebuiltin(
                     'Notification(Kodi POV IL - AI Subtitles,'
@@ -142,11 +161,17 @@ HOOK_BODY = '''\
         try:
             import xbmc as _aix_x
             import xbmcgui as _aix_g
-            _aix_x.log('[AI hook v3] crashed: ' + str(_aix_e),
+            _aix_x.log('[AI hook v4] crashed: ' + str(_aix_e),
                        level=3)
             _aix_g.Window(10000).setProperty(
                 'ai_subs.hook_last_outcome',
                 'crash: ' + str(_aix_e)[:80])
+            try:
+                _aix_a.Addon('service.subtitles.kodipovilai').setSetting(
+                    '_darksubs_hook_last_outcome',
+                    'crash: ' + str(_aix_e)[:80])
+            except Exception:
+                pass
             try:
                 _aix_x.executebuiltin(
                     'Notification(Kodi POV IL - AI Subtitles,'
@@ -170,7 +195,12 @@ HOOK_BODY = '''\
             _aix_shutil.copyfile(input_file, output_file)
             _aix_g.Window(10000).setProperty(
                 'ai_subs.hook_last_outcome', 'kept_original')
-            _aix_x.log('[AI hook v3] copied English -> output, '
+            try:
+                _aix_a.Addon('service.subtitles.kodipovilai').setSetting(
+                    '_darksubs_hook_last_outcome', 'kept_original')
+            except Exception:
+                pass
+            _aix_x.log('[AI hook v4] copied English -> output, '
                        'short-circuiting Google fallback',
                        level=1)
             try:

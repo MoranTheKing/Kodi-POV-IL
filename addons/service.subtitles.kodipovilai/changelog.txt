@@ -1,3 +1,21 @@
+v0.2.105
+- Replaced the TorBox-only startup status toast with a unified build-only
+  premium status notifier for Real-Debrid, TorBox, Premiumize and AllDebrid.
+  Each toast uses the matching POV media icon and service name as the
+  notification title. Connected services are shown one after another so
+  multiple accounts do not collide on screen.
+- The notifier now respects POV's existing per-service "Premium Expires
+  Notification (days)" settings. In this build, 0 means "show status on
+  every Kodi startup"; any positive number means "show only when days left
+  is less than or equal to that number" (for example 3 = last 3 days only).
+  A build-only patch expands those POV sliders from 0-7 to 0-365 days and
+  disables POV's generic English expiry toast to avoid duplicate notices.
+- DarkSubs hook diagnostics are less misleading after Kodi restarts: the
+  hook now persists its last-fire heartbeat/outcome in this addon's settings,
+  not only in a volatile Window property. If the hook is correctly installed
+  and configured but has not yet been exercised on this device, the "fired
+  in practice" line no longer marks the whole integration as broken.
+
 v0.2.104
 - Build-only TorBox subscription startup status: if the user is connected
   to TorBox in POV, Kodi POV IL now shows a Hebrew TorBox premium status
