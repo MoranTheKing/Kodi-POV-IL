@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kodi POV IL — מדריך התקנה</title>
+  <meta name="description" content="מדריך התקנה מלא של Kodi POV IL — לטלפון, מחשב, סטרימר. חיבור Gemini AI לתרגום, TMDB ו-Trakt.">
+  <meta property="og:title" content="Kodi POV IL — מדריך התקנה מלא">
+  <meta property="og:description" content="כל מה שצריך לדעת מההורדה ועד הצפייה הראשונה.">
+  <meta property="og:type" content="article">
+  <style>
+    :root {
+      --bg: #101820;
+      --bg-card: #172635;
+      --bg-card-alt: #1d2f44;
+      --border: #34495e;
+      --text: #f6f1df;
+      --text-muted: #b7c4cf;
+      --accent: #ffd166;
+      --accent-hover: #ffe199;
+      --link: #6cc4ff;
+      --warn-bg: #3d2817;
+      --warn-border: #d97742;
+      --warn-text: #ffba8a;
+      --ok-bg: #1a3a2a;
+      --ok-border: #4caf50;
+      --ok-text: #a5d6a7;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Heebo", "Open Sans Hebrew", Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      font-size: 16px;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent-hover); text-decoration: underline; }
+    code, kbd {
+      direction: ltr;
+      display: inline-block;
+      background: #0b1118;
+      padding: 2px 7px;
+      border-radius: 5px;
+      font-family: "SF Mono", Consolas, monospace;
+      font-size: 0.92em;
+      color: var(--accent);
+      border: 1px solid var(--border);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      max-width: 1180px;
+      margin: 0 auto;
+      gap: 32px;
+      padding: 32px 24px;
+    }
+    nav.toc {
+      position: sticky;
+      top: 24px;
+      align-self: start;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      max-height: calc(100vh - 48px);
+      overflow-y: auto;
+    }
+    nav.toc h3 {
+      margin: 0 0 12px;
+      font-size: 1rem;
+      color: var(--accent);
+      letter-spacing: 0.5px;
+    }
+    nav.toc ul { list-style: none; padding: 0; margin: 0; }
+    nav.toc li { margin: 6px 0; }
+    nav.toc a {
+      color: var(--text);
+      font-size: 0.93rem;
+      display: block;
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: background 0.15s;
+    }
+    nav.toc a:hover { background: var(--bg-card-alt); text-decoration: none; color: var(--accent); }
+    nav.toc li.sub { padding-right: 14px; }
+    nav.toc li.sub a { font-size: 0.86rem; color: var(--text-muted); }
+    main { min-width: 0; }
+    header.hero {
+      background: linear-gradient(135deg, #1d2f44 0%, #172635 100%);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 36px 32px;
+      margin-bottom: 32px;
+      text-align: center;
+    }
+    header.hero h1 {
+      margin: 0 0 12px;
+      font-size: 2rem;
+      color: var(--accent);
+      line-height: 1.3;
+    }
+    header.hero p { margin: 0; color: var(--text-muted); font-size: 1.05rem; }
+    section {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px 28px;
+      margin-bottom: 22px;
+    }
+    section h2 {
+      margin: 0 0 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--accent);
+      font-size: 1.45rem;
+    }
+    section h3 {
+      margin: 22px 0 10px;
+      color: var(--accent-hover);
+      font-size: 1.15rem;
+    }
+    section h4 {
+      margin: 16px 0 6px;
+      font-size: 1rem;
+      color: var(--text);
+    }
+    section p { margin: 8px 0; }
+    section ul, section ol { padding-right: 22px; margin: 10px 0; }
+    section li { margin: 6px 0; }
+    .callout {
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin: 16px 0;
+      border-right: 4px solid;
+    }
+    .callout.warn {
+      background: var(--warn-bg);
+      border-color: var(--warn-border);
+      color: var(--warn-text);
+    }
+    .callout.ok {
+      background: var(--ok-bg);
+      border-color: var(--ok-border);
+      color: var(--ok-text);
+    }
+    .callout.tip {
+      background: var(--bg-card-alt);
+      border-color: var(--link);
+    }
+    .callout strong { color: inherit; filter: brightness(1.2); }
+    .service-list { display: grid; gap: 12px; }
+    .service {
+      background: var(--bg-card-alt);
+      border-right: 4px solid var(--border);
+      padding: 12px 16px;
+      border-radius: 8px;
+    }
+    .service.required { border-color: #ef5350; }
+    .service.recommended { border-color: #66bb6a; }
+    .service.optional { border-color: #ffa726; }
+    .service.skip { border-color: #757575; opacity: 0.85; }
+    .service h4 { margin: 0 0 6px; font-size: 1.05rem; }
+    .service h4 small {
+      font-size: 0.78em;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-right: 8px;
+      font-weight: normal;
+    }
+    .service.required h4 small { background: #ef5350; color: white; }
+    .service.recommended h4 small { background: #66bb6a; color: white; }
+    .service.optional h4 small { background: #ffa726; color: black; }
+    .service.skip h4 small { background: #757575; color: white; }
+    .service p { margin: 4px 0; font-size: 0.93rem; color: var(--text-muted); }
+    .step {
+      background: var(--bg-card-alt);
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin: 12px 0;
+    }
+    .step h4 { margin-top: 0; color: var(--accent); }
+    .pill {
+      display: inline-block;
+      background: var(--bg-card-alt);
+      color: var(--accent);
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      margin: 0 2px;
+      border: 1px solid var(--border);
+    }
+    footer {
+      text-align: center;
+      color: var(--text-muted);
+      padding: 24px;
+      font-size: 0.9rem;
+    }
+    footer a { color: var(--text-muted); text-decoration: underline; }
+    .back-to-top {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      font-size: 1.2rem;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+      z-index: 100;
+    }
+    .back-to-top.visible { opacity: 1; pointer-events: auto; }
+    .toc-toggle {
+      display: none;
+      width: 100%;
+      padding: 12px;
+      background: var(--bg-card);
+      color: var(--accent);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 1rem;
+      margin-bottom: 12px;
+      cursor: pointer;
+    }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; padding: 16px; gap: 12px; }
+      nav.toc { position: static; max-height: none; }
+      nav.toc.collapsed ul { display: none; }
+      .toc-toggle { display: block; }
+      section { padding: 18px 18px; }
+      header.hero { padding: 24px 18px; }
+      header.hero h1 { font-size: 1.6rem; }
+      body { font-size: 15px; }
+    }
+    .intro-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin: 16px 0;
+    }
+    .intro-grid .row {
+      background: var(--bg-card-alt);
+      padding: 12px 16px;
+      border-radius: 8px;
+      border-right: 3px solid var(--accent);
+    }
+    .intro-grid .row strong { color: var(--accent-hover); }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <nav class="toc collapsed">
+    <button class="toc-toggle" onclick="document.querySelector('nav.toc').classList.toggle('collapsed')">📑 תוכן עניינים ▾</button>
+    <h3>📑 תוכן עניינים</h3>
+    <ul>
+      <li><a href="#choose">איזו שיטה מתאימה לי?</a></li>
+      <li><a href="#bits">⚠️ 32-bit vs 64-bit</a></li>
+      <li><a href="#downloader">📱 שיטה 1 — Android (טלפון / טאבלט / סטרימר) דרך Downloader</a></li>
+      <li><a href="#windows">💻 שיטה 2 — Windows</a></li>
+      <li><a href="#webos">📺 שיטה 3 — LG webOS</a></li>
+      <li><a href="#wizard">🧙 שיטה 4 — דרך Wizard</a></li>
+      <li><a href="#filemanager">📂 שיטה 5 — File Manager</a></li>
+      <li><a href="#ai-only">🤖 שיטה 6 — רק תוסף AI</a></li>
+      <li><a href="#gemini">🔑 חיבור Gemini AI</a></li>
+      <li><a href="#tmdb">⭐ חיבור TMDB</a></li>
+      <li><a href="#trakt">🎬 חיבור Trakt</a></li>
+      <li><a href="#services-compare">📋 השוואת שירותים</a></li>
+      <li><a href="#updates">🔄 עדכונים</a></li>
+      <li><a href="#troubleshooting">⚠️ פתרון בעיות</a></li>
+      <li><a href="#help">📞 עזרה נוספת</a></li>
+    </ul>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <h1>🎬 Kodi POV IL — מדריך התקנה מלא</h1>
+      <p>כל מה שצריך לדעת מההורדה ועד הצפייה הראשונה</p>
+    </header>
+
+    <section id="choose">
+      <h2>📌 איזו שיטת התקנה מתאימה לי?</h2>
+      <p>בחר את המצב שלך — ועבור ישר לשיטה הרלוונטית:</p>
+      <div class="intro-grid">
+        <div class="row"><strong>אין לי Kodi בכלל, יש לי טלפון אנדרואיד / טאבלט / סטרימר Android TV</strong><br>→ <a href="#downloader">שיטה 1 (Downloader)</a></div>
+        <div class="row"><strong>אין לי Kodi, יש לי מחשב Windows</strong><br>→ <a href="#windows">שיטה 2 (Windows Setup)</a></div>
+        <div class="row"><strong>אין לי Kodi, יש לי טלוויזיית LG (webOS)</strong><br>→ <a href="#webos">שיטה 3 (IPK)</a></div>
+        <div class="row"><strong>יש לי Kodi מותקן (ריק או עם משהו אחר)</strong><br>→ <a href="#wizard">שיטה 4 (Wizard)</a> או <a href="#filemanager">שיטה 5 (File Manager)</a></div>
+        <div class="row"><strong>יש לי בילד אחר ורק רוצה תרגום AI</strong><br>→ <a href="#ai-only">שיטה 6 (תוסף בודד)</a></div>
+      </div>
+    </section>
+
+    <section id="bits">
+      <h2>⚠️ הערה חשובה — 32-bit מול 64-bit</h2>
+      <p>זה <strong>לא קשור לעוצמת המכשיר</strong> — זה רק עניין של ארכיטקטורת המעבד שהמכשיר תומך בה. כלל פשוט:</p>
+      <ul>
+        <li><strong>אנדרואיד 64-bit</strong> → טלפונים, טאבלטים, ו-<strong>Nvidia Shield Pro 2019</strong>. (הסטרימר היחיד שתומך ב-64-bit. הגרסה הלא-Pro של Shield היא 32-bit!)</li>
+        <li><strong>אנדרואיד 32-bit</strong> → כל שאר הסטרימרים והטלוויזיות החכמות (Android TV boxes, Onn 4K, Xiaomi Mi Box, Chromecast with Google TV, וכו')</li>
+        <li><strong>Windows / מחשב נייד</strong> → השתמש ב-Installer הייעודי (שיטה 2). אין צורך לבחור 32 או 64 ידנית.</li>
+      </ul>
+      <div class="callout tip">
+        ב-Downloader (שיטה 1) — תבחר ה-APK שמתאים למכשיר שלך לפי הסיווג למעלה. אם בטעות תוריד את הלא נכון — ההתקנה פשוט תיכשל ותחזור לבחור אחר.
+      </div>
+    </section>
+
+    <section id="downloader">
+      <h2>📱 שיטה 1 — התקנה ל-Android דרך Downloader (טלפון / טאבלט / סטרימר)</h2>
+      <p>הדרך המומלצת לכל מכשיר אנדרואיד — טלפון, טאבלט, או סטרימר Android TV. Downloader מספק עמוד בחירה אחד שמוביל לקובץ המתאים לכל מכשיר.</p>
+
+      <div class="step">
+        <h4>שלב א' — התקן את אפליקציית Downloader</h4>
+        <ul>
+          <li><strong>טלפון / טאבלט אנדרואיד:</strong> Google Play → חפש <strong>"Downloader"</strong> של AFTVnews → התקן</li>
+          <li><strong>סטרימר Android TV:</strong> בחנות האפליקציות של המכשיר → חפש <strong>"Downloader"</strong> של AFTVnews → התקן</li>
+        </ul>
+      </div>
+
+      <div class="step">
+        <h4>שלב ב' — הזן את הקוד</h4>
+        <ul>
+          <li>פתח את Downloader</li>
+          <li>בשדה הראשי (שורת ה-URL/Code) הזן: <code>6699594</code></li>
+          <li>לחץ <strong>GO</strong> (כפתור צהוב)</li>
+          <li>הקוד יוביל אותך לעמוד בחירה — שם תבחר את המכשיר ואת הגרסה שמתאימים לך (אנדרואיד 32-bit / אנדרואיד 64-bit / Windows / webOS וכו')</li>
+          <li>אחרי הבחירה — Downloader יוריד את הקובץ אוטומטית</li>
+        </ul>
+        <div class="callout warn">
+          <strong>איזו גרסה לבחור?</strong> טלפון / טאבלט / Shield Pro 2019 → <strong>64-bit</strong>. כל סטרימר אחר וטלוויזיה חכמה → <strong>32-bit</strong>. ראה <a href="#bits">סעיף 32/64-bit</a> להסבר מלא.
+        </div>
+      </div>
+
+      <div class="step">
+        <h4>שלב ג' — התקן</h4>
+        <ul>
+          <li>בסיום ההורדה → לחץ <strong>Install</strong></li>
+          <li>אם זו הפעם הראשונה — המכשיר יבקש לאפשר ל-Downloader להתקין אפליקציות. <strong>אפשר</strong> (זה חד פעמי)</li>
+          <li>אם אנטי-וירוס מזהיר — אפשר להמשיך, ה-APK בטוח</li>
+          <li>בסיום ההתקנה → לחץ <strong>Done</strong> (לא Open עדיין) → חזור ל-Downloader → <strong>Delete</strong> את הקובץ (כדי לא לבזבז מקום)</li>
+          <li>עכשיו פתח את <strong>Kodi POV IL</strong> מתפריט האפליקציות</li>
+        </ul>
+      </div>
+
+      <div class="step">
+        <h4>שלב ד' — הפעלה ראשונה</h4>
+        <ul>
+          <li>פתח את <strong>"Kodi POV IL"</strong></li>
+          <li>חכה 30-60 שניות — הוויזרד יותקן אוטומטית ויטעין את הבילד</li>
+          <li>בסיום יופיע מסך הבית עם POV מותקן</li>
+        </ul>
+      </div>
+
+      <div class="callout tip">
+        <strong>אלטרנטיבה למתקדמים:</strong> אם אתה לא רוצה Downloader — אפשר להוריד את ה-APK ישירות מ-<a href="https://github.com/MoranTheKing/Kodi-POV-IL/releases/latest" target="_blank">GitHub Releases</a> דרך דפדפן במכשיר ולפתוח לאחר ההורדה.
+      </div>
+    </section>
+
+    <section id="windows">
+      <h2>💻 שיטה 2 — התקנה ל-Windows</h2>
+
+      <div class="step">
+        <h4>שלב א' — הורד את ה-Setup</h4>
+        <ul>
+          <li>במחשב פתח דפדפן וכנס ל: <a href="https://github.com/MoranTheKing/Kodi-POV-IL/releases/latest" target="_blank">github.com/MoranTheKing/Kodi-POV-IL/releases/latest</a></li>
+          <li>הורד: <code>Kodi-POV-IL-Setup.exe</code></li>
+        </ul>
+      </div>
+
+      <div class="step">
+        <h4>שלב ב' — התקן</h4>
+        <ul>
+          <li>לחץ פעמיים על הקובץ שהורדת</li>
+          <li>אם Windows Defender יזהיר → לחץ "More info" → "Run anyway"</li>
+          <li>עקוב אחרי המתקין: Next → Next → Install → Finish</li>
+        </ul>
+      </div>
+
+      <div class="step">
+        <h4>שלב ג' — פתח</h4>
+        <p><strong>"Kodi POV IL"</strong> יופיע בתפריט התחל. בפעם הראשונה הוויזרד יותקן ויחל הבילד אוטומטית.</p>
+      </div>
+    </section>
+
+    <section id="webos">
+      <h2>📺 שיטה 3 — התקנה ל-LG TV (webOS)</h2>
+      <div class="callout warn">דורש את Developer Mode של LG. למתקדמים בלבד.</div>
+      <ul>
+        <li>הורד <code>Kodi-POV-IL-webos.ipk</code> מ-GitHub Releases</li>
+        <li>הפעל Developer Mode על הטלוויזיה: <a href="https://webostv.developer.lge.com/develop/getting-started/developer-mode-app" target="_blank">webostv.developer.lge.com/develop/getting-started/developer-mode-app</a></li>
+        <li>השתמש ב-<code>ares-install</code> כדי להתקין את ה-IPK</li>
+      </ul>
+    </section>
+
+    <section id="wizard">
+      <h2>🧙 שיטה 4 — התקנה דרך Wizard (אם כבר יש Kodi)</h2>
+      <p>מתאים לך אם יש לך Kodi 21+ ריק או עם בילד אחר ואתה רוצה להתקין את POV IL FENtastic.</p>
+
+      <div class="step">
+        <h4>שלב א' — הוסף Source</h4>
+        <ul>
+          <li>Kodi → הגדרות (גלגל שיניים) → מנהל קבצים (File Manager)</li>
+          <li>לחץ פעמיים על "הוסף מקור" (Add Source) בחלון השמאלי</li>
+          <li>בכתובת הזן: <code>https://morantheking.github.io/Kodi-POV-IL/wizard/</code></li>
+          <li>בשם הזן: <code>pov</code></li>
+          <li>אישור (OK)</li>
+        </ul>
+      </div>
+
+      <div class="step">
+        <h4>שלב ב' — אפשר התקנה ממקורות לא ידועים (חובה ב-Kodi 21!)</h4>
+        <p><strong>בלי השלב הזה ההתקנה תיכשל בלי הסבר ברור.</strong> Kodi 21 חוסם התקנה מ-zip כברירת מחדל לאבטחה.</p>
+        <ul>
+          <li>Kodi → הגדרות (גלגל שיניים) → מערכת (System)</li>
+          <li>גלול ל-Add-ons (תוספים)</li>
+          <li>"Unknown sources" (מקורות לא ידועים) → הפעל ל-<strong>ON</strong></li>
+          <li>תופיע התראה — אישור</li>
+        </ul>
+      </div>
+
+      <div class="step">
+        <h4>שלב ג' — התקן את ה-Wizard</h4>
+        <ul>
+          <li>חזור ל-Kodi → Add-ons (בתפריט הראשי)</li>
+          <li>לחץ על כפתור הקופסה בפינה השמאלית למעלה</li>
+          <li>Install from zip file</li>
+          <li>בחר <code>pov</code> → <code>plugin.program.kodipovilwizard-latest.zip</code></li>
+          <li>אם תופיע התראת אזהרה על מקור לא ידוע — אישור</li>
+          <li>חכה להודעה "הותקן בהצלחה"</li>
+        </ul>
+      </div>
+
+      <div class="step">
+        <h4>שלב ד' — אוטומטי</h4>
+        <p>הוויזרד יזהה שאין בילד מותקן ויפעיל את עצמו אוטומטית. אין צורך לעשות כלום ידנית.</p>
+        <ul>
+          <li>הוויזרד ישאל אם לשמור הגדרות קיימות (Trakt, Debrid, Favorites וכו') — <strong>אשר את כולן</strong> אלא אם רוצה התקנה נקייה לחלוטין</li>
+          <li>חכה — הוויזרד יוריד את הבילד (~50MB), ינקה ויתקין הכל</li>
+          <li>בסיום Kodi יבקש סגירה ופתיחה מחדש → אשר</li>
+        </ul>
+        <div class="callout tip">
+          <strong>אם משום מה לא התחיל אוטומטית:</strong> אפשר להפעיל ידנית דרך Kodi → Programs (בתפריט הראשי) → Kodi POV IL Wizard → Install Build → Kodi POV IL — FENtastic.
+        </div>
+      </div>
+    </section>
+
+    <section id="filemanager">
+      <h2>📂 שיטה 5 — התקנה דרך File Manager (ידנית מלאה)</h2>
+      <p>עבור מי שרוצה שליטה מלאה ולא רוצה Source.</p>
+      <div class="callout warn">
+        <strong>חובה לפני התחלה ב-Kodi 21:</strong> Settings → System → Add-ons → "Unknown sources" → ON (ולאשר את ההתראה). בלי זה התקנת ה-zip תיכשל עם ההודעה "נכשל בהתקנת הרחבה מקובץ".
+      </div>
+      <ul>
+        <li>הורד ידנית מ-GitHub: <code>plugin.program.kodipovilwizard-latest.zip</code> (הוויזרד) ו-<code>Kodi-POV-IL-FENtastic-test-0.1.13.zip</code> (הבילד)</li>
+        <li>העתק את שני הקבצים למכשיר</li>
+        <li>ב-Kodi: Add-ons → קופסה → Install from zip file → בחר את הוויזרד</li>
+        <li>הפעל את הוויזרד דרך Programs ובחר Install Build → Install from local zip (ובחר את הזיפ של הבילד)</li>
+      </ul>
+    </section>
+
+    <section id="ai-only">
+      <h2>🤖 שיטה 6 — רק תוסף ה-AI על בילד קיים</h2>
+      <p>עבור מי שיש לו כבר בילד אחר (Twilight / FEN / Diggz / וכו') ורק רוצה תרגום AI איכותי.</p>
+
+      <div class="step">
+        <h4>שלב א' — הורד את התוסף הבודד</h4>
+        <p><a href="https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist/service.subtitles.kodipovilai-latest.zip" target="_blank">service.subtitles.kodipovilai-latest.zip</a></p>
+        <p class="muted">קישור יציב — תמיד מצביע על הגרסה העדכנית. אין צורך לחפש בפעם הבאה.</p>
+      </div>
+
+      <div class="step">
+        <h4>שלב ב' — אפשר התקנה ממקורות לא ידועים (חובה ב-Kodi 21!)</h4>
+        <p><strong>בלי השלב הזה ההתקנה תיכשל עם ההודעה "נכשל בהתקנת הרחבה מקובץ".</strong></p>
+        <ul>
+          <li>Kodi → הגדרות (גלגל שיניים) → System → Add-ons</li>
+          <li>"Unknown sources" → ON</li>
+          <li>אשר את התראת האזהרה</li>
+        </ul>
+      </div>
+
+      <div class="step">
+        <h4>שלב ג' — התקן</h4>
+        <ul>
+          <li>ב-Kodi: Add-ons → קופסה → Install from zip file</li>
+          <li>נווט לזיפ שהורדת → אשר</li>
+          <li>חכה ל"הותקן"</li>
+        </ul>
+      </div>
+
+      <div class="step">
+        <h4>שלב ד' — הפעל אם דרוש</h4>
+        <p>Add-ons → My add-ons → Subtitles → אם רואה את התוסף כ-Disabled → לחץ Enable</p>
+      </div>
+
+      <div class="callout ok">
+        אחרי שיש Gemini key (סעיף הבא) — התרגום ירוץ אוטומטית. גם DarkSubs/All_Subs יזהו אותו ויעבירו אליו את כל הבקשות.
+      </div>
+    </section>
+
+    <section id="gemini">
+      <h2>🔑 חיבור Gemini AI — חובה לתרגום AI</h2>
+      <p>זה הלב של התוסף. בלי Gemini אין AI.</p>
+
+      <div class="step">
+        <h4>שלב א' — קבל מפתח חינמי</h4>
+        <ul>
+          <li>בטלפון (קל יותר עם מקלדת) → כנס ל: <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a></li>
+          <li>התחבר עם חשבון Google רגיל</li>
+          <li>לחץ "Create API key" → "Create API key in new project"</li>
+          <li>העתק את המפתח (משהו כמו <code>AIzaSy...</code>)</li>
+        </ul>
+      </div>
+
+      <div class="step">
+        <h4>שלב ב' — חבר ב-Kodi (הדרך הקלה — QR)</h4>
+        <ul>
+          <li>במסך הבית של Kodi → <strong>"חיבור שירותים להרחבת POV"</strong></li>
+          <li>בחר <strong>Gemini AI</strong></li>
+          <li>בחר 📱 <strong>התאמה מטלפון / מכשיר אחר (QR + URL)</strong></li>
+          <li>הוצא טלפון → סרוק את ה-QR (או פתח את ה-URL בדפדפן)</li>
+          <li>הדבק את המפתח → שלח</li>
+          <li>ב-Kodi יופיע "החיבור הצליח" → סיימת</li>
+        </ul>
+      </div>
+
+      <div class="step">
+        <h4>שלב ב' חלופי — דרך הגדרות התוסף</h4>
+        <p>אם אין QR נגיש או רוצה לעקוף:</p>
+        <ul>
+          <li>Add-ons → My add-ons → Subtitles → Kodi POV IL - AI Subtitles → Configure</li>
+          <li>בחר "📱 התאם מטלפון / מכשיר אחר (QR + URL)" — אותו QR flow</li>
+          <li>או הזן ידנית ב-Gemini API Key → הדבק → OK → לחץ "בדיקת חיבור"</li>
+        </ul>
+      </div>
+
+      <div class="callout tip">
+        <strong>📊 על המכסה החינמית:</strong> Gemini Flash Lite מאפשר 500 בקשות ביום בחינם (ללא כרטיס אשראי). בפועל = ~10-30 סרטים ביום, יותר ממה שהמשתמש הממוצע צריך.
+      </div>
+
+      <div class="callout ok">
+        <strong>בסיום</strong> — תרגום AI מופעל אוטומטית. גם דרך DarkSubs (אם תבחר כתוביות באנגלית — AI יתרגם לעברית ברמה מצוינת) וגם דרך התוסף הבודד.
+      </div>
+    </section>
+
+    <section id="tmdb">
+      <h2>⭐ חיבור TMDB — אופציונלי, מומלץ מאוד</h2>
+      <p>TMDB משמש לרשימות אישיות — Favorites, Watchlist, רשימות מותאמות אישית.</p>
+
+      <h3>למה דווקא TMDB ולא Trakt לזה?</h3>
+      <ul>
+        <li>אין הגבלות במנוי חינם (Trakt מגביל ל-100 פריטים ב-Collections)</li>
+        <li>יש להם אפליקציה נוחה לטלפון ואתר נקי לעריכה</li>
+        <li>מסונכרן בין כל המכשירים</li>
+      </ul>
+
+      <h3>איך לחבר</h3>
+      <ul>
+        <li>מסך הבית של Kodi → "חיבור שירותים להרחבת POV" → <strong>TMDB</strong></li>
+        <li>עקוב אחרי ההוראות — תידרש להתחבר עם חשבון Google ולאשר גישה</li>
+        <li>חזור ל-Kodi → סטטוס יעבור ל"מחובר"</li>
+      </ul>
+
+      <h3>אחרי שמחובר</h3>
+      <ul>
+        <li>ה-tiles "הסדרות שלי (TMDB)" ו"הסרטים שלי (TMDB)" במסך הבית יציגו את ה-Favorites שלך</li>
+        <li>בלחיצה ארוכה על סרט/סדרה תהיה אופציה "ניהול רשימות (TMDB)" להוסיף/להסיר</li>
+        <li>אפשר לראות ולנהל גם מאפליקציית TMDB בטלפון</li>
+      </ul>
+    </section>
+
+    <section id="trakt">
+      <h2>🎬 חיבור Trakt — אופציונלי, מומלץ למי שצופה בכמה מכשירים</h2>
+      <p>Trakt הוא השירות <strong>היחיד</strong> שמסנכרן progress של נגינה בין מכשירים. אם התחלת סרט בטלפון ורוצה להמשיך בסטרימר — חייבים Trakt. TMDB לא תומך ב-progress sync.</p>
+
+      <h3>איך לחבר</h3>
+      <ul>
+        <li>מסך הבית → "חיבור שירותים להרחבת POV" → <strong>Trakt</strong></li>
+        <li>יופיע קוד 5 ספרות + URL</li>
+        <li>במחשב/טלפון → <a href="https://trakt.tv/activate" target="_blank">trakt.tv/activate</a></li>
+        <li>הזן את הקוד → אשר</li>
+        <li>חזור ל-Kodi → סטטוס "מחובר"</li>
+      </ul>
+
+      <h3>חשוב להגדיר נכון</h3>
+      <div class="callout warn">
+        POV → הגדרות → Trakt → <strong>Watched Indicators = Trakt</strong> (אם משאיר על POV — ה-progress נשמר רק מקומית במכשיר הזה)
+      </div>
+
+      <h3>אחרי שמחובר ומוגדר</h3>
+      <ul>
+        <li>"המשך צפייה" / "הפרק הבא" מסונכרן בין כל המכשירים</li>
+        <li>ה-tiles "הסדרות שלי (Trakt)" ו"הסרטים שלי (Trakt)" מציגים את ה-Collection</li>
+        <li>ב-context menu — אופציה "ניהול רשימות (Trakt)"</li>
+      </ul>
+
+      <div class="callout tip">
+        <strong>📝 על מנוי חינם של Trakt:</strong> progress sync ב-free tier אינו מוגבל. רק Collections / Lists מוגבלים ל-100 פריטים — אבל בבילד שלנו נטינו ל-TMDB לרשימות, אז free tier של Trakt מספיק לחלוטין למה שאנחנו משתמשים בו.
+      </div>
+    </section>
+
+    <section id="services-compare">
+      <h2>📋 השוואת שירותים — מה כדאי לחבר</h2>
+
+      <div class="service-list">
+        <div class="service required">
+          <h4><small>חובה</small>Gemini — חובה לתרגום AI</h4>
+          <p>בלי זה אין AI בכלל. קל מאוד לחבר (QR).</p>
+        </div>
+        <div class="service recommended">
+          <h4><small>מומלץ מאוד</small>TMDB</h4>
+          <p>Favorites/Watchlist בלי הגבלות + יש אפליקציה לטלפון. קל לחבר (OAuth).</p>
+        </div>
+        <div class="service recommended">
+          <h4><small>מומלץ</small>Trakt</h4>
+          <p>למי שצופה בכמה מכשירים — סנכרון progress (היחיד שעובד). קל לחבר (קוד 5 ספרות).</p>
+        </div>
+        <div class="service optional">
+          <h4><small>תלוי במנוי</small>Real Debrid / Premiumize / AllDebrid / TorBox</h4>
+          <p>רק אם יש לך מנוי. סטרימינג איכותי במהירות גבוהה. קל לחבר.</p>
+        </div>
+        <div class="service skip">
+          <h4><small>למתקדמים</small>MDBList</h4>
+          <p>רשימות מתקדמות (לא חיוני). דורש מנוי.</p>
+        </div>
+        <div class="service skip">
+          <h4><small>אופציונלי</small>OffCloud</h4>
+          <p>דביב נוסף, לא חיוני.</p>
+        </div>
+      </div>
+
+      <h3>המלצות מסכמות</h3>
+      <div class="callout ok">
+        <strong>🟢 מינימום:</strong> Gemini + Debrid כלשהו (Real Debrid הכי נפוץ)<br>
+        <strong>🟢 ההמלצה המלאה:</strong> Gemini + TMDB + Trakt + Debrid<br>
+        <strong>🔴 אל תטרח:</strong> MDBList ו-OffCloud אלא אם יש צורך ספציפי
+      </div>
+    </section>
+
+    <section id="updates">
+      <h2>🔄 עדכונים — איך לוודא שיש לי את הגרסה האחרונה</h2>
+      <p>הבילד מתעדכן אוטומטית דרך <strong>Quick Update</strong>:</p>
+      <ul>
+        <li>בכל פעם שעולה Kodi → אם יש עדכון, יופיע popup</li>
+        <li>ניתן גם להריץ ידנית: tile <strong>"עדכון מהיר - Wizard"</strong> במסך הבית</li>
+        <li>אחרי quick_update → <strong>restart ל-Kodi</strong> (סגירה + פתיחה מחדש)</li>
+        <li>כל ה-patchers ירוצו ויחילו את השינויים</li>
+      </ul>
+      <div class="callout tip">
+        אם יש בעיה — לפני שתפנה לעזרה: הרץ quick_update + restart פעם אחת. רוב הבעיות נפתרות.
+      </div>
+    </section>
+
+    <section id="troubleshooting">
+      <h2>⚠️ פתרון בעיות נפוצות</h2>
+
+      <h3>"ההתקנה נכשלה" באנדרואיד</h3>
+      <p>ייתכן שיש לך גרסה קודמת מותקנת עם חתימה שונה → הסר את האפליקציה הקיימת → התקן מחדש. בדוק שבחרת את הגרסה הנכונה (32-bit לרוב הסטרימרים, 64-bit לטלפונים / טאבלטים / Shield Pro 2019) — ראה <a href="#bits">סעיף 32/64-bit</a>.</p>
+
+      <h3>"נכשל בהתקנת הרחבה מקובץ" בתוך Kodi 21 (התקנת zip)</h3>
+      <p>זה Kodi 21 שחוסם <strong>Install from zip file</strong> כברירת מחדל לאבטחה. הפתרון:</p>
+      <ul>
+        <li>Kodi → הגדרות (גלגל שיניים) → System → Add-ons</li>
+        <li>"Unknown sources" → <strong>ON</strong></li>
+        <li>תופיע התראת אבטחה — אישור</li>
+        <li>חזור ל-Add-ons → Install from zip file → נסה שוב</li>
+      </ul>
+      <p class="muted">זה לא קשור ל-POV — Kodi 21 דורש את זה לכל זיפ של תוסף שלא מהמאגר הרשמי.</p>
+
+      <h3>הוויזרד תקוע בהתקנה הראשונית</h3>
+      <p>בדוק שיש אינטרנט יציב (לפחות 5Mbps). אם תקוע יותר מ-2 דקות — סגור את Kodi לחלוטין (לחיצה ארוכה על Home, בחירת Force Stop) ופתח מחדש. בפעם השנייה הוויזרד ימשיך מאיפה שעצר.</p>
+
+      <h3>"תרגום AI לא עובד"</h3>
+      <ol>
+        <li>וודא שיש Gemini key מחובר: Add-ons → My add-ons → Subtitles → AI Subtitles → Configure → Gemini API Key</li>
+        <li>וודא ש-DarkSubs דלוק: Add-ons → DarkSubs → Configure → "הפעל תרגום מכונה (Gemini AI)" = ON</li>
+        <li>אם עדיין לא — restart ל-Kodi</li>
+      </ol>
+
+      <h3>Trakt מחובר אבל progress לא מסונכרן</h3>
+      <p>POV → הגדרות → Trakt → Watched Indicators = <strong>Trakt</strong> (ולא POV)</p>
+
+      <h3>מסך הבית נראה דחוס</h3>
+      <p>יש לך כלי לסידור tiles בבילד: <strong>"סידור מועדפים"</strong> במסך הבית. אפשר לסדר, למחוק, ולהוסיף tiles משלך דרך תפריט ההקשר של Kodi.</p>
+
+      <h3>"התקנתי מחדש ואיבדתי הגדרות"</h3>
+      <p>ב-Wizard בהתקנה יש אפשרויות Keep Trakt Data, Keep Favorites, Keep Gemini וכו'. ברירת המחדל שומרת את כולן. אם איבדת — סימן שביטלת בטעות. בפעם הבאה <strong>בדוק שכל ה-Keep מסומנים</strong> לפני שמאשר את ההתקנה.</p>
+
+      <h3>התקנתי רק את התוסף בנפרד וההגדרות לא נשמרות</h3>
+      <p>ידוע — באג של Kodi 21 ב-Android עם הזנה ידנית של שדות string. <strong>השתמש בכפתור "התאם מטלפון (QR)"</strong> בהגדרות התוסף במקום הזנה ידנית. QR עוקף את הבעיה.</p>
+    </section>
+
+    <section id="help">
+      <h2>📞 עזרה נוספת</h2>
+      <ul>
+        <li><strong>שאלות פשוטות:</strong> בקבוצה</li>
+        <li><strong>באג רציני:</strong> פתח Issue ב-GitHub → <a href="https://github.com/MoranTheKing/Kodi-POV-IL/issues" target="_blank">github.com/MoranTheKing/Kodi-POV-IL/issues</a> (צרף לוג של Kodi אם אפשר)</li>
+        <li><strong>לוג של Kodi:</strong> System Info → Logs → או דרך אפליקציית "Log Viewer for Kodi" באנדרואיד</li>
+      </ul>
+    </section>
+
+    <footer>
+      <p>Kodi POV IL — <a href="https://github.com/MoranTheKing/Kodi-POV-IL" target="_blank">github.com/MoranTheKing/Kodi-POV-IL</a></p>
+    </footer>
+  </main>
+
+</div>
+
+<button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="חזור למעלה">↑</button>
+
+<script>
+  const btn = document.querySelector('.back-to-top');
+  window.addEventListener('scroll', () => {
+    btn.classList.toggle('visible', window.scrollY > 400);
+  });
+</script>
+
+</body>
+</html>

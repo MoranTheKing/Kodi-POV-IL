@@ -1,0 +1,2822 @@
+v0.2.113
+- Rebuilt the embedded staged_wizard.zip with Wizard 0.1.16 so service/APK
+  updates cannot restore the old kodi7rd custom_save_data_config URL.
+- The embedded Wizard no longer performs any custom_save_data_config network
+  read while being imported, preventing 404 crashes before quick-update starts.
+
+v0.2.112
+- Fixed the Wizard quick-update crash caused by importing
+  custom_save_data_config.py while the old kodi7rd config URL returns 404.
+  The Wizard now reads config from this repository and falls back safely if
+  a remote config file is unavailable.
+- Clean Wizard installs now point at full build 0.1.12, which already
+  contains the repaired Wizard/service files instead of relying on a first
+  quick-update pass.
+- Standalone AI-addon installs now also repoint FENtastic/Estuary's home
+  search button to POV's own search node, restoring the Hebrew POV search
+  menu without touching user favourites, lists, caches, or skin widgets.
+
+v0.2.111
+- Fixed clean Wizard installs still receiving the old Real-Debrid/KODI media
+  from the full build zip.
+- Added cache-busting POV IL icon filenames for the POV and Wizard home tiles,
+  then migrates existing favourites.xml paths to those new filenames on startup.
+  This avoids Kodi's image cache keeping the old Real-Debrid tile artwork.
+
+v0.2.110
+- Rebranded the remaining legacy Real-Debrid/KODI artwork in the build.
+- Existing users now receive the POV IL APK-style icon for the startup
+  splash, FENtastic top-left build logo, POV home tile and both Wizard
+  tiles (install wizard + quick update).
+- The branding sync is limited to those controlled build assets so it does
+  not overwrite unrelated custom home icons.
+
+v0.2.109
+- Favourites personal-tile self-heal now respects intentional user deletion.
+  Once the shipped personal tiles have existed in favourites.xml, we mark
+  that state. If the user later deletes those tiles manually, the AI addon
+  will not re-add them on the next Kodi startup.
+- The restore still works for the original build problem: when the Wizard
+  overwrites favourites.xml during a skin switch, the marker is lost with
+  the overwritten file, so the build can still restore missing personal
+  tiles after that accidental wipe.
+
+v0.2.108
+- Replaced the debrid-notification shortcut target with a dedicated Hebrew
+  settings dialog instead of opening POV's generic Addon.OpenSettings screen,
+  because current POV builds do not visibly expose the rd/tb/pm/ad.expires
+  controls there.
+- The new dialog lets users configure Real-Debrid, TorBox, Premiumize and
+  AllDebrid independently. This supports users with multiple connected
+  debrid services at the same time; the startup notifier still shows only
+  services that are actually connected.
+- Existing favourites from v0.2.106/v0.2.107 are migrated in place to the
+  new RunScript action.
+
+v0.2.107
+- Fixed the "הגדרת התראות מנוי" home button. v0.2.106 used a plugin://
+  route against the AI subtitle/service addon, which Kodi does not execute
+  reliably from favourites. The button now uses Kodi's direct
+  Addon.OpenSettings(plugin.video.pov) builtin.
+- Existing users who already received the broken favourite are migrated in
+  place on the next boot, without replacing their other favourites.
+- Arctic Fuse 3 home/power shortcut version bumped again so the rebuilt
+  shortcut uses the working builtin.
+
+v0.2.106
+- Added a build home-screen shortcut for configuring debrid subscription
+  notification thresholds. The new Hebrew button opens POV settings so users
+  can quickly change each service's Premium Expires Notification value.
+- Restores the new shortcut into existing FENtastic/Estuary-style
+  favourites.xml installs when missing, and adds it to Arctic Fuse 3 home and
+  power/submenu shortcuts. Arctic Fuse 3 home patch version bumped so existing
+  installs rebuild and receive the new button.
+
+v0.2.105
+- Replaced the TorBox-only startup status toast with a unified build-only
+  premium status notifier for Real-Debrid, TorBox, Premiumize and AllDebrid.
+  Each toast uses the matching POV media icon and service name as the
+  notification title. Connected services are shown one after another so
+  multiple accounts do not collide on screen.
+- The notifier now respects POV's existing per-service "Premium Expires
+  Notification (days)" settings. In this build, 0 means "show status on
+  every Kodi startup"; any positive number means "show only when days left
+  is less than or equal to that number" (for example 3 = last 3 days only).
+  A build-only patch expands those POV sliders from 0-7 to 0-365 days and
+  disables POV's generic English expiry toast to avoid duplicate notices.
+- DarkSubs hook diagnostics are less misleading after Kodi restarts: the
+  hook now persists its last-fire heartbeat/outcome in this addon's settings,
+  not only in a volatile Window property. If the hook is correctly installed
+  and configured but has not yet been exercised on this device, the "fired
+  in practice" line no longer marks the whole integration as broken.
+
+v0.2.104
+- Build-only TorBox subscription startup status: if the user is connected
+  to TorBox in POV, Kodi POV IL now shows a Hebrew TorBox premium status
+  toast on Kodi startup with the number of days remaining. When Real-Debrid
+  is connected too, TorBox waits a few seconds so the two status toasts are
+  shown one after the other instead of colliding. Standalone AI-subtitle
+  installs are not affected.
+- Arctic Fuse 3 quick-update notice protection: AF3 now waits while the
+  wizard's quick-update changelog notice is still open/unread before running
+  script.skinvariables rebuild + ReloadSkin. It checks once per second for
+  up to 180 seconds and continues immediately after the notice is dismissed,
+  so frequent quick updates still install normally while the changelog is
+  no longer closed by the Skin Variables rebuild.
+
+v0.2.103
+- RTL reverse-mode dialogue dash fix: dashed dialogue lines now move the
+  leading "- " marker to the logical line end so Kodi renders the dash on
+  the right side, while preserving the existing reverse punctuation behavior.
+  Mixed Hebrew/English lines are now treated as RTL whenever they contain
+  Hebrew anywhere in the line, so punctuation is also fixed when the final
+  token is English or a number (for example: Hebrew text + Netflix.). The
+  post-processor still works line-by-line and does not swap stacked subtitle
+  line order. The prompt now explicitly tells the model not to swap physical
+  line order inside two-line entries. Bumped the RTL cache repair marker to
+  v4 so existing cached translations are reprocessed once.
+
+v0.2.102
+- Split the addon startup into managed-build mode and standalone mode.
+  Standalone installs keep the AI subtitles / DarkSubs / Gemini integration,
+  but no longer run build-only POV mutations that can rewrite favourites,
+  navigator.db, Trakt/TMDB/local-list caches, AF3/FENtastic home nodes, or
+  POV context menus. Managed Kodi POV IL build installs are auto-detected via
+  the wizard, build marker, and build assets, so existing/new build users keep
+  the full self-healing build behavior across wizard, APK, IPK/CoreELEC, and
+  Windows installer routes. Also adds a conservative standalone cleanup that
+  restores only exact known personal-area navigator.db rows written by older
+  addon versions, leaving unknown/user-customized data untouched.
+
+v0.2.101
+- Estuary ("simple" skin): the home SEARCH button now opens POV's search
+  node directly too. The previous fix covered only skin.fentastic, but the
+  build also ships skin.estuary, where the home search icon (control 801)
+  opened a generic search dialog (ActivateWindow(1107)) instead of POV
+  search. The home-search patcher now repoints Estuary's search button to
+  ActivateWindow(videos,plugin://plugin.video.pov/?mode=navigator.search,
+  return) as well, so search lands on POV's node (Movies / TV Shows /
+  People / Movies Collection) on whichever simple skin you use. Each skin
+  is patched against its own Home.xml; idempotent, reversible, and a no-op
+  for any skin that isn't installed. Self-tested against both shipped
+  Home.xml files: search buttons repointed on both, idempotent on rerun,
+  cleanly reversible, and for Estuary exactly control 801 was changed with
+  no other bytes touched.
+
+v0.2.100
+- FENtastic ("simple" skin): the home SEARCH button now opens POV's
+  search node directly (SEARCH: Movies / TV Shows / People / Movies
+  Collection), instead of FENtastic's own search dialog. Before, reaching
+  POV search meant drilling manually through Search -> video add-ons ->
+  POV -> Search; now the button lands there in one press, matching how
+  search behaves on the AF3 skin. New self-healing patcher
+  (fentastic_search_patcher) repoints all three search-icon variants in
+  Home.xml (controls 804/805/806, gated by skin settings) to
+  ActivateWindow(videos,plugin://plugin.video.pov/?mode=navigator.search,
+  return). Idempotent, reversible, shape-tolerant, and a no-op on non-
+  FENtastic skins. Self-tested against the shipped Home.xml: all three
+  onclicks repointed, idempotent on rerun, cleanly reversible, no other
+  bytes touched.
+
+v0.2.99
+- AF3 home widgets now SURVIVE updates: customizing your widget rows
+  (removing "My Movies & Shows", reordering, adding your own) is no longer
+  wiped on the next update. Previously we rewrote the homewidgets node
+  verbatim every boot, so any user edit was overwritten. Now we 3-way
+  MERGE (per the build owner's intent -- respect user edits, but still
+  deliver important changes to everyone):
+    * a removed widget stays removed;
+    * reordering and user-added rows are preserved;
+    * widgets we still ship get their fields refreshed (so future tweaks
+      propagate) in the user's chosen position;
+    * BRAND-NEW widgets we add in an update are appended for everyone.
+  Implemented via a per-node "baseline" of what we last shipped, stored in
+  our OWN addon_data (widget_baselines/) so script.skinvariables never
+  parses it. On the first boot with this version the device's current
+  widget layout becomes the baseline, so existing customizations are
+  respected from here on. (homesubmenu/powermenu stay plain-overwrite --
+  they're not user-curated lists.) Self-tested: removal persists, new
+  tiles delivered, reorder/user tiles kept, field updates propagate,
+  idempotent, nodes dir stays clean.
+
+v0.2.98
+- AF3 home widgets are now a clean "teaser + drill-down": each row shows
+  7 posters and ends with a "More..." tile that opens the FULL category
+  list. A group member rightly noted the rows should show only a handful
+  as a teaser, with a button for the full list -- so a user on a weak
+  device gets a fast home screen and can disable rows they don't use in
+  skin settings, keeping just the 3-4 they care about.
+  Two parts:
+  * Widget display lowered from 20 -> 7 posters per row (widget_limit on
+    every home/network widget node). Note: this is the DISPLAY count;
+    POV's own page_limit (20) is unchanged per the build owner, so POV's
+    build cost is the same -- the row is just a tidy 7-item teaser.
+  * "More..." tile enabled: AF3 supports it natively via widget content
+    browse="$VAR[Defs_BrowseLimitedLists]", which is "auto" ONLY when the
+    skin setting Widgets.EnableShowMore is on (off by default, which is
+    why we never saw it). With "auto", because POV returns more (20) than
+    the row shows (7), Kodi appends a "More..." tile; selecting it opens
+    POV's normal list view for that path -- paginated 20/page WITH a Next
+    button + jump-to-letter -- so all items (e.g. all 70 Trakt-collection
+    shows) are reachable, clickable into sources as usual.
+  Fix: _set_af3_runtime_defaults() now sets Skin.SetBool(
+  Widgets.EnableShowMore). It runs every boot when AF3 is active, so
+  existing devices get it automatically; PATCH_VERSION v16 -> v17 also
+  forces a clean rebuild so the change appears right away.
+  (Verified against the real AF3 skin: Defs_BrowseLimitedLists at
+  Includes_Defaults.xml:333-336 gates on Widgets.EnableShowMore; the
+  widget <content> at Includes_Hubs.xml:121/166 consumes it.)
+
+v0.2.97
+- The "ניהול רשימות (Trakt)" context-menu item now actually opens the
+  TRAKT list manager (add to Trakt collection/lists), instead of opening
+  the TMDB list manager. Root cause was POV's own design, not a skin bug:
+  modules/dialogs.py trakt_manager_choice() began with
+    if get_setting('tmdb.account_id'): return tmdb_manager_choice(params)
+  i.e. whenever a personal TMDB account is connected it deliberately
+  redirected the Trakt manager to the TMDB manager (POV's comment: "TMDB
+  beats Trakt -- no rate limits"). Identical on both skins. Per user
+  request, pov_combined_discover_patcher gains a 4th edit (own marker) that
+  removes ONLY that redirect line, so the Trakt item opens Trakt; the rest
+  of the function is unchanged (still guarded by trakt_user), and the
+  separate "ניהול רשימות (TMDB)" item still opens the TMDB manager for
+  those who prefer it. Self-tested against real POV source: redirect gone,
+  function still compiles + keeps its trakt_user guard, idempotent.
+
+v0.2.96
+- AF3: "Clear Progress" / "Mark as watched" now take effect IMMEDIATELY
+  (previously the change showed only after a manual skin reload). Root
+  cause: POV's clear-progress + mark-watched both funnel through
+  kodi_utils.container_refresh(), which only did Container.Refresh -- that
+  updates POV's own focused list but NOT AF3's home widgets, so on AF3 the
+  movie stayed in "Continue Watching" until a skin reload (FENtastic's
+  widgets re-run the raw POV path on Container.Refresh, hence it worked
+  there). The DB delete itself always worked (verified: progress table
+  emptied). Fix (pov_combined_discover_patcher, 3rd edit, own marker):
+  make container_refresh() ALSO fire POV's existing widget-reload ping
+  UpdateLibrary(video,special://skin/foo) -- the standard no-op
+  library-scan signal AF3/TMDbHelper widgets listen for -- so home widgets
+  re-query right away. Self-tested against real POV source (all 3 POV
+  edits apply, compile, idempotent). (The earlier "Continue Watching shows
+  only 1 movie" report is now resolved on the user's device -- the
+  widget_limit=20 widget shows all in-progress movies.)
+
+v0.2.95
+- AF3 Discover is now UNIFIED: movies AND tv shows together, ranked by
+  popularity. Empty (nothing typed) -> trending movies+tv mixed; typed ->
+  a combined movie+tv search. Done the SAFE way (unlike the earlier
+  ai_pov_combined_search attempt): reuse POV's existing mixed-media list
+  builder menus/tmdb.py build_tmdb_list(), which already merges
+  Movies+TVShows and sorts, rendering Hebrew posters that click straight
+  into POV source scraping. New pov_combined_discover_patcher adds only the
+  missing data source to POV (exact-string, marker-gated, idempotent,
+  re-applied each boot, .pyc invalidated, self-tested against real POV
+  source):
+  * indexers/tmdb_api.py: tmdb_search_multi(query) -> TMDB /search/multi,
+    and tmdb_trending_all() -> /trending/all/week, each filtered to
+    movie/tv (drops person).
+  * menus/tmdb.py build_tmdb_list(): action=search_multi uses the query
+    (or trending when empty); everything downstream (merge/sort/render) is
+    unchanged.
+  af3_discover_pov_patcher (v5_rollback -> v6_unified) repoints the
+  Discover grid (Custom_1105_Search.xml onload + Includes_Search.xml
+  content) at plugin://plugin.video.pov/?mode=build_tmdb_list&action=
+  search_multi with the single-encoded typed query appended, so the grid
+  follows the search. Existing devices on the v5 popular-movies grid
+  migrate automatically. Self-tested: stock + v5 devices converge to the
+  unified target, valid XML, idempotent.
+
+v0.2.94
+- AF3 SEARCH result tiles now render (movies + tv). Root cause found by
+  dumping the skin's runtime-generated includes from the device: each
+  search result ROW gates its visibility on
+    String.IsEqual(Container(601).ListItem.Property(guid), <row guid>)
+  but AF3's script.skinvariables generator (node.py assign_guid) assigns a
+  RANDOM guid (f'guid-{random:08x}') to any node item lacking one, and it
+  generates the selector buttons (container 601) and the result rows in
+  SEPARATE passes. Since we rewrite the searchwidgets node every boot, the
+  selector button and its row got DIFFERENT random guids -- e.g. row wanted
+  guid-2a0ba77b while the button carried guid-b7c7a8f6 -- so the focused
+  category's guid never matched the row's guid and the result tiles stayed
+  permanently invisible (blank), even though POV returned valid Art(poster)
+  for every item (verified live via JSON-RPC: 20/20 items had posters).
+  Discover worked only because it is hardcoded with the literal guid
+  'discover' on both sides.
+  Fix: pin a STABLE explicit guid on each searchwidgets node item
+  ('pov-search-movies' / 'pov-search-tv'). assign_guid preserves an
+  existing item guid, so the selector button and its row now always share
+  the same guid and the rows render. Verified against the REAL
+  skinvariables generator code: with explicit guids all generation passes
+  produce identical per-item guids; without them they diverge (reproduces
+  the bug). PATCH_VERSION v14 -> v16 rewrites the node + rebuilds on
+  existing devices.
+
+v0.2.93
+- Genre icons fixed for real, on BOTH skins (root cause found via live
+  JSON-RPC + a full skin-variable trace, not guesswork). POV's
+  build_shortcut_folder_list stamps the GENERIC POV-logo as Art(fanart) on
+  every folder row, including genre rows:
+      listitem.setArt({'icon': icon, 'poster': icon, 'thumb': icon,
+                       'fanart': fanart, 'banner': icon})
+  AF3's genre rows use the Landscape widget style, whose image variable
+  ($VAR[Image_Landscape]) prefers Art(fanart) (resolved early) over the
+  per-genre icon (resolved last), so the POV logo always won and the real
+  genre icon never showed. FENtastic's landscape view has the same
+  fanart-first order -- which is why the icons were blank/POV-logo on BOTH
+  skins even though navigator.py already emitted the correct per-genre
+  icon path and all 28 PNGs were present and valid on disk (verified live:
+  every genre item carried Art(fanart)=pov_fanart.png).
+  Fix (pov_genre_icons_patcher v2 -> v3): for GENRE rows only (iconImage
+  under 'genres/'), use the genre icon as the fanart too, so whichever art
+  key the skin prefers lands on the genre icon. Non-genre rows keep the
+  normal POV fanart (guarded). Self-tested against real POV source: stock
+  and v2 devices both converge, idempotent, patched navigator.py compiles.
+  A device on the old v2 marker auto-upgrades on next boot.
+
+v0.2.92
+- ROLLBACK to the known-good PR #207 state (addon v0.2.88), including for
+  existing devices that already received the later (regressed) builds.
+  The intermediate versions changed the AF3 Discover/Search to a combined
+  "ai_pov_combined_search" flow that did not behave as intended; this
+  release returns everything to the #207 behaviour with certainty:
+  * af3_discover_pov_patcher upgraded to a ROLLBACK patcher (v5_rollback):
+    it now detects ANY prior on-device state (stock, #207, or the later
+    combined-search edits / flipped onclick+visible) in
+    Custom_1105_Search.xml and Includes_Search.xml and forces both files
+    back to the exact #207 target (POV popular grid, Hebrew name 'גלה',
+    bare folderpath content, stock TMDbHelper onclick/visible). Old
+    markers (v1/v2/v3) are stripped and re-stamped. Self-tested
+    byte-for-byte against real AF3 skin files for stock/#207/combined.
+  * af3_search_pov_patcher upgraded to a ROLLBACK patcher (v2_rollback):
+    it strips ALL previously-injected POV rules from search_path.xml --
+    including the later DefaultSearch-POVDiscover / ai_pov_combined_search
+    rules -- from every rule-set, then re-injects ONLY the #207
+    DefaultSearch-POVMovies / DefaultSearch-POVTv rules. Self-tested to
+    produce the #207 search_path.xml byte-for-byte from a combined-search
+    device.
+  * af3_home_patcher restored to #207 (PATCH_VERSION v14). A device left
+    on a later marker differs from v14, so the rebuild fires and the home
+    layout returns to #207.
+  All other addon code is restored to #207. Existing users receive this
+  via quick_update (note id bumped above the highest later build so the
+  update actually reaches devices that progressed past #207).
+
+v0.2.88
+- AF3 Discover GRID now POV too (#5 continued). The search ROWS already
+  worked (Hebrew + sources), but the Discover grid itself was still
+  TMDbHelper (English posters, click didn't open) -- the property seed we
+  tried sat behind the _is_af3_active() boot gate and lost the race to
+  the window's own onload. Fixed deterministically by patching the skin
+  files directly (new af3_discover_pov_patcher, marker-gated, idempotent,
+  re-applied each boot, XML-validated):
+  * Custom_1105_Search.xml onload -> POV popular-movies path (Hebrew,
+    posters warm from browsing) + Hebrew name 'גלה', replacing the
+    TMDbHelper discover path.
+  * Includes_Search.xml line 54 -> stripped the TMDbHelper-only
+    '&with_text_query=' suffix so POV gets a clean path (POV doesn't
+    understand that param; the search ROWS serve typed queries).
+  Clicking a grid item now follows the POV item's own path (play_media)
+  exactly like the home widgets, so it opens sources. Removed the old,
+  race-prone SetProperty seed from _set_af3_runtime_defaults.
+  PATCH_VERSION v13 -> v14 forces the rebuild.
+  Note on posters in the typed-search ROW: POV sets poster art identically
+  to the home widget; a blank poster there is cache-warmth (search hits
+  fresh tmdb_ids) and fills in on re-fetch -- not a widget bug.
+v0.2.87
+- AF3 Discover/Search now uses POV instead of TMDbHelper (#5). The
+  Discover area was wired to plugin.video.themoviedb.helper -> English
+  content + clicking a title couldn't scrape sources (no POV player).
+  Repointed BOTH halves to POV, so it's Hebrew and plays through POV's
+  own source scraping, with the IDENTICAL AF3 layout (same Hub_Combined_
+  Widget / List_Poster_Row -- only the content source changed):
+  * Search ROWS: write our own skinvariables-shortcut-searchwidgets.json
+    (movies + shows) via af3_home_patcher FILES, with path tokens
+    DefaultSearch-POVMovies / DefaultSearch-POVTv.
+  * New af3_search_pov_patcher injects matching rules into AF3's
+    generator search_path.xml (all 4 rule-sets) so those tokens resolve
+    to plugin://plugin.video.pov/?mode=build_movie_list&action=
+    tmdb_movies_search&query= (and tmdb_tv_search), with the query
+    single-encoded (Path_SearchTerm_SingleEncoded) -- verified end-to-end
+    that a Hebrew query round-trips correctly through POV's parse_qsl.
+    Idempotent + re-applied each startup so a skin update can't strip it;
+    patched search_path.xml verified well-formed XML.
+  * Discover GRID: _set_af3_runtime_defaults now seeds
+    TMDbHelper.UserDiscover.FolderPath to a POV popular-movies grid on
+    every AF3 activation (the window's String.IsEmpty onload then leaves
+    it alone), so the grid shows POV content.
+  PATCH_VERSION v12 -> v13 forces the AF3 rebuild so the regenerated
+  search includes pick up our node + rules in the same session.
+v0.2.86
+- Embedded English now sinks to the BOTTOM OF THE ENGLISH GROUP only,
+  not below other languages. v0.2.84 inserted it at len(f_result) (very
+  end, under French/Spanish/etc); v2 of the insert patcher places it
+  right after the last 'English' row instead -- so order is Hebrew,
+  English subs, embedded English, then other languages. The patcher now
+  also re-patches a device that already had v1 applied (regex tolerates
+  the v1 marker comment between `index = 0` and the `if`). Verified vs
+  the original AND a v1-patched autosub.py: both match, compile, and the
+  runtime test confirms embedded English lands at the bottom of English,
+  above other langs.
+- Genre icons on AF3 -- fixed the ORDER bug: the genre navigator-row
+  heal + the navigator.py per-genre patch were running AFTER
+  _maybe_patch_af3_home(), so AF3's home rebuild rendered the still-broken
+  rows and cached the POV-logo tiles. Moved build_icons install + genre
+  heal + genre menu-icon patch to BEFORE _maybe_patch_af3_home(), so the
+  rebuild repaints the already-healed rows in the same session.
+
+v0.2.85
+- THE reason every DarkSubs source patch "didn't apply": DarkSubs
+  (service.subtitles.All_Subs) declares reuselanguageinvoker=true and
+  runs autosub.py as a persistent xbmc.service. Its Python interpreter
+  loads autosub.py/engine.py/sub_window.py into memory at boot and stays
+  alive all session, so rewriting those files on disk + dropping the .pyc
+  never takes effect this session (and a restart races and loses). That's
+  why the embedded-subtitle demote/insert (and other DarkSubs patches)
+  appeared to do nothing.
+  * New darksubs_reload: after any DarkSubs source patch actually changes
+    a file, disable+enable the DarkSubs addon via JSON-RPC so its
+    interpreter is torn down and re-imports the PATCHED source. Debounced
+    to once per startup; only cycles when something changed (no churn on
+    steady-state boots). Wired so the embedded-insert / embedded-demote /
+    subwindow-demote patches trigger it. This is what makes the
+    embedded-English-at-the-bottom fix finally take effect.
+- AF3 home tile ORDER: grouped the Trakt tiles with their media type --
+  movies now go הסרטים שלי / (TMDB) / (Trakt), then shows go הסדרות שלי /
+  (TMDB) / (Trakt), instead of all movies+shows TMDB then both Trakt.
+
+v0.2.84
+- Round 2 of deep-audit fixes (the previous demote/genre/tile attempts
+  didn't take on-device; found the true causes):
+  * EMBEDDED ENGLISH at the ROOT. DarkSubs autosub.py
+    add_embedded_sub_if_exists() computes the embedded-English insert
+    index as "right after the last Hebrew subtitle" -- so it lands ABOVE
+    the real English subs -- and it does this AFTER engine.sort_subtitles
+    runs, which is exactly why both the engine-level and picker-level
+    demotes never moved it. New darksubs_embedded_insert_patcher rewrites
+    that index to len(f_result) so embedded English is always inserted
+    LAST. Verified against the real autosub.py: anchors uniquely on the
+    `index = 0` + Hebrew loop (not the earlier settings block), compiles
+    (spaces preserved, no TabError), idempotent. Kept the engine + picker
+    demotes as belt-and-braces.
+  * עידן פלוס "No Results": its AF3 tile had path RunAddon(...), a
+    COMMAND, which a CONTENT widget can't list. Changed to
+    plugin://plugin.video.idanplus/ (its browsable root) + target=videos,
+    so the row shows idanplus's own categories.
+  * Trakt tab ADDED to AF3 home: there was never a Trakt tile -- only
+    TMDB + POV-local. Added 'הסרטים שלי (Trakt)' and 'הסדרות שלי (Trakt)'
+    (action=trakt_collection, build_movie_list/build_tvshow_list) next to
+    the TMDB ones.
+  * Genre icons on AF3: the v0.2.83 heal is correct but only surfaces
+    after a skin rebuild; PATCH_VERSION bumped (v11->v12) so the AF3 home
+    rebuilds and re-queries the healed navigator.db rows.
+
+v0.2.83
+- Deep-audit fixes for AF3 home + embedded subs (after video/screenshots):
+  * EMBEDDED ENGLISH demote that actually works. The engine-level v2
+    demote didn't move it on-device. DarkSubs's picker (sub_window.py)
+    renders the list in the order it receives and never re-sorts, so we
+    now demote at the LAST point -- new darksubs_subwindow_demote_patcher
+    injects a reorder right after self.list.reset() in
+    set_active_controls that sinks any [LOC] embedded row whose label is
+    English ('english'/'eng'/'אנגלית'), permuting BOTH the display list
+    (list_o) AND the parallel download list (full_list) in lockstep so
+    the pick still downloads the right sub. Genuine embedded Hebrew stays
+    on top. Self-tested incl. the lockstep guarantee.
+  * Genre icons: UNDO the v0.2.81/0.2.82 navigator.db rewrite, which was
+    the cause, not the cure. POV's build_shortcut_folder_list
+    (navigator.py:446) prepends media_path() to a row's iconImage, so the
+    shipped relative 'genres/genre_*.png' already resolved correctly to
+    POV's own (shipped) media/genres/ icons. Our patch had rewritten
+    those to an ABSOLUTE special:// path, which POV then doubled into a
+    broken '.../media/special://...' path -> POV-logo fallback. Now
+    _heal_genre_icon() restores any absolute/empty genre iconImage back
+    to the working relative 'genres/<file>' by Hebrew name, and
+    pov_genre_icons_patcher additionally hardens navigator.py:446 to pass
+    absolute special://‌/http/resource:// icons through unchanged so they
+    can never be doubled again. Fixes both skins.
+  * AF3 new tiles (networks + idanplus) reliably appear. The rebuild was
+    gated on _is_af3_active() at boot AND the version marker was written
+    even when the rebuild was skipped -- so if AF3 wasn't reported active
+    during the startup run, the nodes were written, the marker advanced,
+    and every later boot returned 'already_patched' without ever
+    rebuilding. Now the marker is persisted ONLY after a rebuild actually
+    runs; a missed rebuild is retried next boot. PATCH_VERSION -> v11 so
+    everyone rebuilds once.
+  * Note on "הסרטים שלי (TMDB)" = No Results: the widget path is correct;
+    it's empty because POV's TMDB favorites READ uses the v4 account id
+    (tmdb.account_id), which is empty when only the v3 session is
+    connected. The POV-local "הסרטים שלי" tile (watched.db) is unaffected.
+    A v4-account-id resolver is the follow-up.
+
+v0.2.82
+- Genre icons FOR REAL (both skins). The v0.2.81 approach (repaint AF3
+  navigator.db rows + ship icons to build_icons/Genres) didn't fix
+  FENtastic, because FENtastic opens genres via mode=navigator.genres --
+  a LIVE POV menu that ignores navigator.db. Real root cause: POV's
+  menus/navigator.py genres()/anime_genres() hard-code the single generic
+  'genres.png' for every genre in the _add_item call, even though POV's
+  own meta_lists.py already stores a per-genre icon in value[1]
+  (e.g. ['28','genre_action.png']) and ships those PNGs in
+  media/genres/. The icon was there; the menu never used it.
+  * New pov_genre_icons_patcher rewrites the two per-genre _add_item
+    calls from 'genres.png' to 'genres/%s' % value[1], so each genre gets
+    its own icon. Both FENtastic and AF3 route through navigator.genres,
+    so this fixes BOTH. Also installs our line-art genre PNGs into POV's
+    media/genres/ (and adds the one missing stock icon, genre_tv.png).
+    Marker-gated, idempotent, .pyc dropped; verified: matches exactly the
+    2 genre calls, patched navigator.py compiles, idempotent.
+
+v0.2.81
+- Skin polish batch (AF3 + genre icons + embedded-sub ordering):
+  * Embedded "תרגום מובנה אנגלית" no longer sits above real English
+    subtitles. darksubs_embedded_demote_patcher v2: the v1 patch only
+    re-sorted DarkSubs's english_subtitles group, but the embedded
+    English entry is classified by its Hebrew label ("...אנגלית"), so it
+    never landed in that group. v2 anchors on the final combined-list
+    line and stable-sinks any [LOC] entry whose label is English
+    (ASCII 'english'/'eng' or Hebrew 'אנגלית'), while a genuine embedded
+    HEBREW track stays on top. Strips the stale v1 line on upgrade.
+  * AF3 home: added עידן פלוס tile (RunAddon plugin.video.idanplus) and
+    9 streaming-network rows (Netflix/Disney+/Apple TV+/HBO/HBO Max/FOX/
+    Amazon/Hulu/The CW) as POV tmdb_tv_networks widgets -- Hebrew + play
+    through POV scrapers. AF3 PATCH_VERSION bumped v9 -> v10 so existing
+    installs rebuild and show them.
+  * Genre icons restored on BOTH skins: the per-genre icons pointed at
+    POV's own media/genres/ folder, which we don't ship and POV wipes on
+    self-update, so they were blank. Now we ship a clean line-art genre
+    icon set (resources/lib/media_assets/build_icons/Genres/, 26 PNGs)
+    via build_icons_patcher and repoint POV's genre navigator rows at
+    media/build_icons/Genres/. Mapping works by the original 'genres/'
+    suffix OR the Hebrew genre name, so it re-icons even rows POV rebuilt
+    without the prefix. Runs for FENtastic too (not AF3-gated), since the
+    rows live in POV's shared navigator.db.
+
+v0.2.80
+- ROOT CAUSE FOUND + FIXED. The instrumented outer except (v0.2.79)
+  finally logged it on the device:
+    POV_RUN_ERROR: tmdb_favorites() takes 2 positional arguments but 3
+      were given | action='tmdb_favorites'
+    POV_RUN_ERROR: trakt_collection() takes 2 ... but 3 were given
+    POV_RUN_ERROR: get_favorites() takes 3 ... but 4 were given
+  Our pov_menus_patcher force-syncs movies.py/tvshows.py onto the device,
+  but POV auto-updates its OWN indexers/caches independently. The device
+  ended up with a NEWER POV core whose read functions take fewer args
+  (the trailing `letter` was dropped) than our synced movies.py passes ->
+  every personal list (TMDB/Trakt/POV favorites, movies AND shows) raised
+  TypeError in run() and came back empty. "Continue Watching" survived
+  only because get_in_progress_items(watched_info, mediatype, *args) has
+  *args that swallows the extra arg.
+  Fix: new _flex_call(function, *args) wrapper in movies.py/tvshows.py
+  (and episodes.py for marker consistency). It calls the read function
+  with the full args and, ONLY on a "takes N positional arguments but M
+  were given" TypeError, retries with one fewer trailing arg until it
+  fits -- so it works against ANY POV arity, present or future. All
+  personal-list call sites (tmdb_personal/trakt_personal/mdblist_personal/
+  personal_dict) now go through it. Unrelated TypeErrors still propagate.
+  pov_menus_patcher freshness MARKER bumped to `_flex_call` so existing
+  installs re-sync the fixed menu files once.
+
+v0.2.79
+- WIDEN the instrumentation: v0.2.78 logged the per-item build except,
+  but the on-device log showed NO POV_BUILD_ITEM_ERROR at all -- the
+  favorites list still came back empty in ~213ms. Crucial new clue from
+  the user: the "Continue Watching" (in_progress_movies) list WORKS,
+  while favorites/tmdb/trakt are all empty. Both go through the identical
+  build path, so the failure is OUTSIDE build_movie_content -- in run()'s
+  OUTER `except: pass` (menus/movies.py:319 / tvshows.py): the import of
+  the read function, the function() call/list-comp, or build_*_results'
+  unguarded `self.items.sort(key=int(getProperty('pov_sort_order')))` at
+  movies.py:189 (which raises if any item lacks a numeric sort prop, and
+  zeroes the WHOLE list).
+  * pov_build_content_logger_patcher v2 now instruments BOTH excepts:
+    the per-item one (POV_BUILD_ITEM_ERROR) AND run()'s outer one
+    (POV_RUN_ERROR, logging action + list length). One of those two will
+    fire on the next favorites open and name the exact failure.
+  Same catch+skip behaviour, logging only. Both patched files
+  py_compile-verified (offline + in-zip).
+
+v0.2.78
+- INSTRUMENT the swallowed error that empties favorites lists. v4 proved
+  every upstream piece is fine: auth valid, live GET /3/movie/<fav>=200,
+  watched.db path correct with 6 rows, get_favorites returns all 6, and
+  movie_meta(<fav>) returns a FULL meta dict (all keys, blank_entry
+  False) with director/genre/writer/country/duration all valid. So
+  build_movie_content SHOULD succeed -- yet the live list is empty in
+  ~218ms. That means it raises in the LIVE Kodi context (a listitem op
+  we can't simulate offline: make_listitem/setArt/getVideoInfoTag/
+  setCast/setCountries/setRating...) and the error is eaten by the bare
+  `except: pass` at menus/movies.py:174 / menus/tvshows.py:183.
+  * New pov_build_content_logger_patcher rewrites those two bare
+    excepts into `except Exception as e: logger("POV_BUILD_ITEM_ERROR",
+    repr(e)+tag)` -- same catch+skip behaviour, but the real exception
+    (type, message, the tmdb_id it died on) now lands in kodi.log on the
+    next favorites open. That single line identifies the bug exactly.
+  Marker-gated, idempotent, atomic, .pyc dropped; both patched files
+  py_compile-verified.
+
+v0.2.77
+- DIAGNOSTIC v4 (final): v3 proved the per-item TMDB fetch SUCCEEDS
+  (HTTP 200, "The Mummy"), tmdb_read_token is valid, the watched.db path
+  is correct with 6 rows, and get_favorites returns all 6 -- yet the
+  list still renders empty in ~218ms with ZERO network calls. The only
+  remaining explanation: meta is served from metacache.db and POV's
+  per-item BUILD (menus/movies.py build_movie_content) throws on a
+  missing/None meta key and is swallowed by its bare `except: pass`
+  (movies.py:174), dropping every item silently. v4 replays POV's REAL
+  movie_meta() + the exact meta-dependent ops (director/genre/writer
+  .split, country, duration int()) for one favorite and prints which one
+  raises + the traceback. That line IS the bug. Read-only, silent
+  (writes to log + POV_FAV_DIAGNOSTIC.txt).
+
+v0.2.76
+- DIAGNOSTIC v3 (decisive): the v0.2.75 fix ran on-device (log confirms
+  "blank_entry purge ran: deleted 0" + "widened timeout") yet lists are
+  still empty -- which DISPROVES the poisoned-cache theory (there were 0
+  blank rows) and the timeout theory (favorites_movies returned in
+  ~218ms with ZERO network calls). Offline replay of get_favorites
+  against the user's real watched.db returns all 6 rows, so the read
+  layer is fine too. Three unknowns remain and v3 checks all three on
+  the device, once (silent -- written to log + POV_FAV_DIAGNOSTIC.txt,
+  no popup):
+  * tmdb_read_token presence (the token movie_details/tvshow_details
+    actually use for per-item meta -- never inspected before; empty =>
+    every favorite resolves blank while popular lists still work since
+    they use tmdb.token).
+  * the EXACT watched.db path POV resolves + its movie-row count (in
+    case adds land in one db and the list reads another/empty one).
+  * a LIVE GET /3/movie/<fav id> with Bearer <tmdb_read_token> -> prints
+    HTTP status (200 success vs 401 unauthorized vs timeout). This single
+    call definitively separates token/fetch failure from a render bug.
+  No behaviour change to favorites; read-only.
+
+v0.2.75
+- ACTUALLY apply the favorites fix (v0.2.74 shipped the right idea but
+  didn't take effect on devices). On-device proof: watched.db held 6
+  valid favorite rows, yet the POV-local favorites list returned in
+  212ms with ZERO network calls and rendered empty -- i.e. all 6 ids
+  were served from the per-item meta cache as blank_entry and dropped,
+  and kodi.log showed the patcher never logged at all. Root problem:
+  v0.2.74 tied the poisoned-row purge to the SUCCESS of rewriting
+  metadata.py, so if that rewrite path was skipped the purge never ran
+  and the cache stayed poisoned forever.
+  * pov_meta_blank_patcher v2: the metacache.db blank_entry purge now
+    runs UNCONDITIONALLY and FIRST on every startup, independent of the
+    metadata.py rewrite, and ALWAYS logs how many rows it deleted (v1's
+    silence is what hid the skip). This makes existing favorites
+    reappear immediately.
+  * Also widen tmdb_api's aggressive per-item timeout 3.05s -> 15.05s --
+    the actual reason a /movie/{id} detail fetch failed and got cached
+    blank in the first place on mobile/slow links. With the wider
+    timeout the re-fetch succeeds and posters fill in instead of
+    re-poisoning.
+
+v0.2.74
+- FIX the real "favorites added but list shows 0" bug (root cause found
+  via the v0.2.72/0.2.73 diagnostic). The diagnostic proved on-device:
+  the favorite rows ARE saved (watched.db -> favorites) and TMDB/Trakt
+  auth is fully valid -- yet both the POV-local and TMDB favorites tiles
+  showed 0, in BOTH skins, while normal browsing worked. Root cause was
+  the PER-ITEM metadata cache: POV's movie_meta/tvshow_meta persist a
+  {'blank_entry': True} into metacache.db for 2 DAYS whenever a single
+  movie_details() fetch fails transiently (3.05s timeout / blip), and
+  menus drop any item whose meta is blank_entry. So one hiccup hid a
+  favorite for ~48h regardless of skin or tile. This was the one cache
+  neither pov_cache_empty_patcher (maincache.db) nor
+  pov_trakt_cache_empty_patcher (trakt.db) covered.
+  * New pov_meta_blank_patcher: stops movie_meta/tvshow_meta from
+    persisting transient blank_entry (mirrors the "never cache a
+    failure" approach of the two sibling cache patchers), and one-shot-
+    clears any rows already poisoned with blank_entry from metacache.db
+    so existing favorites recover immediately instead of waiting 2 days.
+- AF3 home: show BOTH a POV-local favorites tile ("הסרטים שלי" ->
+  favorites_movies/favorites_tvshows, the store the in-app add writes
+  to, so it populates instantly) AND the online TMDB.org tile
+  ("...(TMDB)" -> tmdb_favorites), side by side, for movies and shows.
+  Bumped AF3 home PATCH_VERSION so existing installs rebuild the
+  shortcuts and pick up the new tiles.
+
+v0.2.73
+- Make the favorites diagnostic SILENT: the v0.2.72 diagnostic popped a
+  full-screen textviewer on every device that applied it, which is fine
+  for one debugging session but annoying as a general rollout. The
+  popup is removed; the diagnostic still writes its report to kodi.log
+  and to <POV profile>/POV_FAV_DIAGNOSTIC.txt so we can still read the
+  on-device state when needed, with zero on-screen interruption. No
+  behaviour change to favorites themselves.
+
+v0.2.72
+- DIAGNOSTIC build (no behaviour change to favorites): the user still
+  sees "Add to list" report success but "My Movies"/"My Shows" stay at
+  0 results even after leaving and re-entering -- which means the READ
+  genuinely returns empty, not a refresh problem. Rather than guess
+  again, this ships a one-shot, read-only diagnostic
+  (pov_favorites_diagnostic) that dumps the real on-device state:
+    * TMDB auth: tmdb.account_id (v4 READ id) vs tmdb.session_account_id
+      (v3 WRITE id) -- if account_id is empty the favorites read URL
+      breaks and POV returns [] forever regardless of cache. Tokens are
+      shown as presence/length only, never in full.
+    * Trakt auth: trakt_user / token / expires presence.
+    * POV-local favorites DB (watched.db -> favorites): row counts per
+      type + a small sample, to see if items actually saved and whether
+      their tmdb_id looks valid (vs null/empty).
+    * TMDB list cache (maincache.db) + Trakt cache (traktcache.db):
+      which list ids are cached and whether they're empty/near-empty.
+  Output goes to kodi.log, to <POV profile>/POV_FAV_DIAGNOSTIC.txt, and
+  to a textviewer dialog popped once so it can be screenshotted. Gated
+  to run once. Nothing in POV is modified.
+
+v0.2.71
+- HOTFIX for v0.2.70: adding to a list crashed Kodi. v0.2.70's
+  pov_favorites_refresh_patcher, besides the (correct) container_refresh()
+  on add, also called POV's kodi_utils.widget_refresh() to reload the
+  home-screen widget tiles. That refresh uses UpdateLibrary(video,
+  special://skin/foo) -- the same trick POV itself only ever runs from
+  a background thread, gated behind an opt-in setting, never from a
+  context-menu action -- and it crashed Kodi every time the user hit
+  "Add to list".
+  v2 of the patcher removes the widget_refresh() call entirely and keeps
+  ONLY container_refresh(), which is exactly what POV already does
+  safely on remove (just now extended to add). New marker
+  AI_SUBS_FAV_REFRESH_v2; the patcher heals installs that already got
+  the crashing v1 line (strips the widget_refresh() off all three sites)
+  as well as pristine POV. Verified: pristine->v2 and v1->v2 both leave
+  no kodi_utils.widget_refresh() call, 3 sites patched, result parses,
+  idempotent.
+  Trade-off: the home-screen widget tile now refreshes on the next
+  return to the home screen (the list cache is still busted on add)
+  rather than instantly -- a small delay in exchange for not crashing.
+  The in-list refresh (open "My Movies"/"My Shows" -> add -> appears
+  immediately) is unchanged and still works.
+
+v0.2.70
+- Follow-up to #187/#188 (the "Add to My List" saga): those fixed the
+  READ side -- POV was caching empty list results (main_cache.py 24h,
+  trakt_cache.py forever) so a just-added title never showed. With the
+  caches no longer stuck-empty, the remaining gap is the WRITE side:
+  POV's modules/dialogs.py only refreshes the screen after a REMOVE,
+  never after an ADD. The container-refresh call is gated:
+    - tmdb_manager_choice (favorites/watchlist): if not action: container_refresh()
+    - tmdb_manager_choice (custom list):         if not action: container_refresh()
+    - favorites_choice    (POV-local):           if refresh: container_refresh()
+  On add, action/refresh is truthy/False, so nothing refreshes -- you
+  get the "added" toast but the open "My Movies"/"My Shows" list (and
+  the home widget tile) keeps showing the old contents until you leave
+  and come back. Removing already refreshed instantly, which is why the
+  asymmetry looked like "adding is broken".
+  New pov_favorites_refresh_patcher drops the gate so the refresh fires
+  on add as well as remove, and additionally calls POV's own
+  kodi_utils.widget_refresh() so the home-screen widget tiles reload too
+  (Container.Refresh alone only reloads an open list, not a home widget;
+  POV uses widget_refresh() the same way in entry.py after a Trakt sync).
+  Three context-anchored replacements, marker-gated (AI_SUBS_FAV_REFRESH),
+  idempotent, atomic write, no-op on installs without POV. Verified
+  against the real bundled POV dialogs.py (3/3 anchors matched, result
+  parses). Covers the TMDB Favorites/Watchlist, custom-list, and
+  POV-local favorites paths.
+
+v0.2.69
+- Follow-up fix: POV's TRAKT cache is in a separate DB
+  (trakt.db) and uses a separate function (cache_trakt_object) that
+  v0.2.68 did NOT patch. Critically, that cache has NO expiration --
+  empty results cached there stay forever until an explicit
+  clear_trakt_collection_watchlist_data() call. End-user report: the
+  "My Movies (Trakt)" tile stayed empty even after v0.2.68 landed,
+  because the trakt.db row was still poisoned with a stuck empty.
+  New pov_trakt_cache_empty_patcher mirrors v0.2.68's main_cache fix
+  for trakt_cache.py: inserts `if not result: return result` before
+  the `dbcur.execute(TC_BASE_SET, ...)` line so empty results are
+  no longer persisted, and one-shot-clears any
+  trakt_collection_* / trakt_watchlist_* / trakt_favorites_* /
+  trakt_user_lists* / trakt_lists_* rows currently sitting in
+  trakt.db so existing victims don't have to wait for an explicit
+  clear. Marker-gated (AI_SUBS_POV_TRAKT_CACHE_EMPTY_v1),
+  idempotent, no-op on installs without POV.
+
+v0.2.68
+- Two fixes for the "Add to My List" buttons that stopped working
+  in the latest updates:
+
+  1) favourites_personal_tiles_patcher (new): restores the 6 personal
+     home tiles ("הסרטים שלי / הסדרות שלי" in TMDB / Trakt / POV
+     variants) when they're missing from userdata/favourites.xml.
+     Root cause: the wizard's per-skin seed at
+     media/builds_favourites_xml/skin.fentastic/favourites.xml only
+     contains 11 service tiles, while the build's install default
+     ships 32. When the user switches skin to AF3 and back to
+     FENtastic, the wizard's update_favourites_xml_file() copies the
+     stripped 11-tile seed over the working 32-tile favourites.xml,
+     wiping every content tile including the 6 personal ones. The
+     patcher detects the missing tiles by name substring and
+     restores them from a bundled canonical fixture.
+
+  2) pov_cache_empty_patcher (new): inserts `if not result: return
+     result` into plugin.video.pov/.../caches/main_cache.py's
+     cache_object(). POV's pattern of caching API results for 24h
+     unconditionally meant that any transient TMDB/Trakt list-read
+     failure (returning empty by the defensive `except: return []`
+     in _get_tmdblist_paginated_list and similar) would cache the
+     empty list for a full 24h. End-user symptom: add an item via
+     "ניהול רשימות (TMDB)" -> success notification -> "הסרטים שלי
+     (TMDB)" home tile shows "No results" until cache expires.
+     User confirmed items DO get added on themoviedb.org / trakt.tv
+     -- the write works, just the read returns the stuck-empty cache.
+     With this patch empty results are never persisted; next tile open
+     re-fetches. Also one-shot clears any tmdblist_* / trakt_* rows
+     already sitting empty in maincache.db so existing victims don't
+     need to wait out the 24h.
+
+  Both patchers are marker-gated, idempotent, atomic writes, no-op
+  on installs without the affected files. Smoke-tested against the
+  real user's favourites.xml shape (4 cases) and the real POV
+  main_cache.py shape (5 cases).
+
+v0.2.67
+- Actually fix the jurialmunkey upgrade (0.2.66 didn't take). The wizard's
+  AF3 version gate read the XML declaration's version="1.0" instead of the
+  addon's real version, so every installed addon looked like "1.0" and
+  1.0 >= 0.2.35 passed -> the deps pack was still skipped and jurialmunkey
+  stayed at 0.2.28. Requires wizard 0.1.14 (shipped in the same quickfix).
+
+v0.2.66
+- Fix AF3 TMDbHelper crash ("No module named 'jurialmunkey.ftools'"):
+  AF3's bundled TMDbHelper 6.15.6 needs script.module.jurialmunkey >= 0.2.35,
+  but users who switched to AF3 with an older jurialmunkey (e.g. 0.2.28) kept
+  the stale copy -- the deps pack was skipped because it only checked the file
+  EXISTED, not its version. TMDbHelper's service then crash-looped on every
+  startup and AF3 widgets/ratings broke. Now: the AF3 home patcher detects an
+  old jurialmunkey and re-triggers the deps install, and the wizard's deps
+  pack gained a version gate (>= 0.2.35) so the re-extract actually overwrites
+  the stale module instead of skipping it.
+
+v0.2.65
+- Fix: the embedded-demote re-sort is now scoped to the English group
+  ONLY. The 0.2.64 cut re-sorted the combined list by site_id '[LOC]',
+  which DarkSubs also stamps on the embedded HEBREW entry -- that would
+  have sunk native Hebrew embedded subs below English. Hebrew (embedded
+  or not) is now never touched and stays first, as it must.
+- Shipped via quickfix so it reaches existing installs without a full
+  build reinstall.
+
+v0.2.64
+- Embedded ENGLISH ("[LOC]") subtitles now sink to the bottom of the
+  English group in the DarkSubs picker instead of floating to the top on
+  their hard-coded 101% sync. On this streaming build the embedded track
+  can't be AI-translated (DarkSubs short-circuits embedded picks with
+  setSubtitleStream before the AI hook runs), so demoting it makes the
+  external, AI-translatable English source the natural first pick.
+  Embedded HEBREW is deliberately left untouched -- it stays first, as
+  it should (native Hebrew, perfectly synced, no translation needed).
+  New self-healing patcher (AI_EMBEDDED_DEMOTE_v1), scoped to the English
+  group only; no-op when DarkSubs isn't installed or engine.py changed.
+
+v0.2.63
+- AF3 phone/touch pass (iteration 1): enable Kodi's mouse/pointer support
+  so the real home controls (widget rows, spotlight, the submenu buttons
+  once open) respond to taps and lists can be drag-scrolled on a phone.
+  AF3's main menu items are off-screen "fake-focus" controls, so a deeper
+  overlay fix is still planned - this is the safe first step.
+
+v0.2.62
+- New self-healing patcher all_subs_samefile_patcher: wraps the 6
+  shutil.copy() calls in service.subtitles.all_subs_plus's
+  setLanguageSettings() in try/except shutil.SameFileError. On
+  Windows (NTFS junctions/hardlinks) the unpatched AllSubs raises
+  SameFileError at module-load time when source and destination
+  language .po files resolve to the same inode, killing autosub.py
+  before Kodi even shows the home screen -- user-visible Python
+  error every PC boot, AllSubs functionality fully broken. Patch
+  is idempotent, marker-gated (AI_SUBS_ALL_SUBS_SAMEFILE_v1), and
+  no-op on installs without AllSubs.
+
+v0.2.61
+- AF3 phone/touch pass: the home screen now uses Standard rows again
+  instead of the Combined category selector, because the selector is
+  awkward and can mis-target taps on phones.
+- Adds a real "כלים וחיבורים" widget row backed by the wizard. This
+  makes Connect Services, POV, AI settings, Quick Update, Switch Skin,
+  Send Log, Reload Skin, Kodi Settings, and Quit visible on the home
+  screen even when AF3's power icon is hidden or hard to tap.
+- Plot text now uses a real textbox with autoscroll enabled, so long
+  Hebrew plots can continue scrolling instead of being cut after a few
+  lines.
+
+v0.2.60
+- AF3 CoreELEC build: the Arctic Fuse 3 skin pack now uses the
+  CoreELEC-friendly CE-Repo mod (skin version 6.3.2.9) instead of the
+  older upstream-only 3.2.9 package.
+- Existing AF3 installs are upgraded automatically: the wizard now
+  checks the installed skin version instead of only checking that
+  `addon.xml` exists, and the background service requests the CE skin
+  pack when it detects an older AF3 package.
+- AF3 mobile home defaults: forces horizontal/Combined home mode,
+  seeds a POV spotlight from "סרטים חדשים", and refocuses the
+  spotlight after rebuild so Play / More Information are available
+  instead of opening directly on the lower movie row.
+- AF3 ratings: expands the default rating slots to TMDb + IMDb +
+  RottenTomatoesUser for movies, and TMDb + IMDb + Trakt for shows.
+  External providers still depend on TMDbHelper/metadata availability.
+- AF3 Hebrew: adds a small he_IL language file for skin strings we
+  actually see on the home screen, including "Ends at" -> "מסתיים ב-"
+  and "More Information" -> "מידע נוסף".
+
+v0.2.59
+- AF3 mobile hotfix: removes the experimental "כלים וחיבורים"
+  `Custom_Submenu` home widget because it could trap focus/touch on
+  phones and leave the AF3 home screen blank or impossible to scroll.
+- The same critical actions are still available, but now through the
+  AF3 power menu: POV, Connect Services, AI subtitle settings, Send
+  Log, Switch Skin, Quick Update, Settings, Reload Skin, and Quit.
+- Patch marker bumped again so existing installs rewrite the AF3 home
+  nodes on the next Kodi launch/update and recover from the stuck
+  screen without reinstalling the full build.
+
+v0.2.58
+- AF3 tools row: adds a visible "כלים וחיבורים" home row so mobile
+  users do not need to hunt through AF3's hidden submenu/power tray
+  for critical build actions. Includes Connect Services, AI settings,
+  Switch Skin, Quick Update, and Send Log.
+- AF3 genre artwork: patches POV's `navigator.db` genre shortcut
+  rows so relative `genres/...png` icons become absolute POV media
+  paths. AF3 could not resolve the relative paths and displayed the
+  generic POV logo for every genre.
+- AF3 Hebrew font v2: bundles FENtastic/Estuary's NotoSans-Regular
+  and copies it into AF3's font folder, then points AF3's Default
+  fontset at it. This covers Hebrew punctuation/control edge cases
+  that still rendered as boxes with the previous CJK Unicode font.
+- AF3 touch cleanup: injects unload cleanup into AF3 info/context
+  dialogs to clear sticky InfoPanel/SubGroup/TMDbHelper properties
+  after long-press/info use on phones.
+- Ratings defaults: sets AF3/TMDbHelper rating defaults to TMDb +
+  Trakt and ensures ratings are not disabled. IMDb/RT/Metacritic may
+  still require external keys, but TMDb/Trakt should be the baseline.
+
+v0.2.57
+- Arctic Fuse 3 Hebrew font fix: AF3's active "Default" fontset used
+  bundled Inter fonts that do not contain Hebrew glyphs, so Hebrew
+  labels/plots/quick-update text rendered as boxes. The AF3 patcher
+  now rewrites `skin.arctic.fuse.3/1080i/Font.xml` so the Default
+  fontset uses the already-shipped `resource.font.robotocjksc`
+  Unicode Inter fonts.
+- AF3 genre rows now use the FENtastic shortcut-folder lists from
+  POV's `navigator.db` instead of the generic `navigator.genres`
+  entry. This restores the Hebrew genre names and POV genre artwork
+  that the FENtastic build already ships.
+- Patch marker bumped to force all existing AF3 users to receive the
+  rebuilt home nodes + Unicode font on next Kodi launch.
+
+v0.2.56
+- Arctic Fuse 3 POV home seed: AF3's upstream widgets point at Kodi
+  library smart-playlists (`InProgressMovies.xsp`, `NewMovies.xsp`,
+  etc.), which are empty in this streaming build and render as "No
+  Results" everywhere. New `af3_home_patcher` writes
+  script.skinvariables' per-user node JSON for `skin.arctic.fuse.3`
+  so existing installs receive POV/FENtastic-style rows on next Kodi
+  launch: new movies, trending shows, next episodes, in-progress
+  movies, TMDb personal lists, and Hebrew genre entry points.
+- AF3 submenu/power menu now includes working build actions: POV,
+  Connect Services, AI subtitle settings, Switch Skin, Quick Update,
+  Settings, Reload Skin, and Quit. This fixes the "power menu buttons
+  do nothing / no Switch Skin button" report without patching AF3 XML
+  directly, keeping the skin itself updatable.
+- The patch is idempotent and retroactive: if AF3 is already active it
+  forces a script.skinvariables rebuild + ReloadSkin; if AF3 is merely
+  installed it seeds the nodes silently so the next switch starts with
+  the POV home.
+
+v0.2.55
+- Refreshed bundled staged_wizard.zip to wizard 0.1.12, which adds
+  the missing transitive AF3 Python deps pack (jurialmunkey,
+  infotagger, addon.signals, qrcode). Without this the user who
+  recovered from the 0.1.11 ship was getting "Initialising
+  Skin..." -> black screen.
+v0.2.54
+- Refreshed the bundled staged_wizard.zip to wizard 0.1.11, which
+  fixes the "Switch Skin -> Arctic Fuse 3 silently falls back to
+  Estuary" bug (AF3 packs were extracted but their addons were
+  never registered/enabled in Kodi's Addons DB, so the skin's
+  dependencies looked unmet and Kodi refused to load it). Anyone
+  the self-healer recovers from a pre-0.1.10 wizard now lands on
+  0.1.11 directly with the AF3 fix already in place.
+v0.2.53
+- Wizard self-healer v3: APK-override. Real-user log after v2
+  ship showed zero healer log lines AND wizard staying at 0.1.4
+  -- root cause: on the Android APK build the wizard ships
+  inside the APK at /data/.../cache/apk/assets/addons/, which
+  is read-only; the writable mirror at special://home/addons/
+  may not exist at all. v2 checked the writable dir, found
+  nothing, returned 'no_wizard' silently and did nothing.
+  v3 fix: don't require the writable dir to pre-exist. If
+  xbmcaddon.Addon('plugin.program.kodipovilwizard') resolves
+  (which it does for APK-bundled installs), we extract the
+  staged zip into the writable path -- creating the directory
+  if needed. Kodi's normal addon-resolution picks the higher-
+  versioned writable copy over the APK's 0.1.4 (proven in the
+  same user's log via skin.fentastic: APK ships its own copy
+  but Kodi loads writable v1.0.25). Also: every return code
+  now logs at INFO (was silent on 'quiet steady-state' return
+  codes in v2 -- absence-of-logs vs absence-of-bug is invisible
+  to remote diagnosis). Marker bumped to v3 so v2-stuck installs
+  re-try with v3's correct path.
+v0.2.52
+- Wizard self-healer v2: bundled instead of downloaded. User
+  report after v1 ship: no toast appeared after quick_update +
+  restart -- the v1 healer was silently failing (most likely an
+  SSL/urllib edge case on the user's Android Kodi build). v2 ships
+  the wizard zip *inside* this addon (resources/staged_wizard.zip)
+  and the healer reads from disk. No network, no SSL, no CDN. Also
+  swapped the success-path notification from a transient toast
+  (8s) to a modal Dialog().ok the user must acknowledge -- prevents
+  the "didn't see the message, didn't know to restart" failure
+  mode. Failure paths now toast Hebrew error text so users have
+  signal when something can't complete (was completely silent in
+  v1). Adds best-effort __pycache__ cleanup so Python picks up the
+  new .py files cleanly on next boot. Marker bumped to v2 so
+  installs that ran v1 (and got nothing) re-try with v2's path.
+v0.2.51
+- Wizard self-healer (new module wizard_self_healer.py) rides this
+  addon's quickfix path to recover users stuck on a pre-0.1.10
+  wizard. Root cause: the wizard's quick_update extract.all
+  silently skips every file whose path contains the wizard's own
+  addon id (a safety guard against the wizard trashing itself
+  mid-extract), so every wizard update shipped via quickfix was
+  dropped on the floor. End-user symptom: after PR #161 (Arctic
+  Fuse 3 third skin) + PR #162 (quickfix-bundles-wizard) +
+  quick_update + restart, Switch Skin still listed only Estuary
+  and FENtastic. Healer fingerprints the installed wizard.py for a
+  0.1.10-or-newer sentinel; if absent, downloads the latest wizard
+  zip from GitHub Pages and force-writes the files into the
+  wizard's addon dir (different addon id = not skipped by anyone).
+  Toasts the user to restart so Python re-imports the new wizard.
+  Marker-gated, no-op on healthy wizards, no-op on AI-only
+  installs (no wizard addon present).
+v0.2.50
+- Arctic Fuse 3 subtitle-picker header now prefers our
+  subs.player_filename window property over Player.FileName (fixes
+  the TorBox CDN UUID-as-title regression that AF3 users would
+  have seen — same fix we shipped for FENtastic via
+  skin_dialog_subtitles_patcher, but adapted to AF3's structure).
+  Dedicated patcher af3_dialog_subtitles_patcher targets
+  skin.arctic.fuse.3/1080i/Dialog_DialogSubtitles.xml directly.
+  AF3 puts the header label in a <param> inside an include block
+  (not a <control type="label"> the generic patcher matches), so
+  this needs its own regex + injection logic. Solution: inject a
+  conditional <variable name="ai_subs_header_label"> at the top of
+  the file's <includes> root (priority: our window property; fallback:
+  Player.FileName), then swap the param value to $VAR[...]. Both
+  edits in the same file, atomic write, marker-gated, idempotent.
+  No-op when AF3 isn't installed -- self-heals on the next Kodi
+  startup after the user switches to AF3.
+- Arctic Fuse 3 first-launch dialog: when the user activates the
+  new third skin option (skin.arctic.fuse.3) for the first time,
+  show a one-shot Hebrew dialog offering to open POV's Connect
+  Services so they can authorise Trakt + TMDb. AF3 populates its
+  home hubs from those services; without them the home screen is
+  empty and looks broken. The dialog options are: Connect both /
+  Just Trakt / Just TMDb / Remind me later / No thanks. We just
+  open POV's Connect Services dialog -- we don't run Trakt's or
+  TMDb's OAuth ourselves. Marker-gated on a hidden addon setting
+  (`af3_first_launch_dialog_done`); skin-gated on
+  `xbmc.getSkinDir() == 'skin.arctic.fuse.3'` so this is a no-op
+  for FENtastic / Estuary / any other skin -- existing users
+  receiving this via quickfix are not disturbed. New module:
+  resources/lib/af3_first_launch.py.
+
+v0.2.49
+- Subtitle picker (round 3, the actually-right target): the dialog
+  the user sees with the services panel + per-row flag + filename
+  is Kodi's NATIVE DialogSubtitles, rendered by the ACTIVE SKIN
+  (FENtastic in this build). DarkSubs is just a listed service.
+  The previous two attempts targeted the wrong files. New
+  skin_dialog_subtitles_row_patcher rewrites
+  skin.fentastic/xml/DialogSubtitles.xml directly: bumps the
+  per-row itemlayout + focusedlayout heights from 100 to 140 px
+  AND bumps the inner textbox control (the $INFO[ListItem.Label2]
+  release-name display) by the same +40. Two wrapped lines of
+  font12 now fit cleanly without the second line getting clipped.
+  Verified against the actual FENtastic XML shipped in the build:
+  both itemlayout and focusedlayout rewritten, both inner Label2
+  textboxes rewritten, final XML stayed well-formed (ET clean).
+- Same patcher works on any skin whose DialogSubtitles.xml uses
+  the standard <itemlayout height="N"> + textbox-referencing-
+  Label2 idiom (matches Estuary, Arctic Zephyr variants and most
+  modern skins). Skips layouts without ListItem.Label2 so it
+  never touches unrelated containers. Skips layouts already >=140
+  px so a skin author who already handled this gets a no-op.
+
+- DarkSubs picker (round 2 after #157 was a no-op): the picker is
+  actually a pyxbmct.AddonDialogWindow built in Python, not skin
+  XML -- DarkSubs ships no resources/skins/ folder at all, so the
+  XML patcher I wrote in #157 had nothing to bite into. The real
+  fix lives in resources/modules/sub_window.py, where the dialog
+  creates a pyxbmct.List() with the default _itemHeight=27 (one
+  line). Long release names wrap to a second line that the
+  27-pixel row clips. New darksubs_picker_height_patcher rewrites
+  the call to pyxbmct.List(_itemHeight=60), doubling the row so
+  both lines fit. Regex-anchored to the exact one-line call so it
+  refuses to touch a future DarkSubs version that already passes
+  arguments. Marker-gated, idempotent, .pyc cache invalidated so
+  the change takes effect on next DarkSubs import without a Kodi
+  restart strictly required. Verified end-to-end against the
+  actual sub_window.py shipped in the build.
+
+- DarkSubs picker: long release-name labels in each row now
+  marquee-scroll horizontally instead of getting cut off mid-wrap.
+  User screenshot showed entries like "Legends.2026.S01E03.This.is.
+  Liverpool.720p.NF.WEB-DL..." wrapping to a second line that the
+  fixed row height clipped, hiding the release group at the end --
+  the part the user actually needs to identify the file. New
+  darksubs_picker_label_patcher walks DarkSubs's resources/skins/
+  XMLs and adds `<scroll>true</scroll>` to label controls that
+  reference ListItem.Label / ListItem.Label2 (only the per-row
+  labels, never the dialog header or buttons). Idempotent via
+  marker, self-healing on every Kodi startup so a DarkSubs update
+  can't permanently revert it. Skips files that already have
+  scroll set; skips files with no matching labels (no false
+  positives on misc XML).
+
+- DarkSubs download_sub patch now matches flexibly. User report:
+  a wizard-on-existing-Kodi install had a DarkSubs whose
+  download_sub auto_translate elif didn't byte-match our hardcoded
+  line (cosmetic differences: quote style, spacing, indentation,
+  addon-handle variable name). The patch returned 'unmatched', so
+  with auto_translate=OFF the AI hook never fired on a manual
+  English pick and English stayed on screen. The matcher is now a
+  per-line regex that captures the indentation + addon-handle var
+  and reconstructs the rewrite from them -- tolerant of build
+  variations, still requires EXACTLY ONE match or it bails
+  (never rewrites the wrong line / a file it doesn't recognise).
+- Diagnostic detail for the "won't fire" case now tells the user
+  the immediate workaround: turn ON auto_translate in DarkSubs.
+  The main hook (machine_translate_subs) is verified installed,
+  so auto_translate=ON routes manual picks through it -> AI. No
+  Google fallback because the v3 hook returns Hebrew before
+  Google is ever reached.
+- CRITICAL fix: Gemini's new "AQ.Ab..." API key format (rolled
+  out late 2025) was being silently corrupted by our paste
+  sanitizer. The allow-list regex only kept A-Z, a-z, 0-9, `_`
+  and `-` -- the PERIODS in the new format were being stripped,
+  so what we sent Google was `AQAb...` instead of `AQ.Ab...`,
+  and Google rejected the key with a 400 "API key not valid".
+  Existing users on the legacy AIza... format were unaffected
+  because that format has no periods. Fix: add `.` to the
+  sanitizer's allow-list. New-format keys now pass through
+  intact while the iOS Safari smart-quote / NBSP / dash-variant
+  protection stays in place.
+- HTML form placeholder updated to show both formats so users
+  aren't surprised when their new key doesn't start with AIza.
+
+- fast_first_chunk now default ON. New users get the fast
+  experience out of the box. service.py includes a one-shot
+  migration (gated by _fast_first_chunk_default_v2 marker)
+  that flips existing users currently on the old default 'false'
+  to 'true' once. Users who later turn it off intentionally
+  won't be re-flipped on subsequent startups.
+- Setting label dropped "(experimental)" since the feature is
+  no longer behind an opt-in flag.
+
+- Two fixes addressing the (10/10) subtitle-stream pile-up and
+  the "Kodi reverts to a pre-existing Hebrew stream" reports:
+  * Alternating-slot writes during translation: chunk_ready now
+    cycles between progressive_<id>_a.he.srt and ..._b.he.srt
+    instead of incrementing _v1, _v2, _v3.... Each setSubtitles
+    call ADDS a stream to Kodi's player list -- with N chunks
+    the user saw N Hebrew entries pile up in the picker. The
+    alternation caps live streams at 2 (a + b) during
+    translation, plus _final after done = 3 max.
+  * Explicit `setSubtitleStream(last_index)` after the canonical
+    setSubtitles in the done callback. Kodi's language-preference
+    auto-selection sometimes reverts to the FIRST Hebrew stream
+    after we add a second one (user report: "I pick English with
+    existing Hebrew present, translation finishes, picker jumps
+    back to the existing Hebrew and I have to re-click English").
+    Pinning the most-recently-added stream stops this. Wrapped
+    in its own try/except so an old Kodi build without the API
+    just no-ops.
+- Cleanup pattern extended to catch BOTH the legacy _v* names
+  (so users coming from #151/#152 builds get those files cleaned
+  up on their next translation) AND the new _a/_b slots. The
+  _final.he.srt is left alone so Kodi keeps its canonical stream.
+
+- Robustness on the final-canonical swap (3 fixes after user
+  reported "Hebrew at start, NOTHING crossing into chunk 2's
+  time range" persisted even after the first canonical-swap fix):
+  * Copy canonical bytes to a FRESH `progressive_<id>_final.he.srt`
+    path before calling setSubtitles. Kodi caches the parsed SRT
+    per-path; reusing the canonical path can no-op silently on
+    some Kodi builds. The fresh _final name guarantees reload.
+  * Drop the isPlayingVideo() gate -- the player may briefly
+    flip False mid-`done` (user paused, end-of-chapter handoff)
+    and we don't want to silently skip the swap. setSubtitles
+    on a not-yet-resumed player is safe.
+  * Cleanup of progressive_<id>_v*.he.srt files now happens ONLY
+    after canonical swap actually succeeded. On abort/failure we
+    keep the .vN files: they're the user's only Hebrew and
+    deleting them strands Kodi pointing at a removed file = no
+    subtitles for the rest of playback. TTL prune sweeps them
+    later if we don't clean up.
+- Final-canonical swap when translation completes: on success the
+  `done` callback now calls Player().setSubtitles() with the
+  CANONICAL Hebrew cache file -- not the last in-flight .vN. User
+  report: subtitles Hebrew at start of file, but seeking 20 min
+  ahead -> no subtitles at all. Root cause: each chunk_ready
+  ADDS a subtitle stream in Kodi (screenshot showed "(10/10)").
+  The user was stranded on the last mid-translation .vN, which
+  had English placeholders for chunks completed AFTER that .vN
+  was written. The final-canonical swap eliminates that window.
+- Progressive .vN cleanup: on `done` (success or failure) we now
+  remove all progressive_<source_id>_v*.he.srt files for this
+  translation. Without it, every translation left ~5-10 stale
+  files on disk for the 180-day TTL prune to handle, AND every
+  setSubtitles call accumulated a subtitle stream in Kodi's UI
+  ("10/10" instead of "1/1"). Now we end clean.
+- Subtitle-display safety net: after our hook returns the English
+  fallback to DarkSubs we now ALSO load it as the active subtitle
+  via xbmc.Player().setSubtitles() + showSubtitles(True). User
+  reports showed the picker closing + our toast firing but NO
+  subtitle ever appearing on screen -- consistent with DarkSubs's
+  caller either filtering on Hebrew chars or relying on a code
+  path that doesn't fire on the fast return. We now drive Kodi's
+  subtitle player directly rather than trusting the handoff. Same
+  showSubtitles(True) added after each chunk_ready setSubtitles
+  swap (DarkSubs + native picker paths).
+- Brief 3-second poll at first_ready to wait for the player to
+  flip isPlayingVideo() -> True before calling setSubtitles, so
+  the call doesn't no-op when DarkSubs's hook returns slightly
+  before Kodi finishes its own handoff.
+- New opt-in `fast_first_chunk` setting (Advanced > default OFF).
+  Only the DarkSubs auto-translate flow uses it; the regular
+  subtitle picker is unchanged in this version.
+- What it does: when DarkSubs hands an English SRT to translate,
+  resolve() now emits a `first_ready` callback the moment the
+  source is in memory (~3 seconds in). default.py uses that to
+  write the English fallback to DarkSubs's output path and touch
+  the `.ai_done` sentinel so DarkSubs releases immediately --
+  Kodi shows English subtitles in seconds instead of 1-3 minutes.
+- The same RunScript subprocess keeps translating (existing
+  parallel chunked Gemini flow). As each chunk lands, resolve()
+  emits a `chunk_ready` callback with a Hebrew-where-done /
+  English-where-pending merged SRT; default.py writes that to a
+  versioned `progressive_<id>_vN.he.srt` file in cache_dir and
+  calls `xbmc.Player().setSubtitles(new_path)` to swap subtitles
+  in flight. By the time the user is 1-2 minutes into the movie,
+  all Hebrew has arrived.
+- Quality preserved: NOT a fork of resolve(). Same chunks, same
+  prompt, same model, same bisection, same final stitch. The
+  callback is invoked AFTER `out_blocks_by_index[idx] =
+  srt.parse_blocks(response); completed += 1` -- it only OBSERVES
+  the existing translation pipeline. The canonical Hebrew bytes
+  saved via `cache.save_text(translated, final)` at the end are
+  byte-identical to v0.2.48 for the same source SRT. Only the
+  timing of delivery differs.
+- Edge cases handled: if the user stops playback / picks a
+  different subtitle / reopens the dialog mid-translation, the
+  `ai_subs.live_translate_active` Window(10000) property is
+  cleared (or never set) so chunk_ready stops calling
+  setSubtitles and stops writing .vN files. The translation
+  itself still runs to completion (and lands in the canonical
+  cache) so the NEXT pick of that same source shows `[CACHE]`
+  and resolves instantly.
+- Abort path: a partial Hebrew translation never lands in the
+  canonical cache. The .vN files are left on disk for the
+  existing TTL prune to clean up.
+- Also wired into the native subtitle picker -- click an AI
+  entry there and you get the same fast experience.
+- English-source only. The fast path briefly shows the SOURCE SRT
+  to the user (until Hebrew chunks land) -- that's fine for
+  English (broadly readable in our user base) but disorienting
+  for Spanish / Portuguese / German / French sources where the
+  user can't read the placeholder text. For non-English sources
+  the addon transparently falls through to the legacy slow path
+  (1-3 min wait, Hebrew only). DarkSubs path detects via
+  language_detect.detect() on the source bytes (the AI payload
+  hardcodes source_lang='en' for prompt-robustness, so we can't
+  trust the label here); native-picker path uses the configured
+  source_lang in the link payload directly.
+
+v0.2.48
+- Fix cache collision: every distinct source SRT for the same
+  movie/episode/source-language now gets its OWN cache slot.
+  User report: "אם לחצתי על כתוביות מסוימות וזה תרגם עם ai ואז
+  אני מנסה כתוביות אחרות לתרגם עם ai (שלא נמצאות עכשיו בcache)
+  זה כותב לי שיש כבר כתוביות בcache". Root cause: cache._key()
+  only mixed `source_id` into the digest when imdb_id was MISSING,
+  so two different SRTs for the same movie collided on one cache
+  filename and the second click was served the first SRT's
+  translation. Now source_id is ALWAYS part of the digest.
+- Cache hits are surfaced in the subtitle picker list: any AI
+  entry whose translation is already cached is sorted to the top
+  of the AI section (just under Hebrew passthrough, if any) AND
+  labeled with `[CACHE]` so the user can spot the instant pick
+  at a glance.
+- Two-tier cache strategy:
+   * Early lookup uses the input source identity (Wyzie URL or
+     sha1 of local file content). Same key the [CACHE] marker in
+     the list uses, so a list-time `[CACHE]` mark is honoured by
+     resolve() without any redundant work.
+   * After the SRT is in memory we ALSO check (and store at) a
+     content-hash slot, catching the rare case where two
+     different Wyzie URLs / local paths point to byte-identical
+     SRTs (so the same translation answers both).
+- Notification wording unified: "AI: כתוביות מ-cache (תרגום קודם)"
+  for an early-source-id hit, "AI: כתוביות מ-cache (זהה לתרגום
+  קיים)" for the content-hash hit.
+- Cache TTL stays at 180 days (default unchanged). The eviction
+  pass refreshes atime+mtime on every read AND every cache hit
+  in resolve(), so a file that gets used regularly never ages
+  out -- only genuinely abandoned translations get pruned.
+
+v0.2.47
+- v0.2.46 added RLE/PDF wrapping to force RTL paragraph direction
+  in toast notifications. That correctly fixed the within-line
+  character order so each Hebrew word renders properly, but a
+  user screenshot showed the toast STILL appearing to read
+  "backwards" -- because Kodi's notification widget SCROLLS long
+  text and the scroll direction is hard-coded LTR in most skin
+  XMLs. Unicode BiDi markers can't change the scroll direction;
+  only the per-line character layout.
+- Fix: shortened every long notification so it fits on one
+  screen without scrolling at all. Kodi only scrolls text past
+  ~50 visible chars; staying under that ceiling sidesteps the
+  scroll-direction problem entirely.
+- Three messages cropped:
+    * Kickoff: 118 -> 44 chars. "AI מתרגם (כדקה-שתיים). תתעלם
+      משגיאות ביניים." -- dropped the obsolete "התקדמות תופיע
+      בפינה" line (replaced by 25/50/75 % milestone toasts in
+      0.2.45) and the verbose "Kodi might show download failed"
+      explanation (kept just the "תתעלם משגיאות" bottom line).
+    * Cache hit (by IMDB): 70 -> 30 chars. "AI: תרגום מ-cache
+      (כבר תורגם)". Dropped the "click Clear Cache in settings"
+      pointer; that's documented in settings UI anyway.
+    * Cache hit (by content hash): 83 -> 32 chars. Same
+      treatment: "AI: תרגום מ-cache (זהה לסרט אחר)".
+    * Missing source: 67 -> 30 chars. "מקור הכתוביות לא נמצא
+      — בחר שוב".
+- The RLE/PDF wrap from 0.2.46 stays in place. Combined: short
+  text + forced RTL paragraph direction = the toast both
+  RENDERS in correct Hebrew order AND doesn't scroll at all.
+- Other toasts (Wyzie download fail, save fail, end-of-job
+  success, milestone toasts, etc.) were already under 50 chars
+  and unchanged.
+
+v0.2.46
+- Fix Hebrew toast notifications reading left-to-right (visually
+  reversed for Hebrew readers). User report: "ההודעה של התוסף
+  שקופץ במסך בזמן תרגום, הפוך. הוא מקריא מהסוף להתחלה (משמאל
+  לימין)."
+- Previous attempt used U+200F (RIGHT-TO-LEFT MARK) as a prefix.
+  RLM is just a strong-RTL invisible character that BIASES the
+  BiDi algorithm's first-strong heuristic but doesn't OVERRIDE
+  the paragraph direction. When messages like "AI: 25% תורגם
+  (5/20 chunks)" have more LTR character weight than RTL, RLM
+  loses to first-strong from "AI:" and Kodi renders the toast
+  left-to-right -- which to a Hebrew reader looks reversed.
+- Switched to U+202B (RIGHT-TO-LEFT EMBEDDING) + U+202C (POP
+  DIRECTIONAL FORMATTING) wrap. RLE/PDF is the proper Unicode
+  mechanism to FORCE a paragraph's base direction to RTL while
+  still letting embedded Latin/digit runs ("AI: 25%", "(5/20
+  chunks)") read left-to-right within the RTL paragraph. The
+  whole toast now scrolls and aligns from the right as a Hebrew
+  reader expects, with Latin segments rendered in their natural
+  LTR order inside the RTL frame.
+- notify() also strips any existing BiDi-marker prefix from old
+  messages before wrapping, so we don't end up double-wrapped
+  if a caller (or a future re-call) re-passes an already-RTL'd
+  string.
+
+v0.2.45
+- Reverted the custom WindowDialog progress overlay entirely. The
+  v0.2.42-0.2.44 attempts kept breaking in successive ways:
+    * v0.2.42 -- WindowDialog.show() rendered BEHIND DarkSubs's
+      pyxbmct MySubs picker (z-order issue, invisible to user)
+    * v0.2.42 doModal() -- finally rendered on top, but ...
+    * v0.2.43 -- the card came up as a solid BLACK BOX because
+      dark_bg.png * dark colorDiffuse = unreadable
+    * v0.2.43 white_pixel.png fix -- card looked right, but ...
+    * v0.2.44 -- percent / chunks labels never updated, stuck at
+      "0% / מתחיל תרגום..." while translation proceeded silently
+      in the background. Cross-thread xbmcgui control updates
+      apparently don't land reliably even via Window properties
+      and $INFO[] binding on this Kodi configuration.
+- Stripped the _AITranslateProgressWindow class, the
+  _resolve_with_progress_window helper, the doModal+worker
+  architecture, the heartbeat ticker, and the white_pixel.png
+  asset. _handle_download and _handle_translate_file now use the
+  simple inline DialogProgressBG (bottom-right banner) + 25/50/75 %
+  milestone toast notifications -- the exact pattern from v0.2.41
+  that the user confirmed worked in their first screenshot.
+- Toasts always layer above any window (DarkSubs MySubs, video OSD,
+  Kodi standard dialogs). The user sees:
+    - The existing "AI: מתחיל תרגום..." kickoff toast
+    - DialogProgressBG bottom-right banner when no full-screen
+      window covers it
+    - 25/50/75 % milestone toasts -- guaranteed visible regardless
+    - The existing "AI: תרגום הסתיים בהצלחה" completion toast
+- No more fancy overlay; this is the reliable path. The "nicer
+  visual window" goal will be revisited later, possibly via a
+  skin XML approach instead of WindowDialog, when we have more
+  bandwidth to debug Kodi's cross-thread rendering quirks.
+
+v0.2.44
+- v0.2.43 finally rendered the modal correctly (white_pixel.png as
+  the colorDiffuse base fixed the all-black box). User screenshot
+  confirmed: the card LOOKS right -- yellow title, navy panel,
+  branded subtitle, status text. But the percent number stayed at
+  "0%" and the status at "מתחיל תרגום..." for 3 minutes while
+  translation actually progressed in the background. The labels
+  were never updating.
+
+- Root cause: xbmcgui control updates (setLabel, setPercent) called
+  from a non-UI thread don't reliably land on screen. The doModal()
+  architecture in v0.2.42 moved translate.resolve into a daemon
+  worker thread; that thread's calls to window.update_progress()
+  hit the controls but Kodi's UI thread, busy rendering doModal,
+  apparently didn't pick the changes up.
+
+- Fix: switch to Kodi's canonical cross-thread UI pattern --
+  Window(10000) properties + $INFO[] binding in the label text.
+  setProperty is documented thread-safe; the UI thread re-reads
+  $INFO[Window(10000).Property(...)] on every render tick so
+  updates land within ~50 ms regardless of which thread wrote them.
+
+  Properties used:
+    ai_subs.progress_pct        -- current %
+    ai_subs.progress_chunks     -- "chunk X / Y" or status text
+    ai_subs.progress_heartbeat  -- "מתרגם... Ns" elapsed-seconds ticker
+
+  Labels in the modal now contain literal $INFO[...] markers that
+  Kodi auto-expands; update_progress() and update_heartbeat()
+  just call setProperty.
+
+- NEW heartbeat ticker thread updates `progress_heartbeat` every
+  second with the elapsed-seconds count + an animated dots glyph
+  ("מתרגם... 12ש"). Critical for the Gemini-overload-retry case:
+  the first chunk can take up to 230 s before completing if Google
+  is rate-limiting (5 backoff steps of up to 120 s each). With the
+  heartbeat, the user sees the elapsed counter advancing the whole
+  time -- the modal feels alive, not frozen.
+
+- Dropped the visible ControlProgress bar in this revision. It
+  can't bind to a Window property the way ControlLabel can, so it
+  would still need cross-thread setPercent() calls. The big
+  percent number + chunk text + heartbeat counter convey the same
+  information and DO auto-update correctly.
+
+v0.2.43
+- v0.2.42's doModal() switch fixed z-order -- the progress overlay
+  finally renders on top of DarkSubs's MySubs picker. But a new
+  screenshot revealed it renders as a SOLID BLACK BOX: title,
+  percent, chunks counter, all invisible. The card looks broken
+  rather than busy.
+
+- Root cause: ControlImage uses colorDiffuse as a MULTIPLIER on
+  the base texture. The previous code used dark_bg.png (already
+  dark) as both backdrop and card, then multiplied by more dark
+  colors (DD000000, F0172635). Dark * dark = black. The yellow
+  title, the percent number, the chunk counter were all there but
+  invisible against the unintentionally-black card.
+
+- Fix: ship a 16x16 fully-opaque WHITE pixel PNG
+  (resources/lib/icons/white_pixel.png, 79 bytes) and use it as
+  the base texture for every colorDiffuse fill in the modal.
+  White * navy = navy. White * yellow stripe = yellow. Colors
+  finally come through.
+
+- Bonus polish while we were already in the file:
+  * Card widened 800 -> 900, repositioned to better center.
+  * Added a soft shadow (4px offset, semi-opaque black) behind
+    the card for depth.
+  * Top accent stripe (yellow, 6px tall) marks the title area.
+  * Title moved to textColor on the ControlLabel (instead of a
+    [COLOR=...] BBCode wrap inside the label string), same for
+    all other text controls. Cleaner; same render.
+  * Progress bar widened 600 -> 640 and made taller (26 -> 32 px)
+    for TV-viewing-distance visibility.
+  * "Back תסגור את החלון; התרגום ממשיך ברקע" copy at the bottom
+    now explicit about the early-dismiss behaviour added in v0.2.42.
+
+v0.2.42
+- v0.2.41 introduced _AITranslateProgressWindow but a user screenshot
+  confirmed it STILL doesn't show on top of DarkSubs's MySubs picker.
+  The previous WindowDialog.show() approach left our window as a
+  non-modal child window -- pyxbmct's AddonDialogWindow is itself
+  modal and captures z-order, so our overlay rendered BEHIND it
+  (invisible to the user).
+
+- Switched the progress overlay from `show()` to `doModal()` +
+  worker-thread translation. doModal() forces the window above
+  every other window unconditionally because it IS modal. The
+  trade-off: doModal blocks the calling thread, so translate.resolve
+  now runs in a daemon thread; when it finishes, the worker calls
+  window.close() which un-blocks doModal and lets the helper return
+  the translated path.
+
+- User can dismiss the modal early via Back / Esc -- new onAction
+  override on _AITranslateProgressWindow catches the two
+  Kodi action codes (10 and 92) and calls self.close(). Translation
+  continues in the background thread even after the user dismisses
+  the modal; the final SRT is still written to disk so DarkSubs
+  picks it up via its normal trans_file path. Early-dismiss costs
+  only the visual, not the translation.
+
+- worker.join() has a 10-minute cap (covers the worst-case Gemini
+  retry chain: 5 backoff steps of up to 120s each). If translation
+  somehow takes longer than that, we return None and the user falls
+  through to DarkSubs's standard behaviour for an empty trans_file
+  -- same as if our hook had timed out.
+
+- The 25 / 50 / 75 % toast milestones remain in place as a backup,
+  primarily for the early-dismiss case (modal closed, translation
+  still running, toasts surface the ongoing progress).
+
+v0.2.41
+- v0.2.40 added DialogProgressBG to the DarkSubs-triggered path, but
+  a user screenshot confirmed the dialog isn't visible in practice:
+  DarkSubs's MySubs picker is a full-screen pyxbmct AddonDialogWindow
+  that completely covers the bottom-right corner where
+  DialogProgressBG normally appears. The dialog was being updated but
+  hidden behind the picker -- user saw the start toast and then
+  silence until translation finished.
+
+- Two-layer fix:
+
+  1. NEW WindowDialog overlay (_AITranslateProgressWindow). A
+     proper full-screen centered card with dimmed backdrop, big
+     title, branded "Gemini AI · Kodi POV IL" subtitle, visual
+     progress bar, large percentage number, chunk counter, and
+     reassuring "translation continues even if you close this
+     window" copy. WindowDialog is a top-level Kodi window so it
+     layers above EVERY other window -- including DarkSubs's
+     pyxbmct picker. This is now the primary progress UI for
+     both translation entry points.
+
+  2. Kodi notification toasts at 25 / 50 / 75 % milestones as a
+     guaranteed-visible backup. Toasts always layer above
+     WindowDialog too, in the rare case some Kodi-skin combination
+     hides our overlay. Throttled via a closed-over milestone dict
+     so a 20-chunk file fires at most 3 progress toasts.
+
+- Both _handle_download (direct AI Subs path) and
+  _handle_translate_file (DarkSubs hook path) now route through a
+  shared `_resolve_with_progress_window(link, info)` helper that
+  creates the overlay, wires the progress callback, and closes
+  the overlay in `finally`. Identical visual UX regardless of
+  which entry point triggered the translation.
+
+- The existing start toast ("AI: מתחיל תרגום...") and end toast
+  ("AI: תרגום הסתיים בהצלחה") in translate.resolve are unchanged.
+
+v0.2.40
+- User report: didn't see ANY progress feedback when DarkSubs picks
+  a subtitle and the AI translation runs. AI works (translated SRT
+  appears) but during the 30-90s wait there's nothing on screen and
+  the user can't tell if the hook even fired.
+- Root cause: `_handle_download` (when the user picks our AI Subs
+  service directly) creates a DialogProgressBG and passes its
+  updater as `progress_cb` to `translate.resolve`. But
+  `_handle_translate_file` (the entry point DarkSubs's hook
+  RunScripts into) called `translate.resolve(link, info)` with NO
+  progress_cb, so no UI update path existed. Translation ran
+  silently end-to-end.
+- Fix: `_handle_translate_file` now creates its own
+  DialogProgressBG ("Kodi POV IL - AI Subtitles") and passes a
+  matching `report` callback to `translate.resolve`. The
+  background progress bar at the bottom-right of Kodi now ticks
+  through "מתרגם chunk X/Y..." for the DarkSubs path too. Closes
+  cleanly on completion, error, or crash via a finally block;
+  if DialogProgressBG creation itself fails, translation
+  proceeds silently (no regression vs. v0.2.39 behaviour).
+- The existing initial "AI: מתחיל תרגום..." toast and the final
+  "AI: תרגום הסתיים בהצלחה" toast are both already in place from
+  earlier versions -- this PR is purely about the missing
+  MID-translation progress feedback.
+
+v0.2.39
+- AI translation is now the DEFAULT whenever a Gemini API key is
+  set -- no second toggle to find. Users had been hitting the
+  "two-toggle confusion": one toggle in DarkSubs ("Enable machine
+  translation"), one in our addon ("Translate via AI even when
+  DarkSubs auto_translate is OFF"). If the second wasn't on, the
+  hook never fired for users who deliberately keep DarkSubs's
+  auto_translate off, and they wondered why they got Google
+  output sometimes.
+
+- Two changes that together fix the default:
+  * settings.xml ships `force_ai_when_auto_translate_off=true`
+    by default for new installs.
+  * dark_subs_integration auto-flips the toggle ON for existing
+    users (one-shot, marker-gated as _force_ai_autoenable_done).
+    Users who explicitly turn the toggle OFF later are respected:
+    the migration marker stays set, we never re-flip.
+
+- DarkSubs settings.xml is also rebranded to make clear the whole
+  "machine translation" section runs via Gemini AI when a key is
+  connected -- prior versions only relabelled the toggle, leaving
+  the section heading "תרגום מכונה" and the source dropdown "מקור
+  תרגום: Google Translate" looking like Google was still in
+  charge. Three label rewrites now applied (each independent,
+  idempotent, surgical):
+  * Section heading -> "תרגום מכונה — דרך Gemini AI (POV IL)
+    כשמפתח מחובר"
+  * Toggle -> "(Gemini AI)" suffix (unchanged from v0.2.x)
+  * Source dropdown -> "מקור fallback (לא בשימוש כש-Gemini AI
+    מחובר)"
+  The dropdown VALUES (Google Translate | Bing Web | Yandex) are
+  left untouched -- those describe the true fallback path that
+  runs when no AI key is configured, so they remain honest.
+
+v0.2.38
+- Four targeted improvements to Hebrew gender (זכר/נקבה) accuracy
+  in AI translation. Today the gender form is right ~90% of the
+  time; the remaining 10% mostly traces to four specific failure
+  modes that these changes address. No behavioural change for any
+  non-Hebrew code path.
+
+- (a) Cross-chunk context carry-over: we translate in parallel
+  chunks (default 250 entries each). Until now, each chunk was
+  translated INDEPENDENTLY: the AI saw the cast block but no
+  recent conversational thread, so a character finishing a line
+  at the end of chunk N would sometimes get a different gender
+  the moment they spoke at the start of chunk N+1. We now feed
+  the last 5 SOURCE-text lines of chunk N-1 into chunk N's
+  prompt as a "PREVIOUS DIALOGUE CONTEXT" section -- AI sees the
+  thread, picks up the gender consistently. The previous chunk's
+  source is precomputed up-front (deterministic per index) so
+  parallel dispatch still works -- no inter-chunk dependency.
+  Tunable via the `prev_context_lines` setting (default 5;
+  0 disables the feature).
+
+- (b) Speaker-prefix hints: SRT entries that start with an
+  ALL-CAPS speaker tag like "MABEL:" or "DR. SMITH:" used to be
+  dropped on instruction ("do NOT include speaker prefixes in
+  the Hebrew"). The prompt now tells the AI to MATCH the prefix
+  name against the cast block, use that person's gender for
+  first-person forms in the line, then drop only the prefix
+  from the output. Speaker prefixes are common in SDH /
+  Telegram SRTs and were previously thrown away even though
+  they're the strongest gender signal we ever get.
+
+- (c) Reply heuristic: in two-character dialogues, short
+  follow-up lines ("Right.", "No way.", "You sure?", "I told
+  you.") are almost always REPLIES from the OTHER speaker.
+  New explicit prompt rule: "speakers alternate unless context
+  says otherwise; apply alternation before falling back to a
+  gender guess." Catches the most common single-line gender
+  flip in dialogue.
+
+- (d) Cast list widened from top-12 to top-25 (`tmdb_helper`
+  default). Minor characters (waiters, partners, one-scene
+  parents) whose gender mattered for the line they spoke were
+  often outside the top-12 cut and defaulted to the AI's
+  best guess. Existing cached cast lookups with fewer than
+  20 entries are treated as cache misses and re-fetched on
+  next translation, so users with prior watches get the
+  expanded list automatically without manual cache clear.
+
+v0.2.37
+- User report: Android phone says "address not found" when opening
+  the pair URL, even though the phone is on the same WiFi as Kodi
+  and the user typed the URL with the port. Multiple Android devices
+  fail the same way; the user's iPhone on the same network works.
+  Not an HTTPS-cleartext issue (we'd see a different error) -- the
+  phone genuinely can't reach the IP we displayed.
+
+- Root cause: `get_lan_ip()` only ever returned ONE IP -- whichever
+  the default route happened to bind to. On any device with multiple
+  network interfaces (Android TV with WiFi + Ethernet, laptop with
+  WiFi + VPN, PC with Docker bridge active) that single IP can be
+  on a subnet the user's phone is NOT on. Phone tries to reach it,
+  fails silently, user blames the addon.
+
+- `gemini_pair` now enumerates ALL plausible LAN IPv4 addresses:
+  * The 8.8.8.8-probe trick (default-route interface)
+  * `ip -4 addr` / `ifconfig` via subprocess (works on Android,
+    Linux, BSD -- catches non-default-route interfaces)
+  * Per-private-range probes (sometimes routing tables bind
+    different ranges to different NICs)
+  * Hostname lookup as final fallback
+  All results are filtered through `_is_private_lan_ip()` (RFC 1918
+  + 100.64/10 CGNAT, excluding 127.x and 169.254.x) so VPN
+  tunnel IPs etc. don't pollute the list.
+
+- The pair dialog now renders every detected LAN URL. With two or
+  more interfaces, the text says "מטלפון אחר ב-WiFi (נסה כל אחת עד
+  שאחת תיפתח):" and lists them as bullets so the user can try each.
+
+- Better Gemini error surfacing: when Google returns 400/403,
+  `gemini.test_key()` now parses the JSON `error.message` (e.g.
+  "API key not valid. Please pass a valid API key.") and includes
+  it in the user-facing dialog. Previously the user only saw
+  "Key rejected by Gemini (400)" with no clue WHY -- typo'd vs
+  revoked vs quota vs project-not-enabled all looked identical.
+
+- Pair dialog text now includes explicit troubleshooting for the
+  two known phone-side failure modes:
+  * Chrome on Android refusing HTTP: pointer to "Always use secure
+    connections" toggle + Firefox/Brave alternatives.
+  * iPhone 400 from Gemini after paste: compare the fingerprint
+    against AI Studio's key, regenerate if it matches.
+
+- Pair confirmation fingerprint widened from first-4/last-4 to
+  first-8/last-8 chars (still hides the middle 23 of a 39-char
+  Gemini key for shoulder-surf safety). Easier eyeball-compare
+  against the AI Studio source.
+
+v0.2.36
+- Two regressions surfaced on the latest version: (a) iPhone users
+  STILL got Google API 400 even with v0.2.34's autocorrect=off +
+  NFKC + ASCII allow-list; (b) users on non-FENtastic skins (Arctic
+  Zephyr was the reported case) still saw the UUID gibberish in
+  the subtitle-dialog header even though the percentages were fine.
+
+- Fix (a): iOS Smart Punctuation replaces ASCII hyphen-minus
+  (U+002D) with em-dash (U+2014) for `--` and en-dash (U+2013) for
+  a lone `-`. NFKC does NOT collapse these back to ASCII -- they're
+  distinct Unicode codepoints. v0.2.34's allow-list regex stripped
+  them entirely, so an iPhone-pasted `AIza...XYZ-ABC` arrived at
+  our server as `AIza...XYZABC`, two characters short, and Google
+  rejected the truncated string with 400.
+  `_sanitize_key()` now coerces every dash-shaped Unicode codepoint
+  back to ASCII `-` BEFORE the allow-list runs. Covers 11 variants:
+  em-dash, en-dash, minus sign, unicode hyphen, non-breaking
+  hyphen, figure dash, horizontal bar, hyphen bullet, full-width
+  hyphen-minus, and the small-form variants. Verified against an
+  end-to-end PairServer POST with em-dash corruption.
+
+- Fix (b): the old `fentastic_dialog_subtitles_patcher` was
+  hard-coded to FENtastic's XML structure. Users on Arctic Zephyr,
+  Estuary, Aeon Nox etc. got `'no_file'` from it -- the dialog
+  header kept reading `$INFO[Player.Filename]` (the UUID for
+  TorBox URLs). The new `skin_dialog_subtitles_patcher`
+  auto-detects the active skin via `xbmc.getSkinDir()`, locates
+  `DialogSubtitles.xml` in the skin's `xml/`, `720p/`, or `1080i/`
+  directory, and uses a regex-based match (case-insensitive on
+  the `.Filename` vs `.FileName` capitalisation that varies
+  across skins) to swap the label out.
+  Self-migrates from the v1 FENtastic-only inject so users
+  upgrading don't end up with stale duplicated controls. Verified
+  end-to-end against FENtastic, Arctic Zephyr Mod, and Estuary
+  XMLs -- all three parse as valid XML after patching, with the
+  v2 marker and dual-visibility-gated label pair in place.
+
+v0.2.35
+- Make the port number in the Gemini pair-from-phone URL visually
+  unmissable so users can manually type the right URL even when
+  their phone's QR scanner truncates the displayed result.
+- Background: I verified end-to-end that our QR API call already
+  encodes the full URL including the port (decoded the actual
+  generated QR with pyzbar) -- so the QR itself is correct. But
+  Android OEM camera apps (Samsung Bixby Vision, Xiaomi MIUI
+  scanner, etc.) sometimes display the URL truncated at the colon,
+  so users see "http://10.0.0.5" and type that into their browser,
+  missing the ":8765" suffix that we actually need them to use.
+- The text below the QR now:
+  * Renders the `:port` portion in bright yellow (#ffd166), the
+    same accent colour as the page title -- visually impossible to
+    miss.
+  * Increases the body font from font13 to font14 and widens the
+    text region so it doesn't wrap awkwardly.
+  * The "or open one of the URLs in a browser" header is now bold
+    red (#bf7f7f) and explicitly says "חובה כולל החלק הצהוב — הפורט"
+    ("must include the yellow part — the port") so users who type
+    the URL manually after a truncated scan know exactly which
+    piece they're missing.
+
+v0.2.34
+- Fix the Gemini pair form returning a 400 from Google's API on
+  every iPhone Safari paste. Symptom: pair-from-phone flow works
+  perfectly on Android, Mac, Windows -- but iOS users always see
+  "ה-key נדחה ע"י Gemini" right after the page accepts their key.
+  The form HTML had autocomplete/autocapitalize/spellcheck off but
+  was missing the iOS-only `autocorrect="off"` attribute. Without
+  it, Safari quietly mutates the pasted string -- smart quotes
+  around it, non-breaking spaces inserted mid-key, zero-width
+  marks from text direction inference -- and Google's API
+  rejects the corrupted result.
+- Three layers of fix:
+  * gemini_pair.py form: adds `autocorrect="off"` and
+    `inputmode="verbatim"` to the API-key input. These together
+    disable Safari's pasted-text rewrites and the iOS keyboard's
+    word-suggestion bar.
+  * gemini_pair.py server: new `_sanitize_key()` runs NFKC unicode
+    normalisation then keeps only the ASCII alphanumeric +
+    dash/underscore charset Gemini keys actually use. Strips out
+    NBSP, ZWSP, BOM, RTL/LTR marks, smart quotes, full-width
+    characters -- every byte iOS has been observed to insert.
+    Sanitised against 11 known iOS-corruption patterns
+    end-to-end.
+  * The "key sent" confirmation page now echoes a fingerprint
+    (first 4 chars … last 4 chars (length)) so the iPhone user can
+    eyeball-compare against the key they copied from AI Studio.
+    If sanitisation dropped the wrong thing or Safari mangled the
+    inner characters somehow, the fingerprint mismatch makes it
+    obvious -- no need to wait for the Gemini API call to fail.
+
+v0.2.33
+- A CoreELEC user reported: passes the diagnostic but AI still
+  doesn't translate his manual subtitle picks. Reason: he keeps
+  DarkSubs's auto_translate setting OFF (so DarkSubs doesn't auto-
+  translate with Google) and expected AI to take over instead.
+  But the hook lives inside machine_translate_subs, which DarkSubs
+  only calls when auto_translate=true. With auto_translate=false
+  the hook never fires -- English subs go straight to the screen.
+
+- Two complementary changes resolve this without breaking users
+  who deliberately want subs in the source language (e.g. language
+  learners watching English-with-English-subs):
+
+  * Hook bumped to v3. When AI is configured (api_key set), the
+    hook NO LONGER falls back to Google on AI timeout/crash/empty
+    output. Instead, on any AI failure it copies the original
+    English subtitle to the output path and short-circuits -- the
+    user sees the English subs on screen instead of being silently
+    "rescued" by Google Translate. Google fallback is preserved
+    ONLY when no AI key is configured (so non-AI users behave
+    identically to upstream DarkSubs).
+
+  * New patcher (darksubs_download_sub_patcher) widens the elif in
+    download_sub so it ALSO fires when the user has explicitly
+    opted in via a new toggle. The toggle lives in our addon
+    settings:
+        "Translate via AI even when DarkSubs auto_translate is OFF"
+        (id: force_ai_when_auto_translate_off, default: false)
+    With this on, picking a non-Hebrew subtitle while
+    auto_translate=false routes through machine_translate_subs (and
+    thus through our hook). With it off (default), behaviour is
+    identical to upstream DarkSubs for users who deliberately keep
+    auto_translate off.
+
+- Bug fix: the existing hook patcher silently rewrote DarkSubs's
+  engine.py from CRLF to LF on every Kodi startup. Text-mode read
+  with universal newlines + text-mode write with default newline=
+  was doing the conversion. Hook patcher now uses BINARY read/write
+  end-to-end, preserves original line endings, and detects the EOL
+  style of the source file when writing the injected hook body.
+
+- Diagnostic checklist now has 10 rows. New rows:
+  * "פאצ' download_sub פעיל" -- whether the elif rewrite is on disk.
+  * "הוק AI יפעל על כתוביות לא-עבריות" -- the TRUTHFUL "does this
+    setup actually translate anything?" check. Considers
+    auto_translate + force_ai toggle + download_sub marker to give
+    a concrete yes/no plus an explanation of which lever to flip
+    if the user wants different behaviour.
+
+v0.2.32
+- 0.2.31's diagnostic surfaced a real failure mode: a CoreELEC user
+  reported all 8 checks green BUT the hook still doesn't fire --
+  picking an English subtitle in DarkSubs with auto_translate ON
+  still routes through Google Translate, never reaches our AI.
+  Root cause boils down to one of:
+
+  * Python bytecode cache (.pyc): DarkSubs declares
+    <reuselanguageinvoker>true</...> so its interpreter caches the
+    OLD engine.py bytecode -- even though we wrote a new engine.py
+    to disk, the running process keeps executing pre-patch code.
+  * Silent fall-through inside the hook (key check returns empty
+    inside DarkSubs's process, RunScript times out, hook crashes).
+
+  Both look identical from the user's side: AI subs settings show
+  the key is set, the file on disk has the marker, but Google
+  Translate text appears anyway.
+
+- Three fixes in 0.2.32:
+
+  1. Patcher now invalidates engine's __pycache__ on every successful
+     write. Wipes engine.cpython-*.pyc so Python is forced to
+     re-compile from the new .py the next time DarkSubs imports it.
+     Without this, reuselanguageinvoker + an existing stale .pyc
+     means the patch lives on disk but never reaches RAM.
+
+  2. Hook v2 (HOOK_VERSION = 2) is loud. Every fire writes:
+       * Window(10000).Property('ai_subs.hook_last_fire')  = timestamp
+       * Window(10000).Property('ai_subs.hook_last_key_len') = key len
+       * Window(10000).Property('ai_subs.hook_last_outcome') =
+         ok | timeout | no_key | crash:<msg>
+     Plus xbmc.log lines at each branch and a visible Kodi
+     Notification toast whenever the hook fires but falls back
+     (timeout / no key / crash) -- so the user SEES why instead of
+     just getting Google Translate output silently. Marker bumped
+     to v2; v1 → v2 migration handled by the existing OLD_MARKERS
+     mechanism (the patcher strips v1 block before injecting v2).
+
+  3. Diagnostic checklist gained a 9th row: "הוק AI ירה בפועל
+     מ-DarkSubs". Reads the heartbeat Window property and reports
+     when the hook last fired and what the outcome was. If row 4
+     (marker in engine.py) is ✓ but row 9 (heartbeat) is ✗, that's
+     the smoking gun for the .pyc caching issue -- the patch is on
+     disk but the hook never executed in DarkSubs's process.
+
+v0.2.31
+- Add visible diagnostics for the DarkSubs hook integration. CoreELEC
+  reports surfaced that the hook can silently fail to inject (engine.py
+  not writable, signature mismatch from an upstream DarkSubs update,
+  etc.) and the user has no signal -- they see Google Translate output
+  and assume "AI subs not working" with no idea why. Two new entry
+  points fix that:
+
+  * Automatic startup toast: surface_status_if_problem() runs once per
+    Kodi launch from service.py. If the integration has an actionable
+    problem (engine missing/unreadable, signature changed, read-only
+    filesystem, no API key, auto_translate off), pops a Hebrew toast
+    explaining the specific failure class. Only once per failure-class
+    + nag-version, so it doesn't spam on every boot.
+
+  * Manual "Test DarkSubs integration" button: new entry in the
+    addon's settings (under the Gemini API category, next to "Test
+    connection"). Triggers RunScript -> default.py action
+    `darksubs_status` -> a textviewer dialog with an 8-point
+    checklist (DarkSubs installed, engine.py reachable/readable,
+    hook marker present, signature matches, file writable, API key
+    set, auto_translate on). Each line is green-✓ or red-✗ with a
+    one-line explanation, so when a user reports "AI subs not
+    working" we get an exact failure mode instead of guessing.
+
+- Why this matters more than any silent fix: the previous releases
+  added several patchers without any way for the user to verify the
+  end-to-end chain. When ONE link silently broke (read-only fs on
+  CoreELEC, an upstream signature change in DarkSubs, etc.), the
+  whole feature silently regressed. From 0.2.31 forward, any such
+  break is immediately visible.
+
+v0.2.30
+- After v0.2.29 the dialog header still showed the UUID for TorBox
+  playbacks even though the property writes were in place. Two
+  root causes discovered:
+
+  1. POV's addon.xml declares <reuselanguageinvoker>true</...> which
+     means Kodi keeps the Python interpreter in memory across plugin
+     invocations. Our pov_source_name_patcher writes the patched
+     sources.py to disk, but POV's in-memory copy of _process() is
+     the OLD pre-patch version until the user does a FULL Kodi
+     restart -- quick_update + addon reload isn't enough. So on the
+     first playbacks after upgrade, subs.player_filename was never
+     getting written.
+
+  2. The subtitle dialog HEADER is rendered by Kodi's
+     DialogSubtitles.xml in the skin via `$INFO[Player.Filename]`,
+     which Kodi computes directly from the player URL. No amount of
+     Window property writes affects it -- the skin XML has to point
+     at our property instead.
+
+- Two complementary fixes:
+
+  * fentastic_dialog_subtitles_patcher: rewrites FENtastic's
+    DialogSubtitles.xml so the header label first checks
+    Window(10000).Property(subs.player_filename) and only falls
+    back to Player.Filename when our property is empty. Two stacked
+    `<control type="label">` controls with mutually-exclusive
+    `<visible>` conditions. Self-healing -- re-applies on every
+    Kodi startup so a FENtastic update can't permanently revert it.
+
+  * subs_filename_publisher: an xbmc.Player subclass living in
+    our addon's service process that publishes subs.player_filename
+    on every onAVStarted. Reads pov_picked_source_name first (set
+    by POV's inline patch when it does apply), falls back to
+    synthesising a release-style filename from VideoPlayer info-
+    labels. Because our service runs in its own Python process,
+    it's orthogonal to POV's reuselanguageinvoker behaviour --
+    the property gets set on EVERY playback, no Kodi restart
+    required.
+
+- Net effect: TorBox playbacks now show the real release name (or
+  synthesised Title.SxxExx.QUALITYp.mkv when the picked-source
+  property hasn't been set yet) as the dialog header from the
+  first playback after upgrade, with NO Kodi restart needed. Match
+  percentages also improve since the Tagline branch of engine.py
+  now has a real value to work with.
+
+v0.2.29
+- Fix the DarkSubs subtitle-dialog HEADER showing the UUID/hash for
+  TorBox playbacks. v0.2.28 raised the match percentages off 0% by
+  patching get_playing_filename(), but the dialog title is rendered
+  from a separate code path in DarkSubs (sub_window.py uses
+  `video_data['Tagline'] or video_data['file_original_path']`) and
+  Tagline is read from `xbmcgui.Window(10000).getProperty(
+  "subs.player_filename")`. v0.2.28 wasn't writing that property,
+  so the Tagline branch was empty and DarkSubs displayed only the
+  URL basename.
+- v2 of pov_source_name_patcher now also writes
+  `subs.player_filename` (the property DarkSubs natively reads into
+  Tagline_From_Fen, intended for FEN-family scrapers to expose the
+  picked release name). Setting it gives DarkSubs:
+    * the real release name in the dialog HEADER (no more UUID)
+    * the same name fed to the Tagline percentage branch, which
+      engine.py:197 takes the max of with the file_original_path
+      branch -- so matches climb from 30-50% to 70-95% routinely
+- v2 of darksubs_filename_fallback_patcher clears
+  `subs.player_filename` (plus pov_picked_source_name/url) when the
+  URL guard fails. Prevents a stale property from a previous POV
+  play leaking into a later non-POV play (e.g. the next time the
+  user plays a video from a different addon).
+- Migration: both patchers detect the v0.2.28 injection state on
+  disk, revert it back to the original, then apply the v2 form.
+  Idempotent across reboots; safe to re-apply.
+
+v0.2.28
+- Fix DarkSubs subtitle-match percentages and dialog title for all
+  debrid services. Two complementary patchers:
+
+  * pov_source_name_patcher: patches POV's sources.py so that the
+    moment POV picks a source from the source-select dialog (the
+    one with cached/uncached/quality flags), it stashes the picked
+    item's release name and unrestricted URL in a Window(10000)
+    property. Window properties cross the addon-dispatch boundary
+    so DarkSubs (separate addon) can read them.
+
+  * darksubs_filename_fallback_patcher: patches DarkSubs's
+    get_playing_filename() to prefer the release name stashed by
+    POV. A URL-equality guard (stored URL == currently-playing URL)
+    prevents stale values from a previous POV play leaking into a
+    later non-POV play. Falls back to synthesising a release-style
+    filename from VideoPlayer / ListItem info-labels for the rare
+    case where no POV property is available AND the URL basename
+    looks like an opaque hash (TorBox CDN without our POV patch).
+
+- Why this matters: for TorBox sources, the CDN returns URLs like
+  `https://store-N.torbox.app/<uuid>?token=...` -- no filename in
+  the path. Without the fix, DarkSubs sees only the UUID:
+  * The dialog title shows the UUID -- the user can't visually
+    compare it to subtitle release names to pick one manually
+  * Token overlap with subtitle release names is 0%, so every
+    subtitle shows 0% and ranking is useless
+  With the fix, both the dialog title AND the percentage matching
+  use the real release name (e.g.
+  `War.Machine.2026.1080p.NF.WEB-DL.DDP5.1.Atmos.H.264-RYNDR.mkv`)
+  that POV picked from the source list.
+
+- Real Debrid / AllDebrid / Premiumize also benefit: even though
+  their URLs do include the release filename, it may not exactly
+  match the source POV picked (the CDN sometimes returns a
+  different variant). Using POV's picked name gives consistent
+  matching across all services. Expected match: 70-95%, depending
+  on how closely the release name matches the subtitle authoring.
+
+- Self-healing: both patchers re-apply on every Kodi startup. If
+  POV or DarkSubs upstream restructures the patched function in a
+  way our pattern doesn't match, we skip with a log warning -- the
+  affected playback path goes back to its pre-patch behaviour but
+  nothing else breaks.
+
+v0.2.27
+- Gemini "Pair from phone" flow now shows an actual scannable QR
+  image instead of printing the qrserver.com URL as text. The
+  previous DialogProgress-based UI only had a text body, so the
+  QR URL was useless to anyone who wasn't going to manually
+  type a 80-char qrserver.com URL into a browser.
+- Replaced the DialogProgress with a custom WindowDialog
+  (_PairWindow in default.py) that programmatically lays out:
+    1. Title bar at the top
+    2. Real 380x380 QR image (fetched from qrserver.com on
+       first display, Kodi caches the PNG)
+    3. The two URLs as text below the QR for fallback (the
+       user can type them manually if their phone camera
+       doesn't pick up the QR)
+    4. A live countdown + Back-to-cancel hint
+  Same poll loop semantics as before: 5 minute deadline, polled
+  every 500ms, closes on key arrival or user cancel.
+- Tiny `dark_bg.png` bundled in resources/lib/icons/ as the
+  semi-opaque overlay background. 78 bytes.
+- The QR encodes ps.url_lan when available (accessible both
+  from other phones on the same WiFi AND from the local
+  device's own browser since the pair server binds 0.0.0.0)
+  or falls back to ps.url_local when LAN detection failed.
+
+v0.2.26
+- Fix a systemic bug in POV's device-flow auth (Trakt, Real Debrid,
+  TorBox, Premiumize, AllDebrid) where the auth dialog would stay
+  stuck on screen with the same code/URL even after the user
+  authorized on the website.
+
+  Root cause: POV's RepeatTimer.run() in myservices.py polls the
+  service's auth endpoint every N seconds. The polling call is
+  NOT wrapped in try/except. Any exception from the user-function
+  (network timeout, SSLError, malformed JSON, KeyError on
+  unexpected response structure) propagates up to threading.Timer
+  which doesn't catch it -- the polling thread dies silently and
+  the auth detection logic stops running entirely. The dialog
+  stays up because nothing was telling it the auth completed.
+
+  This isn't a per-service bug. Any device-flow service POV
+  integrates with hits the same fragility -- single transient
+  failure on poll #1 = the rest of the user's auth flow is dead.
+
+  Fix is one try/except wrap. Successive polls keep retrying;
+  eventually one returns 200 with the token and the auth gets
+  captured normally.
+
+  Delivered through a new patcher:
+    addons/service.subtitles.kodipovilai/resources/lib/
+      pov_repeat_timer_patcher.py
+  Wired into service.py's startup hook right after
+  _maybe_patch_pov_services() (both modify the same file). Marker
+  AI_SUBS_REPEAT_TIMER_PATCH gates idempotency. Defensive: if
+  upstream POV restructures RepeatTimer in a way our pattern
+  can't match, the patcher skips with a log and POV continues
+  working as upstream (auth dialogs go back to being fragile but
+  nothing breaks).
+
+  Sandbox tested end-to-end against the current shipped
+  myservices.py: first run reports 'patched' and wraps the body
+  correctly, re-run reports 'unchanged', py_compile of the
+  patched file passes.
+
+v0.2.25
+- Smooth out the DarkSubs <-> AI integration so users don't have
+  to know that DarkSubs's "Enable machine translation" toggle is
+  the on/off switch for the AI hook. Three changes, all inside
+  dark_subs_integration.py and run from
+  service.py's _maybe_patch_darksubs() startup hook:
+
+  (1) Auto-enable DarkSubs's auto_translate on first run.
+      When the user has a Gemini key but the toggle is currently
+      off, the patcher flips it to true exactly once and remembers
+      having done so (marker `_darksubs_autoenable_done` in our
+      addon's settings). After that we respect any subsequent
+      explicit user choice -- if they later turn it off, we
+      don't fight them. Skipped entirely when no Gemini key is
+      set (we don't want to wake up Google Translate fallback
+      for users who haven't opted in to AI).
+
+  (2) Relabel the toggle so the AI hook is visible in DarkSubs's
+      own settings UI. Patches resources/settings.xml: the
+      shipped baseline
+          label="הפעל תרגום מכונה"
+      becomes
+          label="הפעל תרגום מכונה (Gemini AI)"
+      Surgical: only replaces the exact baseline string, so any
+      user/upstream edit is left alone. Idempotent via a marker
+      substring in the new label. Self-healing across DarkSubs
+      updates (if upstream rewrites settings.xml, we re-apply
+      on the next Kodi startup).
+
+  (3) One-time toast on the auto-enable. Shows "תרגום AI הופעל
+      ב-DarkSubs" so the user knows what changed without
+      having to dig into DarkSubs's settings.
+
+  None of this changes the actual translation flow -- the
+  existing engine.py hook from v0.2.x still intercepts the
+  call before DarkSubs would fall through to Google Translate.
+  These changes just make the integration self-configuring
+  instead of requiring the user to know to flip a toggle.
+
+v0.2.24
+- Personal-area widget header now spells out the recommended
+  workflow explicitly. Previously the subtitle said only
+  "connect TMDB + Trakt" -- which left newer users wondering
+  what to do after connecting. The new subtitle says to ADD
+  items in TMDB / Trakt before falling back to POV-local:
+      איזור אישי
+      · מומלץ להוסיף ב-TMDB + Trakt לפני POV-מקומי
+- fentastic_widget_patcher pattern extended to recognise three
+  earlier states (A: original "(חובה...)", B: v0.2.18+ plain
+  "איזור אישי", C: v0.2.20+ with "מומלץ לחבר TMDB + Trakt")
+  and migrate any of them to the new D state. NEW_TOKEN bumped
+  to 'לפני POV-מקומי' so idempotency check keys off the v0.2.24
+  text. Sandbox tested with all three legacy headers; each
+  migrates cleanly and re-runs as 'unchanged'.
+
+v0.2.23
+- Context menu on movies / tvshows / episodes: each list-manager
+  entry is now shown independently based on whether its service
+  is connected. Previously TMDB and Trakt were mutually exclusive
+  (Trakt hidden when TMDB connected). Now a user with all four
+  services connected (TMDB + Trakt + MDBList + POV-local) sees
+  four "Manager" entries in the context menu, one per service.
+  Users with only the services they care about see exactly those.
+- All context-menu labels translated to Hebrew (service names
+  TRAKT / TMDB / MDBLIST / POV stay in English -- they're brand
+  names). Changes apply to movies.py, tvshows.py, episodes.py
+  in the pov_overrides bundle:
+    [B]Options...[/B]                 -> [B]אפשרויות...[/B]
+    [B]Extras...[/B]                  -> [B]אקסטרות...[/B]
+    [B]Mark Watched %s[/B]            -> [B]סמן כנצפה (%s)[/B]
+    [B]Mark Unwatched %s[/B]          -> [B]סמן כלא נצפה (%s)[/B]
+    [B]TMDB Lists Manager[/B]         -> [B]ניהול רשימות (TMDB)[/B]
+    [B]Trakt Lists Manager[/B]        -> [B]ניהול רשימות (Trakt)[/B]
+    [B]MDBList Manager[/B]            -> [B]ניהול רשימות (MDBList)[/B]
+    [B]Favorites Manager[/B]          -> [B]ניהול מועדפים (POV)[/B]
+- pov_menus_patcher marker bumped from
+    kodi_utils.get_setting('trakt_user'
+  (which was the v0.2.18+ marker) to
+    [B]ניהול רשימות (Trakt)[/B]
+  so existing-install users on the older Hebrew-less version get
+  the v0.2.23 files copied over via quickfix.
+
+v0.2.22
+- Add a POV-local-favorites tile to both the home favourites bar
+  and the FENtastic personal-area widget on the Movies / TV Shows
+  pages. Users without a TMDB or Trakt account now have a working
+  personal area: POV maintains its own local favorites DB
+  (caches/favorites_cache.py), so "Favorites Manager" from POV's
+  context menu always writes somewhere reachable.
+  Tile names match the existing pattern:
+    "הסדרות שלי (POV)"   action=favorites_tvshows
+    "הסרטים שלי (POV)"   action=favorites_movies
+  Tile thumbs: new My_Shows_POV.png and My_Movies_POV.png shipped
+  alongside the TMDB variants in resources/lib/media_assets/
+  build_icons/Twilight/. Generated from the same Twilight My_Shows
+  base graphic by clearing the upper-right service badge and
+  compositing POV's existing favorites.png (a clean white star)
+  in its place.
+- favourites_xml_patcher gained a 4th pass that always ensures
+  the POV tile exists (option A in chat -- always visible
+  regardless of which services are connected). Insertion anchor
+  is the just-restored Trakt tile when present, else the TMDB
+  tile, so the natural reading order on the home bar is:
+    TMDB Shows -> Trakt Shows -> POV Shows
+    TMDB Movies -> Trakt Movies -> POV Movies
+- pov_navigator_patcher migration table extended:
+    V1 = baseline (Continue + Trakt)
+    V2 = v0.2.18+ (Continue + TMDB + Trakt)
+    V3 = target (Continue + TMDB + Trakt + POV)
+  Rows in either V1 or V2 are rewritten to V3 directly. V3
+  passes through unchanged. Anything else is treated as user
+  customization and left alone.
+- Sandbox tested end-to-end with two starting points:
+    V1 favourites.xml -> 6 personal tiles in correct order
+    V2 favourites.xml -> 6 personal tiles in correct order
+  Both idempotent on re-run, custom user tile preserved.
+
+v0.2.21
+- Two follow-ups to the home-tile migration after user feedback:
+
+  (a) The TMDB home tiles created by v0.2.18+ pointed at the
+      original Trakt-branded icons (the My_Shows.png / My_Movies.png
+      from the Twilight build, both with a red TRAKT badge in the
+      upper-right of the folder graphic). Now ships two TMDB-branded
+      variants -- My_Shows_TMDB.png and My_Movies_TMDB.png -- inside
+      the addon at resources/lib/media_assets/build_icons/Twilight/
+      (Shows|Movies)/. A new build_icons_patcher copies any
+      bundled icons that are missing from the live
+      media/build_icons/ tree on every Kodi startup.
+      Defensive: never overwrites pre-existing icons, so a user
+      who placed a custom icon at the same path keeps it.
+
+  (b) The favourites_xml_patcher previously REPLACED the
+      Trakt-collection home tiles with TMDB-favourites tiles,
+      leaving users with both services connected unable to reach
+      their Trakt collection from the home screen. Now it RESTORES
+      a Trakt tile right after the matching TMDB tile when the
+      user has Trakt configured (POV setting trakt_user non-empty).
+      Detection reads POV's settings.xml directly because POV
+      isn't importable from inside our addon's process. Users
+      without Trakt see only TMDB tiles -- clean home screen.
+
+  Same patcher pass also updates any existing TMDB tile whose
+  thumb still points at the old Trakt-branded icon, swapping it
+  to the new My_(Shows|Movies)_TMDB.png path so the visible
+  branding matches the tile name.
+
+  All three responsibilities (migrate Trakt->TMDB, fix thumb,
+  restore Trakt) happen in one read-modify-write of
+  userdata/favourites.xml. Sandbox tested with two scenarios:
+    * trakt_connected=True  -> 4 tiles (TMDB+Trakt for both
+      mediatypes), thumbs correct, custom user tile preserved,
+      idempotent on re-run
+    * trakt_connected=False -> 2 tiles (only TMDB for both),
+      idempotent on re-run
+
+  service.py wires the new build_icons_patcher BEFORE
+  favourites_xml_patcher so the TMDB-branded icons exist on
+  disk by the time the XML starts pointing at them.
+
+v0.2.20
+- Personal-area widget header on the Movies / TV Shows pages now
+  carries a visible recommendation to connect both TMDB and Trakt:
+      איזור אישי   · מומלץ לחבר TMDB + Trakt
+  (main label yellow bold, recommendation gray italic.)
+  Rationale: TMDB handles Favorites / Watchlist / custom lists
+  cleanly with no rate limits and a working mobile app; Trakt is
+  the only service with a /sync/playback API that powers cross-
+  device Continue Watching / Next Episode -- TMDB doesn't expose
+  that. Combining the two gives the user the best of both.
+- fentastic_widget_patcher upgraded to recognise BOTH legacy
+  headers and migrate them to the new one:
+    State A: "...איזור אישי (חובה להתחבר לTrakt)..." (very
+             original baseline)
+    State B: "...איזור אישי..." (what v0.2.18 wrote)
+  Either matches the regex, both rewrite to State C with the
+  recommendation. Re-run is unchanged (idempotent). Custom user
+  headers don't match the pattern and are left alone.
+
+v0.2.19
+- Three patchers from v0.2.18 didn't take effect for at least one
+  user even though the addon was delivered via quickfix and the
+  service.py runs them on every Kodi startup. Visible improvement
+  was the personal-area widget (which our navigator.db patcher
+  worked for), but the context menu, the widget header, and the
+  home tiles still showed the old layout.
+- Two suspected root causes addressed:
+
+  (a) Exact-string matching was too strict. The
+      favourites_xml_patcher and fentastic_widget_patcher used
+      byte-exact substring match against the lines they expected
+      to find. Kodi sometimes rewrites favourites.xml after the
+      user reorders tiles via the GUI, normalizing whitespace or
+      attribute order in ways that broke the match. Same risk for
+      the widget XML across skin updates. Both patchers now use
+      regex matching that requires the SAME tile identity (visible
+      name + action + mode) but tolerates whitespace, attribute
+      order, quote style, and similar incidental variations.
+
+  (b) The pov_menus_patcher detection marker was specific to
+      movies.py and tvshows.py and didn't appear in episodes.py,
+      so episodes.py was being needlessly re-copied on every
+      Kodi startup (correct behaviour but wasteful logs). Marker
+      changed to a substring that all three PR #98 versions share
+      and no earlier baseline had:
+        kodi_utils.get_setting('trakt_user'
+      Also clarified the rewrite path: detection by marker
+      presence/absence rather than byte-compare of two files.
+
+- Every patcher now logs explicit INFO/WARNING entries to the
+  Kodi log so the next "patcher didn't work" report can be
+  diagnosed from the log file alone. Look for
+      kodipovilai: <patcher>: <event>
+  in xbmc.log -- entries cover not just successes but also
+  no_match, no_file, write_failed, etc.
+
+- Sandbox tested end-to-end:
+    * First run from pre-PR-#97 baseline: all 4 patchers report
+      'patched'/'fixed'
+    * Idempotent re-run: all 4 patchers report 'unchanged' (no
+      writes, no log spam)
+    * Tolerance test: a favourites.xml with double-space between
+      attributes, different thumb path, and different name= URL
+      param still gets correctly migrated; a custom unrelated
+      <favourite> in the same file is left untouched
+
+v0.2.18
+- Self-heal four POV/skin/userdata customizations on existing
+  installs so users get the recent UX improvements without a
+  full build reinstall (which would wipe their connected service
+  tokens). The wizard's quickfix mechanism delivers this addon
+  but doesn't touch POV/skin/userdata files; the patchers below
+  bridge that gap.
+
+  All patchers are surgical and idempotent -- they verify the
+  shipped baseline byte-for-byte before rewriting, so any user
+  customization aborts the patch cleanly without overwriting.
+
+  - pov_menus_patcher (new): force-syncs POV's three context-menu
+    builders (movies.py, tvshows.py, episodes.py) to the canonical
+    PR #98 versions bundled in resources/lib/pov_overrides/menus/.
+    Whole-file copy when bytes differ (vs the marker-inject pattern
+    used by pov_services_patcher.py, because PR #98 replaces an
+    existing block rather than appending one). Drops the matching
+    __pycache__ entry so the next plugin invocation picks up the
+    new code without waiting for Kodi to recompile.
+  - pov_navigator_patcher (extended): added
+    maybe_fix_personal_area_lists() which rewrites the two
+    "FENtastic - <type> - איזור אישי" rows in POV's navigator.db
+    to insert a TMDB Favorites entry before the existing Trakt
+    Collection entry. Only rewrites rows that match the shipped
+    baseline exactly. Doesn't touch the existing favourites
+    typo fix.
+  - fentastic_widget_patcher (new): drops the "(must connect
+    to Trakt)" subtitle from the personal-area widget header in
+    skin.fentastic's two widget XMLs.
+  - favourites_xml_patcher (new): migrates the two Trakt
+    collection home-screen tiles in userdata/favourites.xml to
+    TMDB Favorites equivalents. Surgical -- if the line doesn't
+    match the shipped baseline (user renamed/edited the tile),
+    leaves it alone.
+
+  service.py wires all four patchers into the startup sequence
+  alongside the existing pov_services / pov_navigator /
+  fentastic_notification / darksubs patchers.
+
+v0.2.17
+- Fix: clicking "Replace key" in the Gemini menu no longer wipes
+  the existing key before the new one is confirmed. v0.2.16 and
+  earlier called set_setting('api_key', '') the moment the user
+  picked Replace, so any cancel mid-flow (closing the QR dialog,
+  dismissing the on-screen keyboard, tapping outside) destroyed
+  the working key with nothing to replace it. Now we leave the
+  current key in place; the new one overwrites atomically when
+  validation succeeds, and the original survives any cancel.
+- Defensive: kodi_utils.set_setting() now reads the value back
+  after writing and returns False if Kodi didn't actually
+  persist the change. _test_save_or_retry uses this to surface
+  a "Kodi didn't save the key" dialog instead of a false
+  "Connection succeeded" dialog when the underlying
+  addon().setSetting() call silently fails (reported on certain
+  Kodi 21 / Android combinations). Caller-side change only --
+  the set_setting signature stays backward compatible because
+  the previous implementation implicitly returned None.
+
+v0.2.16
+- Add "Pair with QR (scan from another device)" button inside the
+  addon's settings, next to the existing "Get a free Gemini API
+  key" button. Triggers the same connect_gemini flow that the POV
+  "Connect Services" menu uses, so users who install only the
+  addon zip (without our build) have a working onboarding path
+  that doesn't depend on the Kodi settings UI persisting a typed
+  string -- some users reported the manual api_key field not
+  saving on certain Kodi/Android combinations; QR pairing writes
+  the key directly via setSetting after validation, bypassing
+  whatever Kodi UI state was preventing the save.
+
+v0.2.15
+- Fix the home-screen Favorites tile freezing Kodi. POV ships
+  userdata/addon_data/plugin.video.pov/navigator.db with the
+  RootList row's Favorites entry pointing at
+      mode=navigator.favourites    (UK spelling, with 'u')
+  but plugin.video.pov's navigator.py defines the method as
+  `def favorites(self):` (US spelling, no 'u'). POV's router
+  uses getattr(cls, mode, None) and silently returns None when
+  the method is missing -- endOfDirectory() never runs, Kodi
+  hits its 5-second script-didn't-finish timeout, the plugin is
+  killed, and the user is bounced back to the previous screen.
+  Manifests as: click Favorites, Kodi freezes for ~a minute,
+  ends up on the home screen.
+- Two-pronged fix:
+  1. New module resources/lib/pov_navigator_patcher.py opens the
+     navigator.db on every Kodi startup and rewrites the bad
+     'navigator.favourites' token to 'navigator.favorites' in
+     the RootList row. Idempotent (re-run is a no-op),
+     defensive (any error path leaves the DB alone), narrow
+     (only the one substring is touched). Wired into
+     service.py alongside the existing patchers.
+  2. The DB shipped in the FENtastic build zip is pre-corrected,
+     so future fresh installs don't carry the bug.
+- The long-press "Favorites Manager" context-menu and POV's
+  own dialogs.favorites_choice were never affected -- they
+  call the underlying favorites_cache.Favorites.add() directly
+  rather than going through the broken URL. Only the home-
+  screen tile was hitting the typo.
+
+v0.2.14
+- TMDB out of the box. The addon now ships with a public TMDB v3
+  key copied from jurialmunkey's script.module.tmdbhelper (an
+  open-source addon that publishes the same key to tens of
+  thousands of installs). With it, gender-aware translation
+  works for every user the moment they connect Gemini -- no
+  more "next step: connect TMDB" tutorial.
+- Resolution order in tmdb_helper._get_tmdb_key():
+    1. The user's own key, if tmdbhelper has one set in its
+       settings (candidate fields: api_key, tmdb_apikey,
+       tmdb_api_key). Personal keys still win, both for users
+       who already connected and for users who connect later --
+       we re-read on every lookup.
+    2. The bundled fallback. Only used when no personal key
+       is configured.
+  We NEVER write the bundled key into tmdbhelper's settings,
+  so tmdbhelper itself is untouched and behaves exactly as
+  before.
+- New helper tmdb_helper.using_bundled_key() exposes the state
+  so the settings UI can render an accurate status line.
+- The "🛈 TMDB" notice button (and Gemini-connect success
+  dialog) was rewritten to reflect the new reality: TMDB is
+  no longer a required setup step, just an optional override
+  for power users who want to use their own quota.
+
+v0.2.13
+- Daily Gemini quota display. Free-tier gemini-3.1-flash-lite is
+  capped at ~500 requests/day and resets at UTC midnight. We now
+  surface today's usage in two places:
+    A) appended to the end-of-translation toast --
+       "AI: תרגום הסתיים בהצלחה (5 chunks · 47/500 ביום)"
+    B) a new "📊 ניצול היום" entry in the POV My Services ->
+       Gemini chooser menu (shown only when a key is already set).
+       Opens a Dialog().ok() with model, count, percentage,
+       remaining, and the reset boundary.
+- Scope is intentionally narrow: ONLY gemini-3.1-flash-lite is
+  counted. Other models (3.1 flash, 2.5 variants) silently
+  no-op through note_request() so the displayed number stays
+  meaningful. Per-device count (not synced across machines).
+- Storage: two new hidden settings, _usage_count and
+  _usage_date_utc. The counter is reset automatically the first
+  time note_request runs after the UTC date changes.
+- Hook point is inside gemini.generate() just before the success
+  return -- catches every counted request regardless of caller
+  (parallel translation, DarkSubs hook, future entry points).
+  Wrapped in try/except at every call site so a bug in the
+  quota module can never break translation.
+- New runscript action `show_gemini_usage` for opening the
+  status panel from anywhere (Wizard shortcut, remote, etc.).
+- No new dependencies; stdlib-only datetime + the existing
+  kodi_utils get/set_setting shims.
+
+v0.2.12
+- "Pair from another device" Gemini onboarding. New action
+  `connect_gemini` in default.py spins up a tiny localhost HTTP
+  server on a free port (8765-8769 preferred, OS-allocated
+  fallback), binds 0.0.0.0 so both LAN AND localhost work, and
+  shows the user a QR code + clickable URLs in a Kodi
+  DialogProgress. The user scans on their phone (or types
+  http://localhost:<port> if Kodi is on the phone with cellular
+  only), pastes the key into a small RTL Hebrew web form, and
+  hits submit. The addon polls the server's shared state for the
+  submitted key, then runs the same gemini.test_key validation
+  the typed-input flow uses -- if Gemini rejects the key, we
+  show the specific reason and DO NOT save.
+- Two onboarding paths now offered when the user clicks Gemini
+  in POV's My Services with no existing key:
+    📱 Pair from another device  (new)
+    ⌨️ Type the key here          (the existing flow)
+- For users WITH an existing key the menu stays: Test / Replace
+  / Remove. Replace re-runs the chooser (Pair or Type), so
+  switching keys via QR is just two clicks.
+- All the Gemini UX lives in default.py now; the POV
+  myservices.py patcher just shells out via
+  RunScript(...action=connect_gemini) so future UX iteration
+  doesn't require a patcher bump. INJECT_VERSION 5 -> 6 to roll
+  the simpler injected forwarder into existing installs.
+- New module resources/lib/gemini_pair.py owns the HTTP server,
+  LAN-IP detection, and the form HTML. Stdlib-only (http.server
+  + threading + socket), no new dependencies.
+- Pair server end-to-end-tested in sandbox: bind ok, GET form
+  serves RTL Hebrew + key field, POST empty key returns the
+  "field empty" page without saving, POST with key returns the
+  "sent to Kodi" page and stashes the key into the polling
+  dict, 404 for bogus paths, shutdown frees the port cleanly.
+
+v0.2.11
+- Gemini auth flow in POV's "My Services" menu rewritten:
+  * First-time setup now shows a QR code for
+    aistudio.google.com/apikey, same pattern as Trakt /
+    Real-Debrid / Premiumize. User scans with phone, opens
+    browser, creates key, comes back to Kodi.
+  * The entered key is VALIDATED against Gemini's /models
+    endpoint INLINE before saving. If Gemini rejects the key
+    (400/403), reports quota (429), is in a temporary outage
+    (5xx), or doesn't respond (timeout) -- we DO NOT write the
+    key to settings. Instead we show the specific reason and
+    offer to retry. Previously the addon silently saved any
+    string the user typed, leaving them "connected" with a
+    broken key.
+  * For users with a key already set, clicking Gemini now opens
+    a chooser: 🔍 Test connection / 🔄 Replace key / ❌ Remove.
+    "Test connection" makes the test button accessible from
+    the same place the user authenticates -- no need to dig
+    into the addon's own settings page.
+  * Validation is implemented inline (direct requests call) so
+    we don't have to wrestle with sys.path conflicts importing
+    our resources.lib.gemini from POV's namespace.
+  POV myservices INJECT_VERSION 4 -> 5 so existing patched
+  installs get the new dialog flow on the next Kodi startup.
+
+v0.2.10
+- HOTFIX: revert the v0.2.9 FENtastic DialogNotification patch.
+  User report: "משהו נדפק שם. עכשיו יש הודעה ריקה והבחירה של
+  הכתוביות מאוד באגית, הייתי מחזיר לאיך שהיה". The wraplabel
+  swap evidently broke more than it fixed -- empty notifications
+  + buggy subtitle picker. service.py now calls
+  fentastic_patcher.ensure_unpatched() on every startup, so any
+  install that got v0.2.9 on disk gets the upstream FENtastic
+  file restored automatically. The original LTR-scroll-for-
+  Hebrew quirk comes back, but the user is OK with that --
+  better than a broken picker.
+  Note: the patcher module is kept (with the unpatch routine
+  driving it now), in case a better skin-side fix is found later.
+
+v0.2.9
+- FENtastic skin: self-healing patch of DialogNotification.xml
+  that swaps the message control from <fadelabel id="402">
+  to <wraplabel id="402">. The fadelabel widget scrolls long
+  text in a BiDi-deaf direction that reads backwards for Hebrew
+  users; wraplabel wraps to multiple lines and has no scroll
+  direction at all. Title (id 401) stays as fadelabel since
+  the title is always "Kodi POV IL" (short, no scroll).
+  - Idempotent + self-healing on every Kodi startup
+  - Sanity-checks the patched XML for well-formedness before
+    writing
+  - If FENtastic refactors away from the canonical id=402
+    fadelabel shape, the patcher bails without touching the
+    file ('unmatched' status logged to kodi.log)
+  - ensure_unpatched() available for users who want to revert
+  - Sandbox-tested: patched + reverted XML both parse cleanly,
+    idempotent on both directions
+  - Only patches when FENtastic skin is installed. Users on
+    Estuary / other skins are unaffected.
+
+v0.2.8
+- Default flipped to 'reverse'. User confirmed the wrong-side
+  punctuation reproduces on every Hebrew subtitle for every user
+  -- not just specific lines. That means Kodi's subtitle renderer
+  (across all observed setups: Windows, Android, FENtastic skin)
+  is NOT BiDi-reordering Hebrew lines, so the v0.2.0-v0.2.7
+  "auto" direction (move punct to logical end) was producing
+  visually-wrong output everywhere. The 'reverse' mode (move
+  punct to logical start) introduced in v0.2.7 produces the
+  correct visual placement. Made it the default; renamed 'auto'
+  to 'legacy' and kept it as an option for the rare setup where
+  BiDi reorder DOES happen. CACHE_RTL_FIX_VERSION bumped 2 -> 3
+  so the migration re-runs over already-cached translations and
+  applies the new direction on next Kodi startup. Backwards-
+  compat: users who manually picked 'auto' in v0.2.7 settings
+  are silently mapped to 'legacy'.
+
+v0.2.7
+- User-selectable RTL punctuation fix direction. The previous
+  versions assumed Kodi does proper BiDi reorder on subtitle
+  lines (logical-end Hebrew punct -> visual-left), so we moved
+  the misplaced punct from line start to line end. For some
+  Kodi setups -- specific skins, certain Android configurations,
+  versions that render source order without RTL reorder -- the
+  opposite is true: a logical-START punct ends up at visual-end
+  of the reading flow. The user observed this consistently
+  across all their subtitles even after the v0.2.5/v0.2.6 fixes.
+  New setting `rtl_punct_mode` (Translation -> Behavior) with
+  three choices: 'auto' (default, move to end), 'reverse' (move
+  to start, for non-BiDi renderers), 'off' (no processing).
+  Migration + cache-hit reapply respect the chosen mode.
+
+v0.2.6
+- RTL punctuation fix now runs on EVERY cache hit, not just on
+  first translation. The v0.2.5 migration (re-running the fix
+  over the cached-translation pool) only fires once on Kodi
+  startup; users who didn't restart -- or whose cache was
+  written between two migration versions -- could still see
+  files with the old, broken layout. resolve() now re-applies
+  fix_rtl_punctuation in-place on every cache hit (idempotent
+  -- if the file is already clean, no write happens), and
+  _handle_translate_file applies it once more at the final
+  delivery to DarkSubs as belt-and-suspenders. This means the
+  user no longer needs to restart Kodi for the fix to roll out
+  -- the next time they play a previously-translated subtitle,
+  it gets cleaned up on the spot.
+
+v0.2.5
+- RTL punctuation fix now handles HTML-wrapped lines. Gemini
+  often emits italicised speech as "<i>.לעזאזל</i>" -- the
+  previous regex couldn't see past the opening tag and left the
+  period at the start. The screenshot the user kept hitting was
+  exactly this case. Also covers:
+    - period BEFORE the tag: ".<i>לעזאזל</i>" -> "<i>לעזאזל.</i>"
+    - dialogue dash + punct + tag: "- <i>.שלום</i>" -> "- <i>שלום.</i>"
+    - bold and other tag types (<b>, <font>, ...) -- any tag of
+      the shape <name...> at line start.
+  Ellipsis still respected (left at start as a continuation
+  marker). Existing tests + 16-case unit suite all green.
+- CACHE_RTL_FIX_VERSION 1 -> 2 so the migration re-runs over the
+  whole cached-translation pool on next startup, applying the
+  updated regex to already-saved files that were affected.
+
+v0.2.4
+- Toast notifications now scroll right-to-left as Hebrew should.
+  Kodi's notification widget infers paragraph direction from the
+  first strong character in the message body. Most of our
+  notifications start with "AI: ..." (Latin 'A' = strong LTR),
+  so the widget set paragraph direction to LTR and scrolled
+  left-to-right when the text overflowed. Prepending an invisible
+  RIGHT-TO-LEFT MARK (U+200F) in kodi_utils.notify() flips the
+  inference to RTL. Single point of fix; applies to every notify
+  call site in the addon automatically.
+
+v0.2.3
+- Display-name fix: the bundled subtitle addon's ID is
+  service.subtitles.All_Subs but its visible name in the UI is
+  "DarkSubs". User-facing strings now say "DarkSubs" everywhere
+  so users aren't confused by an addon name they don't recognise
+  in the menu. Internal Python references still use the addon ID
+  (that's what xbmcaddon.Addon() and the patcher path resolution
+  need).
+- POV myservices INJECT_VERSION 3 -> 4 to roll the renamed
+  dialog text into existing patched installs.
+
+v0.2.2
+- Wyzie is now clearly labelled as OPTIONAL across the UI. The
+  setting category, field label, and help text all say so. When
+  the user clicks "Claim a free Wyzie key" or opens the Wyzie
+  row in POV's My Services, the dialog first checks whether
+  All_Subs (DarkSubs) is installed -- if it is, the dialog tells
+  the user up front that Wyzie is redundant for them (clicking a
+  non-Hebrew subtitle in All_Subs already triggers AI translation
+  via the hook). Users without All_Subs see the original flow.
+- POV myservices INJECT_VERSION bumped 2 -> 3 to re-roll the
+  Wyzie auth dialog into existing patched installs.
+
+v0.2.1
+- RTL punctuation: strip invisible BiDi / direction-control / BOM
+  characters (U+200E/F, U+202A-E, U+2066-9, U+FEFF) from line
+  starts and ends BEFORE the leading-punct regex runs. Gemini and
+  similar LLMs occasionally insert U+200F (RLM) before a Hebrew
+  line, which used to hide the trailing period from our matcher
+  -- the user observed this on a freshly-translated subtitle where
+  the period stayed on the wrong side despite the post-processor.
+  Also: tightened the post-processor. Now also handles
+  "punct at both start AND end of line" -> drop the leading
+  duplicate (was previously leaving it untouched). Ellipsis at
+  start of line ("..." -- a legitimate continuation marker) is
+  explicitly excluded so we don't shift it to the end. 12-case
+  unit suite added.
+- One-shot cache repair: on next Kodi startup the service walks
+  cache/translated/ and re-applies fix_rtl_punctuation() to every
+  cached SRT. Marker-gated (_rtl_fix_done = '1'), so it runs once
+  per profile and doesn't re-run after that. Means existing
+  translations with periods/question-marks in the wrong place get
+  fixed without the user having to clear cache manually.
+
+v0.2.0
+- Force the icon update through. v0.1.9 shipped the new icons
+  and the corrected patcher code, but every existing install
+  already had the v0.1.8 injection block in POV's myservices.py
+  marked as v1, so the patcher saw 'already_patched' and bailed
+  before overwriting the icon names. Bumped INJECT_VERSION to v2
+  and added v1 to OLD_MARKERS, so on next startup the patcher
+  strips the v1 block (with the placeholder icon references) and
+  re-injects v2 (with the gemini.png / wyzie.png references).
+
+v0.1.9
+- Custom icons for the Gemini AI and Wyzie entries in POV's
+  My Services menu (instead of the reused tmdb.png / mdblist.png
+  placeholders that v0.1.8 shipped). 512x512 RGBA, generated to
+  visually distinct: Gemini is a white four-point sparkle on a
+  blue->purple gradient, Wyzie is a stylised "W" with three
+  subtitle bars on a teal gradient. The pov_services_patcher now
+  also copies these icons into POV's media folder whenever it
+  runs (idempotent SHA1 comparison, no copy if already up to
+  date).
+
+v0.1.8
+- POV "My Services" patcher. The user was clicking on
+  plugin.video.pov's own Connect Services menu (entry id 32455 =
+  "My Services"), not the wizard's login_menu -- different menu,
+  same kind of hardcoded service list. v0.1.7 patched only the
+  wizard, so the rows still didn't appear where the user expected
+  them. This release adds a parallel patcher for
+  plugin.video.pov/resources/lib/modules/myservices.py that
+  defines Gemini and Wyzie auth classes and wraps the authorize()
+  function to include them in the My Services dialog. Same
+  pattern: idempotent, marker-gated, runs every Kodi startup.
+
+v0.1.7
+- Self-healing wizard patcher: the wizard's AUTOUPDATE is
+  hardcoded 'No', so existing installs never pull the upstream
+  wizard updates. We patch the installed wizard's loginit.py on
+  disk to add the Gemini AI + Wyzie Connect Services entries.
+  Idempotent + re-injects on every Kodi startup. Now users get
+  the entries WITHOUT having to manually reinstall the wizard.
+- Wyzie timeout resilience: tightened per-request timeout from
+  15s to 8s, added one retry on connection-level failures (with
+  2s delay), and short-circuit the rest of a multi-language
+  search if Wyzie is clearly offline (no response on first call).
+  Prevents the user staring at a 45+ second wait for "no subs
+  found" when Wyzie's Cloudflare frontend is having a bad day.
+- Test connection + empty-result diagnostics now distinguish
+  timeout-vs-other-failure clearly and offer a workaround in
+  Hebrew ("click an English sub from All_Subs - the AI hook
+  will translate it").
+
+v0.1.6
+- RTL punctuation fix. Strengthened the prompt with explicit
+  examples ("מה שלומך?" right, "?מה שלומך" wrong) AND added a
+  defensive post-processor that automatically moves misplaced
+  punctuation from the start of a Hebrew line to the end.
+  Verified with 5 unit cases.
+- Wyzie language-alias fallback. OpenSubtitles (which Wyzie wraps)
+  serves Hebrew under three different codes: 'he', 'heb', and the
+  legacy 'iw'. The search now tries all three for any Hebrew
+  request and unions the results, so titles indexed under the
+  legacy code finally surface. For other languages, no behaviour
+  change.
+- Detailed empty-result diagnostics. Instead of a generic "Wyzie
+  לא מצא כתוביות" the user now sees the actual reason: 0 results
+  across all three Hebrew codes (= title not in index), HTTP 401/
+  403 (= key rejected), 429 (= daily quota), 5xx (= service down),
+  or "no response" (= timeout/network).
+
+v0.1.5
+- Test connection button for Wyzie (mirrors the one for Gemini).
+  Sanity-checks the key against the live Wyzie API and reports a
+  clear Hebrew explanation if quota's exhausted, key's rejected,
+  or the service is down.
+- New "TMDB" group in settings with an info button explaining
+  that gender-aware translation needs TMDB API key wired up via
+  the wizard's "Connect Services" screen. The button checks the
+  current status (TMDB Helper installed + key set) and tells the
+  user what to do next.
+- This addon now shows up in the wizard's "Connect Services"
+  menu as two entries: "Gemini AI" and "Wyzie". Save / restore /
+  display key flow matches the other services there.
+
+v0.1.4
+- CRITICAL FIX: undo the auto_translate=false state that v0.1.1
+  left behind. Without this, the v0.1.3 hook never fires (DarkSubs
+  only calls machine_translate_subs when auto_translate=true) and
+  users who'd been through the v0.1.1 takeover ended up getting
+  plain English subs on every DarkSubs pick -- no AI AND no Google.
+  The restore is gated on the takeover marker, so users who had
+  manually turned auto_translate off themselves (no marker) are
+  untouched.
+
+v0.1.3
+- DarkSubs handshake replaced with proper routing: when the user
+  has a Gemini key, DarkSubs's machine-translate now calls into
+  OUR AI translator instead of Google/Bing/Yandex. No key set ->
+  exactly the same Google flow as upstream (zero regression).
+- Self-healing: a service.py-side patcher injects the hook into
+  DarkSubs's engine.py on every Kodi startup. If a DarkSubs update
+  wipes the hook, it comes back on next launch automatically. If
+  DarkSubs ever renames the function, the patcher silently skips
+  rather than breaking anything.
+- Cache buttons (Clear cache / Clear temp) and the API / Wyzie
+  action buttons now have explicit <control type="button"
+  format="action"> blocks. Kodi 21 v1 settings schema needs that
+  for action-type settings to actually render.
+
+v0.1.2
+- (rolled into v0.1.3 below)
+
+v0.1.1
+- One-shot DarkSubs handshake: when the user sets a Gemini key,
+  flip DarkSubs's auto_translate off so its built-in Google/Bing
+  Hebrew rows stop competing with (and outranking) ours. Gated
+  so we never re-stomp on a user who deliberately toggled it
+  back on.
+- Fix: Clear-cache / Clear-temp buttons were hidden because an
+  empty `label=""` on a sibling visible=false setting bailed Kodi
+  21 out of rendering the rest of the group. Now label="0".
+- Prompt: dedicated GENDER AGREEMENT section with concrete
+  Hebrew examples for 1st/2nd/3rd person, and an explicit
+  "double-check before finalising" instruction. Should reduce
+  the occasional male/female mix-ups.
+
+v0.1.0 (initial)
+- AI-translated Hebrew subtitles via Gemini 3.1 Flash Lite (free tier)
+- Sources from OpenSubtitles (anonymous, 200/day) + local SRT files
+- Cast-aware gender forms via TMDB (script.module.tmdbhelper)
+- Caches translations under userdata/addon_data with TTL + size cap
+- Skips translation when real Hebrew subs already exist
+- Settings UI for API key, model, source language priority, cache
