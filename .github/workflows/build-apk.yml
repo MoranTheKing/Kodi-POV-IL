@@ -171,6 +171,12 @@ jobs:
             done
             echo "--- final manifest tail ---"
             tail -15 "$MANIFEST_FILE"
+            # The bundled wizard/build are copied into assets after the first
+            # package patch. Patch the decoded tree again so payload files such
+            # as assets/addons/plugin.program.kodipovilwizard/uservar.py don't
+            # reintroduce org.xbmc.kodi and make the final verifier fail.
+            python3 src/.github/scripts/patch_apk_package_binary.py \
+              "$WORK/decoded" "$OLD_PACKAGE_ID" "$PACKAGE_ID"
             echo "::endgroup::"
             echo "::group::apktool repack + zipalign + sign"
             apktool b -o "$WORK/unsigned.apk" "$WORK/decoded"
