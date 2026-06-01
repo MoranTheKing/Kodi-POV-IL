@@ -27,14 +27,12 @@ permissions:
   pull-requests: write
 
 env:
-  # applicationId for our build. MUST stay org.xbmc.kodi when building via
-  # apktool-rebrand: changing the manifest package="" alone (without rebuilding
-  # the smali code package) breaks Kodi's native JNI lookups
-  # (FindClass("org/xbmc/kodi/...") + getPackageName()) and the app crashes on
-  # launch before the home screen loads. Renaming the applicationId properly
-  # requires a from-source xbmc/xbmc build (see APK_BUILD.md). The earlier
-  # org.moran.kodi attempt shipped in 21.3-povil.26 and crash-looped on boot.
-  PACKAGE_ID: 'org.xbmc.kodi'
+  # Separate applicationId so Kodi POV IL can live side-by-side with official
+  # Kodi. This must stay the same length as OLD_PACKAGE_ID because we patch
+  # Kodi's original DEX/native package strings in place and intentionally avoid
+  # apktool's smali reassembly path, which crash-looped previous attempts.
+  OLD_PACKAGE_ID: 'org.xbmc.kodi'
+  PACKAGE_ID: 'org.xbmc.povi'
   APP_NAME: 'Kodi POV IL'
 
 jobs:
@@ -112,11 +110,17 @@ jobs:
             curl -fL --retry 3 -o "$WORK/kodi-official.apk" \
               "https://mirrors.kodi.tv/releases/android/${MIRROR_DIR}/kodi-${KODI_VERSION}-Omega-${arch}.apk"
             echo "::endgroup::"
-            echo "::group::apktool decode"
-            apktool d -f -o "$WORK/decoded" "$WORK/kodi-official.apk"
+            echo "::group::apktool decode (keep original dex; no smali rebuild)"
+            apktool d -f -s -o "$WORK/decoded" "$WORK/kodi-official.apk"
             echo "::endgroup::"
-            echo "::group::Update label + version metadata (keep package id org.xbmc.kodi -- an apktool-only manifest package rename breaks Kodi's native JNI lookups and crash-loops on boot; a real applicationId change needs a from-source build, see APK_BUILD.md)"
+            echo "::group::Update package id, label + version metadata"
+            if [ "${#OLD_PACKAGE_ID}" -ne "${#PACKAGE_ID}" ]; then
+              echo "::error::OLD_PACKAGE_ID and PACKAGE_ID must be the same length for binary patching"
+              exit 1
+            fi
             MANIFEST="$WORK/decoded/AndroidManifest.xml"
+            python3 src/.github/scripts/patch_apk_package_binary.py \
+              "$WORK/decoded" "$OLD_PACKAGE_ID" "$PACKAGE_ID"
             sed -i 's/android:versionCode="[0-9]*"/android:versionCode="'"$VERSION_CODE"'"/' "$MANIFEST"
             sed -i 's/android:versionName="[^"]*"/android:versionName="'"$VERSION"'"/' "$MANIFEST"
             for f in "$WORK/decoded/res/values/strings.xml" "$WORK/decoded"/res/values-*/strings.xml; do
@@ -138,8 +142,8 @@ jobs:
             echo "::group::Bundle wizard and build into assets/"
             ASSETS="$WORK/decoded/assets"
             mkdir -p "$ASSETS/addons"
-            unzip -o src/dist/plugin.program.kodipovilwizard-0.1.7.zip -d "$ASSETS/addons/" >/dev/null
-            unzip -o src/dist/Kodi-POV-IL-FENtastic-test-0.1.9.zip -d "$ASSETS/" >/dev/null
+            unzip -o src/dist/plugin.program.kodipovilwizard-0.1.12.zip -d "$ASSETS/addons/" >/dev/null
+            unzip -o src/dist/Kodi-POV-IL-FENtastic-test-0.1.10.zip -d "$ASSETS/" >/dev/null
             # Register the wizard as a system addon so Kodi auto-enables it
             # on first launch. Its startup.py then detects no build is
             # installed yet and auto-installs Kodi POV IL - FENtastic
@@ -170,6 +174,10 @@ jobs:
             echo "::endgroup::"
             echo "::group::apktool repack + zipalign + sign"
             apktool b -o "$WORK/unsigned.apk" "$WORK/decoded"
+            python3 src/.github/scripts/verify_apk_package.py \
+              "$WORK/unsigned.apk" \
+              "${OLD_PACKAGE_ID//./\/}" \
+              "${PACKAGE_ID//./\/}"
             zipalign -p -f 4 "$WORK/unsigned.apk" "$WORK/aligned.apk"
             OUT_APK="out/Kodi-POV-IL-${VERSION}-${LABEL}.apk"
             apksigner sign \
@@ -206,8 +214,8 @@ jobs:
           # webOS Kodi installs under /usr/palm/applications/org.xbmc.kodi
           KODI_ROOT="$WORK/data/usr/palm/applications/org.xbmc.kodi"
           test -d "$KODI_ROOT" || { echo "::error::webOS Kodi root not found at expected path"; exit 1; }
-          unzip -o src/dist/plugin.program.kodipovilwizard-0.1.7.zip -d "$KODI_ROOT/addons/" >/dev/null
-          unzip -o src/dist/Kodi-POV-IL-FENtastic-test-0.1.9.zip -d "$KODI_ROOT/" >/dev/null
+          unzip -o src/dist/plugin.program.kodipovilwizard-0.1.12.zip -d "$KODI_ROOT/addons/" >/dev/null
+          unzip -o src/dist/Kodi-POV-IL-FENtastic-test-0.1.10.zip -d "$KODI_ROOT/" >/dev/null
           MANIFEST_FILE="$KODI_ROOT/system/addon-manifest.xml"
           for addon_id in plugin.program.kodipovilwizard script.module.requests script.module.six script.module.certifi script.module.urllib3 script.module.chardet script.module.idna; do
             if grep -q "<addon>$addon_id</addon>" "$MANIFEST_FILE"; then
@@ -240,8 +248,8 @@ jobs:
           mkdir -p $RUNNER_TEMP/win
           curl -fL --retry 3 -o $RUNNER_TEMP/win/kodi-setup.exe \
             "https://mirrors.kodi.tv/releases/windows/win64/kodi-${KODI_VERSION}-Omega-x64.exe"
-          cp src/dist/plugin.program.kodipovilwizard-0.1.7.zip $RUNNER_TEMP/win/wizard.zip
-          cp src/dist/Kodi-POV-IL-FENtastic-test-0.1.9.zip      $RUNNER_TEMP/win/build.zip
+          cp src/dist/plugin.program.kodipovilwizard-0.1.12.zip $RUNNER_TEMP/win/wizard.zip
+          cp src/dist/Kodi-POV-IL-FENtastic-test-0.1.10.zip     $RUNNER_TEMP/win/build.zip
           cp src/dist/installer/build-windows-installer.nsi     $RUNNER_TEMP/win/installer.nsi
           (cd $RUNNER_TEMP/win && makensis -V2 -DVERSION="$VERSION" installer.nsi)
           cp $RUNNER_TEMP/win/Kodi-POV-IL-Setup-*.exe out/
@@ -261,8 +269,8 @@ jobs:
           fi
           NOTES=$(printf '%s\n%s\n%s\n%s\n%s' \
             "Built automatically by .github/workflows/build-apk.yml." \
-            "Android APK: rebranded label 'Kodi POV IL', wizard + FENtastic build pre-bundled in assets/." \
-            "Windows installer: wraps Kodi ${{ github.event.inputs.kodi_version }} and drops the wizard / build zips into Kodi's addons/packages folder." \
+            "Android APK: separate package id '${PACKAGE_ID}', rebranded label 'Kodi POV IL', wizard + FENtastic build pre-bundled in assets/." \
+            "Windows installer: installs Kodi POV IL separately and launches it with -p, so its portable_data profile does not touch normal Kodi." \
             "LG webOS IPK: rebranded webOS Kodi 21.0 with the same bundled wizard + build. Install via LG developer mode and ares-install." \
             "All bundles share the same first-launch flow: wizard auto-runs and installs Kodi POV IL - FENtastic in the background.")
           # Also keep stable filenames (no version) so download pages

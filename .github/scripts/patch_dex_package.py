@@ -26,7 +26,7 @@ patched in place for completeness, but the workflow does not pass one.)
 Usage:
     patch_dex_package.py <dir-with-classes.dex> <old.pkg> <new.pkg>
 
-<old.pkg>/<new.pkg> are the dotted ids, e.g. org.xbmc.kodi org.mora.kodi.
+<old.pkg>/<new.pkg> are the dotted ids, e.g. org.xbmc.kodi org.xbmc.povi.
 They MUST be the same length. Exits non-zero (failing the build) if any
 old reference survives.
 """
