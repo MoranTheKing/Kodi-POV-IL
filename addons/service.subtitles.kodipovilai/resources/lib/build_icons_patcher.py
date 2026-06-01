@@ -31,8 +31,11 @@ except Exception:
     kodi_utils = None
 
 FORCE_SYNC = set([
+    'POV/Logo_POV_IL.png',
     'POV/Logo_POV.png',
+    'Wizard/fast_update_pov_il.png',
     'Wizard/fast_update.png',
+    'Wizard/wizard_pov_il.png',
     'Wizard/wizard.png',
 ])
 

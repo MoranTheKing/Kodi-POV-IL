@@ -332,7 +332,7 @@ HOME_WIDGETS = [
 HOME_SUBMENU = [
     {
         'label': 'POV',
-        'icon': 'special://home/media/build_icons/POV/Logo_POV.png',
+        'icon': 'special://home/media/build_icons/POV/Logo_POV_IL.png',
         'path': 'RunAddon("plugin.video.pov")',
         'target': '',
     },
@@ -356,7 +356,7 @@ HOME_SUBMENU = [
     },
     {
         'label': 'החלף סקין',
-        'icon': 'special://home/media/build_icons/Wizard/wizard.png',
+        'icon': 'special://home/media/build_icons/Wizard/wizard_pov_il.png',
         'path': 'RunPlugin("plugin://plugin.program.kodipovilwizard/?mode=install&action=build_switch_skin")',
         'target': '',
     },
@@ -366,7 +366,7 @@ HOME_SUBMENU = [
 POWER_MENU = [
     {
         'label': 'POV',
-        'icon': 'special://home/media/build_icons/POV/Logo_POV.png',
+        'icon': 'special://home/media/build_icons/POV/Logo_POV_IL.png',
         'path': 'RunAddon("plugin.video.pov")',
         'target': '',
     },
@@ -396,13 +396,13 @@ POWER_MENU = [
     },
     {
         'label': 'החלף סקין',
-        'icon': 'special://home/media/build_icons/Wizard/wizard.png',
+        'icon': 'special://home/media/build_icons/Wizard/wizard_pov_il.png',
         'path': 'RunPlugin("plugin://plugin.program.kodipovilwizard/?mode=install&action=build_switch_skin")',
         'target': '',
     },
     {
         'label': 'עדכון מהיר',
-        'icon': 'special://home/media/build_icons/Wizard/fast_update.png',
+        'icon': 'special://home/media/build_icons/Wizard/fast_update_pov_il.png',
         'path': 'PlayMedia("plugin://plugin.program.kodipovilwizard/?mode=install&action=quick_update&name=Kodi+POV+IL+-+FENtastic&auto_quick_update=false")',
         'target': '',
     },
