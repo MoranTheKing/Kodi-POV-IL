@@ -31,6 +31,116 @@ FIRST_RUN_MARKER = '.disable_on_first_run'
 # be a local variable.
 _subs_filename_publisher = None
 
+BUILD_WIZARD_ID = 'plugin.program.kodipovilwizard'
+BUILD_MARKER = 'build_mode.json'
+BUILD_MARKER_TEXT = 'Kodi POV IL'
+_BUILD_MODE_CACHE = None
+
+
+def _translate_path(path):
+    try:
+        import xbmcvfs
+        return xbmcvfs.translatePath(path)
+    except Exception:
+        return ''
+
+
+def _safe_exists(path):
+    try:
+        return bool(path) and os.path.exists(path)
+    except Exception:
+        return False
+
+
+def _safe_read(path, limit=200000):
+    try:
+        with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+            return f.read(limit)
+    except Exception:
+        return ''
+
+
+def _has_build_marker():
+    marker_paths = (
+        'special://profile/addon_data/{0}/{1}'.format(ADDON_ID, BUILD_MARKER),
+        'special://profile/addon_data/{0}/{1}'.format(BUILD_WIZARD_ID, BUILD_MARKER),
+    )
+    for marker in marker_paths:
+        text = _safe_read(_translate_path(marker))
+        if BUILD_MARKER_TEXT in text or 'managed_by_build' in text:
+            return True
+    return False
+
+
+def _is_kodi_pov_il_build():
+    """Return True when this profile is managed by the Kodi POV IL build."""
+    global _BUILD_MODE_CACHE
+    if _BUILD_MODE_CACHE is not None:
+        return _BUILD_MODE_CACHE
+
+    detected = False
+    try:
+        if _has_build_marker():
+            detected = True
+
+        wizard_addon = _translate_path(
+            'special://home/addons/{0}/addon.xml'.format(BUILD_WIZARD_ID))
+        if _safe_exists(wizard_addon):
+            detected = True
+
+        wizard_settings = _translate_path(
+            'special://profile/addon_data/{0}/settings.xml'.format(
+                BUILD_WIZARD_ID))
+        settings_text = _safe_read(wizard_settings)
+        if 'Kodi POV IL' in settings_text or 'FENtastic' in settings_text:
+            detected = True
+
+        wizard_uservar = _translate_path(
+            'special://home/addons/{0}/uservar.py'.format(BUILD_WIZARD_ID))
+        uservar_text = _safe_read(wizard_uservar)
+        if 'Kodi POV IL' in uservar_text or 'FENtastic' in uservar_text:
+            detected = True
+
+        build_icons = _translate_path('special://home/media/build_icons')
+        if _safe_exists(os.path.join(build_icons, 'Twilight')):
+            detected = True
+    except Exception:
+        detected = False
+
+    _BUILD_MODE_CACHE = bool(detected)
+    return _BUILD_MODE_CACHE
+
+
+def _ensure_build_marker():
+    if not _is_kodi_pov_il_build():
+        return
+    try:
+        import xbmcvfs
+        base = _translate_path('special://profile/addon_data/{0}/'.format(
+            ADDON_ID))
+        if not base:
+            return
+        try:
+            xbmcvfs.mkdirs(base)
+        except Exception:
+            try:
+                os.makedirs(base, exist_ok=True)
+            except Exception:
+                pass
+        marker = os.path.join(base, BUILD_MARKER)
+        if _safe_exists(marker):
+            return
+        content = ('{\n'
+                   '  "build": "Kodi POV IL",\n'
+                   '  "managed_by_build": true,\n'
+                   '  "source": "auto-detected"\n'
+                   '}\n')
+        with open(marker, 'w', encoding='utf-8') as f:
+            f.write(content)
+    except Exception:
+        pass
+
+
 
 def _check_first_run_marker():
     """Return True iff we self-disabled (caller should exit)."""
@@ -262,6 +372,30 @@ def _maybe_patch_pov_menus():
         try:
             kodi_utils.log(
                 'pov_menus_patcher run failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+
+def _maybe_cleanup_standalone_build_patches():
+    """Best-effort cleanup for users who installed only the subtitle addon."""
+    if _is_kodi_pov_il_build():
+        return
+    try:
+        from resources.lib import standalone_cleanup, kodi_utils
+    except Exception:
+        return
+    try:
+        status = standalone_cleanup.ensure_cleaned()
+        if status not in ('already_done', 'no_db'):
+            kodi_utils.log(
+                'standalone_cleanup: {0}'.format(status),
+                level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'standalone_cleanup failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
@@ -1466,6 +1600,12 @@ def main():
     # Initial prune.
     _prune_once()
 
+    build_mode = _is_kodi_pov_il_build()
+    if build_mode:
+        _ensure_build_marker()
+    else:
+        _maybe_cleanup_standalone_build_patches()
+
     # Recover users stuck on a pre-0.1.10 wizard (see function
     # docstring for the extract.all self-skip bug). Runs before
     # the other patchers because if the heal succeeds the user
@@ -1580,112 +1720,43 @@ def main():
     except Exception:
         pass
 
-    # Arctic Fuse 3's upstream home is library-first and therefore
-    # empty in this POV streaming build. Seed script.skinvariables'
-    # per-user nodes so AF3 has useful POV rows and working power-menu
-    # actions on existing installs as soon as the quickfix lands.
-    #
-    # IMPORTANT ORDER: install genre icons + heal POV's genre navigator
-    # rows + patch navigator.py BEFORE _maybe_patch_af3_home(), because
-    # AF3's home rebuild renders the genre shortcut-folder rows -- if we
-    # heal them AFTER the rebuild, the rebuilt (cached) tiles keep the old
-    # broken POV-logo icons until the next restart. Doing it first means
-    # the rebuild repaints the already-healed rows in the same session.
-    _maybe_install_build_icons()
-    _maybe_patch_pov_genre_icons()
-    _maybe_patch_pov_genre_menu_icons()
-    _maybe_patch_pov_combined_discover()
-    _maybe_patch_af3_home()
+    # Build-only home/menu/list self-healing. Standalone subtitle installs
+    # must not rewrite POV navigation, favourites, caches, or skin home nodes.
+    if build_mode:
+        # IMPORTANT ORDER: install genre icons + heal POV's genre navigator
+        # rows + patch navigator.py BEFORE _maybe_patch_af3_home(), because
+        # AF3's home rebuild renders the genre shortcut-folder rows.
+        _maybe_install_build_icons()
+        _maybe_patch_pov_genre_icons()
+        _maybe_patch_pov_genre_menu_icons()
+        _maybe_patch_pov_combined_discover()
+        _maybe_patch_af3_home()
 
-    # Remove the v0.1.5-v0.1.7 misplaced injection into the wizard's
-    # login_menu (the right menu was POV's, not the wizard's).
-    _maybe_cleanup_wizard()
+        # Remove the v0.1.5-v0.1.7 misplaced injection into the wizard's
+        # login_menu (the right menu was POV's, not the wizard's).
+        _maybe_cleanup_wizard()
 
     # POV's own "My Services" menu -- THE correct place. Inject
     # Gemini + Wyzie entries here on every startup; idempotent.
     _maybe_patch_pov_services()
 
-    # Resilient device-flow auth polling -- wraps POV's RepeatTimer
-    # so a single failed poll doesn't silently kill the whole auth
-    # thread for Trakt / RD / TorBox / PM / AD.
-    _maybe_patch_pov_repeat_timer()
-
-    # Make adding to a list refresh the open container (POV core only
-    # refreshes on remove), so "My Movies"/"My Shows" and other lists
-    # show a just-added title immediately instead of after navigating
-    # away and back.
-    _maybe_patch_pov_favorites_refresh()
-
-    # One-shot read-only diagnostic for the "Add to list shows 0
-    # results" report: dumps POV TMDB/Trakt auth + favorites DB +
-    # caches so we can see the real on-device state.
-    _maybe_run_fav_diagnostic()
-
-    # Fix the home-screen Favorites tile typo in POV's bundled
-    # navigator.db (one-shot, idempotent). See function docstring
-    # for the gory details.
-    _maybe_fix_pov_favourites_typo()
-
-    # PR #98 context-menu cleanup -- force-sync POV's movies.py /
-    # tvshows.py / episodes.py to the canonical versions bundled
-    # in this addon so existing-install users get the change via
-    # quickfix instead of needing a full build reinstall.
-    _maybe_patch_pov_menus()
-
-    # PR #99 personal-area widget -- rewrite the FENtastic widget's
-    # two "personal area" lists in POV's navigator.db so they lead
-    # with TMDB Favorites; rewrite the widget XML header so it no
-    # longer says "(must connect to Trakt)"; migrate the home-screen
-    # Trakt-collection tiles in userdata/favourites.xml to TMDB
-    # Favorites equivalents. Each one is surgical and only touches
-    # rows/lines/files that match the shipped baseline -- user
-    # customizations are left alone.
-    _maybe_patch_pov_personal_area()
-    _maybe_patch_fentastic_widgets()
-    _maybe_patch_fentastic_search()
-    # (build_icons + genre heal + genre menu-icon patch already ran
-    # above, before _maybe_patch_af3_home, so AF3's rebuild repaints the
-    # healed genre rows in the same session.)
-    _maybe_patch_favourites_xml()
-
-    # Restore the 6 personal "הסרטים שלי / הסדרות שלי" home tiles
-    # if they're missing -- happens to users who switched skin to
-    # AF3 and back, because the wizard's per-skin seed only contains
-    # 11 service tiles and overwrites the 32-tile install default.
-    _maybe_patch_favourites_personal_tiles()
-
-    # POV's cache_object treats empty API results the same as full
-    # ones and caches them for 24h. When a TMDB/Trakt list read
-    # hits a transient failure, the cached empty list shadows the
-    # user's real list for the next 24h -- they add an item via
-    # context menu, see the success notification, but the home tile
-    # keeps showing "No results". Patch caches.main_cache to skip
-    # the set() when result is empty.
-    _maybe_patch_pov_cache_empty()
-
-    # Sibling patch for trakt_cache.py (separate cache layer, no
-    # expiration -- empty results stuck FOREVER, not just 24h).
-    # Needed because the "My Movies (Trakt)" tile stayed empty even
-    # after the main_cache patch landed; trakt.db has its own cached
-    # empty list that PR #187 never touched.
-    _maybe_patch_pov_trakt_cache_empty()
-
-    # Third cache sibling: the PER-ITEM metadata cache (metacache.db).
-    # The two patchers above fix the LIST caches, but a favorite still
-    # vanishes if its OWN metadata was cached as a blank_entry after a
-    # single transient movie_details() fetch failure -- POV persists
-    # that blank for 2 days, so the item stays hidden in every skin and
-    # every tile (POV-local AND TMDB) even though the favorite row
-    # exists and auth is valid. This stops the 2-day poison and clears
-    # any rows already stuck blank.
-    _maybe_patch_pov_meta_blank()
-
-    # Instrument POV's build_movie_content/build_tvshow_content bare
-    # `except: pass` so the swallowed exception that empties favorites
-    # lists is logged as POV_BUILD_ITEM_ERROR. Everything upstream
-    # (auth/fetch/db/meta) is proven fine; the failure is in the live
-    # listitem build and is currently invisible.
-    _maybe_patch_pov_build_content_logger()
+    if build_mode:
+        # Build-only POV auth/list/navigation/cache patches. Do not run
+        # these for standalone subtitle-addon installs.
+        _maybe_patch_pov_repeat_timer()
+        _maybe_patch_pov_favorites_refresh()
+        _maybe_run_fav_diagnostic()
+        _maybe_fix_pov_favourites_typo()
+        _maybe_patch_pov_menus()
+        _maybe_patch_pov_personal_area()
+        _maybe_patch_fentastic_widgets()
+        _maybe_patch_fentastic_search()
+        _maybe_patch_favourites_xml()
+        _maybe_patch_favourites_personal_tiles()
+        _maybe_patch_pov_cache_empty()
+        _maybe_patch_pov_trakt_cache_empty()
+        _maybe_patch_pov_meta_blank()
+        _maybe_patch_pov_build_content_logger()
 
     # v0.2.9 tried patching FENtastic's notification widget but
     # it broke things; this cleans up the leftover patch on disk
@@ -1708,7 +1779,8 @@ def main():
     # Connect Services is opened on the user's behalf for the
     # service(s) they pick. Best-effort: this addon doesn't own AF3's
     # OAuth flows -- POV does.
-    _maybe_show_af3_first_launch_dialog()
+    if build_mode:
+        _maybe_show_af3_first_launch_dialog()
 
     # Spin up the SubsFilenamePublisher player monitor. It needs to
     # outlive this function's local scope -- xbmc.Player subclasses
