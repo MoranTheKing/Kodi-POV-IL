@@ -1,3 +1,15 @@
+v0.2.108
+- Replaced the debrid-notification shortcut target with a dedicated Hebrew
+  settings dialog instead of opening POV's generic Addon.OpenSettings screen,
+  because current POV builds do not visibly expose the rd/tb/pm/ad.expires
+  controls there.
+- The new dialog lets users configure Real-Debrid, TorBox, Premiumize and
+  AllDebrid independently. This supports users with multiple connected
+  debrid services at the same time; the startup notifier still shows only
+  services that are actually connected.
+- Existing favourites from v0.2.106/v0.2.107 are migrated in place to the
+  new RunScript action.
+
 v0.2.107
 - Fixed the "הגדרת התראות מנוי" home button. v0.2.106 used a plugin://
   route against the AI subtitle/service addon, which Kodi does not execute
