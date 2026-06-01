@@ -1,33 +1,38 @@
-# Self-healing patch of FENtastic's Home.xml so the home SEARCH button
-# opens POV's search node directly, instead of FENtastic's own search
-# dialog/window.
+# Self-healing patch of the home SEARCH button so it opens POV's search
+# node directly, instead of the skin's own search dialog/window.
 #
 # WHY: This is a POV-centric build. On the "beautiful" skin (AF3) the
-# search row resolves to POV search. After a user switches to the
-# "simple" skin (skin.fentastic), the home search icon instead runs
-# FENtastic's native search helper (a keyboard/search-provider window),
-# so to reach POV's "חיפוש / Search" node (SEARCH: Movies / TV Shows /
-# People / Movies Collection) the user has to drill manually through
-# Search -> video add-ons -> POV -> search. Users expect the search
-# button to land on that POV node directly.
+# search row resolves to POV search. On the "simple" skins shipped with
+# the build -- skin.fentastic and skin.estuary -- the home search icon
+# instead opens a generic search dialog/helper, so to reach POV's
+# "חיפוש / Search" node (SEARCH: Movies / TV Shows / People / Movies
+# Collection) the user has to drill manually through Search -> video
+# add-ons -> POV -> search. Users expect the search button to land on
+# that POV node directly, on whichever skin they use.
 #
-# WHAT: FENtastic's Home.xml defines the search icon three times, gated
-# by skin settings (only one renders at a time):
-#   * control 804  (NoSearchResultsWindow)         -> ActivateWindow(1107)
-#   * control 805  (DefaultSearchWindowBehavior)   -> helper search_input
-#   * control 806  (default)                       -> helper open_search_window
-# We repoint all three onclicks to the POV search node so the search
-# button works regardless of the user's skin setting:
+# WHAT: Each skin's Home.xml defines the search icon as an IconButton
+# include with a control_id + onclick param pair. We repoint that onclick
+# to the POV search node:
 #   ActivateWindow(videos,plugin://plugin.video.pov/?mode=navigator.search,return)
 # (POV's router maps navigator.search -> Navigator(params).search(),
 # which builds exactly that 4-item node.)
 #
+#   * skin.fentastic: the icon is defined three times, gated by skin
+#     settings (only one renders at a time):
+#       control 804 (NoSearchResultsWindow)       -> ActivateWindow(1107)
+#       control 805 (DefaultSearchWindowBehavior) -> helper search_input
+#       control 806 (default)                     -> helper open_search_window
+#   * skin.estuary: a single bottom-bar search icon:
+#       control 801                               -> ActivateWindow(1107)
+#
 # The patch is gated on the current onclick value (idempotent: if it
 # already points at POV search we skip), tolerates whitespace/attribute
-# spacing, and is reversible (ensure_unpatched restores the FENtastic
-# defaults). If FENtastic ever restructures these buttons so a control
-# id / onclick pair isn't found, we simply skip that one -- the search
-# button keeps working with the upstream behavior.
+# spacing, and is reversible (ensure_unpatched restores the skin
+# defaults). Each skin is handled independently against its own Home.xml,
+# so switching skins keeps working. If a skin ever restructures these
+# buttons so a control id / onclick pair isn't found, we simply skip that
+# one -- the search button keeps working with the upstream behavior. A
+# skin that isn't installed has no Home.xml and is a no-op.
 
 import re
 
@@ -42,21 +47,28 @@ except Exception:
     kodi_utils = None
 
 
-SKIN_ADDON_ID = 'skin.fentastic'
-HOME_XML = 'special://home/addons/' + SKIN_ADDON_ID + '/xml/Home.xml'
-
 # The POV search node. navigator.search has no extra query params, so no
 # '&' escaping is needed inside the XML attribute value.
 POV_SEARCH_ONCLICK = (
     'ActivateWindow(videos,'
     'plugin://plugin.video.pov/?mode=navigator.search,return)')
 
-# control_id -> the FENtastic default onclick (used for ensure_unpatched).
-_SEARCH_BUTTONS = {
-    '804': 'ActivateWindow(1107)',
-    '805': 'RunScript(script.fentastic.helper,mode=search_input)',
-    '806': 'RunScript(script.fentastic.helper,mode=open_search_window)',
-}
+# Per-skin search-button definitions. For each skin: the search-icon
+# control_id(s) -> the skin's default onclick (used for ensure_unpatched).
+_SEARCH_SKINS = (
+    ('skin.fentastic', {
+        '804': 'ActivateWindow(1107)',
+        '805': 'RunScript(script.fentastic.helper,mode=search_input)',
+        '806': 'RunScript(script.fentastic.helper,mode=open_search_window)',
+    }),
+    ('skin.estuary', {
+        '801': 'ActivateWindow(1107)',
+    }),
+)
+
+
+def _home_xml(skin_addon_id):
+    return 'special://home/addons/' + skin_addon_id + '/xml/Home.xml'
 
 
 def _log(msg, level='INFO'):
@@ -93,8 +105,8 @@ def _write(path, content):
 
 def _onclick_re(control_id):
     """Match a search IconButton's onclick by pinning it to the control_id
-    that immediately precedes it (804/805/806 are unique to the search
-    buttons), tolerating whitespace and attribute spacing."""
+    that immediately precedes it (the search control ids are unique to the
+    search button), tolerating whitespace and attribute spacing."""
     return re.compile(
         r'(<param\s+name="control_id"\s+value="' + control_id +
         r'"\s*/>\s*<param\s+name="onclick"\s+value=")'
@@ -118,22 +130,25 @@ def _set_onclick(content, control_id, new_onclick):
     return new_content, changed['v']
 
 
-def _apply(target_onclick_for):
-    """Generic apply: target_onclick_for(control_id) -> desired onclick.
-    Returns 'patched' / 'unchanged' / 'no_target' / 'failed'."""
+def _apply_skin(skin_addon_id, buttons, target_onclick_for):
+    """Apply to one skin's Home.xml. target_onclick_for(control_id) ->
+    desired onclick. Returns 'patched' / 'unchanged' / 'no_target' /
+    'failed'."""
     if xbmcvfs is None:
         return 'failed'
-    if not _exists(HOME_XML):
+    home_xml = _home_xml(skin_addon_id)
+    if not _exists(home_xml):
         return 'no_target'
     try:
-        content = _read(HOME_XML)
+        content = _read(home_xml)
     except Exception as e:
-        _log('read failed: {0}'.format(e), level='WARNING')
+        _log('{0}: read failed: {1}'.format(skin_addon_id, e),
+             level='WARNING')
         return 'failed'
 
     new_content = content
     any_changed = False
-    for cid in _SEARCH_BUTTONS:
+    for cid in buttons:
         new_content, ch = _set_onclick(
             new_content, cid, target_onclick_for(cid))
         any_changed = any_changed or ch
@@ -141,22 +156,41 @@ def _apply(target_onclick_for):
     if not any_changed:
         return 'unchanged'
     try:
-        _write(HOME_XML, new_content)
+        _write(home_xml, new_content)
     except Exception as e:
-        _log('write failed: {0}'.format(e), level='WARNING')
+        _log('{0}: write failed: {1}'.format(skin_addon_id, e),
+             level='WARNING')
         return 'failed'
     return 'patched'
 
 
+def _apply(target_onclick_for_factory):
+    """Apply across all known skins. target_onclick_for_factory(buttons)
+    returns a target_onclick_for(control_id) callable. Returns 'patched'
+    if any skin changed, else the most informative aggregate status."""
+    statuses = []
+    for skin_addon_id, buttons in _SEARCH_SKINS:
+        statuses.append(_apply_skin(
+            skin_addon_id, buttons, target_onclick_for_factory(buttons)))
+    if 'patched' in statuses:
+        return 'patched'
+    if 'unchanged' in statuses:
+        return 'unchanged'
+    if 'failed' in statuses:
+        return 'failed'
+    return 'no_target'
+
+
 def ensure_patched():
-    """Repoint the home search button(s) to the POV search node."""
-    status = _apply(lambda cid: POV_SEARCH_ONCLICK)
+    """Repoint the home search button(s) to the POV search node, on every
+    installed skin we know about (FENtastic + Estuary)."""
+    status = _apply(lambda buttons: (lambda cid: POV_SEARCH_ONCLICK))
     if status == 'patched':
         _log('home search button now opens POV search node')
     return status
 
 
 def ensure_unpatched():
-    """Restore FENtastic's default home search onclicks. Best-effort;
+    """Restore each skin's default home search onclick(s). Best-effort;
     used if we ever want to back the change out."""
-    return _apply(lambda cid: _SEARCH_BUTTONS[cid])
+    return _apply(lambda buttons: (lambda cid: buttons[cid]))
