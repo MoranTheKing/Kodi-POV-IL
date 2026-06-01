@@ -260,6 +260,14 @@
           <level>3</level>
           <default></default>
         </setting>
+        <setting id="_darksubs_hook_last_fire" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default></default>
+        </setting>
+        <setting id="_darksubs_hook_last_outcome" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default></default>
+        </setting>
         <!-- Hidden: daily Gemini Flash Lite request counter. Reset
              at UTC midnight by gemini_quota.note_request. -->
         <setting id="_usage_count" type="string" label="30000" visible="false">

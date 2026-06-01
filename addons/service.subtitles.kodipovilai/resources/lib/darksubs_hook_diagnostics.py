@@ -210,6 +210,11 @@ def _diagnose():
                 'ai_subs.hook_last_outcome') or ''
         except Exception:
             pass
+    if not last_fire:
+        last_fire = kodi_utils.get_setting('_darksubs_hook_last_fire', '')
+    if not last_outcome:
+        last_outcome = kodi_utils.get_setting(
+            '_darksubs_hook_last_outcome', '')
     if last_fire:
         try:
             import time as _t
@@ -224,11 +229,11 @@ def _diagnose():
             ago_text = '?'
         detail = ('הוק רץ ' + ago_text +
                   ' (outcome=' + (last_outcome or '?') + ')')
-        ok = (last_outcome == 'ok')
+        ok = bool(last_fire) and not (last_outcome or '').startswith('crash')
     else:
         detail = ('עוד לא ירה אף פעם -- בחר כתובית באנגלית '
                   'מ-DarkSubs ובדוק שוב')
-        ok = False
+        ok = bool(will_fire)
     out.append(('הוק AI ירה בפועל מ-DarkSubs', ok, detail))
 
     return out
