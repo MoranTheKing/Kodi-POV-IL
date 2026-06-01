@@ -1842,6 +1842,12 @@ def main():
     # Gemini + Wyzie entries here on every startup; idempotent.
     _maybe_patch_pov_services()
 
+    # Safe for standalone installs: this only repoints FENtastic/Estuary's
+    # home search button to POV's own search node, so users do not get the
+    # English skin-helper search menu. It does not touch favourites, lists,
+    # caches, auth state, or skin home widgets.
+    _maybe_patch_fentastic_search()
+
     if build_mode:
         # Build-only POV auth/list/navigation/cache patches. Do not run
         # these for standalone subtitle-addon installs.
@@ -1852,7 +1858,6 @@ def main():
         _maybe_patch_pov_menus()
         _maybe_patch_pov_personal_area()
         _maybe_patch_fentastic_widgets()
-        _maybe_patch_fentastic_search()
         _maybe_patch_favourites_xml()
         _maybe_patch_favourites_personal_tiles()
         _maybe_patch_pov_cache_empty()

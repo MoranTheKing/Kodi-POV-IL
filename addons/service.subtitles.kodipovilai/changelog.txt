@@ -1,3 +1,15 @@
+v0.2.112
+- Fixed the Wizard quick-update crash caused by importing
+  custom_save_data_config.py while the old kodi7rd config URL returns 404.
+  The Wizard now reads config from this repository and falls back safely if
+  a remote config file is unavailable.
+- Clean Wizard installs now point at full build 0.1.12, which already
+  contains the repaired Wizard/service files instead of relying on a first
+  quick-update pass.
+- Standalone AI-addon installs now also repoint FENtastic/Estuary's home
+  search button to POV's own search node, restoring the Hebrew POV search
+  menu without touching user favourites, lists, caches, or skin widgets.
+
 v0.2.111
 - Fixed clean Wizard installs still receiving the old Real-Debrid/KODI media
   from the full build zip.

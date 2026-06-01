@@ -22,13 +22,44 @@ context.verify_mode = ssl.CERT_NONE
 ######################################################################
 
 # GitHub links for custom_save_data_config.json and build_addons_whitelist.txt + build_addons_blacklist files
-custom_save_data_config_github_url = "https://kodi7rd.github.io/wizard/assets/custom_save_data_config/custom_save_data_config.json"
-build_addons_whitelist_github_url = "https://kodi7rd.github.io/wizard/assets/custom_save_data_config/build_addons_whitelist.txt"
-build_addons_blacklist_github_url = "https://kodi7rd.github.io/wizard/assets/custom_save_data_config/build_addons_blacklist.txt"
+custom_save_data_config_github_url = "https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/custom_save_data_config/custom_save_data_config.json"
+build_addons_whitelist_github_url = "https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/custom_save_data_config/build_addons_whitelist.txt"
+build_addons_blacklist_github_url = "https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/custom_save_data_config/build_addons_blacklist.txt"
 
-# Load the configuration from the JSON file
-with urllib.request.urlopen(custom_save_data_config_github_url, context=context) as response:
-    custom_save_data_config = json.loads(response.read().decode('utf-8'))
+
+def _read_url_text(url, default=''):
+    try:
+        with urllib.request.urlopen(url, context=context, timeout=15) as response:
+            return response.read().decode('utf-8')
+    except Exception as e:
+        logging.log(
+            "custom_save_data_config.py | Failed to read {0}: {1}. "
+            "Using safe defaults.".format(url, e),
+            level=xbmc.LOGWARNING)
+        return default
+
+
+def _read_url_lines(url):
+    data = _read_url_text(url, '')
+    return [line.strip() for line in data.splitlines() if line.strip()]
+
+
+def _load_config():
+    data = _read_url_text(custom_save_data_config_github_url, '{}')
+    try:
+        loaded = json.loads(data or '{}')
+        return loaded if isinstance(loaded, dict) else {}
+    except Exception as e:
+        logging.log(
+            "custom_save_data_config.py | Invalid custom save JSON: {0}. "
+            "Using safe defaults.".format(e),
+            level=xbmc.LOGWARNING)
+        return {}
+
+
+# Load the configuration from the JSON file. This must never raise during
+# import, otherwise startup quick-update cannot repair a broken wizard.
+custom_save_data_config = _load_config()
     
 # Log JSON
 logging.log("custom_save_data_config.py | custom_save_data_config.json: " + str(custom_save_data_config), level=xbmc.LOGINFO)
@@ -75,8 +106,7 @@ def set_addons_whitelist_from_github():
 def write_extra_addons_to_local_whitelist():
     
     # Read Build Blacklist addons from GitHub        
-    with urllib.request.urlopen(build_addons_blacklist_github_url) as f:
-        build_addons_blacklist = [line.decode("utf-8").strip() for line in f.readlines()]
+    build_addons_blacklist = _read_url_lines(build_addons_blacklist_github_url)
       
     logging.log("custom_save_data_config.py | build_addons_blacklist: " + str(build_addons_blacklist), level=xbmc.LOGINFO)
     
@@ -146,8 +176,7 @@ def merge_local_whitelist_with_github_addons():
     
     logging.log("custom_save_data_config.py | Local whitelist.txt to merge: " + str(local_whitelist), level=xbmc.LOGINFO)
 
-    with urllib.request.urlopen(build_addons_whitelist_github_url) as f:
-        github_addons_whitelist_file = [line.decode("utf-8").strip() for line in f.readlines()] 
+    github_addons_whitelist_file = _read_url_lines(build_addons_whitelist_github_url)
         
     logging.log("custom_save_data_config.py | GitHub whitelist.txt to merge: " + str(github_addons_whitelist_file), level=xbmc.LOGINFO)
     
