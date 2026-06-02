@@ -1,8 +1,8 @@
 # Build-only UI guardrails for Kodi POV IL.
 #
 # The build home menu should not expose Kodi's raw "Favourites" entry as
-# the user's home button. Keep the button visible, but label it with Kodi's
-# standard "Home" string so it follows the user's chosen UI language.
+# the user's home button. Keep the button visible, but label it like the
+# rest of the Hebrew build sidemenu.
 
 import os
 import xml.etree.ElementTree as ET
@@ -88,9 +88,14 @@ def _patch_fentastic_home_label():
     try:
         with open(path, 'r', encoding='utf-8', errors='ignore') as f:
             text = f.read()
-        old = '<label>$LOCALIZE[10134]</label>'
-        new = '<label>$LOCALIZE[10000]</label>'
-        if old not in text:
+        candidates = (
+            '<label>$LOCALIZE[10134]</label>',
+            '<label>$LOCALIZE[10000]</label>',
+        )
+        new = '<label>מסך הבית</label>'
+        old = next((candidate for candidate in candidates
+                    if candidate in text), None)
+        if old is None:
             return False
         text = text.replace(old, new, 1)
         with open(path, 'w', encoding='utf-8', newline='') as f:
