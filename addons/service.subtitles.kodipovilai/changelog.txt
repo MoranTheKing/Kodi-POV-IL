@@ -1,3 +1,9 @@
+v0.2.118
+- DarkSubs OpenSubtitles reliability: updates the OpenSubtitles provider
+  to try title/year or title/episode fallback searches when IMDb search
+  returns no results, and clears DarkSubs subtitle result cache once when
+  the provider is patched so old pre-fix results do not hide OpenSubtitles.
+
 v0.2.117
 - DarkSubs OpenSubtitles repair: standalone AI installs now self-heal
   DarkSubs's OpenSubtitles provider if DarkSubs is installed, copying

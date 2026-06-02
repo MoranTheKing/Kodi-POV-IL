@@ -22,7 +22,7 @@ TARGET_REL_DIR = os.path.join('resources', 'sources')
 PATCH_REL_DIR = os.path.join('resources', 'patches', 'darksubs')
 OPEN_SUBS_FILE = 'opensubtitles.py'
 KEYS_FILE = 'darksubs_opensubtitles_api.json'
-MARKER = 'c_get_os_api_keys_v2'
+MARKER = 'OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4'
 
 
 def _log(msg, level='INFO'):
@@ -77,6 +77,24 @@ def _invalidate_pyc_cache(py_path):
         pass
 
 
+def _clear_darksubs_subtitle_cache():
+    if xbmcvfs is None:
+        return
+    try:
+        profile_dir = xbmcvfs.translatePath(
+            'special://home/userdata/addon_data/{0}/'.format(DARKSUBS_ADDON_ID))
+        cache_db = os.path.join(profile_dir, 'cache_f', 'sources.db')
+        if os.path.isfile(cache_db):
+            try:
+                os.remove(cache_db)
+                _log('DarkSubs subtitle cache DB removed after OpenSubtitles patch')
+            except OSError:
+                pass
+    except Exception as e:
+        _log('failed to clear DarkSubs subtitle cache: {0}'.format(e),
+             level='WARNING')
+
+
 def _copy_if_needed(src, dst, marker=None):
     if not src or not os.path.isfile(src):
         return 'missing_source'
@@ -107,6 +125,7 @@ def ensure_patched():
 
     if py_status == 'patched':
         _invalidate_pyc_cache(target_py)
+        _clear_darksubs_subtitle_cache()
         try:
             from . import darksubs_reload
             darksubs_reload.note_patched()
