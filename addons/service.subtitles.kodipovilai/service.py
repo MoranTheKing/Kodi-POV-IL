@@ -1055,6 +1055,38 @@ def _maybe_patch_darksubs_download_sub():
             pass
 
 
+def _maybe_patch_darksubs_opensubtitles():
+    """Self-healing OpenSubtitles provider fix for DarkSubs.
+
+    This runs in both build and standalone AI-addon installs. It only
+    copies DarkSubs's OpenSubtitles provider + local API-key fallback, so
+    standalone installs do not receive build UI/menu/list changes.
+    """
+    try:
+        from resources.lib import darksubs_opensubtitles_patcher, \
+            kodi_utils
+    except Exception:
+        return
+    try:
+        status = darksubs_opensubtitles_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'darksubs_opensubtitles_patcher: OpenSubtitles provider '
+                'updated', level='INFO')
+        elif status == 'failed':
+            kodi_utils.log(
+                'darksubs_opensubtitles_patcher: failed',
+                level='WARNING')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'darksubs_opensubtitles_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_darksubs_embedded_demote():
     """Self-healing patch of DarkSubs's engine.py so embedded ('[LOC]')
     subtitle entries sink to the BOTTOM of their language group instead
@@ -1744,6 +1776,11 @@ def main():
     # setting is OFF (user manually picks a non-Hebrew sub). Without
     # this, the v3 hook only ever fires when auto_translate=true.
     _maybe_patch_darksubs_download_sub()
+
+    # OpenSubtitles provider/key-list fix. Runs for standalone AI-addon
+    # installs too, but touches only DarkSubs's OpenSubtitles source file
+    # and local key fallback.
+    _maybe_patch_darksubs_opensubtitles()
 
     # Push embedded ('[LOC]') subtitle entries to the bottom of their
     # language group. They carry a hard-coded 101% sync that otherwise
