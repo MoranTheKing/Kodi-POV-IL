@@ -45,7 +45,137 @@ sub_color='orange'
 ###### Requests Params ##############
 REQUEST_MAX_RETRIES_NUMBER = 8
 REQUEST_RETRY_DELAY_IN_MS = 500
+OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4
 #########################################
+
+def _base_search_query(lang_string):
+    return {
+        'languages': lang_string,
+        'hearing_impaired': 'include',
+        'ai_translated': 'include',
+        'foreign_parts_only': 'include',
+        'machine_translated': 'include',
+    }
+
+
+def _clean_imdb_id(imdb_id):
+    if imdb_id.startswith('tt'):
+        return imdb_id[2:]
+    return imdb_id
+
+
+def _add_if_value(querystring, key, value):
+    if value not in (None, ''):
+        querystring[key] = value
+
+
+def _build_query_variants(video_data, lang_string):
+    title = video_data.get('OriginalTitle', '')
+    season = video_data.get('season', '')
+    episode = video_data.get('episode', '')
+    year = video_data.get('year', '')
+    imdb_id = video_data.get('imdb', '')
+    media_type = video_data.get('media_type', '')
+
+    variants = []
+
+    if imdb_id.startswith('tt'):
+        imdb_numeric = _clean_imdb_id(imdb_id)
+        if media_type == 'tv':
+            by_parent_imdb = _base_search_query(lang_string)
+            _add_if_value(by_parent_imdb, 'parent_imdb_id', imdb_numeric)
+            _add_if_value(by_parent_imdb, 'season_number', season)
+            _add_if_value(by_parent_imdb, 'episode_number', episode)
+            variants.append(('parent_imdb_id', by_parent_imdb))
+
+            by_query = _base_search_query(lang_string)
+            _add_if_value(by_query, 'query', title)
+            _add_if_value(by_query, 'season_number', season)
+            _add_if_value(by_query, 'episode_number', episode)
+            variants.append(('tv_query', by_query))
+        else:
+            by_imdb = _base_search_query(lang_string)
+            _add_if_value(by_imdb, 'imdb_id', imdb_numeric)
+            variants.append(('imdb_id', by_imdb))
+
+            by_query_year = _base_search_query(lang_string)
+            _add_if_value(by_query_year, 'query', title)
+            _add_if_value(by_query_year, 'year', year)
+            variants.append(('movie_query_year', by_query_year))
+    else:
+        by_query = _base_search_query(lang_string)
+        _add_if_value(by_query, 'query', title)
+        if media_type == 'tv':
+            _add_if_value(by_query, 'season_number', season)
+            _add_if_value(by_query, 'episode_number', episode)
+            variants.append(('tv_query', by_query))
+        else:
+            _add_if_value(by_query, 'year', year)
+            variants.append(('movie_query_year', by_query))
+
+    # Last-resort title-only search catches cases where metadata year/episode
+    # is wrong but OpenSubtitles still has relevant entries for the title.
+    if title:
+        title_only = _base_search_query(lang_string)
+        title_only['query'] = title
+        variants.append(('title_only', title_only))
+
+    unique_variants = []
+    seen = set()
+    for label, querystring in variants:
+        signature = tuple(sorted(querystring.items()))
+        if signature not in seen:
+            seen.add(signature)
+            unique_variants.append((label, querystring))
+    return unique_variants
+
+
+def _search_with_key(headers, querystring):
+    querystring = dict(querystring)
+    response = None
+    for attempt_number in range(REQUEST_MAX_RETRIES_NUMBER):
+        try:
+            response = requests.get(OPS_API_SEARCH_URL, headers=headers, params=querystring, timeout=DEFAULT_REQUEST_TIMEOUT)
+            if response.status_code in (406, 503):
+                log.warning(f"DEBUG | [OpenSubtitles] | OpenSubtitles SearchSubtitles key unavailable ({response.status_code}); trying next API key.")
+                return None, 'key_unavailable'
+            response.raise_for_status()
+            response_json = response.json()
+
+            total_subs_count = response_json.get('total_count', 0)
+            total_pages = response_json.get('total_pages', 0)
+            log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles SearchSubtitles search result: Total subs count: {repr(total_subs_count)} |  Number of pages - {repr(total_pages)}")
+
+            search_data = response_json.get('data', [])
+
+            if total_pages > 1:
+                for _page in range(2, total_pages + 1):
+                    querystring['page'] = _page
+                    response = requests.get(OPS_API_SEARCH_URL, headers=headers, params=querystring, timeout=DEFAULT_REQUEST_TIMEOUT)
+                    if response.status_code in (406, 503):
+                        log.warning(f"DEBUG | [OpenSubtitles] | OpenSubtitles SearchSubtitles pagination key unavailable ({response.status_code}).")
+                        return search_data, 'partial'
+                    response.raise_for_status()
+                    response_json = response.json()
+                    search_data.extend(response_json.get('data', []))
+                    xbmc.sleep(100)
+
+            return search_data, 'ok'
+
+        except requests.exceptions.ConnectionError as ce:
+            log.warning('DEBUG | [OpenSubtitles] | OpenSubtitles SearchSubtitles connection error: ' + repr(ce))
+            if attempt_number < REQUEST_MAX_RETRIES_NUMBER - 1:
+                log.warning(f"DEBUG | [OpenSubtitles] | OpenSubtitles SearchSubtitles | Retrying... Attempt {attempt_number + 2} of {REQUEST_MAX_RETRIES_NUMBER}")
+                continue
+            return None, 'connection_error'
+        except Exception as e:
+            log.warning('DEBUG | [OpenSubtitles] | OpenSubtitles SearchSubtitles error: ' + repr(e))
+            if response is not None and getattr(response, 'status_code', None) in (406, 503):
+                return None, 'key_unavailable'
+            return None, 'error'
+
+    return None, 'error'
+
 
 def api_search_subtitles(video_data, all_lang_override):
 
@@ -56,13 +186,6 @@ def api_search_subtitles(video_data, all_lang_override):
     # https://opensubtitles.stoplight.io/docs/opensubtitles-api/a172317bd5ccc-search-for-subtitles
     
 
-    title = video_data.get('OriginalTitle', '')
-    season = video_data.get('season', '')
-    episode = video_data.get('episode', '')
-    year = video_data.get('year', '')
-    imdb_id = video_data.get('imdb', '')
-    media_type = video_data.get('media_type', '')
-    
     selected_lang=[]
 
     # Language codes from: https://opensubtitles.stoplight.io/docs/opensubtitles-api/1de776d20e873-languages
@@ -86,54 +209,7 @@ def api_search_subtitles(video_data, all_lang_override):
             selected_lang[index] = xbmc.convertLanguage(lang_code, xbmc.ISO_639_1) or lang_code
        
     lang_string = ','.join(selected_lang)
-
-    querystring = {}
-    querystring['languages'] = lang_string
-
-
-    # Build querystring WITH imdb_id
-    if imdb_id.startswith('tt'):
-    
-        if media_type == 'tv':
-            #################################################
-            # Option 1 - TV Shows - by imdb id + season + episode
-            #################################################
-            querystring['parent_imdb_id'] = imdb_id
-            querystring['season_number'] = season
-            querystring['episode_number'] = episode
-            
-        else:
-            #################################################
-            # Option 2 - Movies - by imdb id
-            #################################################
-            querystring['imdb_id'] = imdb_id
-
-    # Build querystring WITHOUT imdb_id
-    else:
-        querystring['query'] = title
-        
-        if media_type == 'tv':
-            #################################################
-            # Option 3 - TV Shows - by title + season + episode
-            #################################################
-            querystring['season_number'] = season
-            querystring['episode_number'] = episode
-            
-        else:
-            #################################################
-            # Option 4 - Movies - by title + year
-            #################################################
-            querystring['year'] = year
-
-
-    #################################################
-    # Default API values:
-    querystring['hearing_impaired'] = "include"
-    querystring['ai_translated'] = "include" 
-    querystring['foreign_parts_only'] = "include"
-    # Overriden API values:
-    querystring['machine_translated'] = "include"
-    #################################################
+    query_variants = _build_query_variants(video_data, lang_string)
     
     # Determine which API keys to try for Search. Search used to use one
     # random shared key only; if that key was exhausted, all results were 0.
@@ -142,60 +218,23 @@ def api_search_subtitles(video_data, all_lang_override):
     else:
         api_keys = get_api_keys(shuffle_keys=True)
 
+    for variant_name, querystring in query_variants:
+        log.warning("DEBUG | [OpenSubtitles] | Opensubtitles SearchSubtitles query variant: " + variant_name + " | " + repr(querystring))
 
-    log.warning("DEBUG | [OpenSubtitles] | Opensubtitles SearchSubtitles querystring: " + repr(querystring))
-    
-    for OS_API_KEY_NAME, OS_API_KEY_VALUE in api_keys:
-        log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles SearchSubtitles OS_API_KEY_NAME={OS_API_KEY_NAME}")
+        for OS_API_KEY_NAME, OS_API_KEY_VALUE in api_keys:
+            log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles SearchSubtitles OS_API_KEY_NAME={OS_API_KEY_NAME}")
 
-        headers = {
-            "User-Agent": USER_AGENT,
-            "Api-Key": OS_API_KEY_VALUE
-        }
+            headers = {
+                "User-Agent": USER_AGENT,
+                "Api-Key": OS_API_KEY_VALUE
+            }
 
-        for attempt_number in range(REQUEST_MAX_RETRIES_NUMBER):
-            try:
-                response = requests.get(OPS_API_SEARCH_URL, headers=headers, params=querystring, timeout=DEFAULT_REQUEST_TIMEOUT)
-                if response.status_code in (406, 503):
-                    log.warning(f"DEBUG | [OpenSubtitles] | OpenSubtitles SearchSubtitles key unavailable ({response.status_code}); trying next API key.")
-                    break
-                response.raise_for_status()  # Raise HTTPError for bad status codes (4xx, 5xx)
-                response_json = response.json()
-
-
-                # Total subtitles found count.
-                total_subs_count = response_json.get('total_count', 0)
-                # Each page has 50 subtitles.
-                total_pages = response_json.get('total_pages', 0)
-                log.warning(f"DEBUG | [OpenSubtitles] | Opensubtitles SearchSubtitles search result: Total subs count: {repr(total_subs_count)} |  Number of pages - {repr(total_pages)}")
-                
-                # Initialize search_data with the data from page 1 (which might be empty)
-                search_data = response_json.get('data', [])
-
-                # Check if there are additional pages to fetch
-                if total_pages > 1:
-                    # Loop through the pages and save all results in search_data
-                    for _page in range(2, total_pages + 1):
-                        querystring['page'] = _page
-                        response = requests.get(OPS_API_SEARCH_URL, headers=headers, params=querystring, timeout=DEFAULT_REQUEST_TIMEOUT)
-                        if response.status_code in (406, 503):
-                            log.warning(f"DEBUG | [OpenSubtitles] | OpenSubtitles SearchSubtitles pagination key unavailable ({response.status_code}).")
-                            break
-                        response.raise_for_status()
-                        response_json = response.json()
-                        search_data.extend(response_json.get('data', []))
-                        xbmc.sleep(100)
-
+            search_data, status = _search_with_key(headers, querystring)
+            if search_data:
                 return search_data
-
-            except requests.exceptions.ConnectionError as ce:
-                log.warning('DEBUG | [OpenSubtitles] | OpenSubtitles SearchSubtitles connection error: ' + repr(ce))
-                if attempt_number < REQUEST_MAX_RETRIES_NUMBER - 1:  # Retry if attempts are left
-                    log.warning(f"DEBUG | [OpenSubtitles] | OpenSubtitles SearchSubtitles | Retrying... Attempt {attempt_number + 2} of {REQUEST_MAX_RETRIES_NUMBER}")
-                    continue
-                break
-            except Exception as e:
-                log.warning('DEBUG | [OpenSubtitles] | OpenSubtitles SearchSubtitles error: ' + repr(e))
+            if status == 'key_unavailable':
+                continue
+            if status in ('connection_error', 'error'):
                 break
 
     return []
