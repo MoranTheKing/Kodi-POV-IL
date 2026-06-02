@@ -553,6 +553,27 @@ def _maybe_patch_brand_favourites():
             pass
 
 
+def _maybe_patch_hebrew_build_ui():
+    """Keep Wizard-installed build profiles on the intended Hebrew UI."""
+    try:
+        from resources.lib import hebrew_build_ui_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = hebrew_build_ui_patcher.ensure_patched()
+        if status != 'already_ok':
+            kodi_utils.log(
+                'hebrew_build_ui_patcher: {0}'.format(status),
+                level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'hebrew_build_ui_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_genre_icons():
     """Re-icon POV's genre navigator rows to the stable
     media/build_icons/Genres/ set we ship (AF3 cached shortcut rows)."""
@@ -1826,6 +1847,7 @@ def main():
         # IMPORTANT ORDER: install genre icons + heal POV's genre navigator
         # rows + patch navigator.py BEFORE _maybe_patch_af3_home(), because
         # AF3's home rebuild renders the genre shortcut-folder rows.
+        _maybe_patch_hebrew_build_ui()
         _maybe_patch_brand_assets()
         _maybe_install_build_icons()
         _maybe_patch_brand_favourites()

@@ -12,6 +12,18 @@ except Exception:
     sqlite3 = None
 
 try:
+    import os
+    import re
+except Exception:
+    os = None
+    re = None
+
+try:
+    import xbmcvfs
+except Exception:
+    xbmcvfs = None
+
+try:
     from resources.lib import pov_navigator_patcher
 except Exception:
     pov_navigator_patcher = None
@@ -40,11 +52,70 @@ def _db_path():
         return ''
 
 
+def _favourites_path():
+    if xbmcvfs is None:
+        return ''
+    try:
+        return xbmcvfs.translatePath('special://userdata/favourites.xml')
+    except Exception:
+        return ''
+
+
+def _remove_build_debrid_notice_favourite():
+    """Standalone installs must not get build home shortcuts.
+
+    v0.2.106-v0.2.114 could leave the "הגדרת התראות מנוי" shortcut in
+    userdata/favourites.xml for users who installed only the AI addon.
+    Remove only that exact build shortcut/action and leave every other
+    favourite untouched.
+    """
+    if os is None or re is None:
+        return False
+    path = _favourites_path()
+    if not path or not os.path.isfile(path):
+        return False
+    try:
+        with open(path, 'rb') as f:
+            content = f.read()
+    except OSError:
+        return False
+
+    patterns = (
+        br'[ \t]*<favourite\s[^>]*?>[^<]*RunScript\(service\.subtitles\.kodipovilai,\s*action=debrid_notice_settings\)[^<]*</favourite>\s*\r?\n?',
+        br'[ \t]*<favourite\s[^>]*name="[^"]*\xd7\x94\xd7\x92\xd7\x93\xd7\xa8\xd7\xaa \xd7\x94\xd7\xaa\xd7\xa8\xd7\x90\xd7\x95\xd7\xaa \xd7\x9e\xd7\xa0\xd7\x95\xd7\x99[^"]*"[^>]*>.*?</favourite>\s*\r?\n?',
+    )
+    updated = content
+    for pattern in patterns:
+        updated = re.sub(pattern, b'', updated, flags=re.DOTALL)
+    if updated == content:
+        return False
+
+    tmp = path + '.standalone_cleanup_tmp'
+    try:
+        with open(tmp, 'wb') as f:
+            f.write(updated)
+        os.replace(tmp, path)
+        return True
+    except OSError as exc:
+        try:
+            os.remove(tmp)
+        except Exception:
+            pass
+        _log('failed removing build debrid notice favourite: {0}'.format(exc), 'WARNING')
+        return False
+
+
 def ensure_cleaned():
+    removed_notice = _remove_build_debrid_notice_favourite()
+
     if sqlite3 is None or pov_navigator_patcher is None:
+        if removed_notice:
+            return 'removed_build_notice_tile'
         return 'unavailable'
     path = _db_path()
     if not path:
+        if removed_notice:
+            return 'removed_build_notice_tile'
         return 'no_db'
 
     targets = (
@@ -112,5 +183,10 @@ def ensure_cleaned():
                 pass
 
     if restored:
+        if removed_notice:
+            return 'restored:{0},removed_build_notice_tile'.format(
+                len(restored))
         return 'restored:{0}'.format(len(restored))
+    if removed_notice:
+        return 'removed_build_notice_tile'
     return 'already_done'
