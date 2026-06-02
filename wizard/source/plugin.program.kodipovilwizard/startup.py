@@ -154,6 +154,43 @@ def auto_quick_update():
             Wizard().force_close_kodi_in_5_seconds(dialog_header="עדכון מהיר הסתיים בהצלחה")
 
 
+def sync_quickfix_build_version():
+    try:
+        if CONFIG.get_setting('buildname') != CONFIG.BUILDNAME_DEFAULT:
+            return
+
+        # Existing users can receive this quickfix through the old wizard code,
+        # which extracts files but does not update buildversion/latestversion.
+        # Keep this sync scoped to the OpenSubtitles quickfix so future full
+        # build updates are not accidentally suppressed.
+        if CONFIG.get_setting('quick_update_noteid') != '166':
+            return
+
+        latest_version = check.check_build(CONFIG.BUILDNAME_DEFAULT, 'version')
+        if latest_version != '0.1.18':
+            return
+
+        if CONFIG.get_setting('buildversion') == latest_version:
+            if CONFIG.get_setting('latestversion') != latest_version:
+                CONFIG.set_setting('latestversion', latest_version)
+            return
+
+        CONFIG.set_setting('buildversion', latest_version)
+        CONFIG.set_setting('latestversion', latest_version)
+        CONFIG.BUILDVERSION = latest_version
+        CONFIG.BUILDLATEST = latest_version
+        logging.log(
+            "[QUICK-UPDATE] Synced buildversion/latestversion to {0} "
+            "after quickfix note 166.".format(latest_version),
+            level=xbmc.LOGINFO,
+        )
+    except Exception as sync_err:
+        logging.log(
+            "[QUICK-UPDATE] Failed to sync quickfix build version: {0}".format(sync_err),
+            level=xbmc.LOGERROR,
+        )
+
+
 def installed_build_check():
     dialog = xbmcgui.Dialog()
 
@@ -456,6 +493,7 @@ except Exception as _autoset_err:
 ######################################
 # KODI-RD-IL - AUTO QUICK UPDATE
 if CONFIG.get_setting('buildname'):
+    sync_quickfix_build_version()
     auto_quick_update()
 ######################################
     
