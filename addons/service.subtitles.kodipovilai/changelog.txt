@@ -1,3 +1,8 @@
+v0.2.116
+- FENtastic build home sidemenu: label the restored favourites/home tile as
+  "מסך הבית" instead of Kodi's shorter "בית". Existing users who already
+  received the previous $LOCALIZE[10000] patch are repaired on next startup.
+
 v0.2.115
 - Build-only FENtastic UI self-heal: keeps the home/favourites sidemenu
   button visible but relabels it with Kodi's standard Home string, so
