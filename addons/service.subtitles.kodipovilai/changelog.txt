@@ -1,3 +1,9 @@
+v0.2.117
+- DarkSubs OpenSubtitles repair: standalone AI installs now self-heal
+  DarkSubs's OpenSubtitles provider if DarkSubs is installed, copying
+  only the provider and local key fallback without touching build UI,
+  Trakt, TMDB, favourites, or user lists.
+
 v0.2.116
 - FENtastic build home sidemenu: label the restored favourites/home tile as
   "מסך הבית" instead of Kodi's shorter "בית". Existing users who already
