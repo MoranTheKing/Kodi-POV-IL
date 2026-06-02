@@ -1,3 +1,12 @@
+v0.2.119
+- Split the subtitle addon distribution into a clean standalone package and
+  a build-edition package.
+- Standalone installs now ship without staged_wizard.zip and without build
+  self-healing modules that rewrite Wizard, home menus, favourites, POV
+  navigation, AF3/FENtastic home nodes, branding, or build quick-update state.
+- Kept only the subtitle/AI path and the required DarkSubs/OpenSubtitles
+  integration so users who want subtitles only do not get build side effects.
+
 v0.2.118
 - DarkSubs OpenSubtitles reliability: updates the OpenSubtitles provider
   to try title/year or title/episode fallback searches when IMDb search
