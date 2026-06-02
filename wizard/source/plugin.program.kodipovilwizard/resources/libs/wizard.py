@@ -315,6 +315,13 @@ class Wizard:
             # skin.look_and_feel_data('save')
             installed = db.grab_addons(lib)
             db.addon_database(installed, 1, True)
+
+            latest_version = check.check_build(name, 'version')
+            if latest_version:
+                CONFIG.set_setting('buildversion', latest_version)
+                CONFIG.set_setting('latestversion', latest_version)
+                CONFIG.BUILDVERSION = latest_version
+                CONFIG.BUILDLATEST = latest_version
                                
             if not auto_quick_update:
                 CONFIG.set_setting('quick_update_notedismiss', 'false')
