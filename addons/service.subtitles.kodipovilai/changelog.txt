@@ -1,3 +1,13 @@
+v0.2.115
+- Build-only FENtastic UI self-heal: keeps the home/favourites sidemenu
+  button visible but relabels it with Kodi's standard Home string, so
+  Hebrew users see "מסך הבית" and English users see "Home".
+- Adds an existing-user repair for FENtastic Hebrew skin strings used by
+  the custom power menu, without forcing Kodi's global language setting.
+- Standalone AI-only cleanup now removes the build-only "הגדרת התראות מנוי"
+  home favourite if an older version accidentally added it, and future
+  standalone installs do not receive that build shortcut.
+
 v0.2.114
 - Wizard self-healer v4 now detects the custom_save_data_config.py bootstrap
   crash, even on wizards that already passed the older wizard.py sentinel.
