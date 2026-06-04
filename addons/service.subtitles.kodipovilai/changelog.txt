@@ -1,3 +1,16 @@
+v0.2.127
+- Fixed the advanced Gemini settings UI for Kodi 19/20/21 settings format:
+  whole-subtitle single-request mode now disables the chunk-size,
+  parallel-request, and fast-subtitles controls through proper Kodi
+  dependencies instead of ignored inline enable attributes.
+- Top-P, Temperature, Thinking Budget, whole-subtitle mode, chunk size,
+  parallel requests, and fast subtitles are now visible at normal settings
+  level inside Advanced, so Thinking Budget can be selected without changing
+  Kodi's settings-level filter.
+- Runtime behavior remains protected too: whole-subtitle mode still forces
+  one request, one worker, max output tokens 65,535, and no fast subtitle
+  flow even if an older profile has stale setting values.
+
 v0.2.126
 - Build-only TorBox status tile now opens a Kodi POV IL AI-owned dialog
   instead of plugin.video.pov's torbox.show_account_info. This avoids

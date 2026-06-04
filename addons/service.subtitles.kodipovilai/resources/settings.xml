@@ -308,13 +308,15 @@
         </setting>
         <setting id="whole_subtitle_request" type="boolean"
                  label="32411" help="32412"> <!-- Send whole subtitle in one Gemini request -->
-          <level>2</level>
+          <level>0</level>
           <default>false</default>
           <control type="toggle"/>
         </setting>
-        <setting id="chunk_lines" type="integer" label="32402"
-                 enable="!eq(-1,true)"> <!-- Lines per translation request -->
-          <level>2</level>
+        <setting id="chunk_lines" type="integer" label="32402"> <!-- Lines per translation request -->
+          <level>0</level>
+          <dependencies>
+            <dependency type="enable" setting="whole_subtitle_request" operator="equals">false</dependency>
+          </dependencies>
           <default>100</default>
           <constraints>
             <minimum>30</minimum>
@@ -325,9 +327,11 @@
             <popup>true</popup>
           </control>
         </setting>
-        <setting id="parallel_chunks" type="integer" label="32404"
-                 enable="!eq(-2,true)"> <!-- Concurrent translation requests -->
-          <level>2</level>
+        <setting id="parallel_chunks" type="integer" label="32404"> <!-- Concurrent translation requests -->
+          <level>0</level>
+          <dependencies>
+            <dependency type="enable" setting="whole_subtitle_request" operator="equals">false</dependency>
+          </dependencies>
           <default>3</default>
           <constraints>
             <minimum>1</minimum>
@@ -339,14 +343,16 @@
           </control>
         </setting>
         <setting id="fast_first_chunk" type="boolean"
-                 label="32405" help="32406"
-                 enable="!eq(-3,true)"> <!-- Fast subtitles -->
-          <level>2</level>
+                 label="32405" help="32406"> <!-- Fast subtitles -->
+          <level>0</level>
+          <dependencies>
+            <dependency type="enable" setting="whole_subtitle_request" operator="equals">false</dependency>
+          </dependencies>
           <default>true</default>
           <control type="toggle"/>
         </setting>
         <setting id="temperature" type="number" label="32403"> <!-- Model temperature -->
-          <level>2</level>
+          <level>0</level>
           <default>0.2</default>
           <constraints>
             <minimum>0.0</minimum>
@@ -358,7 +364,7 @@
           </control>
         </setting>
         <setting id="top_p" type="number" label="32407" help="32408"> <!-- Model Top-P -->
-          <level>2</level>
+          <level>0</level>
           <default>0.95</default>
           <constraints>
             <minimum>0.0</minimum>
@@ -370,7 +376,7 @@
           </control>
         </setting>
         <setting id="thinking_budget" type="integer" label="32409" help="32410"> <!-- Gemini thinking budget -->
-          <level>2</level>
+          <level>0</level>
           <default>0</default>
           <constraints>
             <options>
