@@ -1,3 +1,15 @@
+v0.2.124
+- FENtastic home search is restored to the skin's native search dialog
+  so New Search again gives the original mixed movie+show flow. Estuary
+  remains patched to POV search because that skin needed the direct node.
+- Build UI now makes sure Kodi has both English QWERTY and Hebrew QWERTY
+  keyboard layouts available, so the on-screen keyboard can switch to
+  Hebrew in search fields.
+- TorBox 30-day usage repair bumped to v4. Existing installs that already
+  had the older line are rewritten to fetch user_stats first and always
+  show the 30-day usage row, using "לא זמין" only if TorBox returns no
+  usable bandwidth data.
+
 v0.2.123
 - Whole-subtitle single-request mode now disables the dependent chunk UI
   controls too: SRT lines per chunk, parallel chunk requests, and fast
