@@ -1,3 +1,12 @@
+v0.2.129
+- Build-only favourites repair is forced once more with a new marker so
+  existing Wizard installs that were previously marked as repaired can still
+  receive the missing full home rows after a skin/Wizard seed overwrote them.
+- Added explicit canonical tiles for "סרטים פופולריים" and "סדרות חדשות"
+  using POV's tmdb_movies_popular and tmdb_tv_premieres actions.
+- Standalone AI subtitle package remains clean; this favourites repair only
+  runs in build mode.
+
 v0.2.128
 - Build-only favourites repair now restores the full canonical FENtastic
   home tile set once after Wizard installs/quick updates, not only the
