@@ -144,8 +144,9 @@ def _extract_tile(fixture_text, tile_name):
 
 def _service_tile_pattern(action):
     return re.compile(
-        rb'([ \t]*<favourite\s[^>]*?' + re.escape(action.encode('utf-8'))
-        + rb'[^>]*>(?:(?!</favourite>).)*?</favourite>\s*\n)',
+        rb'([ \t]*<favourite\b(?:(?!</favourite>).)*?'
+        + re.escape(action.encode('utf-8'))
+        + rb'(?:(?!</favourite>).)*?</favourite>\s*\n)',
         re.DOTALL,
     )
 
@@ -248,10 +249,13 @@ def ensure_patched():
     had_restore_marker = _has_restore_marker(content)
     had_service_marker = _has_marker(content, SERVICE_SEEN_MARKER)
     content, fixed_existing = _fix_existing_debrid_notice_action(content)
+    content, service_position_fixed = (
+        _move_existing_service_tile_after_torbox(content))
     missing_personal = _missing_tiles(content)
     missing_service = _missing_tiles(content, BUILD_SERVICE_TILE_NAMES)
     if missing_personal and had_restore_marker:
-        if not fixed_existing and (not missing_service or had_service_marker):
+        if (not fixed_existing and not service_position_fixed
+                and (not missing_service or had_service_marker)):
             return 'user_removed_tiles'
         # A user may delete the tiles after receiving the broken-action
         # version. Keep the deletion respected, but still persist the
@@ -264,9 +268,6 @@ def ensure_patched():
     new_content = content
     marker_added = False
     service_marker_added = False
-    service_position_fixed = False
-    new_content, service_position_fixed = (
-        _move_existing_service_tile_after_torbox(new_content))
     if not missing:
         new_content, marker_added = _insert_marker(new_content)
         new_content, service_marker_added = _insert_marker(

@@ -1,4 +1,5 @@
 import os
+import re
 
 try:
     import xbmcvfs
@@ -11,7 +12,7 @@ except Exception:
     kodi_utils = None
 
 
-PATCH_VERSION = '2'
+PATCH_VERSION = '3'
 SETTING_KEY = '_pov_torbox_usage_patch_version'
 TORBOX_API_REL = (
     'addons/plugin.video.pov/resources/lib/debrids/torbox_api.py')
@@ -137,10 +138,13 @@ def _write(path, text):
 
 def _patch_api(text):
     if 'def user_stats(self):' in text:
-        fixed = text.replace(
-            "return self._get(url, params={'bandwidth': 'true'})",
+        fixed = re.sub(
+            r"return self\._get\(url,\s*params=\{[^}]*'bandwidth'[^}]*\}\)",
             "return self._get(url, params={'general': 'true', "
-            "'bandwidth': 'true', 'bandwidth_grouping': 'day'})")
+            "'bandwidth': 'true', 'bandwidth_grouping': 'day'})",
+            text,
+            count=1,
+        )
         return fixed, fixed != text
     needle = "\tdef torrent_info(self, request_id):\n"
     if needle not in text:
