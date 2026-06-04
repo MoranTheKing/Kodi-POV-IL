@@ -143,7 +143,11 @@ def _handle_download(handle, params):
     # failure we fall through to the legacy slow flow below so the
     # user always gets SOMETHING.
     try:
-        fast_mode = kodi_utils.get_bool('fast_first_chunk', False)
+        whole_mode = kodi_utils.get_bool('whole_subtitle_request', False)
+        fast_mode = (
+            kodi_utils.get_bool('fast_first_chunk', False)
+            and not whole_mode
+        )
     except Exception:
         fast_mode = False
     if fast_mode:
@@ -1337,7 +1341,11 @@ def _handle_translate_file(params):
     # in seconds. Hebrew swaps in via Player().setSubtitles() as each
     # chunk lands. Default OFF so the legacy "wait for full Hebrew"
     # behavior is unchanged unless the user opts in.
-    fast_mode = kodi_utils.get_bool('fast_first_chunk', False)
+    whole_mode = kodi_utils.get_bool('whole_subtitle_request', False)
+    fast_mode = (
+        kodi_utils.get_bool('fast_first_chunk', False)
+        and not whole_mode
+    )
 
     # Pre-flight: the fast path briefly shows the SOURCE SRT to the
     # user (until the first Hebrew chunk arrives). That's acceptable
