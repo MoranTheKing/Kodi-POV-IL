@@ -306,7 +306,14 @@
             <heading>32401</heading>
           </control>
         </setting>
-        <setting id="chunk_lines" type="integer" label="32402"> <!-- Lines per translation request -->
+        <setting id="whole_subtitle_request" type="boolean"
+                 label="32411" help="32412"> <!-- Send whole subtitle in one Gemini request -->
+          <level>2</level>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
+        <setting id="chunk_lines" type="integer" label="32402"
+                 enable="!eq(-1,true)"> <!-- Lines per translation request -->
           <level>2</level>
           <default>100</default>
           <constraints>
@@ -317,6 +324,26 @@
           <control type="slider" format="integer">
             <popup>true</popup>
           </control>
+        </setting>
+        <setting id="parallel_chunks" type="integer" label="32404"
+                 enable="!eq(-2,true)"> <!-- Concurrent translation requests -->
+          <level>2</level>
+          <default>3</default>
+          <constraints>
+            <minimum>1</minimum>
+            <maximum>8</maximum>
+            <step>1</step>
+          </constraints>
+          <control type="slider" format="integer">
+            <popup>true</popup>
+          </control>
+        </setting>
+        <setting id="fast_first_chunk" type="boolean"
+                 label="32405" help="32406"
+                 enable="!eq(-3,true)"> <!-- Fast subtitles -->
+          <level>2</level>
+          <default>true</default>
+          <control type="toggle"/>
         </setting>
         <setting id="temperature" type="number" label="32403"> <!-- Model temperature -->
           <level>2</level>
@@ -357,31 +384,6 @@
           <control type="list" format="integer">
             <heading>32409</heading>
           </control>
-        </setting>
-        <setting id="parallel_chunks" type="integer" label="32404"> <!-- Concurrent translation requests -->
-          <level>2</level>
-          <default>3</default>
-          <constraints>
-            <minimum>1</minimum>
-            <maximum>8</maximum>
-            <step>1</step>
-          </constraints>
-          <control type="slider" format="integer">
-            <popup>true</popup>
-          </control>
-        </setting>
-        <setting id="whole_subtitle_request" type="boolean"
-                 label="32411" help="32412"> <!-- Send whole subtitle in one Gemini request -->
-          <level>2</level>
-          <default>false</default>
-          <control type="toggle"/>
-        </setting>
-        <setting id="fast_first_chunk" type="boolean"
-                 label="32405" help="32406"
-                 enable="!eq(-1,true)"> <!-- Fast subtitles -->
-          <level>2</level>
-          <default>true</default>
-          <control type="toggle"/>
         </setting>
       </group>
     </category>
