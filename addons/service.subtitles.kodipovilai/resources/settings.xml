@@ -375,19 +375,23 @@
             <popup>true</popup>
           </control>
         </setting>
-        <setting id="thinking_budget" type="integer" label="32409" help="32410"> <!-- Gemini thinking budget -->
+        <setting id="thinking_budget" type="string" label="32409" help="32410"> <!-- Gemini thinking level / budget -->
           <level>0</level>
           <default>0</default>
           <constraints>
             <options>
               <option label="32414">0</option>
-              <option>512</option>
-              <option>768</option>
-              <option>1024</option>
-              <option>2048</option>
+              <option label="32415">minimal</option>
+              <option label="32416">low</option>
+              <option label="32417">medium</option>
+              <option label="32418">high</option>
+              <option label="32419">512</option>
+              <option label="32420">768</option>
+              <option label="32421">1024</option>
+              <option label="32422">2048</option>
             </options>
           </constraints>
-          <control type="list" format="integer">
+          <control type="list" format="string">
             <heading>32409</heading>
           </control>
         </setting>

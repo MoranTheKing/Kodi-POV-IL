@@ -151,12 +151,12 @@ msgid "Controls nucleus sampling. Higher values are more varied; lower values ar
 msgstr "שולט בדגימת התוצאה: ערך גבוה יותר מגוון, ערך נמוך יותר ממוקד."
 
 msgctxt "#32409"
-msgid "Thinking Budget"
-msgstr "תקציב Thinking"
+msgid "Thinking"
+msgstr "Thinking"
 
 msgctxt "#32410"
-msgid "Optional Gemini reasoning token budget. Disabled is safest for models that do not support thinking."
-msgstr "תקציב אופציונלי ל-reasoning של Gemini. מבוטל הוא הכי בטוח למודלים שלא תומכים ב-thinking."
+msgid "Optional Gemini reasoning. Gemini 3.x uses levels; Gemini 2.5 can use numeric budgets."
+msgstr "Reasoning אופציונלי של Gemini. מודלי Gemini 3.x משתמשים ברמות; Gemini 2.5 יכול להשתמש בתקציב מספרי."
 
 msgctxt "#32411"
 msgid "Translate whole subtitle in one request"
@@ -169,6 +169,38 @@ msgstr "שולח את כל קובץ ה-SRT ל-Gemini בבקשה אחת, מגדי
 msgctxt "#32414"
 msgid "Disabled"
 msgstr "מבוטל"
+
+msgctxt "#32415"
+msgid "Minimal"
+msgstr "מינימלי"
+
+msgctxt "#32416"
+msgid "Low"
+msgstr "נמוך"
+
+msgctxt "#32417"
+msgid "Medium"
+msgstr "בינוני"
+
+msgctxt "#32418"
+msgid "High"
+msgstr "גבוה"
+
+msgctxt "#32419"
+msgid "Budget 512"
+msgstr "תקציב 512"
+
+msgctxt "#32420"
+msgid "Budget 768"
+msgstr "תקציב 768"
+
+msgctxt "#32421"
+msgid "Budget 1024"
+msgstr "תקציב 1024"
+
+msgctxt "#32422"
+msgid "Budget 2048"
+msgstr "תקציב 2048"
 
 msgctxt "#33000"
 msgid "AI Hebrew (translated from {0})"

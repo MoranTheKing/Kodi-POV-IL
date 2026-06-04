@@ -659,12 +659,33 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             or 'gemini-3.1-flash-lite'
     temperature = kodi_utils.get_float('temperature', 0.2)
     top_p = kodi_utils.get_float('top_p', 0.95)
-    thinking_budget = max(0, kodi_utils.get_int('thinking_budget', 0))
-    if thinking_budget <= 0:
+    thinking_raw = (kodi_utils.get_setting('thinking_budget', 'disabled')
+                    or 'disabled').strip().lower()
+    thinking_level = None
+    thinking_budget = None
+    if thinking_raw in ('minimal', 'low', 'medium', 'high'):
+        thinking_level = thinking_raw
+    else:
+        try:
+            thinking_budget = int(thinking_raw)
+        except (TypeError, ValueError):
+            thinking_budget = 0
+        if thinking_budget <= 0:
+            thinking_budget = None
+    if thinking_budget and model.lower().startswith('gemini-3.'):
+        if thinking_budget <= 512:
+            thinking_level = 'minimal'
+        elif thinking_budget <= 768:
+            thinking_level = 'low'
+        elif thinking_budget <= 1024:
+            thinking_level = 'medium'
+        else:
+            thinking_level = 'high'
         thinking_budget = None
     whole_subtitle_request = kodi_utils.get_bool(
         'whole_subtitle_request', False)
     max_output_tokens = 65535 if whole_subtitle_request else 16384
+    gemini_timeout = 300 if whole_subtitle_request else None
     chunk_lines = kodi_utils.get_int('chunk_lines', 250)
 
     prompt_template = prompt.build(
@@ -686,6 +707,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
 
     if whole_subtitle_request:
         chunks = [blocks]
+        kodi_utils.notify(
+            'AI: מתרגם את כל הכתוביות בפעימה אחת. זה יכול לקחת כמה דקות.',
+            time_ms=7000)
     else:
         chunks = list(srt.chunk_blocks(blocks, per_chunk=chunk_lines))
     total = len(chunks)
@@ -795,6 +819,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                     max_output_tokens=max_output_tokens,
                     top_p=top_p,
                     thinking_budget=thinking_budget,
+                    thinking_level=thinking_level,
+                    timeout=gemini_timeout or gemini.REQUEST_TIMEOUT,
                 )
             except gemini.QuotaExceeded:
                 raise _AbortTranslation('quota',
