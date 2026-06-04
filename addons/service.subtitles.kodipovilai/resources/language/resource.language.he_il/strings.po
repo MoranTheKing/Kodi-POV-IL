@@ -142,6 +142,34 @@ msgctxt "#32406"
 msgid "English appears in seconds, swaps to Hebrew gradually as translation progresses."
 msgstr "אנגלית מופיעה תוך שניות, מתחלפת לעברית בהדרגה ככל שהתרגום מתקדם."
 
+msgctxt "#32407"
+msgid "Model Top-P"
+msgstr "Top-P של המודל"
+
+msgctxt "#32408"
+msgid "Controls nucleus sampling. Higher values are more varied; lower values are more focused."
+msgstr "שולט בדגימת התוצאה: ערך גבוה יותר מגוון, ערך נמוך יותר ממוקד."
+
+msgctxt "#32409"
+msgid "Thinking Budget"
+msgstr "תקציב Thinking"
+
+msgctxt "#32410"
+msgid "Optional Gemini reasoning token budget. Disabled is safest for models that do not support thinking."
+msgstr "תקציב אופציונלי ל-reasoning של Gemini. מבוטל הוא הכי בטוח למודלים שלא תומכים ב-thinking."
+
+msgctxt "#32411"
+msgid "Translate whole subtitle in one request"
+msgstr "תרגם את כל הכתוביות בבקשה אחת"
+
+msgctxt "#32412"
+msgid "Sends the full SRT as one Gemini request, raises max output tokens, and disables fast subtitles."
+msgstr "שולח את כל קובץ ה-SRT ל-Gemini בבקשה אחת, מגדיל max output tokens ומכבה כתוביות מהירות."
+
+msgctxt "#32414"
+msgid "Disabled"
+msgstr "מבוטל"
+
 msgctxt "#33000"
 msgid "AI Hebrew (translated from {0})"
 msgstr "עברית AI (מתורגם מ-{0})"
