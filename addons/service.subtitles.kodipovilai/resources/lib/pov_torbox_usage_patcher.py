@@ -12,7 +12,7 @@ except Exception:
     kodi_utils = None
 
 
-PATCH_VERSION = '3'
+PATCH_VERSION = '4'
 SETTING_KEY = '_pov_torbox_usage_patch_version'
 TORBOX_API_REL = (
     'addons/plugin.video.pov/resources/lib/debrids/torbox_api.py')
@@ -96,13 +96,12 @@ def _format_usage(value):
 '''
 
 USAGE_LINES = (
-    "\t\t\tusage_30 = _find_usage_30(account_info)\n"
+    "\t\t\ttry: usage_30 = _find_usage_30(self.user_stats())\n"
+    "\t\t\texcept Exception: usage_30 = None\n"
     "\t\t\tif usage_30 in (None, ''):\n"
-    "\t\t\t\ttry: usage_30 = _find_usage_30(self.user_stats())\n"
-    "\t\t\t\texcept Exception: usage_30 = None\n"
+    "\t\t\t\tusage_30 = _find_usage_30(account_info)\n"
     "\t\t\tusage_30 = _format_usage(usage_30)\n"
-    "\t\t\tif usage_30:\n"
-    "\t\t\t\tappend('[B]שימוש 30 יום[/B]: %s' % usage_30)\n"
+    "\t\t\tappend('[B]שימוש 30 יום[/B]: %s' % (usage_30 or 'לא זמין'))\n"
 )
 
 
@@ -172,7 +171,21 @@ def _patch_torbox(text):
         if fixed != text:
             text = fixed
             changed = True
-    if 'שימוש 30 יום' not in text:
+    usage_block_re = re.compile(
+        r"\t\t\tusage_30 = _find_usage_30\(account_info\)\n"
+        r"\t\t\tif usage_30 in \(None, ''\):\n"
+        r"\t\t\t\ttry: usage_30 = _find_usage_30\(self\.user_stats\(\)\)\n"
+        r"\t\t\t\texcept Exception: usage_30 = None\n"
+        r"\t\t\tusage_30 = _format_usage\(usage_30\)\n"
+        r"\t\t\tif usage_30:\n"
+        r"\t\t\t\tappend\('\[B\].*?30.*?\[/B\]: %s' % usage_30\)\n",
+        re.DOTALL,
+    )
+    fixed = usage_block_re.sub(USAGE_LINES, text, count=1)
+    if fixed != text:
+        text = fixed
+        changed = True
+    elif 'שימוש 30 יום' not in text:
         needle = "\t\t\tappend('[B]Downloaded[/B]: %s' % account_info['total_downloaded'])\n"
         if needle not in text:
             return text, None
