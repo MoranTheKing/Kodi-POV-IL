@@ -297,6 +297,24 @@ def _canonical_tiles_missing_from_content(content, fixture_text):
     return missing
 
 
+def _favourite_count(content):
+    return len(re.findall(rb'<favourite\b', content))
+
+
+def _should_restore_full_build_tiles(content, missing_full_tiles):
+    """Only repair clearly partial Wizard seeds.
+
+    Quick updates must not rebuild a customised home screen. If the user
+    has already received the full marker, deletions are intentional. If
+    there is no marker yet, only add the canonical rows when the file is
+    small enough to look like the stripped Wizard seed rather than a
+    hand-designed home layout.
+    """
+    if not missing_full_tiles:
+        return False
+    return _favourite_count(content) <= 24
+
+
 def _insert_tiles_before_close(content, tiles):
     if not tiles:
         return content
@@ -357,7 +375,9 @@ def ensure_patched():
     if not had_full_marker:
         missing_full_tiles = _canonical_tiles_missing_from_content(
             content, fixture_text)
-        if missing_full_tiles:
+        if (missing_full_tiles
+                and _should_restore_full_build_tiles(content,
+                                                     missing_full_tiles)):
             positioned_tiles = []
             append_tiles = []
             for tile in missing_full_tiles:
