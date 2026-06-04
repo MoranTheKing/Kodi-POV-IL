@@ -146,6 +146,34 @@ msgctxt "#32406"
 msgid "English appears in seconds, swaps to Hebrew gradually as translation progresses."
 msgstr "English appears in seconds, swaps to Hebrew gradually as translation progresses."
 
+msgctxt "#32407"
+msgid "Model Top-P"
+msgstr "Model Top-P"
+
+msgctxt "#32408"
+msgid "Controls nucleus sampling. Higher values are more varied; lower values are more focused."
+msgstr "Controls nucleus sampling. Higher values are more varied; lower values are more focused."
+
+msgctxt "#32409"
+msgid "Thinking Budget"
+msgstr "Thinking Budget"
+
+msgctxt "#32410"
+msgid "Optional Gemini reasoning token budget. Disabled is safest for models that do not support thinking."
+msgstr "Optional Gemini reasoning token budget. Disabled is safest for models that do not support thinking."
+
+msgctxt "#32411"
+msgid "Translate whole subtitle in one request"
+msgstr "Translate whole subtitle in one request"
+
+msgctxt "#32412"
+msgid "Sends the full SRT as one Gemini request, raises max output tokens, and disables fast subtitles."
+msgstr "Sends the full SRT as one Gemini request, raises max output tokens, and disables fast subtitles."
+
+msgctxt "#32414"
+msgid "Disabled"
+msgstr "Disabled"
+
 # Runtime messages
 msgctxt "#33000"
 msgid "AI Hebrew (translated from {0})"

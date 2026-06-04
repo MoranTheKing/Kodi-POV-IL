@@ -1,3 +1,12 @@
+v0.2.120
+- Added advanced Gemini controls for paid/stronger API setups: Top-P,
+  Thinking Budget, and an optional whole-subtitle single-request mode.
+- Whole-subtitle mode raises Gemini max output tokens to 65,535 and
+  automatically disables fast subtitles so the two translation flows do
+  not conflict.
+- Temperature slider now uses 0.01 steps so values such as 0.15 can be
+  selected directly.
+
 v0.2.119
 - Split the subtitle addon distribution into a clean standalone package and
   a build-edition package.

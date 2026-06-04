@@ -95,7 +95,8 @@ def test_key(api_key, model='gemini-3.1-flash-lite'):
 
 
 def generate(api_key, model, prompt, temperature=0.2,
-             max_output_tokens=16384):
+             max_output_tokens=16384, top_p=None,
+             thinking_budget=None):
     """One-shot text generation. Returns the model's text response.
 
     Raises QuotaExceeded on 429, InvalidKey on 400/403, GeminiError
@@ -111,12 +112,20 @@ def generate(api_key, model, prompt, temperature=0.2,
         API_BASE, urllib.parse.quote(model, safe=''),
         urllib.parse.quote(api_key, safe=''))
 
+    generation_config = {
+        'temperature': temperature,
+        'maxOutputTokens': max_output_tokens,
+    }
+    if top_p is not None:
+        generation_config['topP'] = top_p
+    if thinking_budget:
+        generation_config['thinkingConfig'] = {
+            'thinkingBudget': thinking_budget,
+        }
+
     payload = {
         'contents': [{'parts': [{'text': prompt}]}],
-        'generationConfig': {
-            'temperature': temperature,
-            'maxOutputTokens': max_output_tokens,
-        }
+        'generationConfig': generation_config,
     }
 
     try:
