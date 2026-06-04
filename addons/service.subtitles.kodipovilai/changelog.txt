@@ -1,3 +1,13 @@
+v0.2.125
+- Keyboard layout fix is now applied through Kodi JSON-RPC at runtime,
+  in addition to the guisettings.xml file repair. This forces Kodi to
+  expose both English QWERTY and Hebrew QWERTY without waiting for a
+  profile reload.
+- TorBox 30-day usage repair bumped to v5. The patch now rewrites the
+  account-status block deterministically between the Downloaded row and
+  hide_busy_dialog(), so older or garbled Hebrew labels cannot prevent
+  the new usage row from being installed.
+
 v0.2.124
 - FENtastic home search is restored to the skin's native search dialog
   so New Search again gives the original mixed movie+show flow. Estuary
