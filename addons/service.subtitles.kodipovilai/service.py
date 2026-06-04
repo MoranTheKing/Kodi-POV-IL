@@ -756,6 +756,32 @@ def _maybe_patch_pov_cache_empty():
             pass
 
 
+def _maybe_patch_pov_torbox_usage():
+    """Build-only patch: add TorBox 30-day usage to POV account status."""
+    try:
+        from resources.lib import (
+            pov_torbox_usage_patcher, kodi_utils)
+    except Exception:
+        return
+    try:
+        status = pov_torbox_usage_patcher.ensure_patched()
+        if status.startswith('patched'):
+            kodi_utils.log(
+                'pov_torbox_usage_patcher: ' + status, level='INFO')
+        elif status in ('already_complete', 'no_kodi'):
+            pass
+        else:
+            kodi_utils.log(
+                'pov_torbox_usage_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_torbox_usage_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_trakt_cache_empty():
     """Patch POV's caches/trakt_cache.py so cache_trakt_object()
     refuses to store empty results. Companion to _maybe_patch_pov_
@@ -1919,6 +1945,7 @@ def main():
         _maybe_patch_fentastic_widgets()
         _maybe_patch_favourites_xml()
         _maybe_patch_favourites_personal_tiles()
+        _maybe_patch_pov_torbox_usage()
         _maybe_patch_pov_cache_empty()
         _maybe_patch_pov_trakt_cache_empty()
         _maybe_patch_pov_meta_blank()
