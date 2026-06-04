@@ -5,6 +5,7 @@
 # rest of the Hebrew build sidemenu.
 
 import os
+import json
 import xml.etree.ElementTree as ET
 
 from resources.lib import kodi_utils
@@ -199,6 +200,36 @@ def _ensure_hebrew_keyboard_layout():
         return False
 
 
+def _set_kodi_setting(setting, value):
+    if xbmc is None:
+        return False
+    try:
+        payload = {
+            'jsonrpc': '2.0',
+            'id': 1,
+            'method': 'Settings.SetSettingValue',
+            'params': {'setting': setting, 'value': value},
+        }
+        result = xbmc.executeJSONRPC(json.dumps(payload))
+        return '"OK"' in result or '"result":"OK"' in result
+    except Exception as exc:
+        kodi_utils.log('hebrew_build_ui_patcher JSON setting failed: {0}: {1}'.format(setting, exc), level='WARNING')
+        return False
+
+
+def _ensure_runtime_keyboard_layout():
+    changed = False
+    layouts = ['English QWERTY', 'Hebrew QWERTY']
+    # Kodi accepts keyboardlayouts as a list through JSON-RPC. Keep the
+    # active layout English so existing users do not unexpectedly switch;
+    # the keyboard button can then cycle to Hebrew.
+    if _set_kodi_setting('locale.keyboardlayouts', layouts):
+        changed = True
+    if _set_kodi_setting('locale.activekeyboardlayout', 'English QWERTY'):
+        changed = True
+    return changed
+
+
 def ensure_patched():
     changed = []
     if _clear_skin_bool('HomeMenuNoFavButton'):
@@ -211,4 +242,6 @@ def ensure_patched():
         changed.append('he_strings')
     if _ensure_hebrew_keyboard_layout():
         changed.append('keyboard_layouts')
+    if _ensure_runtime_keyboard_layout():
+        changed.append('runtime_keyboard_layouts')
     return 'patched:' + ','.join(changed) if changed else 'already_ok'
