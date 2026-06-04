@@ -155,12 +155,12 @@ msgid "Controls nucleus sampling. Higher values are more varied; lower values ar
 msgstr "Controls nucleus sampling. Higher values are more varied; lower values are more focused."
 
 msgctxt "#32409"
-msgid "Thinking Budget"
-msgstr "Thinking Budget"
+msgid "Thinking"
+msgstr "Thinking"
 
 msgctxt "#32410"
-msgid "Optional Gemini reasoning token budget. Disabled is safest for models that do not support thinking."
-msgstr "Optional Gemini reasoning token budget. Disabled is safest for models that do not support thinking."
+msgid "Optional Gemini reasoning. Gemini 3.x uses levels; Gemini 2.5 can use numeric budgets."
+msgstr "Optional Gemini reasoning. Gemini 3.x uses levels; Gemini 2.5 can use numeric budgets."
 
 msgctxt "#32411"
 msgid "Translate whole subtitle in one request"
@@ -173,6 +173,38 @@ msgstr "Sends the full SRT as one Gemini request, raises max output tokens, and 
 msgctxt "#32414"
 msgid "Disabled"
 msgstr "Disabled"
+
+msgctxt "#32415"
+msgid "Minimal"
+msgstr "Minimal"
+
+msgctxt "#32416"
+msgid "Low"
+msgstr "Low"
+
+msgctxt "#32417"
+msgid "Medium"
+msgstr "Medium"
+
+msgctxt "#32418"
+msgid "High"
+msgstr "High"
+
+msgctxt "#32419"
+msgid "Budget 512"
+msgstr "Budget 512"
+
+msgctxt "#32420"
+msgid "Budget 768"
+msgstr "Budget 768"
+
+msgctxt "#32421"
+msgid "Budget 1024"
+msgstr "Budget 1024"
+
+msgctxt "#32422"
+msgid "Budget 2048"
+msgstr "Budget 2048"
 
 # Runtime messages
 msgctxt "#33000"

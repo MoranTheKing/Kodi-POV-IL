@@ -96,7 +96,8 @@ def test_key(api_key, model='gemini-3.1-flash-lite'):
 
 def generate(api_key, model, prompt, temperature=0.2,
              max_output_tokens=16384, top_p=None,
-             thinking_budget=None):
+             thinking_budget=None, thinking_level=None,
+             timeout=REQUEST_TIMEOUT):
     """One-shot text generation. Returns the model's text response.
 
     Raises QuotaExceeded on 429, InvalidKey on 400/403, GeminiError
@@ -118,7 +119,11 @@ def generate(api_key, model, prompt, temperature=0.2,
     }
     if top_p is not None:
         generation_config['topP'] = top_p
-    if thinking_budget:
+    if thinking_level:
+        generation_config['thinkingConfig'] = {
+            'thinkingLevel': thinking_level,
+        }
+    elif thinking_budget:
         generation_config['thinkingConfig'] = {
             'thinkingBudget': thinking_budget,
         }
@@ -132,7 +137,7 @@ def generate(api_key, model, prompt, temperature=0.2,
         r = requests.post(url,
                           data=json.dumps(payload),
                           headers={'Content-Type': 'application/json'},
-                          timeout=REQUEST_TIMEOUT)
+                          timeout=timeout)
     except requests.RequestException as e:
         raise GeminiError('Network error: {0}'.format(e))
 
