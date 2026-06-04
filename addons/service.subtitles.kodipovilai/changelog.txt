@@ -1,3 +1,12 @@
+v0.2.121
+- Build-only home status tiles: adds a Premiumize subscription/account
+  status tile to the FENtastic home favourites, using POV's native
+  premiumize.show_account_info action and the Premiumize icon from POV.
+- Existing build users receive the Premiumize tile once via the favourites
+  self-healer. If they delete it afterwards, it stays deleted.
+- TorBox account status now also tries to show 30-day usage by reading
+  TorBox user stats when the API exposes the value.
+
 v0.2.120
 - Added advanced Gemini controls for paid/stronger API setups: Top-P,
   Thinking Budget, and an optional whole-subtitle single-request mode.
