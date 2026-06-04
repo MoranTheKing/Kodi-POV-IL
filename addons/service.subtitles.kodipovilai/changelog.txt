@@ -1,3 +1,14 @@
+v0.2.131
+- AI subtitles: Gemini thinking now supports Gemini 3.x thinking levels
+  (Minimal/Low/Medium/High) and keeps numeric budgets for compatible
+  models. Old Disabled/0 installs remain valid.
+- AI subtitles: whole-subtitle single-request mode now shows an immediate
+  Hebrew start notification and uses a longer Gemini timeout so paid users
+  do not get a silent stalled-looking picker on long files.
+- Build-only favourites repair is now conservative: it repairs clearly
+  partial Wizard seeds, but it does not rebuild a customised home screen
+  after a user already arranged or removed tiles.
+
 v0.2.130
 - Build-only FENtastic widget repair now fixes the dedicated Movies and
   TV Shows pages, not only the home favourites: Movies gets "סרטים
