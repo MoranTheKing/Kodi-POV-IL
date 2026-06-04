@@ -29,6 +29,38 @@ WIDGET_FILES = (
     'script-fentastic-widget_tvshows.xml',
 )
 
+MOVIES_POPULAR_BLOCK = '''        <include content="WidgetListBigPoster">
+            <param name="content_path" value="plugin://plugin.video.pov/?name=32459&amp;iconImage=popular&amp;mode=build_movie_list&amp;action=tmdb_movies_popular"/>
+            <param name="widget_header" value="[B][COLOR yellow]סרטים פופולריים[/COLOR][/B]"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="19015"/>
+        </include>
+'''
+
+MOVIES_GENRES_BLOCK = '''        <include content="WidgetListBigEpisodes">
+            <param name="content_path" value="plugin://plugin.video.pov/?mode=navigator.build_shortcut_folder_list&amp;name=FENtastic+-+%D7%A1%D7%A8%D7%98%D7%99%D7%9D+-+%D7%96%D7%90%D7%A0%D7%A8%D7%99%D7%9D&amp;iconImage=genres&amp;shortcut_folder=True&amp;external_list_item=True"/>
+            <param name="widget_header" value="[B][COLOR yellow]ז'אנרים[/COLOR][/B]"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="19014"/>
+        </include>
+'''
+
+TV_PREMIERES_BLOCK = '''        <include content="WidgetListBigPoster">
+            <param name="content_path" value="plugin://plugin.video.pov/?name=32460&amp;action=tmdb_tv_premieres&amp;iconImage=fresh&amp;mode=build_tvshow_list"/>
+            <param name="widget_header" value="[B][COLOR yellow]סדרות חדשות[/COLOR][/B]"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="22015"/>
+        </include>
+'''
+
+TV_GENRES_BLOCK = '''        <include content="WidgetListBigEpisodes">
+            <param name="content_path" value="plugin://plugin.video.pov/?mode=navigator.build_shortcut_folder_list&amp;name=FENtastic+-+%D7%A1%D7%93%D7%A8%D7%95%D7%AA+-+%D7%96%D7%90%D7%A0%D7%A8%D7%99%D7%9D&amp;iconImage=genres&amp;shortcut_folder=True&amp;external_list_item=True"/>
+            <param name="widget_header" value="[B][COLOR yellow]ז'אנרים[/COLOR][/B]"/>
+            <param name="widget_target" value="videos"/>
+            <param name="list_id" value="22014"/>
+        </include>
+'''
+
 # Match the widget_header param for the personal-area widget.
 # The pattern tolerates three pre-existing baselines and migrates
 # all of them to the current recommended header (which advises
@@ -58,6 +90,53 @@ REPLACEMENT = (
 # Token unique to the new (post-recommendation) header. Present in
 # v0.2.24+ only; absent from all earlier baselines.
 NEW_TOKEN = 'לפני POV-מקומי'
+
+
+def _include_block_containing(content, token):
+    pattern = re.compile(
+        r'([ \t]*<include\s+content="[^"]+">\s*'
+        r'(?:(?!</include>).)*?' + re.escape(token)
+        + r'(?:(?!</include>).)*?</include>\s*)',
+        re.DOTALL,
+    )
+    return pattern.search(content)
+
+
+def _insert_after_token(content, anchor_token, block):
+    match = _include_block_containing(content, anchor_token)
+    if match is None:
+        return content, False
+    return content[:match.end(1)] + block + content[match.end(1):], True
+
+
+def _ensure_content_widgets(filename, content):
+    """Repair the dedicated FENtastic Movies/TV Shows page widgets."""
+    changed = False
+    if filename == 'script-fentastic-widget_movies.xml':
+        if 'tmdb_movies_popular' not in content:
+            content, did = _insert_after_token(
+                content, 'tmdb_movies_latest_releases',
+                MOVIES_POPULAR_BLOCK)
+            changed = changed or did
+        if 'FENtastic+-+%D7%A1%D7%A8%D7%98%D7%99%D7%9D+-+%D7%96%D7%90%D7%A0%D7%A8%D7%99%D7%9D' not in content:
+            content, did = _insert_after_token(
+                content,
+                '%D7%A1%D7%A8%D7%98%D7%99%D7%9D+-+%D7%9C%D7%A4%D7%99+%D7%A8%D7%A9%D7%AA%D7%95%D7%AA',
+                MOVIES_GENRES_BLOCK)
+            changed = changed or did
+    elif filename == 'script-fentastic-widget_tvshows.xml':
+        if 'tmdb_tv_premieres' not in content:
+            content, did = _insert_after_token(
+                content, 'trakt_tv_trending',
+                TV_PREMIERES_BLOCK)
+            changed = changed or did
+        if 'FENtastic+-+%D7%A1%D7%93%D7%A8%D7%95%D7%AA+-+%D7%96%D7%90%D7%A0%D7%A8%D7%99%D7%9D' not in content:
+            content, did = _insert_after_token(
+                content,
+                '%D7%A1%D7%93%D7%A8%D7%95%D7%AA+-+%D7%9C%D7%A4%D7%99+%D7%A8%D7%A9%D7%AA%D7%95%D7%AA',
+                TV_GENRES_BLOCK)
+            changed = changed or did
+    return content, changed
 
 
 def _log(msg, level='INFO'):
@@ -94,10 +173,22 @@ def _patch_one(filename):
              level='WARNING')
         return 'read_failed'
     if NEW_TOKEN in content:
+        new_content = content
+        header_status = 'unchanged'
+    else:
+        new_content, n = PATTERN.subn(REPLACEMENT, content, count=1)
+        if n == 0:
+            new_content = content
+            header_status = 'unmatched'
+        else:
+            header_status = 'patched'
+
+    new_content, widgets_changed = _ensure_content_widgets(
+        filename, new_content)
+    if new_content == content:
         _log('{0}: already migrated'.format(filename), level='DEBUG')
-        return 'unchanged'
-    new_content, n = PATTERN.subn(REPLACEMENT, content, count=1)
-    if n == 0:
+        return header_status
+    if header_status == 'unmatched' and not widgets_changed:
         _log('{0}: no Trakt-subtitle header found -- '
              'leaving file alone'.format(filename), level='INFO')
         return 'unmatched'
@@ -106,8 +197,12 @@ def _patch_one(filename):
         with open(tmp, 'w', encoding='utf-8') as f:
             f.write(new_content)
         os.replace(tmp, path)
+        if widgets_changed:
+            _log('{0}: content widgets repaired'.format(filename),
+                 level='INFO')
+            return 'widgets_patched' if header_status != 'patched' else 'patched'
         _log('{0}: header rewritten'.format(filename), level='INFO')
-        return 'patched'
+        return header_status
     except OSError as e:
         try:
             os.remove(tmp)
