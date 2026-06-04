@@ -1,3 +1,13 @@
+v0.2.128
+- Build-only favourites repair now restores the full canonical FENtastic
+  home tile set once after Wizard installs/quick updates, not only the
+  personal TMDB/Trakt/POV tiles. This repairs clean Wizard installs where
+  genre, popular, and network rows were missing.
+- Premiumize status placement now anchors after the current TorBox status
+  action too, including the newer AI-owned TorBox status dialog action.
+- Standalone AI subtitle package remains clean; this favourites repair only
+  runs in build mode.
+
 v0.2.127
 - Fixed the advanced Gemini settings UI for Kodi 19/20/21 settings format:
   whole-subtitle single-request mode now disables the chunk-size,
