@@ -471,8 +471,8 @@ def _maybe_patch_fentastic_search():
         status = fentastic_search_patcher.ensure_patched()
         if status == 'patched':
             kodi_utils.log(
-                'fentastic_search_patcher: home search now opens POV '
-                'search node', level='INFO')
+                'fentastic_search_patcher: search buttons adjusted per skin',
+                level='INFO')
     except Exception as e:
         try:
             kodi_utils.log(
