@@ -12,7 +12,7 @@ except Exception:
     kodi_utils = None
 
 
-PATCH_VERSION = '4'
+PATCH_VERSION = '5'
 SETTING_KEY = '_pov_torbox_usage_patch_version'
 TORBOX_API_REL = (
     'addons/plugin.video.pov/resources/lib/debrids/torbox_api.py')
@@ -171,26 +171,19 @@ def _patch_torbox(text):
         if fixed != text:
             text = fixed
             changed = True
-    usage_block_re = re.compile(
-        r"\t\t\tusage_30 = _find_usage_30\(account_info\)\n"
-        r"\t\t\tif usage_30 in \(None, ''\):\n"
-        r"\t\t\t\ttry: usage_30 = _find_usage_30\(self\.user_stats\(\)\)\n"
-        r"\t\t\t\texcept Exception: usage_30 = None\n"
-        r"\t\t\tusage_30 = _format_usage\(usage_30\)\n"
-        r"\t\t\tif usage_30:\n"
-        r"\t\t\t\tappend\('\[B\].*?30.*?\[/B\]: %s' % usage_30\)\n",
+    account_status_re = re.compile(
+        r"(\t\t\tappend\('\[B\]Downloaded\[/B\]: %s' % "
+        r"account_info\['total_downloaded'\]\)\n)"
+        r"(?:(?!\t\t\tkodi_utils\.hide_busy_dialog\(\)\n).)*"
+        r"(\t\t\tkodi_utils\.hide_busy_dialog\(\)\n)",
         re.DOTALL,
     )
-    fixed = usage_block_re.sub(USAGE_LINES, text, count=1)
+    fixed = account_status_re.sub(r"\1" + USAGE_LINES + r"\2", text, count=1)
     if fixed != text:
         text = fixed
         changed = True
     elif 'שימוש 30 יום' not in text:
-        needle = "\t\t\tappend('[B]Downloaded[/B]: %s' % account_info['total_downloaded'])\n"
-        if needle not in text:
-            return text, None
-        text = text.replace(needle, needle + USAGE_LINES, 1)
-        changed = True
+        return text, None
     return text, changed
 
 
