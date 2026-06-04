@@ -1,3 +1,13 @@
+v0.2.126
+- Build-only TorBox status tile now opens a Kodi POV IL AI-owned dialog
+  instead of plugin.video.pov's torbox.show_account_info. This avoids
+  stale POV reuselanguageinvoker cache and always includes the 30-day
+  usage row from TorBox user/stats.
+- Existing FENtastic favourites are migrated automatically from the old
+  TorBox POV action to the new AI addon action on next startup/update.
+- TorBox POV file repair bumped to v6 and no longer skips solely because
+  an old patch marker exists.
+
 v0.2.125
 - Keyboard layout fix is now applied through Kodi JSON-RPC at runtime,
   in addition to the guisettings.xml file repair. This forces Kodi to

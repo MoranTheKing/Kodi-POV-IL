@@ -63,8 +63,8 @@ STANDALONE_LIB_FILES = {
 SLIM_SERVICE = r'''# Clean standalone service for Kodi POV IL AI Subtitles.
 #
 # This file is intentionally minimal. It does not install or heal the
-# Kodi POV IL Wizard, does not rewrite POV menus/favourites/home nodes,
-# and does not touch build quick-update state. It only keeps the AI
+# Kodi POV IL build tools, does not rewrite POV menus/favourites/home nodes,
+# and does not touch unrelated update state. It only keeps the AI
 # subtitle flow and required DarkSubs/OpenSubtitles integration alive.
 
 import os
@@ -360,6 +360,109 @@ def copy_common(dst: Path, standalone: bool) -> None:
 
     if standalone:
         (dst / "service.py").write_text(SLIM_SERVICE, encoding="utf-8")
+        (dst / "default.py").write_text(
+            slim_default_text((SRC / "default.py").read_text(encoding="utf-8")),
+            encoding="utf-8",
+        )
+        (dst / "changelog.txt").write_text(
+            slim_changelog_text(
+                (SRC / "changelog.txt").read_text(encoding="utf-8")),
+            encoding="utf-8",
+        )
+
+
+def slim_default_text(text: str) -> str:
+    """Remove build-only RunScript actions from the standalone addon.
+
+    The clean subtitle addon still needs default.py for Kodi subtitle
+    search/download and AI settings actions, but it must not expose build
+    shortcuts such as POV service thresholds or TorBox home-tile status.
+    """
+    text = re.sub(
+        r"\ndef _handle_open_pov_settings\(_params\):.*?(?=\ndef main\(\):)",
+        "\n",
+        text,
+        count=1,
+        flags=re.S,
+    )
+    text = re.sub(
+        r"\n        elif action == 'open_pov_settings':\n"
+        r"            _handle_open_pov_settings\(params\)"
+        r"\n        elif action == 'debrid_notice_settings':\n"
+        r"            _handle_debrid_notice_settings\(params\)"
+        r"\n        elif action == 'torbox_status':\n"
+        r"            _handle_torbox_status\(params\)",
+        "",
+        text,
+        count=1,
+    )
+    text = text.replace(
+        "anywhere, e.g. a Wizard button or a remote shortcut.",
+        "anywhere, e.g. a remote shortcut.",
+    )
+    text = text.replace(
+        "'באופן כללי), פתח את ה-Wizard → \"חיבור שירותים\" → TMDB '\n"
+        "        'וחבר key אישי. הוא יוחל אוטומטית מאותו רגע, בלי '\n",
+        "'באופן כללי), פתח את הגדרות TMDB Helper וחבר key אישי. '\n"
+        "        'הוא יוחל אוטומטית מאותו רגע, בלי '\n",
+    )
+    return text
+
+
+def slim_changelog_text(text: str) -> str:
+    """Keep standalone release notes focused on subtitle-addon changes."""
+    skip_terms = (
+        "AF3",
+        "Arctic",
+        "Estuary",
+        "FENtastic",
+        "TorBox",
+        "Premiumize",
+        "Real-Debrid",
+        "Real Debrid",
+        "AllDebrid",
+        "Kodi JSON-RPC",
+        "keyboard layout",
+        "Home",
+        "home",
+        "Wizard",
+        "build",
+        "Build",
+        "favourites",
+        "favourites.xml",
+        "skin",
+        "Skin",
+        "POV search",
+        "quickfix",
+    )
+    sections = re.split(r"(?=^v\d+\.\d+\.\d+\n)", text, flags=re.M)
+    kept = []
+    for section in sections:
+        if not section.strip():
+            continue
+        lines = section.splitlines()
+        header = lines[0]
+        bullets = []
+        current = []
+        for line in lines[1:]:
+            if line.startswith("- "):
+                if current:
+                    bullets.append("\n".join(current))
+                current = [line]
+            elif current:
+                current.append(line)
+        if current:
+            bullets.append("\n".join(current))
+        filtered = [
+            bullet for bullet in bullets
+            if not any(term in bullet for term in skip_terms)
+        ]
+        if filtered:
+            kept.append(header + "\n" + "\n".join(filtered).rstrip() + "\n")
+    if not kept:
+        return "v{0}\n- AI subtitle addon maintenance update.\n".format(
+            version())
+    return "\n".join(kept).rstrip() + "\n"
 
 
 def include_standalone(rel: Path) -> bool:
@@ -425,11 +528,55 @@ def assert_no_standalone_build_payload(zip_path: Path) -> None:
     )
     with zipfile.ZipFile(zip_path) as zf:
         names = zf.namelist()
-    bad = [n for n in names if any(token in n for token in forbidden)]
-    if bad:
-        raise RuntimeError(
-            "standalone zip contains build payload:\n" + "\n".join(bad[:50])
+        bad = [n for n in names if any(token in n for token in forbidden)]
+        if bad:
+            raise RuntimeError(
+                "standalone zip contains build payload:\n"
+                + "\n".join(bad[:50])
+            )
+        default_name = f"{ADDON_ID}/default.py"
+        default_text = (
+            zf.read(default_name).decode("utf-8", "replace")
+            if default_name in names else ""
         )
+        changelog_name = f"{ADDON_ID}/changelog.txt"
+        changelog_text = (
+            zf.read(changelog_name).decode("utf-8", "replace")
+            if changelog_name in names else ""
+        )
+    if default_text:
+        forbidden_text = (
+            "torbox_status",
+            "debrid_notice_settings",
+            "open_pov_settings",
+            "plugin.video.pov not found",
+            "user/stats",
+        )
+        bad_text = [token for token in forbidden_text if token in default_text]
+        if bad_text:
+            raise RuntimeError(
+                "standalone default.py contains build actions: "
+                + ", ".join(bad_text)
+            )
+        if changelog_text:
+            forbidden_changelog = (
+                "TorBox",
+                "Premiumize",
+                "FENtastic",
+                "Estuary",
+                "AF3",
+                "Wizard",
+                "quickfix",
+            )
+            bad_changelog = [
+                token for token in forbidden_changelog
+                if token in changelog_text
+            ]
+            if bad_changelog:
+                raise RuntimeError(
+                    "standalone changelog contains build notes: "
+                    + ", ".join(bad_changelog)
+                )
 
 
 def main() -> None:

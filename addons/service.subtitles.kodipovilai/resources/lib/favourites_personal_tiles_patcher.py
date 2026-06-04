@@ -68,6 +68,8 @@ BUILD_SERVICE_TILE_NAMES = (
 )
 PREMIUMIZE_ACTION = 'premiumize.show_account_info'
 TORBOX_ACTION = 'torbox.show_account_info'
+TORBOX_STATUS_ACTION = (
+    'RunScript(service.subtitles.kodipovilai,action=torbox_status)')
 
 # Marker comments written into favourites.xml. RESTORE_MARKER keeps
 # compatibility with earlier restores. SEEN_MARKER means "the build
@@ -84,6 +86,13 @@ OLD_DEBRID_NOTICE_ACTION = 'Addon.OpenSettings(plugin.video.pov)'
 FIXED_DEBRID_NOTICE_ACTION = (
     'RunScript(service.subtitles.kodipovilai,'
     'action=debrid_notice_settings)')
+OLD_TORBOX_STATUS_ACTIONS = (
+    'PlayMedia("plugin://plugin.video.pov/?mode=torbox.show_account_info'
+    '&amp;name=Account+Info&amp;isFolder=false&amp;iconImage='
+    'special%3A%2F%2Fhome%2Faddons%2Fplugin.video.pov%2Fresources%2Fskins'
+    '%2FDefault%2Fmedia%2Ftorbox.png")',
+    'plugin://plugin.video.pov/?mode=torbox.show_account_info',
+)
 
 
 def _log(msg, level='INFO'):
@@ -197,6 +206,27 @@ def _fix_existing_debrid_notice_action(content):
     return fixed, fixed != content
 
 
+def _fix_existing_torbox_status_action(content):
+    fixed = content
+    fixed = fixed.replace(
+        OLD_TORBOX_STATUS_ACTIONS[0].encode('utf-8'),
+        TORBOX_STATUS_ACTION.encode('utf-8'))
+    pattern = re.compile(
+        rb'(<favourite\b(?:(?!</favourite>).)*?'
+        rb'name="\[B\](?:[^"]*TorBox[^"]*)\[/B\]"'
+        rb'(?:(?!</favourite>).)*?>)'
+        rb'(?:(?!</favourite>).)*?'
+        rb'(</favourite>)',
+        re.DOTALL,
+    )
+    fixed = pattern.sub(
+        rb'\1' + TORBOX_STATUS_ACTION.encode('utf-8') + rb'\2',
+        fixed,
+        count=1,
+    )
+    return fixed, fixed != content
+
+
 def _has_restore_marker(content):
     return any(marker.encode('utf-8') in content
                for marker in RESTORE_MARKERS)
@@ -249,12 +279,14 @@ def ensure_patched():
     had_restore_marker = _has_restore_marker(content)
     had_service_marker = _has_marker(content, SERVICE_SEEN_MARKER)
     content, fixed_existing = _fix_existing_debrid_notice_action(content)
+    content, fixed_torbox_status = _fix_existing_torbox_status_action(content)
     content, service_position_fixed = (
         _move_existing_service_tile_after_torbox(content))
     missing_personal = _missing_tiles(content)
     missing_service = _missing_tiles(content, BUILD_SERVICE_TILE_NAMES)
     if missing_personal and had_restore_marker:
-        if (not fixed_existing and not service_position_fixed
+        if (not fixed_existing and not fixed_torbox_status
+                and not service_position_fixed
                 and (not missing_service or had_service_marker)):
             return 'user_removed_tiles'
         # A user may delete the tiles after receiving the broken-action
@@ -279,7 +311,8 @@ def ensure_patched():
         new_content, marker_added = _insert_marker(new_content)
 
     if (not missing and not fixed_existing and not marker_added
-            and not service_marker_added and not service_position_fixed):
+            and not fixed_torbox_status and not service_marker_added
+            and not service_position_fixed):
         return 'already_complete'
 
     try:
@@ -356,6 +389,8 @@ def ensure_patched():
             len(missing), ', '.join(missing)), level='INFO')
     if fixed_existing:
         _log('fixed debrid notification settings tile action', level='INFO')
+    if fixed_torbox_status:
+        _log('fixed TorBox status tile action', level='INFO')
     if marker_added:
         _log('marked favourites personal tiles as seen', level='INFO')
     if service_marker_added:
