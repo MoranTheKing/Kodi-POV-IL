@@ -79,6 +79,7 @@ MARKER = '<!-- AI_SUBS_FAVOURITES_PERSONAL_TILES_v1 -->'
 SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_PERSONAL_TILES_SEEN_v2 -->'
 RESTORE_MARKERS = (MARKER, SEEN_MARKER)
 SERVICE_SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_BUILD_SERVICE_TILES_SEEN_v1 -->'
+FULL_BUILD_SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_FULL_BUILD_TILES_SEEN_v1 -->'
 BROKEN_DEBRID_NOTICE_ACTION = (
     'RunPlugin("plugin://service.subtitles.kodipovilai/?'
     'action=open_pov_settings")')
@@ -165,14 +166,17 @@ def _move_existing_service_tile_after_torbox(content):
     matches = list(premiumize_pattern.finditer(content))
     if not matches:
         return content, False
-    torbox_match = _service_tile_pattern(TORBOX_ACTION).search(content)
+    torbox_pattern = _service_tile_pattern(TORBOX_STATUS_ACTION)
+    torbox_match = torbox_pattern.search(content)
+    if torbox_match is None:
+        torbox_pattern = _service_tile_pattern(TORBOX_ACTION)
+        torbox_match = torbox_pattern.search(content)
     if torbox_match is None:
         return content, False
 
     premiumize_tile = matches[0].group(1)
     without_premiumize = premiumize_pattern.sub(b'', content)
-    torbox_match = _service_tile_pattern(TORBOX_ACTION).search(
-        without_premiumize)
+    torbox_match = torbox_pattern.search(without_premiumize)
     if torbox_match is None:
         return content, False
     moved = (
@@ -184,7 +188,9 @@ def _move_existing_service_tile_after_torbox(content):
 
 
 def _insert_service_tile_after_torbox(content, tile_bytes):
-    torbox_match = _service_tile_pattern(TORBOX_ACTION).search(content)
+    torbox_match = _service_tile_pattern(TORBOX_STATUS_ACTION).search(content)
+    if torbox_match is None:
+        torbox_match = _service_tile_pattern(TORBOX_ACTION).search(content)
     if torbox_match is None:
         return None
     return (
@@ -249,6 +255,58 @@ def _insert_marker(content, marker=SEEN_MARKER):
         True)
 
 
+def _extract_fixture_tiles(fixture_text):
+    return re.findall(
+        r'([ \t]*<favourite\s[^>]*?name="[^"]+"[^>]*>'
+        r'(?:(?!</favourite>).)*?</favourite>\s*\n)',
+        fixture_text,
+        flags=re.DOTALL,
+    )
+
+
+def _tile_identity(tile_text):
+    name_match = re.search(r'name="([^"]+)"', tile_text)
+    name = name_match.group(1) if name_match else ''
+    action_match = re.search(
+        r'<favourite\b[^>]*>(?P<action>(?:(?!</favourite>).)*)'
+        r'</favourite>',
+        tile_text,
+        flags=re.DOTALL,
+    )
+    action = (action_match.group('action') if action_match else '').strip()
+    return name, action
+
+
+def _canonical_tiles_missing_from_content(content, fixture_text):
+    """Return canonical build tiles missing from userdata/favourites.xml.
+
+    Older wizard/favourites seeds can overwrite the user's FENtastic
+    favourites with a partial set: personal tiles survive, but genre and
+    popular rows disappear. This repairs the whole canonical build surface
+    once without replacing the user's file or deleting custom favourites.
+    """
+    missing = []
+    for tile_text in _extract_fixture_tiles(fixture_text):
+        name, _action = _tile_identity(tile_text)
+        if not name:
+            continue
+        name_b = name.encode('utf-8')
+        if name_b in content:
+            continue
+        missing.append(tile_text.encode('utf-8'))
+    return missing
+
+
+def _insert_tiles_before_close(content, tiles):
+    if not tiles:
+        return content
+    closing_tag = b'</favourites>'
+    close_idx = content.rfind(closing_tag)
+    if close_idx == -1:
+        return None
+    return content[:close_idx] + b''.join(tiles) + content[close_idx:]
+
+
 def ensure_patched():
     """Returns one of:
     'no_kodi' | 'no_favourites' | 'no_fixture' | 'fixture_unreadable'
@@ -276,12 +334,55 @@ def ensure_patched():
              level='WARNING')
         return 'read_failed'
 
+    try:
+        with open(fixture_path, 'r', encoding='utf-8') as f:
+            fixture_text = f.read()
+    except OSError as e:
+        _log('fixture read failed: {0}'.format(e), level='WARNING')
+        return 'fixture_unreadable'
+
     had_restore_marker = _has_restore_marker(content)
     had_service_marker = _has_marker(content, SERVICE_SEEN_MARKER)
+    had_full_marker = _has_marker(content, FULL_BUILD_SEEN_MARKER)
     content, fixed_existing = _fix_existing_debrid_notice_action(content)
     content, fixed_torbox_status = _fix_existing_torbox_status_action(content)
     content, service_position_fixed = (
         _move_existing_service_tile_after_torbox(content))
+
+    # Wizard installs on clean Kodi can seed a partial favourites.xml:
+    # the top personal tiles exist, but genre/popular/network rows are
+    # missing. Restore the whole canonical build surface once, without
+    # replacing the file or deleting user custom favourites.
+    missing_full_tiles = []
+    if not had_full_marker:
+        missing_full_tiles = _canonical_tiles_missing_from_content(
+            content, fixture_text)
+        if missing_full_tiles:
+            positioned_tiles = []
+            append_tiles = []
+            for tile in missing_full_tiles:
+                if PREMIUMIZE_ACTION.encode('utf-8') in tile:
+                    positioned = _insert_service_tile_after_torbox(
+                        content, tile)
+                    if positioned is not None:
+                        content = positioned
+                    else:
+                        append_tiles.append(tile)
+                else:
+                    append_tiles.append(tile)
+            if append_tiles:
+                inserted = _insert_tiles_before_close(content, append_tiles)
+                if inserted is None:
+                    _log('userdata/favourites.xml has no </favourites> '
+                         'closing tag -- file structure unrecognised, '
+                         'leaving alone', level='WARNING')
+                    return 'unparseable_fixture'
+                content = inserted
+            content, service_position_fixed_2 = (
+                _move_existing_service_tile_after_torbox(content))
+            service_position_fixed = (
+                service_position_fixed or service_position_fixed_2)
+
     missing_personal = _missing_tiles(content)
     missing_service = _missing_tiles(content, BUILD_SERVICE_TILE_NAMES)
     if missing_personal and had_restore_marker:
@@ -300,10 +401,13 @@ def ensure_patched():
     new_content = content
     marker_added = False
     service_marker_added = False
+    full_marker_added = False
     if not missing:
         new_content, marker_added = _insert_marker(new_content)
         new_content, service_marker_added = _insert_marker(
             new_content, SERVICE_SEEN_MARKER)
+        new_content, full_marker_added = _insert_marker(
+            new_content, FULL_BUILD_SEEN_MARKER)
     elif not missing_service:
         new_content, service_marker_added = _insert_marker(
             new_content, SERVICE_SEEN_MARKER)
@@ -312,15 +416,9 @@ def ensure_patched():
 
     if (not missing and not fixed_existing and not marker_added
             and not fixed_torbox_status and not service_marker_added
-            and not service_position_fixed):
+            and not service_position_fixed and not full_marker_added
+            and not missing_full_tiles):
         return 'already_complete'
-
-    try:
-        with open(fixture_path, 'r', encoding='utf-8') as f:
-            fixture_text = f.read()
-    except OSError as e:
-        _log('fixture read failed: {0}'.format(e), level='WARNING')
-        return 'fixture_unreadable'
 
     if missing:
         personal_tiles_to_inject = []
@@ -395,10 +493,17 @@ def ensure_patched():
         _log('marked favourites personal tiles as seen', level='INFO')
     if service_marker_added:
         _log('marked favourites build service tiles as seen', level='INFO')
+    if full_marker_added:
+        _log('marked full build favourites tiles as seen', level='INFO')
     if service_position_fixed:
         _log('moved Premiumize status tile next to TorBox', level='INFO')
+    if missing_full_tiles:
+        _log('restored {0} missing canonical build tile(s)'.format(
+            len(missing_full_tiles)), level='INFO')
     if missing and fixed_existing:
         return 'restored_and_fixed'
+    if missing_full_tiles:
+        return 'restored_full'
     if missing:
         return 'restored'
     if marker_added and fixed_existing:
