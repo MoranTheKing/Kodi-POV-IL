@@ -1794,6 +1794,125 @@ def _pov_addon():
         return None
 
 
+def _format_bytes(value):
+    try:
+        value = float(value)
+    except Exception:
+        return str(value) if value not in (None, '') else ''
+    units = ('B', 'KB', 'MB', 'GB', 'TB')
+    idx = 0
+    while value >= 1024 and idx < len(units) - 1:
+        value /= 1024.0
+        idx += 1
+    if idx == 0:
+        return '{0:d} {1}'.format(int(value), units[idx])
+    return '{0:.1f} {1}'.format(value, units[idx])
+
+
+def _torbox_api_get(token, path, params=None):
+    import requests
+    url = 'https://api.torbox.app/v1/api/{0}'.format(path)
+    headers = {
+        'Authorization': 'Bearer {0}'.format(token),
+        'User-Agent': 'Kodi POV IL',
+    }
+    response = requests.get(url, headers=headers, params=params, timeout=20)
+    response.raise_for_status()
+    payload = response.json()
+    if isinstance(payload, dict) and 'data' in payload:
+        return payload.get('data')
+    return payload
+
+
+def _torbox_usage_30(stats):
+    if not isinstance(stats, dict):
+        return None
+    bandwidth = stats.get('bandwidth') or stats.get('bandwidths')
+    if isinstance(bandwidth, list):
+        total = 0
+        found = False
+        for item in bandwidth:
+            if not isinstance(item, dict):
+                continue
+            value = item.get('bytes_downloaded')
+            if value is None:
+                continue
+            try:
+                total += int(value)
+                found = True
+            except Exception:
+                pass
+        if found:
+            return total
+    general = stats.get('general')
+    if isinstance(general, dict):
+        for key in ('bytes_downloaded', 'total_downloaded',
+                    'total_data_downloaded'):
+            if key in general:
+                return general.get(key)
+    return None
+
+
+def _handle_torbox_status(_params):
+    pov = _pov_addon()
+    if pov is None:
+        xbmcgui.Dialog().ok('TorBox', 'plugin.video.pov not found.')
+        return
+    token = ''
+    try:
+        token = pov.getSetting('tb.token') or ''
+    except Exception:
+        pass
+    if not token:
+        xbmcgui.Dialog().ok('TorBox', 'TorBox is not connected in POV.')
+        return
+
+    try:
+        account_info = _torbox_api_get(token, 'user/me') or {}
+        stats = _torbox_api_get(
+            token, 'user/stats',
+            params={
+                'general': 'true',
+                'bandwidth': 'true',
+                'bandwidth_grouping': 'day',
+            }) or {}
+    except Exception as e:
+        xbmcgui.Dialog().ok('TorBox', 'TorBox status failed: {0}'.format(e))
+        return
+
+    from datetime import datetime
+    expires_raw = account_info.get('premium_expires_at') or ''
+    expires_label = expires_raw[:10] if expires_raw else ''
+    days_remaining = ''
+    if expires_raw:
+        try:
+            expires = datetime.strptime(expires_raw, '%Y-%m-%dT%H:%M:%SZ')
+            days_remaining = str((expires - datetime.today()).days)
+        except Exception:
+            pass
+
+    plans = {0: 'Free', 1: 'Essential', 2: 'Pro', 3: 'Standard'}
+    plan = plans.get(account_info.get('plan'), account_info.get('plan', ''))
+    usage_30 = _format_bytes(_torbox_usage_30(stats)) or 'N/A'
+    downloaded = account_info.get('total_downloaded', '')
+
+    body = [
+        'Days Remaining: {0}'.format(days_remaining or 'N/A'),
+        'Expires: {0}'.format(expires_label or 'N/A'),
+        'Account: {0}'.format(account_info.get('email', 'N/A')),
+        'Username: {0}'.format(account_info.get('customer', 'N/A')),
+        'Status: {0}'.format(plan or 'N/A'),
+        'Downloaded: {0}'.format(downloaded if downloaded != '' else 'N/A'),
+        '\u05e9\u05d9\u05de\u05d5\u05e9 30 \u05d9\u05d5\u05dd: {0}'.format(usage_30),
+    ]
+    text = '\n\n'.join(body)
+    dialog = xbmcgui.Dialog()
+    try:
+        dialog.textviewer('TORBOX', text)
+    except Exception:
+        dialog.ok('TORBOX', text)
+
+
 def _notice_value_label(value):
     for label, stored in DEBRID_NOTICE_VALUES:
         if str(value) == stored:
@@ -1909,6 +2028,8 @@ def main():
             _handle_open_pov_settings(params)
         elif action == 'debrid_notice_settings':
             _handle_debrid_notice_settings(params)
+        elif action == 'torbox_status':
+            _handle_torbox_status(params)
         else:
             _safe_log('unknown action: ' + action, level='WARNING')
             if handle >= 0:

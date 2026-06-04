@@ -12,7 +12,7 @@ except Exception:
     kodi_utils = None
 
 
-PATCH_VERSION = '5'
+PATCH_VERSION = '6'
 SETTING_KEY = '_pov_torbox_usage_patch_version'
 TORBOX_API_REL = (
     'addons/plugin.video.pov/resources/lib/debrids/torbox_api.py')
@@ -208,8 +208,6 @@ def _patch_file(rel_path, patcher):
 def ensure_patched():
     if xbmcvfs is None or kodi_utils is None:
         return 'no_kodi'
-    if kodi_utils.get_setting(SETTING_KEY, '') == PATCH_VERSION:
-        return 'already_complete'
     api_status = _patch_file(TORBOX_API_REL, _patch_api)
     torbox_status = _patch_file(TORBOX_REL, _patch_torbox)
     if api_status in ('missing', 'unmatched') or torbox_status in ('missing', 'unmatched'):
