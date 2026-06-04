@@ -66,6 +66,8 @@ PERSONAL_TILE_NAMES = (
 BUILD_SERVICE_TILE_NAMES = (
     '[B]סטטוס מנוי Premiumize[/B]',
 )
+PREMIUMIZE_ACTION = 'premiumize.show_account_info'
+TORBOX_ACTION = 'torbox.show_account_info'
 
 # Marker comments written into favourites.xml. RESTORE_MARKER keeps
 # compatibility with earlier restores. SEEN_MARKER means "the build
@@ -138,6 +140,48 @@ def _extract_tile(fixture_text, tile_name):
     if m is None:
         return None
     return m.group(1)
+
+
+def _service_tile_pattern(action):
+    return re.compile(
+        rb'([ \t]*<favourite\s[^>]*?' + re.escape(action.encode('utf-8'))
+        + rb'[^>]*>(?:(?!</favourite>).)*?</favourite>\s*\n)',
+        re.DOTALL,
+    )
+
+
+def _move_existing_service_tile_after_torbox(content):
+    premiumize_pattern = _service_tile_pattern(PREMIUMIZE_ACTION)
+    matches = list(premiumize_pattern.finditer(content))
+    if not matches:
+        return content, False
+    torbox_match = _service_tile_pattern(TORBOX_ACTION).search(content)
+    if torbox_match is None:
+        return content, False
+
+    premiumize_tile = matches[0].group(1)
+    without_premiumize = premiumize_pattern.sub(b'', content)
+    torbox_match = _service_tile_pattern(TORBOX_ACTION).search(
+        without_premiumize)
+    if torbox_match is None:
+        return content, False
+    moved = (
+        without_premiumize[:torbox_match.end(1)]
+        + premiumize_tile
+        + without_premiumize[torbox_match.end(1):]
+    )
+    return moved, moved != content
+
+
+def _insert_service_tile_after_torbox(content, tile_bytes):
+    torbox_match = _service_tile_pattern(TORBOX_ACTION).search(content)
+    if torbox_match is None:
+        return None
+    return (
+        content[:torbox_match.end(1)]
+        + tile_bytes
+        + content[torbox_match.end(1):]
+    )
 
 
 def _fix_existing_debrid_notice_action(content):
@@ -220,6 +264,9 @@ def ensure_patched():
     new_content = content
     marker_added = False
     service_marker_added = False
+    service_position_fixed = False
+    new_content, service_position_fixed = (
+        _move_existing_service_tile_after_torbox(new_content))
     if not missing:
         new_content, marker_added = _insert_marker(new_content)
         new_content, service_marker_added = _insert_marker(
@@ -231,7 +278,7 @@ def ensure_patched():
         new_content, marker_added = _insert_marker(new_content)
 
     if (not missing and not fixed_existing and not marker_added
-            and not service_marker_added):
+            and not service_marker_added and not service_position_fixed):
         return 'already_complete'
 
     try:
@@ -242,14 +289,18 @@ def ensure_patched():
         return 'fixture_unreadable'
 
     if missing:
-        tiles_to_inject = []
+        personal_tiles_to_inject = []
+        service_tiles_to_inject = []
         for name in missing:
             snippet = _extract_tile(fixture_text, name)
             if snippet is None:
                 _log('fixture is missing the canonical entry for {0}; '
                      'cannot restore'.format(name), level='WARNING')
                 return 'unparseable_fixture'
-            tiles_to_inject.append(snippet.encode('utf-8'))
+            if name in BUILD_SERVICE_TILE_NAMES:
+                service_tiles_to_inject.append(snippet.encode('utf-8'))
+            else:
+                personal_tiles_to_inject.append(snippet.encode('utf-8'))
 
         # Insert the missing tiles just before the closing </favourites>
         # tag, preserving everything the user already has.
@@ -272,9 +323,18 @@ def ensure_patched():
         new_content = (
             new_content[:close_idx]
             + marker_bytes
-            + b''.join(tiles_to_inject)
+            + b''.join(personal_tiles_to_inject)
             + new_content[close_idx:]
         )
+        for tile in service_tiles_to_inject:
+            positioned = _insert_service_tile_after_torbox(new_content, tile)
+            if positioned is None:
+                close_idx = new_content.rfind(closing_tag)
+                if close_idx == -1:
+                    return 'unparseable_fixture'
+                positioned = (
+                    new_content[:close_idx] + tile + new_content[close_idx:])
+            new_content = positioned
 
     tmp_path = fav_path + '.aitmp'
     try:
@@ -299,6 +359,8 @@ def ensure_patched():
         _log('marked favourites personal tiles as seen', level='INFO')
     if service_marker_added:
         _log('marked favourites build service tiles as seen', level='INFO')
+    if service_position_fixed:
+        _log('moved Premiumize status tile next to TorBox', level='INFO')
     if missing and fixed_existing:
         return 'restored_and_fixed'
     if missing:

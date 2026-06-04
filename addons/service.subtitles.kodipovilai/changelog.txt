@@ -1,3 +1,12 @@
+v0.2.122
+- TorBox 30-day usage now uses TorBox's documented user stats endpoint:
+  user/stats with general=true, bandwidth=true and bandwidth_grouping=day.
+  The status dialog sums bandwidth[].bytes_downloaded and formats the
+  result as MB/GB.
+- Existing users who received the Premiumize status tile at the end of
+  favourites are repaired on next build startup: the tile is moved next
+  to TorBox.
+
 v0.2.121
 - Build-only home status tiles: adds a Premiumize subscription/account
   status tile to the FENtastic home favourites, using POV's native

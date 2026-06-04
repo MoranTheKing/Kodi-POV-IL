@@ -11,7 +11,7 @@ except Exception:
     kodi_utils = None
 
 
-PATCH_VERSION = '1'
+PATCH_VERSION = '2'
 SETTING_KEY = '_pov_torbox_usage_patch_version'
 TORBOX_API_REL = (
     'addons/plugin.video.pov/resources/lib/debrids/torbox_api.py')
@@ -20,7 +20,8 @@ TORBOX_REL = 'addons/plugin.video.pov/resources/lib/debrids/torbox.py'
 USER_STATS_METHOD = (
     "\n\tdef user_stats(self):\n"
     "\t\turl = 'user/stats'\n"
-    "\t\treturn self._get(url, params={'bandwidth': 'true'})\n"
+    "\t\treturn self._get(url, params={'general': 'true', "
+    "'bandwidth': 'true', 'bandwidth_grouping': 'day'})\n"
 )
 
 HELPERS_BLOCK = r'''
@@ -30,7 +31,8 @@ _USAGE_30_KEYS = {
 	'thirtydaydownloaded', 'thirtydaysdownloaded',
 	'downloaded30days', 'downloadedlast30days',
 	'totaldownloaded30days', 'usage30days', 'monthlyusage',
-	'monthlydownloaded', 'bandwidth30days', 'last30days',
+	'monthlydownloaded', 'bandwidth30days', 'bandwidth',
+	'bandwidths', 'last30days',
 }
 
 def _normalise_key(key):
@@ -40,7 +42,8 @@ def _usage_candidate(value):
 	if value in (None, '', [], {}):
 		return None
 	if isinstance(value, dict):
-		for key in ('value', 'total', 'amount', 'size', 'bytes', 'gb', 'used'):
+		for key in ('value', 'total', 'amount', 'size', 'bytes',
+					'bytes_downloaded', 'gb', 'used'):
 			if key in value:
 				candidate = _usage_candidate(value.get(key))
 				if candidate not in (None, ''):
@@ -134,7 +137,11 @@ def _write(path, text):
 
 def _patch_api(text):
     if 'def user_stats(self):' in text:
-        return text, False
+        fixed = text.replace(
+            "return self._get(url, params={'bandwidth': 'true'})",
+            "return self._get(url, params={'general': 'true', "
+            "'bandwidth': 'true', 'bandwidth_grouping': 'day'})")
+        return fixed, fixed != text
     needle = "\tdef torrent_info(self, request_id):\n"
     if needle not in text:
         return text, None
@@ -149,6 +156,18 @@ def _patch_torbox(text):
             return text, None
         text = text.replace(needle, needle + HELPERS_BLOCK, 1)
         changed = True
+    else:
+        fixed = text.replace(
+            "'monthlydownloaded', 'bandwidth30days', 'last30days',",
+            "'monthlydownloaded', 'bandwidth30days', 'bandwidth',\n"
+            "\t'bandwidths', 'last30days',")
+        fixed = fixed.replace(
+            "for key in ('value', 'total', 'amount', 'size', 'bytes', 'gb', 'used'):",
+            "for key in ('value', 'total', 'amount', 'size', 'bytes',\n"
+            "\t\t\t\t\t'bytes_downloaded', 'gb', 'used'):")
+        if fixed != text:
+            text = fixed
+            changed = True
     if 'שימוש 30 יום' not in text:
         needle = "\t\t\tappend('[B]Downloaded[/B]: %s' % account_info['total_downloaded'])\n"
         if needle not in text:

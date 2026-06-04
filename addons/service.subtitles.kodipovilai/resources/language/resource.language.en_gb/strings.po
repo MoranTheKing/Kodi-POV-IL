@@ -168,7 +168,7 @@ msgstr "Translate whole subtitle in one request"
 
 msgctxt "#32412"
 msgid "Sends the full SRT as one Gemini request, raises max output tokens, and disables fast subtitles."
-msgstr "Sends the full SRT as one Gemini request, raises max output tokens, and disables fast subtitles."
+msgstr "Sends the full SRT as one Gemini request, raises max output tokens, and disables fast subtitles. Recommended mainly for paid Gemini/API users; free accounts may hit quota limits or fail on long subtitle files."
 
 msgctxt "#32414"
 msgid "Disabled"
