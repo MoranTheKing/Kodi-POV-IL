@@ -1,5 +1,4 @@
-# Self-healing patch of the home SEARCH button so it opens POV's search
-# node directly, instead of the skin's own search dialog/window.
+# Self-healing patch of the home SEARCH button.
 #
 # WHY: This is a POV-centric build. On the "beautiful" skin (AF3) the
 # search row resolves to POV search. On the "simple" skins shipped with
@@ -11,11 +10,15 @@
 # that POV node directly, on whichever skin they use.
 #
 # WHAT: Each skin's Home.xml defines the search icon as an IconButton
-# include with a control_id + onclick param pair. We repoint that onclick
-# to the POV search node:
+# include with a control_id + onclick param pair. Estuary needs to be
+# repointed to the POV search node:
 #   ActivateWindow(videos,plugin://plugin.video.pov/?mode=navigator.search,return)
 # (POV's router maps navigator.search -> Navigator(params).search(),
 # which builds exactly that 4-item node.)
+#
+# FENtastic is intentionally restored to its own upstream search flow. Its
+# native search dialog gives the "New Search" flow and mixed movie+show
+# results users expect, while Estuary needed the simpler POV node.
 #
 #   * skin.fentastic: the icon is defined three times, gated by skin
 #     settings (only one renders at a time):
@@ -182,11 +185,15 @@ def _apply(target_onclick_for_factory):
 
 
 def ensure_patched():
-    """Repoint the home search button(s) to the POV search node, on every
-    installed skin we know about (FENtastic + Estuary)."""
-    status = _apply(lambda buttons: (lambda cid: POV_SEARCH_ONCLICK))
+    """Keep FENtastic native search and repoint Estuary to POV search."""
+    def _target_factory(buttons):
+        def _target(cid):
+            return POV_SEARCH_ONCLICK if cid == '801' else buttons[cid]
+        return _target
+
+    status = _apply(_target_factory)
     if status == 'patched':
-        _log('home search button now opens POV search node')
+        _log('search buttons adjusted per skin')
     return status
 
 

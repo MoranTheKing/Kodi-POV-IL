@@ -22,6 +22,7 @@ FENTASTIC_HOME_XML = 'special://home/addons/skin.fentastic/xml/Home.xml'
 FENTASTIC_HE_STRINGS = (
     'special://home/addons/skin.fentastic/language/resource.language.he_il/strings.po'
 )
+GUISETTINGS = 'special://profile/guisettings.xml'
 
 HE_STRINGS = {
     '#31072': ('Power Options', 'אפשרויות כיבוי'),
@@ -150,6 +151,54 @@ def _patch_hebrew_skin_strings():
         return False
 
 
+def _ensure_hebrew_keyboard_layout():
+    path = _translate(GUISETTINGS)
+    if not path or not os.path.exists(path):
+        return False
+    try:
+        tree = ET.parse(path)
+        root = tree.getroot()
+        changed = False
+        settings = {}
+        for node in root.findall('setting'):
+            settings[(node.get('id') or '').lower()] = node
+
+        layouts = settings.get('locale.keyboardlayouts')
+        if layouts is None:
+            layouts = ET.SubElement(root, 'setting', {
+                'id': 'locale.keyboardlayouts',
+            })
+            settings['locale.keyboardlayouts'] = layouts
+            changed = True
+        current = [part.strip() for part in (layouts.text or '').split('|')
+                   if part.strip()]
+        wanted = ['English QWERTY', 'Hebrew QWERTY']
+        merged = []
+        for name in wanted + current:
+            if name not in merged:
+                merged.append(name)
+        merged_text = '|'.join(merged)
+        if (layouts.text or '') != merged_text:
+            layouts.text = merged_text
+            changed = True
+
+        active = settings.get('locale.activekeyboardlayout')
+        if active is None:
+            active = ET.SubElement(root, 'setting', {
+                'id': 'locale.activekeyboardlayout',
+                'default': 'true',
+            })
+            active.text = 'English QWERTY'
+            changed = True
+
+        if changed:
+            tree.write(path, encoding='utf-8', xml_declaration=False)
+        return changed
+    except Exception as exc:
+        kodi_utils.log('hebrew_build_ui_patcher keyboard failed: {0}'.format(exc), level='WARNING')
+        return False
+
+
 def ensure_patched():
     changed = []
     if _clear_skin_bool('HomeMenuNoFavButton'):
@@ -160,4 +209,6 @@ def ensure_patched():
         changed.append('home_label')
     if _patch_hebrew_skin_strings():
         changed.append('he_strings')
+    if _ensure_hebrew_keyboard_layout():
+        changed.append('keyboard_layouts')
     return 'patched:' + ','.join(changed) if changed else 'already_ok'
