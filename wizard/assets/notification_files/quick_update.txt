@@ -1,15 +1,12 @@
-170
+171
 |||
-עדכון תיקון - TorBox ו-Premiumize
+עדכון תיקון - AI, TorBox ו-Premiumize
 
-סטטוס TorBox עודכן לפי ה-API הרשמי של TorBox:
-user/stats עם general=true, bandwidth=true ו-bandwidth_grouping=day.
+בתוסף ה-AI, כאשר מפעילים תרגום כל הכתוביות בבקשה אחת, גם ההגדרות שתלויות בצ׳אנקים מושבתות במסך ההגדרות:
+כמות שורות לבקשה, מספר תרגומים במקביל, וכתוביות מהירות.
 
-שורת שימוש 30 יום מסכמת עכשיו את bandwidth[].bytes_downloaded, ולכן אמורה להופיע כאשר TorBox מחזיר נתוני bandwidth.
+סטטוס TorBox מתוקן שוב למשתמשים קיימים: גם מי שכבר קיבל patch קודם יקבל תיקון חדש לקריאת user/stats עם general=true, bandwidth=true ו-bandwidth_grouping=day.
 
-אריח סטטוס מנוי Premiumize יופיע ליד סטטוס מנוי TorBox.
-אם האריח כבר נוסף אצל משתמש קיים בסוף הרשימה, הוא יועבר ליד TorBox בעדכון הבא.
+אריח סטטוס Premiumize יועבר ליד TorBox גם אצל משתמשים שהרשימת מועדפים שלהם חלקית או שחסרים בה אריחים אישיים.
 
-העדכון נשאר build-only ולא מוסיף את האריחים האלה לתוסף ה-AI הנקי.
-
-quickfix 0.1.113 + build 0.1.18 + AI 0.2.122.
+quickfix 0.1.114 + build 0.1.18 + AI 0.2.123.

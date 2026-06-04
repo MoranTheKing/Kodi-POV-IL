@@ -1,3 +1,14 @@
+v0.2.123
+- Whole-subtitle single-request mode now disables the dependent chunk UI
+  controls too: SRT lines per chunk, parallel chunk requests, and fast
+  subtitles. Runtime already forced one chunk and one worker; the settings
+  screen now reflects that to avoid conflicts.
+- Build-only repair: Premiumize status tile positioning now runs before
+  the favourites "user removed tiles" guard, so existing partial favourites
+  files are still reordered next to TorBox.
+- TorBox usage patch bumped to v3 and now repairs already-patched installs
+  whose user_stats method still used the older bandwidth-only parameters.
+
 v0.2.122
 - TorBox 30-day usage now uses TorBox's documented user stats endpoint:
   user/stats with general=true, bandwidth=true and bandwidth_grouping=day.
