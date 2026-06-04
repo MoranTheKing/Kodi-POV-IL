@@ -63,6 +63,10 @@ PERSONAL_TILE_NAMES = (
     '[B]הסרטים שלי (POV)[/B]',
 )
 
+BUILD_SERVICE_TILE_NAMES = (
+    '[B]סטטוס מנוי Premiumize[/B]',
+)
+
 # Marker comments written into favourites.xml. RESTORE_MARKER keeps
 # compatibility with earlier restores. SEEN_MARKER means "the build
 # already had these tiles at least once"; if the user deletes them after
@@ -70,6 +74,7 @@ PERSONAL_TILE_NAMES = (
 MARKER = '<!-- AI_SUBS_FAVOURITES_PERSONAL_TILES_v1 -->'
 SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_PERSONAL_TILES_SEEN_v2 -->'
 RESTORE_MARKERS = (MARKER, SEEN_MARKER)
+SERVICE_SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_BUILD_SERVICE_TILES_SEEN_v1 -->'
 BROKEN_DEBRID_NOTICE_ACTION = (
     'RunPlugin("plugin://service.subtitles.kodipovilai/?'
     'action=open_pov_settings")')
@@ -108,13 +113,13 @@ def _fixture_path():
         here, '..', 'fixtures', 'favourites_fentastic_canonical.xml')
 
 
-def _missing_tiles(content_bytes):
-    """Return the subset of PERSONAL_TILE_NAMES that are NOT present
+def _missing_tiles(content_bytes, tile_names=PERSONAL_TILE_NAMES):
+    """Return the subset of tile_names that are NOT present
     in the current favourites.xml. Substring check is sufficient
     because the name strings are uniquely identifying -- they only
     appear once in the file when present."""
     return tuple(
-        name for name in PERSONAL_TILE_NAMES
+        name for name in tile_names
         if name.encode('utf-8') not in content_bytes
     )
 
@@ -152,14 +157,18 @@ def _has_restore_marker(content):
                for marker in RESTORE_MARKERS)
 
 
-def _insert_marker(content):
-    if _has_restore_marker(content):
+def _has_marker(content, marker):
+    return marker.encode('utf-8') in content
+
+
+def _insert_marker(content, marker=SEEN_MARKER):
+    if _has_marker(content, marker):
         return content, False
     closing_tag = b'</favourites>'
     close_idx = content.rfind(closing_tag)
     if close_idx == -1:
         return content, False
-    marker_line = ('    ' + SEEN_MARKER + '\n').encode('utf-8')
+    marker_line = ('    ' + marker + '\n').encode('utf-8')
     return (
         content[:close_idx] + marker_line + content[close_idx:],
         True)
@@ -193,22 +202,36 @@ def ensure_patched():
         return 'read_failed'
 
     had_restore_marker = _has_restore_marker(content)
+    had_service_marker = _has_marker(content, SERVICE_SEEN_MARKER)
     content, fixed_existing = _fix_existing_debrid_notice_action(content)
-    missing = _missing_tiles(content)
-    if missing and had_restore_marker:
-        if not fixed_existing:
+    missing_personal = _missing_tiles(content)
+    missing_service = _missing_tiles(content, BUILD_SERVICE_TILE_NAMES)
+    if missing_personal and had_restore_marker:
+        if not fixed_existing and (not missing_service or had_service_marker):
             return 'user_removed_tiles'
         # A user may delete the tiles after receiving the broken-action
         # version. Keep the deletion respected, but still persist the
         # action fix if that old action exists elsewhere in favourites.
-        missing = ()
+        missing_personal = ()
+    if missing_service and had_service_marker:
+        missing_service = ()
+    missing = missing_personal + missing_service
 
     new_content = content
     marker_added = False
+    service_marker_added = False
     if not missing:
         new_content, marker_added = _insert_marker(new_content)
+        new_content, service_marker_added = _insert_marker(
+            new_content, SERVICE_SEEN_MARKER)
+    elif not missing_service:
+        new_content, service_marker_added = _insert_marker(
+            new_content, SERVICE_SEEN_MARKER)
+    elif not missing_personal:
+        new_content, marker_added = _insert_marker(new_content)
 
-    if not missing and not fixed_existing and not marker_added:
+    if (not missing and not fixed_existing and not marker_added
+            and not service_marker_added):
         return 'already_complete'
 
     try:
@@ -238,10 +261,17 @@ def ensure_patched():
                  level='WARNING')
             return 'unparseable_fixture'
 
-        marker_line = ('    ' + SEEN_MARKER + '\n').encode('utf-8')
+        marker_lines = []
+        if missing_personal and not _has_restore_marker(new_content):
+            marker_lines.append(SEEN_MARKER)
+        if missing_service and not _has_marker(new_content, SERVICE_SEEN_MARKER):
+            marker_lines.append(SERVICE_SEEN_MARKER)
+        marker_bytes = ''.join(
+            '    ' + marker + '\n' for marker in marker_lines
+        ).encode('utf-8')
         new_content = (
             new_content[:close_idx]
-            + marker_line
+            + marker_bytes
             + b''.join(tiles_to_inject)
             + new_content[close_idx:]
         )
@@ -267,6 +297,8 @@ def ensure_patched():
         _log('fixed debrid notification settings tile action', level='INFO')
     if marker_added:
         _log('marked favourites personal tiles as seen', level='INFO')
+    if service_marker_added:
+        _log('marked favourites build service tiles as seen', level='INFO')
     if missing and fixed_existing:
         return 'restored_and_fixed'
     if missing:
