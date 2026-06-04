@@ -658,6 +658,13 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     model = kodi_utils.get_setting('model', 'gemini-3.1-flash-lite') \
             or 'gemini-3.1-flash-lite'
     temperature = kodi_utils.get_float('temperature', 0.2)
+    top_p = kodi_utils.get_float('top_p', 0.95)
+    thinking_budget = max(0, kodi_utils.get_int('thinking_budget', 0))
+    if thinking_budget <= 0:
+        thinking_budget = None
+    whole_subtitle_request = kodi_utils.get_bool(
+        'whole_subtitle_request', False)
+    max_output_tokens = 65535 if whole_subtitle_request else 16384
     chunk_lines = kodi_utils.get_int('chunk_lines', 250)
 
     prompt_template = prompt.build(
@@ -677,7 +684,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                        level='WARNING')
         return None
 
-    chunks = list(srt.chunk_blocks(blocks, per_chunk=chunk_lines))
+    if whole_subtitle_request:
+        chunks = [blocks]
+    else:
+        chunks = list(srt.chunk_blocks(blocks, per_chunk=chunk_lines))
     total = len(chunks)
 
     # Backoff schedule for retryable Gemini failures (503 overload,
@@ -756,7 +766,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     prev_context_lines = max(0, kodi_utils.get_int(
         'prev_context_lines', 5))
     prev_context_by_idx = {}
-    if prev_context_lines > 0:
+    if prev_context_lines > 0 and not whole_subtitle_request:
         for i in range(1, len(chunks)):
             prev_block_texts = []
             for block in chunks[i - 1][-prev_context_lines:]:
@@ -782,6 +792,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                     model=model,
                     prompt=full_prompt,
                     temperature=temperature,
+                    max_output_tokens=max_output_tokens,
+                    top_p=top_p,
+                    thinking_budget=thinking_budget,
                 )
             except gemini.QuotaExceeded:
                 raise _AbortTranslation('quota',
@@ -833,7 +846,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # translation into ~30-60 seconds wall time. Users with the
     # paid tiers can crank this via `parallel_chunks` in the
     # advanced settings.
-    parallel = max(1, min(8, kodi_utils.get_int('parallel_chunks', 3)))
+    if whole_subtitle_request:
+        parallel = 1
+    else:
+        parallel = max(1, min(8, kodi_utils.get_int(
+            'parallel_chunks', 3)))
     out_blocks_by_index = {}
     completed = 0
     abort_msg = None

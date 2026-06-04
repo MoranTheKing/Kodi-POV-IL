@@ -253,7 +253,7 @@
           <level>3</level>
           <default></default>
         </setting>
-        <!-- Hidden marker for DarkSubs hook bookkeeping (reserved -- the
+        <!-- Hidden marker for DarkSubs hook bookkeeping (reserved: the
              patcher itself is idempotent and doesn't need a flag, but
              we may use this for telemetry / migrations later). -->
         <setting id="_darksubs_takeover_done" type="string" label="30000" visible="false">
@@ -324,10 +324,38 @@
           <constraints>
             <minimum>0.0</minimum>
             <maximum>1.0</maximum>
-            <step>0.05</step>
+            <step>0.01</step>
           </constraints>
           <control type="slider" format="number">
             <popup>true</popup>
+          </control>
+        </setting>
+        <setting id="top_p" type="number" label="32407" help="32408"> <!-- Model Top-P -->
+          <level>2</level>
+          <default>0.95</default>
+          <constraints>
+            <minimum>0.0</minimum>
+            <maximum>1.0</maximum>
+            <step>0.01</step>
+          </constraints>
+          <control type="slider" format="number">
+            <popup>true</popup>
+          </control>
+        </setting>
+        <setting id="thinking_budget" type="integer" label="32409" help="32410"> <!-- Gemini thinking budget -->
+          <level>2</level>
+          <default>0</default>
+          <constraints>
+            <options>
+              <option label="32414">0</option>
+              <option>512</option>
+              <option>768</option>
+              <option>1024</option>
+              <option>2048</option>
+            </options>
+          </constraints>
+          <control type="list" format="integer">
+            <heading>32409</heading>
           </control>
         </setting>
         <setting id="parallel_chunks" type="integer" label="32404"> <!-- Concurrent translation requests -->
@@ -342,8 +370,15 @@
             <popup>true</popup>
           </control>
         </setting>
+        <setting id="whole_subtitle_request" type="boolean"
+                 label="32411" help="32412"> <!-- Send whole subtitle in one Gemini request -->
+          <level>2</level>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
         <setting id="fast_first_chunk" type="boolean"
-                 label="32405" help="32406"> <!-- Fast subtitles -->
+                 label="32405" help="32406"
+                 enable="!eq(-1,true)"> <!-- Fast subtitles -->
           <level>2</level>
           <default>true</default>
           <control type="toggle"/>
