@@ -1,3 +1,12 @@
+v0.2.130
+- Build-only FENtastic widget repair now fixes the dedicated Movies and
+  TV Shows pages, not only the home favourites: Movies gets "סרטים
+  פופולריים" under "סרטים חדשים", TV Shows gets "סדרות חדשות" under
+  "סדרות פופולריות", and both pages keep the Genres row after streaming
+  networks.
+- Existing installs are repaired on startup/quick update by the build
+  edition of the addon. Standalone AI subtitle package remains clean.
+
 v0.2.129
 - Build-only favourites repair is forced once more with a new marker so
   existing Wizard installs that were previously marked as repaired can still
