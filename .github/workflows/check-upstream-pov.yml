@@ -26,7 +26,12 @@ jobs:
         run: |
           set -euo pipefail
 
-          UPSTREAM=$(curl -fsSL "https://kodi7rd.github.io/wizard/assets/build.txt")
+          UPSTREAM_URL="https://kodi7rd.github.io/wizard/assets/build.txt"
+          if ! UPSTREAM=$(curl -fsSL "$UPSTREAM_URL"); then
+            echo "::notice::Upstream POV build file is no longer available: $UPSTREAM_URL"
+            echo "Skipping check instead of failing the scheduled workflow."
+            exit 0
+          fi
 
           # Pull the POV section: everything from its name= line until the
           # next blank-line/name= boundary, then extract version + url.
