@@ -1,3 +1,12 @@
+v0.2.132
+- Build startup repairs now run in a delayed background thread instead of
+  blocking Kodi service startup. This is intended to stop the frozen loading
+  screen seen immediately after quick_update on Android/CoreELEC devices.
+- The delayed thread logs any slow repair step, so future freezes can be
+  traced to a specific build patcher instead of locking the UI silently.
+- Standalone AI subtitle package remains clean; these build repairs run only
+  when the Kodi POV IL build is detected.
+
 v0.2.131
 - AI subtitles: Gemini thinking now supports Gemini 3.x thinking levels
   (Minimal/Low/Medium/High) and keeps numeric budgets for compatible
