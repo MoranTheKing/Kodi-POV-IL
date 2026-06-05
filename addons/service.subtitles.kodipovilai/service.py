@@ -15,6 +15,7 @@
 # default "new user addons start disabled" behaviour.
 
 import os
+import threading
 import time
 
 try:
@@ -35,6 +36,7 @@ BUILD_WIZARD_ID = 'plugin.program.kodipovilwizard'
 BUILD_MARKER = 'build_mode.json'
 BUILD_MARKER_TEXT = 'Kodi POV IL'
 _BUILD_MODE_CACHE = None
+_BUILD_SELF_HEAL_THREAD = None
 
 
 def _translate_path(path):
@@ -139,6 +141,113 @@ def _ensure_build_marker():
             f.write(content)
     except Exception:
         pass
+
+
+def _run_build_startup_repairs():
+    """Run build-only UI/POV repairs after Kodi has had time to render.
+
+    Quick updates replace many files and then restart Kodi. Running every
+    build UI repair synchronously at service startup can make the first
+    post-update session look frozen until Kodi is force-stopped.
+    """
+    try:
+        monitor = xbmc.Monitor()
+    except Exception:
+        monitor = None
+
+    try:
+        if monitor and monitor.waitForAbort(12):
+            return
+    except Exception:
+        pass
+
+    steps = (
+        _maybe_patch_hebrew_build_ui,
+        _maybe_patch_brand_assets,
+        _maybe_install_build_icons,
+        _maybe_patch_brand_favourites,
+        _maybe_patch_pov_genre_icons,
+        _maybe_patch_pov_genre_menu_icons,
+        _maybe_patch_pov_combined_discover,
+        _maybe_patch_af3_home,
+        _maybe_cleanup_wizard,
+        _maybe_patch_pov_repeat_timer,
+        _maybe_patch_pov_favorites_refresh,
+        _maybe_run_fav_diagnostic,
+        _maybe_fix_pov_favourites_typo,
+        _maybe_patch_pov_menus,
+        _maybe_patch_pov_personal_area,
+        _maybe_patch_fentastic_widgets,
+        _maybe_patch_favourites_xml,
+        _maybe_patch_favourites_personal_tiles,
+        _maybe_patch_pov_torbox_usage,
+        _maybe_patch_pov_cache_empty,
+        _maybe_patch_pov_trakt_cache_empty,
+        _maybe_patch_pov_meta_blank,
+        _maybe_patch_pov_build_content_logger,
+        _maybe_patch_pov_debrid_status,
+        _maybe_show_af3_first_launch_dialog,
+        _maybe_show_debrid_status,
+    )
+    for step in steps:
+        try:
+            if monitor and monitor.abortRequested():
+                return
+        except Exception:
+            pass
+
+        started = time.time()
+        try:
+            step()
+        except Exception as e:
+            try:
+                from resources.lib import kodi_utils
+                kodi_utils.log(
+                    'build startup repair {0} failed: {1}'.format(
+                        getattr(step, '__name__', 'unknown'), e),
+                    level='WARNING')
+            except Exception:
+                pass
+
+        try:
+            if monitor and monitor.waitForAbort(0.25):
+                return
+        except Exception:
+            pass
+        if time.time() - started > 4:
+            try:
+                from resources.lib import kodi_utils
+                kodi_utils.log(
+                    'build startup repair {0} took {1:.1f}s'.format(
+                        getattr(step, '__name__', 'unknown'),
+                        time.time() - started),
+                    level='WARNING')
+            except Exception:
+                pass
+
+
+def _start_build_startup_repairs():
+    global _BUILD_SELF_HEAL_THREAD
+    try:
+        if _BUILD_SELF_HEAL_THREAD and _BUILD_SELF_HEAL_THREAD.is_alive():
+            return
+    except Exception:
+        pass
+
+    try:
+        _BUILD_SELF_HEAL_THREAD = threading.Thread(
+            target=_run_build_startup_repairs,
+            name='KodiPovIlBuildStartupRepairs')
+        _BUILD_SELF_HEAL_THREAD.daemon = True
+        _BUILD_SELF_HEAL_THREAD.start()
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'build startup repair thread failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
 
 
 
@@ -1904,25 +2013,6 @@ def main():
     except Exception:
         pass
 
-    # Build-only home/menu/list self-healing. Standalone subtitle installs
-    # must not rewrite POV navigation, favourites, caches, or skin home nodes.
-    if build_mode:
-        # IMPORTANT ORDER: install genre icons + heal POV's genre navigator
-        # rows + patch navigator.py BEFORE _maybe_patch_af3_home(), because
-        # AF3's home rebuild renders the genre shortcut-folder rows.
-        _maybe_patch_hebrew_build_ui()
-        _maybe_patch_brand_assets()
-        _maybe_install_build_icons()
-        _maybe_patch_brand_favourites()
-        _maybe_patch_pov_genre_icons()
-        _maybe_patch_pov_genre_menu_icons()
-        _maybe_patch_pov_combined_discover()
-        _maybe_patch_af3_home()
-
-        # Remove the v0.1.5-v0.1.7 misplaced injection into the wizard's
-        # login_menu (the right menu was POV's, not the wizard's).
-        _maybe_cleanup_wizard()
-
     # POV's own "My Services" menu -- THE correct place. Inject
     # Gemini + Wyzie entries here on every startup; idempotent.
     _maybe_patch_pov_services()
@@ -1933,23 +2023,12 @@ def main():
     # caches, auth state, or skin home widgets.
     _maybe_patch_fentastic_search()
 
+    # Build-only home/menu/list repairs are deliberately delayed. They are
+    # idempotent but can touch many files, so running them inline during the
+    # first post-quick-update startup is the likely source of the frozen
+    # loading screen reported on Android/CoreELEC.
     if build_mode:
-        # Build-only POV auth/list/navigation/cache patches. Do not run
-        # these for standalone subtitle-addon installs.
-        _maybe_patch_pov_repeat_timer()
-        _maybe_patch_pov_favorites_refresh()
-        _maybe_run_fav_diagnostic()
-        _maybe_fix_pov_favourites_typo()
-        _maybe_patch_pov_menus()
-        _maybe_patch_pov_personal_area()
-        _maybe_patch_fentastic_widgets()
-        _maybe_patch_favourites_xml()
-        _maybe_patch_favourites_personal_tiles()
-        _maybe_patch_pov_torbox_usage()
-        _maybe_patch_pov_cache_empty()
-        _maybe_patch_pov_trakt_cache_empty()
-        _maybe_patch_pov_meta_blank()
-        _maybe_patch_pov_build_content_logger()
+        _start_build_startup_repairs()
 
     # v0.2.9 tried patching FENtastic's notification widget but
     # it broke things; this cleans up the leftover patch on disk
@@ -1972,10 +2051,7 @@ def main():
     # Connect Services is opened on the user's behalf for the
     # service(s) they pick. Best-effort: this addon doesn't own AF3's
     # OAuth flows -- POV does.
-    if build_mode:
-        _maybe_patch_pov_debrid_status()
-        _maybe_show_af3_first_launch_dialog()
-        _maybe_show_debrid_status()
+    # Build debrid-status popups are also handled by the delayed repair thread.
 
     # Spin up the SubsFilenamePublisher player monitor. It needs to
     # outlive this function's local scope -- xbmc.Player subclasses
