@@ -248,7 +248,7 @@ HOME_WIDGETS = [
         # devices). Kept alongside the local one so the user has both.
         'label': 'הסרטים שלי (TMDB)',
         'icon': 'special://home/media/build_icons/Twilight/Movies/My_Movies_TMDB.png',
-        'path': _pov('tmdb_favorites', 'build_movie_list', 'Movie%20Favorites%20(TMDB)',
+        'path': _pov('tmdb_my_movies', 'build_movie_list', 'Movie%20Favorites%20(TMDB)',
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftmdb.png'),
         'target': 'videos',
         'widget_style': 'Poster',
@@ -259,7 +259,7 @@ HOME_WIDGETS = [
         # right after 'הסרטים שלי (TMDB)' and above the shows.
         'label': 'הסרטים שלי (Trakt)',
         'icon': 'special://home/media/build_icons/Twilight/Movies/My_Movies.png',
-        'path': _pov('trakt_collection', 'build_movie_list', 'Movies',
+        'path': _pov('trakt_my_movies', 'build_movie_list', 'Movies',
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftrakt.png'),
         'target': 'videos',
         'widget_style': 'Poster',
@@ -279,7 +279,7 @@ HOME_WIDGETS = [
         # TMDB.org account show favorites (online list).
         'label': 'הסדרות שלי (TMDB)',
         'icon': 'special://home/media/build_icons/Twilight/Shows/My_Shows_TMDB.png',
-        'path': _pov('tmdb_favorites', 'build_tvshow_list', 'TV%20Show%20Favorites%20(TMDB)',
+        'path': _pov('tmdb_my_tvshows', 'build_tvshow_list', 'TV%20Show%20Favorites%20(TMDB)',
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftmdb.png'),
         'target': 'videos',
         'widget_style': 'Poster',
@@ -289,7 +289,7 @@ HOME_WIDGETS = [
         # Trakt collection -- shows. Grouped after 'הסדרות שלי (TMDB)'.
         'label': 'הסדרות שלי (Trakt)',
         'icon': 'special://home/media/build_icons/Twilight/Shows/My_Shows.png',
-        'path': _pov('trakt_collection', 'build_tvshow_list', 'TV%20Shows',
+        'path': _pov('trakt_my_tvshows', 'build_tvshow_list', 'TV%20Shows',
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftrakt.png'),
         'target': 'videos',
         'widget_style': 'Poster',
