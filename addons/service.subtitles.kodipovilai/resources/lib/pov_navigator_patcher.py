@@ -73,11 +73,13 @@ MOVIES_PA_NAME = 'FENtastic - סרטים - איזור אישי'
 MOVIES_PA_V1 = "[{'action': 'in_progress_movies', 'iconImage': 'player', 'mode': 'build_movie_list', 'name': '[B]המשך צפייה[/B]'}, {'action': 'trakt_collection', 'category_name': 'Movies Collection', 'iconImage': 'trakt', 'mode': 'build_movie_list', 'name': '[B]הסרטים שלי (Trakt)[/B]'}]"
 MOVIES_PA_V2 = "[{'action': 'in_progress_movies', 'iconImage': 'player', 'mode': 'build_movie_list', 'name': '[B]המשך צפייה[/B]'}, {'action': 'tmdb_favorites', 'iconImage': 'tmdb', 'mode': 'build_movie_list', 'name': '[B]הסרטים שלי (TMDB)[/B]'}, {'action': 'trakt_collection', 'category_name': 'Movies Collection', 'iconImage': 'trakt', 'mode': 'build_movie_list', 'name': '[B]הסרטים שלי (Trakt)[/B]'}]"
 MOVIES_PA_V3 = "[{'action': 'in_progress_movies', 'iconImage': 'player', 'mode': 'build_movie_list', 'name': '[B]המשך צפייה[/B]'}, {'action': 'tmdb_favorites', 'iconImage': 'tmdb', 'mode': 'build_movie_list', 'name': '[B]הסרטים שלי (TMDB)[/B]'}, {'action': 'trakt_collection', 'category_name': 'Movies Collection', 'iconImage': 'trakt', 'mode': 'build_movie_list', 'name': '[B]הסרטים שלי (Trakt)[/B]'}, {'action': 'favorites_movies', 'iconImage': 'favorites', 'mode': 'build_movie_list', 'name': '[B]הסרטים שלי (POV)[/B]'}]"
+MOVIES_PA_V4 = MOVIES_PA_V3.replace("'tmdb_favorites'", "'tmdb_my_movies'").replace("'trakt_collection'", "'trakt_my_movies'")
 
 TVSHOWS_PA_NAME = 'FENtastic - סדרות - איזור אישי'
 TVSHOWS_PA_V1 = "[{'iconImage': 'next_episodes', 'mode': 'build_next_episode', 'name': '[B]הפרק הבא[/B]'}, {'action': 'trakt_collection', 'category_name': 'TV Shows Collection', 'iconImage': 'trakt', 'mode': 'build_tvshow_list', 'name': '[B]הסדרות שלי (Trakt)[/B]'}]"
 TVSHOWS_PA_V2 = "[{'iconImage': 'next_episodes', 'mode': 'build_next_episode', 'name': '[B]הפרק הבא[/B]'}, {'action': 'tmdb_favorites', 'iconImage': 'tmdb', 'mode': 'build_tvshow_list', 'name': '[B]הסדרות שלי (TMDB)[/B]'}, {'action': 'trakt_collection', 'category_name': 'TV Shows Collection', 'iconImage': 'trakt', 'mode': 'build_tvshow_list', 'name': '[B]הסדרות שלי (Trakt)[/B]'}]"
 TVSHOWS_PA_V3 = "[{'iconImage': 'next_episodes', 'mode': 'build_next_episode', 'name': '[B]הפרק הבא[/B]'}, {'action': 'tmdb_favorites', 'iconImage': 'tmdb', 'mode': 'build_tvshow_list', 'name': '[B]הסדרות שלי (TMDB)[/B]'}, {'action': 'trakt_collection', 'category_name': 'TV Shows Collection', 'iconImage': 'trakt', 'mode': 'build_tvshow_list', 'name': '[B]הסדרות שלי (Trakt)[/B]'}, {'action': 'favorites_tvshows', 'iconImage': 'favorites', 'mode': 'build_tvshow_list', 'name': '[B]הסדרות שלי (POV)[/B]'}]"
+TVSHOWS_PA_V4 = TVSHOWS_PA_V3.replace("'tmdb_favorites'", "'tmdb_my_tvshows'").replace("'trakt_collection'", "'trakt_my_tvshows'")
 
 
 def _db_path():
@@ -186,8 +188,8 @@ def maybe_fix_personal_area_lists():
     # any of the known_old_versions exactly. Anything else is treated
     # as user customization and left alone.
     targets = (
-        (MOVIES_PA_NAME, (MOVIES_PA_V1, MOVIES_PA_V2), MOVIES_PA_V3),
-        (TVSHOWS_PA_NAME, (TVSHOWS_PA_V1, TVSHOWS_PA_V2), TVSHOWS_PA_V3),
+        (MOVIES_PA_NAME, (MOVIES_PA_V1, MOVIES_PA_V2, MOVIES_PA_V3), MOVIES_PA_V4),
+        (TVSHOWS_PA_NAME, (TVSHOWS_PA_V1, TVSHOWS_PA_V2, TVSHOWS_PA_V3), TVSHOWS_PA_V4),
     )
     out = {}
     conn = None
