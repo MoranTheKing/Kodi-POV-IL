@@ -159,15 +159,8 @@ def sync_quickfix_build_version():
         if CONFIG.get_setting('buildname') != CONFIG.BUILDNAME_DEFAULT:
             return
 
-        # Existing users can receive this quickfix through the old wizard code,
-        # which extracts files but does not update buildversion/latestversion.
-        # Keep this sync scoped to the OpenSubtitles quickfix so future full
-        # build updates are not accidentally suppressed.
-        if CONFIG.get_setting('quick_update_noteid') != '166':
-            return
-
         latest_version = check.check_build(CONFIG.BUILDNAME_DEFAULT, 'version')
-        if latest_version != '0.1.18':
+        if not latest_version:
             return
 
         if CONFIG.get_setting('buildversion') == latest_version:
@@ -181,7 +174,7 @@ def sync_quickfix_build_version():
         CONFIG.BUILDLATEST = latest_version
         logging.log(
             "[QUICK-UPDATE] Synced buildversion/latestversion to {0} "
-            "after quickfix note 166.".format(latest_version),
+            "to prevent full-build prompts; quick_update remains the update path.".format(latest_version),
             level=xbmc.LOGINFO,
         )
     except Exception as sync_err:
