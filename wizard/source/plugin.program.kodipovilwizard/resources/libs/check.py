@@ -35,6 +35,22 @@ except ImportError:
 from resources.libs.common.config import CONFIG
 
 
+def _version_tuple(value):
+    try:
+        return tuple(int(part) for part in str(value).split('.') if part != '')
+    except Exception:
+        return (0,)
+
+
+def _is_newer_version(latest, current):
+    latest_tuple = _version_tuple(latest)
+    current_tuple = _version_tuple(current)
+    width = max(len(latest_tuple), len(current_tuple))
+    latest_tuple += (0,) * (width - len(latest_tuple))
+    current_tuple += (0,) * (width - len(current_tuple))
+    return latest_tuple > current_tuple
+
+
 def check_paths():
     from resources.libs.common import logging
 
@@ -173,12 +189,15 @@ def check_build_update():
         icon = match[0][1]
         fanart = match[0][2]
         CONFIG.set_setting('latestversion', version)
-        if version > CONFIG.BUILDVERSION:
-            if True:#CONFIG.DISABLEUPDATE == 'false': # KODI-RD-IL
-                logging.log("[Check Updates] [Installed Version: {0}] [Current Version: {1}] Opening Update Window".format(CONFIG.BUILDVERSION, version))
-                window.show_update_window(CONFIG.BUILDNAME, CONFIG.BUILDVERSION, version, icon, fanart)
-            else:
-                logging.log("[Check Updates] [Installed Version: {0}] [Current Version: {1}] Update Window Disabled".format(CONFIG.BUILDVERSION, version))
+        if _is_newer_version(version, CONFIG.BUILDVERSION):
+            # Kodi POV IL updates the live build through quick_update only.
+            # Do not open the Fresh/Normal build-update window here: that path
+            # can overwrite user custom tiles, connected services and userdata.
+            CONFIG.set_setting('buildversion', version)
+            CONFIG.set_setting('latestversion', version)
+            CONFIG.BUILDVERSION = version
+            CONFIG.BUILDLATEST = version
+            logging.log("[Check Updates] [Installed Version: {0}] [Current Version: {1}] Full-build update prompt suppressed; synced version and relying on quick_update.".format(CONFIG.BUILDVERSION, version))
         else:
             logging.log("[Check Updates] [Installed Version: {0}] [Current Version: {1}]".format(CONFIG.BUILDVERSION, version))
     else:
