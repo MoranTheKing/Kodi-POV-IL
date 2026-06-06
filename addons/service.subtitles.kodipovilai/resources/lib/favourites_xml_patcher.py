@@ -54,7 +54,7 @@ MEDIA = (
         # to find the tile and to test "has TMDB tile already".
         'tmdb_pattern': re.compile(
             r'<favourite\s[^>]*?name="\[B\]הסדרות שלי \(TMDB\)\[/B\]"[^>]*>'
-            r'(?:(?!</favourite>).)*?action=tmdb_favorites'
+            r'(?:(?!</favourite>).)*?action=tmdb_(?:favorites|my_tvshows)'
             r'(?:(?!</favourite>).)*?mode=build_tvshow_list'
             r'(?:(?!</favourite>).)*?</favourite>',
             re.DOTALL,
@@ -63,7 +63,7 @@ MEDIA = (
         # restore for users with Trakt connected).
         'trakt_pattern': re.compile(
             r'<favourite\s[^>]*?name="\[B\]הסדרות שלי \(Trakt\)\[/B\]"[^>]*>'
-            r'(?:(?!</favourite>).)*?action=trakt_collection'
+            r'(?:(?!</favourite>).)*?action=trakt_(?:collection|my_tvshows)'
             r'(?:(?!</favourite>).)*?mode=build_tvshow_list'
             r'(?:(?!</favourite>).)*?</favourite>',
             re.DOTALL,
@@ -74,7 +74,7 @@ MEDIA = (
             'thumb="special://home/media/build_icons/Twilight/Shows/'
             'My_Shows_TMDB.png">'
             'ActivateWindow(10025,"plugin://plugin.video.pov/?'
-            'action=tmdb_favorites&amp;iconImage=special%3a%2f%2fhome%2f'
+            'action=tmdb_my_tvshows&amp;iconImage=special%3a%2f%2fhome%2f'
             'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
             'media%2ftmdb.png&amp;mode=build_tvshow_list&amp;'
             'name=TV%20Show%20Favorites",return)</favourite>'
@@ -86,7 +86,7 @@ MEDIA = (
             'thumb="special://home/media/build_icons/Twilight/Shows/'
             'My_Shows.png">'
             'ActivateWindow(10025,"plugin://plugin.video.pov/?'
-            'action=trakt_collection&amp;iconImage=special%3a%2f%2fhome%2f'
+            'action=trakt_my_tvshows&amp;iconImage=special%3a%2f%2fhome%2f'
             'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
             'media%2ftrakt.png&amp;mode=build_tvshow_list&amp;'
             'name=TV%20Shows",return)</favourite>'
@@ -119,14 +119,14 @@ MEDIA = (
         'mode': 'build_movie_list',
         'tmdb_pattern': re.compile(
             r'<favourite\s[^>]*?name="\[B\]הסרטים שלי \(TMDB\)\[/B\]"[^>]*>'
-            r'(?:(?!</favourite>).)*?action=tmdb_favorites'
+            r'(?:(?!</favourite>).)*?action=tmdb_(?:favorites|my_movies)'
             r'(?:(?!</favourite>).)*?mode=build_movie_list'
             r'(?:(?!</favourite>).)*?</favourite>',
             re.DOTALL,
         ),
         'trakt_pattern': re.compile(
             r'<favourite\s[^>]*?name="\[B\]הסרטים שלי \(Trakt\)\[/B\]"[^>]*>'
-            r'(?:(?!</favourite>).)*?action=trakt_collection'
+            r'(?:(?!</favourite>).)*?action=trakt_(?:collection|my_movies)'
             r'(?:(?!</favourite>).)*?mode=build_movie_list'
             r'(?:(?!</favourite>).)*?</favourite>',
             re.DOTALL,
@@ -136,7 +136,7 @@ MEDIA = (
             'thumb="special://home/media/build_icons/Twilight/Movies/'
             'My_Movies_TMDB.png">'
             'ActivateWindow(10025,"plugin://plugin.video.pov/?'
-            'action=tmdb_favorites&amp;iconImage=special%3a%2f%2fhome%2f'
+            'action=tmdb_my_movies&amp;iconImage=special%3a%2f%2fhome%2f'
             'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
             'media%2ftmdb.png&amp;mode=build_movie_list&amp;'
             'name=Movie%20Favorites",return)</favourite>'
@@ -146,7 +146,7 @@ MEDIA = (
             'thumb="special://home/media/build_icons/Twilight/Movies/'
             'My_Movies.png">'
             'ActivateWindow(10025,"plugin://plugin.video.pov/?'
-            'action=trakt_collection&amp;iconImage=special%3a%2f%2fhome%2f'
+            'action=trakt_my_movies&amp;iconImage=special%3a%2f%2fhome%2f'
             'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
             'media%2ftrakt.png&amp;mode=build_movie_list&amp;'
             'name=Movies",return)</favourite>'
