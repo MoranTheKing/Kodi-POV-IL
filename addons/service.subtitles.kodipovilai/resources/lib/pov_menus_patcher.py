@@ -48,7 +48,7 @@ MENU_FILES = ('movies.py', 'tvshows.py', 'episodes.py')
 # forces a one-time re-sync of the fixed files onto existing installs.
 # (The previous marker, the Hebrew "ניהול רשימות (Trakt)" label, is
 # still in the files but is no longer the freshness signal.)
-MARKER = '_flex_call'
+MARKER = 'tmdb_my_movies'
 
 
 def _log(msg, level='INFO'):
