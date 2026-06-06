@@ -28,6 +28,29 @@ def _flex_call(_function, *args):
 				continue
 			raise
 
+def _tmdb_id_from_personal_item(item):
+	try:
+		if not item: return None
+		if 'id' in item: return item.get('id')
+		if 'media_id' in item: return item.get('media_id')
+		ids = item.get('media_ids') or item.get('ids')
+		if isinstance(ids, dict): return ids.get('tmdb')
+		show = item.get('show')
+		if isinstance(show, dict):
+			ids = show.get('ids')
+			if isinstance(ids, dict): return ids.get('tmdb')
+	except: pass
+	return None
+
+def _extend_unique_tmdb_ids(target, seen, data):
+	for item in data or []:
+		tmdb_id = _tmdb_id_from_personal_item(item)
+		if not tmdb_id: continue
+		key = string(tmdb_id)
+		if key in seen: continue
+		seen.add(key)
+		target.append(tmdb_id)
+
 tv_meta_function = tvshow_meta
 KODI_VERSION, make_cast_list = kodi_utils.get_kodi_version(), kodi_utils.make_cast_list
 string, ls, build_url, get_infolabel = str, kodi_utils.local_string, kodi_utils.build_url, kodi_utils.get_infolabel
@@ -212,12 +235,29 @@ class Menu(TVShows):
 	trakt_personal = ('trakt_collection', 'trakt_watchlist', 'trakt_favorites', 'trakt_droplist', 'trakt_collection_lists', 'trakt_watchlist_lists')
 	mdblist_personal = ('mdblist_collection', 'mdblist_watchlist', 'mdblist_droplist')
 	similar = ('tmdb_tv_similar', 'tmdb_tv_recommendations')
+	tmdb_my_tvshows = ('tmdb_favorites', 'tmdb_watchlist')
+	trakt_my_tvshows = ('trakt_collection', 'trakt_watchlist', 'trakt_favorites')
 
 	def worker(self):
 #		threads = list(make_thread_list_enumerate(self.build_tvshow_content, self.list, Thread))
 		for i in TaskPool().tasks_enumerate(self.build_tvshow_content, self.list, Thread): i.join()
 		self.items.sort(key=lambda k: int(k[1].getProperty('pov_sort_order')))
 		return self.items
+
+	def _build_merged_personal(self, actions, module_name, media_type, page_no, letter):
+		merged, seen, max_pages = [], set(), 1
+		for action in actions:
+			try:
+				function = manual_function_import(module_name, action)
+				data, total_pages = _flex_call(function, media_type, page_no, letter)
+				_extend_unique_tmdb_ids(merged, seen, data)
+				try: max_pages = max(max_pages, int(total_pages))
+				except: pass
+			except: pass
+		self.id_type = 'tmdb_id'
+		self.list = merged
+		if max_pages > 2: self.total_pages = max_pages
+		if max_pages > page_no: self.new_page = {'new_page': string(page_no + 1), 'new_letter': letter}
 
 	def run(self):
 		try:
@@ -232,7 +272,11 @@ class Menu(TVShows):
 			else: var_module, import_function = 'indexers.%s_api' % self.action.split('_')[0], self.action
 			try: function = manual_function_import(var_module, import_function)
 			except: pass
-			if self.action in Menu.tmdb_main:
+			if self.action == 'tmdb_my_tvshows':
+				self._build_merged_personal(Menu.tmdb_my_tvshows, 'indexers.tmdb_api', 'tv', page_no, letter)
+			elif self.action == 'trakt_my_tvshows':
+				self._build_merged_personal(Menu.trakt_my_tvshows, 'indexers.trakt_api', 'shows', page_no, letter)
+			elif self.action in Menu.tmdb_main:
 				data = function(page_no)
 				self.list = [i['id'] for i in data['results']]
 				total_pages = data['total_pages']

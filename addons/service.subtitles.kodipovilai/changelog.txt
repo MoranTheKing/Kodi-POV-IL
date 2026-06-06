@@ -1,3 +1,13 @@
+v0.2.133
+- Build edition only: TMDB personal movie/show buttons now merge TMDB
+  Favorites + Watchlist, and Trakt personal buttons now merge Collection
+  + Watchlist + Favorites, so items added through any of those managers
+  show up in the matching My Movies / My Shows tiles.
+- Build edition only: bumped the POV menu sync marker so existing users
+  receive the merged-list menu override on the next quick update.
+- Build edition only: FENtastic player files are refreshed from Tal Levi's
+  latest package, including Idan Plus and player flag refinements.
+
 v0.2.132
 - Build startup repairs now run in a delayed background thread instead of
   blocking Kodi service startup. This is intended to stop the frozen loading
