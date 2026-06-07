@@ -1,3 +1,8 @@
+v0.2.134
+- Build edition only: added a FENtastic player switch tile so users can choose between Tal Levi's current player and a simpler classic player preset.
+- Build edition only: the player switch is marker-gated, so existing build users receive it once and custom home screens are not rebuilt on every startup.
+- Standalone AI subtitle package remains clean; the FENtastic player tile and build-only actions are stripped from the standalone zip.
+
 v0.2.133
 - Build edition only: TMDB personal movie/show buttons now merge TMDB
   Favorites + Watchlist, and Trakt personal buttons now merge Collection
