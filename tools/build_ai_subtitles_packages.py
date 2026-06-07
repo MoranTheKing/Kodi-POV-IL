@@ -37,6 +37,7 @@ STANDALONE_LIB_FILES = {
     "darksubs_embedded_insert_patcher.py",
     "darksubs_filename_fallback_patcher.py",
     "darksubs_hook_diagnostics.py",
+    "darksubs_none_guard_patcher.py",
     "darksubs_opensubtitles_patcher.py",
     "darksubs_patcher.py",
     "darksubs_picker_height_patcher.py",
