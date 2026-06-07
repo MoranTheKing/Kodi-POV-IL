@@ -291,3 +291,10 @@ class Router:
             self._finish(handle)
         elif mode == 'realdebrid':  # Save Data -> Keep Debrid
             menu.debrid_menu()
+            self._finish(handle)
+
+    def _finish(self, handle):
+        from resources.libs.common import directory
+        directory.set_view()
+        xbmcplugin.setContent(handle, 'files')
+        xbmcplugin.endOfDirectory(handle)
