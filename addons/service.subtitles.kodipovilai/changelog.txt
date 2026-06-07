@@ -1,4 +1,9 @@
-﻿v0.2.136
+v0.2.137
+- AI subtitles: fixed a DarkSubs hook crash when DarkSubs passes a missing/None subtitle path before translation.
+- AI subtitles: the hook now skips invalid input safely and creates a temporary output path when DarkSubs does not provide one.
+- Standalone AI subtitle package remains clean from build-only Wizard, skin and home-tile changes.
+
+v0.2.136
 - Build edition only: FENtastic player files were refreshed from Tal Levi's latest package. Huge credit to Tal Levi for the player work.
 - Build edition only: the player switch now uses FENtastic's native chooseosdplayer setting instead of the old script/preset-copy mechanism.
 - Build edition only: subtitle-delay buttons stay in the corrected direction, and users without an existing player choice default to the simple player without overriding later choices.

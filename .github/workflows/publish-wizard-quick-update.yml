@@ -1,8 +1,9 @@
 name: Publish Wizard and Quick Update
 
 # Builds the wizard ZIP, the Quick Update ZIP, and a refreshed full build ZIP
-# from the current source tree. It intentionally packages only the wizard/build
-# payload and does not include or modify service.subtitles.kodipovilai.
+# from the current source tree. The Quick Update now includes the build-edition
+# AI subtitles addon so existing build users receive critical AI subtitle fixes,
+# while the clean standalone AI package is still built only by publish-ai-subtitles.
 
 on:
   workflow_dispatch:
@@ -14,21 +15,27 @@ on:
       quickfix_version:
         description: 'Quick Update / gui zip version'
         required: true
-        default: '0.1.133'
+        default: '0.1.134'
       build_version:
         description: 'Full build version'
         required: true
-        default: '0.1.28'
+        default: '0.1.29'
       previous_build_version:
         description: 'Existing full build zip to refresh'
         required: true
-        default: '0.1.27'
+        default: '0.1.28'
+      ai_addon_version:
+        description: 'Build-edition AI subtitles addon version to include'
+        required: true
+        default: '0.2.137'
   push:
     branches:
       - main
     paths:
       - '.github/workflows/publish-wizard-quick-update.yml'
       - 'wizard/source/plugin.program.kodipovilwizard/**'
+      - 'addons/service.subtitles.kodipovilai/**'
+      - 'dist/service.subtitles.kodipovilai-build-*.zip'
 
 permissions:
   contents: write
@@ -37,6 +44,7 @@ env:
   BUILD_NAME: 'Kodi POV IL - FENtastic'
   BUILD_SLUG: 'Kodi-POV-IL-FENtastic'
   WIZARD_ID: 'plugin.program.kodipovilwizard'
+  AI_ADDON_ID: 'service.subtitles.kodipovilai'
 
 jobs:
   publish:
@@ -61,19 +69,23 @@ jobs:
             QUICKFIX_VERSION="${{ github.event.inputs.quickfix_version }}"
             BUILD_VERSION="${{ github.event.inputs.build_version }}"
             PREVIOUS_BUILD_VERSION="${{ github.event.inputs.previous_build_version }}"
+            AI_ADDON_VERSION="${{ github.event.inputs.ai_addon_version }}"
           else
             WIZARD_VERSION="0.1.17"
-            QUICKFIX_VERSION="0.1.133"
-            BUILD_VERSION="0.1.28"
-            PREVIOUS_BUILD_VERSION="0.1.27"
+            QUICKFIX_VERSION="0.1.134"
+            BUILD_VERSION="0.1.29"
+            PREVIOUS_BUILD_VERSION="0.1.28"
+            AI_ADDON_VERSION="0.2.137"
           fi
           echo "WIZARD_VERSION=$WIZARD_VERSION" >> "$GITHUB_ENV"
           echo "QUICKFIX_VERSION=$QUICKFIX_VERSION" >> "$GITHUB_ENV"
           echo "BUILD_VERSION=$BUILD_VERSION" >> "$GITHUB_ENV"
           echo "PREVIOUS_BUILD_VERSION=$PREVIOUS_BUILD_VERSION" >> "$GITHUB_ENV"
+          echo "AI_ADDON_VERSION=$AI_ADDON_VERSION" >> "$GITHUB_ENV"
           echo "Wizard:   $WIZARD_VERSION"
           echo "Quickfix: $QUICKFIX_VERSION"
           echo "Build:    $BUILD_VERSION (from $PREVIOUS_BUILD_VERSION)"
+          echo "AI addon: $AI_ADDON_VERSION (build edition)"
 
       - name: Patch source version pointers before packaging
         working-directory: src
@@ -118,26 +130,37 @@ jobs:
           unzip -t "dist/${WIZARD_ID}-${WIZARD_VERSION}.zip" >/dev/null
           ls -lh "dist/${WIZARD_ID}-${WIZARD_VERSION}.zip"
 
-      - name: Build Quick Update ZIP without AI addon
+      - name: Build Quick Update ZIP with build-edition AI addon
         working-directory: src
         run: |
           set -euo pipefail
+          AI_BUILD_ZIP="dist/${AI_ADDON_ID}-build-${AI_ADDON_VERSION}.zip"
+          if [ ! -f "$AI_BUILD_ZIP" ]; then
+            echo "::error::Build-edition AI addon ZIP not found: $AI_BUILD_ZIP"
+            exit 1
+          fi
+
           WORK="$RUNNER_TEMP/quickfix"
           rm -rf "$WORK"
           mkdir -p "$WORK/addons"
           cp -a "wizard/source/${WIZARD_ID}" "$WORK/addons/${WIZARD_ID}"
-          if find "$WORK" -path '*service.subtitles.kodipovilai*' | grep -q .; then
-            echo "::error::AI addon leaked into Quick Update package"
+          unzip -q "$AI_BUILD_ZIP" -d "$WORK/addons"
+
+          if [ ! -f "$WORK/addons/${AI_ADDON_ID}/resources/lib/darksubs_none_guard_patcher.py" ]; then
+            echo "::error::AI None guard patcher missing from Quick Update package"
             exit 1
           fi
+          if ! grep -q "version=\"${AI_ADDON_VERSION}\"" "$WORK/addons/${AI_ADDON_ID}/addon.xml"; then
+            echo "::error::Quick Update AI addon version is not ${AI_ADDON_VERSION}"
+            exit 1
+          fi
+
           OUT="dist/${BUILD_SLUG}-quickfix-${QUICKFIX_VERSION}.zip"
           rm -f "$OUT"
           (cd "$WORK" && zip -qr "$OLDPWD/$OUT" addons)
           unzip -t "$OUT" >/dev/null
-          if unzip -l "$OUT" | grep -q 'service.subtitles.kodipovilai'; then
-            echo "::error::AI addon found in Quick Update zip"
-            exit 1
-          fi
+          unzip -l "$OUT" | grep "addons/${WIZARD_ID}/addon.xml"
+          unzip -l "$OUT" | grep "addons/${AI_ADDON_ID}/resources/lib/darksubs_none_guard_patcher.py"
           ls -lh "$OUT"
 
       - name: Build refreshed full build ZIP
@@ -146,8 +169,13 @@ jobs:
           set -euo pipefail
           OLD="dist/${BUILD_SLUG}-test-${PREVIOUS_BUILD_VERSION}.zip"
           NEW="dist/${BUILD_SLUG}-test-${BUILD_VERSION}.zip"
+          AI_BUILD_ZIP="dist/${AI_ADDON_ID}-build-${AI_ADDON_VERSION}.zip"
           if [ ! -f "$OLD" ]; then
             echo "::error::Base full build ZIP not found: $OLD"
+            exit 1
+          fi
+          if [ ! -f "$AI_BUILD_ZIP" ]; then
+            echo "::error::Build-edition AI addon ZIP not found: $AI_BUILD_ZIP"
             exit 1
           fi
           WORK="$RUNNER_TEMP/full-build"
@@ -155,8 +183,14 @@ jobs:
           mkdir -p "$WORK"
           unzip -q "$OLD" -d "$WORK"
           rm -rf "$WORK/addons/${WIZARD_ID}"
+          rm -rf "$WORK/addons/${AI_ADDON_ID}"
           mkdir -p "$WORK/addons"
           cp -a "wizard/source/${WIZARD_ID}" "$WORK/addons/${WIZARD_ID}"
+          unzip -q "$AI_BUILD_ZIP" -d "$WORK/addons"
+          if [ ! -f "$WORK/addons/${AI_ADDON_ID}/resources/lib/darksubs_none_guard_patcher.py" ]; then
+            echo "::error::AI None guard patcher missing from full build package"
+            exit 1
+          fi
           rm -f "$NEW"
           (cd "$WORK" && zip -qr "$OLDPWD/$NEW" .)
           unzip -t "$NEW" >/dev/null
@@ -174,6 +208,7 @@ jobs:
           wizard = os.environ['WIZARD_VERSION']
           quickfix = os.environ['QUICKFIX_VERSION']
           build = os.environ['BUILD_VERSION']
+          ai = os.environ['AI_ADDON_VERSION']
           base = 'https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist'
 
           build_txt = Path('wizard/assets/build.txt')
@@ -191,20 +226,21 @@ jobs:
               count=1,
           )
           build_txt.write_text(text, encoding='utf-8')
+          print(f'AI addon included in quick update: {ai}')
           PY
 
           cat > wizard/assets/notification_files/quick_update.txt <<EOF
           190
           |||
-          תיקון החלפת סקין ועדכון Wizard
+          תיקון החלפת סקין + תיקון כתוביות AI
 
           כפתור "החלף סקין" עודכן כך שהחלפת הסקין מתבצעת דרך Kodi JSON-RPC במקום עריכה ידנית של guisettings.xml.
 
-          לאחר הבחירה, המערכת מוודאת ש-Kodi באמת קיבל את הסקין החדש לפני סגירה והפעלה מחדש.
+          נוסף גם תיקון לתרגום כתוביות AI דרך DarkSubs: אם DarkSubs מעביר נתיב כתוביות חסר/None, התוסף כבר לא קורס עם NoneType object has no attribute encode.
 
-          התוסף העצמאי של כתוביות AI נשאר נקי משינויים של בילד, סקינים ואריחים.
+          העדכון המהיר כולל את גרסת ה-build של תוסף כתוביות AI בלבד. התוסף העצמאי/הנקי ממשיך להיבנות בנפרד ולא מקבל קבצי Wizard/Build.
 
-          quickfix ${QUICKFIX_VERSION} + build ${BUILD_VERSION} + wizard ${WIZARD_VERSION}
+          quickfix ${QUICKFIX_VERSION} + build ${BUILD_VERSION} + wizard ${WIZARD_VERSION} + AI ${AI_ADDON_VERSION}
           EOF
 
       - name: Sanity check package contents
@@ -214,14 +250,10 @@ jobs:
           grep -n "version=\"${WIZARD_VERSION}\"" wizard/source/plugin.program.kodipovilwizard/addon.xml
           grep -n "BUILDVERSION_DEFAULT = '${BUILD_VERSION}'" wizard/source/plugin.program.kodipovilwizard/uservar.py
           grep -n "${WIZARD_VERSION}\|${QUICKFIX_VERSION}\|${BUILD_VERSION}" wizard/assets/build.txt
-          if unzip -l "dist/${BUILD_SLUG}-quickfix-${QUICKFIX_VERSION}.zip" | grep -q 'service.subtitles.kodipovilai'; then
-            echo "::error::AI addon found in Quick Update zip"
-            exit 1
-          fi
-          if git diff --name-only | grep -q '^addons/service.subtitles.kodipovilai/'; then
-            echo "::error::AI addon source changed unexpectedly"
-            exit 1
-          fi
+          unzip -l "dist/${BUILD_SLUG}-quickfix-${QUICKFIX_VERSION}.zip" | grep "addons/${WIZARD_ID}/addon.xml"
+          unzip -l "dist/${BUILD_SLUG}-quickfix-${QUICKFIX_VERSION}.zip" | grep "addons/${AI_ADDON_ID}/addon.xml"
+          unzip -l "dist/${BUILD_SLUG}-quickfix-${QUICKFIX_VERSION}.zip" | grep "addons/${AI_ADDON_ID}/resources/lib/darksubs_none_guard_patcher.py"
+          unzip -p "dist/${BUILD_SLUG}-quickfix-${QUICKFIX_VERSION}.zip" "addons/${AI_ADDON_ID}/addon.xml" | grep "version=\"${AI_ADDON_VERSION}\""
 
       - name: Commit generated release files
         working-directory: src
@@ -241,5 +273,5 @@ jobs:
             echo "Nothing to publish."
             exit 0
           fi
-          git commit -m "Publish wizard ${WIZARD_VERSION} and quickfix ${QUICKFIX_VERSION} [skip ci]"
+          git commit -m "Publish quickfix ${QUICKFIX_VERSION} with AI subtitles ${AI_ADDON_VERSION} [skip ci]"
           git push origin main
