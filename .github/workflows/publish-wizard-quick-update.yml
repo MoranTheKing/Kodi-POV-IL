@@ -79,21 +79,32 @@ jobs:
         working-directory: src
         run: |
           set -euo pipefail
-          python3 - <<'PY'
+          python3 <<'PY'
           import os
+          import re
           from pathlib import Path
+
           wizard_version = os.environ['WIZARD_VERSION']
           build_version = os.environ['BUILD_VERSION']
+
           addon_xml = Path('wizard/source/plugin.program.kodipovilwizard/addon.xml')
           text = addon_xml.read_text(encoding='utf-8-sig')
-          import re
-          text = re.sub(r'(<addon\s+id="plugin\.program\.kodipovilwizard"\s+name="[^"]+"\s+version=")([^"]+)(")',
-                        rf'\g<1>{wizard_version}\3', text, count=1)
+          text = re.sub(
+              r'(<addon\s+id="plugin\.program\.kodipovilwizard"\s+name="[^"]+"\s+version=")([^"]+)(")',
+              rf'\g<1>{wizard_version}\3',
+              text,
+              count=1,
+          )
           addon_xml.write_text(text, encoding='utf-8')
 
           uservar = Path('wizard/source/plugin.program.kodipovilwizard/uservar.py')
           text = uservar.read_text(encoding='utf-8-sig')
-          text = re.sub(r"BUILDVERSION_DEFAULT = '[^']+'", f"BUILDVERSION_DEFAULT = '{build_version}'", text, count=1)
+          text = re.sub(
+              r"BUILDVERSION_DEFAULT = '[^']+'",
+              f"BUILDVERSION_DEFAULT = '{build_version}'",
+              text,
+              count=1,
+          )
           uservar.write_text(text, encoding='utf-8')
           PY
 
@@ -155,38 +166,46 @@ jobs:
         working-directory: src
         run: |
           set -euo pipefail
-          python3 - <<'PY'
+          python3 <<'PY'
           import os
+          import re
           from pathlib import Path
+
           wizard = os.environ['WIZARD_VERSION']
           quickfix = os.environ['QUICKFIX_VERSION']
           build = os.environ['BUILD_VERSION']
           base = 'https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist'
+
           build_txt = Path('wizard/assets/build.txt')
           text = build_txt.read_text(encoding='utf-8-sig')
-          import re
-          text = re.sub(r'id="plugin\.program\.kodipovilwizard"\nversion="[^"]+"\nzip="[^"]+"',
-                        f'id="plugin.program.kodipovilwizard"\nversion="{wizard}"\nzip="{base}/plugin.program.kodipovilwizard-{wizard}.zip"',
-                        text, count=1)
-          text = re.sub(r'(name="Kodi POV IL - FENtastic"\nversion=")[^"]+("\nurl=")[^"]+("\nminor="https://"\ngui=")[^"]+("\nkodi=)',
-                        rf'\g<1>{build}\g<2>{base}/Kodi-POV-IL-FENtastic-test-{build}.zip\g<3>{base}/Kodi-POV-IL-FENtastic-quickfix-{quickfix}.zip\g<4>',
-                        text, count=1)
+          text = re.sub(
+              r'id="plugin\.program\.kodipovilwizard"\nversion="[^"]+"\nzip="[^"]+"',
+              f'id="plugin.program.kodipovilwizard"\nversion="{wizard}"\nzip="{base}/plugin.program.kodipovilwizard-{wizard}.zip"',
+              text,
+              count=1,
+          )
+          text = re.sub(
+              r'(name="Kodi POV IL - FENtastic"\nversion=")[^"]+("\nurl=")[^"]+("\nminor="https://"\ngui=")[^"]+("\nkodi=)',
+              rf'\g<1>{build}\g<2>{base}/Kodi-POV-IL-FENtastic-test-{build}.zip\g<3>{base}/Kodi-POV-IL-FENtastic-quickfix-{quickfix}.zip\g<4>',
+              text,
+              count=1,
+          )
           build_txt.write_text(text, encoding='utf-8')
-
-          notice = Path('wizard/assets/notification_files/quick_update.txt')
-          notice.write_text(f'''190
-|||
-תיקון החלפת סקין ועדכון Wizard
-
-כפתור "החלף סקין" עודכן כך שהחלפת הסקין מתבצעת דרך Kodi JSON-RPC במקום עריכה ידנית של guisettings.xml.
-
-לאחר הבחירה, המערכת מוודאת ש-Kodi באמת קיבל את הסקין החדש לפני סגירה והפעלה מחדש.
-
-התוסף העצמאי של כתוביות AI נשאר נקי משינויים של בילד, סקינים ואריחים.
-
-quickfix {quickfix} + build {build} + wizard {wizard}
-''', encoding='utf-8')
           PY
+
+          cat > wizard/assets/notification_files/quick_update.txt <<EOF
+          190
+          |||
+          תיקון החלפת סקין ועדכון Wizard
+
+          כפתור "החלף סקין" עודכן כך שהחלפת הסקין מתבצעת דרך Kodi JSON-RPC במקום עריכה ידנית של guisettings.xml.
+
+          לאחר הבחירה, המערכת מוודאת ש-Kodi באמת קיבל את הסקין החדש לפני סגירה והפעלה מחדש.
+
+          התוסף העצמאי של כתוביות AI נשאר נקי משינויים של בילד, סקינים ואריחים.
+
+          quickfix ${QUICKFIX_VERSION} + build ${BUILD_VERSION} + wizard ${WIZARD_VERSION}
+          EOF
 
       - name: Sanity check package contents
         working-directory: src
