@@ -1,4 +1,4 @@
-import xbmcaddon
+﻿import xbmcaddon
 
 import os
 
@@ -29,7 +29,7 @@ BUILDNAME_DEFAULT = 'Kodi POV IL - FENtastic'
 # triggers a destructive full-build-install dialog that wipes the
 # user's connected services. Should be kept aligned with the version
 # we ship in dist/Kodi-POV-IL-FENtastic-test-*.zip.
-BUILDVERSION_DEFAULT = '0.1.24'
+BUILDVERSION_DEFAULT = '0.1.25'
 EXCLUDES = [ADDON_ID]
 # Text File with build info in it. Please read https://github.com/a4k-openproject/plugin.program.openwizard/wiki/Installing-Builds
 BUILDFILE = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/build.txt'
@@ -116,7 +116,7 @@ THEME_LIMEGREEN = u'[COLOR {color1}]{{}}[/COLOR]'.format(color1=COLOR_LIMEGREEN)
 # YELLOW Alternate items      / {0} is the menu item and is required
 THEME_YELLOW = u'[COLOR {color1}]{{}}[/COLOR]'.format(color1=COLOR_YELLOW)
 # Current Build Header / {0} is the menu item and is required
-THEME4 = u'[COLOR {color1}]גרסת בילד נוכחי:[/COLOR] [COLOR {color2}]{{}}[/COLOR]'.format(color1=COLOR1, color2=COLOR2)
+THEME4 = u'[COLOR {color1}]׳’׳¨׳¡׳× ׳‘׳™׳׳“ ׳ ׳•׳›׳—׳™:[/COLOR] [COLOR {color2}]{{}}[/COLOR]'.format(color1=COLOR1, color2=COLOR2)
 # Current Theme Header / {0} is the menu item and is required
 THEME5 = u'[COLOR {color1}]Current Theme:[/COLOR] [COLOR {color2}]{{}}[/COLOR]'.format(color1=COLOR1, color2=COLOR2)
 # KODI_RD_ISRAEL Custom Theme for COLOR_WHITE text usage (window.py - def show_dialog)
