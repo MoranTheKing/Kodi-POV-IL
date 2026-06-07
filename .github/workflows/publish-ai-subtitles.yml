@@ -1,0 +1,134 @@
+name: Publish AI Subtitles Addon
+
+# Packages the AI subtitles addon only.
+# Outputs:
+# - dist/service.subtitles.kodipovilai-<version>.zip
+# - dist/service.subtitles.kodipovilai-latest.zip
+# - dist/service.subtitles.kodipovilai-build-<version>.zip
+# - dist/service.subtitles.kodipovilai-build-latest.zip
+
+on:
+  workflow_dispatch:
+    inputs:
+      addon_version:
+        description: 'AI subtitles addon version'
+        required: true
+        default: '0.2.137'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Clone main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git clone --depth=1 --branch=main \
+            "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" \
+            src
+
+      - name: Patch addon version, changelog and standalone whitelist
+        working-directory: src
+        run: |
+          set -euo pipefail
+          export ADDON_VERSION="${{ github.event.inputs.addon_version }}"
+          python3 <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          version = os.environ['ADDON_VERSION']
+          addon_id = 'service.subtitles.kodipovilai'
+          addon_dir = Path('addons') / addon_id
+
+          addon_xml = addon_dir / 'addon.xml'
+          text = addon_xml.read_text(encoding='utf-8-sig')
+          text = re.sub(
+              r'(<addon\s+id="service\.subtitles\.kodipovilai"\s+name="[^"]+"\s+version=")([^"]+)(")',
+              rf'\g<1>{version}\3',
+              text,
+              count=1,
+              flags=re.S,
+          )
+          addon_xml.write_text(text, encoding='utf-8')
+
+          changelog = addon_dir / 'changelog.txt'
+          old = changelog.read_text(encoding='utf-8-sig')
+          entry = (
+              f'v{version}\n'
+              '- AI subtitles: fixed a DarkSubs hook crash when DarkSubs passes a missing/None subtitle path before translation.\n'
+              '- AI subtitles: the hook now skips invalid input safely and creates a temporary output path when DarkSubs does not provide one.\n'
+              '- Standalone AI subtitle package remains clean from build-only Wizard, skin and home-tile changes.\n\n'
+          )
+          if not old.lstrip('\ufeff').startswith(f'v{version}\n'):
+              changelog.write_text(entry + old.lstrip('\ufeff'), encoding='utf-8')
+
+          builder = Path('tools/build_ai_subtitles_packages.py')
+          b = builder.read_text(encoding='utf-8')
+          needed = '    "darksubs_none_guard_patcher.py",\n'
+          if '"darksubs_none_guard_patcher.py"' not in b:
+              anchor = '    "darksubs_hook_diagnostics.py",\n'
+              if anchor not in b:
+                  raise RuntimeError('Could not find standalone whitelist anchor')
+              b = b.replace(anchor, anchor + needed, 1)
+              builder.write_text(b, encoding='utf-8')
+          PY
+
+      - name: Build AI addon packages
+        working-directory: src
+        run: |
+          set -euo pipefail
+          python3 tools/build_ai_subtitles_packages.py
+
+      - name: Validate AI packages
+        working-directory: src
+        run: |
+          set -euo pipefail
+          VER="${{ github.event.inputs.addon_version }}"
+          STANDALONE="dist/service.subtitles.kodipovilai-${VER}.zip"
+          BUILD="dist/service.subtitles.kodipovilai-build-${VER}.zip"
+
+          test -f "$STANDALONE"
+          test -f "$BUILD"
+          unzip -t "$STANDALONE" >/dev/null
+          unzip -t "$BUILD" >/dev/null
+
+          unzip -l "$STANDALONE" | grep 'service.subtitles.kodipovilai/resources/lib/darksubs_none_guard_patcher.py'
+          unzip -l "$STANDALONE" | grep 'service.subtitles.kodipovilai/resources/lib/__init__.py'
+          unzip -p "$STANDALONE" service.subtitles.kodipovilai/addon.xml | grep "version=\"${VER}\""
+
+          if unzip -l "$STANDALONE" | grep -E 'staged_wizard|wizard_self_healer|wizard_patcher|media_assets|resources/fixtures'; then
+            echo '::error::Standalone AI zip contains build-only payload'
+            exit 1
+          fi
+
+          ls -lh "$STANDALONE" "$BUILD" \
+            dist/service.subtitles.kodipovilai-latest.zip \
+            dist/service.subtitles.kodipovilai-build-latest.zip
+
+      - name: Commit generated AI release files
+        working-directory: src
+        run: |
+          set -euo pipefail
+          VER="${{ github.event.inputs.addon_version }}"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add \
+            addons/service.subtitles.kodipovilai/addon.xml \
+            addons/service.subtitles.kodipovilai/changelog.txt \
+            tools/build_ai_subtitles_packages.py \
+            "dist/service.subtitles.kodipovilai-${VER}.zip" \
+            "dist/service.subtitles.kodipovilai-build-${VER}.zip" \
+            dist/service.subtitles.kodipovilai-latest.zip \
+            dist/service.subtitles.kodipovilai-build-latest.zip
+          if git diff --cached --quiet; then
+            echo 'Nothing to publish.'
+            exit 0
+          fi
+          git commit -m "Publish AI subtitles ${VER}"
+          git push origin main
