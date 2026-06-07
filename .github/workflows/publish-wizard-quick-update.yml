@@ -28,6 +28,10 @@ on:
         description: 'Build-edition AI subtitles addon version to include'
         required: true
         default: '0.2.137'
+      quick_update_note_id:
+        description: 'Quick Update notification id. Must increase to notify existing users again.'
+        required: true
+        default: '191'
   push:
     branches:
       - main
@@ -70,22 +74,26 @@ jobs:
             BUILD_VERSION="${{ github.event.inputs.build_version }}"
             PREVIOUS_BUILD_VERSION="${{ github.event.inputs.previous_build_version }}"
             AI_ADDON_VERSION="${{ github.event.inputs.ai_addon_version }}"
+            QUICK_UPDATE_NOTE_ID="${{ github.event.inputs.quick_update_note_id }}"
           else
             WIZARD_VERSION="0.1.17"
             QUICKFIX_VERSION="0.1.134"
             BUILD_VERSION="0.1.29"
             PREVIOUS_BUILD_VERSION="0.1.28"
             AI_ADDON_VERSION="0.2.137"
+            QUICK_UPDATE_NOTE_ID="191"
           fi
           echo "WIZARD_VERSION=$WIZARD_VERSION" >> "$GITHUB_ENV"
           echo "QUICKFIX_VERSION=$QUICKFIX_VERSION" >> "$GITHUB_ENV"
           echo "BUILD_VERSION=$BUILD_VERSION" >> "$GITHUB_ENV"
           echo "PREVIOUS_BUILD_VERSION=$PREVIOUS_BUILD_VERSION" >> "$GITHUB_ENV"
           echo "AI_ADDON_VERSION=$AI_ADDON_VERSION" >> "$GITHUB_ENV"
+          echo "QUICK_UPDATE_NOTE_ID=$QUICK_UPDATE_NOTE_ID" >> "$GITHUB_ENV"
           echo "Wizard:   $WIZARD_VERSION"
           echo "Quickfix: $QUICKFIX_VERSION"
           echo "Build:    $BUILD_VERSION (from $PREVIOUS_BUILD_VERSION)"
           echo "AI addon: $AI_ADDON_VERSION (build edition)"
+          echo "Quick update note id: $QUICK_UPDATE_NOTE_ID"
 
       - name: Patch source version pointers before packaging
         working-directory: src
@@ -230,7 +238,7 @@ jobs:
           PY
 
           cat > wizard/assets/notification_files/quick_update.txt <<EOF
-          190
+          ${QUICK_UPDATE_NOTE_ID}
           |||
           תיקון החלפת סקין + תיקון כתוביות AI
 
