@@ -1,22 +1,3 @@
-################################################################################
-#      Copyright (C) 2019 drinfernoo                                           #
-#                                                                              #
-#  This Program is free software; you can redistribute it and/or modify        #
-#  it under the terms of the GNU General Public License as published by        #
-#  the Free Software Foundation; either version 2, or (at your option)         #
-#  any later version.                                                          #
-#                                                                              #
-#  This Program is distributed in the hope that it will be useful,             #
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of              #
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the                #
-#  GNU General Public License for more details.                                #
-#                                                                              #
-#  You should have received a copy of the GNU General Public License           #
-#  along with XBMC; see the file COPYING.  If not, write to                    #
-#  the Free Software Foundation, 675 Mass Ave, Cambridge, MA 02139, USA.       #
-#  http://www.gnu.org/copyleft/gpl.html                                        #
-################################################################################
-
 import xbmc
 
 import re
@@ -43,7 +24,6 @@ def _get_old(old_key):
                 return response['result']['value']
     except:
         pass
-        # need to be logging error here
         
     return None
     
@@ -53,18 +33,20 @@ def _set_new(new_key, value):
         new = '"{0}"'.format(new_key)
         value = '"{0}"'.format(value)
         query = '{{"jsonrpc":"2.0","method":"Settings.SetSettingValue","params":{{"setting":{0},"value":{1}}}, "id":1}}'.format(new, value)
-        response = xbmc.executeJSONRPC(query)
-    except Exception as e:
+        xbmc.executeJSONRPC(query)
+    except Exception:
         pass
-        # need to be logging error here
         
     return None
 
 
 def _swap_skins(skin):
     _set_new('lookandfeel.skin', skin)
-    
-    return _dialog_watch()
+
+    dialog_result = _dialog_watch()
+    xbmc.sleep(500)
+
+    return _get_old('lookandfeel.skin') == skin or dialog_result
 
 
 def switch_to_skin(goto, title="Error"):
@@ -77,7 +59,7 @@ def switch_to_skin(goto, title="Error"):
     else:
         logging.log_notify(CONFIG.ADDONTITLE,
                            '[COLOR {0}]{1}: Skin Swap Failed![/COLOR]'.format(CONFIG.COLOR2, title))
-                           
+                            
     return result
 
 
@@ -85,9 +67,6 @@ def skin_to_default(title):
     if _get_old('lookandfeel.skin') not in DEFAULT_SKINS:
         from resources.libs.common import logging
         logging.log('[COLOR {0}]{1}: KODI_RD_ISRAEL - Skip setting default Estuary skin no matter what.[/COLOR]'.format(CONFIG.COLOR2, title))
-        # KODI_RD_ISRAEL - Commented to not set back default skin on build install.  
-        #skin = 'skin.estuary'
-        #return switch_to_skin(skin, title)
     else:
         from resources.libs.common import logging
         logging.log('[COLOR {0}]{1}: Skipping Skin Swap[/COLOR]'.format(CONFIG.COLOR2, title))
@@ -113,35 +92,14 @@ def look_and_feel_data(do='save'):
         for item in scan:
             value = CONFIG.get_setting(item.replace('lookandfeel', 'default'))
             query = '{{"jsonrpc":"2.0", "method":"Settings.SetSettingValue","params":{{"setting":"{0}","value":{1}}}, "id":1}}'.format(item, value)
-            response = xbmc.executeJSONRPC(query)
+            xbmc.executeJSONRPC(query)
             logging.log("{0} restored to {1}".format(item, value))
 
 
 def swap_us():
     from resources.libs.common import logging
-
-    new = '"addons.unknownsources"'
-    query = '{{"jsonrpc":"2.0", "method":"Settings.GetSettingValue","params":{{"setting":{0}}}, "id":1}}'.format(new)
-    response = xbmc.executeJSONRPC(query)
-    logging.log("Unknown Sources Get Settings: {0}".format(str(response)))
-    if 'false' in response:
-        value = 'true'
-        threading.Thread(target=_dialog_watch).start()
-        xbmc.sleep(200)
-        query = '{{"jsonrpc":"2.0", "method":"Settings.SetSettingValue","params":{{"setting":{0},"value":{1}}}, "id":1}}'.format(new, value)
-        response = xbmc.executeJSONRPC(query)
-        logging.log_notify(CONFIG.ADDONTITLE,
-                           '[COLOR {0}]Unknown Sources:[/COLOR] [COLOR {1}]Enabled[/COLOR]'.format(CONFIG.COLOR1, CONFIG.COLOR2))
-        logging.log("Unknown Sources Set Settings: {0}".format(str(response)))
-    elif 'true' in response:
-        value = 'false'
-        threading.Thread(target=_dialog_watch).start()
-        xbmc.sleep(200)
-        query = '{{"jsonrpc":"2.0", "method":"Settings.SetSettingValue","params":{{"setting":{0},"value":{1}}}, "id":1}}'.format(new, value)
-        response = xbmc.executeJSONRPC(query)
-        logging.log_notify(CONFIG.ADDONTITLE,
-                           '[COLOR {0}]Unknown Sources:[/COLOR] [COLOR {1}]Disabled[/COLOR]'.format(CONFIG.COLOR1, CONFIG.COLOR2))
-        logging.log("Unknown Sources Set Settings: {0}".format(str(response)))
+    logging.log('swap_us is unavailable in this build of the wizard')
+    return False
 
 
 def _dialog_watch():
