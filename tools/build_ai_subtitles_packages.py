@@ -396,13 +396,6 @@ def slim_default_text(text: str) -> str:
         text,
         count=1,
     )
-    text = re.sub(
-        r"\n        elif action == 'fentastic_player_switch':\n"
-        r"            _handle_fentastic_player_switch\(params\)",
-        "",
-        text,
-        count=1,
-    )
     text = text.replace(
         "anywhere, e.g. a Wizard button or a remote shortcut.",
         "anywhere, e.g. a remote shortcut.",
@@ -558,7 +551,6 @@ def assert_no_standalone_build_payload(zip_path: Path) -> None:
             "open_pov_settings",
             "plugin.video.pov not found",
             "user/stats",
-            "fentastic_player_switch",
         )
         bad_text = [token for token in forbidden_text if token in default_text]
         if bad_text:

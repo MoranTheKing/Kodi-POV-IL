@@ -1923,98 +1923,6 @@ def _translate_path(path):
     return ''
 
 
-def _is_fentastic_xml_dir(path):
-    if not path:
-        return False
-    normalized = os.path.normpath(path).replace('\\', '/').rstrip('/')
-    return normalized.endswith('/addons/skin.fentastic/xml')
-
-
-def _remove_xml_files(path):
-    """Remove only XML files inside skin.fentastic/xml before a preset copy."""
-    if not _is_fentastic_xml_dir(path):
-        raise RuntimeError('unsafe FENtastic XML path: {0}'.format(path))
-    for root, _dirs, files in os.walk(path):
-        for filename in files:
-            if not filename.lower().endswith('.xml'):
-                continue
-            os.remove(os.path.join(root, filename))
-
-
-def _copy_tree_files(src, dst):
-    for root, dirs, files in os.walk(src):
-        rel = os.path.relpath(root, src)
-        target_root = dst if rel == '.' else os.path.join(dst, rel)
-        if not os.path.isdir(target_root):
-            os.makedirs(target_root)
-        for dirname in dirs:
-            target_dir = os.path.join(target_root, dirname)
-            if not os.path.isdir(target_dir):
-                os.makedirs(target_dir)
-        for filename in files:
-            shutil.copy2(
-                os.path.join(root, filename),
-                os.path.join(target_root, filename))
-
-
-def _handle_fentastic_player_switch(_params):
-    """Switch FENtastic between the current Tal Levi player and classic OSD.
-
-    The preset XML folders are shipped by the managed build quick update under
-    special://home/media/player_presets. Standalone AI installs do not include
-    those files, so this action stays inert unless the build tile is present.
-    """
-    dialog = xbmcgui.Dialog()
-    options = (
-        '\u05e0\u05d2\u05df \u05d7\u05d3\u05e9 - Tal Levi (\u05d1\u05e8\u05d9\u05e8\u05ea \u05de\u05d7\u05d3\u05dc)',
-        '\u05e0\u05d2\u05df \u05e7\u05dc\u05d0\u05e1\u05d9 - \u05e4\u05e9\u05d5\u05d8 \u05d9\u05d5\u05ea\u05e8',
-    )
-    choice = dialog.select(
-        '\u05d1\u05d7\u05d9\u05e8\u05ea \u05e0\u05d2\u05df FENtastic', options)
-    if choice < 0:
-        return
-
-    mode = 'modern' if choice == 0 else 'classic'
-    mode_label = options[choice]
-    src = _translate_path(
-        'special://home/media/player_presets/fentastic/{0}/xml'.format(mode))
-    dst = _translate_path('special://home/addons/skin.fentastic/xml')
-    if not src or not os.path.isdir(src):
-        dialog.ok(
-            'FENtastic',
-            '\u05e7\u05d1\u05e6\u05d9 \u05d4\u05e0\u05d2\u05df \u05dc\u05d0 \u05e0\u05de\u05e6\u05d0\u05d5. \u05d1\u05e6\u05e2 \u05e2\u05d3\u05db\u05d5\u05df \u05de\u05d4\u05d9\u05e8 \u05d5\u05e0\u05e1\u05d4 \u05e9\u05d5\u05d1.')
-        return
-    if not dst or not os.path.isdir(dst) or not _is_fentastic_xml_dir(dst):
-        dialog.ok(
-            'FENtastic',
-            '\u05dc\u05d0 \u05e0\u05de\u05e6\u05d0 skin.fentastic. \u05e2\u05d1\u05d5\u05e8 \u05dc\u05e1\u05e7\u05d9\u05df FENtastic \u05d5\u05e0\u05e1\u05d4 \u05e9\u05d5\u05d1.')
-        return
-
-    try:
-        _remove_xml_files(dst)
-        _copy_tree_files(src, dst)
-        marker_dir = _translate_path(
-            'special://profile/addon_data/{0}'.format(ADDON_ID))
-        if marker_dir and not os.path.isdir(marker_dir):
-            os.makedirs(marker_dir)
-        if marker_dir:
-            with open(os.path.join(marker_dir, 'fentastic_player_mode.txt'),
-                      'w', encoding='utf-8') as marker:
-                marker.write(mode)
-    except Exception as e:
-        dialog.ok('FENtastic', 'Player switch failed: {0}'.format(e))
-        return
-
-    try:
-        xbmc.executebuiltin('ReloadSkin()')
-    except Exception:
-        pass
-    dialog.notification(
-        'FENtastic',
-        '\u05d4\u05d5\u05d7\u05dc\u05e3 \u05dc{0}'.format(mode_label),
-        time=5000)
-
-
 def _notice_value_label(value):
     for label, stored in DEBRID_NOTICE_VALUES:
         if str(value) == stored:
@@ -2132,8 +2040,6 @@ def main():
             _handle_debrid_notice_settings(params)
         elif action == 'torbox_status':
             _handle_torbox_status(params)
-        elif action == 'fentastic_player_switch':
-            _handle_fentastic_player_switch(params)
         else:
             _safe_log('unknown action: ' + action, level='WARNING')
             if handle >= 0:
