@@ -82,7 +82,6 @@ def _remove_build_debrid_notice_favourite():
 
     patterns = (
         br'[ \t]*<favourite\s[^>]*?>[^<]*RunScript\(service\.subtitles\.kodipovilai,\s*action=debrid_notice_settings\)[^<]*</favourite>\s*\r?\n?',
-        br'[ \t]*<favourite\s[^>]*?>[^<]*RunScript\(service\.subtitles\.kodipovilai,\s*action=fentastic_player_switch\)[^<]*</favourite>\s*\r?\n?',
         br'[ \t]*<favourite\s[^>]*name="[^"]*\xd7\x94\xd7\x92\xd7\x93\xd7\xa8\xd7\xaa \xd7\x94\xd7\xaa\xd7\xa8\xd7\x90\xd7\x95\xd7\xaa \xd7\x9e\xd7\xa0\xd7\x95\xd7\x99[^"]*"[^>]*>.*?</favourite>\s*\r?\n?',
     )
     updated = content
