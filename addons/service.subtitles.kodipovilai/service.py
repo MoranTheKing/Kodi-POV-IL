@@ -144,22 +144,17 @@ def _ensure_build_marker():
 
 
 def _run_build_startup_repairs():
-    """Run build-only UI/POV repairs after Kodi has had time to render.
+    """Run build-only UI/POV repairs early in Kodi startup.
 
-    Quick updates replace many files and then restart Kodi. Running every
-    build UI repair synchronously at service startup can make the first
-    post-update session look frozen until Kodi is force-stopped.
+    These repairs are idempotent and should settle the skin/menus before
+    the user starts navigating. Slow steps are still logged individually
+    so a future post-quick-update freeze can be traced to a concrete
+    patcher instead of becoming guesswork.
     """
     try:
         monitor = xbmc.Monitor()
     except Exception:
         monitor = None
-
-    try:
-        if monitor and monitor.waitForAbort(12):
-            return
-    except Exception:
-        pass
 
     steps = (
         _maybe_patch_hebrew_build_ui,
@@ -2023,12 +2018,8 @@ def main():
     # caches, auth state, or skin home widgets.
     _maybe_patch_fentastic_search()
 
-    # Build-only home/menu/list repairs are deliberately delayed. They are
-    # idempotent but can touch many files, so running them inline during the
-    # first post-quick-update startup is the likely source of the frozen
-    # loading screen reported on Android/CoreELEC.
     if build_mode:
-        _start_build_startup_repairs()
+        _run_build_startup_repairs()
 
     # v0.2.9 tried patching FENtastic's notification widget but
     # it broke things; this cleans up the leftover patch on disk
@@ -2051,7 +2042,7 @@ def main():
     # Connect Services is opened on the user's behalf for the
     # service(s) they pick. Best-effort: this addon doesn't own AF3's
     # OAuth flows -- POV does.
-    # Build debrid-status popups are also handled by the delayed repair thread.
+    # Build debrid-status popups are also handled by the startup repair pass.
 
     # Spin up the SubsFilenamePublisher player monitor. It needs to
     # outlive this function's local scope -- xbmc.Player subclasses
