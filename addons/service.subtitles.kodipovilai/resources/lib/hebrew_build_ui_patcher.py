@@ -31,6 +31,7 @@ HE_STRINGS = {
     '#700051': ('Open DarkSubs Settings', 'הגדרות DarkSubs'),
     '#700052': ('Clear POV Cache', 'ניקוי קאש POV'),
     '#700053': ('Clear DarkSubs Cache', 'ניקוי קאש DarkSubs'),
+    '#700070': ('Switch FENtastic Player', 'החלפת נגן FENtastic'),
 }
 
 
