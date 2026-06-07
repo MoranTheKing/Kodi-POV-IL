@@ -1,3 +1,7 @@
+﻿v0.2.135
+- Build edition only: the FENtastic player switch is now exposed from the Kodi power menu, directly below Refresh Skin, so existing users can switch players even if the home tile was never added.
+- Build edition only: the old FENtastic player-switch home tile is no longer injected or restored, preserving custom home screens and avoiding extra build-only tiles.
+- Standalone AI subtitle package remains clean from FENtastic player switch UI.
 v0.2.134
 - Build edition only: added a FENtastic player switch tile so users can choose between Tal Levi's current player and a simpler classic player preset.
 - Build edition only: the player switch is marker-gated, so existing build users receive it once and custom home screens are not rebuilt on every startup.
@@ -3008,3 +3012,4 @@ v0.1.0 (initial)
 - Caches translations under userdata/addon_data with TTL + size cap
 - Skips translation when real Hebrew subs already exist
 - Settings UI for API key, model, source language priority, cache
+

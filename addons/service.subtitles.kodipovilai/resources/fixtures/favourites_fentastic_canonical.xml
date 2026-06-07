@@ -35,5 +35,4 @@
     <favourite name="[B]בדיקת מהירות[/B]" thumb="special://home/media/build_icons/Speed_Test/speed_test_icon.png">PlayMedia("plugin://plugin.program.kodipovilwizard/?mode=build_speed_test")</favourite>
     <favourite name="[B]שליחת לוג[/B]" thumb="special://home/media/build_icons/Twilight/Send_Log/twilight_send_log.png">ActivateWindow(10025,"plugin://plugin.video.pov/?iconImage=special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2fsettings.png&amp;mode=navigator.log_utils&amp;name=Changelog%20%26%20Log%20Utils",return)</favourite>
     <favourite name="[B]סידור מועדפים[/B]" thumb="special://home/media/build_icons/Order_Favorites/Order_Favorites.png">RunAddon(plugin.program.orderfavourites-hebrew)</favourite>
-    <favourite name="[B][COLOR orange]החלפת נגן FENtastic[/COLOR][/B]" thumb="special://home/media/build_icons/POV/Logo_POV_IL.png">RunScript(service.subtitles.kodipovilai,action=fentastic_player_switch)</favourite>
 </favourites>

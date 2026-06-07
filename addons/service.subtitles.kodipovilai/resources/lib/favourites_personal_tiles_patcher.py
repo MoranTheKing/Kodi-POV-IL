@@ -70,8 +70,6 @@ PREMIUMIZE_ACTION = 'premiumize.show_account_info'
 TORBOX_ACTION = 'torbox.show_account_info'
 TORBOX_STATUS_ACTION = (
     'RunScript(service.subtitles.kodipovilai,action=torbox_status)')
-PLAYER_SWITCH_ACTION = (
-    'RunScript(service.subtitles.kodipovilai,action=fentastic_player_switch)')
 
 # Marker comments written into favourites.xml. RESTORE_MARKER keeps
 # compatibility with earlier restores. SEEN_MARKER means "the build
@@ -82,7 +80,6 @@ SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_PERSONAL_TILES_SEEN_v2 -->'
 RESTORE_MARKERS = (MARKER, SEEN_MARKER)
 SERVICE_SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_BUILD_SERVICE_TILES_SEEN_v1 -->'
 FULL_BUILD_SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_FULL_BUILD_TILES_SEEN_v2 -->'
-PLAYER_SWITCH_SEEN_MARKER = '<!-- AI_SUBS_FENTASTIC_PLAYER_SWITCH_SEEN_v1 -->'
 BROKEN_DEBRID_NOTICE_ACTION = (
     'RunPlugin("plugin://service.subtitles.kodipovilai/?'
     'action=open_pov_settings")')
@@ -341,20 +338,6 @@ def _insert_tiles_before_close(content, tiles):
     return content[:close_idx] + b''.join(tiles) + content[close_idx:]
 
 
-def _insert_player_switch_tile(content, tile):
-    # Keep the player switch near the other maintenance tools when possible.
-    anchors = (
-        b'RunAddon(plugin.program.orderfavourites-hebrew)',
-        b'mode=build_speed_test',
-        b'action=quick_update',
-    )
-    for action in anchors:
-        match = _service_tile_pattern(action.decode('utf-8')).search(content)
-        if match is not None:
-            return content[:match.end(1)] + tile + content[match.end(1):]
-    return _insert_tiles_before_close(content, (tile,))
-
-
 def ensure_patched():
     """Returns one of:
     'no_kodi' | 'no_favourites' | 'no_fixture' | 'fixture_unreadable'
@@ -392,7 +375,6 @@ def ensure_patched():
     had_restore_marker = _has_restore_marker(content)
     had_service_marker = _has_marker(content, SERVICE_SEEN_MARKER)
     had_full_marker = _has_marker(content, FULL_BUILD_SEEN_MARKER)
-    had_player_marker = _has_marker(content, PLAYER_SWITCH_SEEN_MARKER)
     content, fixed_existing = _fix_existing_debrid_notice_action(content)
     content, fixed_torbox_status = _fix_existing_torbox_status_action(content)
     content, service_position_fixed = (
@@ -436,14 +418,11 @@ def ensure_patched():
 
     missing_personal = _missing_tiles(content)
     missing_service = _missing_tiles(content, BUILD_SERVICE_TILE_NAMES)
-    has_player_tile = PLAYER_SWITCH_ACTION.encode('utf-8') in content
-    restore_player_tile = (not has_player_tile and not had_player_marker)
-    mark_player_seen = (has_player_tile and not had_player_marker)
     if missing_personal and had_restore_marker:
         if (not fixed_existing and not fixed_torbox_status
                 and not service_position_fixed
                 and (not missing_service or had_service_marker)
-                and not restore_player_tile and not mark_player_seen):
+                ):
             return 'user_removed_tiles'
         # A user may delete the tiles after receiving the broken-action
         # version. Keep the deletion respected, but still persist the
@@ -457,16 +436,12 @@ def ensure_patched():
     marker_added = False
     service_marker_added = False
     full_marker_added = False
-    player_marker_added = False
     if not missing:
         new_content, marker_added = _insert_marker(new_content)
         new_content, service_marker_added = _insert_marker(
             new_content, SERVICE_SEEN_MARKER)
         new_content, full_marker_added = _insert_marker(
             new_content, FULL_BUILD_SEEN_MARKER)
-        if mark_player_seen and not restore_player_tile:
-            new_content, player_marker_added = _insert_marker(
-                new_content, PLAYER_SWITCH_SEEN_MARKER)
     elif not missing_service:
         new_content, service_marker_added = _insert_marker(
             new_content, SERVICE_SEEN_MARKER)
@@ -476,8 +451,7 @@ def ensure_patched():
     if (not missing and not fixed_existing and not marker_added
             and not fixed_torbox_status and not service_marker_added
             and not service_position_fixed and not full_marker_added
-            and not missing_full_tiles and not restore_player_tile
-            and not player_marker_added):
+            and not missing_full_tiles):
         return 'already_complete'
 
     if missing:
@@ -528,20 +502,6 @@ def ensure_patched():
                     new_content[:close_idx] + tile + new_content[close_idx:])
             new_content = positioned
 
-    if restore_player_tile:
-        snippet = _extract_tile_by_action(fixture_text, PLAYER_SWITCH_ACTION)
-        if snippet is None:
-            _log('fixture is missing the FENtastic player switch tile; '
-                 'cannot restore', level='WARNING')
-            return 'unparseable_fixture'
-        player_tile = snippet.encode('utf-8')
-        positioned = _insert_player_switch_tile(new_content, player_tile)
-        if positioned is None:
-            return 'unparseable_fixture'
-        new_content = positioned
-        new_content, player_marker_added = _insert_marker(
-            new_content, PLAYER_SWITCH_SEEN_MARKER)
-
     tmp_path = fav_path + '.aitmp'
     try:
         with open(tmp_path, 'wb') as f:
@@ -569,12 +529,8 @@ def ensure_patched():
         _log('marked favourites build service tiles as seen', level='INFO')
     if full_marker_added:
         _log('marked full build favourites tiles as seen', level='INFO')
-    if player_marker_added:
-        _log('marked FENtastic player switch tile as seen', level='INFO')
     if service_position_fixed:
         _log('moved Premiumize status tile next to TorBox', level='INFO')
-    if restore_player_tile:
-        _log('restored FENtastic player switch tile', level='INFO')
     if missing_full_tiles:
         _log('restored {0} missing canonical build tile(s)'.format(
             len(missing_full_tiles)), level='INFO')
@@ -588,6 +544,4 @@ def ensure_patched():
         return 'marked_and_fixed'
     if marker_added:
         return 'marked'
-    if player_marker_added:
-        return 'marked_player_switch'
     return 'fixed'
