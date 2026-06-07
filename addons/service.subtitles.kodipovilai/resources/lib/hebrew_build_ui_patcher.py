@@ -24,6 +24,7 @@ FENTASTIC_HE_STRINGS = (
     'special://home/addons/skin.fentastic/language/resource.language.he_il/strings.po'
 )
 GUISETTINGS = 'special://profile/guisettings.xml'
+FENTASTIC_DEFAULT_PLAYER_SETTING = 'chooseosdplayer'
 
 HE_STRINGS = {
     '#31072': ('Power Options', 'אפשרויות כיבוי'),
@@ -65,20 +66,32 @@ def _ensure_fentastic_setting_file():
         tree = ET.parse(path)
         root = tree.getroot()
         target = None
+        player_target = None
         for node in root.findall('setting'):
-            if (node.get('id') or '').lower() == 'homemenunofavbutton':
+            setting_id = (node.get('id') or '').lower()
+            if setting_id == 'homemenunofavbutton':
                 target = node
-                break
+            elif setting_id == FENTASTIC_DEFAULT_PLAYER_SETTING:
+                player_target = node
         if target is None:
             target = ET.SubElement(root, 'setting', {
                 'id': 'homemenunofavbutton',
                 'type': 'bool',
             })
-        if (target.text or '').strip().lower() == 'false':
-            return False
-        target.text = 'false'
-        tree.write(path, encoding='utf-8', xml_declaration=False)
-        return True
+        changed = False
+        if (target.text or '').strip().lower() != 'false':
+            target.text = 'false'
+            changed = True
+        if player_target is None:
+            player_target = ET.SubElement(root, 'setting', {
+                'id': FENTASTIC_DEFAULT_PLAYER_SETTING,
+                'type': 'bool',
+            })
+            player_target.text = 'true'
+            changed = True
+        if changed:
+            tree.write(path, encoding='utf-8', xml_declaration=False)
+        return changed
     except Exception as exc:
         kodi_utils.log('hebrew_build_ui_patcher settings.xml failed: {0}'.format(exc), level='WARNING')
         return False
@@ -231,6 +244,45 @@ def _ensure_runtime_keyboard_layout():
     return changed
 
 
+def _ensure_english_audio_preference_file():
+    path = _translate(GUISETTINGS)
+    if not path or not os.path.exists(path):
+        return False
+    try:
+        tree = ET.parse(path)
+        root = tree.getroot()
+        changed = False
+        settings = {}
+        for node in root.findall('setting'):
+            settings[(node.get('id') or '').lower()] = node
+
+        for setting_id in ('locale.audiolanguage',
+                           'locale.defaultaudiolanguage'):
+            node = settings.get(setting_id)
+            if node is None:
+                node = ET.SubElement(root, 'setting', {'id': setting_id})
+                settings[setting_id] = node
+            if (node.text or '').strip() != 'English':
+                node.text = 'English'
+                changed = True
+
+        if changed:
+            tree.write(path, encoding='utf-8', xml_declaration=False)
+        return changed
+    except Exception as exc:
+        kodi_utils.log('hebrew_build_ui_patcher audio failed: {0}'.format(exc), level='WARNING')
+        return False
+
+
+def _ensure_runtime_english_audio_preference():
+    changed = False
+    for setting_id in ('locale.audiolanguage',
+                       'locale.defaultaudiolanguage'):
+        if _set_kodi_setting(setting_id, 'English'):
+            changed = True
+    return changed
+
+
 def ensure_patched():
     changed = []
     if _clear_skin_bool('HomeMenuNoFavButton'):
@@ -245,4 +297,8 @@ def ensure_patched():
         changed.append('keyboard_layouts')
     if _ensure_runtime_keyboard_layout():
         changed.append('runtime_keyboard_layouts')
+    if _ensure_english_audio_preference_file():
+        changed.append('english_audio_file')
+    if _ensure_runtime_english_audio_preference():
+        changed.append('english_audio_runtime')
     return 'patched:' + ','.join(changed) if changed else 'already_ok'
