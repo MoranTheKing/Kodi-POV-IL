@@ -426,7 +426,12 @@ def kill_kodi(msg=None, over=None):
     if choice == 1:
         from resources.libs.common import logging
         logging.log("Force Closing Kodi: Platform[{0}]".format(str(platform())))
-        os._exit(1)
+        try:
+            xbmc.executebuiltin('Quit')
+            xbmc.sleep(1500)
+        except Exception as exc:
+            logging.log("Kodi Quit builtin failed: {0}".format(exc))
+        os._exit(0)
 
 
 def reload_profile(profile=None):

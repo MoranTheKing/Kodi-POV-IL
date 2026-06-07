@@ -1,4 +1,12 @@
-﻿v0.2.135
+﻿v0.2.136
+- Build edition only: FENtastic player files were refreshed from Tal Levi's latest package. Huge credit to Tal Levi for the player work.
+- Build edition only: the player switch now uses FENtastic's native chooseosdplayer setting instead of the old script/preset-copy mechanism.
+- Build edition only: subtitle-delay buttons stay in the corrected direction, and users without an existing player choice default to the simple player without overriding later choices.
+- Build edition only: quick updates no longer restore deleted default home tiles after cache cleanup or restart.
+- Build edition only: startup repairs run early again, English audio is preferred when available, and Kodi now exits through the normal Quit path before the hard fallback after updates.
+- Standalone AI subtitle package remains clean from build-only player UI and home-tile changes.
+
+v0.2.135
 - Build edition only: the FENtastic player switch is now exposed from the Kodi power menu, directly below Refresh Skin, so existing users can switch players even if the home tile was never added.
 - Build edition only: the old FENtastic player-switch home tile is no longer injected or restored, preserving custom home screens and avoiding extra build-only tiles.
 - Standalone AI subtitle package remains clean from FENtastic player switch UI.

@@ -314,18 +314,16 @@ def _favourite_count(content):
     return len(re.findall(rb'<favourite\b', content))
 
 
-def _should_restore_full_build_tiles(content, missing_full_tiles):
-    """Only repair clearly partial Wizard seeds.
+def _should_restore_full_build_tiles(_content, _missing_full_tiles):
+    """Never rebuild the home screen from startup patching.
 
-    Quick updates must not rebuild a customised home screen. If the user
-    has already received the full marker, deletions are intentional. If
-    there is no marker yet, only add the canonical rows when the file is
-    small enough to look like the stripped Wizard seed rather than a
-    hand-designed home layout.
+    The full build zip already ships the canonical favourites.xml for
+    clean installs. On existing installs, missing favourites are more
+    likely intentional user customisation than a broken seed. Returning
+    False keeps quick updates from re-adding tiles that users deleted,
+    including after app-cache or POV-cache cleanup followed by restart.
     """
-    if not missing_full_tiles:
-        return False
-    return _favourite_count(content) <= 24
+    return False
 
 
 def _insert_tiles_before_close(content, tiles):
@@ -418,7 +416,7 @@ def ensure_patched():
 
     missing_personal = _missing_tiles(content)
     missing_service = _missing_tiles(content, BUILD_SERVICE_TILE_NAMES)
-    if missing_personal and had_restore_marker:
+    if missing_personal:
         if (not fixed_existing and not fixed_torbox_status
                 and not service_position_fixed
                 and (not missing_service or had_service_marker)
@@ -428,7 +426,7 @@ def ensure_patched():
         # version. Keep the deletion respected, but still persist the
         # action fix if that old action exists elsewhere in favourites.
         missing_personal = ()
-    if missing_service and had_service_marker:
+    if missing_service:
         missing_service = ()
     missing = missing_personal + missing_service
 
