@@ -29,7 +29,7 @@ BUILDNAME_DEFAULT = 'Kodi POV IL - FENtastic'
 # triggers a destructive full-build-install dialog that wipes the
 # user's connected services. Should be kept aligned with the version
 # we ship in dist/Kodi-POV-IL-FENtastic-test-*.zip.
-BUILDVERSION_DEFAULT = '0.1.34'
+BUILDVERSION_DEFAULT = '0.1.35'
 EXCLUDES = [ADDON_ID]
 # Text File with build info in it. Please read https://github.com/a4k-openproject/plugin.program.openwizard/wiki/Installing-Builds
 BUILDFILE = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/build.txt'
