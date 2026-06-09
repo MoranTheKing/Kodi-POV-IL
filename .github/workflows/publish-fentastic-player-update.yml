@@ -6,15 +6,15 @@ on:
       quickfix_version:
         description: 'Quick Update version to publish'
         required: true
-        default: '0.1.139'
+        default: '0.1.141'
       build_version:
         description: 'Full build version to publish'
         required: true
-        default: '0.1.32'
+        default: '0.1.34'
       previous_build_version:
         description: 'Existing full build zip to refresh'
         required: true
-        default: '0.1.31'
+        default: '0.1.33'
       wizard_version:
         description: 'Wizard addon version'
         required: true
@@ -26,7 +26,7 @@ on:
       quick_update_note_id:
         description: 'Quick Update notification id. Must increase.'
         required: true
-        default: '196'
+        default: '199'
 
 permissions:
   contents: write
@@ -126,9 +126,9 @@ jobs:
           grep -q 'KODI-POV-IL - Taller power menu list' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
           grep -q '<height>455</height>' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
           grep -q 'Skin.ToggleSetting(chooseosdplayer)' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
-          grep -q 'Skin.HasSetting(chooseosdplayer)' "$WORK/addons/skin.fentastic/xml/VideoOSD.xml"
-          grep -q 'videosd2' "$WORK/addons/skin.fentastic/xml/VideoOSD.xml"
-          grep -q 'OSDPlayerModeVar' "$WORK/addons/skin.fentastic/xml/Variables.xml"
+          grep -q 'Skin.HasSetting(chooseosdplayer).*videosd2' "$WORK/addons/skin.fentastic/xml/VideoOSD.xml"
+          grep -q '!Skin.HasSetting(chooseosdplayer).*videosd1' "$WORK/addons/skin.fentastic/xml/VideoOSD.xml"
+          grep -q 'osdchangeplayervar' "$WORK/addons/skin.fentastic/xml/Variables.xml"
           OUT="dist/${BUILD_SLUG}-quickfix-${QUICKFIX_VERSION}.zip"
           rm -f "$OUT"
           (cd "$WORK" && zip -qr "$OLDPWD/$OUT" addons userdata)
@@ -159,8 +159,9 @@ jobs:
           grep -q 'שנה נגן' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
           grep -q 'KODI-POV-IL - Taller power menu list' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
           grep -q '<height>455</height>' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
-          grep -q 'Skin.HasSetting(chooseosdplayer)' "$WORK/addons/skin.fentastic/xml/VideoOSD.xml"
-          grep -q 'videosd2' "$WORK/addons/skin.fentastic/xml/VideoOSD.xml"
+          grep -q 'Skin.HasSetting(chooseosdplayer).*videosd2' "$WORK/addons/skin.fentastic/xml/VideoOSD.xml"
+          grep -q '!Skin.HasSetting(chooseosdplayer).*videosd1' "$WORK/addons/skin.fentastic/xml/VideoOSD.xml"
+          grep -q 'osdchangeplayervar' "$WORK/addons/skin.fentastic/xml/Variables.xml"
           rm -f "$NEW"
           (cd "$WORK" && zip -qr "$OLDPWD/$NEW" .)
           unzip -t "$NEW" >/dev/null
@@ -198,13 +199,11 @@ jobs:
           cat > wizard/assets/notification_files/quick_update.txt <<EOF
           ${QUICK_UPDATE_NOTE_ID}
           |||
-          תיקון תצוגת כפתור שנה נגן ב-FENtastic
+          תיקון החלפת נגן FENtastic
 
-          הכפתור שנה נגן נשאר בתוך כפתור הכיבוי מתחת לרענן סקין, אבל תפריט הכיבוי הורחב כדי שהוא יהיה גלוי ולא יידחק מתחת לאזור הנראה.
+          החלפת הנגן מחוברת למשתנה של טל osdchangeplayervar ולפעולה Skin.ToggleSetting(chooseosdplayer).
 
-          הכפתור מחליף בפועל בין הנגן המתקדם לנגן הקלאסי באמצעות chooseosdplayer, ו-VideoOSD.xml טוען את הנגן המתאים לפי ההגדרה.
-
-          התיקון כולל גם את האפשרות בהגדרות הנגן בזמן ניגון, ושומר את שינוי השהיית הכתוביות כפי שנשלח בחבילה.
+          ברירת המחדל היא נגן רגיל, והכפתור שנה נגן מחליף בין נגן רגיל לנגן מתקדם לפי קבצי ה-OSD שנשלחו.
 
           quickfix ${QUICKFIX_VERSION} + build ${BUILD_VERSION} + wizard ${WIZARD_VERSION} + AI ${AI_ADDON_VERSION}
           EOF
@@ -225,5 +224,5 @@ jobs:
             wizard/assets/notification_files/quick_update.txt \
             wizard/source/plugin.program.kodipovilwizard/addon.xml \
             wizard/source/plugin.program.kodipovilwizard/uservar.py
-          git commit -m "Publish FENtastic visible player switch fix ${QUICKFIX_VERSION}"
+          git commit -m "Publish FENtastic Tal player switch fix ${QUICKFIX_VERSION}"
           git push origin HEAD:main
