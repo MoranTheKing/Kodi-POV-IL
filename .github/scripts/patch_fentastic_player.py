@@ -137,53 +137,6 @@ def apply_tal_videoosd1(xml_dir: Path) -> None:
     text = read_text(path)
     text = text.replace('<icon>osd/fullscreen/buttons/previous.png</icon>\n\t\t\t<onclick>SkipPrevious</onclick>', '<icon>osd/fullscreen/buttons/previous.png</icon>\n\t\t\t<property name="id">previous</property>\n\t\t\t<onclick>SkipPrevious</onclick>', 1)
     text = text.replace('<icon>osd/fullscreen/buttons/next.png</icon>\n\t\t\t<onclick>SkipNext</onclick>', '<icon>osd/fullscreen/buttons/next.png</icon>\n\t\t\t<property name="id">next</property>\n\t\t\t<onclick>SkipNext</onclick>', 1)
-    new_info = """<!-- OSD CURRENT INFO -->
-<include content="PoweredOsdInfo">
-<param name="groupheight">550</param>
-<param name="texture">$VAR[_FixOsdIcon]</param>
-<param name="bottomlabel">$INFO[VideoPlayer.Plot]</param>
-<param name="middlelabel">$VAR[middlelabelInfo_OSD_Var]</param>
-<param name="grouplistheight">250</param>
-<param name="visible">String.IsEqual(Container(201).ListItem.Property(info),info) + !$EXP[IDANPlusCheck_OSd]</param>
-</include>
-<include content="PoweredOsdInfo">
-<param name="groupheight">250</param>
-<param name="texture">$INFO[Player.Icon]</param>
-<param name="bottomlabel">$INFO[VideoPlayer.Plot]</param>
-<param name="middlelabel">$VAR[middlelabelInfo_OSD_Var]</param>
-<param name="grouplistheight">150</param>
-<param name="visible">String.IsEqual(Container(201).ListItem.Property(info),info) + $EXP[IDANPlusCheck_OSd]</param>
-</include>
-<!-- END OSD CURRENT INFO -->
-
-<!-- OSD NEXT SHOW INFO -->
-<include content="PoweredOsdInfo">
-<param name="groupheight">250</param>
-<param name="texture">$VAR[NextShowIcon_OSD_Var]</param>
-<param name="label">$VAR[NextTitleInfo_Next_OSD] $VAR[NextTitleInfoYear_Next_OSD]</param>
-<param name="bottomlabel">$VAR[bottomlabelinfo_Next_OSD_Var]</param>
-<param name="middlelabel">$VAR[middlelabelInfo_Next_OSD_Var]</param>
-<param name="grouplistheight">150</param>
-<param name="visible">String.IsEqual(Container(201).ListItem.Property(id),next) + $EXP[IDANPlusCheck_OSd] + $EXP[NextItemExist_OSd]</param>
-</include>
-<!-- END OSD NEXT SHOW INFO -->
-
-<!-- OSD PREVIOUS SHOW INFO -->
-<include content="PoweredOsdInfo">
-<param name="groupheight">250</param>
-<param name="texture">$VAR[PreviousShowIcon_OSD_Var]</param>
-<param name="label">$VAR[PreviousTitleInfo_Next_OSD] $VAR[PreviousTitleInfoYear_Next_OSD]</param>
-<param name="bottomlabel">$VAR[bottomlabelinfo_Previous_OSD_Var]</param>
-<param name="middlelabel">$VAR[middlelabelInfo_Previous_OSD_Var]</param>
-<param name="grouplistheight">150</param>
-<param name="visible">String.IsEqual(Container(201).ListItem.Property(id),previous) + $EXP[IDANPlusCheck_OSd] + $EXP[PreviousItemExist_OSd]</param>
-</include>
-<!-- END OSD PREVIOUS SHOW INFO -->
-
-<include>_FixedCachedOSd</include>"""
-    text = re.sub(r'<!-- OSD INFO -->.*?<include>_FixedCachedOSd</include>', new_info, text, count=1, flags=re.S)
-    text = text.replace('<label>$INFO[VideoPlayer.Genre]</label>\n\t\t<visible>!String.IsEmpty(VideoPlayer.Genre)</visible>', '<label>$PARAM[middlelabel]</label>', 1)
-    text = text.replace('<label>$INFO[VideoPlayer.Plot]</label>', '<label>$PARAM[bottomlabel]</label>\n\t\t<visible>$PARAM[bottomlabevisible]</visible> <!-- IF NO PLOT -->', 1)
     write_text(path, text)
 
 
@@ -195,13 +148,12 @@ def keep_user_subtitle_delay(xml_dir: Path) -> None:
     write_text(path, text)
 
 
-def patch_video_osd_switch(xml_dir: Path) -> None:
+def lock_video_osd_to_tal_default(xml_dir: Path) -> None:
     path = xml_dir / "VideoOSD.xml"
     text = read_text(path)
-    switch = '<include condition="Skin.HasSetting(chooseosdplayer)">videosd2</include>\n\t<include condition="!Skin.HasSetting(chooseosdplayer)">videosd1</include>'
-    text = re.sub(r'<include[^>]*Skin\.HasSetting\(chooseosdplayer\)[^>]*>videosd[12]</include>\s*<include[^>]*!Skin\.HasSetting\(chooseosdplayer\)[^>]*>videosd[12]</include>(?:\s*<!--[^>]*videosd2[^>]*-->)?', switch, text, count=1)
-    if "Skin.HasSetting(chooseosdplayer)" not in text:
-        text = text.replace("<include>videosd1</include>", switch, 1)
+    text = re.sub(r'<include[^>]*Skin\.HasSetting\(chooseosdplayer\)[^>]*>videosd[12]</include>\s*<include[^>]*!Skin\.HasSetting\(chooseosdplayer\)[^>]*>videosd[12]</include>', '<include>videosd1</include>', text, count=1)
+    if "<include>videosd1</include>" not in text:
+        text = text.replace("<controls>", "<controls>\n\t<include>videosd1</include>", 1)
     write_text(path, text)
 
 
@@ -228,15 +180,25 @@ def patch_power_menu(xml_dir: Path) -> None:
     text = read_text(path)
     text = text.replace('<param name="height" value="485" />', '<param name="height" value="560" />', 1)
     text = inline_taller_power_menu_list(xml_dir, text)
-    marker = "KODI-POV-IL - Toggle FENtastic player"
+    marker = "KODI-POV-IL - Open FENtastic player selector"
+    old_marker = "KODI-POV-IL - Toggle FENtastic player"
+    old_block = re.compile(r'\s*<item>\s*<!-- ' + re.escape(old_marker) + r' -->.*?</item>', re.S)
+    text = old_block.sub("", text)
     if marker not in text:
-        block = "\n".join(["                        <item>", "                            <!-- KODI-POV-IL - Toggle FENtastic player -->", f"                            <label>[B][COLOR blue]{LABEL}[/COLOR][/B]</label>", f"                            <label2>$VAR[{VAR_NAME}]</label2>", "                            <onclick>Skin.ToggleSetting(chooseosdplayer)</onclick>", "                            <onclick>Dialog.Close(all)</onclick>", "                            <onclick>ReloadSkin()</onclick>", "                        </item>"])
+        block = "\n".join([
+            "                        <item>",
+            "                            <!-- KODI-POV-IL - Open FENtastic player selector -->",
+            f"                            <label>[B][COLOR blue]{LABEL}[/COLOR][/B]</label>",
+            f"                            <label2>$VAR[{VAR_NAME}]</label2>",
+            "                            <onclick>Dialog.Close(all)</onclick>",
+            "                            <onclick>ActivateWindow(1124)</onclick>",
+            "                            <onclick>Control.SetFocus(9001)</onclick>",
+            "                        </item>",
+        ])
         idx = text.find("<!-- Reload skin -->")
         end = text.find("</item>", idx)
         if idx >= 0 and end >= 0:
             text = text[:end + len("</item>")] + "\n" + block + text[end + len("</item>"):]
-    else:
-        text = text.replace("Skin.SetBool(chooseosdplayer)", "Skin.ToggleSetting(chooseosdplayer)").replace("$VAR[OSDPlayerModeVar]", f"$VAR[{VAR_NAME}]")
     write_text(path, text)
 
 
@@ -245,13 +207,21 @@ def patch_osd_settings_menu(xml_dir: Path) -> None:
     text = read_text(path)
     marker = "KODI-POV-IL - OSD player mode"
     if marker not in text:
-        block = "\n".join(["        <item>", "            <!-- KODI-POV-IL - OSD player mode -->", f"            <label>{LABEL}</label>", f"            <label2>$VAR[{VAR_NAME}]</label2>", "            <onclick>Skin.ToggleSetting(chooseosdplayer)</onclick>", "            <onclick>ReloadSkin()</onclick>", "        </item>"])
+        block = "\n".join([
+            "        <item>",
+            "            <!-- KODI-POV-IL - OSD player mode -->",
+            f"            <label>{LABEL}</label>",
+            f"            <label2>$VAR[{VAR_NAME}]</label2>",
+            "            <onclick>Skin.ToggleSetting(chooseosdplayer)</onclick>",
+            "        </item>",
+        ])
         idx = text.find('<include name="BasedMenuOsdSecondMenu">')
         end = text.find("</content>", idx)
         if idx >= 0 and end >= 0:
             text = text[:end] + block + "\n" + text[end:]
     else:
         text = text.replace("Skin.SetBool(chooseosdplayer)", "Skin.ToggleSetting(chooseosdplayer)").replace("$VAR[OSDPlayerModeVar]", f"$VAR[{VAR_NAME}]")
+        text = text.replace("<onclick>ReloadSkin()</onclick>", "")
     write_text(path, text)
 
 
@@ -269,16 +239,15 @@ def patch_player_var(xml_dir: Path) -> None:
 
 def verify(root: Path, xml_dir: Path) -> None:
     video = read_text(xml_dir / "VideoOSD.xml")
-    if 'Skin.HasSetting(chooseosdplayer)">videosd2</include>' not in video:
-        raise SystemExit("true state is not mapped to videosd2 regular player")
-    if '!Skin.HasSetting(chooseosdplayer)">videosd1</include>' not in video:
-        raise SystemExit("false state is not mapped to videosd1 advanced player")
-    for dep in ["Includes.xml", "Includes_VideoOsd.xml", "Includes_VideoOsd2.xml", "Includes_Buttons.xml", "Includes_Items.xml", "Variables.xml", "Includes_Expression.xml"]:
-        if not (xml_dir / dep).is_file():
-            raise SystemExit(f"missing dependency {dep}")
+    if "<include>videosd1</include>" not in video:
+        raise SystemExit("VideoOSD is not locked to Tal default videosd1")
+    if "Skin.HasSetting(chooseosdplayer)" in video or "videosd2</include>" in video:
+        raise SystemExit("VideoOSD still contains unsafe direct player switch")
     variables = read_text(xml_dir / "Variables.xml")
     expressions = read_text(xml_dir / "Includes_Expression.xml")
     video1 = read_text(xml_dir / "Includes_VideoOsd.xml")
+    power = read_text(xml_dir / "DialogButtonMenu.xml")
+    items = read_text(xml_dir / "Includes_Items.xml")
     for needle in ["middlelabelInfo_OSD_Var", "NextShowIcon_OSD_Var", VAR_NAME]:
         if needle not in variables:
             raise SystemExit(f"missing variable {needle}")
@@ -289,10 +258,10 @@ def verify(root: Path, xml_dir: Path) -> None:
         raise SystemExit("Tal previous/next OSD properties missing")
     if "SubtitleDelayPlus" not in video1 or "SubtitleDelayMinus" not in video1:
         raise SystemExit("subtitle delay actions missing")
-    for name in ["DialogButtonMenu.xml", "Includes_Items.xml"]:
-        text = read_text(xml_dir / name)
-        if LABEL not in text or "Skin.ToggleSetting(chooseosdplayer)" not in text or f"$VAR[{VAR_NAME}]" not in text:
-            raise SystemExit(f"{name} missing Tal-style toggle")
+    if LABEL not in power or "ActivateWindow(1124)" not in power or "Skin.ToggleSetting(chooseosdplayer)" in power:
+        raise SystemExit("power menu is not opening selector safely")
+    if LABEL not in items or "Skin.ToggleSetting(chooseosdplayer)" not in items or f"$VAR[{VAR_NAME}]" not in items:
+        raise SystemExit("OSD settings menu missing Tal selector")
 
 
 def main() -> int:
@@ -307,12 +276,12 @@ def main() -> int:
     apply_tal_variables(xml_dir)
     apply_tal_videoosd1(xml_dir)
     keep_user_subtitle_delay(xml_dir)
-    patch_video_osd_switch(xml_dir)
+    lock_video_osd_to_tal_default(xml_dir)
     patch_power_menu(xml_dir)
     patch_osd_settings_menu(xml_dir)
     patch_player_var(xml_dir)
     verify(root, xml_dir)
-    print("FENtastic Tal full player update applied with user subtitle delay")
+    print("FENtastic Tal player selector applied safely")
     return 0
 
 
