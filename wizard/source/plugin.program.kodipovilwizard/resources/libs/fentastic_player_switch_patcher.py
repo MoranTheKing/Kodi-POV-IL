@@ -9,12 +9,14 @@ import xbmc
 from resources.libs.common.config import CONFIG
 from resources.libs.common import logging
 
-LABEL = "\u05e9\u05e0\u05d4 \u05e0\u05d2\u05df"
+LABEL = "\u05d1\u05d7\u05e8 \u05e0\u05d2\u05df"
 REGULAR = "\u05e0\u05d2\u05df \u05e8\u05d2\u05d9\u05dc"
 ADVANCED = "\u05e0\u05d2\u05df \u05de\u05ea\u05e7\u05d3\u05dd"
-MARKER_POWER = "KODI-POV-IL - Toggle FENtastic player"
+VAR_NAME = "osdchangeplayervar"
+MARKER_POWER = "KODI-POV-IL - Open FENtastic player selector"
 MARKER_OSD = "KODI-POV-IL - OSD player mode"
 MARKER_TALLER = "KODI-POV-IL - Taller power menu list"
+OLD_MARKER_POWER = "KODI-POV-IL - Toggle FENtastic player"
 
 
 def _read(path):
@@ -44,22 +46,18 @@ def _set_default_regular():
     return False
 
 
-def _patch_video_osd(xml_dir):
+def _lock_video_osd(xml_dir):
     path = os.path.join(xml_dir, "VideoOSD.xml")
     text = _read(path)
     original = text
-    switch = (
-        '<include condition="Skin.HasSetting(chooseosdplayer)">videosd2</include>\n'
-        '\t<include condition="!Skin.HasSetting(chooseosdplayer)">videosd1</include>'
-    )
     text = re.sub(
-        r'<include[^>]*Skin\.HasSetting\(chooseosdplayer\)[^>]*>videosd[12]</include>\s*<include[^>]*!Skin\.HasSetting\(chooseosdplayer\)[^>]*>videosd[12]</include>(?:\s*<!--[^>]*videosd2[^>]*-->)?',
-        switch,
+        r'<include[^>]*Skin\.HasSetting\(chooseosdplayer\)[^>]*>videosd[12]</include>\s*<include[^>]*!Skin\.HasSetting\(chooseosdplayer\)[^>]*>videosd[12]</include>',
+        '<include>videosd1</include>',
         text,
         count=1,
     )
-    if "Skin.HasSetting(chooseosdplayer)" not in text:
-        text = text.replace("<include>videosd1</include>", switch, 1)
+    if '<include>videosd1</include>' not in text:
+        text = text.replace('<controls>', '<controls>\n\t<include>videosd1</include>', 1)
     if text != original:
         _write(path, text)
         return True
@@ -90,23 +88,22 @@ def _patch_power_menu(xml_dir):
     original = text
     text = text.replace('<param name="height" value="485" />', '<param name="height" value="560" />', 1)
     text = _inline_taller_power_menu_list(xml_dir, text)
+    text = re.sub(r'\s*<item>\s*<!-- ' + re.escape(OLD_MARKER_POWER) + r' -->.*?</item>', '', text, count=1, flags=re.S)
     if MARKER_POWER not in text:
         block = "\n".join([
             "                        <item>",
             "                            <!-- {0} -->".format(MARKER_POWER),
             "                            <label>[B][COLOR blue]{0}[/COLOR][/B]</label>".format(LABEL),
-            "                            <label2>$VAR[OSDPlayerModeVar]</label2>",
-            "                            <onclick>Skin.ToggleSetting(chooseosdplayer)</onclick>",
+            "                            <label2>$VAR[{0}]</label2>".format(VAR_NAME),
             "                            <onclick>Dialog.Close(all)</onclick>",
-            "                            <onclick>ReloadSkin()</onclick>",
+            "                            <onclick>ActivateWindow(1124)</onclick>",
+            "                            <onclick>Control.SetFocus(9001)</onclick>",
             "                        </item>",
         ])
         idx = text.find("<!-- Reload skin -->")
         end = text.find("</item>", idx)
         if idx >= 0 and end >= 0:
             text = text[:end + len("</item>")] + "\n" + block + text[end + len("</item>"):]
-    else:
-        text = text.replace("Skin.SetBool(chooseosdplayer)", "Skin.ToggleSetting(chooseosdplayer)")
     if text != original:
         _write(path, text)
         return True
@@ -122,9 +119,8 @@ def _patch_osd_settings_menu(xml_dir):
             "        <item>",
             "            <!-- {0} -->".format(MARKER_OSD),
             "            <label>{0}</label>".format(LABEL),
-            "            <label2>$VAR[OSDPlayerModeVar]</label2>",
+            "            <label2>$VAR[{0}]</label2>".format(VAR_NAME),
             "            <onclick>Skin.ToggleSetting(chooseosdplayer)</onclick>",
-            "            <onclick>ReloadSkin()</onclick>",
             "        </item>",
         ])
         idx = text.find('<include name="BasedMenuOsdSecondMenu">')
@@ -133,6 +129,8 @@ def _patch_osd_settings_menu(xml_dir):
             text = text[:end] + block + "\n" + text[end:]
     else:
         text = text.replace("Skin.SetBool(chooseosdplayer)", "Skin.ToggleSetting(chooseosdplayer)")
+        text = text.replace("$VAR[OSDPlayerModeVar]", "$VAR[{0}]".format(VAR_NAME))
+        text = text.replace("<onclick>ReloadSkin()</onclick>", "")
     if text != original:
         _write(path, text)
         return True
@@ -143,11 +141,12 @@ def _patch_variables(xml_dir):
     path = os.path.join(xml_dir, "Variables.xml")
     text = _read(path)
     original = text
-    block = '\n\t<variable name="OSDPlayerModeVar">\n\t\t<value condition="Skin.HasSetting(chooseosdplayer)">{0}</value>\n\t\t<value>{1}</value>\n\t</variable>'.format(REGULAR, ADVANCED)
-    if '<variable name="OSDPlayerModeVar">' in text:
-        text = re.sub(r'<variable name="OSDPlayerModeVar">.*?</variable>', block, text, count=1, flags=re.S)
+    block = '\n\t<variable name="{0}">\n\t\t<value condition="Skin.HasSetting(chooseosdplayer)">{1}</value>\n\t\t<value>{2}</value>\n\t</variable>'.format(VAR_NAME, REGULAR, ADVANCED)
+    if '<variable name="{0}">'.format(VAR_NAME) in text:
+        text = re.sub(r'<variable name="' + VAR_NAME + r'">.*?</variable>', block, text, count=1, flags=re.S)
     else:
         text = text.replace("</includes>", block + "\n</includes>", 1)
+    text = re.sub(r'<variable name="OSDPlayerModeVar">.*?</variable>', '', text, count=1, flags=re.S)
     if text != original:
         _write(path, text)
         return True
@@ -156,29 +155,29 @@ def _patch_variables(xml_dir):
 
 def _verify(xml_dir):
     video = _read(os.path.join(xml_dir, "VideoOSD.xml"))
-    if 'Skin.HasSetting(chooseosdplayer)">videosd2</include>' not in video:
-        raise RuntimeError("true state is not videosd2")
-    if '!Skin.HasSetting(chooseosdplayer)">videosd1</include>' not in video:
-        raise RuntimeError("false state is not videosd1")
-    includes = _read(os.path.join(xml_dir, "Includes.xml"))
-    if 'include name="syncfakebutton"' not in includes or 'include name="TouchBackOSDButton"' not in includes:
-        raise RuntimeError("videosd2 dependencies are missing")
+    if "<include>videosd1</include>" not in video:
+        raise RuntimeError("VideoOSD is not locked to videosd1")
+    if "Skin.HasSetting(chooseosdplayer)" in video or "videosd2</include>" in video:
+        raise RuntimeError("unsafe direct VideoOSD switch remains")
+    power = _read(os.path.join(xml_dir, "DialogButtonMenu.xml"))
+    if "ActivateWindow(1124)" not in power or "Skin.ToggleSetting(chooseosdplayer)" in power:
+        raise RuntimeError("power menu is not safe selector opener")
 
 
 def ensure_patched():
     xml_dir = os.path.join(CONFIG.ADDONS, "skin.fentastic", "xml")
     if not os.path.isdir(xml_dir):
-        logging.log("[FENtastic player switch] xml folder not found", level=xbmc.LOGINFO)
+        logging.log("[FENtastic player selector] xml folder not found", level=xbmc.LOGINFO)
         return False
     changed = False
     changed = _set_default_regular() or changed
-    changed = _patch_video_osd(xml_dir) or changed
+    changed = _lock_video_osd(xml_dir) or changed
     changed = _patch_power_menu(xml_dir) or changed
     changed = _patch_osd_settings_menu(xml_dir) or changed
     changed = _patch_variables(xml_dir) or changed
     _verify(xml_dir)
     if changed:
-        logging.log("[FENtastic player switch] Tal mapping applied", level=xbmc.LOGINFO)
+        logging.log("[FENtastic player selector] safe selector applied", level=xbmc.LOGINFO)
         xbmc.executebuiltin("ReloadSkin()")
     return changed
 
@@ -187,5 +186,5 @@ def safe_ensure_patched():
     try:
         return ensure_patched()
     except Exception as exc:
-        logging.log("[FENtastic player switch] failed: {0}".format(exc), level=xbmc.LOGERROR)
+        logging.log("[FENtastic player selector] failed: {0}".format(exc), level=xbmc.LOGERROR)
         return False
