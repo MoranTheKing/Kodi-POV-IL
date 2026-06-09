@@ -38,6 +38,21 @@ class Router:
 
         return self.params
 
+    def _select_fentastic_player(self):
+        dialog = xbmcgui.Dialog()
+        options = ['נגן רגיל', 'נגן מתקדם']
+        selected = dialog.select('בחר נגן FENtastic', options)
+        if selected == -1:
+            return
+        if selected == 0:
+            xbmc.executebuiltin('Skin.SetBool(chooseosdplayer)')
+            msg = 'נבחר נגן רגיל'
+        else:
+            xbmc.executebuiltin('Skin.Reset(chooseosdplayer)')
+            msg = 'נבחר נגן מתקדם'
+        xbmc.executebuiltin('ReloadSkin()')
+        logging.log_notify(CONFIG.ADDONTITLE, '[COLOR {0}]{1}[/COLOR]'.format(CONFIG.COLOR2, msg))
+
     def _build_switch_skin_jsonrpc(self):
         from resources.libs import skin as skin_lib
         from resources.libs.wizard import Wizard
@@ -173,6 +188,8 @@ class Router:
             # KODI-RD-IL
             elif action == 'quick_update':
                 Wizard().quick_update(name, auto_quick_update)
+            elif action == 'fentastic_select_player':
+                self._select_fentastic_player()
             # KODI-RD-IL
             elif action == 'build_switch_skin':
                 self._build_switch_skin_jsonrpc()
@@ -218,83 +235,17 @@ class Router:
             self._finish(handle)
         elif mode == 'enableall':
             menu.enable_addons(all=True)
-        elif mode == 'toggleaddon':
-            from resources.libs import db
-            db.toggle_addon(name, url)
-            xbmc.executebuiltin('Container.Refresh()')
-        elif mode == 'forceupdate':
-            from resources.libs import db
-            db.force_check_updates(auto=action)
-        ############KODI-RD-IL##############
-        elif mode == 'forceupdateFAST':
-            from resources.libs import db
-            db.forceUpdate()
-        ####################################
-        elif mode == 'togglecache':
-            from resources.libs import clear
-            clear.toggle_cache(name)
-            xbmc.executebuiltin('Container.Refresh()')
-        elif mode == 'changefreq':  # Maintenance - Auto Clean Frequency
-            menu.change_freq()
-            xbmc.executebuiltin('Container.Refresh()')
-        elif mode == 'systeminfo':  # Maintenance -> System Tweaks/Fixes -> System Information
-            menu.system_info()
-            self._finish(handle)
-        elif mode == 'nettools':  # Maintenance -> Misc Maintenance -> Network Tools
-            menu.net_tools()
-            self._finish(handle)
-        elif mode == 'runspeedtest':  # Maintenance -> Misc Maintenance -> Network Tools -> Speed Test -> Run Speed Test
-            menu.run_speed_test()
-            xbmc.executebuiltin('Container.Refresh()')
-        elif mode == 'clearspeedtest':  # Maintenance -> Misc Maintenance -> Network Tools -> Speed Test -> Clear Results
-            menu.clear_speed_test()
-            xbmc.executebuiltin('Container.Refresh()')
-        elif mode == 'viewspeedtest':  # Maintenance -> Misc Maintenance -> Network Tools -> Speed Test -> any previous test
-            menu.view_speed_test(name)
-            xbmc.executebuiltin('Container.Refresh()')
-        elif mode == 'viewIP':  # Maintenance -> Misc Maintenance -> Network Tools -> View IP Address & MAC Address
-            menu.view_ip()
-            self._finish(handle)
-        elif mode == 'speedtest': 
-            xbmc.executebuiltin('InstallAddon("script.speedtester")')
-            xbmc.executebuiltin('RunAddon("script.speedtester")')
-        ############KODI-RD-IL##############
-        elif mode == 'build_speed_test': # KODI-RD-IL Real Debrid Speed Test
-            from resources.libs.wizard import build_speed_test
-            build_speed_test()
-        ####################################
-        elif mode == 'apk':  # APK Installer
-            menu.apk_menu(url)
-            self._finish(handle)
-        elif mode == 'kodiapk':  # APK Installer -> Official Kodi APK's
-            xbmc.executebuiltin('RunScript(script.kodi.android.update)')
-        elif mode == 'fmchoose':
-            from resources.libs import install
-            install.choose_file_manager()
-        elif mode == 'apkinstall':
-            from resources.libs import install
-            install.install_apk(name, url)
-        elif mode == 'removeaddondata':  # Maintenance - > Addon Tools -> Remove Addon Data
-            menu.remove_addon_data_menu()
-            self._finish(handle)
-        elif mode == 'savedata':  # Save Data + Builds -> Save Data Menu
-            menu.save_menu()
-            self._finish(handle)
-        elif mode == 'youtube':  # "YouTube Section"
-            menu.youtube_menu(url)
-            self._finish(handle)
-        elif mode == 'viewVideo':  # View  Video
-            from resources.libs import yt
-            yt.play_video(url)
-        elif mode == 'trakt':  # Save Data -> Keep Trakt Data
-            menu.trakt_menu()
-            self._finish(handle)
-        elif mode == 'realdebrid':  # Save Data -> Keep Debrid
-            menu.debrid_menu()
             self._finish(handle)
 
+        elif mode == 'backup':
+            from resources.libs.gui.backup_menu import BackupMenu
+            BackupMenu().get_listing()
+            self._finish(handle)
+
+        self._finish(handle)
+
     def _finish(self, handle):
-        from resources.libs.common import directory
-        directory.set_view()
-        xbmcplugin.setContent(handle, 'files')
-        xbmcplugin.endOfDirectory(handle)
+        try:
+            xbmcplugin.endOfDirectory(handle)
+        except Exception:
+            pass
