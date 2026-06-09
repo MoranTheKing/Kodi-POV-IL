@@ -6,15 +6,15 @@ on:
       quickfix_version:
         description: 'Quick Update version to publish'
         required: true
-        default: '0.1.137'
+        default: '0.1.138'
       build_version:
         description: 'Full build version to publish'
         required: true
-        default: '0.1.30'
+        default: '0.1.31'
       previous_build_version:
         description: 'Existing full build zip to refresh'
         required: true
-        default: '0.1.29'
+        default: '0.1.30'
       wizard_version:
         description: 'Wizard addon version'
         required: true
@@ -26,7 +26,7 @@ on:
       quick_update_note_id:
         description: 'Quick Update notification id. Must increase.'
         required: true
-        default: '194'
+        default: '195'
 
 permissions:
   contents: write
@@ -61,21 +61,18 @@ jobs:
           echo "AI_ADDON_VERSION=${{ github.event.inputs.ai_addon_version }}" >> "$GITHUB_ENV"
           echo "QUICK_UPDATE_NOTE_ID=${{ github.event.inputs.quick_update_note_id }}" >> "$GITHUB_ENV"
 
-      - name: Verify FENtastic player package
+      - name: Verify source FENtastic player package
         working-directory: src
         run: |
           set -euo pipefail
           test -s "$FENTASTIC_UPDATE_ZIP"
           unzip -t "$FENTASTIC_UPDATE_ZIP" >/dev/null
           unzip -l "$FENTASTIC_UPDATE_ZIP" | grep 'addons/skin.fentastic/xml/Includes_VideoOsd.xml'
+          unzip -l "$FENTASTIC_UPDATE_ZIP" | grep 'addons/skin.fentastic/xml/Includes_VideoOsd2.xml'
+          unzip -l "$FENTASTIC_UPDATE_ZIP" | grep 'addons/skin.fentastic/xml/DialogButtonMenu.xml'
+          unzip -l "$FENTASTIC_UPDATE_ZIP" | grep 'addons/skin.fentastic/xml/VideoOSD.xml'
           unzip -l "$FENTASTIC_UPDATE_ZIP" | grep 'addons/skin.fentastic/xml/Custom_1124_OsdSettings.xml'
           unzip -l "$FENTASTIC_UPDATE_ZIP" | grep 'userdata/addon_data/skin.fentastic/settings.xml'
-          tmp="$RUNNER_TEMP/fentastic-check"
-          rm -rf "$tmp" && mkdir -p "$tmp"
-          unzip -q "$FENTASTIC_UPDATE_ZIP" -d "$tmp"
-          grep -q '<setting id="chooseosdplayer" type="bool">true</setting>' "$tmp/userdata/addon_data/skin.fentastic/settings.xml"
-          grep -q 'SubtitleDelayPlus' "$tmp/addons/skin.fentastic/xml/Includes_VideoOsd.xml"
-          grep -q 'SubtitleDelayMinus' "$tmp/addons/skin.fentastic/xml/Includes_VideoOsd.xml"
 
       - name: Build wizard ZIP
         working-directory: src
@@ -98,6 +95,90 @@ jobs:
           (cd wizard/source && zip -qr "../../dist/${WIZARD_ID}-${WIZARD_VERSION}.zip" "${WIZARD_ID}")
           unzip -t "dist/${WIZARD_ID}-${WIZARD_VERSION}.zip" >/dev/null
 
+      - name: Create FENtastic patch helper
+        working-directory: src
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/patch_fentastic_player.py" <<'PY'
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          xml = root / 'addons' / 'skin.fentastic' / 'xml'
+
+          def read(path):
+              return path.read_text(encoding='utf-8-sig')
+
+          def write(path, text):
+              path.write_text(text, encoding='utf-8')
+
+          # 1) VideoOSD must actually choose between the two OSD/player layouts.
+          video = xml / 'VideoOSD.xml'
+          text = read(video)
+          text = text.replace('<include>videosd1</include>', '<include condition="Skin.HasSetting(chooseosdplayer)">videosd1</include>\n\t<include condition="!Skin.HasSetting(chooseosdplayer)">videosd2</include>')
+          write(video, text)
+
+          # 2) Add a readable power-menu button directly below Reload skin.
+          dialog = xml / 'DialogButtonMenu.xml'
+          text = read(dialog)
+          marker = '<!-- KODI-POV-IL - Toggle FENtastic player -->'
+          if marker not in text:
+              block = '''\t\t\t\t\t\t<item>
+\t\t\t\t\t\t\t<!-- KODI-POV-IL - Toggle FENtastic player -->
+\t\t\t\t\t\t\t<label>[B][COLOR blue]שנה נגן[/COLOR][/B]</label>
+\t\t\t\t\t\t\t<label2>$VAR[OSDPlayerModeVar]</label2>
+\t\t\t\t\t\t\t<onclick>Skin.ToggleSetting(chooseosdplayer)</onclick>
+\t\t\t\t\t\t\t<onclick>Dialog.Close(all)</onclick>
+\t\t\t\t\t\t\t<onclick>ReloadSkin()</onclick>
+\t\t\t\t\t\t</item>'''
+              anchor = '<!-- Reload skin -->'
+              idx = text.find(anchor)
+              if idx < 0:
+                  raise SystemExit('Reload skin anchor not found in DialogButtonMenu.xml')
+              end = text.find('</item>', idx)
+              if end < 0:
+                  raise SystemExit('Reload skin item end not found in DialogButtonMenu.xml')
+              end += len('</item>')
+              text = text[:end] + '\n' + block + text[end:]
+          write(dialog, text)
+
+          # 3) Add the same toggle to the in-player OSD settings list.
+          items = xml / 'Includes_Items.xml'
+          text = read(items)
+          marker = '<!-- KODI-POV-IL - OSD player mode -->'
+          if marker not in text:
+              block = '''\t\t<item>
+\t\t\t<!-- KODI-POV-IL - OSD player mode -->
+\t\t\t<label>שנה נגן</label>
+\t\t\t<label2>$VAR[OSDPlayerModeVar]</label2>
+\t\t\t<onclick>Skin.ToggleSetting(chooseosdplayer)</onclick>
+\t\t\t<onclick>ReloadSkin()</onclick>
+\t\t</item>'''
+              include_idx = text.find('<include name="BasedMenuOsdSecondMenu">')
+              if include_idx < 0:
+                  raise SystemExit('BasedMenuOsdSecondMenu not found in Includes_Items.xml')
+              end = text.find('</content>', include_idx)
+              if end < 0:
+                  raise SystemExit('BasedMenuOsdSecondMenu content end not found in Includes_Items.xml')
+              text = text[:end] + block + '\n' + text[end:]
+          write(items, text)
+
+          # 4) Add a status variable so the user sees which player is active.
+          vars_path = xml / 'Variables.xml'
+          text = read(vars_path)
+          marker = '<variable name="OSDPlayerModeVar">'
+          if marker not in text:
+              block = '''\n\t<variable name="OSDPlayerModeVar">
+\t\t<value condition="Skin.HasSetting(chooseosdplayer)">נגן מתקדם</value>
+\t\t<value>נגן קלאסי</value>
+\t</variable>\n'''
+              end = text.rfind('</includes>')
+              if end < 0:
+                  raise SystemExit('Variables.xml closing </includes> not found')
+              text = text[:end] + block + text[end:]
+          write(vars_path, text)
+          PY
+
       - name: Build Quick Update ZIP
         working-directory: src
         run: |
@@ -109,14 +190,19 @@ jobs:
           cp -a "wizard/source/${WIZARD_ID}" "$WORK/addons/${WIZARD_ID}"
           unzip -q "$AI_BUILD_ZIP" -d "$WORK/addons"
           unzip -q "$FENTASTIC_UPDATE_ZIP" -d "$WORK"
+          python3 "$RUNNER_TEMP/patch_fentastic_player.py" "$WORK"
           grep -q '<setting id="chooseosdplayer" type="bool">true</setting>' "$WORK/userdata/addon_data/skin.fentastic/settings.xml"
-          test -f "$WORK/addons/skin.fentastic/xml/Custom_1124_OsdSettings.xml"
-          test -f "$WORK/addons/skin.fentastic/xml/Includes_VideoOsd.xml"
+          grep -q 'שנה נגן' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
+          grep -q 'Skin.ToggleSetting(chooseosdplayer)' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
+          grep -q 'Skin.HasSetting(chooseosdplayer)' "$WORK/addons/skin.fentastic/xml/VideoOSD.xml"
+          grep -q 'videosd2' "$WORK/addons/skin.fentastic/xml/VideoOSD.xml"
+          grep -q 'OSDPlayerModeVar' "$WORK/addons/skin.fentastic/xml/Variables.xml"
           OUT="dist/${BUILD_SLUG}-quickfix-${QUICKFIX_VERSION}.zip"
           rm -f "$OUT"
           (cd "$WORK" && zip -qr "$OLDPWD/$OUT" addons userdata)
           unzip -t "$OUT" >/dev/null
-          unzip -l "$OUT" | grep 'addons/skin.fentastic/xml/Includes_VideoOsd.xml'
+          unzip -l "$OUT" | grep 'addons/skin.fentastic/xml/DialogButtonMenu.xml'
+          unzip -l "$OUT" | grep 'addons/skin.fentastic/xml/VideoOSD.xml'
           unzip -l "$OUT" | grep 'userdata/addon_data/skin.fentastic/settings.xml'
 
       - name: Build refreshed full build ZIP
@@ -136,7 +222,10 @@ jobs:
           cp -a "wizard/source/${WIZARD_ID}" "$WORK/addons/${WIZARD_ID}"
           unzip -q "$AI_BUILD_ZIP" -d "$WORK/addons"
           unzip -q "$FENTASTIC_UPDATE_ZIP" -d "$WORK"
-          grep -q '<setting id="chooseosdplayer" type="bool">true</setting>' "$WORK/userdata/addon_data/skin.fentastic/settings.xml"
+          python3 "$RUNNER_TEMP/patch_fentastic_player.py" "$WORK"
+          grep -q 'שנה נגן' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
+          grep -q 'Skin.HasSetting(chooseosdplayer)' "$WORK/addons/skin.fentastic/xml/VideoOSD.xml"
+          grep -q 'videosd2' "$WORK/addons/skin.fentastic/xml/VideoOSD.xml"
           rm -f "$NEW"
           (cd "$WORK" && zip -qr "$OLDPWD/$NEW" .)
           unzip -t "$NEW" >/dev/null
@@ -159,13 +248,13 @@ jobs:
           cat > wizard/assets/notification_files/quick_update.txt <<EOF
           ${QUICK_UPDATE_NOTE_ID}
           |||
-          עדכון נגן FENtastic
+          תיקון כפתור שנה נגן ב-FENtastic
 
-          העדכון כולל את קבצי הנגן החדשים של FENtastic ואת הגדרות skin.fentastic החדשות, כולל האפשרות לבחור בין הנגן החדש לנגן הישן.
+          נוסף כפתור קריא בעברית: שנה נגן, בתוך כפתור הכיבוי מתחת לרענן סקין.
 
-          תוקן גם מצב שבו חלק מהמשתמשים לא ראו חלק מההגדרות דרך כפתור הכיבוי/הגדרות הבילד אחרי עדכון מהיר.
+          הכפתור מחליף בפועל בין הנגן המתקדם לנגן הקלאסי באמצעות chooseosdplayer, ו-VideoOSD.xml טוען עכשיו את הנגן המתאים לפי ההגדרה.
 
-          נשמר שינוי השהיית הכתוביות כפי שנשלח בחבילה.
+          התיקון כולל גם את האפשרות בהגדרות הנגן בזמן ניגון, ושומר את שינוי השהיית הכתוביות כפי שנשלח בחבילה.
 
           quickfix ${QUICKFIX_VERSION} + build ${BUILD_VERSION} + wizard ${WIZARD_VERSION} + AI ${AI_ADDON_VERSION}
           EOF
@@ -186,5 +275,5 @@ jobs:
             wizard/assets/notification_files/quick_update.txt \
             wizard/source/plugin.program.kodipovilwizard/addon.xml \
             wizard/source/plugin.program.kodipovilwizard/uservar.py
-          git commit -m "Publish FENtastic player quick update ${QUICKFIX_VERSION}"
+          git commit -m "Publish FENtastic player switch fix ${QUICKFIX_VERSION}"
           git push origin HEAD:main
