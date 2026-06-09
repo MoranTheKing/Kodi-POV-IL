@@ -8,6 +8,7 @@ from pathlib import Path
 LABEL = "\u05e9\u05e0\u05d4 \u05e0\u05d2\u05df"
 REGULAR = "\u05e0\u05d2\u05df \u05e8\u05d2\u05d9\u05dc"
 ADVANCED = "\u05e0\u05d2\u05df \u05de\u05ea\u05e7\u05d3\u05dd"
+VAR_NAME = "osdchangeplayervar"
 
 
 def read_text(path: Path) -> str:
@@ -77,7 +78,7 @@ def patch_power_menu(xml_dir: Path) -> None:
             "                        <item>",
             "                            <!-- KODI-POV-IL - Toggle FENtastic player -->",
             f"                            <label>[B][COLOR blue]{LABEL}[/COLOR][/B]</label>",
-            "                            <label2>$VAR[OSDPlayerModeVar]</label2>",
+            f"                            <label2>$VAR[{VAR_NAME}]</label2>",
             "                            <onclick>Skin.ToggleSetting(chooseosdplayer)</onclick>",
             "                            <onclick>Dialog.Close(all)</onclick>",
             "                            <onclick>ReloadSkin()</onclick>",
@@ -89,6 +90,7 @@ def patch_power_menu(xml_dir: Path) -> None:
             text = text[:end + len("</item>")] + "\n" + block + text[end + len("</item>"):]
     else:
         text = text.replace("Skin.SetBool(chooseosdplayer)", "Skin.ToggleSetting(chooseosdplayer)")
+        text = text.replace("$VAR[OSDPlayerModeVar]", f"$VAR[{VAR_NAME}]")
     write_text(path, text)
 
 
@@ -101,7 +103,7 @@ def patch_osd_settings_menu(xml_dir: Path) -> None:
             "        <item>",
             "            <!-- KODI-POV-IL - OSD player mode -->",
             f"            <label>{LABEL}</label>",
-            "            <label2>$VAR[OSDPlayerModeVar]</label2>",
+            f"            <label2>$VAR[{VAR_NAME}]</label2>",
             "            <onclick>Skin.ToggleSetting(chooseosdplayer)</onclick>",
             "            <onclick>ReloadSkin()</onclick>",
             "        </item>",
@@ -112,24 +114,26 @@ def patch_osd_settings_menu(xml_dir: Path) -> None:
             text = text[:end] + block + "\n" + text[end:]
     else:
         text = text.replace("Skin.SetBool(chooseosdplayer)", "Skin.ToggleSetting(chooseosdplayer)")
+        text = text.replace("$VAR[OSDPlayerModeVar]", f"$VAR[{VAR_NAME}]")
     write_text(path, text)
 
 
 def patch_variables(xml_dir: Path) -> None:
     path = xml_dir / "Variables.xml"
     text = read_text(path)
-    if '<variable name="OSDPlayerModeVar">' not in text:
-        block = "\n".join([
-            "",
-            '    <variable name="OSDPlayerModeVar">',
-            f'        <value condition="Skin.HasSetting(chooseosdplayer)">{REGULAR}</value>',
-            f"        <value>{ADVANCED}</value>",
-            "    </variable>",
-            "",
-        ])
-        text = text.replace("</includes>", block + "</includes>", 1)
+    block = "\n".join([
+        "",
+        f'    <variable name="{VAR_NAME}">',
+        f'        <value condition="Skin.HasSetting(chooseosdplayer)">{REGULAR}</value>',
+        f"        <value>{ADVANCED}</value>",
+        "    </variable>",
+        "",
+    ])
+    if f'<variable name="{VAR_NAME}">' in text:
+        text = re.sub(r'<variable name="' + VAR_NAME + r'">.*?</variable>', block, text, count=1, flags=re.S)
     else:
-        text = re.sub(r'<variable name="OSDPlayerModeVar">.*?</variable>', '\n\t<variable name="OSDPlayerModeVar">\n\t\t<value condition="Skin.HasSetting(chooseosdplayer)">' + REGULAR + '</value>\n\t\t<value>' + ADVANCED + '</value>\n\t</variable>', text, count=1, flags=re.S)
+        text = text.replace("</includes>", block + "</includes>", 1)
+    text = re.sub(r'<variable name="OSDPlayerModeVar">.*?</variable>', '', text, count=1, flags=re.S)
     write_text(path, text)
 
 
@@ -150,8 +154,8 @@ def verify(root: Path, xml_dir: Path) -> None:
         raise SystemExit("chooseosdplayer default is not true")
     for name in ["DialogButtonMenu.xml", "Includes_Items.xml"]:
         text = read_text(xml_dir / name)
-        if LABEL not in text or "Skin.ToggleSetting(chooseosdplayer)" not in text:
-            raise SystemExit(f"{name} missing toggle")
+        if LABEL not in text or "Skin.ToggleSetting(chooseosdplayer)" not in text or f"$VAR[{VAR_NAME}]" not in text:
+            raise SystemExit(f"{name} missing Tal-style toggle")
 
 
 def main() -> int:
