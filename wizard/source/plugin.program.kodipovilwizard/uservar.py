@@ -59,7 +59,9 @@ APK_PACKAGE_ID = 'org.xbmc.povi'
 # as "our app" so people on an old org.xbmc.kodirdil build (or the short-lived
 # org.moran.kodi / org.mora.kodi rename attempts) still get the update prompt.
 APK_PACKAGE_IDS = ['org.xbmc.povi', 'org.xbmc.kodi', 'org.xbmc.kodirdil', 'org.moran.kodi', 'org.mora.kodi']
-APK_DOWNLOADER_CODE = ''
+# AFTVnews/Downloader short code is not configured yet. Downloader also accepts
+# URLs, so show the install page instead of an empty code in the update prompt.
+APK_DOWNLOADER_CODE = APK_DOWNLOAD_URL
 APK_DOWNLOADER_CODE_IMAGE_URL = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/kodi_version_auto_update/apk/apk_downloader_code.png'
 #########################################################
 
