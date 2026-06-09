@@ -1,24 +1,17 @@
 # -*- coding: utf-8 -*-
-"""Runtime safety patch for the Kodi POV IL FENtastic player switch.
-
-Why this exists:
-Quick Update packages can include addons/skin.fentastic, but some existing
-installations keep/preserve skin files during extraction, or Kodi may continue
-loading the already-installed skin copy. The wizard itself is extracted with
-ignore=True, so this module is delivered reliably with the wizard and patches the
-active FENtastic XML files directly on the next startup.
-"""
-
 from __future__ import annotations
 
 import os
+import re
 
 import xbmc
 
 from resources.libs.common.config import CONFIG
 from resources.libs.common import logging
 
-
+LABEL = "\u05e9\u05e0\u05d4 \u05e0\u05d2\u05df"
+REGULAR = "\u05e0\u05d2\u05df \u05e8\u05d2\u05d9\u05dc"
+ADVANCED = "\u05e0\u05d2\u05df \u05de\u05ea\u05e7\u05d3\u05dd"
 MARKER_POWER = "KODI-POV-IL - Toggle FENtastic player"
 MARKER_OSD = "KODI-POV-IL - OSD player mode"
 MARKER_TALLER = "KODI-POV-IL - Taller power menu list"
@@ -36,85 +29,84 @@ def _write(path, text):
     os.replace(tmp, path)
 
 
+def _set_default_regular():
+    path = os.path.join(CONFIG.ADDON_DATA, "skin.fentastic", "settings.xml")
+    if not os.path.isfile(path):
+        return False
+    text = _read(path)
+    item = '<setting id="chooseosdplayer" type="bool">true</setting>'
+    new = re.sub(r'<setting id="chooseosdplayer" type="bool">(?:true|false)</setting>', item, text, count=1)
+    if new == text and "chooseosdplayer" not in text and "</settings>" in text:
+        new = text.replace("</settings>", "    " + item + "\n</settings>", 1)
+    if new != text:
+        _write(path, new)
+        return True
+    return False
+
+
 def _patch_video_osd(xml_dir):
     path = os.path.join(xml_dir, "VideoOSD.xml")
     text = _read(path)
-    old = "<include>videosd1</include>"
-    new = (
-        '<include condition="Skin.HasSetting(chooseosdplayer)">videosd1</include>\n'
-        '<include condition="!Skin.HasSetting(chooseosdplayer)">videosd2</include>'
+    original = text
+    switch = (
+        '<include condition="Skin.HasSetting(chooseosdplayer)">videosd2</include>\n'
+        '\t<include condition="!Skin.HasSetting(chooseosdplayer)">videosd1</include>'
     )
-    if old in text:
-        text = text.replace(old, new, 1)
+    text = re.sub(
+        r'<include[^>]*Skin\.HasSetting\(chooseosdplayer\)[^>]*>videosd[12]</include>\s*<include[^>]*!Skin\.HasSetting\(chooseosdplayer\)[^>]*>videosd[12]</include>(?:\s*<!--[^>]*videosd2[^>]*-->)?',
+        switch,
+        text,
+        count=1,
+    )
+    if "Skin.HasSetting(chooseosdplayer)" not in text:
+        text = text.replace("<include>videosd1</include>", switch, 1)
+    if text != original:
         _write(path, text)
         return True
-    if "Skin.HasSetting(chooseosdplayer)" in text and "videosd2" in text:
-        return False
-    raise RuntimeError("VideoOSD.xml missing videosd1 anchor/player switch logic")
+    return False
 
 
-def _inline_taller_power_menu_list(xml_dir, dialog_text):
-    if MARKER_TALLER in dialog_text:
-        return dialog_text, False
-
+def _inline_taller_power_menu_list(xml_dir, text):
+    if MARKER_TALLER in text:
+        return text
     includes_path = os.path.join(xml_dir, "Includes_Buttons.xml")
+    if not os.path.isfile(includes_path):
+        return text
     includes_text = _read(includes_path)
     start = includes_text.find('<include name="ButtonMenuList">')
-    if start < 0:
-        raise RuntimeError("ButtonMenuList include not found")
-
-    end_marker = "\n\t</include>"
-    end = includes_text.find(end_marker, start)
-    if end < 0:
-        raise RuntimeError("ButtonMenuList include end not found")
-
-    include_block = includes_text[start : end + len(end_marker)]
-    inner = include_block.split("\n", 1)[1].rsplit(end_marker, 1)[0]
+    end = includes_text.find("\n\t</include>", start)
+    if start < 0 or end < 0:
+        return text
+    end += len("\n\t</include>")
+    inner = includes_text[start:end].split("\n", 1)[1].rsplit("\n\t</include>", 1)[0]
     inner = inner.replace("<height>380</height>", "<height>455</height>", 1)
     inner = "\t\t\t\t<!-- {0} -->\n".format(MARKER_TALLER) + inner
-
-    old = "\t\t\t\t<include>ButtonMenuList</include>"
-    if old in dialog_text:
-        return dialog_text.replace(old, inner, 1), True
-
-    old = "<include>ButtonMenuList</include>"
-    if old in dialog_text:
-        return dialog_text.replace(old, inner, 1), True
-
-    if "<height>455</height>" in dialog_text:
-        return dialog_text, False
-    raise RuntimeError("DialogButtonMenu.xml does not contain ButtonMenuList include")
+    return text.replace("\t\t\t\t<include>ButtonMenuList</include>", inner, 1)
 
 
 def _patch_power_menu(xml_dir):
     path = os.path.join(xml_dir, "DialogButtonMenu.xml")
     text = _read(path)
     original = text
-
     text = text.replace('<param name="height" value="485" />', '<param name="height" value="560" />', 1)
-    text, _ = _inline_taller_power_menu_list(xml_dir, text)
-
+    text = _inline_taller_power_menu_list(xml_dir, text)
     if MARKER_POWER not in text:
         block = "\n".join([
             "                        <item>",
             "                            <!-- {0} -->".format(MARKER_POWER),
-            "                            <label>[B][COLOR blue]שנה נגן[/COLOR][/B]</label>",
+            "                            <label>[B][COLOR blue]{0}[/COLOR][/B]</label>".format(LABEL),
             "                            <label2>$VAR[OSDPlayerModeVar]</label2>",
             "                            <onclick>Skin.ToggleSetting(chooseosdplayer)</onclick>",
             "                            <onclick>Dialog.Close(all)</onclick>",
             "                            <onclick>ReloadSkin()</onclick>",
             "                        </item>",
         ])
-        anchor = "<!-- Reload skin -->"
-        idx = text.find(anchor)
-        if idx < 0:
-            raise RuntimeError("Reload skin anchor not found in DialogButtonMenu.xml")
+        idx = text.find("<!-- Reload skin -->")
         end = text.find("</item>", idx)
-        if end < 0:
-            raise RuntimeError("Reload skin item end not found in DialogButtonMenu.xml")
-        end += len("</item>")
-        text = text[:end] + "\n" + block + text[end:]
-
+        if idx >= 0 and end >= 0:
+            text = text[:end + len("</item>")] + "\n" + block + text[end + len("</item>"):]
+    else:
+        text = text.replace("Skin.SetBool(chooseosdplayer)", "Skin.ToggleSetting(chooseosdplayer)")
     if text != original:
         _write(path, text)
         return True
@@ -124,84 +116,70 @@ def _patch_power_menu(xml_dir):
 def _patch_osd_settings_menu(xml_dir):
     path = os.path.join(xml_dir, "Includes_Items.xml")
     text = _read(path)
-    if MARKER_OSD in text:
-        return False
-
-    block = "\n".join([
-        "        <item>",
-        "            <!-- {0} -->".format(MARKER_OSD),
-        "            <label>שנה נגן</label>",
-        "            <label2>$VAR[OSDPlayerModeVar]</label2>",
-        "            <onclick>Skin.ToggleSetting(chooseosdplayer)</onclick>",
-        "            <onclick>ReloadSkin()</onclick>",
-        "        </item>",
-    ])
-    include_idx = text.find('<include name="BasedMenuOsdSecondMenu">')
-    if include_idx < 0:
-        raise RuntimeError("BasedMenuOsdSecondMenu not found in Includes_Items.xml")
-    end = text.find("</content>", include_idx)
-    if end < 0:
-        raise RuntimeError("BasedMenuOsdSecondMenu content end not found in Includes_Items.xml")
-    text = text[:end] + block + "\n" + text[end:]
-    _write(path, text)
-    return True
+    original = text
+    if MARKER_OSD not in text:
+        block = "\n".join([
+            "        <item>",
+            "            <!-- {0} -->".format(MARKER_OSD),
+            "            <label>{0}</label>".format(LABEL),
+            "            <label2>$VAR[OSDPlayerModeVar]</label2>",
+            "            <onclick>Skin.ToggleSetting(chooseosdplayer)</onclick>",
+            "            <onclick>ReloadSkin()</onclick>",
+            "        </item>",
+        ])
+        idx = text.find('<include name="BasedMenuOsdSecondMenu">')
+        end = text.find("</content>", idx)
+        if idx >= 0 and end >= 0:
+            text = text[:end] + block + "\n" + text[end:]
+    else:
+        text = text.replace("Skin.SetBool(chooseosdplayer)", "Skin.ToggleSetting(chooseosdplayer)")
+    if text != original:
+        _write(path, text)
+        return True
+    return False
 
 
 def _patch_variables(xml_dir):
     path = os.path.join(xml_dir, "Variables.xml")
     text = _read(path)
+    original = text
+    block = '\n\t<variable name="OSDPlayerModeVar">\n\t\t<value condition="Skin.HasSetting(chooseosdplayer)">{0}</value>\n\t\t<value>{1}</value>\n\t</variable>'.format(REGULAR, ADVANCED)
     if '<variable name="OSDPlayerModeVar">' in text:
-        return False
-
-    block = "\n".join([
-        "",
-        '    <variable name="OSDPlayerModeVar">',
-        '        <value condition="Skin.HasSetting(chooseosdplayer)">נגן מתקדם</value>',
-        "        <value>נגן קלאסי</value>",
-        "    </variable>",
-        "",
-    ])
-    end = text.rfind("</includes>")
-    if end < 0:
-        raise RuntimeError("Variables.xml closing </includes> not found")
-    text = text[:end] + block + text[end:]
-    _write(path, text)
-    return True
+        text = re.sub(r'<variable name="OSDPlayerModeVar">.*?</variable>', block, text, count=1, flags=re.S)
+    else:
+        text = text.replace("</includes>", block + "\n</includes>", 1)
+    if text != original:
+        _write(path, text)
+        return True
+    return False
 
 
 def _verify(xml_dir):
-    checks = {
-        "DialogButtonMenu.xml": [MARKER_TALLER, "<height>455</height>", "שנה נגן", "Skin.ToggleSetting(chooseosdplayer)"],
-        "VideoOSD.xml": ["Skin.HasSetting(chooseosdplayer)", "videosd1", "videosd2"],
-        "Includes_Items.xml": [MARKER_OSD, "Skin.ToggleSetting(chooseosdplayer)"],
-        "Variables.xml": ["OSDPlayerModeVar", "נגן מתקדם", "נגן קלאסי"],
-    }
-    for filename, needles in checks.items():
-        text = _read(os.path.join(xml_dir, filename))
-        for needle in needles:
-            if needle not in text:
-                raise RuntimeError("Missing {0!r} in {1}".format(needle, filename))
+    video = _read(os.path.join(xml_dir, "VideoOSD.xml"))
+    if 'Skin.HasSetting(chooseosdplayer)">videosd2</include>' not in video:
+        raise RuntimeError("true state is not videosd2")
+    if '!Skin.HasSetting(chooseosdplayer)">videosd1</include>' not in video:
+        raise RuntimeError("false state is not videosd1")
+    includes = _read(os.path.join(xml_dir, "Includes.xml"))
+    if 'include name="syncfakebutton"' not in includes or 'include name="TouchBackOSDButton"' not in includes:
+        raise RuntimeError("videosd2 dependencies are missing")
 
 
 def ensure_patched():
-    """Patch installed FENtastic XML files. Returns True if files changed."""
     xml_dir = os.path.join(CONFIG.ADDONS, "skin.fentastic", "xml")
     if not os.path.isdir(xml_dir):
-        logging.log("[FENtastic player switch patch] skin.fentastic xml folder not found: {0}".format(xml_dir), level=xbmc.LOGINFO)
+        logging.log("[FENtastic player switch] xml folder not found", level=xbmc.LOGINFO)
         return False
-
     changed = False
+    changed = _set_default_regular() or changed
     changed = _patch_video_osd(xml_dir) or changed
     changed = _patch_power_menu(xml_dir) or changed
     changed = _patch_osd_settings_menu(xml_dir) or changed
     changed = _patch_variables(xml_dir) or changed
     _verify(xml_dir)
-
     if changed:
-        logging.log("[FENtastic player switch patch] installed skin files patched successfully", level=xbmc.LOGINFO)
+        logging.log("[FENtastic player switch] Tal mapping applied", level=xbmc.LOGINFO)
         xbmc.executebuiltin("ReloadSkin()")
-    else:
-        logging.log("[FENtastic player switch patch] installed skin files already patched", level=xbmc.LOGINFO)
     return changed
 
 
@@ -209,5 +187,5 @@ def safe_ensure_patched():
     try:
         return ensure_patched()
     except Exception as exc:
-        logging.log("[FENtastic player switch patch] failed: {0}".format(exc), level=xbmc.LOGERROR)
+        logging.log("[FENtastic player switch] failed: {0}".format(exc), level=xbmc.LOGERROR)
         return False
