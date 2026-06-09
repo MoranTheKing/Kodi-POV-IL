@@ -160,9 +160,19 @@ jobs:
           # Clean installs need a complete FENtastic addon. The Tal package is a skin update,
           # not a complete skin addon, so never delete addons/skin.fentastic here.
           test -s "$WORK/addons/skin.fentastic/addon.xml"
-          test -s "$WORK/addons/skin.fentastic/xml/Home.xml"
-          test -s "$WORK/addons/skin.fentastic/xml/SkinSettings.xml"
-          test -d "$WORK/addons/skin.fentastic/media" || test -d "$WORK/addons/skin.fentastic/resources"
+          test -d "$WORK/addons/skin.fentastic/xml"
+          XML_COUNT=$(find "$WORK/addons/skin.fentastic/xml" -type f -name '*.xml' | wc -l | tr -d ' ')
+          echo "FENtastic XML count before patch: ${XML_COUNT}"
+          if [ "$XML_COUNT" -lt 50 ]; then
+            echo "::error::FENtastic base skin looks incomplete: only ${XML_COUNT} XML files"
+            find "$WORK/addons/skin.fentastic" -maxdepth 2 -type f | sort | head -80
+            exit 1
+          fi
+          if [ ! -d "$WORK/addons/skin.fentastic/media" ] && [ ! -d "$WORK/addons/skin.fentastic/resources" ]; then
+            echo "::error::FENtastic base skin has no media/resources folder"
+            find "$WORK/addons/skin.fentastic" -maxdepth 1 -type d | sort
+            exit 1
+          fi
 
           rm -rf "$WORK/addons/${WIZARD_ID}" "$WORK/addons/${AI_ADDON_ID}"
           mkdir -p "$WORK/addons"
@@ -186,8 +196,8 @@ jobs:
           (cd "$WORK" && zip -qr "$OLDPWD/$NEW" .)
           unzip -t "$NEW" >/dev/null
           unzip -l "$NEW" | grep 'addons/skin.fentastic/addon.xml'
-          unzip -l "$NEW" | grep 'addons/skin.fentastic/xml/Home.xml'
           unzip -l "$NEW" | grep 'addons/skin.fentastic/xml/DialogButtonMenu.xml'
+          unzip -l "$NEW" | grep 'addons/skin.fentastic/xml/Includes_VideoOsd2.xml'
 
       - name: Update build.txt and notice
         working-directory: src
