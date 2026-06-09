@@ -38,38 +38,85 @@ def patch_video_osd(xml_dir: Path) -> None:
     write_text(path, text)
 
 
+def inline_taller_power_menu_list(xml_dir: Path, dialog_text: str) -> str:
+    """Make the power menu tall enough to show the extra row.
+
+    ButtonMenuList is a shared include with a 380px panel, which shows about five
+    rows. The new button is intentionally placed below Reload skin, so we inline
+    a taller copy only in DialogButtonMenu instead of changing the shared include
+    for search dialogs too.
+    """
+
+    if "KODI-POV-IL - Taller power menu list" in dialog_text:
+        return dialog_text
+
+    includes_path = xml_dir / "Includes_Buttons.xml"
+    includes_text = read_text(includes_path)
+    start = includes_text.find('<include name="ButtonMenuList">')
+    if start < 0:
+        raise SystemExit("ButtonMenuList include not found in Includes_Buttons.xml")
+
+    end_marker = "\n\t</include>"
+    end = includes_text.find(end_marker, start)
+    if end < 0:
+        raise SystemExit("ButtonMenuList include end not found in Includes_Buttons.xml")
+
+    include_block = includes_text[start : end + len(end_marker)]
+    inner = include_block.split("\n", 1)[1].rsplit(end_marker, 1)[0]
+    inner = inner.replace("<height>380</height>", "<height>455</height>", 1)
+    inner = "\t\t\t\t<!-- KODI-POV-IL - Taller power menu list -->\n" + inner
+
+    old = "\t\t\t\t<include>ButtonMenuList</include>"
+    if old in dialog_text:
+        return dialog_text.replace(old, inner, 1)
+
+    old = "<include>ButtonMenuList</include>"
+    if old in dialog_text:
+        return dialog_text.replace(old, inner, 1)
+
+    if "ButtonMenuList" not in dialog_text:
+        # Already inlined somehow; keep going as long as the height is tall enough.
+        if "<height>455</height>" in dialog_text:
+            return dialog_text
+    raise SystemExit("DialogButtonMenu.xml does not contain ButtonMenuList include")
+
+
 def patch_power_menu(xml_dir: Path) -> None:
     path = xml_dir / "DialogButtonMenu.xml"
     text = read_text(path)
+
+    # Give the popup enough room for the new row. Without this, the button exists
+    # in XML but appears below the visible five rows on some devices.
+    text = text.replace('<param name="height" value="485" />', '<param name="height" value="560" />', 1)
+    text = inline_taller_power_menu_list(xml_dir, text)
+
     marker = "KODI-POV-IL - Toggle FENtastic player"
-    if marker in text:
-        write_text(path, text)
-        return
+    if marker not in text:
+        block = "\n".join(
+            [
+                "                        <item>",
+                "                            <!-- KODI-POV-IL - Toggle FENtastic player -->",
+                "                            <label>[B][COLOR blue]שנה נגן[/COLOR][/B]</label>",
+                "                            <label2>$VAR[OSDPlayerModeVar]</label2>",
+                "                            <onclick>Skin.ToggleSetting(chooseosdplayer)</onclick>",
+                "                            <onclick>Dialog.Close(all)</onclick>",
+                "                            <onclick>ReloadSkin()</onclick>",
+                "                        </item>",
+            ]
+        )
 
-    block = "\n".join(
-        [
-            "                        <item>",
-            "                            <!-- KODI-POV-IL - Toggle FENtastic player -->",
-            "                            <label>[B][COLOR blue]שנה נגן[/COLOR][/B]</label>",
-            "                            <label2>$VAR[OSDPlayerModeVar]</label2>",
-            "                            <onclick>Skin.ToggleSetting(chooseosdplayer)</onclick>",
-            "                            <onclick>Dialog.Close(all)</onclick>",
-            "                            <onclick>ReloadSkin()</onclick>",
-            "                        </item>",
-        ]
-    )
+        anchor = "<!-- Reload skin -->"
+        idx = text.find(anchor)
+        if idx < 0:
+            raise SystemExit("Reload skin anchor not found in DialogButtonMenu.xml")
 
-    anchor = "<!-- Reload skin -->"
-    idx = text.find(anchor)
-    if idx < 0:
-        raise SystemExit("Reload skin anchor not found in DialogButtonMenu.xml")
+        end = text.find("</item>", idx)
+        if end < 0:
+            raise SystemExit("Reload skin item end not found in DialogButtonMenu.xml")
+        end += len("</item>")
 
-    end = text.find("</item>", idx)
-    if end < 0:
-        raise SystemExit("Reload skin item end not found in DialogButtonMenu.xml")
-    end += len("</item>")
+        text = text[:end] + "\n" + block + text[end:]
 
-    text = text[:end] + "\n" + block + text[end:]
     write_text(path, text)
 
 
@@ -134,7 +181,13 @@ def patch_variables(xml_dir: Path) -> None:
 
 def verify(xml_dir: Path) -> None:
     checks = {
-        xml_dir / "DialogButtonMenu.xml": ["שנה נגן", "Skin.ToggleSetting(chooseosdplayer)", "ReloadSkin()"],
+        xml_dir / "DialogButtonMenu.xml": [
+            "KODI-POV-IL - Taller power menu list",
+            "<height>455</height>",
+            "שנה נגן",
+            "Skin.ToggleSetting(chooseosdplayer)",
+            "ReloadSkin()",
+        ],
         xml_dir / "VideoOSD.xml": ["Skin.HasSetting(chooseosdplayer)", "videosd1", "videosd2"],
         xml_dir / "Includes_Items.xml": ["KODI-POV-IL - OSD player mode", "Skin.ToggleSetting(chooseosdplayer)"],
         xml_dir / "Variables.xml": ["OSDPlayerModeVar", "נגן מתקדם", "נגן קלאסי"],
