@@ -15,7 +15,7 @@ on:
       quickfix_version:
         description: 'Quick Update / gui zip version'
         required: true
-        default: '0.1.134'
+        default: '0.1.135'
       build_version:
         description: 'Full build version'
         required: true
@@ -31,7 +31,7 @@ on:
       quick_update_note_id:
         description: 'Quick Update notification id. Must increase to notify existing users again.'
         required: true
-        default: '191'
+        default: '192'
   push:
     branches:
       - main
@@ -77,11 +77,11 @@ jobs:
             QUICK_UPDATE_NOTE_ID="${{ github.event.inputs.quick_update_note_id }}"
           else
             WIZARD_VERSION="0.1.17"
-            QUICKFIX_VERSION="0.1.134"
+            QUICKFIX_VERSION="0.1.135"
             BUILD_VERSION="0.1.29"
             PREVIOUS_BUILD_VERSION="0.1.28"
             AI_ADDON_VERSION="0.2.137"
-            QUICK_UPDATE_NOTE_ID="191"
+            QUICK_UPDATE_NOTE_ID="192"
           fi
           echo "WIZARD_VERSION=$WIZARD_VERSION" >> "$GITHUB_ENV"
           echo "QUICKFIX_VERSION=$QUICKFIX_VERSION" >> "$GITHUB_ENV"
@@ -240,7 +240,9 @@ jobs:
           cat > wizard/assets/notification_files/quick_update.txt <<EOF
           ${QUICK_UPDATE_NOTE_ID}
           |||
-          תיקון החלפת סקין + תיקון כתוביות AI
+          תיקון עדכוני אפליקציה + החלפת סקין + כתוביות AI
+
+          למשתמשים על Kodi 21.2: הודעת עדכון האפליקציה כבר לא תציג שדה Downloader ריק. אם אין קוד Downloader קצר, יוצג קישור דף ההורדות במקום.
 
           כפתור "החלף סקין" עודכן כך שהחלפת הסקין מתבצעת דרך Kodi JSON-RPC במקום עריכה ידנית של guisettings.xml.
 
@@ -258,17 +260,19 @@ jobs:
           grep -n "version=\"${WIZARD_VERSION}\"" wizard/source/plugin.program.kodipovilwizard/addon.xml
           grep -n "BUILDVERSION_DEFAULT = '${BUILD_VERSION}'" wizard/source/plugin.program.kodipovilwizard/uservar.py
           grep -n "${WIZARD_VERSION}\|${QUICKFIX_VERSION}\|${BUILD_VERSION}" wizard/assets/build.txt
-          unzip -l "dist/${BUILD_SLUG}-quickfix-${QUICKFIX_VERSION}.zip" | grep "addons/${WIZARD_ID}/addon.xml"
+          grep -n "${QUICK_UPDATE_NOTE_ID}" wizard/assets/notification_files/quick_update.txt
+          unzip -l "dist/${BUILD_SLUG}-quickfix-${QUICKFIX_VERSION}.zip" | grep "addons/${WIZARD_ID}/uservar.py"
           unzip -l "dist/${BUILD_SLUG}-quickfix-${QUICKFIX_VERSION}.zip" | grep "addons/${AI_ADDON_ID}/addon.xml"
           unzip -l "dist/${BUILD_SLUG}-quickfix-${QUICKFIX_VERSION}.zip" | grep "addons/${AI_ADDON_ID}/resources/lib/darksubs_none_guard_patcher.py"
-          unzip -p "dist/${BUILD_SLUG}-quickfix-${QUICKFIX_VERSION}.zip" "addons/${AI_ADDON_ID}/addon.xml" | grep "version=\"${AI_ADDON_VERSION}\""
 
-      - name: Commit generated release files
+      - name: Commit release artifacts
         working-directory: src
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
             "dist/${WIZARD_ID}-${WIZARD_VERSION}.zip" \
             "dist/${BUILD_SLUG}-quickfix-${QUICKFIX_VERSION}.zip" \
@@ -278,8 +282,8 @@ jobs:
             wizard/source/plugin.program.kodipovilwizard/addon.xml \
             wizard/source/plugin.program.kodipovilwizard/uservar.py
           if git diff --cached --quiet; then
-            echo "Nothing to publish."
+            echo "No release artifact changes to commit."
             exit 0
           fi
-          git commit -m "Publish quickfix ${QUICKFIX_VERSION} with AI subtitles ${AI_ADDON_VERSION} [skip ci]"
-          git push origin main
+          git commit -m "Publish wizard quick update ${QUICKFIX_VERSION}"
+          git push origin HEAD:main
