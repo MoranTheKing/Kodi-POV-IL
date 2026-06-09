@@ -12,7 +12,7 @@ on:
         required: true
         default: '0.1.38'
       previous_build_version:
-        description: 'Existing full build zip to refresh'
+        description: 'Preferred base full build version. Workflow auto-falls back to a complete FENtastic base if needed.'
         required: true
         default: '0.1.30'
       wizard_version:
@@ -147,30 +147,57 @@ jobs:
         working-directory: src
         run: |
           set -euo pipefail
-          OLD="dist/${BUILD_SLUG}-test-${PREVIOUS_BUILD_VERSION}.zip"
+          PREFERRED="dist/${BUILD_SLUG}-test-${PREVIOUS_BUILD_VERSION}.zip"
           NEW="dist/${BUILD_SLUG}-test-${BUILD_VERSION}.zip"
           AI_BUILD_ZIP="dist/${AI_ADDON_ID}-build-${AI_ADDON_VERSION}.zip"
-          test -s "$OLD"
           test -s "$AI_BUILD_ZIP"
+
+          is_complete_base() {
+            local zip="$1"
+            test -s "$zip" || return 1
+            unzip -t "$zip" >/dev/null || return 1
+            unzip -l "$zip" | grep -q 'addons/skin.fentastic/addon.xml' || return 1
+            local xml_count
+            xml_count=$(unzip -l "$zip" | awk '/addons\/skin\.fentastic\/xml\/.*\.xml$/ {c++} END {print c+0}')
+            [ "$xml_count" -ge 50 ] || return 1
+            unzip -l "$zip" | grep -Eq 'addons/skin.fentastic/(media|resources)/' || return 1
+            return 0
+          }
+
+          BASE=""
+          if is_complete_base "$PREFERRED"; then
+            BASE="$PREFERRED"
+          else
+            echo "Preferred base is not a complete FENtastic build: $PREFERRED"
+            echo "Searching dist for the newest complete FENtastic base..."
+            for candidate in $(ls -1 dist/${BUILD_SLUG}-test-*.zip 2>/dev/null | sort -V -r); do
+              echo "Checking base candidate: $candidate"
+              if is_complete_base "$candidate"; then
+                BASE="$candidate"
+                break
+              fi
+            done
+          fi
+
+          if [ -z "$BASE" ]; then
+            echo "::error::No complete FENtastic full build zip found in dist. Need a base zip containing addons/skin.fentastic/addon.xml + full xml/media."
+            echo "Available build zips:"
+            ls -1 dist/${BUILD_SLUG}-test-*.zip 2>/dev/null | sort -V || true
+            exit 1
+          fi
+
+          echo "Using full build base: $BASE"
           WORK="$RUNNER_TEMP/full-build"
           rm -rf "$WORK"
           mkdir -p "$WORK"
-          unzip -q "$OLD" -d "$WORK"
+          unzip -q "$BASE" -d "$WORK"
 
-          # Clean installs need a complete FENtastic addon. The Tal package is a skin update,
-          # not a complete skin addon, so never delete addons/skin.fentastic here.
           test -s "$WORK/addons/skin.fentastic/addon.xml"
           test -d "$WORK/addons/skin.fentastic/xml"
           XML_COUNT=$(find "$WORK/addons/skin.fentastic/xml" -type f -name '*.xml' | wc -l | tr -d ' ')
           echo "FENtastic XML count before patch: ${XML_COUNT}"
           if [ "$XML_COUNT" -lt 50 ]; then
-            echo "::error::FENtastic base skin looks incomplete: only ${XML_COUNT} XML files"
-            find "$WORK/addons/skin.fentastic" -maxdepth 2 -type f | sort | head -80
-            exit 1
-          fi
-          if [ ! -d "$WORK/addons/skin.fentastic/media" ] && [ ! -d "$WORK/addons/skin.fentastic/resources" ]; then
-            echo "::error::FENtastic base skin has no media/resources folder"
-            find "$WORK/addons/skin.fentastic" -maxdepth 1 -type d | sort
+            echo "::error::Selected base skin looks incomplete: only ${XML_COUNT} XML files"
             exit 1
           fi
 
@@ -190,7 +217,6 @@ jobs:
           ! grep -q 'Skin.ToggleSetting(chooseosdplayer)' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
           ! grep -q 'Skin.ToggleSetting(chooseosdplayer)' "$WORK/addons/skin.fentastic/xml/Includes_Items.xml"
           grep -q 'fentastic_select_player' "$WORK/addons/${WIZARD_ID}/resources/libs/common/router.py"
-          unzip -l "$OLD" | grep 'addons/skin.fentastic/addon.xml'
 
           rm -f "$NEW"
           (cd "$WORK" && zip -qr "$OLDPWD/$NEW" .)
@@ -234,7 +260,7 @@ jobs:
           |||
           תיקון התקנות נקיות ו-FENtastic
 
-          העדכון החדש שומר את סקין FENtastic המלא בבנייה של Full Build, ומדריס עליו רק את קבצי הנגן של טל. זה מתקן התקנות נקיות שנפלו ל-Estuary בגלל קבצי סקין חסרים.
+          העדכון החדש מחפש בסיס Full Build מלא של FENtastic, שומר את הסקין המלא, ומדריס עליו רק את קבצי הנגן של טל. זה מתקן התקנות נקיות שנפלו ל-Estuary בגלל קבצי סקין חסרים.
 
           quickfix ${QUICKFIX_VERSION} + build ${BUILD_VERSION} + wizard ${WIZARD_VERSION} + AI ${AI_ADDON_VERSION}
           EOF
