@@ -6,15 +6,15 @@ on:
       quickfix_version:
         description: 'Quick Update version to publish'
         required: true
-        default: '0.1.144'
+        default: '0.1.145'
       build_version:
         description: 'Full build version to publish'
         required: true
-        default: '0.1.37'
+        default: '0.1.38'
       previous_build_version:
         description: 'Existing full build zip to refresh'
         required: true
-        default: '0.1.36'
+        default: '0.1.30'
       wizard_version:
         description: 'Wizard addon version'
         required: true
@@ -26,7 +26,7 @@ on:
       quick_update_note_id:
         description: 'Quick Update notification id. Must increase.'
         required: true
-        default: '203'
+        default: '204'
 
 permissions:
   contents: write
@@ -119,7 +119,7 @@ jobs:
           mkdir -p "$WORK/addons"
           cp -a "wizard/source/${WIZARD_ID}" "$WORK/addons/${WIZARD_ID}"
           unzip -q "$AI_BUILD_ZIP" -d "$WORK/addons"
-          unzip -q "$FENTASTIC_UPDATE_ZIP" -d "$WORK"
+          unzip -oq "$FENTASTIC_UPDATE_ZIP" -d "$WORK"
           python3 .github/scripts/patch_fentastic_player.py "$WORK"
           grep -q '<setting id="chooseosdplayer" type="bool">true</setting>' "$WORK/userdata/addon_data/skin.fentastic/settings.xml"
           grep -q 'Includes_VideoOsd2.xml' "$WORK/addons/skin.fentastic/xml/Includes.xml"
@@ -156,12 +156,22 @@ jobs:
           rm -rf "$WORK"
           mkdir -p "$WORK"
           unzip -q "$OLD" -d "$WORK"
-          rm -rf "$WORK/addons/${WIZARD_ID}" "$WORK/addons/${AI_ADDON_ID}" "$WORK/addons/skin.fentastic" "$WORK/userdata/addon_data/skin.fentastic"
+
+          # Clean installs need a complete FENtastic addon. The Tal package is a skin update,
+          # not a complete skin addon, so never delete addons/skin.fentastic here.
+          test -s "$WORK/addons/skin.fentastic/addon.xml"
+          test -s "$WORK/addons/skin.fentastic/xml/Home.xml"
+          test -s "$WORK/addons/skin.fentastic/xml/SkinSettings.xml"
+          test -d "$WORK/addons/skin.fentastic/media" || test -d "$WORK/addons/skin.fentastic/resources"
+
+          rm -rf "$WORK/addons/${WIZARD_ID}" "$WORK/addons/${AI_ADDON_ID}"
           mkdir -p "$WORK/addons"
           cp -a "wizard/source/${WIZARD_ID}" "$WORK/addons/${WIZARD_ID}"
           unzip -q "$AI_BUILD_ZIP" -d "$WORK/addons"
-          unzip -q "$FENTASTIC_UPDATE_ZIP" -d "$WORK"
+          unzip -oq "$FENTASTIC_UPDATE_ZIP" -d "$WORK"
           python3 .github/scripts/patch_fentastic_player.py "$WORK"
+
+          grep -q 'skin.fentastic' "$WORK/addons/skin.fentastic/addon.xml"
           grep -q 'Includes_VideoOsd2.xml' "$WORK/addons/skin.fentastic/xml/Includes.xml"
           grep -q 'Skin.HasSetting(chooseosdplayer).*videosd2' "$WORK/addons/skin.fentastic/xml/VideoOSD.xml"
           grep -q '!Skin.HasSetting(chooseosdplayer).*videosd1' "$WORK/addons/skin.fentastic/xml/VideoOSD.xml"
@@ -170,9 +180,14 @@ jobs:
           ! grep -q 'Skin.ToggleSetting(chooseosdplayer)' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
           ! grep -q 'Skin.ToggleSetting(chooseosdplayer)' "$WORK/addons/skin.fentastic/xml/Includes_Items.xml"
           grep -q 'fentastic_select_player' "$WORK/addons/${WIZARD_ID}/resources/libs/common/router.py"
+          unzip -l "$OLD" | grep 'addons/skin.fentastic/addon.xml'
+
           rm -f "$NEW"
           (cd "$WORK" && zip -qr "$OLDPWD/$NEW" .)
           unzip -t "$NEW" >/dev/null
+          unzip -l "$NEW" | grep 'addons/skin.fentastic/addon.xml'
+          unzip -l "$NEW" | grep 'addons/skin.fentastic/xml/Home.xml'
+          unzip -l "$NEW" | grep 'addons/skin.fentastic/xml/DialogButtonMenu.xml'
 
       - name: Update build.txt and notice
         working-directory: src
@@ -207,9 +222,9 @@ jobs:
           cat > wizard/assets/notification_files/quick_update.txt <<EOF
           ${QUICK_UPDATE_NOTE_ID}
           |||
-          תיקון חלון בחירת נגן FENtastic
+          תיקון התקנות נקיות ו-FENtastic
 
-          הכפתור בחר נגן פותח חלון בחירה אמיתי בין נגן רגיל לנגן מתקדם. שני קבצי הנגן נטענים, כולל Includes_VideoOsd2.xml, כדי שהנגן הרגיל לא יוביל לנגן שלא קיים.
+          העדכון החדש שומר את סקין FENtastic המלא בבנייה של Full Build, ומדריס עליו רק את קבצי הנגן של טל. זה מתקן התקנות נקיות שנפלו ל-Estuary בגלל קבצי סקין חסרים.
 
           quickfix ${QUICKFIX_VERSION} + build ${BUILD_VERSION} + wizard ${WIZARD_VERSION} + AI ${AI_ADDON_VERSION}
           EOF
@@ -230,5 +245,5 @@ jobs:
             wizard/assets/notification_files/quick_update.txt \
             wizard/source/plugin.program.kodipovilwizard/addon.xml \
             wizard/source/plugin.program.kodipovilwizard/uservar.py
-          git commit -m "Publish FENtastic real player selector ${QUICKFIX_VERSION}"
+          git commit -m "Publish FENtastic clean install fix ${QUICKFIX_VERSION}"
           git push origin HEAD:main
