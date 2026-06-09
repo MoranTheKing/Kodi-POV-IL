@@ -1,0 +1,190 @@
+name: Publish FENtastic Player Update
+
+on:
+  workflow_dispatch:
+    inputs:
+      quickfix_version:
+        description: 'Quick Update version to publish'
+        required: true
+        default: '0.1.137'
+      build_version:
+        description: 'Full build version to publish'
+        required: true
+        default: '0.1.30'
+      previous_build_version:
+        description: 'Existing full build zip to refresh'
+        required: true
+        default: '0.1.29'
+      wizard_version:
+        description: 'Wizard addon version'
+        required: true
+        default: '0.1.17'
+      ai_addon_version:
+        description: 'Build-edition AI subtitles addon version to include'
+        required: true
+        default: '0.2.137'
+      quick_update_note_id:
+        description: 'Quick Update notification id. Must increase.'
+        required: true
+        default: '194'
+
+permissions:
+  contents: write
+
+env:
+  BUILD_SLUG: 'Kodi-POV-IL-FENtastic'
+  WIZARD_ID: 'plugin.program.kodipovilwizard'
+  AI_ADDON_ID: 'service.subtitles.kodipovilai'
+  FENTASTIC_UPDATE_ZIP: 'wizard/assets/fentastic_player_update/fentastic_player_update_2026_06_09.zip'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Clone main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git clone --depth=1 --branch=main \
+            "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" src
+
+      - name: Resolve inputs
+        working-directory: src
+        run: |
+          set -euo pipefail
+          echo "QUICKFIX_VERSION=${{ github.event.inputs.quickfix_version }}" >> "$GITHUB_ENV"
+          echo "BUILD_VERSION=${{ github.event.inputs.build_version }}" >> "$GITHUB_ENV"
+          echo "PREVIOUS_BUILD_VERSION=${{ github.event.inputs.previous_build_version }}" >> "$GITHUB_ENV"
+          echo "WIZARD_VERSION=${{ github.event.inputs.wizard_version }}" >> "$GITHUB_ENV"
+          echo "AI_ADDON_VERSION=${{ github.event.inputs.ai_addon_version }}" >> "$GITHUB_ENV"
+          echo "QUICK_UPDATE_NOTE_ID=${{ github.event.inputs.quick_update_note_id }}" >> "$GITHUB_ENV"
+
+      - name: Verify FENtastic player package
+        working-directory: src
+        run: |
+          set -euo pipefail
+          test -s "$FENTASTIC_UPDATE_ZIP"
+          unzip -t "$FENTASTIC_UPDATE_ZIP" >/dev/null
+          unzip -l "$FENTASTIC_UPDATE_ZIP" | grep 'addons/skin.fentastic/xml/Includes_VideoOsd.xml'
+          unzip -l "$FENTASTIC_UPDATE_ZIP" | grep 'addons/skin.fentastic/xml/Custom_1124_OsdSettings.xml'
+          unzip -l "$FENTASTIC_UPDATE_ZIP" | grep 'userdata/addon_data/skin.fentastic/settings.xml'
+          tmp="$RUNNER_TEMP/fentastic-check"
+          rm -rf "$tmp" && mkdir -p "$tmp"
+          unzip -q "$FENTASTIC_UPDATE_ZIP" -d "$tmp"
+          grep -q '<setting id="chooseosdplayer" type="bool">true</setting>' "$tmp/userdata/addon_data/skin.fentastic/settings.xml"
+          grep -q 'SubtitleDelayPlus' "$tmp/addons/skin.fentastic/xml/Includes_VideoOsd.xml"
+          grep -q 'SubtitleDelayMinus' "$tmp/addons/skin.fentastic/xml/Includes_VideoOsd.xml"
+
+      - name: Build wizard ZIP
+        working-directory: src
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          addon_xml = Path('wizard/source/plugin.program.kodipovilwizard/addon.xml')
+          text = addon_xml.read_text(encoding='utf-8-sig')
+          text = re.sub(r'(<addon\s+id="plugin\.program\.kodipovilwizard"\s+name="[^"]+"\s+version=")([^"]+)(")', rf'\g<1>{os.environ["WIZARD_VERSION"]}\3', text, count=1)
+          addon_xml.write_text(text, encoding='utf-8')
+          uservar = Path('wizard/source/plugin.program.kodipovilwizard/uservar.py')
+          text = uservar.read_text(encoding='utf-8-sig')
+          text = re.sub(r"BUILDVERSION_DEFAULT = '[^']+'", f"BUILDVERSION_DEFAULT = '{os.environ['BUILD_VERSION']}'", text, count=1)
+          uservar.write_text(text, encoding='utf-8')
+          PY
+          mkdir -p dist
+          rm -f "dist/${WIZARD_ID}-${WIZARD_VERSION}.zip"
+          (cd wizard/source && zip -qr "../../dist/${WIZARD_ID}-${WIZARD_VERSION}.zip" "${WIZARD_ID}")
+          unzip -t "dist/${WIZARD_ID}-${WIZARD_VERSION}.zip" >/dev/null
+
+      - name: Build Quick Update ZIP
+        working-directory: src
+        run: |
+          set -euo pipefail
+          AI_BUILD_ZIP="dist/${AI_ADDON_ID}-build-${AI_ADDON_VERSION}.zip"
+          test -s "$AI_BUILD_ZIP"
+          WORK="$RUNNER_TEMP/quickfix"
+          rm -rf "$WORK" && mkdir -p "$WORK/addons"
+          cp -a "wizard/source/${WIZARD_ID}" "$WORK/addons/${WIZARD_ID}"
+          unzip -q "$AI_BUILD_ZIP" -d "$WORK/addons"
+          unzip -q "$FENTASTIC_UPDATE_ZIP" -d "$WORK"
+          grep -q '<setting id="chooseosdplayer" type="bool">true</setting>' "$WORK/userdata/addon_data/skin.fentastic/settings.xml"
+          test -f "$WORK/addons/skin.fentastic/xml/Custom_1124_OsdSettings.xml"
+          test -f "$WORK/addons/skin.fentastic/xml/Includes_VideoOsd.xml"
+          OUT="dist/${BUILD_SLUG}-quickfix-${QUICKFIX_VERSION}.zip"
+          rm -f "$OUT"
+          (cd "$WORK" && zip -qr "$OLDPWD/$OUT" addons userdata)
+          unzip -t "$OUT" >/dev/null
+          unzip -l "$OUT" | grep 'addons/skin.fentastic/xml/Includes_VideoOsd.xml'
+          unzip -l "$OUT" | grep 'userdata/addon_data/skin.fentastic/settings.xml'
+
+      - name: Build refreshed full build ZIP
+        working-directory: src
+        run: |
+          set -euo pipefail
+          OLD="dist/${BUILD_SLUG}-test-${PREVIOUS_BUILD_VERSION}.zip"
+          NEW="dist/${BUILD_SLUG}-test-${BUILD_VERSION}.zip"
+          AI_BUILD_ZIP="dist/${AI_ADDON_ID}-build-${AI_ADDON_VERSION}.zip"
+          test -s "$OLD"
+          test -s "$AI_BUILD_ZIP"
+          WORK="$RUNNER_TEMP/full-build"
+          rm -rf "$WORK" && mkdir -p "$WORK"
+          unzip -q "$OLD" -d "$WORK"
+          rm -rf "$WORK/addons/${WIZARD_ID}" "$WORK/addons/${AI_ADDON_ID}" "$WORK/addons/skin.fentastic" "$WORK/userdata/addon_data/skin.fentastic"
+          mkdir -p "$WORK/addons"
+          cp -a "wizard/source/${WIZARD_ID}" "$WORK/addons/${WIZARD_ID}"
+          unzip -q "$AI_BUILD_ZIP" -d "$WORK/addons"
+          unzip -q "$FENTASTIC_UPDATE_ZIP" -d "$WORK"
+          grep -q '<setting id="chooseosdplayer" type="bool">true</setting>' "$WORK/userdata/addon_data/skin.fentastic/settings.xml"
+          rm -f "$NEW"
+          (cd "$WORK" && zip -qr "$OLDPWD/$NEW" .)
+          unzip -t "$NEW" >/dev/null
+
+      - name: Update build.txt and notice
+        working-directory: src
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          wizard=os.environ['WIZARD_VERSION']; quickfix=os.environ['QUICKFIX_VERSION']; build=os.environ['BUILD_VERSION']
+          base='https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist'
+          p=Path('wizard/assets/build.txt')
+          text=p.read_text(encoding='utf-8-sig')
+          text=re.sub(r'id="plugin\.program\.kodipovilwizard"\nversion="[^"]+"\nzip="[^"]+"', f'id="plugin.program.kodipovilwizard"\nversion="{wizard}"\nzip="{base}/plugin.program.kodipovilwizard-{wizard}.zip"', text, count=1)
+          text=re.sub(r'(name="Kodi POV IL - FENtastic"\nversion=")[^"]+("\nurl=")[^"]+("\nminor="https://"\ngui=")[^"]+("\nkodi=)', rf'\g<1>{build}\g<2>{base}/Kodi-POV-IL-FENtastic-test-{build}.zip\g<3>{base}/Kodi-POV-IL-FENtastic-quickfix-{quickfix}.zip\g<4>', text, count=1)
+          p.write_text(text, encoding='utf-8')
+          PY
+          cat > wizard/assets/notification_files/quick_update.txt <<EOF
+          ${QUICK_UPDATE_NOTE_ID}
+          |||
+          עדכון נגן FENtastic
+
+          העדכון כולל את קבצי הנגן החדשים של FENtastic ואת הגדרות skin.fentastic החדשות, כולל האפשרות לבחור בין הנגן החדש לנגן הישן.
+
+          תוקן גם מצב שבו חלק מהמשתמשים לא ראו חלק מההגדרות דרך כפתור הכיבוי/הגדרות הבילד אחרי עדכון מהיר.
+
+          נשמר שינוי השהיית הכתוביות כפי שנשלח בחבילה.
+
+          quickfix ${QUICKFIX_VERSION} + build ${BUILD_VERSION} + wizard ${WIZARD_VERSION} + AI ${AI_ADDON_VERSION}
+          EOF
+
+      - name: Commit release artifacts
+        working-directory: src
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            "dist/${WIZARD_ID}-${WIZARD_VERSION}.zip" \
+            "dist/${BUILD_SLUG}-quickfix-${QUICKFIX_VERSION}.zip" \
+            "dist/${BUILD_SLUG}-test-${BUILD_VERSION}.zip" \
+            wizard/assets/build.txt \
+            wizard/assets/notification_files/quick_update.txt \
+            wizard/source/plugin.program.kodipovilwizard/addon.xml \
+            wizard/source/plugin.program.kodipovilwizard/uservar.py
+          git commit -m "Publish FENtastic player quick update ${QUICKFIX_VERSION}"
+          git push origin HEAD:main
