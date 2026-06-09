@@ -10,13 +10,13 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release tag / version label (e.g., 21.3-povil.1)'
+        description: 'Release tag / version label (e.g., 21.3-povil.2)'
         required: true
-        default: '21.3-povil.1'
+        default: '21.3-povil.2'
       version_code:
         description: 'Android versionCode (integer, must increase each release)'
         required: true
-        default: '21301'
+        default: '21302'
       kodi_version:
         description: 'Upstream Kodi version to rebrand (e.g., 21.3)'
         required: true
@@ -35,7 +35,7 @@ env:
   PACKAGE_ID: 'org.xbmc.povi'
   APP_NAME: 'Kodi POV IL'
   BUNDLED_WIZARD_ZIP: 'plugin.program.kodipovilwizard-0.1.17.zip'
-  BUNDLED_BUILD_ZIP: 'Kodi-POV-IL-FENtastic-test-0.1.30.zip'
+  BUNDLED_BUILD_ZIP: 'Kodi-POV-IL-FENtastic-test-0.1.38.zip'
 
 jobs:
   build-and-release:
@@ -97,8 +97,16 @@ jobs:
           test -s "src/dist/${BUNDLED_BUILD_ZIP}"
           unzip -t "src/dist/${BUNDLED_WIZARD_ZIP}" >/dev/null
           unzip -t "src/dist/${BUNDLED_BUILD_ZIP}" >/dev/null
+          unzip -l "src/dist/${BUNDLED_BUILD_ZIP}" | grep 'addons/skin.fentastic/addon.xml'
+          unzip -l "src/dist/${BUNDLED_BUILD_ZIP}" | grep 'addons/skin.fentastic/xml/Home.xml'
+          unzip -l "src/dist/${BUNDLED_BUILD_ZIP}" | grep 'addons/skin.fentastic/xml/SkinSettings.xml'
           unzip -l "src/dist/${BUNDLED_BUILD_ZIP}" | grep 'addons/skin.fentastic/xml/Includes_VideoOsd.xml'
+          unzip -l "src/dist/${BUNDLED_BUILD_ZIP}" | grep 'addons/skin.fentastic/xml/Includes_VideoOsd2.xml'
           unzip -l "src/dist/${BUNDLED_BUILD_ZIP}" | grep 'userdata/addon_data/skin.fentastic/settings.xml'
+          unzip -p "src/dist/${BUNDLED_BUILD_ZIP}" addons/skin.fentastic/xml/Includes.xml | grep 'Includes_VideoOsd2.xml'
+          unzip -p "src/dist/${BUNDLED_BUILD_ZIP}" addons/skin.fentastic/xml/DialogButtonMenu.xml | grep 'fentastic_select_player'
+          unzip -p "src/dist/${BUNDLED_BUILD_ZIP}" addons/skin.fentastic/xml/Includes_Items.xml | grep 'fentastic_select_player'
+          unzip -p "src/dist/${BUNDLED_WIZARD_ZIP}" plugin.program.kodipovilwizard/resources/libs/common/router.py | grep 'fentastic_select_player'
 
       - name: Build both Android APKs
         env:
