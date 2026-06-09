@@ -6,15 +6,15 @@ on:
       quickfix_version:
         description: 'Quick Update version to publish'
         required: true
-        default: '0.1.141'
+        default: '0.1.142'
       build_version:
         description: 'Full build version to publish'
         required: true
-        default: '0.1.34'
+        default: '0.1.35'
       previous_build_version:
         description: 'Existing full build zip to refresh'
         required: true
-        default: '0.1.33'
+        default: '0.1.34'
       wizard_version:
         description: 'Wizard addon version'
         required: true
@@ -26,7 +26,7 @@ on:
       quick_update_note_id:
         description: 'Quick Update notification id. Must increase.'
         required: true
-        default: '199'
+        default: '200'
 
 permissions:
   contents: write
@@ -122,13 +122,17 @@ jobs:
           unzip -q "$FENTASTIC_UPDATE_ZIP" -d "$WORK"
           python3 .github/scripts/patch_fentastic_player.py "$WORK"
           grep -q '<setting id="chooseosdplayer" type="bool">true</setting>' "$WORK/userdata/addon_data/skin.fentastic/settings.xml"
-          grep -q 'שנה נגן' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
+          grep -q 'בחר נגן' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
           grep -q 'KODI-POV-IL - Taller power menu list' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
           grep -q '<height>455</height>' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
           grep -q 'Skin.ToggleSetting(chooseosdplayer)' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
           grep -q 'Skin.HasSetting(chooseosdplayer).*videosd2' "$WORK/addons/skin.fentastic/xml/VideoOSD.xml"
           grep -q '!Skin.HasSetting(chooseosdplayer).*videosd1' "$WORK/addons/skin.fentastic/xml/VideoOSD.xml"
           grep -q 'osdchangeplayervar' "$WORK/addons/skin.fentastic/xml/Variables.xml"
+          grep -q 'middlelabelInfo_OSD_Var' "$WORK/addons/skin.fentastic/xml/Variables.xml"
+          grep -q 'IDANPlusCheck_OSd' "$WORK/addons/skin.fentastic/xml/Includes_Expression.xml"
+          grep -q 'SubtitleDelayPlus' "$WORK/addons/skin.fentastic/xml/Includes_VideoOsd.xml"
+          grep -q 'SubtitleDelayMinus' "$WORK/addons/skin.fentastic/xml/Includes_VideoOsd.xml"
           OUT="dist/${BUILD_SLUG}-quickfix-${QUICKFIX_VERSION}.zip"
           rm -f "$OUT"
           (cd "$WORK" && zip -qr "$OLDPWD/$OUT" addons userdata)
@@ -156,12 +160,16 @@ jobs:
           unzip -q "$AI_BUILD_ZIP" -d "$WORK/addons"
           unzip -q "$FENTASTIC_UPDATE_ZIP" -d "$WORK"
           python3 .github/scripts/patch_fentastic_player.py "$WORK"
-          grep -q 'שנה נגן' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
+          grep -q 'בחר נגן' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
           grep -q 'KODI-POV-IL - Taller power menu list' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
           grep -q '<height>455</height>' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
           grep -q 'Skin.HasSetting(chooseosdplayer).*videosd2' "$WORK/addons/skin.fentastic/xml/VideoOSD.xml"
           grep -q '!Skin.HasSetting(chooseosdplayer).*videosd1' "$WORK/addons/skin.fentastic/xml/VideoOSD.xml"
           grep -q 'osdchangeplayervar' "$WORK/addons/skin.fentastic/xml/Variables.xml"
+          grep -q 'middlelabelInfo_OSD_Var' "$WORK/addons/skin.fentastic/xml/Variables.xml"
+          grep -q 'IDANPlusCheck_OSd' "$WORK/addons/skin.fentastic/xml/Includes_Expression.xml"
+          grep -q 'SubtitleDelayPlus' "$WORK/addons/skin.fentastic/xml/Includes_VideoOsd.xml"
+          grep -q 'SubtitleDelayMinus' "$WORK/addons/skin.fentastic/xml/Includes_VideoOsd.xml"
           rm -f "$NEW"
           (cd "$WORK" && zip -qr "$OLDPWD/$NEW" .)
           unzip -t "$NEW" >/dev/null
@@ -199,11 +207,9 @@ jobs:
           cat > wizard/assets/notification_files/quick_update.txt <<EOF
           ${QUICK_UPDATE_NOTE_ID}
           |||
-          תיקון החלפת נגן FENtastic
+          עדכון מלא לנגן FENtastic לפי טל
 
-          החלפת הנגן מחוברת למשתנה של טל osdchangeplayervar ולפעולה Skin.ToggleSetting(chooseosdplayer).
-
-          ברירת המחדל היא נגן רגיל, והכפתור שנה נגן מחליף בין נגן רגיל לנגן מתקדם לפי קבצי ה-OSD שנשלחו.
+          העדכון מחיל את קבצי הנגן החדשים של טל, מוסיף את כפתור בחר נגן גם בכיבוי וגם בהגדרות הנגן, ושומר את כיוון השהיית הכתוביות כפי שתוקן אצלך.
 
           quickfix ${QUICKFIX_VERSION} + build ${BUILD_VERSION} + wizard ${WIZARD_VERSION} + AI ${AI_ADDON_VERSION}
           EOF
@@ -224,5 +230,5 @@ jobs:
             wizard/assets/notification_files/quick_update.txt \
             wizard/source/plugin.program.kodipovilwizard/addon.xml \
             wizard/source/plugin.program.kodipovilwizard/uservar.py
-          git commit -m "Publish FENtastic Tal player switch fix ${QUICKFIX_VERSION}"
+          git commit -m "Publish FENtastic Tal full player update ${QUICKFIX_VERSION}"
           git push origin HEAD:main
