@@ -10,7 +10,7 @@
         <provides>executable</provides>
     </extension>
     
-    <extension point="xbmc.service" library="startup.py" start="startup" />
+    <extension point="xbmc.service" library="startup_patched.py" start="startup" />
     
     <extension point="xbmc.addon.metadata">
         <summary lang="en">[COLOR blue]Kodi POV IL Wizard[/COLOR]</summary>
