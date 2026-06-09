@@ -79,105 +79,34 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import os, re
+          import os
+          import re
           from pathlib import Path
+
           addon_xml = Path('wizard/source/plugin.program.kodipovilwizard/addon.xml')
           text = addon_xml.read_text(encoding='utf-8-sig')
-          text = re.sub(r'(<addon\s+id="plugin\.program\.kodipovilwizard"\s+name="[^"]+"\s+version=")([^"]+)(")', rf'\g<1>{os.environ["WIZARD_VERSION"]}\3', text, count=1)
+          text = re.sub(
+              r'(<addon\s+id="plugin\.program\.kodipovilwizard"\s+name="[^"]+"\s+version=")([^"]+)(")',
+              rf'\g<1>{os.environ["WIZARD_VERSION"]}\3',
+              text,
+              count=1,
+          )
           addon_xml.write_text(text, encoding='utf-8')
+
           uservar = Path('wizard/source/plugin.program.kodipovilwizard/uservar.py')
           text = uservar.read_text(encoding='utf-8-sig')
-          text = re.sub(r"BUILDVERSION_DEFAULT = '[^']+'", f"BUILDVERSION_DEFAULT = '{os.environ['BUILD_VERSION']}'", text, count=1)
+          text = re.sub(
+              r"BUILDVERSION_DEFAULT = '[^']+'",
+              f"BUILDVERSION_DEFAULT = '{os.environ['BUILD_VERSION']}'",
+              text,
+              count=1,
+          )
           uservar.write_text(text, encoding='utf-8')
           PY
           mkdir -p dist
           rm -f "dist/${WIZARD_ID}-${WIZARD_VERSION}.zip"
           (cd wizard/source && zip -qr "../../dist/${WIZARD_ID}-${WIZARD_VERSION}.zip" "${WIZARD_ID}")
           unzip -t "dist/${WIZARD_ID}-${WIZARD_VERSION}.zip" >/dev/null
-
-      - name: Create FENtastic patch helper
-        working-directory: src
-        run: |
-          set -euo pipefail
-          cat > "$RUNNER_TEMP/patch_fentastic_player.py" <<'PY'
-          import sys
-          from pathlib import Path
-
-          root = Path(sys.argv[1])
-          xml = root / 'addons' / 'skin.fentastic' / 'xml'
-
-          def read(path):
-              return path.read_text(encoding='utf-8-sig')
-
-          def write(path, text):
-              path.write_text(text, encoding='utf-8')
-
-          # 1) VideoOSD must actually choose between the two OSD/player layouts.
-          video = xml / 'VideoOSD.xml'
-          text = read(video)
-          text = text.replace('<include>videosd1</include>', '<include condition="Skin.HasSetting(chooseosdplayer)">videosd1</include>\n\t<include condition="!Skin.HasSetting(chooseosdplayer)">videosd2</include>')
-          write(video, text)
-
-          # 2) Add a readable power-menu button directly below Reload skin.
-          dialog = xml / 'DialogButtonMenu.xml'
-          text = read(dialog)
-          marker = '<!-- KODI-POV-IL - Toggle FENtastic player -->'
-          if marker not in text:
-              block = '''\t\t\t\t\t\t<item>
-\t\t\t\t\t\t\t<!-- KODI-POV-IL - Toggle FENtastic player -->
-\t\t\t\t\t\t\t<label>[B][COLOR blue]שנה נגן[/COLOR][/B]</label>
-\t\t\t\t\t\t\t<label2>$VAR[OSDPlayerModeVar]</label2>
-\t\t\t\t\t\t\t<onclick>Skin.ToggleSetting(chooseosdplayer)</onclick>
-\t\t\t\t\t\t\t<onclick>Dialog.Close(all)</onclick>
-\t\t\t\t\t\t\t<onclick>ReloadSkin()</onclick>
-\t\t\t\t\t\t</item>'''
-              anchor = '<!-- Reload skin -->'
-              idx = text.find(anchor)
-              if idx < 0:
-                  raise SystemExit('Reload skin anchor not found in DialogButtonMenu.xml')
-              end = text.find('</item>', idx)
-              if end < 0:
-                  raise SystemExit('Reload skin item end not found in DialogButtonMenu.xml')
-              end += len('</item>')
-              text = text[:end] + '\n' + block + text[end:]
-          write(dialog, text)
-
-          # 3) Add the same toggle to the in-player OSD settings list.
-          items = xml / 'Includes_Items.xml'
-          text = read(items)
-          marker = '<!-- KODI-POV-IL - OSD player mode -->'
-          if marker not in text:
-              block = '''\t\t<item>
-\t\t\t<!-- KODI-POV-IL - OSD player mode -->
-\t\t\t<label>שנה נגן</label>
-\t\t\t<label2>$VAR[OSDPlayerModeVar]</label2>
-\t\t\t<onclick>Skin.ToggleSetting(chooseosdplayer)</onclick>
-\t\t\t<onclick>ReloadSkin()</onclick>
-\t\t</item>'''
-              include_idx = text.find('<include name="BasedMenuOsdSecondMenu">')
-              if include_idx < 0:
-                  raise SystemExit('BasedMenuOsdSecondMenu not found in Includes_Items.xml')
-              end = text.find('</content>', include_idx)
-              if end < 0:
-                  raise SystemExit('BasedMenuOsdSecondMenu content end not found in Includes_Items.xml')
-              text = text[:end] + block + '\n' + text[end:]
-          write(items, text)
-
-          # 4) Add a status variable so the user sees which player is active.
-          vars_path = xml / 'Variables.xml'
-          text = read(vars_path)
-          marker = '<variable name="OSDPlayerModeVar">'
-          if marker not in text:
-              block = '''\n\t<variable name="OSDPlayerModeVar">
-\t\t<value condition="Skin.HasSetting(chooseosdplayer)">נגן מתקדם</value>
-\t\t<value>נגן קלאסי</value>
-\t</variable>\n'''
-              end = text.rfind('</includes>')
-              if end < 0:
-                  raise SystemExit('Variables.xml closing </includes> not found')
-              text = text[:end] + block + text[end:]
-          write(vars_path, text)
-          PY
 
       - name: Build Quick Update ZIP
         working-directory: src
@@ -186,11 +115,12 @@ jobs:
           AI_BUILD_ZIP="dist/${AI_ADDON_ID}-build-${AI_ADDON_VERSION}.zip"
           test -s "$AI_BUILD_ZIP"
           WORK="$RUNNER_TEMP/quickfix"
-          rm -rf "$WORK" && mkdir -p "$WORK/addons"
+          rm -rf "$WORK"
+          mkdir -p "$WORK/addons"
           cp -a "wizard/source/${WIZARD_ID}" "$WORK/addons/${WIZARD_ID}"
           unzip -q "$AI_BUILD_ZIP" -d "$WORK/addons"
           unzip -q "$FENTASTIC_UPDATE_ZIP" -d "$WORK"
-          python3 "$RUNNER_TEMP/patch_fentastic_player.py" "$WORK"
+          python3 .github/scripts/patch_fentastic_player.py "$WORK"
           grep -q '<setting id="chooseosdplayer" type="bool">true</setting>' "$WORK/userdata/addon_data/skin.fentastic/settings.xml"
           grep -q 'שנה נגן' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
           grep -q 'Skin.ToggleSetting(chooseosdplayer)' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
@@ -215,14 +145,15 @@ jobs:
           test -s "$OLD"
           test -s "$AI_BUILD_ZIP"
           WORK="$RUNNER_TEMP/full-build"
-          rm -rf "$WORK" && mkdir -p "$WORK"
+          rm -rf "$WORK"
+          mkdir -p "$WORK"
           unzip -q "$OLD" -d "$WORK"
           rm -rf "$WORK/addons/${WIZARD_ID}" "$WORK/addons/${AI_ADDON_ID}" "$WORK/addons/skin.fentastic" "$WORK/userdata/addon_data/skin.fentastic"
           mkdir -p "$WORK/addons"
           cp -a "wizard/source/${WIZARD_ID}" "$WORK/addons/${WIZARD_ID}"
           unzip -q "$AI_BUILD_ZIP" -d "$WORK/addons"
           unzip -q "$FENTASTIC_UPDATE_ZIP" -d "$WORK"
-          python3 "$RUNNER_TEMP/patch_fentastic_player.py" "$WORK"
+          python3 .github/scripts/patch_fentastic_player.py "$WORK"
           grep -q 'שנה נגן' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
           grep -q 'Skin.HasSetting(chooseosdplayer)' "$WORK/addons/skin.fentastic/xml/VideoOSD.xml"
           grep -q 'videosd2' "$WORK/addons/skin.fentastic/xml/VideoOSD.xml"
@@ -235,15 +166,30 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import os, re
+          import os
+          import re
           from pathlib import Path
-          wizard=os.environ['WIZARD_VERSION']; quickfix=os.environ['QUICKFIX_VERSION']; build=os.environ['BUILD_VERSION']
-          base='https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist'
-          p=Path('wizard/assets/build.txt')
-          text=p.read_text(encoding='utf-8-sig')
-          text=re.sub(r'id="plugin\.program\.kodipovilwizard"\nversion="[^"]+"\nzip="[^"]+"', f'id="plugin.program.kodipovilwizard"\nversion="{wizard}"\nzip="{base}/plugin.program.kodipovilwizard-{wizard}.zip"', text, count=1)
-          text=re.sub(r'(name="Kodi POV IL - FENtastic"\nversion=")[^"]+("\nurl=")[^"]+("\nminor="https://"\ngui=")[^"]+("\nkodi=)', rf'\g<1>{build}\g<2>{base}/Kodi-POV-IL-FENtastic-test-{build}.zip\g<3>{base}/Kodi-POV-IL-FENtastic-quickfix-{quickfix}.zip\g<4>', text, count=1)
-          p.write_text(text, encoding='utf-8')
+
+          wizard = os.environ['WIZARD_VERSION']
+          quickfix = os.environ['QUICKFIX_VERSION']
+          build = os.environ['BUILD_VERSION']
+          base = 'https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist'
+
+          build_txt = Path('wizard/assets/build.txt')
+          text = build_txt.read_text(encoding='utf-8-sig')
+          text = re.sub(
+              r'id="plugin\.program\.kodipovilwizard"\nversion="[^"]+"\nzip="[^"]+"',
+              f'id="plugin.program.kodipovilwizard"\nversion="{wizard}"\nzip="{base}/plugin.program.kodipovilwizard-{wizard}.zip"',
+              text,
+              count=1,
+          )
+          text = re.sub(
+              r'(name="Kodi POV IL - FENtastic"\nversion=")[^"]+("\nurl=")[^"]+("\nminor="https://"\ngui=")[^"]+("\nkodi=)',
+              rf'\g<1>{build}\g<2>{base}/Kodi-POV-IL-FENtastic-test-{build}.zip\g<3>{base}/Kodi-POV-IL-FENtastic-quickfix-{quickfix}.zip\g<4>',
+              text,
+              count=1,
+          )
+          build_txt.write_text(text, encoding='utf-8')
           PY
           cat > wizard/assets/notification_files/quick_update.txt <<EOF
           ${QUICK_UPDATE_NOTE_ID}
