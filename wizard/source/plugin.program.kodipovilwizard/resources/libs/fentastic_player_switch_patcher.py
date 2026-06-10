@@ -17,6 +17,7 @@ MARKER_POWER = "KODI-POV-IL - Open FENtastic player selector"
 MARKER_OSD = "KODI-POV-IL - OSD player mode"
 MARKER_TALLER = "KODI-POV-IL - Taller power menu list"
 OLD_MARKER_POWER = "KODI-POV-IL - Toggle FENtastic player"
+BACKPLATE_MARKER = "KODI-POV-IL - OSD bottom backplate"
 SELECT_ACTION = "RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=install&amp;action=fentastic_select_player)"
 
 
@@ -86,6 +87,56 @@ def _patch_video_osd_switch(xml_dir):
         _write(path, text)
         return True
     return False
+
+
+def _patch_osd_backplates(xml_dir):
+    changed = False
+    video1 = os.path.join(xml_dir, "Includes_VideoOsd.xml")
+    if os.path.isfile(video1):
+        text = _read(video1)
+        original = text
+        if BACKPLATE_MARKER not in text:
+            block = """\n\t\t\t<!-- KODI-POV-IL - OSD bottom backplate -->
+\t\t\t<control type=\"image\">
+\t\t\t\t<left>-40</left>
+\t\t\t\t<width>120%</width>
+\t\t\t\t<height>110</height>
+\t\t\t\t<bottom>0</bottom>
+\t\t\t\t<texture>colors/black.png</texture>
+\t\t\t\t<colordiffuse>B0000000</colordiffuse>
+\t\t\t</control>"""
+            marker = "\t\t\t<!-- OSD MAIN MENU -->"
+            if marker in text:
+                text = text.replace(marker, block + "\n" + marker, 1)
+            else:
+                text = text.replace('<control type="list" id="201">', block + '\n\t\t\t<control type="list" id="201">', 1)
+        if text != original:
+            _write(video1, text)
+            changed = True
+
+    video2 = os.path.join(xml_dir, "Includes_VideoOsd2.xml")
+    if os.path.isfile(video2):
+        text = _read(video2)
+        original = text
+        if BACKPLATE_MARKER not in text:
+            block = """\n\t\t\t\t<!-- KODI-POV-IL - OSD bottom backplate -->
+\t\t\t\t<control type=\"image\">
+\t\t\t\t\t<left>0</left>
+\t\t\t\t\t<bottom>0</bottom>
+\t\t\t\t\t<width>100%</width>
+\t\t\t\t\t<height>180</height>
+\t\t\t\t\t<texture>colors/black.png</texture>
+\t\t\t\t\t<colordiffuse>B0000000</colordiffuse>
+\t\t\t\t</control>"""
+            marker = '<animation effect="fade" time="200">VisibleChange</animation>'
+            if marker in text:
+                text = text.replace(marker, marker + block, 1)
+            else:
+                text = text.replace('<control type="label">', block + '\n\t\t\t\t<control type="label">', 1)
+        if text != original:
+            _write(video2, text)
+            changed = True
+    return changed
 
 
 def _inline_taller_power_menu_list(xml_dir, text):
@@ -181,6 +232,8 @@ def _verify(xml_dir):
     video = _read(os.path.join(xml_dir, "VideoOSD.xml"))
     power = _read(os.path.join(xml_dir, "DialogButtonMenu.xml"))
     items = _read(os.path.join(xml_dir, "Includes_Items.xml"))
+    video1 = _read(os.path.join(xml_dir, "Includes_VideoOsd.xml"))
+    video2 = _read(os.path.join(xml_dir, "Includes_VideoOsd2.xml"))
     if 'Includes_VideoOsd2.xml' not in includes:
         raise RuntimeError("Includes.xml does not load Includes_VideoOsd2.xml")
     if 'Skin.HasSetting(chooseosdplayer)">videosd2</include>' not in video:
@@ -191,6 +244,8 @@ def _verify(xml_dir):
         raise RuntimeError("power menu is not using selector dialog")
     if 'fentastic_select_player' not in items or 'Skin.ToggleSetting(chooseosdplayer)' in items:
         raise RuntimeError("OSD settings menu is not using selector dialog")
+    if BACKPLATE_MARKER not in video1 or BACKPLATE_MARKER not in video2:
+        raise RuntimeError("OSD bottom backplate is missing")
 
 
 def ensure_patched():
@@ -202,12 +257,13 @@ def ensure_patched():
     changed = _set_default_regular() or changed
     changed = _ensure_videoosd2_is_loaded(xml_dir) or changed
     changed = _patch_video_osd_switch(xml_dir) or changed
+    changed = _patch_osd_backplates(xml_dir) or changed
     changed = _patch_power_menu(xml_dir) or changed
     changed = _patch_osd_settings_menu(xml_dir) or changed
     changed = _patch_variables(xml_dir) or changed
     _verify(xml_dir)
     if changed:
-        logging.log("[FENtastic player selector] both player modes loaded", level=xbmc.LOGINFO)
+        logging.log("[FENtastic player selector] both player modes loaded with OSD backplate", level=xbmc.LOGINFO)
         xbmc.executebuiltin("ReloadSkin()")
     return changed
 
