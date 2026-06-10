@@ -6,15 +6,15 @@ on:
       quickfix_version:
         description: 'Quick Update version to publish'
         required: true
-        default: '0.1.145'
+        default: '0.1.147'
       build_version:
         description: 'Full build version to publish'
         required: true
-        default: '0.1.38'
+        default: '0.1.40'
       previous_build_version:
         description: 'Preferred base full build version. Workflow auto-falls back to a complete FENtastic base if needed.'
         required: true
-        default: '0.1.30'
+        default: '0.1.39'
       wizard_version:
         description: 'Wizard addon version'
         required: true
@@ -26,7 +26,7 @@ on:
       quick_update_note_id:
         description: 'Quick Update notification id. Must increase.'
         required: true
-        default: '204'
+        default: '206'
 
 permissions:
   contents: write
@@ -132,16 +132,27 @@ jobs:
           grep -q 'fentastic_select_player' "$WORK/addons/skin.fentastic/xml/Includes_Items.xml"
           ! grep -q 'Skin.ToggleSetting(chooseosdplayer)' "$WORK/addons/skin.fentastic/xml/Includes_Items.xml"
           grep -q 'osdchangeplayervar' "$WORK/addons/skin.fentastic/xml/Variables.xml"
+          grep -q 'KODI-POV-IL - OSD bottom backplate' "$WORK/addons/skin.fentastic/xml/Includes_VideoOsd.xml"
+          grep -q 'KODI-POV-IL - OSD bottom backplate' "$WORK/addons/skin.fentastic/xml/Includes_VideoOsd2.xml"
           grep -q 'SubtitleDelayPlus' "$WORK/addons/skin.fentastic/xml/Includes_VideoOsd.xml"
           grep -q 'SubtitleDelayMinus' "$WORK/addons/skin.fentastic/xml/Includes_VideoOsd.xml"
           grep -q 'fentastic_select_player' "$WORK/addons/${WIZARD_ID}/resources/libs/common/router.py"
+
+          # Do NOT ship skin.fentastic settings.xml in Quick Update. It contains
+          # home-menu state and overwriting it exposes Kodi's raw categories.
+          rm -f "$WORK/userdata/addon_data/skin.fentastic/settings.xml"
+
           OUT="dist/${BUILD_SLUG}-quickfix-${QUICKFIX_VERSION}.zip"
           rm -f "$OUT"
           (cd "$WORK" && zip -qr "$OLDPWD/$OUT" addons userdata)
           unzip -t "$OUT" >/dev/null
           unzip -l "$OUT" | grep 'addons/skin.fentastic/xml/DialogButtonMenu.xml'
           unzip -l "$OUT" | grep 'addons/skin.fentastic/xml/VideoOSD.xml'
-          unzip -l "$OUT" | grep 'userdata/addon_data/skin.fentastic/settings.xml'
+          unzip -l "$OUT" | grep 'addons/skin.fentastic/xml/Includes_VideoOsd2.xml'
+          if unzip -l "$OUT" | grep -q 'userdata/addon_data/skin.fentastic/settings.xml'; then
+            echo "::error::Quick Update must not include skin.fentastic settings.xml"
+            exit 1
+          fi
 
       - name: Build refreshed full build ZIP
         working-directory: src
@@ -201,11 +212,22 @@ jobs:
             exit 1
           fi
 
+          SKIN_SETTINGS_BACKUP="$RUNNER_TEMP/skin.fentastic.settings.xml"
+          if [ -s "$WORK/userdata/addon_data/skin.fentastic/settings.xml" ]; then
+            cp "$WORK/userdata/addon_data/skin.fentastic/settings.xml" "$SKIN_SETTINGS_BACKUP"
+          fi
+
           rm -rf "$WORK/addons/${WIZARD_ID}" "$WORK/addons/${AI_ADDON_ID}"
           mkdir -p "$WORK/addons"
           cp -a "wizard/source/${WIZARD_ID}" "$WORK/addons/${WIZARD_ID}"
           unzip -q "$AI_BUILD_ZIP" -d "$WORK/addons"
           unzip -oq "$FENTASTIC_UPDATE_ZIP" -d "$WORK"
+
+          if [ -s "$SKIN_SETTINGS_BACKUP" ]; then
+            mkdir -p "$WORK/userdata/addon_data/skin.fentastic"
+            cp "$SKIN_SETTINGS_BACKUP" "$WORK/userdata/addon_data/skin.fentastic/settings.xml"
+          fi
+
           python3 .github/scripts/patch_fentastic_player.py "$WORK"
 
           grep -q 'skin.fentastic' "$WORK/addons/skin.fentastic/addon.xml"
@@ -216,6 +238,8 @@ jobs:
           grep -q 'fentastic_select_player' "$WORK/addons/skin.fentastic/xml/Includes_Items.xml"
           ! grep -q 'Skin.ToggleSetting(chooseosdplayer)' "$WORK/addons/skin.fentastic/xml/DialogButtonMenu.xml"
           ! grep -q 'Skin.ToggleSetting(chooseosdplayer)' "$WORK/addons/skin.fentastic/xml/Includes_Items.xml"
+          grep -q 'KODI-POV-IL - OSD bottom backplate' "$WORK/addons/skin.fentastic/xml/Includes_VideoOsd.xml"
+          grep -q 'KODI-POV-IL - OSD bottom backplate' "$WORK/addons/skin.fentastic/xml/Includes_VideoOsd2.xml"
           grep -q 'fentastic_select_player' "$WORK/addons/${WIZARD_ID}/resources/libs/common/router.py"
 
           rm -f "$NEW"
@@ -258,9 +282,9 @@ jobs:
           cat > wizard/assets/notification_files/quick_update.txt <<EOF
           ${QUICK_UPDATE_NOTE_ID}
           |||
-          תיקון התקנות נקיות ו-FENtastic
+          תיקון תפריט בית ונגן FENtastic
 
-          העדכון החדש מחפש בסיס Full Build מלא של FENtastic, שומר את הסקין המלא, ומדריס עליו רק את קבצי הנגן של טל. זה מתקן התקנות נקיות שנפלו ל-Estuary בגלל קבצי סקין חסרים.
+          העדכון החדש לא דורס יותר את settings.xml של FENtastic, מחזיר את תפריט הבית של הבילד למצב הנכון, ומשאיר את תיקוני הנגן והרקע הכהה לאייקוני ה-OSD.
 
           quickfix ${QUICKFIX_VERSION} + build ${BUILD_VERSION} + wizard ${WIZARD_VERSION} + AI ${AI_ADDON_VERSION}
           EOF
@@ -281,5 +305,5 @@ jobs:
             wizard/assets/notification_files/quick_update.txt \
             wizard/source/plugin.program.kodipovilwizard/addon.xml \
             wizard/source/plugin.program.kodipovilwizard/uservar.py
-          git commit -m "Publish FENtastic clean install fix ${QUICKFIX_VERSION}"
+          git commit -m "Publish FENtastic home menu restore ${QUICKFIX_VERSION}"
           git push origin HEAD:main
