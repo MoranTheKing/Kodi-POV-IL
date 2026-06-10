@@ -20,6 +20,33 @@ OLD_MARKER_POWER = "KODI-POV-IL - Toggle FENtastic player"
 BACKPLATE_MARKER = "KODI-POV-IL - OSD bottom backplate"
 SELECT_ACTION = "RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=install&amp;action=fentastic_select_player)"
 
+# Keep the Kodi POV IL build home clean. Tal's player update contained a
+# full skin.fentastic settings.xml, and when that file was applied it could
+# expose the raw Kodi home categories again. These booleans restore the
+# intended build menu on every startup without touching user add-on logins.
+HOME_MENU_HIDE = (
+    "HomeMenuNoMusicButton",
+    "HomeMenuNoMusicVideoButton",
+    "HomeMenuNoTVButton",
+    "HomeMenuNoRadioButton",
+    "HomeMenuNoGamesButton",
+    "HomeMenuNoProgramsButton",
+    "HomeMenuNoPicturesButton",
+    "HomeMenuNoVideosButton",
+    "HomeMenuNoWeatherButton",
+    "HomeMenuNoCustom2Button",
+    "HomeMenuNoCustom3Button",
+)
+HOME_MENU_SHOW = (
+    "HomeMenuNoMoviesButton",
+    "HomeMenuNoTVShowsButton",
+    "HomeMenuNoCustom1Button",
+    "HomeMenuNoFavButton",
+    "HomeMenuNoIdanPlusButton",
+    "HomeMenuNoMovieButton",
+    "HomeMenuNoTVShowButton",
+)
+
 
 def _read(path):
     with open(path, "r", encoding="utf-8-sig") as f:
@@ -33,20 +60,73 @@ def _write(path, text):
     os.replace(tmp, path)
 
 
+def _skin_settings_path():
+    return os.path.join(CONFIG.ADDON_DATA, "skin.fentastic", "settings.xml")
+
+
+def _set_settings_xml_bool(text, setting_id, value):
+    item = '<setting id="{0}" type="bool">{1}</setting>'.format(setting_id, value)
+    pattern = re.compile(
+        r'<setting id="' + re.escape(setting_id) + r'" type="bool">(?:true|false)</setting>',
+        re.I,
+    )
+    if pattern.search(text):
+        return pattern.sub(item, text, count=1)
+    if "</settings>" in text:
+        return text.replace("</settings>", "    " + item + "\n</settings>", 1)
+    return text
+
+
+def _set_skin_bool_runtime(setting_id, wanted_true):
+    try:
+        is_true = xbmc.getCondVisibility("Skin.HasSetting({0})".format(setting_id))
+        if wanted_true and not is_true:
+            xbmc.executebuiltin("Skin.SetBool({0})".format(setting_id))
+            return True
+        if not wanted_true and is_true:
+            xbmc.executebuiltin("Skin.Reset({0})".format(setting_id))
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _ensure_home_menu_visibility():
+    changed = False
+    path = _skin_settings_path()
+    text = _read(path) if os.path.isfile(path) else "<settings>\n</settings>\n"
+    original = text
+
+    for setting_id in HOME_MENU_HIDE:
+        changed = _set_skin_bool_runtime(setting_id, True) or changed
+        text = _set_settings_xml_bool(text, setting_id, "true")
+    for setting_id in HOME_MENU_SHOW:
+        changed = _set_skin_bool_runtime(setting_id, False) or changed
+        text = _set_settings_xml_bool(text, setting_id, "false")
+
+    if text != original:
+        base = os.path.dirname(path)
+        try:
+            os.makedirs(base, exist_ok=True)
+        except Exception:
+            pass
+        _write(path, text)
+        changed = True
+    return changed
+
+
 def _set_default_regular():
-    path = os.path.join(CONFIG.ADDON_DATA, "skin.fentastic", "settings.xml")
+    path = _skin_settings_path()
     if not os.path.isfile(path):
         return False
     text = _read(path)
     original = text
-    item = '<setting id="chooseosdplayer" type="bool">true</setting>'
-    text = re.sub(r'<setting id="chooseosdplayer" type="bool">(?:true|false)</setting>', item, text, count=1)
-    if "chooseosdplayer" not in text and "</settings>" in text:
-        text = text.replace("</settings>", "    " + item + "\n</settings>", 1)
+    text = _set_settings_xml_bool(text, "chooseosdplayer", "true")
+    changed = _set_skin_bool_runtime("chooseosdplayer", True)
     if text != original:
         _write(path, text)
-        return True
-    return False
+        changed = True
+    return changed
 
 
 def _ensure_videoosd2_is_loaded(xml_dir):
@@ -254,6 +334,7 @@ def ensure_patched():
         logging.log("[FENtastic player selector] xml folder not found", level=xbmc.LOGINFO)
         return False
     changed = False
+    changed = _ensure_home_menu_visibility() or changed
     changed = _set_default_regular() or changed
     changed = _ensure_videoosd2_is_loaded(xml_dir) or changed
     changed = _patch_video_osd_switch(xml_dir) or changed
@@ -263,7 +344,7 @@ def ensure_patched():
     changed = _patch_variables(xml_dir) or changed
     _verify(xml_dir)
     if changed:
-        logging.log("[FENtastic player selector] both player modes loaded with OSD backplate", level=xbmc.LOGINFO)
+        logging.log("[FENtastic player selector] both player modes loaded, home menu restored, OSD backplate applied", level=xbmc.LOGINFO)
         xbmc.executebuiltin("ReloadSkin()")
     return changed
 
