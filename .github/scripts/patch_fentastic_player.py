@@ -5,11 +5,12 @@ import re
 import sys
 from pathlib import Path
 
-LABEL = "\u05d1\u05d7\u05e8 \u05e0\u05d2\u05df"
-REGULAR = "\u05e0\u05d2\u05df \u05e8\u05d2\u05d9\u05dc"
-ADVANCED = "\u05e0\u05d2\u05df \u05de\u05ea\u05e7\u05d3\u05dd"
+LABEL = "בחר נגן"
+REGULAR = "נגן רגיל"
+ADVANCED = "נגן מתקדם"
 VAR_NAME = "osdchangeplayervar"
 SELECT_ACTION = "RunPlugin(plugin://plugin.program.kodipovilwizard/?mode=install&amp;action=fentastic_select_player)"
+BACKPLATE_MARKER = "KODI-POV-IL - OSD bottom backplate"
 
 
 def read_text(path: Path) -> str:
@@ -129,6 +130,49 @@ def patch_video_osd_switch(xml_dir: Path) -> None:
     write_text(path, text)
 
 
+def patch_osd_backplates(xml_dir: Path) -> None:
+    """Add a solid dark rail behind the OSD controls so white icons stay readable on bright video."""
+    video1_path = xml_dir / "Includes_VideoOsd.xml"
+    text = read_text(video1_path)
+    if BACKPLATE_MARKER not in text:
+        block = """\n\t\t\t<!-- KODI-POV-IL - OSD bottom backplate -->
+\t\t\t<control type=\"image\">
+\t\t\t\t<left>-40</left>
+\t\t\t\t<width>120%</width>
+\t\t\t\t<height>110</height>
+\t\t\t\t<bottom>0</bottom>
+\t\t\t\t<texture>colors/black.png</texture>
+\t\t\t\t<colordiffuse>B0000000</colordiffuse>
+\t\t\t</control>"""
+        marker = "\t\t\t<!-- OSD MAIN MENU -->"
+        if marker in text:
+            text = text.replace(marker, block + "\n" + marker, 1)
+        else:
+            text = text.replace('<control type="list" id="201">', block + '\n\t\t\t<control type="list" id="201">', 1)
+    write_text(video1_path, text)
+
+    video2_path = xml_dir / "Includes_VideoOsd2.xml"
+    if not video2_path.is_file():
+        return
+    text = read_text(video2_path)
+    if BACKPLATE_MARKER not in text:
+        block = """\n\t\t\t\t<!-- KODI-POV-IL - OSD bottom backplate -->
+\t\t\t\t<control type=\"image\">
+\t\t\t\t\t<left>0</left>
+\t\t\t\t\t<bottom>0</bottom>
+\t\t\t\t\t<width>100%</width>
+\t\t\t\t\t<height>180</height>
+\t\t\t\t\t<texture>colors/black.png</texture>
+\t\t\t\t\t<colordiffuse>B0000000</colordiffuse>
+\t\t\t\t</control>"""
+        marker = '<animation effect="fade" time="200">VisibleChange</animation>'
+        if marker in text:
+            text = text.replace(marker, marker + block, 1)
+        else:
+            text = text.replace('<control type="label">', block + '\n\t\t\t\t<control type="label">', 1)
+    write_text(video2_path, text)
+
+
 def inline_taller_power_menu_list(xml_dir: Path, text: str) -> str:
     if "KODI-POV-IL - Taller power menu list" in text:
         return text
@@ -205,6 +249,8 @@ def verify(root: Path, xml_dir: Path) -> None:
     variables = read_text(xml_dir / "Variables.xml")
     power = read_text(xml_dir / "DialogButtonMenu.xml")
     items = read_text(xml_dir / "Includes_Items.xml")
+    video1 = read_text(xml_dir / "Includes_VideoOsd.xml")
+    video2 = read_text(xml_dir / "Includes_VideoOsd2.xml") if (xml_dir / "Includes_VideoOsd2.xml").is_file() else ""
     if 'Includes_VideoOsd2.xml' not in includes:
         raise SystemExit("Includes.xml does not load Includes_VideoOsd2.xml")
     if 'Skin.HasSetting(chooseosdplayer)">videosd2</include>' not in video:
@@ -217,6 +263,8 @@ def verify(root: Path, xml_dir: Path) -> None:
         raise SystemExit("power button is not using safe selector dialog")
     if 'fentastic_select_player' not in items or 'Skin.ToggleSetting(chooseosdplayer)' in items:
         raise SystemExit("OSD settings button is not using safe selector dialog")
+    if BACKPLATE_MARKER not in video1 or BACKPLATE_MARKER not in video2:
+        raise SystemExit("OSD bottom backplate is missing")
     settings = root / "userdata" / "addon_data" / "skin.fentastic" / "settings.xml"
     if settings.is_file() and '<setting id="chooseosdplayer" type="bool">true</setting>' not in read_text(settings):
         raise SystemExit("default player is not regular/simple")
@@ -236,11 +284,12 @@ def main() -> int:
     apply_tal_videoosd1(xml_dir)
     keep_user_subtitle_delay(xml_dir)
     patch_video_osd_switch(xml_dir)
+    patch_osd_backplates(xml_dir)
     patch_power_menu(xml_dir)
     patch_osd_settings_menu(xml_dir)
     patch_player_var(xml_dir)
     verify(root, xml_dir)
-    print("FENtastic Tal player selector applied with both OSD players loaded")
+    print("FENtastic Tal player selector applied with readable OSD backplate")
     return 0
 
 
