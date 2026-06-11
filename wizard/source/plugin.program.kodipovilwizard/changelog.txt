@@ -1,12 +1,3 @@
-[COLOR yellow][B]v0.1.17[/B][/COLOR]
-* Switch Skin now uses Kodi's JSON-RPC Settings.SetSettingValue flow
-  instead of manually editing userdata/guisettings.xml. This makes the
-  selected skin actually stick after Kodi is closed and reopened.
-* The switch flow verifies that lookandfeel.skin changed to the target
-  skin before showing the success/close message.
-* Quick Update packaging for this fix contains the wizard/build payload
-  only; the standalone AI subtitles addon stays clean.
-
 [COLOR yellow][B]v0.1.14[/B][/COLOR]
 * Fix the version gate from 0.1.13: _af3_read_addon_version() was matching
   the FIRST version=" in the file, which is the XML declaration

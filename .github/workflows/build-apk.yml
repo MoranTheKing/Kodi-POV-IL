@@ -10,13 +10,13 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release tag / version label (e.g., 21.3-povil.2)'
+        description: 'Release tag / version label (e.g., 21.3-povil.1)'
         required: true
-        default: '21.3-povil.2'
+        default: '21.3-povil.1'
       version_code:
         description: 'Android versionCode (integer, must increase each release)'
         required: true
-        default: '21302'
+        default: '21301'
       kodi_version:
         description: 'Upstream Kodi version to rebrand (e.g., 21.3)'
         required: true
@@ -34,8 +34,6 @@ env:
   OLD_PACKAGE_ID: 'org.xbmc.kodi'
   PACKAGE_ID: 'org.xbmc.povi'
   APP_NAME: 'Kodi POV IL'
-  BUNDLED_WIZARD_ZIP: 'plugin.program.kodipovilwizard-0.1.17.zip'
-  BUNDLED_BUILD_ZIP: 'Kodi-POV-IL-FENtastic-test-0.1.38.zip'
 
 jobs:
   build-and-release:
@@ -89,24 +87,6 @@ jobs:
             -out $HOME/release.keystore \
             -pass env:KEYSTORE_PASSWORD
           test -s $HOME/release.keystore
-
-      - name: Verify bundled wizard/build zips
-        run: |
-          set -euo pipefail
-          test -s "src/dist/${BUNDLED_WIZARD_ZIP}"
-          test -s "src/dist/${BUNDLED_BUILD_ZIP}"
-          unzip -t "src/dist/${BUNDLED_WIZARD_ZIP}" >/dev/null
-          unzip -t "src/dist/${BUNDLED_BUILD_ZIP}" >/dev/null
-          unzip -l "src/dist/${BUNDLED_BUILD_ZIP}" | grep 'addons/skin.fentastic/addon.xml'
-          unzip -l "src/dist/${BUNDLED_BUILD_ZIP}" | grep 'addons/skin.fentastic/xml/Home.xml'
-          unzip -l "src/dist/${BUNDLED_BUILD_ZIP}" | grep 'addons/skin.fentastic/xml/SkinSettings.xml'
-          unzip -l "src/dist/${BUNDLED_BUILD_ZIP}" | grep 'addons/skin.fentastic/xml/Includes_VideoOsd.xml'
-          unzip -l "src/dist/${BUNDLED_BUILD_ZIP}" | grep 'addons/skin.fentastic/xml/Includes_VideoOsd2.xml'
-          unzip -l "src/dist/${BUNDLED_BUILD_ZIP}" | grep 'userdata/addon_data/skin.fentastic/settings.xml'
-          unzip -p "src/dist/${BUNDLED_BUILD_ZIP}" addons/skin.fentastic/xml/Includes.xml | grep 'Includes_VideoOsd2.xml'
-          unzip -p "src/dist/${BUNDLED_BUILD_ZIP}" addons/skin.fentastic/xml/DialogButtonMenu.xml | grep 'fentastic_select_player'
-          unzip -p "src/dist/${BUNDLED_BUILD_ZIP}" addons/skin.fentastic/xml/Includes_Items.xml | grep 'fentastic_select_player'
-          unzip -p "src/dist/${BUNDLED_WIZARD_ZIP}" plugin.program.kodipovilwizard/resources/libs/common/router.py | grep 'fentastic_select_player'
 
       - name: Build both Android APKs
         env:
@@ -162,8 +142,8 @@ jobs:
             echo "::group::Bundle wizard and build into assets/"
             ASSETS="$WORK/decoded/assets"
             mkdir -p "$ASSETS/addons"
-            unzip -o "src/dist/${BUNDLED_WIZARD_ZIP}" -d "$ASSETS/addons/" >/dev/null
-            unzip -o "src/dist/${BUNDLED_BUILD_ZIP}" -d "$ASSETS/" >/dev/null
+            unzip -o src/dist/plugin.program.kodipovilwizard-0.1.16.zip -d "$ASSETS/addons/" >/dev/null
+            unzip -o src/dist/Kodi-POV-IL-FENtastic-test-0.1.18.zip -d "$ASSETS/" >/dev/null
             # Register the wizard as a system addon so Kodi auto-enables it
             # on first launch. Its startup.py then detects no build is
             # installed yet and auto-installs Kodi POV IL - FENtastic
@@ -240,8 +220,8 @@ jobs:
           # webOS Kodi installs under /usr/palm/applications/org.xbmc.kodi
           KODI_ROOT="$WORK/data/usr/palm/applications/org.xbmc.kodi"
           test -d "$KODI_ROOT" || { echo "::error::webOS Kodi root not found at expected path"; exit 1; }
-          unzip -o "src/dist/${BUNDLED_WIZARD_ZIP}" -d "$KODI_ROOT/addons/" >/dev/null
-          unzip -o "src/dist/${BUNDLED_BUILD_ZIP}" -d "$KODI_ROOT/" >/dev/null
+          unzip -o src/dist/plugin.program.kodipovilwizard-0.1.16.zip -d "$KODI_ROOT/addons/" >/dev/null
+          unzip -o src/dist/Kodi-POV-IL-FENtastic-test-0.1.18.zip -d "$KODI_ROOT/" >/dev/null
           MANIFEST_FILE="$KODI_ROOT/system/addon-manifest.xml"
           for addon_id in plugin.program.kodipovilwizard script.module.requests script.module.six script.module.certifi script.module.urllib3 script.module.chardet script.module.idna; do
             if grep -q "<addon>$addon_id</addon>" "$MANIFEST_FILE"; then
@@ -274,8 +254,8 @@ jobs:
           mkdir -p $RUNNER_TEMP/win
           curl -fL --retry 3 -o $RUNNER_TEMP/win/kodi-setup.exe \
             "https://mirrors.kodi.tv/releases/windows/win64/kodi-${KODI_VERSION}-Omega-x64.exe"
-          cp "src/dist/${BUNDLED_WIZARD_ZIP}" $RUNNER_TEMP/win/wizard.zip
-          cp "src/dist/${BUNDLED_BUILD_ZIP}"     $RUNNER_TEMP/win/build.zip
+          cp src/dist/plugin.program.kodipovilwizard-0.1.16.zip $RUNNER_TEMP/win/wizard.zip
+          cp src/dist/Kodi-POV-IL-FENtastic-test-0.1.18.zip     $RUNNER_TEMP/win/build.zip
           cp src/dist/installer/build-windows-installer.nsi     $RUNNER_TEMP/win/installer.nsi
           (cd $RUNNER_TEMP/win && makensis -V2 -DVERSION="$VERSION" installer.nsi)
           cp $RUNNER_TEMP/win/Kodi-POV-IL-Setup-*.exe out/
