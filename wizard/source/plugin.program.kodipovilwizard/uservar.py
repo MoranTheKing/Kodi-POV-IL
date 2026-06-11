@@ -29,7 +29,7 @@ BUILDNAME_DEFAULT = 'Kodi POV IL - FENtastic'
 # triggers a destructive full-build-install dialog that wipes the
 # user's connected services. Should be kept aligned with the version
 # we ship in dist/Kodi-POV-IL-FENtastic-test-*.zip.
-BUILDVERSION_DEFAULT = '0.1.40'
+BUILDVERSION_DEFAULT = '0.1.41'
 EXCLUDES = [ADDON_ID]
 # Text File with build info in it. Please read https://github.com/a4k-openproject/plugin.program.openwizard/wiki/Installing-Builds
 BUILDFILE = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/build.txt'
@@ -59,8 +59,7 @@ APK_PACKAGE_ID = 'org.xbmc.povi'
 # as "our app" so people on an old org.xbmc.kodirdil build (or the short-lived
 # org.moran.kodi / org.mora.kodi rename attempts) still get the update prompt.
 APK_PACKAGE_IDS = ['org.xbmc.povi', 'org.xbmc.kodi', 'org.xbmc.kodirdil', 'org.moran.kodi', 'org.mora.kodi']
-# AFTVnews / Downloader short code for the Kodi POV IL downloads page.
-APK_DOWNLOADER_CODE = '6699594'
+APK_DOWNLOADER_CODE = ''
 APK_DOWNLOADER_CODE_IMAGE_URL = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/kodi_version_auto_update/apk/apk_downloader_code.png'
 #########################################################
 
