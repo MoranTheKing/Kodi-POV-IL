@@ -48,6 +48,10 @@ jobs:
           cd ..
           git clone --depth=1 --branch=main "$REMOTE" src
           (cd src && git archive HEAD) | tar -x -C gh
+          # gh-pages should serve static files only. Do not publish workflow
+          # files there: GitHub blocks GITHUB_TOKEN from creating/updating
+          # workflows without the extra workflows permission.
+          rm -rf gh/.github
           touch gh/.nojekyll
           cd gh
           git add -A
