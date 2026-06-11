@@ -213,7 +213,7 @@ def authorize():
             yield(item)
     icon_path = kodi_utils.media_path()
     services = (
-        ('trakt', Trakt), ('mdblist', MDBList), ('tmdblist', TMDBList),
+        ('trakt', Trakt), ('mdblist', MDBList), ('tmdblist', TMDbList),
         ('real-debrid', RealDebrid), ('premiumize.me', Premiumize),
         ('alldebrid', AllDebrid), ('torbox', TorBox),
         ('offcloud', Offcloud), ('easynews', EasyNews),
