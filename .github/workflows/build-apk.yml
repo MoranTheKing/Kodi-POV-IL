@@ -142,8 +142,8 @@ jobs:
             echo "::group::Bundle wizard and build into assets/"
             ASSETS="$WORK/decoded/assets"
             mkdir -p "$ASSETS/addons"
-            unzip -o src/dist/plugin.program.kodipovilwizard-0.1.16.zip -d "$ASSETS/addons/" >/dev/null
-            unzip -o src/dist/Kodi-POV-IL-FENtastic-test-0.1.18.zip -d "$ASSETS/" >/dev/null
+            unzip -o src/dist/plugin.program.kodipovilwizard-0.1.18.zip -d "$ASSETS/addons/" >/dev/null
+            unzip -o src/dist/Kodi-POV-IL-FENtastic-test-0.1.41.zip -d "$ASSETS/" >/dev/null
             # Register the wizard as a system addon so Kodi auto-enables it
             # on first launch. Its startup.py then detects no build is
             # installed yet and auto-installs Kodi POV IL - FENtastic
@@ -220,8 +220,8 @@ jobs:
           # webOS Kodi installs under /usr/palm/applications/org.xbmc.kodi
           KODI_ROOT="$WORK/data/usr/palm/applications/org.xbmc.kodi"
           test -d "$KODI_ROOT" || { echo "::error::webOS Kodi root not found at expected path"; exit 1; }
-          unzip -o src/dist/plugin.program.kodipovilwizard-0.1.16.zip -d "$KODI_ROOT/addons/" >/dev/null
-          unzip -o src/dist/Kodi-POV-IL-FENtastic-test-0.1.18.zip -d "$KODI_ROOT/" >/dev/null
+          unzip -o src/dist/plugin.program.kodipovilwizard-0.1.18.zip -d "$KODI_ROOT/addons/" >/dev/null
+          unzip -o src/dist/Kodi-POV-IL-FENtastic-test-0.1.41.zip -d "$KODI_ROOT/" >/dev/null
           MANIFEST_FILE="$KODI_ROOT/system/addon-manifest.xml"
           for addon_id in plugin.program.kodipovilwizard script.module.requests script.module.six script.module.certifi script.module.urllib3 script.module.chardet script.module.idna; do
             if grep -q "<addon>$addon_id</addon>" "$MANIFEST_FILE"; then
@@ -254,8 +254,8 @@ jobs:
           mkdir -p $RUNNER_TEMP/win
           curl -fL --retry 3 -o $RUNNER_TEMP/win/kodi-setup.exe \
             "https://mirrors.kodi.tv/releases/windows/win64/kodi-${KODI_VERSION}-Omega-x64.exe"
-          cp src/dist/plugin.program.kodipovilwizard-0.1.16.zip $RUNNER_TEMP/win/wizard.zip
-          cp src/dist/Kodi-POV-IL-FENtastic-test-0.1.18.zip     $RUNNER_TEMP/win/build.zip
+          cp src/dist/plugin.program.kodipovilwizard-0.1.18.zip $RUNNER_TEMP/win/wizard.zip
+          cp src/dist/Kodi-POV-IL-FENtastic-test-0.1.41.zip     $RUNNER_TEMP/win/build.zip
           cp src/dist/installer/build-windows-installer.nsi     $RUNNER_TEMP/win/installer.nsi
           (cd $RUNNER_TEMP/win && makensis -V2 -DVERSION="$VERSION" installer.nsi)
           cp $RUNNER_TEMP/win/Kodi-POV-IL-Setup-*.exe out/
