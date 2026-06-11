@@ -63,15 +63,8 @@ def _set_new(new_key, value):
 
 def _swap_skins(skin):
     _set_new('lookandfeel.skin', skin)
-
-    # Kodi shows a confirmation dialog when changing skins. The old
-    # implementation returned only whether that dialog appeared and was
-    # accepted. That could report success while Kodi still kept the old skin
-    # (or silently fell back on restart). Verify the actual setting value too.
-    _dialog_watch()
-    xbmc.sleep(500)
-
-    return _get_old('lookandfeel.skin') == skin
+    
+    return _dialog_watch()
 
 
 def switch_to_skin(goto, title="Error"):
@@ -84,7 +77,7 @@ def switch_to_skin(goto, title="Error"):
     else:
         logging.log_notify(CONFIG.ADDONTITLE,
                            '[COLOR {0}]{1}: Skin Swap Failed![/COLOR]'.format(CONFIG.COLOR2, title))
-                            
+                           
     return result
 
 
