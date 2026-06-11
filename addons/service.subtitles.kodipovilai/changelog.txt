@@ -1,7 +1,8 @@
-v0.2.137
-- AI subtitles: fixed a DarkSubs hook crash when DarkSubs passes a missing/None subtitle path before translation.
-- AI subtitles: the hook now skips invalid input safely and creates a temporary output path when DarkSubs does not provide one.
-- Standalone AI subtitle package remains clean from build-only Wizard, skin and home-tile changes.
+﻿v0.2.138
+- Build edition only: restored the stable 0.2.136-era code path after the broken later updates, while publishing a higher version so affected users receive the repair.
+- Build edition only: FENtastic player files are refreshed from Tal Levi's latest three-player package. Huge credit to Tal Levi.
+- Build edition only: clean installs, wizard installs, APK installs, and Windows installer builds are based back on the last stable Codex build baseline.
+- Standalone AI subtitle package remains clean from build-only player UI and home-tile changes.
 
 v0.2.136
 - Build edition only: FENtastic player files were refreshed from Tal Levi's latest package. Huge credit to Tal Levi for the player work.
