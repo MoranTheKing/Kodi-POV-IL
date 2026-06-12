@@ -1,3 +1,15 @@
+[COLOR yellow][B]v0.1.21[/B][/COLOR]
+* Fix the "Kodi hangs for a few seconds on the first launch after an
+  install / quick update, force-stop required" bug. startup.py is an
+  xbmc.service with start="startup", so it runs before Kodi's GUI
+  exists; the first-launch modal dialogs (build notification, skin-
+  switch notification) were doModal()'d that early and deadlocked the
+  boot. Because those blocks set their one-shot dismiss flag BEFORE
+  showing, the hang happened exactly once and a force-stop recovered --
+  matching the symptom. Added wait_for_gui_ready(): the service now
+  blocks (bounded) until the Home window is actually live before any
+  first-launch dialog, so each modal has a real parent window.
+
 [COLOR yellow][B]v0.1.20[/B][/COLOR]
 * New 4th skin: NOX (skin.povil.nox), a rebranded + scrubbed Estuary MOD
   with a Hebrew home menu remapped to our POV / idanplus / otaku addons.

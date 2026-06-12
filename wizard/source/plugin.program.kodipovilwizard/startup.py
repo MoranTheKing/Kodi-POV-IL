@@ -492,6 +492,40 @@ def check_for_video():
         xbmc.sleep(1000)
 
 
+def wait_for_gui_ready(timeout=90):
+    """This script is an xbmc.service with start="startup", so it runs
+    before Kodi's GUI/Home window exists. Showing a modal dialog
+    (doModal) that early deadlocks Kodi: it loads for a few seconds and
+    then hangs, and only a force-stop recovers -- after which the
+    one-shot dismiss flags are already set, so the next launch is fine.
+    That exactly matches the "hang once after every install/quick
+    update" symptom. Wait for the Home window to be live before any
+    first-launch dialog. Bounded by a timeout so we never wait forever
+    (e.g. headless/odd boots); returns True only if Home actually came
+    up."""
+    try:
+        monitor = xbmc.Monitor()
+        waited = 0
+        while waited < timeout:
+            if xbmc.getCondVisibility('Window.IsVisible(home)'):
+                # Home is up; give the skin a moment to finish drawing
+                # before we layer a modal on top of it.
+                xbmc.sleep(750)
+                return True
+            if monitor.waitForAbort(1):
+                return False
+            waited += 1
+        logging.log(
+            '[GUI Ready] Home window not visible after {0}s; '
+            'continuing without the wait.'.format(timeout),
+            level=xbmc.LOGWARNING)
+        return False
+    except Exception as gui_err:
+        logging.log('[GUI Ready] wait failed: {0}'.format(gui_err),
+                    level=xbmc.LOGERROR)
+        return False
+
+
 # Don't run the script while video is playing :)
 check_for_video()
 # Ensure that any needed folders are created
@@ -517,6 +551,14 @@ if CONFIG.FORCEUPDATEFAST_ONSTARTUP == "true": db.forceUpdate()
 # first needs the full build (userdata + FENtastic + favourites) extracted.
 if fresh_build_auto_install_if_needed():
     sys.exit()
+
+# Everything below can pop a modal dialog (build first-launch notification,
+# skin-switch notification, quick-update prompt). Because this is a
+# start="startup" service those modals can fire before Kodi's GUI exists
+# and deadlock the boot -- the "hangs once after install/quick update,
+# force-stop to recover" symptom. Block here until Home is actually live
+# (bounded) so every dialog below has a real parent window.
+wait_for_gui_ready()
 
 # SHOW NOTIFICATIONS
 if CONFIG.ENABLE_NOTIFICATION == 'Yes' and CONFIG.get_setting('buildname'):
