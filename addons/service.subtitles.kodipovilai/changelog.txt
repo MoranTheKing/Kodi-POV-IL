@@ -1,4 +1,13 @@
-﻿v0.2.138
+v0.2.139
+- Build edition only: FENtastic Movies/Shows genre widgets now open POV's
+  direct navigator.genres paths, so the Genres rows appear under streaming
+  networks even when the old shortcut folders are missing.
+- Build edition only: the subscription notification settings tile is restored
+  once for installs that never received it, while still respecting users who
+  delete it afterwards.
+- Standalone AI subtitle package remains clean from build-only home tiles.
+
+v0.2.138
 - Build edition only: restored the stable 0.2.136-era code path after the broken later updates, while publishing a higher version so affected users receive the repair.
 - Build edition only: FENtastic player files are refreshed from Tal Levi's latest three-player package. Huge credit to Tal Levi.
 - Build edition only: clean installs, wizard installs, APK installs, and Windows installer builds are based back on the last stable Codex build baseline.
