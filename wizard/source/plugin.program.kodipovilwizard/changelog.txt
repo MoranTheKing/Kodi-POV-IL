@@ -1,3 +1,12 @@
+[COLOR yellow][B]v0.1.24[/B][/COLOR]
+* NOX gate -> skin 1.0.4. Fixes the overlapping home rows: Movies / TV /
+  Kids now show two separate stacked rows (Popular + New / kids movies +
+  kids series) instead of both widgets rendering at the same position.
+  Each row is wrapped in its own group with a vertical offset (mirroring
+  the working VOD layout); the category groups moved up so both rows fit.
+* Israeli content (תוכן ישראלי): added the "כאן 11" row beneath
+  channel 13 and channel 12 (idanplus module=kan), so it shows 13/12/11.
+
 [COLOR yellow][B]v0.1.23[/B][/COLOR]
 * NOX skin now auto-updates for users already ON it. Added
   auto_update_active_skin_pack() (called from startup.py): if the active
