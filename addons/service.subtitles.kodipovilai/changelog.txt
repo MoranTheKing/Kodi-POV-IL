@@ -1,3 +1,17 @@
+v0.2.141
+- Build edition only: fix Kodi hanging on the first launch after an
+  install / quick update (force-stop required). The DarkSubs reload
+  (darksubs_reload) disabled+re-enabled service.subtitles.All_Subs INLINE
+  during our service's boot pass -- while All_Subs's own service was still
+  starting -- so two autosub.py interpreters fought ("didn't stop in 5
+  seconds - let's kill it") and wedged the GUI. The cycle now runs on a
+  background thread that waits for the Home window to be up and nothing
+  playing before toggling the addon, so All_Subs is idle and stops
+  cleanly. Confirmed against the hang log (the cycle line appeared only in
+  the frozen boot, never in the boot that recovered).
+- Standalone AI subtitle package is unaffected (it does not ship the
+  DarkSubs patchers/reload).
+
 v0.2.140
 - Build edition only: the POV "Connect Services" injector now resolves POV's
   service classes dynamically instead of hardcoding their names. POV 6.x
