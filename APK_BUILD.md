@@ -3,7 +3,7 @@
 Two workflows live under `.github/workflows/`:
 
 - **`setup-keystore.yml`** ג€” runs once. Generates an Android release keystore on the runner, encrypts it with your `KEYSTORE_PASSWORD` secret, and opens a PR adding `.secrets/release.keystore.enc` to the repo. The unencrypted keystore never leaves the runner.
-- **`build-apk.yml`** - runs each time you cut a release. Decrypts the in-repo keystore, downloads the official Kodi APK, rebrands it to separate package id `org.xbmc.povi`, relabels it to "Kodi POV IL", bundles the wizard + FENtastic build into `assets/`, signs both architectures, and attaches them plus the independent Windows installer to a GitHub Release.
+- **`build-apk.yml`** - runs each time you cut a release. Decrypts the in-repo keystore, downloads the official Kodi APK, rebrands it to separate package id `org.xbmc.povi`, relabels it to "Kodi POV IL", bundles the wizard (+ its python deps) into `assets/` as optional system addons (the FENtastic build itself is downloaded by the wizard on first launch -- never baked into `assets/`, see APK_RELEASE.md), signs both architectures, and attaches them plus the independent Windows installer to a GitHub Release.
 
 Neither workflow uses any third-party `actions/*` ג€” just system tools and the preinstalled `gh` CLI. The repo's restrictive Actions policy doesn't block them.
 
