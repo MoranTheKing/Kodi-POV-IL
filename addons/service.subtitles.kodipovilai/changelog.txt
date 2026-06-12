@@ -1,3 +1,11 @@
+v0.2.140
+- Build edition only: the POV "Connect Services" injector now resolves POV's
+  service classes dynamically instead of hardcoding their names. POV 6.x
+  renamed TMDbList to TMDBList and removed EasyDebrid, which made the injected
+  menu crash with NameError after Kodi auto-updated POV. Existing installs are
+  re-patched automatically on the next Kodi start (injector v7).
+- Standalone AI subtitle package is unaffected (it does not ship the injector).
+
 v0.2.139
 - Build edition only: FENtastic Movies/Shows genre widgets now open POV's
   direct navigator.genres paths, so the Genres rows appear under streaming
