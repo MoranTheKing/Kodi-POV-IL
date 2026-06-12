@@ -184,6 +184,111 @@ def sync_quickfix_build_version():
         )
 
 
+def fresh_build_auto_install_if_needed():
+    """Hydrate a clean profile with the full build once.
+
+    Existing users already have buildname set and stay on the safe quick_update
+    path. A fresh APK/IPK/Windows/wizard profile needs the full build extracted
+    once so guisettings, FENtastic settings, favourites, and addon DB rows exist.
+    """
+    if CONFIG.get_setting('buildname'):
+        return False
+    if CONFIG.get_setting('installed') == 'true':
+        return False
+
+    build_name = CONFIG.BUILDNAME_DEFAULT
+    build_version = CONFIG.BUILDVERSION_DEFAULT
+    try:
+        build_url = check.check_build(build_name, 'url')
+        remote_version = check.check_build(build_name, 'version')
+        if remote_version:
+            build_version = remote_version
+    except Exception as err:
+        logging.log(
+            "[Fresh Build Auto Install] Failed reading build.txt: {0}".format(err),
+            level=xbmc.LOGERROR,
+        )
+        return False
+
+    if not build_url:
+        return False
+
+    if CONFIG.get_setting('fresh_build_auto_install_done') == build_version:
+        return False
+
+    try:
+        from resources.libs.downloader import Downloader
+        from resources.libs import extract
+
+        tools.ensure_folders(CONFIG.PACKAGES)
+        zipname = build_name.replace('\\', '').replace('/', '').replace(':', '').replace('*', '').replace('?', '').replace('"', '').replace('<', '').replace('>', '').replace('|', '')
+        lib = os.path.join(CONFIG.PACKAGES, '{0}_fresh_install.zip'.format(zipname))
+        tools.remove_file(lib)
+
+        logging.log(
+            "[Fresh Build Auto Install] Installing {0} v{1}".format(
+                build_name, build_version
+            ),
+            level=xbmc.LOGINFO,
+        )
+        Downloader().download(build_url, lib)
+        xbmc.sleep(500)
+
+        if not os.path.exists(lib) or os.path.getsize(lib) == 0:
+            tools.remove_file(lib)
+            return False
+
+        title = '[COLOR {0}][B]Installing:[/B][/COLOR] [COLOR {1}]{2}[/COLOR]'.format(
+            CONFIG.COLOR2, CONFIG.COLOR1, build_name
+        )
+        percent, errors, error = extract.all(lib, CONFIG.HOME, ignore=True, title=title)
+        if int(float(percent)) <= 0:
+            logging.log(
+                "[Fresh Build Auto Install] Extract failed: {0}".format(error),
+                level=xbmc.LOGERROR,
+            )
+            return False
+
+        installed = db.grab_addons(lib)
+        db.addon_database(installed, 1, True)
+        db.addon_database(CONFIG.ADDON_ID, 1)
+        db.fix_metas()
+
+        CONFIG.set_setting('buildname', build_name)
+        CONFIG.set_setting('installed', 'true')
+        CONFIG.set_setting('buildversion', build_version)
+        CONFIG.set_setting('latestversion', build_version)
+        CONFIG.set_setting('nextbuildcheck', tools.get_date(days=CONFIG.UPDATECHECK, formatted=True))
+        CONFIG.set_setting('extract', percent)
+        CONFIG.set_setting('errors', errors)
+        CONFIG.set_setting('fresh_build_auto_install_done', build_version)
+
+        CONFIG.BUILDNAME = build_name
+        CONFIG.BUILDVERSION = build_version
+        CONFIG.BUILDLATEST = build_version
+        CONFIG.INSTALLED = 'true'
+
+        tools.remove_file(lib)
+
+        from resources.libs.gui import window as _window
+        note_id, _msg = _window.split_notify(CONFIG.QUICK_UPDATE_NOTIFICATION_URL)
+        if note_id:
+            CONFIG.set_setting('quick_update_noteid', note_id)
+            CONFIG.set_setting('quick_update_notedismiss', 'true')
+
+        from resources.libs.wizard import Wizard
+        Wizard().force_close_kodi_in_5_seconds(
+            dialog_header="Kodi POV IL build installed"
+        )
+        return True
+    except Exception as err:
+        logging.log(
+            "[Fresh Build Auto Install] Failed: {0}".format(err),
+            level=xbmc.LOGERROR,
+        )
+        return False
+
+
 def installed_build_check():
     dialog = xbmcgui.Dialog()
 
@@ -394,6 +499,12 @@ else:
 
 # KODI-RD-IL - Auto force addon updates on Kodi startup
 if CONFIG.FORCEUPDATEFAST_ONSTARTUP == "true": db.forceUpdate()
+
+# KODI-POV-IL - Clean APK/IPK/Windows/wizard first launch hydration.
+# This is intentionally before notifications and quick_update: a clean profile
+# first needs the full build (userdata + FENtastic + favourites) extracted.
+if fresh_build_auto_install_if_needed():
+    sys.exit()
 
 # SHOW NOTIFICATIONS
 if CONFIG.ENABLE_NOTIFICATION == 'Yes' and CONFIG.get_setting('buildname'):
