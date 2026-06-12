@@ -37,7 +37,7 @@ ICON_SRC_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), 'icons')
 ICON_FILENAMES = ('gemini.png', 'wyzie.png')
 
-INJECT_VERSION = 6
+INJECT_VERSION = 7
 MARKER = '# AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
 END_MARKER = '# END AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
 TUPLE_MARKER = "# AI_SUBS_MYSERVICES_TUPLE_v{0}".format(INJECT_VERSION)
@@ -58,6 +58,14 @@ TUPLE_MARKER = "# AI_SUBS_MYSERVICES_TUPLE_v{0}".format(INJECT_VERSION)
 #     lives in default.py going forward -- the patcher only
 #     handles the "icon + click forwarder" pieces, which are
 #     stable. Future Gemini UX changes won't touch this file.
+#   v7 (addon v0.2.140): the replicated services tuple no longer
+#     hardcodes POV's class names. POV 6.x renamed TMDbList to
+#     TMDBList and dropped EasyDebrid, so after Kodi auto-updated
+#     POV from its repo, the injected authorize() crashed with
+#     NameError: name 'TMDbList' is not defined and the whole
+#     "Connect Services" menu died. The wrapper now resolves each
+#     candidate class through globals() at call time and silently
+#     skips names the installed POV doesn't define.
 # Each bump triggers a one-time re-patch on the next Kodi startup;
 # OLD_MARKERS lists every prior version's marker so the legacy
 # blocks get stripped cleanly before the new one is injected.
@@ -67,6 +75,7 @@ OLD_MARKERS = [
     '# AI_SUBS_MYSERVICES_INJECT_v3',
     '# AI_SUBS_MYSERVICES_INJECT_v4',
     '# AI_SUBS_MYSERVICES_INJECT_v5',
+    '# AI_SUBS_MYSERVICES_INJECT_v6',
 ]
 
 # Two service classes plus a hook that monkey-patches authorize()
@@ -212,12 +221,33 @@ def authorize():
             item.setArt({'icon': '%s%s' % (icon_path, api.icon)})
             yield(item)
     icon_path = kodi_utils.media_path()
-    services = (
-        ('trakt', Trakt), ('mdblist', MDBList), ('tmdblist', TMDbList),
-        ('real-debrid', RealDebrid), ('premiumize.me', Premiumize),
-        ('alldebrid', AllDebrid), ('torbox', TorBox),
-        ('offcloud', Offcloud), ('easynews', EasyNews),
-    ) + _ai_extra
+    # Resolve POV's own service classes dynamically instead of naming
+    # them directly. Upstream renames/removes classes between releases
+    # (POV 5.x: TMDbList + EasyDebrid, POV 6.x: TMDBList, no
+    # EasyDebrid) and a hardcoded name crashes the whole menu with
+    # NameError after Kodi auto-updates POV. Each entry lists the
+    # known spellings, newest first; entries the installed POV does
+    # not define are skipped.
+    _ai_candidates = (
+        ('trakt', ('Trakt',)),
+        ('mdblist', ('MDBList',)),
+        ('tmdblist', ('TMDBList', 'TMDbList')),
+        ('real-debrid', ('RealDebrid',)),
+        ('premiumize.me', ('Premiumize',)),
+        ('alldebrid', ('AllDebrid',)),
+        ('torbox', ('TorBox',)),
+        ('offcloud', ('Offcloud',)),
+        ('easydebrid', ('EasyDebrid',)),
+        ('easynews', ('EasyNews',)),
+    )
+    _ai_g = globals()
+    _ai_services = []
+    for _ai_name, _ai_classes in _ai_candidates:
+        for _ai_cls in _ai_classes:
+            if _ai_cls in _ai_g:
+                _ai_services.append((_ai_name, _ai_g[_ai_cls]))
+                break
+    services = tuple(_ai_services) + _ai_extra
     service = kodi_utils.dialog.select('My Services', list(_builder()), useDetails=True)
     if service < 0: return
     try: success = services[service][1]().set()
