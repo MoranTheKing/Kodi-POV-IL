@@ -709,6 +709,19 @@ if CONFIG.get_setting('installed') == 'true':
 else:
     logging.log("[Build Installed Check] Not Enabled", level=xbmc.LOGINFO)
 
+# KODI-POV-IL - Auto-refresh the on-demand NOX skin pack for users who are
+# already ON it. On-demand skins are normally only (re)installed from Switch
+# Skin; this makes a published NOX update reach existing NOX users on their
+# next quick_update + restart, exactly like the other skins, without them
+# having to toggle skins. Version-gated, so it never re-downloads needlessly.
+try:
+    if CONFIG.get_setting('buildname'):
+        from resources.libs import wizard as _wiz_skin
+        _wiz_skin.auto_update_active_skin_pack()
+except Exception as _skin_upd_err:
+    logging.log("[Skin Auto Update] startup hook failed: {0}".format(_skin_upd_err),
+                level=xbmc.LOGERROR)
+
 # SAVE TRAKT
 if CONFIG.get_setting('keeptrakt') == 'true':
     logging.log("[Trakt Data] Started", level=xbmc.LOGINFO)
