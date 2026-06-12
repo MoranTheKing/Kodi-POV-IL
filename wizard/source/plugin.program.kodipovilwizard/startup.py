@@ -195,6 +195,18 @@ def fresh_build_auto_install_if_needed():
         return False
     if CONFIG.get_setting('installed') == 'true':
         return False
+    # Pre-seeded installs (e.g. the Windows installer extracts the full
+    # build into portable_data before the first launch) already have the
+    # build on disk -- re-downloading it here would extract over a live
+    # profile for nothing. Let the auto-set-buildname block below adopt
+    # the existing install instead.
+    if os.path.exists(os.path.join(CONFIG.ADDONS, 'plugin.video.pov')):
+        logging.log(
+            "[Fresh Build Auto Install] plugin.video.pov already on disk; "
+            "skipping hydration and letting auto-set-buildname adopt it.",
+            level=xbmc.LOGINFO,
+        )
+        return False
 
     build_name = CONFIG.BUILDNAME_DEFAULT
     build_version = CONFIG.BUILDVERSION_DEFAULT
