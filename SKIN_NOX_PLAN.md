@@ -1,0 +1,130 @@
+# NOX Skin (4th skin) — Implementation Plan & Widget Mapping
+
+Status: PLANNING (approved direction). Not yet built. This document
+captures the full analysis so work survives the ephemeral build
+container and can be executed in stages.
+
+## Goal
+
+Add a 4th, on-demand skin to the build — the "NOX" look the user likes —
+installed only when the user picks it from the wizard's **Switch Skin**
+menu, exactly like Arctic Fuse 3 (AF3). It must not bloat the base build
+for users who never select it.
+
+## Key finding: what "NOX" actually is
+
+The source is `skin.anonymoustv` (from the AnonymousTV build, downloaded
+with the user's own subscription for read-only inspection). Despite the
+"nox" nickname, its own `addon.xml` declares it a **modified Kodi Estuary
+skin** ("Estuary MOD by Ivar Brandt", source github.com/xbmc/skin.estuary).
+It is a "mega-skin" bundling several home layouts; the one the user likes
+is `xml/Home_nox.xml` + `Custom_nox_main_menu.xml`.
+
+Facts:
+- Base: Estuary for **Kodi 20 (Nexus)**. Our build is **Kodi 21 (Omega)** —
+  expect minor compatibility fixes.
+- Size: ~24 MB zipped → fits in a SINGLE on-demand pack (unlike AF3's 4).
+- Skin `<requires>`: `xbmc.gui`, `script.fentastic.helper` (already shipped).
+- Also references `script.embuary.info` (~20 refs) — bundle it in the pack
+  or strip those references.
+- Hebrew: proper `resources/language/resource.language.he_il/strings.po`
+  (196 strings) + Hebrew fonts (Heebo/Noto). RTL relies on Kodi's built-in
+  language mirroring + the bundled fonts.
+
+## MUST SCRUB before shipping (security)
+
+`skin.anonymoustv/media/buttons/font.py` contains a side-loader:
+- `gdrive()` downloads `n.zip` from `github.com/vip200/victory` into
+  `addons/packages`.
+- `fix()` force-enables `repository.gaia.2`.
+Remove this file (and any `xbmc.service`/startup hook referencing it) and
+strip all AnonymousTV branding. Do NOT ship their wizard or any phone-home.
+
+## Skin package design (mirror AF3)
+
+- New addon id: `skin.povil.nox` (label e.g. "POV IL — NOX"). Rebrand
+  `addon.xml` id/name/provider; bump version; keep GPL/CC-BY-SA license
+  + Estuary attribution (GPL requirement).
+- Host one zip at `dist/Kodi-POV-IL-NOX-skin-pack.zip` (raw GitHub URL,
+  same `AF3_PACK_BASE_URL` base). Include `script.embuary.info` if kept.
+- Wizard wiring (resources/libs/wizard.py), copying the AF3 pattern:
+  - Add a `NOX_PACKS`-style list (single pack) with `sentinel` =
+    `special://home/addons/skin.povil.nox/addon.xml`, `expected_version`,
+    and `addon_ids` (the skin + embuary.info if bundled).
+  - Add `ensure_nox_installed()` mirroring `ensure_arctic_fuse_3_installed()`
+    (download → extract.all → register+enable in Addons DB → UpdateLocalAddons).
+    The DB-register step is CRITICAL: without it Kodi silently falls back
+    to Estuary (the same bug AF3 hit).
+  - In `build_switch_skin()`: add `'סקין NOX - ...': 'skin.povil.nox'`
+    to `skin_mapping`, and call `ensure_nox_installed()` before switching,
+    like the `skin.arctic.fuse.3` branch does.
+  - Update the Switch-Skin notification text (currently lists 3 skins).
+  - Add a `media/builds_favourites_xml/skin.povil.nox/favourites.xml`
+    and ensure `update_favourites_xml_file()` handles it.
+
+## Home menu widget mapping (approved: keep their layout, remap to POV/idanplus)
+
+Their `Home_nox.xml` widgets target two content addons we must remap:
+
+### A) plugin.video.novix  →  plugin.video.pov   (NEAR-MECHANICAL)
+novix and POV share the SAME TMDB scheme (same `action`/`genre_id`/
+`network_id`). Confirmed against our working FENtastic→POV wiring:
+- `novix ?action=tmdb_movies_genres&genre_id=N&mode=build_movie_list`
+  → `pov  ?action=tmdb_movies_genres&genre_id=N&mode=build_movie_list`
+- `novix ?action=tmdb_tv_genres&genre_id=N&mode=build_tvshow_list`
+  → `pov  ?action=tmdb_tv_genres&genre_id=N&mode=build_tvshow_list`
+- `novix ?action=tmdb_movies_networks&network_id=N&mode=build_movie_list`
+  → `pov  ?action=tmdb_tv_networks&network_id=N&mode=build_tvshow_list`
+    (POV network browsing is under tmdb_tv_networks; verify per row)
+- Genre IDs are TMDB-standard and identical, so values carry over.
+Implementation: regex transform `plugin.video.novix` → `plugin.video.pov`,
+then verify each distinct action/mode against POV's actual routes (cross-
+check with FENtastic's proven paths — see list below).
+
+Proven POV paths already used by FENtastic (reuse these verbatim):
+- Movies root:  `?name=32028&iconImage=movies&mode=navigator.main&action=MovieList`
+- Shows root:   `?name=32029&iconImage=tv&mode=navigator.main&action=TVShowList`
+- Genres:       `?menu_type=movie|tvshow&mode=navigator.genres&name=32470`
+- Popular movies: `?action=tmdb_movies_popular&mode=build_movie_list&name=32459`
+- Trending shows: `?action=trakt_tv_trending&mode=build_tvshow_list&name=32458`
+- TV premieres:  `?action=tmdb_tv_premieres&mode=build_tvshow_list&name=32460`
+- Latest movies: `?action=tmdb_movies_latest_releases&mode=build_movie_list&name=32461`
+- Networks (TV): `?action=tmdb_tv_networks&network_id=N&mode=build_tvshow_list`
+- In-progress:   `?action=in_progress_movies&mode=build_movie_list&name=32476`
+- Next episodes: `?mode=build_next_episode&name=32483`
+- Connect services: `?mode=myservices` (or navigator.build_shortcut_folder_list)
+
+### B) plugin.video.telemedia  →  plugin.video.idanplus   (BEST-EFFORT)
+telemedia is AnonymousTV's proprietary Israeli/IPTV addon (modes 251/254/
+261/303/312, with pastebin/m3u/Telegram sources). NO 1:1 equivalent. Map
+their Israeli rows to idanplus's top entry points (idanplus uses simple
+integer modes, confirmed from FENtastic favourites):
+- idanplus TV:    `?mode=1&name=...&url=&module=&moredata=`
+- idanplus VOD:   `?mode=2&name=...&url=&module=&moredata=`
+- idanplus Radio: `?mode=3&name=...&url=&module=&moredata=`
+We cannot reproduce telemedia's exact sub-catalogs; collapse the Israeli
+rows to these idanplus entries. Drop any pure-IPTV/proprietary tiles that
+have no idanplus equivalent.
+
+### Other addons seen
+- `plugin.video.idanplus` — already in our build (some widgets map directly).
+- `watchnixtoons2`, `drax`, `flashstream`, `specialfeatures` etc. — not in
+  our build; drop or point at the nearest POV equivalent.
+
+## Staging (each stage independently verifiable)
+
+1. Skin package: copy skin.anonymoustv → rebrand id/name → SCRUB font.py +
+   branding → fix Nexus→Omega issues → zip as dist pack. (Structural verify.)
+2. Widget remap: apply novix→POV transform + telemedia→idanplus in the
+   NOX home XMLs; build a he_il-clean labels pass.
+3. Wizard integration: NOX pack list + ensure_nox_installed() + switch_skin
+   entry + favourites. (Mirror AF3, reuse its DB-register fix.)
+4. Hosting + build.txt/version bumps as needed.
+5. DEVICE TEST PASS (required): verify it renders, RTL correct, home widgets
+   populate from POV/idanplus, switch-skin round-trips, no fallback to
+   Estuary. Only after this → wide release.
+
+## Open risks
+- Nexus-based Estuary on Omega may need per-control fixes.
+- POV network browsing path per-row needs verification (movies vs tv).
+- RTL correctness can only be confirmed on a real device.
