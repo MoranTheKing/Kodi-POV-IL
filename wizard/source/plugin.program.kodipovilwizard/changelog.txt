@@ -1,3 +1,26 @@
+[COLOR yellow][B]v0.1.21[/B][/COLOR]
+* Fix the "Kodi hangs for a few seconds on the first launch after an
+  install / quick update, force-stop required" bug. startup.py is an
+  xbmc.service with start="startup", so it runs before Kodi's GUI
+  exists; the first-launch modal dialogs (build notification, skin-
+  switch notification) were doModal()'d that early and deadlocked the
+  boot. Because those blocks set their one-shot dismiss flag BEFORE
+  showing, the hang happened exactly once and a force-stop recovered --
+  matching the symptom. Added wait_for_gui_ready(): the service now
+  blocks (bounded) until the Home window is actually live before any
+  first-launch dialog, so each modal has a real parent window.
+
+[COLOR yellow][B]v0.1.20[/B][/COLOR]
+* New 4th skin: NOX (skin.povil.nox), a rebranded + scrubbed Estuary MOD
+  with a Hebrew home menu remapped to our POV / idanplus / otaku addons.
+  Like Arctic Fuse 3 it is NOT bundled in the base build -- it downloads
+  on demand the first time the user picks it in Switch Skin, so it costs
+  nothing for users who do not use it. The on-demand installer was
+  generalised (_ensure_packs_installed) so AF3 and NOX share one path,
+  including the critical Addons-DB register step that prevents the silent
+  Estuary fallback. The side-loader and all foreign wizard/IPTV calls in
+  the original skin were removed.
+
 [COLOR yellow][B]v0.1.19[/B][/COLOR]
 * CRITICAL: kill_kodi() is a true hard kill again (os._exit, no Quit).
   The graceful Quit added earlier made Kodi save its in-memory settings
