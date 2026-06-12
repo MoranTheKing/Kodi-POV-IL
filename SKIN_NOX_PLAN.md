@@ -1,8 +1,34 @@
 # NOX Skin (4th skin) — Implementation Plan & Widget Mapping
 
-Status: PLANNING (approved direction). Not yet built. This document
-captures the full analysis so work survives the ephemeral build
-container and can be executed in stages.
+Status: STAGES 1–4 BUILT (shipped in wizard 0.1.20 / build 0.1.47 /
+quickfix 0.1.155 + dist/Kodi-POV-IL-NOX-skin-pack.zip). STAGE 5 (device
+render/RTL test) pending — to be done by the user on a real device.
+
+## What shipped
+- `skin.povil.nox` v1.0.0: rebranded + scrubbed Estuary MOD. font.py
+  side-loader deleted; all foreign plugin calls (plugin.program.Anonymous,
+  Settingz-Anon) neutralized/mapped; AnonymousTV branding scrubbed.
+- Home widgets remapped: novix→POV (130, mechanical, same TMDB scheme),
+  telemedia→idanplus (81, best-effort TV/VOD), drax/flashstream/misc→POV
+  (76), watchnixtoons→otaku (3). Final home targets are only pov/idanplus/
+  otaku/youtube — all shipped addons. Zero new XML parse errors.
+- Hosted as a single on-demand pack `dist/Kodi-POV-IL-NOX-skin-pack.zip`
+  (~24 MB). NOT bundled in the base build/APK.
+- Wizard (0.1.20): generic `_ensure_packs_installed()` shared by AF3 and
+  NOX; `ensure_nox_installed()`; `NOX_PACKS`; Switch-Skin entry
+  "סקין NOX - עברית מלאה (ניסיוני)"; first-launch skin list updated.
+
+## Known limitations (v1, refine after device test)
+- `script.embuary.info` is NOT bundled — only used by DialogVideoInfo
+  (not the home), so the skin loads fine; the enhanced info dialog may
+  show empty fields. Add the addon to the pack later if desired.
+- telemedia→idanplus is best-effort: Israeli rows collapse to idanplus
+  TV/VOD entry points, not their exact sub-catalogs (their content was
+  proprietary, no equivalent).
+- Base is Nexus-era Estuary on Omega: watch for per-control glitches.
+
+---
+(Original planning analysis below.)
 
 ## Goal
 

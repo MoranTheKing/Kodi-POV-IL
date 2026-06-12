@@ -1,3 +1,14 @@
+[COLOR yellow][B]v0.1.20[/B][/COLOR]
+* New 4th skin: NOX (skin.povil.nox), a rebranded + scrubbed Estuary MOD
+  with a Hebrew home menu remapped to our POV / idanplus / otaku addons.
+  Like Arctic Fuse 3 it is NOT bundled in the base build -- it downloads
+  on demand the first time the user picks it in Switch Skin, so it costs
+  nothing for users who do not use it. The on-demand installer was
+  generalised (_ensure_packs_installed) so AF3 and NOX share one path,
+  including the critical Addons-DB register step that prevents the silent
+  Estuary fallback. The side-loader and all foreign wizard/IPTV calls in
+  the original skin were removed.
+
 [COLOR yellow][B]v0.1.19[/B][/COLOR]
 * CRITICAL: kill_kodi() is a true hard kill again (os._exit, no Quit).
   The graceful Quit added earlier made Kodi save its in-memory settings
