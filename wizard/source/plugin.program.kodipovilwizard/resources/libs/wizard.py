@@ -616,7 +616,7 @@ AF3_PACKS = [
 # picks it from Switch Skin so it never bloats the base build. Single pack
 # (fits under GitHub's 100 MB limit), unlike AF3's four. Its only hard
 # dependency, script.fentastic.helper, already ships in the build.
-NOX_SKIN_VERSION = '1.0.2'
+NOX_SKIN_VERSION = '1.0.3'
 NOX_PACKS = [
     {
         'name': 'סקין NOX',
@@ -729,6 +729,39 @@ def ensure_nox_installed():
         NOX_PACKS,
         '[COLOR {0}][B]מוריד את סקין NOX[/B][/COLOR]'.format(CONFIG.COLOR2),
         '[COLOR {0}][B]סקין NOX מוכן לשימוש[/B][/COLOR]'.format(CONFIG.COLOR1))
+
+
+def auto_update_active_skin_pack():
+    """Refresh an on-demand skin pack (currently NOX) when the user is already
+    ON that skin and a newer version has been published. The pack is otherwise
+    only (re)installed when picked from Switch Skin, so without this an existing
+    NOX user never gets skin updates from a normal quick_update -- they had to
+    switch away and back. Idempotent: the version gate (_af3_pack_current) means
+    we only re-download when the on-disk skin is actually OLDER than what we now
+    ship, so it does NOT re-download every boot, and it does NOT re-download when
+    the user merely toggles skins. Re-extracting overwrites only the skin's addon
+    files under addons/skin.povil.nox -- never userdata/addon_data skin settings,
+    so the user's favourites order and skin tweaks are preserved."""
+    try:
+        active = CONFIG.SKIN or ''
+        if 'skin.povil.nox' not in active:
+            return
+        pack = NOX_PACKS[0]
+        if _af3_pack_current(pack):
+            return  # on-disk version already current; no re-download
+        logging.log(
+            '[Skin Auto Update] NOX is active and the installed pack is behind '
+            '{0}; refreshing it now.'.format(pack.get('expected_version')),
+            level=xbmc.LOGINFO)
+        if ensure_nox_installed():
+            xbmc.sleep(800)
+            try:
+                xbmc.executebuiltin('ReloadSkin()')
+            except Exception:
+                pass
+    except Exception as e:
+        logging.log('[Skin Auto Update] failed: {0}'.format(e),
+                    level=xbmc.LOGERROR)
 
 
 def _ensure_packs_installed(packs, downloading_label, ready_label):
