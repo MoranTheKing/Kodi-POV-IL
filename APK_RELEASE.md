@@ -7,7 +7,7 @@ For build instructions, keystore setup, and release procedures see **[APK_BUILD.
 ## Current State
 
 - Android APKs (32-bit + 64-bit) are produced from the official Kodi 21.3 APK, rebranded to `org.xbmc.kodipovil`, and signed with the repo's keystore.
-- Each APK ships with `plugin.program.kodipovilwizard` and the FENtastic build pre-bundled in `assets/`, so on first launch the user already has the wizard + build loaded.
+- Each APK ships with `plugin.program.kodipovilwizard` (plus its requests/six python deps) pre-bundled in `assets/` and registered as *optional* system addons. The full FENtastic build is intentionally NOT bundled into `assets/`: the build zip carries desktop copies of addons Kodi already ships inside the APK (e.g. `inputstream.adaptive` with a Windows-only `addon.xml`), and overwriting those broke Kodi startup (black screen). On first launch the wizard auto-downloads and installs the build into the user profile, exactly like a clean-Kodi wizard install.
 - The Windows installer is an NSIS wrapper that installs the official Kodi 21.3 and drops the wizard zip into `%APPDATA%\Kodi\addons\packages\`.
 
 ## Download pages
