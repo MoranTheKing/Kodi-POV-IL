@@ -426,12 +426,14 @@ def kill_kodi(msg=None, over=None):
     if choice == 1:
         from resources.libs.common import logging
         logging.log("Force Closing Kodi: Platform[{0}]".format(str(platform())))
-        try:
-            xbmc.executebuiltin('Quit')
-            xbmc.sleep(1500)
-        except Exception as exc:
-            logging.log("Kodi Quit builtin failed: {0}".format(exc))
-        os._exit(0)
+        # HARD kill, on purpose. A graceful Quit makes Kodi write its
+        # in-memory settings on shutdown, which overwrites the
+        # guisettings.xml / Addons33.db a build install just extracted
+        # (skin reverts to Estuary, addons stay disabled). os._exit()
+        # skips Kodi's shutdown save so the extracted files survive.
+        # Quick updates were unaffected (their zips carry no
+        # guisettings), which is why only fresh installs broke.
+        os._exit(1)
 
 
 def reload_profile(profile=None):
