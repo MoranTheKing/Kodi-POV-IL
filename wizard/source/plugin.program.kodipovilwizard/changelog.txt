@@ -1,3 +1,13 @@
+[COLOR yellow][B]v0.1.22[/B][/COLOR]
+* Fix NOX skin being auto-disabled as "incompatible add-on" right after
+  switching to it (Kodi then fell back to plain Estuary, so it looked
+  identical to the simple skin). Cause: skin.povil.nox declared
+  <import addon="xbmc.gui" version="5.15.0"/> (Nexus), which Kodi 21
+  Omega rejects. The build's working skins (Estuary, FENtastic) keep that
+  import commented out; NOX now matches. Skin bumped to 1.0.1 and
+  NOX_SKIN_VERSION gated to 1.0.1 so devices that already pulled the
+  broken 1.0.0 re-download the fixed pack on the next switch.
+
 [COLOR yellow][B]v0.1.21[/B][/COLOR]
 * Fix the "Kodi hangs for a few seconds on the first launch after an
   install / quick update, force-stop required" bug. startup.py is an

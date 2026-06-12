@@ -616,7 +616,7 @@ AF3_PACKS = [
 # picks it from Switch Skin so it never bloats the base build. Single pack
 # (fits under GitHub's 100 MB limit), unlike AF3's four. Its only hard
 # dependency, script.fentastic.helper, already ships in the build.
-NOX_SKIN_VERSION = '1.0.0'
+NOX_SKIN_VERSION = '1.0.1'
 NOX_PACKS = [
     {
         'name': 'סקין NOX',
