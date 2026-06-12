@@ -91,21 +91,25 @@ Function PatchAddonManifest
     StrCmp $5 "</addons>" insert_before_close write_through
 
     insert_before_close:
-      FileWrite $3 "  <addon>plugin.program.kodipovilwizard</addon>$\r$\n"
-      FileWrite $3 "  <addon>script.module.requests</addon>$\r$\n"
-      FileWrite $3 "  <addon>script.module.six</addon>$\r$\n"
-      FileWrite $3 "  <addon>script.module.certifi</addon>$\r$\n"
-      FileWrite $3 "  <addon>script.module.urllib3</addon>$\r$\n"
-      FileWrite $3 "  <addon>script.module.chardet</addon>$\r$\n"
-      FileWrite $3 "  <addon>script.module.idna</addon>$\r$\n"
+      ; optional="true" on purpose: a non-optional manifest entry that
+      ; Kodi fails to resolve makes CAddonMgr::Init() fail and Kodi
+      ; exits before drawing anything. Optional system addons are still
+      ; auto-enabled on first launch, but can never brick startup.
+      FileWrite $3 '  <addon optional="true">plugin.program.kodipovilwizard</addon>$\r$\n'
+      FileWrite $3 '  <addon optional="true">script.module.requests</addon>$\r$\n'
+      FileWrite $3 '  <addon optional="true">script.module.six</addon>$\r$\n'
+      FileWrite $3 '  <addon optional="true">script.module.certifi</addon>$\r$\n'
+      FileWrite $3 '  <addon optional="true">script.module.urllib3</addon>$\r$\n'
+      FileWrite $3 '  <addon optional="true">script.module.chardet</addon>$\r$\n'
+      FileWrite $3 '  <addon optional="true">script.module.idna</addon>$\r$\n'
       ; All Subs Plus (service.subtitles.all_subs_plus, by burekas)
       ; imports these at module load. Without them registered as
       ; system addons they aren't enabled on first Kodi launch and
       ; the subtitle service crashes with an ImportError before the
       ; user has a chance to open settings. Both ship in the build
       ; under addons/, we just need to wire them in here.
-      FileWrite $3 "  <addon>script.module.beautifulsoup4</addon>$\r$\n"
-      FileWrite $3 "  <addon>script.common.plugin.cache</addon>$\r$\n"
+      FileWrite $3 '  <addon optional="true">script.module.beautifulsoup4</addon>$\r$\n'
+      FileWrite $3 '  <addon optional="true">script.common.plugin.cache</addon>$\r$\n'
       FileWrite $3 $4
       Goto read_loop
 
