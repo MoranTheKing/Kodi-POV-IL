@@ -38,7 +38,7 @@ MOVIES_POPULAR_BLOCK = '''        <include content="WidgetListBigPoster">
 '''
 
 MOVIES_GENRES_BLOCK = '''        <include content="WidgetListBigEpisodes">
-            <param name="content_path" value="plugin://plugin.video.pov/?mode=navigator.build_shortcut_folder_list&amp;name=FENtastic+-+%D7%A1%D7%A8%D7%98%D7%99%D7%9D+-+%D7%96%D7%90%D7%A0%D7%A8%D7%99%D7%9D&amp;iconImage=genres&amp;shortcut_folder=True&amp;external_list_item=True"/>
+            <param name="content_path" value="plugin://plugin.video.pov/?iconImage=genres.png&amp;menu_type=movie&amp;mode=navigator.genres&amp;name=32470"/>
             <param name="widget_header" value="[B][COLOR yellow]ז'אנרים[/COLOR][/B]"/>
             <param name="widget_target" value="videos"/>
             <param name="list_id" value="19014"/>
@@ -54,7 +54,7 @@ TV_PREMIERES_BLOCK = '''        <include content="WidgetListBigPoster">
 '''
 
 TV_GENRES_BLOCK = '''        <include content="WidgetListBigEpisodes">
-            <param name="content_path" value="plugin://plugin.video.pov/?mode=navigator.build_shortcut_folder_list&amp;name=FENtastic+-+%D7%A1%D7%93%D7%A8%D7%95%D7%AA+-+%D7%96%D7%90%D7%A0%D7%A8%D7%99%D7%9D&amp;iconImage=genres&amp;shortcut_folder=True&amp;external_list_item=True"/>
+            <param name="content_path" value="plugin://plugin.video.pov/?iconImage=genres.png&amp;menu_type=tvshow&amp;mode=navigator.genres&amp;name=32470"/>
             <param name="widget_header" value="[B][COLOR yellow]ז'אנרים[/COLOR][/B]"/>
             <param name="widget_target" value="videos"/>
             <param name="list_id" value="22014"/>
@@ -113,24 +113,50 @@ def _ensure_content_widgets(filename, content):
     """Repair the dedicated FENtastic Movies/TV Shows page widgets."""
     changed = False
     if filename == 'script-fentastic-widget_movies.xml':
+        old_movie_genres = (
+            'plugin://plugin.video.pov/?mode=navigator.build_shortcut_folder_list'
+            '&amp;name=FENtastic+-+%D7%A1%D7%A8%D7%98%D7%99%D7%9D+-+'
+            '%D7%96%D7%90%D7%A0%D7%A8%D7%99%D7%9D&amp;iconImage=genres'
+            '&amp;shortcut_folder=True&amp;external_list_item=True'
+        )
+        new_movie_genres = (
+            'plugin://plugin.video.pov/?iconImage=genres.png&amp;'
+            'menu_type=movie&amp;mode=navigator.genres&amp;name=32470'
+        )
+        if old_movie_genres in content:
+            content = content.replace(old_movie_genres, new_movie_genres)
+            changed = True
         if 'tmdb_movies_popular' not in content:
             content, did = _insert_after_token(
                 content, 'tmdb_movies_latest_releases',
                 MOVIES_POPULAR_BLOCK)
             changed = changed or did
-        if 'FENtastic+-+%D7%A1%D7%A8%D7%98%D7%99%D7%9D+-+%D7%96%D7%90%D7%A0%D7%A8%D7%99%D7%9D' not in content:
+        if 'menu_type=movie&amp;mode=navigator.genres' not in content:
             content, did = _insert_after_token(
                 content,
                 '%D7%A1%D7%A8%D7%98%D7%99%D7%9D+-+%D7%9C%D7%A4%D7%99+%D7%A8%D7%A9%D7%AA%D7%95%D7%AA',
                 MOVIES_GENRES_BLOCK)
             changed = changed or did
     elif filename == 'script-fentastic-widget_tvshows.xml':
+        old_tv_genres = (
+            'plugin://plugin.video.pov/?mode=navigator.build_shortcut_folder_list'
+            '&amp;name=FENtastic+-+%D7%A1%D7%93%D7%A8%D7%95%D7%AA+-+'
+            '%D7%96%D7%90%D7%A0%D7%A8%D7%99%D7%9D&amp;iconImage=genres'
+            '&amp;shortcut_folder=True&amp;external_list_item=True'
+        )
+        new_tv_genres = (
+            'plugin://plugin.video.pov/?iconImage=genres.png&amp;'
+            'menu_type=tvshow&amp;mode=navigator.genres&amp;name=32470'
+        )
+        if old_tv_genres in content:
+            content = content.replace(old_tv_genres, new_tv_genres)
+            changed = True
         if 'tmdb_tv_premieres' not in content:
             content, did = _insert_after_token(
                 content, 'trakt_tv_trending',
                 TV_PREMIERES_BLOCK)
             changed = changed or did
-        if 'FENtastic+-+%D7%A1%D7%93%D7%A8%D7%95%D7%AA+-+%D7%96%D7%90%D7%A0%D7%A8%D7%99%D7%9D' not in content:
+        if 'menu_type=tvshow&amp;mode=navigator.genres' not in content:
             content, did = _insert_after_token(
                 content,
                 '%D7%A1%D7%93%D7%A8%D7%95%D7%AA+-+%D7%9C%D7%A4%D7%99+%D7%A8%D7%A9%D7%AA%D7%95%D7%AA',
