@@ -1,3 +1,14 @@
+[COLOR yellow][B]v0.1.25[/B][/COLOR]
+* NOX gate -> skin 1.0.5.
+  - Movies/TV/Kids reverted to a SINGLE row (popular) -- the two stacked
+    rows collided with the top info panel so the title/plot was unreadable.
+  - NOX is now the default home: no more "choose view (Nox/Fentastic/...)"
+    prompt on first switch to NOX (Home.xml defaults HomeS=Home_nox and
+    sets firsttimerun; the chooser is still reachable from Skin settings).
+  - Removed the broken "אוספי סרטים" (Movie Collections) search entry that
+    threw a POV error.
+  - Removed the "כאן 11" Israeli-content row (kept channel 13 + 12).
+
 [COLOR yellow][B]v0.1.24[/B][/COLOR]
 * NOX gate -> skin 1.0.4. Fixes the overlapping home rows: Movies / TV /
   Kids now show two separate stacked rows (Popular + New / kids movies +
