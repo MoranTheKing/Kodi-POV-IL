@@ -81,9 +81,20 @@ def _set_enabled(enabled):
 
 
 def request_reload():
-    """Disable+enable DarkSubs so its reuselanguageinvoker interpreter
-    re-imports the patched source. Debounced to once per process. Safe
-    no-op if Kodi APIs are unavailable. Returns True if a cycle ran."""
+    """Cycle DarkSubs so its reuselanguageinvoker interpreter re-imports
+    the patched source. Debounced to once per process. Safe no-op if Kodi
+    APIs are unavailable. Returns True if a cycle was scheduled.
+
+    IMPORTANT: the disable/enable now runs on a BACKGROUND thread that
+    first waits for Kodi to finish booting and go idle. Doing the cycle
+    inline during the AI service's startup pass DEADLOCKED Kodi: it
+    disabled All_Subs while All_Subs's own xbmc.service (autosub.py) was
+    still starting that same boot, leaving two interpreters fighting (the
+    old one "didn't stop in 5 seconds - let's kill it" while a new one
+    launched), which wedged the GUI and forced a force-stop on the first
+    launch after every install/quick update. Deferring until the Home
+    window is up and nothing is playing means All_Subs is idle in its
+    waitForAbort loop and stops cleanly, so the cycle is harmless."""
     global _cycled
     if _cycled:
         return False
@@ -91,27 +102,73 @@ def request_reload():
         return False
     _cycled = True
     try:
-        off = _set_enabled(False)
-        # brief settle so the interpreter is actually torn down
+        import threading
+        threading.Thread(target=_deferred_cycle, daemon=True).start()
+        return True
+    except Exception as e:
+        _log('could not start deferred reload thread: {0}'.format(e),
+             level='WARNING')
+        return False
+
+
+def _wait_until_idle(timeout=120):
+    """Block until Kodi has booted (Home visible) and is not playing, or
+    until timeout. Abort-aware. Returns True once idle, False on
+    abort."""
+    try:
+        monitor = xbmc.Monitor()
+    except Exception:
+        return False
+    # Let the boot storm settle regardless of window state.
+    if monitor.waitForAbort(8):
+        return False
+    waited = 8
+    while waited < timeout:
         try:
-            xbmc.sleep(800)
+            home_up = xbmc.getCondVisibility('Window.IsVisible(home)')
+            playing = xbmc.getCondVisibility('Player.HasMedia')
+        except Exception:
+            home_up, playing = True, False
+        if home_up and not playing:
+            return True
+        if monitor.waitForAbort(2):
+            return False
+        waited += 2
+    return True
+
+
+def _deferred_cycle():
+    """Background worker: wait for idle, then disable+enable DarkSubs."""
+    if not _wait_until_idle():
+        _log('deferred reload aborted before cycle', level='WARNING')
+        return
+    # If the user started playback while we waited, skip; the patch simply
+    # takes effect next launch. Never tear an addon down mid-playback.
+    try:
+        if xbmc.getCondVisibility('Player.HasMedia'):
+            _log('media playing; skipping DarkSubs cycle (applies next '
+                 'launch)', level='INFO')
+            return
+    except Exception:
+        pass
+    try:
+        off = _set_enabled(False)
+        try:
+            xbmc.sleep(1500)
         except Exception:
             pass
         on = _set_enabled(True)
         if off and on:
             _log('cycled DarkSubs (disable/enable) so it re-imports the '
                  'patched source', level='INFO')
-            return True
-        _log('DarkSubs enable/disable returned off={0} on={1}'.format(
-            off, on), level='WARNING')
-        # Make sure we leave it ENABLED even if the disable half failed.
-        if not on:
-            _set_enabled(True)
-        return False
+        else:
+            _log('DarkSubs enable/disable returned off={0} on={1}'.format(
+                off, on), level='WARNING')
+            if not on:
+                _set_enabled(True)
     except Exception as e:
         _log('reload failed: {0}'.format(e), level='WARNING')
         try:
             _set_enabled(True)
         except Exception:
             pass
-        return False
