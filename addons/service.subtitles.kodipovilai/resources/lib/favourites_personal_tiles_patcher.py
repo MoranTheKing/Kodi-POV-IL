@@ -80,6 +80,7 @@ SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_PERSONAL_TILES_SEEN_v2 -->'
 RESTORE_MARKERS = (MARKER, SEEN_MARKER)
 SERVICE_SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_BUILD_SERVICE_TILES_SEEN_v1 -->'
 FULL_BUILD_SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_FULL_BUILD_TILES_SEEN_v2 -->'
+DEBRID_NOTICE_SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_DEBRID_NOTICE_SEEN_v1 -->'
 BROKEN_DEBRID_NOTICE_ACTION = (
     'RunPlugin("plugin://service.subtitles.kodipovilai/?'
     'action=open_pov_settings")')
@@ -87,6 +88,7 @@ OLD_DEBRID_NOTICE_ACTION = 'Addon.OpenSettings(plugin.video.pov)'
 FIXED_DEBRID_NOTICE_ACTION = (
     'RunScript(service.subtitles.kodipovilai,'
     'action=debrid_notice_settings)')
+CONNECT_SERVICES_ICON = 'Connect_Services.png'
 OLD_TORBOX_STATUS_ACTIONS = (
     'PlayMedia("plugin://plugin.video.pov/?mode=torbox.show_account_info'
     '&amp;name=Account+Info&amp;isFolder=false&amp;iconImage='
@@ -211,6 +213,58 @@ def _insert_service_tile_after_torbox(content, tile_bytes):
         + tile_bytes
         + content[torbox_match.end(1):]
     )
+
+
+def _insert_debrid_notice_tile(content, fixture_text):
+    """Restore the subscription-notification settings tile once.
+
+    This is intentionally not a mandatory tile. After the tile has been
+    seen/restored once, the dedicated marker lets users delete it without
+    quick updates adding it back forever.
+    """
+    action_b = FIXED_DEBRID_NOTICE_ACTION.encode('utf-8')
+    if action_b in content:
+        new_content, marker_added = _insert_marker(
+            content, DEBRID_NOTICE_SEEN_MARKER)
+        return new_content, marker_added
+    if _has_marker(content, DEBRID_NOTICE_SEEN_MARKER):
+        return content, False
+
+    snippet = _extract_tile_by_action(fixture_text, FIXED_DEBRID_NOTICE_ACTION)
+    if snippet is None:
+        return content, False
+    tile = snippet.encode('utf-8')
+
+    connect_pattern = re.compile(
+        rb'([ \t]*<favourite\b(?:(?!</favourite>).)*?'
+        + re.escape(CONNECT_SERVICES_ICON.encode('utf-8'))
+        + rb'(?:(?!</favourite>).)*?</favourite>\s*\n)',
+        re.DOTALL,
+    )
+    connect_match = connect_pattern.search(content)
+    if connect_match is not None:
+        new_content = (
+            content[:connect_match.end(1)]
+            + tile
+            + content[connect_match.end(1):]
+        )
+    else:
+        pov_match = _service_tile_pattern('RunAddon("plugin.video.pov")').search(
+            content)
+        if pov_match is not None:
+            new_content = (
+                content[:pov_match.end(1)]
+                + tile
+                + content[pov_match.end(1):]
+            )
+        else:
+            inserted = _insert_tiles_before_close(content, (tile,))
+            if inserted is None:
+                return content, False
+            new_content = inserted
+    new_content, _marker_added = _insert_marker(
+        new_content, DEBRID_NOTICE_SEEN_MARKER)
+    return new_content, True
 
 
 def _fix_existing_debrid_notice_action(content):
@@ -375,6 +429,8 @@ def ensure_patched():
     had_full_marker = _has_marker(content, FULL_BUILD_SEEN_MARKER)
     content, fixed_existing = _fix_existing_debrid_notice_action(content)
     content, fixed_torbox_status = _fix_existing_torbox_status_action(content)
+    content, debrid_notice_restored = _insert_debrid_notice_tile(
+        content, fixture_text)
     content, service_position_fixed = (
         _move_existing_service_tile_after_torbox(content))
 
@@ -448,6 +504,7 @@ def ensure_patched():
 
     if (not missing and not fixed_existing and not marker_added
             and not fixed_torbox_status and not service_marker_added
+            and not debrid_notice_restored
             and not service_position_fixed and not full_marker_added
             and not missing_full_tiles):
         return 'already_complete'
@@ -527,6 +584,8 @@ def ensure_patched():
         _log('marked favourites build service tiles as seen', level='INFO')
     if full_marker_added:
         _log('marked full build favourites tiles as seen', level='INFO')
+    if debrid_notice_restored:
+        _log('restored subscription notification settings tile', level='INFO')
     if service_position_fixed:
         _log('moved Premiumize status tile next to TorBox', level='INFO')
     if missing_full_tiles:
