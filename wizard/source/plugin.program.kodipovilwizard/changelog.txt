@@ -1,3 +1,16 @@
+[COLOR yellow][B]v0.1.23[/B][/COLOR]
+* NOX skin now auto-updates for users already ON it. Added
+  auto_update_active_skin_pack() (called from startup.py): if the active
+  skin is skin.povil.nox and the on-disk version is behind NOX_SKIN_VERSION,
+  it re-downloads the pack and reloads the skin -- so a published NOX update
+  reaches existing NOX users on their next quick update + restart, like the
+  other skins, without having to switch skins and back. Version-gated, so it
+  never re-downloads when already current (no wipe of the user's favourites
+  order / skin settings, which live in addon_data, not in the pack).
+* Gate bumped to NOX skin 1.0.3.
+* Fixed the mojibake "current build" header in the wizard's Builds menu
+  (THEME4 was double-encoded gibberish) -> now reads "בילד נוכחי:".
+
 [COLOR yellow][B]v0.1.22[/B][/COLOR]
 * Fix NOX skin being auto-disabled as "incompatible add-on" right after
   switching to it (Kodi then fell back to plain Estuary, so it looked
