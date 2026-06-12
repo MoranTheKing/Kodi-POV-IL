@@ -144,26 +144,34 @@ jobs:
             mkdir -p "$ASSETS/addons"
             unzip -o src/dist/plugin.program.kodipovilwizard-0.1.18.zip -d "$ASSETS/addons/" >/dev/null
             unzip -o src/dist/Kodi-POV-IL-FENtastic-test-0.1.44.zip -d "$ASSETS/" >/dev/null
-            # Register the wizard as a system addon so Kodi auto-enables it
-            # on first launch. Its startup.py then detects no build is
-            # installed yet and auto-installs Kodi POV IL - FENtastic
-            # (there's only one entry in build.txt, so no menu prompt).
-            # Also register the wizard's transitive imports (requests +
-            # urllib3 stack) so its `import requests` doesn't crash with
-            # ModuleNotFoundError before it can run.
+            # Register every addon bundled by the build as a system addon so
+            # a clean APK first launch does not start with a half-enabled
+            # profile (Estuary/English/default menus) before the wizard can
+            # finish. Keeping this derived from the unpacked build prevents
+            # future FENtastic/POV/DarkSubs dependency drift.
             MANIFEST_FILE="$ASSETS/system/addon-manifest.xml"
-            ADDONS_TO_ENABLE=(
-              "plugin.program.kodipovilwizard"
-              "script.module.requests"
-              "script.module.six"
-              "script.module.certifi"
-              "script.module.urllib3"
-              "script.module.chardet"
-              "script.module.idna"
-              "plugin.video.pov"
-              "service.subtitles.kodipovilai"
-              "skin.fentastic"
-              "script.fentastic.helper"
+            mapfile -t ADDONS_TO_ENABLE < <(
+              python3 - "$ASSETS/addons" <<'PY'
+          import pathlib
+          import sys
+          import xml.etree.ElementTree as ET
+
+          addons_dir = pathlib.Path(sys.argv[1])
+          ids = set()
+          for addon_xml in sorted(addons_dir.glob("*/addon.xml")):
+              try:
+                  addon_id = ET.parse(addon_xml).getroot().attrib.get("id")
+              except Exception:
+                  continue
+              if addon_id:
+                  ids.add(addon_id)
+
+          # The wizard is unpacked beside the build and should always be enabled even if
+          # it is not present in an older build payload for some reason.
+          ids.add("plugin.program.kodipovilwizard")
+          for addon_id in sorted(ids):
+              print(addon_id)
+          PY
             )
             for addon_id in "${ADDONS_TO_ENABLE[@]}"; do
               if grep -q "<addon>$addon_id</addon>" "$MANIFEST_FILE"; then
@@ -173,6 +181,11 @@ jobs:
                 echo "added to manifest:   $addon_id"
               fi
             done
+            echo "registered bundled addons: ${#ADDONS_TO_ENABLE[@]}"
+            test "${#ADDONS_TO_ENABLE[@]}" -gt 40 || {
+              echo "::error::Expected the full build addon set in APK assets; got only ${#ADDONS_TO_ENABLE[@]}"
+              exit 1
+            }
             echo "--- final manifest tail ---"
             tail -15 "$MANIFEST_FILE"
             # The bundled wizard/build are copied into assets after the first
@@ -227,7 +240,28 @@ jobs:
           unzip -o src/dist/plugin.program.kodipovilwizard-0.1.18.zip -d "$KODI_ROOT/addons/" >/dev/null
           unzip -o src/dist/Kodi-POV-IL-FENtastic-test-0.1.44.zip -d "$KODI_ROOT/" >/dev/null
           MANIFEST_FILE="$KODI_ROOT/system/addon-manifest.xml"
-          for addon_id in plugin.program.kodipovilwizard script.module.requests script.module.six script.module.certifi script.module.urllib3 script.module.chardet script.module.idna plugin.video.pov service.subtitles.kodipovilai skin.fentastic script.fentastic.helper; do
+          mapfile -t ADDONS_TO_ENABLE < <(
+            python3 - "$KODI_ROOT/addons" <<'PY'
+          import pathlib
+          import sys
+          import xml.etree.ElementTree as ET
+
+          addons_dir = pathlib.Path(sys.argv[1])
+          ids = set()
+          for addon_xml in sorted(addons_dir.glob("*/addon.xml")):
+              try:
+                  addon_id = ET.parse(addon_xml).getroot().attrib.get("id")
+              except Exception:
+                  continue
+              if addon_id:
+                  ids.add(addon_id)
+
+          ids.add("plugin.program.kodipovilwizard")
+          for addon_id in sorted(ids):
+              print(addon_id)
+          PY
+          )
+          for addon_id in "${ADDONS_TO_ENABLE[@]}"; do
             if grep -q "<addon>$addon_id</addon>" "$MANIFEST_FILE"; then
               echo "already in manifest: $addon_id"
             else
@@ -235,6 +269,11 @@ jobs:
               echo "added to manifest:   $addon_id"
             fi
           done
+          echo "registered bundled addons: ${#ADDONS_TO_ENABLE[@]}"
+          test "${#ADDONS_TO_ENABLE[@]}" -gt 40 || {
+            echo "::error::Expected the full build addon set in webOS assets; got only ${#ADDONS_TO_ENABLE[@]}"
+            exit 1
+          }
           # Bump the appinfo version so webOS sees this as a newer build
           APPINFO="$KODI_ROOT/appinfo.json"
           if [ -f "$APPINFO" ]; then
