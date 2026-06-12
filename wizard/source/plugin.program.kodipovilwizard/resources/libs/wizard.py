@@ -610,6 +610,24 @@ AF3_PACKS = [
     },
 ]
 
+# KODI-POV-IL - NOX skin, same on-demand pattern as AF3. The NOX skin is a
+# rebranded + scrubbed Estuary MOD (~24 MB) whose home menu was remapped to
+# our POV / idanplus / otaku addons. It is downloaded only when the user
+# picks it from Switch Skin so it never bloats the base build. Single pack
+# (fits under GitHub's 100 MB limit), unlike AF3's four. Its only hard
+# dependency, script.fentastic.helper, already ships in the build.
+NOX_SKIN_VERSION = '1.0.0'
+NOX_PACKS = [
+    {
+        'name': 'סקין NOX',
+        'url': '{0}/Kodi-POV-IL-NOX-skin-pack.zip'.format(AF3_PACK_BASE_URL),
+        'filename': 'nox_skin_pack.zip',
+        'sentinel': 'special://home/addons/skin.povil.nox/addon.xml',
+        'expected_version': NOX_SKIN_VERSION,
+        'addon_ids': ['skin.povil.nox'],
+    },
+]
+
 
 def _af3_register_pack_in_db(pack):
     """Register + enable a pack's addons in Kodi's Addons DB. Safe to
@@ -696,31 +714,49 @@ def _af3_pack_current(pack):
 
 
 def ensure_arctic_fuse_3_installed():
-    """Download + extract any AF3 packs that aren't already on disk.
-    Returns True if all packs are present at the end; False if any
+    """Download + extract the AF3 packs on demand (see _ensure_packs_installed)."""
+    return _ensure_packs_installed(
+        AF3_PACKS,
+        '[COLOR {0}][B]מוריד את Arctic Fuse 3 ותלויות[/B][/COLOR]'.format(
+            CONFIG.COLOR2),
+        '[COLOR {0}][B]Arctic Fuse 3 מוכן לשימוש[/B][/COLOR]'.format(
+            CONFIG.COLOR1))
+
+
+def ensure_nox_installed():
+    """Download + extract the NOX skin pack on demand (see _ensure_packs_installed)."""
+    return _ensure_packs_installed(
+        NOX_PACKS,
+        '[COLOR {0}][B]מוריד את סקין NOX[/B][/COLOR]'.format(CONFIG.COLOR2),
+        '[COLOR {0}][B]סקין NOX מוכן לשימוש[/B][/COLOR]'.format(CONFIG.COLOR1))
+
+
+def _ensure_packs_installed(packs, downloading_label, ready_label):
+    """Download + extract any supplemental skin packs that aren't already
+    on disk. Returns True if all packs are present at the end; False if any
     failed. Best-effort: shows a progress dialog with per-pack labels;
     on failure, surfaces a Hebrew notification and bails.
 
     Reuses the wizard's existing Downloader + extract.all machinery
     -- the same code that powers quick_update and Fresh Install --
-    so progress / cancel / error reporting all behave the same way."""
+    so progress / cancel / error reporting all behave the same way.
+    Generic over a packs list so AF3 and NOX (and any future on-demand
+    skin) share one battle-tested install path, including the critical
+    Addons-DB register step that prevents the silent Estuary fallback."""
     try:
         all_ok = True
         dialog_progress = xbmcgui.DialogProgress()
-        dialog_progress.create(
-            CONFIG.ADDONTITLE,
-            '[COLOR {0}][B]מוריד את Arctic Fuse 3 ותלויות[/B][/COLOR]'.format(
-                CONFIG.COLOR2))
+        dialog_progress.create(CONFIG.ADDONTITLE, downloading_label)
 
-        for i, pack in enumerate(AF3_PACKS, start=1):
+        for i, pack in enumerate(packs, start=1):
             if dialog_progress.iscanceled():
                 dialog_progress.close()
                 return False
 
             label = '[COLOR {0}][B]{1}/{2}[/B][/COLOR] - {3}'.format(
-                CONFIG.COLOR1, i, len(AF3_PACKS), pack['name'])
+                CONFIG.COLOR1, i, len(packs), pack['name'])
             dialog_progress.update(
-                int((i - 1) / len(AF3_PACKS) * 100), label)
+                int((i - 1) / len(packs) * 100), label)
 
             if _af3_pack_current(pack):
                 # Files already on disk (this user switched to AF3
@@ -827,10 +863,7 @@ def ensure_arctic_fuse_3_installed():
         except Exception:
             pass
 
-        dialog_progress.update(
-            100,
-            '[COLOR {0}][B]Arctic Fuse 3 מוכן לשימוש[/B][/COLOR]'.format(
-                CONFIG.COLOR1))
+        dialog_progress.update(100, ready_label)
         xbmc.sleep(800)
         dialog_progress.close()
         return all_ok
@@ -841,11 +874,11 @@ def ensure_arctic_fuse_3_installed():
         except Exception:
             pass
         logging.log(
-            'DEBUG | ensure_arctic_fuse_3_installed | '
+            'DEBUG | _ensure_packs_installed | '
             'unexpected exception: {0}'.format(str(e)))
         logging.log_notify(
             CONFIG.ADDONTITLE,
-            '[COLOR {0}]שגיאה בהתקנת Arctic Fuse 3[/COLOR]'.format(
+            '[COLOR {0}]שגיאה בהתקנת חבילת סקין[/COLOR]'.format(
                 CONFIG.COLOR2))
         return False
 
@@ -988,13 +1021,14 @@ def build_switch_skin():
 
 
     from resources.libs.gui import window
-    msg = f"הסקינים הקיימים בבילד:\n1. סקין Estuary\n2. סקין FENtastic\n3. סקין Arctic Fuse 3"
+    msg = f"הסקינים הקיימים בבילד:\n1. סקין Estuary\n2. סקין FENtastic\n3. סקין Arctic Fuse 3\n4. סקין NOX"
     window.show_notification_with_extra_image(msg, 888, CONFIG.BUILD_SKIN_SWITCH_IMAGE_URL)
 
     skin_mapping = {
         'סקין Estuary - מראה פשוט עם כפתורים': 'skin.estuary',
         'סקין FENtastic - יפהפה': 'skin.fentastic',
-        'סקין Arctic Fuse 3 - מודרני (ניסיוני)': 'skin.arctic.fuse.3'
+        'סקין Arctic Fuse 3 - מודרני (ניסיוני)': 'skin.arctic.fuse.3',
+        'סקין NOX - עברית מלאה (ניסיוני)': 'skin.povil.nox'
     }
         
     # Get the name of the current active skin. If the user manually
@@ -1038,6 +1072,15 @@ def build_switch_skin():
                 logging.log_notify(
                     CONFIG.ADDONTITLE,
                     '[COLOR {0}]Arctic Fuse 3 לא הותקן - מבטל[/COLOR]'.format(
+                        CONFIG.COLOR2))
+                return
+        # NOX is also too big to bundle in the base build; download +
+        # extract it on first switch, identical to the AF3 path.
+        elif gotoskin == 'skin.povil.nox':
+            if not ensure_nox_installed():
+                logging.log_notify(
+                    CONFIG.ADDONTITLE,
+                    '[COLOR {0}]סקין NOX לא הותקן - מבטל[/COLOR]'.format(
                         CONFIG.COLOR2))
                 return
 
