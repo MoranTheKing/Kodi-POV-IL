@@ -1,3 +1,16 @@
+[COLOR yellow][B]v0.1.19[/B][/COLOR]
+* CRITICAL: kill_kodi() is a true hard kill again (os._exit, no Quit).
+  The graceful Quit added earlier made Kodi save its in-memory settings
+  on shutdown, overwriting the guisettings.xml / Addons33.db that a
+  fresh build install had just extracted -- so clean installs rebooted
+  into Estuary with everything disabled, while quick updates (whose
+  zips carry no guisettings) kept working. This restores the original
+  wizard behavior that fresh installs depend on.
+* fresh_build_auto_install_if_needed() now skips hydration when
+  plugin.video.pov is already on disk (pre-seeded installs, e.g. the
+  Windows installer), letting the auto-set-buildname block adopt the
+  existing install instead of re-downloading the build over it.
+
 [COLOR yellow][B]v0.1.14[/B][/COLOR]
 * Fix the version gate from 0.1.13: _af3_read_addon_version() was matching
   the FIRST version=" in the file, which is the XML declaration
