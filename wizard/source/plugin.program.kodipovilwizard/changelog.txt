@@ -1,3 +1,11 @@
+[COLOR yellow][B]v0.1.27[/B][/COLOR]
+* NOX gate -> skin 1.0.7. The 6-tile favorites fix (PR #240) was packed
+  as 1.0.6 IN PLACE -- but 1.0.6 had already shipped via PR #239, so
+  devices that pulled it (gate==on-disk==1.0.6) would never re-download
+  the fixed pack. Bumped the skin to 1.0.7 so the version gate fires.
+  Lesson encoded: never rebuild a skin pack in place once its version
+  has been merged to main.
+
 [COLOR yellow][B]v0.1.26[/B][/COLOR]
 * NOX gate -> skin 1.0.6:
   - "הסרטים שלי / הסדרות שלי" on the home now open POV's unified
