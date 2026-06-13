@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="repository.kodipovilai"
+       name="POV IL - תרגום AI"
+       version="1.0.0"
+       provider-name="MoranTheKing">
+  <extension point="xbmc.addon.repository" name="POV IL - תרגום AI">
+    <dir>
+      <info compressed="false">https://morantheking.github.io/Kodi-POV-IL/repo/addons.xml</info>
+      <checksum>https://morantheking.github.io/Kodi-POV-IL/repo/addons.xml.md5</checksum>
+      <datadir zip="true">https://morantheking.github.io/Kodi-POV-IL/repo/zips/</datadir>
+    </dir>
+  </extension>
+  <extension point="xbmc.addon.metadata">
+    <summary lang="he">מאגר POV IL להתקנת ועדכון תוסף תרגום ה-AI לעברית</summary>
+    <summary lang="en">POV IL repository for the AI Hebrew subtitles add-on</summary>
+    <description lang="he">מאגר רשמי של POV IL. מאפשר להתקין ולעדכן אוטומטית מתוך Kodi את תוסף תרגום ה-AI לעברית (service.subtitles.kodipovilai) בלבד — בלי להתקין את הבילד המלא.</description>
+    <description lang="en">Official POV IL repository. Installs and auto-updates the AI Hebrew subtitles add-on (service.subtitles.kodipovilai) on its own, without the full build.</description>
+    <platform>all</platform>
+    <license>MIT</license>
+    <assets>
+      <icon>icon.png</icon>
+    </assets>
+  </extension>
+</addon>
