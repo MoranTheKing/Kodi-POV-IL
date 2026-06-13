@@ -1,3 +1,11 @@
+[COLOR yellow][B]v0.1.28[/B][/COLOR]
+* NOX gate -> skin 1.0.8. Enlarged the POV logo on the NOX home screen and
+  switched it to the wide "POV IL / KODI BUILD" vendor logo (same artwork
+  FENtastic uses top-left) instead of the small square K-logo. New media
+  file media/logos/pov_il_vendor_logo.png; both home logo controls now point
+  at it at 300x83. Bumped skin.povil.nox to 1.0.8 so the version gate fires
+  and devices already on NOX re-pull the pack via auto_update_active_skin_pack.
+
 [COLOR yellow][B]v0.1.27[/B][/COLOR]
 * NOX gate -> skin 1.0.7. The 6-tile favorites fix (PR #240) was packed
   as 1.0.6 IN PLACE -- but 1.0.6 had already shipped via PR #239, so
