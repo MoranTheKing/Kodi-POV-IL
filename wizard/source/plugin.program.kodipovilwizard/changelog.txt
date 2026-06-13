@@ -1,3 +1,12 @@
+[COLOR yellow][B]v0.1.29[/B][/COLOR]
+* NOX gate -> skin 1.0.9. The 1.0.8 vendor-logo image still rendered small
+  (the wide logo had to fit a short box, and the framed square dominated).
+  Replaced it with a large frameless TEXT logo on the NOX home: "POV IL" in
+  font60 (white + gold "IL") with "KODI BUILD" beneath it -- no image, no
+  frame, scales crisply. Also shipped the new Home_nox.xml inside the
+  FENtastic quickfix so existing NOX users get it on the next quick-update
+  restart instead of waiting for the full skin-pack re-pull.
+
 [COLOR yellow][B]v0.1.28[/B][/COLOR]
 * NOX gate -> skin 1.0.8. Enlarged the POV logo on the NOX home screen and
   switched it to the wide "POV IL / KODI BUILD" vendor logo (same artwork
