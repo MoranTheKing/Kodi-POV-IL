@@ -1,3 +1,14 @@
+[COLOR yellow][B]v0.1.26[/B][/COLOR]
+* NOX gate -> skin 1.0.6:
+  - "הסרטים שלי / הסדרות שלי" on the home now open POV's unified
+    "My Content" hub (navigator.my_content) instead of the POV-only
+    favorites list, which showed 0 for users who keep their lists on
+    Trakt/TMDB rather than POV.
+  - Focused submenu item is highlighted yellow instead of gray.
+* FENtastic: applied Tal Levi's updated player set (new VideoOSD /
+  OsdSettings / NetflixPlayer + supporting includes -- 26 files), kept all
+  other skin files, and preserved our clear-cache RunPlugin fix.
+
 [COLOR yellow][B]v0.1.25[/B][/COLOR]
 * NOX gate -> skin 1.0.5.
   - Movies/TV/Kids reverted to a SINGLE row (popular) -- the two stacked
