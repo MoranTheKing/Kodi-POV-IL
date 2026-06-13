@@ -6,3 +6,8 @@ zips/
 # Python bytecode (e.g. from local py_compile verification runs)
 __pycache__/
 *.pyc
+
+# Kodi repository datadir (served via GitHub Pages) must be tracked,
+# despite the broad zips/ rule above.
+!repo/zips/
+!repo/zips/**
