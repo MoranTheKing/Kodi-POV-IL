@@ -1,3 +1,10 @@
+[COLOR yellow][B]v0.1.30[/B][/COLOR]
+* NOX gate -> skin 1.0.10. Reordered the "my content" tiles on the NOX home
+  so each provider's movies and series sit next to each other -- my movies
+  (Trakt) + my series (Trakt), then TMDB pair, then POV pair -- instead of
+  all movies followed by all series. The updated Custom_nox_main_menu.xml is
+  also shipped inside the FENtastic quickfix for fast propagation.
+
 [COLOR yellow][B]v0.1.29[/B][/COLOR]
 * NOX gate -> skin 1.0.9. The 1.0.8 vendor-logo image still rendered small
   (the wide logo had to fit a short box, and the framed square dominated).
