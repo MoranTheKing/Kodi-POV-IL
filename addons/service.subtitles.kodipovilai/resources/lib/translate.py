@@ -135,6 +135,17 @@ def list_candidates(info):
     Returns a list of dicts with keys: filename, language, link,
     sync, rating. Empty list if nothing plausible is available.
     """
+    # Respect the user's preferred subtitle language. If they've set it to
+    # a specific non-Hebrew language (e.g. English) we are the wrong addon
+    # for the job -- offer nothing and let DarkSubs / other providers serve
+    # that language. Conservative: only skips when we can positively tell
+    # Hebrew is not wanted (see kodi_utils.hebrew_subtitle_wanted).
+    if not kodi_utils.hebrew_subtitle_wanted():
+        kodi_utils.log(
+            'list_candidates: preferred subtitle language is not Hebrew; '
+            'offering no AI entries', level='INFO')
+        return []
+
     filepath = info.get('filepath') or ''
     imdb_id = (info.get('imdb_id') or '').strip()
     tmdb_id = (info.get('tmdb_id') or '').strip()
@@ -462,6 +473,38 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
 
     local_source = payload.get('local_path')
     wyzie_url = payload.get('wyzie_url')
+
+    # Respect the user's preferred subtitle language: if they've chosen a
+    # specific non-Hebrew language (e.g. English) DON'T force an AI Hebrew
+    # translation -- hand back the SOURCE subtitle untranslated so they get
+    # the language they asked for. Checked BEFORE the cache lookups below so
+    # we never serve a previously-cached Hebrew file either. This is an
+    # extra gate only; it can't re-enable translation that auto_translate /
+    # force_ai_when_auto_translate_off already disabled.
+    if not kodi_utils.hebrew_subtitle_wanted():
+        kodi_utils.log(
+            'resolve: preferred subtitle language is not Hebrew; returning '
+            'the source subtitle untranslated', level='INFO')
+        kodi_utils.notify(
+            'AI: שפת הכתוביות המועדפת אינה עברית — מחזיר כתובית מקור ללא תרגום',
+            time_ms=4000)
+        if local_source and os.path.isfile(local_source):
+            return local_source
+        if wyzie_url:
+            text = wyzie.download(wyzie_url)
+            if text:
+                import hashlib as _hsrc
+                sid = _hsrc.sha1(wyzie_url.encode('utf-8')).hexdigest()[:16]
+                out = os.path.join(
+                    kodi_utils.cache_dir(),
+                    'src_{0}.{1}.srt'.format(sid, source_lang or 'en'))
+                try:
+                    with open(out, 'w', encoding='utf-8') as f:
+                        f.write(text)
+                    return out
+                except OSError:
+                    return None
+        return None
 
     # Two-tier cache strategy:
     #  1. EARLY lookup: Wyzie URL is stable per-SRT; local path is

@@ -1,3 +1,16 @@
+v0.2.142
+- Respect the user's preferred subtitle language. If you set Kodi's
+  "preferred subtitle language" to a specific non-Hebrew language (e.g.
+  English), the AI translator now stays out of the way: list_candidates
+  offers nothing and resolve() hands back the source subtitle untranslated,
+  so you get the language you asked for instead of a forced Hebrew
+  translation. Conservative by design -- only skips when we can positively
+  read a non-Hebrew preference (locale.subtitlelanguage / subtitles.languages
+  via JSON-RPC); any ambiguity or read failure keeps the long-standing
+  AI-Hebrew default. This is an extra gate only and does NOT change the
+  DarkSubs auto_translate / force_ai_when_auto_translate_off behaviour: if
+  automatic translation is off, there is still no AI translation.
+
 v0.2.141
 - Build edition only: fix Kodi hanging on the first launch after an
   install / quick update (force-stop required). The DarkSubs reload
