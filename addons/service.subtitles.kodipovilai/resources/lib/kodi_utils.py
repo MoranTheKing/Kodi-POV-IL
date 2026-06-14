@@ -58,6 +58,73 @@ def get_float(key, default=0.0):
         return default
 
 
+def _read_kodi_setting_value(setting):
+    """Read a Kodi *system* setting via JSON-RPC (Settings.GetSettingValue).
+    Returns the raw value (str/list/...) or None on any failure."""
+    if not KODI_AVAILABLE or xbmc is None:
+        return None
+    try:
+        import json
+        payload = {
+            'jsonrpc': '2.0', 'id': 1,
+            'method': 'Settings.GetSettingValue',
+            'params': {'setting': setting},
+        }
+        resp = json.loads(xbmc.executeJSONRPC(json.dumps(payload)))
+        return (resp.get('result') or {}).get('value')
+    except Exception:
+        return None
+
+
+# Anything that names Hebrew, whether as an ISO code or a language name.
+_HEBREW_LANG_TOKENS = ('he', 'heb', 'iw', 'hebrew', 'עברית')
+# Kodi 'preferred subtitle language' tokens that do NOT name a concrete
+# language. When the setting holds one of these we can't conclude the user
+# prefers a non-Hebrew language, so we defer to the download-languages list.
+_SUBTITLE_LANG_SPECIAL = ('', 'none', 'forced_only', 'forcedonly',
+                          'default', 'original', 'mediadefault')
+
+
+def _is_hebrew_lang(value):
+    return (value or '').strip().lower() in _HEBREW_LANG_TOKENS
+
+
+def hebrew_subtitle_wanted():
+    """Decide whether the user actually wants Hebrew subtitles, so the AI
+    translator knows when to stay out of the way.
+
+    Returns ``False`` ONLY when we can positively determine the user prefers
+    a specific NON-Hebrew subtitle language (e.g. they set Kodi's
+    "preferred subtitle language" to English). In every ambiguous or
+    unreadable case we return ``True`` -- preserving the long-standing
+    AI-Hebrew default so we never silently disable translation for the
+    Hebrew-default majority, and so a settings-read failure can't break
+    anyone. This is purely an *extra* gate: it never enables translation
+    that other settings (DarkSubs auto_translate / force_ai_when_auto_translate_off)
+    have already turned off."""
+    try:
+        # 1. "Preferred subtitle language" (locale.subtitlelanguage) -- a
+        #    single value. When it names a concrete language it is the
+        #    clearest statement of intent, so it wins outright.
+        pref = (_read_kodi_setting_value('locale.subtitlelanguage') or '')
+        pref_norm = str(pref).strip().lower()
+        if pref_norm and pref_norm not in _SUBTITLE_LANG_SPECIAL:
+            return _is_hebrew_lang(pref_norm)
+
+        # 2. Otherwise defer to "Languages to download subtitles for"
+        #    (subtitles.languages) -- a list (or, on some builds, a CSV).
+        dl = _read_kodi_setting_value('subtitles.languages')
+        if isinstance(dl, str):
+            dl = [p for p in dl.replace(';', ',').split(',') if p.strip()]
+        if isinstance(dl, (list, tuple)) and dl:
+            return any(_is_hebrew_lang(x) for x in dl)
+
+        # 3. Nothing conclusive -> keep the AI-Hebrew default.
+        return True
+    except Exception:
+        return True
+
+
 def set_setting(key, value):
     """Set an addon setting. Returns True if the write persisted,
     False otherwise -- some Kodi/Android combinations silently
