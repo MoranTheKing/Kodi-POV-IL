@@ -52,6 +52,19 @@ jobs:
           # files there: GitHub blocks GITHUB_TOKEN from creating/updating
           # workflows without the extra workflows permission.
           rm -rf gh/.github
+          # Publish the latest release APKs as DIRECT files under downloads/ so
+          # the Downloader app (and any browser) can fetch them in a single 200
+          # response. GitHub Releases' redirect chain breaks Downloader, and an
+          # AFTVnews code that points at the /downloads/ HTML page just hands
+          # Downloader an unusable web page. These live on gh-pages ONLY (never
+          # committed to main), so the source repo isn't bloated with binaries;
+          # identical bytes across deploys produce no new commit.
+          mkdir -p gh/downloads
+          gh release download --repo "$REPO_SLUG" \
+            --pattern "Kodi-POV-IL-64bit.apk" \
+            --pattern "Kodi-POV-IL-32bit.apk" \
+            --dir gh/downloads --clobber \
+            || echo "No release APK assets yet; skipping APK publish."
           touch gh/.nojekyll
           cd gh
           git add -A
