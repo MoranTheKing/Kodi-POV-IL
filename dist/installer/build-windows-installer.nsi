@@ -245,6 +245,21 @@ Section "Install"
   DetailPrint "Registering wizard in addon-manifest.xml..."
   Call PatchAddonManifest
 
+  ; --- Shortcuts that ALWAYS launch portable mode (-p) -------------------
+  ; THE relaunch bug: the only launch that used -p was the Exec below, which
+  ; runs once at install time. Kodi's own bundled setup (run silently above)
+  ; leaves a plain "Kodi" entry that starts kodi.exe WITHOUT -p, so every
+  ; later launch opened vanilla Kodi on %APPDATA%\Kodi -- no build, no skin
+  ; ("works great the first time, empty after you close and reopen"). Create
+  ; clearly named POV IL shortcuts that pass -p so re-launching always uses
+  ; our portable_data profile. Purely additive: we do NOT delete or repoint
+  ; any existing "Kodi" shortcut, so a separately-installed normal Kodi keeps
+  ; its own launcher untouched.
+  DetailPrint "Creating Kodi POV IL shortcuts (portable -p)..."
+  CreateShortCut "$DESKTOP\Kodi POV IL.lnk" "$INSTDIR\kodi.exe" "-p" "$INSTDIR\kodi.exe" 0
+  CreateDirectory "$SMPROGRAMS\Kodi POV IL"
+  CreateShortCut "$SMPROGRAMS\Kodi POV IL\Kodi POV IL.lnk" "$INSTDIR\kodi.exe" "-p" "$INSTDIR\kodi.exe" 0
+
   DetailPrint "Launching Kodi POV IL..."
   Exec '"$INSTDIR\kodi.exe" -p'
 
