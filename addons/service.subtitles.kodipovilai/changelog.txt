@@ -1,3 +1,14 @@
+v0.2.143
+- Fix: FENtastic skin loads but ALL text is blank for some users (after a quick
+  update). The build-edition hebrew_build_ui_patcher rewrote the skin's Hebrew
+  strings.po in place with a plain open('w'); if Kodi was force-closed mid-write
+  (the quick-update flow force-closes), strings.po was left truncated, and a
+  truncated strings.po blanks every Hebrew $LOCALIZE label. Now it writes
+  atomically (temp file + os.replace, never a half-written live file), preserves
+  the blank line between .po entries (the in-place replace was gluing entries
+  together), and refuses to write a suspiciously short/empty strings.po. Same
+  atomic write applied to the Home.xml / settings.xml / guisettings.xml edits.
+
 v0.2.142
 - Respect the user's preferred subtitle language. If you set Kodi's
   "preferred subtitle language" to a specific non-Hebrew language (e.g.
