@@ -45,6 +45,36 @@ def _translate(path):
         return ''
 
 
+def _atomic_write(path, text):
+    """Write text to a file atomically: full write to a temp file in the same
+    directory, fsync, then os.replace over the target. The live file is only
+    ever swapped once the new content is completely on disk.
+
+    This is the fix for the "FENtastic loads but all text is blank" reports:
+    these helpers used to write the skin's strings.po / Home.xml in place with
+    a plain open('w'), so if Kodi was force-closed mid-write (exactly what the
+    quick-update flow does) the file was left truncated -- a truncated strings.po
+    means every $LOCALIZE Hebrew label renders empty. An atomic replace can
+    never leave a half-written file behind."""
+    tmp = path + '.kpovtmp'
+    with open(tmp, 'w', encoding='utf-8', newline='') as f:
+        f.write(text)
+        f.flush()
+        try:
+            os.fsync(f.fileno())
+        except OSError:
+            pass
+    os.replace(tmp, path)
+
+
+def _atomic_tree_write(tree, path):
+    """Atomic ElementTree write (temp file + os.replace), so a force-close
+    can't leave guisettings.xml / settings.xml truncated."""
+    tmp = path + '.kpovtmp'
+    tree.write(tmp, encoding='utf-8', xml_declaration=False)
+    os.replace(tmp, path)
+
+
 def _clear_skin_bool(setting_id):
     if xbmc is None:
         return False
@@ -90,7 +120,7 @@ def _ensure_fentastic_setting_file():
             player_target.text = 'true'
             changed = True
         if changed:
-            tree.write(path, encoding='utf-8', xml_declaration=False)
+            _atomic_tree_write(tree, path)
         return changed
     except Exception as exc:
         kodi_utils.log('hebrew_build_ui_patcher settings.xml failed: {0}'.format(exc), level='WARNING')
@@ -114,8 +144,7 @@ def _patch_fentastic_home_label():
         if old is None:
             return False
         text = text.replace(old, new, 1)
-        with open(path, 'w', encoding='utf-8', newline='') as f:
-            f.write(text)
+        _atomic_write(path, text)
         return True
     except Exception as exc:
         kodi_utils.log('hebrew_build_ui_patcher Home.xml failed: {0}'.format(exc), level='WARNING')
@@ -129,6 +158,7 @@ def _patch_hebrew_skin_strings():
     try:
         with open(path, 'r', encoding='utf-8', errors='ignore') as f:
             text = f.read()
+        original = text
         changed = False
         for strid, pair in HE_STRINGS.items():
             msgid, msgstr = pair
@@ -150,7 +180,11 @@ def _patch_hebrew_skin_strings():
                     if next_start == -1:
                         text = text[:start] + replacement + '\n'
                     else:
-                        text = text[:start] + replacement + text[next_start:]
+                        # Keep the blank line between PO entries. text[next_start:]
+                        # begins at "\nmsgctxt", and `wanted` has no trailing
+                        # newline, so without this extra \n the two entries would
+                        # be glued together (msgstr "..."\nmsgctxt) -- malformed PO.
+                        text = text[:start] + replacement + '\n' + text[next_start:]
                     changed = True
             else:
                 if not text.endswith('\n'):
@@ -158,8 +192,16 @@ def _patch_hebrew_skin_strings():
                 text += '\n{0}\n'.format(wanted)
                 changed = True
         if changed:
-            with open(path, 'w', encoding='utf-8', newline='') as f:
-                f.write(text)
+            # Never swap in a strings.po that is empty or drastically shorter
+            # than what we read -- a corrupt/truncated strings.po blanks every
+            # Hebrew $LOCALIZE label in the skin (the "loads but no text" bug).
+            if not text.strip() or len(text) < len(original) // 2:
+                kodi_utils.log(
+                    'hebrew_build_ui_patcher: refusing to write suspect '
+                    'strings.po (new {0} vs orig {1} bytes)'.format(
+                        len(text), len(original)), level='WARNING')
+                return False
+            _atomic_write(path, text)
         return changed
     except Exception as exc:
         kodi_utils.log('hebrew_build_ui_patcher strings.po failed: {0}'.format(exc), level='WARNING')
@@ -207,7 +249,7 @@ def _ensure_hebrew_keyboard_layout():
             changed = True
 
         if changed:
-            tree.write(path, encoding='utf-8', xml_declaration=False)
+            _atomic_tree_write(tree, path)
         return changed
     except Exception as exc:
         kodi_utils.log('hebrew_build_ui_patcher keyboard failed: {0}'.format(exc), level='WARNING')
@@ -267,7 +309,7 @@ def _ensure_english_audio_preference_file():
                 changed = True
 
         if changed:
-            tree.write(path, encoding='utf-8', xml_declaration=False)
+            _atomic_tree_write(tree, path)
         return changed
     except Exception as exc:
         kodi_utils.log('hebrew_build_ui_patcher audio failed: {0}'.format(exc), level='WARNING')
