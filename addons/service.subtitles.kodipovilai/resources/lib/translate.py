@@ -414,6 +414,77 @@ def list_candidates(info):
 
 # ---- download / translate -------------------------------------------
 
+def _prepare_source(raw_src):
+    """Strip hearing-impaired noise from a source SRT, but only if the
+    cleaner left at least 30% of the entries (otherwise keep the raw text).
+    This is the SAME transform the main translate path applies before
+    hashing -- factored out so the content hash is computed identically
+    here and in the backfill path, guaranteeing both produce the same
+    source_hash and the pool never stores two copies of one translation."""
+    cleaned = srt.strip_hi_annotations(raw_src)
+    if cleaned and srt.count_entries(cleaned) >= max(
+            1, int(srt.count_entries(raw_src) * 0.3)):
+        return cleaned
+    return raw_src
+
+
+def _content_hash(text):
+    """sha1[:16] of the (already prepared) source text -- the pool's
+    source_hash / dedup key."""
+    import hashlib as _h
+    return _h.sha1(text.encode('utf-8', errors='replace')).hexdigest()[:16]
+
+
+def _backfill_pool_async(info, translated_path, local_source, wyzie_url,
+                         source_lang):
+    """Share an ALREADY-cached Hebrew translation to the community pool, in
+    the background, the first time the user re-watches it after enabling
+    pool_share. Used at the EARLY cache hit, where the source bytes (and
+    therefore the content hash) aren't computed yet: we read the source on a
+    daemon thread so playback is never delayed, compute the same content hash
+    the fresh-translation path uses, and contribute_once (marker + server-side
+    dedup => never a duplicate). One-shot per file thanks to the .shared
+    marker; silent to the user on any failure."""
+    if pool is None:
+        return
+
+    def _work():
+        try:
+            if not pool.share_enabled() or pool.was_contributed(
+                    translated_path):
+                return
+            cached = cache.load_text(translated_path)
+            if not cached:
+                return
+            raw = None
+            if local_source and os.path.isfile(local_source):
+                try:
+                    with open(local_source, 'r', encoding='utf-8',
+                              errors='replace') as f:
+                        raw = f.read()
+                except (IOError, OSError):
+                    raw = None
+            elif wyzie_url:
+                raw = wyzie.download(wyzie_url)
+            if not raw:
+                return
+            cid = _content_hash(_prepare_source(raw))
+            pool.contribute_once(info, cid, source_lang, cached,
+                                 marker_path=translated_path)
+        except Exception as e:
+            try:
+                kodi_utils.log('pool backfill failed: {0}'.format(e),
+                               level='DEBUG')
+            except Exception:
+                pass
+
+    try:
+        import threading as _t
+        _t.Thread(target=_work, daemon=True).start()
+    except Exception:
+        pass
+
+
 def resolve(link, info, progress_cb=None, progressive_cb=None):
     """Return a filesystem path to the SRT for the chosen link.
 
@@ -575,6 +646,13 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             except OSError:
                 pass
             _reapply_rtl_fix_in_place(translated)
+            # Backfill: share this previously-translated file to the pool the
+            # first time it's re-watched after pool_share is on. Runs on a
+            # daemon thread (reads the source to compute the content hash), so
+            # the cache hit still returns instantly. One-shot per file.
+            if pool is not None and pool.share_enabled():
+                _backfill_pool_async(info, translated, local_source,
+                                     wyzie_url, source_lang)
             return translated
 
     # Read the source SRT. Either we recorded a local path at list
@@ -601,10 +679,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # / "MABEL: ..." that aren't speech we want translated; they
     # just clutter the Hebrew output. Skipped if the cleaner ate
     # the entire file (it won't, but defend against it).
-    cleaned = srt.strip_hi_annotations(src_text)
-    if cleaned and srt.count_entries(cleaned) >= max(
-            1, int(srt.count_entries(src_text) * 0.3)):
-        src_text = cleaned
+    src_text = _prepare_source(src_text)
 
     # Content-hash lookup: only catches a hit when SOURCE bytes
     # match a previously translated SRT served from a different
@@ -612,9 +687,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # (so list_candidates can pre-mark it as [CACHE]) and ALSO
     # to the content-hash slot so a future click of a different
     # url with identical content also hits cache.
-    import hashlib as _hashlib
-    content_id = _hashlib.sha1(
-        src_text.encode('utf-8', errors='replace')).hexdigest()[:16]
+    content_id = _content_hash(src_text)
     if content_id != early_source_id:
         translated_by_content = cache.translated_path(
             imdb_id, season, episode, source_lang,
@@ -632,6 +705,18 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             except OSError:
                 pass
             _reapply_rtl_fix_in_place(translated_by_content)
+            # Backfill: we already have the content hash here, so share the
+            # cached file directly (contribute_once = marker + server dedup).
+            if pool is not None and pool.share_enabled():
+                try:
+                    pool.contribute_once(
+                        info, content_id, source_lang,
+                        cache.load_text(translated_by_content) or '',
+                        marker_path=translated_by_content)
+                except Exception as e:
+                    kodi_utils.log(
+                        'pool backfill (content) failed: {0}'.format(e),
+                        level='DEBUG')
             return translated_by_content
 
     # No hit: settle on the early-source-id slot as the canonical
@@ -1119,7 +1204,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # and pool both missed above).
     if pool is not None and pool.share_enabled():
         try:
-            pool.contribute(info, content_id, source_lang, final)
+            pool.contribute_once(info, content_id, source_lang, final,
+                                 marker_path=translated)
         except Exception as e:
             kodi_utils.log('pool contribute dispatch failed: {0}'.format(e),
                            level='DEBUG')
