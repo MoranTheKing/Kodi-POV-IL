@@ -1936,11 +1936,12 @@ def _ensure_darksubs_enabled():
 
 
 def _maybe_default_pov_autoplay():
-    """One-shot: turn on POV Auto Play + Always-Resume so "Continue Watching"
-    is a single click -- no source-select dialog, and it resumes from where you
-    stopped. Marker-gated (_pov_autoplay_default_v1); only flips settings still
-    on POV's old defaults, so a later manual change by the user sticks. Touches
-    ONLY these four POV settings -- never Trakt/debrid/anything else."""
+    """One-shot: set POV "Automatically Resume Playback" to Always, so picking
+    up an in-progress item resumes from where you stopped (no resume/start-over
+    prompt). Marker-gated; only flips settings still on POV's old default, so a
+    later manual change sticks. Does NOT enable Auto Play -- the source/servers
+    dialog must still appear so the user chooses the source. Touches ONLY the
+    two auto_resume settings; never Trakt/debrid/anything else."""
     if xbmc is None:
         return
     try:
@@ -1961,18 +1962,52 @@ def _maybe_default_pov_autoplay():
                     pov.setSetting(key, newval)
             except Exception:
                 pass
-        # Auto Play: pick the best source automatically (no dialog).
-        _flip('auto_play_movie', 'false', 'true')
-        _flip('auto_play_episode', 'false', 'true')
         # Automatically Resume Playback: 0=Never, 1=Always, 2=Autoplay Only.
+        # NOTE: we deliberately do NOT touch auto_play_* -- the source dialog
+        # must keep showing so the user picks the source themselves.
         _flip('auto_resume_movie', '0', '1')
         _flip('auto_resume_episode', '0', '1')
         kodi_utils.set_setting('_pov_autoplay_default_v1', '1')
-        kodi_utils.log('POV auto-play + always-resume defaults applied (v1)',
-                       level='INFO')
+        kodi_utils.log('POV always-resume default applied (v1)', level='INFO')
     except Exception as e:
         try:
-            kodi_utils.log('POV autoplay default migration failed: {0}'.format(e),
+            kodi_utils.log('POV resume default migration failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_revert_pov_autoplay():
+    """One-shot fix: an earlier build (0.2.158) wrongly turned POV Auto Play ON
+    by default, which skipped the source/servers dialog even on first watch.
+    Turn it back OFF so the dialog always shows. Marker-gated; sets the value
+    back to POV's own default (false). Users who genuinely want Auto Play can
+    re-enable it in POV settings."""
+    if xbmc is None:
+        return
+    try:
+        from resources.lib import kodi_utils
+        import xbmcaddon
+    except Exception:
+        return
+    try:
+        if kodi_utils.get_setting('_pov_autoplay_revert_v2', '') == '1':
+            return
+        try:
+            pov = xbmcaddon.Addon('plugin.video.pov')
+        except Exception:
+            return
+        for key in ('auto_play_movie', 'auto_play_episode'):
+            try:
+                if (pov.getSetting(key) or '').strip().lower() == 'true':
+                    pov.setSetting(key, 'false')
+            except Exception:
+                pass
+        kodi_utils.set_setting('_pov_autoplay_revert_v2', '1')
+        kodi_utils.log('POV Auto Play reverted to off (v2)', level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log('POV autoplay revert failed: {0}'.format(e),
                            level='WARNING')
         except Exception:
             pass
@@ -2157,6 +2192,10 @@ def main():
     # One-shot: enable POV Auto Play + Always-Resume so "Continue Watching" is
     # one click (no source dialog, resumes where you stopped). Marker-gated.
     _maybe_default_pov_autoplay()
+
+    # One-shot fix: undo the 0.2.158 mistake that forced POV Auto Play on
+    # (it skipped the source dialog even on first watch). Restores the dialog.
+    _maybe_revert_pov_autoplay()
 
     # One-shot first-launch dialog for Arctic Fuse 3. Skin-gated +
     # marker-gated so it only fires for users who have actually
