@@ -1,3 +1,10 @@
+v0.2.147
+- Fix (for real this time): the "Community pool" settings tab didn't appear at
+  all. Its two toggles were the only settings in the category and neither had
+  an explicit <control> element; Kodi 21 hides a category with no controllable
+  setting. Added <control type="toggle"/> to both, matching every other toggle
+  in the add-on. The tab now shows with both switches.
+
 v0.2.146
 - Fix: the "Community pool" settings category showed up empty (no toggles).
   In Kodi 21's settings format every category must wrap its settings in a

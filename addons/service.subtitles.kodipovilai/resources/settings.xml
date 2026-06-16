@@ -294,10 +294,12 @@
         <setting id="pool_use" type="boolean" label="32501"> <!-- Use community pool -->
           <level>0</level>
           <default>false</default>
+          <control type="toggle"/>
         </setting>
         <setting id="pool_share" type="boolean" label="32502"> <!-- Share my AI translations -->
           <level>0</level>
           <default>false</default>
+          <control type="toggle"/>
         </setting>
       </group>
     </category>
