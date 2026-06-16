@@ -1,33 +1,24 @@
 // Kodi POV IL — community AI-subtitle pool (Cloudflare Worker)
 // ---------------------------------------------------------------------------
-// A tiny backend that lets the AI subtitle add-on SHARE Hebrew AI translations
-// and PULL ones other users already made, using a Telegram channel as the file
-// store and Workers KV as a small index.
+// Shares/pulls Hebrew AI translations. Telegram channel = file store, Workers
+// KV = small index. Posts are formatted like a subtitle-release channel:
+// poster + title + genre hashtags + season/episode + IMDb|TMDb + plot, then the
+// .srt document.
 //
 // Routes:
 //   GET  /health
 //   GET  /lookup?tmdb=<id>&type=movie|episode&season=&episode=&lang=he
-//          -> { ok, key, count, variants:[{hash,release,source_lang,ts}] }
 //   GET  /sub?tmdb=<id>&type=&season=&episode=&lang=he[&hash=<source_hash>]
-//          -> the .srt bytes (200) or 404. With hash -> that exact variant;
-//             without -> the newest variant.
-//   POST /contribute   (header X-API-Key: <API_KEY>)
-//          body JSON: { tmdb_id, imdb_id, type:"movie"|"episode", season, episode,
-//                       lang:"he", release, source_hash, source_lang, title, year,
-//                       srt:"<raw utf-8 srt text>" }
-//          -> uploads the .srt to the channel, indexes it, dedups by source_hash.
+//   POST /contribute  (X-API-Key)  body JSON {tmdb_id,imdb_id,type,season,episode,
+//                       lang:"he",release,source_hash,source_lang,title,year,srt}
 //
-// Bindings (set in the Cloudflare dashboard):
-//   KV namespace binding:  POOL
-//   Secrets / vars:        BOT_TOKEN (secret), CHANNEL_ID, API_KEY (secret)
-//
-// Identity model: the index key is (lang, tmdb/imdb, season, episode). Each key
-// holds a list of VARIANTS, one per distinct source-subtitle content hash, so a
-// different English source (= different sync) becomes its own variant and never
-// overwrites another. Exact source reuse is a hash match.
+// Bindings: KV "POOL"; secrets BOT_TOKEN, CHANNEL_ID, API_KEY; optional TMDB_KEY.
 
-const MAX_SRT = 2 * 1024 * 1024;   // 2 MB
+const MAX_SRT = 2 * 1024 * 1024;
 const MAX_VARIANTS = 25;
+// Public TMDB v3 key bundled in jurialmunkey's tmdbhelper (same one the add-on
+// uses). Override per-deployment by setting a TMDB_KEY variable.
+const BUNDLED_TMDB_KEY = 'a07324c669cac4d96789197134ce272b';
 
 const tg = (token, method) => `https://api.telegram.org/bot${token}/${method}`;
 
@@ -41,15 +32,22 @@ function keyFor(p) {
 
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8' },
+    status, headers: { 'content-type': 'application/json; charset=utf-8' },
   });
 }
 
 function looksLikeSrt(text) {
   if (!text || text.length < 30 || text.length > MAX_SRT) return false;
-  const cues = (text.match(/-->/g) || []).length;
-  return cues >= 3;            // at least a few timecoded cues
+  return (text.match(/-->/g) || []).length >= 3;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function hashtag(s) {
+  const t = String(s).trim().replace(/[\s\-]+/g, '_').replace(/[^\wא-ת]/g, '');
+  return t ? '#' + t : '';
 }
 
 async function readIndex(env, key) {
@@ -59,12 +57,82 @@ async function readIndex(env, key) {
   catch { return []; }
 }
 
-async function uploadSrt(env, filename, srtText, caption) {
+async function tmdbMeta(env, body) {
+  const key = env.TMDB_KEY || BUNDLED_TMDB_KEY;
+  const id = String(body.tmdb_id || '').trim();
+  if (!/^\d+$/.test(id)) return {};
+  const isEp = body.type === 'episode';
+  const base = isEp ? 'tv' : 'movie';
+  try {
+    const r = await fetch(`https://api.themoviedb.org/3/${base}/${id}` +
+      `?api_key=${key}&language=he&append_to_response=external_ids`);
+    if (!r.ok) return {};
+    const d = await r.json();
+    const meta = {
+      title: d.title || d.name || body.title || '',
+      year: String(d.release_date || d.first_air_date || '').slice(0, 4) || body.year || '',
+      overview: d.overview || '',
+      poster_url: d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : '',
+      genres: (d.genres || []).map(g => g.name),
+      imdb_id: (d.external_ids && d.external_ids.imdb_id) || d.imdb_id || body.imdb_id || '',
+    };
+    if (isEp && body.season && body.episode) {
+      try {
+        const er = await fetch(`https://api.themoviedb.org/3/tv/${id}/season/` +
+          `${body.season}/episode/${body.episode}?api_key=${key}&language=he`);
+        if (er.ok) {
+          const ed = await er.json();
+          if (ed.overview) meta.overview = ed.overview;
+          if (ed.name) meta.ep_name = ed.name;
+        }
+      } catch (_) { /* ignore */ }
+    }
+    return meta;
+  } catch (_) { return {}; }
+}
+
+function buildCaption(body, meta) {
+  const isEp = body.type === 'episode';
+  const title = meta.title || body.title || 'Unknown';
+  const lines = [];
+  let head = `${isEp ? '📺' : '🎬'} <b>${escapeHtml(title)}</b>`;
+  if (!isEp && meta.year) head += ` (${meta.year})`;
+  lines.push(head);
+  if (isEp) {
+    lines.push(`עונה ${body.season} · פרק ${body.episode}` +
+      (meta.ep_name ? ` — ${escapeHtml(meta.ep_name)}` : ''));
+  }
+  const tags = (meta.genres || []).slice(0, 5).map(hashtag).filter(Boolean);
+  if (tags.length) lines.push(tags.join(' '));
+  const links = [];
+  if (meta.imdb_id) links.push(`<a href="https://www.imdb.com/title/${meta.imdb_id}/">IMDb</a>`);
+  const tid = String(body.tmdb_id || '').trim();
+  if (tid) links.push(`<a href="https://www.themoviedb.org/${isEp ? 'tv' : 'movie'}/${tid}">TMDb</a>`);
+  if (links.length) lines.push(links.join(' | '));
+  if (meta.overview) { lines.push(''); lines.push(escapeHtml(meta.overview.slice(0, 500))); }
+  lines.push('');
+  lines.push('🤖 תרגום AI · #כתוביות_AI #עברית');
+  let cap = lines.join('\n');
+  if (cap.length > 1024) cap = cap.slice(0, 1020) + '…';
+  return cap;
+}
+
+async function sendPhoto(env, photoUrl, caption) {
+  try {
+    const r = await fetch(tg(env.BOT_TOKEN, 'sendPhoto'), {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ chat_id: String(env.CHANNEL_ID), photo: photoUrl, caption, parse_mode: 'HTML' }),
+    });
+    return (await r.json()).ok;
+  } catch (_) { return false; }
+}
+
+async function uploadSrt(env, filename, srtText, caption, parseMode) {
   const fd = new FormData();
   fd.append('chat_id', String(env.CHANNEL_ID));
-  fd.append('caption', String(caption).slice(0, 1024));
-  fd.append('document',
-    new Blob([srtText], { type: 'application/x-subrip' }), filename);
+  if (caption) fd.append('caption', String(caption).slice(0, 1024));
+  if (parseMode) fd.append('parse_mode', parseMode);
+  fd.append('document', new Blob([srtText], { type: 'application/x-subrip' }), filename);
   const r = await fetch(tg(env.BOT_TOKEN, 'sendDocument'), { method: 'POST', body: fd });
   const data = await r.json();
   if (!data.ok) throw new Error('sendDocument: ' + JSON.stringify(data).slice(0, 300));
@@ -93,9 +161,7 @@ export default {
       const variants = await readIndex(env, key);
       return json({
         ok: true, key, count: variants.length,
-        variants: variants.map(v => ({
-          hash: v.hash, release: v.release, source_lang: v.source_lang, ts: v.ts,
-        })),
+        variants: variants.map(v => ({ hash: v.hash, release: v.release, source_lang: v.source_lang, ts: v.ts })),
       });
     }
 
@@ -105,12 +171,10 @@ export default {
       if (!variants.length) return new Response('not found', { status: 404 });
       const want = (p.hash || '').trim();
       let v = want ? variants.find(x => x.hash === want) : null;
-      if (!v) v = variants[variants.length - 1];   // newest as fallback
+      if (!v) { if (want) return new Response('not found', { status: 404 }); v = variants[variants.length - 1]; }
       const srt = await downloadById(env, v.file_id);
       if (!srt) return new Response('fetch failed', { status: 502 });
-      return new Response(srt, {
-        headers: { 'content-type': 'application/x-subrip; charset=utf-8' },
-      });
+      return new Response(srt, { headers: { 'content-type': 'application/x-subrip; charset=utf-8' } });
     }
 
     if (path === '/contribute' && request.method === 'POST') {
@@ -126,36 +190,29 @@ export default {
       const id = String(body.tmdb_id || body.imdb_id || '').trim();
       if (!id) return json({ ok: false, error: 'no id' }, 400);
 
-      const key = keyFor({
-        lang, tmdb: body.tmdb_id, imdb: body.imdb_id,
-        type: body.type, season: body.season, episode: body.episode,
-      });
+      const key = keyFor({ lang, tmdb: body.tmdb_id, imdb: body.imdb_id, type: body.type, season: body.season, episode: body.episode });
       const hash = (body.source_hash || '').trim();
       const variants = await readIndex(env, key);
-      if (hash && variants.some(v => v.hash === hash))
-        return json({ ok: true, dedup: true, key });
-      if (variants.length >= MAX_VARIANTS)
-        return json({ ok: false, error: 'too many variants' }, 429);
+      if (hash && variants.some(v => v.hash === hash)) return json({ ok: true, dedup: true, key });
+      if (variants.length >= MAX_VARIANTS) return json({ ok: false, error: 'too many variants' }, 429);
 
       const rel = (body.release || '').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 80) || ('tmdb' + id);
       const filename = `${rel}.he.srt`;
-      const caption = [
-        (body.title || '').slice(0, 120),
-        body.type === 'episode' ? `S${body.season}E${body.episode}` : (body.year || ''),
-        `tmdb:${id}`,
-        `src:${body.source_lang || '?'}`,
-        '#AI #he',
-      ].filter(Boolean).join(' · ');
+      const meta = await tmdbMeta(env, body);
+      const caption = buildCaption(body, meta);
 
       let fileId;
-      try { fileId = await uploadSrt(env, filename, srt, caption); }
-      catch (e) { return json({ ok: false, error: String(e).slice(0, 200) }, 502); }
+      try {
+        if (meta.poster_url) {
+          await sendPhoto(env, meta.poster_url, caption);
+          fileId = await uploadSrt(env, filename, srt, `📄 <code>${escapeHtml(filename)}</code>`, 'HTML');
+        } else {
+          fileId = await uploadSrt(env, filename, srt, caption, 'HTML');
+        }
+      } catch (e) { return json({ ok: false, error: String(e).slice(0, 200) }, 502); }
       if (!fileId) return json({ ok: false, error: 'no file_id' }, 502);
 
-      variants.push({
-        hash, release: body.release || '', source_lang: body.source_lang || '',
-        file_id: fileId, ts: Date.now(),
-      });
+      variants.push({ hash, release: body.release || '', source_lang: body.source_lang || '', file_id: fileId, ts: Date.now() });
       await env.POOL.put(key, JSON.stringify(variants));
       return json({ ok: true, stored: true, key });
     }
