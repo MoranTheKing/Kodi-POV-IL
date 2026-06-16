@@ -321,3 +321,7 @@ msgstr "שתף עכשיו את כל התרגומים שבמטמון (חד-פעמ
 msgctxt "#32504"
 msgid "Remember picked source (experimental, capture only)"
 msgstr "זכור את המקור שנבחר (ניסיוני, לכידה בלבד)"
+
+msgctxt "#32505"
+msgid "Check remembered sources (diagnostic)"
+msgstr "בדוק מקורות שנשמרו (אבחון)"
