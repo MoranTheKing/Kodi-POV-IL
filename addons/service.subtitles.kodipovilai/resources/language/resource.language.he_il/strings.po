@@ -317,3 +317,7 @@ msgstr "שתף את תרגומי ה-AI שלי למאגר הקהילתי"
 msgctxt "#32503"
 msgid "Share my cached translations now (one-time)"
 msgstr "שתף עכשיו את כל התרגומים שבמטמון (חד-פעמי)"
+
+msgctxt "#32504"
+msgid "Remember picked source (experimental, capture only)"
+msgstr "זכור את המקור שנבחר (ניסיוני, לכידה בלבד)"
