@@ -348,6 +348,13 @@
     </category>
 
     <category id="advanced" label="32400"> <!-- Advanced -->
+      <group id="experimental">
+        <setting id="remember_source" type="boolean" label="32504"> <!-- Remember picked source (experimental, capture only) -->
+          <level>0</level>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
+      </group>
       <group id="debug">
         <setting id="log_level" type="string" label="32401"> <!-- Log level -->
           <level>1</level>
