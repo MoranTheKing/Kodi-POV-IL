@@ -100,14 +100,28 @@ async function tmdbMeta(env, body) {
   } catch (_) { return {}; }
 }
 
-// Build a clean, human-readable .srt filename from metadata. The client's
-// `release` is often a tokenized stream/temp filename (e.g. a debrid URL
-// basename), which makes for an ugly Telegram document name. Prefer the
+// A real subtitle release name carries a year and/or a quality/source token
+// (1080p, BluRay, x265, ...). The client's `release` can also be a tokenized
+// stream/temp basename with none of those -- we reject those and fall back to
+// the TMDB title so the Telegram filename stays meaningful.
+function looksLikeRelease(s) {
+  if (!s || s.length < 5) return false;
+  if (/(?:^|[^0-9])(?:19|20)\d{2}(?:[^0-9]|$)/.test(s)) return true;
+  if (/\b(2160p|1080p|720p|480p|bluray|blu-ray|webrip|web-dl|webdl|web|hdtv|brrip|bdrip|dvdrip|hdrip|x264|x265|h264|h265|hevc|xvid|aac|ac3|dts)\b/i.test(s)) return true;
+  return false;
+}
+
+// Build a clean, human-readable .srt filename. Prefer a real release name (it
+// tells you which video version the subtitle is synced to); otherwise use the
 // English/original TMDB title + year (+ SxxEyy for episodes); fall back to the
-// id. Purely cosmetic -- the pool is indexed by id/season/episode, not by name.
+// id. Cosmetic only -- the pool is indexed by id/season/episode, not the name.
 function cleanFilename(body, meta) {
   const isEp = body.type === 'episode';
   const id = String(body.tmdb_id || body.imdb_id || '').trim();
+  const rel = String(body.release || '')
+    .replace(/[^A-Za-z0-9._-]/g, '.').replace(/\.{2,}/g, '.')
+    .replace(/^\.+|\.+$/g, '').slice(0, 80);
+  if (looksLikeRelease(rel)) return rel + '.he.srt';
   let base = (meta.original_title || meta.title || body.title || '')
     .replace(/[^A-Za-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '').slice(0, 60);
   if (!base) base = (isEp ? 'tv' : 'movie') + (id || '');
