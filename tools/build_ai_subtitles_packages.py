@@ -51,6 +51,7 @@ STANDALONE_LIB_FILES = {
     "local_subs.py",
     "pool.py",
     "prompt.py",
+    "source_memory.py",
     "skin_dialog_subtitles_patcher.py",
     "skin_dialog_subtitles_row_patcher.py",
     "srt.py",
