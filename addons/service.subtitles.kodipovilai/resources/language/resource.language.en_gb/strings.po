@@ -333,3 +333,7 @@ msgstr "Share my cached translations now (one-time)"
 msgctxt "#32504"
 msgid "Remember picked source (experimental, capture only)"
 msgstr "Remember picked source (experimental, capture only)"
+
+msgctxt "#32505"
+msgid "Check remembered sources (diagnostic)"
+msgstr "Check remembered sources (diagnostic)"
