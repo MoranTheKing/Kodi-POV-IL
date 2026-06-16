@@ -1,3 +1,9 @@
+v0.2.146
+- Fix: the "Community pool" settings category showed up empty (no toggles).
+  In Kodi 21's settings format every category must wrap its settings in a
+  <group>; the pool category was missing it, so "Use community pool" and
+  "Share my AI translations" never rendered. Wrapped them in a group.
+
 v0.2.145
 - Community pool: automatically share translations you ALREADY have cached.
   When "Share my AI translations" is on, re-watching something you translated
