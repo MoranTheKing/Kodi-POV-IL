@@ -290,6 +290,7 @@
     </category>
 
     <category id="pool" label="32500"> <!-- Community pool -->
+      <group id="1">
         <setting id="pool_use" type="boolean" label="32501"> <!-- Use community pool -->
           <level>0</level>
           <default>false</default>
@@ -298,6 +299,7 @@
           <level>0</level>
           <default>false</default>
         </setting>
+      </group>
     </category>
 
     <category id="advanced" label="32400"> <!-- Advanced -->
