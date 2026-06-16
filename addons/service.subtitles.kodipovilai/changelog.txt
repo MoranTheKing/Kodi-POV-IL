@@ -1,3 +1,12 @@
+v0.2.160
+- Groundwork (capture only, OFF by default) for "remember the source you
+  picked": a new experimental setting "Remember picked source" (Advanced).
+  When ON, the source you choose for a movie/episode is recorded
+  (name/hash/quality/provider) so a future phase can auto-pick the same or a
+  similar one. This release ONLY records -- it changes no playback behavior.
+  The POV patch that records it is compile-checked before it's written, so it
+  can never break playback, and it does nothing while the setting is off.
+
 v0.2.159
 - Fix: 0.2.158 wrongly enabled POV Auto Play, which skipped the source/servers
   dialog even on the FIRST watch. Reverted Auto Play to off (one-shot), so you
