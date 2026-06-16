@@ -1,3 +1,12 @@
+v0.2.156
+- CRITICAL fix: after a quick update some users were left with DarkSubs
+  DISABLED and therefore no subtitles / no AI translation (the post-update
+  DarkSubs reload cycle could fail to re-enable it). Two guards: (1) the reload
+  cycle now verifies DarkSubs actually came back enabled and retries the enable
+  several times; (2) a new early-startup check re-enables DarkSubs if it's
+  found installed-but-disabled -- which also recovers anyone already stuck.
+  No manual re-enabling needed.
+
 v0.2.155
 - "Share my cached translations" now runs fully in the BACKGROUND: the button
   confirms, then hands off to a detached worker, so the settings UI is freed
