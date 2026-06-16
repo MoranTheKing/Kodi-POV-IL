@@ -1072,9 +1072,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
 
     try:
         from concurrent.futures import ThreadPoolExecutor, as_completed
-        with ThreadPoolExecutor(max_workers=parallel) as pool:
+        with ThreadPoolExecutor(max_workers=parallel) as executor:
             future_to_idx = {
-                pool.submit(_translate_one, i + 1, ch): i + 1
+                executor.submit(_translate_one, i + 1, ch): i + 1
                 for i, ch in enumerate(chunks)
             }
             for future in as_completed(future_to_idx):
