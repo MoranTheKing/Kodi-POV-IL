@@ -1,3 +1,10 @@
+v0.2.148
+- Community pool reliability: the ".shared" marker is now written only AFTER a
+  successful upload. Before, it was set before the POST, so a transient network
+  failure would mark the file as shared and it would never retry. Now a failed
+  contribution simply retries on the next watch; a successful one is marked and
+  never re-uploaded. (The server still dedups by source hash regardless.)
+
 v0.2.147
 - Fix (for real this time): the "Community pool" settings tab didn't appear at
   all. Its two toggles were the only settings in the category and neither had
