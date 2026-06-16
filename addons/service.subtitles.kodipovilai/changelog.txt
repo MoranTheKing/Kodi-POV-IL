@@ -1,3 +1,31 @@
+v0.2.155
+- "Share my cached translations" now runs fully in the BACKGROUND: the button
+  confirms, then hands off to a detached worker, so the settings UI is freed
+  immediately and you can keep using Kodi. Progress shows in the bottom-right
+  banner and a toast reports the result when done -- no blocking dialog and no
+  waiting on a loading screen.
+
+v0.2.154
+- Community pool hardening against Telegram rate limits (for the wider
+  rollout): the bulk "share my cache" run now paces uploads (~6s apart) so a
+  large cache can't burst past the channel's ~20-messages/min limit. The Worker
+  honours Telegram's 429 retry_after (one bounded retry) on every channel call,
+  and caches each subtitle at Cloudflare's edge by file_id -- so repeated pulls
+  are served from the edge and never hit Telegram's getFile limit (also much
+  faster). (Worker redeploy required.) Note: this is unrelated to the
+  "userbot blocked across IPs" issue -- that affects Telethon user accounts
+  (like DarkSubs), not a server-side Bot API token.
+
+v0.2.153
+- Community pool is now ON by default (both pull and share). New installs get
+  it via the settings defaults; existing installs are flipped on once by a
+  marker-gated startup migration (a later manual opt-out sticks).
+- "Share my cached translations" now has a run-lock so an accidental double
+  click can't post the same file to the channel twice.
+- Pool filenames: prefer the subtitle's real release name (e.g.
+  "Show.2026.1080p.WEBRip.x265-GRP") when it looks like one, falling back to
+  the TMDB title for tokenized stream/temp names. (Worker redeploy required.)
+
 v0.2.152
 - Community pool: "Share my cached translations now" button (under Community
   pool). One-time migration that uploads every Hebrew translation already in

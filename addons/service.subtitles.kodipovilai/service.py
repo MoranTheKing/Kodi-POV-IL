@@ -1869,6 +1869,36 @@ def _maybe_default_fast_first_chunk():
             pass
 
 
+def _maybe_default_pool_on():
+    """One-shot: turn the community pool ON (both pull and share) for existing
+    users who are still on the old default-off. Gated by a marker so it fires
+    once per install; if the user later turns either toggle off manually we
+    don't re-enable on subsequent startups. New installs get it on via the
+    settings.xml defaults; this covers everyone who installed before the
+    default flip."""
+    try:
+        from resources.lib import kodi_utils
+    except Exception:
+        return
+    try:
+        if kodi_utils.get_setting('_pool_default_on_v1', '') == '1':
+            return
+        # Only flip toggles still on the old default 'false'; leave an explicit
+        # choice (already 'true') alone.
+        for key in ('pool_use', 'pool_share'):
+            if kodi_utils.get_setting(key, 'false') == 'false':
+                kodi_utils.set_setting(key, 'true')
+        kodi_utils.set_setting('_pool_default_on_v1', '1')
+        kodi_utils.log('community pool enabled by default (migration v1)',
+                       level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log('pool default-on migration failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def main():
     if xbmc is None:
         return
@@ -2034,6 +2064,11 @@ def main():
     # One-shot: flip `fast_first_chunk` default from off -> on for
     # existing users on the old default. Marker-gated.
     _maybe_default_fast_first_chunk()
+
+    # One-shot: turn the community pool ON (pull + share) for existing users
+    # still on the old default-off. New installs get it via settings.xml
+    # defaults. Marker-gated so a later manual opt-out sticks.
+    _maybe_default_pool_on()
 
     # One-shot first-launch dialog for Arctic Fuse 3. Skin-gated +
     # marker-gated so it only fires for users who have actually

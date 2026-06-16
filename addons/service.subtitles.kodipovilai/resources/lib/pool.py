@@ -9,6 +9,7 @@
 import json
 import os
 import threading
+import time
 
 from resources.lib import kodi_utils
 
@@ -28,6 +29,10 @@ _UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
        '(KHTML, like Gecko) Chrome/120.0 Safari/537.36')
 _GET_TIMEOUT = 8
 _POST_TIMEOUT = 25
+# Seconds to wait between bulk-migration uploads. Each contribution is two
+# channel messages (poster + document); Telegram allows ~20/min to a channel,
+# so ~6s/contribution keeps the bulk run comfortably under the limit.
+_BULK_THROTTLE_SEC = 6.0
 
 
 def use_enabled():
@@ -320,6 +325,20 @@ def share_cache(progress_cb=None, should_cancel=None):
         # written by _post only on success, so a failure simply retries next run.
         _post(body, marker_path=fp)
         submitted += 1
+        # Throttle so a large cache doesn't burst past Telegram's per-channel
+        # rate limit (~20 msgs/min; each contribution is 2 messages). Sleep in
+        # short slices so a cancel is still responsive.
+        if i < total - 1:
+            waited = 0.0
+            while waited < _BULK_THROTTLE_SEC:
+                if should_cancel is not None:
+                    try:
+                        if should_cancel():
+                            break
+                    except Exception:
+                        pass
+                time.sleep(0.5)
+                waited += 0.5
     return (submitted, skipped, total)
 
 
