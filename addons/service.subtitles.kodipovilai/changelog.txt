@@ -1,3 +1,10 @@
+v0.2.151
+- Silence Kodi log spam: every setting now declares a <control> (toggle for
+  booleans, label for the hidden status/storage strings). The hidden hook
+  heartbeat settings were read/written on every DarkSubs fire without a
+  control, flooding the log with "missing <control> tag" errors. No visible
+  change; just a cleaner log.
+
 v0.2.150
 - CRITICAL fix: with "Use community pool" ON, every fresh (non-cached) AI
   translation crashed with "cannot access local variable 'pool'" and fell back
