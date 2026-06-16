@@ -1899,6 +1899,42 @@ def _maybe_default_pool_on():
             pass
 
 
+def _ensure_darksubs_enabled():
+    """Recover DarkSubs (service.subtitles.All_Subs) if it was left disabled --
+    e.g. a reload cycle that didn't re-enable cleanly after a quick update.
+    The whole subtitle flow (and our AI-translation hook) depends on DarkSubs
+    being enabled, so an installed-but-disabled DarkSubs means no subtitles and
+    no translation at all. Cheap, idempotent, runs early every startup. Only
+    touches state when DarkSubs is installed AND currently disabled."""
+    if xbmc is None:
+        return
+    try:
+        import json as _json
+        get = _json.dumps({
+            'jsonrpc': '2.0', 'id': 1,
+            'method': 'Addons.GetAddonDetails',
+            'params': {'addonid': 'service.subtitles.All_Subs',
+                       'properties': ['enabled']},
+        })
+        data = _json.loads(xbmc.executeJSONRPC(get) or '{}')
+        addon = (data.get('result') or {}).get('addon') or {}
+        if 'enabled' not in addon:
+            return  # not installed / unknown -> leave alone
+        if addon.get('enabled'):
+            return  # already enabled -> nothing to do
+        en = _json.dumps({
+            'jsonrpc': '2.0', 'id': 1,
+            'method': 'Addons.SetAddonEnabled',
+            'params': {'addonid': 'service.subtitles.All_Subs',
+                       'enabled': True},
+        })
+        xbmc.executeJSONRPC(en)
+        xbmc.log('[' + ADDON_ID + '] re-enabled DarkSubs (it was disabled)',
+                 level=xbmc.LOGINFO)
+    except Exception:
+        pass
+
+
 def main():
     if xbmc is None:
         return
@@ -1925,6 +1961,11 @@ def main():
     # will restart Kodi anyway, and we don't want to spend cycles
     # patching things they'll re-run on the next boot.
     _maybe_heal_wizard()
+
+    # Recover DarkSubs first if a previous reload cycle left it disabled after
+    # a quick update -- otherwise no subtitles and no AI translation fire at
+    # all. Runs before the patchers (which patch its files on disk regardless).
+    _ensure_darksubs_enabled()
 
     # Self-healing DarkSubs hook injection. Runs every startup so
     # if upstream DarkSubs updates and overwrites our hook, it
