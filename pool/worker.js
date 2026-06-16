@@ -159,35 +159,80 @@ function buildCaption(body, meta) {
   return cap;
 }
 
+const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
+// Telegram rate-limits a bot per token / per chat (~20 msgs/min to a channel).
+// On 429 it returns parameters.retry_after seconds. Do ONE bounded retry that
+// honours retry_after (capped, so we never blow the Worker's request budget);
+// if it's still throttled, the caller treats it as a failure and the client
+// retries later. doFetch is a thunk so the request body (FormData) is rebuilt
+// fresh for the retry.
+async function tgRetry(doFetch) {
+  let r = await doFetch();
+  if (r.status === 429) {
+    let wait = 2;
+    try {
+      const j = await r.clone().json();
+      wait = (j.parameters && j.parameters.retry_after) || 2;
+    } catch (_) { /* keep default */ }
+    if (wait <= 12) { await sleep(wait * 1000 + 300); r = await doFetch(); }
+  }
+  return r;
+}
+
 async function sendPhoto(env, photoUrl, caption) {
   try {
-    const r = await fetch(tg(env.BOT_TOKEN, 'sendPhoto'), {
+    const r = await tgRetry(() => fetch(tg(env.BOT_TOKEN, 'sendPhoto'), {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ chat_id: String(env.CHANNEL_ID), photo: photoUrl, caption, parse_mode: 'HTML' }),
-    });
+    }));
     return (await r.json()).ok;
   } catch (_) { return false; }
 }
 
 async function uploadSrt(env, filename, srtText, caption, parseMode) {
-  const fd = new FormData();
-  fd.append('chat_id', String(env.CHANNEL_ID));
-  if (caption) fd.append('caption', String(caption).slice(0, 1024));
-  if (parseMode) fd.append('parse_mode', parseMode);
-  fd.append('document', new Blob([srtText], { type: 'application/x-subrip' }), filename);
-  const r = await fetch(tg(env.BOT_TOKEN, 'sendDocument'), { method: 'POST', body: fd });
+  const buildFd = () => {
+    const fd = new FormData();
+    fd.append('chat_id', String(env.CHANNEL_ID));
+    if (caption) fd.append('caption', String(caption).slice(0, 1024));
+    if (parseMode) fd.append('parse_mode', parseMode);
+    fd.append('document', new Blob([srtText], { type: 'application/x-subrip' }), filename);
+    return fd;
+  };
+  const r = await tgRetry(() => fetch(tg(env.BOT_TOKEN, 'sendDocument'), { method: 'POST', body: buildFd() }));
   const data = await r.json();
   if (!data.ok) throw new Error('sendDocument: ' + JSON.stringify(data).slice(0, 300));
   return data.result && data.result.document && data.result.document.file_id;
 }
 
+// Edge-cached fetch of a stored SRT by its (immutable) Telegram file_id. The
+// first pull downloads from Telegram and stores the bytes in Cloudflare's edge
+// cache; subsequent pulls are served from the edge and never touch the Telegram
+// getFile API -- which keeps many concurrent /sub requests off the bot's rate
+// limit and makes pulls much faster.
 async function downloadById(env, fileId) {
-  const gf = await fetch(tg(env.BOT_TOKEN, 'getFile') + '?file_id=' + encodeURIComponent(fileId));
+  const cache = caches.default;
+  const cacheKey = new Request('https://pool-file-cache/' + encodeURIComponent(fileId));
+  try {
+    const hit = await cache.match(cacheKey);
+    if (hit) return await hit.text();
+  } catch (_) { /* fall through to live fetch */ }
+
+  const gf = await tgRetry(() => fetch(tg(env.BOT_TOKEN, 'getFile') + '?file_id=' + encodeURIComponent(fileId)));
   const gd = await gf.json();
   if (!gd.ok || !gd.result || !gd.result.file_path) return null;
   const fr = await fetch(`https://api.telegram.org/file/bot${env.BOT_TOKEN}/${gd.result.file_path}`);
   if (!fr.ok) return null;
-  return await fr.text();
+  const text = await fr.text();
+  try {
+    await cache.put(cacheKey, new Response(text, {
+      headers: {
+        'content-type': 'application/x-subrip; charset=utf-8',
+        'cache-control': 'public, max-age=2592000',
+      },
+    }));
+  } catch (_) { /* caching is best-effort */ }
+  return text;
 }
 
 export default {
