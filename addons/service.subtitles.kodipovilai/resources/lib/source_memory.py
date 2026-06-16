@@ -63,3 +63,27 @@ def count():
         return len([f for f in os.listdir(d) if f.endswith('.json')])
     except OSError:
         return 0
+
+
+def dir_path():
+    """The source_memory directory path (for diagnostics)."""
+    return _dir() or ''
+
+
+def list_all():
+    """Return [(key, record), ...] for every remembered source (diagnostics)."""
+    d = _dir()
+    out = []
+    if not d or not os.path.isdir(d):
+        return out
+    try:
+        names = sorted(f for f in os.listdir(d) if f.endswith('.json'))
+    except OSError:
+        return out
+    for fn in names:
+        try:
+            with open(os.path.join(d, fn), 'r', encoding='utf-8') as f:
+                out.append((fn[:-5], json.loads(f.read())))
+        except (IOError, OSError, ValueError):
+            pass
+    return out
