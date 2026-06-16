@@ -1,3 +1,11 @@
+v0.2.162
+- Fix the "remember picked source" capture hook: the old anchor only matched
+  one POV phrasing, so on many installs it reported "didn't match POV version"
+  and recorded nothing. Now it anchors on the unique `yield link` site with a
+  tolerant match that handles every POV variant (new/old phrasing, and the
+  form left after the source-name patcher), still compile-checked so it can't
+  break playback. Capture stays OFF by default.
+
 v0.2.161
 - Diagnostic for "remember picked source": a "Check remembered sources" button
   (Advanced) shows whether the setting is on, whether POV's capture hook is
