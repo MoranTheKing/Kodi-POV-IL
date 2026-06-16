@@ -1223,23 +1223,30 @@ def _handle_clear_cache(_params):
 
 
 def _handle_pool_share_cache(_params):
-    """Bulk-share every cached Hebrew translation to the community pool.
-    One-time migration for translations made before sharing was on (or that
-    DarkSubs serves from its own cache, so our auto-upload never fires). Safe
-    to run repeatedly -- the server dedups by the Hebrew result hash and each
-    file is marked once shared."""
+    """Button handler for "share my cached translations". Confirms with the
+    user, then hands the actual work to a SEPARATE detached RunScript
+    (action=pool_share_cache_run) so the settings UI is freed immediately and
+    the upload runs in the background -- the user can keep using Kodi while it
+    paces uploads. Safe to run repeatedly: the server dedups by the Hebrew
+    result hash and each file is marked once shared."""
     try:
         from resources.lib import pool, kodi_utils
     except Exception as e:
         xbmcgui.Dialog().ok('Kodi POV IL', 'Internal error: {0}'.format(e))
         return
 
+    # Run-lock on the global home window (visible across processes) so an
+    # accidental double click can't start two background runs.
+    win = xbmcgui.Window(10000)
+    if win.getProperty('ai_subs.pool_migrating') == '1':
+        xbmcgui.Dialog().ok('Kodi POV IL', 'שיתוף המטמון כבר פועל ברקע.')
+        return
+
     if not pool.share_enabled():
-        turn_on = xbmcgui.Dialog().yesno(
-            'Kodi POV IL',
-            'שיתוף למאגר הקהילתי כבוי. להפעיל אותו עכשיו ולשתף את כל '
-            'התרגומים שבמטמון?')
-        if not turn_on:
+        if not xbmcgui.Dialog().yesno(
+                'Kodi POV IL',
+                'שיתוף למאגר הקהילתי כבוי. להפעיל אותו עכשיו ולשתף את כל '
+                'התרגומים שבמטמון?'):
             return
         try:
             kodi_utils.set_setting('pool_share', 'true')
@@ -1248,8 +1255,38 @@ def _handle_pool_share_cache(_params):
 
     if not xbmcgui.Dialog().yesno(
             'Kodi POV IL',
-            'לשתף את כל תרגומי ה-AI ששמורים אצלך במטמון אל המאגר הקהילתי?\n'
-            'פעולה חד-פעמית; כפילויות נמנעות אוטומטית.'):
+            'לשתף ברקע את כל תרגומי ה-AI ששמורים אצלך במטמון אל המאגר '
+            'הקהילתי?\nאפשר להמשיך להשתמש בקודי בזמן זה. פעולה חד-פעמית; '
+            'כפילויות נמנעות אוטומטית.'):
+        return
+
+    # Claim the lock BEFORE firing the worker so a second click is rejected.
+    win.setProperty('ai_subs.pool_migrating', '1')
+    try:
+        xbmc.executebuiltin(
+            'RunScript(service.subtitles.kodipovilai,'
+            'action=pool_share_cache_run)')
+        kodi_utils.notify('שיתוף המטמון התחיל ברקע — אפשר להמשיך כרגיל',
+                          time_ms=5000)
+    except Exception as e:
+        win.clearProperty('ai_subs.pool_migrating')
+        _safe_log('pool_share_cache dispatch failed: {0}'.format(e),
+                  level='ERROR')
+
+
+def _handle_pool_share_cache_run(_params):
+    """Background worker for the cache migration (launched detached by
+    _handle_pool_share_cache). Shows a non-modal progress banner and a final
+    toast -- no modal dialog, so it never interrupts the user. Releases the
+    run-lock when done."""
+    win = xbmcgui.Window(10000)
+    try:
+        from resources.lib import pool, kodi_utils
+    except Exception:
+        try:
+            win.clearProperty('ai_subs.pool_migrating')
+        except Exception:
+            pass
         return
 
     progress = None
@@ -1275,23 +1312,27 @@ def _handle_pool_share_cache(_params):
         except Exception:
             return False
 
+    submitted = skipped = total = 0
     try:
         submitted, skipped, total = pool.share_cache(
             progress_cb=report, should_cancel=cancelled)
     except Exception as e:
-        _safe_log('pool_share_cache crashed: {0}'.format(e), level='ERROR')
-        submitted, skipped, total = (0, 0, 0)
+        _safe_log('pool_share_cache_run crashed: {0}'.format(e),
+                  level='ERROR')
     finally:
+        win.clearProperty('ai_subs.pool_migrating')
         if progress is not None:
             try:
                 progress.close()
             except Exception:
                 pass
-
-    xbmcgui.Dialog().ok(
-        'Kodi POV IL',
-        'הסתיים. נשלחו {0} תרגומים למאגר, דולגו {1} (מתוך {2}).\n'
-        'כפילויות נמנעו אוטומטית בצד השרת.'.format(submitted, skipped, total))
+        try:
+            kodi_utils.notify(
+                'שיתוף המטמון הסתיים — נשלחו {0}, דולגו {1} (מתוך {2})'.format(
+                    submitted, skipped, total),
+                time_ms=6000)
+        except Exception:
+            pass
 
 
 def _handle_translate_file(params):
@@ -1352,6 +1393,15 @@ def _handle_translate_file(params):
     # and proper title come from VideoPlayer InfoLabels if the
     # video is currently playing; otherwise we degrade gracefully.
     info = kodi_utils.current_video_info()
+
+    # The source SRT's basename is the subtitle's real release name (e.g.
+    # "Show.2026.1080p.WEBRip.x265-GRP") -- a far better Telegram filename than
+    # the video's tokenized stream path. Pass it as the pool release; the Worker
+    # falls back to the TMDB title if it doesn't look like a real release.
+    try:
+        info['release'] = os.path.splitext(os.path.basename(in_path))[0]
+    except Exception:
+        pass
 
     # Reuse the core orchestration: translate via a temp link payload
     # that points at the source file we already have. resolve() does
@@ -2100,6 +2150,8 @@ def main():
             _handle_clear_cache(params)
         elif action == 'pool_share_cache':
             _handle_pool_share_cache(params)
+        elif action == 'pool_share_cache_run':
+            _handle_pool_share_cache_run(params)
         elif action == 'purge_temp':
             _handle_purge_temp(params)
         elif action == 'translate_file':
