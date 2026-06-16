@@ -1,3 +1,14 @@
+v0.2.157
+- Community pool quality gate: a translation is shared only if it looks
+  complete (didn't lose blocks vs the source) and is genuinely Hebrew (not a
+  failed/mostly-English result). Broken or partial translations are kept for
+  the local user but NOT uploaded, so they can't pollute the pool. (Applies to
+  auto-share, re-watch backfill, and the bulk "share my cache".) Note: this
+  can't detect a mis-synced source -- the text is correct, only timing differs.
+- Restored the remote "Back" button to STOP playback in fullscreen video
+  (it had been lost when the keymap was emptied), via a minimal, safe
+  FullscreenVideo-only keymap.
+
 v0.2.156
 - CRITICAL fix: after a quick update some users were left with DarkSubs
   DISABLED and therefore no subtitles / no AI translation (the post-update

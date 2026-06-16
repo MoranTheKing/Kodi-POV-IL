@@ -300,6 +300,16 @@ def share_cache(progress_cb=None, should_cancel=None):
         if not text:
             skipped += 1
             continue
+        # Quality gate: don't bulk-share something that isn't really Hebrew
+        # (a failed/empty translation left in cache). We have no source here to
+        # compare entry counts, so this is the Hebrew-content check only.
+        try:
+            from . import srt as _srt
+            if not _srt.looks_hebrew(text):
+                skipped += 1
+                continue
+        except Exception:
+            pass
         tmdb_id, title, year = '', '', ''
         if _tmdb is not None:
             try:

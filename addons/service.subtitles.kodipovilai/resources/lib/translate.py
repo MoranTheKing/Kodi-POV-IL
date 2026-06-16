@@ -435,6 +435,27 @@ def _content_hash(text):
     return _h.sha1(text.encode('utf-8', errors='replace')).hexdigest()[:16]
 
 
+def _pool_quality_ok(src_text, final):
+    """Quality gate before SHARING a translation to the community pool. Skips
+    obviously-broken output so it can't pollute the pool: a truncated result
+    (lost too many blocks vs the source -> failed/partial chunks) or one that
+    isn't really Hebrew (translation didn't happen). NOTE: it cannot catch a
+    mis-synced SOURCE -- the text is correct, only the timing differs -- so
+    this raises reliability but isn't a perfect guarantee. Never blocks on a
+    checker error (returns True)."""
+    try:
+        if not final:
+            return False
+        if src_text:
+            src_n = srt.count_entries(src_text)
+            out_n = srt.count_entries(final)
+            if src_n >= 5 and out_n < src_n * 0.85:
+                return False
+        return srt.looks_hebrew(final)
+    except Exception:
+        return True
+
+
 def _backfill_pool_async(info, translated_path, local_source, wyzie_url,
                          source_lang):
     """Share an ALREADY-cached Hebrew translation to the community pool, in
@@ -468,7 +489,10 @@ def _backfill_pool_async(info, translated_path, local_source, wyzie_url,
                 raw = wyzie.download(wyzie_url)
             if not raw:
                 return
-            cid = _content_hash(_prepare_source(raw))
+            prepared = _prepare_source(raw)
+            if not _pool_quality_ok(prepared, cached):
+                return
+            cid = _content_hash(prepared)
             pool.contribute_once(info, cid, source_lang, cached,
                                  marker_path=translated_path)
         except Exception as e:
@@ -708,15 +732,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             # Backfill: we already have the content hash here, so share the
             # cached file directly (contribute_once = marker + server dedup).
             if pool is not None and pool.share_enabled():
-                try:
-                    pool.contribute_once(
-                        info, content_id, source_lang,
-                        cache.load_text(translated_by_content) or '',
-                        marker_path=translated_by_content)
-                except Exception as e:
-                    kodi_utils.log(
-                        'pool backfill (content) failed: {0}'.format(e),
-                        level='DEBUG')
+                _cached_he = cache.load_text(translated_by_content) or ''
+                if _pool_quality_ok(src_text, _cached_he):
+                    try:
+                        pool.contribute_once(
+                            info, content_id, source_lang, _cached_he,
+                            marker_path=translated_by_content)
+                    except Exception as e:
+                        kodi_utils.log(
+                            'pool backfill (content) failed: {0}'.format(e),
+                            level='DEBUG')
             return translated_by_content
 
     # No hit: settle on the early-source-id slot as the canonical
@@ -1203,12 +1228,17 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # by pool_share; only reached for a genuinely new translation (local cache
     # and pool both missed above).
     if pool is not None and pool.share_enabled():
-        try:
-            pool.contribute_once(info, content_id, source_lang, final,
-                                 marker_path=translated)
-        except Exception as e:
-            kodi_utils.log('pool contribute dispatch failed: {0}'.format(e),
-                           level='DEBUG')
+        if _pool_quality_ok(src_text, final):
+            try:
+                pool.contribute_once(info, content_id, source_lang, final,
+                                     marker_path=translated)
+            except Exception as e:
+                kodi_utils.log('pool contribute dispatch failed: {0}'.format(e),
+                               level='DEBUG')
+        else:
+            kodi_utils.log(
+                'pool: skipped share -- translation looks incomplete or not '
+                'Hebrew (quality gate)', level='INFO')
 
     # Append today's Gemini quota usage to the success toast, but
     # only if the user is on the tracked model (3.1 Flash Lite).
