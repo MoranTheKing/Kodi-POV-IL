@@ -1234,6 +1234,16 @@ def _handle_pool_share_cache(_params):
         xbmcgui.Dialog().ok('Kodi POV IL', 'Internal error: {0}'.format(e))
         return
 
+    # Run-lock: a double-click spawns two RunScript processes; without this
+    # both would iterate the cache and post the same files (the server dedups
+    # by result hash so the KV index stays clean, but Telegram would still get
+    # duplicate messages). The lock lives on the global home window so it's
+    # visible across processes.
+    win = xbmcgui.Window(10000)
+    if win.getProperty('ai_subs.pool_migrating') == '1':
+        xbmcgui.Dialog().ok('Kodi POV IL', 'שיתוף המטמון כבר פועל כעת.')
+        return
+
     if not pool.share_enabled():
         turn_on = xbmcgui.Dialog().yesno(
             'Kodi POV IL',
@@ -1251,6 +1261,8 @@ def _handle_pool_share_cache(_params):
             'לשתף את כל תרגומי ה-AI ששמורים אצלך במטמון אל המאגר הקהילתי?\n'
             'פעולה חד-פעמית; כפילויות נמנעות אוטומטית.'):
         return
+
+    win.setProperty('ai_subs.pool_migrating', '1')
 
     progress = None
     try:
@@ -1282,6 +1294,7 @@ def _handle_pool_share_cache(_params):
         _safe_log('pool_share_cache crashed: {0}'.format(e), level='ERROR')
         submitted, skipped, total = (0, 0, 0)
     finally:
+        win.clearProperty('ai_subs.pool_migrating')
         if progress is not None:
             try:
                 progress.close()
@@ -1352,6 +1365,15 @@ def _handle_translate_file(params):
     # and proper title come from VideoPlayer InfoLabels if the
     # video is currently playing; otherwise we degrade gracefully.
     info = kodi_utils.current_video_info()
+
+    # The source SRT's basename is the subtitle's real release name (e.g.
+    # "Show.2026.1080p.WEBRip.x265-GRP") -- a far better Telegram filename than
+    # the video's tokenized stream path. Pass it as the pool release; the Worker
+    # falls back to the TMDB title if it doesn't look like a real release.
+    try:
+        info['release'] = os.path.splitext(os.path.basename(in_path))[0]
+    except Exception:
+        pass
 
     # Reuse the core orchestration: translate via a temp link payload
     # that points at the source file we already have. resolve() does

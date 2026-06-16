@@ -1,3 +1,13 @@
+v0.2.153
+- Community pool is now ON by default (both pull and share). New installs get
+  it via the settings defaults; existing installs are flipped on once by a
+  marker-gated startup migration (a later manual opt-out sticks).
+- "Share my cached translations" now has a run-lock so an accidental double
+  click can't post the same file to the channel twice.
+- Pool filenames: prefer the subtitle's real release name (e.g.
+  "Show.2026.1080p.WEBRip.x265-GRP") when it looks like one, falling back to
+  the TMDB title for tokenized stream/temp names. (Worker redeploy required.)
+
 v0.2.152
 - Community pool: "Share my cached translations now" button (under Community
   pool). One-time migration that uploads every Hebrew translation already in
