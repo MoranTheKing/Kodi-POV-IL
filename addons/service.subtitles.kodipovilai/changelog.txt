@@ -1,3 +1,26 @@
+v0.2.145
+- Community pool: automatically share translations you ALREADY have cached.
+  When "Share my AI translations" is on, re-watching something you translated
+  before quietly contributes that cached Hebrew to the pool (no user action,
+  no re-translation). Backfills the existing local cache over time. Guarded
+  against duplicates two ways: the server keys every variant by the source
+  content hash and rejects repeats, and a local ".shared" marker means we
+  never re-upload the same file -- not on a re-watch, not after a quick
+  update. Reading the source for the content hash runs on a background thread,
+  so cache hits still return instantly.
+
+v0.2.144
+- Community subtitle pool (opt-in, OFF by default; two settings under
+  "Community pool"). With "Use community pool" on, the add-on checks a shared
+  pool of Hebrew AI translations BEFORE spending Gemini quota: an exact source
+  match (same content hash) is reused instantly with perfect sync, and any
+  available variants are offered in the subtitle dialog. With "Share my AI
+  translations" on, each fresh translation is contributed back (fire-and-forget
+  on a daemon thread, never blocks playback). Works for any source language the
+  add-on already translates, not just English. Fully gated and wrapped so it
+  can't affect playback, and it respects the preferred-subtitle-language gate
+  (nothing Hebrew is pulled when you've chosen a different subtitle language).
+
 v0.2.143
 - Fix: FENtastic skin loads but ALL text is blank for some users (after a quick
   update). The build-edition hebrew_build_ui_patcher rewrote the skin's Hebrew
