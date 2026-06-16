@@ -143,3 +143,46 @@ def contribute(info, source_hash, source_lang, srt_text):
         threading.Thread(target=_post, args=(body,), daemon=True).start()
     except Exception:
         pass
+
+
+# --- Duplicate-upload guard -------------------------------------------------
+# Two layers protect against ever creating two identical subtitles in the pool:
+#   1. SERVER: the Worker keys every variant by source_hash (the content hash
+#      of the source SRT) and rejects a POST whose hash already exists for that
+#      episode -- so a duplicate is impossible even if the client re-posts.
+#   2. CLIENT: a tiny ".shared" sidecar next to each cached translation lets us
+#      skip the network call entirely once we've contributed that file. The
+#      marker lives in addon_data/cache, which a quick-update does NOT touch,
+#      so it survives updates and we don't re-upload on every re-watch.
+# The marker is only an optimisation; the server is the real guarantee.
+
+def _marker_path(translated_path):
+    return (translated_path + '.shared') if translated_path else None
+
+
+def was_contributed(translated_path):
+    m = _marker_path(translated_path)
+    return bool(m and os.path.isfile(m))
+
+
+def mark_contributed(translated_path):
+    m = _marker_path(translated_path)
+    if not m:
+        return
+    try:
+        with open(m, 'w', encoding='utf-8') as f:
+            f.write('1')
+    except OSError:
+        pass
+
+
+def contribute_once(info, source_hash, source_lang, srt_text, marker_path=None):
+    """contribute(), but skip the upload if this file was already shared (per
+    the local marker). Marks optimistically BEFORE dispatching so repeated
+    cache-hits / quick-updates don't queue the same POST again. Even if the
+    marker is lost, the Worker still dedups by source_hash."""
+    if marker_path and was_contributed(marker_path):
+        return
+    if marker_path:
+        mark_contributed(marker_path)
+    contribute(info, source_hash, source_lang, srt_text)

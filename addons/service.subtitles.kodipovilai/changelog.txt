@@ -1,3 +1,14 @@
+v0.2.145
+- Community pool: automatically share translations you ALREADY have cached.
+  When "Share my AI translations" is on, re-watching something you translated
+  before quietly contributes that cached Hebrew to the pool (no user action,
+  no re-translation). Backfills the existing local cache over time. Guarded
+  against duplicates two ways: the server keys every variant by the source
+  content hash and rejects repeats, and a local ".shared" marker means we
+  never re-upload the same file -- not on a re-watch, not after a quick
+  update. Reading the source for the content hash runs on a background thread,
+  so cache hits still return instantly.
+
 v0.2.144
 - Community subtitle pool (opt-in, OFF by default; two settings under
   "Community pool"). With "Use community pool" on, the add-on checks a shared
