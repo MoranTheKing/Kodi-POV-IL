@@ -1935,6 +1935,49 @@ def _ensure_darksubs_enabled():
         pass
 
 
+def _maybe_default_pov_autoplay():
+    """One-shot: turn on POV Auto Play + Always-Resume so "Continue Watching"
+    is a single click -- no source-select dialog, and it resumes from where you
+    stopped. Marker-gated (_pov_autoplay_default_v1); only flips settings still
+    on POV's old defaults, so a later manual change by the user sticks. Touches
+    ONLY these four POV settings -- never Trakt/debrid/anything else."""
+    if xbmc is None:
+        return
+    try:
+        from resources.lib import kodi_utils
+        import xbmcaddon
+    except Exception:
+        return
+    try:
+        if kodi_utils.get_setting('_pov_autoplay_default_v1', '') == '1':
+            return
+        try:
+            pov = xbmcaddon.Addon('plugin.video.pov')
+        except Exception:
+            return  # POV not installed (standalone AI install) -> retry later
+        def _flip(key, oldval, newval):
+            try:
+                if (pov.getSetting(key) or '').strip().lower() == oldval:
+                    pov.setSetting(key, newval)
+            except Exception:
+                pass
+        # Auto Play: pick the best source automatically (no dialog).
+        _flip('auto_play_movie', 'false', 'true')
+        _flip('auto_play_episode', 'false', 'true')
+        # Automatically Resume Playback: 0=Never, 1=Always, 2=Autoplay Only.
+        _flip('auto_resume_movie', '0', '1')
+        _flip('auto_resume_episode', '0', '1')
+        kodi_utils.set_setting('_pov_autoplay_default_v1', '1')
+        kodi_utils.log('POV auto-play + always-resume defaults applied (v1)',
+                       level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log('POV autoplay default migration failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def main():
     if xbmc is None:
         return
@@ -2110,6 +2153,10 @@ def main():
     # still on the old default-off. New installs get it via settings.xml
     # defaults. Marker-gated so a later manual opt-out sticks.
     _maybe_default_pool_on()
+
+    # One-shot: enable POV Auto Play + Always-Resume so "Continue Watching" is
+    # one click (no source dialog, resumes where you stopped). Marker-gated.
+    _maybe_default_pov_autoplay()
 
     # One-shot first-launch dialog for Arctic Fuse 3. Skin-gated +
     # marker-gated so it only fires for users who have actually
