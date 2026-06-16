@@ -354,6 +354,17 @@
           <default>false</default>
           <control type="toggle"/>
         </setting>
+        <setting id="remember_source_status" type="action" label="32505"> <!-- Check remembered sources (diagnostic) -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32505</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=remember_source_status)</data>
+        </setting>
       </group>
       <group id="debug">
         <setting id="log_level" type="string" label="32401"> <!-- Log level -->
