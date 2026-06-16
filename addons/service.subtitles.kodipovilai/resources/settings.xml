@@ -98,22 +98,27 @@
         <setting id="src_english" type="boolean" label="32211" help="32212"> <!-- English -->
           <level>0</level>
           <default>true</default>
+          <control type="toggle"/>
         </setting>
         <setting id="src_spanish" type="boolean" label="32213">
           <level>0</level>
           <default>true</default>
+          <control type="toggle"/>
         </setting>
         <setting id="src_german" type="boolean" label="32214">
           <level>0</level>
           <default>false</default>
+          <control type="toggle"/>
         </setting>
         <setting id="src_french" type="boolean" label="32215">
           <level>0</level>
           <default>false</default>
+          <control type="toggle"/>
         </setting>
         <setting id="src_portuguese" type="boolean" label="32216">
           <level>0</level>
           <default>false</default>
+          <control type="toggle"/>
         </setting>
       </group>
 
@@ -121,6 +126,7 @@
         <setting id="skip_if_hebrew" type="boolean" label="32221"> <!-- Skip translation if real Hebrew subs exist -->
           <level>0</level>
           <default>true</default>
+          <control type="toggle"/>
         </setting>
         <setting id="rtl_punct_mode" type="string" label="32222" help="32223"> <!-- RTL punctuation fix direction -->
           <level>0</level>
@@ -247,11 +253,13 @@
         <setting id="_temp_purge_done" type="string" label="30000" visible="false">
           <level>3</level>
           <default></default>
+          <control type="label" format="string"/>
         </setting>
         <!-- Hidden marker: which CACHE_RTL_FIX_VERSION has run. -->
         <setting id="_rtl_fix_done" type="string" label="30000" visible="false">
           <level>3</level>
           <default></default>
+          <control type="label" format="string"/>
         </setting>
         <!-- Hidden marker for DarkSubs hook bookkeeping (reserved: the
              patcher itself is idempotent and doesn't need a flag, but
@@ -259,25 +267,30 @@
         <setting id="_darksubs_takeover_done" type="string" label="30000" visible="false">
           <level>3</level>
           <default></default>
+          <control type="label" format="string"/>
         </setting>
         <setting id="_darksubs_hook_last_fire" type="string" label="30000" visible="false">
           <level>3</level>
           <default></default>
+          <control type="label" format="string"/>
         </setting>
         <setting id="_darksubs_hook_last_outcome" type="string" label="30000" visible="false">
           <level>3</level>
           <default></default>
+          <control type="label" format="string"/>
         </setting>
         <!-- Hidden: daily Gemini Flash Lite request counter. Reset
              at UTC midnight by gemini_quota.note_request. -->
         <setting id="_usage_count" type="string" label="30000" visible="false">
           <level>3</level>
           <default>0</default>
+          <control type="label" format="string"/>
         </setting>
         <!-- Hidden: UTC date (YYYY-MM-DD) of the counter above. -->
         <setting id="_usage_date_utc" type="string" label="30000" visible="false">
           <level>3</level>
           <default></default>
+          <control type="label" format="string"/>
         </setting>
         <!-- Hidden marker: AF3 first-launch dialog has been shown
              (and the user picked something other than 'remind me
@@ -285,6 +298,7 @@
         <setting id="af3_first_launch_dialog_done" type="boolean" label="30000" visible="false">
           <level>3</level>
           <default>false</default>
+          <control type="toggle"/>
         </setting>
       </group>
     </category>
