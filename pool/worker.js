@@ -41,6 +41,14 @@ function looksLikeSrt(text) {
   return (text.match(/-->/g) || []).length >= 3;
 }
 
+// sha1 hex of a string (Web Crypto). Used to dedup by the Hebrew RESULT, so two
+// byte-identical translations never get stored twice even when one has no
+// source hash (e.g. a bulk "share my cache" upload).
+async function sha1hex(text) {
+  const buf = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(text || ''));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+}
+
 function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -70,6 +78,7 @@ async function tmdbMeta(env, body) {
     const d = await r.json();
     const meta = {
       title: d.title || d.name || body.title || '',
+      original_title: d.original_title || d.original_name || '',
       year: String(d.release_date || d.first_air_date || '').slice(0, 4) || body.year || '',
       overview: d.overview || '',
       poster_url: d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : '',
@@ -89,6 +98,25 @@ async function tmdbMeta(env, body) {
     }
     return meta;
   } catch (_) { return {}; }
+}
+
+// Build a clean, human-readable .srt filename from metadata. The client's
+// `release` is often a tokenized stream/temp filename (e.g. a debrid URL
+// basename), which makes for an ugly Telegram document name. Prefer the
+// English/original TMDB title + year (+ SxxEyy for episodes); fall back to the
+// id. Purely cosmetic -- the pool is indexed by id/season/episode, not by name.
+function cleanFilename(body, meta) {
+  const isEp = body.type === 'episode';
+  const id = String(body.tmdb_id || body.imdb_id || '').trim();
+  let base = (meta.original_title || meta.title || body.title || '')
+    .replace(/[^A-Za-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '').slice(0, 60);
+  if (!base) base = (isEp ? 'tv' : 'movie') + (id || '');
+  if (!isEp && meta.year) base += '.' + meta.year;
+  if (isEp) {
+    const pad = (n) => String(parseInt(n, 10) || 0).padStart(2, '0');
+    base += `.S${pad(body.season)}E${pad(body.episode)}`;
+  }
+  return base + '.he.srt';
 }
 
 function buildCaption(body, meta) {
@@ -193,12 +221,37 @@ export default {
       const key = keyFor({ lang, tmdb: body.tmdb_id, imdb: body.imdb_id, type: body.type, season: body.season, episode: body.episode });
       const hash = (body.source_hash || '').trim();
       const variants = await readIndex(env, key);
-      if (hash && variants.some(v => v.hash === hash)) return json({ ok: true, dedup: true, key });
-      if (variants.length >= MAX_VARIANTS) return json({ ok: false, error: 'too many variants' }, 429);
 
-      const rel = (body.release || '').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 80) || ('tmdb' + id);
-      const filename = `${rel}.he.srt`;
+      // Dedup layer 1: same SOURCE hash already present (cheap, no downloads).
+      if (hash && variants.some(v => v.hash === hash)) return json({ ok: true, dedup: true, key });
+
+      // Dedup layer 2: same RESULT (Hebrew) already present. Catches uploads
+      // that carry no source hash (bulk "share my cache") and prevents two
+      // byte-identical Hebrew files from ever coexisting. Old variants stored
+      // before this layer have no result_hash, so backfill it lazily (download
+      // + hash, write back) -- bounded by MAX_VARIANTS and only on this path.
+      const resultHash = await sha1hex(srt);
+      let indexDirty = false;
+      for (const v of variants) {
+        if (!v.result_hash) {
+          try {
+            const existing = await downloadById(env, v.file_id);
+            if (existing) { v.result_hash = await sha1hex(existing); indexDirty = true; }
+          } catch (_) { /* leave it; just won't dedup by result for this one */ }
+        }
+      }
+      if (variants.some(v => v.result_hash === resultHash)) {
+        if (indexDirty) await env.POOL.put(key, JSON.stringify(variants));
+        return json({ ok: true, dedup: true, key });
+      }
+
+      if (variants.length >= MAX_VARIANTS) {
+        if (indexDirty) await env.POOL.put(key, JSON.stringify(variants));
+        return json({ ok: false, error: 'too many variants' }, 429);
+      }
+
       const meta = await tmdbMeta(env, body);
+      const filename = cleanFilename(body, meta);
       const caption = buildCaption(body, meta);
 
       let fileId;
@@ -212,7 +265,7 @@ export default {
       } catch (e) { return json({ ok: false, error: String(e).slice(0, 200) }, 502); }
       if (!fileId) return json({ ok: false, error: 'no file_id' }, 502);
 
-      variants.push({ hash, release: body.release || '', source_lang: body.source_lang || '', file_id: fileId, ts: Date.now() });
+      variants.push({ hash, result_hash: resultHash, release: body.release || '', source_lang: body.source_lang || '', file_id: fileId, ts: Date.now() });
       await env.POOL.put(key, JSON.stringify(variants));
       return json({ ok: true, stored: true, key });
     }

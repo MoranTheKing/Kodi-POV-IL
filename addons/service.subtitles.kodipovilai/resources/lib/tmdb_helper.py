@@ -165,6 +165,31 @@ def fetch_cast(imdb_id=None, tmdb_id=None, media_type=None,
     return out
 
 
+def resolve_imdb_to_tmdb(imdb_id, is_episode=False):
+    """Return the TMDB id (as a string) for an IMDb id, or '' on failure.
+    Used by the bulk pool-migration so cached items (which only carry an IMDb
+    id in their filename) key the same way live uploads do (which usually have
+    a TMDB id). For episodes the show's TMDB id is what the pool keys on."""
+    imdb_id = (imdb_id or '').strip()
+    key = _get_tmdb_key()
+    if not key or not imdb_id:
+        return ''
+    find = _get(API_BASE + '/find/' + imdb_id,
+                {'api_key': key, 'external_source': 'imdb_id'})
+    if not find:
+        return ''
+    # An IMDb id for an episode usually resolves under tv_episode_results; the
+    # pool keys episodes by the SHOW id, so prefer tv_results, then derive the
+    # show id from an episode hit, then fall back to movie.
+    if find.get('tv_results'):
+        return str(find['tv_results'][0].get('id') or '')
+    if find.get('tv_episode_results'):
+        return str(find['tv_episode_results'][0].get('show_id') or '')
+    if find.get('movie_results'):
+        return str(find['movie_results'][0].get('id') or '')
+    return ''
+
+
 def title_and_year(imdb_id=None, tmdb_id=None, media_type=None):
     """Convenience: official title + release year from TMDB. Useful
     for the translation prompt header."""
