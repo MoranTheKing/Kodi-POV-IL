@@ -1369,6 +1369,16 @@ def _maybe_patch_pov_remember_source():
                       'write_failed', 'read_failed'):
             kodi_utils.log('pov_remember_source_patcher: ' + status,
                            level=('INFO' if status == 'patched' else 'WARNING'))
+        # If we just changed POV's sources.py AND the user opted in, cycle POV
+        # so its reuse-language-invoker interpreter re-imports the patched code
+        # this session (otherwise it only applies a restart later). Gated by the
+        # setting so users with the feature off never get POV cycled.
+        if status == 'patched' and kodi_utils.get_bool('remember_source', False):
+            try:
+                from resources.lib import pov_reload
+                pov_reload.note_patched()
+            except Exception:
+                pass
     except Exception as e:
         try:
             kodi_utils.log('pov_remember_source_patcher failed: {0}'.format(e),
@@ -2182,6 +2192,15 @@ def main():
     try:
         from resources.lib import darksubs_reload
         darksubs_reload.reload_if_patched()
+    except Exception:
+        pass
+
+    # Same idea for POV: if we patched its sources.py and the user opted into
+    # remember-source, cycle POV (deferred, idle-only) so it re-imports the
+    # patched code this session. No-op unless armed above.
+    try:
+        from resources.lib import pov_reload
+        pov_reload.reload_if_patched()
     except Exception:
         pass
 

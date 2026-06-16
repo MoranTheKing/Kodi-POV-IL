@@ -1,3 +1,12 @@
+v0.2.163
+- Remember-source capture: make it actually fire + log each step. The capture
+  is now a tiny stable hook that calls source_capture.py (which logs
+  "[remember_source] ..." so capture is diagnosable). And because POV keeps its
+  old sources.py warm (reuselanguageinvoker), the patch only applied a restart
+  later -- so when the toggle is ON we now cycle POV once (deferred, idle-only,
+  re-enable verified) so capture works the same session. Gated by the setting,
+  so users with it OFF never get POV cycled. Still capture-only, OFF by default.
+
 v0.2.162
 - Fix the "remember picked source" capture hook: the old anchor only matched
   one POV phrasing, so on many installs it reported "didn't match POV version"
