@@ -1,3 +1,14 @@
+v0.2.154
+- Community pool hardening against Telegram rate limits (for the wider
+  rollout): the bulk "share my cache" run now paces uploads (~6s apart) so a
+  large cache can't burst past the channel's ~20-messages/min limit. The Worker
+  honours Telegram's 429 retry_after (one bounded retry) on every channel call,
+  and caches each subtitle at Cloudflare's edge by file_id -- so repeated pulls
+  are served from the edge and never hit Telegram's getFile limit (also much
+  faster). (Worker redeploy required.) Note: this is unrelated to the
+  "userbot blocked across IPs" issue -- that affects Telethon user accounts
+  (like DarkSubs), not a server-side Bot API token.
+
 v0.2.153
 - Community pool is now ON by default (both pull and share). New installs get
   it via the settings defaults; existing installs are flipped on once by a
