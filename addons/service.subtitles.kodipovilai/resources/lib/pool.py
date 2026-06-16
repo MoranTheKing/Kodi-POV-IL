@@ -105,7 +105,45 @@ def fetch(info, source_hash=None):
         return None
 
 
+def _lookup_params_from_body(body):
+    return {
+        'tmdb': (body.get('tmdb_id') or '').strip(),
+        'imdb': (body.get('imdb_id') or '').strip(),
+        'type': body.get('type') or '',
+        'season': str(body.get('season') or '0'),
+        'episode': str(body.get('episode') or '0'),
+        'lang': body.get('lang') or 'he',
+    }
+
+
+def _pool_has_hash(body, source_hash):
+    """Cheap pre-check: is this exact source already in the pool? Reads the
+    episode's variant list (each carries its source hash) and looks for a
+    match. Lets the background uploader skip sending an SRT the server would
+    only discard. Best-effort: any error returns False so we just upload."""
+    if not source_hash:
+        return False
+    try:
+        data = json.loads(
+            _get('/lookup', _lookup_params_from_body(body)).decode('utf-8'))
+        variants = (data.get('variants') or []) if data.get('ok') else []
+        return any(v.get('hash') == source_hash for v in variants)
+    except Exception:
+        return False
+
+
 def _post(body, marker_path=None):
+    # Pre-check: if this exact source is already in the pool, skip the upload
+    # entirely and just mark locally so we stop retrying. The server dedups by
+    # source hash too, so this is purely to avoid sending an SRT that would be
+    # discarded (and to suppress retries when another device already shared it).
+    try:
+        if _pool_has_hash(body, (body.get('source_hash') or '').strip()):
+            if marker_path:
+                mark_contributed(marker_path)
+            return
+    except Exception:
+        pass
     try:
         req = _urlreq.Request(
             POOL_URL + '/contribute',

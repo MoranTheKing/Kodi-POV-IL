@@ -1,3 +1,11 @@
+v0.2.149
+- Community pool: check before uploading. The background sharer now asks the
+  pool whether this exact source is already there (its /lookup lists each
+  variant's source hash) and, if so, skips the upload and just marks the file
+  locally. Saves sending an SRT that the server would discard, and stops a
+  device re-trying when another user already shared the same source. The
+  server-side dedup stays as the guarantee (defense in depth).
+
 v0.2.148
 - Community pool reliability: the ".shared" marker is now written only AFTER a
   successful upload. Before, it was set before the POST, so a transient network
