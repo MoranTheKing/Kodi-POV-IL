@@ -1,3 +1,10 @@
+v0.2.155
+- "Share my cached translations" now runs fully in the BACKGROUND: the button
+  confirms, then hands off to a detached worker, so the settings UI is freed
+  immediately and you can keep using Kodi. Progress shows in the bottom-right
+  banner and a toast reports the result when done -- no blocking dialog and no
+  waiting on a loading screen.
+
 v0.2.154
 - Community pool hardening against Telegram rate limits (for the wider
   rollout): the bulk "share my cache" run now paces uploads (~6s apart) so a
