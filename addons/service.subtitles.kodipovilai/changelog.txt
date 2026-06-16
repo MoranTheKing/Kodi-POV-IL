@@ -1,3 +1,11 @@
+v0.2.158
+- "Continue Watching" in one click: enabled POV Auto Play + Always-Resume by
+  default (auto_play_movie/episode = on, auto_resume_movie/episode = Always).
+  Clicking an in-progress item now auto-picks a source and resumes from where
+  you stopped, with no source-selection dialog. One-shot, marker-gated
+  (_pov_autoplay_default_v1); a later manual change in POV settings sticks, and
+  no other POV setting (Trakt/debrid/etc.) is touched.
+
 v0.2.157
 - Community pool quality gate: a translation is shared only if it looks
   complete (didn't lose blocks vs the source) and is genuinely Hebrew (not a
