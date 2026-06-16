@@ -1,3 +1,11 @@
+v0.2.159
+- Fix: 0.2.158 wrongly enabled POV Auto Play, which skipped the source/servers
+  dialog even on the FIRST watch. Reverted Auto Play to off (one-shot), so you
+  always pick the source yourself. Kept "Automatically Resume Playback = Always"
+  so an in-progress item still continues from where you stopped once a source
+  plays. (POV has no "auto-pick only on resume" option, so the source dialog
+  shows every time -- this is the closest correct behaviour.)
+
 v0.2.158
 - "Continue Watching" in one click: enabled POV Auto Play + Always-Resume by
   default (auto_play_movie/episode = on, auto_resume_movie/episode = Always).
