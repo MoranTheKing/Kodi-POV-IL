@@ -470,34 +470,67 @@
       <h2>🤖 שיטה 6 — רק תוסף ה-AI על בילד קיים</h2>
       <p>עבור מי שיש לו כבר בילד אחר (Twilight / FEN / Diggz / וכו') ורק רוצה תרגום AI איכותי.</p>
 
-      <div class="step">
-        <h4>שלב א' — הורד את התוסף הבודד</h4>
-        <p><a href="https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist/service.subtitles.kodipovilai-latest.zip" target="_blank">service.subtitles.kodipovilai-latest.zip</a></p>
-        <p class="muted">קישור יציב — תמיד מצביע על הגרסה העדכנית. אין צורך לחפש בפעם הבאה.</p>
+      <div class="callout ok">
+        <strong>מומלץ: התקנה דרך המאגר (Source) — מקבלת עדכונים אוטומטית.</strong>
+        כך Kodi יעדכן את התוסף לבד בכל גרסה חדשה, בלי להוריד zip ידנית כל פעם.
       </div>
 
+      <h3>אפשרות א' (מומלצת) — דרך מאגר / כתובת מקור</h3>
       <div class="step">
-        <h4>שלב ב' — אפשר התקנה ממקורות לא ידועים (חובה ב-Kodi 21!)</h4>
-        <p><strong>בלי השלב הזה ההתקנה תיכשל עם ההודעה "נכשל בהתקנת הרחבה מקובץ".</strong></p>
+        <h4>שלב א' — הוסף Source</h4>
         <ul>
-          <li>Kodi → הגדרות (גלגל שיניים) → System → Add-ons</li>
-          <li>"Unknown sources" → ON</li>
-          <li>אשר את התראת האזהרה</li>
+          <li>Kodi → הגדרות (גלגל שיניים) → מנהל קבצים (File Manager)</li>
+          <li>"הוסף מקור" (Add Source)</li>
+          <li>בכתובת הזן: <code>https://morantheking.github.io/Kodi-POV-IL/repo/</code></li>
+          <li>בשם הזן: <code>povil-ai</code> → אישור</li>
         </ul>
       </div>
-
       <div class="step">
-        <h4>שלב ג' — התקן</h4>
+        <h4>שלב ב' — אפשר "מקורות לא ידועים" (חובה ב-Kodi 21!)</h4>
+        <p><strong>בלי זה ההתקנה תיכשל עם "נכשל בהתקנת הרחבה מקובץ".</strong></p>
         <ul>
-          <li>ב-Kodi: Add-ons → קופסה → Install from zip file</li>
-          <li>נווט לזיפ שהורדת → אשר</li>
+          <li>הגדרות → System → Add-ons → "Unknown sources" → ON → אשר</li>
+        </ul>
+      </div>
+      <div class="step">
+        <h4>שלב ג' — התקן את המאגר</h4>
+        <ul>
+          <li>Add-ons → כפתור הקופסה → Install from zip file</li>
+          <li>בחר <code>povil-ai</code> → <code>repository.kodipovilai-1.0.0.zip</code></li>
           <li>חכה ל"הותקן"</li>
         </ul>
       </div>
+      <div class="step">
+        <h4>שלב ד' — התקן את התוסף מהמאגר</h4>
+        <ul>
+          <li>Add-ons → Install from repository → <strong>POV IL - תרגום AI</strong></li>
+          <li>Subtitle add-ons → <strong>Kodi POV IL - AI Subtitles</strong> → Install</li>
+          <li>מעכשיו Kodi יעדכן אותו אוטומטית בכל גרסה חדשה.</li>
+        </ul>
+      </div>
 
+      <h3>אפשרות ב' — קובץ zip בודד (בלי עדכון אוטומטי)</h3>
+      <div class="step">
+        <h4>שלב א' — הורד את התוסף הבודד</h4>
+        <p><a href="https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist/service.subtitles.kodipovilai-latest.zip" target="_blank">service.subtitles.kodipovilai-latest.zip</a></p>
+        <p class="muted">קישור יציב — תמיד מצביע על הגרסה העדכנית. (שים לב: בדרך הזו תצטרך להוריד שוב ידנית כדי לעדכן.)</p>
+      </div>
+      <div class="step">
+        <h4>שלב ב' — אפשר "מקורות לא ידועים" (כנ"ל)</h4>
+        <ul>
+          <li>הגדרות → System → Add-ons → "Unknown sources" → ON → אשר</li>
+        </ul>
+      </div>
+      <div class="step">
+        <h4>שלב ג' — התקן</h4>
+        <ul>
+          <li>Add-ons → קופסה → Install from zip file → נווט לזיפ שהורדת → אשר</li>
+          <li>חכה ל"הותקן"</li>
+        </ul>
+      </div>
       <div class="step">
         <h4>שלב ד' — הפעל אם דרוש</h4>
-        <p>Add-ons → My add-ons → Subtitles → אם רואה את התוסף כ-Disabled → לחץ Enable</p>
+        <p>Add-ons → My add-ons → Subtitles → אם התוסף מופיע כ-Disabled → Enable</p>
       </div>
 
       <div class="callout ok">
