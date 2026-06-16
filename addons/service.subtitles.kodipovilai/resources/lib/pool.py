@@ -105,7 +105,45 @@ def fetch(info, source_hash=None):
         return None
 
 
-def _post(body):
+def _lookup_params_from_body(body):
+    return {
+        'tmdb': (body.get('tmdb_id') or '').strip(),
+        'imdb': (body.get('imdb_id') or '').strip(),
+        'type': body.get('type') or '',
+        'season': str(body.get('season') or '0'),
+        'episode': str(body.get('episode') or '0'),
+        'lang': body.get('lang') or 'he',
+    }
+
+
+def _pool_has_hash(body, source_hash):
+    """Cheap pre-check: is this exact source already in the pool? Reads the
+    episode's variant list (each carries its source hash) and looks for a
+    match. Lets the background uploader skip sending an SRT the server would
+    only discard. Best-effort: any error returns False so we just upload."""
+    if not source_hash:
+        return False
+    try:
+        data = json.loads(
+            _get('/lookup', _lookup_params_from_body(body)).decode('utf-8'))
+        variants = (data.get('variants') or []) if data.get('ok') else []
+        return any(v.get('hash') == source_hash for v in variants)
+    except Exception:
+        return False
+
+
+def _post(body, marker_path=None):
+    # Pre-check: if this exact source is already in the pool, skip the upload
+    # entirely and just mark locally so we stop retrying. The server dedups by
+    # source hash too, so this is purely to avoid sending an SRT that would be
+    # discarded (and to suppress retries when another device already shared it).
+    try:
+        if _pool_has_hash(body, (body.get('source_hash') or '').strip()):
+            if marker_path:
+                mark_contributed(marker_path)
+            return
+    except Exception:
+        pass
     try:
         req = _urlreq.Request(
             POOL_URL + '/contribute',
@@ -119,11 +157,18 @@ def _post(body):
             kodi_utils.log('pool contribute failed: {0}'.format(e), level='DEBUG')
         except Exception:
             pass
+        return
+    # Reached only on a successful POST: mark the file so we never re-upload
+    # it. A failed upload leaves no marker, so it retries on the next watch.
+    if marker_path:
+        mark_contributed(marker_path)
 
 
-def contribute(info, source_hash, source_lang, srt_text):
+def contribute(info, source_hash, source_lang, srt_text, marker_path=None):
     """Fire-and-forget: share a fresh Hebrew translation. Runs on a daemon
-    thread so it never delays handing the subtitle back to the player."""
+    thread so it never delays handing the subtitle back to the player. If
+    marker_path is given, the thread writes a ".shared" marker there once the
+    upload succeeds."""
     if _urlreq is None or not srt_text:
         return
     p = _params(info)
@@ -140,7 +185,8 @@ def contribute(info, source_hash, source_lang, srt_text):
         'srt': srt_text,
     }
     try:
-        threading.Thread(target=_post, args=(body,), daemon=True).start()
+        threading.Thread(target=_post, args=(body, marker_path),
+                         daemon=True).start()
     except Exception:
         pass
 
@@ -178,11 +224,12 @@ def mark_contributed(translated_path):
 
 def contribute_once(info, source_hash, source_lang, srt_text, marker_path=None):
     """contribute(), but skip the upload if this file was already shared (per
-    the local marker). Marks optimistically BEFORE dispatching so repeated
-    cache-hits / quick-updates don't queue the same POST again. Even if the
-    marker is lost, the Worker still dedups by source_hash."""
+    the local marker). The marker is written by the POST thread ONLY after a
+    successful upload, so a transient failure retries on the next watch rather
+    than being silently dropped. Once marked, repeated watches / quick-updates
+    never re-upload. Even if the marker is lost, the Worker dedups by
+    source_hash, so duplicates are impossible."""
     if marker_path and was_contributed(marker_path):
         return
-    if marker_path:
-        mark_contributed(marker_path)
-    contribute(info, source_hash, source_lang, srt_text)
+    contribute(info, source_hash, source_lang, srt_text,
+               marker_path=marker_path)
