@@ -29,7 +29,24 @@ one per distinct **source-subtitle content hash** (so a different English source
    - `BOT_TOKEN`  = your BotFather token   *(mark as Secret/encrypt)*
    - `CHANNEL_ID` = `-1004388223186`
    - `API_KEY`    = the shared write key    *(mark as Secret/encrypt)*
+   - `UPLOAD_TOKEN` = a separate token for the manual web upload page
+     *(mark as Secret/encrypt; only needed if you use `/upload`)*
 5. Test: open `https://<worker-url>/health` → `{"ok":true}`.
 
 The add-on is wired with the worker URL + `API_KEY` (read endpoints are open;
 only `/contribute` requires the key).
+
+## Manual web upload (for subs made outside the add-on)
+`https://<worker-url>/upload` serves a small page where a trusted contributor
+can upload a Hebrew `.srt` from their computer:
+- It auto-parses season/episode/year from the filename, and resolves the
+  movie/series via a **TMDB title search** (or a pasted TMDB/IMDb id).
+- It requires the **`UPLOAD_TOKEN`** (entered in the page, sent as
+  `x-upload-token`) — share it only with people you trust; revoke by changing
+  the secret. The page never exposes `API_KEY`.
+- Uploads go through the SAME pipeline as the add-on: deduped by source **and**
+  Hebrew-result hash (so manual uploads never create a duplicate), and posted
+  to the channel with the rich caption + document.
+
+Endpoints added for this: `GET /upload` (page), `GET /tmdb-search` (token-gated
+TMDB proxy), `POST /web-upload` (token-gated, multipart).
