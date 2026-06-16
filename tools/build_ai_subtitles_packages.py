@@ -49,6 +49,7 @@ STANDALONE_LIB_FILES = {
     "kodi_utils.py",
     "language_detect.py",
     "local_subs.py",
+    "pool.py",
     "prompt.py",
     "skin_dialog_subtitles_patcher.py",
     "skin_dialog_subtitles_row_patcher.py",
