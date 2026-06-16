@@ -1354,6 +1354,29 @@ def _maybe_surface_darksubs_status():
             pass
 
 
+def _maybe_patch_pov_remember_source():
+    """PHASE 1 (capture only) of "remember the source the user picked": patch
+    POV's sources.py to record the chosen source per media (gated by our
+    `remember_source` setting, OFF by default). The patcher compile-checks the
+    result before writing, so it can never break POV playback."""
+    try:
+        from resources.lib import pov_remember_source_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_remember_source_patcher.ensure_patched()
+        if status in ('patched', 'unmatched', 'compile_failed',
+                      'write_failed', 'read_failed'):
+            kodi_utils.log('pov_remember_source_patcher: ' + status,
+                           level=('INFO' if status == 'patched' else 'WARNING'))
+    except Exception as e:
+        try:
+            kodi_utils.log('pov_remember_source_patcher failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_source_name():
     """Self-healing patch of POV's sources.py so that when POV picks
     a source from the source-select dialog (the one with cached/
@@ -2090,6 +2113,11 @@ def main():
     # debrid services to ~85-95% (the full release name has the
     # encoder/source/group tokens that subtitle releases carry).
     _maybe_patch_pov_source_name()
+
+    # PHASE 1 capture for "remember the source the user picked" (gated by the
+    # remember_source setting, OFF by default; compile-checked so it can't
+    # break POV playback).
+    _maybe_patch_pov_remember_source()
 
     # Self-healing DarkSubs get_playing_filename() patch. Prefers
     # the picked release name set by the pov_source_name_patcher
