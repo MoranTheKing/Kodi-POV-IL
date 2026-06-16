@@ -312,6 +312,24 @@ def count_entries(text):
     return len(parse_blocks(text))
 
 
+def looks_hebrew(text, min_alpha=120, min_ratio=0.5):
+    """Rough sanity check that `text` is genuinely a Hebrew translation and not
+    a failed / mostly-untranslated one. Among the alphabetic characters, Hebrew
+    must dominate. If there's too little text to judge, returns True (never
+    block on thin evidence). Used as a pool-upload quality gate."""
+    heb = lat = 0
+    for c in text or '':
+        o = ord(c)
+        if 0x0590 <= o <= 0x05FF:
+            heb += 1
+        elif ('a' <= c <= 'z') or ('A' <= c <= 'Z'):
+            lat += 1
+    alpha = heb + lat
+    if alpha < min_alpha:
+        return True
+    return heb >= alpha * min_ratio
+
+
 def strip_hi_annotations(text):
     """Remove hearing-impaired noise from an SRT body.
 
