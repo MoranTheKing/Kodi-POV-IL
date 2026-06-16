@@ -325,3 +325,7 @@ msgstr "Use community pool (pull shared Hebrew AI subtitles)"
 msgctxt "#32502"
 msgid "Share my AI translations to the community pool"
 msgstr "Share my AI translations to the community pool"
+
+msgctxt "#32503"
+msgid "Share my cached translations now (one-time)"
+msgstr "Share my cached translations now (one-time)"

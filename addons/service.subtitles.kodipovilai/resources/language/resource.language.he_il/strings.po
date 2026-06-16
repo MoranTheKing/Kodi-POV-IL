@@ -313,3 +313,7 @@ msgstr "השתמש במאגר הקהילתי (משיכת כתוביות עברי
 msgctxt "#32502"
 msgid "Share my AI translations to the community pool"
 msgstr "שתף את תרגומי ה-AI שלי למאגר הקהילתי"
+
+msgctxt "#32503"
+msgid "Share my cached translations now (one-time)"
+msgstr "שתף עכשיו את כל התרגומים שבמטמון (חד-פעמי)"

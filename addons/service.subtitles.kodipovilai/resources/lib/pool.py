@@ -164,17 +164,12 @@ def _post(body, marker_path=None):
         mark_contributed(marker_path)
 
 
-def contribute(info, source_hash, source_lang, srt_text, marker_path=None):
-    """Fire-and-forget: share a fresh Hebrew translation. Runs on a daemon
-    thread so it never delays handing the subtitle back to the player. If
-    marker_path is given, the thread writes a ".shared" marker there once the
-    upload succeeds."""
-    if _urlreq is None or not srt_text:
-        return
+def _build_body(info, source_hash, source_lang, srt_text):
+    """Assemble the /contribute JSON body, or None if there's no usable id."""
     p = _params(info)
     if not _has_id(p):
-        return
-    body = {
+        return None
+    return {
         'tmdb_id': p['tmdb'], 'imdb_id': p['imdb'], 'type': p['type'],
         'season': p['season'], 'episode': p['episode'], 'lang': 'he',
         'release': _release_from(info),
@@ -184,6 +179,18 @@ def contribute(info, source_hash, source_lang, srt_text, marker_path=None):
         'year': str(info.get('year') or ''),
         'srt': srt_text,
     }
+
+
+def contribute(info, source_hash, source_lang, srt_text, marker_path=None):
+    """Fire-and-forget: share a fresh Hebrew translation. Runs on a daemon
+    thread so it never delays handing the subtitle back to the player. If
+    marker_path is given, the thread writes a ".shared" marker there once the
+    upload succeeds."""
+    if _urlreq is None or not srt_text:
+        return
+    body = _build_body(info, source_hash, source_lang, srt_text)
+    if body is None:
+        return
     try:
         threading.Thread(target=_post, args=(body, marker_path),
                          daemon=True).start()
@@ -220,6 +227,100 @@ def mark_contributed(translated_path):
             f.write('1')
     except OSError:
         pass
+
+
+_CACHE_NAME_RE = None
+
+
+def share_cache(progress_cb=None, should_cancel=None):
+    """Bulk migration: contribute every Hebrew translation already in the local
+    cache to the pool. Drives the "share my cached translations" settings
+    action. Synchronous + one-at-a-time (the caller runs it on a thread), so it
+    never spawns a swarm of uploads. Safe to run repeatedly: each file's
+    ".shared" marker skips it once shared, and the Worker dedups by the Hebrew
+    result hash, so nothing is ever uploaded or stored twice.
+
+    Cached filenames look like <imdb>_S<season>E<episode>_<lang>_<digest>.he.srt
+    -- we only have an IMDb id, so we resolve it to a TMDB id (when possible)
+    so these key exactly like live uploads do. Returns
+    (submitted, skipped, total)."""
+    global _CACHE_NAME_RE
+    if _urlreq is None or not share_enabled():
+        return (0, 0, 0)
+    import glob
+    import re
+    from . import cache as _cache
+    try:
+        from . import tmdb_helper as _tmdb
+    except Exception:
+        _tmdb = None
+    if _CACHE_NAME_RE is None:
+        _CACHE_NAME_RE = re.compile(
+            r'^(?P<imdb>.+?)_S(?P<s>\d+)E(?P<e>\d+)_(?P<lang>[a-z]+)_'
+            r'[0-9a-f]+\.he\.srt$')
+
+    base = os.path.join(kodi_utils.cache_dir(), 'translated')
+    try:
+        files = glob.glob(os.path.join(base, '*.he.srt'))
+    except Exception:
+        files = []
+    total = len(files)
+    submitted = skipped = 0
+    for i, fp in enumerate(files):
+        if should_cancel is not None:
+            try:
+                if should_cancel():
+                    break
+            except Exception:
+                pass
+        if progress_cb is not None:
+            try:
+                progress_cb(i + 1, total)
+            except Exception:
+                pass
+        if was_contributed(fp):
+            skipped += 1
+            continue
+        m = _CACHE_NAME_RE.match(os.path.basename(fp))
+        if not m:
+            skipped += 1
+            continue
+        imdb = m.group('imdb')
+        if imdb in ('', 'unknown'):
+            skipped += 1
+            continue
+        season, episode, lang = m.group('s'), m.group('e'), m.group('lang')
+        is_ep = not (season == '0' and episode == '0')
+        text = _cache.load_text(fp)
+        if not text:
+            skipped += 1
+            continue
+        tmdb_id, title, year = '', '', ''
+        if _tmdb is not None:
+            try:
+                tmdb_id = _tmdb.resolve_imdb_to_tmdb(imdb, is_ep) or ''
+            except Exception:
+                tmdb_id = ''
+            try:
+                title, year = _tmdb.title_and_year(
+                    imdb_id=imdb, tmdb_id=(tmdb_id or None),
+                    media_type=('tv' if is_ep else 'movie'))
+            except Exception:
+                title, year = '', ''
+        info = {
+            'tmdb_id': tmdb_id, 'imdb_id': imdb, 'is_episode': is_ep,
+            'season': season, 'episode': episode,
+            'title': title or '', 'year': year or '', 'filepath': '',
+        }
+        body = _build_body(info, '', lang, text)
+        if body is None:
+            skipped += 1
+            continue
+        # Synchronous post (we're already on a worker thread); the marker is
+        # written by _post only on success, so a failure simply retries next run.
+        _post(body, marker_path=fp)
+        submitted += 1
+    return (submitted, skipped, total)
 
 
 def contribute_once(info, source_hash, source_lang, srt_text, marker_path=None):
