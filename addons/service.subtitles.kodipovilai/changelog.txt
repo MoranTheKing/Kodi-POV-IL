@@ -1,3 +1,12 @@
+v0.2.150
+- CRITICAL fix: with "Use community pool" ON, every fresh (non-cached) AI
+  translation crashed with "cannot access local variable 'pool'" and fell back
+  to the original English ("AI translation failed"). Cause: resolve() uses a
+  ThreadPoolExecutor named `pool`, which made Python treat the module-level
+  `pool` import as a function-local everywhere in resolve() -- so the pool
+  checks earlier in the function referenced it before assignment. Renamed the
+  executor to `executor`. Translation works again with the pool enabled.
+
 v0.2.149
 - Community pool: check before uploading. The background sharer now asks the
   pool whether this exact source is already there (its /lookup lists each
