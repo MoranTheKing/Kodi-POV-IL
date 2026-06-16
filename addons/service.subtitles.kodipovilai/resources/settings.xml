@@ -267,8 +267,14 @@
           <default></default>
           <control type="label" format="string"/>
         </setting>
-        <!-- Hidden marker: POV auto-play + always-resume default migration. -->
+        <!-- Hidden marker: POV always-resume default migration. -->
         <setting id="_pov_autoplay_default_v1" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default></default>
+          <control type="label" format="string"/>
+        </setting>
+        <!-- Hidden marker: one-shot revert of the 0.2.158 Auto Play mistake. -->
+        <setting id="_pov_autoplay_revert_v2" type="string" label="30000" visible="false">
           <level>3</level>
           <default></default>
           <control type="label" format="string"/>
