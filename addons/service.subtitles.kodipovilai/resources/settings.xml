@@ -315,6 +315,17 @@
           <default>false</default>
           <control type="toggle"/>
         </setting>
+        <setting id="pool_share_cache" type="action" label="32503"> <!-- Share my cached translations now -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <control type="button" format="action">
+            <heading>32503</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=pool_share_cache)</data>
+        </setting>
       </group>
     </category>
 
