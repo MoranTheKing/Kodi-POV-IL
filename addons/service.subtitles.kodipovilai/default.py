@@ -1335,6 +1335,52 @@ def _handle_pool_share_cache_run(_params):
             pass
 
 
+def _handle_remember_source_status(_params):
+    """Diagnostic for the experimental "remember picked source" capture: shows
+    whether the setting is on, whether POV's sources.py is patched (the capture
+    hook), how many sources were recorded, and the most recent one. Helps
+    confirm capture works before the auto-pick phase is built."""
+    try:
+        from resources.lib import (kodi_utils, source_memory,
+                                    pov_remember_source_patcher)
+    except Exception as e:
+        xbmcgui.Dialog().ok('Kodi POV IL', 'Internal error: {0}'.format(e))
+        return
+    on = kodi_utils.get_bool('remember_source', False)
+    try:
+        patch_status = pov_remember_source_patcher.ensure_patched()
+    except Exception as e:
+        patch_status = 'error: ' + str(e)[:60]
+    pmap = {
+        'unchanged': 'מותקן ✓', 'patched': 'הותקן עכשיו ✓',
+        'no_file': 'POV לא נמצא', 'unmatched': 'לא תאם את גרסת POV ✗',
+        'compile_failed': 'נכשל קומפילציה ✗', 'read_failed': 'כשל קריאה',
+        'write_failed': 'כשל כתיבה',
+    }
+    recs = source_memory.list_all()
+    lines = [
+        'הגדרה "זכור מקור": ' + ('דלוקה ✓' if on else 'כבויה ✗'),
+        'פאצ׳ הלכידה ב-POV: ' + pmap.get(patch_status, str(patch_status)),
+        'מקורות שנשמרו: ' + str(len(recs)),
+        'תיקייה: ' + (source_memory.dir_path() or '?'),
+    ]
+    if recs:
+        k, r = recs[-1]
+        lines.append('')
+        lines.append('אחרון שנשמר:')
+        lines.append('  שם: ' + (r.get('name') or '?')[:60])
+        lines.append('  hash: ' + (r.get('hash') or '-')[:16])
+        lines.append('  איכות: ' + (r.get('quality') or '-') +
+                     ' | ספק: ' + (r.get('provider') or '-'))
+    elif on and patch_status in ('unchanged', 'patched'):
+        lines.append('')
+        lines.append('הכל מוכן — נגן סרט ובחר מקור, ואז בדוק שוב כאן.')
+    try:
+        xbmcgui.Dialog().textviewer('זכירת מקור — אבחון', '\n'.join(lines))
+    except Exception:
+        xbmcgui.Dialog().ok('זכירת מקור — אבחון', '\n'.join(lines))
+
+
 def _handle_translate_file(params):
     """Translate an SRT file to Hebrew on disk.
 
@@ -2152,6 +2198,8 @@ def main():
             _handle_pool_share_cache(params)
         elif action == 'pool_share_cache_run':
             _handle_pool_share_cache_run(params)
+        elif action == 'remember_source_status':
+            _handle_remember_source_status(params)
         elif action == 'purge_temp':
             _handle_purge_temp(params)
         elif action == 'translate_file':

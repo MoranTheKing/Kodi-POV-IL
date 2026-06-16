@@ -1,3 +1,9 @@
+v0.2.161
+- Diagnostic for "remember picked source": a "Check remembered sources" button
+  (Advanced) shows whether the setting is on, whether POV's capture hook is
+  installed, how many sources were recorded, and the most recent one. Helps
+  confirm capture works (or pinpoint why it didn't) before building auto-pick.
+
 v0.2.160
 - Groundwork (capture only, OFF by default) for "remember the source you
   picked": a new experimental setting "Remember picked source" (Advanced).
