@@ -1,3 +1,22 @@
+v0.2.152
+- Community pool: "Share my cached translations now" button (under Community
+  pool). One-time migration that uploads every Hebrew translation already in
+  your local cache -- including ones DarkSubs serves from its own cache, which
+  the automatic on-watch sharing never sees. Cached files only carry an IMDb
+  id, so it resolves IMDb->TMDB (via TMDB Find) so they key exactly like live
+  uploads. Safe to run repeatedly: each file is marked once shared, and the
+  pool now also dedups by the Hebrew RESULT hash (not just the source hash),
+  so a bulk upload can never create a second copy of a translation that was
+  already shared -- whether it came from a fresh translation or another user.
+  (Requires the updated Worker; redeploy pool/worker.js.)
+
+v0.2.151
+- Silence Kodi log spam: every setting now declares a <control> (toggle for
+  booleans, label for the hidden status/storage strings). The hidden hook
+  heartbeat settings were read/written on every DarkSubs fire without a
+  control, flooding the log with "missing <control> tag" errors. No visible
+  change; just a cleaner log.
+
 v0.2.150
 - CRITICAL fix: with "Use community pool" ON, every fresh (non-cached) AI
   translation crashed with "cannot access local variable 'pool'" and fell back

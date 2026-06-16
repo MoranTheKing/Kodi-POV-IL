@@ -1222,6 +1222,78 @@ def _handle_clear_cache(_params):
     xbmcgui.Dialog().ok('Kodi POV IL', kodi_utils.localised(33007, n))
 
 
+def _handle_pool_share_cache(_params):
+    """Bulk-share every cached Hebrew translation to the community pool.
+    One-time migration for translations made before sharing was on (or that
+    DarkSubs serves from its own cache, so our auto-upload never fires). Safe
+    to run repeatedly -- the server dedups by the Hebrew result hash and each
+    file is marked once shared."""
+    try:
+        from resources.lib import pool, kodi_utils
+    except Exception as e:
+        xbmcgui.Dialog().ok('Kodi POV IL', 'Internal error: {0}'.format(e))
+        return
+
+    if not pool.share_enabled():
+        turn_on = xbmcgui.Dialog().yesno(
+            'Kodi POV IL',
+            'שיתוף למאגר הקהילתי כבוי. להפעיל אותו עכשיו ולשתף את כל '
+            'התרגומים שבמטמון?')
+        if not turn_on:
+            return
+        try:
+            kodi_utils.set_setting('pool_share', 'true')
+        except Exception:
+            pass
+
+    if not xbmcgui.Dialog().yesno(
+            'Kodi POV IL',
+            'לשתף את כל תרגומי ה-AI ששמורים אצלך במטמון אל המאגר הקהילתי?\n'
+            'פעולה חד-פעמית; כפילויות נמנעות אוטומטית.'):
+        return
+
+    progress = None
+    try:
+        progress = xbmcgui.DialogProgressBG()
+        progress.create('Kodi POV IL', 'משתף תרגומים למאגר...')
+    except Exception:
+        progress = None
+
+    def report(done, total):
+        if progress is None:
+            return
+        try:
+            pct = int(done * 100 / max(1, total))
+            progress.update(pct, 'Kodi POV IL',
+                            'משתף תרגומים למאגר ({0}/{1})'.format(done, total))
+        except Exception:
+            pass
+
+    def cancelled():
+        try:
+            return progress is not None and progress.isFinished()
+        except Exception:
+            return False
+
+    try:
+        submitted, skipped, total = pool.share_cache(
+            progress_cb=report, should_cancel=cancelled)
+    except Exception as e:
+        _safe_log('pool_share_cache crashed: {0}'.format(e), level='ERROR')
+        submitted, skipped, total = (0, 0, 0)
+    finally:
+        if progress is not None:
+            try:
+                progress.close()
+            except Exception:
+                pass
+
+    xbmcgui.Dialog().ok(
+        'Kodi POV IL',
+        'הסתיים. נשלחו {0} תרגומים למאגר, דולגו {1} (מתוך {2}).\n'
+        'כפילויות נמנעו אוטומטית בצד השרת.'.format(submitted, skipped, total))
+
+
 def _handle_translate_file(params):
     """Translate an SRT file to Hebrew on disk.
 
@@ -2026,6 +2098,8 @@ def main():
             _handle_open_tmdb_notice(params)
         elif action == 'clear_cache':
             _handle_clear_cache(params)
+        elif action == 'pool_share_cache':
+            _handle_pool_share_cache(params)
         elif action == 'purge_temp':
             _handle_purge_temp(params)
         elif action == 'translate_file':
