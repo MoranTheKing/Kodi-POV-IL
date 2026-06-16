@@ -70,6 +70,7 @@ async function tmdbMeta(env, body) {
     const d = await r.json();
     const meta = {
       title: d.title || d.name || body.title || '',
+      original_title: d.original_title || d.original_name || '',
       year: String(d.release_date || d.first_air_date || '').slice(0, 4) || body.year || '',
       overview: d.overview || '',
       poster_url: d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : '',
@@ -89,6 +90,25 @@ async function tmdbMeta(env, body) {
     }
     return meta;
   } catch (_) { return {}; }
+}
+
+// Build a clean, human-readable .srt filename from metadata. The client's
+// `release` is often a tokenized stream/temp filename (e.g. a debrid URL
+// basename), which makes for an ugly Telegram document name. Prefer the
+// English/original TMDB title + year (+ SxxEyy for episodes); fall back to the
+// id. Purely cosmetic -- the pool is indexed by id/season/episode, not by name.
+function cleanFilename(body, meta) {
+  const isEp = body.type === 'episode';
+  const id = String(body.tmdb_id || body.imdb_id || '').trim();
+  let base = (meta.original_title || meta.title || body.title || '')
+    .replace(/[^A-Za-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '').slice(0, 60);
+  if (!base) base = (isEp ? 'tv' : 'movie') + (id || '');
+  if (!isEp && meta.year) base += '.' + meta.year;
+  if (isEp) {
+    const pad = (n) => String(parseInt(n, 10) || 0).padStart(2, '0');
+    base += `.S${pad(body.season)}E${pad(body.episode)}`;
+  }
+  return base + '.he.srt';
 }
 
 function buildCaption(body, meta) {
@@ -196,9 +216,8 @@ export default {
       if (hash && variants.some(v => v.hash === hash)) return json({ ok: true, dedup: true, key });
       if (variants.length >= MAX_VARIANTS) return json({ ok: false, error: 'too many variants' }, 429);
 
-      const rel = (body.release || '').replace(/[^A-Za-z0-9._-]/g, '').slice(0, 80) || ('tmdb' + id);
-      const filename = `${rel}.he.srt`;
       const meta = await tmdbMeta(env, body);
+      const filename = cleanFilename(body, meta);
       const caption = buildCaption(body, meta);
 
       let fileId;
