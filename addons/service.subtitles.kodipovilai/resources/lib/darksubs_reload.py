@@ -80,6 +80,27 @@ def _set_enabled(enabled):
         return False
 
 
+def _is_enabled():
+    """Query DarkSubs's current enabled state. Returns True/False, or None if
+    it can't be determined (not installed / API error)."""
+    if xbmc is None:
+        return None
+    payload = json.dumps({
+        'jsonrpc': '2.0',
+        'id': 1,
+        'method': 'Addons.GetAddonDetails',
+        'params': {'addonid': DARKSUBS_ADDON_ID, 'properties': ['enabled']},
+    })
+    try:
+        data = json.loads(xbmc.executeJSONRPC(payload) or '{}')
+        addon = (data.get('result') or {}).get('addon') or {}
+        if 'enabled' not in addon:
+            return None
+        return bool(addon.get('enabled'))
+    except Exception:
+        return None
+
+
 def request_reload():
     """Cycle DarkSubs so its reuselanguageinvoker interpreter re-imports
     the patched source. Debounced to once per process. Safe no-op if Kodi
@@ -157,15 +178,30 @@ def _deferred_cycle():
             xbmc.sleep(1500)
         except Exception:
             pass
-        on = _set_enabled(True)
+        _set_enabled(True)
+        # CRITICAL: never leave DarkSubs disabled. The re-enable can race the
+        # post-update boot, and a disabled DarkSubs means no subtitle service
+        # and no AI-translation hook at all. Verify it actually came back on,
+        # and retry a few times before giving up.
+        on = False
+        for _ in range(6):
+            state = _is_enabled()
+            if state is True:
+                on = True
+                break
+            if state is False or state is None:
+                _set_enabled(True)
+            try:
+                xbmc.sleep(1000)
+            except Exception:
+                pass
         if off and on:
             _log('cycled DarkSubs (disable/enable) so it re-imports the '
                  'patched source', level='INFO')
         else:
-            _log('DarkSubs enable/disable returned off={0} on={1}'.format(
-                off, on), level='WARNING')
-            if not on:
-                _set_enabled(True)
+            _log('DarkSubs cycle off={0} on={1} (final state verified={2})'
+                 .format(off, on, _is_enabled()), level='WARNING')
+            _set_enabled(True)
     except Exception as e:
         _log('reload failed: {0}'.format(e), level='WARNING')
         try:
