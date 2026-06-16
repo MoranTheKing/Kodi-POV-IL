@@ -313,3 +313,15 @@ msgstr "Reverse (move to start - default, correct on most setups)"
 msgctxt "#32226"
 msgid "Off (no punctuation processing)"
 msgstr "Off (no punctuation processing)"
+
+msgctxt "#32500"
+msgid "Community pool"
+msgstr "Community pool"
+
+msgctxt "#32501"
+msgid "Use community pool (pull shared Hebrew AI subtitles)"
+msgstr "Use community pool (pull shared Hebrew AI subtitles)"
+
+msgctxt "#32502"
+msgid "Share my AI translations to the community pool"
+msgstr "Share my AI translations to the community pool"

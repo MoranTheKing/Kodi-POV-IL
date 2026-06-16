@@ -35,6 +35,13 @@ from . import srt
 from . import tmdb_helper
 from . import wyzie
 
+# Community subtitle pool (optional, gated by settings, OFF by default).
+# Imported defensively: a problem here must never break translation.
+try:
+    from . import pool
+except Exception:
+    pool = None
+
 # Iteration order = priority order. settings.xml exposes
 # checkboxes -- we filter the disabled ones out at runtime.
 ALL_SOURCE_LANGS = [
@@ -247,6 +254,20 @@ def list_candidates(info):
             'is_hi': h.get('hi', False),
             'is_hd': False,
         })
+
+    # Community pool: Hebrew translations other users already made and shared.
+    # Offered like passthrough (ready Hebrew -- no local translation needed).
+    # Gated by pool_use; failures are swallowed inside pool.lookup.
+    if pool is not None and pool.use_enabled():
+        for v in pool.lookup(info):
+            have_hebrew = True
+            results.append({
+                'filename': v.get('release') or 'מאגר קהילתי',
+                'language': 'he',
+                'link': _encode_link({'type': 'pool', 'hash': v.get('hash')}),
+                'sync': 'false', 'rating': '5',
+                'is_hi': False, 'is_hd': False,
+            })
 
     skip_when_hebrew = kodi_utils.get_bool('skip_if_hebrew', True)
     if have_hebrew and skip_when_hebrew:
@@ -464,6 +485,28 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                               time_ms=8000)
             return None
 
+    if kind == 'pool':
+        # A community-pool entry the user picked from the dialog. Fetch the
+        # exact shared Hebrew SRT (by source hash) and hand it to Kodi.
+        if pool is None:
+            return None
+        text = pool.fetch(info, payload.get('hash'))
+        if not text:
+            kodi_utils.notify('AI: לא נמצאה כתובית במאגר', time_ms=4000)
+            return None
+        import hashlib as _hpool
+        sid = (payload.get('hash')
+               or _hpool.sha1(text.encode('utf-8', 'replace')).hexdigest()[:16])
+        out = os.path.join(kodi_utils.cache_dir(), 'pool_{0}.he.srt'.format(sid))
+        try:
+            with open(out, 'w', encoding='utf-8') as f:
+                f.write(text)
+            _reapply_rtl_fix_in_place(out)
+            kodi_utils.notify('AI: כתוביות מהמאגר הקהילתי', time_ms=4000)
+            return out
+        except OSError:
+            return None
+
     if kind != 'ai':
         kodi_utils.log('resolve: unknown kind ' + str(kind),
                        level='WARNING')
@@ -597,6 +640,24 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     translated = cache.translated_path(
         imdb_id, season, episode, source_lang,
         source_id=(early_source_id or content_id))
+
+    # Community pool: before spending Gemini quota, check whether someone has
+    # already translated THIS exact source (same content hash) and shared it.
+    # Exact-hash match only -> perfect sync. Gated by pool_use; on any failure
+    # we fall through and translate normally. Returns a path like a cache hit
+    # (no progressive callbacks -- the caller's sentinel handles that).
+    if pool is not None and pool.use_enabled():
+        pooled = pool.fetch(info, content_id)
+        if pooled:
+            try:
+                cache.save_text(translated, pooled)
+                _reapply_rtl_fix_in_place(translated)
+                kodi_utils.notify(
+                    'AI: כתוביות מהמאגר הקהילתי (לא נדרש תרגום)', time_ms=4000)
+                return translated
+            except Exception as e:
+                kodi_utils.log('pool reuse save failed: {0}'.format(e),
+                               level='WARNING')
 
     # Captured once and reused for ALL progressive callback emissions
     # so the caller can correlate first_ready/chunk_ready/done into a
@@ -1051,6 +1112,18 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             kodi_utils.log(
                 'content-hash duplicate save failed: {0}'.format(e),
                 level='DEBUG')
+
+    # Share this fresh translation to the community pool (fire-and-forget on a
+    # daemon thread -- never delays handing the subtitle to the player). Gated
+    # by pool_share; only reached for a genuinely new translation (local cache
+    # and pool both missed above).
+    if pool is not None and pool.share_enabled():
+        try:
+            pool.contribute(info, content_id, source_lang, final)
+        except Exception as e:
+            kodi_utils.log('pool contribute dispatch failed: {0}'.format(e),
+                           level='DEBUG')
+
     # Append today's Gemini quota usage to the success toast, but
     # only if the user is on the tracked model (3.1 Flash Lite).
     # Wrapped so a quota-module bug can't drop the toast itself.
