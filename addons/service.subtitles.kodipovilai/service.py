@@ -2070,6 +2070,44 @@ def _ensure_darksubs_enabled():
         pass
 
 
+def _ensure_pov_enabled():
+    """Recover plugin.video.pov if it was left disabled -- e.g. our pov_reload
+    cycle (disable+enable to re-import the patched sources.py after enabling
+    remember_source) lost the re-enable race on a slow box, or any other reason.
+    POV is THE content addon: if it's installed but disabled, every home row and
+    every "My Movies/My Shows" tile is empty and nothing plays -- on ALL skins.
+    pov_reload retries within its own cycle, but if that ultimately failed there
+    was previously nothing to bring POV back on a later boot. This is that net:
+    cheap, idempotent, runs early every startup, only acts when POV is installed
+    AND currently disabled."""
+    if xbmc is None:
+        return
+    try:
+        import json as _json
+        get = _json.dumps({
+            'jsonrpc': '2.0', 'id': 1,
+            'method': 'Addons.GetAddonDetails',
+            'params': {'addonid': 'plugin.video.pov',
+                       'properties': ['enabled']},
+        })
+        data = _json.loads(xbmc.executeJSONRPC(get) or '{}')
+        addon = (data.get('result') or {}).get('addon') or {}
+        if 'enabled' not in addon:
+            return  # not installed / unknown -> leave alone
+        if addon.get('enabled'):
+            return  # already enabled -> nothing to do
+        en = _json.dumps({
+            'jsonrpc': '2.0', 'id': 1,
+            'method': 'Addons.SetAddonEnabled',
+            'params': {'addonid': 'plugin.video.pov', 'enabled': True},
+        })
+        xbmc.executeJSONRPC(en)
+        xbmc.log('[' + ADDON_ID + '] re-enabled POV (it was disabled)',
+                 level=xbmc.LOGINFO)
+    except Exception:
+        pass
+
+
 def _maybe_default_pov_autoplay():
     """One-shot: set POV "Automatically Resume Playback" to Always, so picking
     up an in-progress item resumes from where you stopped (no resume/start-over
@@ -2184,6 +2222,11 @@ def main():
     # a quick update -- otherwise no subtitles and no AI translation fire at
     # all. Runs before the patchers (which patch its files on disk regardless).
     _ensure_darksubs_enabled()
+
+    # Same safety net for POV: our pov_reload cycle (for remember_source) could
+    # have left POV disabled on a slow box, which empties every home row + tile
+    # and breaks playback on ALL skins. Bring it back if it's installed and off.
+    _ensure_pov_enabled()
 
     # Self-healing DarkSubs hook injection. Runs every startup so
     # if upstream DarkSubs updates and overwrites our hook, it
