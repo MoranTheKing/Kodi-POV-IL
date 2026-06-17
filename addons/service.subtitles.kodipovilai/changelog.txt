@@ -1,3 +1,10 @@
+v0.2.181
+- Unification groundwork (Phase B2): the built-in subtitle sources engine is
+  now wired in behind a new experimental "Built-in sources engine" toggle in
+  settings, OFF by default. When off, behavior is unchanged and DarkSubs keeps
+  running as its own add-on. Adds a "Translation mode" setting (AI / Google /
+  none) for the upcoming three-mode translation.
+
 v0.2.166
 - Home tiles: stop resurrecting personal "my movies/my shows" tiles (Trakt /
   POV) after you delete them. The favourites patcher now remembers which tiles
