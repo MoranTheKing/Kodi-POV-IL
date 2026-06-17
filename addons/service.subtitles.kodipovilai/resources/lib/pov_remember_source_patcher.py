@@ -26,8 +26,8 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 SOURCES_REL_PATH = 'resources/lib/modules/sources.py'
-CAP_MARKER = 'AI_SUBS_REMEMBER_SOURCE_v4'
-PICK_MARKER = 'AI_SUBS_AUTOPICK_v4'
+CAP_MARKER = 'AI_SUBS_REMEMBER_SOURCE_v5'
+PICK_MARKER = 'AI_SUBS_AUTOPICK_v5'
 
 # Unique yield site (optional inline `if ...:` prefix, any indent).
 _YIELD_RE = re.compile(
@@ -77,10 +77,8 @@ def _capture_lines(body_indent, eol):
     raw = [
         '# ' + CAP_MARKER,
         'try:',
-        '\timport xbmc as _rs_x, xbmcaddon as _rs_a',
-        "\t_rs_on = (_rs_a.Addon('service.subtitles.kodipovilai').getSetting('remember_source') or '')",
-        "\t_rs_x.log('[remember_source] yield hook; setting=' + repr(_rs_on), 1)",
-        "\tif _rs_on.strip().lower() == 'true':",
+        '\timport xbmcaddon as _rs_a',
+        "\tif (_rs_a.Addon('service.subtitles.kodipovilai').getSetting('remember_source') or '').strip().lower() == 'true':",
         '\t\timport sys as _rs_s, xbmcvfs as _rs_v',
         "\t\t_rs_p = _rs_v.translatePath('special://home/addons/service.subtitles.kodipovilai/resources/lib')",
         '\t\tif _rs_p not in _rs_s.path: _rs_s.path.insert(0, _rs_p)',
