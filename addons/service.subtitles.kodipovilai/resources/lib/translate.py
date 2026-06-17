@@ -226,8 +226,16 @@ def list_candidates(info):
     if pool is not None and pool.use_enabled():
         for v in pool.lookup(info):
             have_hebrew = True
+            # Clearly mark community-pool entries as AI translations (they
+            # are not human subs). Show the real release name when the share
+            # carried one; otherwise a generic label. Entries shared without
+            # a release name (older / live shares from a tokenized stream
+            # path) fall back to the generic text -- that's why some rows
+            # show a full name and others don't.
+            release = (v.get('release') or '').strip()
+            label = '[AI · מאגר] ' + release if release else 'תרגום AI (מאגר קהילתי)'
             results.append({
-                'filename': v.get('release') or 'מאגר קהילתי',
+                'filename': label,
                 'language': 'he',
                 'link': _encode_link({'type': 'pool', 'hash': v.get('hash')}),
                 'sync': 'false', 'rating': '5',
