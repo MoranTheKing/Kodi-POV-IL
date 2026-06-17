@@ -331,8 +331,8 @@ msgid "Share my cached translations now (one-time)"
 msgstr "Share my cached translations now (one-time)"
 
 msgctxt "#32504"
-msgid "Remember picked source (experimental, capture only)"
-msgstr "Remember picked source (experimental, capture only)"
+msgid "Remember picked source (auto-play it next time)"
+msgstr "Remember picked source (auto-play it next time)"
 
 msgctxt "#32505"
 msgid "Check remembered sources (diagnostic)"

@@ -1932,6 +1932,32 @@ def _maybe_default_pool_on():
             pass
 
 
+def _maybe_default_remember_source():
+    """One-shot: turn "remember picked source" ON for existing users still on
+    the old default-off (the feature is now on by default for everyone). Flips
+    a stored 'false' to 'true' once, marker-gated, so a later manual opt-out
+    sticks. New installs get it via the settings.xml default. Runs BEFORE the
+    POV patcher so the patcher sees the setting on and reloads POV this session."""
+    try:
+        from resources.lib import kodi_utils
+    except Exception:
+        return
+    try:
+        if kodi_utils.get_setting('_remember_source_default_v1', '') == '1':
+            return
+        if kodi_utils.get_setting('remember_source', 'false') == 'false':
+            kodi_utils.set_setting('remember_source', 'true')
+        kodi_utils.set_setting('_remember_source_default_v1', '1')
+        kodi_utils.log('remember_source enabled by default (migration v1)',
+                       level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log('remember_source default migration failed: {0}'
+                           .format(e), level='WARNING')
+        except Exception:
+            pass
+
+
 def _ensure_darksubs_enabled():
     """Recover DarkSubs (service.subtitles.All_Subs) if it was left disabled --
     e.g. a reload cycle that didn't re-enable cleanly after a quick update.
@@ -2072,6 +2098,10 @@ def main():
     # will restart Kodi anyway, and we don't want to spend cycles
     # patching things they'll re-run on the next boot.
     _maybe_heal_wizard()
+
+    # Enable "remember picked source" by default (one-shot) BEFORE the POV
+    # patcher runs, so the patcher sees it on and reloads POV this session.
+    _maybe_default_remember_source()
 
     # Recover DarkSubs first if a previous reload cycle left it disabled after
     # a quick update -- otherwise no subtitles and no AI translation fire at

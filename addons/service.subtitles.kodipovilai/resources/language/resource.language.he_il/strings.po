@@ -319,8 +319,8 @@ msgid "Share my cached translations now (one-time)"
 msgstr "שתף עכשיו את כל התרגומים שבמטמון (חד-פעמי)"
 
 msgctxt "#32504"
-msgid "Remember picked source (experimental, capture only)"
-msgstr "זכור את המקור שנבחר (ניסיוני, לכידה בלבד)"
+msgid "Remember picked source (auto-play it next time)"
+msgstr "זכור את המקור שנבחר (נגן אותו אוטומטית בפעם הבאה)"
 
 msgctxt "#32505"
 msgid "Check remembered sources (diagnostic)"
