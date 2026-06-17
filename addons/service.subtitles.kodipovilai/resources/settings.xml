@@ -349,10 +349,15 @@
 
     <category id="advanced" label="32400"> <!-- Advanced -->
       <group id="experimental">
-        <setting id="remember_source" type="boolean" label="32504"> <!-- Remember picked source (experimental, capture only) -->
+        <setting id="remember_source" type="boolean" label="32504"> <!-- Remember picked source -->
           <level>0</level>
-          <default>false</default>
+          <default>true</default>
           <control type="toggle"/>
+        </setting>
+        <setting id="_remember_source_default_v1" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default></default>
+          <control type="label" format="string"/>
         </setting>
         <setting id="remember_source_status" type="action" label="32505"> <!-- Check remembered sources (diagnostic) -->
           <level>0</level>
