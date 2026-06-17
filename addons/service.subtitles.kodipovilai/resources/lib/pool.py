@@ -174,13 +174,21 @@ def _build_body(info, source_hash, source_lang, srt_text):
     p = _params(info)
     if not _has_id(p):
         return None
+    # For episodes the pool/Telegram post wants the SERIES name, not the
+    # episode title. Kodi's VideoPlayer.Title is the episode label (e.g. POV's
+    # "2x08 The Hunters"), so prefer the show title for episodes -- otherwise
+    # the post reads as the episode instead of the series. (The Worker still
+    # overrides this with the localized TMDB name when it can resolve the id.)
+    show = (info.get('tvshow') or '').strip()
+    title = (show if (p['type'] == 'episode' and show)
+             else (info.get('title') or '').strip())
     return {
         'tmdb_id': p['tmdb'], 'imdb_id': p['imdb'], 'type': p['type'],
         'season': p['season'], 'episode': p['episode'], 'lang': 'he',
         'release': _release_from(info),
         'source_hash': source_hash or '',
         'source_lang': source_lang or 'en',
-        'title': (info.get('title') or '').strip(),
+        'title': title,
         'year': str(info.get('year') or ''),
         'srt': srt_text,
     }
