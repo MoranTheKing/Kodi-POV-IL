@@ -163,21 +163,40 @@ get the most device testing before C flips the switch.
 - **Vendored libs needed for fetching:** cloudscraper (CF bypass),
   charset_normalizer (decode), requests_toolbelt (uploads), pysrt (validate).
   **Drop:** pyxbmct (picker, replaced by Kodi's native dialog).
-  **KEEP:** `auto_translate/` (Google/Bing/Yandex) — now a **fallback** (below).
+  **KEEP:** `auto_translate/` (Google/Bing/Yandex) — now the engine behind the
+  explicit "Google" translation mode (below), NOT a silent fallback.
 
-### Translation: Gemini-first, Google as FALLBACK (maintainer requirement)
-Gemini stays the primary, high-quality, gender-aware translator. We keep Google
-(`auto_translate/`) as a fallback, used ONLY when:
-- the user has **no Gemini API key**, OR
-- Gemini hits a **hard error** (crash / invalid key / API failure).
-NOT when Gemini is merely **overloaded/busy** (429/503 "try later" — common) —
-there we **retry Gemini**, never downgrade to Google. The UI must **strongly
-recommend connecting a Gemini key** ("much higher quality, gender-aware") to push
-users to set one up. (Implemented in B2's translation seam.)
+### Translation modes (maintainer-FINAL) — NO silent Google fallback
+Silent fallback to Google was rejected: a user without a Gemini key would get
+mediocre Google output, assume it's "the AI", and trash the addon's reputation.
+Instead, a `translation_mode` setting with THREE explicit modes:
+
+1. **AI (Gemini) — default.** Uses Gemini. If there is **no key**, we do NOT
+   silently use Google. Instead, when a user opens a translatable sub, a
+   one-time dialog leads them to connect Gemini:
+   *"High-quality Hebrew AI translation (gender-aware) — connect a free Gemini
+   key."* Buttons: **[Connect now]** (existing `connect_gemini` flow) ·
+   **[Use basic Google translate instead]** (→ mode 2) ·
+   **[Show source language untranslated]** (→ mode 3).
+2. **Google Translate (no key).** Explicit opt-in. **Clearly labelled** "basic
+   quality, NOT the AI, no gender awareness," so anyone on it knows it isn't the
+   AI. Backed by the vendored `auto_translate/`.
+3. **No translation — source language only.** Delivers the human/source sub
+   untranslated. NOTE: the source may be English OR another language we'd
+   otherwise translate from — this is **source-language**, not English-specific.
+
+**Hard Gemini error in AI mode** (key present, a REAL failure — NOT overload,
+where we retry Gemini): show a clear *"AI translation failed"* notice and OFFER
+*"use Google this time?"* (labelled). **Never silently substitute Google.**
+
+Strong "connect Gemini" messaging throughout to drive adoption. Implemented in
+B2's translation seam (replaces `engine.py::machine_translate_subs`; vendor
+`auto_translate/` then, as the engine for mode 2 + the one-time offer).
 
 ### The integration seam
-- Replace `engine.py::machine_translate_subs()` with the Gemini-first /
-  Google-fallback wrapper described above (B2).
+- Replace `engine.py::machine_translate_subs()` with the translation-mode
+  dispatcher described above (B2): AI(Gemini) / Google / off, plus the no-key
+  connect-prompt and the hard-error "use Google this time?" offer.
 - After `c_get_subtitles()` returns the human list, **merge in** our pool
   Hebrew + "🤖 translate" entries as 10-tuples with `site_id='[MoranSubs]'`,
   then sort so **human Hebrew → 🤖 AI Hebrew → English/other** (embedded Hebrew
