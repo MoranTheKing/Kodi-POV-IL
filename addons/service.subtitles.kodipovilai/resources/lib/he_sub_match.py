@@ -127,8 +127,12 @@ def best_score(src_release, names):
 
 
 def label_prefix(src_release, names):
-    """A small coloured '<NN>% עברית | ' prefix for the source's info line, or
-    '' when there's no usable match. Colour: green high / amber mid / red low."""
+    """A small coloured 'HEB <NN>% | ' prefix for the START of the source's
+    info line, or '' when there's no usable match. Colour: green high / amber
+    mid / red low. Deliberately LTR-only (no Hebrew letters): a Hebrew word
+    inline in the mostly-English info line triggers bidi reordering (it jumps
+    to the end) and then gets clipped when the line is full. An LTR badge stays
+    at the start and always shows, since the line truncates from the end."""
     try:
         best = best_score(src_release, names)
         if best <= 0:
@@ -139,6 +143,6 @@ def label_prefix(src_release, names):
             color = 'FFE0B23C'
         else:
             color = 'FFD0594F'
-        return '[COLOR {0}]{1}% עברית[/COLOR] | '.format(color, best)
+        return '[COLOR {0}][B]HEB {1}%[/B][/COLOR] | '.format(color, best)
     except Exception:
         return ''

@@ -29,7 +29,7 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 SOURCES_REL_PATH = 'resources/lib/windows/sources.py'
-MARKER = 'AI_SUBS_MATCH_v1'
+MARKER = 'AI_SUBS_MATCH_v2'
 
 # The for-loop that builds each source row (insert SETUP just before it).
 _LOOP_RE = re.compile(
