@@ -1,3 +1,10 @@
+v0.2.182
+- Built-in sources engine fixes: it now actually returns the human Hebrew
+  sources (Ktuvit, Wizdom, OpenSubtitles, etc.) when enabled -- a stray
+  top-level chardet import made the engine fail to load and the results were
+  silently dropped. Community-pool entries are now clearly marked "[AI · מאגר]".
+  Hidden engine settings no longer render as blank toggles in Expert level.
+
 v0.2.181
 - Unification groundwork (Phase B2): the built-in subtitle sources engine is
   now wired in behind a new experimental "Built-in sources engine" toggle in

@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <addon id="service.subtitles.kodipovilai"
        name="MoranSubs"
-       version="0.2.181"
+       version="0.2.182"
        provider-name="MoranTheKing">
   <requires>
     <import addon="xbmc.python" version="3.0.0"/>
     <import addon="script.module.requests" version="2.22.0"/>
+    <!-- Optional: used only by the built-in sources engine's download-time
+         cleanup (encoding detection). optional=true so a missing chardet
+         never blocks the add-on from loading (standalone installs exclude
+         the engine entirely). -->
+    <import addon="script.module.chardet" version="4.0.0" optional="true"/>
   </requires>
 
   <!-- Subtitle service entry point. Kodi calls default.py with
