@@ -2163,6 +2163,35 @@ def _ensure_pov_enabled():
         pass
 
 
+def _maybe_default_fentastic_player():
+    """Heal the FENtastic player choice ONLY when it's unset.
+
+    The build ships a default __chooseplayer=__netflixplayer so a fresh install
+    never lands on a "player with nothing" (an empty string matches no player
+    include in the skin -> no controls). But the quickfix must NOT keep
+    re-asserting that default, or it reverts the user's manual player choice on
+    every update (reported: "I switch to the simple player and the next update
+    puts me back on Netflix"). So we no longer ship the skin settings file in
+    the quickfix; instead we set a valid default HERE only when the value is
+    empty -- and never touch a value the user picked. FENtastic-only (the
+    setting is a FENtastic skin string; other skins handle players themselves).
+    Uses the skin API (not a file write) so it can't fight Kodi's in-memory
+    skin-settings cache."""
+    if xbmc is None:
+        return
+    try:
+        if xbmc.getSkinDir() != 'skin.fentastic':
+            return
+        cur = (xbmc.getInfoLabel('Skin.String(__chooseplayer)') or '').strip()
+        if cur:
+            return  # user (or a prior default) already set one -> respect it
+        xbmc.executebuiltin('Skin.SetString(__chooseplayer,__netflixplayer)')
+        xbmc.log('[' + ADDON_ID + '] set default __chooseplayer (was empty)',
+                 level=xbmc.LOGINFO)
+    except Exception:
+        pass
+
+
 def _maybe_default_pov_autoplay():
     """One-shot: set POV "Automatically Resume Playback" to Always, so picking
     up an in-progress item resumes from where you stopped (no resume/start-over
@@ -2282,6 +2311,12 @@ def main():
     # have left POV disabled on a slow box, which empties every home row + tile
     # and breaks playback on ALL skins. Bring it back if it's installed and off.
     _ensure_pov_enabled()
+
+    # Heal the FENtastic player choice only if it's empty (prevents the
+    # "player with nothing" bug) -- never overrides a value the user picked.
+    # The quickfix no longer ships the skin settings file, so this is what
+    # guarantees a valid default without reverting manual choices on update.
+    _maybe_default_fentastic_player()
 
     # Self-healing DarkSubs hook injection. Runs every startup so
     # if upstream DarkSubs updates and overwrites our hook, it
