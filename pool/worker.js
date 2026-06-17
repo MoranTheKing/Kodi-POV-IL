@@ -192,6 +192,24 @@ async function tmdbMeta(env, body) {
       genres: (d.genres || []).map(g => g.name),
       imdb_id: (d.external_ids && d.external_ids.imdb_id) || d.imdb_id || body.imdb_id || '',
     };
+    // The .srt filename needs a Latin title. For anime/foreign titles both the
+    // native original_title (e.g. Japanese) and our he title are non-Latin and
+    // strip to nothing in an ASCII filename -- which left names like
+    // "tvtt10233448.S02E22.he.srt". Grab the English title with one more call
+    // only when neither title we have carries Latin letters.
+    let latin = meta.original_title || meta.title || '';
+    if (!/[A-Za-z]/.test(latin)) {
+      try {
+        const enr = await fetch(`https://api.themoviedb.org/3/${base}/${id}` +
+          `?api_key=${key}&language=en-US`);
+        if (enr.ok) {
+          const end = await enr.json();
+          const en = end.title || end.name || '';
+          if (/[A-Za-z]/.test(en)) latin = en;
+        }
+      } catch (_) { /* ignore */ }
+    }
+    meta.latin_title = latin;
     if (isEp && body.season && body.episode) {
       try {
         const er = await fetch(`https://api.themoviedb.org/3/tv/${id}/season/` +
@@ -229,7 +247,7 @@ function cleanFilename(body, meta) {
     .replace(/[^A-Za-z0-9._-]/g, '.').replace(/\.{2,}/g, '.')
     .replace(/^\.+|\.+$/g, '').slice(0, 80);
   if (looksLikeRelease(rel)) return rel + '.he.srt';
-  let base = (meta.original_title || meta.title || body.title || '')
+  let base = (meta.latin_title || meta.original_title || meta.title || body.title || '')
     .replace(/[^A-Za-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '').slice(0, 60);
   if (!base) base = (isEp ? 'tv' : 'movie') + (id || '');
   if (!isEp && meta.year) base += '.' + meta.year;
