@@ -6,20 +6,52 @@
   <title>הורדות — Kodi POV IL</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 32px; background: #101820; color: #f6f1df; }
-    a { color: #ffd166; font-size: 1.15rem; display: block; margin: 14px 0; }
-    .card { max-width: 760px; padding: 24px; border: 1px solid #34495e; border-radius: 16px; background: #172635; }
+    a { color: #ffd166; }
+    .card { max-width: 760px; padding: 24px; border: 1px solid #34495e; border-radius: 16px; background: #172635; margin: 0 auto; }
+    h1 { margin-top: 0; }
+    .dl {
+      display: block; text-align: center; padding: 18px 24px; margin: 14px 0;
+      background: #ffd166; color: #101820; border-radius: 12px;
+      font-size: 1.25rem; font-weight: bold; text-decoration: none;
+    }
+    .dl small { display: block; font-size: 0.85rem; font-weight: normal; margin-top: 4px; color: #3a2e10; }
+    .dl.alt { background: #2a3f55; color: #ffd166; }
+    .dl.alt small { color: #b7c4cf; }
+    .more { font-size: 1.05rem; display: block; margin: 10px 0; }
     .muted { color: #b7c4cf; font-size: 0.95rem; }
+    code { direction: ltr; display: inline-block; background: #0b1118; padding: 3px 6px; border-radius: 6px; }
+    hr { border: none; border-top: 1px solid #34495e; margin: 22px 0; }
   </style>
 </head>
 <body>
   <main class="card">
     <h1>הורדות Kodi POV IL</h1>
     <p>בחר את הפלטפורמה. כל ההורדות כוללות את ה-wizard וה-build (FENtastic + POV) מותקנים מראש בתוך האפליקציה.</p>
-    <a href="android-tv/">📺 Android TV (32-ביט) — Fire TV, סטרימרים ישנים</a>
-    <a href="android-phone/">📱 Android (64-ביט) — Shield, טלפונים, סטרימרים חדשים</a>
-    <a href="lg-tv/">🖥 LG TV (webOS) — דורש developer mode</a>
-    <a href="windows/">💻 Windows installer</a>
+
+    <p class="muted"><strong>לא בטוח 32 או 64 ביט?</strong> טלפון / טאבלט / Nvidia Shield Pro → <strong>64-ביט</strong>. כל סטרימר / טלוויזיה חכמה אחרים (Fire TV, Onn, Xiaomi, Chromecast) → <strong>32-ביט</strong>.</p>
+
+    <a class="dl" href="https://morantheking.github.io/Kodi-POV-IL/downloads/Kodi-POV-IL-64bit.apk">
+      📱 הורד עכשיו — אנדרואיד 64-ביט
+      <small>Nvidia Shield, טלפונים, סטרימרים חדשים</small>
+    </a>
+    <a class="dl" href="https://morantheking.github.io/Kodi-POV-IL/downloads/Kodi-POV-IL-32bit.apk">
+      📺 הורד עכשיו — אנדרואיד 32-ביט
+      <small>Fire TV וסטרימרים ישנים יותר</small>
+    </a>
+
+    <p class="muted">הקישורים מורידים את ה-APK ישירות (קובץ אחד, בלי דפי ביניים) — מתאים גם ל-Downloader וגם לדפדפן. צריך הוראות התקנה מפורטות? <a href="android-phone/">64-ביט</a> · <a href="android-tv/">32-ביט</a>.</p>
+
+    <hr>
+
+    <a class="dl alt" href="https://github.com/MoranTheKing/Kodi-POV-IL/releases/latest/download/Kodi-POV-IL-Setup.exe">
+      💻 Windows — הורד Setup.exe
+      <small>מתקין את Kodi POV IL בנפרד מ-Kodi רגיל</small>
+    </a>
+    <a class="more" href="lg-tv/">🖥 LG TV (webOS) — דורש developer mode</a>
+
+    <hr>
     <p class="muted">מעדיף להתקין דרך Kodi הקיים? <a href="../wizard/">השתמש ב-Wizard</a> (הוסף את הסורס <code>https://morantheking.github.io/Kodi-POV-IL/wizard/</code> ב-File manager).</p>
+    <p class="muted">מדריך התקנה מלא (כל השיטות, חיבור Gemini/TMDB/Trakt): <a href="../install.html">install.html</a></p>
   </main>
 </body>
 </html>
