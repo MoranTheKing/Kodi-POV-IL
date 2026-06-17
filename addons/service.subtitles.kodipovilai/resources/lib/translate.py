@@ -33,7 +33,6 @@ from . import local_subs
 from . import prompt
 from . import srt
 from . import tmdb_helper
-from . import wyzie
 
 # Community subtitle pool (optional, gated by settings, OFF by default).
 # Imported defensively: a problem here must never break translation.
@@ -78,15 +77,11 @@ def _lang_display(code):
 
 def _source_id_for_ai(payload):
     """Stable identifier for one source SRT, used as part of the
-    cache key. Wyzie URLs are stable per SRT so we use them as-is.
-    Local files get content-hashed because Kodi reuses temp paths
-    like TempSubtitle.0.srt across movies -- the filename alone
-    is NOT a reliable identifier. Returns '' if we can't compute
-    one cheaply (caller will fall back to content-hash after the
-    SRT is in memory)."""
-    wyzie_url = payload.get('wyzie_url')
-    if wyzie_url:
-        return wyzie_url
+    cache key. Local files get content-hashed because Kodi reuses
+    temp paths like TempSubtitle.0.srt across movies -- the filename
+    alone is NOT a reliable identifier. Returns '' if we can't
+    compute one cheaply (caller will fall back to content-hash after
+    the SRT is in memory)."""
     local_path = payload.get('local_path')
     if local_path and os.path.isfile(local_path):
         try:
@@ -179,48 +174,11 @@ def list_candidates(info):
         # selected last -- which means after translating movie
         # A, opening the subtitle dialog for movie B would
         # surface movie A's Hebrew SRT as if it were a match
-        # for movie B. Only trust local files alongside the
-        # video or fresh Wyzie hits for Hebrew passthrough.
+        # for movie B. Only trust local files alongside the video
+        # for Hebrew passthrough.
         if lang == 'he':
             continue
         in_temp[lang] = entry['path']
-
-    # Wyzie hits if the user has set their API key. Look up Hebrew
-    # AND each source language in one round trip so we can offer
-    # passthrough Hebrew if available, otherwise translate options.
-    # Accept either imdb_id (set by the library scraper) or tmdb_id
-    # (set by POV / FENtastic plugin streams via UniqueId(tmdb)).
-    wyzie_by_lang = {}
-    wyzie_last_status = None  # for diagnostics in the empty-results branch
-    wyzie_last_error = None
-    if wyzie.has_api_key() and (imdb_id or tmdb_id):
-        wanted = ['he'] + [l for l in sources if l != 'he']
-        try:
-            hits = wyzie.search(
-                imdb_id=imdb_id or None,
-                tmdb_id=tmdb_id or None,
-                season=season, episode=episode,
-                languages=tuple(wanted),
-            )
-        except Exception as e:
-            kodi_utils.log('wyzie search failed: {0}'.format(e),
-                           level='WARNING')
-            hits = []
-        for h in hits:
-            lang = h.get('language')
-            if lang and lang not in wyzie_by_lang:
-                wyzie_by_lang[lang] = h
-        # Diagnostics: capture last HTTP status / error if the result
-        # list exposes them (the new _SearchResult subclass does).
-        wyzie_last_status = getattr(hits, 'last_http_status', None)
-        wyzie_last_error = getattr(hits, 'last_error', None)
-        kodi_utils.log(
-            'Wyzie search: imdb={0} tmdb={1} -> {2} hits '
-            '(last HTTP {3}, err {4}). per-lang: {5}'.format(
-                imdb_id, tmdb_id, len(wyzie_by_lang),
-                wyzie_last_status, wyzie_last_error,
-                {k: 1 for k in wyzie_by_lang}),
-            level='INFO')
 
     results = []
 
@@ -238,21 +196,6 @@ def list_candidates(info):
             'sync': 'true',
             'rating': '5',
             'is_hi': False, 'is_hd': False,
-        })
-    elif 'he' in wyzie_by_lang:
-        # Online Hebrew. Kodi will fetch it through us when picked.
-        have_hebrew = True
-        h = wyzie_by_lang['he']
-        results.append({
-            'filename': h.get('release') or h.get('name') or 'Hebrew',
-            'language': 'he',
-            'link': _encode_link({
-                'type': 'wyzie_passthrough', 'url': h['url'],
-            }),
-            'sync': 'false',
-            'rating': '4',
-            'is_hi': h.get('hi', False),
-            'is_hd': False,
         })
 
     # Community pool: Hebrew translations other users already made and shared.
@@ -274,10 +217,9 @@ def list_candidates(info):
         return results
 
     # 2. For each enabled source language, surface ONE "translate
-    #    this" entry. Priority order:
+    #    this" entry from a local source:
     #       (a) alongside file (local re-watch)
-    #       (b) temp-dir file (loaded by another addon)
-    #       (c) Wyzie online (single-click flow if user has key)
+    #       (b) temp-dir file (loaded by another addon, e.g. DarkSubs)
     #    Built into a separate list so cache hits can be sorted to
     #    the top of the AI section (just under Hebrew passthrough).
     ai_entries = []
@@ -308,25 +250,6 @@ def list_candidates(info):
                              'local_path': local_path},
             })
             continue
-
-        wyzie_hit = wyzie_by_lang.get(src_lang)
-        if wyzie_hit:
-            seen_langs.add(src_lang)
-            ai_entries.append({
-                'filename': 'AI Hebrew (translate {0} via Wyzie)'.format(
-                    _lang_display(src_lang)),
-                'language': 'he',
-                'link': _encode_link({
-                    'type': 'ai',
-                    'source_lang': src_lang,
-                    'wyzie_url': wyzie_hit['url'],
-                }),
-                'sync': 'false',
-                'rating': '4' if src_lang == 'en' else '3',
-                'is_hi': False, 'is_hd': False,
-                '_payload': {'source_lang': src_lang,
-                             'wyzie_url': wyzie_hit['url']},
-            })
 
     # Mark cached entries with a visible label and sort them to the
     # top of the AI section so a returning user picks the
@@ -360,53 +283,16 @@ def list_candidates(info):
         reasons = []
         if not imdb_id and not tmdb_id:
             reasons.append('אין IMDB / TMDB id מהנגן')
-        if not wyzie.has_api_key():
-            reasons.append('לא הוגדר Wyzie API key')
-        elif (imdb_id or tmdb_id) and not wyzie_by_lang:
-            # Be specific about WHY Wyzie returned empty -- the
-            # difference between "service down", "key rejected" and
-            # "title genuinely not in their index" matters a lot
-            # for the user trying to debug.
-            if wyzie_last_status is None:
-                reasons.append(
-                    'Wyzie לא הגיב (timeout). Wyzie מקרטעת לאחרונה '
-                    '(Cloudflare 522). זה אצלם, לא אצלך. אפשרות חלופית '
-                    'מיידית: לחץ על כתובית באנגלית מ-All_Subs - התוסף '
-                    'AI יתרגם אותה אוטומטית לעברית.')
-            elif wyzie_last_status == 200:
-                reasons.append(
-                    'Wyzie החזיר 0 תוצאות לסרט הזה גם תחת קודי שפה '
-                    'חלופיים (he/heb/iw). הסרט כנראה לא באינדקס שלהם.')
-            elif wyzie_last_status in (401, 403):
-                reasons.append(
-                    'Wyzie API key נדחה ({0}). בדוק ב-"בדיקת חיבור '
-                    'Wyzie".'.format(wyzie_last_status))
-            elif wyzie_last_status == 429:
-                reasons.append(
-                    'חרגת ממכסת Wyzie היומית (1000 בקשות). המתן '
-                    'עד מחר.')
-            elif 500 <= wyzie_last_status < 600:
-                reasons.append(
-                    'Wyzie במצב תקלה (HTTP {0}). נסה שוב מאוחר '
-                    'יותר.'.format(wyzie_last_status))
-            else:
-                reasons.append(
-                    'Wyzie החזיר HTTP {0} ({1}). נסה "בדיקת חיבור '
-                    'Wyzie".'.format(wyzie_last_status,
-                                     wyzie_last_error or '?'))
         if not alongside and not in_temp:
             reasons.append('אין קבצי SRT ב-temp או ליד הסרט')
-        msg = 'AI: אין מקור לתרגום ({0}). אפשרויות: 1) בחר ' \
-              'כתובית באנגלית מתוסף אחר ופתח שוב חיפוש 2) הגדר ' \
-              'Wyzie API key 3) חפש סרט שיש לו IMDB id'.format(
+        msg = 'AI: אין מקור לתרגום ({0}). בחר כתובית באנגלית מ-DarkSubs ' \
+              'ופתח שוב את חיפוש הכתוביות — התרגום ל-AI יופעל אוטומטית.'.format(
                 ' / '.join(reasons) or 'לא ידוע')
         kodi_utils.notify(msg, time_ms=15000)
         kodi_utils.log('list_candidates returned empty: ' + repr(
             {'imdb_id': imdb_id, 'tmdb_id': tmdb_id,
-             'has_wyzie_key': wyzie.has_api_key(),
              'alongside_count': len(alongside),
-             'in_temp_count': len(in_temp),
-             'wyzie_hits_count': len(wyzie_by_lang)}),
+             'in_temp_count': len(in_temp)}),
             level='WARNING')
 
     return results
@@ -467,8 +353,7 @@ def _pool_quality_ok(src_text, final):
         return True
 
 
-def _backfill_pool_async(info, translated_path, local_source, wyzie_url,
-                         source_lang):
+def _backfill_pool_async(info, translated_path, local_source, source_lang):
     """Share an ALREADY-cached Hebrew translation to the community pool, in
     the background, the first time the user re-watches it after enabling
     pool_share. Used at the EARLY cache hit, where the source bytes (and
@@ -496,8 +381,6 @@ def _backfill_pool_async(info, translated_path, local_source, wyzie_url,
                         raw = f.read()
                 except (IOError, OSError):
                     raw = None
-            elif wyzie_url:
-                raw = wyzie.download(wyzie_url)
             if not raw:
                 return
             prepared = _prepare_source(raw)
@@ -564,33 +447,6 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             return path
         return None
 
-    if kind == 'wyzie_passthrough':
-        kodi_utils.notify(
-            'AI: מוריד עברית מ-Wyzie ישירות (לא תרגום AI)',
-            time_ms=4000)
-        url = payload.get('url') or ''
-        text = wyzie.download(url)
-        if not text:
-            kodi_utils.notify('AI: Wyzie download נכשל',
-                              time_ms=8000)
-            return None
-        # Unique per Wyzie URL so different movies don't overwrite
-        # each other in the cache dir, and so Kodi doesn't see the
-        # same file path twice in a row and assume "same subtitle
-        # as last play".
-        import hashlib as _hashlib
-        url_hash = _hashlib.sha1(url.encode('utf-8')).hexdigest()[:16]
-        out = os.path.join(kodi_utils.cache_dir(),
-                           'wyzie_{0}.he.srt'.format(url_hash))
-        try:
-            with open(out, 'w', encoding='utf-8') as f:
-                f.write(text)
-            return out
-        except OSError as e:
-            kodi_utils.notify('AI: שמירה נכשלה - {0}'.format(e),
-                              time_ms=8000)
-            return None
-
     if kind == 'pool':
         # A community-pool entry the user picked from the dialog. Fetch the
         # exact shared Hebrew SRT (by source hash) and hand it to Kodi.
@@ -621,7 +477,6 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     source_lang = payload.get('source_lang') or 'en'
 
     local_source = payload.get('local_path')
-    wyzie_url = payload.get('wyzie_url')
 
     # Respect the user's preferred subtitle language: if they've chosen a
     # specific non-Hebrew language (e.g. English) DON'T force an AI Hebrew
@@ -639,31 +494,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             time_ms=4000)
         if local_source and os.path.isfile(local_source):
             return local_source
-        if wyzie_url:
-            text = wyzie.download(wyzie_url)
-            if text:
-                import hashlib as _hsrc
-                sid = _hsrc.sha1(wyzie_url.encode('utf-8')).hexdigest()[:16]
-                out = os.path.join(
-                    kodi_utils.cache_dir(),
-                    'src_{0}.{1}.srt'.format(sid, source_lang or 'en'))
-                try:
-                    with open(out, 'w', encoding='utf-8') as f:
-                        f.write(text)
-                    return out
-                except OSError:
-                    return None
         return None
 
     # Two-tier cache strategy:
-    #  1. EARLY lookup: Wyzie URL is stable per-SRT; local path is
-    #     hashed by content (cheap because the file is small).
-    #     This avoids a redundant Wyzie download / re-translation
-    #     for entries the user already translated. Same key the
-    #     [CACHE] marker in list_candidates uses.
+    #  1. EARLY lookup: the local path is hashed by content (cheap
+    #     because the file is small). This avoids a redundant
+    #     re-translation for entries the user already translated.
+    #     Same key the [CACHE] marker in list_candidates uses.
     #  2. CONTENT-HASH lookup after the source is in memory: catches
-    #     the rare case where two different Wyzie URLs / local
-    #     paths point to byte-identical SRTs.
+    #     the rare case where two different local paths point to
+    #     byte-identical SRTs.
     early_source_id = _source_id_for_ai(payload)
     if early_source_id:
         translated = cache.translated_path(
@@ -687,11 +527,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             # the cache hit still returns instantly. One-shot per file.
             if pool is not None and pool.share_enabled():
                 _backfill_pool_async(info, translated, local_source,
-                                     wyzie_url, source_lang)
+                                     source_lang)
             return translated
 
-    # Read the source SRT. Either we recorded a local path at list
-    # time (alongside / temp dir) or a Wyzie download URL.
+    # Read the source SRT recorded at list time (alongside the video
+    # or a temp-dir file loaded by another addon, e.g. DarkSubs).
     src_text = None
     if local_source and os.path.isfile(local_source):
         try:
@@ -700,8 +540,6 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 src_text = f.read()
         except (IOError, OSError):
             src_text = None
-    elif wyzie_url:
-        src_text = wyzie.download(wyzie_url)
     if not src_text:
         kodi_utils.notify(
             'מקור הכתוביות לא נמצא — בחר שוב',
@@ -1219,9 +1057,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # Also save under the content-hash slot when it differs from
     # the early-source-id slot. That way the same translation
     # answers a future lookup whether the user comes back via the
-    # same URL/local path OR via a different source whose bytes
-    # happen to match (e.g. a re-download of the same SRT from a
-    # different Wyzie URL).
+    # same local path OR via a different source whose bytes
+    # happen to match (e.g. a re-read of the same SRT from a
+    # different local path).
     if early_source_id and content_id and content_id != early_source_id:
         try:
             cache.save_text(

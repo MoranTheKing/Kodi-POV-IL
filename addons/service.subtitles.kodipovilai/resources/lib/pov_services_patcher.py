@@ -1,5 +1,5 @@
-# Self-healing injection of two AI service entries (Gemini, Wyzie)
-# into the POV plugin's "My Services" menu
+# Self-healing injection of the Gemini AI service entry into the POV
+# plugin's "My Services" menu
 # (plugin.video.pov/resources/lib/modules/myservices.py).
 #
 # The POV plugin owns its own "Connect Services" UI that's separate
@@ -35,9 +35,9 @@ POV_MEDIA_REL_PATH = 'resources/skins/Default/media'
 # Source paths for the two icons we ship.
 ICON_SRC_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), 'icons')
-ICON_FILENAMES = ('gemini.png', 'wyzie.png')
+ICON_FILENAMES = ('gemini.png',)
 
-INJECT_VERSION = 7
+INJECT_VERSION = 8
 MARKER = '# AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
 END_MARKER = '# END AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
 TUPLE_MARKER = "# AI_SUBS_MYSERVICES_TUPLE_v{0}".format(INJECT_VERSION)
@@ -136,70 +136,6 @@ class Gemini:
         return True
 
 
-class Wyzie:
-    icon = 'wyzie.png'  # copied into POV's media dir by pov_services_patcher
-
-    def __init__(self):
-        self._ai = _ai_get_addon()
-        try:
-            v = self._ai.getSetting('wyzie_api_key') if self._ai else ''
-        except Exception:
-            v = ''
-        self.token = (v or '').strip()
-
-    def set(self):
-        cls_name = 'Wyzie'
-        if not self._ai:
-            notification('Kodi POV IL AI subtitles addon not installed')
-            return
-        if self.token:
-            if not confirm_dialog(): return
-            try: self._ai.setSetting('wyzie_api_key', '')
-            except Exception: pass
-            return notification('Removed %s Authorization' % cls_name)
-        # First-time setup: nudge that Wyzie is optional. The build
-        # ships DarkSubs (service.subtitles.All_Subs) which already
-        # gives non-Hebrew sources -- clicking those triggers our AI
-        # via the engine.py hook, no Wyzie needed. Users without
-        # DarkSubs DO benefit from Wyzie, so we still offer it.
-        try:
-            _has_darksubs = False
-            try:
-                _ai_xbmcaddon.Addon('service.subtitles.All_Subs')
-                _has_darksubs = True
-            except Exception:
-                pass
-            if _has_darksubs:
-                _msg = (
-                    'שים לב: יש לך תוסף DarkSubs מותקן, אז Wyzie '
-                    'בעצם לא נחוץ -- לחיצה על כתובית באנגלית (או כל '
-                    'שפה לא-עברית) ב-DarkSubs כבר מפעילה את התרגום '
-                    'AI שלי אוטומטית.\\n\\nאם בכל זאת אתה רוצה Wyzie '
-                    'key (למשל למקור אונליין נוסף לתוך התוסף שלי, '
-                    'בלי לעבור דרך DarkSubs):\\n'
-                    'https://store.wyzie.io/redeem\\n'
-                    '1000 בקשות ביום, חינם.'
-                )
-            else:
-                _msg = (
-                    'Wyzie נותן מקור כתוביות אונליין חינמי '
-                    '(1000 בקשות ביום). הירשם ב-store.wyzie.io/'
-                    'redeem, ואז הדבק את ה-key שתקבל במסך הבא.\\n\\n'
-                    '(אופציונלי - אם תתקין בעתיד את התוסף '
-                    'DarkSubs, תוכל לוותר על Wyzie לגמרי.)'
-                )
-            kodi_utils.ok_dialog(
-                heading='Wyzie - איך משיגים API key', text=_msg)
-        except Exception:
-            pass
-        api_key = kodi_utils.dialog.input('Wyzie API Key:').strip()
-        if not api_key: return
-        try: self._ai.setSetting('wyzie_api_key', api_key)
-        except Exception:
-            return notification('Failed to write to AI subs addon')
-        notification('Set %s Authorization' % cls_name)
-        return True
-
 
 # Replace authorize() with a wrapper that adds our two services to
 # the menu. We can't reliably regex-edit the inline tuple because
@@ -207,7 +143,7 @@ class Wyzie:
 # function instead.
 _ai_orig_authorize = authorize
 def authorize():
-    _ai_extra = (('gemini-ai', Gemini), ('wyzie', Wyzie))
+    _ai_extra = (('gemini-ai', Gemini),)
     # Monkey-patch the module's `_builder` indirectly by replicating
     # authorize()'s logic exactly, but with our extras appended to
     # the services list. (We can't just call _orig_authorize and

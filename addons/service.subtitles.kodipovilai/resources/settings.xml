@@ -144,41 +144,6 @@
         </setting>
       </group>
 
-      <group id="wyzie" label="32250"> <!-- Wyzie Subs (online source) -->
-        <setting id="info_wyzie_key" type="action" label="32251"> <!-- Claim a free Wyzie key -->
-          <level>0</level>
-          <default></default>
-          <constraints>
-            <allowempty>true</allowempty>
-          </constraints>
-          <control type="button" format="action">
-            <heading>32251</heading>
-          </control>
-          <data>RunScript(service.subtitles.kodipovilai,action=open_wyzie_signup)</data>
-        </setting>
-        <setting id="wyzie_api_key" type="string" label="32252" help="32253"> <!-- Wyzie API key + help -->
-          <level>0</level>
-          <default></default>
-          <constraints>
-            <allowempty>true</allowempty>
-          </constraints>
-          <control type="edit" format="string">
-            <heading>32252</heading>
-          </control>
-        </setting>
-        <setting id="test_wyzie_connection" type="action" label="32254"> <!-- Test Wyzie connection -->
-          <level>0</level>
-          <default></default>
-          <constraints>
-            <allowempty>true</allowempty>
-          </constraints>
-          <control type="button" format="action">
-            <heading>32254</heading>
-          </control>
-          <data>RunScript(service.subtitles.kodipovilai,action=test_wyzie_connection)</data>
-        </setting>
-      </group>
-
       <group id="tmdb_notice" label="32260"> <!-- TMDB (for gender-aware translation) -->
         <setting id="info_tmdb_notice" type="action" label="32261"> <!-- Static notice text + open services screen -->
           <level>0</level>
