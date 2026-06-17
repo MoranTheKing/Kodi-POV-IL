@@ -1582,6 +1582,61 @@ def _maybe_reload_nox_skin():
         pass
 
 
+def _maybe_patch_estuary_change_source():
+    """Add a 'החלף מקור' (change source) button to the Estuary skin's player OSD
+    (skin.estuary/xml/VideoOSD.xml). The build's Estuary shipped without one
+    (only a stale commented-out attempt that used the wrong POV param), so a bad
+    source mid-playback left users stuck. No-op when Estuary isn't installed.
+    Marker-gated + XML-parse-checked so it can never corrupt the skin / black-
+    screen the player."""
+    try:
+        from resources.lib import estuary_change_source_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = estuary_change_source_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'estuary_change_source_patcher: change-source button added to '
+                'Estuary OSD', level='INFO')
+            _maybe_reload_estuary_skin()
+        elif status in ('unmatched', 'parse_failed', 'write_failed',
+                        'read_failed'):
+            kodi_utils.log('estuary_change_source_patcher: ' + status,
+                           level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'estuary_change_source_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_reload_estuary_skin():
+    """Reload once so a freshly-applied Estuary OSD patch shows this session --
+    only when Estuary is the active skin AND the wizard's quick-update notice
+    isn't on screen. Otherwise the button appears on the next Kodi restart."""
+    try:
+        import xbmc
+        import xbmcaddon
+    except Exception:
+        return
+    try:
+        if xbmc.getSkinDir() != 'skin.estuary':
+            return
+        try:
+            wiz = xbmcaddon.Addon('plugin.program.kodipovilwizard')
+            if (wiz.getSetting('quick_update_notedismiss') == 'false'
+                    and wiz.getSetting('quick_update_noteid')):
+                return
+        except Exception:
+            pass
+        xbmc.executebuiltin('ReloadSkin()')
+    except Exception:
+        pass
+
+
 def _maybe_patch_darksubs_picker_label():
     """Self-healing patch of DarkSubs's custom picker dialog XML so
     long release-name labels in each row marquee-scroll horizontally
@@ -2330,6 +2385,10 @@ def main():
     # shipped without one, so a bad source mid-playback was a dead end.
     # Skin-gated (no-op unless skin.povil.nox is installed), XML-checked.
     _maybe_patch_nox_change_source()
+
+    # Same for the Estuary skin (skin.estuary) -- it also shipped without a
+    # change-source button. Skin-gated, XML-parse-checked.
+    _maybe_patch_estuary_change_source()
 
     # AllSubs Plus crashes at import on Windows when shutil.copy hits a
     # NTFS junction/hardlink (SameFileError). Patch its 6 copy lines in
