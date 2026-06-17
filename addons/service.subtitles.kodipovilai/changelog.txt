@@ -1,3 +1,13 @@
+v0.2.166
+- Home tiles: stop resurrecting personal "my movies/my shows" tiles (Trakt /
+  POV) after you delete them. The favourites patcher now remembers which tiles
+  you removed and won't re-add them. It tells a real deletion (the tile is gone
+  but its TMDB anchor tile is still there) from a skin-switch reseed (which
+  restores everything), so it respects deletions without breaking the
+  survive-skin-switch behaviour. Covers FENtastic + NOX (shared favourites.xml).
+  (First run after this update behaves as before; delete once more and it
+  sticks. AF3's separate home nodes will follow.)
+
 v0.2.165
 - Remember picked source is now ON by default (new installs via the default;
   existing users via a one-shot migration -- a manual opt-out still sticks).
