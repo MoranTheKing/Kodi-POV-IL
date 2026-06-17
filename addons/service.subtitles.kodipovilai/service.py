@@ -1506,6 +1506,60 @@ def _maybe_patch_skin_dialog_subtitles():
             pass
 
 
+def _maybe_patch_old_change_source():
+    """Add a 'החלף מקור' (change source) button to the OLD skin's player OSD
+    (skin.povil.old/xml/VideoOSD.xml). OLD shipped without one, so a bad source
+    mid-playback left users stuck with no way to pick another. No-op when OLD
+    isn't installed. Marker-gated + XML-parse-checked so it can never corrupt
+    the skin / black-screen the player."""
+    try:
+        from resources.lib import old_change_source_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = old_change_source_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'old_change_source_patcher: change-source button added to '
+                'OLD OSD', level='INFO')
+            _maybe_reload_old_skin()
+        elif status in ('unmatched', 'parse_failed', 'write_failed',
+                        'read_failed'):
+            kodi_utils.log('old_change_source_patcher: ' + status,
+                           level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log('old_change_source_patcher failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_reload_old_skin():
+    """Skin XML is read at skin load, so a freshly-applied OLD OSD patch only
+    shows after a reload. Reload once -- but only when OLD is the active skin
+    AND the wizard's quick-update notice isn't on screen (reloading would close
+    it). Otherwise the button simply appears on the next Kodi restart."""
+    try:
+        import xbmc
+        import xbmcaddon
+    except Exception:
+        return
+    try:
+        if xbmc.getSkinDir() != 'skin.povil.old':
+            return
+        try:
+            wiz = xbmcaddon.Addon('plugin.program.kodipovilwizard')
+            if (wiz.getSetting('quick_update_notedismiss') == 'false'
+                    and wiz.getSetting('quick_update_noteid')):
+                return
+        except Exception:
+            pass
+        xbmc.executebuiltin('ReloadSkin()')
+    except Exception:
+        pass
+
+
 def _maybe_patch_darksubs_picker_label():
     """Self-healing patch of DarkSubs's custom picker dialog XML so
     long release-name labels in each row marquee-scroll horizontally
@@ -2205,6 +2259,11 @@ def main():
     # patcher handles that file -- skin-gated, no-op when AF3 isn't
     # installed.
     _maybe_patch_af3_dialog_subtitles()
+
+    # Add a "change source" button to the OLD skin's player OSD -- OLD
+    # shipped without one, so a bad source mid-playback was a dead end.
+    # Skin-gated (no-op unless skin.povil.old is installed), XML-checked.
+    _maybe_patch_old_change_source()
 
     # AllSubs Plus crashes at import on Windows when shutil.copy hits a
     # NTFS junction/hardlink (SameFileError). Patch its 6 copy lines in
