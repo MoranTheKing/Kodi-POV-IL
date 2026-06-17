@@ -101,20 +101,24 @@ no `RunScript`, no sentinel file, no 300 s poll, no addon reload.
 Each phase reaches users via the normal quick-update; B/C are the risky ones and
 get the most device testing before C flips the switch.
 
-## 5. Key decisions needed (before coding)
+## 5. Key decisions — RESOLVED
 
-1. **Picker UI:** keep DarkSubs' custom styled pyxbmct picker (port
-   `sub_window.py`, more code, same look) **or** switch to Kodi's native
-   subtitle dialog (less code, consistent, but the look changes from today's
-   screenshot)? *Recommendation: native* — simpler, we already style its
-   header/rows; fewer moving parts for a one-addon goal.
-2. **Telegram (telethon) sources:** are the Israeli Telegram subtitle channels a
-   must-keep source? If yes we vendor telethon (big). If most human subs come
-   from OpenSubtitles, we could drop Telegram and shrink the surface a lot.
-3. **Upstream re-sync process:** keep a pristine vendored copy of DarkSubs +
-   our diff, so when Tal updates DarkSubs we can re-apply. Document it.
-4. **Timeline appetite:** B is multi-day. OK to run it as a long-lived parallel
-   track while smaller fixes keep shipping?
+1. **Picker UI: Kodi's native subtitle dialog + a well-organized unified list.**
+   The "beauty" comes from the list's organization (sections + coloured badges +
+   ordering), which MoranSubs fully controls via the entries it returns, and
+   renders on every skin. (A custom pyxbmct window can be added later if we ever
+   want pixel-identical chrome across skins, but it's not needed to start.)
+2. **Telegram (telethon) sources: KEEP — vendor them in.** More subtitle
+   coverage is wanted, so the Israeli Telegram channels stay. We vendor telethon.
+3. **Upstream re-sync: not a concern.** DarkSubs (`service.subtitles.All_Subs`,
+   v4.7.7) has **no auto-update** at all — no `<repository>` in its addon.xml, no
+   self-updater anywhere, not in our repo or the wizard. It's simply bundled in
+   the build (530 files; the quickfix only carries the 3 files we patch). So it
+   was *already* manually controlled. Absorbing it into MoranSubs changes nothing
+   about updates; future DarkSubs bumps are a manual code replacement, exactly as
+   today.
+4. **Timeline: run Phase B as a long-lived parallel track**, while smaller fixes
+   keep shipping.
 
 ## 6. Risks & mitigations
 
