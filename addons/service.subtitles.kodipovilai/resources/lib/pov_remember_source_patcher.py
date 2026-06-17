@@ -1,20 +1,14 @@
-# PHASE 1 (capture only) of "remember the source the user picked".
+# "Remember the source the user picked" -- patches plugin.video.pov's
+# sources.py with TWO gated hooks (both no-ops unless our `remember_source`
+# setting is on, both reverted-then-reapplied so versions don't stack, and the
+# whole file is compile()-checked before writing so it can never break POV):
 #
-# Injects a tiny, STABLE block into plugin.video.pov's sources.py right before
-# it yields the resolved link of the picked source. The block is intentionally
-# minimal: it checks our `remember_source` setting (OFF by default), logs that
-# the hook fired, and -- only when on -- imports our source_capture module (by
-# path, since POV is a separate add-on) and hands it the source. All real logic
-# + logging lives in source_capture.py, so it can be iterated without
-# re-patching POV.
-#
-# ANCHOR: `yield link` is unique in POV's sources.py. We match it with a
-# tolerant regex (optional inline `if ...:` prefix, any indent) so it works on
-# every POV variant. Any previously-injected version of our block is reverted
-# first, so upgrades don't stack.
-#
-# SAFETY: the patched file is compile()-checked BEFORE writing; if anything is
-# off we skip and leave POV untouched -- it can never break playback.
+#   1. CAPTURE  -- right before POV yields the resolved link, record the chosen
+#      source (name/hash/quality/provider) per media. (source_capture.capture)
+#   2. AUTO-PICK -- at the top of display_results(), if the user already picked
+#      a source for this media, play the same/similar one and skip the source
+#      dialog. (source_capture.autopick) First watch -> no record -> dialog;
+#      later watches -> auto-play.
 
 import os
 import re
@@ -32,21 +26,30 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 SOURCES_REL_PATH = 'resources/lib/modules/sources.py'
-MARKER = 'AI_SUBS_REMEMBER_SOURCE_v3'
+CAP_MARKER = 'AI_SUBS_REMEMBER_SOURCE_v4'
+PICK_MARKER = 'AI_SUBS_AUTOPICK_v4'
 
-# The unique yield site, with optional inline `if ...:` prefix, any indent.
+# Unique yield site (optional inline `if ...:` prefix, any indent).
 _YIELD_RE = re.compile(
     r'^(?P<indent>[ \t]*)'
     r'(?P<iff>if (?:not link is None|link is not None):[ \t]*)?'
     r'yield link[ \t]*$',
     re.MULTILINE,
 )
-
-# Any previously-injected block: from our marker comment through the next
-# `yield link` line. Used to revert before re-applying (so upgrades don't stack).
-_REVERT_RE = re.compile(
+# display_results method definition (any indent).
+_DISPLAY_RE = re.compile(
+    r'^(?P<indent>[ \t]*)def display_results\(self, results\):[ \t]*$',
+    re.MULTILINE,
+)
+# Revert: capture block (marker comment .. yield link) -> plain yield.
+_REVERT_CAP_RE = re.compile(
     r'[ \t]*#[ \t]*AI_SUBS_REMEMBER_SOURCE_v\d+.*?\n(?P<yi>[ \t]*)yield link[ \t]*$',
     re.DOTALL | re.MULTILINE,
+)
+# Revert: autopick block (marker comment .. its closing `except Exception: pass`).
+_REVERT_PICK_RE = re.compile(
+    r'[ \t]*#[ \t]*AI_SUBS_AUTOPICK_v\d+.*?except Exception: pass[ \t]*\n',
+    re.DOTALL,
 )
 
 
@@ -70,9 +73,9 @@ def _sources_path():
     return p if os.path.isfile(p) else ''
 
 
-def _hook_lines(body_indent, eol):
+def _capture_lines(body_indent, eol):
     raw = [
-        '# ' + MARKER,
+        '# ' + CAP_MARKER,
         'try:',
         '\timport xbmc as _rs_x, xbmcaddon as _rs_a',
         "\t_rs_on = (_rs_a.Addon('service.subtitles.kodipovilai').getSetting('remember_source') or '')",
@@ -88,69 +91,89 @@ def _hook_lines(body_indent, eol):
     return ''.join(body_indent + ln + eol for ln in raw)
 
 
+def _autopick_lines(body_indent, eol):
+    raw = [
+        '# ' + PICK_MARKER,
+        'try:',
+        '\timport xbmcaddon as _ap_a',
+        "\tif (_ap_a.Addon('service.subtitles.kodipovilai').getSetting('remember_source') or '').strip().lower() == 'true':",
+        '\t\timport sys as _ap_s, xbmcvfs as _ap_v',
+        "\t\t_ap_p = _ap_v.translatePath('special://home/addons/service.subtitles.kodipovilai/resources/lib')",
+        '\t\tif _ap_p not in _ap_s.path: _ap_s.path.insert(0, _ap_p)',
+        '\t\timport source_capture as _ap_c',
+        '\t\t_ap_pick = _ap_c.autopick(self, results)',
+        '\t\tif _ap_pick is not None:',
+        '\t\t\tself._kill_progress_dialog()',
+        '\t\t\treturn self.play_file(results, _ap_pick)',
+        'except Exception: pass',
+    ]
+    return ''.join(body_indent + ln + eol for ln in raw)
+
+
 def ensure_patched():
     path = _sources_path()
     if not path:
         return 'no_file'
     try:
         with open(path, 'r', encoding='utf-8') as f:
-            content = f.read()
+            original = f.read()
     except OSError as e:
         _log('read failed: {0}'.format(e), level='WARNING')
         return 'read_failed'
 
-    eol = '\r\n' if '\r\n' in content[:4096] else '\n'
+    eol = '\r\n' if '\r\n' in original[:4096] else '\n'
+    already = CAP_MARKER in original and PICK_MARKER in original
 
-    already = MARKER in content
+    # Revert any prior versions of either hook so we re-apply cleanly.
+    content = _REVERT_CAP_RE.sub(lambda m: m.group('yi') + 'yield link', original)
+    content = _REVERT_PICK_RE.sub('', content)
 
-    # Revert any previously-injected version (v1/v2/v3...) back to a plain
-    # `yield link`, so we can (re)apply the current version cleanly.
-    def _revert(m):
-        return m.group('yi') + 'yield link'
-    reverted = _REVERT_RE.sub(_revert, content)
-    if reverted != content:
-        content = reverted
-        # If the only marker present was the current one and revert changed
-        # nothing else, we'll re-apply identical content (harmless).
-
+    # 1) capture hook at the yield site.
     m = _YIELD_RE.search(content)
     if not m:
-        _log('no `yield link` site found -- skipping', level='WARNING')
+        _log('yield site not found -- skipping', level='WARNING')
         return 'unmatched'
-
     indent = m.group('indent')
     if m.group('iff'):
         body = indent + '\t'
-        replacement = (indent + 'if not link is None:' + eol
-                       + _hook_lines(body, eol)
-                       + body + 'yield link')
+        cap = (indent + 'if not link is None:' + eol
+               + _capture_lines(body, eol) + body + 'yield link')
     else:
-        replacement = _hook_lines(indent, eol) + indent + 'yield link'
+        cap = _capture_lines(indent, eol) + indent + 'yield link'
+    content = content[:m.start()] + cap + content[m.end():]
 
-    new_content = content[:m.start()] + replacement + content[m.end():]
+    # 2) autopick hook at the top of display_results().
+    d = _DISPLAY_RE.search(content)
+    if not d:
+        _log('display_results not found -- skipping', level='WARNING')
+        return 'unmatched'
+    body = d.group('indent') + '\t'
+    after = content[d.end():]
+    if after.startswith(eol):
+        # insert the block right after the def line's newline (idempotent: the
+        # revert removes exactly the block, restoring the original).
+        content = (content[:d.end()] + eol + _autopick_lines(body, eol)
+                   + after[len(eol):])
+    else:
+        content = (content[:d.end()] + eol + _autopick_lines(body, eol) + after)
 
+    # SAFETY: never write a file that doesn't compile.
     try:
-        compile(new_content, path, 'exec')
+        compile(content, path, 'exec')
     except SyntaxError as e:
         _log('patched content would not compile -- skipping ({0})'.format(e),
              level='WARNING')
         return 'compile_failed'
 
-    # If the file already had exactly this version and revert produced the same
-    # bytes, avoid a redundant write.
-    try:
-        with open(path, 'r', encoding='utf-8') as f:
-            if f.read() == new_content:
-                return 'unchanged'
-    except OSError:
-        pass
+    if content == original:
+        return 'unchanged'
 
     tmp = path + '.aitmp'
     try:
         with open(tmp, 'w', encoding='utf-8') as f:
-            f.write(new_content)
+            f.write(content)
         os.replace(tmp, path)
-        _log('injected remember-source capture hook (v3)', level='INFO')
+        _log('injected capture + autopick hooks (v4)', level='INFO')
         return 'unchanged' if already else 'patched'
     except OSError as e:
         try:
