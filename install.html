@@ -326,16 +326,24 @@
       </div>
 
       <div class="step">
-        <h4>שלב ב' — הזן את הקוד</h4>
+        <h4>שלב ב' — הזן את הקוד הישיר (הדרך הכי אמינה)</h4>
+        <p>הזן ל-Downloader את הקוד הישיר לפי הארכיטקטורה — הוא מוריד את ה-APK מיד בשלב אחד, בלי דף ביניים שתוקע את Downloader:</p>
         <ul>
-          <li>פתח את Downloader</li>
-          <li>בשדה הראשי (שורת ה-URL/Code) הזן: <code>6699594</code></li>
-          <li>לחץ <strong>GO</strong> (כפתור צהוב)</li>
-          <li>הקוד יוביל אותך לעמוד בחירה — שם תבחר את המכשיר ואת הגרסה שמתאימים לך (אנדרואיד 32-bit / אנדרואיד 64-bit / Windows / webOS וכו')</li>
-          <li>אחרי הבחירה — Downloader יוריד את הקובץ אוטומטית</li>
+          <li>פתח את Downloader, ובשדה ה-URL/Code הזן את הקוד לפי המכשיר:</li>
+          <li><strong>אנדרואיד 64-bit</strong> (טלפון / טאבלט / Shield Pro): קוד <code>5364281</code></li>
+          <li><strong>אנדרואיד 32-bit</strong> (Fire TV / שאר הסטרימרים): קוד <code>3158525</code></li>
+          <li>לחץ <strong>GO</strong> (כפתור צהוב) → ההורדה מתחילה מיד (~75MB)</li>
         </ul>
+        <div class="callout tip">
+          <strong>אין גישה לקוד?</strong> אפשר להזין במקום הקוד את הכתובת המלאה (אותה הורדה ישירה): <br>
+          64-bit: <code>morantheking.github.io/Kodi-POV-IL/downloads/Kodi-POV-IL-64bit.apk</code><br>
+          32-bit: <code>morantheking.github.io/Kodi-POV-IL/downloads/Kodi-POV-IL-32bit.apk</code>
+        </div>
         <div class="callout warn">
-          <strong>איזו גרסה לבחור?</strong> טלפון / טאבלט / Shield Pro 2019 → <strong>64-bit</strong>. כל סטרימר אחר וטלוויזיה חכמה → <strong>32-bit</strong>. ראה <a href="#bits">סעיף 32/64-bit</a> להסבר מלא.
+          <strong>נתקע על "Connecting" ולא יורד?</strong> סימן שהזנת קוד שמוביל לדף בחירה (HTML) במקום ישירות לקובץ — Downloader לא מוריד דפי אינטרנט. השתמש בקוד הישיר (<code>5364281</code> ל-64 / <code>3158525</code> ל-32) או בכתובת המלאה למעלה. <strong>איזו גרסה?</strong> טלפון / טאבלט / Shield Pro → 64-bit; כל סטרימר אחר → 32-bit (<a href="#bits">הסבר מלא</a>).
+        </div>
+        <div class="callout tip">
+          <strong>חלופה — דף בחירה אחד לכל הפלטפורמות:</strong> הקוד <code>6699594</code> מוביל לעמוד בחירה (32/64-bit, Windows, webOS). שים לב שדף הבחירה עלול לתקוע את Downloader על "Connecting" — אם זה קורה, השתמש בקוד הישיר למעלה.
         </div>
       </div>
 
@@ -370,8 +378,8 @@
       <div class="step">
         <h4>שלב א' — הורד את ה-Setup</h4>
         <ul>
-          <li>במחשב פתח דפדפן וכנס ל: <a href="https://github.com/MoranTheKing/Kodi-POV-IL/releases/latest" target="_blank">github.com/MoranTheKing/Kodi-POV-IL/releases/latest</a></li>
-          <li>הורד: <code>Kodi-POV-IL-Setup.exe</code></li>
+          <li>הורדה ישירה: <a href="https://github.com/MoranTheKing/Kodi-POV-IL/releases/latest/download/Kodi-POV-IL-Setup.exe" target="_blank"><code>Kodi-POV-IL-Setup.exe</code></a> (תמיד הגרסה האחרונה)</li>
+          <li>או דרך עמוד ה-releases: <a href="https://github.com/MoranTheKing/Kodi-POV-IL/releases/latest" target="_blank">github.com/MoranTheKing/Kodi-POV-IL/releases/latest</a></li>
         </ul>
       </div>
 
@@ -394,7 +402,7 @@
       <h2>📺 שיטה 3 — התקנה ל-LG TV (webOS)</h2>
       <div class="callout warn">דורש את Developer Mode של LG. למתקדמים בלבד.</div>
       <ul>
-        <li>הורד <code>Kodi-POV-IL-webos.ipk</code> מ-GitHub Releases</li>
+        <li>הורד <a href="https://github.com/MoranTheKing/Kodi-POV-IL/releases/latest/download/Kodi-POV-IL-webos.ipk" target="_blank"><code>Kodi-POV-IL-webos.ipk</code></a> (הורדה ישירה — תמיד הגרסה האחרונה)</li>
         <li>הפעל Developer Mode על הטלוויזיה: <a href="https://webostv.developer.lge.com/develop/getting-started/developer-mode-app" target="_blank">webostv.developer.lge.com/develop/getting-started/developer-mode-app</a></li>
         <li>השתמש ב-<code>ares-install</code> כדי להתקין את ה-IPK</li>
       </ul>
@@ -459,7 +467,7 @@
         <strong>חובה לפני התחלה ב-Kodi 21:</strong> Settings → System → Add-ons → "Unknown sources" → ON (ולאשר את ההתראה). בלי זה התקנת ה-zip תיכשל עם ההודעה "נכשל בהתקנת הרחבה מקובץ".
       </div>
       <ul>
-          <li>הורד ידנית מ-GitHub: <code>plugin.program.kodipovilwizard-latest.zip</code> (הוויזרד) ואת קובץ הבילד העדכני <code>Kodi-POV-IL-FENtastic-test-*.zip</code> מתיקיית <code>dist</code> (הגרסה הנוכחית: 0.1.45)</li>
+          <li>הורד ידנית מ-GitHub: <a href="https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist/plugin.program.kodipovilwizard-latest.zip" target="_blank"><code>plugin.program.kodipovilwizard-latest.zip</code></a> (הוויזרד) ואת קובץ הבילד העדכני <code>Kodi-POV-IL-FENtastic-test-*.zip</code> (הגרסה האחרונה) מתיקיית <a href="https://github.com/MoranTheKing/Kodi-POV-IL/tree/main/dist" target="_blank"><code>dist</code></a></li>
         <li>העתק את שני הקבצים למכשיר</li>
         <li>ב-Kodi: Add-ons → קופסה → Install from zip file → בחר את הוויזרד</li>
         <li>הפעל את הוויזרד דרך Programs ובחר Install Build → Install from local zip (ובחר את הזיפ של הבילד)</li>
@@ -693,6 +701,14 @@
 
     <section id="troubleshooting">
       <h2>⚠️ פתרון בעיות נפוצות</h2>
+
+      <h3>Downloader נתקע על "Connecting" ולא מוריד</h3>
+      <p>הבעיה הכי נפוצה ב-Shield/Android TV. זה קורה כשמזינים ל-Downloader קוד שמוביל ל<strong>דף בחירה (HTML)</strong> במקום ישירות לקובץ — Downloader יודע להוריד קבצים, לא לגלוש בדפי אינטרנט, אז הוא נתקע. <strong>הפתרון:</strong> הזן ב-Downloader את הקוד הישיר (או הכתובת המלאה) לקובץ ה-APK:</p>
+      <ul>
+        <li>64-bit: קוד <code>5364281</code> &nbsp;·&nbsp; או כתובת <code>morantheking.github.io/Kodi-POV-IL/downloads/Kodi-POV-IL-64bit.apk</code></li>
+        <li>32-bit: קוד <code>3158525</code> &nbsp;·&nbsp; או כתובת <code>morantheking.github.io/Kodi-POV-IL/downloads/Kodi-POV-IL-32bit.apk</code></li>
+      </ul>
+      <p>אלה מורידים את ה-APK ישירות (~75MB) בשלב אחד. ראה <a href="#downloader">שיטה 1</a>.</p>
 
       <h3>"ההתקנה נכשלה" באנדרואיד</h3>
       <p>ייתכן שיש לך גרסה קודמת מותקנת עם חתימה שונה → הסר את האפליקציה הקיימת → התקן מחדש. בדוק שבחרת את הגרסה הנכונה (32-bit לרוב הסטרימרים, 64-bit לטלפונים / טאבלטים / Shield Pro 2019) — ראה <a href="#bits">סעיף 32/64-bit</a>.</p>
