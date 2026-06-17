@@ -417,30 +417,36 @@
            surfaced to users; MoranSubs controls translation centrally via
            translation_mode, so DarkSubs's own MT (auto_translate) stays
            OFF and our bridge does the translating. -->
+      <!-- All of these mirror the proven hidden-marker pattern used in the
+           cache category: type="string" + a label control + visible="false".
+           Booleans are stored as the strings "true"/"false" (the engine
+           reads them with getSetting(...)=='true', which works either way).
+           Using a label control rather than a toggle keeps them from
+           rendering as stray switches when the user is in Expert level. -->
       <group id="engine_internal">
-        <setting id="language_hebrew" type="boolean" label="30000" visible="false">
-          <level>3</level><default>true</default><control type="toggle"/>
+        <setting id="language_hebrew" type="string" label="30000" visible="false">
+          <level>3</level><default>true</default><control type="label" format="string"/>
         </setting>
-        <setting id="language_english" type="boolean" label="30000" visible="false">
-          <level>3</level><default>true</default><control type="toggle"/>
+        <setting id="language_english" type="string" label="30000" visible="false">
+          <level>3</level><default>true</default><control type="label" format="string"/>
         </setting>
-        <setting id="language_russian" type="boolean" label="30000" visible="false">
-          <level>3</level><default>false</default><control type="toggle"/>
+        <setting id="language_russian" type="string" label="30000" visible="false">
+          <level>3</level><default>false</default><control type="label" format="string"/>
         </setting>
-        <setting id="language_arab" type="boolean" label="30000" visible="false">
-          <level>3</level><default>false</default><control type="toggle"/>
+        <setting id="language_arab" type="string" label="30000" visible="false">
+          <level>3</level><default>false</default><control type="label" format="string"/>
         </setting>
-        <setting id="all_lang" type="boolean" label="30000" visible="false">
-          <level>3</level><default>false</default><control type="toggle"/>
+        <setting id="all_lang" type="string" label="30000" visible="false">
+          <level>3</level><default>false</default><control type="label" format="string"/>
         </setting>
-        <setting id="retry_search_with_all_langs" type="boolean" label="30000" visible="false">
-          <level>3</level><default>false</default><control type="toggle"/>
+        <setting id="retry_search_with_all_langs" type="string" label="30000" visible="false">
+          <level>3</level><default>false</default><control type="label" format="string"/>
         </setting>
         <setting id="other_lang" type="string" label="30000" visible="false">
           <level>3</level><default></default><control type="label" format="string"/>
         </setting>
-        <setting id="auto_translate" type="boolean" label="30000" visible="false">
-          <level>3</level><default>false</default><control type="toggle"/>
+        <setting id="auto_translate" type="string" label="30000" visible="false">
+          <level>3</level><default>false</default><control type="label" format="string"/>
         </setting>
         <setting id="translate_p" type="string" label="30000" visible="false">
           <level>3</level><default>0</default><control type="label" format="string"/>
@@ -451,17 +457,17 @@
         <setting id="subtitle_trans_cache" type="string" label="30000" visible="false">
           <level>3</level><default>15</default><control type="label" format="string"/>
         </setting>
-        <setting id="enable_autosub_notifications" type="boolean" label="30000" visible="false">
-          <level>3</level><default>true</default><control type="toggle"/>
+        <setting id="enable_autosub_notifications" type="string" label="30000" visible="false">
+          <level>3</level><default>true</default><control type="label" format="string"/>
         </setting>
-        <setting id="auto_fix_sub_punctuation" type="boolean" label="30000" visible="false">
-          <level>3</level><default>true</default><control type="toggle"/>
+        <setting id="auto_fix_sub_punctuation" type="string" label="30000" visible="false">
+          <level>3</level><default>true</default><control type="label" format="string"/>
         </setting>
-        <setting id="auto_remove_hi_tags" type="boolean" label="30000" visible="false">
-          <level>3</level><default>false</default><control type="toggle"/>
+        <setting id="auto_remove_hi_tags" type="string" label="30000" visible="false">
+          <level>3</level><default>false</default><control type="label" format="string"/>
         </setting>
-        <setting id="show_debug" type="boolean" label="30000" visible="false">
-          <level>3</level><default>false</default><control type="toggle"/>
+        <setting id="show_debug" type="string" label="30000" visible="false">
+          <level>3</level><default>false</default><control type="label" format="string"/>
         </setting>
         <setting id="OS_USER_API_KEY_VALUE" type="string" label="30000" visible="false">
           <level>3</level><default></default><control type="label" format="string"/>

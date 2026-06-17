@@ -9,7 +9,14 @@ xbmc_tranlate_path=xbmcvfs.translatePath
 from urllib.parse import  unquote_plus, unquote,  quote
 import threading
 import urllib.parse
-import chardet
+# NOTE: `import chardet` used to be here at module scope, but chardet is
+# not on MoranSubs's add-on path (it's a dependency of the separate
+# DarkSubs add-on). A hard top-level import made the whole engine fail to
+# import inside MoranSubs -> the bridge swallowed it -> no human sources
+# appeared. It's redundant anyway: every function that uses chardet
+# (fix_sub_punctuation_and_write, remove_hi_tags_and_write,
+# machine_translate_subs) already does its own local `import chardet`,
+# and those run only on the download path (guarded by the bridge).
 global break_all
 from urllib.parse import  unquote_plus, unquote, quote, quote_plus
 from resources.lib.subs_engine.general import Thread,CachedSubFolder,TransFolder,user_dataDir
