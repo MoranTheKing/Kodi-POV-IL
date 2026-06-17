@@ -30,6 +30,83 @@ function keyFor(p) {
   return `v1:${lang}:${id}:s${s}:e${e}`;
 }
 
+// --- Canonical media bucketing --------------------------------------------
+// The same title must bucket the same way no matter which id the client sent.
+// Live add-on shares of an episode usually carry only the show's imdb (Kodi
+// exposes no tmdb for streamed episodes); manual web uploads carry only tmdb
+// (picked from search). Keying by `tmdb||imdb` split those into two buckets
+// that never saw each other. We resolve the missing id from TMDB (cached in
+// KV), build BOTH candidate keys -- tmdb first as the canonical target -- and
+// consolidate on write so contribute/lookup/sub all converge.
+
+async function resolveIds(env, p) {
+  let tmdb = String(p.tmdb || '').trim();
+  let imdb = String(p.imdb || '').trim();
+  const type = (p.type === 'episode') ? 'episode' : 'movie';
+  if ((tmdb && imdb) || (!tmdb && !imdb)) return { tmdb, imdb };
+  const cacheKey = `idmap:${type}:${tmdb ? 't' + tmdb : 'i' + imdb}`;
+  try {
+    const c = await env.POOL.get(cacheKey);
+    if (c) { const m = JSON.parse(c); return { tmdb: tmdb || m.tmdb || '', imdb: imdb || m.imdb || '' }; }
+  } catch (_) { /* ignore */ }
+  const key = env.TMDB_KEY || BUNDLED_TMDB_KEY;
+  try {
+    if (!tmdb && /^tt\d+$/.test(imdb)) {
+      const r = await fetch(`https://api.themoviedb.org/3/find/${imdb}` +
+        `?api_key=${key}&external_source=imdb_id`);
+      if (r.ok) {
+        const d = await r.json();
+        if (type === 'episode') {
+          if (d.tv_results && d.tv_results.length) tmdb = String(d.tv_results[0].id || '');
+          else if (d.tv_episode_results && d.tv_episode_results.length) tmdb = String(d.tv_episode_results[0].show_id || '');
+        } else if (d.movie_results && d.movie_results.length) tmdb = String(d.movie_results[0].id || '');
+      }
+    } else if (tmdb && !imdb && /^\d+$/.test(tmdb)) {
+      const base = (type === 'episode') ? 'tv' : 'movie';
+      const r = await fetch(`https://api.themoviedb.org/3/${base}/${tmdb}/external_ids?api_key=${key}`);
+      if (r.ok) { const d = await r.json(); if (d.imdb_id) imdb = String(d.imdb_id); }
+    }
+  } catch (_) { /* ignore */ }
+  if (tmdb && imdb) {
+    const map = JSON.stringify({ tmdb, imdb });
+    const ttl = { expirationTtl: 60 * 60 * 24 * 180 };
+    try { await env.POOL.put(`idmap:${type}:t${tmdb}`, map, ttl); } catch (_) { /* ignore */ }
+    try { await env.POOL.put(`idmap:${type}:i${imdb}`, map, ttl); } catch (_) { /* ignore */ }
+  }
+  return { tmdb, imdb };
+}
+
+// Ordered candidate keys (tmdb-based first = canonical write target), deduped.
+async function mediaKeys(env, p) {
+  const lang = (p.lang || 'he').toLowerCase();
+  const s = String(p.season || '0').trim() || '0';
+  const e = String(p.episode || '0').trim() || '0';
+  const { tmdb, imdb } = await resolveIds(env, p);
+  const ids = [];
+  if (/^\d+$/.test(String(tmdb || ''))) ids.push(String(tmdb));
+  if (/^tt\d+$/.test(String(imdb || ''))) ids.push(String(imdb));
+  const raw = String(p.tmdb || p.imdb || '').trim();
+  if (raw && !ids.includes(raw)) ids.push(raw);
+  const keys = [...new Set(ids.map(id => `v1:${lang}:${id}:s${s}:e${e}`))];
+  return keys.length ? keys : [keyFor(p)];
+}
+
+// Merge variant lists across all candidate keys, deduping by file_id.
+async function readMergedIndex(env, p) {
+  const keys = await mediaKeys(env, p);
+  const seen = new Set();
+  const variants = [];
+  for (const k of keys) {
+    for (const v of await readIndex(env, k)) {
+      const sig = v.file_id || v.result_hash;
+      if (sig && seen.has(sig)) continue;
+      if (sig) seen.add(sig);
+      variants.push(v);
+    }
+  }
+  return { variants, keys, primaryKey: keys[0] };
+}
+
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
     status, headers: { 'content-type': 'application/json; charset=utf-8' },
@@ -277,12 +354,30 @@ async function contributeCore(env, body) {
   const id = String(body.tmdb_id || body.imdb_id || '').trim();
   if (!id) return json({ ok: false, error: 'no id' }, 400);
 
-  const key = keyFor({ lang, tmdb: body.tmdb_id, imdb: body.imdb_id, type: body.type, season: body.season, episode: body.episode });
+  // Canonical bucketing: resolve the missing id and merge any legacy
+  // tmdb/imdb-split buckets, writing back to one primary (tmdb-preferred) key.
+  const mkeys = await mediaKeys(env, { lang, tmdb: body.tmdb_id, imdb: body.imdb_id, type: body.type, season: body.season, episode: body.episode });
+  const key = mkeys[0];
   const hash = (body.source_hash || '').trim();
-  const variants = await readIndex(env, key);
+  const variants = [];
+  {
+    const seen = new Set();
+    for (const k of mkeys) {
+      for (const v of await readIndex(env, k)) {
+        const sig = v.file_id || v.result_hash;
+        if (sig && seen.has(sig)) continue;
+        if (sig) seen.add(sig);
+        variants.push(v);
+      }
+    }
+  }
+  const persist = async () => {
+    await env.POOL.put(key, JSON.stringify(variants));
+    for (const k of mkeys.slice(1)) { try { await env.POOL.delete(k); } catch (_) { /* ignore */ } }
+  };
 
   // Dedup layer 1: same SOURCE hash already present (cheap, no downloads).
-  if (hash && variants.some(v => v.hash === hash)) return json({ ok: true, dedup: true, key });
+  if (hash && variants.some(v => v.hash === hash)) { await persist(); return json({ ok: true, dedup: true, key }); }
 
   // Dedup layer 2: same RESULT (Hebrew) already present. Catches uploads with
   // no source hash (bulk "share my cache", manual web upload) and prevents two
@@ -290,22 +385,21 @@ async function contributeCore(env, body) {
   // layer have no result_hash, so backfill it lazily (download + hash, write
   // back) -- bounded by MAX_VARIANTS and only on this path.
   const resultHash = await sha1hex(srt);
-  let indexDirty = false;
   for (const v of variants) {
     if (!v.result_hash) {
       try {
         const existing = await downloadById(env, v.file_id);
-        if (existing) { v.result_hash = await sha1hex(existing); indexDirty = true; }
+        if (existing) { v.result_hash = await sha1hex(existing); }
       } catch (_) { /* leave it; just won't dedup by result for this one */ }
     }
   }
   if (variants.some(v => v.result_hash === resultHash)) {
-    if (indexDirty) await env.POOL.put(key, JSON.stringify(variants));
+    await persist();
     return json({ ok: true, dedup: true, key });
   }
 
   if (variants.length >= MAX_VARIANTS) {
-    if (indexDirty) await env.POOL.put(key, JSON.stringify(variants));
+    await persist();
     return json({ ok: false, error: 'too many variants' }, 429);
   }
 
@@ -325,7 +419,7 @@ async function contributeCore(env, body) {
   if (!fileId) return json({ ok: false, error: 'no file_id' }, 502);
 
   variants.push({ hash, result_hash: resultHash, release: body.release || '', source_lang: body.source_lang || '', file_id: fileId, ts: Date.now() });
-  await env.POOL.put(key, JSON.stringify(variants));
+  await persist();
   return json({ ok: true, stored: true, key });
 }
 
@@ -498,17 +592,16 @@ export default {
 
     if (path === '/lookup' && request.method === 'GET') {
       const p = Object.fromEntries(url.searchParams);
-      const key = keyFor(p);
-      const variants = await readIndex(env, key);
+      const { variants, primaryKey } = await readMergedIndex(env, p);
       return json({
-        ok: true, key, count: variants.length,
+        ok: true, key: primaryKey, count: variants.length,
         variants: variants.map(v => ({ hash: v.hash, release: v.release, source_lang: v.source_lang, ts: v.ts })),
       });
     }
 
     if (path === '/sub' && request.method === 'GET') {
       const p = Object.fromEntries(url.searchParams);
-      const variants = await readIndex(env, keyFor(p));
+      const { variants } = await readMergedIndex(env, p);
       if (!variants.length) return new Response('not found', { status: 404 });
       const want = (p.hash || '').trim();
       let v = want ? variants.find(x => x.hash === want) : null;
