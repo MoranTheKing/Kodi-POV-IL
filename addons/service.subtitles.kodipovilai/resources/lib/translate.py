@@ -450,8 +450,19 @@ def _pool_quality_ok(src_text, final):
             src_n = srt.count_entries(src_text)
             out_n = srt.count_entries(final)
             if src_n >= 5 and out_n < src_n * 0.85:
-                return False
-        return srt.looks_hebrew(final)
+                return False  # truncated: lost too many blocks (failed chunks)
+        if not srt.looks_hebrew(final):
+            return False  # not really Hebrew overall
+        # Partial-failure guard: a doc can read as "Hebrew overall" yet have
+        # whole chunks left in English. Reject only when a LARGE share of
+        # substantial cues are English-only (no Hebrew at all) -- a generous
+        # 0.30 so legitimately-English lines (lyrics, on-screen signs, an
+        # English phrase, half-English lines) never trip it; only a mostly-
+        # broken translation does. Mixed Hebrew+English lines count as
+        # translated because they contain Hebrew.
+        if srt.untranslated_line_ratio(final) > 0.30:
+            return False
+        return True
     except Exception:
         return True
 
