@@ -28,6 +28,7 @@
 
 import os
 import re
+import json
 
 try:
     import xbmcvfs
@@ -41,6 +42,57 @@ except Exception:
 
 
 FAVOURITES_RELATIVE = 'favourites.xml'
+
+# State for "respect user deletions": which personal tiles were present last
+# run (seen) and which the user has deleted (removed -> never restore again).
+# Stored as a JSON file (not a setting -> no settings.xml control noise).
+_STATE_FILE = 'home_tiles_state.json'
+
+
+def _state_path():
+    try:
+        return os.path.join(kodi_utils.addon_profile_path(), _STATE_FILE)
+    except Exception:
+        return ''
+
+
+def _load_state():
+    p = _state_path()
+    if p and os.path.isfile(p):
+        try:
+            with open(p, 'r', encoding='utf-8') as f:
+                d = json.loads(f.read())
+            return set(d.get('seen') or []), set(d.get('removed') or [])
+        except (IOError, OSError, ValueError):
+            pass
+    return set(), set()
+
+
+def _save_state(seen, removed):
+    p = _state_path()
+    if not p:
+        return
+    try:
+        with open(p, 'w', encoding='utf-8') as f:
+            f.write(json.dumps({'seen': sorted(seen),
+                                'removed': sorted(removed)}))
+    except OSError:
+        pass
+
+
+def _present(content):
+    """Return the set of restorable personal-tile keys currently in the file,
+    plus the set of mediatypes whose TMDB anchor tile is present."""
+    present, anchors = set(), set()
+    for media in MEDIA:
+        label = media['label']
+        if media['tmdb_pattern'].search(content):
+            anchors.add(label)
+        if media['trakt_pattern'].search(content):
+            present.add(label + '_trakt')
+        if media['pov_pattern'].search(content):
+            present.add(label + '_pov')
+    return present, anchors
 
 # Per-mediatype constants: regex to find an existing TMDB tile, an
 # OLD Trakt-collection tile, and a baked Trakt-tile-line we add when
@@ -220,7 +272,7 @@ def _trakt_connected():
     return bool(m.group(1).strip())
 
 
-def _process_one(content, media, trakt_connected):
+def _process_one(content, media, trakt_connected, removed):
     """Apply migrate + thumb-update + restore-Trakt for one
     mediatype. Returns (new_content, dict_of_actions)."""
     label = media['label']
@@ -275,9 +327,10 @@ def _process_one(content, media, trakt_connected):
         'fixed_{0}'.format(fix_count) if fix_count else 'ok')
 
     # 3. Restore Trakt tile if user has Trakt connected and the
-    #    Trakt tile is missing. Append it right after the TMDB
-    #    tile so the visual ordering is "TMDB first, then Trakt".
-    if trakt_connected and not media['trakt_pattern'].search(content):
+    #    Trakt tile is missing -- UNLESS the user deleted it (respect that).
+    if (label + '_trakt') in removed:
+        actions[label + '_restore'] = 'user_removed'
+    elif trakt_connected and not media['trakt_pattern'].search(content):
         m = media['tmdb_pattern'].search(content)
         if m:
             insert_at = m.end()
@@ -297,10 +350,11 @@ def _process_one(content, media, trakt_connected):
     else:
         actions[label + '_restore'] = 'trakt_disconnected'
 
-    # 4. Ensure the POV local-favorites tile is present (always --
-    #    independent of TMDB / Trakt connection). Insert it after the
-    #    Trakt tile if one exists, otherwise after the TMDB tile.
-    if media['pov_pattern'].search(content):
+    # 4. Ensure the POV local-favorites tile is present -- UNLESS the user
+    #    deleted it (respect that), otherwise insert after the Trakt/TMDB tile.
+    if (label + '_pov') in removed:
+        actions[label + '_pov'] = 'user_removed'
+    elif media['pov_pattern'].search(content):
         actions[label + '_pov'] = 'already'
     else:
         anchor = (media['trakt_pattern'].search(content)
@@ -335,11 +389,27 @@ def ensure_patched():
         return 'read_failed'
 
     trakt_on = _trakt_connected()
+
+    # Respect user deletions: if a personal tile that was present last run is
+    # now gone WHILE its TMDB anchor tile is still here, the user deleted it
+    # (not a skin-switch wipe, which also drops the anchor) -> remember that and
+    # stop restoring it. Anchors-gone => treat as a wipe and don't mark removed.
+    seen, removed = _load_state()
+    present_now, anchors_now = _present(original)
+    for key in seen:
+        label = key.rsplit('_', 1)[0]
+        if key not in present_now and label in anchors_now:
+            removed.add(key)
+
     content = original
     all_actions = {}
     for media in MEDIA:
-        content, actions = _process_one(content, media, trakt_on)
+        content, actions = _process_one(content, media, trakt_on, removed)
         all_actions.update(actions)
+
+    # Persist state: what's present after our pass, and the removed set.
+    new_present, _ = _present(content)
+    _save_state(new_present, removed)
 
     _log(
         'trakt_connected={0} | {1}'.format(
