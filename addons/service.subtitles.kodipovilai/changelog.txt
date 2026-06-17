@@ -1,3 +1,13 @@
+v0.2.164
+- Remember picked source -- PHASE 2 (auto-pick), still OFF by default. When the
+  toggle is on and you've already picked a source for a movie/episode, opening
+  it again auto-plays the same source and skips the source dialog (first watch
+  still shows the dialog -> that's when it's remembered). Match is exact by
+  source hash, with a conservative fallback to a same-quality + same-provider
+  cached source; anything less confident falls back to the dialog, and a dead
+  remembered source just falls through to POV's other sources. Injected at the
+  top of POV display_results(), compile-checked, reverts cleanly, idempotent.
+
 v0.2.163
 - Remember-source capture: make it actually fire + log each step. The capture
   is now a tiny stable hook that calls source_capture.py (which logs
