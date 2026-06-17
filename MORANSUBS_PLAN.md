@@ -135,3 +135,73 @@ get the most device testing before C flips the switch.
 - Not changing the Gemini translation logic, the pool, or the quality gate.
 - Not changing the addon id (no settings migration).
 - Not dropping human-subs-first behaviour.
+
+## 8. Phase B — detailed breakdown (from the engine map)
+
+### What DarkSubs' engine actually is
+- `start.py` → `resources/main.py` dispatches `search`/`download`; results are
+  returned as `xbmcgui.ListItem`s via `xbmcplugin.addDirectoryItems` into Kodi's
+  **native** subtitle dialog (so dropping the pyxbmct picker is safe).
+- `autosub.py` drives search + the **embedded-track detection**
+  (`add_embedded_sub_if_exists`, `[LOC]`, sync 101, auto-place Hebrew).
+- `resources/modules/engine.py`: `c_get_subtitles()` spawns one thread per
+  enabled provider, collects into each provider's `global_var`, then
+  `sort_subtitles()` buckets into **Hebrew / Telegram-MT / English / Other** and
+  `custom_sort` orders by `-percent` then provider priority. `download_sub()`
+  fetches+decodes+caches a picked sub. `machine_translate_subs()` is the
+  translate seam (Google/Bing/Yandex today).
+- **The result row is a 10-tuple:**
+  `(label, colored_label2, rating, langcode, url, percent, sync, hi, filename, site_id)`.
+- **Providers** (`resources/sources/`), each exposing `get_subs(video_data...)`
+  + `download(download_data, folder)`:
+  - Hebrew: **ktuvit** (hardcoded login), **wizdom** (open API), **subscene**,
+    **subsource**, **bsplayer**, **telegram** (telethon).
+  - General: **opensubtitles** (public/user key), **yify** (movies).
+- **Telegram** = telethon (~200 files), a **StringSession** on disk, a user
+  phone+2FA login UI, a hardcoded private channel id, and obfuscated api
+  id/hash/bot creds. The heaviest piece.
+- **Vendored libs needed for fetching:** cloudscraper (CF bypass),
+  charset_normalizer (decode), requests_toolbelt (uploads), pysrt (validate).
+  **Drop:** pyxbmct (picker) and `auto_translate/` (replaced by Gemini).
+
+### The integration seam
+- Replace `engine.py::machine_translate_subs()` with a call into our Gemini
+  engine (`translate.py`).
+- After `c_get_subtitles()` returns the human list, **merge in** our pool
+  Hebrew + "🤖 translate" entries as 10-tuples with `site_id='[MoranSubs]'`,
+  then sort so **human Hebrew → 🤖 AI Hebrew → English/other** (embedded Hebrew
+  stays top at 101%).
+- `download` routes provider picks to the vendored `download_sub()`, and our
+  pool/AI picks to our existing `resolve()`.
+
+### Sub-steps (each its own PR, testable, DarkSubs stays installed in parallel)
+- **B1 — Vendor the engine + NON-Telegram providers + required libs, dormant.**
+  Copy `engine.py`, the embedded logic, `sources/{ktuvit,wizdom,opensubtitles,
+  yify,subsource,subscene,bsplayer}.py`, `general.py`, `extract_sub.py`,
+  `cache.py`, `log.py`, `srt.py` + cloudscraper/charset_normalizer/
+  requests_toolbelt/pysrt into `resources/lib/subs_engine/`. **Rewrite all
+  internal imports** to MoranSubs' namespace. Replace `machine_translate_subs`
+  with a Gemini wrapper. **No wiring yet** — just verify everything imports
+  cleanly in MoranSubs' process. Zero behaviour change.
+- **B2 — Wire search + merge.** MoranSubs' `search` calls the vendored
+  `c_get_subtitles()` (human) + our pool + our AI-translate entries, merges and
+  sorts into one list (human → 🤖 AI → English), returns to Kodi's native
+  dialog. `download` routes appropriately. DarkSubs still installed; compare
+  coverage on device.
+- **B3 — Telegram.** Vendor telethon + `telegram.py` + the StringSession login
+  UI (in MoranSubs settings). The async-in-Kodi workaround. Heaviest/riskiest;
+  isolated so B1/B2 ship without it.
+- **B4 — Embedded detection in MoranSubs.** Port autosub's embedded-track
+  detection so MoranSubs itself surfaces embedded Hebrew at top (101%) /
+  demotes embedded English.
+- Settings: add DarkSubs' source/language toggles to MoranSubs' settings.xml as
+  part of B1/B2.
+
+### Phase B risks
+- **Import rewriting** across ~10 engine files + providers (mechanical, but must
+  be precise; each step compile/import-checked).
+- **Telegram/telethon** (B3): ~200 vendored files, async-in-Kodi, login UI, and
+  the obfuscated channel creds must be carried over. Biggest unknown — isolated
+  to B3 so the rest isn't blocked.
+- **Settings surface** grows (provider/language toggles move into MoranSubs).
+- Mitigated throughout by keeping DarkSubs installed in parallel until Phase C.
