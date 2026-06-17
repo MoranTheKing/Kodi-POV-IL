@@ -24,8 +24,8 @@
   </extension>
 </addon>
 <addon id="service.subtitles.kodipovilai"
-       name="Kodi POV IL - AI Subtitles"
-       version="0.2.178"
+       name="MoranSubs"
+       version="0.2.179"
        provider-name="MoranTheKing">
   <requires>
     <import addon="xbmc.python" version="3.0.0"/>
