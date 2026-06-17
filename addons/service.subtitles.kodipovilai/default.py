@@ -240,20 +240,18 @@ def _try_fast_download(handle, link, info):
     import base64
     try:
         from resources.lib import (kodi_utils, translate,
-                                    srt as _srt, cache as _cache,
-                                    wyzie as _wyzie)
+                                    srt as _srt, cache as _cache)
     except Exception:
         return False
 
     payload = translate._decode_link(link)
     if not payload or payload.get('type') != 'ai':
-        # passthrough / wyzie_passthrough are short -- the existing
-        # path handles them fine.
+        # passthrough / pool entries are short -- the existing path
+        # handles them fine.
         return False
 
     source_lang = payload.get('source_lang') or 'en'
     local_source = payload.get('local_path')
-    wyzie_url = payload.get('wyzie_url')
     imdb_id = (info.get('imdb_id') or '').strip()
     season  = info.get('season') or ''
     episode = info.get('episode') or ''
@@ -296,23 +294,20 @@ def _try_fast_download(handle, link, info):
             _safe_log('fast_download cache check failed: {0}'
                       .format(_e), level='WARNING')
 
-    # No cache hit. Read source SRT inline (~1s for Wyzie, instant
-    # for a local file).
+    # No cache hit. Read the source SRT inline (instant -- local file
+    # alongside the video or a temp file from another addon).
     src_text = None
     try:
         if local_source and os.path.isfile(local_source):
             with open(local_source, 'r', encoding='utf-8',
                       errors='replace') as f:
                 src_text = f.read()
-        elif wyzie_url:
-            src_text = _wyzie.download(wyzie_url)
     except Exception as _e:
         _safe_log('fast_download source read failed: {0}'
                   .format(_e), level='WARNING')
 
     if not src_text:
-        # Fall through; existing slow path will surface the error
-        # (Wyzie failure toast, etc.)
+        # Fall through; existing slow path will surface the error.
         return False
 
     # HI-strip guard mirroring translate.py:518-521. We're delivering
@@ -632,44 +627,6 @@ def _handle_open_aistudio(_params):
     except Exception:
         pass
 
-
-def _handle_open_wyzie_signup(_params):
-    """User clicked 'Claim a free Wyzie key' in settings."""
-    url = 'https://store.wyzie.io/redeem'
-    # Check whether DarkSubs is installed -- if it is, Wyzie is
-    # redundant for most users and we should say so up front so they
-    # don't waste time signing up.
-    has_darksubs = False
-    try:
-        import xbmcaddon as _xa
-        _xa.Addon('service.subtitles.All_Subs')
-        has_darksubs = True
-    except Exception:
-        pass
-    try:
-        if has_darksubs:
-            msg = (
-                'שים לב: יש לך תוסף DarkSubs מותקן, '
-                'אז Wyzie בעצם לא נחוץ - לחיצה על כתובית באנגלית '
-                '(או כל שפה לא-עברית) ב-DarkSubs כבר מפעילה את '
-                'התרגום AI אוטומטית.\n\nאם בכל זאת אתה רוצה key '
-                '(למשל למקור אונליין נוסף מתוך התוסף שלי, בלי '
-                'לעבור דרך DarkSubs):\n{0}\n\n1000 בקשות ביום, חינם.'
-            ).format(url)
-        else:
-            msg = (
-                'פתח בדפדפן:\n{0}\n\nתקבל API key חינמי '
-                '(1000 בקשות/יום). העתק לשדה Wyzie API Key '
-                'בהגדרות.\n\n(אופציונלי - אם תתקין בעתיד את '
-                'התוסף DarkSubs, תוכל לוותר על Wyzie לגמרי.)'
-            ).format(url)
-        xbmcgui.Dialog().ok('Kodi POV IL', msg)
-    except Exception:
-        pass
-    try:
-        xbmc.executebuiltin('System.Exec("xdg-open {0}")'.format(url))
-    except Exception:
-        pass
 
 
 def _handle_connect_gemini(_params):
@@ -1178,31 +1135,6 @@ def _handle_open_tmdb_notice(_params):
     )
     xbmcgui.Dialog().ok('Kodi POV IL — TMDB', body)
 
-
-def _handle_test_wyzie_connection(_params):
-    """User clicked 'Test Wyzie connection' in settings. Mirrors
-    _handle_test_connection for Gemini."""
-    try:
-        from resources.lib import kodi_utils, wyzie
-    except Exception as e:
-        xbmcgui.Dialog().ok('Kodi POV IL', 'Internal error: {0}'.format(e))
-        return
-
-    key = kodi_utils.get_setting('wyzie_api_key', '')
-    if not (key or '').strip():
-        xbmcgui.Dialog().ok(
-            'Kodi POV IL',
-            'לא הוגדר Wyzie API key. לחץ על "השג מפתח Wyzie" '
-            'בהגדרות וקבל אחד חינמי (1000 בקשות ליום).')
-        return
-
-    result = wyzie.test_key(key)
-    if result.get('ok'):
-        xbmcgui.Dialog().ok('Kodi POV IL',
-                            '✓ Wyzie: ' + result.get('message', 'OK'))
-    else:
-        xbmcgui.Dialog().ok('Kodi POV IL',
-                            '✗ Wyzie: ' + result.get('message', 'נכשל'))
 
 
 def _handle_clear_cache(_params):
@@ -2180,16 +2112,12 @@ def main():
             _handle_download(handle, params)
         elif action == 'open_aistudio':
             _handle_open_aistudio(params)
-        elif action == 'open_wyzie_signup':
-            _handle_open_wyzie_signup(params)
         elif action == 'test_connection':
             _handle_test_connection(params)
         elif action == 'connect_gemini':
             _handle_connect_gemini(params)
         elif action == 'show_gemini_usage':
             _handle_show_gemini_usage(params)
-        elif action == 'test_wyzie_connection':
-            _handle_test_wyzie_connection(params)
         elif action == 'open_tmdb_notice':
             _handle_open_tmdb_notice(params)
         elif action == 'clear_cache':

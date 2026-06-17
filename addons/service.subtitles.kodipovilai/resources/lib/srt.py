@@ -330,6 +330,41 @@ def looks_hebrew(text, min_alpha=120, min_ratio=0.5):
     return heb >= alpha * min_ratio
 
 
+def untranslated_line_ratio(text, min_cues=10, min_len=8):
+    """Fraction of substantial cues that look UNTRANSLATED -- i.e. they carry
+    Latin letters but contain no Hebrew at all. Used as a pool-upload quality
+    gate to catch a PARTIALLY-failed translation (whole chunks left in English)
+    that `looks_hebrew` misses because the document is Hebrew overall.
+
+    A cue with ANY Hebrew counts as translated (mixed Hebrew+English lines are
+    fine). Only cues with real text (>= min_len letters) are weighed, so blank
+    lines, '♪', numbers and short interjections don't skew it. Returns 0.0 when
+    there are too few substantial cues to judge (never block on thin evidence)
+    -- so a handful of legitimately-English lines (song lyrics, on-screen
+    signs, 'FBI') can't trip the gate; only a large proportion does."""
+    substantial = 0
+    untranslated = 0
+    for block in parse_blocks(text or ''):
+        line = block_text_only(block)
+        if not line:
+            continue
+        heb = lat = 0
+        for c in line:
+            o = ord(c)
+            if 0x0590 <= o <= 0x05FF:
+                heb += 1
+            elif ('a' <= c <= 'z') or ('A' <= c <= 'Z'):
+                lat += 1
+        if (heb + lat) < min_len:
+            continue  # too little text to judge this cue
+        substantial += 1
+        if heb == 0 and lat > 0:
+            untranslated += 1
+    if substantial < min_cues:
+        return 0.0
+    return untranslated / float(substantial)
+
+
 def strip_hi_annotations(text):
     """Remove hearing-impaired noise from an SRT body.
 
