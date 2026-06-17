@@ -325,3 +325,7 @@ msgstr "זכור את המקור שנבחר (נגן אותו אוטומטית ב
 msgctxt "#32505"
 msgid "Check remembered sources (diagnostic)"
 msgstr "בדוק מקורות שנשמרו (אבחון)"
+
+msgctxt "#32506"
+msgid "Show Hebrew-subtitle match % on each source"
+msgstr "הצג אחוז התאמת כתוביות עברית לכל מקור"
