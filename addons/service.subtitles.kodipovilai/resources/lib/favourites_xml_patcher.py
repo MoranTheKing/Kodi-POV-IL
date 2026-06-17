@@ -224,6 +224,25 @@ MEDIA = (
 )
 
 
+def _remove_tile(content, pattern):
+    """Remove the first tile matching pattern from content, including its
+    surrounding whitespace/newline so the XML stays clean."""
+    m = pattern.search(content)
+    if not m:
+        return content, False
+    start, end = m.start(), m.end()
+    # eat leading indentation
+    while start > 0 and content[start - 1] in ' \t':
+        start -= 1
+    # eat the newline that preceded the indentation
+    if start > 0 and content[start - 1] == '\n':
+        start -= 1
+    # eat trailing newline
+    if end < len(content) and content[end] == '\n':
+        end += 1
+    return content[:start] + content[end:], True
+
+
 def _log(msg, level='INFO'):
     if kodi_utils is None:
         return
@@ -328,8 +347,11 @@ def _process_one(content, media, trakt_connected, removed):
 
     # 3. Restore Trakt tile if user has Trakt connected and the
     #    Trakt tile is missing -- UNLESS the user deleted it (respect that).
+    #    If the skin-switch seed put the tile back, remove it again.
     if (label + '_trakt') in removed:
-        actions[label + '_restore'] = 'user_removed'
+        content, did_remove = _remove_tile(content, media['trakt_pattern'])
+        actions[label + '_restore'] = (
+            'user_removed_deleted' if did_remove else 'user_removed')
     elif trakt_connected and not media['trakt_pattern'].search(content):
         m = media['tmdb_pattern'].search(content)
         if m:
@@ -351,9 +373,11 @@ def _process_one(content, media, trakt_connected, removed):
         actions[label + '_restore'] = 'trakt_disconnected'
 
     # 4. Ensure the POV local-favorites tile is present -- UNLESS the user
-    #    deleted it (respect that), otherwise insert after the Trakt/TMDB tile.
+    #    deleted it (respect that). If the skin-switch seed put it back, remove it.
     if (label + '_pov') in removed:
-        actions[label + '_pov'] = 'user_removed'
+        content, did_remove = _remove_tile(content, media['pov_pattern'])
+        actions[label + '_pov'] = (
+            'user_removed_deleted' if did_remove else 'user_removed')
     elif media['pov_pattern'].search(content):
         actions[label + '_pov'] = 'already'
     else:
