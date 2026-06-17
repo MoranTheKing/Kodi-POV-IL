@@ -123,6 +123,26 @@
       </group>
 
       <group id="policy" label="32220"> <!-- Behavior -->
+        <!-- Three explicit translation modes (Phase B unified design):
+             ai     = Gemini AI (default, recommended; gender-aware)
+             google = basic Google Translate (no key, NO gender, NOT the AI)
+             none   = no translation, show subtitles in their source language
+             Consumed by the unified path; a hard AI error offers a one-time
+             Google fallback rather than silently downgrading. -->
+        <setting id="translation_mode" type="string" label="32520" help="32521">
+          <level>0</level>
+          <default>ai</default>
+          <constraints>
+            <options>
+              <option label="32522">ai</option>
+              <option label="32523">google</option>
+              <option label="32524">none</option>
+            </options>
+          </constraints>
+          <control type="list" format="string">
+            <heading>32520</heading>
+          </control>
+        </setting>
         <setting id="skip_if_hebrew" type="boolean" label="32221"> <!-- Skip translation if real Hebrew subs exist -->
           <level>0</level>
           <default>true</default>
@@ -308,6 +328,149 @@
             <heading>32503</heading>
           </control>
           <data>RunScript(service.subtitles.kodipovilai,action=pool_share_cache)</data>
+        </setting>
+      </group>
+    </category>
+
+    <category id="engine" label="32507"> <!-- Built-in sources engine (DarkSubs, experimental) -->
+      <group id="master">
+        <!-- Master gate for Phase B. DEFAULT OFF: when off, behavior is
+             exactly as before (DarkSubs runs as its own addon). When on,
+             MoranSubs searches the human subtitle sources itself via the
+             vendored engine in resources/lib/subs_engine. Experimental
+             until Phase C. -->
+        <setting id="use_builtin_engine" type="boolean" label="32508" help="32509">
+          <level>0</level>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
+      </group>
+      <group id="engine_sources" label="32510"> <!-- Search sources -->
+        <setting id="ktuvit" type="boolean" label="32511">
+          <level>0</level>
+          <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="wizdom" type="boolean" label="32512">
+          <level>0</level>
+          <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="telegram" type="boolean" label="32513" help="32519">
+          <level>0</level>
+          <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="opensubtitles" type="boolean" label="32514">
+          <level>0</level>
+          <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="yify" type="boolean" label="32515">
+          <level>0</level>
+          <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="subsource" type="boolean" label="32516">
+          <level>0</level>
+          <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="subscene" type="boolean" label="32517">
+          <level>0</level>
+          <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+        <setting id="bsplayer" type="boolean" label="32518">
+          <level>0</level>
+          <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
+      </group>
+      <!-- Hidden engine settings. The vendored engine reads these by name
+           (Addon.getSetting). They MUST exist with safe defaults or the
+           engine crashes on int('') / empty reads at import time. Not
+           surfaced to users; MoranSubs controls translation centrally via
+           translation_mode, so DarkSubs's own MT (auto_translate) stays
+           OFF and our bridge does the translating. -->
+      <group id="engine_internal">
+        <setting id="language_hebrew" type="boolean" label="30000" visible="false">
+          <level>3</level><default>true</default><control type="toggle"/>
+        </setting>
+        <setting id="language_english" type="boolean" label="30000" visible="false">
+          <level>3</level><default>true</default><control type="toggle"/>
+        </setting>
+        <setting id="language_russian" type="boolean" label="30000" visible="false">
+          <level>3</level><default>false</default><control type="toggle"/>
+        </setting>
+        <setting id="language_arab" type="boolean" label="30000" visible="false">
+          <level>3</level><default>false</default><control type="toggle"/>
+        </setting>
+        <setting id="all_lang" type="boolean" label="30000" visible="false">
+          <level>3</level><default>false</default><control type="toggle"/>
+        </setting>
+        <setting id="retry_search_with_all_langs" type="boolean" label="30000" visible="false">
+          <level>3</level><default>false</default><control type="toggle"/>
+        </setting>
+        <setting id="other_lang" type="string" label="30000" visible="false">
+          <level>3</level><default></default><control type="label" format="string"/>
+        </setting>
+        <setting id="auto_translate" type="boolean" label="30000" visible="false">
+          <level>3</level><default>false</default><control type="toggle"/>
+        </setting>
+        <setting id="translate_p" type="string" label="30000" visible="false">
+          <level>3</level><default>0</default><control type="label" format="string"/>
+        </setting>
+        <setting id="max_search_time" type="string" label="30000" visible="false">
+          <level>3</level><default>10</default><control type="label" format="string"/>
+        </setting>
+        <setting id="subtitle_trans_cache" type="string" label="30000" visible="false">
+          <level>3</level><default>15</default><control type="label" format="string"/>
+        </setting>
+        <setting id="enable_autosub_notifications" type="boolean" label="30000" visible="false">
+          <level>3</level><default>true</default><control type="toggle"/>
+        </setting>
+        <setting id="auto_fix_sub_punctuation" type="boolean" label="30000" visible="false">
+          <level>3</level><default>true</default><control type="toggle"/>
+        </setting>
+        <setting id="auto_remove_hi_tags" type="boolean" label="30000" visible="false">
+          <level>3</level><default>false</default><control type="toggle"/>
+        </setting>
+        <setting id="show_debug" type="boolean" label="30000" visible="false">
+          <level>3</level><default>false</default><control type="toggle"/>
+        </setting>
+        <setting id="OS_USER_API_KEY_VALUE" type="string" label="30000" visible="false">
+          <level>3</level><default></default><control type="label" format="string"/>
+        </setting>
+        <setting id="OSuser" type="string" label="30000" visible="false">
+          <level>3</level><default></default><control type="label" format="string"/>
+        </setting>
+        <setting id="OSpass" type="string" label="30000" visible="false">
+          <level>3</level><default></default><control type="label" format="string"/>
         </setting>
       </group>
     </category>
