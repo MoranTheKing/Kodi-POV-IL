@@ -59,7 +59,6 @@ STANDALONE_LIB_FILES = {
     "subs_filename_publisher.py",
     "tmdb_helper.py",
     "translate.py",
-    "wyzie.py",
 }
 
 
