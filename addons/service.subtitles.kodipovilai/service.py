@@ -292,6 +292,28 @@ def _check_first_run_marker():
         return False
 
 
+def _prune_source_memory_once():
+    """Cap the remembered-sources store so it can never grow unbounded over
+    years of watching. Records are tiny (~340 bytes each); this keeps the most
+    recent ~2000 and drops older ones (a dropped title just shows the source
+    dialog again next time). Independent of the translation-cache prune so one
+    failing doesn't skip the other."""
+    try:
+        from resources.lib import source_memory, kodi_utils
+        n = source_memory.prune()
+        if n:
+            kodi_utils.log(
+                'source_memory prune: {0} old record(s) removed'.format(n),
+                level='INFO')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log('source_memory prune failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _prune_once():
     try:
         from resources.lib import cache, kodi_utils
@@ -2139,6 +2161,7 @@ def main():
 
     # Initial prune.
     _prune_once()
+    _prune_source_memory_once()
 
     build_mode = _is_kodi_pov_il_build()
     if build_mode:
@@ -2369,6 +2392,7 @@ def main():
         if monitor.waitForAbort(interval_seconds):
             break
         _prune_once()
+        _prune_source_memory_once()
 
 
 # Kodi loads xbmc.service scripts by executing the module body, not by

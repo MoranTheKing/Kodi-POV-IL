@@ -65,6 +65,40 @@ def count():
         return 0
 
 
+def prune(max_keep=2000):
+    """Cap the source_memory directory so it can never grow without bound.
+    Keeps the `max_keep` most-recently-modified records and deletes the rest
+    (oldest first). Each record is tiny (~340 bytes), so even the cap is well
+    under a couple of MB -- this just guarantees it never creeps up over years
+    of watching. A pruned title simply shows the source dialog again next time,
+    exactly like a first watch. Returns the number of files removed."""
+    d = _dir()
+    if not d or not os.path.isdir(d):
+        return 0
+    try:
+        entries = [f for f in os.listdir(d) if f.endswith('.json')]
+    except OSError:
+        return 0
+    if len(entries) <= max_keep:
+        return 0
+    paths = []
+    for fn in entries:
+        fp = os.path.join(d, fn)
+        try:
+            paths.append((os.path.getmtime(fp), fp))
+        except OSError:
+            pass
+    paths.sort(key=lambda t: t[0])  # oldest first
+    removed = 0
+    for _mtime, fp in paths[:len(paths) - max_keep]:
+        try:
+            os.remove(fp)
+            removed += 1
+        except OSError:
+            pass
+    return removed
+
+
 def dir_path():
     """The source_memory directory path (for diagnostics)."""
     return _dir() or ''
