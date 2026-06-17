@@ -171,7 +171,7 @@ def _handle_download(handle, params):
     progress = None
     try:
         progress = xbmcgui.DialogProgressBG()
-        progress.create('Kodi POV IL - AI Subtitles',
+        progress.create('MoranSubs',
                         'AI Hebrew')
     except Exception:
         progress = None
@@ -184,7 +184,7 @@ def _handle_download(handle, params):
             if progress is not None:
                 try:
                     progress.update(
-                        pct, 'Kodi POV IL - AI Subtitles',
+                        pct, 'MoranSubs',
                         kodi_utils.localised(33001, stage, total))
                 except Exception:
                     pass
@@ -1405,7 +1405,7 @@ def _handle_translate_file(params):
     progress = None
     try:
         progress = xbmcgui.DialogProgressBG()
-        progress.create('Kodi POV IL - AI Subtitles',
+        progress.create('MoranSubs',
                         'תרגום AI מתחיל...')
     except Exception:
         progress = None
@@ -1419,7 +1419,7 @@ def _handle_translate_file(params):
             if progress is not None:
                 try:
                     progress.update(
-                        pct, 'Kodi POV IL - AI Subtitles',
+                        pct, 'MoranSubs',
                         _ku.localised(33001, stage, total))
                 except Exception:
                     pass
