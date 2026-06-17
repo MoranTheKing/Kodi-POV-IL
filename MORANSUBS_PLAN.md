@@ -162,11 +162,22 @@ get the most device testing before C flips the switch.
   id/hash/bot creds. The heaviest piece.
 - **Vendored libs needed for fetching:** cloudscraper (CF bypass),
   charset_normalizer (decode), requests_toolbelt (uploads), pysrt (validate).
-  **Drop:** pyxbmct (picker) and `auto_translate/` (replaced by Gemini).
+  **Drop:** pyxbmct (picker, replaced by Kodi's native dialog).
+  **KEEP:** `auto_translate/` (Google/Bing/Yandex) — now a **fallback** (below).
+
+### Translation: Gemini-first, Google as FALLBACK (maintainer requirement)
+Gemini stays the primary, high-quality, gender-aware translator. We keep Google
+(`auto_translate/`) as a fallback, used ONLY when:
+- the user has **no Gemini API key**, OR
+- Gemini hits a **hard error** (crash / invalid key / API failure).
+NOT when Gemini is merely **overloaded/busy** (429/503 "try later" — common) —
+there we **retry Gemini**, never downgrade to Google. The UI must **strongly
+recommend connecting a Gemini key** ("much higher quality, gender-aware") to push
+users to set one up. (Implemented in B2's translation seam.)
 
 ### The integration seam
-- Replace `engine.py::machine_translate_subs()` with a call into our Gemini
-  engine (`translate.py`).
+- Replace `engine.py::machine_translate_subs()` with the Gemini-first /
+  Google-fallback wrapper described above (B2).
 - After `c_get_subtitles()` returns the human list, **merge in** our pool
   Hebrew + "🤖 translate" entries as 10-tuples with `site_id='[MoranSubs]'`,
   then sort so **human Hebrew → 🤖 AI Hebrew → English/other** (embedded Hebrew
@@ -175,19 +186,21 @@ get the most device testing before C flips the switch.
   pool/AI picks to our existing `resolve()`.
 
 ### Sub-steps (each its own PR, testable, DarkSubs stays installed in parallel)
-- **B1 — Vendor the engine + NON-Telegram providers + required libs, dormant.**
+- **B1 — Vendor the FETCH engine + NON-Telegram providers + fetch-libs, dormant.**
   Copy `engine.py`, the embedded logic, `sources/{ktuvit,wizdom,opensubtitles,
   yify,subsource,subscene,bsplayer}.py`, `general.py`, `extract_sub.py`,
   `cache.py`, `log.py`, `srt.py` + cloudscraper/charset_normalizer/
   requests_toolbelt/pysrt into `resources/lib/subs_engine/`. **Rewrite all
-  internal imports** to MoranSubs' namespace. Replace `machine_translate_subs`
-  with a Gemini wrapper. **No wiring yet** — just verify everything imports
-  cleanly in MoranSubs' process. Zero behaviour change.
-- **B2 — Wire search + merge.** MoranSubs' `search` calls the vendored
-  `c_get_subtitles()` (human) + our pool + our AI-translate entries, merges and
-  sorts into one list (human → 🤖 AI → English), returns to Kodi's native
-  dialog. `download` routes appropriately. DarkSubs still installed; compare
-  coverage on device.
+  internal imports** + sys.path setup. **Stub** `machine_translate_subs`
+  (translation arrives in B2). NO `auto_translate/`, NO Telegram, NO wiring yet
+  — just verify everything imports cleanly. Zero behaviour change (nothing
+  imports it at runtime).
+- **B2 — Wire search + merge + translation seam.** MoranSubs' `search` calls the
+  vendored `c_get_subtitles()` (human) + our pool + our AI-translate entries,
+  merges and sorts (human → 🤖 AI → English), returns to Kodi's native dialog.
+  Implement `machine_translate_subs` = Gemini-first / Google-fallback (vendor
+  `auto_translate/` here) + the "connect Gemini" recommendation UI. DarkSubs
+  still installed; compare coverage on device.
 - **B3 — Telegram.** Vendor telethon + `telegram.py` + the StringSession login
   UI (in MoranSubs settings). The async-in-Kodi workaround. Heaviest/riskiest;
   isolated so B1/B2 ship without it.
