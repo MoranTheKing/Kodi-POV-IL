@@ -65,9 +65,38 @@ async function readIndex(env, key) {
   catch { return []; }
 }
 
+// Resolve a usable numeric TMDB id. Prefer body.tmdb_id; if it's missing or
+// non-numeric, look it up from the imdb id via TMDB /find. This is what rescues
+// imdb-only shares -- the live add-on share of an episode often carries only
+// the show's imdb id (Kodi's VideoPlayer.UniqueId(tmdb) is empty for streamed
+// episodes), which previously left the Telegram post with no series name,
+// poster, or plot. For episodes we want the SHOW's tmdb id (tv_results, or the
+// show_id behind an episode-level imdb).
+async function resolveTmdbId(env, body) {
+  const direct = String(body.tmdb_id || '').trim();
+  if (/^\d+$/.test(direct)) return direct;
+  const imdb = String(body.imdb_id || '').trim();
+  if (!/^tt\d+$/.test(imdb)) return '';
+  const key = env.TMDB_KEY || BUNDLED_TMDB_KEY;
+  try {
+    const r = await fetch(`https://api.themoviedb.org/3/find/${imdb}` +
+      `?api_key=${key}&external_source=imdb_id`);
+    if (!r.ok) return '';
+    const d = await r.json();
+    if (body.type === 'episode') {
+      if (d.tv_results && d.tv_results.length) return String(d.tv_results[0].id || '');
+      if (d.tv_episode_results && d.tv_episode_results.length)
+        return String(d.tv_episode_results[0].show_id || '');
+    } else {
+      if (d.movie_results && d.movie_results.length) return String(d.movie_results[0].id || '');
+    }
+  } catch (_) { /* ignore */ }
+  return '';
+}
+
 async function tmdbMeta(env, body) {
   const key = env.TMDB_KEY || BUNDLED_TMDB_KEY;
-  const id = String(body.tmdb_id || '').trim();
+  const id = await resolveTmdbId(env, body);
   if (!/^\d+$/.test(id)) return {};
   const isEp = body.type === 'episode';
   const base = isEp ? 'tv' : 'movie';
@@ -77,6 +106,7 @@ async function tmdbMeta(env, body) {
     if (!r.ok) return {};
     const d = await r.json();
     const meta = {
+      tmdb_id: id,
       title: d.title || d.name || body.title || '',
       original_title: d.original_title || d.original_name || '',
       year: String(d.release_date || d.first_air_date || '').slice(0, 4) || body.year || '',
@@ -148,7 +178,7 @@ function buildCaption(body, meta) {
   if (tags.length) lines.push(tags.join(' '));
   const links = [];
   if (meta.imdb_id) links.push(`<a href="https://www.imdb.com/title/${meta.imdb_id}/">IMDb</a>`);
-  const tid = String(body.tmdb_id || '').trim();
+  const tid = String(meta.tmdb_id || body.tmdb_id || '').trim();
   if (tid) links.push(`<a href="https://www.themoviedb.org/${isEp ? 'tv' : 'movie'}/${tid}">TMDb</a>`);
   if (links.length) lines.push(links.join(' | '));
   if (meta.overview) { lines.push(''); lines.push(escapeHtml(meta.overview.slice(0, 500))); }
