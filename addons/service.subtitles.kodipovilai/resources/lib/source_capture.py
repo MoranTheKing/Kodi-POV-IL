@@ -106,6 +106,16 @@ def autopick(sources_self, results):
     try:
         if not _enabled():
             return None
+        # If a video is already playing, this display_results call is an
+        # explicit "change source" mid-playback -> let the user pick (show the
+        # dialog), and the new pick will be captured. Auto-pick only on a fresh
+        # open / resume (player not yet playing).
+        try:
+            if xbmc is not None and xbmc.Player().isPlayingVideo():
+                _log('autopick: video already playing (change-source) -> dialog')
+                return None
+        except Exception:
+            pass
         rec = _get_record(sources_self)
         if not rec:
             _log('autopick: nothing remembered for this item -> dialog')

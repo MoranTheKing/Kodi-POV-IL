@@ -1,3 +1,12 @@
+v0.2.165
+- Remember picked source is now ON by default (new installs via the default;
+  existing users via a one-shot migration -- a manual opt-out still sticks).
+- "Change source" mid-playback now bypasses auto-pick: if a video is already
+  playing, the source dialog is shown so you can switch, and your new pick is
+  remembered (overwrites the old one). Auto-pick still fires on a fresh open /
+  resume. (POV is reloaded once when the toggle is on so this applies the same
+  session; compile-checked, OFF-users untouched.)
+
 v0.2.164
 - Remember picked source -- PHASE 2 (auto-pick), still OFF by default. When the
   toggle is on and you've already picked a source for a movie/episode, opening
