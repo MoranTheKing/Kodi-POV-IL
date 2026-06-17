@@ -329,3 +329,75 @@ msgstr "בדוק מקורות שנשמרו (אבחון)"
 msgctxt "#32506"
 msgid "Show Hebrew-subtitle match % on each source"
 msgstr "הצג אחוז התאמת כתוביות עברית לכל מקור"
+
+msgctxt "#32507"
+msgid "Built-in sources engine (DarkSubs)"
+msgstr "מנוע מקורות מובנה (DarkSubs)"
+
+msgctxt "#32508"
+msgid "Use the built-in sources engine (experimental)"
+msgstr "השתמש במנוע המקורות המובנה (ניסיוני)"
+
+msgctxt "#32509"
+msgid "When on, MoranSubs searches the human subtitle sources itself (Ktuvit, Wizdom, etc.) instead of relying on the separate DarkSubs add-on. Still in testing."
+msgstr "כשמופעל, MoranSubs מחפש בעצמו את מקורות הכתוביות האנושיות (Ktuvit, Wizdom וכו') במקום להסתמך על תוסף DarkSubs נפרד. עדיין בבדיקות."
+
+msgctxt "#32510"
+msgid "Search sources"
+msgstr "מקורות חיפוש"
+
+msgctxt "#32511"
+msgid "Ktuvit"
+msgstr "Ktuvit"
+
+msgctxt "#32512"
+msgid "Wizdom"
+msgstr "Wizdom"
+
+msgctxt "#32513"
+msgid "Telegram"
+msgstr "Telegram"
+
+msgctxt "#32514"
+msgid "OpenSubtitles"
+msgstr "OpenSubtitles"
+
+msgctxt "#32515"
+msgid "YIFY"
+msgstr "YIFY"
+
+msgctxt "#32516"
+msgid "SubSource"
+msgstr "SubSource"
+
+msgctxt "#32517"
+msgid "Subscene"
+msgstr "Subscene"
+
+msgctxt "#32518"
+msgid "BSPlayer"
+msgstr "BSPlayer"
+
+msgctxt "#32519"
+msgid "Telegram channels (coming in a later update)"
+msgstr "ערוצי טלגרם (יגיע בעדכון הבא)"
+
+msgctxt "#32520"
+msgid "Translation mode"
+msgstr "אופן התרגום"
+
+msgctxt "#32521"
+msgid "AI (Gemini) is strongly recommended - it is gender-aware and far more accurate. Google Translate is a basic fallback with no gender. 'No translation' shows subtitles in their original language."
+msgstr "מומלץ מאוד להשתמש ב-AI (Gemini) - הוא מודע למגדר ומדויק בהרבה. Google Translate הוא גיבוי בסיסי ללא מגדר. 'ללא תרגום' מציג את הכתוביות בשפת המקור."
+
+msgctxt "#32522"
+msgid "AI - Gemini (recommended)"
+msgstr "AI - Gemini (מומלץ)"
+
+msgctxt "#32523"
+msgid "Google Translate (basic, no gender)"
+msgstr "Google Translate (בסיסי, ללא מגדר)"
+
+msgctxt "#32524"
+msgid "No translation (source language only)"
+msgstr "ללא תרגום (שפת המקור בלבד)"
