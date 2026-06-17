@@ -198,6 +198,28 @@ def list_candidates(info):
             'is_hi': False, 'is_hd': False,
         })
 
+    # Built-in sources engine (Phase B, gated by use_builtin_engine,
+    # default OFF). When on, MoranSubs searches the human subtitle
+    # sources itself and surfaces the HEBREW results: human subs go
+    # right under the local passthrough (also human), machine-translated
+    # Hebrew is held back and appended below the community pool. When the
+    # gate is off subs_engine_bridge.search() returns [] without importing
+    # the engine, so this block is a no-op.
+    engine_machine = []
+    try:
+        from . import subs_engine_bridge
+        if subs_engine_bridge.enabled():
+            for c in subs_engine_bridge.search(info):
+                kind = c.pop('_engine_kind', 'human')
+                if kind == 'human':
+                    have_hebrew = True
+                    results.append(c)
+                else:
+                    engine_machine.append(c)
+    except Exception as e:
+        kodi_utils.log('engine search skipped: {0}'.format(e),
+                       level='DEBUG')
+
     # Community pool: Hebrew translations other users already made and shared.
     # Offered like passthrough (ready Hebrew -- no local translation needed).
     # Gated by pool_use; failures are swallowed inside pool.lookup.
@@ -211,6 +233,13 @@ def list_candidates(info):
                 'sync': 'false', 'rating': '5',
                 'is_hi': False, 'is_hd': False,
             })
+
+    # Machine-translated Hebrew from the engine (Telegram-MT etc.) ranks
+    # below human subs and the community pool -- appended last among the
+    # ready-Hebrew entries.
+    for c in engine_machine:
+        have_hebrew = True
+        results.append(c)
 
     skip_when_hebrew = kodi_utils.get_bool('skip_if_hebrew', True)
     if have_hebrew and skip_when_hebrew:
@@ -468,6 +497,26 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             return out
         except OSError:
             return None
+
+    if kind == 'engine':
+        # A human (or machine-translated) Hebrew subtitle the user
+        # picked from the built-in sources engine. Download it directly
+        # via the vendored provider -- no AI translation needed, it's
+        # already Hebrew. Gated: download() returns None if the engine
+        # gate is off.
+        try:
+            from . import subs_engine_bridge
+            path = subs_engine_bridge.download(payload)
+        except Exception as e:
+            kodi_utils.log('resolve engine download failed: {0}'.format(e),
+                           level='ERROR')
+            path = None
+        if path and os.path.isfile(path):
+            kodi_utils.notify('כתוביות עברית מ-{0}'.format(
+                payload.get('source') or 'מקור'), time_ms=4000)
+            return path
+        kodi_utils.notify('לא ניתן היה להוריד את הכתובית', time_ms=4000)
+        return None
 
     if kind != 'ai':
         kodi_utils.log('resolve: unknown kind ' + str(kind),
