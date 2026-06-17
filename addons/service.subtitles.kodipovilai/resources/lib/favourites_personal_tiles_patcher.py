@@ -36,6 +36,7 @@
 
 import os
 import re
+import json
 
 try:
     import xbmcvfs
@@ -215,19 +216,71 @@ def _insert_service_tile_after_torbox(content, tile_bytes):
     )
 
 
+_SEEN_STATE_FILE = 'personal_tiles_state.json'
+
+
+def _seen_state_path():
+    if kodi_utils is None:
+        return ''
+    try:
+        return os.path.join(kodi_utils.addon_profile_path(), _SEEN_STATE_FILE)
+    except Exception:
+        return ''
+
+
+def _load_seen_state():
+    """Persistent set of tile keys we've inserted at least once. Survives
+    Kodi's comment-stripping favourites rewrites (unlike the XML markers)."""
+    p = _seen_state_path()
+    if not p or not os.path.isfile(p):
+        return set()
+    try:
+        with open(p, 'r', encoding='utf-8') as f:
+            d = json.loads(f.read())
+        return set(d.get('seen') or [])
+    except (IOError, OSError, ValueError):
+        return set()
+
+
+def _save_seen_state(seen):
+    p = _seen_state_path()
+    if not p:
+        return
+    try:
+        with open(p, 'w', encoding='utf-8') as f:
+            f.write(json.dumps({'seen': sorted(seen)}))
+    except OSError:
+        pass
+
+
 def _insert_debrid_notice_tile(content, fixture_text):
     """Restore the subscription-notification settings tile once.
 
     This is intentionally not a mandatory tile. After the tile has been
-    seen/restored once, the dedicated marker lets users delete it without
-    quick updates adding it back forever.
+    seen/restored once, we record it in a PERSISTENT JSON sidecar so users can
+    delete it without quick updates adding it back forever.
+
+    Why JSON and not just the XML comment marker: when a user deletes a
+    favourite via Kodi's GUI, Kodi rewrites favourites.xml and STRIPS XML
+    comments -- so the marker vanishes, the patcher thinks the tile was never
+    added, and re-inserts it on the next startup ("the tile that keeps coming
+    back"). A separate JSON file Kodi never touches, so the deletion sticks.
+    (Same reason the home-tiles patcher uses home_tiles_state.json.)
     """
     action_b = FIXED_DEBRID_NOTICE_ACTION.encode('utf-8')
+    seen = _load_seen_state()
     if action_b in content:
+        # Tile present -> persist "seen" so a LATER delete sticks even after
+        # Kodi strips the comment marker.
+        if 'debrid_notice' not in seen:
+            seen.add('debrid_notice')
+            _save_seen_state(seen)
         new_content, marker_added = _insert_marker(
             content, DEBRID_NOTICE_SEEN_MARKER)
         return new_content, marker_added
-    if _has_marker(content, DEBRID_NOTICE_SEEN_MARKER):
+    # Tile absent: if we've ever seen it (persistent flag OR legacy comment),
+    # respect the deletion and never re-add.
+    if 'debrid_notice' in seen or _has_marker(content, DEBRID_NOTICE_SEEN_MARKER):
         return content, False
 
     snippet = _extract_tile_by_action(fixture_text, FIXED_DEBRID_NOTICE_ACTION)
@@ -262,6 +315,9 @@ def _insert_debrid_notice_tile(content, fixture_text):
             if inserted is None:
                 return content, False
             new_content = inserted
+    # Persist "seen" the first (and only) time we insert it.
+    seen.add('debrid_notice')
+    _save_seen_state(seen)
     new_content, _marker_added = _insert_marker(
         new_content, DEBRID_NOTICE_SEEN_MARKER)
     return new_content, True
