@@ -1409,6 +1409,40 @@ def _maybe_patch_pov_remember_source():
             pass
 
 
+def _maybe_patch_pov_subtitle_match():
+    """Show a Hebrew-subtitle match % under each source in POV's source-results
+    window (gated by `show_subtitle_match`, default on). Patches POV's
+    windows/sources.py to prepend a coloured '<NN>% עברית' to each row's
+    size_label -- a property rendered first in the info line of every layout, so
+    it shows on every skin with no skin-XML changes. The patcher compile-checks
+    before writing, so it can never break the source window / playback."""
+    try:
+        from resources.lib import pov_subtitle_match_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_subtitle_match_patcher.ensure_patched()
+        if status in ('patched', 'unmatched', 'compile_failed',
+                      'write_failed', 'read_failed'):
+            kodi_utils.log('pov_subtitle_match_patcher: ' + status,
+                           level=('INFO' if status == 'patched' else 'WARNING'))
+        # Cycle POV so its reuse-language-invoker interpreter re-imports the
+        # patched window this session (the runtime gate in he_sub_match means a
+        # user who turns the feature off just sees no badge).
+        if status == 'patched':
+            try:
+                from resources.lib import pov_reload
+                pov_reload.note_patched()
+            except Exception:
+                pass
+    except Exception as e:
+        try:
+            kodi_utils.log('pov_subtitle_match_patcher failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_source_name():
     """Self-healing patch of POV's sources.py so that when POV picks
     a source from the source-select dialog (the one with cached/
@@ -2368,6 +2402,11 @@ def main():
     # remember_source setting, OFF by default; compile-checked so it can't
     # break POV playback).
     _maybe_patch_pov_remember_source()
+
+    # Hebrew-subtitle match % under each source in POV's source-results window
+    # (skin-agnostic: prepends to a property shown in every layout). Gated by
+    # show_subtitle_match (default on); compile-checked so it can't break POV.
+    _maybe_patch_pov_subtitle_match()
 
     # Self-healing DarkSubs get_playing_filename() patch. Prefers
     # the picked release name set by the pov_source_name_patcher

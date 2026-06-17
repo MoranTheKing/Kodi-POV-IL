@@ -337,3 +337,7 @@ msgstr "Remember picked source (auto-play it next time)"
 msgctxt "#32505"
 msgid "Check remembered sources (diagnostic)"
 msgstr "Check remembered sources (diagnostic)"
+
+msgctxt "#32506"
+msgid "Show Hebrew-subtitle match % on each source"
+msgstr "Show Hebrew-subtitle match % on each source"
