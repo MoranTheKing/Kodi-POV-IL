@@ -1417,7 +1417,7 @@ def _autosub_on_play():
     the best Hebrew subtitle automatically (replacing DarkSubs's autosub).
     Runs in its own thread so it never blocks Kodi's playback callback."""
     try:
-        from resources.lib import kodi_utils, translate
+        from resources.lib import kodi_utils, translate, subs_engine_bridge
     except Exception:
         return
     try:
@@ -1433,8 +1433,23 @@ def _autosub_on_play():
     if _AUTOSUB_STATE['busy']:
         return
     _AUTOSUB_STATE['busy'] = True
-    progress = None
+    _eng_general = None
     try:
+        # Show the DarkSubs-style top overlay IMMEDIATELY (with live per-source
+        # counts the engine fills into general.show_msg as it searches), so the
+        # user sees the same "loading subtitles" screen the moment playback
+        # starts -- not after the metadata wait below.
+        try:
+            subs_engine_bridge.ensure_engine_settings()
+            from resources.lib.subs_engine import general as _eng_general
+            _eng_general.break_all = False
+            _eng_general.with_dp = False
+            _eng_general.show_msg = 'MoranSubs — מחפש כתוביות עברית'
+            threading.Thread(target=_eng_general.show_results,
+                             args=(False,), daemon=True).start()
+        except Exception:
+            _eng_general = None
+
         # Right after onAVStarted the player metadata (imdb/title) often
         # isn't populated yet -- poll briefly until it is (mirrors how
         # DarkSubs waits for the video before searching).
@@ -1460,15 +1475,9 @@ def _autosub_on_play():
                 or info.get('title')):
             return
 
-        try:
-            progress = xbmcgui.DialogProgressBG()
-            progress.create('MoranSubs', 'מחפש כתוביות עברית...')
-        except Exception:
-            progress = None
-
-        # Non-modal search (the bottom banner above is our progress).
-        # list_candidates returns everything in priority order; the first
-        # 'he' row is the best Hebrew (embedded > human > pool > MT).
+        # Non-modal search (the overlay above is the progress). list_candidates
+        # returns everything in priority order; the first 'he' row is the best
+        # Hebrew (embedded > human > pool > MT).
         cands = translate.list_candidates(info, modal_progress=False)
         he = next((c for c in cands if c.get('language') == 'he'), None)
         if not he:
@@ -1489,6 +1498,11 @@ def _autosub_on_play():
                     p.showSubtitles(True)
             except Exception:
                 pass
+        # Remember it as the current sub so the picker marks it '» נוכחית'.
+        try:
+            kodi_utils.set_current_subtitle(he.get('link') or '')
+        except Exception:
+            pass
         try:
             kodi_utils.notify('MoranSubs: הוחלה כתובית עברית', time_ms=3000)
         except Exception:
@@ -1501,9 +1515,10 @@ def _autosub_on_play():
             pass
     finally:
         _AUTOSUB_STATE['busy'] = False
-        if progress is not None:
+        # Close the overlay (show_results exits on 'END').
+        if _eng_general is not None:
             try:
-                progress.close()
+                _eng_general.show_msg = 'END'
             except Exception:
                 pass
 
@@ -2304,31 +2319,34 @@ def _ensure_darksubs_enabled():
     except Exception:
         engine_on = False
     desired = not engine_on
-    try:
-        import json as _json
-        get = _json.dumps({
-            'jsonrpc': '2.0', 'id': 1,
-            'method': 'Addons.GetAddonDetails',
-            'params': {'addonid': 'service.subtitles.All_Subs',
-                       'properties': ['enabled']},
-        })
-        data = _json.loads(xbmc.executeJSONRPC(get) or '{}')
-        addon = (data.get('result') or {}).get('addon') or {}
-        if 'enabled' not in addon:
-            return  # not installed / unknown -> leave alone
-        if bool(addon.get('enabled')) == desired:
-            return  # already in the desired state
-        en = _json.dumps({
-            'jsonrpc': '2.0', 'id': 1,
-            'method': 'Addons.SetAddonEnabled',
-            'params': {'addonid': 'service.subtitles.All_Subs',
-                       'enabled': desired},
-        })
-        xbmc.executeJSONRPC(en)
-        xbmc.log('[{0}] DarkSubs set enabled={1} (engine_on={2})'.format(
-            ADDON_ID, desired, engine_on), level=xbmc.LOGINFO)
-    except Exception:
-        pass
+    # Both competing Hebrew subtitle add-ons get the same treatment: enabled
+    # when the engine is off (default), disabled when the engine is on (so only
+    # MoranSubs runs -- no duplicate/competing searches).
+    for addon_id in ('service.subtitles.All_Subs',
+                     'service.subtitles.all_subs_plus'):
+        try:
+            import json as _json
+            get = _json.dumps({
+                'jsonrpc': '2.0', 'id': 1,
+                'method': 'Addons.GetAddonDetails',
+                'params': {'addonid': addon_id, 'properties': ['enabled']},
+            })
+            data = _json.loads(xbmc.executeJSONRPC(get) or '{}')
+            addon = (data.get('result') or {}).get('addon') or {}
+            if 'enabled' not in addon:
+                continue  # not installed / unknown -> leave alone
+            if bool(addon.get('enabled')) == desired:
+                continue  # already in the desired state
+            en = _json.dumps({
+                'jsonrpc': '2.0', 'id': 1,
+                'method': 'Addons.SetAddonEnabled',
+                'params': {'addonid': addon_id, 'enabled': desired},
+            })
+            xbmc.executeJSONRPC(en)
+            xbmc.log('[{0}] {1} set enabled={2} (engine_on={3})'.format(
+                ADDON_ID, addon_id, desired, engine_on), level=xbmc.LOGINFO)
+        except Exception:
+            pass
 
 
 def _maybe_set_default_subtitle_service():
@@ -2670,9 +2688,10 @@ def main():
 
     # AllSubs Plus crashes at import on Windows when shutil.copy hits a
     # NTFS junction/hardlink (SameFileError). Patch its 6 copy lines in
-    # setLanguageSettings to absorb that specific exception so the
-    # addon survives to actually serve subtitles.
-    _maybe_patch_all_subs_samefile()
+    # setLanguageSettings to absorb that specific exception. Skipped when the
+    # engine is on -- All Subs Plus is disabled then (we don't touch it).
+    if not _engine_on:
+        _maybe_patch_all_subs_samefile()
 
     # DarkSubs has reuselanguageinvoker=true and runs autosub.py as a
     # persistent xbmc.service, so editing its .py files on disk does NOT
