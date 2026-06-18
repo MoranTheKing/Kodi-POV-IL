@@ -248,6 +248,53 @@ def run_async_logout_from_telegram():
     asyncio.run(logout_from_telegram())
 #########################################################################
 
+
+# ---- Diagnostic: connect + (optionally) send a real login code, report the
+#      exact outcome so we can tell WHY login fails (the normal logs are
+#      suppressed unless show_debug is on). Used by the "Test Telegram" button.
+async def _diagnose(phone=None):
+    steps = []
+    try:
+        steps.append('api_id=%s api_hash=%s bot=%s' % (
+            'set' if api_id else 'MISSING',
+            'set' if api_hash else 'MISSING',
+            'set' if bot_token else 'MISSING'))
+    except Exception as e:
+        return 'telegram_api FAILED: %r' % e
+    client = None
+    try:
+        client = TelegramClient(StringSession(get_session_string()),
+                                api_id, api_hash)
+        await client.connect()
+        steps.append('connected=%s' % client.is_connected())
+        authed = await client.is_user_authorized()
+        steps.append('logged_in=%s' % authed)
+        if not authed and phone:
+            try:
+                await client.send_code_request(phone, force_sms=False)
+                steps.append('send_code=OK (check the Telegram app)')
+            except Exception as e:
+                steps.append('send_code FAILED: %s: %s' % (
+                    type(e).__name__, str(e)[:160]))
+    except Exception as e:
+        steps.append('connect FAILED: %s: %s' % (
+            type(e).__name__, str(e)[:160]))
+    finally:
+        try:
+            if client:
+                await client.disconnect()
+        except Exception:
+            pass
+    return ' | '.join(steps)
+
+
+def run_diagnose(phone=None):
+    try:
+        return asyncio.run(_diagnose(phone))
+    except Exception as e:
+        return 'asyncio FAILED: %s: %s' % (type(e).__name__, str(e)[:160])
+#########################################################################
+
 ################### CONNECT #############################################
 def telegram_helper_window():
     dialog = xbmcgui.Dialog()
