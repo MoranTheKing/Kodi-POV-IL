@@ -344,6 +344,20 @@
           <default>false</default>
           <control type="toggle"/>
         </setting>
+        <setting id="engine_test" type="action" label="32525"> <!-- Test the built-in engine (diagnostic) -->
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+          </dependencies>
+          <control type="button" format="action">
+            <heading>32525</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=engine_test)</data>
+        </setting>
       </group>
       <group id="engine_sources" label="32510"> <!-- Search sources -->
         <setting id="ktuvit" type="boolean" label="32511">
