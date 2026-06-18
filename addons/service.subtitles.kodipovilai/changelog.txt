@@ -1,3 +1,12 @@
+v0.2.214
+- Source-screen "HEB NN%" badge now uses OpenSubtitles (not Ktuvit) for its
+  background lookup. Ktuvit runs on ONE shared, rate-limited account; hitting it
+  on every browse pushed it past its limit and broke real Ktuvit downloads
+  ("request not found"). Proven by reproducing the flow directly: a single
+  Ktuvit download succeeds, rapid/repeated ones get throttled. OpenSubtitles
+  uses rotating API keys, so the badge adds no load to that account -- which
+  also lets genuine Ktuvit downloads work again.
+
 v0.2.213
 - Embedded Hebrew: now re-finds the Hebrew stream at the moment you pick it
   (instead of a stale index captured when the dialog opened), so it actually
