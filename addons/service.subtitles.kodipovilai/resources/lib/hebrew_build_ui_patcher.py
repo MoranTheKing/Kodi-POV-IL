@@ -23,6 +23,17 @@ FENTASTIC_HOME_XML = 'special://home/addons/skin.fentastic/xml/Home.xml'
 FENTASTIC_HE_STRINGS = (
     'special://home/addons/skin.fentastic/language/resource.language.he_il/strings.po'
 )
+FENTASTIC_EN_STRINGS = (
+    'special://home/addons/skin.fentastic/language/resource.language.en_gb/strings.po'
+)
+# Pristine, known-good copies of the skin's language files, bundled inside THIS
+# add-on (so they ride along in every quick update). Used to self-heal a
+# corrupt/truncated strings.po. Keyed: live skin path -> bundled pristine file.
+_SKIN_REPAIR_DIR = os.path.join(os.path.dirname(__file__), '..', 'skin_repair')
+SKIN_STRINGS_REPAIR = {
+    FENTASTIC_HE_STRINGS: os.path.join(_SKIN_REPAIR_DIR, 'fentastic_he_il_strings.po'),
+    FENTASTIC_EN_STRINGS: os.path.join(_SKIN_REPAIR_DIR, 'fentastic_en_gb_strings.po'),
+}
 GUISETTINGS = 'special://profile/guisettings.xml'
 FENTASTIC_DEFAULT_PLAYER_SETTING = 'chooseosdplayer'
 
@@ -149,6 +160,55 @@ def _patch_fentastic_home_label():
     except Exception as exc:
         kodi_utils.log('hebrew_build_ui_patcher Home.xml failed: {0}'.format(exc), level='WARNING')
         return False
+
+
+def _restore_corrupt_skin_strings():
+    """Self-heal the "FENtastic loads but ALL text is blank" bug.
+
+    A truncated/empty strings.po blanks every $LOCALIZE label, so the whole
+    skin renders with no text (only icons). v0.2.143 made our own writes atomic
+    so WE can no longer truncate it -- but a file already corrupted (by an older
+    build, an interrupted extract, a power loss, etc.) stays broken forever,
+    because nothing repairs it in place. This restores a bundled pristine copy
+    whenever the live file is missing/empty/suspiciously short, on every
+    startup, independent of the quick-update extractor. Healthy files (incl. a
+    legitimately newer/larger skin translation) are left untouched."""
+    restored = []
+    for live_special, pristine_path in SKIN_STRINGS_REPAIR.items():
+        try:
+            if not os.path.exists(pristine_path):
+                continue
+            pristine_size = os.path.getsize(pristine_path)
+            if pristine_size <= 0:
+                continue
+            live_path = _translate(live_special)
+            if not live_path:
+                continue
+            corrupt = False
+            if not os.path.exists(live_path):
+                # The skin file should exist; if it's gone the skin can't render
+                # that language at all, so put the good copy back.
+                corrupt = True
+            else:
+                live_size = os.path.getsize(live_path)
+                # < 60% of the known-good size == truncated/blanked. A healthy
+                # file (even an updated one) is never this much smaller.
+                if live_size <= 0 or live_size < pristine_size * 0.6:
+                    corrupt = True
+            if not corrupt:
+                continue
+            with open(pristine_path, 'r', encoding='utf-8', errors='ignore') as f:
+                good = f.read()
+            if not good.strip():
+                continue
+            _atomic_write(live_path, good)
+            restored.append(os.path.basename(os.path.dirname(live_path)))
+        except Exception as exc:
+            kodi_utils.log('hebrew_build_ui_patcher restore failed: {0}'.format(exc), level='WARNING')
+    if restored:
+        kodi_utils.log('hebrew_build_ui_patcher: restored corrupt skin strings.po for {0}'.format(
+            ','.join(restored)), level='WARNING')
+    return bool(restored)
 
 
 def _patch_hebrew_skin_strings():
@@ -327,6 +387,10 @@ def _ensure_runtime_english_audio_preference():
 
 def ensure_patched():
     changed = []
+    # Repair a blanked/truncated skin strings.po FIRST, so the label patch below
+    # works on a healthy file and the user never sees a text-less skin.
+    if _restore_corrupt_skin_strings():
+        changed.append('restored_skin_strings')
     if _clear_skin_bool('HomeMenuNoFavButton'):
         changed.append('skin_bool')
     if _ensure_fentastic_setting_file():
