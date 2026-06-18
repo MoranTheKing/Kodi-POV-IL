@@ -1,3 +1,9 @@
+v0.2.201
+- Added "Test Telegram connection (diagnostic)" button: it reports the exact
+  connection state and, optionally, the real result of sending a login code,
+  in a dialog -- so Telegram login failures are visible even with debug
+  logging off.
+
 v0.2.200
 - Telegram source is now OFF by default (it is mostly low-quality machine
   translations and needs a per-user login). Turn it on in settings if you want

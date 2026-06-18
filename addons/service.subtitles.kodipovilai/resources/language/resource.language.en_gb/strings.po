@@ -445,3 +445,7 @@ msgstr "Force AI translation when no Hebrew exists (on play)"
 msgctxt "#32532"
 msgid "When a video starts and no ready Hebrew subtitle is found (human or community pool), automatically AI-translate the best foreign subtitle to Hebrew. Off by default to save API requests."
 msgstr "When a video starts and no ready Hebrew subtitle is found (human or community pool), automatically AI-translate the best foreign subtitle to Hebrew. Off by default to save API requests."
+
+msgctxt "#32533"
+msgid "Test Telegram connection (diagnostic)"
+msgstr "Test Telegram connection (diagnostic)"

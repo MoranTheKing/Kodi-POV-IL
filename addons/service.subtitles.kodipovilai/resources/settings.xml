@@ -402,6 +402,20 @@
           </control>
           <data>RunScript(service.subtitles.kodipovilai,action=logout_telegram)</data>
         </setting>
+        <setting id="telegram_test" type="action" label="32533">
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+          </dependencies>
+          <control type="button" format="action">
+            <heading>32533</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=telegram_test)</data>
+        </setting>
       </group>
       <group id="engine_sources" label="32510"> <!-- Search sources -->
         <setting id="ktuvit" type="boolean" label="32511">
