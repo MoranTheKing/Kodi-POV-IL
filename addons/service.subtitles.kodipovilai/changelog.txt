@@ -1,3 +1,13 @@
+v0.2.204
+- Fix (recurrence): FENtastic loads but ALL text is blank (only icons show).
+  A truncated/blanked skin strings.po blanks every label. v0.2.143 stopped US
+  from truncating it, but a file already corrupted (older build, interrupted
+  extract, power loss) stayed broken forever because nothing repaired it in
+  place. MoranSubs now ships a pristine copy of the skin's he/en strings.po and
+  self-heals on every startup: if the live file is missing/empty/much shorter
+  than the known-good copy, it is atomically restored -- independent of the
+  quick-update extractor. Healthy/newer files are left untouched.
+
 v0.2.203
 - Telegram login now reveals HOW the code was sent and can fall back to SMS.
   The "Test Telegram connection" diagnostic now reports the delivery channel
