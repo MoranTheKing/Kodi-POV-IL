@@ -135,3 +135,18 @@ def logout():
         impl.run_async_logout_from_telegram()
     except Exception:
         pass
+
+
+def diagnose(phone=None):
+    """Return a human-readable status string explaining the Telegram
+    connection state (and, if a phone is given, the result of sending a login
+    code). Used by the "Test Telegram" button so failures are visible even
+    when debug logging is off."""
+    impl = _load_impl()
+    if impl is None:
+        return ('לא ניתן לטעון את רכיב הטלגרם (telethon). ודא שהבילד מותקן '
+                'במלואו ושהמנוע המובנה דלוק.')
+    try:
+        return impl.run_diagnose(phone)
+    except Exception as e:
+        return 'diagnose FAILED: {0}: {1}'.format(type(e).__name__, str(e)[:160])

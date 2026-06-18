@@ -118,11 +118,14 @@ _ENGINE_DEFAULTS = {
     'auto_fix_sub_punctuation': 'true',
     'auto_remove_hi_tags': 'false',
     'show_debug': 'false',
+    # Telegram channel is mostly low-quality machine translations and needs a
+    # per-user login -> OFF by default (force it off once via the version bump).
+    'telegram': 'false',
 }
 
 # Bump when _ENGINE_DEFAULTS changes so the new values are force-applied to
 # installs that already have the old values written.
-_ENGINE_DEFAULTS_VERSION = '2'
+_ENGINE_DEFAULTS_VERSION = '3'
 
 
 def ensure_engine_settings():
