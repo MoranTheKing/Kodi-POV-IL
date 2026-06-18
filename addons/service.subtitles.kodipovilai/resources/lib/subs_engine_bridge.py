@@ -23,9 +23,64 @@
 
 import json
 import os
+import re
+import time
 import urllib.parse
 
 from . import kodi_utils
+
+
+# Tokens that mark a string as a real release name (vs a clean title or a
+# debrid token). Used to pick the best release name for sync-% matching.
+_REL_PATTERNS = (
+    r'(?:19|20)\d{2}',
+    r'(?:360|480|576|720|1080|2160)p',
+    r'web.?dl|webrip|web|bluray|blu.?ray|brrip|bdrip|hdtv|hdrip|dvdrip|remux|hdcam',
+    r'x26[45]|h\.?26[45]|hevc|avc|xvid|10bit',
+    r'aac|ac3|e?ac.?3|dts|ddp?5|atmos|dd\+|truehd|multi',
+    r'-[a-z0-9]{2,}$',
+)
+
+
+def _release_score(s):
+    """Heuristic: how much a string looks like a scene/web release name."""
+    if not s:
+        return 0
+    s2 = s.lower()
+    sc = sum(1 for p in _REL_PATTERNS if re.search(p, s2))
+    if s2.count('.') >= 3 or s2.count(' ') >= 3:
+        sc += 1
+    return sc
+
+
+def _detect_release_name(info):
+    """Pick the best available release name for sync-% matching. The player
+    filepath is often a tokenized debrid URL, while the real release name
+    lives in the ListItem path / label / tagline -- so we score every
+    candidate and take the most release-like one."""
+    cands = []
+    # POV's captured pick is the most reliable release name -- prefer it.
+    pr = (info.get('picked_release') or '').strip()
+    if pr:
+        cands.append(pr)
+    for key in ('filepath', 'li_filename'):
+        v = (info.get(key) or '').strip()
+        if v:
+            try:
+                cands.append(os.path.basename(v.rstrip('/')) or v)
+            except Exception:
+                cands.append(v)
+    for key in ('label', 'tagline', 'title'):
+        v = (info.get(key) or '').strip()
+        if v:
+            cands.append(v)
+    best, best_score = '', -1
+    for c in cands:
+        sc = _release_score(c)
+        # tie-break: prefer the longer (more specific) string
+        if sc > best_score or (sc == best_score and len(c) > len(best)):
+            best, best_score = c, sc
+    return best
 
 
 def enabled():
@@ -103,23 +158,13 @@ def build_video_data(info):
 
     title = (info.get('title') or '').strip()
     tvshow = (info.get('tvshow') or '').strip()
-    filepath = info.get('filepath') or ''
-    try:
-        file_base = os.path.basename(filepath) if filepath else ''
-    except Exception:
-        file_base = ''
 
-    # Release name used by sort_subtitles to compute the sync %. FEN/POV
-    # put the real release in the Tagline; for debrid streams the filepath
-    # is a tokenized URL, so without the Tagline the match % is meaningless
-    # (this is why our %s were far lower than DarkSubs'). sort_subtitles
-    # takes max(file_original_path match, Tagline match), so we feed the
-    # best release name we have into BOTH.
-    tagline = (info.get('tagline') or '').strip()
-    label = (info.get('label') or '').strip()
-    # Prefer a token that actually looks like a release (has dots / a year /
-    # a quality tag) over a clean human title.
-    file_original = file_base or tagline or label or tvshow or title
+    # Release name used by sort_subtitles to compute the sync %. The player
+    # filepath is often a tokenized debrid URL, so we score every candidate
+    # (filepath, ListItem path, label, tagline, title) and feed the most
+    # release-like one into BOTH file_original_path and Tagline. This is why
+    # our %s were far lower than DarkSubs' -- we were matching a token.
+    release = _detect_release_name(info) or tvshow or title
 
     vd = {
         'imdb': imdb,
@@ -135,10 +180,10 @@ def build_video_data(info):
         'media_type': media_type,
         'media_type_ListItem.DBTYPE': media_type,
         'media_type_videoInfoTag': media_type,
-        'file_original_path': file_original or '',
-        'Tagline': tagline or label or file_original or '',
-        'Tagline_From_Fen': tagline or '',
-        'VideoPlayer.Tagline': tagline or '',
+        'file_original_path': release or '',
+        'Tagline': release or '',
+        'Tagline_From_Fen': release or '',
+        'VideoPlayer.Tagline': release or '',
         'mpaa': '',
         'is_local_media_playing': 'false',
         'state': '',
@@ -224,8 +269,16 @@ def search(info):
     """
     if not enabled():
         return []
+    # Result cache: a repeat open of the same title returns instantly
+    # instead of re-running every provider (this is a big part of why
+    # DarkSubs feels faster -- it caches its sorted results for 24h).
+    cached = _cache_get(info)
+    if cached is not None:
+        return cached
     try:
-        return _search_inner(info)
+        out = _search_inner(info)
+        _cache_put(info, out)
+        return out
     except Exception as e:
         kodi_utils.log('subs_engine_bridge.search failed: {0}'.format(e),
                        level='WARNING')
@@ -237,6 +290,66 @@ def search(info):
         except Exception:
             pass
         return []
+
+
+# ---- result cache (per media, short TTL) ----------------------------
+
+_CACHE_TTL = 6 * 3600  # seconds
+
+
+def _cache_key(info):
+    mid = (info.get('imdb_id') or info.get('tmdb_id') or '').strip()
+    if not mid:
+        return None
+    return '{0}_s{1}_e{2}'.format(
+        mid, info.get('season') or '0', info.get('episode') or '0')
+
+
+def _cache_dir():
+    try:
+        import xbmcvfs
+        import xbmcaddon
+        base = xbmcvfs.translatePath(
+            xbmcaddon.Addon('service.subtitles.kodipovilai')
+            .getAddonInfo('profile'))
+        d = os.path.join(base, 'engine_cache')
+        if not os.path.isdir(d):
+            os.makedirs(d)
+        return d
+    except Exception:
+        return None
+
+
+def _cache_get(info):
+    key = _cache_key(info)
+    d = _cache_dir()
+    if not key or not d:
+        return None
+    p = os.path.join(d, key + '.json')
+    try:
+        if not os.path.isfile(p):
+            return None
+        if time.time() - os.path.getmtime(p) > _CACHE_TTL:
+            return None
+        with open(p, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def _cache_put(info, candidates):
+    key = _cache_key(info)
+    d = _cache_dir()
+    if not key or not d:
+        return
+    p = os.path.join(d, key + '.json')
+    try:
+        tmp = p + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(candidates, f, ensure_ascii=False)
+        os.replace(tmp, p)
+    except Exception:
+        pass
 
 
 def _search_inner(info):
@@ -323,6 +436,35 @@ def _search_inner(info):
     return out
 
 
+def _wait_for_subtitle_streams(player, max_tenths=25):
+    """Poll the player's subtitle-stream list until it populates. The
+    demuxer often hasn't exposed embedded streams yet right after playback
+    starts (the search dialog opens at ~00:00:02), so an immediate read
+    returns []. Mirrors DarkSubs's wait_for_video_and_return_subs_list but
+    capped shorter to stay responsive. Returns the stream list."""
+    import xbmc
+    subs = []
+    once = True
+    vidtime_pre = 0
+    for _ in range(max_tenths):
+        try:
+            subs = player.getAvailableSubtitleStreams() or []
+            if subs:
+                return subs
+            vidtime = player.getTime()
+            if vidtime > 0:
+                if once:
+                    vidtime_pre = vidtime
+                    once = False
+                elif vidtime_pre != vidtime:
+                    # Time advanced and still no streams -> none coming.
+                    break
+        except Exception:
+            pass
+        xbmc.sleep(100)
+    return subs
+
+
 def embedded_candidates(info):
     """Detect an embedded Hebrew subtitle stream in the currently-playing
     file and offer it at the very top, mirroring DarkSubs's "[LOC] 101%"
@@ -335,11 +477,11 @@ def embedded_candidates(info):
         player = xbmc.Player()
         if not player.isPlayingVideo():
             return []
-        streams = player.getAvailableSubtitleStreams() or []
+        streams = _wait_for_subtitle_streams(player)
     except Exception:
         return []
     out = []
-    for idx, name in enumerate(streams):
+    for idx, name in enumerate(streams or []):
         n = (name or '').strip().lower()
         if n in ('he', 'heb', 'iw', 'hebrew', 'עברית') or 'hebrew' in n:
             out.append({
