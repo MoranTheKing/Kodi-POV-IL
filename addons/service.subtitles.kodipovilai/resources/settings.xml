@@ -358,6 +358,14 @@
           </control>
           <data>RunScript(service.subtitles.kodipovilai,action=engine_test)</data>
         </setting>
+        <setting id="engine_autosub" type="boolean" label="32526" help="32527">
+          <level>0</level>
+          <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
       </group>
       <group id="engine_sources" label="32510"> <!-- Search sources -->
         <setting id="ktuvit" type="boolean" label="32511">

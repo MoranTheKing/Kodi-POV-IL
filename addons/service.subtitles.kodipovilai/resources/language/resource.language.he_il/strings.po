@@ -405,3 +405,11 @@ msgstr "ללא תרגום (שפת המקור בלבד)"
 msgctxt "#32525"
 msgid "Test the built-in engine (diagnostic)"
 msgstr "בדיקת מנוע המקורות המובנה (אבחון)"
+
+msgctxt "#32526"
+msgid "Auto-search and apply Hebrew on play"
+msgstr "חיפוש והחלה אוטומטית של עברית בהפעלה"
+
+msgctxt "#32527"
+msgid "When a video starts, automatically search and apply the best Hebrew subtitle (like DarkSubs). Requires the built-in engine."
+msgstr "כשסרט/פרק מתחיל, לחפש ולהחיל אוטומטית את הכתובית העברית הטובה ביותר (כמו DarkSubs). דורש את המנוע המובנה."
