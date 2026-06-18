@@ -100,16 +100,19 @@ def enabled():
 # these values ourselves before the engine is ever imported. Only keys
 # with a non-empty intended default are listed (empty-default keys like
 # other_lang / the OS_* credentials are correct as '').
+# all_lang=true makes the global providers (OpenSubtitles, Subscene,
+# SubSource, YIFY) return EVERY language, not just Hebrew+English -- this is
+# why DarkSubs returned far more results in more languages. We match that.
 _ENGINE_DEFAULTS = {
     'language_hebrew': 'true',
     'language_english': 'true',
     'language_russian': 'false',
     'language_arab': 'false',
-    'all_lang': 'false',
-    'retry_search_with_all_langs': 'false',
+    'all_lang': 'true',
+    'retry_search_with_all_langs': 'true',
     'auto_translate': 'false',
     'translate_p': '0',
-    'max_search_time': '10',
+    'max_search_time': '15',
     'subtitle_trans_cache': '15',
     'enable_autosub_notifications': 'true',
     'auto_fix_sub_punctuation': 'true',
@@ -117,20 +120,35 @@ _ENGINE_DEFAULTS = {
     'show_debug': 'false',
 }
 
+# Bump when _ENGINE_DEFAULTS changes so the new values are force-applied to
+# installs that already have the old values written.
+_ENGINE_DEFAULTS_VERSION = '2'
+
 
 def ensure_engine_settings():
-    """Populate any engine internal setting that is still empty with its
-    intended default. MUST run before the engine is imported (general.py
-    reads max_search_time at module load). Idempotent and cheap."""
+    """Populate the engine's internal settings. MUST run before the engine is
+    imported (general.py reads max_search_time at module load). Writes empty
+    settings always; force-rewrites everything once when the defaults version
+    changes (so existing installs pick up new defaults like all_lang)."""
     try:
         import xbmcaddon
         addon = xbmcaddon.Addon('service.subtitles.kodipovilai')
     except Exception:
         return
+    try:
+        force = (addon.getSetting('_engine_defaults_v') or '') \
+            != _ENGINE_DEFAULTS_VERSION
+    except Exception:
+        force = False
     for k, v in _ENGINE_DEFAULTS.items():
         try:
-            if (addon.getSetting(k) or '') == '':
+            if force or (addon.getSetting(k) or '') == '':
                 addon.setSetting(k, v)
+        except Exception:
+            pass
+    if force:
+        try:
+            addon.setSetting('_engine_defaults_v', _ENGINE_DEFAULTS_VERSION)
         except Exception:
             pass
 
