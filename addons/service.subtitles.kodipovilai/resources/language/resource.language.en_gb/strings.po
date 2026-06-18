@@ -413,3 +413,7 @@ msgstr "Google Translate (basic, no gender)"
 msgctxt "#32524"
 msgid "No translation (source language only)"
 msgstr "No translation (source language only)"
+
+msgctxt "#32525"
+msgid "Test the built-in engine (diagnostic)"
+msgstr "Test the built-in engine (diagnostic)"
