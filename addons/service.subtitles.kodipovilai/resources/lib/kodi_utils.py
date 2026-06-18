@@ -249,7 +249,7 @@ def current_video_info():
     info = {
         'imdb_id': '', 'tmdb_id': '', 'title': '', 'year': '',
         'season': '', 'episode': '', 'language': '', 'filepath': '',
-        'tvshow': '', 'is_episode': False,
+        'tvshow': '', 'is_episode': False, 'tagline': '', 'label': '',
     }
     if not KODI_AVAILABLE:
         return info
@@ -274,6 +274,13 @@ def current_video_info():
     info['episode']  = gi('VideoPlayer.Episode')
     info['tvshow']   = gi('VideoPlayer.TVshowtitle')
     info['filepath'] = gi('Player.Filenameandpath')
+    # The release name used for subtitle sync matching. FEN/POV populate
+    # the Tagline with the real release (e.g. "Swapped.2026.1080p.NF.WEB-
+    # DL.DDP5.1.Atmos.H.264-TURG"); for debrid streams the filepath is a
+    # tokenized URL, so the Tagline is what makes the match % meaningful.
+    info['tagline'] = gi('VideoPlayer.Tagline') or gi('ListItem.Tagline')
+    # The visible label is another good release-name fallback.
+    info['label'] = gi('VideoPlayer.Label') or gi('ListItem.Label')
     info['is_episode'] = bool(info['tvshow'] and info['episode'])
     return info
 

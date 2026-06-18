@@ -1,3 +1,11 @@
+v0.2.185
+- Built-in sources engine, parity pass: (1) sync % is now correct -- it
+  matches against the release name from the Tagline like DarkSubs does, so a
+  good match shows e.g. 92% instead of 15%; (2) embedded Hebrew tracks are
+  detected and offered at the top ("תרגום מובנה בעברית · 101%"); (3) other
+  languages (English, etc.) are now shown too, not only Hebrew; (4) community-
+  pool entries show a sync % when they carry a release name.
+
 v0.2.184
 - Built-in sources engine now actually loads and searches. The hidden engine
   settings weren't getting their defaults (Kodi doesn't apply a default to a
