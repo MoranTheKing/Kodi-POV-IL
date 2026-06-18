@@ -1,3 +1,28 @@
+v0.2.216
+- "Choose subtitles" button in the player now works on Estuary + FENtastic when
+  the engine is on. It used to launch DarkSubs's picker (now disabled, so it did
+  nothing); it now opens Kodi's native subtitle window, which runs MoranSubs.
+- Ktuvit now uses a dedicated build account instead of the global shared
+  DarkSubs account, so it carries far less load (the shared account was
+  rate-limited from worldwide use). Password stored only in its encrypted form.
+
+v0.2.215
+- Subtitle download failed? It no longer leaves you stuck on it -- MoranSubs
+  automatically loads the NEXT available ready Hebrew subtitle (human/pool)
+  instead of staying on the failed pick.
+- Embedded Hebrew ("תרגום מובנה") now matches the EMBEDDED stream exactly like
+  DarkSubs (code 'heb'), so it no longer grabs an external Hebrew sub and
+  "switches to nothing" -- it switches to the real embedded track.
+
+v0.2.214
+- Source-screen "HEB NN%" badge now uses OpenSubtitles (not Ktuvit) for its
+  background lookup. Ktuvit runs on ONE shared, rate-limited account; hitting it
+  on every browse pushed it past its limit and broke real Ktuvit downloads
+  ("request not found"). Proven by reproducing the flow directly: a single
+  Ktuvit download succeeds, rapid/repeated ones get throttled. OpenSubtitles
+  uses rotating API keys, so the badge adds no load to that account -- which
+  also lets genuine Ktuvit downloads work again.
+
 v0.2.213
 - Embedded Hebrew: now re-finds the Hebrew stream at the moment you pick it
   (instead of a stale index captured when the dialog opened), so it actually
