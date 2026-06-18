@@ -37,21 +37,33 @@ jobs:
         run: |
           set -euo pipefail
           REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${REPO_SLUG}.git"
-          # Fetch existing gh-pages so we extend its history (no force push).
-          git clone --depth=1 --branch=gh-pages "$REMOTE" gh
+          # Blobless + no-checkout clone of gh-pages: we replace its whole tree
+          # anyway, so we must NOT download its (possibly multi-GB) existing
+          # blobs -- that is what filled the runner disk ("No space left on
+          # device"). This pulls only the branch ref/history so we can extend
+          # it (no force push -> branch protection stays satisfied).
+          git clone --depth=1 --single-branch --branch=gh-pages \
+            --filter=blob:none --no-checkout "$REMOTE" gh
           cd gh
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
-          # Wipe everything except .git so we can replace with main's content.
-          find . -mindepth 1 -maxdepth 1 -not -name ".git" -exec rm -rf {} +
-          # Pull main's tree and drop it here.
           cd ..
-          git clone --depth=1 --branch=main "$REMOTE" src
-          (cd src && git archive HEAD) | tar -x -C gh
-          # gh-pages should serve static files only. Do not publish workflow
-          # files there: GitHub blocks GITHUB_TOKEN from creating/updating
-          # workflows without the extra workflows permission.
-          rm -rf gh/.github
+          # Blobless clone of main; we only pull the blobs we actually publish.
+          git clone --depth=1 --single-branch --branch=main \
+            --filter=blob:none "$REMOTE" src
+          # Publish main's tree EXCEPT:
+          #   dist/    -- the build/quickfix binaries (many GB) are fetched from
+          #               raw.githubusercontent.com/<repo>/main/dist/, NOT from
+          #               Pages, so they must never be copied to gh-pages.
+          #   .github/  -- GITHUB_TOKEN cannot push workflow files.
+          #   .secrets/ -- the (encrypted) signing keystore; never publish it.
+          # Everything Pages actually serves (repo/ addon channel, wizard/,
+          # index.html, install.html, ...) is kept.
+          cd src
+          PUBLISH_PATHS="$(git ls-tree --name-only HEAD | grep -vxE 'dist|\.github|\.secrets')"
+          # shellcheck disable=SC2086
+          git archive HEAD -- $PUBLISH_PATHS | tar -x -C ../gh
+          cd ..
           # Publish the latest release APKs as DIRECT files under downloads/ so
           # the Downloader app (and any browser) can fetch them in a single 200
           # response. GitHub Releases' redirect chain breaks Downloader, and an
