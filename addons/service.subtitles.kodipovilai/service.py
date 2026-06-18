@@ -1475,6 +1475,48 @@ def _autosub_on_play():
                 or info.get('title')):
             return
 
+        # Embedded Hebrew is the best, perfectly-synced subtitle -- apply it
+        # FIRST whenever the file has one. The demuxer often hasn't exposed the
+        # embedded streams yet this early after play, so poll while the stream
+        # list is still empty (then check once for a 'heb' track). Matches how
+        # DarkSubs waits for the stream list before deciding.
+        try:
+            _pl = xbmc.Player()
+            _heb_idx = None
+            for _ in range(80):  # up to ~8s, but only while streams aren't listed yet
+                try:
+                    _streams = _pl.getAvailableSubtitleStreams() or []
+                except Exception:
+                    _streams = []
+                if _streams:
+                    _heb_idx = next(
+                        (i for i, n in enumerate(_streams)
+                         if (n or '').strip().lower() == 'heb'), None)
+                    break  # streams listed -- decided (heb or not)
+                if not _pl.isPlayingVideo():
+                    break
+                xbmc.sleep(100)
+            if _heb_idx is not None:
+                _pl.setSubtitleStream(_heb_idx)
+                _pl.showSubtitles(True)
+                try:
+                    import json as _json
+                    import urllib.parse as _up
+                    _elink = _up.quote(_json.dumps(
+                        {'type': 'engine', 'embedded': True,
+                         'stream_index': _heb_idx}, ensure_ascii=False))
+                    kodi_utils.set_current_subtitle(_elink)
+                except Exception:
+                    pass
+                try:
+                    kodi_utils.notify('MoranSubs: הוחל תרגום מובנה בעברית',
+                                      time_ms=3000)
+                except Exception:
+                    pass
+                return  # embedded Hebrew applied -- it's the best, we're done
+        except Exception:
+            pass
+
         # Non-modal search (the overlay above is the progress). list_candidates
         # returns everything in priority order; the first 'he' row is the best
         # Hebrew (embedded > human > pool > MT).
