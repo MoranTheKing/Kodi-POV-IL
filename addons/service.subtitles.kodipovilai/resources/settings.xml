@@ -94,30 +94,48 @@
         </setting>
       </group>
 
+      <!-- Legacy "source language priority" for the old local-file flow. The
+           built-in engine translates from ANY language, so these are hidden
+           when the engine is on (they'd be misleading). -->
       <group id="sources" label="32210"> <!-- Source language priority -->
         <setting id="src_english" type="boolean" label="32211" help="32212"> <!-- English -->
           <level>0</level>
           <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="equals">false</dependency>
+          </dependencies>
           <control type="toggle"/>
         </setting>
         <setting id="src_spanish" type="boolean" label="32213">
           <level>0</level>
           <default>true</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="equals">false</dependency>
+          </dependencies>
           <control type="toggle"/>
         </setting>
         <setting id="src_german" type="boolean" label="32214">
           <level>0</level>
           <default>false</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="equals">false</dependency>
+          </dependencies>
           <control type="toggle"/>
         </setting>
         <setting id="src_french" type="boolean" label="32215">
           <level>0</level>
           <default>false</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="equals">false</dependency>
+          </dependencies>
           <control type="toggle"/>
         </setting>
         <setting id="src_portuguese" type="boolean" label="32216">
           <level>0</level>
           <default>false</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="equals">false</dependency>
+          </dependencies>
           <control type="toggle"/>
         </setting>
       </group>
