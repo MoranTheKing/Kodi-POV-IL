@@ -2127,6 +2127,38 @@ def _handle_debrid_notice_settings(_params):
         dialog.notification('התראות מנוי', msg, time=5000)
 
 
+def _handle_connect_telegram(_params):
+    """Log in to Telegram (phone -> SMS code -> 2FA) so the engine's Telegram
+    channel source can search. Per-user, one-time; the session is saved."""
+    try:
+        from resources.lib import kodi_utils, subs_engine_bridge
+        if not kodi_utils.get_bool('use_builtin_engine', False):
+            xbmcgui.Dialog().ok(
+                'MoranSubs — Telegram',
+                'יש להפעיל קודם את "מנוע המקורות המובנה" בהגדרות.')
+            return
+        subs_engine_bridge.ensure_engine_settings()
+        from resources.lib.subs_engine.sources import telegram as _tg
+        _tg.login()
+    except Exception as e:
+        try:
+            xbmcgui.Dialog().ok('MoranSubs — Telegram',
+                                'שגיאה: {0}'.format(str(e)[:200]))
+        except Exception:
+            pass
+
+
+def _handle_logout_telegram(_params):
+    """Clear the saved Telegram session."""
+    try:
+        from resources.lib.subs_engine.sources import telegram as _tg
+        _tg.logout()
+        xbmcgui.Dialog().notification('MoranSubs', 'התנתקת מטלגרם',
+                                      time=3000)
+    except Exception:
+        pass
+
+
 def _handle_engine_test(_params):
     """Diagnostic for the built-in sources engine. Runs a real search for
     the currently-playing video and reports, per provider, how many results
@@ -2305,6 +2337,10 @@ def main():
             _handle_torbox_status(params)
         elif action == 'engine_test':
             _handle_engine_test(params)
+        elif action == 'connect_telegram':
+            _handle_connect_telegram(params)
+        elif action == 'logout_telegram':
+            _handle_logout_telegram(params)
         else:
             _safe_log('unknown action: ' + action, level='WARNING')
             if handle >= 0:
