@@ -449,3 +449,19 @@ msgstr "When a video starts and no ready Hebrew subtitle is found (human or comm
 msgctxt "#32533"
 msgid "Test Telegram connection (diagnostic)"
 msgstr "Test Telegram connection (diagnostic)"
+
+msgctxt "#32534"
+msgid "Use my own Ktuvit account"
+msgstr "Use my own Ktuvit account"
+
+msgctxt "#32535"
+msgid "Avoids the shared account's rate limit. Enter your ktuvit.me email and password below."
+msgstr "Avoids the shared account's rate limit. Enter your ktuvit.me email and password below."
+
+msgctxt "#32536"
+msgid "Ktuvit email"
+msgstr "Ktuvit email"
+
+msgctxt "#32537"
+msgid "Ktuvit password"
+msgstr "Ktuvit password"

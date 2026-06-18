@@ -272,12 +272,72 @@ def _handle_download(handle, params):
             except Exception:
                 pass
 
+    # If the picked subtitle failed to download (e.g. Ktuvit rate-limited),
+    # don't leave the user stuck on it -- automatically try the NEXT available
+    # ready Hebrew subtitles and deliver the first that works.
+    if not (path and os.path.isfile(path)):
+        try:
+            path = _try_next_hebrew(link, info)
+        except Exception as e:
+            _safe_log('next-hebrew fallback failed: {0}'.format(e),
+                      level='WARNING')
+
     if path and os.path.isfile(path):
         listitem = xbmcgui.ListItem(label=path)
         xbmcplugin.addDirectoryItem(handle=handle, url=path,
                                     listitem=listitem,
                                     isFolder=False)
     xbmcplugin.endOfDirectory(handle)
+
+
+def _try_next_hebrew(failed_link, info):
+    """The user's picked subtitle failed -- fall back to the next ready Hebrew
+    options so they aren't stuck on the failed one. Re-lists candidates and
+    resolves the next non-AI, non-embedded Hebrew entries (engine human / pool /
+    passthrough) until one downloads. AI (slow) and embedded (no file) are
+    skipped here. Returns a path or None. Bounded so it can't hang."""
+    from resources.lib import kodi_utils, translate
+    try:
+        failed = translate._decode_link(failed_link) or {}
+    except Exception:
+        failed = {}
+    failed_key = (failed.get('source'), failed.get('filename'),
+                  failed.get('hash'))
+    try:
+        candidates = translate.list_candidates(info, modal_progress=False)
+    except Exception:
+        return None
+    tried = 0
+    for c in candidates:
+        if tried >= 6:
+            break
+        link2 = c.get('link')
+        if not link2:
+            continue
+        try:
+            p2 = translate._decode_link(link2) or {}
+        except Exception:
+            continue
+        if (p2.get('source'), p2.get('filename'), p2.get('hash')) == failed_key:
+            continue  # the one that just failed
+        kind = p2.get('type')
+        if kind not in ('engine', 'pool', 'passthrough'):
+            continue  # skip AI (slow) + foreign 'engine_ai'
+        if kind == 'engine' and p2.get('embedded'):
+            continue  # embedded delivers no file
+        tried += 1
+        try:
+            path = translate.resolve(link2, info)
+        except Exception:
+            path = None
+        if path and os.path.isfile(path):
+            try:
+                kodi_utils.notify('הכתובית הקודמת נכשלה — נטענה הבאה בתור',
+                                  time_ms=4000)
+            except Exception:
+                pass
+            return path
+    return None
 
 
 def _try_fast_download(handle, link, info):
@@ -2248,14 +2308,14 @@ def _he_avail_store(mk, names):
 def _handle_he_avail(params):
     """Background warm of the source-screen "HEB NN%" badge.
 
-    he_sub_match (running inside POV's source window) covers the community pool
-    + Wizdom synchronously, but NOT Ktuvit -- the largest Hebrew source, which
-    needs a login + multi-step search too slow to run on every source-list
-    open. So the badge fires this fire-and-forget RunScript once per title; we
-    run the engine's Ktuvit provider here (its own MoranSubs context, shared
-    cached credentials) and write the Hebrew release names to a shared cache
-    that the badge reads on the next window open. Never shows UI; any failure
-    just leaves the badge on pool+Wizdom (no worse than before)."""
+    he_sub_match (in POV's source window) covers the community pool + Wizdom
+    synchronously. This adds OpenSubtitles' Hebrew releases on top, once per
+    title (fire-and-forget), written to a shared cache the badge reads next
+    open. We deliberately use OpenSubtitles here, NOT Ktuvit: Ktuvit runs on a
+    single shared, rate-limited account, and hitting it on every browse pushed
+    it past its limit (breaking real Ktuvit downloads). OpenSubtitles uses
+    rotating API keys, so it adds no load to that account. Never shows UI; any
+    failure just leaves the badge on pool+Wizdom."""
     try:
         import base64
         import json as _json
@@ -2282,15 +2342,19 @@ def _handle_he_avail(params):
         vd = bridge.build_video_data(bridge_info)
         names = []
         try:
-            from resources.lib.subs_engine.sources import ktuvit
-            ktuvit.global_var = []
-            ktuvit.get_subs(vd)
-            for d in (ktuvit.global_var or []):
-                fn = (d.get('filename') or '').strip()
-                if fn:
-                    names.append(fn)
+            from resources.lib.subs_engine.sources import opensubtitles
+            opensubtitles.global_var = []
+            opensubtitles.get_subs(vd, True)  # all languages; we keep Hebrew
+            for d in (opensubtitles.global_var or []):
+                lang = (d.get('label') or '').strip().lower()
+                code = (d.get('thumbnailImage') or '').strip().lower()
+                if lang == 'hebrew' or code in ('he', 'heb', 'iw'):
+                    fn = (d.get('filename') or '').strip()
+                    if fn:
+                        names.append(fn)
         except Exception as e:
-            _safe_log('he_avail ktuvit failed: {0}'.format(e), level='WARNING')
+            _safe_log('he_avail opensubtitles failed: {0}'.format(e),
+                      level='WARNING')
         _he_avail_store(mk, names)
         _safe_log('he_avail: stored {0} Hebrew release names for {1}'.format(
             len(names), mk))
