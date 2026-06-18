@@ -105,10 +105,21 @@ def build_video_data(info):
     tvshow = (info.get('tvshow') or '').strip()
     filepath = info.get('filepath') or ''
     try:
-        file_original = os.path.basename(filepath) if filepath else (
-            tvshow or title)
+        file_base = os.path.basename(filepath) if filepath else ''
     except Exception:
-        file_original = title
+        file_base = ''
+
+    # Release name used by sort_subtitles to compute the sync %. FEN/POV
+    # put the real release in the Tagline; for debrid streams the filepath
+    # is a tokenized URL, so without the Tagline the match % is meaningless
+    # (this is why our %s were far lower than DarkSubs'). sort_subtitles
+    # takes max(file_original_path match, Tagline match), so we feed the
+    # best release name we have into BOTH.
+    tagline = (info.get('tagline') or '').strip()
+    label = (info.get('label') or '').strip()
+    # Prefer a token that actually looks like a release (has dots / a year /
+    # a quality tag) over a clean human title.
+    file_original = file_base or tagline or label or tvshow or title
 
     vd = {
         'imdb': imdb,
@@ -125,9 +136,9 @@ def build_video_data(info):
         'media_type_ListItem.DBTYPE': media_type,
         'media_type_videoInfoTag': media_type,
         'file_original_path': file_original or '',
-        'Tagline': '',
-        'Tagline_From_Fen': '',
-        'VideoPlayer.Tagline': '',
+        'Tagline': tagline or label or file_original or '',
+        'Tagline_From_Fen': tagline or '',
+        'VideoPlayer.Tagline': tagline or '',
         'mpaa': '',
         'is_local_media_playing': 'false',
         'state': '',
@@ -203,14 +214,13 @@ def _parse_download_url(url):
 
 
 def search(info):
-    """Return a list of MoranSubs candidate dicts for the HEBREW
-    subtitles the engine found (human first, machine-translated
-    after). Empty list when the gate is off or anything fails.
+    """Return MoranSubs candidate dicts for the subtitles the engine
+    found. Empty list when the gate is off or anything fails.
 
-    Each candidate matches translate.list_candidates' schema and
-    carries a link of type 'engine' that resolve() routes back here
-    for download. Non-Hebrew results are intentionally dropped --
-    MoranSubs translates those via its own AI/pool path, not here.
+    Each candidate matches translate.list_candidates' schema, carries a
+    link of type 'engine' that resolve() routes back here for download,
+    and is tagged with '_engine_kind' in {'human_he','mt_he','other'} so
+    list_candidates can order them (Hebrew first, other languages last).
     """
     if not enabled():
         return []
@@ -248,7 +258,7 @@ def _search_inner(info):
         return []
     sorted_subs = engine.sort_subtitles(f_result, video_data)
 
-    human, machine = [], []
+    out = []
     seen = set()
     for t in sorted_subs:
         # tuple layout (sort_subtitles.append_subtitles):
@@ -257,9 +267,7 @@ def _search_inner(info):
         try:
             url = t[4]
             percent = t[5]
-            sync = t[6]
             hi = t[7]
-            filename = t[8]
             site_id = t[9]
         except Exception:
             continue
@@ -268,19 +276,21 @@ def _search_inner(info):
         if not parsed:
             continue
         lang = parsed['language']
-        # Keep only Hebrew (human + machine-translated). Everything
-        # else (English, etc.) is left for MoranSubs's AI path.
+        label0 = t[0] or ''
+        # Classify by language. We keep ALL languages now (parity with
+        # DarkSubs): Hebrew (human / machine) first, everything else after.
         if lang == 'HebrewMachineTranslated':
-            bucket = machine
-            kind_tag = 'mt'
-        elif lang == 'Hebrew' or 'Hebrew' in (t[0] or ''):
-            bucket = human
-            kind_tag = 'human'
+            kind, code = 'mt_he', 'he'
+        elif lang == 'Hebrew' or 'Hebrew' in label0:
+            kind, code = 'human_he', 'he'
+        elif lang == 'English' or 'English' in label0:
+            kind, code = 'other', 'en'
         else:
-            continue
+            kind = 'other'
+            code = _LANG_CODES.get(lang, (lang[:2].lower() if lang else 'und'))
 
-        # De-dup identical picks (same source+filename).
-        dedup_key = (parsed['source'], parsed['filename'])
+        # De-dup identical picks (same source + filename + language).
+        dedup_key = (parsed['source'], parsed['filename'], code)
         if dedup_key in seen:
             continue
         seen.add(dedup_key)
@@ -291,28 +301,70 @@ def _search_inner(info):
         except Exception:
             pct = 0
         label = '{0} · {1}%'.format(provider, pct)
-        if kind_tag == 'mt':
+        if kind == 'mt_he':
             label = '[תרגום מכונה] ' + label
         if parsed['filename']:
             label = '{0}  —  {1}'.format(label, parsed['filename'])
 
-        link = _encode_engine_link(parsed, hi)
-        bucket.append({
+        out.append({
             'filename': label,
-            'language': 'he',
-            'link': link,
-            # Human subs sorted by real release-name match; show the
-            # match% as the rating star bucket (5=best ... 1).
-            'sync': 'true' if (kind_tag == 'human' and pct >= 90) else 'false',
-            'rating': _rating_for(pct, kind_tag),
+            'language': code,
+            'link': _encode_engine_link(parsed, hi),
+            'sync': 'true' if (kind == 'human_he' and pct >= 90) else 'false',
+            'rating': _rating_for(pct, kind),
             'is_hi': (hi == 'true'),
             'is_hd': False,
-            '_engine_kind': kind_tag,
+            '_engine_kind': kind,
+            '_pct': pct,
         })
 
-    kodi_utils.log('subs_engine_bridge: {0} human + {1} machine Hebrew '
-                   'subs'.format(len(human), len(machine)), level='INFO')
-    return human + machine
+    kodi_utils.log('subs_engine_bridge: {0} engine results'.format(len(out)),
+                   level='INFO')
+    return out
+
+
+def embedded_candidates(info):
+    """Detect an embedded Hebrew subtitle stream in the currently-playing
+    file and offer it at the very top, mirroring DarkSubs's "[LOC] 101%"
+    entry. Returns [] when off / not playing / none found. Selecting it
+    just switches Kodi's subtitle stream (no file)."""
+    if not enabled():
+        return []
+    try:
+        import xbmc
+        player = xbmc.Player()
+        if not player.isPlayingVideo():
+            return []
+        streams = player.getAvailableSubtitleStreams() or []
+    except Exception:
+        return []
+    out = []
+    for idx, name in enumerate(streams):
+        n = (name or '').strip().lower()
+        if n in ('he', 'heb', 'iw', 'hebrew', 'עברית') or 'hebrew' in n:
+            out.append({
+                'filename': 'תרגום מובנה בעברית · 101%',
+                'language': 'he',
+                'link': urllib.parse.quote(json.dumps({
+                    'type': 'engine', 'embedded': True,
+                    'stream_index': idx,
+                }, ensure_ascii=False)),
+                'sync': 'true',
+                'rating': '5',
+                'is_hi': False, 'is_hd': False,
+                '_engine_kind': 'embedded_he',
+            })
+    return out
+
+
+# Language-name -> ISO code for the buckets sort_subtitles produces by
+# language name (the "other languages" path). Only the common ones; an
+# unknown name falls back to its first two letters.
+_LANG_CODES = {
+    'Hebrew': 'he', 'English': 'en', 'Arabic': 'ar', 'Russian': 'ru',
+    'Spanish': 'es', 'French': 'fr', 'German': 'de', 'Portuguese': 'pt',
+    'Italian': 'it', 'Turkish': 'tr', 'Polish': 'pl', 'Dutch': 'nl',
+}
 
 
 _PROVIDER_LABEL = {
@@ -327,9 +379,9 @@ _PROVIDER_LABEL = {
 }
 
 
-def _rating_for(pct, kind_tag):
+def _rating_for(pct, kind):
     # Machine-translated Hebrew always ranks below any human sub.
-    if kind_tag == 'mt':
+    if kind == 'mt_he':
         return '2'
     if pct >= 90:
         return '5'
@@ -353,6 +405,22 @@ def _encode_engine_link(parsed, hi):
 
 
 # ---- download -------------------------------------------------------
+
+def select_embedded(stream_index):
+    """Switch Kodi to an embedded subtitle stream by index. Returns True
+    on success. Used for the embedded-Hebrew pick (no file to deliver)."""
+    try:
+        import xbmc
+        idx = int(stream_index)
+        p = xbmc.Player()
+        p.setSubtitleStream(idx)
+        p.showSubtitles(True)
+        return True
+    except Exception as e:
+        kodi_utils.log('subs_engine_bridge.select_embedded failed: {0}'
+                       .format(e), level='WARNING')
+        return False
+
 
 def download(payload):
     """Resolve an 'engine' link to a Hebrew SRT path on disk. Returns
