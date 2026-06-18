@@ -389,7 +389,10 @@ def download(download_data,MySubFolder):
         
         # Send subtitle download request
         post_response = requests.post(REQUEST_DOWNLOAD_IDENTIFIER_URL, headers=headers, data=data, cookies=ktuvit_login_cookie, timeout=DEFAULT_REQUEST_TIMEOUT).json()
-        xbmc.sleep(100)
+        # Give Ktuvit time to actually prepare the file before we fetch it.
+        # 100ms was too aggressive -- the server kept answering "request not
+        # found, try again" and we burned all the retries. Back off a bit.
+        xbmc.sleep(700)
         
         # Extract DownloadIdentifier from response
         DownloadIdentifier = json.loads(post_response['d'])['DownloadIdentifier']
@@ -427,14 +430,17 @@ def download(download_data,MySubFolder):
             
     log.warning(f"DEBUG | [KTUVIT] | Number of try: {count} | While loop finished.")
 
-    # Still failing after all retries (or no file headers) -> return no file
-    # cleanly, so the caller reports a real failure instead of writing the
-    # "request not found" error text out as a bogus subtitle.
+    # Still failing after all retries (or no file headers). Raise with the
+    # actual server text so the bridge surfaces the REAL Ktuvit reason on
+    # screen (no debug logging needed) instead of a bogus subtitle / a vague
+    # "no file". This is what tells us precisely why Ktuvit refuses the file.
     if ("הבקשה לא נמצאה" in subtitle_download_result
             or 'Content-Disposition' not in response.headers):
-        log.warning("DEBUG | [KTUVIT] | download gave up: server kept "
-                    "returning 'request not found'.")
-        return ''
+        snippet = (subtitle_download_result or '').strip().replace('\n', ' ')[:120]
+        log.warning("DEBUG | [KTUVIT] | download gave up after {0} tries: "
+                    "{1}".format(count, snippet))
+        raise Exception("Ktuvit refused the file after {0} tries: {1}".format(
+            count, snippet))
 
     # Extract subtitle file name from download response headers
     subtitle_file_name = response.headers['Content-Disposition'].split("filename=")[1]
