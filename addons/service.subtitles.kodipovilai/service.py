@@ -1409,6 +1409,120 @@ def _maybe_patch_pov_remember_source():
             pass
 
 
+_AUTOSUB_STATE = {'last_file': None, 'busy': False, 'player': None}
+
+
+def _autosub_on_play():
+    """Phase C auto-on-play: when the built-in engine is on, search and apply
+    the best Hebrew subtitle automatically (replacing DarkSubs's autosub).
+    Runs in its own thread so it never blocks Kodi's playback callback."""
+    try:
+        from resources.lib import kodi_utils, translate
+    except Exception:
+        return
+    try:
+        if not kodi_utils.get_bool('use_builtin_engine', False):
+            return
+        if not kodi_utils.get_bool('engine_autosub', True):
+            return
+        if not kodi_utils.hebrew_subtitle_wanted():
+            return
+    except Exception:
+        return
+
+    info = kodi_utils.current_video_info()
+    f = info.get('filepath') or ''
+    # onAVStarted can fire more than once for the same file; only act once.
+    if f and f == _AUTOSUB_STATE['last_file']:
+        return
+    _AUTOSUB_STATE['last_file'] = f
+    if not (info.get('imdb_id') or info.get('tmdb_id') or info.get('title')):
+        return
+    if _AUTOSUB_STATE['busy']:
+        return
+    _AUTOSUB_STATE['busy'] = True
+
+    progress = None
+    try:
+        progress = xbmcgui.DialogProgressBG()
+        progress.create('MoranSubs', 'מחפש כתוביות עברית...')
+    except Exception:
+        progress = None
+
+    try:
+        # Non-modal search (no DarkSubs-style modal here -- we show the
+        # bottom banner above). list_candidates returns everything in
+        # priority order; the first 'he' row is the best Hebrew.
+        cands = translate.list_candidates(info, modal_progress=False)
+        he = next((c for c in cands if c.get('language') == 'he'), None)
+        if not he:
+            return
+        path = translate.resolve(he['link'], info)
+        # Embedded picks switch the stream inside resolve() and return None;
+        # external/pool picks return a file path to load.
+        if path:
+            try:
+                p = xbmc.Player()
+                if p.isPlayingVideo():
+                    p.setSubtitles(path)
+                    p.showSubtitles(True)
+            except Exception:
+                pass
+        try:
+            kodi_utils.notify('MoranSubs: הוחלה כתובית עברית', time_ms=3000)
+        except Exception:
+            pass
+    except Exception as e:
+        try:
+            kodi_utils.log('autosub_on_play failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+    finally:
+        _AUTOSUB_STATE['busy'] = False
+        if progress is not None:
+            try:
+                progress.close()
+            except Exception:
+                pass
+
+
+if xbmc is not None:
+    class _AutoSubPlayer(xbmc.Player):
+        def onAVStarted(self):
+            try:
+                threading.Thread(target=_autosub_on_play, daemon=True).start()
+            except Exception:
+                pass
+
+
+def _maybe_start_autosub_player():
+    """Register a Player listener so we can auto-search + auto-apply Hebrew on
+    play, but ONLY when the engine is on and autosub is enabled. The service's
+    existing prune loop keeps the process alive, so the Player callbacks fire;
+    we just hold a reference. When off, does nothing (behavior unchanged)."""
+    if xbmc is None:
+        return
+    try:
+        from resources.lib import kodi_utils
+        if not kodi_utils.get_bool('use_builtin_engine', False):
+            return
+        if not kodi_utils.get_bool('engine_autosub', True):
+            return
+    except Exception:
+        return
+    try:
+        _AUTOSUB_STATE['player'] = _AutoSubPlayer()  # keep a ref alive
+        # If a video is already playing when the service starts, kick once.
+        try:
+            if xbmc.Player().isPlayingVideo():
+                threading.Thread(target=_autosub_on_play, daemon=True).start()
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
 def _maybe_prewarm_engine():
     """If the built-in sources engine is enabled, import it (and ensure its
     settings) in a background thread so the first subtitle search is warm.
@@ -2149,14 +2263,26 @@ def _maybe_default_remember_source():
 
 
 def _ensure_darksubs_enabled():
-    """Recover DarkSubs (service.subtitles.All_Subs) if it was left disabled --
-    e.g. a reload cycle that didn't re-enable cleanly after a quick update.
-    The whole subtitle flow (and our AI-translation hook) depends on DarkSubs
-    being enabled, so an installed-but-disabled DarkSubs means no subtitles and
-    no translation at all. Cheap, idempotent, runs early every startup. Only
-    touches state when DarkSubs is installed AND currently disabled."""
+    """Sync DarkSubs (service.subtitles.All_Subs) enabled-state to the inverse
+    of the built-in engine toggle (Phase C):
+
+      * use_builtin_engine OFF (default) -> ensure DarkSubs ENABLED. The whole
+        subtitle flow + AI-translation hook depends on it, so an installed-but-
+        disabled DarkSubs means no subtitles at all -- recover it.
+      * use_builtin_engine ON -> ensure DarkSubs DISABLED, so only MoranSubs
+        runs (no double search, no competing results -- this is what makes the
+        engine as fast as DarkSubs is on its own). MoranSubs then provides the
+        sourcing, the auto-on-play, and the AI translation itself.
+
+    Cheap, idempotent, runs early every startup; only writes on a mismatch."""
     if xbmc is None:
         return
+    try:
+        from resources.lib import kodi_utils
+        engine_on = kodi_utils.get_bool('use_builtin_engine', False)
+    except Exception:
+        engine_on = False
+    desired = not engine_on
     try:
         import json as _json
         get = _json.dumps({
@@ -2169,17 +2295,17 @@ def _ensure_darksubs_enabled():
         addon = (data.get('result') or {}).get('addon') or {}
         if 'enabled' not in addon:
             return  # not installed / unknown -> leave alone
-        if addon.get('enabled'):
-            return  # already enabled -> nothing to do
+        if bool(addon.get('enabled')) == desired:
+            return  # already in the desired state
         en = _json.dumps({
             'jsonrpc': '2.0', 'id': 1,
             'method': 'Addons.SetAddonEnabled',
             'params': {'addonid': 'service.subtitles.All_Subs',
-                       'enabled': True},
+                       'enabled': desired},
         })
         xbmc.executeJSONRPC(en)
-        xbmc.log('[' + ADDON_ID + '] re-enabled DarkSubs (it was disabled)',
-                 level=xbmc.LOGINFO)
+        xbmc.log('[{0}] DarkSubs set enabled={1} (engine_on={2})'.format(
+            ADDON_ID, desired, engine_on), level=xbmc.LOGINFO)
     except Exception:
         pass
 
@@ -2412,8 +2538,15 @@ def main():
     # DarkSubs signature changed, engine.py not writable on CoreELEC,
     # API key missing). Without this, hook failures cascade silently
     # into "AI subs not working" with no signal to the user. Only
-    # toasts once per failure-class.
-    _maybe_surface_darksubs_status()
+    # toasts once per failure-class. Skipped when the built-in engine is
+    # on (DarkSubs is intentionally disabled then -- no false alarm).
+    try:
+        from resources.lib import kodi_utils as _ku
+        _engine_on = _ku.get_bool('use_builtin_engine', False)
+    except Exception:
+        _engine_on = False
+    if not _engine_on:
+        _maybe_surface_darksubs_status()
 
     # Stash POV's picked release name (from the source-select dialog)
     # in a Window(10000) property before play() so DarkSubs can use
@@ -2588,6 +2721,10 @@ def main():
                 level='WARNING')
         except Exception:
             pass
+
+    # Phase C: register the auto-on-play Hebrew listener (gated; only when the
+    # built-in engine + autosub are on). The loop below keeps us alive.
+    _maybe_start_autosub_player()
 
     monitor = xbmc.Monitor()
     # 24h between passes. waitForAbort returns True when Kodi is

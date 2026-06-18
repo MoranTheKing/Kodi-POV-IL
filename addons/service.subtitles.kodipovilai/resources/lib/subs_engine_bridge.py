@@ -258,9 +258,13 @@ def _parse_download_url(url):
     }
 
 
-def search(info):
+def search(info, modal_progress=True):
     """Return MoranSubs candidate dicts for the subtitles the engine
     found. Empty list when the gate is off or anything fails.
+
+    modal_progress: show the DarkSubs-style modal progress dialog while
+    searching (manual "Download Subtitles" flow). The auto-on-play path
+    passes False -- it shows its own non-modal banner instead.
 
     Each candidate matches translate.list_candidates' schema, carries a
     link of type 'engine' that resolve() routes back here for download,
@@ -276,7 +280,7 @@ def search(info):
     if cached is not None:
         return cached
     try:
-        out = _search_inner(info)
+        out = _search_inner(info, modal_progress=modal_progress)
         _cache_put(info, out)
         return out
     except Exception as e:
@@ -352,7 +356,7 @@ def _cache_put(info, candidates):
         pass
 
 
-def _search_inner(info):
+def _search_inner(info, modal_progress=True):
     # Make sure the engine's internal settings have real values before the
     # engine module (and general.py) is imported -- otherwise int('') / empty
     # language flags break it. Safe to call every time.
@@ -367,21 +371,22 @@ def _search_inner(info):
                    level='INFO')
 
     # Show the same live per-provider progress dialog DarkSubs shows while
-    # the providers run. general.show_results reads general.show_msg (which
-    # c_get_subtitles updates with per-source counts) until we set 'END'.
-    # Heavily guarded: any failure here must not affect the search.
+    # the providers run (manual flow only). general.show_results reads
+    # general.show_msg (which c_get_subtitles updates with per-source counts)
+    # until we set 'END'. Heavily guarded: any failure must not affect search.
     import threading
     progress_thread = None
-    try:
-        general.break_all = False
-        general.with_dp = True
-        general.show_msg = 'MoranSubs — מחפש כתוביות'
-        progress_thread = threading.Thread(
-            target=general.show_results, args=(True,))
-        progress_thread.daemon = True
-        progress_thread.start()
-    except Exception:
-        progress_thread = None
+    if modal_progress:
+        try:
+            general.break_all = False
+            general.with_dp = True
+            general.show_msg = 'MoranSubs — מחפש כתוביות'
+            progress_thread = threading.Thread(
+                target=general.show_results, args=(True,))
+            progress_thread.daemon = True
+            progress_thread.start()
+        except Exception:
+            progress_thread = None
 
     try:
         f_result = engine.get_subtitles(video_data)
