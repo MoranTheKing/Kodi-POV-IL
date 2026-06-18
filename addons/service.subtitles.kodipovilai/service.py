@@ -1409,6 +1409,31 @@ def _maybe_patch_pov_remember_source():
             pass
 
 
+def _maybe_prewarm_engine():
+    """If the built-in sources engine is enabled, import it (and ensure its
+    settings) in a background thread so the first subtitle search is warm.
+    Fully guarded; a failure here never affects anything."""
+    try:
+        from resources.lib import kodi_utils
+        if not kodi_utils.get_bool('use_builtin_engine', False):
+            return
+    except Exception:
+        return
+
+    def _work():
+        try:
+            from resources.lib import subs_engine_bridge
+            subs_engine_bridge.ensure_engine_settings()
+            from resources.lib.subs_engine import engine  # noqa: F401
+        except Exception:
+            pass
+
+    try:
+        threading.Thread(target=_work, daemon=True).start()
+    except Exception:
+        pass
+
+
 def _maybe_patch_pov_subtitle_match():
     """Show a Hebrew-subtitle match % under each source in POV's source-results
     window (gated by `show_subtitle_match`, default on). Patches POV's
@@ -2407,6 +2432,10 @@ def main():
     # (skin-agnostic: prepends to a property shown in every layout). Gated by
     # show_subtitle_match (default on); compile-checked so it can't break POV.
     _maybe_patch_pov_subtitle_match()
+
+    # Pre-warm the built-in sources engine (only when the user enabled it) so
+    # the first subtitle search doesn't pay the heavy import cost inline.
+    _maybe_prewarm_engine()
 
     # Self-healing DarkSubs get_playing_filename() patch. Prefers
     # the picked release name set by the pov_source_name_patcher
