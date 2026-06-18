@@ -217,7 +217,7 @@ msgstr "Translating chunk {0}/{1}..."
 
 msgctxt "#33002"
 msgid "No API key configured. Open Settings to add one."
-msgstr "No API key configured. Open Settings to add one."
+msgstr "No Gemini API key. Add a free key in Settings -> Connect Gemini for real AI-quality Hebrew translation."
 
 msgctxt "#33003"
 msgid "Connection successful. Model: {0}"
