@@ -56,6 +56,7 @@ STANDALONE_LIB_FILES = {
     "skin_dialog_subtitles_patcher.py",
     "skin_dialog_subtitles_row_patcher.py",
     "srt.py",
+    "subs_engine_bridge.py",
     "subs_filename_publisher.py",
     "tmdb_helper.py",
     "translate.py",
@@ -276,6 +277,99 @@ def _maybe_patch_all_subs_samefile():
     all_subs_samefile_patcher.ensure_patched()
 
 
+def _maybe_default_builtin_engine():
+    """One-shot: turn the built-in sources engine ON for existing standalone
+    users too (marker-gated). New installs get it from the settings.xml default.
+    A later manual opt-out STICKS -- we never force it back on."""
+    try:
+        from resources.lib import kodi_utils
+    except Exception:
+        return
+    try:
+        if kodi_utils.get_setting('_builtin_engine_rollout_v1', '') == '1':
+            return
+        if kodi_utils.get_setting('use_builtin_engine', 'false') != 'true':
+            kodi_utils.set_setting('use_builtin_engine', 'true')
+        if kodi_utils.get_setting('engine_autosub', 'true') == 'false':
+            kodi_utils.set_setting('engine_autosub', 'true')
+        kodi_utils.set_setting('_builtin_engine_rollout_v1', '1')
+        kodi_utils.log('built-in engine enabled (standalone rollout v1)',
+                       level='INFO')
+    except Exception:
+        pass
+
+
+def _engine_on():
+    try:
+        from resources.lib import kodi_utils
+        return kodi_utils.get_bool('use_builtin_engine', False)
+    except Exception:
+        return False
+
+
+def _ensure_darksubs_enabled():
+    """When the engine is ON, disable DarkSubs + All Subs Plus so only MoranSubs
+    runs (reversible: turn the engine off and they come back). When OFF, ensure
+    DarkSubs is enabled (the translation hook depends on it). Only writes on a
+    mismatch; leaves an add-on that isn't installed alone."""
+    if xbmc is None:
+        return
+    engine_on = _engine_on()
+    desired = not engine_on
+    for addon_id in ('service.subtitles.All_Subs',
+                     'service.subtitles.all_subs_plus'):
+        try:
+            import json as _json
+            get = _json.dumps({
+                'jsonrpc': '2.0', 'id': 1,
+                'method': 'Addons.GetAddonDetails',
+                'params': {'addonid': addon_id, 'properties': ['enabled']},
+            })
+            data = _json.loads(xbmc.executeJSONRPC(get) or '{}')
+            addon = (data.get('result') or {}).get('addon') or {}
+            if 'enabled' not in addon:
+                continue
+            if bool(addon.get('enabled')) == desired:
+                continue
+            en = _json.dumps({
+                'jsonrpc': '2.0', 'id': 1,
+                'method': 'Addons.SetAddonEnabled',
+                'params': {'addonid': addon_id, 'enabled': desired},
+            })
+            xbmc.executeJSONRPC(en)
+            xbmc.log('[{0}] {1} set enabled={2} (engine_on={3})'.format(
+                ADDON_ID, addon_id, desired, engine_on), level=xbmc.LOGINFO)
+        except Exception:
+            pass
+
+
+def _maybe_set_default_subtitle_service():
+    """When the engine is on, make MoranSubs the default subtitle service for
+    movies + TV. Only when the engine is on (we don't override otherwise)."""
+    if xbmc is None or not _engine_on():
+        return
+    try:
+        import json as _json
+        for sid in ('subtitles.tv', 'subtitles.movie'):
+            getq = _json.dumps({
+                'jsonrpc': '2.0', 'id': 1,
+                'method': 'Settings.GetSettingValue',
+                'params': {'setting': sid},
+            })
+            cur = (_json.loads(xbmc.executeJSONRPC(getq) or '{}')
+                   .get('result') or {}).get('value')
+            if cur == ADDON_ID:
+                continue
+            setq = _json.dumps({
+                'jsonrpc': '2.0', 'id': 1,
+                'method': 'Settings.SetSettingValue',
+                'params': {'setting': sid, 'value': ADDON_ID},
+            })
+            xbmc.executeJSONRPC(setq)
+    except Exception:
+        pass
+
+
 def main():
     if xbmc is None:
         return
@@ -285,25 +379,36 @@ def main():
     _prune_once()
     _maybe_purge_temp_once()
 
-    _run('darksubs integration', _maybe_patch_darksubs)
-    _run('darksubs download_sub patch', _maybe_patch_darksubs_download_sub)
-    _run('darksubs OpenSubtitles patch', _maybe_patch_darksubs_opensubtitles)
-    _run('darksubs embedded demote patch', _maybe_patch_darksubs_embedded_demote)
-    _run('darksubs embedded insert patch', _maybe_patch_darksubs_embedded_insert)
-    _run('darksubs subwindow demote patch', _maybe_patch_darksubs_subwindow_demote)
-    _run('darksubs status diagnostics', _maybe_surface_darksubs_status)
-    _run('darksubs filename fallback patch', _maybe_patch_darksubs_filename)
+    # Roll out / sync the built-in sources engine, then neutralise the competing
+    # subtitle add-ons when it's on (reversible -- turn the engine off and they
+    # come back). Mirrors the full build.
+    _maybe_default_builtin_engine()
+    _ensure_darksubs_enabled()
+    _maybe_set_default_subtitle_service()
+
+    if not _engine_on():
+        # DarkSubs provides the sources when the engine is off: keep our hooks
+        # alive. Skipped entirely when the engine is on (DarkSubs is disabled).
+        _run('darksubs integration', _maybe_patch_darksubs)
+        _run('darksubs download_sub patch', _maybe_patch_darksubs_download_sub)
+        _run('darksubs OpenSubtitles patch', _maybe_patch_darksubs_opensubtitles)
+        _run('darksubs embedded demote patch', _maybe_patch_darksubs_embedded_demote)
+        _run('darksubs embedded insert patch', _maybe_patch_darksubs_embedded_insert)
+        _run('darksubs subwindow demote patch', _maybe_patch_darksubs_subwindow_demote)
+        _run('darksubs status diagnostics', _maybe_surface_darksubs_status)
+        _run('darksubs filename fallback patch', _maybe_patch_darksubs_filename)
+        _run('darksubs picker label patch', _maybe_patch_darksubs_picker_label)
+        _run('darksubs picker height patch', _maybe_patch_darksubs_picker_height)
+        _run('allsubs samefile patch', _maybe_patch_all_subs_samefile)
+        try:
+            from resources.lib import darksubs_reload
+            darksubs_reload.reload_if_patched()
+        except Exception:
+            pass
+
+    # Skin subtitle-dialog fixes are not DarkSubs-specific -- run regardless.
     _run('subtitle dialog filename patch', _maybe_patch_skin_dialog_subtitles)
     _run('subtitle dialog row patch', _maybe_patch_skin_dialog_subtitles_rows)
-    _run('darksubs picker label patch', _maybe_patch_darksubs_picker_label)
-    _run('darksubs picker height patch', _maybe_patch_darksubs_picker_height)
-    _run('allsubs samefile patch', _maybe_patch_all_subs_samefile)
-
-    try:
-        from resources.lib import darksubs_reload
-        darksubs_reload.reload_if_patched()
-    except Exception:
-        pass
 
     _maybe_repair_rtl_cache()
     _maybe_default_fast_first_chunk()
@@ -488,6 +593,11 @@ def include_standalone(rel: Path) -> bool:
         return parts[2:3] == ("darksubs",)
     if len(parts) >= 3 and parts[1] == "lib":
         if parts[2] == "icons":
+            return True
+        # The vendored sources engine: ship it in the standalone too, so the
+        # repo-channel add-on can fetch subtitles on its own (sources +
+        # translation in one add-on) -- not only translate what DarkSubs finds.
+        if parts[2] == "subs_engine":
             return True
         if len(parts) == 3 and parts[2] in STANDALONE_LIB_FILES:
             return True
