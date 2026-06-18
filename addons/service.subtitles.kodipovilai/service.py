@@ -1479,7 +1479,26 @@ def _autosub_on_play():
         # returns everything in priority order; the first 'he' row is the best
         # Hebrew (embedded > human > pool > MT).
         cands = translate.list_candidates(info, modal_progress=False)
+        # Ready Hebrew first (human / pool / embedded / MT).
         he = next((c for c in cands if c.get('language') == 'he'), None)
+        # Force-translation (opt-in): if no ready Hebrew, AI-translate the best
+        # foreign sub (the first 'תרגום AI לעברית' entry -- they're ordered
+        # en, es, de, ...). Off by default so we don't spend API requests
+        # unless the user asked for it.
+        if not he and kodi_utils.get_bool('engine_force_translate', False):
+            for c in cands:
+                try:
+                    p = translate._decode_link(c.get('link') or '')
+                except Exception:
+                    p = None
+                if p and p.get('type') == 'engine_ai':
+                    he = c
+                    try:
+                        kodi_utils.notify('MoranSubs: אין עברית — מתרגם ב-AI',
+                                          time_ms=4000)
+                    except Exception:
+                        pass
+                    break
         if not he:
             try:
                 kodi_utils.notify('MoranSubs: לא נמצאה כתובית עברית',
