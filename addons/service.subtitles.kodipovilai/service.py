@@ -2400,18 +2400,18 @@ def _maybe_default_remember_source():
             pass
 
 
-def _maybe_disable_ktuvit():
-    """Temporarily force the Ktuvit source OFF for everyone (Ktuvit has a
-    current server-side problem). One-shot, marker-gated, so a user who turns it
-    back on keeps it on. To re-enable for everyone later, flip the settings.xml
-    default back to true and bump this marker version."""
+def _maybe_reenable_ktuvit():
+    """Ktuvit's server-side problem is fixed -> turn the source back ON for
+    everyone, ONCE (it was force-disabled in 0.2.219). Marker-gated, so a user
+    who turns it off again AFTER this keeps it off -- we never force it back on
+    on later startups."""
     try:
         from resources.lib import kodi_utils
-        if kodi_utils.get_setting('_ktuvit_off_v1', '') == '1':
+        if kodi_utils.get_setting('_ktuvit_on_v2', '') == '1':
             return
-        kodi_utils.set_setting('ktuvit', 'false')
-        kodi_utils.set_setting('_ktuvit_off_v1', '1')
-        kodi_utils.log('Ktuvit source disabled (temporary, v1)', level='INFO')
+        kodi_utils.set_setting('ktuvit', 'true')
+        kodi_utils.set_setting('_ktuvit_on_v2', '1')
+        kodi_utils.log('Ktuvit source re-enabled (v2)', level='INFO')
     except Exception:
         pass
 
@@ -2752,8 +2752,9 @@ def main():
     # sticks (marker prevents re-forcing).
     _maybe_default_builtin_engine()
 
-    # Ktuvit is temporarily disabled (server-side problem). One-shot.
-    _maybe_disable_ktuvit()
+    # Ktuvit is back -> re-enable the source for everyone once (a later manual
+    # opt-out sticks).
+    _maybe_reenable_ktuvit()
 
     # Recover DarkSubs first if a previous reload cycle left it disabled after
     # a quick update -- otherwise no subtitles and no AI translation fire at
