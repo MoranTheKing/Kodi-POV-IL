@@ -1,3 +1,10 @@
+v0.2.196
+- AI translation works from ANY source language (Gemini is multilingual);
+  expanded the language-name table so the prompt names them properly. Gender-
+  aware Hebrew (from TMDB cast) applies regardless of source language.
+- Opt-out: setting "Translation mode" to "No translation" now disables AI
+  entirely on the engine path -- foreign subs are handed back raw, no AI calls.
+
 v0.2.195
 - Built-in engine: foreign-language subs are now unified into one clear
   action -- "תרגום AI לעברית · NN% — <release>" -- so picking any non-Hebrew
