@@ -1,3 +1,10 @@
+v0.2.217
+- Auto-subtitle on play now really falls through: if the best Hebrew source
+  fails (e.g. Ktuvit "refused/rate-limited"), it skips the rest of THAT source
+  and immediately tries the next one -- OpenSubtitles, community pool, Wizdom --
+  applying the first that works, instead of just showing the error. Same
+  fallthrough now also applies when you pick a sub manually.
+
 v0.2.216
 - "Choose subtitles" button in the player now works on Estuary + FENtastic when
   the engine is on. It used to launch DarkSubs's picker (now disabled, so it did
