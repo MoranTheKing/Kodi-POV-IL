@@ -143,6 +143,37 @@ def _handle_download(handle, params):
     except Exception:
         pass
 
+    # If the user picked an engine "translate from <lang>" entry, download the
+    # source sub NOW, then continue as a local 'ai' link. This lets the fast
+    # path below deliver the source immediately (dialog closes) and translate
+    # in the background -- instead of blocking the dialog open for the whole
+    # 1-2 minute translation.
+    try:
+        _p = translate._decode_link(link)
+    except Exception:
+        _p = None
+    if _p and _p.get('type') == 'engine_ai':
+        eng_path = None
+        try:
+            from resources.lib import subs_engine_bridge
+            kodi_utils.notify('AI: מוריד את כתובית המקור...', time_ms=2500)
+            eng_path = subs_engine_bridge.download(_p)
+        except Exception as _e:
+            _safe_log('engine_ai source download failed: {0}'.format(_e),
+                      level='ERROR')
+        if eng_path and os.path.isfile(eng_path):
+            link = translate._encode_link({
+                'type': 'ai',
+                'source_lang': _p.get('src_lang') or 'en',
+                'local_path': eng_path,
+                'force_ai': True,
+            })
+        else:
+            kodi_utils.notify('AI: לא ניתן היה להוריד את כתובית המקור',
+                              time_ms=4000)
+            xbmcplugin.endOfDirectory(handle)
+            return
+
     # Opt-in fast path for the NATIVE Kodi subtitle picker. Mirrors
     # the DarkSubs fast_first_chunk flow in _handle_translate_file:
     # deliver the English source to Kodi immediately and continue
