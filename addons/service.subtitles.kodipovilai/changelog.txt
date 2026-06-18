@@ -1,3 +1,9 @@
+v0.2.199
+- Telegram source now reuses an existing DarkSubs Telegram login: if you were
+  already logged in to Telegram via DarkSubs, MoranSubs uses that saved
+  session automatically -- no need to connect again. (Connect button stays
+  for anyone who never logged in.)
+
 v0.2.198
 - Telegram subtitle source (Phase B3): the built-in engine can now search the
   community Telegram channel for Hebrew subs, like DarkSubs did. One-time

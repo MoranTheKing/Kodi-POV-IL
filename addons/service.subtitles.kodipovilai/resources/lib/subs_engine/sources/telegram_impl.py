@@ -253,12 +253,26 @@ def telegram_helper_window():
     dialog = xbmcgui.Dialog()
     dialog.ok("Telegram",'[B]לחצו "התחבר" כדי להתחבר לחשבון הטלגרם שלכם.\nלאחר מכן, תצורפו אוטומטית לערוץ הכתוביות AllSubs.\n(במידה ומתחברים מטלפון נייד - אין למזער את הקודי בזמן הזנת קוד האימות מהטלגרם)[/B]')
 
+# DarkSubs saved its Telegram session in ITS OWN add-on profile. Users who
+# already used DarkSubs's Telegram are logged in there -- reuse that session so
+# they don't have to log in again under MoranSubs.
+_DARKSUBS_SESSION_PATH = xbmc_tranlate_path(
+    'special://profile/addon_data/service.subtitles.All_Subs/'
+    'telegram_session/telethon_session_string.txt')
+
+
 def get_session_string():
-    try:
-        with open(session_string_file_path, 'r') as file:
-            return file.read()
-    except Exception:
-        return ''
+    # Prefer MoranSubs's own session; fall back to a session DarkSubs already
+    # saved (so an existing DarkSubs Telegram login keeps working seamlessly).
+    for path in (session_string_file_path, _DARKSUBS_SESSION_PATH):
+        try:
+            with open(path, 'r') as file:
+                s = (file.read() or '').strip()
+                if s:
+                    return s
+        except Exception:
+            pass
+    return ''
 
 def set_session_string(session_string):
     with open(session_string_file_path, 'w') as file:
