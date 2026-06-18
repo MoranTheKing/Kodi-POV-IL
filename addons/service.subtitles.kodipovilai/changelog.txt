@@ -1,3 +1,12 @@
+v0.2.194
+- Built-in engine: (1) subtitle list is now grouped and ordered by language --
+  Hebrew first (incl. AI-translated), then English, Spanish, the other AI-source
+  languages (German/French/Portuguese), then the rest; each language stays
+  together. (2) "AI translate to Hebrew" is now offered for every AI-source
+  language, not just English. (3) YIFY downloads now send a browser User-Agent
+  + Referer (fixes 403/HTML), and any non-subtitle download is rejected so you
+  get a clean miss instead of "download failed" on garbage.
+
 v0.2.193
 - Built-in engine: (1) subtitle language is now taken from the provider's
   ISO code so Kodi shows the right flag, with a [LANG] tag in the label so

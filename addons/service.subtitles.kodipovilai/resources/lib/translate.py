@@ -250,8 +250,7 @@ def list_candidates(info, modal_progress=True):
         if subs_engine_bridge.enabled():
             engine_embedded = subs_engine_bridge.embedded_candidates(info)
             for c in subs_engine_bridge.search(info, modal_progress=modal_progress):
-                k = c.pop('_engine_kind', 'human_he')
-                c.pop('_pct', None)
+                k = c.get('_engine_kind', 'human_he')
                 if k == 'human_he':
                     engine_human.append(c)
                 elif k == 'mt_he':
@@ -262,30 +261,38 @@ def list_candidates(info, modal_progress=True):
         kodi_utils.log('engine search skipped: {0}'.format(e),
                        level='DEBUG')
 
+    # Language display order (the user's requested grouping): Hebrew first
+    # (handled above as its own groups), then English, Spanish, then the other
+    # AI-source languages MoranSubs can translate from (German/French/
+    # Portuguese), then everything else. Used to sort + group the raw foreign
+    # subs AND to decide which languages get an "AI translate to Hebrew" entry.
+    _AI_SOURCE_ORDER = {'en': 0, 'es': 1, 'de': 2, 'fr': 3, 'pt': 4}
+
+    def _lang_rank(code):
+        return _AI_SOURCE_ORDER.get(code, 50)
+
+    def _clean(c):
+        c.pop('_engine_kind', None)
+        c.pop('_pct', None)
+        return c
+
     # Embedded Hebrew (101%) goes to the very top -- above even a local
     # passthrough -- mirroring DarkSubs's [LOC] entry.
     if engine_embedded:
         have_hebrew = True
-        for c in engine_embedded:
-            c.pop('_engine_kind', None)
-        results[:0] = engine_embedded
+        results[:0] = [_clean(c) for c in engine_embedded]
 
     # Engine human Hebrew, right under the passthrough.
     for c in engine_human:
         have_hebrew = True
-        results.append(c)
+        results.append(_clean(c))
 
     # Community pool: Hebrew translations other users already made and shared.
-    # Offered like passthrough (ready Hebrew -- no local translation needed).
-    # Gated by pool_use; failures are swallowed inside pool.lookup.
     if pool is not None and pool.use_enabled():
         video_ref = (info.get('tagline') or info.get('label')
                      or os.path.basename(filepath) or info.get('title') or '')
         for v in pool.lookup(info):
             have_hebrew = True
-            # Clearly mark community-pool entries as AI translations (they
-            # are not human subs). Show the real release name + a sync %
-            # when the share carried a release; otherwise a generic label.
             release = (v.get('release') or '').strip()
             if release:
                 pct = _match_pct(video_ref, release)
@@ -300,44 +307,51 @@ def list_candidates(info, modal_progress=True):
                 'is_hi': False, 'is_hd': False,
             })
 
-    # Machine-translated Hebrew from the engine ranks below human subs
-    # and the community pool.
+    # Machine-translated Hebrew from the engine.
     for c in engine_mt:
         have_hebrew = True
-        results.append(c)
+        results.append(_clean(c))
 
-    # AI Hebrew translated from the engine's English results (one-step, like
-    # the old DarkSubs auto-translate). Offered ABOVE the raw English so a
-    # user who wants Hebrew picks this; raw English stays available below.
+    # AI Hebrew translated from the engine's source-language results (one-step,
+    # like the old DarkSubs auto-translate). One entry per AI-source language
+    # (best % of that language), ordered en, es, de, fr, pt -- still in the
+    # Hebrew section because the result is Hebrew.
     if engine_other:
-        ai_added = 0
+        best_by_lang = {}
         for c in engine_other:
-            if c.get('language') != 'en':
+            code = c.get('language')
+            if code not in _AI_SOURCE_ORDER:
                 continue
+            if (code not in best_by_lang
+                    or c.get('_pct', 0) > best_by_lang[code].get('_pct', 0)):
+                best_by_lang[code] = c
+        for code in sorted(best_by_lang, key=_lang_rank):
+            c = best_by_lang[code]
             src = _decode_link(c.get('link') or '')
             if not src or src.get('type') != 'engine':
                 continue
             src = dict(src)
             src['type'] = 'engine_ai'
-            src['src_lang'] = 'en'
-            rel = src.get('filename') or 'אנגלית'
+            src['src_lang'] = code
+            rel = src.get('filename') or code
             results.append({
-                'filename': 'תרגום AI לעברית (מ-{0})'.format(rel),
+                'filename': 'תרגום AI לעברית (מ-{0} · {1})'.format(
+                    code.upper(), rel),
                 'language': 'he',
                 'link': _encode_link(src),
                 'sync': 'false', 'rating': '4',
                 'is_hi': False, 'is_hd': False,
             })
             have_hebrew = True
-            ai_added += 1
-            if ai_added >= 3:  # cap to avoid clutter
-                break
 
-    # Other languages from the engine (English, etc.) -- shown for parity
-    # with DarkSubs (raw, not translated). They do NOT count as Hebrew, but
-    # we surface them even when Hebrew exists so MoranSubs is a full stand-in.
+    # Raw foreign-language subs, sorted by the language order above and grouped
+    # so all subs of one language stay together (no French at the top AND
+    # bottom); within a language, best match % first.
+    engine_other.sort(key=lambda c: (_lang_rank(c.get('language')),
+                                     c.get('language') or 'zz',
+                                     -c.get('_pct', 0)))
     for c in engine_other:
-        results.append(c)
+        results.append(_clean(c))
 
     skip_when_hebrew = kodi_utils.get_bool('skip_if_hebrew', True)
     if have_hebrew and skip_when_hebrew:
