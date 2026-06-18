@@ -528,10 +528,16 @@ def _wait_for_subtitle_streams(player, max_tenths=25):
 
 
 def embedded_candidates(info):
-    """Detect an embedded Hebrew subtitle stream in the currently-playing
-    file and offer it at the very top, mirroring DarkSubs's "[LOC] 101%"
-    entry. Returns [] when off / not playing / none found. Selecting it
-    just switches Kodi's subtitle stream (no file)."""
+    """Embedded Hebrew streams are NOT offered as engine items anymore.
+
+    Kodi's subtitle dialog expects a download to return a subtitle FILE; an
+    embedded stream has no file, so picking it (we only switched the stream via
+    setSubtitleStream) always left Kodi showing a "subtitle download failed"
+    error on top of our "applied" toast -- confusing and looked broken. Embedded
+    subtitle streams are already selectable from Kodi's own subtitle/CC button,
+    so we simply don't duplicate them in our list. Returns [] always."""
+    return []
+    # (unreachable; kept for reference) ----------------------------------
     if not enabled():
         return []
     try:
