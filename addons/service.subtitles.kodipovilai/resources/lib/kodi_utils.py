@@ -294,6 +294,32 @@ def current_video_info():
     return info
 
 
+_CURRENT_SUB_PROP = 'moransubs.current_sub'
+
+
+def set_current_subtitle(link):
+    """Remember which subtitle (by its candidate link) is currently applied,
+    so the picker can mark it as '» נוכחית' next time it opens. Stored on the
+    home window so it's visible across the service / picker processes."""
+    if not KODI_AVAILABLE:
+        return
+    try:
+        xbmcgui.Window(10000).setProperty(_CURRENT_SUB_PROP, link or '')
+    except Exception:
+        pass
+
+
+def get_current_subtitle():
+    """The link of the currently-applied subtitle (see above), or ''."""
+    if not KODI_AVAILABLE:
+        return ''
+    try:
+        return xbmc.getInfoLabel(
+            'Window(10000).Property({0})'.format(_CURRENT_SUB_PROP)) or ''
+    except Exception:
+        return ''
+
+
 def progress_dialog():
     """Return a DialogProgressBG or None if not available."""
     if not KODI_AVAILABLE:
