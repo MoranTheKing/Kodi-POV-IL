@@ -1,3 +1,12 @@
+v0.2.192
+- Built-in engine, full DarkSubs parity: (1) now searches ALL languages
+  (all_lang on) so you get the same large multi-language result set DarkSubs
+  returned, not just Hebrew+English; (2) auto-on-play shows the same top
+  overlay with live per-source counts, immediately on play; (3) the currently
+  applied subtitle is marked "» נוכחית" and floated to the top of the list;
+  (4) All Subs Plus is also disabled when the engine is on (only MoranSubs
+  runs). All gated behind the engine switch.
+
 v0.2.191
 - Built-in engine: when the engine is ON (DarkSubs disabled), we no longer
   patch or reload DarkSubs at all. Its reload cycle was re-enabling DarkSubs

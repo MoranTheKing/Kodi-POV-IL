@@ -153,6 +153,24 @@ def _reapply_rtl_fix_in_place(path):
 
 # ---- search ----------------------------------------------------------
 
+def _mark_current(results):
+    """Mark the currently-applied subtitle with '» נוכחית' and float it to the
+    top (mirrors DarkSubs's 'כתובית נוכחית'). Matched by candidate link."""
+    try:
+        cur = kodi_utils.get_current_subtitle()
+        if not cur:
+            return results
+        for i, c in enumerate(results):
+            if c.get('link') == cur:
+                c['filename'] = '» נוכחית · ' + (c.get('filename') or '')
+                c['rating'] = '5'
+                results.insert(0, results.pop(i))
+                break
+    except Exception:
+        pass
+    return results
+
+
 def list_candidates(info, modal_progress=True):
     """Build the list Kodi's subtitle dialog will render.
 
@@ -323,7 +341,7 @@ def list_candidates(info, modal_progress=True):
 
     skip_when_hebrew = kodi_utils.get_bool('skip_if_hebrew', True)
     if have_hebrew and skip_when_hebrew:
-        return results
+        return _mark_current(results)
 
     # 2. For each enabled source language, surface ONE "translate
     #    this" entry from a local source:
@@ -404,7 +422,7 @@ def list_candidates(info, modal_progress=True):
              'in_temp_count': len(in_temp)}),
             level='WARNING')
 
-    return results
+    return _mark_current(results)
 
 
 # ---- download / translate -------------------------------------------
