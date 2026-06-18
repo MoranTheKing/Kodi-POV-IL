@@ -46,6 +46,7 @@ STANDALONE_LIB_FILES = {
     "gemini.py",
     "gemini_pair.py",
     "gemini_quota.py",
+    "google_translate.py",
     "kodi_utils.py",
     "language_detect.py",
     "local_subs.py",

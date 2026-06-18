@@ -571,6 +571,48 @@ def _backfill_pool_async(info, translated_path, local_source, source_lang):
         pass
 
 
+def _is_google_translated(path):
+    """True if this cached translation was produced by Google Translate (a
+    sidecar '<path>.google' marker is written next to it). Such machine
+    translations must NEVER be shared to the community pool."""
+    try:
+        return bool(path) and os.path.exists(path + '.google')
+    except Exception:
+        return False
+
+
+def _google_translate_and_save(src_text, source_lang, translated, info,
+                               via_quota=False):
+    """Translate src_text to Hebrew with Google Translate and save it to the
+    cache path `translated`. Marks it Google-translated (sidecar) so it is
+    never pooled, applies the RTL punctuation fix, and returns the path (or
+    None on failure)."""
+    heb = None
+    try:
+        from . import google_translate
+        heb = google_translate.translate_srt(src_text, source_lang)
+    except Exception as e:
+        kodi_utils.log('google translate failed: {0}'.format(e),
+                       level='WARNING')
+    if not heb or not heb.strip():
+        kodi_utils.notify('Google Translate נכשל — נסה שוב', time_ms=4000)
+        return None
+    try:
+        cache.save_text(translated, heb)
+        try:
+            open(translated + '.google', 'w').close()  # keep it out of the pool
+        except Exception:
+            pass
+        _reapply_rtl_fix_in_place(translated)
+    except Exception as e:
+        kodi_utils.log('google save failed: {0}'.format(e), level='WARNING')
+        return None
+    kodi_utils.notify(
+        'מכסת ה-AI נגמרה — תורגם עם Google Translate' if via_quota
+        else 'תורגם עם Google Translate', time_ms=4000)
+    return translated
+
+
 def resolve(link, info, progress_cb=None, progressive_cb=None):
     """Return a filesystem path to the SRT for the chosen link.
 
@@ -749,7 +791,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             # first time it's re-watched after pool_share is on. Runs on a
             # daemon thread (reads the source to compute the content hash), so
             # the cache hit still returns instantly. One-shot per file.
-            if pool is not None and pool.share_enabled():
+            if (pool is not None and pool.share_enabled()
+                    and not _is_google_translated(translated)):
                 _backfill_pool_async(info, translated, local_source,
                                      source_lang)
             return translated
@@ -804,7 +847,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             _reapply_rtl_fix_in_place(translated_by_content)
             # Backfill: we already have the content hash here, so share the
             # cached file directly (contribute_once = marker + server dedup).
-            if pool is not None and pool.share_enabled():
+            if (pool is not None and pool.share_enabled()
+                    and not _is_google_translated(translated_by_content)):
                 _cached_he = cache.load_text(translated_by_content) or ''
                 if _pool_quality_ok(src_text, _cached_he):
                     try:
@@ -894,6 +938,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     if language_detect.detect(src_text[:8000]) == 'he':
         cache.save_text(translated, src_text)
         return translated
+
+    # Translator selection. 'google' (the user picked it in settings) ->
+    # translate with Google Translate now and skip Gemini entirely. Google
+    # output is machine quality, so it is never shared to the pool. 'ai'
+    # (default) falls through to the Gemini path below (which guides the user
+    # to connect a key if none is set). translation_mode 'none' never reaches
+    # here (list_candidates hands back raw foreign subs instead).
+    if (kodi_utils.get_setting('translation_mode', 'ai') or 'ai') == 'google':
+        return _google_translate_and_save(src_text, source_lang, translated,
+                                          info)
 
     # Cast metadata (cached per-imdb).
     meta_path = cache.metadata_path(imdb_id) if imdb_id else None
@@ -1167,6 +1221,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     out_blocks_by_index = {}
     completed = 0
     abort_msg = None
+    abort_reason = None
 
     try:
         from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -1181,6 +1236,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                     response = future.result()
                 except _AbortTranslation as e:
                     abort_msg = e.user_msg
+                    abort_reason = e.reason
                     # Try to cancel pending futures; in-flight ones
                     # will run to completion but we ignore them.
                     for f in future_to_idx:
@@ -1235,6 +1291,23 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         return None
 
     if abort_msg:
+        # Daily Gemini quota exhausted -> fall back to Google Translate so the
+        # user still gets Hebrew (machine quality; never pooled). Only for the
+        # quota case -- other aborts (invalid key, overload, error) surface as
+        # before so the user can fix them.
+        if abort_reason == 'quota':
+            gpath = _google_translate_and_save(src_text, source_lang,
+                                               translated, info, via_quota=True)
+            if gpath:
+                if progressive_cb is not None:
+                    try:
+                        progressive_cb('done', {
+                            'success': True,
+                            'source_id': _progressive_source_id,
+                        })
+                    except Exception:
+                        pass
+                return gpath
         kodi_utils.notify(abort_msg, time_ms=12000)
         if progressive_cb is not None:
             try:
