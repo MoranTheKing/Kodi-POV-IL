@@ -1479,47 +1479,88 @@ def _autosub_on_play():
         # returns everything in priority order; the first 'he' row is the best
         # Hebrew (embedded > human > pool > MT).
         cands = translate.list_candidates(info, modal_progress=False)
-        # Ready Hebrew first (human / pool / embedded / MT).
-        he = next((c for c in cands if c.get('language') == 'he'), None)
-        # Force-translation (opt-in): if no ready Hebrew, AI-translate the best
-        # foreign sub (the first 'תרגום AI לעברית' entry -- they're ordered
-        # en, es, de, ...). Off by default so we don't spend API requests
-        # unless the user asked for it.
-        if not he and kodi_utils.get_bool('engine_force_translate', False):
+        # Try the ready Hebrew candidates in priority order until one actually
+        # downloads. If a source fails (e.g. Ktuvit rate-limited / "refused"),
+        # skip the rest from that SAME source (they fail identically) and move
+        # straight on to the next source -- OpenSubtitles / pool / Wizdom.
+        he_list = [c for c in cands if c.get('language') == 'he']
+        applied = False
+        chosen_link = None
+        failed_sources = set()
+        for c in he_list[:12]:
+            link2 = c.get('link') or ''
+            try:
+                pl = translate._decode_link(link2) or {}
+            except Exception:
+                pl = {}
+            src = pl.get('source')
+            if src and src in failed_sources:
+                continue  # this source already failed -- don't waste time on it
+            is_embedded = (pl.get('type') == 'engine' and pl.get('embedded'))
+            try:
+                path = translate.resolve(link2, info)
+            except Exception:
+                path = None
+            if is_embedded:
+                # resolve() switched the embedded stream and returns None -- that
+                # IS success for an embedded pick.
+                applied = True
+                chosen_link = link2
+                break
+            if path:
+                try:
+                    p = xbmc.Player()
+                    if p.isPlayingVideo():
+                        p.setSubtitles(path)
+                        p.showSubtitles(True)
+                    applied = True
+                    chosen_link = link2
+                    break
+                except Exception:
+                    pass
+            if src:
+                failed_sources.add(src)
+
+        # Nothing ready worked. Optionally AI-translate the best foreign sub
+        # (opt-in; off by default so we don't spend API requests unasked).
+        if not applied and kodi_utils.get_bool('engine_force_translate', False):
             for c in cands:
                 try:
-                    p = translate._decode_link(c.get('link') or '')
+                    p2 = translate._decode_link(c.get('link') or '')
                 except Exception:
-                    p = None
-                if p and p.get('type') == 'engine_ai':
-                    he = c
+                    p2 = None
+                if p2 and p2.get('type') == 'engine_ai':
                     try:
                         kodi_utils.notify('MoranSubs: אין עברית — מתרגם ב-AI',
                                           time_ms=4000)
                     except Exception:
                         pass
+                    try:
+                        path = translate.resolve(c.get('link'), info)
+                    except Exception:
+                        path = None
+                    if path:
+                        try:
+                            pp = xbmc.Player()
+                            if pp.isPlayingVideo():
+                                pp.setSubtitles(path)
+                                pp.showSubtitles(True)
+                            applied = True
+                            chosen_link = c.get('link')
+                        except Exception:
+                            pass
                     break
-        if not he:
+
+        if not applied:
             try:
                 kodi_utils.notify('MoranSubs: לא נמצאה כתובית עברית',
                                   time_ms=3000)
             except Exception:
                 pass
             return
-        path = translate.resolve(he['link'], info)
-        # Embedded picks switch the stream inside resolve() and return None;
-        # external/pool picks return a file path to load.
-        if path:
-            try:
-                p = xbmc.Player()
-                if p.isPlayingVideo():
-                    p.setSubtitles(path)
-                    p.showSubtitles(True)
-            except Exception:
-                pass
         # Remember it as the current sub so the picker marks it '» נוכחית'.
         try:
-            kodi_utils.set_current_subtitle(he.get('link') or '')
+            kodi_utils.set_current_subtitle(chosen_link or '')
         except Exception:
             pass
         try:
