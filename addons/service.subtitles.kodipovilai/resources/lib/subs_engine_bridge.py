@@ -357,7 +357,7 @@ def _search_inner(info):
     # engine module (and general.py) is imported -- otherwise int('') / empty
     # language flags break it. Safe to call every time.
     ensure_engine_settings()
-    from resources.lib.subs_engine import engine
+    from resources.lib.subs_engine import engine, general
 
     video_data = build_video_data(info)
     kodi_utils.log('subs_engine_bridge: searching engine for '
@@ -366,10 +366,36 @@ def _search_inner(info):
                             'media_type')}),
                    level='INFO')
 
-    f_result = engine.get_subtitles(video_data)
-    if not f_result:
+    # Show the same live per-provider progress dialog DarkSubs shows while
+    # the providers run. general.show_results reads general.show_msg (which
+    # c_get_subtitles updates with per-source counts) until we set 'END'.
+    # Heavily guarded: any failure here must not affect the search.
+    import threading
+    progress_thread = None
+    try:
+        general.break_all = False
+        general.with_dp = True
+        general.show_msg = 'MoranSubs — מחפש כתוביות'
+        progress_thread = threading.Thread(
+            target=general.show_results, args=(True,))
+        progress_thread.daemon = True
+        progress_thread.start()
+    except Exception:
+        progress_thread = None
+
+    try:
+        f_result = engine.get_subtitles(video_data)
+        sorted_subs = engine.sort_subtitles(f_result, video_data) \
+            if f_result else []
+    finally:
+        # Close the progress dialog (show_results exits on 'END').
+        try:
+            general.show_msg = 'END'
+        except Exception:
+            pass
+
+    if not sorted_subs:
         return []
-    sorted_subs = engine.sort_subtitles(f_result, video_data)
 
     out = []
     seen = set()
