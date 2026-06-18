@@ -1,3 +1,22 @@
+v0.2.208
+- The standalone add-on now fetches subtitles on its own via its internal
+  sources engine (Ktuvit, Wizdom, OpenSubtitles and more), enabled
+  automatically -- so it is a complete sources + AI-translation add-on, not
+  only a translation layer on top of DarkSubs. While the engine is on, DarkSubs
+  and All Subs Plus are disabled so only this add-on runs; turn the engine off
+  in settings and they come back. One-time switch -- a later manual opt-out is
+  respected and never forced back on.
+
+v0.2.207
+- MoranSubs is now the default for EVERYONE: the built-in sources engine is
+  turned on automatically (one-time), DarkSubs + All Subs Plus are disabled,
+  and MoranSubs becomes the default subtitle service -- so MoranSubs alone
+  does the sourcing, auto-on-play and AI translation, replacing DarkSubs and
+  the separate AI add-on. This is a ONE-TIME switch (marker-gated): if you
+  later turn the engine off (or any seeded option), it STAYS off -- we never
+  force your choice back on. Existing per-source / provider toggles are left
+  exactly as you set them.
+
 v0.2.206
 - The Ktuvit "HEB NN%" badge now shows on the FIRST time you open a title's
   source list, not only the next time. On a title that isn't cached yet the
