@@ -1,3 +1,12 @@
+v0.2.209
+- Engine download robustness: the download path now seeds the engine's
+  internal settings itself (a download can be the first engine call after a
+  quick update / on auto-play), accepts a valid subtitle even when a provider
+  returns a mangled/quoted file extension, and -- when a download genuinely
+  fails -- shows the exact reason on screen (unsupported source / server
+  returned no file / not a valid subtitle / the error text) instead of Kodi's
+  generic "subtitle download failed", so problems are reportable at a glance.
+
 v0.2.208
 - The standalone add-on now fetches subtitles on its own via its internal
   sources engine (Ktuvit, Wizdom, OpenSubtitles and more), enabled
