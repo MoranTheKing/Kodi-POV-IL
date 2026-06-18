@@ -48,11 +48,19 @@ def _has_session():
         prof = xbmcvfs.translatePath(
             xbmcaddon.Addon('service.subtitles.kodipovilai')
             .getAddonInfo('profile'))
-        p = os.path.join(prof, 'telegram_session',
-                         'telethon_session_string.txt')
-        if os.path.isfile(p):
-            with open(p, 'r') as f:
-                return bool(f.read().strip())
+        paths = [
+            os.path.join(prof, 'telegram_session',
+                         'telethon_session_string.txt'),
+            # Reuse an existing DarkSubs Telegram login if present.
+            xbmcvfs.translatePath(
+                'special://profile/addon_data/service.subtitles.All_Subs/'
+                'telegram_session/telethon_session_string.txt'),
+        ]
+        for p in paths:
+            if os.path.isfile(p):
+                with open(p, 'r') as f:
+                    if f.read().strip():
+                        return True
     except Exception:
         pass
     return False
