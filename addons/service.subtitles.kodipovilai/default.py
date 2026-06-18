@@ -2191,6 +2191,94 @@ def _handle_logout_telegram(_params):
         pass
 
 
+HE_AVAIL_CACHE = ('special://profile/addon_data/service.subtitles.kodipovilai/'
+                  'he_avail_cache.json')
+
+
+def _he_avail_store(mk, names):
+    """Merge {mk: {ts, names}} into the shared he_avail cache that POV's source
+    window reads (he_sub_match._engine_cached_names). Atomic + size-bounded."""
+    if xbmcvfs is None:
+        return
+    try:
+        import json as _json
+        import time as _time
+        path = xbmcvfs.translatePath(HE_AVAIL_CACHE)
+        data = {}
+        if os.path.isfile(path):
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    data = _json.load(f) or {}
+            except Exception:
+                data = {}
+        data[mk] = {'ts': _time.time(), 'names': list(names)}
+        # Keep the newest ~400 titles so the file can't grow without bound.
+        if len(data) > 400:
+            newest = sorted(data.items(), key=lambda kv: kv[1].get('ts', 0),
+                            reverse=True)[:400]
+            data = dict(newest)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            _json.dump(data, f, ensure_ascii=False)
+        os.replace(tmp, path)
+    except Exception as e:
+        _safe_log('he_avail store failed: {0}'.format(e), level='WARNING')
+
+
+def _handle_he_avail(params):
+    """Background warm of the source-screen "HEB NN%" badge.
+
+    he_sub_match (running inside POV's source window) covers the community pool
+    + Wizdom synchronously, but NOT Ktuvit -- the largest Hebrew source, which
+    needs a login + multi-step search too slow to run on every source-list
+    open. So the badge fires this fire-and-forget RunScript once per title; we
+    run the engine's Ktuvit provider here (its own MoranSubs context, shared
+    cached credentials) and write the Hebrew release names to a shared cache
+    that the badge reads on the next window open. Never shows UI; any failure
+    just leaves the badge on pool+Wizdom (no worse than before)."""
+    try:
+        import base64
+        import json as _json
+        blob = params.get('data') or ''
+        if not blob:
+            return
+        info = _json.loads(base64.b64decode(blob).decode('utf-8'))
+        mk = (info.get('mk') or '').strip()
+        if not mk:
+            return
+        is_ep = (info.get('type') == 'episode')
+        bridge_info = {
+            'imdb_id': info.get('imdb', ''),
+            'tmdb_id': info.get('tmdb', ''),
+            'title': info.get('title', ''),
+            'tvshow': info.get('tvshow', ''),
+            'year': info.get('year', ''),
+            'season': info.get('season', '') if is_ep else '',
+            'episode': info.get('episode', '') if is_ep else '',
+            'is_episode': is_ep,
+        }
+        from resources.lib import subs_engine_bridge as bridge
+        bridge.ensure_engine_settings()
+        vd = bridge.build_video_data(bridge_info)
+        names = []
+        try:
+            from resources.lib.subs_engine.sources import ktuvit
+            ktuvit.global_var = []
+            ktuvit.get_subs(vd)
+            for d in (ktuvit.global_var or []):
+                fn = (d.get('filename') or '').strip()
+                if fn:
+                    names.append(fn)
+        except Exception as e:
+            _safe_log('he_avail ktuvit failed: {0}'.format(e), level='WARNING')
+        _he_avail_store(mk, names)
+        _safe_log('he_avail: stored {0} Hebrew release names for {1}'.format(
+            len(names), mk))
+    except Exception as e:
+        _safe_log('he_avail crashed: {0}'.format(e), level='WARNING')
+
+
 def _handle_engine_test(_params):
     """Diagnostic for the built-in sources engine. Runs a real search for
     the currently-playing video and reports, per provider, how many results
@@ -2367,6 +2455,8 @@ def main():
             _handle_debrid_notice_settings(params)
         elif action == 'torbox_status':
             _handle_torbox_status(params)
+        elif action == 'he_avail':
+            _handle_he_avail(params)
         elif action == 'engine_test':
             _handle_engine_test(params)
         elif action == 'connect_telegram':
