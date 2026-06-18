@@ -647,7 +647,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         kodi_utils.notify('AI: מוריד אנגלית ומתרגם לעברית...', time_ms=3000)
         payload = {'type': 'ai',
                    'source_lang': payload.get('src_lang') or 'en',
-                   'local_path': eng_path}
+                   'local_path': eng_path,
+                   'force_ai': True}  # user explicitly asked to translate
         kind = 'ai'
         # fall through to the AI logic below
 
@@ -667,7 +668,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # we never serve a previously-cached Hebrew file either. This is an
     # extra gate only; it can't re-enable translation that auto_translate /
     # force_ai_when_auto_translate_off already disabled.
-    if not kodi_utils.hebrew_subtitle_wanted():
+    if not payload.get('force_ai') and not kodi_utils.hebrew_subtitle_wanted():
         kodi_utils.log(
             'resolve: preferred subtitle language is not Hebrew; returning '
             'the source subtitle untranslated', level='INFO')

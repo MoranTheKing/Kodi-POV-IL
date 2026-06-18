@@ -431,6 +431,7 @@ def _search_inner(info, modal_progress=True):
             percent = t[5]
             hi = t[7]
             site_id = t[9]
+            thumb_code = (t[3] or '').strip().lower()  # provider ISO 639-1
         except Exception:
             continue
 
@@ -439,17 +440,22 @@ def _search_inner(info, modal_progress=True):
             continue
         lang = parsed['language']
         label0 = t[0] or ''
-        # Classify by language. We keep ALL languages now (parity with
-        # DarkSubs): Hebrew (human / machine) first, everything else after.
-        if lang == 'HebrewMachineTranslated':
-            kind, code = 'mt_he', 'he'
-        elif lang == 'Hebrew' or 'Hebrew' in label0:
-            kind, code = 'human_he', 'he'
-        elif lang == 'English' or 'English' in label0:
-            kind, code = 'other', 'en'
+        # The provider already computed a proper ISO 639-1 code in the tuple's
+        # thumbnail field (via xbmc.convertLanguage) -- use it so Kodi shows
+        # the right flag. Normalize a few common non-standard codes.
+        code = _LANG_NORMALIZE.get(thumb_code, thumb_code)
+        # Classify. Hebrew (human / machine) first, everything else after.
+        if lang == 'HebrewMachineTranslated' or 'HebrewMachineTranslated' in label0:
+            kind = 'mt_he'
+            code = 'he'
+        elif (code in ('he', 'iw', 'heb') or lang == 'Hebrew'
+              or 'Hebrew' in label0):
+            kind = 'human_he'
+            code = 'he'
         else:
             kind = 'other'
-            code = _LANG_CODES.get(lang, (lang[:2].lower() if lang else 'und'))
+            if not code:
+                code = _LANG_CODES.get(lang, (lang[:2].lower() if lang else 'und'))
 
         # De-dup identical picks (same source + filename + language).
         dedup_key = (parsed['source'], parsed['filename'], code)
@@ -465,12 +471,16 @@ def _search_inner(info, modal_progress=True):
         label = '{0} · {1}%'.format(provider, pct)
         if kind == 'mt_he':
             label = '[תרגום מכונה] ' + label
+        # Always show a language tag so the user knows the language even when
+        # Kodi can't render a flag for the code.
+        if kind == 'other' and code:
+            label = '[{0}] {1}'.format(code.upper(), label)
         if parsed['filename']:
             label = '{0}  —  {1}'.format(label, parsed['filename'])
 
         out.append({
             'filename': label,
-            'language': code,
+            'language': code or 'und',
             'link': _encode_engine_link(parsed, hi),
             'sync': 'true' if (kind == 'human_he' and pct >= 90) else 'false',
             'rating': _rating_for(pct, kind),
@@ -555,6 +565,21 @@ _LANG_CODES = {
     'Hebrew': 'he', 'English': 'en', 'Arabic': 'ar', 'Russian': 'ru',
     'Spanish': 'es', 'French': 'fr', 'German': 'de', 'Portuguese': 'pt',
     'Italian': 'it', 'Turkish': 'tr', 'Polish': 'pl', 'Dutch': 'nl',
+}
+
+# Fix common non-ISO-639-1 codes some providers emit so Kodi shows a flag.
+_LANG_NORMALIZE = {
+    'gr': 'el', 'gre': 'el', 'ell': 'el', 'greek': 'el',
+    'sp': 'es', 'spa': 'es', 'spanish': 'es',
+    'per': 'fa', 'fas': 'fa', 'far': 'fa', 'persian': 'fa',
+    'iw': 'he', 'heb': 'he', 'hebrew': 'he',
+    'eng': 'en', 'english': 'en',
+    'ara': 'ar', 'arabic': 'ar',
+    'rus': 'ru', 'russian': 'ru',
+    'fre': 'fr', 'fra': 'fr', 'french': 'fr',
+    'ger': 'de', 'deu': 'de', 'german': 'de',
+    'dut': 'nl', 'nld': 'nl', 'por': 'pt', 'ita': 'it',
+    'tur': 'tr', 'pol': 'pl', 'chi': 'zh', 'zho': 'zh',
 }
 
 
