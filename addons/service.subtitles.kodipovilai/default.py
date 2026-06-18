@@ -2248,14 +2248,14 @@ def _he_avail_store(mk, names):
 def _handle_he_avail(params):
     """Background warm of the source-screen "HEB NN%" badge.
 
-    he_sub_match (running inside POV's source window) covers the community pool
-    + Wizdom synchronously, but NOT Ktuvit -- the largest Hebrew source, which
-    needs a login + multi-step search too slow to run on every source-list
-    open. So the badge fires this fire-and-forget RunScript once per title; we
-    run the engine's Ktuvit provider here (its own MoranSubs context, shared
-    cached credentials) and write the Hebrew release names to a shared cache
-    that the badge reads on the next window open. Never shows UI; any failure
-    just leaves the badge on pool+Wizdom (no worse than before)."""
+    he_sub_match (in POV's source window) covers the community pool + Wizdom
+    synchronously. This adds OpenSubtitles' Hebrew releases on top, once per
+    title (fire-and-forget), written to a shared cache the badge reads next
+    open. We deliberately use OpenSubtitles here, NOT Ktuvit: Ktuvit runs on a
+    single shared, rate-limited account, and hitting it on every browse pushed
+    it past its limit (breaking real Ktuvit downloads). OpenSubtitles uses
+    rotating API keys, so it adds no load to that account. Never shows UI; any
+    failure just leaves the badge on pool+Wizdom."""
     try:
         import base64
         import json as _json
@@ -2282,15 +2282,19 @@ def _handle_he_avail(params):
         vd = bridge.build_video_data(bridge_info)
         names = []
         try:
-            from resources.lib.subs_engine.sources import ktuvit
-            ktuvit.global_var = []
-            ktuvit.get_subs(vd)
-            for d in (ktuvit.global_var or []):
-                fn = (d.get('filename') or '').strip()
-                if fn:
-                    names.append(fn)
+            from resources.lib.subs_engine.sources import opensubtitles
+            opensubtitles.global_var = []
+            opensubtitles.get_subs(vd, True)  # all languages; we keep Hebrew
+            for d in (opensubtitles.global_var or []):
+                lang = (d.get('label') or '').strip().lower()
+                code = (d.get('thumbnailImage') or '').strip().lower()
+                if lang == 'hebrew' or code in ('he', 'heb', 'iw'):
+                    fn = (d.get('filename') or '').strip()
+                    if fn:
+                        names.append(fn)
         except Exception as e:
-            _safe_log('he_avail ktuvit failed: {0}'.format(e), level='WARNING')
+            _safe_log('he_avail opensubtitles failed: {0}'.format(e),
+                      level='WARNING')
         _he_avail_store(mk, names)
         _safe_log('he_avail: stored {0} Hebrew release names for {1}'.format(
             len(names), mk))
