@@ -2409,6 +2409,29 @@ def _ensure_darksubs_enabled():
             pass
 
 
+def _point_subtitle_button(engine_on):
+    """Make the skins' player "Choose subtitles" button open the right thing.
+
+    The build skins ship the button gated two ways:
+      * Estuary / FENtastic(VideoOsd3): Skin.HasSetting(ChooseSubtitlesButtonOpensKodiWindow)
+      * FENtastic(VideoOsd1):           Skin.String(subtitlesearch) == kodisubtitle|darksubs
+    When the engine is ON, DarkSubs is disabled, so the DarkSubs branch is a
+    dead button. Set both skin settings to the "Kodi native subtitle window"
+    side (it runs MoranSubs as the default service). When OFF, restore DarkSubs.
+    Only touches the ACTIVE skin; cheap; safe if the setting doesn't exist."""
+    if xbmc is None:
+        return
+    try:
+        if engine_on:
+            xbmc.executebuiltin('Skin.SetBool(ChooseSubtitlesButtonOpensKodiWindow)')
+            xbmc.executebuiltin('Skin.SetString(subtitlesearch,kodisubtitle)')
+        else:
+            xbmc.executebuiltin('Skin.Reset(ChooseSubtitlesButtonOpensKodiWindow)')
+            xbmc.executebuiltin('Skin.SetString(subtitlesearch,darksubs)')
+    except Exception:
+        pass
+
+
 def _maybe_set_default_subtitle_service():
     """When the engine is on, make MoranSubs the default subtitle service for
     movies + TV, so Kodi auto-runs it and pre-selects it when the subtitle
@@ -2662,6 +2685,15 @@ def main():
         _engine_on = _ku.get_bool('use_builtin_engine', False)
     except Exception:
         _engine_on = False
+
+    # Point the skins' player "Choose subtitles" button at the right target.
+    # The build skins gate it: it opens DarkSubs's picker unless the skin
+    # setting says to open Kodi's native subtitle window. With the engine on,
+    # DarkSubs is DISABLED -- so the DarkSubs button does nothing ("doesn't
+    # work"). Flip the skin settings so the button opens the NATIVE Kodi
+    # subtitle dialog (which now runs MoranSubs). Reverts to DarkSubs when the
+    # engine is off. Affects the active skin (Estuary / FENtastic).
+    _point_subtitle_button(_engine_on)
 
     if not _engine_on:
         # Self-healing DarkSubs hook injection. Runs every startup so
