@@ -359,7 +359,7 @@
              until Phase C. -->
         <setting id="use_builtin_engine" type="boolean" label="32508" help="32509">
           <level>0</level>
-          <default>false</default>
+          <default>true</default>
           <control type="toggle"/>
         </setting>
         <setting id="engine_test" type="action" label="32525"> <!-- Test the built-in engine (diagnostic) -->
