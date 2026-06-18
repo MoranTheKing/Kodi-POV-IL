@@ -2089,6 +2089,122 @@ def _handle_debrid_notice_settings(_params):
         dialog.notification('התראות מנוי', msg, time=5000)
 
 
+def _handle_engine_test(_params):
+    """Diagnostic for the built-in sources engine. Runs a real search for
+    the currently-playing video and reports, per provider, how many results
+    came back (or the exact exception), plus the final Hebrew candidates the
+    bridge would surface. This is the tool to find out WHY the engine shows
+    nothing -- import failure, a provider erroring, or genuinely no Hebrew
+    subs for this title."""
+    try:
+        from resources.lib import kodi_utils, subs_engine_bridge
+    except Exception as e:
+        try:
+            xbmcgui.Dialog().ok('MoranSubs', 'Internal error: {0}'.format(e))
+        except Exception:
+            pass
+        return
+
+    lines = []
+    on = kodi_utils.get_bool('use_builtin_engine', False)
+    lines.append('מתג מנוע מובנה: ' + ('דלוק ✓' if on else 'כבוי ✗'))
+    if not on:
+        lines.append('')
+        lines.append('הדלק את "השתמש במנוע המקורות המובנה" ונסה שוב.')
+        _engine_test_show(lines)
+        return
+
+    info = kodi_utils.current_video_info()
+    vd = subs_engine_bridge.build_video_data(info)
+    lines.append('imdb: ' + (vd.get('imdb') or '-')
+                 + ' | tmdb: ' + (vd.get('tmdb') or '-'))
+    lines.append('כותרת: ' + (vd.get('title') or '-')[:50])
+    lines.append('סוג: ' + vd.get('media_type', '-')
+                 + ' | עונה/פרק: ' + str(vd.get('season') or '-')
+                 + '/' + str(vd.get('episode') or '-'))
+    if not (vd.get('imdb') or vd.get('tmdb') or vd.get('title')):
+        lines.append('')
+        lines.append('אין מטא-דאטה מהנגן. הרץ בזמן שסרט/פרק מתנגן.')
+
+    # Try to import the engine -- the single most likely failure point.
+    engine = None
+    try:
+        from resources.lib.subs_engine import engine as _engine
+        engine = _engine
+        lines.append('')
+        lines.append('טעינת המנוע: ✓')
+    except Exception as e:
+        lines.append('')
+        lines.append('טעינת המנוע נכשלה ✗:')
+        lines.append('  ' + repr(e)[:200])
+        _engine_test_show(lines)
+        return
+
+    # Run each ENABLED provider directly (sequential, so we can attribute
+    # results/errors precisely) and report counts.
+    providers = [
+        ('ktuvit', 'ktuvit'), ('wizdom', 'wizdom'),
+        ('telegram', 'telegram'), ('opensubtitles', 'opensubtitles'),
+        ('yify', 'yify'), ('subsource', 'subsource'),
+        ('subscene', 'subscene'), ('bsplayer', 'bsplayer'),
+    ]
+    lines.append('')
+    lines.append('תוצאות לפי ספק:')
+    import time as _t
+    for setting_id, modname in providers:
+        if not kodi_utils.get_bool(setting_id, False):
+            lines.append('  {0}: (כבוי)'.format(modname))
+            continue
+        try:
+            mod = __import__(
+                'resources.lib.subs_engine.sources.' + modname,
+                fromlist=[modname])
+        except Exception as e:
+            lines.append('  {0}: יבוא נכשל - {1}'.format(
+                modname, repr(e)[:80]))
+            continue
+        try:
+            mod.global_var = []
+        except Exception:
+            pass
+        t0 = _t.time()
+        try:
+            try:
+                mod.get_subs(vd)
+            except TypeError:
+                mod.get_subs(vd, False)
+            n = len(getattr(mod, 'global_var', []) or [])
+            lines.append('  {0}: {1} תוצאות ({2:.1f}s)'.format(
+                modname, n, _t.time() - t0))
+        except Exception as e:
+            lines.append('  {0}: שגיאה - {1}'.format(
+                modname, repr(e)[:80]))
+
+    # Final: what the bridge would surface (Hebrew only, after filtering).
+    try:
+        cands = subs_engine_bridge.search(info)
+        lines.append('')
+        lines.append('כתוביות עברית שיוצגו: {0}'.format(len(cands)))
+        for c in cands[:6]:
+            lines.append('  • ' + (c.get('filename') or '')[:70])
+    except Exception as e:
+        lines.append('')
+        lines.append('bridge.search נכשל: ' + repr(e)[:150])
+
+    _engine_test_show(lines)
+
+
+def _engine_test_show(lines):
+    body = '\n'.join(lines)
+    try:
+        xbmcgui.Dialog().textviewer('בדיקת מנוע מקורות', body)
+    except Exception:
+        try:
+            xbmcgui.Dialog().ok('בדיקת מנוע מקורות', body)
+        except Exception:
+            pass
+
+
 def main():
     if xbmc is None:
         _safe_log('default.py invoked outside Kodi -- nothing to do',
@@ -2142,6 +2258,8 @@ def main():
             _handle_debrid_notice_settings(params)
         elif action == 'torbox_status':
             _handle_torbox_status(params)
+        elif action == 'engine_test':
+            _handle_engine_test(params)
         else:
             _safe_log('unknown action: ' + action, level='WARNING')
             if handle >= 0:
