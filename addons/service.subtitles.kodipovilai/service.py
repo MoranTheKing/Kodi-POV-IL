@@ -2317,6 +2317,47 @@ def _maybe_default_remember_source():
             pass
 
 
+def _maybe_default_builtin_engine():
+    """One-shot rollout: move EVERYONE from DarkSubs to MoranSubs's own built-in
+    engine. Turns use_builtin_engine ON exactly once (and seeds engine_autosub
+    ON so auto-search-and-apply works like DarkSubs did). Marker-gated, so a
+    later manual opt-out STICKS -- if the user turns the engine (or autosub) off
+    afterwards we never force it back on, on this or any future startup.
+
+    Must run BEFORE _ensure_darksubs_enabled() / _maybe_set_default_subtitle_
+    service() and the _engine_on read in main(), so the rest of THIS startup
+    already treats the engine as on (DarkSubs disabled, MoranSubs default, the
+    DarkSubs patchers skipped).
+
+    Build-edition only: the standalone repo-channel addon ships SLIM_SERVICE
+    (no engine code), so it never runs this and stays on the OFF default."""
+    try:
+        from resources.lib import kodi_utils
+    except Exception:
+        return
+    try:
+        if kodi_utils.get_setting('_builtin_engine_rollout_v1', '') == '1':
+            return
+        # Flip the master engine toggle on (covers users still on the old
+        # default 'false'; an explicit 'true' is already what we want).
+        if kodi_utils.get_setting('use_builtin_engine', 'false') != 'true':
+            kodi_utils.set_setting('use_builtin_engine', 'true')
+        # Auto-search & apply on play, like DarkSubs's autosub. Defaults to
+        # 'true' already (and was hidden while the engine was off), so this is
+        # normally a no-op; flip only if a tester explicitly turned it off.
+        if kodi_utils.get_setting('engine_autosub', 'true') == 'false':
+            kodi_utils.set_setting('engine_autosub', 'true')
+        kodi_utils.set_setting('_builtin_engine_rollout_v1', '1')
+        kodi_utils.log('built-in engine enabled for everyone (rollout v1)',
+                       level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log('builtin engine rollout failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _ensure_darksubs_enabled():
     """Sync DarkSubs (service.subtitles.All_Subs) enabled-state to the inverse
     of the built-in engine toggle (Phase C):
@@ -2582,6 +2623,12 @@ def main():
     # Enable "remember picked source" by default (one-shot) BEFORE the POV
     # patcher runs, so the patcher sees it on and reloads POV this session.
     _maybe_default_remember_source()
+
+    # ROLLOUT: switch everyone to MoranSubs's built-in engine (one-shot, marker-
+    # gated). Must run before _ensure_darksubs_enabled() so that when it flips
+    # the engine on, DarkSubs is disabled THIS startup. A later manual opt-out
+    # sticks (marker prevents re-forcing).
+    _maybe_default_builtin_engine()
 
     # Recover DarkSubs first if a previous reload cycle left it disabled after
     # a quick update -- otherwise no subtitles and no AI translation fire at
