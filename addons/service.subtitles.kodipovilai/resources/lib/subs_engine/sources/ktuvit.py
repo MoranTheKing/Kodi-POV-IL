@@ -361,7 +361,13 @@ def download(download_data,MySubFolder):
     # Attempt subtitle download
     count = 0
     KTUVIT_REFERER_URL = f"{MOVIE_INFO_URL}?ID={Ktuvit_Page_ID}"
-    while ("הבקשה לא נמצאה, נא לנסות להוריד את הקובץ בשנית" in subtitle_download_result):
+    # Ktuvit answers the first DownloadFile calls with a "request not found,
+    # try again" message until the identifier is ready -- poll until it serves
+    # the real file. Match on the stable prefix "הבקשה לא נמצאה" so a change to
+    # the rest of the wording (exactly what broke downloads: the server now says
+    # "...- נא לנסות שנית") doesn't make us give up after one try and write the
+    # error text as the "subtitle".
+    while ("הבקשה לא נמצאה" in subtitle_download_result):
     
         count += 1
         log.warning(f"DEBUG | [KTUVIT] | Number of try: {count} | Sending RequestSubtitleDownload request...")
@@ -420,7 +426,16 @@ def download(download_data,MySubFolder):
             break
             
     log.warning(f"DEBUG | [KTUVIT] | Number of try: {count} | While loop finished.")
-    
+
+    # Still failing after all retries (or no file headers) -> return no file
+    # cleanly, so the caller reports a real failure instead of writing the
+    # "request not found" error text out as a bogus subtitle.
+    if ("הבקשה לא נמצאה" in subtitle_download_result
+            or 'Content-Disposition' not in response.headers):
+        log.warning("DEBUG | [KTUVIT] | download gave up: server kept "
+                    "returning 'request not found'.")
+        return ''
+
     # Extract subtitle file name from download response headers
     subtitle_file_name = response.headers['Content-Disposition'].split("filename=")[1]
     log.warning(f"DEBUG | [KTUVIT] | Number of try: {count} | filename: {subtitle_file_name}")
