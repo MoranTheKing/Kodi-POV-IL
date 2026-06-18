@@ -122,7 +122,27 @@ async def login_to_telegram():
                     notify("החיבור בוטל")
                     return
                 try:
-                    await client.send_code_request(phone, force_sms=False)
+                    sent = await client.send_code_request(phone, force_sms=False)
+                    # Telegram first sends the code as an in-app message to any
+                    # device already logged in on this number. A user without
+                    # the Telegram app installed never sees it. If SMS is an
+                    # available fallback, offer to send the code by text.
+                    cur = type(getattr(sent, 'type', None)).__name__
+                    nxt = type(getattr(sent, 'next_type', None)).__name__
+                    if 'App' in cur and 'Sms' in nxt:
+                        use_sms = xbmcgui.Dialog().yesno(
+                            "איך לקבל את הקוד?",
+                            "טלגרם שלח קוד לאפליקציית טלגרם שלך.\n"
+                            "אם אין לך את האפליקציה או לא קיבלת קוד - "
+                            "אפשר לשלוח את הקוד ב-SMS.",
+                            "[B][COLOR springgreen]קוד באפליקציה[/COLOR][/B]",
+                            "[B][COLOR deepskyblue]שלח SMS[/COLOR][/B]")
+                        if use_sms:
+                            try:
+                                await client.send_code_request(phone, force_sms=True)
+                                notify("קוד נשלח ב-SMS")
+                            except Exception as e:
+                                log.warning("[Telegram] | login_to_telegram | force_sms failed: %s" % e)
                 except PhoneNumberInvalidError:
                     notify("מספר טלפון לא חוקי!")
                     return
@@ -271,8 +291,27 @@ async def _diagnose(phone=None):
         steps.append('logged_in=%s' % authed)
         if not authed and phone:
             try:
-                await client.send_code_request(phone, force_sms=False)
-                steps.append('send_code=OK (check the Telegram app)')
+                sent = await client.send_code_request(phone, force_sms=False)
+                # The SentCode.type tells us WHERE Telegram delivered the code:
+                #   SentCodeTypeApp  -> in-app message on another logged-in device
+                #   SentCodeTypeSms  -> text message
+                #   SentCodeTypeCall -> voice call reading the digits
+                # If it's "App" but the user has no Telegram app logged in on
+                # that number, the code goes nowhere they can see -- that is the
+                # usual cause of "send_code=OK but no code arrived".
+                cur = type(getattr(sent, 'type', None)).__name__
+                nxt = type(getattr(sent, 'next_type', None)).__name__
+                steps.append('send_code=OK via=%s next=%s' % (cur, nxt))
+                # If Telegram only sent an in-app code and SMS is available as a
+                # fallback, try forcing an SMS so a user without the app can log
+                # in (this triggers Telegram to actually send the text).
+                if 'App' in cur and 'Sms' in nxt:
+                    try:
+                        await client.send_code_request(phone, force_sms=True)
+                        steps.append('forced_sms=OK (check for a text message)')
+                    except Exception as e2:
+                        steps.append('forced_sms FAILED: %s: %s' % (
+                            type(e2).__name__, str(e2)[:120]))
             except Exception as e:
                 steps.append('send_code FAILED: %s: %s' % (
                     type(e).__name__, str(e)[:160]))
