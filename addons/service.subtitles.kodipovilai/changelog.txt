@@ -1,3 +1,12 @@
+v0.2.205
+- Source-screen "HEB NN%" badge now also covers Ktuvit (the largest Hebrew
+  source), not just the community pool + Wizdom -- so titles whose Hebrew subs
+  exist only on Ktuvit finally show a match %. Ktuvit needs a login + multi-step
+  search too slow to run while you browse, so it is fetched ONCE per title in
+  the background (fire-and-forget) into a 7-day shared cache; the badge fills in
+  on the next time you open that title's source list. Never blocks the source
+  browser, and does nothing when the badge feature is off.
+
 v0.2.204
 - Fix (recurrence): FENtastic loads but ALL text is blank (only icons show).
   A truncated/blanked skin strings.po blanks every label. v0.2.143 stopped US

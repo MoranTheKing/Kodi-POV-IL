@@ -11,9 +11,11 @@
 # point is fully guarded; any failure yields an empty prefix so POV's source
 # list is never affected.
 
+import os
 import re
 import time
 import json
+import base64
 
 try:
     import urllib.request as _req
@@ -26,9 +28,19 @@ POOL_URL = 'https://povil-subs-pool.moran200333.workers.dev'
 _UA = 'KodiPOVIL-AISubs/he-match'
 _ADDON_ID = 'service.subtitles.kodipovilai'
 
-_CACHE = {}            # media_key -> (ts, [release names])
+_CACHE = {}            # media_key -> (ts, [pool+wizdom release names])
 _TTL = 300.0           # seconds; POV's interpreter persists so this survives
 _TIMEOUT = 2.5
+
+# Engine (Ktuvit/...) availability is filled by a background RunScript into a
+# shared cache file; we read it cheaply on every call so the badge fills in on
+# the next source-window open without ever blocking POV.
+_ENGINE_CACHE_FILE = (
+    'special://profile/addon_data/service.subtitles.kodipovilai/'
+    'he_avail_cache.json')
+_ENGINE_TTL = 7 * 24 * 3600.0   # 7 days; Ktuvit availability changes slowly
+_FIRED = {}            # media_key -> last warm-fire ts (throttle re-fires)
+_FIRE_RETRY = 120.0    # re-fire a warm at most once every 2 min per title
 
 
 def _enabled():
@@ -125,10 +137,79 @@ def _wizdom_release_names(p):
         return []
 
 
+def _engine_cache_path():
+    try:
+        import xbmcvfs
+        return xbmcvfs.translatePath(_ENGINE_CACHE_FILE)
+    except Exception:
+        return ''
+
+
+def _engine_cached_names(key):
+    """Hebrew release names the MoranSubs engine (Ktuvit) found for this media,
+    or None when it has not been warmed yet / is stale -- the caller then fires
+    a background warm. Pure file read; never networks."""
+    try:
+        path = _engine_cache_path()
+        if not path or not os.path.isfile(path):
+            return None
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f) or {}
+        ent = data.get(key)
+        if not ent:
+            return None
+        if (time.time() - float(ent.get('ts', 0))) > _ENGINE_TTL:
+            return None
+        return [n for n in (ent.get('names') or []) if n]
+    except Exception:
+        return None
+
+
+def _meta_str(meta, keys):
+    for k in keys:
+        v = meta.get(k)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return ''
+
+
+def _fire_engine_warm(key, p, meta):
+    """Fire-and-forget RunScript so MoranSubs runs Ktuvit for this title in its
+    own context and writes the result to the shared cache. Throttled per title
+    so reopening the source window doesn't spam it. Non-blocking."""
+    try:
+        import xbmc
+        now = time.time()
+        if (now - _FIRED.get(key, 0)) < _FIRE_RETRY:
+            return
+        _FIRED[key] = now
+        payload = {
+            'mk': key,
+            'imdb': p.get('imdb', ''),
+            'tmdb': p.get('tmdb', ''),
+            'type': p.get('type', 'movie'),
+            'season': p.get('season', '0'),
+            'episode': p.get('episode', '0'),
+            'title': _meta_str(meta, ('title', 'originaltitle',
+                                      'OriginalTitle', 'label', 'name')),
+            'tvshow': _meta_str(meta, ('tvshowtitle', 'showtitle',
+                                       'TVShowTitle')),
+            'year': str((meta.get('year') if meta else '') or ''),
+        }
+        blob = base64.b64encode(
+            json.dumps(payload).encode('utf-8')).decode('ascii')
+        xbmc.executebuiltin(
+            'RunScript(service.subtitles.kodipovilai,'
+            'action=he_avail,data={0})'.format(blob))
+    except Exception:
+        pass
+
+
 def release_names(meta):
     """Return the release names of Hebrew subtitles available for this media,
-    from the community pool AND Wizdom's open API. Cached per media. [] when
-    disabled / unknown / on error -- so the caller shows no match prefix."""
+    from the community pool + Wizdom (synchronous) AND the MoranSubs engine /
+    Ktuvit (background-warmed, read from a shared cache). Cached per media. []
+    when disabled / unknown / on error -- so the caller shows no prefix."""
     try:
         if not _enabled() or _req is None:
             return []
@@ -136,19 +217,34 @@ def release_names(meta):
         if not p:
             return []
         key = _media_key(p)
-        hit = _CACHE.get(key)
         now = time.time()
+        # Pool + Wizdom: networked, so cache in-memory for 5 min.
+        hit = _CACHE.get(key)
         if hit and (now - hit[0]) < _TTL:
-            return hit[1]
-        names = []
-        seen = set()
-        for src in (_pool_release_names, _wizdom_release_names):
-            for rel in src(p):
-                low = rel.lower()
-                if low not in seen:
-                    seen.add(low)
-                    names.append(rel)
-        _CACHE[key] = (now, names)
+            pw = hit[1]
+        else:
+            pw = []
+            seen0 = set()
+            for src in (_pool_release_names, _wizdom_release_names):
+                for rel in src(p):
+                    low = rel.lower()
+                    if low not in seen0:
+                        seen0.add(low)
+                        pw.append(rel)
+            _CACHE[key] = (now, pw)
+        # Engine (Ktuvit): cheap disk read every call; warm in the background
+        # when missing so the badge fills in on the next open (never blocks).
+        eng = _engine_cached_names(key)
+        if eng is None:
+            _fire_engine_warm(key, p, meta)
+            eng = []
+        names = list(pw)
+        seen = set(n.lower() for n in names)
+        for rel in eng:
+            low = (rel or '').lower()
+            if low and low not in seen:
+                seen.add(low)
+                names.append(rel)
         return names
     except Exception:
         return []
