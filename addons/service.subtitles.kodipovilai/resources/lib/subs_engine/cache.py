@@ -31,7 +31,7 @@ try:
 except:
     pass
 
-KODI_VERSION = int(xbmc.getInfoLabel("System.BuildVersion").split('.', 1)[0])
+KODI_VERSION = int((xbmc.getInfoLabel("System.BuildVersion") or '21').split('.', 1)[0] or 21)
 if KODI_VERSION<=18:
     xbmc_tranlate_path=xbmc.translatePath
 else:
