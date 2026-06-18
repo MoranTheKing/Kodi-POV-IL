@@ -1,3 +1,8 @@
+v0.2.187
+- Source-screen Hebrew match %: now also queries Wizdom's open API (not just
+  the community pool), so the "HEB NN%" badge under each source appears for
+  most titles that have Hebrew subtitles, not only ones already in the pool.
+
 v0.2.186
 - Built-in sources engine, parity pass 2: (1) sync % is now accurate -- it
   uses POV's captured release name (the same one DarkSubs uses), so a good
