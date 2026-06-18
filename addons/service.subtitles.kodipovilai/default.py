@@ -136,6 +136,13 @@ def _handle_download(handle, params):
     link = params.get('link', '')
     info = kodi_utils.current_video_info()
 
+    # Remember this as the currently-applied subtitle so the picker marks it
+    # '» נוכחית' next time it opens.
+    try:
+        kodi_utils.set_current_subtitle(link)
+    except Exception:
+        pass
+
     # Opt-in fast path for the NATIVE Kodi subtitle picker. Mirrors
     # the DarkSubs fast_first_chunk flow in _handle_translate_file:
     # deliver the English source to Kodi immediately and continue
