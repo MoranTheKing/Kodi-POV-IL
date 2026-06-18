@@ -1,3 +1,10 @@
+v0.2.191
+- Built-in engine: when the engine is ON (DarkSubs disabled), we no longer
+  patch or reload DarkSubs at all. Its reload cycle was re-enabling DarkSubs
+  and running its code while disabled, which logged
+  "Unknown addon id 'service.subtitles.All_Subs'". Users with the engine OFF
+  are unaffected -- DarkSubs stays enabled and patched as before.
+
 v0.2.190
 - Built-in engine: (1) picking an English result now offers one-step AI
   Hebrew translation again ("תרגום AI לעברית (מ-...)" above the raw English);
