@@ -401,3 +401,7 @@ msgstr "Google Translate (בסיסי, ללא מגדר)"
 msgctxt "#32524"
 msgid "No translation (source language only)"
 msgstr "ללא תרגום (שפת המקור בלבד)"
+
+msgctxt "#32525"
+msgid "Test the built-in engine (diagnostic)"
+msgstr "בדיקת מנוע המקורות המובנה (אבחון)"

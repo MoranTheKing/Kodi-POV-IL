@@ -1,3 +1,10 @@
+v0.2.183
+- Built-in sources engine: added a "Test the built-in engine (diagnostic)"
+  button that reports, per provider, how many results came back (or the exact
+  error) for the currently-playing video, plus the Hebrew candidates that
+  would be shown. Engine search failures now surface as a notification instead
+  of silently showing nothing.
+
 v0.2.182
 - Built-in sources engine fixes: it now actually returns the human Hebrew
   sources (Ktuvit, Wizdom, OpenSubtitles, etc.) when enabled -- a stray
