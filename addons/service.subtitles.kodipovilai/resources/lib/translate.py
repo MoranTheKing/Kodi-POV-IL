@@ -57,6 +57,27 @@ def _enabled_sources():
             if kodi_utils.get_bool(key, code in ('en', 'es'))]
 
 
+def _looks_like_token(s):
+    """True if a string is a debrid URL / token / bare UUID rather than a real
+    subtitle release name (used to hide garbage pool 'release' names)."""
+    import re as _re
+    s = (s or '').strip()
+    if not s:
+        return False
+    low = s.lower()
+    if 'token=' in low or '://' in low or '?' in low or '&' in low:
+        return True
+    # bare UUID, e.g. 499157df-d49d-4c1b-96f9-920866a2354a
+    if _re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-'
+                     r'[0-9a-f]{4}-[0-9a-f]{12}', low):
+        return True
+    # long hex blob with no spaces/dots (a hash, not a release name)
+    if (len(s) >= 24 and '.' not in s and ' ' not in s
+            and _re.fullmatch(r'[0-9a-f-]+', low)):
+        return True
+    return False
+
+
 def _match_pct(video_name, sub_name):
     """Release-name match %, same idea as the engine's sort_subtitles
     (token-list similarity). Used to show a sync % on community-pool
@@ -295,6 +316,11 @@ def list_candidates(info, modal_progress=True):
         for v in pool.lookup(info):
             have_hebrew = True
             release = (v.get('release') or '').strip()
+            # Some older pool entries were shared with a debrid URL / token as
+            # their "release" (a stream path, not a real release name). Don't
+            # show that garbage -- treat it as no name.
+            if release and _looks_like_token(release):
+                release = ''
             pct = _match_pct(video_ref, release) if release else 0
             # Only show a % when we actually have a meaningful match (a 0%
             # almost always means we couldn't read the video's release name,
