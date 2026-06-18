@@ -174,6 +174,13 @@ def search(info):
     except Exception as e:
         kodi_utils.log('subs_engine_bridge.search failed: {0}'.format(e),
                        level='WARNING')
+        # The engine is experimental and the user explicitly turned it on,
+        # so make a failure visible instead of silently showing nothing.
+        try:
+            kodi_utils.notify('מנוע מקורות: שגיאה — {0}'.format(
+                str(e)[:80]), time_ms=5000)
+        except Exception:
+            pass
         return []
 
 
