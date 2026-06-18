@@ -1,3 +1,11 @@
+v0.2.184
+- Built-in sources engine now actually loads and searches. The hidden engine
+  settings weren't getting their defaults (Kodi doesn't apply a default to a
+  hidden label setting), so the engine crashed on int('') at import and read
+  every language flag as empty. Defaults are now written in code before the
+  engine loads, and the engine's int() reads are empty-safe. With the engine
+  on, Ktuvit/Wizdom/OpenSubtitles/etc. Hebrew results now appear in MoranSubs.
+
 v0.2.183
 - Built-in sources engine: added a "Test the built-in engine (diagnostic)"
   button that reports, per provider, how many results came back (or the exact

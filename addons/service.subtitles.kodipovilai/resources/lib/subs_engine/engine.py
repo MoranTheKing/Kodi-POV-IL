@@ -330,7 +330,7 @@ def c_get_subtitles(video_data, all_lang_override=False):
     start_time = time.time()
     num_live=0
     break_all=False
-    ExcludeTime = int((Addon.getSetting('max_search_time')))
+    ExcludeTime = int(Addon.getSetting('max_search_time') or 10)
     
 
     while 1:
@@ -969,7 +969,7 @@ def download_sub(source,download_data,MySubFolder,language,filename):
     source_dir = os.path.join(addonPath, 'resources', 'sources')
     sys.path.append(source_dir)
     impmodule = __import__(source)
-    max_sub_cache=int(Addon.getSetting("subtitle_trans_cache"))
+    max_sub_cache=int(Addon.getSetting("subtitle_trans_cache") or 15)
     f_count=0
     for filename_o in os.listdir(CachedSubFolder):
         

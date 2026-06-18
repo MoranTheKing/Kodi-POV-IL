@@ -36,6 +36,51 @@ def enabled():
         return False
 
 
+# Defaults for the engine's internal settings. These are declared in
+# settings.xml as hidden label-control entries (so they don't render as
+# stray toggles), but Kodi does NOT auto-apply a <default> to a label
+# control -- getSetting() comes back ''. The engine then crashes on
+# int('') at import and, even past that, reads every language flag as ''
+# (== 'true' is False) so Hebrew search is silently disabled. So we write
+# these values ourselves before the engine is ever imported. Only keys
+# with a non-empty intended default are listed (empty-default keys like
+# other_lang / the OS_* credentials are correct as '').
+_ENGINE_DEFAULTS = {
+    'language_hebrew': 'true',
+    'language_english': 'true',
+    'language_russian': 'false',
+    'language_arab': 'false',
+    'all_lang': 'false',
+    'retry_search_with_all_langs': 'false',
+    'auto_translate': 'false',
+    'translate_p': '0',
+    'max_search_time': '10',
+    'subtitle_trans_cache': '15',
+    'enable_autosub_notifications': 'true',
+    'auto_fix_sub_punctuation': 'true',
+    'auto_remove_hi_tags': 'false',
+    'show_debug': 'false',
+}
+
+
+def ensure_engine_settings():
+    """Populate any engine internal setting that is still empty with its
+    intended default. MUST run before the engine is imported (general.py
+    reads max_search_time at module load). Idempotent and cheap."""
+    try:
+        import xbmcaddon
+        addon = xbmcaddon.Addon('service.subtitles.kodipovilai')
+    except Exception:
+        return
+    for k, v in _ENGINE_DEFAULTS.items():
+        try:
+            if (addon.getSetting(k) or '') == '':
+                addon.setSetting(k, v)
+        except Exception:
+            pass
+
+
+
 # ---- video_data construction ---------------------------------------
 
 def build_video_data(info):
@@ -185,6 +230,10 @@ def search(info):
 
 
 def _search_inner(info):
+    # Make sure the engine's internal settings have real values before the
+    # engine module (and general.py) is imported -- otherwise int('') / empty
+    # language flags break it. Safe to call every time.
+    ensure_engine_settings()
     from resources.lib.subs_engine import engine
 
     video_data = build_video_data(info)

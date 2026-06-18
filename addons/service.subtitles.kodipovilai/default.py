@@ -2126,6 +2126,13 @@ def _handle_engine_test(_params):
         lines.append('')
         lines.append('אין מטא-דאטה מהנגן. הרץ בזמן שסרט/פרק מתנגן.')
 
+    # Populate the engine's internal settings before importing it (general.py
+    # reads max_search_time at module load -> would crash on '').
+    try:
+        subs_engine_bridge.ensure_engine_settings()
+    except Exception:
+        pass
+
     # Try to import the engine -- the single most likely failure point.
     engine = None
     try:
