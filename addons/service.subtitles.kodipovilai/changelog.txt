@@ -1,3 +1,10 @@
+v0.2.190
+- Built-in engine: (1) picking an English result now offers one-step AI
+  Hebrew translation again ("תרגום AI לעברית (מ-...)" above the raw English);
+  (2) MoranSubs is set as the default subtitle service when the engine is on,
+  so it opens/searches first; (3) auto-on-play now waits for the video
+  metadata before searching, so the loading banner + auto-apply actually fire.
+
 v0.2.189
 - Phase C (built-in engine): when the engine is ON, DarkSubs is now disabled
   automatically so only MoranSubs runs -- no double search, no competing

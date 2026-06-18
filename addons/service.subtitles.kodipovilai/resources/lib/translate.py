@@ -288,6 +288,33 @@ def list_candidates(info, modal_progress=True):
         have_hebrew = True
         results.append(c)
 
+    # AI Hebrew translated from the engine's English results (one-step, like
+    # the old DarkSubs auto-translate). Offered ABOVE the raw English so a
+    # user who wants Hebrew picks this; raw English stays available below.
+    if engine_other:
+        ai_added = 0
+        for c in engine_other:
+            if c.get('language') != 'en':
+                continue
+            src = _decode_link(c.get('link') or '')
+            if not src or src.get('type') != 'engine':
+                continue
+            src = dict(src)
+            src['type'] = 'engine_ai'
+            src['src_lang'] = 'en'
+            rel = src.get('filename') or 'אנגלית'
+            results.append({
+                'filename': 'תרגום AI לעברית (מ-{0})'.format(rel),
+                'language': 'he',
+                'link': _encode_link(src),
+                'sync': 'false', 'rating': '4',
+                'is_hi': False, 'is_hd': False,
+            })
+            have_hebrew = True
+            ai_added += 1
+            if ai_added >= 3:  # cap to avoid clutter
+                break
+
     # Other languages from the engine (English, etc.) -- shown for parity
     # with DarkSubs (raw, not translated). They do NOT count as Hebrew, but
     # we surface them even when Hebrew exists so MoranSubs is a full stand-in.
@@ -583,6 +610,28 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             return path
         kodi_utils.notify('לא ניתן היה להוריד את הכתובית', time_ms=4000)
         return None
+
+    if kind == 'engine_ai':
+        # User picked "AI Hebrew (translate from English)" sourced from the
+        # built-in engine. Download the English sub via the engine, then fall
+        # through to the normal AI pipeline below to translate it to Hebrew.
+        try:
+            from . import subs_engine_bridge
+            eng_path = subs_engine_bridge.download(payload)
+        except Exception as e:
+            kodi_utils.log('resolve engine_ai download failed: {0}'
+                           .format(e), level='ERROR')
+            eng_path = None
+        if not eng_path or not os.path.isfile(eng_path):
+            kodi_utils.notify('AI: לא ניתן היה להוריד את כתובית המקור',
+                              time_ms=4000)
+            return None
+        kodi_utils.notify('AI: מוריד אנגלית ומתרגם לעברית...', time_ms=3000)
+        payload = {'type': 'ai',
+                   'source_lang': payload.get('src_lang') or 'en',
+                   'local_path': eng_path}
+        kind = 'ai'
+        # fall through to the AI logic below
 
     if kind != 'ai':
         kodi_utils.log('resolve: unknown kind ' + str(kind),
