@@ -1,3 +1,12 @@
+v0.2.186
+- Built-in sources engine, parity pass 2: (1) sync % is now accurate -- it
+  uses POV's captured release name (the same one DarkSubs uses), so a good
+  match shows ~92% even on debrid streams whose URL is a token; (2) embedded
+  Hebrew detection now waits for the demuxer to expose streams (they aren't
+  ready the instant playback starts), so "תרגום מובנה בעברית · 101%" actually
+  appears; (3) results are cached per title for 6h so re-opening the subtitle
+  list is instant; (4) the engine is pre-warmed in the background on startup.
+
 v0.2.185
 - Built-in sources engine, parity pass: (1) sync % is now correct -- it
   matches against the release name from the Tagline like DarkSubs does, so a
