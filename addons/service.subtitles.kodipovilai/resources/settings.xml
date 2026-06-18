@@ -500,6 +500,9 @@
         <setting id="OSpass" type="string" label="30000" visible="false">
           <level>3</level><default></default><control type="label" format="string"/>
         </setting>
+        <setting id="_engine_defaults_v" type="string" label="30000" visible="false">
+          <level>3</level><default></default><control type="label" format="string"/>
+        </setting>
       </group>
     </category>
 
