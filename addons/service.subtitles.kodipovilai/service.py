@@ -2358,6 +2358,22 @@ def _maybe_default_remember_source():
             pass
 
 
+def _maybe_disable_ktuvit():
+    """Temporarily force the Ktuvit source OFF for everyone (Ktuvit has a
+    current server-side problem). One-shot, marker-gated, so a user who turns it
+    back on keeps it on. To re-enable for everyone later, flip the settings.xml
+    default back to true and bump this marker version."""
+    try:
+        from resources.lib import kodi_utils
+        if kodi_utils.get_setting('_ktuvit_off_v1', '') == '1':
+            return
+        kodi_utils.set_setting('ktuvit', 'false')
+        kodi_utils.set_setting('_ktuvit_off_v1', '1')
+        kodi_utils.log('Ktuvit source disabled (temporary, v1)', level='INFO')
+    except Exception:
+        pass
+
+
 def _maybe_default_builtin_engine():
     """One-shot rollout: move EVERYONE from DarkSubs to MoranSubs's own built-in
     engine. Turns use_builtin_engine ON exactly once (and seeds engine_autosub
@@ -2693,6 +2709,9 @@ def main():
     # the engine on, DarkSubs is disabled THIS startup. A later manual opt-out
     # sticks (marker prevents re-forcing).
     _maybe_default_builtin_engine()
+
+    # Ktuvit is temporarily disabled (server-side problem). One-shot.
+    _maybe_disable_ktuvit()
 
     # Recover DarkSubs first if a previous reload cycle left it disabled after
     # a quick update -- otherwise no subtitles and no AI translation fire at

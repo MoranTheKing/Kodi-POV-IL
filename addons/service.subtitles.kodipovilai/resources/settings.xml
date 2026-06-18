@@ -438,7 +438,7 @@
       <group id="engine_sources" label="32510"> <!-- Search sources -->
         <setting id="ktuvit" type="boolean" label="32511">
           <level>0</level>
-          <default>true</default>
+          <default>false</default>
           <dependencies>
             <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
           </dependencies>
