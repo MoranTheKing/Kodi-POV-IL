@@ -658,14 +658,31 @@ def _looks_like_subtitle(path):
 
 
 def select_embedded(stream_index):
-    """Switch Kodi to an embedded subtitle stream by index. Returns True
-    on success. Used for the embedded-Hebrew pick (no file to deliver)."""
+    """Switch Kodi to the embedded HEBREW subtitle stream. We RE-FIND the Hebrew
+    stream right now rather than trusting the index captured when the dialog
+    opened: by download time the stream list can have shifted (Kodi/our own
+    external subs got added), so a stale index points at the wrong stream and
+    "shows nothing". Mirrors DarkSubs's get_embedded_sub_index(subs,'heb') at
+    apply time. Falls back to the captured index if no Hebrew stream is found."""
     try:
         import xbmc
-        idx = int(stream_index)
         p = xbmc.Player()
-        p.setSubtitleStream(idx)
+        try:
+            streams = p.getAvailableSubtitleStreams() or []
+        except Exception:
+            streams = []
+        target = None
+        for i, name in enumerate(streams):
+            n = (name or '').strip().lower()
+            if n in ('he', 'heb', 'iw', 'hebrew', 'עברית') or 'hebrew' in n:
+                target = i
+                break
+        if target is None:
+            target = int(stream_index)
+        p.setSubtitleStream(target)
         p.showSubtitles(True)
+        kodi_utils.log('subs_engine_bridge.select_embedded: set stream {0}'
+                       .format(target), level='INFO')
         return True
     except Exception as e:
         kodi_utils.log('subs_engine_bridge.select_embedded failed: {0}'
