@@ -425,3 +425,15 @@ msgstr "Auto-search and apply Hebrew on play"
 msgctxt "#32527"
 msgid "When a video starts, automatically search and apply the best Hebrew subtitle (like DarkSubs). Requires the built-in engine."
 msgstr "When a video starts, automatically search and apply the best Hebrew subtitle (like DarkSubs). Requires the built-in engine."
+
+msgctxt "#32528"
+msgid "Connect Telegram (more Hebrew subtitles)"
+msgstr "Connect Telegram (more Hebrew subtitles)"
+
+msgctxt "#32529"
+msgid "Disconnect Telegram"
+msgstr "Disconnect Telegram"
+
+msgctxt "#32530"
+msgid "Log in to Telegram once (phone + code) to search the community subtitle channel for Hebrew subs. Requires the built-in engine."
+msgstr "Log in to Telegram once (phone + code) to search the community subtitle channel for Hebrew subs. Requires the built-in engine."
