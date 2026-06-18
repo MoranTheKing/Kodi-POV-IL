@@ -247,53 +247,79 @@ def clean_log(content):
 
 
 def post_log(data, name):
-    """Upload the given log contents to paste.ubuntu.com and return
-    (success, url_or_error_msg).
+    """Upload the given log contents and return (success, url_or_error_msg).
 
-    Was implemented with urllib's FancyURLopener subclass. Rewritten
-    to use `requests.post()` because FancyURLopener was removed in
-    Python 3.14 (the previous try/except urllib import fallback was
-    crashing the whole wizard at module load on Arch Linux). The
-    requests library is already a wizard dependency
-    (script.module.requests, declared in addon.xml), so no new
-    runtime requirement."""
+    paste.ubuntu.com stopped accepting anonymous automated posts (the old
+    code returned 'pov:error' / 'failed to connect'), so we now try a chain
+    of reliable paste services and use the first that works:
+      1. paste.kodi.tv  -- the official Kodi log paste (Hastebin API)
+      2. 0x0.st         -- plain file upload, returns a bare URL
+      3. dpaste.com     -- simple form API
+    The requests library is already a wizard dependency."""
     try:
         import requests
     except ImportError as e:
         msg = 'requests module unavailable: {0}'.format(e)
         log(msg, level=xbmc.LOGERROR)
         return False, msg
-    params = {
-        'poster':     CONFIG.BUILDERNAME,
-        'content':    data,
-        'syntax':     'text',
-        'expiration': 'week',
-    }
+
+    # Keep the most-recent ~600 KB: Hastebin caps document size, and the tail
+    # of the log is where the actual error is. Logs only grow at the end.
+    try:
+        if isinstance(data, str) and len(data) > 600000:
+            data = data[-600000:]
+    except Exception:
+        pass
+
     headers = {
         'User-Agent': '{0}: {1}'.format(
             CONFIG.ADDON_ID, CONFIG.ADDON_VERSION),
     }
-    try:
-        # paste.ubuntu.com responds with a 30x redirect to the
-        # paste's permalink. `requests` follows it by default and
-        # exposes the final URL via Response.url.
-        response = requests.post(URL, data=params, headers=headers,
-                                 timeout=30)
-    except Exception as e:
-        a = 'failed to connect to the server'
-        log("{0}: {1}".format(a, str(e)), level=xbmc.LOGERROR)
-        return False, a
+    payload = data.encode('utf-8', 'replace') if isinstance(data, str) else data
 
+    # 1) paste.kodi.tv (Hastebin) -- the canonical place for Kodi logs.
     try:
-        page_url = (response.url or '').strip()
-        if not page_url:
-            raise ValueError('no url in response')
-        log("URL for {0}: {1}".format(name, page_url))
-        return True, page_url
+        r = requests.post('https://paste.kodi.tv/documents',
+                          data=payload, headers=headers, timeout=30)
+        if r.status_code == 200:
+            key = (r.json() or {}).get('key')
+            if key:
+                url = 'https://paste.kodi.tv/{0}'.format(key)
+                log("URL for {0}: {1}".format(name, url))
+                return True, url
+        log('paste.kodi.tv returned {0}'.format(r.status_code),
+            level=xbmc.LOGWARNING)
     except Exception as e:
-        a = 'unable to retrieve the paste url'
-        log("{0}: {1}".format(a, str(e)), level=xbmc.LOGERROR)
-        return False, a
+        log('paste.kodi.tv failed: {0}'.format(e), level=xbmc.LOGWARNING)
+
+    # 2) 0x0.st -- multipart file upload, replies with a bare URL.
+    try:
+        files = {'file': (name or 'kodi.log', payload, 'text/plain')}
+        r = requests.post('https://0x0.st', files=files,
+                          headers=headers, timeout=30)
+        body = (r.text or '').strip()
+        if r.status_code == 200 and body.startswith('http'):
+            log("URL for {0}: {1}".format(name, body))
+            return True, body
+        log('0x0.st returned {0}'.format(r.status_code), level=xbmc.LOGWARNING)
+    except Exception as e:
+        log('0x0.st failed: {0}'.format(e), level=xbmc.LOGWARNING)
+
+    # 3) dpaste.com -- simple form API, returns the paste URL as plain text.
+    try:
+        r = requests.post('https://dpaste.com/api/v2/',
+                          data={'content': data, 'syntax': 'text',
+                                'expiry_days': 7},
+                          headers=headers, timeout=30)
+        body = (r.text or '').strip()
+        if r.status_code in (200, 201) and body.startswith('http'):
+            log("URL for {0}: {1}".format(name, body))
+            return True, body
+        log('dpaste returned {0}'.format(r.status_code), level=xbmc.LOGWARNING)
+    except Exception as e:
+        log('dpaste failed: {0}'.format(e), level=xbmc.LOGWARNING)
+
+    return False, 'all paste services failed (check the internet connection)'
 
 
 # CURRENTLY NOT IN USE
