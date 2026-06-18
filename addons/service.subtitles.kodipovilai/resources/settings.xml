@@ -366,6 +366,34 @@
           </dependencies>
           <control type="toggle"/>
         </setting>
+        <setting id="connect_telegram" type="action" label="32528" help="32530">
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+          </dependencies>
+          <control type="button" format="action">
+            <heading>32528</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=connect_telegram)</data>
+        </setting>
+        <setting id="logout_telegram" type="action" label="32529">
+          <level>0</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+          </dependencies>
+          <control type="button" format="action">
+            <heading>32529</heading>
+          </control>
+          <data>RunScript(service.subtitles.kodipovilai,action=logout_telegram)</data>
+        </setting>
       </group>
       <group id="engine_sources" label="32510"> <!-- Search sources -->
         <setting id="ktuvit" type="boolean" label="32511">

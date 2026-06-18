@@ -1,3 +1,10 @@
+v0.2.198
+- Telegram subtitle source (Phase B3): the built-in engine can now search the
+  community Telegram channel for Hebrew subs, like DarkSubs did. One-time
+  login via Settings -> Built-in sources engine -> "Connect Telegram"
+  (phone + code). Loaded lazily and fully guarded, so it never affects the
+  rest of the engine; only active after you connect.
+
 v0.2.197
 - Picking "AI translate to Hebrew" now closes the subtitle dialog right away
   and translates in the background (the source subtitle shows immediately and
