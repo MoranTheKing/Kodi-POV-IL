@@ -1,3 +1,8 @@
+v0.2.188
+- Built-in sources engine now shows the same live per-source loading
+  progress dialog DarkSubs shows while it searches (via the "Download
+  Subtitles" flow). Cancellable.
+
 v0.2.187
 - Source-screen Hebrew match %: now also queries Wizdom's open API (not just
   the community pool), so the "HEB NN%" badge under each source appears for
