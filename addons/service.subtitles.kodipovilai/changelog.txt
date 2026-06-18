@@ -1,3 +1,6 @@
+v0.2.218
+- Reverted the Ktuvit account back to the previous shared one.
+
 v0.2.217
 - Auto-subtitle on play now really falls through: if the best Hebrew source
   fails (e.g. Ktuvit "refused/rate-limited"), it skips the rest of THAT source
