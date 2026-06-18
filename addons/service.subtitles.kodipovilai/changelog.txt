@@ -1,3 +1,15 @@
+v0.2.210
+- FIX: Hebrew subtitle downloads from Ktuvit failed with "the received file is
+  not a valid subtitle". Ktuvit answers the first download polls with a "request
+  not found, try again" message until the file is ready; the server changed the
+  wording of that message, so our poll loop no longer recognised it and gave up
+  after one try, writing the error text out as the "subtitle". The poll now
+  matches the stable part of the message and bails cleanly if it never succeeds.
+- FIX: the source-select screen took several seconds to appear. The Ktuvit
+  match-% lookup was waiting (blocking) for its result on the first open of a
+  title; it now runs fully in the background again, so the source list is
+  instant and the % badge fills in on the next render.
+
 v0.2.209
 - Engine download robustness: the download path now seeds the engine's
   internal settings itself (a download can be the first engine call after a
