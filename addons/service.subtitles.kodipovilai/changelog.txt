@@ -1,3 +1,11 @@
+v0.2.206
+- The Ktuvit "HEB NN%" badge now shows on the FIRST time you open a title's
+  source list, not only the next time. On a title that isn't cached yet the
+  source window waits briefly (bounded, max ~8s) for the background Ktuvit
+  lookup to finish so the % is there on this open; after that it's cached for
+  7 days and reads instantly with no wait. The wait aborts at once if Kodi is
+  closing.
+
 v0.2.205
 - Source-screen "HEB NN%" badge now also covers Ktuvit (the largest Hebrew
   source), not just the community pool + Wizdom -- so titles whose Hebrew subs
