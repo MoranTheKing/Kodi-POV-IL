@@ -417,3 +417,11 @@ msgstr "No translation (source language only)"
 msgctxt "#32525"
 msgid "Test the built-in engine (diagnostic)"
 msgstr "Test the built-in engine (diagnostic)"
+
+msgctxt "#32526"
+msgid "Auto-search and apply Hebrew on play"
+msgstr "Auto-search and apply Hebrew on play"
+
+msgctxt "#32527"
+msgid "When a video starts, automatically search and apply the best Hebrew subtitle (like DarkSubs). Requires the built-in engine."
+msgstr "When a video starts, automatically search and apply the best Hebrew subtitle (like DarkSubs). Requires the built-in engine."
