@@ -2566,49 +2566,37 @@ def main():
     # guarantees a valid default without reverting manual choices on update.
     _maybe_default_fentastic_player()
 
-    # Self-healing DarkSubs hook injection. Runs every startup so
-    # if upstream DarkSubs updates and overwrites our hook, it
-    # comes back automatically on next Kodi launch.
-    _maybe_patch_darksubs()
-
-    # Companion patch: extends download_sub's elif so the hook above
-    # ALSO gets a chance to run when DarkSubs's auto_translate
-    # setting is OFF (user manually picks a non-Hebrew sub). Without
-    # this, the v3 hook only ever fires when auto_translate=true.
-    _maybe_patch_darksubs_download_sub()
-
-    # OpenSubtitles provider/key-list fix. Runs for standalone AI-addon
-    # installs too, but touches only DarkSubs's OpenSubtitles source file
-    # and local key fallback.
-    _maybe_patch_darksubs_opensubtitles()
-
-    # Push embedded ('[LOC]') subtitle entries to the bottom of their
-    # language group. They carry a hard-coded 101% sync that otherwise
-    # floats them to the top, and they can't be AI-translated (DarkSubs
-    # short-circuits embedded picks before our hook runs) -- so we want
-    # the external, translatable English source to be the first pick.
-    _maybe_patch_darksubs_embedded_demote()
-    # ROOT-CAUSE fix: autosub.py inserts embedded English right after the
-    # Hebrew group (above real English). Make it insert at the end.
-    _maybe_patch_darksubs_embedded_insert()
-    # Belt-and-braces: also demote at the picker dialog itself, the last
-    # point before display, so embedded English can't slip back to the
-    # top regardless of engine ordering.
-    _maybe_patch_darksubs_subwindow_demote()
-
-    # Now that the hook injection has had its shot, run a structural
-    # check end-to-end and pop a toast if something is broken (e.g.
-    # DarkSubs signature changed, engine.py not writable on CoreELEC,
-    # API key missing). Without this, hook failures cascade silently
-    # into "AI subs not working" with no signal to the user. Only
-    # toasts once per failure-class. Skipped when the built-in engine is
-    # on (DarkSubs is intentionally disabled then -- no false alarm).
+    # When the built-in engine is ON, DarkSubs is intentionally DISABLED
+    # (Phase C). In that case we must NOT touch DarkSubs at all: patching it
+    # and its reload cycle (disable+enable) would re-enable it -- fighting the
+    # disable -- and run its code while disabled, which throws
+    # "Unknown addon id 'service.subtitles.All_Subs'". So the entire DarkSubs
+    # integration block is skipped when the engine is on. (Existing users with
+    # the engine OFF are unaffected: DarkSubs stays enabled + patched as before.)
     try:
         from resources.lib import kodi_utils as _ku
         _engine_on = _ku.get_bool('use_builtin_engine', False)
     except Exception:
         _engine_on = False
+
     if not _engine_on:
+        # Self-healing DarkSubs hook injection. Runs every startup so
+        # if upstream DarkSubs updates and overwrites our hook, it
+        # comes back automatically on next Kodi launch.
+        _maybe_patch_darksubs()
+        # Companion patch: extends download_sub's elif so the hook above
+        # ALSO gets a chance to run when DarkSubs's auto_translate
+        # setting is OFF (user manually picks a non-Hebrew sub).
+        _maybe_patch_darksubs_download_sub()
+        # OpenSubtitles provider/key-list fix (DarkSubs's OS source file).
+        _maybe_patch_darksubs_opensubtitles()
+        # Push embedded ('[LOC]') subtitle entries to the bottom of their
+        # language group so the external, translatable English source is the
+        # first pick.
+        _maybe_patch_darksubs_embedded_demote()
+        _maybe_patch_darksubs_embedded_insert()
+        _maybe_patch_darksubs_subwindow_demote()
+        # Structural health check + toast if the hook is broken.
         _maybe_surface_darksubs_status()
 
     # Stash POV's picked release name (from the source-select dialog)
@@ -2635,10 +2623,9 @@ def main():
 
     # Self-healing DarkSubs get_playing_filename() patch. Prefers
     # the picked release name set by the pov_source_name_patcher
-    # above. Falls back to synthesising a release-name-style filename
-    # from VideoPlayer info-labels when no POV property is available
-    # AND the basename looks like an opaque hash (TorBox CDN behaviour).
-    _maybe_patch_darksubs_filename()
+    # above. (Skipped when the engine is on -- DarkSubs is disabled.)
+    if not _engine_on:
+        _maybe_patch_darksubs_filename()
 
     # Fix the subtitle-picker dialog HEADER (rendered by Kodi from
     # the skin's DialogSubtitles.xml) to prefer our subs.player_filename
@@ -2647,19 +2634,11 @@ def main():
     # shows the URL basename / UUID.
     _maybe_patch_skin_dialog_subtitles()
 
-    # Patch DarkSubs's custom picker XML so long release-name labels
-    # in each row marquee-scroll instead of getting clipped mid-wrap.
-    # (No-op when DarkSubs has no skins folder, which it doesn't on
-    # current builds -- the real fix for that case is the height
-    # patcher below.)
-    _maybe_patch_darksubs_picker_label()
-
-    # Bump DarkSubs's pyxbmct picker row height so wrapped release
-    # names display fully. (For the alternate flow where DarkSubs's
-    # standalone MySubs dialog is opened directly. Most users won't
-    # see this dialog -- it's a Python-built pyxbmct.List inside
-    # DarkSubs's sub_window.py.)
-    _maybe_patch_darksubs_picker_height()
+    # Patch DarkSubs's custom picker XML (label marquee + row height).
+    # Skipped when the engine is on -- DarkSubs is disabled.
+    if not _engine_on:
+        _maybe_patch_darksubs_picker_label()
+        _maybe_patch_darksubs_picker_height()
 
     # The picker users actually see when they hit "Choose subtitles"
     # is Kodi's NATIVE DialogSubtitles, rendered by the active skin
@@ -2702,11 +2681,15 @@ def main():
     # enable) so it re-imports the patched source -- otherwise the
     # embedded-subtitle ordering (and every other DarkSubs source patch)
     # stays stale for the whole session.
-    try:
-        from resources.lib import darksubs_reload
-        darksubs_reload.reload_if_patched()
-    except Exception:
-        pass
+    # Cycle DarkSubs (disable+enable) to re-import patched source -- ONLY when
+    # the engine is off. When the engine is on DarkSubs is deliberately
+    # disabled, and this cycle would re-enable it (and error while disabled).
+    if not _engine_on:
+        try:
+            from resources.lib import darksubs_reload
+            darksubs_reload.reload_if_patched()
+        except Exception:
+            pass
 
     # Same idea for POV: if we patched its sources.py and the user opted into
     # remember-source, cycle POV (deferred, idle-only) so it re-imports the
