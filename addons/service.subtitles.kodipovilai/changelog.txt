@@ -1,3 +1,10 @@
+v0.2.193
+- Built-in engine: (1) subtitle language is now taken from the provider's
+  ISO code so Kodi shows the right flag, with a [LANG] tag in the label so
+  you always know the language; common bad codes fixed (gr->el, sp->es).
+  (2) Picking "AI Hebrew (translate from English)" now forces the AI
+  translation through instead of returning the English source untranslated.
+
 v0.2.192
 - Built-in engine, full DarkSubs parity: (1) now searches ALL languages
   (all_lang on) so you get the same large multi-language result set DarkSubs
