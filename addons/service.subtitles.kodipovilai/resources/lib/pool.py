@@ -45,15 +45,36 @@ def share_enabled():
     return kodi_utils.get_bool('pool_share', False)
 
 
+def _is_token_like(s):
+    """A debrid URL / token / bare UUID is NOT a usable release name."""
+    import re as _re
+    s = (s or '').strip()
+    low = s.lower()
+    if not s:
+        return True
+    if 'token=' in low or '://' in low or '?' in low or '&' in low:
+        return True
+    if _re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-'
+                     r'[0-9a-f]{4}-[0-9a-f]{12}', low):
+        return True
+    if (len(s) >= 24 and '.' not in s and ' ' not in s
+            and _re.fullmatch(r'[0-9a-f-]+', low)):
+        return True
+    return False
+
+
 def _release_from(info):
-    rel = (info.get('release') or info.get('filename') or '').strip()
-    if rel:
-        return rel
+    # Prefer real release names; never share a debrid URL/token as the release
+    # (that's what produced the garbage "...?token=..." names in the pool).
+    for key in ('release', 'filename', 'picked_release', 'tagline', 'label'):
+        rel = (info.get(key) or '').strip()
+        if rel and not _is_token_like(rel):
+            return rel
     fp = info.get('filepath') or ''
     base = os.path.basename(fp)
     if '.' in base:
         base = base.rsplit('.', 1)[0]
-    return base
+    return '' if _is_token_like(base) else base
 
 
 def _params(info):
