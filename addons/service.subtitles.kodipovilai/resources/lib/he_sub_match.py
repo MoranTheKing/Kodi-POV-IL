@@ -41,12 +41,6 @@ _ENGINE_CACHE_FILE = (
 _ENGINE_TTL = 7 * 24 * 3600.0   # 7 days; Ktuvit availability changes slowly
 _FIRED = {}            # media_key -> last warm-fire ts (throttle re-fires)
 _FIRE_RETRY = 120.0    # re-fire a warm at most once every 2 min per title
-# On the FIRST open of a title we briefly wait for the background Ktuvit warm
-# to finish, so the badge shows on this open and not only the next one. Bounded
-# so the source window never hangs; after the first time the result is cached
-# (7 days) and reads instantly with no wait.
-_ENGINE_WAIT_MAX = 8.0
-_ENGINE_WAIT_STEP = 0.2
 
 
 def _enabled():
@@ -211,29 +205,6 @@ def _fire_engine_warm(key, p, meta):
         pass
 
 
-def _wait_for_engine(key):
-    """Briefly block (bounded) until the background Ktuvit warm writes this
-    title's result, so the badge appears on THIS open. Returns the names (maybe
-    empty) once written, or [] on timeout. Only ever waits the first time per
-    title -- afterwards _engine_cached_names hits the cache before we get here.
-    Aborts immediately if Kodi is shutting down."""
-    try:
-        import xbmc
-        mon = xbmc.Monitor()
-        waited = 0.0
-        while waited < _ENGINE_WAIT_MAX:
-            if mon.abortRequested():
-                break
-            xbmc.sleep(int(_ENGINE_WAIT_STEP * 1000))
-            waited += _ENGINE_WAIT_STEP
-            got = _engine_cached_names(key)
-            if got is not None:   # entry written (names may be empty)
-                return got
-    except Exception:
-        pass
-    return []
-
-
 def release_names(meta):
     """Return the release names of Hebrew subtitles available for this media,
     from the community pool + Wizdom (synchronous) AND the MoranSubs engine /
@@ -265,10 +236,12 @@ def release_names(meta):
         # when missing so the badge fills in on the next open (never blocks).
         eng = _engine_cached_names(key)
         if eng is None:
-            # Not warmed yet: fire the background Ktuvit lookup and wait briefly
-            # for it so the badge shows on THIS open (bounded; cached afterward).
+            # Not warmed yet: fire the background Ktuvit lookup and return NOW.
+            # We must NOT block here -- this runs inside POV's source-results
+            # build, so waiting froze the source list for several seconds. The
+            # badge fills in the next time the list renders (cheap cache read).
             _fire_engine_warm(key, p, meta)
-            eng = _wait_for_engine(key)
+            eng = []
         names = list(pw)
         seen = set(n.lower() for n in names)
         for rel in eng:
