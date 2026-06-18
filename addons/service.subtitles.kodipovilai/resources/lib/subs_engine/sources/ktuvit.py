@@ -349,8 +349,15 @@ def download(download_data,MySubFolder):
 
     log.warning(f"DEBUG | [KTUVIT] | download_data={download_data}")
     
-    # Get login cookie from Ktuvit
-    ktuvit_login_cookie = cache.get(login_to_ktuvit,1, table='subs')
+    # Get login cookie from Ktuvit. For the DOWNLOAD we log in FRESH (not the
+    # 1h cache the search uses): a stale/expired cached cookie makes Ktuvit
+    # answer "request not found" forever even though RequestSubtitleDownload
+    # returns an identifier. A fresh cookie rules that out. Fall back to the
+    # cached one if the fresh login somehow returns nothing.
+    try:
+        ktuvit_login_cookie = login_to_ktuvit() or cache.get(login_to_ktuvit, 1, table='subs')
+    except Exception:
+        ktuvit_login_cookie = cache.get(login_to_ktuvit, 1, table='subs')
     
     # Set up params from download_data
     Ktuvit_Page_ID = download_data['Ktuvit_Page_ID']
