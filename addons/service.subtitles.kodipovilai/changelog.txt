@@ -1,3 +1,9 @@
+v0.2.220
+- Fix: Ktuvit results kept showing after it was turned off, because search
+  results are cached for 6h and the old cache still contained Ktuvit. The
+  result cache key now includes which sources are enabled, so toggling a source
+  on/off invalidates stale results immediately.
+
 v0.2.219
 - Ktuvit source temporarily turned OFF by default (it has a current server-side
   problem). Turn it back on in settings if you want; it will be re-enabled for

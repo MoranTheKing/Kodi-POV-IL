@@ -326,8 +326,20 @@ def _cache_key(info):
     mid = (info.get('imdb_id') or info.get('tmdb_id') or '').strip()
     if not mid:
         return None
-    return '{0}_s{1}_e{2}'.format(
-        mid, info.get('season') or '0', info.get('episode') or '0')
+    # Include a signature of the ENABLED sources so toggling a source (e.g.
+    # turning Ktuvit off) invalidates old cached results instead of serving
+    # 6h-stale results that still contain the now-disabled source.
+    sig = ''
+    try:
+        import xbmcaddon
+        a = xbmcaddon.Addon('service.subtitles.kodipovilai')
+        for s in ('ktuvit', 'wizdom', 'telegram', 'opensubtitles',
+                  'yify', 'subsource', 'subscene', 'bsplayer', 'all_lang'):
+            sig += '1' if (a.getSetting(s) or '') == 'true' else '0'
+    except Exception:
+        sig = ''
+    return '{0}_s{1}_e{2}_{3}'.format(
+        mid, info.get('season') or '0', info.get('episode') or '0', sig)
 
 
 def _cache_dir():
