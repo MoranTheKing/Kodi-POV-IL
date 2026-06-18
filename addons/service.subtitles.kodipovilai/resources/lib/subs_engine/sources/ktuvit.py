@@ -389,10 +389,7 @@ def download(download_data,MySubFolder):
         
         # Send subtitle download request
         post_response = requests.post(REQUEST_DOWNLOAD_IDENTIFIER_URL, headers=headers, data=data, cookies=ktuvit_login_cookie, timeout=DEFAULT_REQUEST_TIMEOUT).json()
-        # Give Ktuvit time to actually prepare the file before we fetch it.
-        # 100ms was too aggressive -- the server kept answering "request not
-        # found, try again" and we burned all the retries. Back off a bit.
-        xbmc.sleep(700)
+        xbmc.sleep(100)  # matches DarkSubs exactly
         
         # Extract DownloadIdentifier from response
         DownloadIdentifier = json.loads(post_response['d'])['DownloadIdentifier']
