@@ -1,3 +1,11 @@
+v0.2.203
+- Telegram login now reveals HOW the code was sent and can fall back to SMS.
+  The "Test Telegram connection" diagnostic now reports the delivery channel
+  (e.g. via=App / via=Sms) instead of just "OK", and if Telegram only sent an
+  in-app code it automatically tries an SMS too. During real login, if the code
+  was sent only to the Telegram app you are now asked whether to receive it by
+  SMS instead -- so you can log in even without the Telegram app installed.
+
 v0.2.202
 - The legacy "Source language priority" toggles are now hidden when the
   built-in engine is on -- the engine translates from ANY language, so those
