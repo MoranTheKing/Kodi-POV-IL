@@ -1,3 +1,14 @@
+v0.2.224
+- Translation modes wired up properly:
+  * "Google" in settings now really uses Google Translate (like DarkSubs did) --
+    not Gemini. Google output is machine quality, so it is NEVER shared to the
+    community pool.
+  * When the daily Gemini quota runs out, AI users now auto-fall-back to Google
+    Translate (so you still get Hebrew) -- also never shared to the pool.
+  * No Gemini API key (or a fresh install): you are guided to connect a free
+    Gemini key for real AI-quality translation. (Only API users get the Gemini /
+    quota-fallback behaviour; anyone can force Google in settings.)
+
 v0.2.223
 - Ktuvit source is back ON by default (its server-side issue is resolved). It's
   re-enabled for everyone once; if you turn it off yourself afterwards it stays
