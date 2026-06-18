@@ -1,3 +1,13 @@
+v0.2.211
+- Ktuvit downloads: wait longer between download polls (700ms instead of
+  100ms). Ktuvit answers "request not found, try again" until the file is
+  prepared; polling too fast burned all the retries before it was ready. If it
+  still fails, the exact Ktuvit server message is now shown on screen.
+- Embedded Hebrew ("תרגום מובנה") is no longer listed as a pickable item: a
+  subtitle service can't deliver an embedded stream as a file, so picking it
+  always produced a "download failed" error. Embedded subtitle streams remain
+  selectable from Kodi's own subtitle button.
+
 v0.2.210
 - FIX: Hebrew subtitle downloads from Ktuvit failed with "the received file is
   not a valid subtitle". Ktuvit answers the first download polls with a "request
