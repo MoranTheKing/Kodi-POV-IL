@@ -413,3 +413,15 @@ msgstr "חיפוש והחלה אוטומטית של עברית בהפעלה"
 msgctxt "#32527"
 msgid "When a video starts, automatically search and apply the best Hebrew subtitle (like DarkSubs). Requires the built-in engine."
 msgstr "כשסרט/פרק מתחיל, לחפש ולהחיל אוטומטית את הכתובית העברית הטובה ביותר (כמו DarkSubs). דורש את המנוע המובנה."
+
+msgctxt "#32528"
+msgid "Connect Telegram (more Hebrew subtitles)"
+msgstr "התחבר לטלגרם (עוד כתוביות עברית)"
+
+msgctxt "#32529"
+msgid "Disconnect Telegram"
+msgstr "התנתק מטלגרם"
+
+msgctxt "#32530"
+msgid "Log in to Telegram once (phone + code) to search the community subtitle channel for Hebrew subs. Requires the built-in engine."
+msgstr "התחברות חד-פעמית לטלגרם (טלפון + קוד) כדי לחפש כתוביות עברית בערוץ הקהילתי. דורש את המנוע המובנה."
