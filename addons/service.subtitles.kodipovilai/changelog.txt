@@ -1,3 +1,13 @@
+v0.2.212
+- Embedded Hebrew ("תרגום מובנה") now works exactly like DarkSubs: picking it
+  switches Kodi's subtitle stream and closes the dialog (Dialog.Close), so it
+  applies with NO "download failed" error. (Re-enabled the entry; the previous
+  version had hidden it.)
+- Ktuvit download code reverted to be byte-identical to the working DarkSubs
+  (same poll timing); on a genuine failure the exact Ktuvit server message is
+  shown on screen. Verified by diffing our engine against the build's DarkSubs:
+  the code is the same, so a remaining Ktuvit failure is server/account-side.
+
 v0.2.211
 - Ktuvit downloads: wait longer between download polls (700ms instead of
   100ms). Ktuvit answers "request not found, try again" until the file is
