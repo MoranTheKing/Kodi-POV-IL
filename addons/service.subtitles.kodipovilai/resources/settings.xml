@@ -366,6 +366,14 @@
           </dependencies>
           <control type="toggle"/>
         </setting>
+        <setting id="engine_force_translate" type="boolean" label="32531" help="32532">
+          <level>0</level>
+          <default>false</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
         <setting id="connect_telegram" type="action" label="32528" help="32530">
           <level>0</level>
           <default></default>
@@ -414,7 +422,7 @@
         </setting>
         <setting id="telegram" type="boolean" label="32513" help="32519">
           <level>0</level>
-          <default>true</default>
+          <default>false</default>
           <dependencies>
             <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
           </dependencies>

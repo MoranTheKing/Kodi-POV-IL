@@ -425,3 +425,11 @@ msgstr "התנתק מטלגרם"
 msgctxt "#32530"
 msgid "Log in to Telegram once (phone + code) to search the community subtitle channel for Hebrew subs. Requires the built-in engine."
 msgstr "התחברות חד-פעמית לטלגרם (טלפון + קוד) כדי לחפש כתוביות עברית בערוץ הקהילתי. דורש את המנוע המובנה."
+
+msgctxt "#32531"
+msgid "Force AI translation when no Hebrew exists (on play)"
+msgstr "כפיית תרגום AI כשאין עברית (בהפעלה)"
+
+msgctxt "#32532"
+msgid "When a video starts and no ready Hebrew subtitle is found (human or community pool), automatically AI-translate the best foreign subtitle to Hebrew. Off by default to save API requests."
+msgstr "כשסרט/פרק מתחיל ולא נמצאה כתובית עברית מוכנה (אנושית או מהמאגר), לתרגם אוטומטית ב-AI את הכתובית הזרה הטובה ביותר לעברית. כבוי כברירת מחדל כדי לחסוך בקשות API."

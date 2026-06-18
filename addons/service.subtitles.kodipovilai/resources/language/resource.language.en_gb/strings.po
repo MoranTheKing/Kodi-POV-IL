@@ -437,3 +437,11 @@ msgstr "Disconnect Telegram"
 msgctxt "#32530"
 msgid "Log in to Telegram once (phone + code) to search the community subtitle channel for Hebrew subs. Requires the built-in engine."
 msgstr "Log in to Telegram once (phone + code) to search the community subtitle channel for Hebrew subs. Requires the built-in engine."
+
+msgctxt "#32531"
+msgid "Force AI translation when no Hebrew exists (on play)"
+msgstr "Force AI translation when no Hebrew exists (on play)"
+
+msgctxt "#32532"
+msgid "When a video starts and no ready Hebrew subtitle is found (human or community pool), automatically AI-translate the best foreign subtitle to Hebrew. Off by default to save API requests."
+msgstr "When a video starts and no ready Hebrew subtitle is found (human or community pool), automatically AI-translate the best foreign subtitle to Hebrew. Off by default to save API requests."

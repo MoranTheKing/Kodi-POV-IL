@@ -1,3 +1,12 @@
+v0.2.200
+- Telegram source is now OFF by default (it is mostly low-quality machine
+  translations and needs a per-user login). Turn it on in settings if you want
+  it. Existing engine users are switched off once.
+- New "Force AI translation when no Hebrew exists (on play)" option (off by
+  default): when a video starts and there is no ready Hebrew (human or pool),
+  the best foreign sub is auto AI-translated. Otherwise auto-play only applies
+  ready Hebrew, to save API requests. Priority stays human -> pool -> AI.
+
 v0.2.199
 - Telegram source now reuses an existing DarkSubs Telegram login: if you were
   already logged in to Telegram via DarkSubs, MoranSubs uses that saved
