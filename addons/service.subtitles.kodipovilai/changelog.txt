@@ -1,3 +1,12 @@
+v0.2.213
+- Embedded Hebrew: now re-finds the Hebrew stream at the moment you pick it
+  (instead of a stale index captured when the dialog opened), so it actually
+  switches to the right stream and shows -- matching how DarkSubs does it.
+- Ktuvit: log in FRESH for each download (not the cached login the search
+  uses), to rule out a stale cookie making the server answer "request not
+  found". Verified our Ktuvit code + credentials are byte-identical to DarkSubs,
+  so a remaining failure is on Ktuvit's side.
+
 v0.2.212
 - Embedded Hebrew ("תרגום מובנה") now works exactly like DarkSubs: picking it
   switches Kodi's subtitle stream and closes the dialog (Dialog.Close), so it
