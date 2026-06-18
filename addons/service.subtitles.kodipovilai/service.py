@@ -1430,32 +1430,53 @@ def _autosub_on_play():
     except Exception:
         return
 
-    info = kodi_utils.current_video_info()
-    f = info.get('filepath') or ''
-    # onAVStarted can fire more than once for the same file; only act once.
-    if f and f == _AUTOSUB_STATE['last_file']:
-        return
-    _AUTOSUB_STATE['last_file'] = f
-    if not (info.get('imdb_id') or info.get('tmdb_id') or info.get('title')):
-        return
     if _AUTOSUB_STATE['busy']:
         return
     _AUTOSUB_STATE['busy'] = True
-
     progress = None
     try:
-        progress = xbmcgui.DialogProgressBG()
-        progress.create('MoranSubs', 'מחפש כתוביות עברית...')
-    except Exception:
-        progress = None
+        # Right after onAVStarted the player metadata (imdb/title) often
+        # isn't populated yet -- poll briefly until it is (mirrors how
+        # DarkSubs waits for the video before searching).
+        info = {}
+        for _ in range(30):  # up to ~6s
+            info = kodi_utils.current_video_info()
+            if (info.get('imdb_id') or info.get('tmdb_id')
+                    or info.get('title')):
+                break
+            try:
+                if not xbmc.Player().isPlayingVideo():
+                    return
+            except Exception:
+                pass
+            xbmc.sleep(200)
 
-    try:
-        # Non-modal search (no DarkSubs-style modal here -- we show the
-        # bottom banner above). list_candidates returns everything in
-        # priority order; the first 'he' row is the best Hebrew.
+        f = info.get('filepath') or info.get('title') or ''
+        # onAVStarted can fire more than once for the same file; act once.
+        if f and f == _AUTOSUB_STATE['last_file']:
+            return
+        _AUTOSUB_STATE['last_file'] = f
+        if not (info.get('imdb_id') or info.get('tmdb_id')
+                or info.get('title')):
+            return
+
+        try:
+            progress = xbmcgui.DialogProgressBG()
+            progress.create('MoranSubs', 'מחפש כתוביות עברית...')
+        except Exception:
+            progress = None
+
+        # Non-modal search (the bottom banner above is our progress).
+        # list_candidates returns everything in priority order; the first
+        # 'he' row is the best Hebrew (embedded > human > pool > MT).
         cands = translate.list_candidates(info, modal_progress=False)
         he = next((c for c in cands if c.get('language') == 'he'), None)
         if not he:
+            try:
+                kodi_utils.notify('MoranSubs: לא נמצאה כתובית עברית',
+                                  time_ms=3000)
+            except Exception:
+                pass
             return
         path = translate.resolve(he['link'], info)
         # Embedded picks switch the stream inside resolve() and return None;
@@ -2310,6 +2331,44 @@ def _ensure_darksubs_enabled():
         pass
 
 
+def _maybe_set_default_subtitle_service():
+    """When the engine is on, make MoranSubs the default subtitle service for
+    movies + TV, so Kodi auto-runs it and pre-selects it when the subtitle
+    dialog opens (the services list order itself is fixed by Kodi, but the
+    default is what opens/searches first). Only writes on a mismatch; only
+    when the engine is on (we don't override the user's choice otherwise)."""
+    if xbmc is None:
+        return
+    try:
+        from resources.lib import kodi_utils
+        if not kodi_utils.get_bool('use_builtin_engine', False):
+            return
+    except Exception:
+        return
+    try:
+        import json as _json
+        for sid in ('subtitles.tv', 'subtitles.movie'):
+            getq = _json.dumps({
+                'jsonrpc': '2.0', 'id': 1,
+                'method': 'Settings.GetSettingValue',
+                'params': {'setting': sid},
+            })
+            cur = (_json.loads(xbmc.executeJSONRPC(getq) or '{}')
+                   .get('result') or {}).get('value')
+            if cur == ADDON_ID:
+                continue
+            setq = _json.dumps({
+                'jsonrpc': '2.0', 'id': 1,
+                'method': 'Settings.SetSettingValue',
+                'params': {'setting': sid, 'value': ADDON_ID},
+            })
+            xbmc.executeJSONRPC(setq)
+        xbmc.log('[{0}] set as default subtitle service (engine on)'
+                 .format(ADDON_ID), level=xbmc.LOGINFO)
+    except Exception:
+        pass
+
+
 def _ensure_pov_enabled():
     """Recover plugin.video.pov if it was left disabled -- e.g. our pov_reload
     cycle (disable+enable to re-import the patched sources.py after enabling
@@ -2491,6 +2550,10 @@ def main():
     # a quick update -- otherwise no subtitles and no AI translation fire at
     # all. Runs before the patchers (which patch its files on disk regardless).
     _ensure_darksubs_enabled()
+
+    # When the engine is on, make MoranSubs the default subtitle service so it
+    # opens/searches first in the dialog.
+    _maybe_set_default_subtitle_service()
 
     # Same safety net for POV: our pov_reload cycle (for remember_source) could
     # have left POV disabled on a slow box, which empties every home row + tile
