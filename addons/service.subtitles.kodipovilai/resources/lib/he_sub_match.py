@@ -70,10 +70,65 @@ def _media_key(p):
         p['tmdb'] or p['imdb'], p['type'], p['season'], p['episode'], p['lang'])
 
 
+WIZDOM_API_URL = 'https://wizdom.xyz/api/search?action=by_id'
+
+
+def _pool_release_names(p):
+    """Hebrew release names from the community pool."""
+    try:
+        q = _parse.urlencode({k: v for k, v in p.items() if v})
+        req = _req.Request(POOL_URL + '/lookup?' + q,
+                           headers={'user-agent': _UA})
+        raw = _req.urlopen(req, timeout=_TIMEOUT).read().decode('utf-8')
+        data = json.loads(raw)
+        out = []
+        if data.get('ok'):
+            for v in (data.get('variants') or []):
+                rel = (v.get('release') or '').strip()
+                if rel:
+                    out.append(rel)
+        return out
+    except Exception:
+        return []
+
+
+def _wizdom_release_names(p):
+    """Hebrew release names from Wizdom's open API (no key, covers most
+    content) -- so the source-screen % works even for titles that aren't in
+    the community pool yet. Fully guarded."""
+    try:
+        imdb = (p.get('imdb') or '').strip()
+        if not imdb.startswith('tt'):
+            return []
+        params = {'imdb': imdb}
+        season = (p.get('season') or '').strip()
+        episode = (p.get('episode') or '').strip()
+        if p.get('type') == 'tv' or (season not in ('', '0')
+                                     and episode not in ('', '0')):
+            try:
+                params['season'] = str(int(season or 0)).zfill(2)
+                params['episode'] = str(int(episode or 0)).zfill(2)
+            except Exception:
+                pass
+        req = _req.Request(
+            WIZDOM_API_URL + '&' + _parse.urlencode(params),
+            headers={'user-agent': _UA})
+        raw = _req.urlopen(req, timeout=_TIMEOUT).read().decode('utf-8')
+        data = json.loads(raw)
+        out = []
+        for item in (data or []):
+            v = (item.get('versioname') or '').strip()
+            if v:
+                out.append(v)
+        return out
+    except Exception:
+        return []
+
+
 def release_names(meta):
-    """Return the release names of Hebrew subtitles available for this media
-    (community pool). Cached per media. [] when disabled / unknown / on error
-    -- so the caller simply shows no match prefix."""
+    """Return the release names of Hebrew subtitles available for this media,
+    from the community pool AND Wizdom's open API. Cached per media. [] when
+    disabled / unknown / on error -- so the caller shows no match prefix."""
     try:
         if not _enabled() or _req is None:
             return []
@@ -85,16 +140,13 @@ def release_names(meta):
         now = time.time()
         if hit and (now - hit[0]) < _TTL:
             return hit[1]
-        q = _parse.urlencode({k: v for k, v in p.items() if v})
-        req = _req.Request(POOL_URL + '/lookup?' + q,
-                           headers={'user-agent': _UA})
-        raw = _req.urlopen(req, timeout=_TIMEOUT).read().decode('utf-8')
-        data = json.loads(raw)
         names = []
-        if data.get('ok'):
-            for v in (data.get('variants') or []):
-                rel = (v.get('release') or '').strip()
-                if rel:
+        seen = set()
+        for src in (_pool_release_names, _wizdom_release_names):
+            for rel in src(p):
+                low = rel.lower()
+                if low not in seen:
+                    seen.add(low)
                     names.append(rel)
         _CACHE[key] = (now, names)
         return names
