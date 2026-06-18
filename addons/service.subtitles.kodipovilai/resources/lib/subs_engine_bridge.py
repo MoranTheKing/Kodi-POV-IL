@@ -629,14 +629,14 @@ _SUB_EXTS = ('.srt', '.ssa', '.ass', '.sub', '.smi', '.vtt', '.txt')
 
 
 def _looks_like_subtitle(path):
-    """True if the file is a plausible subtitle: a known extension and not an
-    HTML/zip blob (some providers hand back the error page or un-extracted
-    archive when a download actually failed)."""
+    """True if the file is a plausible subtitle: not an HTML/zip blob (some
+    providers hand back the error page or un-extracted archive when a download
+    actually failed). Accepts by known extension OR by content sniff -- some
+    providers quote the Content-Disposition filename ("name.srt") so the
+    on-disk extension comes out mangled even though the bytes are a real SRT."""
     try:
-        if os.path.splitext(path)[1].lower() not in _SUB_EXTS:
-            return False
         with open(path, 'rb') as f:
-            head = f.read(256)
+            head = f.read(2048)
         if not head.strip():
             return False
         if head[:2] == b'PK':          # zip
@@ -644,7 +644,15 @@ def _looks_like_subtitle(path):
         low = head.lstrip().lower()
         if low.startswith((b'<!doctype', b'<html', b'<?xml', b'<head')):
             return False
-        return True
+        ext = os.path.splitext(path)[1].lower().strip('"\'')
+        if ext in _SUB_EXTS:
+            return True
+        # Mangled / missing extension: accept if the CONTENT looks like a
+        # subtitle (srt/vtt cue arrow, ass/ssa header, microdvd frame braces).
+        if (b'-->' in head or b'[script info]' in low
+                or b'dialogue:' in low or head.lstrip()[:1] == b'{'):
+            return True
+        return False
     except Exception:
         return True  # if unsure, don't block a possibly-good file
 
@@ -675,6 +683,13 @@ def download(payload):
     except Exception as e:
         kodi_utils.log('subs_engine_bridge.download failed: {0}'.format(e),
                        level='ERROR')
+        # Surface the real reason instead of Kodi's generic "download failed",
+        # so a problem is reportable without digging through the log.
+        try:
+            kodi_utils.notify('הורדה נכשלה ({0}): {1}'.format(
+                (payload.get('source') or '?'), str(e)[:90]), time_ms=6000)
+        except Exception:
+            pass
         return None
 
 
@@ -684,10 +699,25 @@ def _download_inner(payload):
     language = payload.get('language') or 'Hebrew'
     filename = payload.get('filename') or 'subtitle'
 
+    # Make sure the engine's internal settings exist before any provider /
+    # general.py runs. search() does this, but a download can be the FIRST
+    # engine call in a fresh process (e.g. straight after a quick update, or an
+    # auto-on-play), and the providers + general.py read these settings -- an
+    # empty value used to break the read. Cheap + idempotent.
+    try:
+        ensure_engine_settings()
+    except Exception:
+        pass
+
     module = _provider_module(source)
     if module is None or not hasattr(module, 'download'):
         kodi_utils.log('subs_engine_bridge: no download() for source '
                        + str(source), level='WARNING')
+        try:
+            kodi_utils.notify('מקור לא נתמך להורדה: {0}'.format(source or '?'),
+                              time_ms=6000)
+        except Exception:
+            pass
         return None
 
     from resources.lib.subs_engine import general
@@ -712,8 +742,14 @@ def _download_inner(payload):
 
     sub_file = module.download(download_data, sub_folder)
     if not sub_file or not os.path.isfile(sub_file):
-        kodi_utils.log('subs_engine_bridge: download returned no file',
+        kodi_utils.log('subs_engine_bridge: download returned no file '
+                       '(source={0}, got={1})'.format(source, sub_file),
                        level='WARNING')
+        try:
+            kodi_utils.notify('השרת לא החזיר קובץ כתובית ({0})'.format(source),
+                              time_ms=6000)
+        except Exception:
+            pass
         return None
 
     # Validate it's an actual subtitle, not an HTML error page / un-extracted
@@ -723,6 +759,11 @@ def _download_inner(payload):
         kodi_utils.log('subs_engine_bridge: downloaded file is not a valid '
                        'subtitle ({0})'.format(os.path.basename(sub_file)),
                        level='WARNING')
+        try:
+            kodi_utils.notify('הקובץ שהתקבל אינו כתובית תקינה ({0})'.format(
+                source), time_ms=6000)
+        except Exception:
+            pass
         return None
 
     # Optional Hebrew punctuation fix, mirroring engine.download_sub.
