@@ -301,16 +301,21 @@ def _try_next_hebrew(failed_link, info):
         failed = translate._decode_link(failed_link) or {}
     except Exception:
         failed = {}
-    failed_key = (failed.get('source'), failed.get('filename'),
-                  failed.get('hash'))
+    # Skip the WHOLE source that just failed -- other subs from it (e.g. more
+    # Ktuvit entries) fail identically, so jump straight to the next source.
+    failed_sources = set()
+    if failed.get('source'):
+        failed_sources.add(failed.get('source'))
     try:
         candidates = translate.list_candidates(info, modal_progress=False)
     except Exception:
         return None
     tried = 0
     for c in candidates:
-        if tried >= 6:
+        if tried >= 8:
             break
+        if c.get('language') != 'he':
+            continue  # only fall back to another HEBREW subtitle
         link2 = c.get('link')
         if not link2:
             continue
@@ -318,8 +323,9 @@ def _try_next_hebrew(failed_link, info):
             p2 = translate._decode_link(link2) or {}
         except Exception:
             continue
-        if (p2.get('source'), p2.get('filename'), p2.get('hash')) == failed_key:
-            continue  # the one that just failed
+        src = p2.get('source')
+        if src and src in failed_sources:
+            continue  # this source already failed -- don't retry its siblings
         kind = p2.get('type')
         if kind not in ('engine', 'pool', 'passthrough'):
             continue  # skip AI (slow) + foreign 'engine_ai'
@@ -337,6 +343,8 @@ def _try_next_hebrew(failed_link, info):
             except Exception:
                 pass
             return path
+        if src:
+            failed_sources.add(src)  # this source failed too -- skip its siblings
     return None
 
 
