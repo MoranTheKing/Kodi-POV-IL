@@ -622,6 +622,30 @@ def _encode_engine_link(parsed, hi):
 
 # ---- download -------------------------------------------------------
 
+_SUB_EXTS = ('.srt', '.ssa', '.ass', '.sub', '.smi', '.vtt', '.txt')
+
+
+def _looks_like_subtitle(path):
+    """True if the file is a plausible subtitle: a known extension and not an
+    HTML/zip blob (some providers hand back the error page or un-extracted
+    archive when a download actually failed)."""
+    try:
+        if os.path.splitext(path)[1].lower() not in _SUB_EXTS:
+            return False
+        with open(path, 'rb') as f:
+            head = f.read(256)
+        if not head.strip():
+            return False
+        if head[:2] == b'PK':          # zip
+            return False
+        low = head.lstrip().lower()
+        if low.startswith((b'<!doctype', b'<html', b'<?xml', b'<head')):
+            return False
+        return True
+    except Exception:
+        return True  # if unsure, don't block a possibly-good file
+
+
 def select_embedded(stream_index):
     """Switch Kodi to an embedded subtitle stream by index. Returns True
     on success. Used for the embedded-Hebrew pick (no file to deliver)."""
@@ -686,6 +710,15 @@ def _download_inner(payload):
     sub_file = module.download(download_data, sub_folder)
     if not sub_file or not os.path.isfile(sub_file):
         kodi_utils.log('subs_engine_bridge: download returned no file',
+                       level='WARNING')
+        return None
+
+    # Validate it's an actual subtitle, not an HTML error page / un-extracted
+    # archive a provider handed back on a failed download (e.g. YIFY 403).
+    # Otherwise Kodi tries to load garbage and shows "download failed".
+    if not _looks_like_subtitle(sub_file):
+        kodi_utils.log('subs_engine_bridge: downloaded file is not a valid '
+                       'subtitle ({0})'.format(os.path.basename(sub_file)),
                        level='WARNING')
         return None
 
