@@ -1,3 +1,8 @@
+v0.2.219
+- Ktuvit source temporarily turned OFF by default (it has a current server-side
+  problem). Turn it back on in settings if you want; it will be re-enabled for
+  everyone once Ktuvit is fixed.
+
 v0.2.218
 - Reverted the Ktuvit account back to the previous shared one.
 
