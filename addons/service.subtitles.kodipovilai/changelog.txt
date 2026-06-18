@@ -1,3 +1,8 @@
+v0.2.221
+- Embedded Hebrew: fixed the error when picking it. Copied DarkSubs's exact
+  sequence -- close the dialog, then a 100ms pause, then end -- so Kodi no
+  longer shows "download failed" after switching to the embedded stream.
+
 v0.2.220
 - Fix: Ktuvit results kept showing after it was turned off, because search
   results are cached for 6h and the old cache still contained Ktuvit. The

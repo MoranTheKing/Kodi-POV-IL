@@ -154,9 +154,11 @@ def _handle_download(handle, params):
         _p = None
 
     # Embedded Hebrew pick: there is no file to hand back. Switch Kodi's
-    # subtitle stream and CLOSE the dialog (exactly what DarkSubs does in
-    # main.py -> Dialog.Close(all,true)); then end with no item. Closing the
-    # dialog first is what stops Kodi's spurious "subtitle download failed".
+    # subtitle stream and CLOSE the dialog, then end with no item -- copied
+    # EXACTLY from DarkSubs (main.py): Dialog.Close(all,true) -> empty
+    # addDirectoryItems -> xbmc.sleep(100) -> endOfDirectory(updateListing=True,
+    # cacheToDisc=True). The sleep(100) is essential: it lets the dialog finish
+    # closing BEFORE endOfDirectory, otherwise Kodi shows "download failed".
     if _p and _p.get('type') == 'engine' and _p.get('embedded'):
         try:
             from resources.lib import subs_engine_bridge
@@ -166,9 +168,15 @@ def _handle_download(handle, params):
             _safe_log('embedded select failed: {0}'.format(_e), level='WARNING')
         try:
             xbmc.executebuiltin('Dialog.Close(all,true)')
+            xbmcplugin.addDirectoryItems(handle, [], 0)
+            xbmc.sleep(100)
+            xbmcplugin.endOfDirectory(handle, updateListing=True,
+                                      cacheToDisc=True)
         except Exception:
-            pass
-        xbmcplugin.endOfDirectory(handle)
+            try:
+                xbmcplugin.endOfDirectory(handle)
+            except Exception:
+                pass
         return
 
     if _p and _p.get('type') == 'engine_ai':
