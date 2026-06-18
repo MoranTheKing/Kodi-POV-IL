@@ -1,3 +1,11 @@
+v0.2.215
+- Subtitle download failed? It no longer leaves you stuck on it -- MoranSubs
+  automatically loads the NEXT available ready Hebrew subtitle (human/pool)
+  instead of staying on the failed pick.
+- Embedded Hebrew ("תרגום מובנה") now matches the EMBEDDED stream exactly like
+  DarkSubs (code 'heb'), so it no longer grabs an external Hebrew sub and
+  "switches to nothing" -- it switches to the real embedded track.
+
 v0.2.214
 - Source-screen "HEB NN%" badge now uses OpenSubtitles (not Ktuvit) for its
   background lookup. Ktuvit runs on ONE shared, rate-limited account; hitting it

@@ -272,12 +272,72 @@ def _handle_download(handle, params):
             except Exception:
                 pass
 
+    # If the picked subtitle failed to download (e.g. Ktuvit rate-limited),
+    # don't leave the user stuck on it -- automatically try the NEXT available
+    # ready Hebrew subtitles and deliver the first that works.
+    if not (path and os.path.isfile(path)):
+        try:
+            path = _try_next_hebrew(link, info)
+        except Exception as e:
+            _safe_log('next-hebrew fallback failed: {0}'.format(e),
+                      level='WARNING')
+
     if path and os.path.isfile(path):
         listitem = xbmcgui.ListItem(label=path)
         xbmcplugin.addDirectoryItem(handle=handle, url=path,
                                     listitem=listitem,
                                     isFolder=False)
     xbmcplugin.endOfDirectory(handle)
+
+
+def _try_next_hebrew(failed_link, info):
+    """The user's picked subtitle failed -- fall back to the next ready Hebrew
+    options so they aren't stuck on the failed one. Re-lists candidates and
+    resolves the next non-AI, non-embedded Hebrew entries (engine human / pool /
+    passthrough) until one downloads. AI (slow) and embedded (no file) are
+    skipped here. Returns a path or None. Bounded so it can't hang."""
+    from resources.lib import kodi_utils, translate
+    try:
+        failed = translate._decode_link(failed_link) or {}
+    except Exception:
+        failed = {}
+    failed_key = (failed.get('source'), failed.get('filename'),
+                  failed.get('hash'))
+    try:
+        candidates = translate.list_candidates(info, modal_progress=False)
+    except Exception:
+        return None
+    tried = 0
+    for c in candidates:
+        if tried >= 6:
+            break
+        link2 = c.get('link')
+        if not link2:
+            continue
+        try:
+            p2 = translate._decode_link(link2) or {}
+        except Exception:
+            continue
+        if (p2.get('source'), p2.get('filename'), p2.get('hash')) == failed_key:
+            continue  # the one that just failed
+        kind = p2.get('type')
+        if kind not in ('engine', 'pool', 'passthrough'):
+            continue  # skip AI (slow) + foreign 'engine_ai'
+        if kind == 'engine' and p2.get('embedded'):
+            continue  # embedded delivers no file
+        tried += 1
+        try:
+            path = translate.resolve(link2, info)
+        except Exception:
+            path = None
+        if path and os.path.isfile(path):
+            try:
+                kodi_utils.notify('הכתובית הקודמת נכשלה — נטענה הבאה בתור',
+                                  time_ms=4000)
+            except Exception:
+                pass
+            return path
+    return None
 
 
 def _try_fast_download(handle, link, info):
