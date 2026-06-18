@@ -1,3 +1,9 @@
+v0.2.222
+- Embedded Hebrew is now auto-applied FIRST on play whenever the file has one
+  (it's the best, perfectly-synced subtitle). On play we wait for the embedded
+  streams to appear and, if there's a Hebrew ('heb') track, switch to it
+  immediately -- before trying any downloaded source.
+
 v0.2.221
 - Embedded Hebrew: fixed the error when picking it. Copied DarkSubs's exact
   sequence -- close the dialog, then a 100ms pause, then end -- so Kodi no
