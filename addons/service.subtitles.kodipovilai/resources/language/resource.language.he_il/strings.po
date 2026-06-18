@@ -433,3 +433,7 @@ msgstr "כפיית תרגום AI כשאין עברית (בהפעלה)"
 msgctxt "#32532"
 msgid "When a video starts and no ready Hebrew subtitle is found (human or community pool), automatically AI-translate the best foreign subtitle to Hebrew. Off by default to save API requests."
 msgstr "כשסרט/פרק מתחיל ולא נמצאה כתובית עברית מוכנה (אנושית או מהמאגר), לתרגם אוטומטית ב-AI את הכתובית הזרה הטובה ביותר לעברית. כבוי כברירת מחדל כדי לחסוך בקשות API."
+
+msgctxt "#32533"
+msgid "Test Telegram connection (diagnostic)"
+msgstr "בדיקת חיבור טלגרם (אבחון)"
