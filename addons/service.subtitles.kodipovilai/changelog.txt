@@ -1,3 +1,12 @@
+v0.2.189
+- Phase C (built-in engine): when the engine is ON, DarkSubs is now disabled
+  automatically so only MoranSubs runs -- no double search, no competing
+  results (and re-enabled if you turn the engine off). MoranSubs now also
+  auto-searches and applies the best Hebrew subtitle when a video starts
+  (embedded > human > pool), like DarkSubs did, with a loading banner.
+  New "Auto-search and apply Hebrew on play" toggle (on by default with the
+  engine). All still gated behind the experimental engine switch.
+
 v0.2.188
 - Built-in sources engine now shows the same live per-source loading
   progress dialog DarkSubs shows while it searches (via the "Download
