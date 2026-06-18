@@ -281,6 +281,15 @@ def current_video_info():
     info['tagline'] = gi('VideoPlayer.Tagline') or gi('ListItem.Tagline')
     # The visible label is another good release-name fallback.
     info['label'] = gi('VideoPlayer.Label') or gi('ListItem.Label')
+    # ListItem path is often the real release name even when the player's
+    # filepath is a tokenized debrid URL -- key for the sync-% matching.
+    info['li_filename'] = gi('ListItem.FileNameAndPath') \
+        or gi('ListItem.FilenameAndPath')
+    # The picked release name POV captures into a home-window property
+    # (set by pov_source_name_patcher / subs_filename_publisher, the same
+    # one DarkSubs reads). This is the most reliable release name for
+    # sync-% matching on debrid streams.
+    info['picked_release'] = gi('Window(10000).Property(subs.player_filename)')
     info['is_episode'] = bool(info['tvshow'] and info['episode'])
     return info
 

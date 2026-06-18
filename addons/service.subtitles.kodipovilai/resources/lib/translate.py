@@ -153,7 +153,7 @@ def _reapply_rtl_fix_in_place(path):
 
 # ---- search ----------------------------------------------------------
 
-def list_candidates(info):
+def list_candidates(info, modal_progress=True):
     """Build the list Kodi's subtitle dialog will render.
 
     Returns a list of dicts with keys: filename, language, link,
@@ -231,7 +231,7 @@ def list_candidates(info):
         from . import subs_engine_bridge
         if subs_engine_bridge.enabled():
             engine_embedded = subs_engine_bridge.embedded_candidates(info)
-            for c in subs_engine_bridge.search(info):
+            for c in subs_engine_bridge.search(info, modal_progress=modal_progress):
                 k = c.pop('_engine_kind', 'human_he')
                 c.pop('_pct', None)
                 if k == 'human_he':
