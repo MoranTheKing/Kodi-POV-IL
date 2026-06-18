@@ -1,3 +1,12 @@
+v0.2.195
+- Built-in engine: foreign-language subs are now unified into one clear
+  action -- "תרגום AI לעברית · NN% — <release>" -- so picking any non-Hebrew
+  sub translates it to Hebrew (no more raw foreign + separate AI entries, no
+  more misleading "Hebrew" toast on an English file). Each shows its match %.
+  Community-pool entries no longer show a misleading 0%% (shown only when the
+  match is real). Pool = ready-made shared translations; "מ-XX" = translate
+  this source now.
+
 v0.2.194
 - Built-in engine: (1) subtitle list is now grouped and ordered by language --
   Hebrew first (incl. AI-translated), then English, Spanish, the other AI-source

@@ -287,18 +287,24 @@ def list_candidates(info, modal_progress=True):
         have_hebrew = True
         results.append(_clean(c))
 
-    # Community pool: Hebrew translations other users already made and shared.
+    # Community pool: ready-made AI Hebrew translations other users shared.
     if pool is not None and pool.use_enabled():
-        video_ref = (info.get('tagline') or info.get('label')
-                     or os.path.basename(filepath) or info.get('title') or '')
+        video_ref = (info.get('picked_release') or info.get('tagline')
+                     or info.get('label') or os.path.basename(filepath)
+                     or info.get('title') or '')
         for v in pool.lookup(info):
             have_hebrew = True
             release = (v.get('release') or '').strip()
-            if release:
-                pct = _match_pct(video_ref, release)
-                label = '[AI · מאגר {0}%]  {1}'.format(pct, release)
+            pct = _match_pct(video_ref, release) if release else 0
+            # Only show a % when we actually have a meaningful match (a 0%
+            # almost always means we couldn't read the video's release name,
+            # not a real zero -- showing "0%" is misleading).
+            if release and pct > 0:
+                label = 'תרגום AI · מאגר קהילתי · {0}%  —  {1}'.format(pct, release)
+            elif release:
+                label = 'תרגום AI · מאגר קהילתי  —  {0}'.format(release)
             else:
-                label = 'תרגום AI (מאגר קהילתי)'
+                label = 'תרגום AI · מאגר קהילתי'
             results.append({
                 'filename': label,
                 'language': 'he',
@@ -312,46 +318,36 @@ def list_candidates(info, modal_progress=True):
         have_hebrew = True
         results.append(_clean(c))
 
-    # AI Hebrew translated from the engine's source-language results (one-step,
-    # like the old DarkSubs auto-translate). One entry per AI-source language
-    # (best % of that language), ordered en, es, de, fr, pt -- still in the
-    # Hebrew section because the result is Hebrew.
-    if engine_other:
-        best_by_lang = {}
-        for c in engine_other:
-            code = c.get('language')
-            if code not in _AI_SOURCE_ORDER:
-                continue
-            if (code not in best_by_lang
-                    or c.get('_pct', 0) > best_by_lang[code].get('_pct', 0)):
-                best_by_lang[code] = c
-        for code in sorted(best_by_lang, key=_lang_rank):
-            c = best_by_lang[code]
-            src = _decode_link(c.get('link') or '')
-            if not src or src.get('type') != 'engine':
-                continue
-            src = dict(src)
-            src['type'] = 'engine_ai'
-            src['src_lang'] = code
-            rel = src.get('filename') or code
-            results.append({
-                'filename': 'תרגום AI לעברית (מ-{0} · {1})'.format(
-                    code.upper(), rel),
-                'language': 'he',
-                'link': _encode_link(src),
-                'sync': 'false', 'rating': '4',
-                'is_hi': False, 'is_hd': False,
-            })
-            have_hebrew = True
-
-    # Raw foreign-language subs, sorted by the language order above and grouped
-    # so all subs of one language stay together (no French at the top AND
-    # bottom); within a language, best match % first.
+    # Every non-Hebrew engine result becomes a "translate to Hebrew (AI)"
+    # action -- a Hebrew add-on shouldn't hand back raw foreign subs, and this
+    # matches what the user expects (pick a foreign sub -> get Hebrew, like
+    # DarkSubs auto_translate). Grouped/ordered by source language (en, es, de,
+    # fr, pt, then the rest); within a language, best match % first. The source
+    # language flag + code stay visible so the user knows what it's translating.
     engine_other.sort(key=lambda c: (_lang_rank(c.get('language')),
                                      c.get('language') or 'zz',
                                      -c.get('_pct', 0)))
     for c in engine_other:
-        results.append(_clean(c))
+        code = (c.get('language') or '?')
+        pct = c.get('_pct', 0)
+        src = _decode_link(c.get('link') or '')
+        if not src or src.get('type') != 'engine':
+            continue
+        src = dict(src)
+        src['type'] = 'engine_ai'
+        src['src_lang'] = code
+        rel = src.get('filename') or code
+        have_hebrew = True
+        results.append({
+            'filename': 'תרגום AI לעברית · {0}%  —  {1}'.format(pct, rel),
+            # Keep the source-language flag/code so the rows stay grouped by
+            # language and the user can see which language is being translated.
+            'language': code,
+            'link': _encode_link(src),
+            'sync': 'false',
+            'rating': c.get('rating', '3'),
+            'is_hi': False, 'is_hd': False,
+        })
 
     skip_when_hebrew = kodi_utils.get_bool('skip_if_hebrew', True)
     if have_hebrew and skip_when_hebrew:
