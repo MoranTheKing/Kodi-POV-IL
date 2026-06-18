@@ -212,7 +212,7 @@ msgstr "מתרגם chunk {0}/{1}..."
 
 msgctxt "#33002"
 msgid "No API key configured. Open Settings to add one."
-msgstr "לא הוגדר API key. פתח Settings כדי להוסיף."
+msgstr "אין מפתח Gemini — חבר מפתח חינמי בהגדרות התוסף (חיבור Gemini) לתרגום AI איכותי באמת בעברית."
 
 msgctxt "#33003"
 msgid "Connection successful. Model: {0}"
