@@ -32,13 +32,13 @@ _CACHE = {}            # media_key -> (ts, [pool+wizdom release names])
 _TTL = 300.0           # seconds; POV's interpreter persists so this survives
 _TIMEOUT = 2.5
 
-# Engine (Ktuvit/...) availability is filled by a background RunScript into a
+# Engine (OpenSubtitles) availability is filled by a background RunScript into a
 # shared cache file; we read it cheaply on every call so the badge fills in on
 # the next source-window open without ever blocking POV.
 _ENGINE_CACHE_FILE = (
     'special://profile/addon_data/service.subtitles.kodipovilai/'
     'he_avail_cache.json')
-_ENGINE_TTL = 7 * 24 * 3600.0   # 7 days; Ktuvit availability changes slowly
+_ENGINE_TTL = 7 * 24 * 3600.0   # 7 days; OpenSubtitles availability changes slowly
 _FIRED = {}            # media_key -> last warm-fire ts (throttle re-fires)
 _FIRE_RETRY = 120.0    # re-fire a warm at most once every 2 min per title
 
@@ -146,7 +146,7 @@ def _engine_cache_path():
 
 
 def _engine_cached_names(key):
-    """Hebrew release names the MoranSubs engine (Ktuvit) found for this media,
+    """Hebrew release names the MoranSubs engine (OpenSubtitles) found for this media,
     or None when it has not been warmed yet / is stale -- the caller then fires
     a background warm. Pure file read; never networks."""
     try:
@@ -174,7 +174,7 @@ def _meta_str(meta, keys):
 
 
 def _fire_engine_warm(key, p, meta):
-    """Fire-and-forget RunScript so MoranSubs runs Ktuvit for this title in its
+    """Fire-and-forget RunScript so MoranSubs runs OpenSubtitles for this title in its
     own context and writes the result to the shared cache. Throttled per title
     so reopening the source window doesn't spam it. Non-blocking."""
     try:
@@ -208,7 +208,7 @@ def _fire_engine_warm(key, p, meta):
 def release_names(meta):
     """Return the release names of Hebrew subtitles available for this media,
     from the community pool + Wizdom (synchronous) AND the MoranSubs engine /
-    Ktuvit (background-warmed, read from a shared cache). Cached per media. []
+    OpenSubtitles (background-warmed, read from a shared cache). Cached per media. []
     when disabled / unknown / on error -- so the caller shows no prefix."""
     try:
         if not _enabled() or _req is None:
@@ -232,11 +232,11 @@ def release_names(meta):
                         seen0.add(low)
                         pw.append(rel)
             _CACHE[key] = (now, pw)
-        # Engine (Ktuvit): cheap disk read every call; warm in the background
+        # Engine (OpenSubtitles): cheap disk read every call; warm in the background
         # when missing so the badge fills in on the next open (never blocks).
         eng = _engine_cached_names(key)
         if eng is None:
-            # Not warmed yet: fire the background Ktuvit lookup and return NOW.
+            # Not warmed yet: fire the background OpenSubtitles lookup and return NOW.
             # We must NOT block here -- this runs inside POV's source-results
             # build, so waiting froze the source list for several seconds. The
             # badge fills in the next time the list renders (cheap cache read).

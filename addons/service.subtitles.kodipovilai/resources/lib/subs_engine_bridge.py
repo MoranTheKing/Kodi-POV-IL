@@ -545,7 +545,12 @@ def embedded_candidates(info):
     out = []
     for idx, name in enumerate(streams or []):
         n = (name or '').strip().lower()
-        if n in ('he', 'heb', 'iw', 'hebrew', 'עברית') or 'hebrew' in n:
+        # Match the EMBEDDED Hebrew stream exactly like DarkSubs does (== 'heb').
+        # Embedded container streams report the 3-letter code 'heb'; an EXTERNAL
+        # Hebrew sub (e.g. one we already loaded from OpenSubtitles) reports 'he'
+        # or 'Hebrew' -- so a broad match would wrongly target the external sub
+        # and "switch to nothing". Only offer a true embedded 'heb' stream.
+        if n == 'heb':
             out.append({
                 'filename': 'תרגום מובנה בעברית · 101%',
                 'language': 'he',
@@ -671,10 +676,12 @@ def select_embedded(stream_index):
             streams = p.getAvailableSubtitleStreams() or []
         except Exception:
             streams = []
+        # DarkSubs matches the embedded stream by EXACTLY 'heb' (get_embedded_
+        # sub_index(subs,'heb')). External Hebrew subs report 'he'/'Hebrew', so
+        # matching 'heb' picks the real embedded stream and not an external one.
         target = None
         for i, name in enumerate(streams):
-            n = (name or '').strip().lower()
-            if n in ('he', 'heb', 'iw', 'hebrew', 'עברית') or 'hebrew' in n:
+            if (name or '').strip().lower() == 'heb':
                 target = i
                 break
         if target is None:
