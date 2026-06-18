@@ -57,6 +57,28 @@ def _enabled_sources():
             if kodi_utils.get_bool(key, code in ('en', 'es'))]
 
 
+def _match_pct(video_name, sub_name):
+    """Release-name match %, same idea as the engine's sort_subtitles
+    (token-list similarity). Used to show a sync % on community-pool
+    entries the way human sources show one."""
+    import re as _re
+    import difflib as _dl
+
+    def toks(s):
+        s = _re.sub(r'\.[a-z0-9]{2,4}$', '', s or '', flags=_re.I)
+        for ch in '_ +/-':
+            s = s.replace(ch, '.')
+        return [x.lower() for x in s.split('.') if x]
+
+    a, b = toks(video_name), toks(sub_name)
+    if not a or not b:
+        return 0
+    try:
+        return int(round(_dl.SequenceMatcher(None, a, b).ratio() * 100))
+    except Exception:
+        return 0
+
+
 def _encode_link(payload):
     return urllib.parse.quote(json.dumps(payload, ensure_ascii=False))
 
@@ -199,41 +221,59 @@ def list_candidates(info):
         })
 
     # Built-in sources engine (Phase B, gated by use_builtin_engine,
-    # default OFF). When on, MoranSubs searches the human subtitle
-    # sources itself and surfaces the HEBREW results: human subs go
-    # right under the local passthrough (also human), machine-translated
-    # Hebrew is held back and appended below the community pool. When the
-    # gate is off subs_engine_bridge.search() returns [] without importing
+    # default OFF). When on, MoranSubs searches the subtitle sources
+    # itself so it can stand in for DarkSubs: embedded Hebrew, human
+    # Hebrew, machine-translated Hebrew, and other languages (English
+    # etc.). When the gate is off the bridge returns [] without importing
     # the engine, so this block is a no-op.
-    engine_machine = []
+    engine_human, engine_mt, engine_other, engine_embedded = [], [], [], []
     try:
         from . import subs_engine_bridge
         if subs_engine_bridge.enabled():
+            engine_embedded = subs_engine_bridge.embedded_candidates(info)
             for c in subs_engine_bridge.search(info):
-                kind = c.pop('_engine_kind', 'human')
-                if kind == 'human':
-                    have_hebrew = True
-                    results.append(c)
+                k = c.pop('_engine_kind', 'human_he')
+                c.pop('_pct', None)
+                if k == 'human_he':
+                    engine_human.append(c)
+                elif k == 'mt_he':
+                    engine_mt.append(c)
                 else:
-                    engine_machine.append(c)
+                    engine_other.append(c)
     except Exception as e:
         kodi_utils.log('engine search skipped: {0}'.format(e),
                        level='DEBUG')
+
+    # Embedded Hebrew (101%) goes to the very top -- above even a local
+    # passthrough -- mirroring DarkSubs's [LOC] entry.
+    if engine_embedded:
+        have_hebrew = True
+        for c in engine_embedded:
+            c.pop('_engine_kind', None)
+        results[:0] = engine_embedded
+
+    # Engine human Hebrew, right under the passthrough.
+    for c in engine_human:
+        have_hebrew = True
+        results.append(c)
 
     # Community pool: Hebrew translations other users already made and shared.
     # Offered like passthrough (ready Hebrew -- no local translation needed).
     # Gated by pool_use; failures are swallowed inside pool.lookup.
     if pool is not None and pool.use_enabled():
+        video_ref = (info.get('tagline') or info.get('label')
+                     or os.path.basename(filepath) or info.get('title') or '')
         for v in pool.lookup(info):
             have_hebrew = True
             # Clearly mark community-pool entries as AI translations (they
-            # are not human subs). Show the real release name when the share
-            # carried one; otherwise a generic label. Entries shared without
-            # a release name (older / live shares from a tokenized stream
-            # path) fall back to the generic text -- that's why some rows
-            # show a full name and others don't.
+            # are not human subs). Show the real release name + a sync %
+            # when the share carried a release; otherwise a generic label.
             release = (v.get('release') or '').strip()
-            label = '[AI · מאגר] ' + release if release else 'תרגום AI (מאגר קהילתי)'
+            if release:
+                pct = _match_pct(video_ref, release)
+                label = '[AI · מאגר {0}%]  {1}'.format(pct, release)
+            else:
+                label = 'תרגום AI (מאגר קהילתי)'
             results.append({
                 'filename': label,
                 'language': 'he',
@@ -242,11 +282,16 @@ def list_candidates(info):
                 'is_hi': False, 'is_hd': False,
             })
 
-    # Machine-translated Hebrew from the engine (Telegram-MT etc.) ranks
-    # below human subs and the community pool -- appended last among the
-    # ready-Hebrew entries.
-    for c in engine_machine:
+    # Machine-translated Hebrew from the engine ranks below human subs
+    # and the community pool.
+    for c in engine_mt:
         have_hebrew = True
+        results.append(c)
+
+    # Other languages from the engine (English, etc.) -- shown for parity
+    # with DarkSubs (raw, not translated). They do NOT count as Hebrew, but
+    # we surface them even when Hebrew exists so MoranSubs is a full stand-in.
+    for c in engine_other:
         results.append(c)
 
     skip_when_hebrew = kodi_utils.get_bool('skip_if_hebrew', True)
@@ -507,6 +552,19 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             return None
 
     if kind == 'engine':
+        # Embedded Hebrew pick: just switch Kodi's subtitle stream, there
+        # is no file to deliver (mirrors DarkSubs's [LOC] selection).
+        if payload.get('embedded'):
+            try:
+                from . import subs_engine_bridge
+                if subs_engine_bridge.select_embedded(
+                        payload.get('stream_index')):
+                    kodi_utils.notify('כתובית עברית מובנה הופעלה',
+                                      time_ms=4000)
+            except Exception as e:
+                kodi_utils.log('resolve embedded select failed: {0}'
+                               .format(e), level='WARNING')
+            return None
         # A human (or machine-translated) Hebrew subtitle the user
         # picked from the built-in sources engine. Download it directly
         # via the vendored provider -- no AI translation needed, it's
