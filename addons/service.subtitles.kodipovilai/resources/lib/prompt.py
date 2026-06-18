@@ -6,11 +6,14 @@
 # they're addressing to pick the right form.
 
 LANG_NAME = {
-    'en': 'English',
-    'es': 'Spanish',
-    'fr': 'French',
-    'de': 'German',
-    'pt': 'Portuguese',
+    'en': 'English', 'es': 'Spanish', 'fr': 'French', 'de': 'German',
+    'pt': 'Portuguese', 'it': 'Italian', 'ru': 'Russian', 'ar': 'Arabic',
+    'tr': 'Turkish', 'pl': 'Polish', 'nl': 'Dutch', 'el': 'Greek',
+    'fa': 'Persian', 'hi': 'Hindi', 'ja': 'Japanese', 'ko': 'Korean',
+    'zh': 'Chinese', 'cs': 'Czech', 'ro': 'Romanian', 'sv': 'Swedish',
+    'da': 'Danish', 'fi': 'Finnish', 'no': 'Norwegian', 'hu': 'Hungarian',
+    'uk': 'Ukrainian', 'bg': 'Bulgarian', 'hr': 'Croatian', 'sr': 'Serbian',
+    'th': 'Thai', 'id': 'Indonesian', 'vi': 'Vietnamese',
 }
 
 
