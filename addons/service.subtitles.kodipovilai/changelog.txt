@@ -1,3 +1,11 @@
+v0.2.197
+- Picking "AI translate to Hebrew" now closes the subtitle dialog right away
+  and translates in the background (the source subtitle shows immediately and
+  Hebrew swaps in as it is ready) instead of blocking the dialog for 1-2 min.
+- Community-pool entries shared with a debrid URL/token as their name no
+  longer show that garbage, and new shares store the real release name
+  (picked release / tagline) instead of the stream token.
+
 v0.2.196
 - AI translation works from ANY source language (Gemini is multilingual);
   expanded the language-name table so the prompt names them properly. Gender-
