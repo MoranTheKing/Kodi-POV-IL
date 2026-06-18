@@ -1,3 +1,11 @@
+v0.2.216
+- "Choose subtitles" button in the player now works on Estuary + FENtastic when
+  the engine is on. It used to launch DarkSubs's picker (now disabled, so it did
+  nothing); it now opens Kodi's native subtitle window, which runs MoranSubs.
+- Ktuvit now uses a dedicated build account instead of the global shared
+  DarkSubs account, so it carries far less load (the shared account was
+  rate-limited from worldwide use). Password stored only in its encrypted form.
+
 v0.2.215
 - Subtitle download failed? It no longer leaves you stuck on it -- MoranSubs
   automatically loads the NEXT available ready Hebrew subtitle (human/pool)
