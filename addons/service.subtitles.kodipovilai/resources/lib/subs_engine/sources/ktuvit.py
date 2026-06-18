@@ -109,8 +109,8 @@ def get_subs(video_data):
 
 
 def login_to_ktuvit():
-    
-    # Set the request headers  
+
+    # Set the request headers
     headers = {
     'authority': 'www.ktuvit.me',
     'accept': 'application/json, text/javascript, */*; q=0.01',
@@ -124,9 +124,12 @@ def login_to_ktuvit():
     'accept-language': 'en-US,en;q=0.9',
     }
 
-    # Set email and password
-    email = 'darksubsil1@gmail.com'
-    password = 'ZkCyMZfsIHt9HQK4eL8bbfaxXoNBjmFO9w39kt/gA14='
+    # Build's dedicated Ktuvit account. Password is the ALREADY-ENCRYPTED form
+    # the site's own login produces (never the plain password) -- same approach
+    # as DarkSubs. Dedicated to this build (not the global shared account) so it
+    # carries far less load. Login verified against the live site.
+    email = 'moran200333@gmail.com'
+    password = 'J5P4+nBGLRMK7BJXpzm3oqtFR29etkE6xk+SULW7TXM='
 
     # Set login request data
     data = f'{{"request":{{"Email":"{email}","Password":"{password}"}}}}'
@@ -138,7 +141,7 @@ def login_to_ktuvit():
     ktuvit_login_cookies_dict = {}
     for cookie in ktuvit_api_response:
         ktuvit_login_cookies_dict[cookie.name] = cookie.value
-        
+
     return ktuvit_login_cookies_dict
 
 
