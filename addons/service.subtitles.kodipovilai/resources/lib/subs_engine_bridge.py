@@ -431,6 +431,7 @@ def _search_inner(info, modal_progress=True):
             percent = t[5]
             hi = t[7]
             site_id = t[9]
+            thumb_code = (t[3] or '').strip().lower()  # provider ISO 639-1
         except Exception:
             continue
 
@@ -439,17 +440,22 @@ def _search_inner(info, modal_progress=True):
             continue
         lang = parsed['language']
         label0 = t[0] or ''
-        # Classify by language. We keep ALL languages now (parity with
-        # DarkSubs): Hebrew (human / machine) first, everything else after.
-        if lang == 'HebrewMachineTranslated':
-            kind, code = 'mt_he', 'he'
-        elif lang == 'Hebrew' or 'Hebrew' in label0:
-            kind, code = 'human_he', 'he'
-        elif lang == 'English' or 'English' in label0:
-            kind, code = 'other', 'en'
+        # The provider already computed a proper ISO 639-1 code in the tuple's
+        # thumbnail field (via xbmc.convertLanguage) -- use it so Kodi shows
+        # the right flag. Normalize a few common non-standard codes.
+        code = _LANG_NORMALIZE.get(thumb_code, thumb_code)
+        # Classify. Hebrew (human / machine) first, everything else after.
+        if lang == 'HebrewMachineTranslated' or 'HebrewMachineTranslated' in label0:
+            kind = 'mt_he'
+            code = 'he'
+        elif (code in ('he', 'iw', 'heb') or lang == 'Hebrew'
+              or 'Hebrew' in label0):
+            kind = 'human_he'
+            code = 'he'
         else:
             kind = 'other'
-            code = _LANG_CODES.get(lang, (lang[:2].lower() if lang else 'und'))
+            if not code:
+                code = _LANG_CODES.get(lang, (lang[:2].lower() if lang else 'und'))
 
         # De-dup identical picks (same source + filename + language).
         dedup_key = (parsed['source'], parsed['filename'], code)
@@ -465,12 +471,16 @@ def _search_inner(info, modal_progress=True):
         label = '{0} · {1}%'.format(provider, pct)
         if kind == 'mt_he':
             label = '[תרגום מכונה] ' + label
+        # Always show a language tag so the user knows the language even when
+        # Kodi can't render a flag for the code.
+        if kind == 'other' and code:
+            label = '[{0}] {1}'.format(code.upper(), label)
         if parsed['filename']:
             label = '{0}  —  {1}'.format(label, parsed['filename'])
 
         out.append({
             'filename': label,
-            'language': code,
+            'language': code or 'und',
             'link': _encode_engine_link(parsed, hi),
             'sync': 'true' if (kind == 'human_he' and pct >= 90) else 'false',
             'rating': _rating_for(pct, kind),
@@ -557,6 +567,21 @@ _LANG_CODES = {
     'Italian': 'it', 'Turkish': 'tr', 'Polish': 'pl', 'Dutch': 'nl',
 }
 
+# Fix common non-ISO-639-1 codes some providers emit so Kodi shows a flag.
+_LANG_NORMALIZE = {
+    'gr': 'el', 'gre': 'el', 'ell': 'el', 'greek': 'el',
+    'sp': 'es', 'spa': 'es', 'spanish': 'es',
+    'per': 'fa', 'fas': 'fa', 'far': 'fa', 'persian': 'fa',
+    'iw': 'he', 'heb': 'he', 'hebrew': 'he',
+    'eng': 'en', 'english': 'en',
+    'ara': 'ar', 'arabic': 'ar',
+    'rus': 'ru', 'russian': 'ru',
+    'fre': 'fr', 'fra': 'fr', 'french': 'fr',
+    'ger': 'de', 'deu': 'de', 'german': 'de',
+    'dut': 'nl', 'nld': 'nl', 'por': 'pt', 'ita': 'it',
+    'tur': 'tr', 'pol': 'pl', 'chi': 'zh', 'zho': 'zh',
+}
+
 
 _PROVIDER_LABEL = {
     '[Ktuvit]': 'Ktuvit',
@@ -596,6 +621,30 @@ def _encode_engine_link(parsed, hi):
 
 
 # ---- download -------------------------------------------------------
+
+_SUB_EXTS = ('.srt', '.ssa', '.ass', '.sub', '.smi', '.vtt', '.txt')
+
+
+def _looks_like_subtitle(path):
+    """True if the file is a plausible subtitle: a known extension and not an
+    HTML/zip blob (some providers hand back the error page or un-extracted
+    archive when a download actually failed)."""
+    try:
+        if os.path.splitext(path)[1].lower() not in _SUB_EXTS:
+            return False
+        with open(path, 'rb') as f:
+            head = f.read(256)
+        if not head.strip():
+            return False
+        if head[:2] == b'PK':          # zip
+            return False
+        low = head.lstrip().lower()
+        if low.startswith((b'<!doctype', b'<html', b'<?xml', b'<head')):
+            return False
+        return True
+    except Exception:
+        return True  # if unsure, don't block a possibly-good file
+
 
 def select_embedded(stream_index):
     """Switch Kodi to an embedded subtitle stream by index. Returns True
@@ -661,6 +710,15 @@ def _download_inner(payload):
     sub_file = module.download(download_data, sub_folder)
     if not sub_file or not os.path.isfile(sub_file):
         kodi_utils.log('subs_engine_bridge: download returned no file',
+                       level='WARNING')
+        return None
+
+    # Validate it's an actual subtitle, not an HTML error page / un-extracted
+    # archive a provider handed back on a failed download (e.g. YIFY 403).
+    # Otherwise Kodi tries to load garbage and shows "download failed".
+    if not _looks_like_subtitle(sub_file):
+        kodi_utils.log('subs_engine_bridge: downloaded file is not a valid '
+                       'subtitle ({0})'.format(os.path.basename(sub_file)),
                        level='WARNING')
         return None
 
