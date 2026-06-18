@@ -1,3 +1,8 @@
+v0.2.202
+- The legacy "Source language priority" toggles are now hidden when the
+  built-in engine is on -- the engine translates from ANY language, so those
+  per-language toggles were misleading.
+
 v0.2.201
 - Added "Test Telegram connection (diagnostic)" button: it reports the exact
   connection state and, optionally, the real result of sending a login code,
