@@ -208,9 +208,18 @@ def download(download_data,MySubFolder):
     
     # Example: https://yifysubtitles.ch/subtitles/dune-part-two-2024-hebrew-yify-618077
     subtitle_download_url = YIFY_DOWNLOAD_URL % SubPageLink
-        
+
+    # yifysubtitles.ch returns 403 / an HTML page to clients without a real
+    # browser User-Agent + a same-site Referer; send both so we get the zip.
+    _dl_headers = {
+        'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                       'AppleWebKit/537.36 (KHTML, like Gecko) '
+                       'Chrome/124.0 Safari/537.36'),
+        'Referer': YIFY_BASE_URL + '/subtitles/' + SubPageLink,
+        'Accept': 'application/zip,application/octet-stream,*/*',
+    }
     try:
-        sub_download_response = requests.get(subtitle_download_url, timeout=DEFAULT_REQUEST_TIMEOUT)
+        sub_download_response = requests.get(subtitle_download_url, headers=_dl_headers, timeout=DEFAULT_REQUEST_TIMEOUT)
         log.warning(f"DEBUG | [YIFY] | DownloadSubtitles sub_download_response: {sub_download_response.status_code}")
         sub_download_response.raise_for_status()  # Raise HTTPError for bad status codes (4xx, 5xx)
 
