@@ -1,3 +1,13 @@
+v0.2.231
+- Fix: subtitle search showed ONLY the community pool (no Ktuvit/Wizdom/
+  OpenSubtitles/etc.) and the on-play loading panel stopped appearing. The
+  engine's embedded-stream probe and its provider search were sharing one
+  try-block, so a single silent failure in the probe aborted the whole engine
+  step -- and the failure was logged at DEBUG (invisible). They now run in
+  SEPARATE guarded steps (a failure in one can't stop the other), failures are
+  logged at WARNING (visible), and a one-line "engine gate" log records whether
+  the engine is active -- so the providers run even if the embedded probe trips.
+
 v0.2.230
 - CRITICAL fix: "no results" for STREAMING sources (couldn't watch). POV's own
   debrid resolver (resolve_external_sources) crashed with an UnboundLocalError
