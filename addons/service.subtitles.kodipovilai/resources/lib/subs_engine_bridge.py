@@ -83,6 +83,29 @@ def _detect_release_name(info):
     return best
 
 
+def _release_ready(info):
+    """True once a REAL release name is available (not just the show/movie
+    title). The sync-% is computed from the release name; right after an
+    auto-advance to the next episode the real release (POV's picked_release,
+    the ListItem path, or the tagline) lags the title by a moment, during
+    which every match is 0%. We use this to (a) make autosub wait for the
+    release before its pre-search and (b) refuse to cache a search done before
+    the release settled -- which is why users previously had to exit + re-enter
+    the subtitle list to get correct percentages."""
+    if (info.get('picked_release') or '').strip():
+        return True
+    if (info.get('li_filename') or '').strip():
+        return True
+    if (info.get('tagline') or '').strip():
+        return True
+    fp = (info.get('filepath') or '').strip()
+    # A real local file path is itself the release name; a stream / debrid
+    # token URL is not, so for those we wait for one of the fields above.
+    if fp and '://' not in fp:
+        return True
+    return False
+
+
 def enabled():
     """Master gate. False => this whole module is inert."""
     try:
@@ -294,15 +317,25 @@ def search(info, modal_progress=True):
     """
     if not enabled():
         return []
+    # The sync-% is computed against the release name. Right after an
+    # auto-advance to the next episode the player metadata is still
+    # transitioning, so the release name is briefly empty and every match
+    # comes back 0%. We must NOT cache such a transient result -- otherwise
+    # the 0%-list sticks for 24h and the user has to exit + re-enter the
+    # subtitle list to get a fresh (correct) search. So the result cache is
+    # only consulted/written once a real release name is available.
+    cacheable = _release_ready(info)
     # Result cache: a repeat open of the same title returns instantly
     # instead of re-running every provider (this is a big part of why
     # DarkSubs feels faster -- it caches its sorted results for 24h).
-    cached = _cache_get(info)
-    if cached is not None:
-        return cached
+    if cacheable:
+        cached = _cache_get(info)
+        if cached is not None:
+            return cached
     try:
         out = _search_inner(info, modal_progress=modal_progress)
-        _cache_put(info, out)
+        if cacheable:
+            _cache_put(info, out)
         return out
     except Exception as e:
         kodi_utils.log('subs_engine_bridge.search failed: {0}'.format(e),
