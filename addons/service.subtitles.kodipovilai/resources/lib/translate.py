@@ -613,6 +613,30 @@ def _google_translate_and_save(src_text, source_lang, translated, info,
     return translated
 
 
+# When the auto-on-play flow is driving (service._autosub_on_play), success /
+# progress notifications are shown in the top overlay by the caller -- so the
+# scattered success toasts here are suppressed to avoid double messaging. Error
+# toasts still fire. Mirrors DarkSubs, which shows status only in its on-play
+# overlay, never as toasts.
+_QUIET = False
+
+
+def set_quiet(value):
+    global _QUIET
+    _QUIET = bool(value)
+
+
+def _status(msg, **kwargs):
+    """Success / informational status. Suppressed during auto-on-play (the
+    overlay shows it instead); a normal toast otherwise."""
+    if _QUIET:
+        return
+    try:
+        kodi_utils.notify(msg, **kwargs)
+    except Exception:
+        pass
+
+
 def resolve(link, info, progress_cb=None, progressive_cb=None):
     """Return a filesystem path to the SRT for the chosen link.
 
@@ -649,7 +673,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
 
     if kind == 'passthrough':
         path = payload.get('path')
-        kodi_utils.notify(
+        _status(
             'AI: כתובית קיימת (passthrough) - {0}'.format(
                 os.path.basename(path) if path else '?'),
             time_ms=4000)
@@ -664,7 +688,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             return None
         text = pool.fetch(info, payload.get('hash'))
         if not text:
-            kodi_utils.notify('AI: לא נמצאה כתובית במאגר', time_ms=4000)
+            _status('AI: לא נמצאה כתובית במאגר', time_ms=4000)
             return None
         import hashlib as _hpool
         sid = (payload.get('hash')
@@ -674,7 +698,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             with open(out, 'w', encoding='utf-8') as f:
                 f.write(text)
             _reapply_rtl_fix_in_place(out)
-            kodi_utils.notify('AI: כתוביות מהמאגר הקהילתי', time_ms=4000)
+            _status('AI: כתוביות מהמאגר הקהילתי', time_ms=4000)
             return out
         except OSError:
             return None
@@ -687,7 +711,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 from . import subs_engine_bridge
                 if subs_engine_bridge.select_embedded(
                         payload.get('stream_index')):
-                    kodi_utils.notify('כתובית עברית מובנה הופעלה',
+                    _status('כתובית עברית מובנה הופעלה',
                                       time_ms=4000)
             except Exception as e:
                 kodi_utils.log('resolve embedded select failed: {0}'
@@ -706,7 +730,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                            level='ERROR')
             path = None
         if path and os.path.isfile(path):
-            kodi_utils.notify('כתוביות עברית מ-{0}'.format(
+            _status('כתוביות עברית מ-{0}'.format(
                 payload.get('source') or 'מקור'), time_ms=4000)
             return path
         kodi_utils.notify('לא ניתן היה להוריד את הכתובית', time_ms=4000)
@@ -727,7 +751,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             kodi_utils.notify('AI: לא ניתן היה להוריד את כתובית המקור',
                               time_ms=4000)
             return None
-        kodi_utils.notify('AI: מוריד אנגלית ומתרגם לעברית...', time_ms=3000)
+        _status('AI: מוריד אנגלית ומתרגם לעברית...', time_ms=3000)
         payload = {'type': 'ai',
                    'source_lang': payload.get('src_lang') or 'en',
                    'local_path': eng_path,

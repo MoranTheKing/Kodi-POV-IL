@@ -1450,6 +1450,34 @@ def _autosub_on_play():
         except Exception:
             _eng_general = None
 
+        # While auto-on-play drives, success/progress toasts from resolve() are
+        # suppressed -- the top overlay shows status instead (exactly like
+        # DarkSubs, which never toasts during autosub).
+        try:
+            translate.set_quiet(True)
+        except Exception:
+            pass
+
+        def _final_overlay(msg, hold=5.0):
+            """Show a final status line in the top overlay for ~hold seconds
+            (DarkSubs shows its 'כתובית מוכנה' / 'אין כתוביות' line for ~5s
+            before the overlay closes). No-op if the overlay isn't up."""
+            if _eng_general is None:
+                return
+            try:
+                _eng_general.show_msg = msg
+            except Exception:
+                return
+            waited = 0.0
+            while waited < hold:
+                try:
+                    if not xbmc.Player().isPlayingVideo():
+                        break
+                except Exception:
+                    break
+                xbmc.sleep(200)
+                waited += 0.2
+
         # Right after onAVStarted the player metadata (imdb/title) often
         # isn't populated yet -- poll briefly until it is (mirrors how
         # DarkSubs waits for the video before searching).
@@ -1508,11 +1536,7 @@ def _autosub_on_play():
                     kodi_utils.set_current_subtitle(_elink)
                 except Exception:
                     pass
-                try:
-                    kodi_utils.notify('MoranSubs: הוחל תרגום מובנה בעברית',
-                                      time_ms=3000)
-                except Exception:
-                    pass
+                _final_overlay('[COLOR lightblue]הופעל תרגום מובנה בעברית[/COLOR]')
                 return  # embedded Hebrew applied -- it's the best, we're done
         except Exception:
             pass
@@ -1528,6 +1552,8 @@ def _autosub_on_play():
         he_list = [c for c in cands if c.get('language') == 'he']
         applied = False
         chosen_link = None
+        chosen_name = ''
+        chosen_from_cache = False
         failed_sources = set()
         for c in he_list[:12]:
             link2 = c.get('link') or ''
@@ -1548,6 +1574,7 @@ def _autosub_on_play():
                 # IS success for an embedded pick.
                 applied = True
                 chosen_link = link2
+                chosen_name = 'תרגום מובנה בעברית'
                 break
             if path:
                 try:
@@ -1557,6 +1584,16 @@ def _autosub_on_play():
                         p.showSubtitles(True)
                     applied = True
                     chosen_link = link2
+                    # Full subtitle name + cache note for the overlay status,
+                    # exactly like DarkSubs's "כתובית מוכנה\n{name}".
+                    chosen_name = (pl.get('filename')
+                                   or c.get('filename') or '').strip()
+                    try:
+                        if pl.get('type') == 'engine':
+                            chosen_from_cache = bool(
+                                subs_engine_bridge.LAST_DOWNLOAD_FROM_CACHE)
+                    except Exception:
+                        chosen_from_cache = False
                     break
                 except Exception:
                     pass
@@ -1572,11 +1609,12 @@ def _autosub_on_play():
                 except Exception:
                     p2 = None
                 if p2 and p2.get('type') == 'engine_ai':
-                    try:
-                        kodi_utils.notify('MoranSubs: אין עברית — מתרגם ב-AI',
-                                          time_ms=4000)
-                    except Exception:
-                        pass
+                    if _eng_general is not None:
+                        try:
+                            _eng_general.show_msg = (
+                                '[COLOR lightblue]אין עברית — מתרגם ב-AI[/COLOR]')
+                        except Exception:
+                            pass
                     try:
                         path = translate.resolve(c.get('link'), info)
                     except Exception:
@@ -1594,21 +1632,23 @@ def _autosub_on_play():
                     break
 
         if not applied:
-            try:
-                kodi_utils.notify('MoranSubs: לא נמצאה כתובית עברית',
-                                  time_ms=3000)
-            except Exception:
-                pass
+            _final_overlay('[COLOR red]לא נמצאה כתובית עברית[/COLOR]', hold=4.0)
             return
         # Remember it as the current sub so the picker marks it '» נוכחית'.
         try:
             kodi_utils.set_current_subtitle(chosen_link or '')
         except Exception:
             pass
-        try:
-            kodi_utils.notify('MoranSubs: הוחלה כתובית עברית', time_ms=3000)
-        except Exception:
-            pass
+        # DarkSubs-style final status in the top overlay (full subtitle name,
+        # + cache note when it came straight from the Cached_subs folder),
+        # instead of a success toast.
+        _status_msg = '[COLOR lightblue]כתובית מוכנה'
+        if chosen_name:
+            _status_msg += '\n' + chosen_name
+        if chosen_from_cache:
+            _status_msg += '\n(נטענה מהקאש)'
+        _status_msg += '[/COLOR]'
+        _final_overlay(_status_msg)
     except Exception as e:
         try:
             kodi_utils.log('autosub_on_play failed: {0}'.format(e),
@@ -1617,6 +1657,10 @@ def _autosub_on_play():
             pass
     finally:
         _AUTOSUB_STATE['busy'] = False
+        try:
+            translate.set_quiet(False)
+        except Exception:
+            pass
         # Close the overlay (show_results exits on 'END').
         if _eng_general is not None:
             try:

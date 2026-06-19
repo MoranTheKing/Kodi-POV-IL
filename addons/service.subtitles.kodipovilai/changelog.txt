@@ -1,3 +1,14 @@
+v0.2.226
+- On-play subtitle search now shows the prominent DarkSubs-style status panel at
+  the top of the screen (dark box) with LIVE per-source counts as each source
+  reports how many subtitles it found -- restored the missing background art so
+  the panel is clearly visible over the video.
+- Replaced the success toasts with DarkSubs's in-place status: at the start of a
+  movie/episode the top panel now shows "כתובית מוכנה" + the full subtitle name
+  (and "(נטענה מהקאש)" when it was served straight from the cache), instead of
+  popping a toast for every successful load. Error/abort notifications still
+  show as before.
+
 v0.2.225
 - Ktuvit source turned OFF again by default for everyone (its downloads are
   failing on the server again). Done once; if you turn it back ON yourself
