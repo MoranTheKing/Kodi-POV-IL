@@ -941,7 +941,8 @@ def _download_inner(payload):
             if hit:
                 kodi_utils.log('subs_engine_bridge: cached file hit ({0})'
                                .format(os.path.basename(hit)), level='INFO')
-                global LAST_DOWNLOAD_FROM_CACHE
+                # (LAST_DOWNLOAD_FROM_CACHE is already declared global at the
+                # top of this function -- re-declaring it here is a SyntaxError.)
                 LAST_DOWNLOAD_FROM_CACHE = True
                 return hit
         except Exception as e:
