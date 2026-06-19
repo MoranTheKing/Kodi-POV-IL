@@ -2524,10 +2524,11 @@ def _maybe_default_builtin_engine():
     except Exception:
         return
     try:
-        if kodi_utils.get_setting('_builtin_engine_rollout_v1', '') == '1':
+        if kodi_utils.get_setting('_builtin_engine_rollout_v2', '') == '1':
             return
         # Flip the master engine toggle on (covers users still on the old
-        # default 'false'; an explicit 'true' is already what we want).
+        # default 'false', AND users where it drifted off so DarkSubs came back
+        # with no translation -- re-forced once via the v2 marker).
         if kodi_utils.get_setting('use_builtin_engine', 'false') != 'true':
             kodi_utils.set_setting('use_builtin_engine', 'true')
         # Auto-search & apply on play, like DarkSubs's autosub. Defaults to
@@ -2535,8 +2536,8 @@ def _maybe_default_builtin_engine():
         # normally a no-op; flip only if a tester explicitly turned it off.
         if kodi_utils.get_setting('engine_autosub', 'true') == 'false':
             kodi_utils.set_setting('engine_autosub', 'true')
-        kodi_utils.set_setting('_builtin_engine_rollout_v1', '1')
-        kodi_utils.log('built-in engine enabled for everyone (rollout v1)',
+        kodi_utils.set_setting('_builtin_engine_rollout_v2', '1')
+        kodi_utils.log('built-in engine enabled for everyone (rollout v2)',
                        level='INFO')
     except Exception as e:
         try:
