@@ -1376,6 +1376,40 @@ def _maybe_surface_darksubs_status():
             pass
 
 
+def _maybe_patch_pov_debrid_resolve():
+    """Harden plugin.video.pov's debrid.resolve_external_sources() so an early
+    failure can't raise an UnboundLocalError ('torrent_id') from its own except
+    handler -- that crash aborts POV's "try the next source" fallback loop and
+    leaves the user with NO playable source / no source dialog ("no results"),
+    even though sources were found. Always applied (not gated): it only makes
+    POV's existing error path safe, helping both auto-pick and manual picks."""
+    try:
+        from resources.lib import pov_debrid_resolve_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_debrid_resolve_patcher.ensure_patched()
+        if status in ('patched', 'unmatched', 'compile_failed',
+                      'write_failed', 'read_failed'):
+            kodi_utils.log('pov_debrid_resolve_patcher: ' + status,
+                           level=('INFO' if status == 'patched' else 'WARNING'))
+        # Cycle POV so its reuse-language-invoker interpreter re-imports the
+        # fixed debrid.py THIS session (otherwise it only applies on a later
+        # restart) -- this is a playback-breaking bug, so apply it immediately.
+        if status == 'patched':
+            try:
+                from resources.lib import pov_reload
+                pov_reload.note_patched()
+            except Exception:
+                pass
+    except Exception as e:
+        try:
+            kodi_utils.log('pov_debrid_resolve_patcher failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_remember_source():
     """PHASE 1 (capture only) of "remember the source the user picked": patch
     POV's sources.py to record the chosen source per media (gated by our
@@ -2880,6 +2914,11 @@ def main():
     # debrid services to ~85-95% (the full release name has the
     # encoder/source/group tokens that subtitle releases carry).
     _maybe_patch_pov_source_name()
+
+    # Harden POV's debrid resolve_external_sources() against its own
+    # UnboundLocalError crash that aborts the source-fallback loop and breaks
+    # playback ("no results"). Compile-checked; only makes the error path safe.
+    _maybe_patch_pov_debrid_resolve()
 
     # PHASE 1 capture for "remember the source the user picked" (gated by the
     # remember_source setting, OFF by default; compile-checked so it can't
