@@ -1,3 +1,12 @@
+v0.2.228
+- CRITICAL fix: subtitles disappeared from every source (only the community
+  pool showed) after the caching update. The 24h result cache was storing
+  EMPTY search results -- so a single transient failure (timeout / rate-limit /
+  network blip) hid all sources for 24h. Now an empty/failed search is never
+  cached, and an existing empty cache entry is ignored and re-searched, so
+  affected devices recover immediately. (This matches DarkSubs, which never
+  caches an empty result.)
+
 v0.2.227
 - Fixed: after the show auto-advanced to the next episode, the subtitle list
   showed no match percentages until you exited and re-entered it. Right after an
