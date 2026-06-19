@@ -1,3 +1,13 @@
+v0.2.232
+- THE fix for "only community-pool subtitles + no on-play loading panel": the
+  sources-engine bridge had a SyntaxError (a duplicate `global` declaration
+  added in 0.2.226), so `import subs_engine_bridge` failed every time -- the
+  engine never ran at all, leaving only the community pool, and the autosub
+  overlay couldn't load. Removed the duplicate declaration. Now every source
+  (Ktuvit/Wizdom/OpenSubtitles/...) and the on-play loading panel work again.
+  Also added a real compile() check to the build so a parse-clean-but-compile-
+  broken file can never ship again.
+
 v0.2.231
 - Fix: subtitle search showed ONLY the community pool (no Ktuvit/Wizdom/
   OpenSubtitles/etc.) and the on-play loading panel stopped appearing. The
