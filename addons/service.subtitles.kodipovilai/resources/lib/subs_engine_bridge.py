@@ -177,6 +177,22 @@ def ensure_engine_settings():
             addon.setSetting('_engine_defaults_v', _ENGINE_DEFAULTS_VERSION)
         except Exception:
             pass
+    # One-time wipe of the now-retired result cache (engine_cache). Buggy
+    # versions could leave poisoned entries there; the cache is no longer read,
+    # but clear it once so nothing stale lingers. Marker-gated.
+    try:
+        if (addon.getSetting('_engine_cache_wiped_v1') or '') != '1':
+            d = _cache_dir()
+            if d and os.path.isdir(d):
+                for n in os.listdir(d):
+                    if n.endswith('.json'):
+                        try:
+                            os.remove(os.path.join(d, n))
+                        except OSError:
+                            pass
+            addon.setSetting('_engine_cache_wiped_v1', '1')
+    except Exception:
+        pass
 
 
 
@@ -317,34 +333,14 @@ def search(info, modal_progress=True):
     """
     if not enabled():
         return []
-    # The sync-% is computed against the release name. Right after an
-    # auto-advance to the next episode the player metadata is still
-    # transitioning, so the release name is briefly empty and every match
-    # comes back 0%. We must NOT cache such a transient result -- otherwise
-    # the 0%-list sticks for 24h and the user has to exit + re-enter the
-    # subtitle list to get a fresh (correct) search. So the result cache is
-    # only consulted/written once a real release name is available.
-    cacheable = _release_ready(info)
-    # Result cache: a repeat open of the same title returns instantly
-    # instead of re-running every provider (this is a big part of why
-    # DarkSubs feels faster -- it caches its sorted results for 24h).
-    if cacheable:
-        cached = _cache_get(info)
-        # Only a NON-EMPTY cached result counts as a hit. An empty cached list
-        # is treated as a miss so we re-search -- this also lets devices that
-        # already have a poisoned empty entry recover immediately instead of
-        # waiting 24h for it to expire.
-        if cached:
-            return cached
+    # NOTE: the 24h result cache was disabled in 0.2.229. It regressed search
+    # (only the community pool showed, every source empty) and even after the
+    # empty-result guard the safest behaviour -- and exactly what worked before
+    # caching was introduced -- is to ALWAYS run a fresh search. The on-disk
+    # engine_cache is intentionally NOT read or written here anymore, so a
+    # poisoned entry from the buggy versions can never be served again.
     try:
-        out = _search_inner(info, modal_progress=modal_progress)
-        # NEVER cache an empty / failed search. A transient timeout, rate-limit
-        # (429) or network hiccup returns [] -- caching that would hide every
-        # source for 24h (the user sees only the community pool). DarkSubs's
-        # cache does the same: it returns an empty result without storing it.
-        if cacheable and out:
-            _cache_put(info, out)
-        return out
+        return _search_inner(info, modal_progress=modal_progress)
     except Exception as e:
         kodi_utils.log('subs_engine_bridge.search failed: {0}'.format(e),
                        level='WARNING')

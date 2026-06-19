@@ -1,3 +1,11 @@
+v0.2.229
+- CRITICAL: removed the 24h search-result cache entirely. It was the source of
+  the "only the community pool shows, every source empty" regression. The engine
+  now ALWAYS does a fresh search -- exactly how it behaved (and worked) before
+  the cache was ever added. Any leftover cache files from the buggy versions are
+  wiped once on startup. (The separate downloaded-file cache and the on-play
+  status panel are unaffected.)
+
 v0.2.228
 - CRITICAL fix: subtitles disappeared from every source (only the community
   pool showed) after the caching update. The 24h result cache was storing
