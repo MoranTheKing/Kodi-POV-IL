@@ -1,3 +1,16 @@
+v0.2.225
+- Ktuvit source turned OFF again by default for everyone (its downloads are
+  failing on the server again). Done once; if you turn it back ON yourself
+  afterwards it stays on -- we never force it off again.
+- Faster subtitle loading, copied one-to-one from DarkSubs:
+  * Persistent downloaded-file cache ("Cached_subs"): a subtitle you already
+    picked once is served straight from disk next time (same source + language +
+    file) with no re-download -- so re-picking is instant, exactly like DarkSubs.
+  * Search-result cache extended to 24h (was 6h), matching DarkSubs. Because the
+    on-play auto-search and the in-player "choose subtitles" picker share this
+    cache, opening the picker after play returns instantly instead of
+    re-searching every provider.
+
 v0.2.224
 - Translation modes wired up properly:
   * "Google" in settings now really uses Google Translate (like DarkSubs did) --
