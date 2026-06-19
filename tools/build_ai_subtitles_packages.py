@@ -692,8 +692,28 @@ def assert_no_standalone_build_payload(zip_path: Path) -> None:
                 )
 
 
+def assert_python_compiles() -> None:
+    """compile() every .py in the source addon. ast.parse() is NOT enough --
+    errors like 'name X is assigned to before global declaration' only surface
+    at compile() (symbol-table) time, and one such bug shipped in the engine
+    bridge and silently disabled the whole sources engine. Hard-fail the build
+    so it can never happen again."""
+    import py_compile
+    failures = []
+    for path in sorted(SRC.rglob("*.py")):
+        try:
+            py_compile.compile(str(path), doraise=True)
+        except py_compile.PyCompileError as exc:  # noqa: PERF203
+            failures.append("{0}: {1}".format(
+                path.relative_to(ROOT), str(exc).splitlines()[-1]))
+    if failures:
+        raise SystemExit("BUILD ABORTED -- Python compile errors:\n  "
+                         + "\n  ".join(failures))
+
+
 def main() -> None:
     DIST.mkdir(exist_ok=True)
+    assert_python_compiles()
     standalone = build_one("service.subtitles.kodipovilai", standalone=True)
     build = build_one("service.subtitles.kodipovilai-build", standalone=False)
     assert_no_standalone_build_payload(standalone)
