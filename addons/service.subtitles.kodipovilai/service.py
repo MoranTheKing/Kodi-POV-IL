@@ -1482,10 +1482,20 @@ def _autosub_on_play():
         # isn't populated yet -- poll briefly until it is (mirrors how
         # DarkSubs waits for the video before searching).
         info = {}
-        for _ in range(30):  # up to ~6s
+        for _ in range(40):  # up to ~8s
             info = kodi_utils.current_video_info()
-            if (info.get('imdb_id') or info.get('tmdb_id')
-                    or info.get('title')):
+            have_id = (info.get('imdb_id') or info.get('tmdb_id')
+                       or info.get('title'))
+            # Also wait for the release name to settle: on an auto-advance to
+            # the next episode the metadata transitions a moment after play,
+            # and the sync-% is computed from the release name -- searching
+            # (and caching) before it's ready yields 0% matches. Once we have
+            # both an id/title AND a release name, proceed.
+            try:
+                have_release = subs_engine_bridge._release_ready(info)
+            except Exception:
+                have_release = True
+            if have_id and have_release:
                 break
             try:
                 if not xbmc.Player().isPlayingVideo():
