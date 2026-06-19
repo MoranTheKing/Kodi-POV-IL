@@ -1,3 +1,14 @@
+v0.2.230
+- CRITICAL fix: "no results" for STREAMING sources (couldn't watch). POV's own
+  debrid resolver (resolve_external_sources) crashed with an UnboundLocalError
+  ('torrent_id') from its error handler whenever a source failed to resolve
+  early (e.g. a torrent not cached on the debrid). That crash aborted POV's
+  "try the next source" fallback loop, so a single bad source killed the whole
+  list and left you with no playable source and no source dialog. We now harden
+  that function (initialise its locals) so it fails gracefully and POV moves on
+  to the next source -- fixing both auto-pick and manual source selection. (This
+  is a guard around POV's existing error path; compile-checked before applying.)
+
 v0.2.228
 - CRITICAL fix: subtitles disappeared from every source (only the community
   pool showed) after the caching update. The 24h result cache was storing
