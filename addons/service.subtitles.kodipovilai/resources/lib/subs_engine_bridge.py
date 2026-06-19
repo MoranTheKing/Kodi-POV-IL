@@ -330,11 +330,19 @@ def search(info, modal_progress=True):
     # DarkSubs feels faster -- it caches its sorted results for 24h).
     if cacheable:
         cached = _cache_get(info)
-        if cached is not None:
+        # Only a NON-EMPTY cached result counts as a hit. An empty cached list
+        # is treated as a miss so we re-search -- this also lets devices that
+        # already have a poisoned empty entry recover immediately instead of
+        # waiting 24h for it to expire.
+        if cached:
             return cached
     try:
         out = _search_inner(info, modal_progress=modal_progress)
-        if cacheable:
+        # NEVER cache an empty / failed search. A transient timeout, rate-limit
+        # (429) or network hiccup returns [] -- caching that would hide every
+        # source for 24h (the user sees only the community pool). DarkSubs's
+        # cache does the same: it returns an empty result without storing it.
+        if cacheable and out:
             _cache_put(info, out)
         return out
     except Exception as e:
