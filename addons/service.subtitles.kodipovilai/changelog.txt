@@ -1,3 +1,11 @@
+v0.2.233
+- Re-enable the built-in engine for everyone, once (rollout v2). Some users who
+  updated were left with the engine toggled off, so DarkSubs came back and they
+  got no Hebrew translation. This re-forces use_builtin_engine + engine_autosub
+  ON a single time (now that the engine SyntaxError is fixed) -> DarkSubs is
+  disabled again and MoranSubs translates. If you intentionally turn the engine
+  off afterwards, that sticks.
+
 v0.2.232
 - THE fix for "only community-pool subtitles + no on-play loading panel": the
   sources-engine bridge had a SyntaxError (a duplicate `global` declaration
