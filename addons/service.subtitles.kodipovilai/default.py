@@ -98,6 +98,22 @@ def _handle_search(handle, params):
                   level='DEBUG')
 
     info = kodi_utils.current_video_info()
+    # Right after an auto-advance to the next episode the player metadata is
+    # still transitioning, so the release name (used for the sync-%) is briefly
+    # empty -- searching now would show 0% until the user exits and re-enters.
+    # Wait briefly (bounded, only when the engine is on and the release isn't
+    # ready yet) so the FIRST open already shows correct percentages.
+    try:
+        from resources.lib import subs_engine_bridge as _seb
+        if _seb.enabled():
+            for _ in range(15):  # up to ~3s
+                if _seb._release_ready(info):
+                    break
+                import xbmc as _xbmc
+                _xbmc.sleep(200)
+                info = kodi_utils.current_video_info()
+    except Exception:
+        pass
     _safe_log('search: ' + repr({k: v for k, v in info.items() if v}))
 
     try:

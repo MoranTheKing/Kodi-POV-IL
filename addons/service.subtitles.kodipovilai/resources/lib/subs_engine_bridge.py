@@ -83,6 +83,29 @@ def _detect_release_name(info):
     return best
 
 
+def _release_ready(info):
+    """True once a REAL release name is available (not just the show/movie
+    title). The sync-% is computed from the release name; right after an
+    auto-advance to the next episode the real release (POV's picked_release,
+    the ListItem path, or the tagline) lags the title by a moment, during
+    which every match is 0%. We use this to (a) make autosub wait for the
+    release before its pre-search and (b) refuse to cache a search done before
+    the release settled -- which is why users previously had to exit + re-enter
+    the subtitle list to get correct percentages."""
+    if (info.get('picked_release') or '').strip():
+        return True
+    if (info.get('li_filename') or '').strip():
+        return True
+    if (info.get('tagline') or '').strip():
+        return True
+    fp = (info.get('filepath') or '').strip()
+    # A real local file path is itself the release name; a stream / debrid
+    # token URL is not, so for those we wait for one of the fields above.
+    if fp and '://' not in fp:
+        return True
+    return False
+
+
 def enabled():
     """Master gate. False => this whole module is inert."""
     try:
@@ -294,15 +317,25 @@ def search(info, modal_progress=True):
     """
     if not enabled():
         return []
+    # The sync-% is computed against the release name. Right after an
+    # auto-advance to the next episode the player metadata is still
+    # transitioning, so the release name is briefly empty and every match
+    # comes back 0%. We must NOT cache such a transient result -- otherwise
+    # the 0%-list sticks for 24h and the user has to exit + re-enter the
+    # subtitle list to get a fresh (correct) search. So the result cache is
+    # only consulted/written once a real release name is available.
+    cacheable = _release_ready(info)
     # Result cache: a repeat open of the same title returns instantly
     # instead of re-running every provider (this is a big part of why
     # DarkSubs feels faster -- it caches its sorted results for 24h).
-    cached = _cache_get(info)
-    if cached is not None:
-        return cached
+    if cacheable:
+        cached = _cache_get(info)
+        if cached is not None:
+            return cached
     try:
         out = _search_inner(info, modal_progress=modal_progress)
-        _cache_put(info, out)
+        if cacheable:
+            _cache_put(info, out)
         return out
     except Exception as e:
         kodi_utils.log('subs_engine_bridge.search failed: {0}'.format(e),
@@ -648,6 +681,11 @@ _SUB_EXTS = ('.srt', '.ssa', '.ass', '.sub', '.smi', '.vtt', '.txt')
 # folder. A subtitle the user already picked once is served straight from disk
 # on the next pick of the SAME source+language+filename -- no network round
 # trip -- which is the single biggest reason re-picking in DarkSubs is instant.
+# Set by _download_inner on each call: True when the subtitle was served from
+# the persistent Cached_subs folder (no network fetch). The auto-on-play overlay
+# reads it to show "(נטענה מהקאש)", exactly like DarkSubs's cache note.
+LAST_DOWNLOAD_FROM_CACHE = False
+
 _CACHED_SUBS_DIRNAME = 'Cached_subs'
 # DarkSubs caches every download keyed {source}_{language}_{filename}{ext} and
 # wipes the whole folder once it exceeds this many files (its
@@ -831,6 +869,8 @@ def download(payload):
 
 
 def _download_inner(payload):
+    global LAST_DOWNLOAD_FROM_CACHE
+    LAST_DOWNLOAD_FROM_CACHE = False
     source = payload.get('source') or ''
     download_data = payload.get('download_data') or {}
     language = payload.get('language') or 'Hebrew'
@@ -893,6 +933,8 @@ def _download_inner(payload):
             if hit:
                 kodi_utils.log('subs_engine_bridge: cached file hit ({0})'
                                .format(os.path.basename(hit)), level='INFO')
+                global LAST_DOWNLOAD_FROM_CACHE
+                LAST_DOWNLOAD_FROM_CACHE = True
                 return hit
         except Exception as e:
             kodi_utils.log('subs_engine_bridge: cache lookup skipped: {0}'
