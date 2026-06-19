@@ -319,7 +319,7 @@ def search(info, modal_progress=True):
 
 # ---- result cache (per media, short TTL) ----------------------------
 
-_CACHE_TTL = 6 * 3600  # seconds
+_CACHE_TTL = 24 * 3600  # seconds (matches DarkSubs's 24h search-result cache)
 
 
 def _cache_key(info):
@@ -644,6 +644,107 @@ def _encode_engine_link(parsed, hi):
 
 _SUB_EXTS = ('.srt', '.ssa', '.ass', '.sub', '.smi', '.vtt', '.txt')
 
+# Persistent downloaded-file cache, one-to-one with DarkSubs's "Cached_subs"
+# folder. A subtitle the user already picked once is served straight from disk
+# on the next pick of the SAME source+language+filename -- no network round
+# trip -- which is the single biggest reason re-picking in DarkSubs is instant.
+_CACHED_SUBS_DIRNAME = 'Cached_subs'
+# DarkSubs caches every download keyed {source}_{language}_{filename}{ext} and
+# wipes the whole folder once it exceeds this many files (its
+# "subtitle_trans_cache" setting). We keep the same count-based prune.
+_CACHED_SUBS_MAX = 200
+_CACHED_SUBS_EXTS = ('.srt', '.idx', '.sup', '.sub', '.str', '.ass', '.ssa',
+                     '.smi', '.vtt', '.txt')
+
+
+def _cached_subs_dir():
+    try:
+        import xbmcvfs
+        import xbmcaddon
+        base = xbmcvfs.translatePath(
+            xbmcaddon.Addon('service.subtitles.kodipovilai')
+            .getAddonInfo('profile'))
+        d = os.path.join(base, _CACHED_SUBS_DIRNAME)
+        if not os.path.isdir(d):
+            os.makedirs(d)
+        return d
+    except Exception:
+        return None
+
+
+def _cached_subs_max():
+    # Honour DarkSubs's subtitle_trans_cache setting if present, else default.
+    try:
+        v = int(kodi_utils.get_setting('subtitle_trans_cache', '') or 0)
+        if v > 0:
+            return v
+    except Exception:
+        pass
+    return _CACHED_SUBS_MAX
+
+
+def _cached_subs_keybase(cache_dir, source, language, filename):
+    """The DarkSubs cache stem: <dir>/<source>_<language>_<filename>. Filename
+    components are sanitised so a provider's title can't escape the folder or
+    break the path; the value is still stable per pick, so a repeat pick hits
+    the same stem."""
+    def _safe(s):
+        s = str(s or '')
+        out = []
+        for ch in s:
+            if ch.isalnum() or ch in (' ', '.', '-', '_', '(', ')', '[', ']'):
+                out.append(ch)
+            else:
+                out.append('_')
+        return ''.join(out).strip() or '_'
+    stem = '{0}_{1}_{2}'.format(_safe(source), _safe(language),
+                                _safe(filename))
+    return os.path.join(cache_dir, stem)
+
+
+def _cached_subs_lookup(keybase):
+    """Return an existing cached file for this stem (any known ext), or None."""
+    for ext in _CACHED_SUBS_EXTS:
+        p = keybase + ext
+        try:
+            if os.path.isfile(p):
+                return p
+        except Exception:
+            pass
+    return None
+
+
+def _cached_subs_prune(cache_dir):
+    """Match DarkSubs: once the folder exceeds the cap, wipe it wholesale (a
+    simple, predictable bound that never blocks a download)."""
+    try:
+        names = os.listdir(cache_dir)
+    except Exception:
+        return
+    if len(names) <= _cached_subs_max():
+        return
+    for n in names:
+        try:
+            os.remove(os.path.join(cache_dir, n))
+        except Exception:
+            pass
+
+
+def _cached_subs_store(keybase, sub_file):
+    """Copy a freshly-downloaded subtitle into the cache (if not already there),
+    preserving its extension -- exactly like DarkSubs's shutil.copy."""
+    try:
+        import shutil
+        ext = os.path.splitext(sub_file)[1] or '.srt'
+        dest = keybase + ext
+        if not os.path.exists(dest):
+            shutil.copy(sub_file, dest)
+        return dest
+    except Exception as e:
+        kodi_utils.log('subs_engine_bridge: cache store skipped: {0}'
+                       .format(e), level='DEBUG')
+        return None
+
 
 def _looks_like_subtitle(path):
     """True if the file is a plausible subtitle: not an HTML/zip blob (some
@@ -776,6 +877,28 @@ def _download_inner(payload):
     except OSError:
         pass
 
+    # DarkSubs-style downloaded-file cache: if this exact subtitle (same
+    # source + language + filename) was fetched before, serve it from disk
+    # and skip the network download entirely -- this is what makes re-picking
+    # a subtitle instant. The cached file was already validated + punctuation-
+    # fixed when it was first stored, so we return it straight away.
+    cache_dir = _cached_subs_dir()
+    keybase = None
+    if cache_dir:
+        try:
+            _cached_subs_prune(cache_dir)
+            keybase = _cached_subs_keybase(cache_dir, source, language,
+                                           filename)
+            hit = _cached_subs_lookup(keybase)
+            if hit:
+                kodi_utils.log('subs_engine_bridge: cached file hit ({0})'
+                               .format(os.path.basename(hit)), level='INFO')
+                return hit
+        except Exception as e:
+            kodi_utils.log('subs_engine_bridge: cache lookup skipped: {0}'
+                           .format(e), level='DEBUG')
+            keybase = None
+
     sub_file = module.download(download_data, sub_folder)
     if not sub_file or not os.path.isfile(sub_file):
         kodi_utils.log('subs_engine_bridge: download returned no file '
@@ -813,5 +936,10 @@ def _download_inner(payload):
     except Exception as e:
         kodi_utils.log('subs_engine_bridge: punct fix skipped: {0}'
                        .format(e), level='DEBUG')
+
+    # Store the validated, punctuation-fixed file in the persistent cache so
+    # the next pick of the same subtitle is served from disk (see above).
+    if keybase:
+        _cached_subs_store(keybase, sub_file)
 
     return sub_file
