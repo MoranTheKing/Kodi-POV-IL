@@ -1,3 +1,12 @@
+v0.2.227
+- Fixed: after the show auto-advanced to the next episode, the subtitle list
+  showed no match percentages until you exited and re-entered it. Right after an
+  auto-advance the player's release name is still transitioning, so the first
+  search matched against an empty name (0%) -- and since results are cached for
+  24h, that empty-percent list stuck. Now the search waits for the release name
+  to settle, and a search done before it's ready is no longer cached, so the
+  correct percentages show on the first open.
+
 v0.2.226
 - On-play subtitle search now shows the prominent DarkSubs-style status panel at
   the top of the screen (dark box) with LIVE per-source counts as each source
