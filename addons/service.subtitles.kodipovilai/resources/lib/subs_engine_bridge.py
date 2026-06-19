@@ -648,6 +648,11 @@ _SUB_EXTS = ('.srt', '.ssa', '.ass', '.sub', '.smi', '.vtt', '.txt')
 # folder. A subtitle the user already picked once is served straight from disk
 # on the next pick of the SAME source+language+filename -- no network round
 # trip -- which is the single biggest reason re-picking in DarkSubs is instant.
+# Set by _download_inner on each call: True when the subtitle was served from
+# the persistent Cached_subs folder (no network fetch). The auto-on-play overlay
+# reads it to show "(נטענה מהקאש)", exactly like DarkSubs's cache note.
+LAST_DOWNLOAD_FROM_CACHE = False
+
 _CACHED_SUBS_DIRNAME = 'Cached_subs'
 # DarkSubs caches every download keyed {source}_{language}_{filename}{ext} and
 # wipes the whole folder once it exceeds this many files (its
@@ -831,6 +836,8 @@ def download(payload):
 
 
 def _download_inner(payload):
+    global LAST_DOWNLOAD_FROM_CACHE
+    LAST_DOWNLOAD_FROM_CACHE = False
     source = payload.get('source') or ''
     download_data = payload.get('download_data') or {}
     language = payload.get('language') or 'Hebrew'
@@ -893,6 +900,8 @@ def _download_inner(payload):
             if hit:
                 kodi_utils.log('subs_engine_bridge: cached file hit ({0})'
                                .format(os.path.basename(hit)), level='INFO')
+                global LAST_DOWNLOAD_FROM_CACHE
+                LAST_DOWNLOAD_FROM_CACHE = True
                 return hit
         except Exception as e:
             kodi_utils.log('subs_engine_bridge: cache lookup skipped: {0}'
