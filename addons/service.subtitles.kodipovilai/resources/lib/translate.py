@@ -266,11 +266,29 @@ def list_candidates(info, modal_progress=True):
     # etc.). When the gate is off the bridge returns [] without importing
     # the engine, so this block is a no-op.
     engine_human, engine_mt, engine_other, engine_embedded = [], [], [], []
+    _engine_on = False
     try:
         from . import subs_engine_bridge
-        if subs_engine_bridge.enabled():
+        _engine_on = subs_engine_bridge.enabled()
+    except Exception as e:
+        kodi_utils.log('engine import/enabled() failed: {0}'.format(e),
+                       level='WARNING')
+    kodi_utils.log('engine gate: enabled={0}'.format(_engine_on), level='INFO')
+    if _engine_on:
+        # Embedded-stream detection and the provider search are INDEPENDENT --
+        # run them in SEPARATE try blocks so a failure in one (e.g. the player
+        # stream probe) can NEVER stop the other. Previously a single exception
+        # in embedded_candidates aborted the whole block and the provider search
+        # never ran, leaving only the community pool. Failures are logged at
+        # WARNING (not DEBUG) so they're visible without a debug log.
+        try:
             engine_embedded = subs_engine_bridge.embedded_candidates(info)
-            for c in subs_engine_bridge.search(info, modal_progress=modal_progress):
+        except Exception as e:
+            kodi_utils.log('engine embedded_candidates failed: {0}'.format(e),
+                           level='WARNING')
+        try:
+            for c in subs_engine_bridge.search(info,
+                                               modal_progress=modal_progress):
                 k = c.get('_engine_kind', 'human_he')
                 if k == 'human_he':
                     engine_human.append(c)
@@ -278,9 +296,9 @@ def list_candidates(info, modal_progress=True):
                     engine_mt.append(c)
                 else:
                     engine_other.append(c)
-    except Exception as e:
-        kodi_utils.log('engine search skipped: {0}'.format(e),
-                       level='DEBUG')
+        except Exception as e:
+            kodi_utils.log('engine search failed: {0}'.format(e),
+                           level='WARNING')
 
     # Language display order (the user's requested grouping): Hebrew first
     # (handled above as its own groups), then English, Spanish, then the other
