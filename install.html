@@ -512,9 +512,18 @@
         <h4>שלב ד' — התקן את התוסף מהמאגר</h4>
         <ul>
           <li>Add-ons → Install from repository → <strong>POV IL - תרגום AI</strong></li>
-          <li>Subtitle add-ons → <strong>Kodi POV IL - AI Subtitles</strong> → Install</li>
+          <li>Subtitle add-ons (תוספי כתוביות) → <strong>MoranSubs</strong> → Install</li>
           <li>מעכשיו Kodi יעדכן אותו אוטומטית בכל גרסה חדשה.</li>
         </ul>
+        <div class="callout warn">
+          <strong>קיבלת "לא ניתן להתחבר למאגר"?</strong> זה כמעט תמיד זמני — Kodi לפעמים שומר כישלון חיבור רגעי מיד אחרי התקנת המאגר. כך פותרים:
+          <ul>
+            <li>ודא שיש חיבור אינטרנט תקין למכשיר.</li>
+            <li>חזור אחורה ולחץ שוב על <strong>POV IL - תרגום AI</strong> (לרוב מתחבר בניסיון השני).</li>
+            <li>אם עדיין לא — סגור ופתח את Kodi מחדש, ואז נסה שוב. אפשר גם: Add-ons → לחיצה ארוכה על המאגר → <strong>Check for updates</strong>.</li>
+            <li>המאגר עצמו תקין ופעיל (<code>morantheking.github.io/Kodi-POV-IL/repo/</code>) — אין מה לתקן בצד שלך מעבר לזה.</li>
+          </ul>
+        </div>
       </div>
 
       <h3>אפשרות ב' — קובץ zip בודד (בלי עדכון אוטומטי)</h3>
@@ -542,7 +551,7 @@
       </div>
 
       <div class="callout ok">
-        אחרי שיש Gemini key (סעיף הבא) — התרגום ירוץ אוטומטית. גם DarkSubs/All_Subs יזהו אותו ויעבירו אליו את כל הבקשות.
+        אחרי שיש Gemini key (סעיף הבא) — התרגום ירוץ אוטומטית. <strong>MoranSubs</strong> הוא מנוע הכתוביות (מקורות אנושיים + תרגום AI), ומחליף את DarkSubs לחלוטין.
       </div>
     </section>
 
@@ -576,7 +585,7 @@
         <h4>שלב ב' חלופי — דרך הגדרות התוסף</h4>
         <p>אם אין QR נגיש או רוצה לעקוף:</p>
         <ul>
-          <li>Add-ons → My add-ons → Subtitles → Kodi POV IL - AI Subtitles → Configure</li>
+          <li>Add-ons → My add-ons → Subtitles → MoranSubs → Configure</li>
           <li>בחר "📱 התאם מטלפון / מכשיר אחר (QR + URL)" — אותו QR flow</li>
           <li>או הזן ידנית ב-Gemini API Key → הדבק → OK → לחץ "בדיקת חיבור"</li>
         </ul>
@@ -587,7 +596,7 @@
       </div>
 
       <div class="callout ok">
-        <strong>בסיום</strong> — תרגום AI מופעל אוטומטית. גם דרך DarkSubs (אם תבחר כתוביות באנגלית — AI יתרגם לעברית ברמה מצוינת) וגם דרך התוסף הבודד.
+        <strong>בסיום</strong> — תרגום AI מופעל אוטומטית. MoranSubs מביא קודם כתוביות עברית אנושיות אם קיימות, ואחרת מתרגם כתובית אנגלית לעברית ברמה מצוינת ב-AI — הן בבילד המלא והן בתוסף הבודד.
       </div>
     </section>
 
@@ -728,9 +737,9 @@
 
       <h3>"תרגום AI לא עובד"</h3>
       <ol>
-        <li>וודא שיש Gemini key מחובר: Add-ons → My add-ons → Subtitles → AI Subtitles → Configure → Gemini API Key</li>
-        <li>וודא ש-DarkSubs דלוק: Add-ons → DarkSubs → Configure → "הפעל תרגום מכונה (Gemini AI)" = ON</li>
-        <li>אם עדיין לא — restart ל-Kodi</li>
+        <li>וודא שיש Gemini key מחובר: Add-ons → My add-ons → Subtitles → <strong>MoranSubs</strong> → Configure → Gemini API Key (או דרך "התאם מטלפון (QR)")</li>
+        <li>וודא ש-MoranSubs הוא שירות הכתוביות הפעיל ובמצב תרגום AI (לא Google Translate) בהגדרות התוסף</li>
+        <li>אם עדיין לא — הרץ עדכון מהיר + restart ל-Kodi</li>
       </ol>
 
       <h3>Trakt מחובר אבל progress לא מסונכרן</h3>
