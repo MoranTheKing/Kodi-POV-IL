@@ -1,3 +1,13 @@
+v0.2.242
+- Ktuvit pool uploads now happen immediately, like the AI pool. A finished
+  contribution used to sit in the queue until the background service's next
+  pass (every 20-60s) before reaching the channel; now queuing one kicks an
+  instant background upload -- so the subtitle you just watched reaches the
+  Telegram channel right away, exactly like an AI translation does at the end
+  of translating. (Still one-at-a-time, deduped, and rate-limit-safe -- the
+  shared lock + per-send throttle are unchanged; the periodic pass stays as a
+  retry/backfill safety net.)
+
 v0.2.241
 - Ktuvit pool: the title you JUST played is now mirrored first. The background
   harvest used to work strictly oldest-first, so a freshly-played movie's
