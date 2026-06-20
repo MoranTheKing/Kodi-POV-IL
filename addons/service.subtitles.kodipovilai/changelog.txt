@@ -1,3 +1,8 @@
+v0.2.236
+- Ktuvit source is back ON by default for everyone (it's working again). Done
+  once; if you turn it off yourself afterwards it stays off.
+- FENtastic player refreshed again to Tal's latest video-OSD update.
+
 v0.2.235
 - Auto-translate on play when there's NO Hebrew at all: if a movie/episode has
   no Hebrew subtitle anywhere (no embedded, no human source, nothing in the
