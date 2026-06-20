@@ -2501,18 +2501,17 @@ def _maybe_default_remember_source():
 
 
 def _maybe_reenable_ktuvit():
-    """Ktuvit is failing downloads again -> turn the source back OFF for
-    everyone, ONCE (marker _ktuvit_off_v3). Marker-gated, so a user who turns
-    it back ON again AFTER this keeps it on -- we never force it off again on
-    later startups. (Supersedes the 0.2.223 re-enable; new marker so it runs
-    once even for users who already got the earlier on/off toggles.)"""
+    """Ktuvit is working again -> turn the source back ON for everyone, ONCE
+    (marker _ktuvit_on_v4). Marker-gated, so a user who turns it OFF again AFTER
+    this keeps it off -- we never force it back on on later startups. (Fresh
+    marker so it runs once even for users who got the earlier off/on toggles.)"""
     try:
         from resources.lib import kodi_utils
-        if kodi_utils.get_setting('_ktuvit_off_v3', '') == '1':
+        if kodi_utils.get_setting('_ktuvit_on_v4', '') == '1':
             return
-        kodi_utils.set_setting('ktuvit', 'false')
-        kodi_utils.set_setting('_ktuvit_off_v3', '1')
-        kodi_utils.log('Ktuvit source disabled (off v3)', level='INFO')
+        kodi_utils.set_setting('ktuvit', 'true')
+        kodi_utils.set_setting('_ktuvit_on_v4', '1')
+        kodi_utils.log('Ktuvit source re-enabled (on v4)', level='INFO')
     except Exception:
         pass
 
