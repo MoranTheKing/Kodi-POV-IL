@@ -192,6 +192,129 @@ def _mark_current(results):
     return results
 
 
+# How gently to pull queued Ktuvit subs from Ktuvit on each background pass.
+# A couple per pass, spaced out, so we never hammer Ktuvit's rate/quota limits
+# (the thing that made a fast in-session grab miss most releases).
+_HARVEST_PER_PASS = 2
+_HARVEST_DOWNLOAD_THROTTLE = 10.0
+
+
+def process_harvest_queue(should_cancel=None):
+    """Download a couple of queued Ktuvit subs and feed them into the upload
+    queue. Gentle (few per pass, throttled) + retrying (a failed download stays
+    queued and is retried on a later pass / day, until it succeeds or is
+    declared dead). Runs on the long-lived service. Returns how many were fed to
+    the upload queue."""
+    if pool is None:
+        return 0
+    try:
+        if not pool.share_enabled():
+            return 0
+    except Exception:
+        return 0
+    jobs = pool.harvest_jobs()
+    if not jobs:
+        return 0
+    try:
+        from . import subs_engine_bridge
+        if not subs_engine_bridge.enabled():
+            return 0
+    except Exception:
+        return 0
+
+    import re as _re
+
+    def _norm(s):
+        return _re.sub(r'[^a-z0-9]', '', (s or '').lower())
+
+    pooled_cache = {}
+
+    def _pooled_for(info):
+        key = '{0}:{1}:{2}'.format(
+            info.get('tmdb_id') or info.get('imdb_id') or '',
+            info.get('season') or '0', info.get('episode') or '0')
+        if key not in pooled_cache:
+            s = set()
+            try:
+                for v in pool.lookup(info):
+                    if (v.get('kind') or 'ai') == 'ktuvit':
+                        r = (v.get('release') or '').strip()
+                        if r:
+                            s.add(_norm(r))
+            except Exception:
+                pass
+            pooled_cache[key] = s
+        return pooled_cache[key]
+
+    fed = downloaded = 0
+    for fp, job in jobs:
+        if downloaded >= _HARVEST_PER_PASS:
+            break
+        if should_cancel is not None:
+            try:
+                if should_cancel():
+                    break
+            except Exception:
+                pass
+        info = job.get('info') or {}
+        payload = job.get('payload') or {}
+        rel = payload.get('filename') or ''
+        # Already shared by anyone? then this job is done -- no Ktuvit hit.
+        if rel and _norm(rel) in _pooled_for(info):
+            pool.remove_harvest_job(fp)
+            continue
+        try:
+            path = subs_engine_bridge.download(payload)
+        except Exception as e:
+            kodi_utils.log('ktuvit harvest: download failed "{0}": {1}'.format(
+                rel, str(e)[:120]), level='INFO')
+            pool.harvest_job_failed(fp, job)
+            downloaded += 1
+            _sleep_harvest(should_cancel)
+            continue
+        downloaded += 1
+        if not path or not os.path.isfile(path):
+            pool.harvest_job_failed(fp, job)
+            _sleep_harvest(should_cancel)
+            continue
+        if pool.was_contributed(path):
+            pool.remove_harvest_job(fp)
+            continue
+        text = ''
+        try:
+            with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                text = f.read()
+        except OSError:
+            text = ''
+        if text:
+            try:
+                pool.contribute_ktuvit(info, text, release=rel,
+                                       marker_path=path)
+                fed += 1
+            except Exception:
+                pass
+        pool.remove_harvest_job(fp)
+        _sleep_harvest(should_cancel)
+    if fed:
+        kodi_utils.log('ktuvit harvest: fed {0} sub(s) to the upload queue '
+                       '({1} left)'.format(fed, pool.harvest_queue_len()),
+                       level='INFO')
+    return fed
+
+
+def _sleep_harvest(should_cancel):
+    waited = 0.0
+    while waited < _HARVEST_DOWNLOAD_THROTTLE:
+        if should_cancel is not None:
+            try:
+                if should_cancel():
+                    return
+            except Exception:
+                pass
+        time.sleep(0.5)
+        waited += 0.5
+
+
 def list_candidates(info, modal_progress=True):
     """Build the list Kodi's subtitle dialog will render.
 
@@ -298,6 +421,32 @@ def list_candidates(info, modal_progress=True):
                     engine_other.append(c)
         except Exception as e:
             kodi_utils.log('engine search failed: {0}'.format(e),
+                           level='WARNING')
+
+        # Queue EVERY human Ktuvit result for the background harvest, so the
+        # whole title's set ends up in the pool over time -- not just the one
+        # the user picks. Just a fast local write per sub (no Ktuvit hit here);
+        # the long-lived service downloads + uploads them gently. Gated by
+        # pool_share; runs on auto-on-play AND a manual "download subtitles".
+        try:
+            if pool is not None and pool.share_enabled():
+                _kt = 0
+                for c in engine_human:
+                    pl = _decode_link(c.get('link') or '') or {}
+                    if (pl.get('type') == 'engine' and not pl.get('embedded')
+                            and (pl.get('source') or '').strip().lower()
+                            == 'ktuvit'
+                            and 'Hebrew' in (pl.get('language') or '')
+                            and 'MachineTranslated' not in (
+                                pl.get('language') or '')):
+                        pool.enqueue_harvest(info, pl)
+                        _kt += 1
+                if _kt:
+                    kodi_utils.log('ktuvit harvest: queued {0} release(s) for '
+                                   'background mirroring'.format(_kt),
+                                   level='INFO')
+        except Exception as e:
+            kodi_utils.log('ktuvit harvest enqueue failed: {0}'.format(e),
                            level='WARNING')
 
     # Language display order (the user's requested grouping): Hebrew first
@@ -846,9 +995,20 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                             info, _ktext,
                             release=(payload.get('filename') or ''),
                             marker_path=path)
+                        kodi_utils.log(
+                            'ktuvit pool mirror: enqueued "{0}"'.format(
+                                payload.get('filename') or ''), level='INFO')
+                else:
+                    kodi_utils.log(
+                        'ktuvit pool mirror: not enqueued (share={0}, '
+                        'src={1}, lang={2}, already_shared={3})'.format(
+                            (pool.share_enabled() if pool else False),
+                            _src, _lang, (pool.was_contributed(path)
+                                          if pool else False)),
+                        level='INFO')
             except Exception as e:
                 kodi_utils.log('ktuvit pool mirror failed: {0}'.format(e),
-                               level='DEBUG')
+                               level='WARNING')
             _status('כתוביות עברית מ-{0}'.format(
                 payload.get('source') or 'מקור'), time_ms=4000)
             return path
