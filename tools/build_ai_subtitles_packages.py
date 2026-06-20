@@ -194,9 +194,10 @@ def _maybe_default_fast_first_chunk():
 
 
 def _start_pool_queue_drainer(monitor):
-    """Drain the persistent pool upload queue (one at a time, throttled) so a
-    shared Ktuvit subtitle is uploaded reliably without bursting past Telegram's
-    bot rate limit -- even after the user has left the video. Best-effort."""
+    """Drive both pool queues from the long-lived service: gently pull queued
+    Ktuvit subs from Ktuvit (process_harvest_queue) and upload queued
+    contributions to Telegram (drain), throttled + retrying, surviving playback
+    ending / a Kodi restart. Best-effort; never blocks."""
     try:
         import threading
         from resources.lib import pool
@@ -208,13 +209,23 @@ def _start_pool_queue_drainer(monitor):
             if monitor.waitForAbort(20):
                 return
             while not monitor.abortRequested():
+                try:
+                    from resources.lib import translate
+                    translate.process_harvest_queue(
+                        should_cancel=monitor.abortRequested)
+                except Exception:
+                    pass
                 left = 0
                 try:
                     _sent, left = pool.drain(
                         should_cancel=monitor.abortRequested)
                 except Exception:
                     left = 0
-                if monitor.waitForAbort(30 if left else 180):
+                try:
+                    backlog = bool(left) or pool.harvest_queue_len() > 0
+                except Exception:
+                    backlog = bool(left)
+                if monitor.waitForAbort(20 if backlog else 60):
                     break
         except Exception:
             pass
