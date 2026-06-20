@@ -193,10 +193,12 @@ def _mark_current(results):
 
 
 # How gently to pull queued Ktuvit subs from Ktuvit on each background pass.
-# A couple per pass, spaced out, so we never hammer Ktuvit's rate/quota limits
-# (the thing that made a fast in-session grab miss most releases).
-_HARVEST_PER_PASS = 2
-_HARVEST_DOWNLOAD_THROTTLE = 10.0
+# A few per pass, spaced out, so we never hammer Ktuvit's rate/quota limits
+# (the thing that made a fast in-session grab miss most releases). On-device
+# logs show downloads at this rate succeed (failed=0), and a failure just stays
+# queued and retries, so it's safe to keep the pool filling at a useful pace.
+_HARVEST_PER_PASS = 3
+_HARVEST_DOWNLOAD_THROTTLE = 6.0
 
 
 def process_harvest_queue(should_cancel=None):
