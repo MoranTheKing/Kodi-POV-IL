@@ -1,3 +1,13 @@
+v0.2.237
+- Fixed AI translation that "said it translated but showed blank / the original
+  language". The model (flash-lite) sometimes returns an EMPTY response or
+  ECHOES the source untranslated; both used to pass the entry-count check and
+  get cached + served as "the Hebrew translation" (so re-picking showed
+  "from cache" but blank/foreign). Now the output is validated to be real
+  Hebrew before it's cached -- if it isn't, we don't cache it, we fall back to
+  Google Translate so you still get Hebrew, and otherwise tell you to retry.
+  Existing bad cached files (blank/echoed) are detected and re-done automatically.
+
 v0.2.236
 - Ktuvit source is back ON by default for everyone (it's working again). Done
   once; if you turn it off yourself afterwards it stays off.
