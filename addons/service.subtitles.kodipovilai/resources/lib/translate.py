@@ -212,6 +212,11 @@ def process_harvest_queue(should_cancel=None):
     try:
         if not pool.share_enabled():
             return 0
+        # Respect the daily KV write budget: if it's spent, don't even download
+        # from Ktuvit (no point fetching what we can't upload yet) -- the jobs
+        # stay queued for later today / tomorrow.
+        if not pool.contribute_budget_left():
+            return 0
     except Exception:
         return 0
     jobs = pool.harvest_jobs()

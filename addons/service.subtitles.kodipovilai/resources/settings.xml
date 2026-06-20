@@ -307,6 +307,18 @@
           <default>0</default>
           <control type="label" format="string"/>
         </setting>
+        <!-- Hidden: daily pool-contribution (KV write) counter, to respect
+             Cloudflare KV's free write budget. Reset at UTC midnight. -->
+        <setting id="_pool_writes_count" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default>0</default>
+          <control type="label" format="string"/>
+        </setting>
+        <setting id="_pool_writes_date" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default></default>
+          <control type="label" format="string"/>
+        </setting>
         <!-- Hidden: UTC date (YYYY-MM-DD) of the counter above. -->
         <setting id="_usage_date_utc" type="string" label="30000" visible="false">
           <level>3</level>

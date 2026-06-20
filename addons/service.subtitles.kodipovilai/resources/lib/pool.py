@@ -554,18 +554,67 @@ def queue_len():
         return 0
 
 
+# --- Daily write budget -----------------------------------------------------
+# Cloudflare KV's free tier allows ~1000 WRITES/day (shared across ALL users).
+# Each new pool contribution is ~1 KV write, and the bulk Ktuvit harvest can
+# otherwise blow that budget in hours. So cap NEW contributions per device per
+# day; when the cap is hit, jobs stay queued and upload later today / tomorrow
+# (nothing is lost). This is the interim guard -- the real fix is moving the
+# index to D1 (100k writes/day). Reset at UTC midnight, like the Gemini counter.
+_DAILY_CONTRIBUTE_CAP = 200
+_WRITES_COUNT_KEY = '_pool_writes_count'
+_WRITES_DATE_KEY = '_pool_writes_date'
+
+
+def _utc_date():
+    import datetime
+    return datetime.datetime.utcnow().strftime('%Y-%m-%d')
+
+
+def _writes_today():
+    try:
+        if (kodi_utils.get_setting(_WRITES_DATE_KEY, '') or '') != _utc_date():
+            return 0
+        return int(kodi_utils.get_setting(_WRITES_COUNT_KEY, '0') or '0')
+    except Exception:
+        return 0
+
+
+def _note_write():
+    try:
+        today = _utc_date()
+        if (kodi_utils.get_setting(_WRITES_DATE_KEY, '') or '') != today:
+            kodi_utils.set_setting(_WRITES_DATE_KEY, today)
+            kodi_utils.set_setting(_WRITES_COUNT_KEY, '1')
+        else:
+            n = int(kodi_utils.get_setting(_WRITES_COUNT_KEY, '0') or '0')
+            kodi_utils.set_setting(_WRITES_COUNT_KEY, str(n + 1))
+    except Exception:
+        pass
+
+
+def contribute_budget_left():
+    """True while today's per-device contribution cap isn't reached."""
+    return _writes_today() < _DAILY_CONTRIBUTE_CAP
+
+
 def _post_sync(body):
     """Synchronous /contribute POST for the drainer. Returns one of:
       'ok'    -> stored, or already in the pool (server dedup): remove the job.
       'drop'  -> permanent client error (bad/invalid/unauthorized): remove it.
-      'retry' -> transient failure (network / 429 / 5xx): keep for next pass.
+      'retry' -> transient failure / write-budget reached: keep for next pass.
     Never raises."""
-    # Cheap pre-check: already in the pool -> done, no upload (= no TG message).
+    # Cheap pre-check: already in the pool -> done, no upload (= no TG message,
+    # no KV write). This is a READ, not bound by the daily write budget.
     try:
         if _pool_has_hash(body, (body.get('source_hash') or '').strip()):
             return 'ok'
     except Exception:
         pass
+    # Respect the daily write budget BEFORE posting (a store = a KV write).
+    # When exhausted, leave the job queued -- it uploads later today / tomorrow.
+    if not contribute_budget_left():
+        return 'retry'
     try:
         req = _urlreq.Request(
             POOL_URL + '/contribute',
@@ -575,9 +624,15 @@ def _post_sync(body):
             method='POST')
         resp = _urlreq.urlopen(req, timeout=_POST_TIMEOUT).read()
         try:
-            return 'ok' if json.loads(resp.decode('utf-8')).get('ok') else 'retry'
+            data = json.loads(resp.decode('utf-8'))
         except Exception:
-            return 'ok'  # 2xx with an unparseable body -- assume stored
+            _note_write()           # 2xx, unparseable -- assume a store
+            return 'ok'
+        if not data.get('ok'):
+            return 'retry'
+        if data.get('stored'):      # a real new store = one KV write
+            _note_write()
+        return 'ok'                 # 'stored' or 'dedup' both = done
     except Exception as e:
         code = getattr(e, 'code', None)
         if code in (400, 401):           # invalid srt / unauthorized -> never ok

@@ -1,3 +1,12 @@
+v0.2.244
+- Pool now respects Cloudflare's free daily write budget. Each new shared
+  subtitle is one KV write, and the free tier allows ~1000/day across everyone;
+  the bulk Ktuvit harvest could blow that in hours. Added a per-device daily cap
+  on new contributions -- once reached, pending subs simply wait for later today
+  / tomorrow (nothing is lost, and lookups/playback are unaffected). The pool
+  fills a bit slower but never trips the limit. (Groundwork for moving the index
+  to D1, which raises the ceiling 100x.)
+
 v0.2.243
 - Ktuvit pool now PREFERRED over live Ktuvit for the same release. When a
   release exists both live (from Ktuvit) and in the pool, the list shows the
