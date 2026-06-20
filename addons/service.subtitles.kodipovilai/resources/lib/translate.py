@@ -472,90 +472,109 @@ def list_candidates(info, modal_progress=True):
         have_hebrew = True
         results[:0] = [_clean(c) for c in engine_embedded]
 
-    # Engine human Hebrew, right under the passthrough.
+    # Community pool. ONE network lookup returns both kinds of shared Hebrew:
+    #   - 'ktuvit': a HUMAN Ktuvit subtitle mirrored to the pool. It loads
+    #               INSTANTLY from the channel and never hits Ktuvit, so when a
+    #               release exists BOTH live (from the engine) and in the pool we
+    #               show the POOL copy and hide the slow live one -- exactly what
+    #               you asked: no need for the live Ktuvit when the pool has it.
+    #               Labelled "כתובית · מאגר" so it's clearly the pool (a live one
+    #               is labelled "Ktuvit"). Human, so it ranks above the AI pool.
+    #   - 'ai':     a machine AI translation other users shared.
+    # One lookup keeps the request count identical to the AI-only pool.
+    _pool_variants = []
+    _video_ref = ''
+    if pool is not None and pool.use_enabled():
+        _video_ref = (info.get('picked_release') or info.get('tagline')
+                      or info.get('label') or os.path.basename(filepath)
+                      or info.get('title') or '')
+        try:
+            _pool_variants = pool.lookup(info)
+        except Exception:
+            _pool_variants = []
+
+    def _norm_rel(s):
+        import re as _re_nr
+        return _re_nr.sub(r'[^a-z0-9]', '', (s or '').lower())
+
+    def _pool_release(v):
+        r = (v.get('release') or '').strip()
+        # Reject debrid URL / token "releases" stored by older shares.
+        return '' if (r and _looks_like_token(r)) else r
+
+    # Map normalised release -> the pooled Ktuvit copy, so we can swap a live
+    # Ktuvit result for its faster pool twin.
+    _ktuvit_pool_by_rel = {}
+    for v in _pool_variants:
+        if (v.get('kind') or 'ai') == 'ktuvit':
+            r = _pool_release(v)
+            if r:
+                _ktuvit_pool_by_rel.setdefault(_norm_rel(r), v)
+
+    def _pool_entry(v, release):
+        pct = _match_pct(_video_ref, release) if release else 0
+        if release and pct > 0:
+            label = 'כתובית · מאגר · {0}%  —  {1}'.format(pct, release)
+        elif release:
+            label = 'כתובית · מאגר  —  {0}'.format(release)
+        else:
+            label = 'כתובית · מאגר'
+        return {
+            'filename': label, 'language': 'he',
+            'link': _encode_link({'type': 'pool', 'hash': v.get('hash')}),
+            'sync': 'false', 'rating': '5', 'is_hi': False, 'is_hd': False,
+        }
+
+    # Engine human Hebrew, in the engine's own match-% order. For a LIVE Ktuvit
+    # result that's ALSO in the pool, emit the POOL copy in its place (instant +
+    # no Ktuvit hit), keeping the position so the %-ordering is preserved. Other
+    # human results (Wizdom, not-yet-pooled Ktuvit) render as-is.
+    _used_pool_rels = set()
     for c in engine_human:
         have_hebrew = True
-        results.append(_clean(c))
+        pl = _decode_link(c.get('link') or '') or {}
+        is_ktuvit = (pl.get('type') == 'engine'
+                     and (pl.get('source') or '').strip().lower() == 'ktuvit')
+        fn = c.get('filename') or ''
+        rel_norm = _norm_rel(fn.split('—')[-1].strip() if '—' in fn else '')
+        if is_ktuvit and rel_norm and rel_norm in _ktuvit_pool_by_rel:
+            v = _ktuvit_pool_by_rel[rel_norm]
+            results.append(_pool_entry(v, _pool_release(v)))
+            _used_pool_rels.add(rel_norm)
+        else:
+            results.append(_clean(c))
 
-    # Community pool. ONE network lookup returns both kinds of shared Hebrew:
-    #   - 'ktuvit': a HUMAN Ktuvit subtitle mirrored to the pool. Shown ABOVE
-    #               the AI pool (human quality outranks machine), labelled as
-    #               Ktuvit -- never "AI". This is the Ktuvit backup: it loads
-    #               instantly and keeps working even when Ktuvit is down.
-    #   - 'ai':     a machine AI translation other users shared (as before).
-    # Splitting one lookup keeps the request count identical to the AI-only
-    # pool (no extra call for the Ktuvit mirror).
-    if pool is not None and pool.use_enabled():
-        video_ref = (info.get('picked_release') or info.get('tagline')
-                     or info.get('label') or os.path.basename(filepath)
-                     or info.get('title') or '')
-        _pool_variants = pool.lookup(info)
+    # Pooled Ktuvit releases the live engine did NOT return this time (e.g.
+    # Ktuvit is slow/down) -- still available, instant, human.
+    for rel_norm, v in _ktuvit_pool_by_rel.items():
+        if rel_norm in _used_pool_rels:
+            continue
+        have_hebrew = True
+        results.append(_pool_entry(v, _pool_release(v)))
 
-        # Don't show a pooled Ktuvit sub the live engine already returned for
-        # the same release (avoid pool+live duplicates). Match on a normalised
-        # release name pulled from the live human candidates' labels.
-        def _norm_rel(s):
-            import re as _re_nr
-            return _re_nr.sub(r'[^a-z0-9]', '', (s or '').lower())
-
-        _live_human_rels = set()
-        for c in engine_human:
-            fn = c.get('filename') or ''
-            rel0 = fn.split('—')[-1].strip() if '—' in fn else ''
-            if rel0:
-                _live_human_rels.add(_norm_rel(rel0))
-
-        def _pool_release(v):
-            r = (v.get('release') or '').strip()
-            # Reject debrid URL / token "releases" stored by older shares.
-            return '' if (r and _looks_like_token(r)) else r
-
-        # Ktuvit pool (human) -- above the AI pool.
-        for v in _pool_variants:
-            if (v.get('kind') or 'ai') != 'ktuvit':
-                continue
-            release = _pool_release(v)
-            if release and _norm_rel(release) in _live_human_rels:
-                continue  # the live engine already offered this exact release
-            have_hebrew = True
-            pct = _match_pct(video_ref, release) if release else 0
-            if release and pct > 0:
-                label = 'כתובית · מאגר · {0}%  —  {1}'.format(pct, release)
-            elif release:
-                label = 'כתובית · מאגר  —  {0}'.format(release)
-            else:
-                label = 'כתובית · מאגר'
-            results.append({
-                'filename': label,
-                'language': 'he',
-                'link': _encode_link({'type': 'pool', 'hash': v.get('hash')}),
-                'sync': 'false', 'rating': '5',
-                'is_hi': False, 'is_hd': False,
-            })
-
-        # AI pool (machine translations) -- below the Ktuvit pool.
-        for v in _pool_variants:
-            if (v.get('kind') or 'ai') == 'ktuvit':
-                continue
-            have_hebrew = True
-            release = _pool_release(v)
-            pct = _match_pct(video_ref, release) if release else 0
-            # Only show a % when we actually have a meaningful match (a 0%
-            # almost always means we couldn't read the video's release name,
-            # not a real zero -- showing "0%" is misleading).
-            if release and pct > 0:
-                label = 'תרגום AI · מאגר קהילתי · {0}%  —  {1}'.format(pct, release)
-            elif release:
-                label = 'תרגום AI · מאגר קהילתי  —  {0}'.format(release)
-            else:
-                label = 'תרגום AI · מאגר קהילתי'
-            results.append({
-                'filename': label,
-                'language': 'he',
-                'link': _encode_link({'type': 'pool', 'hash': v.get('hash')}),
-                'sync': 'false', 'rating': '5',
-                'is_hi': False, 'is_hd': False,
-            })
+    # AI pool (machine translations) -- below all the human Ktuvit entries.
+    for v in _pool_variants:
+        if (v.get('kind') or 'ai') == 'ktuvit':
+            continue
+        have_hebrew = True
+        release = _pool_release(v)
+        pct = _match_pct(_video_ref, release) if release else 0
+        # Only show a % when we actually have a meaningful match (a 0% almost
+        # always means we couldn't read the video's release name, not a real
+        # zero -- showing "0%" is misleading).
+        if release and pct > 0:
+            label = 'תרגום AI · מאגר קהילתי · {0}%  —  {1}'.format(pct, release)
+        elif release:
+            label = 'תרגום AI · מאגר קהילתי  —  {0}'.format(release)
+        else:
+            label = 'תרגום AI · מאגר קהילתי'
+        results.append({
+            'filename': label,
+            'language': 'he',
+            'link': _encode_link({'type': 'pool', 'hash': v.get('hash')}),
+            'sync': 'false', 'rating': '5',
+            'is_hi': False, 'is_hd': False,
+        })
 
     # Machine-translated Hebrew from the engine.
     for c in engine_mt:
