@@ -1,3 +1,13 @@
+v0.2.243
+- Ktuvit pool now PREFERRED over live Ktuvit for the same release. When a
+  release exists both live (from Ktuvit) and in the pool, the list shows the
+  pool copy -- labelled "כתובית · מאגר" -- and hides the slower live one, in the
+  same match-% position. The pool copy loads instantly from the channel and
+  never hits Ktuvit, so there's no reason to use the live one (exactly as you'd
+  expect). A live result still shows normally when it isn't in the pool yet
+  (labelled "Ktuvit"), and pooled releases Ktuvit didn't return this time still
+  appear. So: "כתובית · מאגר" = from the pool (instant); "Ktuvit" = fetched live.
+
 v0.2.242
 - Ktuvit pool uploads now happen immediately, like the AI pool. A finished
   contribution used to sit in the queue until the background service's next
