@@ -639,6 +639,30 @@ def _google_translate_and_save(src_text, source_lang, translated, info,
 _QUIET = False
 
 
+def _is_mostly_hebrew(text, min_ratio=0.30):
+    """True if the SRT text is a real Hebrew translation -- not empty, and a
+    meaningful share of its letters are Hebrew. Catches the two ways a weak
+    model (gemini-3.1-flash-lite) silently fails: (a) it returns EMPTY (blocked
+    / no content) and (b) it ECHOES the source untranslated (German/Spanish/
+    English). Both used to be cached and served as 'the Hebrew translation',
+    showing blank or foreign text. Numbers/names keep some Latin, so we only
+    require a fraction, not all."""
+    if not text or not text.strip():
+        return False
+    he = 0
+    latin = 0
+    for ch in text:
+        o = ord(ch)
+        if 0x0590 <= o <= 0x05FF:
+            he += 1
+        elif ch.isalpha() and o < 128:
+            latin += 1
+    letters = he + latin
+    if letters < 20:
+        return False  # almost no text -> treat as failed
+    return (he / letters) >= min_ratio
+
+
 def set_quiet(value):
     global _QUIET
     _QUIET = bool(value)
@@ -817,6 +841,18 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         translated = cache.translated_path(
             imdb_id, season, episode, source_lang,
             source_id=early_source_id)
+        # Only honour the cache if it's a REAL Hebrew translation. Older buggy
+        # versions could cache an empty / source-echoed file and then serve it
+        # forever as "from cache (previous translation)" -- blank or foreign
+        # text. If the cached file isn't really Hebrew, delete it and re-do.
+        if os.path.isfile(translated) and not _is_mostly_hebrew(
+                cache.load_text(translated) or ''):
+            kodi_utils.log('Discarding non-Hebrew cached translation (empty/'
+                           'echoed): ' + translated, level='WARNING')
+            try:
+                os.remove(translated)
+            except OSError:
+                pass
         if os.path.isfile(translated):
             kodi_utils.log('Cache hit (early): ' + translated,
                            level='INFO')
@@ -874,6 +910,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         translated_by_content = cache.translated_path(
             imdb_id, season, episode, source_lang,
             source_id=content_id)
+        if os.path.isfile(translated_by_content) and not _is_mostly_hebrew(
+                cache.load_text(translated_by_content) or ''):
+            kodi_utils.log('Discarding non-Hebrew cached translation (empty/'
+                           'echoed): ' + translated_by_content,
+                           level='WARNING')
+            try:
+                os.remove(translated_by_content)
+            except OSError:
+                pass
         if os.path.isfile(translated_by_content):
             kodi_utils.log(
                 'Cache hit (content): ' + translated_by_content,
@@ -1392,6 +1437,31 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # instructs against this, but this post-processor catches any
     # slips so the final SRT renders correctly in Kodi.
     final = srt.fix_rtl_punctuation(final)
+    # Guard: the model sometimes returns EMPTY (blank subtitles) or ECHOES the
+    # source untranslated -- both pass the entry-count check and used to be
+    # cached and served as "the Hebrew translation". Verify the result is really
+    # Hebrew before caching. If it isn't, do NOT cache the garbage; fall back to
+    # Google Translate so the user still gets Hebrew (unless they chose 'none'),
+    # otherwise fail visibly and let them retry.
+    if not _is_mostly_hebrew(final):
+        kodi_utils.log(
+            'AI output is not Hebrew (empty or echoed source) -- not caching; '
+            'len={0}'.format(len(final or '')), level='WARNING')
+        mode = (kodi_utils.get_setting('translation_mode', 'ai') or 'ai')
+        if mode != 'none':
+            gpath = _google_translate_and_save(
+                src_text, source_lang, translated, info)
+            if gpath:
+                return gpath
+        kodi_utils.notify(
+            'AI: התרגום לא הוחזר בעברית (ריק/לא תורגם). נסה שוב.', time_ms=10000)
+        if progressive_cb is not None:
+            try:
+                progressive_cb('done', {'success': False,
+                                        'source_id': _progressive_source_id})
+            except Exception:
+                pass
+        return None
     cache.save_text(translated, final)
     # Also save under the content-hash slot when it differs from
     # the early-source-id slot. That way the same translation
