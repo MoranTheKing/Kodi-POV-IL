@@ -1,3 +1,12 @@
+v0.2.241
+- Ktuvit pool: the title you JUST played is now mirrored first. The background
+  harvest used to work strictly oldest-first, so a freshly-played movie's
+  subtitles waited behind a big title's 20+ queued releases (you'd see nothing
+  for the new movie for many minutes). It now processes newest-first, and pulls
+  a few more per pass, so what you just watched shows up in the channel quickly
+  while older items backfill when idle. (On-device logs confirmed downloads at
+  this rate succeed; a failure still just retries.)
+
 v0.2.240
 - Ktuvit pool now reliably mirrors EVERY release of a title, not a random
   subset. The old grab downloaded all of a title's Ktuvit subs in a quick
