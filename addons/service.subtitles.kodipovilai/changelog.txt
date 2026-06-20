@@ -1,3 +1,22 @@
+v0.2.239
+- New: Ktuvit backup pool. When you open a movie/episode, ALL of its human
+  Ktuvit subtitles (every release, not only the one you're watching) are
+  mirrored in the background to the community channel -- the same place the AI
+  pool lives, but clearly tagged as a human Ktuvit translation, never "AI". So
+  the backup grows fast. This means: (1) if Ktuvit ever goes down again, its
+  subtitles keep working from the backup, and (2) a release someone already
+  grabbed loads instantly from the channel. Ktuvit-pool results appear ABOVE
+  the AI pool in the list, labelled "כתובית · מאגר · NN%", with no duplicates
+  against a live Ktuvit result. Releases already in the pool are skipped (no
+  re-download from Ktuvit, no re-upload), so a title costs nothing once seeded.
+  The lookup is folded into the existing pool request -- no extra calls per play.
+- Reliable, rate-limit-safe sharing: a subtitle to be shared is now queued to
+  disk the instant it's downloaded and uploaded by the background service one
+  at a time with a throttle. So it still gets uploaded even if you stop or
+  leave the video right after (the old background upload could be cut off), and
+  a burst can never trip Telegram's send limit and drop a subtitle. Failed
+  uploads retry automatically; nothing is ever sent twice.
+
 v0.2.238
 - Faster subtitle loading on first open: the source search now waits up to 10
   seconds instead of 15. Results almost always arrive within 5-8s; the engine
