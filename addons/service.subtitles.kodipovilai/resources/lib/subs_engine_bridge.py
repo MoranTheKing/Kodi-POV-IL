@@ -135,7 +135,7 @@ _ENGINE_DEFAULTS = {
     'retry_search_with_all_langs': 'true',
     'auto_translate': 'false',
     'translate_p': '0',
-    'max_search_time': '15',
+    'max_search_time': '10',
     'subtitle_trans_cache': '15',
     'enable_autosub_notifications': 'true',
     'auto_fix_sub_punctuation': 'true',
@@ -148,7 +148,7 @@ _ENGINE_DEFAULTS = {
 
 # Bump when _ENGINE_DEFAULTS changes so the new values are force-applied to
 # installs that already have the old values written.
-_ENGINE_DEFAULTS_VERSION = '3'
+_ENGINE_DEFAULTS_VERSION = '4'
 
 
 def ensure_engine_settings():

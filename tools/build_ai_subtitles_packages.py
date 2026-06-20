@@ -193,6 +193,38 @@ def _maybe_default_fast_first_chunk():
         pass
 
 
+def _start_pool_queue_drainer(monitor):
+    """Drain the persistent pool upload queue (one at a time, throttled) so a
+    shared Ktuvit subtitle is uploaded reliably without bursting past Telegram's
+    bot rate limit -- even after the user has left the video. Best-effort."""
+    try:
+        import threading
+        from resources.lib import pool
+    except Exception:
+        return
+
+    def _loop():
+        try:
+            if monitor.waitForAbort(20):
+                return
+            while not monitor.abortRequested():
+                left = 0
+                try:
+                    _sent, left = pool.drain(
+                        should_cancel=monitor.abortRequested)
+                except Exception:
+                    left = 0
+                if monitor.waitForAbort(30 if left else 180):
+                    break
+        except Exception:
+            pass
+
+    try:
+        threading.Thread(target=_loop, daemon=True).start()
+    except Exception:
+        pass
+
+
 def _run(label, func):
     try:
         func()
@@ -422,6 +454,9 @@ def main():
         pass
 
     monitor = xbmc.Monitor()
+    # Upload any queued community-pool contributions (e.g. mirrored Ktuvit
+    # subs) from this long-lived service, throttled + retrying.
+    _start_pool_queue_drainer(monitor)
     while not monitor.abortRequested():
         if monitor.waitForAbort(24 * 3600):
             break
