@@ -492,7 +492,12 @@ def _job_id(body):
 
 
 def enqueue(body, marker_path=None):
-    """Persist a contribution as a queued job (fast local write). Idempotent."""
+    """Persist a contribution as a queued job (fast local write). Idempotent.
+    Then kick an immediate background drain so the upload happens right away --
+    the same "upload as soon as it's ready" behaviour as the AI path's
+    fire-and-forget post, instead of waiting for the service drainer's next
+    pass. The drain lock serialises with the service thread and the per-send
+    throttle still prevents a Telegram burst."""
     if not body:
         return
     d = _queue_dir()
@@ -518,11 +523,25 @@ def enqueue(body, marker_path=None):
                 queue_len()), level='INFO')
         except Exception:
             pass
+        _kick_drain()
     except Exception as e:
         try:
             kodi_utils.log('pool enqueue failed: {0}'.format(e), level='WARNING')
         except Exception:
             pass
+
+
+def _kick_drain():
+    """Fire-and-forget an immediate drain on a daemon thread (best-effort)."""
+    def _run():
+        try:
+            drain()
+        except Exception:
+            pass
+    try:
+        threading.Thread(target=_run, daemon=True).start()
+    except Exception:
+        pass
 
 
 def queue_len():
