@@ -190,8 +190,15 @@ def _post(body, marker_path=None):
         mark_contributed(marker_path)
 
 
-def _build_body(info, source_hash, source_lang, srt_text):
-    """Assemble the /contribute JSON body, or None if there's no usable id."""
+def _build_body(info, source_hash, source_lang, srt_text,
+                kind='ai', release_override=None):
+    """Assemble the /contribute JSON body, or None if there's no usable id.
+
+    `kind` is 'ai' for a machine translation or 'ktuvit' for a human Hebrew
+    subtitle pulled from Ktuvit (a backup mirror so it survives Ktuvit going
+    down, and loads instantly from the channel). `release_override`, when given,
+    is used as the release name instead of deriving one from `info` -- the
+    engine already knows the exact Ktuvit release filename."""
     p = _params(info)
     if not _has_id(p):
         return None
@@ -203,26 +210,33 @@ def _build_body(info, source_hash, source_lang, srt_text):
     show = (info.get('tvshow') or '').strip()
     title = (show if (p['type'] == 'episode' and show)
              else (info.get('title') or '').strip())
+    if release_override:
+        rel = '' if _is_token_like(release_override) else release_override
+    else:
+        rel = _release_from(info)  # already filters token-like names
     return {
         'tmdb_id': p['tmdb'], 'imdb_id': p['imdb'], 'type': p['type'],
         'season': p['season'], 'episode': p['episode'], 'lang': 'he',
-        'release': _release_from(info),
+        'release': rel,
         'source_hash': source_hash or '',
         'source_lang': source_lang or 'en',
+        'kind': kind or 'ai',
         'title': title,
         'year': str(info.get('year') or ''),
         'srt': srt_text,
     }
 
 
-def contribute(info, source_hash, source_lang, srt_text, marker_path=None):
+def contribute(info, source_hash, source_lang, srt_text, marker_path=None,
+               kind='ai', release_override=None):
     """Fire-and-forget: share a fresh Hebrew translation. Runs on a daemon
     thread so it never delays handing the subtitle back to the player. If
     marker_path is given, the thread writes a ".shared" marker there once the
     upload succeeds."""
     if _urlreq is None or not srt_text:
         return
-    body = _build_body(info, source_hash, source_lang, srt_text)
+    body = _build_body(info, source_hash, source_lang, srt_text,
+                       kind=kind, release_override=release_override)
     if body is None:
         return
     try:
@@ -381,7 +395,8 @@ def share_cache(progress_cb=None, should_cancel=None):
     return (submitted, skipped, total)
 
 
-def contribute_once(info, source_hash, source_lang, srt_text, marker_path=None):
+def contribute_once(info, source_hash, source_lang, srt_text, marker_path=None,
+                    kind='ai', release_override=None):
     """contribute(), but skip the upload if this file was already shared (per
     the local marker). The marker is written by the POST thread ONLY after a
     successful upload, so a transient failure retries on the next watch rather
@@ -391,4 +406,231 @@ def contribute_once(info, source_hash, source_lang, srt_text, marker_path=None):
     if marker_path and was_contributed(marker_path):
         return
     contribute(info, source_hash, source_lang, srt_text,
-               marker_path=marker_path)
+               marker_path=marker_path, kind=kind,
+               release_override=release_override)
+
+
+def contribute_ktuvit(info, srt_text, release='', marker_path=None):
+    """Mirror a human Ktuvit Hebrew subtitle into the pool (kind='ktuvit').
+
+    This is the Ktuvit backup channel: every Ktuvit sub a user downloads is
+    pushed once to the same Telegram channel/Worker so it survives Ktuvit going
+    offline and loads instantly from the channel afterwards. The content hash
+    of the Hebrew SRT is the source hash, so the same release is never stored
+    twice (server dedups by hash AND by result).
+
+    Unlike the AI share (a fire-and-forget thread), this ENQUEUES the upload to
+    a small on-disk queue and lets the long-lived service drain it (see
+    drain()). That matters because the subtitle search runs in a short-lived
+    invoker: the user is usually already watching -- or may stop/leave right
+    after picking -- so a background thread can be torn down before it finishes.
+    A queued job survives playback ending AND a Kodi restart, and the drainer
+    throttles uploads so a burst never trips Telegram's bot rate limit. Gated by
+    the caller on share_enabled(); enqueue is a fast local file write."""
+    if _urlreq is None or not srt_text:
+        return
+    if marker_path and was_contributed(marker_path):
+        return
+    try:
+        import hashlib
+        sh = hashlib.sha1(
+            srt_text.encode('utf-8', 'replace')).hexdigest()[:16]
+    except Exception:
+        sh = ''
+    body = _build_body(info, sh, 'he', srt_text, kind='ktuvit',
+                       release_override=(release or None))
+    if body is None:
+        return
+    enqueue(body, marker_path=marker_path)
+
+
+# --- Persistent, throttled upload queue -------------------------------------
+# A contribution is QUEUED to disk the moment it's ready and uploaded later by
+# the long-lived service (drain(), driven by service.py's monitor thread). This
+# is what makes a shared subtitle reliable and rate-limit-safe:
+#   * Durable: the job is a file under addon_data (which a quick-update never
+#     touches), so it survives the user leaving the video and a Kodi restart --
+#     a short-lived search invoker can't lose it.
+#   * No burst: the drainer sends ONE contribution at a time with a throttle
+#     (each contribution is two Telegram messages), so even a backlog stays well
+#     under the bot's ~20 msgs/min channel limit.
+#   * Self-healing: a failed upload stays queued and retries next pass; a
+#     success (or a server dedup) removes it; permanently-bad jobs are dropped,
+#     and anything stuck is aged out so the queue can't grow without bound.
+
+_QUEUE_MAX_AGE_SEC = 14 * 24 * 3600
+
+
+def _queue_dir():
+    try:
+        d = os.path.join(kodi_utils.cache_dir(), 'pool_queue')
+        if not os.path.isdir(d):
+            os.makedirs(d)
+        return d
+    except Exception:
+        return None
+
+
+def _job_id(body):
+    """Stable id from kind + source hash + media id, so the SAME subtitle is
+    never queued twice (idempotent enqueue) even across re-watches."""
+    import hashlib
+    raw = '{0}|{1}|{2}:{3}:s{4}:e{5}'.format(
+        body.get('kind') or 'ai',
+        body.get('source_hash') or '',
+        body.get('tmdb_id') or body.get('imdb_id') or '',
+        body.get('type') or '',
+        body.get('season') or '0',
+        body.get('episode') or '0')
+    return hashlib.sha1(raw.encode('utf-8', 'replace')).hexdigest()[:24]
+
+
+def enqueue(body, marker_path=None):
+    """Persist a contribution as a queued job (fast local write). Idempotent."""
+    if not body:
+        return
+    d = _queue_dir()
+    if not d:
+        return
+    try:
+        path = os.path.join(d, _job_id(body) + '.json')
+        if os.path.exists(path):
+            return  # already queued
+        tmp = path + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump({'body': body, 'marker_path': marker_path or ''}, f)
+        os.replace(tmp, path)
+    except Exception as e:
+        try:
+            kodi_utils.log('pool enqueue failed: {0}'.format(e), level='DEBUG')
+        except Exception:
+            pass
+
+
+def queue_len():
+    d = _queue_dir()
+    if not d:
+        return 0
+    try:
+        return sum(1 for fn in os.listdir(d) if fn.endswith('.json'))
+    except Exception:
+        return 0
+
+
+def _post_sync(body):
+    """Synchronous /contribute POST for the drainer. Returns one of:
+      'ok'    -> stored, or already in the pool (server dedup): remove the job.
+      'drop'  -> permanent client error (bad/invalid/unauthorized): remove it.
+      'retry' -> transient failure (network / 429 / 5xx): keep for next pass.
+    Never raises."""
+    # Cheap pre-check: already in the pool -> done, no upload (= no TG message).
+    try:
+        if _pool_has_hash(body, (body.get('source_hash') or '').strip()):
+            return 'ok'
+    except Exception:
+        pass
+    try:
+        req = _urlreq.Request(
+            POOL_URL + '/contribute',
+            data=json.dumps(body).encode('utf-8'),
+            headers={'content-type': 'application/json',
+                     'x-api-key': POOL_API_KEY, 'user-agent': _UA},
+            method='POST')
+        resp = _urlreq.urlopen(req, timeout=_POST_TIMEOUT).read()
+        try:
+            return 'ok' if json.loads(resp.decode('utf-8')).get('ok') else 'retry'
+        except Exception:
+            return 'ok'  # 2xx with an unparseable body -- assume stored
+    except Exception as e:
+        code = getattr(e, 'code', None)
+        if code in (400, 401):           # invalid srt / unauthorized -> never ok
+            try:
+                kodi_utils.log('pool drop job (HTTP {0})'.format(code),
+                               level='DEBUG')
+            except Exception:
+                pass
+            return 'drop'
+        try:                              # 429 / 5xx / network -> retry later
+            kodi_utils.log('pool _post_sync retry: {0}'.format(e), level='DEBUG')
+        except Exception:
+            pass
+        return 'retry'
+
+
+def _sleep_cancellable(seconds, should_cancel):
+    waited = 0.0
+    while waited < seconds:
+        if should_cancel is not None:
+            try:
+                if should_cancel():
+                    return
+            except Exception:
+                pass
+        time.sleep(0.5)
+        waited += 0.5
+
+
+def drain(throttle=None, should_cancel=None, max_sends=40):
+    """Upload queued contributions one at a time with a throttle so a burst can
+    never trip Telegram's bot rate limit. A failed upload stays queued for the
+    next pass; a success (or server dedup) is removed. Returns (sent, remaining).
+    `should_cancel` is an optional callable (e.g. monitor.abortRequested)."""
+    if _urlreq is None:
+        return (0, queue_len())
+    d = _queue_dir()
+    if not d:
+        return (0, 0)
+    if throttle is None:
+        throttle = _BULK_THROTTLE_SEC
+    try:
+        files = [os.path.join(d, fn) for fn in os.listdir(d)
+                 if fn.endswith('.json')]
+    except Exception:
+        return (0, 0)
+    # Oldest first (FIFO) so nothing starves.
+    files.sort(key=lambda p: (os.path.getmtime(p) if os.path.exists(p) else 0))
+    sent = 0
+    now = time.time()
+    for fp in files:
+        if should_cancel is not None:
+            try:
+                if should_cancel():
+                    break
+            except Exception:
+                pass
+        if sent >= max_sends:
+            break
+        # Age out jobs that can never resolve so the queue can't grow forever.
+        try:
+            if now - os.path.getmtime(fp) > _QUEUE_MAX_AGE_SEC:
+                os.remove(fp)
+                continue
+        except OSError:
+            pass
+        try:
+            with open(fp, 'r', encoding='utf-8') as f:
+                job = json.load(f)
+        except Exception:
+            try:
+                os.remove(fp)
+            except OSError:
+                pass
+            continue
+        body = job.get('body') or {}
+        marker_path = job.get('marker_path') or None
+        status = _post_sync(body)
+        if status == 'retry':
+            # Server/network trouble -- stop now and retry the whole queue later
+            # (don't hammer a struggling endpoint or burn the request budget).
+            break
+        if status == 'ok' and marker_path:
+            mark_contributed(marker_path)
+        try:
+            os.remove(fp)
+        except OSError:
+            pass
+        if status == 'ok':
+            sent += 1
+            # Throttle ONLY between real sends (each is a Telegram message pair).
+            _sleep_cancellable(throttle, should_cancel)
+    return (sent, queue_len())
