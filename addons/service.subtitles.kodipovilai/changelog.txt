@@ -1,3 +1,12 @@
+v0.2.235
+- Auto-translate on play when there's NO Hebrew at all: if a movie/episode has
+  no Hebrew subtitle anywhere (no embedded, no human source, nothing in the
+  community pool), MoranSubs now automatically takes the best-matching English
+  subtitle and translates it to Hebrew on play -- no need to open "choose
+  subtitles". Only when a Gemini API key is connected and AI mode is on, and
+  ONLY when there's genuinely no Hebrew (a ready Hebrew sub is always preferred,
+  so quota is never spent when one exists).
+
 v0.2.234
 - Arctic Fuse 3: your home customizations no longer revert on exit/update.
   Deleting items in the submenu (and search/power menus) is now MERGED like the
