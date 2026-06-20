@@ -10,7 +10,8 @@
 //   GET  /lookup?tmdb=<id>&type=movie|episode&season=&episode=&lang=he
 //   GET  /sub?tmdb=<id>&type=&season=&episode=&lang=he[&hash=<source_hash>]
 //   POST /contribute  (X-API-Key)  body JSON {tmdb_id,imdb_id,type,season,episode,
-//                       lang:"he",release,source_hash,source_lang,title,year,srt}
+//                       lang:"he",release,source_hash,source_lang,title,year,srt,
+//                       kind:"ai"|"ktuvit"}  (kind defaults to "ai")
 //
 // Bindings: KV "POOL"; secrets BOT_TOKEN, CHANNEL_ID, API_KEY; optional TMDB_KEY.
 
@@ -278,7 +279,13 @@ function buildCaption(body, meta) {
   if (links.length) lines.push(links.join(' | '));
   if (meta.overview) { lines.push(''); lines.push(escapeHtml(meta.overview.slice(0, 500))); }
   lines.push('');
-  lines.push('🤖 תרגום AI · #כתוביות_AI #עברית');
+  // Distinguish a human Ktuvit subtitle from a machine AI translation in the
+  // channel itself, so it's unambiguous which kind each post is.
+  if (body.kind === 'ktuvit') {
+    lines.push('📥 כתובית · תרגום אנושי (לא AI) · #כתוביות_כתובית #עברית');
+  } else {
+    lines.push('🤖 תרגום AI · #כתוביות_AI #עברית');
+  }
   let cap = lines.join('\n');
   if (cap.length > 1024) cap = cap.slice(0, 1020) + '…';
   return cap;
@@ -367,6 +374,10 @@ async function downloadById(env, fileId) {
 async function contributeCore(env, body) {
   const lang = (body.lang || 'he').toLowerCase();
   if (lang !== 'he') return json({ ok: false, error: 'only he supported' }, 400);
+  // 'kind' splits the same media bucket into human Ktuvit subs vs machine AI
+  // translations. Anything that isn't an explicit 'ktuvit' stays 'ai' so all
+  // legacy entries (which predate this field) keep behaving as AI.
+  const kind = (body.kind === 'ktuvit') ? 'ktuvit' : 'ai';
   const srt = body.srt || '';
   if (!looksLikeSrt(srt)) return json({ ok: false, error: 'invalid srt' }, 400);
   const id = String(body.tmdb_id || body.imdb_id || '').trim();
@@ -436,7 +447,7 @@ async function contributeCore(env, body) {
   } catch (e) { return json({ ok: false, error: String(e).slice(0, 200) }, 502); }
   if (!fileId) return json({ ok: false, error: 'no file_id' }, 502);
 
-  variants.push({ hash, result_hash: resultHash, release: body.release || '', source_lang: body.source_lang || '', file_id: fileId, ts: Date.now() });
+  variants.push({ hash, result_hash: resultHash, release: body.release || '', source_lang: body.source_lang || '', kind, file_id: fileId, ts: Date.now() });
   await persist();
   return json({ ok: true, stored: true, key });
 }
@@ -613,7 +624,7 @@ export default {
       const { variants, primaryKey } = await readMergedIndex(env, p);
       return json({
         ok: true, key: primaryKey, count: variants.length,
-        variants: variants.map(v => ({ hash: v.hash, release: v.release, source_lang: v.source_lang, ts: v.ts })),
+        variants: variants.map(v => ({ hash: v.hash, release: v.release, source_lang: v.source_lang, kind: v.kind || 'ai', ts: v.ts })),
       });
     }
 
