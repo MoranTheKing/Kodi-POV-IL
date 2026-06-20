@@ -749,7 +749,10 @@ def harvest_queue_len():
 
 
 def harvest_jobs(limit=None):
-    """Oldest-first list of (path, job-dict). Drops unreadable / aged-out jobs."""
+    """NEWEST-first list of (path, job-dict). Newest-first so the title the user
+    just played is mirrored before an older backlog (a big title's 20+ releases
+    must not make a freshly-played movie wait behind them). Drops unreadable /
+    aged-out jobs."""
     d = _harvest_queue_dir()
     if not d:
         return []
@@ -758,7 +761,8 @@ def harvest_jobs(limit=None):
                  if fn.endswith('.json')]
     except Exception:
         return []
-    files.sort(key=lambda p: (os.path.getmtime(p) if os.path.exists(p) else 0))
+    files.sort(key=lambda p: (os.path.getmtime(p) if os.path.exists(p) else 0),
+               reverse=True)
     now = time.time()
     out = []
     for fp in files:
