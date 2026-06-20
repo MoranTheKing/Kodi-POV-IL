@@ -613,9 +613,16 @@ def _write_if_changed(filename, data):
 
 # Node files the user can reorder/remove/add to via AF3's own widget editor.
 # For these we MERGE instead of overwrite, so user customizations survive
-# updates while we can still deliver new/changed tiles. (homesubmenu /
-# powermenu are not user-curated lists, so they keep plain overwrite.)
-_MERGE_FILES = ('skinvariables-shortcut-homewidgets.json',)
+# updates while we can still deliver new/changed tiles. ALL of the user-
+# curatable shortcut/widget lists are merged -- a user who deletes items in the
+# submenu (or search/power menu) must keep that deletion across restarts and
+# updates, not have it overwritten back to our defaults every boot.
+_MERGE_FILES = (
+    'skinvariables-shortcut-homewidgets.json',
+    'skinvariables-shortcut-homesubmenu.json',
+    'skinvariables-shortcut-searchwidgets.json',
+    'skinvariables-shortcut-powermenu.json',
+)
 
 
 def _item_key(item):
@@ -991,10 +998,10 @@ def _set_af3_runtime_defaults():
         'Skin.SetString(HomeSwitcher.1101.Mode,Standard)',
         'Skin.SetString(HomeSwitcher.1102.Mode,Standard)',
         'Skin.SetBool(Textboxes.DisableFakeBox)',
-        'Skin.SetString(HomeSwitcher.Home.Spotlight.Path,plugin://plugin.video.pov/?action=tmdb_movies_latest_releases&iconImage=dvd.png&mode=build_movie_list&name=32461)',
-        'Skin.SetString(HomeSwitcher.Home.Spotlight.Target,videos)',
-        'Skin.SetString(HomeSwitcher.Home.Spotlight.Label,סרטים חדשים)',
-        'Skin.SetString(HomeSwitcher.Home.Spotlight.Limit,10)',
+        # NOTE: the Spotlight.* strings are NOT seeded here every boot anymore --
+        # they're user-customisable (path/target/label/limit, incl. setting the
+        # path to None), and re-setting them on every startup reverted the user's
+        # change. They're now seeded once via _seed_af3_spotlight_once().
         'Skin.SetString(HomeSwitcher.Home.Shortcut.Path,ActivateWindow(1181))',
         'Skin.Reset(TMDbHelper.DisableRatings)',
         'Skin.SetBool(TMDbHelper.EnableData)',
@@ -1020,6 +1027,40 @@ def _set_af3_runtime_defaults():
             xbmc.executebuiltin(command)
         except Exception:
             pass
+
+
+_SPOTLIGHT_MARKER = AF3_NODES + '.pov_spotlight_seeded'
+_SPOTLIGHT_COMMANDS = [
+    'Skin.SetString(HomeSwitcher.Home.Spotlight.Path,plugin://plugin.video.pov/?action=tmdb_movies_latest_releases&iconImage=dvd.png&mode=build_movie_list&name=32461)',
+    'Skin.SetString(HomeSwitcher.Home.Spotlight.Target,videos)',
+    'Skin.SetString(HomeSwitcher.Home.Spotlight.Label,סרטים חדשים)',
+    'Skin.SetString(HomeSwitcher.Home.Spotlight.Limit,10)',
+]
+
+
+def _seed_af3_spotlight_once():
+    """Seed the Spotlight defaults ONCE, then never touch them again, so a
+    user who changes the spotlight (path, or sets it to None) keeps that across
+    restarts/updates. Brand-new AF3 installs (no prior home-version marker) get
+    the default spotlight; existing users keep whatever they currently have."""
+    if xbmc is None:
+        return
+    try:
+        if _exists(_SPOTLIGHT_MARKER):
+            return  # already decided once -> never re-seed (user owns it now)
+        # Only seed the default on a TRULY fresh AF3 setup. If AF3 was already
+        # seeded before (home-version marker present), the user may have
+        # customised the spotlight -> do NOT overwrite it; just claim ownership.
+        fresh = not _exists(AF3_NODES + '.pov_home_version')
+        if fresh:
+            for command in _SPOTLIGHT_COMMANDS:
+                try:
+                    xbmc.executebuiltin(command)
+                except Exception:
+                    pass
+        _write(_SPOTLIGHT_MARKER, PATCH_VERSION + '\n')
+    except Exception:
+        pass
 
 
 def _is_af3_active():
@@ -1071,6 +1112,7 @@ def _rebuild_af3_shortcuts():
     if xbmc is None:
         return
     _set_af3_runtime_defaults()
+    _seed_af3_spotlight_once()
     stamp = '{0}-{1}'.format(PATCH_VERSION, int(time.time()))
     xbmc.executebuiltin('Skin.SetString(Shortcuts.RebuildDateTime,{0})'.format(stamp))
     xbmc.executebuiltin('RunScript(script.skinvariables,action=buildtemplate,force=True,background=true)')
@@ -1127,6 +1169,7 @@ def ensure_patched():
         pass
     if _is_af3_active():
         _set_af3_runtime_defaults()
+        _seed_af3_spotlight_once()
 
     marker = AF3_NODES + '.pov_home_version'
     marker_changed = True
