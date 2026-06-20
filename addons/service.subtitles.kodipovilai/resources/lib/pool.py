@@ -460,6 +460,12 @@ def contribute_ktuvit(info, srt_text, release='', marker_path=None):
 
 _QUEUE_MAX_AGE_SEC = 14 * 24 * 3600
 
+# Only one drain at a time per process: the service drainer thread AND an inline
+# drain (e.g. right after the on-play harvest enqueues) can both call drain();
+# this non-blocking lock lets whichever gets here first do the work while the
+# other returns immediately -- so a job is never POSTed twice in one process.
+_DRAIN_LOCK = threading.Lock()
+
 
 def _queue_dir():
     try:
@@ -495,14 +501,26 @@ def enqueue(body, marker_path=None):
     try:
         path = os.path.join(d, _job_id(body) + '.json')
         if os.path.exists(path):
+            try:
+                kodi_utils.log('pool enqueue: already queued ({0} {1})'.format(
+                    body.get('kind') or 'ai', body.get('release') or ''),
+                    level='INFO')
+            except Exception:
+                pass
             return  # already queued
         tmp = path + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
             json.dump({'body': body, 'marker_path': marker_path or ''}, f)
         os.replace(tmp, path)
+        try:
+            kodi_utils.log('pool enqueue: queued {0} "{1}" (queue={2})'.format(
+                body.get('kind') or 'ai', body.get('release') or '',
+                queue_len()), level='INFO')
+        except Exception:
+            pass
     except Exception as e:
         try:
-            kodi_utils.log('pool enqueue failed: {0}'.format(e), level='DEBUG')
+            kodi_utils.log('pool enqueue failed: {0}'.format(e), level='WARNING')
         except Exception:
             pass
 
@@ -580,27 +598,170 @@ def drain(throttle=None, should_cancel=None, max_sends=40):
     d = _queue_dir()
     if not d:
         return (0, 0)
-    if throttle is None:
-        throttle = _BULK_THROTTLE_SEC
+    # One drain at a time per process; a second concurrent caller just leaves.
+    if not _DRAIN_LOCK.acquire(blocking=False):
+        return (0, queue_len())
+    try:
+        if throttle is None:
+            throttle = _BULK_THROTTLE_SEC
+        try:
+            files = [os.path.join(d, fn) for fn in os.listdir(d)
+                     if fn.endswith('.json')]
+        except Exception:
+            return (0, 0)
+        # Oldest first (FIFO) so nothing starves.
+        files.sort(
+            key=lambda p: (os.path.getmtime(p) if os.path.exists(p) else 0))
+        sent = dropped = failed = 0
+        now = time.time()
+        for fp in files:
+            if should_cancel is not None:
+                try:
+                    if should_cancel():
+                        break
+                except Exception:
+                    pass
+            if sent >= max_sends:
+                break
+            # Age out jobs that can never resolve so the queue can't grow forever.
+            try:
+                if now - os.path.getmtime(fp) > _QUEUE_MAX_AGE_SEC:
+                    os.remove(fp)
+                    continue
+            except OSError:
+                pass
+            try:
+                with open(fp, 'r', encoding='utf-8') as f:
+                    job = json.load(f)
+            except Exception:
+                try:
+                    os.remove(fp)
+                except OSError:
+                    pass
+                continue
+            body = job.get('body') or {}
+            marker_path = job.get('marker_path') or None
+            status = _post_sync(body)
+            if status == 'retry':
+                # Server/network trouble -- stop now and retry the whole queue
+                # later (don't hammer a struggling endpoint / burn the budget).
+                failed += 1
+                break
+            if status == 'ok' and marker_path:
+                mark_contributed(marker_path)
+            try:
+                os.remove(fp)
+            except OSError:
+                pass
+            if status == 'ok':
+                sent += 1
+                # Throttle ONLY between real sends (each = a TG message pair).
+                _sleep_cancellable(throttle, should_cancel)
+            else:
+                dropped += 1
+        remaining = queue_len()
+        if sent or dropped or failed:
+            try:
+                kodi_utils.log(
+                    'pool drain: uploaded={0} dropped={1} failed={2} '
+                    'remaining={3}'.format(sent, dropped, failed, remaining),
+                    level='INFO')
+            except Exception:
+                pass
+        return (sent, remaining)
+    finally:
+        _DRAIN_LOCK.release()
+
+
+# --- Ktuvit harvest queue ---------------------------------------------------
+# A SECOND queue, separate from the upload queue above. On every search,
+# list_candidates drops a tiny job here for EVERY human Ktuvit subtitle it sees
+# (just the media info + the engine download link) -- a fast local write, NO
+# Ktuvit hit during playback. The long-lived service then downloads them from
+# Ktuvit GENTLY (a couple at a time, throttled, retrying failures across
+# sessions and days) and feeds each into the upload queue. This is what makes
+# the backup eventually COMPLETE -- every release of a title ends up in the
+# pool -- without hammering Ktuvit (which rate-/quota-limits downloads, the very
+# reason a fast in-session grab only ever got a random subset) and without
+# depending on the user staying on the video. The actual download lives in
+# translate.py (which can import the engine); this module owns only the storage.
+
+# Drop a harvest job after this many failed download attempts (Ktuvit removed
+# it / permanently refuses), so a dead job can't retry forever.
+_HARVEST_MAX_TRIES = 8
+
+
+def _harvest_queue_dir():
+    try:
+        d = os.path.join(kodi_utils.cache_dir(), 'pool_harvest_queue')
+        if not os.path.isdir(d):
+            os.makedirs(d)
+        return d
+    except Exception:
+        return None
+
+
+def _harvest_job_id(info, payload):
+    """Unique per (media + this exact Ktuvit subtitle), so the same release is
+    queued once. The engine download_data carries Ktuvit's FilmID+SubtitleID."""
+    import hashlib
+    dd = payload.get('download_data') or {}
+    raw = '{0}:{1}:s{2}:e{3}|{4}'.format(
+        info.get('tmdb_id') or info.get('imdb_id') or '',
+        'episode' if info.get('is_episode') else 'movie',
+        info.get('season') or '0', info.get('episode') or '0',
+        json.dumps(dd, sort_keys=True, ensure_ascii=False))
+    return hashlib.sha1(raw.encode('utf-8', 'replace')).hexdigest()[:24]
+
+
+def enqueue_harvest(info, payload):
+    """Queue ONE Ktuvit subtitle for background download+share. Fast, durable,
+    idempotent, no network. Caller gates on share_enabled()."""
+    if not info or not payload:
+        return
+    d = _harvest_queue_dir()
+    if not d:
+        return
+    try:
+        p = os.path.join(d, _harvest_job_id(info, payload) + '.json')
+        if os.path.exists(p):
+            return
+        tmp = p + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump({'info': info, 'payload': payload, 'tries': 0}, f)
+        os.replace(tmp, p)
+    except Exception as e:
+        try:
+            kodi_utils.log('harvest enqueue failed: {0}'.format(e),
+                           level='DEBUG')
+        except Exception:
+            pass
+
+
+def harvest_queue_len():
+    d = _harvest_queue_dir()
+    if not d:
+        return 0
+    try:
+        return sum(1 for fn in os.listdir(d) if fn.endswith('.json'))
+    except Exception:
+        return 0
+
+
+def harvest_jobs(limit=None):
+    """Oldest-first list of (path, job-dict). Drops unreadable / aged-out jobs."""
+    d = _harvest_queue_dir()
+    if not d:
+        return []
     try:
         files = [os.path.join(d, fn) for fn in os.listdir(d)
                  if fn.endswith('.json')]
     except Exception:
-        return (0, 0)
-    # Oldest first (FIFO) so nothing starves.
+        return []
     files.sort(key=lambda p: (os.path.getmtime(p) if os.path.exists(p) else 0))
-    sent = 0
     now = time.time()
+    out = []
     for fp in files:
-        if should_cancel is not None:
-            try:
-                if should_cancel():
-                    break
-            except Exception:
-                pass
-        if sent >= max_sends:
-            break
-        # Age out jobs that can never resolve so the queue can't grow forever.
         try:
             if now - os.path.getmtime(fp) > _QUEUE_MAX_AGE_SEC:
                 os.remove(fp)
@@ -609,28 +770,38 @@ def drain(throttle=None, should_cancel=None, max_sends=40):
             pass
         try:
             with open(fp, 'r', encoding='utf-8') as f:
-                job = json.load(f)
+                out.append((fp, json.load(f)))
         except Exception:
             try:
                 os.remove(fp)
             except OSError:
                 pass
-            continue
-        body = job.get('body') or {}
-        marker_path = job.get('marker_path') or None
-        status = _post_sync(body)
-        if status == 'retry':
-            # Server/network trouble -- stop now and retry the whole queue later
-            # (don't hammer a struggling endpoint or burn the request budget).
+        if limit and len(out) >= limit:
             break
-        if status == 'ok' and marker_path:
-            mark_contributed(marker_path)
-        try:
-            os.remove(fp)
-        except OSError:
-            pass
-        if status == 'ok':
-            sent += 1
-            # Throttle ONLY between real sends (each is a Telegram message pair).
-            _sleep_cancellable(throttle, should_cancel)
-    return (sent, queue_len())
+    return out
+
+
+def harvest_job_failed(fp, job):
+    """Record a failed download attempt; drop the job once it's clearly dead."""
+    try:
+        tries = int(job.get('tries') or 0) + 1
+    except Exception:
+        tries = 1
+    if tries >= _HARVEST_MAX_TRIES:
+        remove_harvest_job(fp)
+        return
+    try:
+        job['tries'] = tries
+        tmp = fp + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(job, f)
+        os.replace(tmp, fp)
+    except Exception:
+        pass
+
+
+def remove_harvest_job(fp):
+    try:
+        os.remove(fp)
+    except OSError:
+        pass

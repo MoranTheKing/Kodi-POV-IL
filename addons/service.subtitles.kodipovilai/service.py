@@ -1589,13 +1589,9 @@ def _autosub_on_play():
         # returns everything in priority order; the first 'he' row is the best
         # Hebrew (embedded > human > pool > MT).
         cands = translate.list_candidates(info, modal_progress=False)
-        # Grow the Ktuvit backup fast: mirror EVERY human Ktuvit sub for this
-        # title to the pool in the background (not just the one being watched).
-        # Fully gated by pool_share; runs after the viewing sub is applied.
-        try:
-            _harvest_ktuvit_to_pool(info, cands)
-        except Exception:
-            pass
+        # (list_candidates already queued every human Ktuvit release for the
+        # background harvest; the service drainer downloads + uploads them
+        # gently over time. Nothing to do here.)
         # Try the ready Hebrew candidates in priority order until one actually
         # downloads. If a source fails (e.g. Ktuvit rate-limited / "refused"),
         # skip the rest from that SAME source (they fail identically) and move
@@ -1742,12 +1738,15 @@ if xbmc is not None:
 
 
 def _start_pool_queue_drainer(monitor):
-    """Drain the persistent pool upload queue from the long-lived service, one
-    contribution at a time with a throttle. This is what makes a shared Ktuvit
-    subtitle reliable AND rate-limit-safe: it's queued to disk the instant it's
-    downloaded (survives the user leaving the video or restarting Kodi) and
-    uploaded here without ever bursting past Telegram's bot limit. A backlog is
-    worked off gradually; an empty queue idles. Best-effort; never blocks."""
+    """Drive both pool queues from the long-lived service:
+      1. process_harvest_queue() -- gently pull a couple of queued Ktuvit subs
+         from Ktuvit (throttled, retrying) and feed them into the upload queue.
+         This is what eventually mirrors EVERY release of a title without
+         hammering Ktuvit or depending on the user staying on the video.
+      2. drain() -- upload queued contributions to Telegram, one at a time with
+         a throttle so a burst can't trip the bot's rate limit.
+    Both survive playback ending / a Kodi restart (the queues are on disk).
+    Backlog -> short interval; idle -> longer. Best-effort; never blocks."""
     try:
         from resources.lib import pool
     except Exception:
@@ -1758,119 +1757,32 @@ def _start_pool_queue_drainer(monitor):
             if monitor.waitForAbort(20):   # let startup settle first
                 return
             while not monitor.abortRequested():
+                try:
+                    from resources.lib import translate
+                    translate.process_harvest_queue(
+                        should_cancel=monitor.abortRequested)
+                except Exception:
+                    pass
                 left = 0
                 try:
                     _sent, left = pool.drain(
                         should_cancel=monitor.abortRequested)
                 except Exception:
                     left = 0
-                # Backlog -> come back soon; empty -> idle longer.
-                if monitor.waitForAbort(30 if left else 180):
+                try:
+                    backlog = bool(left) or pool.harvest_queue_len() > 0
+                except Exception:
+                    backlog = bool(left)
+                # Backlog -> come back soon (keeps the gentle harvest moving);
+                # empty -> idle, but still promptly so a manual pick uploads
+                # within ~a minute.
+                if monitor.waitForAbort(20 if backlog else 60):
                     break
         except Exception:
             pass
 
     try:
         threading.Thread(target=_loop, daemon=True).start()
-    except Exception:
-        pass
-
-
-_KTUVIT_HARVEST_THROTTLE = 2.5   # seconds between Ktuvit downloads
-_KTUVIT_HARVEST_MAX = 25         # cap per title (safety)
-
-
-def _harvest_ktuvit_to_pool(info, cands):
-    """On every play, mirror EVERY human Ktuvit subtitle for this title to the
-    pool -- not just the one being watched -- so the backup grows fast. Runs in
-    the long-lived service process (survives playback ending), gated by
-    pool_share. Cheap and safe:
-      * Skips releases already in the pool (authoritative pool.lookup), so we
-        never re-download from Ktuvit or re-upload what's already shared.
-      * Re-downloads of a release we fetched before are served from the engine's
-        on-disk cache (no Ktuvit hit); throttled regardless.
-      * Only DOWNLOADS + ENQUEUES here; the durable, throttled queue does the
-        actual Telegram upload, so a burst can't trip the bot's rate limit and
-        nothing is lost if this thread is cut short (next play picks it up)."""
-    try:
-        from resources.lib import pool, translate, subs_engine_bridge
-    except Exception:
-        return
-    try:
-        if not (pool.share_enabled() and subs_engine_bridge.enabled()):
-            return
-    except Exception:
-        return
-
-    payloads = []
-    for c in (cands or []):
-        try:
-            pl = translate._decode_link(c.get('link') or '') or {}
-        except Exception:
-            pl = {}
-        if pl.get('type') != 'engine' or pl.get('embedded'):
-            continue
-        if (pl.get('source') or '').strip().lower() != 'ktuvit':
-            continue
-        lang = pl.get('language') or ''
-        if 'Hebrew' not in lang or 'MachineTranslated' in lang:
-            continue
-        payloads.append(pl)
-    if not payloads:
-        return
-
-    def _norm(s):
-        import re as _re
-        return _re.sub(r'[^a-z0-9]', '', (s or '').lower())
-
-    def _worker():
-        # Let the viewing subtitle download/apply first, then harvest the rest.
-        time.sleep(6)
-        pooled = set()
-        try:
-            for v in pool.lookup(info):
-                if (v.get('kind') or 'ai') == 'ktuvit':
-                    r = (v.get('release') or '').strip()
-                    if r:
-                        pooled.add(_norm(r))
-        except Exception:
-            pass
-        sent = 0
-        for pl in payloads[:_KTUVIT_HARVEST_MAX]:
-            rel = pl.get('filename') or ''
-            if rel and _norm(rel) in pooled:
-                continue  # already shared -- no Ktuvit hit, no upload
-            try:
-                path = subs_engine_bridge.download(pl)
-            except Exception:
-                path = None
-            if not path or not os.path.isfile(path):
-                continue
-            if pool.was_contributed(path):
-                continue
-            try:
-                with open(path, 'r', encoding='utf-8', errors='replace') as f:
-                    text = f.read()
-            except OSError:
-                text = ''
-            if text:
-                try:
-                    pool.contribute_ktuvit(info, text, release=rel,
-                                           marker_path=path)
-                    sent += 1
-                except Exception:
-                    pass
-            time.sleep(_KTUVIT_HARVEST_THROTTLE)
-        if sent:
-            try:
-                kodi_utils.log(
-                    'ktuvit harvest: queued {0} sub(s) for the pool'.format(
-                        sent), level='INFO')
-            except Exception:
-                pass
-
-    try:
-        threading.Thread(target=_worker, daemon=True).start()
     except Exception:
         pass
 

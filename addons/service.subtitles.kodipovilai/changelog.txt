@@ -1,3 +1,16 @@
+v0.2.240
+- Ktuvit pool now reliably mirrors EVERY release of a title, not a random
+  subset. The old grab downloaded all of a title's Ktuvit subs in a quick
+  burst the moment you pressed play -- but Ktuvit rate-/quota-limits downloads,
+  so most of them silently failed and were never retried (hence "it only
+  uploads some, whenever it feels like it"). Now every Ktuvit release is queued
+  to disk on any search (play OR a manual "download subtitles"), and the
+  background service pulls them from Ktuvit GENTLY -- a couple at a time,
+  spaced out, retrying failures across sessions and even days -- until the
+  whole set is in the pool. Nothing depends on you staying on the video, and
+  the upload to the channel is still one-at-a-time and deduped. Clear log lines
+  added for the whole path (queued N, fed K to upload, uploaded M).
+
 v0.2.239
 - New: Ktuvit backup pool. When you open a movie/episode, ALL of its human
   Ktuvit subtitles (every release, not only the one you're watching) are
