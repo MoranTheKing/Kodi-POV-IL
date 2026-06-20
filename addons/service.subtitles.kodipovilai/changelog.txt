@@ -1,3 +1,8 @@
+v0.2.238
+- Faster subtitle loading on first open: the source search now waits up to 10
+  seconds instead of 15. Results almost always arrive within 5-8s; the engine
+  no longer sits an extra ~5-7s waiting on a slow source that returns nothing.
+
 v0.2.237
 - Fixed AI translation that "said it translated but showed blank / the original
   language". The model (flash-lite) sometimes returns an EMPTY response or
