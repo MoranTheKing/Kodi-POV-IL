@@ -1644,9 +1644,21 @@ def _autosub_on_play():
             if src:
                 failed_sources.add(src)
 
-        # Nothing ready worked. Optionally AI-translate the best foreign sub
-        # (opt-in; off by default so we don't spend API requests unasked).
-        if not applied and kodi_utils.get_bool('engine_force_translate', False):
+        # No Hebrew anywhere -- not embedded, not human, not the community pool,
+        # not machine-translated. ONLY in that case, auto-translate the best
+        # foreign sub (the highest-match English, which list_candidates already
+        # orders first) to Hebrew on play, exactly like DarkSubs's auto_translate.
+        # Gated so we NEVER spend quota when a ready Hebrew sub exists:
+        #   * a Gemini API key must be connected (nothing to translate with
+        #     otherwise), and
+        #   * the user hasn't opted out of AI (translation_mode != 'none').
+        # (The legacy engine_force_translate toggle still forces it if set.)
+        _have_key = bool((kodi_utils.get_setting('api_key', '') or '').strip())
+        _ai_ok = (kodi_utils.get_setting('translation_mode', 'ai')
+                  or 'ai') != 'none'
+        _auto_ai = (_have_key and _ai_ok) or kodi_utils.get_bool(
+            'engine_force_translate', False)
+        if not applied and _auto_ai:
             for c in cands:
                 try:
                     p2 = translate._decode_link(c.get('link') or '')
