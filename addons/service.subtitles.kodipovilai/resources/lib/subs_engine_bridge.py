@@ -580,41 +580,98 @@ def _wait_for_subtitle_streams(player, max_tenths=25):
     return subs
 
 
-def embedded_candidates(info):
-    """Detect an embedded Hebrew subtitle stream in the currently-playing file
-    and offer it at the very top, mirroring DarkSubs's "[LOC] 101%" entry.
-    Selecting it switches Kodi's subtitle stream (no file) -- default.py then
-    closes the dialog the way DarkSubs does so Kodi shows no error."""
-    if not enabled():
-        return []
+# --- Embedded-stream snapshot (taken at PLAYBACK START) ----------------------
+# Kodi's getAvailableSubtitleStreams() returns BOTH the file's embedded streams
+# AND any EXTERNAL sub that's since been loaded (including one WE loaded -- e.g.
+# an AI translation). Polling it live each time the picker opens therefore
+# misreads our own external sub as an "embedded Hebrew 101%" entry, which then
+# pins the picker on that sub. The fix: snapshot the stream list ONCE at play
+# start (before anything external is loaded) and offer embedded entries only
+# from that snapshot. Embedded streams keep their (low) indices even after Kodi
+# appends externals, so the snapshot index stays valid at select time.
+_EMBEDDED_SNAP = {'key': None, 'streams': None}
+
+
+def _stream_key(info):
+    """A stable id for the currently-playing item (same across the dialog opens
+    of one playback). Prefer the player's own file over the info dict."""
+    try:
+        import xbmc
+        f = (xbmc.Player().getPlayingFile() or '').strip()
+    except Exception:
+        f = ''
+    return f or ((info or {}).get('filepath') or (info or {}).get('title') or '')
+
+
+def note_playback_streams(info, streams=None):
+    """Snapshot the embedded/local subtitle streams at PLAY START, before any
+    external sub is loaded. Call ONCE per file, as early as possible. `streams`
+    may be passed if the caller already polled them (auto-on-play does)."""
     try:
         import xbmc
         player = xbmc.Player()
         if not player.isPlayingVideo():
-            return []
-        streams = _wait_for_subtitle_streams(player)
+            return
+        key = _stream_key(info)
+        if (_EMBEDDED_SNAP.get('key') == key
+                and _EMBEDDED_SNAP.get('streams') is not None):
+            return  # already captured for this file
+        if streams is None:
+            streams = _wait_for_subtitle_streams(player)
+        _EMBEDDED_SNAP['key'] = key
+        _EMBEDDED_SNAP['streams'] = list(streams or [])
+        kodi_utils.log('embedded baseline ({0} stream(s)): {1}'.format(
+            len(_EMBEDDED_SNAP['streams']), _EMBEDDED_SNAP['streams']),
+            level='INFO')
     except Exception:
+        pass
+
+
+def embedded_candidates(info):
+    """Offer the file's EMBEDDED / local subtitle streams (mirroring DarkSubs's
+    [LOC] entries): Hebrew at the top as 101%, other languages as selectable
+    "[מובנה] XX" entries. Uses the play-start snapshot (see above) so an
+    external sub we loaded -- e.g. an AI translation -- can NEVER be mistaken
+    for an embedded stream. With no snapshot (e.g. autosub off, or the dialog
+    opened before play start was captured) it offers nothing rather than risk a
+    misread."""
+    if not enabled():
+        return []
+    key = _stream_key(info)
+    if _EMBEDDED_SNAP.get('key') != key:
+        return []
+    streams = _EMBEDDED_SNAP.get('streams')
+    if not streams:
         return []
     out = []
-    for idx, name in enumerate(streams or []):
+    for idx, name in enumerate(streams):
         n = (name or '').strip().lower()
-        # Match the EMBEDDED Hebrew stream exactly like DarkSubs does (== 'heb').
-        # Embedded container streams report the 3-letter code 'heb'; an EXTERNAL
-        # Hebrew sub (e.g. one we already loaded from OpenSubtitles) reports 'he'
-        # or 'Hebrew' -- so a broad match would wrongly target the external sub
-        # and "switch to nothing". Only offer a true embedded 'heb' stream.
-        if n == 'heb':
+        if not n:
+            continue
+        code = _LANG_NORMALIZE.get(n, n[:2] if len(n) >= 2 else n)
+        if code == 'he':
             out.append({
                 'filename': 'תרגום מובנה בעברית · 101%',
                 'language': 'he',
                 'link': urllib.parse.quote(json.dumps({
                     'type': 'engine', 'embedded': True,
-                    'stream_index': idx,
+                    'stream_index': idx, 'lang': 'he',
                 }, ensure_ascii=False)),
-                'sync': 'true',
-                'rating': '5',
+                'sync': 'true', 'rating': '5',
                 'is_hi': False, 'is_hd': False,
-                '_engine_kind': 'embedded_he',
+                '_engine_kind': 'embedded_he', '_pct': 101,
+            })
+        else:
+            out.append({
+                'filename': '[מובנה] {0}'.format(code.upper()),
+                'language': code or 'und',
+                'link': urllib.parse.quote(json.dumps({
+                    'type': 'engine', 'embedded': True,
+                    'stream_index': idx, 'lang': code,
+                }, ensure_ascii=False)),
+                'sync': 'false', 'rating': '3',
+                'is_hi': False, 'is_hd': False,
+                '_engine_kind': 'embedded_other', '_pct': 0,
             })
     return out
 
@@ -821,13 +878,13 @@ def _looks_like_subtitle(path):
         return True  # if unsure, don't block a possibly-good file
 
 
-def select_embedded(stream_index):
-    """Switch Kodi to the embedded HEBREW subtitle stream. We RE-FIND the Hebrew
-    stream right now rather than trusting the index captured when the dialog
-    opened: by download time the stream list can have shifted (Kodi/our own
-    external subs got added), so a stale index points at the wrong stream and
-    "shows nothing". Mirrors DarkSubs's get_embedded_sub_index(subs,'heb') at
-    apply time. Falls back to the captured index if no Hebrew stream is found."""
+def select_embedded(stream_index, lang=None):
+    """Switch Kodi to the chosen EMBEDDED subtitle stream. The index comes from
+    the play-start snapshot, where only true embedded streams existed; Kodi
+    appends external subs at HIGHER indices, so this index still points at the
+    embedded stream. Use it directly. Only if it's out of range do we re-find
+    the first stream of the requested language (lowest index = the embedded
+    one), never an external appended later."""
     try:
         import xbmc
         p = xbmc.Player()
@@ -835,16 +892,14 @@ def select_embedded(stream_index):
             streams = p.getAvailableSubtitleStreams() or []
         except Exception:
             streams = []
-        # DarkSubs matches the embedded stream by EXACTLY 'heb' (get_embedded_
-        # sub_index(subs,'heb')). External Hebrew subs report 'he'/'Hebrew', so
-        # matching 'heb' picks the real embedded stream and not an external one.
-        target = None
-        for i, name in enumerate(streams):
-            if (name or '').strip().lower() == 'heb':
-                target = i
-                break
-        if target is None:
-            target = int(stream_index)
+        target = int(stream_index)
+        if target < 0 or (streams and target >= len(streams)):
+            want = (lang or 'he').lower()
+            target = next(
+                (i for i, name in enumerate(streams)
+                 if _LANG_NORMALIZE.get((name or '').strip().lower(),
+                                        (name or '').strip().lower()[:2]) == want),
+                int(stream_index))
         p.setSubtitleStream(target)
         p.showSubtitles(True)
         kodi_utils.log('subs_engine_bridge.select_embedded: set stream {0}'
