@@ -38,10 +38,10 @@
 
 - עץ קבצים מסודר של המיגרציה.
 - מסמך diff של `Twilight -> POV`.
-- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.2.zip`.
+- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.101.zip`.
 - הוראות התקנה ובדיקת smoke test לטלפון: `ANDROID_TESTING.md`.
 
-## חבילת בדיקה 0.1.2
+## חבילת בדיקה (גרסה נוכחית)
 
 החבילה מבוססת על `build21_kodirdil_pov-1.0.0.zip` ומוסיפה:
 
@@ -57,7 +57,7 @@
 
 For phone testing, install this Kodi add-on zip first:
 
-`dist/plugin.program.kodipovilwizard-0.1.1.zip`
+`dist/plugin.program.kodipovilwizard-latest.zip`
 
 After installing it in Kodi, open:
 
