@@ -1,3 +1,16 @@
+v0.2.244
+- Fixed: an AI-translated (or any external) subtitle being mistaken for an
+  "embedded Hebrew" track. The picker read Kodi's live subtitle-stream list,
+  which includes subs WE load -- so after an AI translation it showed a bogus
+  "embedded Hebrew 101%", marked it current, and got stuck on it (you couldn't
+  switch to other subtitles). Now the embedded streams are snapshotted at the
+  moment playback starts -- before anything external is loaded -- so an external
+  sub can never be misread as embedded.
+- Embedded subtitles in OTHER languages (e.g. English) now show too, as
+  selectable "[מובנה] EN" entries (they were silently dropped before; only
+  Hebrew was offered). An embedded English no longer counts as "Hebrew exists",
+  so the AI-translate options stay available.
+
 v0.2.243
 - Ktuvit pool now PREFERRED over live Ktuvit for the same release. When a
   release exists both live (from Ktuvit) and in the pool, the list shows the
