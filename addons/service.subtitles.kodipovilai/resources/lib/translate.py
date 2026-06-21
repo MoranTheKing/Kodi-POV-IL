@@ -469,7 +469,11 @@ def list_candidates(info, modal_progress=True):
     # Embedded Hebrew (101%) goes to the very top -- above even a local
     # passthrough -- mirroring DarkSubs's [LOC] entry.
     if engine_embedded:
-        have_hebrew = True
+        # Only an embedded HEBREW stream means "Hebrew already exists"; an
+        # embedded English (or other) [מובנה] entry must NOT suppress the
+        # AI-translate options.
+        if any((c.get('language') == 'he') for c in engine_embedded):
+            have_hebrew = True
         results[:0] = [_clean(c) for c in engine_embedded]
 
     # Community pool. ONE network lookup returns both kinds of shared Hebrew:
@@ -970,10 +974,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         if payload.get('embedded'):
             try:
                 from . import subs_engine_bridge
+                _elang = payload.get('lang') or 'he'
                 if subs_engine_bridge.select_embedded(
-                        payload.get('stream_index')):
-                    _status('כתובית עברית מובנה הופעלה',
-                                      time_ms=4000)
+                        payload.get('stream_index'), _elang):
+                    _status('הופעל תרגום מובנה' + (
+                        ' בעברית' if _elang == 'he' else ''), time_ms=4000)
             except Exception as e:
                 kodi_utils.log('resolve embedded select failed: {0}'
                                .format(e), level='WARNING')
