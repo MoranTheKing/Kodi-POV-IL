@@ -589,7 +589,32 @@ def _wait_for_subtitle_streams(player, max_tenths=25):
 # start (before anything external is loaded) and offer embedded entries only
 # from that snapshot. Embedded streams keep their (low) indices even after Kodi
 # appends externals, so the snapshot index stays valid at select time.
-_EMBEDDED_SNAP = {'key': None, 'streams': None}
+#
+# CRITICAL: the snapshot is taken in the SERVICE process (auto-on-play) but read
+# in the SUBTITLE-DIALOG process (default.py) -- two separate Python instances,
+# so a module global wouldn't be visible across them. Store it on a Kodi WINDOW
+# PROPERTY (Window(10000)), which every add-on process shares.
+_SNAP_PROP = 'povil.embedded_snap'
+
+
+def _snap_get():
+    try:
+        import xbmcgui
+        raw = xbmcgui.Window(10000).getProperty(_SNAP_PROP)
+        return json.loads(raw) if raw else None
+    except Exception:
+        return None
+
+
+def _snap_set(key, streams):
+    try:
+        import xbmcgui
+        xbmcgui.Window(10000).setProperty(
+            _SNAP_PROP,
+            json.dumps({'key': key, 'streams': list(streams or [])},
+                       ensure_ascii=False))
+    except Exception:
+        pass
 
 
 def _stream_key(info):
@@ -606,23 +631,22 @@ def _stream_key(info):
 def note_playback_streams(info, streams=None):
     """Snapshot the embedded/local subtitle streams at PLAY START, before any
     external sub is loaded. Call ONCE per file, as early as possible. `streams`
-    may be passed if the caller already polled them (auto-on-play does)."""
+    may be passed if the caller already polled them (auto-on-play does).
+    Stored on a window property so the subtitle-dialog process can read it."""
     try:
         import xbmc
         player = xbmc.Player()
         if not player.isPlayingVideo():
             return
         key = _stream_key(info)
-        if (_EMBEDDED_SNAP.get('key') == key
-                and _EMBEDDED_SNAP.get('streams') is not None):
+        cur = _snap_get()
+        if cur and cur.get('key') == key and cur.get('streams') is not None:
             return  # already captured for this file
         if streams is None:
             streams = _wait_for_subtitle_streams(player)
-        _EMBEDDED_SNAP['key'] = key
-        _EMBEDDED_SNAP['streams'] = list(streams or [])
+        _snap_set(key, streams)
         kodi_utils.log('embedded baseline ({0} stream(s)): {1}'.format(
-            len(_EMBEDDED_SNAP['streams']), _EMBEDDED_SNAP['streams']),
-            level='INFO')
+            len(streams or []), list(streams or [])), level='INFO')
     except Exception:
         pass
 
@@ -638,9 +662,10 @@ def embedded_candidates(info):
     if not enabled():
         return []
     key = _stream_key(info)
-    if _EMBEDDED_SNAP.get('key') != key:
+    snap = _snap_get()
+    if not snap or snap.get('key') != key:
         return []
-    streams = _EMBEDDED_SNAP.get('streams')
+    streams = snap.get('streams')
     if not streams:
         return []
     out = []
