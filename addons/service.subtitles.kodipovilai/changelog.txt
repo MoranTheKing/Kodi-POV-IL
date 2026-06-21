@@ -1,3 +1,12 @@
+v0.2.245
+- Fixed embedded subtitles not appearing in the "Download subtitles" dialog. The
+  play-start stream snapshot was kept in the background service's memory, but the
+  subtitle dialog runs in a SEPARATE process that couldn't see it -- so embedded
+  Hebrew/English never showed when you opened the picker manually. The snapshot
+  now lives on a shared Kodi window property both processes read. (Embedded still
+  only shows when the file genuinely has an embedded stream; many web/debrid
+  releases simply have none.)
+
 v0.2.244
 - Fixed: an AI-translated (or any external) subtitle being mistaken for an
   "embedded Hebrew" track. The picker read Kodi's live subtitle-stream list,
