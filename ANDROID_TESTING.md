@@ -2,7 +2,7 @@
 
 קובץ הבדיקה נמצא כאן:
 
-`dist/Kodi-POV-IL-FENtastic-test-0.1.2.zip`
+`dist/Kodi-POV-IL-FENtastic-test-0.1.101.zip`
 
 ## מה לבדוק אחרי התקנה
 
@@ -26,7 +26,7 @@
 
 Install the wizard zip in Kodi:
 
-`dist/plugin.program.kodipovilwizard-0.1.1.zip`
+`dist/plugin.program.kodipovilwizard-latest.zip`
 
 Then open:
 
@@ -36,7 +36,7 @@ Choose a fresh install if you want this test build to replace the old POV build 
 
 Direct GitHub download:
 
-`https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist/plugin.program.kodipovilwizard-0.1.1.zip`
+`https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist/plugin.program.kodipovilwizard-latest.zip`
 
 Kodi file source after GitHub Pages deploys:
 
@@ -44,4 +44,4 @@ Kodi file source after GitHub Pages deploys:
 
 Path in Kodi:
 
-`Install from zip file -> Kodi POV IL -> wizard -> plugin.program.kodipovilwizard-0.1.1.zip`
+`Install from zip file -> Kodi POV IL -> wizard -> plugin.program.kodipovilwizard-latest.zip`
