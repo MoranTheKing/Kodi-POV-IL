@@ -1555,6 +1555,7 @@ def _autosub_on_play():
         try:
             _pl = xbmc.Player()
             _heb_idx = None
+            _streams = []
             for _ in range(80):  # up to ~8s, but only while streams aren't listed yet
                 try:
                     _streams = _pl.getAvailableSubtitleStreams() or []
@@ -1568,6 +1569,14 @@ def _autosub_on_play():
                 if not _pl.isPlayingVideo():
                     break
                 xbmc.sleep(100)
+            # Snapshot these PLAY-START streams as the embedded baseline. This is
+            # the only moment we're sure no external sub (incl. one WE load
+            # below) is present, so the picker can later tell embedded from
+            # external and never mistake an AI translation for "embedded Hebrew".
+            try:
+                subs_engine_bridge.note_playback_streams(info, _streams)
+            except Exception:
+                pass
             if _heb_idx is not None:
                 _pl.setSubtitleStream(_heb_idx)
                 _pl.showSubtitles(True)
