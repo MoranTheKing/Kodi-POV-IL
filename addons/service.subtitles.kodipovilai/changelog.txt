@@ -1,3 +1,11 @@
+v0.2.248
+- New setting: "Subtitle search time (seconds)" -- you choose how long the
+  engine searches the sources (slider 2-60s) instead of the fixed 10s. Higher
+  = more results from slow sources, longer wait. (Settings > built-in engine.)
+- New setting: "Show subtitle / translation notifications" (on by default).
+  Turn it off to hide ALL the addon's toast popups ("translating with AI",
+  "from cache", etc.), like DarkSubs. The on-play status overlay is unaffected.
+
 v0.2.247
 - "Remember picked source" now shows the source dialog with your last-played
   source FIRST and marked with a star (⭐), instead of silently auto-playing

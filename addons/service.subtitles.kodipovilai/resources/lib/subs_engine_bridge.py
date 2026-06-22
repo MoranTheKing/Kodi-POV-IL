@@ -135,7 +135,8 @@ _ENGINE_DEFAULTS = {
     'retry_search_with_all_langs': 'true',
     'auto_translate': 'false',
     'translate_p': '0',
-    'max_search_time': '10',
+    # max_search_time is NOT here on purpose: it's a user-facing setting now
+    # (Settings > engine), so we must never force-overwrite the user's choice.
     'subtitle_trans_cache': '15',
     'enable_autosub_notifications': 'true',
     'auto_fix_sub_punctuation': 'true',

@@ -453,3 +453,19 @@ msgstr "אימייל Ktuvit"
 msgctxt "#32537"
 msgid "Ktuvit password"
 msgstr "סיסמת Ktuvit"
+
+msgctxt "#32540"
+msgid "Subtitle search time (seconds)"
+msgstr "משך חיפוש כתוביות (שניות)"
+
+msgctxt "#32541"
+msgid "How long to search subtitle sources"
+msgstr "כמה זמן לחפש במקורות הכתוביות לפני עצירה. גבוה יותר = יותר תוצאות ממקורות איטיים, אבל המתנה ארוכה יותר."
+
+msgctxt "#32542"
+msgid "Show subtitle / translation notifications"
+msgstr "הצג התראות כתוביות / תרגום"
+
+msgctxt "#32543"
+msgid "Hide translation toasts"
+msgstr "הודעות קופצות כמו \"מתרגם עם AI\", \"מהקאש\" וכו'. כבה כדי להסתיר את כולן."

@@ -166,6 +166,11 @@
           <default>true</default>
           <control type="toggle"/>
         </setting>
+        <setting id="subs_notifications" type="boolean" label="32542" help="32543"> <!-- Show subtitle/translation notifications -->
+          <level>0</level>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
         <setting id="rtl_punct_mode" type="string" label="32222" help="32223"> <!-- RTL punctuation fix direction -->
           <level>0</level>
           <default>reverse</default>
@@ -399,6 +404,19 @@
           </dependencies>
           <control type="toggle"/>
         </setting>
+        <setting id="max_search_time" type="integer" label="32540" help="32541">
+          <level>0</level>
+          <default>10</default>
+          <constraints>
+            <minimum>2</minimum>
+            <step>1</step>
+            <maximum>60</maximum>
+          </constraints>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+          </dependencies>
+          <control type="slider" format="integer"/>
+        </setting>
         <setting id="connect_telegram" type="action" label="32528" help="32530">
           <level>0</level>
           <default></default>
@@ -547,9 +565,6 @@
         </setting>
         <setting id="translate_p" type="string" label="30000" visible="false">
           <level>3</level><default>0</default><control type="label" format="string"/>
-        </setting>
-        <setting id="max_search_time" type="string" label="30000" visible="false">
-          <level>3</level><default>10</default><control type="label" format="string"/>
         </setting>
         <setting id="subtitle_trans_cache" type="string" label="30000" visible="false">
           <level>3</level><default>15</default><control type="label" format="string"/>

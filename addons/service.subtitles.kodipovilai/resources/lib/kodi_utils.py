@@ -208,6 +208,14 @@ def notify(msg, title=None, icon=None, time_ms=4000):
     if not KODI_AVAILABLE:
         print('NOTIFY:', title, '-', msg)
         return
+    # User master switch (like DarkSubs): hide all subtitle/translation toasts
+    # when turned off. Default ON, so nothing changes unless the user opts out.
+    try:
+        if (get_setting('subs_notifications', 'true')
+                or 'true').strip().lower() == 'false':
+            return
+    except Exception:
+        pass
     try:
         if title is None:
             title = 'Kodi POV IL'
