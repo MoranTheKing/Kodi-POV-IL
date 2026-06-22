@@ -2537,23 +2537,32 @@ def _maybe_default_pool_on():
 
 
 def _maybe_default_remember_source():
-    """One-shot: turn "remember picked source" ON for existing users still on
-    the old default-off (the feature is now on by default for everyone). Flips
-    a stored 'false' to 'true' once, marker-gated, so a later manual opt-out
-    sticks. New installs get it via the settings.xml default. Runs BEFORE the
-    POV patcher so the patcher sees the setting on and reloads POV this session."""
+    """Turn "remember picked source" (the source that floats to the top of the
+    list, marked "« נצפה לאחרונה »") ON for everyone.
+
+    v1 was a gentle default: it only flipped a stored 'false' to 'true' once and
+    then respected a manual opt-out. v2 is a stronger rollout -- because this is
+    an important feature, it FORCE-enables it once for EVERYONE, including users
+    who had turned it off. Marker-gated by a fresh key (_remember_source_force_
+    v2) so it re-applies exactly once even for users who already passed v1; a
+    later manual opt-out AFTER this run sticks again (we never force it back on
+    on subsequent startups). New installs get it via the settings.xml default.
+    Runs BEFORE the POV patcher so the patcher sees it on and reloads POV this
+    session."""
     try:
         from resources.lib import kodi_utils
     except Exception:
         return
     try:
-        if kodi_utils.get_setting('_remember_source_default_v1', '') == '1':
+        if kodi_utils.get_setting('_remember_source_force_v2', '') == '1':
             return
-        if kodi_utils.get_setting('remember_source', 'false') == 'false':
-            kodi_utils.set_setting('remember_source', 'true')
+        # Force ON once -- override a prior opt-out, this rollout only.
+        kodi_utils.set_setting('remember_source', 'true')
+        # Keep the v1 marker set too, so the old gentle path stays a no-op.
         kodi_utils.set_setting('_remember_source_default_v1', '1')
-        kodi_utils.log('remember_source enabled by default (migration v1)',
-                       level='INFO')
+        kodi_utils.set_setting('_remember_source_force_v2', '1')
+        kodi_utils.log('remember_source force-enabled for everyone '
+                       '(rollout v2)', level='INFO')
     except Exception as e:
         try:
             kodi_utils.log('remember_source default migration failed: {0}'
@@ -2563,49 +2572,48 @@ def _maybe_default_remember_source():
 
 
 def _maybe_default_nox_poster_rating():
-    """One-shot: turn the NOX skin's rating/score circle ON for posters so the
-    content score shows on artwork by default for everyone. NOX ships with the
-    tri-state rating setting (circle_rating / circle_userrating / circle_none)
-    all OFF, so posters show no score until the user digs into skin settings.
-    We flip 'circle_rating' on exactly once, the first time NOX is the active
-    skin -- but ONLY when the user hasn't already chosen any of the three
-    options, so a later manual change (including picking 'none') STICKS.
+    """One-shot rollout: FORCE the NOX skin's rating/score circle ON for posters
+    so the content score shows on artwork -- for EVERYONE, the first time NOX is
+    the active skin after this update. The rating is considered an important
+    default, so this run also re-enables it for users who had previously turned
+    it off (it sets 'circle_rating' and clears the mutually-exclusive
+    'circle_none' / 'circle_userrating'). Marker-gated by a FRESH version (v2),
+    so it re-applies exactly once even for users who already passed the earlier
+    v1 default -- and a later MANUAL opt-out AFTER this run sticks again (we
+    never force it back on on subsequent startups).
 
     Skin settings can only be read/written for the ACTIVE skin (Skin.HasSetting
-    / Skin.SetBool target whatever skin is loaded), so this no-ops on every
-    startup until NOX is actually the active skin -- then it applies and marks
-    itself done. We confirm the bool actually took before marking done, so a
-    write that didn't persist is retried on a later startup. No-op for users
-    who never run NOX (the marker is simply never set)."""
+    / Skin.SetBool / Skin.Reset target whatever skin is loaded), so this no-ops
+    on every startup until NOX is actually the active skin -- then it applies
+    and marks itself done. We confirm the bool actually took before marking
+    done, so a write that didn't persist is retried on a later startup. No-op
+    for users who never run NOX (the marker is simply never set)."""
     try:
         import xbmc
         from resources.lib import kodi_utils
     except Exception:
         return
     try:
-        if kodi_utils.get_setting('_nox_poster_rating_default_v1', '') == '1':
+        if kodi_utils.get_setting('_nox_poster_rating_default_v2', '') == '1':
             return
         # Only meaningful while NOX is the active skin -- otherwise the
         # Skin.* condition/builtin would read/write the wrong skin. Try again
         # on a later startup (cheap, marker stays unset).
         if xbmc.getSkinDir() != 'skin.povil.nox':
             return
-        # Respect an existing choice: if the user (or a prior run) already set
-        # any of the three rating-circle options, leave it alone and mark done.
-        already_chosen = (
-            xbmc.getCondVisibility('Skin.HasSetting(circle_rating)')
-            or xbmc.getCondVisibility('Skin.HasSetting(circle_userrating)')
-            or xbmc.getCondVisibility('Skin.HasSetting(circle_none)'))
-        if not already_chosen:
-            xbmc.executebuiltin('Skin.SetBool(circle_rating)')
-            xbmc.sleep(150)
+        # Force the rating circle ON (override a prior 'off'/'user rating'
+        # choice this once). circle_rating / circle_userrating / circle_none
+        # are mutually exclusive, so clear the other two and set rating.
+        xbmc.executebuiltin('Skin.Reset(circle_none)')
+        xbmc.executebuiltin('Skin.Reset(circle_userrating)')
+        xbmc.executebuiltin('Skin.SetBool(circle_rating)')
+        xbmc.sleep(150)
         # Only mark done once the setting is actually present, so a write that
         # failed to take is retried next startup instead of being lost.
-        if (already_chosen
-                or xbmc.getCondVisibility('Skin.HasSetting(circle_rating)')):
-            kodi_utils.set_setting('_nox_poster_rating_default_v1', '1')
-            kodi_utils.log('NOX poster rating circle enabled by default '
-                           '(migration v1)', level='INFO')
+        if xbmc.getCondVisibility('Skin.HasSetting(circle_rating)'):
+            kodi_utils.set_setting('_nox_poster_rating_default_v2', '1')
+            kodi_utils.log('NOX poster rating circle force-enabled for '
+                           'everyone (rollout v2)', level='INFO')
     except Exception as e:
         try:
             kodi_utils.log('NOX poster rating default migration failed: {0}'

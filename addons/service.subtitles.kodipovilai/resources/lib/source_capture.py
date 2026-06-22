@@ -98,7 +98,16 @@ def _norm(x):
 
 
 # Prefix put on the remembered source's display name so the user can spot it.
-_MARK = '⭐ '  # star + space
+# NB: a ⭐ emoji (U+2B50) was tried first but the skin fonts (Noto/Heebo) have
+# no glyph for it, so it rendered as a blank tofu box -- the user saw "□" and
+# couldn't tell which source was remembered. Plain Hebrew text always renders
+# and is clearer, so we use a short label instead of a symbol.
+_MARK = '« נצפה לאחרונה » '
+
+# Earlier marker(s) we may still find on a freshly-scraped name (results are
+# rebuilt every scrape, so this is just belt-and-braces for an in-memory list
+# that was already reordered once this session).
+_OLD_MARKS = ('⭐ ',)
 
 
 def _match_index(results, rec):
@@ -146,7 +155,11 @@ def reorder(sources_self, results):
         # pollutes the remembered record on a re-pick.
         try:
             nm = item.get('URLName') or ''
-            if nm and not nm.startswith(_MARK):
+            # Strip any prior marker (old emoji or this one) so we never stack.
+            for _m in (_MARK,) + _OLD_MARKS:
+                if nm.startswith(_m):
+                    nm = nm[len(_m):]
+            if nm:
                 item['URLName'] = _MARK + nm
         except Exception:
             pass
