@@ -2537,23 +2537,32 @@ def _maybe_default_pool_on():
 
 
 def _maybe_default_remember_source():
-    """One-shot: turn "remember picked source" ON for existing users still on
-    the old default-off (the feature is now on by default for everyone). Flips
-    a stored 'false' to 'true' once, marker-gated, so a later manual opt-out
-    sticks. New installs get it via the settings.xml default. Runs BEFORE the
-    POV patcher so the patcher sees the setting on and reloads POV this session."""
+    """Turn "remember picked source" (the source that floats to the top of the
+    list, marked "« נצפה לאחרונה »") ON for everyone.
+
+    v1 was a gentle default: it only flipped a stored 'false' to 'true' once and
+    then respected a manual opt-out. v2 is a stronger rollout -- because this is
+    an important feature, it FORCE-enables it once for EVERYONE, including users
+    who had turned it off. Marker-gated by a fresh key (_remember_source_force_
+    v2) so it re-applies exactly once even for users who already passed v1; a
+    later manual opt-out AFTER this run sticks again (we never force it back on
+    on subsequent startups). New installs get it via the settings.xml default.
+    Runs BEFORE the POV patcher so the patcher sees it on and reloads POV this
+    session."""
     try:
         from resources.lib import kodi_utils
     except Exception:
         return
     try:
-        if kodi_utils.get_setting('_remember_source_default_v1', '') == '1':
+        if kodi_utils.get_setting('_remember_source_force_v2', '') == '1':
             return
-        if kodi_utils.get_setting('remember_source', 'false') == 'false':
-            kodi_utils.set_setting('remember_source', 'true')
+        # Force ON once -- override a prior opt-out, this rollout only.
+        kodi_utils.set_setting('remember_source', 'true')
+        # Keep the v1 marker set too, so the old gentle path stays a no-op.
         kodi_utils.set_setting('_remember_source_default_v1', '1')
-        kodi_utils.log('remember_source enabled by default (migration v1)',
-                       level='INFO')
+        kodi_utils.set_setting('_remember_source_force_v2', '1')
+        kodi_utils.log('remember_source force-enabled for everyone '
+                       '(rollout v2)', level='INFO')
     except Exception as e:
         try:
             kodi_utils.log('remember_source default migration failed: {0}'
