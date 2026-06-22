@@ -98,16 +98,22 @@ def _norm(x):
 
 
 # Prefix put on the remembered source's display name so the user can spot it.
-# NB: a ⭐ emoji (U+2B50) was tried first but the skin fonts (Noto/Heebo) have
-# no glyph for it, so it rendered as a blank tofu box -- the user saw "□" and
-# couldn't tell which source was remembered. Plain Hebrew text always renders
-# and is clearer, so we use a short label instead of a symbol.
-_MARK = '« נצפה לאחרונה » '
+# History: a ⭐ emoji (U+2B50) was tried first but the skin fonts (Noto/Heebo)
+# have no glyph for it, so it rendered as a blank tofu box. Plain Hebrew text
+# fixed that but blended into the (white) release name and got lost on long
+# titles. So we now make it a BOLD GOLD badge via Kodi label markup -- POV
+# renders item['URLName'] as a normal Kodi label, which honours [B]/[COLOR].
+# Hex colour (not a named one) so it works regardless of the skin's palette.
+# It stays a PREFIX: in this list names are left-aligned, so the badge sits at
+# the start (left) and the "..." truncation of a long title eats the END, never
+# the badge. The trailing dot keeps the gold badge visually separate from the
+# white title.
+_MARK = '[B][COLOR FFFFD700]« נצפה לאחרונה »[/COLOR][/B] · '
 
 # Earlier marker(s) we may still find on a freshly-scraped name (results are
 # rebuilt every scrape, so this is just belt-and-braces for an in-memory list
 # that was already reordered once this session).
-_OLD_MARKS = ('⭐ ',)
+_OLD_MARKS = ('⭐ ', '« נצפה לאחרונה » ')
 
 
 def _match_index(results, rec):
