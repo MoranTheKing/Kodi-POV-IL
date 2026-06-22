@@ -97,6 +97,67 @@ def _norm(x):
     return (x or '').strip().lower()
 
 
+# Prefix put on the remembered source's display name so the user can spot it.
+_MARK = '⭐ '  # star + space
+
+
+def _match_index(results, rec):
+    """Index in `results` of the source the user picked last time, or None.
+    Exact match by source hash first; else a conservative similar match (same
+    quality AND provider, cached only)."""
+    rhash = _norm(rec.get('hash'))
+    if rhash:
+        for i, it in enumerate(results):
+            if _norm(it.get('hash')) == rhash:
+                return i
+    rq = _norm(rec.get('quality'))
+    rprov = _norm(rec.get('provider'))
+    if rq and rprov:
+        for i, it in enumerate(results):
+            if 'Uncached' in (it.get('cache_provider') or ''):
+                continue
+            if (_norm(it.get('quality')) == rq
+                    and _norm(it.get('scrape_provider')
+                              or it.get('provider')) == rprov):
+                return i
+    return None
+
+
+def reorder(sources_self, results):
+    """Move the remembered source to the TOP of `results` and mark its display
+    name, so the user can re-pick it in one click -- instead of auto-playing and
+    skipping the dialog. Modifies `results` IN PLACE. Best-effort: on any error
+    or no remembered match, leaves `results` untouched. Returns True if it
+    reordered. Gated by the `remember_source` setting (same as capture)."""
+    try:
+        if not _enabled():
+            return False
+        rec = _get_record(sources_self)
+        if not rec:
+            _log('reorder: nothing remembered for this item')
+            return False
+        idx = _match_index(results, rec)
+        if idx is None:
+            _log('reorder: no confident match in current results')
+            return False
+        item = results.pop(idx)
+        # Mark the displayed name (POV shows item['URLName'] as tikiskins.name).
+        # The stored record reads item['name'], not URLName, so the marker never
+        # pollutes the remembered record on a re-pick.
+        try:
+            nm = item.get('URLName') or ''
+            if nm and not nm.startswith(_MARK):
+                item['URLName'] = _MARK + nm
+        except Exception:
+            pass
+        results.insert(0, item)
+        _log('reorder: remembered source moved to top + marked')
+        return True
+    except Exception as e:
+        _log('reorder error: ' + str(e), 3)
+        return False
+
+
 def autopick(sources_self, results):
     """Return the source item from `results` that matches the one the user
     picked for this media last time, so POV can play it and skip the dialog.

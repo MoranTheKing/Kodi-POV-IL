@@ -5,10 +5,12 @@
 #
 #   1. CAPTURE  -- right before POV yields the resolved link, record the chosen
 #      source (name/hash/quality/provider) per media. (source_capture.capture)
-#   2. AUTO-PICK -- at the top of display_results(), if the user already picked
-#      a source for this media, play the same/similar one and skip the source
-#      dialog. (source_capture.autopick) First watch -> no record -> dialog;
-#      later watches -> auto-play.
+#   2. REORDER -- at the top of display_results(), if the user already picked a
+#      source for this media, move the same/similar one to the TOP of the list
+#      and mark it (⭐), so the source dialog still shows but the last-played
+#      source is the first, easy-to-re-pick choice. (source_capture.reorder)
+#      We deliberately do NOT auto-play/skip the dialog. The capture hook keeps
+#      the remembered source updated whenever the user picks a different one.
 
 import os
 import re
@@ -26,8 +28,8 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 SOURCES_REL_PATH = 'resources/lib/modules/sources.py'
-CAP_MARKER = 'AI_SUBS_REMEMBER_SOURCE_v5'
-PICK_MARKER = 'AI_SUBS_AUTOPICK_v5'
+CAP_MARKER = 'AI_SUBS_REMEMBER_SOURCE_v6'
+PICK_MARKER = 'AI_SUBS_AUTOPICK_v6'
 
 # Unique yield site (optional inline `if ...:` prefix, any indent).
 _YIELD_RE = re.compile(
@@ -99,10 +101,7 @@ def _autopick_lines(body_indent, eol):
         "\t\t_ap_p = _ap_v.translatePath('special://home/addons/service.subtitles.kodipovilai/resources/lib')",
         '\t\tif _ap_p not in _ap_s.path: _ap_s.path.insert(0, _ap_p)',
         '\t\timport source_capture as _ap_c',
-        '\t\t_ap_pick = _ap_c.autopick(self, results)',
-        '\t\tif _ap_pick is not None:',
-        '\t\t\tself._kill_progress_dialog()',
-        '\t\t\treturn self.play_file(results, _ap_pick)',
+        '\t\t_ap_c.reorder(self, results)',
         'except Exception: pass',
     ]
     return ''.join(body_indent + ln + eol for ln in raw)
