@@ -359,7 +359,12 @@ def _ensure_darksubs_enabled():
     if xbmc is None:
         return
     engine_on = _engine_on()
-    desired = not engine_on
+    try:
+        from resources.lib import kodi_utils as _ku
+        keep = _ku.get_bool('keep_darksubs', False)
+    except Exception:
+        keep = False
+    desired = (not engine_on) or keep
     for addon_id in ('service.subtitles.All_Subs',
                      'service.subtitles.all_subs_plus'):
         try:
