@@ -3,6 +3,9 @@ v0.2.251
   to the top of the source list, but instead of a star emoji that showed as an
   empty box (the skin fonts have no glyph for it) it's now labelled clearly in
   Hebrew ("נצפה לאחרונה" / recently watched).
+- NOX skin: the content rating/score on posters is now force-enabled for
+  everyone once more (it's an important default) -- including anyone who had
+  turned it off. After this, turning it off again sticks.
 
 v0.2.250
 - Hebrew subtitles on streaming sources are no longer all named the generic
