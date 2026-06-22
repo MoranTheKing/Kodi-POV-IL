@@ -1,3 +1,17 @@
+v0.2.250
+- Hebrew subtitles on streaming sources are no longer all named the generic
+  "TempSubtitle": each downloaded sub now keeps its own release name (e.g.
+  "Incendies.2010.720p.BluRay") so you can tell them apart in Kodi's subtitle
+  list. (On debrid/CDN streams Kodi used to rename every downloaded sub to the
+  same "TempSubtitle" file.)
+- Fixed: you can now download more than 2 Hebrew subtitles on a streaming
+  source. They used to collide on that single shared "TempSubtitle" file so
+  the 3rd and beyond silently never appeared in the list even though the
+  download reported success.
+- NOX skin: the content rating/score now shows on posters by default (the
+  rating circle). You can still turn it off in the skin's rating settings --
+  if you do, it stays off.
+
 v0.2.249
 - New setting "Keep DarkSubs (regular Hebrew subtitle search) enabled": by
   default only MoranSubs runs while the engine is on, but if you turn this on,
