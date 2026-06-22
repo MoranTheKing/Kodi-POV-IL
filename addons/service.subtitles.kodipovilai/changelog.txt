@@ -1,3 +1,11 @@
+v0.2.246
+- Fixed "Play from start" resuming from where you stopped. A previous one-shot
+  had forced POV "Automatically Resume Playback" to Always, which made even an
+  explicit "Play from start" (context menu) jump back to the stop point. It's
+  now set back to POV's default (ask), so the resume prompt still appears and
+  "Play from start" really starts at 0. One-shot + marker-gated: a user who
+  manually wants Always keeps it.
+
 v0.2.245
 - Fixed embedded subtitles not appearing in the "Download subtitles" dialog. The
   play-start stream snapshot was kept in the background service's memory, but the
