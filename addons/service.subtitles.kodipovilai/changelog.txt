@@ -1,3 +1,19 @@
+v0.2.253
+- Source screen no longer freezes while loading the Hebrew-match %: the
+  community-pool/Wizdom lookup is now fully background-warmed (like the
+  OpenSubtitles one already was), so the source list opens instantly. The
+  badges fill in from a shared cache (the next open is always instant).
+- The Hebrew-match % now also covers Ktuvit -- but only as a fallback, when no
+  other source had Hebrew, so a title whose Hebrew exists only on Ktuvit finally
+  shows a %. (Strictly throttled + cached so it never overloads Ktuvit; can be
+  turned off.)
+- NEW: built-in Hebrew is now shared for everyone. When the add-on detects a
+  source that ships an embedded Hebrew track, it flags that release in the
+  community pool (automatically, no action needed), so on everyone else's source
+  screen that source shows a green "HEB BUILT-IN 100%" badge -- telling you it
+  already has Hebrew and is well worth picking. Matched by release name, so it
+  works across debrid providers (TorBox / Real-Debrid / ...).
+
 v0.2.252
 - "Remember source" marker is now a bold gold badge ("« נצפה לאחרונה »") at the
   start of the remembered source's line, so it stands out from the white title
