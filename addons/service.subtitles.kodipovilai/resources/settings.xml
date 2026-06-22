@@ -417,6 +417,14 @@
           </dependencies>
           <control type="slider" format="integer"/>
         </setting>
+        <setting id="keep_darksubs" type="boolean" label="32544" help="32545">
+          <level>0</level>
+          <default>false</default>
+          <dependencies>
+            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+          </dependencies>
+          <control type="toggle"/>
+        </setting>
         <setting id="connect_telegram" type="action" label="32528" help="32530">
           <level>0</level>
           <default></default>
