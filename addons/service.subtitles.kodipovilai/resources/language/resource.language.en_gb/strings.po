@@ -465,3 +465,19 @@ msgstr "Ktuvit email"
 msgctxt "#32537"
 msgid "Ktuvit password"
 msgstr "Ktuvit password"
+
+msgctxt "#32540"
+msgid "Subtitle search time (seconds)"
+msgstr "Subtitle search time (seconds)"
+
+msgctxt "#32541"
+msgid "How long to search the subtitle sources before stopping. Higher = more results from slow sources, but a longer wait."
+msgstr "How long to search the subtitle sources before stopping. Higher = more results from slow sources, but a longer wait."
+
+msgctxt "#32542"
+msgid "Show subtitle / translation notifications"
+msgstr "Show subtitle / translation notifications"
+
+msgctxt "#32543"
+msgid "Toast popups like \"translating with AI\", \"from cache\", etc. Turn off to hide them all."
+msgstr "Toast popups like \"translating with AI\", \"from cache\", etc. Turn off to hide them all."
