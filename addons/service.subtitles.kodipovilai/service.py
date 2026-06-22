@@ -2631,6 +2631,9 @@ def _ensure_darksubs_enabled():
         runs (no double search, no competing results -- this is what makes the
         engine as fast as DarkSubs is on its own). MoranSubs then provides the
         sourcing, the auto-on-play, and the AI translation itself.
+        EXCEPTION: if the user turned on `keep_darksubs`, leave DarkSubs ENABLED
+        even with the engine on, so they keep "regular" Hebrew subtitle search
+        alongside the AI -- and it stays enabled across restarts/updates.
 
     Cheap, idempotent, runs early every startup; only writes on a mismatch."""
     if xbmc is None:
@@ -2638,9 +2641,11 @@ def _ensure_darksubs_enabled():
     try:
         from resources.lib import kodi_utils
         engine_on = kodi_utils.get_bool('use_builtin_engine', False)
+        keep = kodi_utils.get_bool('keep_darksubs', False)
     except Exception:
         engine_on = False
-    desired = not engine_on
+        keep = False
+    desired = (not engine_on) or keep
     # Both competing Hebrew subtitle add-ons get the same treatment: enabled
     # when the engine is off (default), disabled when the engine is on (so only
     # MoranSubs runs -- no duplicate/competing searches).
