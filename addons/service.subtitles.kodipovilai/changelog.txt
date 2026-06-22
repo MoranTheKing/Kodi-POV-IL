@@ -1,3 +1,11 @@
+v0.2.247
+- "Remember picked source" now shows the source dialog with your last-played
+  source FIRST and marked with a star (⭐), instead of silently auto-playing
+  it and skipping the dialog. So you can re-pick it in one click -- or choose a
+  different one, and that becomes the new remembered source for next time.
+  Opt-in (the existing "Remember picked source" setting); off by default, so
+  nothing changes for anyone who hasn't enabled it.
+
 v0.2.246
 - Fixed "Play from start" resuming from where you stopped. A previous one-shot
   had forced POV "Automatically Resume Playback" to Always, which made even an
