@@ -307,11 +307,188 @@ def _handle_download(handle, params):
                       level='WARNING')
 
     if path and os.path.isfile(path):
+        # Internet-stream workaround: hand the SRT to the player ourselves
+        # under a meaningful, unique name so it doesn't collapse into the
+        # generic shared "TempSubtitle" file Kodi would create. Falls back
+        # to the normal addDirectoryItem flow on local playback or failure.
+        delivered = False
+        try:
+            delivered = _deliver_named_subtitle(handle, path, link, info)
+        except Exception as _e:
+            _safe_log('named subtitle delivery failed: {0}'.format(_e),
+                      level='WARNING')
+            delivered = False
+        if delivered:
+            return  # endOfDirectory already called inside the helper
         listitem = xbmcgui.ListItem(label=path)
         xbmcplugin.addDirectoryItem(handle=handle, url=path,
                                     listitem=listitem,
                                     isFolder=False)
     xbmcplugin.endOfDirectory(handle)
+
+
+def _sanitise_sub_name(name):
+    """Make a release string safe as a filename and clean as a Kodi
+    subtitle label: drop directories/extensions, replace path/reserved
+    characters with dots, collapse runs, and cap the length."""
+    if not name:
+        return ''
+    try:
+        name = os.path.basename(str(name))
+    except Exception:
+        name = str(name)
+    low = name.lower()
+    for ext in ('.srt', '.ssa', '.ass', '.sub', '.vtt', '.txt'):
+        if low.endswith(ext):
+            name = name[:-len(ext)]
+            break
+    out = []
+    for ch in name:
+        if ch.isalnum() or ch in ' .,_-()[]':
+            out.append(ch)
+        else:
+            out.append('.')
+    cleaned = ''.join(out)
+    while '..' in cleaned:
+        cleaned = cleaned.replace('..', '.')
+    while '  ' in cleaned:
+        cleaned = cleaned.replace('  ', ' ')
+    cleaned = cleaned.strip(' .')
+    if len(cleaned) > 80:
+        cleaned = cleaned[:80].strip(' .')
+    return cleaned
+
+
+def _subtitle_display_name(link, info, path):
+    """A human-readable, filesystem-safe release name for the subtitle
+    we're about to hand to the player. Kodi turns the file's basename
+    into the label shown in the subtitle list, so we want the release
+    name (e.g. 'Incendies.2010.720p.BluRay.x264') instead of the generic
+    'TempSubtitle'. Engine/passthrough entries carry the real release
+    name; AI/pool entries only have an internal cache key, so those use
+    the movie/episode title. Returns '' when nothing sane is available
+    (caller then falls back to the normal flow)."""
+    from resources.lib import translate
+    try:
+        payload = translate._decode_link(link) or {}
+    except Exception:
+        payload = {}
+    kind = payload.get('type')
+
+    def _title_name():
+        title = (info.get('title') or '').strip()
+        if not title:
+            return ''
+        if info.get('is_episode') and info.get('season') and \
+                info.get('episode'):
+            try:
+                return '{0}.S{1:02d}E{2:02d}'.format(
+                    title, int(info.get('season')),
+                    int(info.get('episode')))
+            except (TypeError, ValueError):
+                return title
+        year = (info.get('year') or '').strip()
+        return '{0}.{1}'.format(title, year) if year else title
+
+    candidates = []
+    # Engine (Ktuvit human / machine-translated) and passthrough carry
+    # the real release name in the picked entry -- the most informative.
+    if payload.get('filename'):
+        candidates.append(payload['filename'])
+    if kind == 'passthrough':
+        candidates.append(os.path.basename(path))
+    # AI / pool / fallback: the on-disk name is an internal key, so the
+    # title is far more useful as a label.
+    candidates.append(_title_name())
+    candidates.append(os.path.basename(path))
+
+    for c in candidates:
+        cleaned = _sanitise_sub_name(c)
+        if cleaned:
+            return cleaned
+    return ''
+
+
+def _deliver_named_subtitle(handle, path, link, info):
+    """Internet-stream workaround for two Kodi-core subtitle behaviours.
+
+    When the playing file is an HTTP(S) stream (debrid/CDN), Kodi's
+    download dialog (GUIDialogSubtitles::OnDownloadComplete) ALWAYS copies
+    the returned file to special://temp/TempSubtitle.he.srt -- a single
+    shared name derived from the (missing) stream filename, NOT from the
+    file we hand back. Two consequences the user hit:
+      * every Hebrew sub shows up as the indistinguishable label
+        "Hebrew - TempSubtitle (External)" (bug #2);
+      * the destination path is identical every time, so repeated
+        downloads overwrite the same file and Kodi dedups the external
+        stream by path -- only the first one or two ever appear and the
+        3rd+ silently vanish even though we report success (bug #3).
+
+    We sidestep BOTH by copying our resolved SRT to a uniquely- and
+    MEANINGFULLY-named file (the release name) and handing it straight to
+    the player via setSubtitles() -- exactly how the AI/progressive path
+    already delivers -- then closing the dialog with no item (the same
+    sequence the embedded-Hebrew pick uses). Kodi derives the external
+    stream label from the basename, so the user sees e.g.
+    "Hebrew - Incendies.2010.720p.BluRay (External)" and each distinct
+    release becomes its own persistent stream.
+
+    Returns True if we delivered (endOfDirectory already called), or False
+    to let the caller fall back to the normal addDirectoryItem path
+    (local playback, no active player, or any failure)."""
+    from resources.lib import kodi_utils
+    if xbmc is None:
+        return False
+    # Only internet streams hit the TempSubtitle path. Local playback gets
+    # a sane video-derived name from Kodi (and may be stored alongside the
+    # video), so leave that flow completely untouched.
+    try:
+        playing = (xbmc.Player().getPlayingFile() or '').strip()
+    except Exception:
+        playing = ''
+    pl = playing.lower()
+    if not (pl.startswith('http://') or pl.startswith('https://')):
+        return False
+    try:
+        if not xbmc.Player().isPlayingVideo():
+            return False
+    except Exception:
+        return False
+    name = _subtitle_display_name(link, info, path)
+    if not name:
+        return False
+    dest = os.path.join(kodi_utils.cache_dir(), name + '.he.srt')
+    try:
+        if os.path.abspath(dest) != os.path.abspath(path):
+            shutil.copyfile(path, dest)
+    except OSError as _e:
+        _safe_log('named subtitle copy failed: {0}'.format(_e),
+                  level='WARNING')
+        return False
+    try:
+        p = xbmc.Player()
+        p.setSubtitles(dest)
+        p.showSubtitles(True)
+    except Exception as _e:
+        _safe_log('named subtitle setSubtitles failed: {0}'.format(_e),
+                  level='WARNING')
+        return False
+    # Close the dialog cleanly with no item -- same sequence the embedded
+    # pick uses (copied from DarkSubs): the sleep(100) lets the dialog
+    # finish closing before endOfDirectory so Kodi doesn't flash a
+    # spurious "download failed".
+    try:
+        xbmc.executebuiltin('Dialog.Close(all,true)')
+        xbmcplugin.addDirectoryItems(handle, [], 0)
+        xbmc.sleep(100)
+        xbmcplugin.endOfDirectory(handle, updateListing=True,
+                                  cacheToDisc=True)
+    except Exception:
+        try:
+            xbmcplugin.endOfDirectory(handle)
+        except Exception:
+            pass
+    return True
 
 
 def _try_next_hebrew(failed_link, info):
