@@ -1,3 +1,12 @@
+v0.2.249
+- New setting "Keep DarkSubs (regular Hebrew subtitle search) enabled": by
+  default only MoranSubs runs while the engine is on, but if you turn this on,
+  DarkSubs/All Subs stays ENABLED too -- and stays on across restarts and
+  updates (it used to be force-disabled on every startup).
+- Arctic Fuse 3: the movie/series plot auto-scroll was crawling (26s/cycle).
+  Sped it up (~8s) to match the other skins. Applies to existing AF3 installs
+  on next startup.
+
 v0.2.248
 - New setting: "Subtitle search time (seconds)" -- you choose how long the
   engine searches the sources (slider 2-60s) instead of the fixed 10s. Higher

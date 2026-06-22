@@ -481,3 +481,11 @@ msgstr "Show subtitle / translation notifications"
 msgctxt "#32543"
 msgid "Toast popups like \"translating with AI\", \"from cache\", etc. Turn off to hide them all."
 msgstr "Toast popups like \"translating with AI\", \"from cache\", etc. Turn off to hide them all."
+
+msgctxt "#32544"
+msgid "Keep DarkSubs (regular Hebrew subtitle search) enabled"
+msgstr "Keep DarkSubs (regular Hebrew subtitle search) enabled"
+
+msgctxt "#32545"
+msgid "By default only MoranSubs runs while the engine is on. Turn this on to keep DarkSubs/All Subs enabled too -- it stays on across restarts and updates."
+msgstr "By default only MoranSubs runs while the engine is on. Turn this on to keep DarkSubs/All Subs enabled too -- it stays on across restarts and updates."

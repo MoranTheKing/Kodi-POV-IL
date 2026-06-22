@@ -924,14 +924,23 @@ def _patch_touch_cleanup_xml():
 
 
 def _patch_info_plot_autoscroll_xml():
+    # v1 set time=26000 (a 26-second crawl -- far slower than other skins).
+    # v2 speeds it up to match the others. Revert any prior version of OUR
+    # autoscroll line, then (re)apply the current one, so existing installs that
+    # already have the slow v1 get the faster value.
     if not _exists(AF3_INFO_XML):
         return False
     try:
         text = _read(AF3_INFO_XML)
     except Exception:
         return False
-    if 'POV_AF3_PLOT_AUTOSCROLL_v1' in text:
-        return False
+    if 'POV_AF3_PLOT_AUTOSCROLL_v2' in text:
+        return False  # already at the faster value
+    import re as _re
+    # Strip any earlier version of our marker + autoscroll line.
+    text = _re.sub(
+        r'[ \t]*<!-- POV_AF3_PLOT_AUTOSCROLL_v\d+ -->\n'
+        r'[ \t]*<autoscroll[^\n]*</autoscroll>\n', '', text)
     needle = (
         '                <height>$PARAM[height]</height>\n'
         '                <left>40</left>\n'
@@ -941,8 +950,8 @@ def _patch_info_plot_autoscroll_xml():
         '                <height>$PARAM[height]</height>\n'
         '                <left>40</left>\n'
         '                <font>font_main_plot</font>\n'
-        '                <!-- POV_AF3_PLOT_AUTOSCROLL_v1 -->\n'
-        '                <autoscroll delay="3000" time="26000" repeat="10000">true</autoscroll>\n'
+        '                <!-- POV_AF3_PLOT_AUTOSCROLL_v2 -->\n'
+        '                <autoscroll delay="2000" time="8000" repeat="5000">true</autoscroll>\n'
         '                <nested />')
     if needle not in text:
         return False

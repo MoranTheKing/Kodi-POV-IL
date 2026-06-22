@@ -469,3 +469,11 @@ msgstr "הצג התראות כתוביות / תרגום"
 msgctxt "#32543"
 msgid "Hide translation toasts"
 msgstr "הודעות קופצות כמו \"מתרגם עם AI\", \"מהקאש\" וכו'. כבה כדי להסתיר את כולן."
+
+msgctxt "#32544"
+msgid "Keep DarkSubs enabled"
+msgstr "השאר את DarkSubs (חיפוש כתוביות עברית רגיל) מופעל"
+
+msgctxt "#32545"
+msgid "Keep DarkSubs enabled help"
+msgstr "כברירת מחדל רק MoranSubs פעיל כשהמנוע דולק. הפעל כדי להשאיר גם את DarkSubs/All Subs מופעל — הוא יישאר דלוק גם אחרי אתחול ועדכון."
