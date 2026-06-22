@@ -282,6 +282,13 @@
           <default></default>
           <control type="label" format="string"/>
         </setting>
+        <!-- Hidden marker: one-shot revert of the forced POV always-resume,
+             so "Play from start" starts at 0. -->
+        <setting id="_pov_resume_revert_v1" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default></default>
+          <control type="label" format="string"/>
+        </setting>
         <!-- Hidden marker for DarkSubs hook bookkeeping (reserved: the
              patcher itself is idempotent and doesn't need a flag, but
              we may use this for telemetry / migrations later). -->

@@ -2877,6 +2877,46 @@ def _maybe_revert_pov_autoplay():
             pass
 
 
+def _maybe_revert_pov_always_resume():
+    """One-shot: undo our earlier always-resume override. A prior migration set
+    POV "Automatically Resume Playback" to Always (auto_resume=1) for one-click
+    continue -- but that makes POV resume even when the user explicitly picks
+    "Play from start" from the context menu (it jumps back to the stop point).
+    Set the two auto_resume settings back to POV's default (0 = ask), so the
+    resume prompt appears AND "Play from start" really starts from 0. Marker-
+    gated; only reverts a value still on OUR forced '1', so a later manual
+    choice (e.g. a user who genuinely wants Always) sticks."""
+    if xbmc is None:
+        return
+    try:
+        from resources.lib import kodi_utils
+        import xbmcaddon
+    except Exception:
+        return
+    try:
+        if kodi_utils.get_setting('_pov_resume_revert_v1', '') == '1':
+            return
+        try:
+            pov = xbmcaddon.Addon('plugin.video.pov')
+        except Exception:
+            return  # POV not installed (standalone AI install) -> retry later
+        for key in ('auto_resume_movie', 'auto_resume_episode'):
+            try:
+                if (pov.getSetting(key) or '').strip() == '1':
+                    pov.setSetting(key, '0')
+            except Exception:
+                pass
+        kodi_utils.set_setting('_pov_resume_revert_v1', '1')
+        kodi_utils.log('POV always-resume reverted to ask '
+                       '("Play from start" fix)', level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log('POV resume revert failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def main():
     if xbmc is None:
         return
@@ -3127,6 +3167,10 @@ def main():
     # One-shot fix: undo the 0.2.158 mistake that forced POV Auto Play on
     # (it skipped the source dialog even on first watch). Restores the dialog.
     _maybe_revert_pov_autoplay()
+
+    # One-shot: undo our forced always-resume so "Play from start" really starts
+    # from 0 (it was resuming to the stop point). Marker-gated.
+    _maybe_revert_pov_always_resume()
 
     # One-shot first-launch dialog for Arctic Fuse 3. Skin-gated +
     # marker-gated so it only fires for users who have actually
