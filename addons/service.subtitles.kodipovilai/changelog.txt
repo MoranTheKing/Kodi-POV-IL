@@ -1,3 +1,9 @@
+v0.2.251
+- "Remember source" marker is now readable: the remembered source still moves
+  to the top of the source list, but instead of a star emoji that showed as an
+  empty box (the skin fonts have no glyph for it) it's now labelled clearly in
+  Hebrew ("נצפה לאחרונה" / recently watched).
+
 v0.2.250
 - Hebrew subtitles on streaming sources are no longer all named the generic
   "TempSubtitle": each downloaded sub now keeps its own release name (e.g.
