@@ -114,6 +114,65 @@ function json(obj, status = 200) {
   });
 }
 
+// --- Embedded-Hebrew registry --------------------------------------------
+// A tiny per-media list of RELEASE NAMES known to ship a built-in (muxed)
+// Hebrew subtitle track. Reported automatically by the add-on the moment it
+// detects an embedded Hebrew stream at play start, keyed by release name (NOT
+// debrid hash) so it matches across providers (TorBox / Real-Debrid / ... all
+// expose the same release name for the same file). Stored under 'emb:<key>' so
+// it never touches the subtitle index. Bounded so a value can't grow forever.
+const EMB_MAX = 80;
+
+function embKey(mediaKey) { return 'emb:' + mediaKey; }
+
+async function readEmbedded(env, p) {
+  try {
+    const keys = await mediaKeys(env, p);
+    const seen = new Set();
+    const out = [];
+    for (const k of keys) {
+      let raw;
+      try { raw = await env.POOL.get(embKey(k)); } catch (_) { raw = null; }
+      if (!raw) continue;
+      let arr; try { arr = JSON.parse(raw); } catch { arr = null; }
+      if (!Array.isArray(arr)) continue;
+      for (const rel of arr) {
+        const r = String(rel || '').trim();
+        const low = r.toLowerCase();
+        if (r && !seen.has(low)) { seen.add(low); out.push(r); }
+      }
+    }
+    return out;
+  } catch (_) { return []; }
+}
+
+async function recordEmbedded(env, body) {
+  const rel = String(body.release || '').trim();
+  if (!rel) return json({ ok: false, error: 'no release' }, 400);
+  const ids = await resolveIds(env, {
+    tmdb: body.tmdb_id, imdb: body.imdb_id, type: body.type,
+  });
+  const p = {
+    tmdb: ids.tmdb, imdb: ids.imdb, type: body.type,
+    season: body.season, episode: body.episode, lang: 'he',
+  };
+  const keys = await mediaKeys(env, p);
+  const primary = keys[0];
+  if (!primary) return json({ ok: false, error: 'no key' }, 400);
+  const k = embKey(primary);
+  let arr = [];
+  try { const raw = await env.POOL.get(k); if (raw) arr = JSON.parse(raw) || []; } catch (_) { arr = []; }
+  if (!Array.isArray(arr)) arr = [];
+  const low = rel.toLowerCase();
+  if (arr.some(x => String(x || '').toLowerCase() === low)) {
+    return json({ ok: true, added: false });   // already known -> no write
+  }
+  arr.push(rel);
+  if (arr.length > EMB_MAX) arr = arr.slice(arr.length - EMB_MAX);
+  try { await env.POOL.put(k, JSON.stringify(arr)); } catch (_) { /* ignore */ }
+  return json({ ok: true, added: true });
+}
+
 function looksLikeSrt(text) {
   if (!text || text.length < 30 || text.length > MAX_SRT) return false;
   return (text.match(/-->/g) || []).length >= 3;
@@ -622,10 +681,21 @@ export default {
     if (path === '/lookup' && request.method === 'GET') {
       const p = Object.fromEntries(url.searchParams);
       const { variants, primaryKey } = await readMergedIndex(env, p);
+      const embedded = await readEmbedded(env, p);
       return json({
         ok: true, key: primaryKey, count: variants.length,
         variants: variants.map(v => ({ hash: v.hash, release: v.release, source_lang: v.source_lang, kind: v.kind || 'ai', ts: v.ts })),
+        embedded,
       });
+    }
+
+    // Add-on report: "this release ships a built-in Hebrew subtitle track."
+    if (path === '/embedded' && request.method === 'POST') {
+      if (request.headers.get('x-api-key') !== env.API_KEY)
+        return json({ ok: false, error: 'unauthorized' }, 401);
+      let body;
+      try { body = await request.json(); } catch { return json({ ok: false, error: 'bad json' }, 400); }
+      return await recordEmbedded(env, body);
     }
 
     if (path === '/sub' && request.method === 'GET') {

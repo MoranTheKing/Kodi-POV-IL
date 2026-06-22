@@ -28,8 +28,6 @@ POOL_URL = 'https://povil-subs-pool.moran200333.workers.dev'
 _UA = 'KodiPOVIL-AISubs/he-match'
 _ADDON_ID = 'service.subtitles.kodipovilai'
 
-_CACHE = {}            # media_key -> (ts, [pool+wizdom release names])
-_TTL = 300.0           # seconds; POV's interpreter persists so this survives
 _TIMEOUT = 2.5
 
 # Engine (OpenSubtitles) availability is filled by a background RunScript into a
@@ -85,23 +83,33 @@ def _media_key(p):
 WIZDOM_API_URL = 'https://wizdom.xyz/api/search?action=by_id'
 
 
-def _pool_release_names(p):
-    """Hebrew release names from the community pool."""
+def _pool_lookup(p):
+    """One /lookup call -> (hebrew release names, embedded-Hebrew release names).
+    'embedded' is the set of releases the community has flagged as carrying a
+    built-in (muxed) Hebrew track -- keyed by release name so it matches across
+    debrid providers. Networked: only called from the background warm, never
+    from the POV source window."""
     try:
         q = _parse.urlencode({k: v for k, v in p.items() if v})
         req = _req.Request(POOL_URL + '/lookup?' + q,
                            headers={'user-agent': _UA})
         raw = _req.urlopen(req, timeout=_TIMEOUT).read().decode('utf-8')
         data = json.loads(raw)
-        out = []
+        names, embedded = [], []
         if data.get('ok'):
             for v in (data.get('variants') or []):
                 rel = (v.get('release') or '').strip()
                 if rel:
-                    out.append(rel)
-        return out
+                    names.append(rel)
+            for rel in (data.get('embedded') or []):
+                rel = (rel or '').strip()
+                if rel:
+                    embedded.append(rel)
+        return names, embedded
     except Exception:
-        return []
+        return [], []
+
+
 
 
 def _wizdom_release_names(p):
@@ -145,10 +153,10 @@ def _engine_cache_path():
         return ''
 
 
-def _engine_cached_names(key):
-    """Hebrew release names the MoranSubs engine (OpenSubtitles) found for this media,
-    or None when it has not been warmed yet / is stale -- the caller then fires
-    a background warm. Pure file read; never networks."""
+def _cache_entry(key):
+    """The shared he_avail cache entry for this media, or None when missing /
+    stale. The background warm writes {ts, names, embedded}; this is a pure file
+    read that NEVER networks (it runs inside POV's source-window build)."""
     try:
         path = _engine_cache_path()
         if not path or not os.path.isfile(path):
@@ -160,9 +168,27 @@ def _engine_cached_names(key):
             return None
         if (time.time() - float(ent.get('ts', 0))) > _ENGINE_TTL:
             return None
-        return [n for n in (ent.get('names') or []) if n]
+        return ent
     except Exception:
         return None
+
+
+def _cached_names(key):
+    """All available Hebrew release names from the warm cache (pool + Wizdom +
+    OpenSubtitles + Ktuvit-fallback), or None when not warmed / stale."""
+    ent = _cache_entry(key)
+    if ent is None:
+        return None
+    return [n for n in (ent.get('names') or []) if n]
+
+
+def _cached_embedded(key):
+    """Release names flagged as carrying a built-in Hebrew track (from the warm
+    cache). [] when none / not warmed."""
+    ent = _cache_entry(key)
+    if ent is None:
+        return []
+    return [n for n in (ent.get('embedded') or []) if n]
 
 
 def _meta_str(meta, keys):
@@ -205,51 +231,63 @@ def _fire_engine_warm(key, p, meta):
         pass
 
 
-def release_names(meta):
-    """Return the release names of Hebrew subtitles available for this media,
-    from the community pool + Wizdom (synchronous) AND the MoranSubs engine /
-    OpenSubtitles (background-warmed, read from a shared cache). Cached per media. []
-    when disabled / unknown / on error -- so the caller shows no prefix."""
+def availability(p):
+    """NETWORKED -- runs ONLY in the background warm (MoranSubs's own process),
+    never in POV's source window. Returns (hebrew release names, embedded-Hebrew
+    release names) from the community pool + Wizdom. The warm adds OpenSubtitles
+    / Ktuvit on top and writes the merged result to the shared cache."""
+    names, embedded = [], []
+    seen = set()
     try:
-        if not _enabled() or _req is None:
+        pool_names, embedded = _pool_lookup(p)
+    except Exception:
+        pool_names, embedded = [], []
+    try:
+        wiz = _wizdom_release_names(p)
+    except Exception:
+        wiz = []
+    for rel in list(pool_names) + list(wiz):
+        low = (rel or '').strip().lower()
+        if low and low not in seen:
+            seen.add(low)
+            names.append(rel)
+    return names, embedded
+
+
+def release_names(meta):
+    """Hebrew-subtitle release names available for this media -- a PURE CACHE
+    READ (pool + Wizdom + OpenSubtitles + Ktuvit-fallback, all written by the
+    background warm). NEVER networks: this runs inside POV's source-results
+    build, and the old synchronous pool/Wizdom calls froze the source list for
+    several seconds. On a cache miss we fire the warm and return [] now; the
+    badge fills in the next time the list renders (cheap disk read). [] when
+    disabled / unknown."""
+    try:
+        if not _enabled():
             return []
         p = _media_params(meta)
         if not p:
             return []
         key = _media_key(p)
-        now = time.time()
-        # Pool + Wizdom: networked, so cache in-memory for 5 min.
-        hit = _CACHE.get(key)
-        if hit and (now - hit[0]) < _TTL:
-            pw = hit[1]
-        else:
-            pw = []
-            seen0 = set()
-            for src in (_pool_release_names, _wizdom_release_names):
-                for rel in src(p):
-                    low = rel.lower()
-                    if low not in seen0:
-                        seen0.add(low)
-                        pw.append(rel)
-            _CACHE[key] = (now, pw)
-        # Engine (OpenSubtitles): cheap disk read every call; warm in the background
-        # when missing so the badge fills in on the next open (never blocks).
-        eng = _engine_cached_names(key)
-        if eng is None:
-            # Not warmed yet: fire the background OpenSubtitles lookup and return NOW.
-            # We must NOT block here -- this runs inside POV's source-results
-            # build, so waiting froze the source list for several seconds. The
-            # badge fills in the next time the list renders (cheap cache read).
-            _fire_engine_warm(key, p, meta)
-            eng = []
-        names = list(pw)
-        seen = set(n.lower() for n in names)
-        for rel in eng:
-            low = (rel or '').lower()
-            if low and low not in seen:
-                seen.add(low)
-                names.append(rel)
+        names = _cached_names(key)
+        if names is None:
+            _fire_engine_warm(key, p, meta)   # warms pool+Wizdom+OS+Ktuvit
+            return []
         return names
+    except Exception:
+        return []
+
+
+def embedded_names(meta):
+    """Release names flagged (by the community) as carrying a built-in Hebrew
+    track, for THIS media. Pure cache read; [] when none / not warmed yet."""
+    try:
+        if not _enabled():
+            return []
+        p = _media_params(meta)
+        if not p:
+            return []
+        return _cached_embedded(_media_key(p))
     except Exception:
         return []
 
@@ -278,14 +316,28 @@ def best_score(src_release, names):
         return 0
 
 
-def label_prefix(src_release, names):
-    """A small coloured 'HEB <NN>% | ' prefix for the START of the source's
-    info line, or '' when there's no usable match. Colour: green high / amber
-    mid / red low. Deliberately LTR-only (no Hebrew letters): a Hebrew word
-    inline in the mostly-English info line triggers bidi reordering (it jumps
-    to the end) and then gets clipped when the line is full. An LTR badge stays
-    at the start and always shows, since the line truncates from the end."""
+def label_prefix(src_release, names, embedded=None):
+    """A small coloured prefix for the START of the source's info line, or ''
+    when there's no usable match.
+
+    If this source's release matches one the community flagged as carrying a
+    BUILT-IN Hebrew track, it gets a distinct top-priority green badge
+    ('HEB BUILT-IN 100%') so everyone knows it already has Hebrew and is well
+    worth picking. Otherwise a normal 'HEB <NN>%' match badge: green high /
+    amber mid / red low.
+
+    Deliberately LTR-only (no Hebrew letters): a Hebrew word inline in the
+    mostly-English info line triggers bidi reordering (it jumps to the end) and
+    gets clipped when the line is full. An LTR badge stays at the start and
+    always shows, since the line truncates from the end."""
     try:
+        # Embedded Hebrew = best possible: it's already in the file. We treat a
+        # high token overlap with a flagged release as a match (same scorer as
+        # the % badge, threshold 80) so it survives small release-name diffs.
+        if embedded and src_release:
+            emb_best = best_score(src_release, embedded)
+            if emb_best >= 80:
+                return '[COLOR FF2ECC71][B]HEB BUILT-IN 100%[/B][/COLOR] | '
         best = best_score(src_release, names)
         if best <= 0:
             return ''

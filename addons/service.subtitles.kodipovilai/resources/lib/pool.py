@@ -277,6 +277,103 @@ def mark_contributed(translated_path):
         pass
 
 
+# --- Embedded-Hebrew reporting -------------------------------------------
+# When the add-on detects a built-in (muxed) Hebrew track in the source being
+# played, it tells the pool "this RELEASE ships embedded Hebrew" so EVERYONE
+# sees that source flagged on the source screen. Fully automatic (no user
+# action), non-blocking, keyed by release name (provider-independent), and
+# deduped locally so each release is reported at most once per device. NOT
+# gated by pool_share -- it's a tiny advisory flag, not a subtitle upload --
+# but can be turned off with `he_embedded_report`.
+
+def _embedded_reported_path():
+    try:
+        import xbmcvfs
+        base = xbmcvfs.translatePath(
+            'special://profile/addon_data/service.subtitles.kodipovilai/')
+        return os.path.join(base, 'embedded_reported.json')
+    except Exception:
+        return ''
+
+
+def _embedded_already(key):
+    p = _embedded_reported_path()
+    if not p or not os.path.isfile(p):
+        return False, p, []
+    try:
+        with open(p, 'r', encoding='utf-8') as f:
+            lst = json.load(f) or []
+        return (key in lst), p, lst
+    except Exception:
+        return False, p, []
+
+
+def _embedded_mark(p, lst, key):
+    try:
+        lst.append(key)
+        if len(lst) > 2000:
+            lst = lst[-2000:]
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        tmp = p + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(lst, f)
+        os.replace(tmp, p)
+    except Exception:
+        pass
+
+
+def report_embedded(info):
+    """Fire-and-forget: flag this media's CURRENT source release as carrying a
+    built-in Hebrew track. Safe to call on every embedded-Hebrew detection --
+    deduped locally and thrown onto a background thread so it never touches
+    playback. No-op when disabled, when ids/release are missing, or on error."""
+    try:
+        if kodi_utils.get_setting('he_embedded_report', 'true') == 'false':
+            return
+        if _urlreq is None:
+            return
+        p = _params(info)
+        if not _has_id(p):
+            return
+        rel = _release_from(info)
+        if not rel or _is_token_like(rel):
+            return
+        key = '{0}:{1}:{2}:{3}:{4}'.format(
+            p['tmdb'] or p['imdb'], p['type'], p['season'], p['episode'],
+            rel.lower())
+        already, path, lst = _embedded_already(key)
+        if already:
+            return
+        body = {
+            'tmdb_id': p['tmdb'], 'imdb_id': p['imdb'], 'type': p['type'],
+            'season': p['season'], 'episode': p['episode'], 'release': rel,
+        }
+
+        def _run():
+            try:
+                req = _urlreq.Request(
+                    POOL_URL + '/embedded',
+                    data=json.dumps(body).encode('utf-8'),
+                    headers={'content-type': 'application/json',
+                             'x-api-key': POOL_API_KEY, 'user-agent': _UA},
+                    method='POST')
+                _urlreq.urlopen(req, timeout=_POST_TIMEOUT).read()
+                # Mark locally only on a successful send, so a failed report
+                # retries on the next watch.
+                if path:
+                    _embedded_mark(path, lst, key)
+            except Exception as e:
+                try:
+                    kodi_utils.log('pool report_embedded failed: {0}'.format(e),
+                                   level='DEBUG')
+                except Exception:
+                    pass
+
+        threading.Thread(target=_run, daemon=True).start()
+    except Exception:
+        pass
+
+
 _CACHE_NAME_RE = None
 
 
