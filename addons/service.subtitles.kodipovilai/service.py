@@ -2562,6 +2562,58 @@ def _maybe_default_remember_source():
             pass
 
 
+def _maybe_default_nox_poster_rating():
+    """One-shot: turn the NOX skin's rating/score circle ON for posters so the
+    content score shows on artwork by default for everyone. NOX ships with the
+    tri-state rating setting (circle_rating / circle_userrating / circle_none)
+    all OFF, so posters show no score until the user digs into skin settings.
+    We flip 'circle_rating' on exactly once, the first time NOX is the active
+    skin -- but ONLY when the user hasn't already chosen any of the three
+    options, so a later manual change (including picking 'none') STICKS.
+
+    Skin settings can only be read/written for the ACTIVE skin (Skin.HasSetting
+    / Skin.SetBool target whatever skin is loaded), so this no-ops on every
+    startup until NOX is actually the active skin -- then it applies and marks
+    itself done. We confirm the bool actually took before marking done, so a
+    write that didn't persist is retried on a later startup. No-op for users
+    who never run NOX (the marker is simply never set)."""
+    try:
+        import xbmc
+        from resources.lib import kodi_utils
+    except Exception:
+        return
+    try:
+        if kodi_utils.get_setting('_nox_poster_rating_default_v1', '') == '1':
+            return
+        # Only meaningful while NOX is the active skin -- otherwise the
+        # Skin.* condition/builtin would read/write the wrong skin. Try again
+        # on a later startup (cheap, marker stays unset).
+        if xbmc.getSkinDir() != 'skin.povil.nox':
+            return
+        # Respect an existing choice: if the user (or a prior run) already set
+        # any of the three rating-circle options, leave it alone and mark done.
+        already_chosen = (
+            xbmc.getCondVisibility('Skin.HasSetting(circle_rating)')
+            or xbmc.getCondVisibility('Skin.HasSetting(circle_userrating)')
+            or xbmc.getCondVisibility('Skin.HasSetting(circle_none)'))
+        if not already_chosen:
+            xbmc.executebuiltin('Skin.SetBool(circle_rating)')
+            xbmc.sleep(150)
+        # Only mark done once the setting is actually present, so a write that
+        # failed to take is retried next startup instead of being lost.
+        if (already_chosen
+                or xbmc.getCondVisibility('Skin.HasSetting(circle_rating)')):
+            kodi_utils.set_setting('_nox_poster_rating_default_v1', '1')
+            kodi_utils.log('NOX poster rating circle enabled by default '
+                           '(migration v1)', level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log('NOX poster rating default migration failed: {0}'
+                           .format(e), level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_reenable_ktuvit():
     """Ktuvit is working again -> turn the source back ON for everyone, ONCE
     (marker _ktuvit_on_v4). Marker-gated, so a user who turns it OFF again AFTER
@@ -3095,6 +3147,10 @@ def main():
     # shipped without one, so a bad source mid-playback was a dead end.
     # Skin-gated (no-op unless skin.povil.nox is installed), XML-checked.
     _maybe_patch_nox_change_source()
+
+    # Turn NOX's rating/score circle ON for posters by default (one-shot, only
+    # while NOX is the active skin; a later manual change sticks).
+    _maybe_default_nox_poster_rating()
 
     # Same for the Estuary skin (skin.estuary) -- it also shipped without a
     # change-source button. Skin-gated, XML-parse-checked.
