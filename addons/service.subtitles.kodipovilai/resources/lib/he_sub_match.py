@@ -28,8 +28,6 @@ POOL_URL = 'https://povil-subs-pool.moran200333.workers.dev'
 _UA = 'KodiPOVIL-AISubs/he-match'
 _ADDON_ID = 'service.subtitles.kodipovilai'
 
-_CACHE = {}            # media_key -> (ts, [pool+wizdom release names])
-_TTL = 300.0           # seconds; POV's interpreter persists so this survives
 _TIMEOUT = 2.5
 
 # Engine (OpenSubtitles) availability is filled by a background RunScript into a
@@ -38,7 +36,11 @@ _TIMEOUT = 2.5
 _ENGINE_CACHE_FILE = (
     'special://profile/addon_data/service.subtitles.kodipovilai/'
     'he_avail_cache.json')
-_ENGINE_TTL = 7 * 24 * 3600.0   # 7 days; OpenSubtitles availability changes slowly
+_ENGINE_TTL = 7 * 24 * 3600.0   # 7 days; used once HUMAN Hebrew has been found
+# When NO human Hebrew exists yet (likely brand-new content), re-warm MUCH more
+# often so a sub that appears within hours shows up fast for everyone -- new
+# releases get human Hebrew within ~24h, and a 7-day cache would hide it.
+_AVAIL_TTL_NONE = 8 * 3600.0    # 8 hours
 _FIRED = {}            # media_key -> last warm-fire ts (throttle re-fires)
 _FIRE_RETRY = 120.0    # re-fire a warm at most once every 2 min per title
 
@@ -85,23 +87,50 @@ def _media_key(p):
 WIZDOM_API_URL = 'https://wizdom.xyz/api/search?action=by_id'
 
 
-def _pool_release_names(p):
-    """Hebrew release names from the community pool."""
+def _pool_lookup(p):
+    """One /lookup call -> dict with the pool's Hebrew data for this media:
+        {'names': [...],          pool-contributed Hebrew release names
+         'embedded': [...],       releases flagged as carrying built-in Hebrew
+         'ktuvit': [...],         Hebrew release names cached from Ktuvit
+         'ktuvit_checked': <ts>}  when Ktuvit was last checked (0 = never)
+    All keyed by release name so they match across debrid providers. Networked:
+    only called from the background warm, never from the POV source window."""
+    out = {'names': [], 'embedded': [], 'ktuvit': [],
+           'ktuvit_checked': 0.0, 'ktuvit_changed': 0.0}
     try:
         q = _parse.urlencode({k: v for k, v in p.items() if v})
         req = _req.Request(POOL_URL + '/lookup?' + q,
                            headers={'user-agent': _UA})
         raw = _req.urlopen(req, timeout=_TIMEOUT).read().decode('utf-8')
         data = json.loads(raw)
-        out = []
         if data.get('ok'):
-            for v in (data.get('variants') or []):
-                rel = (v.get('release') or '').strip()
-                if rel:
-                    out.append(rel)
-        return out
+            # Only HUMAN Hebrew counts as "there's a translation" here -- an AI
+            # translation (kind='ai') can be generated for any source on demand,
+            # so it must NOT make us treat a title as already-having-Hebrew (that
+            # would stop us looking for real human subs on new content).
+            out['names'] = [(_v.get('release') or '').strip()
+                            for _v in (data.get('variants') or [])
+                            if (_v.get('release') or '').strip()
+                            and (_v.get('kind') or 'ai') != 'ai']
+            out['embedded'] = [(_r or '').strip()
+                               for _r in (data.get('embedded') or [])
+                               if (_r or '').strip()]
+            out['ktuvit'] = [(_r or '').strip()
+                             for _r in (data.get('ktuvit') or [])
+                             if (_r or '').strip()]
+            try:
+                out['ktuvit_checked'] = float(data.get('ktuvit_checked') or 0)
+            except (TypeError, ValueError):
+                out['ktuvit_checked'] = 0.0
+            try:
+                out['ktuvit_changed'] = float(data.get('ktuvit_changed') or 0)
+            except (TypeError, ValueError):
+                out['ktuvit_changed'] = 0.0
     except Exception:
-        return []
+        pass
+    return out
+
+
 
 
 def _wizdom_release_names(p):
@@ -145,10 +174,10 @@ def _engine_cache_path():
         return ''
 
 
-def _engine_cached_names(key):
-    """Hebrew release names the MoranSubs engine (OpenSubtitles) found for this media,
-    or None when it has not been warmed yet / is stale -- the caller then fires
-    a background warm. Pure file read; never networks."""
+def _cache_entry(key):
+    """The shared he_avail cache entry for this media, or None when missing /
+    stale. The background warm writes {ts, names, embedded}; this is a pure file
+    read that NEVER networks (it runs inside POV's source-window build)."""
     try:
         path = _engine_cache_path()
         if not path or not os.path.isfile(path):
@@ -158,11 +187,38 @@ def _engine_cached_names(key):
         ent = data.get(key)
         if not ent:
             return None
-        if (time.time() - float(ent.get('ts', 0))) > _ENGINE_TTL:
+        # The warm picks the re-warm interval per title (short while the title is
+        # still gaining Hebrew / has none yet, long once it's stable). Fall back
+        # to the names-based rule for entries written before this field existed.
+        try:
+            ttl = float(ent.get('ttl') or 0)
+        except (TypeError, ValueError):
+            ttl = 0.0
+        if ttl <= 0:
+            ttl = _ENGINE_TTL if (ent.get('names')) else _AVAIL_TTL_NONE
+        if (time.time() - float(ent.get('ts', 0))) > ttl:
             return None
-        return [n for n in (ent.get('names') or []) if n]
+        return ent
     except Exception:
         return None
+
+
+def _cached_names(key):
+    """All available Hebrew release names from the warm cache (pool + Wizdom +
+    OpenSubtitles + Ktuvit-fallback), or None when not warmed / stale."""
+    ent = _cache_entry(key)
+    if ent is None:
+        return None
+    return [n for n in (ent.get('names') or []) if n]
+
+
+def _cached_embedded(key):
+    """Release names flagged as carrying a built-in Hebrew track (from the warm
+    cache). [] when none / not warmed."""
+    ent = _cache_entry(key)
+    if ent is None:
+        return []
+    return [n for n in (ent.get('embedded') or []) if n]
 
 
 def _meta_str(meta, keys):
@@ -205,51 +261,74 @@ def _fire_engine_warm(key, p, meta):
         pass
 
 
-def release_names(meta):
-    """Return the release names of Hebrew subtitles available for this media,
-    from the community pool + Wizdom (synchronous) AND the MoranSubs engine /
-    OpenSubtitles (background-warmed, read from a shared cache). Cached per media. []
-    when disabled / unknown / on error -- so the caller shows no prefix."""
+def availability(p):
+    """NETWORKED -- runs ONLY in the background warm (MoranSubs's own process),
+    never in POV's source window. Returns a dict:
+        {'names': [...],          pool + Wizdom Hebrew release names
+         'embedded': [...],       releases flagged as carrying built-in Hebrew
+         'ktuvit': [...],         Hebrew release names already cached on the pool
+         'ktuvit_checked': <ts>}  when the pool last checked Ktuvit (0 = never)
+    The warm adds OpenSubtitles on top, decides whether to refresh Ktuvit (only
+    when the shared registry is missing/stale), and writes the merged result to
+    the local speed cache."""
+    pl = {}
     try:
-        if not _enabled() or _req is None:
+        pl = _pool_lookup(p)
+    except Exception:
+        pl = {}
+    try:
+        wiz = _wizdom_release_names(p)
+    except Exception:
+        wiz = []
+    names, seen = [], set()
+    for rel in list(pl.get('names') or []) + list(wiz):
+        low = (rel or '').strip().lower()
+        if low and low not in seen:
+            seen.add(low)
+            names.append(rel)
+    return {
+        'names': names,
+        'embedded': list(pl.get('embedded') or []),
+        'ktuvit': list(pl.get('ktuvit') or []),
+        'ktuvit_checked': pl.get('ktuvit_checked') or 0.0,
+        'ktuvit_changed': pl.get('ktuvit_changed') or 0.0,
+    }
+
+
+def release_names(meta):
+    """Hebrew-subtitle release names available for this media -- a PURE CACHE
+    READ (pool + Wizdom + OpenSubtitles + Ktuvit-fallback, all written by the
+    background warm). NEVER networks: this runs inside POV's source-results
+    build, and the old synchronous pool/Wizdom calls froze the source list for
+    several seconds. On a cache miss we fire the warm and return [] now; the
+    badge fills in the next time the list renders (cheap disk read). [] when
+    disabled / unknown."""
+    try:
+        if not _enabled():
             return []
         p = _media_params(meta)
         if not p:
             return []
         key = _media_key(p)
-        now = time.time()
-        # Pool + Wizdom: networked, so cache in-memory for 5 min.
-        hit = _CACHE.get(key)
-        if hit and (now - hit[0]) < _TTL:
-            pw = hit[1]
-        else:
-            pw = []
-            seen0 = set()
-            for src in (_pool_release_names, _wizdom_release_names):
-                for rel in src(p):
-                    low = rel.lower()
-                    if low not in seen0:
-                        seen0.add(low)
-                        pw.append(rel)
-            _CACHE[key] = (now, pw)
-        # Engine (OpenSubtitles): cheap disk read every call; warm in the background
-        # when missing so the badge fills in on the next open (never blocks).
-        eng = _engine_cached_names(key)
-        if eng is None:
-            # Not warmed yet: fire the background OpenSubtitles lookup and return NOW.
-            # We must NOT block here -- this runs inside POV's source-results
-            # build, so waiting froze the source list for several seconds. The
-            # badge fills in the next time the list renders (cheap cache read).
-            _fire_engine_warm(key, p, meta)
-            eng = []
-        names = list(pw)
-        seen = set(n.lower() for n in names)
-        for rel in eng:
-            low = (rel or '').lower()
-            if low and low not in seen:
-                seen.add(low)
-                names.append(rel)
+        names = _cached_names(key)
+        if names is None:
+            _fire_engine_warm(key, p, meta)   # warms pool+Wizdom+OS+Ktuvit
+            return []
         return names
+    except Exception:
+        return []
+
+
+def embedded_names(meta):
+    """Release names flagged (by the community) as carrying a built-in Hebrew
+    track, for THIS media. Pure cache read; [] when none / not warmed yet."""
+    try:
+        if not _enabled():
+            return []
+        p = _media_params(meta)
+        if not p:
+            return []
+        return _cached_embedded(_media_key(p))
     except Exception:
         return []
 
@@ -278,14 +357,28 @@ def best_score(src_release, names):
         return 0
 
 
-def label_prefix(src_release, names):
-    """A small coloured 'HEB <NN>% | ' prefix for the START of the source's
-    info line, or '' when there's no usable match. Colour: green high / amber
-    mid / red low. Deliberately LTR-only (no Hebrew letters): a Hebrew word
-    inline in the mostly-English info line triggers bidi reordering (it jumps
-    to the end) and then gets clipped when the line is full. An LTR badge stays
-    at the start and always shows, since the line truncates from the end."""
+def label_prefix(src_release, names, embedded=None):
+    """A small coloured prefix for the START of the source's info line, or ''
+    when there's no usable match.
+
+    If this source's release matches one the community flagged as carrying a
+    BUILT-IN Hebrew track, it gets a distinct top-priority green badge
+    ('HEB BUILT-IN 100%') so everyone knows it already has Hebrew and is well
+    worth picking. Otherwise a normal 'HEB <NN>%' match badge: green high /
+    amber mid / red low.
+
+    Deliberately LTR-only (no Hebrew letters): a Hebrew word inline in the
+    mostly-English info line triggers bidi reordering (it jumps to the end) and
+    gets clipped when the line is full. An LTR badge stays at the start and
+    always shows, since the line truncates from the end."""
     try:
+        # Embedded Hebrew = best possible: it's already in the file. We treat a
+        # high token overlap with a flagged release as a match (same scorer as
+        # the % badge, threshold 80) so it survives small release-name diffs.
+        if embedded and src_release:
+            emb_best = best_score(src_release, embedded)
+            if emb_best >= 80:
+                return '[COLOR FF2ECC71][B]HEB BUILT-IN 100%[/B][/COLOR] | '
         best = best_score(src_release, names)
         if best <= 0:
             return ''

@@ -1,3 +1,31 @@
+v0.2.253
+- Community-pool sharing is now ON by default for everyone, to grow the shared
+  Hebrew pool. With it on, every human Ktuvit Hebrew sub for something you play
+  is mirrored to the pool in the background (no need to download it yourself),
+  and your AI translations are shared too -- so Hebrew loads instantly for the
+  next person. You can turn it off in settings (built-in engine / pool); if you
+  do, it stays off.
+- Source screen no longer freezes while loading the Hebrew-match %: the
+  community-pool/Wizdom lookup is now fully background-warmed (like the
+  OpenSubtitles one already was), so the source list opens instantly. The
+  badges fill in from a shared cache (the next open is always instant).
+- The Hebrew-match % now also covers Ktuvit, via a SHARED registry: the first
+  user to browse a title checks Ktuvit once and publishes the result to the
+  community pool, so everyone else reads it back without ever hitting Ktuvit
+  (~one check per title globally -- it never overloads the shared account). A
+  Ktuvit-only title now shows a % for everyone. (Can be turned off.) Only HUMAN
+  Hebrew counts toward the % (an AI translation, which can be made for anything,
+  doesn't). New releases are re-checked every few hours and KEEP being re-checked
+  as long as more Hebrew subs are still appearing (1 today, 3 more tomorrow...),
+  so they all show up fast for everyone; a title only settles to a slow check
+  once its subs have been stable for a couple of weeks.
+- NEW: built-in Hebrew is now shared for everyone. When the add-on detects a
+  source that ships an embedded Hebrew track, it flags that release in the
+  community pool (automatically, no action needed), so on everyone else's source
+  screen that source shows a green "HEB BUILT-IN 100%" badge -- telling you it
+  already has Hebrew and is well worth picking. Matched by release name, so it
+  works across debrid providers (TorBox / Real-Debrid / ...).
+
 v0.2.252
 - "Remember source" marker is now a bold gold badge ("« נצפה לאחרונה »") at the
   start of the remembered source's line, so it stands out from the white title
