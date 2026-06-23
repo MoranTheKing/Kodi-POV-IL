@@ -648,6 +648,19 @@ def note_playback_streams(info, streams=None):
         _snap_set(key, streams)
         kodi_utils.log('embedded baseline ({0} stream(s)): {1}'.format(
             len(streams or []), list(streams or [])), level='INFO')
+        # If this source ships a built-in Hebrew track, tell the pool so the
+        # source screen flags it "BUILT-IN 100%" for everyone. Automatic,
+        # deduped + backgrounded inside pool.report_embedded; never blocks.
+        try:
+            has_he = any(
+                (_LANG_NORMALIZE.get((n or '').strip().lower(),
+                                     (n or '').strip().lower()[:2]) == 'he')
+                for n in (streams or []))
+            if has_he:
+                from resources.lib import pool
+                pool.report_embedded(info)
+        except Exception:
+            pass
     except Exception:
         pass
 
@@ -669,6 +682,16 @@ def embedded_candidates(info):
     streams = snap.get('streams')
     if not streams:
         return []
+    # Built-in Hebrew here too -> flag the release for everyone (deduped,
+    # backgrounded). Covers users who open the picker with autosub off.
+    try:
+        if any((_LANG_NORMALIZE.get((n or '').strip().lower(),
+                                    (n or '').strip().lower()[:2]) == 'he')
+               for n in streams):
+            from resources.lib import pool
+            pool.report_embedded(info)
+    except Exception:
+        pass
     out = []
     for idx, name in enumerate(streams):
         n = (name or '').strip().lower()
