@@ -860,10 +860,17 @@ def _handle_bg_translate_picker(params):
                             'en',
                             source_id=payload['source_id'])
                         if os.path.isfile(canonical):
-                            _final_path = os.path.join(
-                                kodi_utils.cache_dir(),
-                                'progressive_{0}_final.he.srt'.format(
+                            # Name the delivered file after the source RELEASE so
+                            # Kodi shows the full release name (not a hash); fall
+                            # back to the source-id when no release is known.
+                            _rel = kodi_utils.safe_release_filename(
+                                payload.get('release') or '')
+                            _final_name = (
+                                _rel + '.he.srt' if _rel
+                                else 'progressive_{0}_final.he.srt'.format(
                                     payload['source_id']))
+                            _final_path = os.path.join(
+                                kodi_utils.cache_dir(), _final_name)
                             try:
                                 with open(canonical, 'rb') as _src_f:
                                     _bytes = _src_f.read()
@@ -2031,10 +2038,17 @@ def _handle_translate_file(params):
                             'en',
                             source_id=payload['source_id'])
                         if os.path.isfile(canonical):
-                            _final_path = os.path.join(
-                                kodi_utils.cache_dir(),
-                                'progressive_{0}_final.he.srt'.format(
+                            # Name the delivered file after the source RELEASE so
+                            # Kodi shows the full release name (not a hash); fall
+                            # back to the source-id when no release is known.
+                            _rel = kodi_utils.safe_release_filename(
+                                payload.get('release') or '')
+                            _final_name = (
+                                _rel + '.he.srt' if _rel
+                                else 'progressive_{0}_final.he.srt'.format(
                                     payload['source_id']))
+                            _final_path = os.path.join(
+                                kodi_utils.cache_dir(), _final_name)
                             try:
                                 with open(canonical, 'rb') as _src_f:
                                     _bytes = _src_f.read()
