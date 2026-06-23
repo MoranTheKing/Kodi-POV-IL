@@ -1,3 +1,11 @@
+v0.2.255
+- Source-screen Hebrew-match % is now refreshed by the actual search: the
+  moment the add-on searches a title (on play, or when you open the subtitle
+  picker) the real Hebrew releases it finds are written into the badge cache --
+  so the % on the poster matches what the picker shows, instead of lagging
+  behind (it could read 25% on the poster while the picker had a 33% match).
+- FENtastic skin/player refresh (Tal's update 19).
+
 v0.2.254
 - Fixed: built-in (embedded) FOREIGN subtitles -- e.g. French/English baked
   into the file -- were listed ABOVE the Hebrew options. Hebrew now always
