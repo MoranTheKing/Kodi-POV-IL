@@ -240,6 +240,48 @@ def _handle_download(handle, params):
             _safe_log('fast_download outer guard caught: {0}'
                       .format(_e), level='WARNING')
 
+    # AI translation links: CLOSE the dialog immediately and translate in the
+    # background, instead of blocking the picker for the full 1-2 minute
+    # translation. This matches the "בחר כתוביות" chooser window: you click,
+    # the dialog closes, Hebrew swaps in progressively as it translates. The
+    # picker subprocess ends at endOfDirectory, so the work is handed to a
+    # separate RunScript (bg_translate_picker), exactly like the fast path's
+    # background step -- just without delivering an English fallback first.
+    try:
+        _ai_payload = translate._decode_link(link)
+    except Exception:
+        _ai_payload = None
+    if _ai_payload and _ai_payload.get('type') == 'ai':
+        try:
+            import base64 as _b64m
+            _sid = translate._source_id_for_ai(_ai_payload) or ''
+            _lk = _b64m.b64encode(link.encode('utf-8')).decode('ascii')
+            _sd = _b64m.b64encode(_sid.encode('utf-8')).decode('ascii')
+            xbmc.executebuiltin(
+                'RunScript(service.subtitles.kodipovilai,'
+                'action=bg_translate_picker,link_b64={0},source_id_b64={1})'
+                .format(_lk, _sd))
+            try:
+                kodi_utils.notify('AI: מתרגם לעברית ברקע', time_ms=3500)
+            except Exception:
+                pass
+        except Exception as _e:
+            _safe_log('ai bg fire failed: {0}'.format(_e), level='WARNING')
+        # Close the dialog now with no item -- same proven sequence as the
+        # embedded-Hebrew pick (Dialog.Close -> empty -> sleep -> endOfDirectory).
+        try:
+            xbmc.executebuiltin('Dialog.Close(all,true)')
+            xbmcplugin.addDirectoryItems(handle, [], 0)
+            xbmc.sleep(100)
+            xbmcplugin.endOfDirectory(handle, updateListing=True,
+                                      cacheToDisc=True)
+        except Exception:
+            try:
+                xbmcplugin.endOfDirectory(handle)
+            except Exception:
+                pass
+        return
+
     # DialogProgressBG (bottom-right banner) PLUS milestone toasts.
     # The toasts at 25/50/75 % are the guaranteed-visible backup --
     # DialogProgressBG can be hidden behind a full-screen window
