@@ -224,7 +224,8 @@ def show():
                     _start_ai_apply(link, self.info)
                     return
                 # Ready Hebrew subs (passthrough / pool / human engine): quick
-                # download -> apply, and keep the window open to try another.
+                # download -> apply and CLOSE the window. On failure, keep it
+                # open so the user can pick another.
                 path = _t.resolve(link, self.info)
                 if path and os.path.isfile(path):
                     p = xbmc.Player()
@@ -235,8 +236,7 @@ def show():
                         kodi_utils.set_current_subtitle(link)
                     except Exception:
                         pass
-                    self._set_head('[B][COLOR lightgreen]הכתובית הוחלה[/COLOR]'
-                                   '[/B]')
+                    self.close()
                 else:
                     self._set_head('[B][COLOR red]ההורדה נכשלה, נסה '
                                    'אחרת[/COLOR][/B]')
