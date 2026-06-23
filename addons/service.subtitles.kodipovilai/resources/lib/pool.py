@@ -514,7 +514,16 @@ def share_cache(progress_cb=None, should_cancel=None):
             'season': season, 'episode': episode,
             'title': title or '', 'year': year or '', 'filepath': '',
         }
-        body = _build_body(info, '', lang, text)
+        # Use the real source release recorded next to the cached file (written
+        # at translation time), so this bulk upload tags it with a proper release
+        # for match-% instead of falling back to a generic Title.Year.
+        rel_override = None
+        try:
+            with open(fp + '.release', 'r', encoding='utf-8') as _rf:
+                rel_override = (_rf.read().strip() or None)
+        except OSError:
+            rel_override = None
+        body = _build_body(info, '', lang, text, release_override=rel_override)
         if body is None:
             skipped += 1
             continue
