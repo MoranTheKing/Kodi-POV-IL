@@ -627,40 +627,48 @@ def list_candidates(info, modal_progress=True):
     # then the rest); within a language, best match % first.
     ai_translation_on = (kodi_utils.get_setting('translation_mode', 'ai')
                          or 'ai') != 'none'
-    engine_other.sort(key=lambda c: (_lang_rank(c.get('language')),
-                                     c.get('language') or 'zz',
-                                     -c.get('_pct', 0)))
+    # Group BOTH the foreign AI-translate sources AND the embedded (built-in)
+    # foreign streams by language, then emit language by language (en, es, de,
+    # fr, pt, then the rest). Within each language the EMBEDDED track comes
+    # FIRST (top of that language's group), then the rest by best match %. So
+    # built-in subtitles head their own language instead of all being dumped at
+    # the very bottom -- while Hebrew (handled above) still leads the whole list.
+    _ai_by_lang = {}
     for c in engine_other:
-        code = (c.get('language') or '?')
-        pct = c.get('_pct', 0)
-        if ai_translation_on:
-            src = _decode_link(c.get('link') or '')
-            if not src or src.get('type') != 'engine':
-                continue
-            src = dict(src)
-            src['type'] = 'engine_ai'
-            src['src_lang'] = code
-            rel = src.get('filename') or code
-            have_hebrew = True
-            results.append({
-                'filename': 'תרגום AI לעברית · {0}%  —  {1}'.format(pct, rel),
-                'language': code,
-                'link': _encode_link(src),
-                'sync': 'false',
-                'rating': c.get('rating', '3'),
-                'is_hi': False, 'is_hd': False,
-            })
-        else:
-            # Opt-out: deliver the raw foreign sub as-is.
-            rel = c.get('filename') or code
-            results.append(_clean(c))
-
-    # Embedded FOREIGN subtitles (built-in French/English/...): selectable, but
-    # ranked here -- BELOW every Hebrew option and below the AI-translate-from-
-    # foreign entries -- so they never sit above Hebrew. They can't be AI-
-    # translated (no extractable file), so they're offered as-is.
+        _ai_by_lang.setdefault(c.get('language') or '?', []).append(c)
+    _emb_by_lang = {}
     for c in embedded_foreign:
-        results.append(_clean(c))
+        _emb_by_lang.setdefault(c.get('language') or '?', []).append(c)
+
+    for code in sorted(set(_ai_by_lang) | set(_emb_by_lang),
+                       key=lambda l: (_lang_rank(l), l)):
+        # Built-in (embedded) track of this language -> top of its group.
+        for c in _emb_by_lang.get(code, []):
+            results.append(_clean(c))
+        # Then the foreign subs of this language, best match % first.
+        for c in sorted(_ai_by_lang.get(code, []),
+                        key=lambda x: -x.get('_pct', 0)):
+            pct = c.get('_pct', 0)
+            if ai_translation_on:
+                src = _decode_link(c.get('link') or '')
+                if not src or src.get('type') != 'engine':
+                    continue
+                src = dict(src)
+                src['type'] = 'engine_ai'
+                src['src_lang'] = code
+                rel = src.get('filename') or code
+                have_hebrew = True
+                results.append({
+                    'filename': 'תרגום AI לעברית · {0}%  —  {1}'.format(pct, rel),
+                    'language': code,
+                    'link': _encode_link(src),
+                    'sync': 'false',
+                    'rating': c.get('rating', '3'),
+                    'is_hi': False, 'is_hd': False,
+                })
+            else:
+                # Opt-out: deliver the raw foreign sub as-is.
+                results.append(_clean(c))
 
     skip_when_hebrew = kodi_utils.get_bool('skip_if_hebrew', True)
     if have_hebrew and skip_when_hebrew:
