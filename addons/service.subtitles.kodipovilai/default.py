@@ -2851,8 +2851,9 @@ def _engine_test_show(lines):
 
 def _handle_choose_subs(params):
     """Open the MoranSubs subtitle-chooser window (the player's 'בחר כתוביות'
-    button). If the custom window can't open for any reason, fall back to Kodi's
-    native subtitle selector so the button is never a dead end."""
+    button). If the custom window can't open for any reason (e.g. nothing found),
+    fall back to Kodi's native subtitle SEARCH/download window -- the same one the
+    button used to open -- so the button is never a dead end."""
     opened = False
     try:
         from resources.lib import subs_chooser
@@ -2861,7 +2862,7 @@ def _handle_choose_subs(params):
         _safe_log('choose_subs failed: {0}'.format(e), level='WARNING')
     if not opened and xbmc is not None:
         try:
-            xbmc.executebuiltin('ActivateWindow(osdsubtitlesettings)')
+            xbmc.executebuiltin('ActivateWindow(SubtitleSearch)')
         except Exception:
             pass
 
