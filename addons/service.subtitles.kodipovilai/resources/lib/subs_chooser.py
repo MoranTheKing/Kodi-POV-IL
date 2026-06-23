@@ -64,6 +64,64 @@ def _entry_label(c, info, translate):
     return name
 
 
+def _start_ai_apply(link, info):
+    """Translate a foreign sub to Hebrew with AI in the BACKGROUND (the window
+    is already closing), showing a progress banner, and apply it when ready.
+    Mirrors the search dialog's AI flow so picking English/Spanish/German from
+    the chooser behaves the same: window closes, translation progresses, the
+    Hebrew lands when done. Fully guarded; never blocks the UI thread."""
+    import threading
+
+    def _run():
+        progress = None
+        try:
+            from resources.lib import kodi_utils, translate
+            try:
+                progress = xbmcgui.DialogProgressBG()
+                progress.create('MoranSubs', 'AI: מתרגם לעברית...')
+            except Exception:
+                progress = None
+
+            def _cb(stage, total):
+                try:
+                    if progress is not None:
+                        pct = int(stage * 100 / max(1, total))
+                        progress.update(pct, 'MoranSubs',
+                                        'AI: {0}% ({1}/{2})'.format(
+                                            pct, stage, total))
+                except Exception:
+                    pass
+
+            path = translate.resolve(link, info, progress_cb=_cb)
+            if (path and os.path.isfile(path)
+                    and xbmc.Player().isPlayingVideo()):
+                xbmc.Player().setSubtitles(path)
+                xbmc.Player().showSubtitles(True)
+                try:
+                    kodi_utils.set_current_subtitle(link)
+                except Exception:
+                    pass
+                try:
+                    kodi_utils.notify('AI: כתובית עברית מוכנה', time_ms=3000)
+                except Exception:
+                    pass
+            else:
+                try:
+                    kodi_utils.notify('AI: התרגום נכשל', time_ms=4000)
+                except Exception:
+                    pass
+        except Exception as e:
+            _log('ai apply failed: {0}'.format(e), level='WARNING')
+        finally:
+            if progress is not None:
+                try:
+                    progress.close()
+                except Exception:
+                    pass
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
 def show():
     """Open the chooser for whatever is playing. Returns True if the window was
     shown, False on any failure (so the caller can fall back)."""
@@ -141,9 +199,11 @@ def show():
             self._set_head('[B]מוריד...[/B]')
             try:
                 from resources.lib import translate as _t
-                payload = _t._decode_link(c.get('link') or '') or {}
+                link = c.get('link') or ''
+                payload = _t._decode_link(link) or {}
+                kind = payload.get('type')
                 # Embedded pick: switch Kodi's stream, no file to deliver.
-                if payload.get('type') in ('engine',) and payload.get('embedded'):
+                if kind == 'engine' and payload.get('embedded'):
                     try:
                         from resources.lib import subs_engine_bridge
                         subs_engine_bridge.select_embedded(
@@ -155,14 +215,24 @@ def show():
                     self._set_head('[B][COLOR lightgreen]הופעל תרגום '
                                    'מובנה[/COLOR][/B]')
                     return
-                path = _t.resolve(c.get('link'), self.info)
+                # AI translation (English/Spanish/German/... -> Hebrew) takes
+                # 1-2 minutes, so it must NOT block the window. CLOSE the window
+                # and translate in the background, applying when ready, with a
+                # progress banner -- exactly like picking it from the search.
+                if kind in ('engine_ai', 'ai'):
+                    self.close()
+                    _start_ai_apply(link, self.info)
+                    return
+                # Ready Hebrew subs (passthrough / pool / human engine): quick
+                # download -> apply, and keep the window open to try another.
+                path = _t.resolve(link, self.info)
                 if path and os.path.isfile(path):
                     p = xbmc.Player()
                     if p.isPlayingVideo():
                         p.setSubtitles(path)
                         p.showSubtitles(True)
                     try:
-                        kodi_utils.set_current_subtitle(c.get('link'))
+                        kodi_utils.set_current_subtitle(link)
                     except Exception:
                         pass
                     self._set_head('[B][COLOR lightgreen]הכתובית הוחלה[/COLOR]'
