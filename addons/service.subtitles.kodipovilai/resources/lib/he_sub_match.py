@@ -95,7 +95,8 @@ def _pool_lookup(p):
          'ktuvit_checked': <ts>}  when Ktuvit was last checked (0 = never)
     All keyed by release name so they match across debrid providers. Networked:
     only called from the background warm, never from the POV source window."""
-    out = {'names': [], 'embedded': [], 'ktuvit': [], 'ktuvit_checked': 0.0}
+    out = {'names': [], 'embedded': [], 'ktuvit': [],
+           'ktuvit_checked': 0.0, 'ktuvit_changed': 0.0}
     try:
         q = _parse.urlencode({k: v for k, v in p.items() if v})
         req = _req.Request(POOL_URL + '/lookup?' + q,
@@ -121,6 +122,10 @@ def _pool_lookup(p):
                 out['ktuvit_checked'] = float(data.get('ktuvit_checked') or 0)
             except (TypeError, ValueError):
                 out['ktuvit_checked'] = 0.0
+            try:
+                out['ktuvit_changed'] = float(data.get('ktuvit_changed') or 0)
+            except (TypeError, ValueError):
+                out['ktuvit_changed'] = 0.0
     except Exception:
         pass
     return out
@@ -182,9 +187,15 @@ def _cache_entry(key):
         ent = data.get(key)
         if not ent:
             return None
-        # Short TTL while no human Hebrew has been found yet (keep checking new
-        # content), long TTL once it has (human subs rarely change).
-        ttl = _ENGINE_TTL if (ent.get('names')) else _AVAIL_TTL_NONE
+        # The warm picks the re-warm interval per title (short while the title is
+        # still gaining Hebrew / has none yet, long once it's stable). Fall back
+        # to the names-based rule for entries written before this field existed.
+        try:
+            ttl = float(ent.get('ttl') or 0)
+        except (TypeError, ValueError):
+            ttl = 0.0
+        if ttl <= 0:
+            ttl = _ENGINE_TTL if (ent.get('names')) else _AVAIL_TTL_NONE
         if (time.time() - float(ent.get('ts', 0))) > ttl:
             return None
         return ent
@@ -280,6 +291,7 @@ def availability(p):
         'embedded': list(pl.get('embedded') or []),
         'ktuvit': list(pl.get('ktuvit') or []),
         'ktuvit_checked': pl.get('ktuvit_checked') or 0.0,
+        'ktuvit_changed': pl.get('ktuvit_changed') or 0.0,
     }
 
 

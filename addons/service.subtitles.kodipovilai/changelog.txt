@@ -9,8 +9,10 @@ v0.2.253
   (~one check per title globally -- it never overloads the shared account). A
   Ktuvit-only title now shows a % for everyone. (Can be turned off.) Only HUMAN
   Hebrew counts toward the % (an AI translation, which can be made for anything,
-  doesn't) -- and titles with no human Hebrew yet are re-checked every few hours,
-  so brand-new releases that get Hebrew within a day show up fast for everyone.
+  doesn't). New releases are re-checked every few hours and KEEP being re-checked
+  as long as more Hebrew subs are still appearing (1 today, 3 more tomorrow...),
+  so they all show up fast for everyone; a title only settles to a slow check
+  once its subs have been stable for a couple of weeks.
 - NEW: built-in Hebrew is now shared for everyone. When the add-on detects a
   source that ships an embedded Hebrew track, it flags that release in the
   community pool (automatically, no action needed), so on everyone else's source

@@ -189,6 +189,7 @@ async function readKtuvit(env, keys) {
   const seen = new Set();
   const names = [];
   let checked = 0;
+  let changed = 0;   // when the list last GREW (a new release appeared)
   try {
     for (const k of keys) {
       let raw;
@@ -198,6 +199,8 @@ async function readKtuvit(env, keys) {
       if (!obj) continue;
       const ts = Number(obj.checked || 0);
       if (ts > checked) checked = ts;
+      const ch = Number(obj.changed || 0);
+      if (ch > changed) changed = ch;
       for (const rel of (obj.names || [])) {
         const r = String(rel || '').trim();
         const low = r.toLowerCase();
@@ -205,7 +208,7 @@ async function readKtuvit(env, keys) {
       }
     }
   } catch (_) { /* ignore */ }
-  return { names, checked };
+  return { names, checked, changed };
 }
 
 async function recordKtuvit(env, body) {
@@ -231,9 +234,16 @@ async function recordKtuvit(env, body) {
     if (r && !seen.has(low)) { seen.add(low); merged.push(r); }
   }
   const bounded = merged.length > KT_MAX ? merged.slice(merged.length - KT_MAX) : merged;
-  const obj = { checked: Date.now() / 1000, names: bounded };
+  const now = Date.now() / 1000;
+  // 'changed' marks when the list last GREW (or first contact), so clients
+  // keep re-checking often while a title is still gaining subs, then back off
+  // once it's been stable for a while.
+  const prevCount = Array.isArray(prev.names) ? prev.names.length : 0;
+  let changed = Number(prev.changed || 0);
+  if (bounded.length > prevCount || !changed) changed = now;
+  const obj = { checked: now, changed, names: bounded };
   try { await env.POOL.put(ktKey(primary), JSON.stringify(obj)); } catch (_) { /* ignore */ }
-  return json({ ok: true, count: bounded.length });
+  return json({ ok: true, count: bounded.length, changed });
 }
 
 function looksLikeSrt(text) {
@@ -751,6 +761,7 @@ export default {
         variants: variants.map(v => ({ hash: v.hash, release: v.release, source_lang: v.source_lang, kind: v.kind || 'ai', ts: v.ts })),
         embedded,
         ktuvit: ktuvit.names, ktuvit_checked: ktuvit.checked,
+        ktuvit_changed: ktuvit.changed,
       });
     }
 
