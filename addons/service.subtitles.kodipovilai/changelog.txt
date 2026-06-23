@@ -4,6 +4,11 @@ v0.2.255
   picker) the real Hebrew releases it finds are written into the badge cache --
   so the % on the poster matches what the picker shows, instead of lagging
   behind (it could read 25% on the poster while the picker had a 33% match).
+- Match % now shows on the FIRST entry to a title, on every device: on a cache
+  miss the add-on does one quick (capped) lookup to the shared pool, so the
+  badge appears from the shared data right away instead of only after that
+  device's own background refresh. (A title you've never opened on this device
+  used to show nothing the first time.)
 - FENtastic skin/player refresh (Tal's update 19).
 
 v0.2.254
