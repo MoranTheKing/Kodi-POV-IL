@@ -1,4 +1,10 @@
 v0.2.253
+- Community-pool sharing is now ON by default for everyone, to grow the shared
+  Hebrew pool. With it on, every human Ktuvit Hebrew sub for something you play
+  is mirrored to the pool in the background (no need to download it yourself),
+  and your AI translations are shared too -- so Hebrew loads instantly for the
+  next person. You can turn it off in settings (built-in engine / pool); if you
+  do, it stays off.
 - Source screen no longer freezes while loading the Hebrew-match %: the
   community-pool/Wizdom lookup is now fully background-warmed (like the
   OpenSubtitles one already was), so the source list opens instantly. The
