@@ -2091,26 +2091,32 @@ def _maybe_patch_choose_subs_buttons():
     rewire FENtastic's (it pointed at the disabled DarkSubs) and ADD one to the
     NOX OSD. Both skin-gated, XML-parse-checked, self-healing. A reload is done
     only when the patched skin is the active one."""
-    # FENtastic: rewire the existing button.
+    # FENtastic + Estuary: rewire the existing DarkSubs button to our chooser.
     try:
-        from resources.lib import fentastic_choose_subs_patcher, kodi_utils
-        status = fentastic_choose_subs_patcher.ensure_patched()
-        if status == 'patched':
-            kodi_utils.log('fentastic_choose_subs_patcher: rewired button to '
-                           'MoranSubs chooser', level='INFO')
-            try:
-                import xbmc
-                if xbmc.getSkinDir() == 'skin.fentastic':
-                    xbmc.executebuiltin('ReloadSkin()')
-            except Exception:
-                pass
-        elif status in ('unmatched', 'parse_failed', 'write_failed',
-                        'read_failed'):
-            kodi_utils.log('fentastic_choose_subs_patcher: ' + status,
-                           level='WARNING')
+        from resources.lib import choose_subs_rewire_patcher, kodi_utils
+        import xbmc
+        results = choose_subs_rewire_patcher.ensure_patched()
+        active = ''
+        try:
+            active = xbmc.getSkinDir()
+        except Exception:
+            active = ''
+        for skin_id, status in (results or {}).items():
+            if status == 'patched':
+                kodi_utils.log('choose_subs_rewire_patcher: rewired {0} button '
+                               'to MoranSubs chooser'.format(skin_id),
+                               level='INFO')
+                if skin_id == active:
+                    try:
+                        xbmc.executebuiltin('ReloadSkin()')
+                    except Exception:
+                        pass
+            elif status in ('parse_failed', 'write_failed', 'read_failed'):
+                kodi_utils.log('choose_subs_rewire_patcher: {0} -> {1}'.format(
+                    skin_id, status), level='WARNING')
     except Exception as e:
         try:
-            kodi_utils.log('fentastic_choose_subs_patcher failed: {0}'
+            kodi_utils.log('choose_subs_rewire_patcher failed: {0}'
                            .format(e), level='WARNING')
         except Exception:
             pass
