@@ -1,3 +1,13 @@
+v0.2.264
+- "בחר כתוביות" window: the subtitle list now wraps around -- pressing Down on
+  the last subtitle jumps to the first, and Up on the first jumps to the last,
+  so you can cycle quickly. Works on every skin (the chooser is the same window
+  everywhere). The "הורדת כתוביות (Kodi)" and "סגור" buttons are reached with
+  Left/Right, and Back still closes.
+- FENtastic: applied Tal's player update (update_20) -- refreshed the player OSD
+  layouts and added a lock-player screen. Only the files Tal actually changed
+  were replaced (13 of them), nothing else was touched.
+
 v0.2.263
 - FENtastic: "בחר כתוביות" / "חפש כתובית" now ALWAYS opens the MoranSubs chooser,
   on every player style and regardless of the "choose subtitles opens Kodi's
