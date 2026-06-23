@@ -333,6 +333,70 @@ def embedded_names(meta):
         return []
 
 
+def merge_names(meta, names):
+    """Write-through: UNION freshly-found Hebrew release names into the local
+    availability cache. Called by the live search (auto-on-play / the subtitle
+    picker) so the source-screen badge reflects what was ACTUALLY found, instead
+    of lagging behind a possibly-staler background warm. This is what fixes "the
+    picker shows a 33% Ktuvit sub but the poster badge says 25%": the moment the
+    search sees that sub, its release is written here, so the badge picks it up.
+    Union-only, so it never drops what the warm already found. Safe + atomic."""
+    try:
+        if not _enabled():
+            return
+        p = _media_params(meta)
+        if not p:
+            return
+        clean = [(_n or '').strip() for _n in (names or []) if (_n or '').strip()]
+        if not clean:
+            return
+        key = _media_key(p)
+        path = _engine_cache_path()
+        if not path:
+            return
+        data = {}
+        if os.path.isfile(path):
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    data = json.load(f) or {}
+            except Exception:
+                data = {}
+        ent = data.get(key) or {}
+        existing = [n for n in (ent.get('names') or []) if n]
+        seen = set(n.lower() for n in existing)
+        merged = list(existing)
+        for n in clean:
+            low = n.lower()
+            if low not in seen:
+                seen.add(low)
+                merged.append(n)
+        if merged == existing:
+            return   # nothing new -- skip the write
+        ent['names'] = merged
+        ent['ts'] = time.time()
+        ent.setdefault('embedded', ent.get('embedded') or [])
+        # Keep it fresh-ish so the warm still refreshes from the network later.
+        if not ent.get('ttl'):
+            ent['ttl'] = _AVAIL_TTL_NONE
+        data[key] = ent
+        # Bound the file the same way the warm does (newest ~400 titles).
+        if len(data) > 400:
+            newest = sorted(data.items(),
+                            key=lambda kv: kv[1].get('ts', 0),
+                            reverse=True)[:400]
+            data = dict(newest)
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            tmp = path + '.wtmp'
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False)
+            os.replace(tmp, path)
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
 def _tokens(s):
     # MUST mirror translate._match_pct so the source-screen badge and the
     # subtitle picker's % agree (the user saw 29% on the poster but 33% in the
