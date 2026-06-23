@@ -1,3 +1,12 @@
+v0.2.262
+- NOX player: fixed "הפרק הבא" (next episode) overlapping the play controls
+  while a video was playing. Adding the "החלף מקור" button had widened NOX's
+  right-aligned button row, which pushed "הפרק הבא" left into the central
+  rewind/forward controls (those only appear during playback, so paused looked
+  fine). Fix: the right-row buttons are re-sized so the whole row is exactly as
+  wide as it was before we added "החלף מקור" -- so "הפרק הבא" sits back where it
+  used to, with no button removed. Resolution-independent and self-healing.
+
 v0.2.261
 - FENtastic: the "בחר כתוביות" rewire now covers ALL player styles, not just the
   "advanced" one. The button also lives in the simple player (and the other
