@@ -192,6 +192,33 @@ def _mark_current(results):
     return results
 
 
+def _finalize(info, results):
+    """Write-through the real Hebrew releases this live search found into the
+    source-screen badge cache (so the poster % matches the picker), then apply
+    the 'currently applied' marking. Every list_candidates return goes through
+    here."""
+    try:
+        he_names = []
+        for c in results:
+            if c.get('language') != 'he':
+                continue
+            pl = _decode_link(c.get('link') or '') or {}
+            t = pl.get('type')
+            # Real downloadable Hebrew releases only -- skip embedded streams
+            # and the synthetic "AI translate" / "current" display entries.
+            if t in ('passthrough', 'pool', 'engine') and not pl.get('embedded'):
+                nm = (c.get('filename') or '').strip()
+                if nm and not _looks_like_token(nm) and '» נוכחית' not in nm \
+                        and not nm.startswith('תרגום'):
+                    he_names.append(nm)
+        if he_names:
+            from . import he_sub_match
+            he_sub_match.merge_names(info, he_names)
+    except Exception:
+        pass
+    return _mark_current(results)
+
+
 # How gently to pull queued Ktuvit subs from Ktuvit on each background pass.
 # A few per pass, spaced out, so we never hammer Ktuvit's rate/quota limits
 # (the thing that made a fast in-session grab miss most releases). On-device
@@ -637,7 +664,7 @@ def list_candidates(info, modal_progress=True):
 
     skip_when_hebrew = kodi_utils.get_bool('skip_if_hebrew', True)
     if have_hebrew and skip_when_hebrew:
-        return _mark_current(results)
+        return _finalize(info, results)
 
     # 2. For each enabled source language, surface ONE "translate
     #    this" entry from a local source:
@@ -718,7 +745,7 @@ def list_candidates(info, modal_progress=True):
              'in_temp_count': len(in_temp)}),
             level='WARNING')
 
-    return _mark_current(results)
+    return _finalize(info, results)
 
 
 # ---- download / translate -------------------------------------------
