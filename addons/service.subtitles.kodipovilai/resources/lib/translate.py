@@ -467,14 +467,21 @@ def list_candidates(info, modal_progress=True):
         return c
 
     # Embedded Hebrew (101%) goes to the very top -- above even a local
-    # passthrough -- mirroring DarkSubs's [LOC] entry.
+    # passthrough -- mirroring DarkSubs's [LOC] entry. Embedded FOREIGN streams
+    # (e.g. built-in French/English) are NOT Hebrew, so they must rank BELOW all
+    # the Hebrew options, not above them -- they're held back and appended after
+    # the foreign section.
+    embedded_foreign = []
     if engine_embedded:
-        # Only an embedded HEBREW stream means "Hebrew already exists"; an
-        # embedded English (or other) [מובנה] entry must NOT suppress the
-        # AI-translate options.
-        if any((c.get('language') == 'he') for c in engine_embedded):
+        emb_he = [c for c in engine_embedded if c.get('language') == 'he']
+        embedded_foreign = [c for c in engine_embedded
+                            if c.get('language') != 'he']
+        if emb_he:
+            # Only an embedded HEBREW stream means "Hebrew already exists"; an
+            # embedded English (or other) [מובנה] entry must NOT suppress the
+            # AI-translate options.
             have_hebrew = True
-        results[:0] = [_clean(c) for c in engine_embedded]
+            results[:0] = [_clean(c) for c in emb_he]
 
     # Community pool. ONE network lookup returns both kinds of shared Hebrew:
     #   - 'ktuvit': a HUMAN Ktuvit subtitle mirrored to the pool. It loads
@@ -620,6 +627,13 @@ def list_candidates(info, modal_progress=True):
             # Opt-out: deliver the raw foreign sub as-is.
             rel = c.get('filename') or code
             results.append(_clean(c))
+
+    # Embedded FOREIGN subtitles (built-in French/English/...): selectable, but
+    # ranked here -- BELOW every Hebrew option and below the AI-translate-from-
+    # foreign entries -- so they never sit above Hebrew. They can't be AI-
+    # translated (no extractable file), so they're offered as-is.
+    for c in embedded_foreign:
+        results.append(_clean(c))
 
     skip_when_hebrew = kodi_utils.get_bool('skip_if_hebrew', True)
     if have_hebrew and skip_when_hebrew:
