@@ -35,56 +35,42 @@ def _video_ref(info):
 
 
 def _entry_label(c, info, translate):
-    """Build a COLOURED list row, in the spirit of DarkSubs's MySubs window:
-      * the currently-applied sub gets a magenta "» נוכחית" badge (it's also
-        floated to the top by list_candidates);
-      * Hebrew rows: a cyan "עברית" tag + a green/amber/red match %, and a gold
-        accent on a very strong (>=80%) match;
-      * built-in (embedded) Hebrew shows its "101%" in gold;
-      * foreign rows: a muted language tag + their own label."""
+    """Colour the WHOLE row (like DarkSubs's MySubs), not just a tag -- the
+    candidate label already carries its own text + match % (e.g. "כתובית · מאגר
+    · 29% — Movie..."), so we just tint all of it:
+      * currently-applied sub  -> magenta (it's also floated to the top);
+      * Hebrew sub             -> gold (>=80% match) / green (>=50%) / cyan;
+      * foreign / AI-from-X     -> muted grey.
+    The % shown is the one list_candidates already put in the label."""
+    import re as _re
     lang = (c.get('language') or '').strip()
     name = (c.get('filename') or '').strip()
+    current = name.startswith('» נוכחית')
 
-    # Currently-applied sub: list_candidates prefixes the name with "» נוכחית · "
-    # and floats it to the top. Detect it, strip the marker, colour it.
-    current = False
-    if name.startswith('» נוכחית'):
-        current = True
-        # drop the "» נוכחית · " marker -- we re-render it coloured.
-        name = name.split('· ', 1)[1] if '· ' in name else name
-
-    try:
-        payload = translate._decode_link(c.get('link') or '') or {}
-    except Exception:
-        payload = {}
-    kind = payload.get('type')
-    is_real_he = (lang == 'he' and not payload.get('embedded')
-                  and kind in ('passthrough', 'pool', 'engine'))
-
-    if is_real_he:
-        rel = (payload.get('filename') or name)
+    # match % already embedded in the label (list_candidates computed it).
+    pct = None
+    m = _re.search(r'(\d{1,3})%', name)
+    if m:
         try:
-            pct = translate._match_pct(_video_ref(info), rel)
-        except Exception:
-            pct = 0
-        pct_col = ('FF49C46A' if pct >= 66 else
-                   'FFE0B23C' if pct >= 33 else 'FFD0594F')
-        body = ('[B][COLOR FF35B6FF]עברית[/COLOR] |[/B] '
-                '[B][COLOR {0}]{1}%[/COLOR][/B] · {2}'.format(pct_col, pct, name))
-        if pct >= 80:
-            body = '[COLOR gold]★[/COLOR] ' + body
-    elif lang == 'he':
-        # embedded Hebrew ("תרגום מובנה בעברית · 101%") and the like.
-        body = '[B][COLOR gold]{0}[/COLOR][/B]'.format(name)
-    elif lang:
-        body = ('[B][COLOR FFB0B0B0][{0}][/COLOR][/B] {1}'
-                .format(lang.upper(), name))
-    else:
-        body = name
+            pct = int(m.group(1))
+        except ValueError:
+            pct = None
 
     if current:
-        body = '[B][COLOR FFFF00FE]» נוכחית[/COLOR][/B] · ' + body
-    return body
+        col = 'FFFF00FE'                       # magenta
+    elif lang == 'he':
+        if pct is not None and pct >= 80:
+            col = 'FFFFD700'                   # gold -- strong match / 101%
+        elif pct is not None and pct >= 50:
+            col = 'FF49C46A'                   # green
+        else:
+            col = 'FF6FD3F0'                   # cyan
+    elif lang:
+        col = 'FFB0B0B0'                       # foreign / AI source -- grey
+    else:
+        col = 'FFFFFFFF'
+
+    return '[B][COLOR {0}]{1}[/COLOR][/B]'.format(col, name)
 
 
 def _start_ai_apply(link, info):
@@ -200,25 +186,48 @@ def show():
             super(Chooser, self).__init__('MoranSubs — בחר כתוביות')
             self.info = info
             self.items = items
-            self.setGeometry(950, 620, 9, 1)
+            self.setGeometry(950, 620, 9, 2)
             head = _video_ref(info) or ''
             self.header = pyxbmct.Label(
                 '[B][COLOR deepskyblue]{0}[/COLOR][/B]'.format(head))
-            self.placeControl(self.header, 0, 0)
+            self.placeControl(self.header, 0, 0, columnspan=2)
             self.lst = pyxbmct.List()
-            self.placeControl(self.lst, 1, 0, rowspan=7, columnspan=1)
+            self.placeControl(self.lst, 1, 0, rowspan=7, columnspan=2)
             self.lst.addItems(
                 [_entry_label(c, info, translate) for c in self.items])
             self.connect(self.lst, self.on_pick)
+            # Full native Kodi subtitle search/download -- for users who want the
+            # regular "download subtitles" flow, not just this picker. Skin-
+            # agnostic (the OSD layout is untouched, so no NOX button collision).
+            self.dl = pyxbmct.Button('[B]הורדת כתוביות (Kodi)[/B]')
+            self.placeControl(self.dl, 8, 0)
+            self.connect(self.dl, self.on_download)
             self.btn = pyxbmct.Button('[B]סגור[/B]')
-            self.placeControl(self.btn, 8, 0)
+            self.placeControl(self.btn, 8, 1)
             self.connect(self.btn, self.close)
             self.connect(pyxbmct.ACTION_NAV_BACK, self.close)
-            self.lst.controlDown(self.btn)
-            self.lst.controlUp(self.btn)
+            self.lst.controlDown(self.dl)
+            self.lst.controlUp(self.dl)
+            self.dl.controlUp(self.lst)
+            self.dl.controlDown(self.lst)
+            self.dl.controlRight(self.btn)
             self.btn.controlUp(self.lst)
             self.btn.controlDown(self.lst)
+            self.btn.controlLeft(self.dl)
             self.setFocus(self.lst)
+
+        def on_download(self):
+            """Close the picker and open Kodi's native subtitle search/download
+            dialog -- the same dialog the OSD's "download subtitle" reaches."""
+            try:
+                self.close()
+            except Exception:
+                pass
+            try:
+                xbmc.executebuiltin('ActivateWindow(SubtitleSearch)')
+            except Exception as e:
+                _log('open SubtitleSearch failed: {0}'.format(e),
+                     level='WARNING')
 
         def _set_head(self, text):
             try:

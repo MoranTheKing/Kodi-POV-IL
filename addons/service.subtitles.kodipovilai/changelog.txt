@@ -1,3 +1,41 @@
+v0.2.261
+- FENtastic: the "בחר כתוביות" rewire now covers ALL player styles, not just the
+  "advanced" one. The button also lives in the simple player (and the other
+  player layouts), and those were still pointing at the disabled DarkSubs -- they
+  now open the MoranSubs chooser too.
+- FENtastic: the "החלף מקור" pause now actually works. FENtastic's OSD files use
+  raw "&" in their plugin URLs, which made our XML safety-check reject the patch,
+  so the pause silently never applied; the check now tolerates it. The pause is
+  also injected into every change-source option in every player style (each is a
+  separate menu item), and carefully only once per click so it can never toggle
+  playback back on.
+- (Verified Arctic Fuse 3: it ships no DarkSubs button and no "החלף מקור" button
+  at all -- it uses its own native subtitle selector -- so neither change
+  applies there. Nothing to patch.)
+
+v0.2.260
+- NOX player: fixed the "החלף מקור" button overlapping the fast-forward/next
+  control. The real cause was the NEW "בחר כתוביות" button we'd added: NOX's
+  right-side OSD group is right-aligned, so the extra button widened the group
+  and pushed "החלף מקור" left into the play controls. Fix: we no longer add a
+  button -- we rewire NOX's existing subtitles button (it only opened the plain
+  Kodi subtitle dialog) to open the MoranSubs chooser instead, so the OSD layout
+  is unchanged. The previously-added button is removed automatically (self-
+  healing on the next start).
+- "בחר כתוביות" window now has a "הורדת כתוביות (Kodi)" button that opens Kodi's
+  full native subtitle search/download dialog -- for when you want the regular
+  download flow, not just the quick picker. Works on every skin (NOX included),
+  and since it lives inside the window it adds no OSD button (no collision).
+- "החלף מקור" pauses the video again before opening the source-selection
+  screen, instead of letting it keep playing in the background. Restored on NOX,
+  Estuary and FENtastic.
+
+v0.2.259
+- "בחר כתוביות" window: the WHOLE row is now colour-coded (like DarkSubs) --
+  gold for a strong-match Hebrew sub, green for a decent match, cyan for the
+  rest, magenta for the currently-applied one, grey for foreign/AI sources.
+  (Before, only a tiny tag was coloured so it looked mostly white.)
+
 v0.2.258
 - "בחר כתוביות" window is now colour-coded (like DarkSubs): the currently-
   applied subtitle is floated to the top and marked "» נוכחית" in magenta, each

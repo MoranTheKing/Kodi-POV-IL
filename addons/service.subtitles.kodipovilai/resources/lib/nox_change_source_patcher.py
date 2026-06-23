@@ -132,6 +132,24 @@ def ensure_patched():
     # Strip any prior version so we re-apply cleanly (idempotent).
     content = _REVERT_RE.sub('', original)
 
+    # If the skin pack now SHIPS the change-source button baked in (a real
+    # <control ... id="39517"> without our marker), do NOT add a second one --
+    # that duplicate overcrowded the OSD grouplist and overlapped the new
+    # "choose subtitles" button. Leave the baked button as the single one.
+    if ('id="' + BUTTON_ID + '"') in content:
+        if content != original:
+            # We only removed our stale duplicate -- write the de-duplicated file.
+            try:
+                tmp = path + '.tmp'
+                with open(tmp, 'w', encoding='utf-8', newline='') as f:
+                    f.write(content)
+                os.replace(tmp, path)
+                _log('baked change-source button present -- removed our '
+                     'duplicate', level='INFO')
+            except OSError:
+                pass
+        return 'ok'
+
     m = _ANCHOR_RE.search(content)
     if not m:
         _log('audio-button anchor not found -- skipping', level='WARNING')
