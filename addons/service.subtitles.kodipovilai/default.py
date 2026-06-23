@@ -2483,9 +2483,11 @@ HE_AVAIL_CACHE = ('special://profile/addon_data/service.subtitles.kodipovilai/'
                   'he_avail_cache.json')
 
 
-def _he_avail_store(mk, names):
-    """Merge {mk: {ts, names}} into the shared he_avail cache that POV's source
-    window reads (he_sub_match._engine_cached_names). Atomic + size-bounded."""
+def _he_avail_store(mk, names, embedded=None, ttl=0):
+    """Merge {mk: {ts, names, embedded, ttl}} into the shared he_avail cache that
+    POV's source window reads (he_sub_match._cache_entry). `ttl` is the chosen
+    re-warm interval for this title (short while it's still gaining Hebrew / has
+    none, long once stable). Atomic + size-bounded."""
     if xbmcvfs is None:
         return
     try:
@@ -2499,7 +2501,8 @@ def _he_avail_store(mk, names):
                     data = _json.load(f) or {}
             except Exception:
                 data = {}
-        data[mk] = {'ts': _time.time(), 'names': list(names)}
+        data[mk] = {'ts': _time.time(), 'names': list(names),
+                    'embedded': list(embedded or []), 'ttl': float(ttl or 0)}
         # Keep the newest ~400 titles so the file can't grow without bound.
         if len(data) > 400:
             newest = sorted(data.items(), key=lambda kv: kv[1].get('ts', 0),
@@ -2515,16 +2518,21 @@ def _he_avail_store(mk, names):
 
 
 def _handle_he_avail(params):
-    """Background warm of the source-screen "HEB NN%" badge.
-
-    he_sub_match (in POV's source window) covers the community pool + Wizdom
-    synchronously. This adds OpenSubtitles' Hebrew releases on top, once per
-    title (fire-and-forget), written to a shared cache the badge reads next
-    open. We deliberately use OpenSubtitles here, NOT Ktuvit: Ktuvit runs on a
-    single shared, rate-limited account, and hitting it on every browse pushed
-    it past its limit (breaking real Ktuvit downloads). OpenSubtitles uses
-    rotating API keys, so it adds no load to that account. Never shows UI; any
-    failure just leaves the badge on pool+Wizdom."""
+    """Background warm of the source-screen "HEB NN%" badge -- runs in
+    MoranSubs's own process (fire-and-forget), so NOTHING here blocks POV's
+    source window. It gathers every Hebrew-availability source and writes the
+    merged result to the shared cache the badge reads on the next open:
+      * community pool + Wizdom (networked here now, NOT synchronously in POV's
+        window -- that's what removed the multi-second source-list freeze);
+      * the pool's embedded-Hebrew flags (releases known to ship a built-in
+        Hebrew track) -> the "BUILT-IN 100%" badge;
+      * OpenSubtitles (rotating keys, no shared-account load);
+      * Ktuvit -- ONLY as a fallback when nothing else found Hebrew, and gated
+        by `he_match_ktuvit`. Ktuvit runs on ONE shared, rate-limited account,
+        so we must never hit it on every browse (that broke real downloads);
+        the fallback-only guard + the 7-day warm cache keep it to a rare,
+        bounded trickle for the exact case the user cares about (Hebrew that
+        exists only on Ktuvit, not yet in the pool)."""
     try:
         import base64
         import json as _json
@@ -2536,6 +2544,38 @@ def _handle_he_avail(params):
         if not mk:
             return
         is_ep = (info.get('type') == 'episode')
+
+        def _merge(dst, seen, items):
+            for rel in items or []:
+                low = (rel or '').strip().lower()
+                if low and low not in seen:
+                    seen.add(low)
+                    dst.append(rel)
+
+        names, seen = [], set()
+        embedded = []
+        kt_pool_names, kt_checked, kt_changed = [], 0.0, 0.0
+
+        # 1) Community pool + Wizdom (+ embedded flags + shared Ktuvit registry).
+        try:
+            from resources.lib import he_sub_match as _hsm
+            _p = {
+                'tmdb': info.get('tmdb', ''), 'imdb': info.get('imdb', ''),
+                'type': 'episode' if is_ep else 'movie',
+                'season': info.get('season', '0') if is_ep else '0',
+                'episode': info.get('episode', '0') if is_ep else '0',
+                'lang': 'he',
+            }
+            av = _hsm.availability(_p)
+            embedded = av.get('embedded') or []
+            kt_pool_names = av.get('ktuvit') or []
+            kt_checked = av.get('ktuvit_checked') or 0.0
+            kt_changed = av.get('ktuvit_changed') or 0.0
+            _merge(names, seen, av.get('names') or [])
+        except Exception as e:
+            _safe_log('he_avail pool/wizdom failed: {0}'.format(e),
+                      level='WARNING')
+
         bridge_info = {
             'imdb_id': info.get('imdb', ''),
             'tmdb_id': info.get('tmdb', ''),
@@ -2549,24 +2589,97 @@ def _handle_he_avail(params):
         from resources.lib import subs_engine_bridge as bridge
         bridge.ensure_engine_settings()
         vd = bridge.build_video_data(bridge_info)
-        names = []
+
+        # 2) OpenSubtitles (rotating keys -- safe to hit on browse).
         try:
             from resources.lib.subs_engine.sources import opensubtitles
             opensubtitles.global_var = []
             opensubtitles.get_subs(vd, True)  # all languages; we keep Hebrew
+            os_names = []
             for d in (opensubtitles.global_var or []):
                 lang = (d.get('label') or '').strip().lower()
                 code = (d.get('thumbnailImage') or '').strip().lower()
                 if lang == 'hebrew' or code in ('he', 'heb', 'iw'):
                     fn = (d.get('filename') or '').strip()
                     if fn:
-                        names.append(fn)
+                        os_names.append(fn)
+            _merge(names, seen, os_names)
         except Exception as e:
             _safe_log('he_avail opensubtitles failed: {0}'.format(e),
                       level='WARNING')
-        _he_avail_store(mk, names)
-        _safe_log('he_avail: stored {0} Hebrew release names for {1}'.format(
-            len(names), mk))
+
+        # 3) Ktuvit via the SHARED registry. We hit the rate-limited shared
+        #    Ktuvit account at most ~once per title GLOBALLY: if the pool already
+        #    has a fresh Ktuvit result, just use it (no Ktuvit call); only when
+        #    it's missing/stale does THIS client check Ktuvit once and publish
+        #    the result back for everyone. Gated by `he_match_ktuvit`.
+        try:
+            from resources.lib import kodi_utils as _ku
+            ktuvit_ok = _ku.get_setting('he_match_ktuvit', 'true') != 'false'
+        except Exception:
+            ktuvit_ok = True
+        import time as _time
+        _now = _time.time()
+        # Re-check Ktuvit OFTEN while a title is still GAINING Hebrew (a new
+        # release gets 1 sub today, 3 more tomorrow...), and only back off once
+        # the list has been STABLE for a while. 'changed' = when the shared
+        # registry last grew; a title is "active" until it's been unchanged for
+        # _KT_STABILIZE. So new content is re-checked every few hours and catches
+        # subs as they trickle in; mature content settles to a long interval.
+        # Still ~one Ktuvit call per title globally per window.
+        _KT_SHORT = 8 * 3600.0            # 8 hours while still active
+        _KT_LONG = 30 * 24 * 3600.0       # 30 days once stable
+        _KT_STABILIZE = 14 * 24 * 3600.0  # "active" window since last growth
+        kt_active = (not kt_changed) or ((_now - float(kt_changed)) < _KT_STABILIZE)
+        if ktuvit_ok:
+            _kt_ttl = _KT_SHORT if kt_active else _KT_LONG
+            fresh = kt_checked and (_now - float(kt_checked)) < _kt_ttl
+            if fresh:
+                _merge(names, seen, kt_pool_names)   # shared cache hit -- no call
+            else:
+                try:
+                    from resources.lib.subs_engine.sources import ktuvit as _kt
+                    _kt.global_var = []
+                    _kt.get_subs(vd)
+                    kt_names = []
+                    for d in (_kt.global_var or []):
+                        fn = (d.get('filename') or '').strip()
+                        if fn:
+                            kt_names.append(fn)
+                    _merge(names, seen, kt_names)
+                    # Publish to the shared registry so nobody else has to ask
+                    # Ktuvit (even an empty result records "checked").
+                    try:
+                        from resources.lib import pool as _pool
+                        _pool.report_ktuvit({
+                            'tmdb_id': info.get('tmdb', ''),
+                            'imdb_id': info.get('imdb', ''),
+                            'is_episode': is_ep,
+                            'season': info.get('season', '0') if is_ep else '0',
+                            'episode': info.get('episode', '0') if is_ep else '0',
+                        }, kt_names)
+                    except Exception:
+                        pass
+                except Exception as e:
+                    _safe_log('he_avail ktuvit check failed: {0}'.format(e),
+                              level='WARNING')
+
+        # Pick how soon POV's window should re-warm this title: often while it's
+        # still in flux (no human Hebrew yet, or Ktuvit still gaining subs), and
+        # rarely once it's stable -- so new releases refresh fast for everyone
+        # without re-warming mature titles needlessly.
+        _LOCAL_SHORT = 8 * 3600.0
+        _LOCAL_LONG = 7 * 24 * 3600.0
+        if not names:
+            local_ttl = _LOCAL_SHORT          # nothing yet -- keep looking
+        elif ktuvit_ok and kt_active:
+            local_ttl = _LOCAL_SHORT          # still gaining Ktuvit subs
+        else:
+            local_ttl = _LOCAL_LONG           # stable
+        _he_avail_store(mk, names, embedded, local_ttl)
+        _safe_log('he_avail: stored {0} Hebrew release names ({1} embedded) '
+                  'for {2} (ttl={3}h)'.format(
+                      len(names), len(embedded), mk, int(local_ttl / 3600)))
     except Exception as e:
         _safe_log('he_avail crashed: {0}'.format(e), level='WARNING')
 

@@ -114,6 +114,138 @@ function json(obj, status = 200) {
   });
 }
 
+// --- Embedded-Hebrew registry --------------------------------------------
+// A tiny per-media list of RELEASE NAMES known to ship a built-in (muxed)
+// Hebrew subtitle track. Reported automatically by the add-on the moment it
+// detects an embedded Hebrew stream at play start, keyed by release name (NOT
+// debrid hash) so it matches across providers (TorBox / Real-Debrid / ... all
+// expose the same release name for the same file). Stored under 'emb:<key>' so
+// it never touches the subtitle index. Bounded so a value can't grow forever.
+const EMB_MAX = 80;
+
+function embKey(mediaKey) { return 'emb:' + mediaKey; }
+
+async function readEmbedded(env, keys) {
+  try {
+    const seen = new Set();
+    const out = [];
+    for (const k of keys) {
+      let raw;
+      try { raw = await env.POOL.get(embKey(k)); } catch (_) { raw = null; }
+      if (!raw) continue;
+      let arr; try { arr = JSON.parse(raw); } catch { arr = null; }
+      if (!Array.isArray(arr)) continue;
+      for (const rel of arr) {
+        const r = String(rel || '').trim();
+        const low = r.toLowerCase();
+        if (r && !seen.has(low)) { seen.add(low); out.push(r); }
+      }
+    }
+    return out;
+  } catch (_) { return []; }
+}
+
+async function recordEmbedded(env, body) {
+  const rel = String(body.release || '').trim();
+  if (!rel) return json({ ok: false, error: 'no release' }, 400);
+  const ids = await resolveIds(env, {
+    tmdb: body.tmdb_id, imdb: body.imdb_id, type: body.type,
+  });
+  const p = {
+    tmdb: ids.tmdb, imdb: ids.imdb, type: body.type,
+    season: body.season, episode: body.episode, lang: 'he',
+  };
+  const keys = await mediaKeys(env, p);
+  const primary = keys[0];
+  if (!primary) return json({ ok: false, error: 'no key' }, 400);
+  const k = embKey(primary);
+  let arr = [];
+  try { const raw = await env.POOL.get(k); if (raw) arr = JSON.parse(raw) || []; } catch (_) { arr = []; }
+  if (!Array.isArray(arr)) arr = [];
+  const low = rel.toLowerCase();
+  if (arr.some(x => String(x || '').toLowerCase() === low)) {
+    return json({ ok: true, added: false });   // already known -> no write
+  }
+  arr.push(rel);
+  if (arr.length > EMB_MAX) arr = arr.slice(arr.length - EMB_MAX);
+  try { await env.POOL.put(k, JSON.stringify(arr)); } catch (_) { /* ignore */ }
+  return json({ ok: true, added: true });
+}
+
+// --- Shared Ktuvit-availability registry ---------------------------------
+// Ktuvit runs on ONE shared, rate-limited account, so it must NOT be queried
+// per-user on every browse. Instead the FIRST add-on to browse a title checks
+// Ktuvit once and reports the Hebrew release names here; everyone else reads
+// them from this shared, persistent registry without ever touching Ktuvit.
+// Stored as 'kt:<key>' -> { checked: <ts>, names: [...] }. The 'checked'
+// timestamp lets clients treat it as fresh for a while (and re-check rarely),
+// so new Hebrew that appears on Ktuvit is eventually picked up -- still at most
+// ~once per title globally.
+const KT_MAX = 120;
+
+function ktKey(mediaKey) { return 'kt:' + mediaKey; }
+
+async function readKtuvit(env, keys) {
+  const seen = new Set();
+  const names = [];
+  let checked = 0;
+  let changed = 0;   // when the list last GREW (a new release appeared)
+  try {
+    for (const k of keys) {
+      let raw;
+      try { raw = await env.POOL.get(ktKey(k)); } catch (_) { raw = null; }
+      if (!raw) continue;
+      let obj; try { obj = JSON.parse(raw); } catch { obj = null; }
+      if (!obj) continue;
+      const ts = Number(obj.checked || 0);
+      if (ts > checked) checked = ts;
+      const ch = Number(obj.changed || 0);
+      if (ch > changed) changed = ch;
+      for (const rel of (obj.names || [])) {
+        const r = String(rel || '').trim();
+        const low = r.toLowerCase();
+        if (r && !seen.has(low)) { seen.add(low); names.push(r); }
+      }
+    }
+  } catch (_) { /* ignore */ }
+  return { names, checked, changed };
+}
+
+async function recordKtuvit(env, body) {
+  const ids = await resolveIds(env, {
+    tmdb: body.tmdb_id, imdb: body.imdb_id, type: body.type,
+  });
+  const p = {
+    tmdb: ids.tmdb, imdb: ids.imdb, type: body.type,
+    season: body.season, episode: body.episode, lang: 'he',
+  };
+  const keys = await mediaKeys(env, p);
+  const primary = keys[0];
+  if (!primary) return json({ ok: false, error: 'no key' }, 400);
+  // Merge reported names with whatever's already stored, dedup, bound.
+  let names = Array.isArray(body.names) ? body.names : [];
+  const seen = new Set();
+  let prev = {};
+  try { const raw = await env.POOL.get(ktKey(primary)); if (raw) prev = JSON.parse(raw) || {}; } catch (_) { prev = {}; }
+  const merged = [];
+  for (const rel of [...(prev.names || []), ...names]) {
+    const r = String(rel || '').trim();
+    const low = r.toLowerCase();
+    if (r && !seen.has(low)) { seen.add(low); merged.push(r); }
+  }
+  const bounded = merged.length > KT_MAX ? merged.slice(merged.length - KT_MAX) : merged;
+  const now = Date.now() / 1000;
+  // 'changed' marks when the list last GREW (or first contact), so clients
+  // keep re-checking often while a title is still gaining subs, then back off
+  // once it's been stable for a while.
+  const prevCount = Array.isArray(prev.names) ? prev.names.length : 0;
+  let changed = Number(prev.changed || 0);
+  if (bounded.length > prevCount || !changed) changed = now;
+  const obj = { checked: now, changed, names: bounded };
+  try { await env.POOL.put(ktKey(primary), JSON.stringify(obj)); } catch (_) { /* ignore */ }
+  return json({ ok: true, count: bounded.length, changed });
+}
+
 function looksLikeSrt(text) {
   if (!text || text.length < 30 || text.length > MAX_SRT) return false;
   return (text.match(/-->/g) || []).length >= 3;
@@ -621,11 +753,35 @@ export default {
 
     if (path === '/lookup' && request.method === 'GET') {
       const p = Object.fromEntries(url.searchParams);
-      const { variants, primaryKey } = await readMergedIndex(env, p);
+      const { variants, primaryKey, keys } = await readMergedIndex(env, p);
+      const embedded = await readEmbedded(env, keys);
+      const ktuvit = await readKtuvit(env, keys);
       return json({
         ok: true, key: primaryKey, count: variants.length,
         variants: variants.map(v => ({ hash: v.hash, release: v.release, source_lang: v.source_lang, kind: v.kind || 'ai', ts: v.ts })),
+        embedded,
+        ktuvit: ktuvit.names, ktuvit_checked: ktuvit.checked,
+        ktuvit_changed: ktuvit.changed,
       });
+    }
+
+    // Add-on report: "this release ships a built-in Hebrew subtitle track."
+    if (path === '/embedded' && request.method === 'POST') {
+      if (request.headers.get('x-api-key') !== env.API_KEY)
+        return json({ ok: false, error: 'unauthorized' }, 401);
+      let body;
+      try { body = await request.json(); } catch { return json({ ok: false, error: 'bad json' }, 400); }
+      return await recordEmbedded(env, body);
+    }
+
+    // Add-on report: Hebrew release names found on Ktuvit for this title (the
+    // first browser checks once; everyone else reads it back via /lookup).
+    if (path === '/ktuvit' && request.method === 'POST') {
+      if (request.headers.get('x-api-key') !== env.API_KEY)
+        return json({ ok: false, error: 'unauthorized' }, 401);
+      let body;
+      try { body = await request.json(); } catch { return json({ ok: false, error: 'bad json' }, 400); }
+      return await recordKtuvit(env, body);
     }
 
     if (path === '/sub' && request.method === 'GET') {
