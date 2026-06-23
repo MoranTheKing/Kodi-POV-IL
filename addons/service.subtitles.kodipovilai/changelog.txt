@@ -7,6 +7,10 @@ v0.2.260
   Kodi subtitle dialog) to open the MoranSubs chooser instead, so the OSD layout
   is unchanged. The previously-added button is removed automatically (self-
   healing on the next start).
+- "בחר כתוביות" window now has a "הורדת כתוביות (Kodi)" button that opens Kodi's
+  full native subtitle search/download dialog -- for when you want the regular
+  download flow, not just the quick picker. Works on every skin (NOX included),
+  and since it lives inside the window it adds no OSD button (no collision).
 - "החלף מקור" pauses the video again before opening the source-selection
   screen, instead of letting it keep playing in the background. Restored on NOX,
   Estuary and FENtastic.
