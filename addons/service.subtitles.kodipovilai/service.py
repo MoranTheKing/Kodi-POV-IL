@@ -2087,10 +2087,13 @@ def _maybe_patch_estuary_change_source():
 
 
 def _maybe_patch_choose_subs_buttons():
-    """Wire the player's "בחר כתוביות" button to MoranSubs's chooser window:
-    rewire FENtastic's (it pointed at the disabled DarkSubs) and ADD one to the
-    NOX OSD. Both skin-gated, XML-parse-checked, self-healing. A reload is done
-    only when the patched skin is the active one."""
+    """Wire the player's subtitle button to MoranSubs's chooser window:
+    rewire FENtastic + Estuary (they pointed at the disabled DarkSubs) and
+    rewire NOX's existing subtitles button (id 70046, which only opened
+    ActivateWindow(2118)). NOX is rewired -- NOT given a new button -- because an
+    added button widened the right-aligned OSD group and pushed "החלף מקור" into
+    the play controls. All skin-gated, XML-parse-checked, self-healing. A reload
+    is done only when the patched skin is the active one."""
     # FENtastic + Estuary: rewire the existing DarkSubs button to our chooser.
     try:
         from resources.lib import choose_subs_rewire_patcher, kodi_utils
@@ -2120,13 +2123,13 @@ def _maybe_patch_choose_subs_buttons():
                            .format(e), level='WARNING')
         except Exception:
             pass
-    # NOX: add the button.
+    # NOX: rewire the existing subtitles button (no new button -> no collision).
     try:
         from resources.lib import nox_choose_subs_patcher, kodi_utils
         status = nox_choose_subs_patcher.ensure_patched()
         if status == 'patched':
-            kodi_utils.log('nox_choose_subs_patcher: choose-subs button added '
-                           'to NOX OSD', level='INFO')
+            kodi_utils.log('nox_choose_subs_patcher: NOX subtitles button '
+                           'rewired to MoranSubs chooser', level='INFO')
             _maybe_reload_nox_skin()
         elif status in ('unmatched', 'parse_failed', 'write_failed',
                         'read_failed'):
@@ -2135,6 +2138,44 @@ def _maybe_patch_choose_subs_buttons():
     except Exception as e:
         try:
             kodi_utils.log('nox_choose_subs_patcher failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_change_source_pause():
+    """Make the player's "החלף מקור" (change source) button pause the video
+    before opening the source-selection screen -- it used to pause but started
+    playing through in the background. Injects a Player.Playing-gated
+    PlayerControl(Play) onclick before the existing change-source onclick in
+    NOX, Estuary, and FENtastic. Marker-gated, XML-parse-checked, self-healing.
+    Must run AFTER the change-source button patchers so Estuary's inserted
+    button exists. Reloads only the active skin if it was patched."""
+    try:
+        from resources.lib import change_source_pause_patcher, kodi_utils
+        import xbmc
+        results = change_source_pause_patcher.ensure_patched()
+        active = ''
+        try:
+            active = xbmc.getSkinDir()
+        except Exception:
+            active = ''
+        for skin_id, status in (results or {}).items():
+            if status == 'patched':
+                kodi_utils.log('change_source_pause_patcher: {0} change-source '
+                               'now pauses before opening sources'.format(
+                                   skin_id), level='INFO')
+                if skin_id == active:
+                    try:
+                        xbmc.executebuiltin('ReloadSkin()')
+                    except Exception:
+                        pass
+            elif status in ('parse_failed', 'write_failed', 'read_failed'):
+                kodi_utils.log('change_source_pause_patcher: {0} -> {1}'.format(
+                    skin_id, status), level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log('change_source_pause_patcher failed: {0}'.format(e),
                            level='WARNING')
         except Exception:
             pass
@@ -3248,10 +3289,16 @@ def main():
     # change-source button. Skin-gated, XML-parse-checked.
     _maybe_patch_estuary_change_source()
 
-    # Point the player's "בחר כתוביות" button at MoranSubs's own subtitle
-    # chooser window (FENtastic's pointed at the now-disabled DarkSubs; NOX had
-    # no such button). Skin-gated, XML-parse-checked, self-healing.
+    # Point the player's subtitle button at MoranSubs's own chooser window
+    # (FENtastic + Estuary pointed at the now-disabled DarkSubs; NOX's existing
+    # subtitles button is rewired in place, not duplicated, to avoid widening
+    # its OSD group). Skin-gated, XML-parse-checked, self-healing.
     _maybe_patch_choose_subs_buttons()
+
+    # Make "החלף מקור" pause before opening the source screen (it regressed to
+    # playing through in the background). Runs AFTER the change-source button
+    # patchers above so Estuary's inserted button is present to patch.
+    _maybe_patch_change_source_pause()
 
     # AllSubs Plus crashes at import on Windows when shutil.copy hits a
     # NTFS junction/hardlink (SameFileError). Patch its 6 copy lines in

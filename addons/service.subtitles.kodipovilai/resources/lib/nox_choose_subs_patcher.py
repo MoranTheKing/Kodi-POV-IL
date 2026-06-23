@@ -1,15 +1,16 @@
-# Adds a "בחר כתוביות" (choose subtitles) button to the NOX skin's player OSD
-# (skin.povil.nox/xml/VideoOSD.xml), wired to MoranSubs's own subtitle-chooser
-# window:
-#     RunScript(service.subtitles.kodipovilai,action=choose_subs)
+# Make NOX's player open MoranSubs's subtitle chooser -- WITHOUT adding a new
+# OSD button.
 #
-# NOX shipped without this button; FENtastic had one (pointing at the now-
-# disabled DarkSubs), so this brings NOX to parity. The chooser is a pyxbmct
-# window (skin-agnostic) and falls back to Kodi's native selector on failure.
+# History: an earlier version ADDED a "בחר כתוביות" button to NOX's right-side
+# OSD grouplist. That group is right-aligned and already near the centre play
+# controls, so the extra button pushed "החלף מקור" left until it overlapped the
+# fast-forward/next button. NOX already ships a subtitle button (id 70046,
+# label "כתוביות") that merely opens ActivateWindow(2118); we repurpose THAT to
+# open our chooser instead -- so the OSD layout is unchanged (no collision).
 #
-# Self-healing: marker-gated, reverts prior versions, XML-parse-checked before
-# writing (a broken OSD would black-screen the player), atomic write. No-op
-# when NOX isn't installed.
+# This patcher therefore: (a) REMOVES the button the old version added (so
+# existing installs self-heal), and (b) rewires button 70046's onclick. Marker-
+# gated, XML-parse-checked, atomic, no-op when NOX isn't installed.
 
 import os
 import re
@@ -32,15 +33,12 @@ except Exception:
 
 NOX_SKIN_ID = 'skin.povil.nox'
 OSD_REL_PATH = 'xml/VideoOSD.xml'
-MARKER = 'AI_SUBS_NOX_CHOOSE_SUBS_v1'
-BUTTON_ID = '39518'  # unused in NOX (39517 is the change-source button)
+OLD_ONCLICK = '<onclick>ActivateWindow(2118)</onclick>'
+NEW_ONCLICK = ('<onclick>RunScript(service.subtitles.kodipovilai,'
+               'action=choose_subs)</onclick>')
 
-# Anchor: the always-present "audio" button in the right-side OSD grouplist.
-_ANCHOR_RE = re.compile(
-    r'^(?P<indent>[ \t]*)<control type="button" id="70038">',
-    re.MULTILINE,
-)
-_REVERT_RE = re.compile(
+# Remove the button the previous version inserted (any marked v\d+ block).
+_OLD_BTN_RE = re.compile(
     r'[ \t]*<!--\s*AI_SUBS_NOX_CHOOSE_SUBS_v\d+\s*-->.*?</control>[ \t]*\r?\n',
     re.DOTALL,
 )
@@ -67,28 +65,6 @@ def _osd_path():
     return p if os.path.isfile(p) else ''
 
 
-def _button_block(indent, eol):
-    inner = indent + '\t'
-    lines = [
-        indent + '<!-- ' + MARKER + ' -->',
-        indent + '<control type="button" id="' + BUTTON_ID + '">',
-        inner + '<description>MoranSubs choose subtitles</description>',
-        inner + '<visible>!VideoPlayer.Content(LiveTV) | '
-                'VideoPlayer.HasSubtitles</visible>',
-        inner + '<visible>!String.Contains(Player.Folderpath, '
-                'plugin.video.idanplus)</visible>',
-        inner + '<height>80</height>',
-        inner + '<width>220</width>',
-        inner + '<include>SettingsItemCommonOSD</include>',
-        inner + '<font>font25_title</font>',
-        inner + '<label>בחר כתוביות</label>',
-        inner + '<onclick>RunScript(service.subtitles.kodipovilai,'
-                'action=choose_subs)</onclick>',
-        indent + '</control>',
-    ]
-    return ''.join(ln + eol for ln in lines)
-
-
 def ensure_patched():
     path = _osd_path()
     if not path:
@@ -100,21 +76,16 @@ def ensure_patched():
         _log('read failed: {0}'.format(e), level='WARNING')
         return 'read_failed'
 
-    eol = '\r\n' if '\r\n' in original[:4096] else '\n'
+    # (a) drop any button the old version added.
+    content = _OLD_BTN_RE.sub('', original)
+    # (b) rewire the existing subtitles button (70046).
+    if OLD_ONCLICK in content:
+        content = content.replace(OLD_ONCLICK, NEW_ONCLICK)
 
-    # Strip any prior version so we re-apply cleanly (idempotent).
-    content = _REVERT_RE.sub('', original)
+    if content == original:
+        # nothing to do (already rewired + no stale button, or button gone).
+        return 'ok'
 
-    m = _ANCHOR_RE.search(content)
-    if not m:
-        _log('audio-button anchor not found -- skipping', level='WARNING')
-        return 'unmatched'
-    indent = m.group('indent')
-    block = _button_block(indent, eol)
-    content = content[:m.start()] + block + content[m.start():]
-
-    # SAFETY: never write XML that doesn't parse -- a broken OSD would
-    # black-screen the player.
     if ET is not None:
         try:
             ET.fromstring(content)
@@ -122,9 +93,6 @@ def ensure_patched():
             _log('patched XML would not parse -- skipping ({0})'.format(e),
                  level='WARNING')
             return 'parse_failed'
-
-    if content == original:
-        return 'unchanged'
 
     try:
         tmp = path + '.tmp'

@@ -1,12 +1,21 @@
+v0.2.260
+- NOX player: fixed the "החלף מקור" button overlapping the fast-forward/next
+  control. The real cause was the NEW "בחר כתוביות" button we'd added: NOX's
+  right-side OSD group is right-aligned, so the extra button widened the group
+  and pushed "החלף מקור" left into the play controls. Fix: we no longer add a
+  button -- we rewire NOX's existing subtitles button (it only opened the plain
+  Kodi subtitle dialog) to open the MoranSubs chooser instead, so the OSD layout
+  is unchanged. The previously-added button is removed automatically (self-
+  healing on the next start).
+- "החלף מקור" pauses the video again before opening the source-selection
+  screen, instead of letting it keep playing in the background. Restored on NOX,
+  Estuary and FENtastic.
+
 v0.2.259
 - "בחר כתוביות" window: the WHOLE row is now colour-coded (like DarkSubs) --
   gold for a strong-match Hebrew sub, green for a decent match, cyan for the
   rest, magenta for the currently-applied one, grey for foreign/AI sources.
   (Before, only a tiny tag was coloured so it looked mostly white.)
-- NOX player: fixed the "החלף מקור" / "בחר כתוביות" buttons overlapping. The NOX
-  pack now ships the change-source button built in, but the self-healing patcher
-  didn't notice and added a SECOND copy, overcrowding the OSD. It now detects the
-  built-in button and removes its duplicate.
 
 v0.2.258
 - "בחר כתוביות" window is now colour-coded (like DarkSubs): the currently-
