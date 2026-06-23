@@ -3,10 +3,11 @@ v0.2.253
   community-pool/Wizdom lookup is now fully background-warmed (like the
   OpenSubtitles one already was), so the source list opens instantly. The
   badges fill in from a shared cache (the next open is always instant).
-- The Hebrew-match % now also covers Ktuvit -- but only as a fallback, when no
-  other source had Hebrew, so a title whose Hebrew exists only on Ktuvit finally
-  shows a %. (Strictly throttled + cached so it never overloads Ktuvit; can be
-  turned off.)
+- The Hebrew-match % now also covers Ktuvit, via a SHARED registry: the first
+  user to browse a title checks Ktuvit once and publishes the result to the
+  community pool, so everyone else reads it back without ever hitting Ktuvit
+  (~one check per title globally -- it never overloads the shared account). A
+  Ktuvit-only title now shows a % for everyone. (Can be turned off.)
 - NEW: built-in Hebrew is now shared for everyone. When the add-on detects a
   source that ships an embedded Hebrew track, it flags that release in the
   community pool (automatically, no action needed), so on everyone else's source

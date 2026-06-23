@@ -2553,8 +2553,9 @@ def _handle_he_avail(params):
 
         names, seen = [], set()
         embedded = []
+        kt_pool_names, kt_checked = [], 0.0
 
-        # 1) Community pool + Wizdom (+ embedded flags) -- one place now.
+        # 1) Community pool + Wizdom (+ embedded flags + shared Ktuvit registry).
         try:
             from resources.lib import he_sub_match as _hsm
             _p = {
@@ -2564,8 +2565,11 @@ def _handle_he_avail(params):
                 'episode': info.get('episode', '0') if is_ep else '0',
                 'lang': 'he',
             }
-            pw_names, embedded = _hsm.availability(_p)
-            _merge(names, seen, pw_names)
+            av = _hsm.availability(_p)
+            embedded = av.get('embedded') or []
+            kt_pool_names = av.get('ktuvit') or []
+            kt_checked = av.get('ktuvit_checked') or 0.0
+            _merge(names, seen, av.get('names') or [])
         except Exception as e:
             _safe_log('he_avail pool/wizdom failed: {0}'.format(e),
                       level='WARNING')
@@ -2602,27 +2606,49 @@ def _handle_he_avail(params):
             _safe_log('he_avail opensubtitles failed: {0}'.format(e),
                       level='WARNING')
 
-        # 3) Ktuvit FALLBACK -- only when nothing else found Hebrew, and only
-        #    if the user hasn't turned it off. Protects the shared account.
+        # 3) Ktuvit via the SHARED registry. We hit the rate-limited shared
+        #    Ktuvit account at most ~once per title GLOBALLY: if the pool already
+        #    has a fresh Ktuvit result, just use it (no Ktuvit call); only when
+        #    it's missing/stale does THIS client check Ktuvit once and publish
+        #    the result back for everyone. Gated by `he_match_ktuvit`.
         try:
             from resources.lib import kodi_utils as _ku
             ktuvit_ok = _ku.get_setting('he_match_ktuvit', 'true') != 'false'
         except Exception:
             ktuvit_ok = True
-        if ktuvit_ok and not names:
-            try:
-                from resources.lib.subs_engine.sources import ktuvit as _kt
-                _kt.global_var = []
-                _kt.get_subs(vd)
-                kt_names = []
-                for d in (_kt.global_var or []):
-                    fn = (d.get('filename') or '').strip()
-                    if fn:
-                        kt_names.append(fn)
-                _merge(names, seen, kt_names)
-            except Exception as e:
-                _safe_log('he_avail ktuvit fallback failed: {0}'.format(e),
-                          level='WARNING')
+        import time as _time
+        _KT_TTL = 14 * 24 * 3600.0   # re-check a title on Ktuvit at most ~biweekly
+        if ktuvit_ok:
+            fresh = kt_checked and (_time.time() - float(kt_checked)) < _KT_TTL
+            if fresh:
+                _merge(names, seen, kt_pool_names)   # shared cache hit -- no call
+            else:
+                try:
+                    from resources.lib.subs_engine.sources import ktuvit as _kt
+                    _kt.global_var = []
+                    _kt.get_subs(vd)
+                    kt_names = []
+                    for d in (_kt.global_var or []):
+                        fn = (d.get('filename') or '').strip()
+                        if fn:
+                            kt_names.append(fn)
+                    _merge(names, seen, kt_names)
+                    # Publish to the shared registry so nobody else has to ask
+                    # Ktuvit (even an empty result records "checked").
+                    try:
+                        from resources.lib import pool as _pool
+                        _pool.report_ktuvit({
+                            'tmdb_id': info.get('tmdb', ''),
+                            'imdb_id': info.get('imdb', ''),
+                            'is_episode': is_ep,
+                            'season': info.get('season', '0') if is_ep else '0',
+                            'episode': info.get('episode', '0') if is_ep else '0',
+                        }, kt_names)
+                    except Exception:
+                        pass
+                except Exception as e:
+                    _safe_log('he_avail ktuvit check failed: {0}'.format(e),
+                              level='WARNING')
 
         _he_avail_store(mk, names, embedded)
         _safe_log('he_avail: stored {0} Hebrew release names ({1} embedded) '

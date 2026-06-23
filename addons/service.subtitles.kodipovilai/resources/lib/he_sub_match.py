@@ -84,30 +84,37 @@ WIZDOM_API_URL = 'https://wizdom.xyz/api/search?action=by_id'
 
 
 def _pool_lookup(p):
-    """One /lookup call -> (hebrew release names, embedded-Hebrew release names).
-    'embedded' is the set of releases the community has flagged as carrying a
-    built-in (muxed) Hebrew track -- keyed by release name so it matches across
-    debrid providers. Networked: only called from the background warm, never
-    from the POV source window."""
+    """One /lookup call -> dict with the pool's Hebrew data for this media:
+        {'names': [...],          pool-contributed Hebrew release names
+         'embedded': [...],       releases flagged as carrying built-in Hebrew
+         'ktuvit': [...],         Hebrew release names cached from Ktuvit
+         'ktuvit_checked': <ts>}  when Ktuvit was last checked (0 = never)
+    All keyed by release name so they match across debrid providers. Networked:
+    only called from the background warm, never from the POV source window."""
+    out = {'names': [], 'embedded': [], 'ktuvit': [], 'ktuvit_checked': 0.0}
     try:
         q = _parse.urlencode({k: v for k, v in p.items() if v})
         req = _req.Request(POOL_URL + '/lookup?' + q,
                            headers={'user-agent': _UA})
         raw = _req.urlopen(req, timeout=_TIMEOUT).read().decode('utf-8')
         data = json.loads(raw)
-        names, embedded = [], []
         if data.get('ok'):
-            for v in (data.get('variants') or []):
-                rel = (v.get('release') or '').strip()
-                if rel:
-                    names.append(rel)
-            for rel in (data.get('embedded') or []):
-                rel = (rel or '').strip()
-                if rel:
-                    embedded.append(rel)
-        return names, embedded
+            out['names'] = [(_v.get('release') or '').strip()
+                            for _v in (data.get('variants') or [])
+                            if (_v.get('release') or '').strip()]
+            out['embedded'] = [(_r or '').strip()
+                               for _r in (data.get('embedded') or [])
+                               if (_r or '').strip()]
+            out['ktuvit'] = [(_r or '').strip()
+                             for _r in (data.get('ktuvit') or [])
+                             if (_r or '').strip()]
+            try:
+                out['ktuvit_checked'] = float(data.get('ktuvit_checked') or 0)
+            except (TypeError, ValueError):
+                out['ktuvit_checked'] = 0.0
     except Exception:
-        return [], []
+        pass
+    return out
 
 
 
@@ -233,25 +240,35 @@ def _fire_engine_warm(key, p, meta):
 
 def availability(p):
     """NETWORKED -- runs ONLY in the background warm (MoranSubs's own process),
-    never in POV's source window. Returns (hebrew release names, embedded-Hebrew
-    release names) from the community pool + Wizdom. The warm adds OpenSubtitles
-    / Ktuvit on top and writes the merged result to the shared cache."""
-    names, embedded = [], []
-    seen = set()
+    never in POV's source window. Returns a dict:
+        {'names': [...],          pool + Wizdom Hebrew release names
+         'embedded': [...],       releases flagged as carrying built-in Hebrew
+         'ktuvit': [...],         Hebrew release names already cached on the pool
+         'ktuvit_checked': <ts>}  when the pool last checked Ktuvit (0 = never)
+    The warm adds OpenSubtitles on top, decides whether to refresh Ktuvit (only
+    when the shared registry is missing/stale), and writes the merged result to
+    the local speed cache."""
+    pl = {}
     try:
-        pool_names, embedded = _pool_lookup(p)
+        pl = _pool_lookup(p)
     except Exception:
-        pool_names, embedded = [], []
+        pl = {}
     try:
         wiz = _wizdom_release_names(p)
     except Exception:
         wiz = []
-    for rel in list(pool_names) + list(wiz):
+    names, seen = [], set()
+    for rel in list(pl.get('names') or []) + list(wiz):
         low = (rel or '').strip().lower()
         if low and low not in seen:
             seen.add(low)
             names.append(rel)
-    return names, embedded
+    return {
+        'names': names,
+        'embedded': list(pl.get('embedded') or []),
+        'ktuvit': list(pl.get('ktuvit') or []),
+        'ktuvit_checked': pl.get('ktuvit_checked') or 0.0,
+    }
 
 
 def release_names(meta):
