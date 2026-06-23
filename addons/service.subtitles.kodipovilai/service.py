@@ -2160,19 +2160,24 @@ def _maybe_patch_change_source_pause():
             active = xbmc.getSkinDir()
         except Exception:
             active = ''
-        for skin_id, status in (results or {}).items():
+        # Keys are "skin_id:file"; reload once if the ACTIVE skin got patched.
+        active_patched = False
+        for key, status in (results or {}).items():
+            skin_id = key.split(':', 1)[0]
             if status == 'patched':
                 kodi_utils.log('change_source_pause_patcher: {0} change-source '
                                'now pauses before opening sources'.format(
-                                   skin_id), level='INFO')
+                                   key), level='INFO')
                 if skin_id == active:
-                    try:
-                        xbmc.executebuiltin('ReloadSkin()')
-                    except Exception:
-                        pass
+                    active_patched = True
             elif status in ('parse_failed', 'write_failed', 'read_failed'):
                 kodi_utils.log('change_source_pause_patcher: {0} -> {1}'.format(
-                    skin_id, status), level='WARNING')
+                    key, status), level='WARNING')
+        if active_patched:
+            try:
+                xbmc.executebuiltin('ReloadSkin()')
+            except Exception:
+                pass
     except Exception as e:
         try:
             kodi_utils.log('change_source_pause_patcher failed: {0}'.format(e),
