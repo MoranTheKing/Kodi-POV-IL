@@ -109,6 +109,9 @@ def _start_ai_apply(link, info):
                 'type': 'ai',
                 'source_lang': payload.get('src_lang') or 'en',
                 'local_path': src_path,
+                # carry the source release so the delivered file + pool upload
+                # show the full release name instead of a hash / Title.Year.
+                'release': payload.get('filename') or '',
                 'force_ai': True,
             }
             ai_link = translate._encode_link(ai_payload)
