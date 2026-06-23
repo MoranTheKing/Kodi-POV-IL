@@ -1,3 +1,9 @@
+v0.2.256
+- Subtitle download list order: built-in (embedded) Hebrew stays first overall,
+  and for every OTHER language the built-in track is now shown at the TOP of
+  that language's group (instead of all built-in foreign subs being dumped at
+  the very bottom).
+
 v0.2.255
 - Source-screen Hebrew-match % is now refreshed by the actual search: the
   moment the add-on searches a title (on play, or when you open the subtitle
