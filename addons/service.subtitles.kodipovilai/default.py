@@ -2483,10 +2483,11 @@ HE_AVAIL_CACHE = ('special://profile/addon_data/service.subtitles.kodipovilai/'
                   'he_avail_cache.json')
 
 
-def _he_avail_store(mk, names, embedded=None):
-    """Merge {mk: {ts, names, embedded}} into the shared he_avail cache that
-    POV's source window reads (he_sub_match._cache_entry). Atomic +
-    size-bounded."""
+def _he_avail_store(mk, names, embedded=None, ttl=0):
+    """Merge {mk: {ts, names, embedded, ttl}} into the shared he_avail cache that
+    POV's source window reads (he_sub_match._cache_entry). `ttl` is the chosen
+    re-warm interval for this title (short while it's still gaining Hebrew / has
+    none, long once stable). Atomic + size-bounded."""
     if xbmcvfs is None:
         return
     try:
@@ -2501,7 +2502,7 @@ def _he_avail_store(mk, names, embedded=None):
             except Exception:
                 data = {}
         data[mk] = {'ts': _time.time(), 'names': list(names),
-                    'embedded': list(embedded or [])}
+                    'embedded': list(embedded or []), 'ttl': float(ttl or 0)}
         # Keep the newest ~400 titles so the file can't grow without bound.
         if len(data) > 400:
             newest = sorted(data.items(), key=lambda kv: kv[1].get('ts', 0),
@@ -2553,7 +2554,7 @@ def _handle_he_avail(params):
 
         names, seen = [], set()
         embedded = []
-        kt_pool_names, kt_checked = [], 0.0
+        kt_pool_names, kt_checked, kt_changed = [], 0.0, 0.0
 
         # 1) Community pool + Wizdom (+ embedded flags + shared Ktuvit registry).
         try:
@@ -2569,6 +2570,7 @@ def _handle_he_avail(params):
             embedded = av.get('embedded') or []
             kt_pool_names = av.get('ktuvit') or []
             kt_checked = av.get('ktuvit_checked') or 0.0
+            kt_changed = av.get('ktuvit_changed') or 0.0
             _merge(names, seen, av.get('names') or [])
         except Exception as e:
             _safe_log('he_avail pool/wizdom failed: {0}'.format(e),
@@ -2617,14 +2619,21 @@ def _handle_he_avail(params):
         except Exception:
             ktuvit_ok = True
         import time as _time
-        # Re-check Ktuvit OFTEN while it has found nothing yet (new content gets
-        # human subs within ~24h), but rarely once it has subs (they don't
-        # vanish). Still ~one Ktuvit call per title globally per window.
-        _KT_TTL_NONE = 8 * 3600.0        # 8 hours when registry is empty
-        _KT_TTL_FOUND = 30 * 24 * 3600.0  # 30 days once Ktuvit subs are known
+        _now = _time.time()
+        # Re-check Ktuvit OFTEN while a title is still GAINING Hebrew (a new
+        # release gets 1 sub today, 3 more tomorrow...), and only back off once
+        # the list has been STABLE for a while. 'changed' = when the shared
+        # registry last grew; a title is "active" until it's been unchanged for
+        # _KT_STABILIZE. So new content is re-checked every few hours and catches
+        # subs as they trickle in; mature content settles to a long interval.
+        # Still ~one Ktuvit call per title globally per window.
+        _KT_SHORT = 8 * 3600.0            # 8 hours while still active
+        _KT_LONG = 30 * 24 * 3600.0       # 30 days once stable
+        _KT_STABILIZE = 14 * 24 * 3600.0  # "active" window since last growth
+        kt_active = (not kt_changed) or ((_now - float(kt_changed)) < _KT_STABILIZE)
         if ktuvit_ok:
-            _kt_ttl = _KT_TTL_FOUND if kt_pool_names else _KT_TTL_NONE
-            fresh = kt_checked and (_time.time() - float(kt_checked)) < _kt_ttl
+            _kt_ttl = _KT_SHORT if kt_active else _KT_LONG
+            fresh = kt_checked and (_now - float(kt_checked)) < _kt_ttl
             if fresh:
                 _merge(names, seen, kt_pool_names)   # shared cache hit -- no call
             else:
@@ -2655,9 +2664,22 @@ def _handle_he_avail(params):
                     _safe_log('he_avail ktuvit check failed: {0}'.format(e),
                               level='WARNING')
 
-        _he_avail_store(mk, names, embedded)
+        # Pick how soon POV's window should re-warm this title: often while it's
+        # still in flux (no human Hebrew yet, or Ktuvit still gaining subs), and
+        # rarely once it's stable -- so new releases refresh fast for everyone
+        # without re-warming mature titles needlessly.
+        _LOCAL_SHORT = 8 * 3600.0
+        _LOCAL_LONG = 7 * 24 * 3600.0
+        if not names:
+            local_ttl = _LOCAL_SHORT          # nothing yet -- keep looking
+        elif ktuvit_ok and kt_active:
+            local_ttl = _LOCAL_SHORT          # still gaining Ktuvit subs
+        else:
+            local_ttl = _LOCAL_LONG           # stable
+        _he_avail_store(mk, names, embedded, local_ttl)
         _safe_log('he_avail: stored {0} Hebrew release names ({1} embedded) '
-                  'for {2}'.format(len(names), len(embedded), mk))
+                  'for {2} (ttl={3}h)'.format(
+                      len(names), len(embedded), mk, int(local_ttl / 3600)))
     except Exception as e:
         _safe_log('he_avail crashed: {0}'.format(e), level='WARNING')
 
