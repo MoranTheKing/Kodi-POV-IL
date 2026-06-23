@@ -334,18 +334,28 @@ def embedded_names(meta):
 
 
 def _tokens(s):
-    return set(t for t in re.split(r'[^a-z0-9]+', (s or '').lower()) if len(t) >= 2)
+    # MUST mirror translate._match_pct so the source-screen badge and the
+    # subtitle picker's % agree (the user saw 29% on the poster but 33% in the
+    # picker for the same source -- because the two used different algorithms).
+    s = re.sub(r'\.[a-z0-9]{2,4}$', '', s or '', flags=re.I)
+    for ch in '_ +/-':
+        s = s.replace(ch, '.')
+    return [x.lower() for x in s.split('.') if x]
 
 
 def _score(src_release, sub_release):
-    """How much of the SUBTITLE's release is covered by the SOURCE's release
-    (0-100). Using the subtitle as denominator means a sub whose release tags
-    are all present in the source scores high -> likely a good sync."""
+    """Release-name match %, IDENTICAL to translate._match_pct (difflib token
+    sequence ratio) so the badge on the source screen and the % shown in the
+    subtitle picker are the same number for the same source + sub."""
+    import difflib
     a = _tokens(src_release)
     b = _tokens(sub_release)
     if not a or not b:
         return 0
-    return int(round(100.0 * len(a & b) / len(b)))
+    try:
+        return int(round(difflib.SequenceMatcher(None, a, b).ratio() * 100))
+    except Exception:
+        return 0
 
 
 def best_score(src_release, names):

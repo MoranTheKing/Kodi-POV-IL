@@ -1,3 +1,13 @@
+v0.2.254
+- Fixed: built-in (embedded) FOREIGN subtitles -- e.g. French/English baked
+  into the file -- were listed ABOVE the Hebrew options. Hebrew now always
+  ranks above embedded-foreign; the foreign built-in tracks still appear, just
+  lower down.
+- Fixed: the Hebrew-match % on the source screen now matches the % shown in the
+  subtitle picker. They used two different formulas, so the same source could
+  read e.g. 29% on the poster but 33% in the picker -- now both use the same
+  calculation.
+
 v0.2.253
 - Community-pool sharing is now ON by default for everyone, to grow the shared
   Hebrew pool. With it on, every human Ktuvit Hebrew sub for something you play
