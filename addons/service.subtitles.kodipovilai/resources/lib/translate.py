@@ -845,8 +845,16 @@ def _backfill_pool_async(info, translated_path, local_source, source_lang):
             if not _pool_quality_ok(prepared, cached):
                 return
             cid = _content_hash(prepared)
+            _rel = None
+            try:
+                with open(translated_path + '.release', 'r',
+                          encoding='utf-8') as _rf:
+                    _rel = (_rf.read().strip() or None)
+            except OSError:
+                _rel = None
             pool.contribute_once(info, cid, source_lang, cached,
-                                 marker_path=translated_path)
+                                 marker_path=translated_path,
+                                 release_override=_rel)
         except Exception as e:
             try:
                 kodi_utils.log('pool backfill failed: {0}'.format(e),
@@ -1109,6 +1117,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         payload = {'type': 'ai',
                    'source_lang': payload.get('src_lang') or 'en',
                    'local_path': eng_path,
+                   # Keep the SOURCE sub's real release name (e.g. "Movie.2010.
+                   # 1080p.BluRay.x264-GROUP") so the delivered file and the pool
+                   # upload carry it instead of a generic Title.Year.
+                   'release': payload.get('filename') or '',
                    'force_ai': True}  # user explicitly asked to translate
         kind = 'ai'
         # fall through to the AI logic below
@@ -1121,6 +1133,27 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     source_lang = payload.get('source_lang') or 'en'
 
     local_source = payload.get('local_path')
+
+    # Real release name of the SOURCE subtitle being translated (carried from the
+    # picked candidate). Used to (a) name the delivered Hebrew file so Kodi shows
+    # the full release instead of a hash, and (b) tag the community-pool upload
+    # with a real release so match-% works for everyone who downloads it -- a
+    # generic "Title.Year" matches almost nothing. Falls back to the video's own
+    # release name from info; token-like (debrid URL/uuid) values are dropped.
+    _src_release = (payload.get('release') or '').strip()
+    if not _src_release:
+        for _k in ('release', 'picked_release', 'filename', 'tagline', 'label'):
+            _cand = (info.get(_k) or '').strip()
+            if _cand:
+                _src_release = _cand
+                break
+    if pool is not None:
+        try:
+            if pool._is_token_like(_src_release):
+                _src_release = ''
+        except Exception:
+            pass
+    _release_override = _src_release or None
 
     # Respect the user's preferred subtitle language: if they've chosen a
     # specific non-Hebrew language (e.g. English) DON'T force an AI Hebrew
@@ -1250,10 +1283,18 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                     and not _is_google_translated(translated_by_content)):
                 _cached_he = cache.load_text(translated_by_content) or ''
                 if _pool_quality_ok(src_text, _cached_he):
+                    if _src_release:
+                        try:
+                            with open(translated_by_content + '.release', 'w',
+                                      encoding='utf-8') as _rf:
+                                _rf.write(_src_release)
+                        except OSError:
+                            pass
                     try:
                         pool.contribute_once(
                             info, content_id, source_lang, _cached_he,
-                            marker_path=translated_by_content)
+                            marker_path=translated_by_content,
+                            release_override=_release_override)
                     except Exception as e:
                         kodi_utils.log(
                             'pool backfill (content) failed: {0}'.format(e),
@@ -1266,6 +1307,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     translated = cache.translated_path(
         imdb_id, season, episode, source_lang,
         source_id=(early_source_id or content_id))
+
+    # Stash the source release name next to the cached translation, so a later
+    # "share my cached translations" upload can tag it with the real release too
+    # (the cache filename itself is only id+hash). Best-effort.
+    if _src_release:
+        try:
+            with open(translated + '.release', 'w', encoding='utf-8') as _rf:
+                _rf.write(_src_release)
+        except OSError:
+            pass
 
     # Community pool: before spending Gemini quota, check whether someone has
     # already translated THIS exact source (same content hash) and shared it.
@@ -1302,6 +1353,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             progressive_cb('first_ready', {
                 'fallback_text': src_text,
                 'source_id': _progressive_source_id,
+                'release': _src_release,
             })
         except Exception as e:
             kodi_utils.log(
@@ -1703,6 +1755,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                         progressive_cb('done', {
                             'success': True,
                             'source_id': _progressive_source_id,
+                            'release': _src_release,
                         })
                     except Exception:
                         pass
@@ -1801,7 +1854,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         if _pool_quality_ok(src_text, final):
             try:
                 pool.contribute_once(info, content_id, source_lang, final,
-                                     marker_path=translated)
+                                     marker_path=translated,
+                                     release_override=_release_override)
             except Exception as e:
                 kodi_utils.log('pool contribute dispatch failed: {0}'.format(e),
                                level='DEBUG')
@@ -1827,6 +1881,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             progressive_cb('done', {
                 'success': True,
                 'source_id': _progressive_source_id,
+                'release': _src_release,
             })
         except Exception as e:
             kodi_utils.log(
