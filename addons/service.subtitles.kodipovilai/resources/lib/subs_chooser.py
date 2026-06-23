@@ -186,25 +186,48 @@ def show():
             super(Chooser, self).__init__('MoranSubs — בחר כתוביות')
             self.info = info
             self.items = items
-            self.setGeometry(950, 620, 9, 1)
+            self.setGeometry(950, 620, 9, 2)
             head = _video_ref(info) or ''
             self.header = pyxbmct.Label(
                 '[B][COLOR deepskyblue]{0}[/COLOR][/B]'.format(head))
-            self.placeControl(self.header, 0, 0)
+            self.placeControl(self.header, 0, 0, columnspan=2)
             self.lst = pyxbmct.List()
-            self.placeControl(self.lst, 1, 0, rowspan=7, columnspan=1)
+            self.placeControl(self.lst, 1, 0, rowspan=7, columnspan=2)
             self.lst.addItems(
                 [_entry_label(c, info, translate) for c in self.items])
             self.connect(self.lst, self.on_pick)
+            # Full native Kodi subtitle search/download -- for users who want the
+            # regular "download subtitles" flow, not just this picker. Skin-
+            # agnostic (the OSD layout is untouched, so no NOX button collision).
+            self.dl = pyxbmct.Button('[B]הורדת כתוביות (Kodi)[/B]')
+            self.placeControl(self.dl, 8, 0)
+            self.connect(self.dl, self.on_download)
             self.btn = pyxbmct.Button('[B]סגור[/B]')
-            self.placeControl(self.btn, 8, 0)
+            self.placeControl(self.btn, 8, 1)
             self.connect(self.btn, self.close)
             self.connect(pyxbmct.ACTION_NAV_BACK, self.close)
-            self.lst.controlDown(self.btn)
-            self.lst.controlUp(self.btn)
+            self.lst.controlDown(self.dl)
+            self.lst.controlUp(self.dl)
+            self.dl.controlUp(self.lst)
+            self.dl.controlDown(self.lst)
+            self.dl.controlRight(self.btn)
             self.btn.controlUp(self.lst)
             self.btn.controlDown(self.lst)
+            self.btn.controlLeft(self.dl)
             self.setFocus(self.lst)
+
+        def on_download(self):
+            """Close the picker and open Kodi's native subtitle search/download
+            dialog -- the same dialog the OSD's "download subtitle" reaches."""
+            try:
+                self.close()
+            except Exception:
+                pass
+            try:
+                xbmc.executebuiltin('ActivateWindow(SubtitleSearch)')
+            except Exception as e:
+                _log('open SubtitleSearch failed: {0}'.format(e),
+                     level='WARNING')
 
         def _set_head(self, text):
             try:
