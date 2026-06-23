@@ -65,61 +65,78 @@ def _entry_label(c, info, translate):
 
 
 def _start_ai_apply(link, info):
-    """Translate a foreign sub to Hebrew with AI in the BACKGROUND (the window
-    is already closing), showing a progress banner, and apply it when ready.
-    Mirrors the search dialog's AI flow so picking English/Spanish/German from
-    the chooser behaves the same: window closes, translation progresses, the
-    Hebrew lands when done. Fully guarded; never blocks the UI thread."""
-    import threading
+    """Deliver an AI translation EXACTLY like the search dialog's fast path:
+    show the English source immediately (when the source is English -- readable
+    while it cooks), then translate to Hebrew in a SEPARATE background process
+    (bg_translate_picker) that swaps the Hebrew in progressively.
 
-    def _run():
-        progress = None
-        try:
-            from resources.lib import kodi_utils, translate
+    We fire a RunScript rather than a thread on purpose: this chooser runs in a
+    short-lived script process that ends when the window closes, so a worker
+    thread would be killed mid-translation. The background RunScript runs in its
+    own process and survives. Fully guarded."""
+    try:
+        import base64
+        from resources.lib import (kodi_utils, translate,
+                                    subs_engine_bridge)
+        payload = translate._decode_link(link) or {}
+        ai_link = link
+        ai_payload = payload
+        # engine_ai: download the foreign SOURCE sub now, then continue as 'ai'
+        # (same first step the search dialog does).
+        if payload.get('type') == 'engine_ai':
             try:
-                progress = xbmcgui.DialogProgressBG()
-                progress.create('MoranSubs', 'AI: מתרגם לעברית...')
+                kodi_utils.notify('AI: מוריד את כתובית המקור...', time_ms=2500)
+                src_path = subs_engine_bridge.download(payload)
             except Exception:
-                progress = None
-
-            def _cb(stage, total):
+                src_path = None
+            if not (src_path and os.path.isfile(src_path)):
                 try:
-                    if progress is not None:
-                        pct = int(stage * 100 / max(1, total))
-                        progress.update(pct, 'MoranSubs',
-                                        'AI: {0}% ({1}/{2})'.format(
-                                            pct, stage, total))
+                    kodi_utils.notify('AI: לא ניתן להוריד את כתובית המקור',
+                                      time_ms=4000)
                 except Exception:
                     pass
-
-            path = translate.resolve(link, info, progress_cb=_cb)
-            if (path and os.path.isfile(path)
-                    and xbmc.Player().isPlayingVideo()):
-                xbmc.Player().setSubtitles(path)
-                xbmc.Player().showSubtitles(True)
-                try:
-                    kodi_utils.set_current_subtitle(link)
-                except Exception:
-                    pass
-                try:
-                    kodi_utils.notify('AI: כתובית עברית מוכנה', time_ms=3000)
-                except Exception:
-                    pass
-            else:
-                try:
-                    kodi_utils.notify('AI: התרגום נכשל', time_ms=4000)
-                except Exception:
-                    pass
-        except Exception as e:
-            _log('ai apply failed: {0}'.format(e), level='WARNING')
-        finally:
-            if progress is not None:
-                try:
-                    progress.close()
-                except Exception:
-                    pass
-
-    threading.Thread(target=_run, daemon=True).start()
+                return
+            ai_payload = {
+                'type': 'ai',
+                'source_lang': payload.get('src_lang') or 'en',
+                'local_path': src_path,
+                'force_ai': True,
+            }
+            ai_link = translate._encode_link(ai_payload)
+        # English source -> show it immediately (broadly readable); other
+        # languages get no intermediate, exactly like the fast path.
+        src_lang = ai_payload.get('source_lang') or 'en'
+        local_src = ai_payload.get('local_path')
+        if src_lang == 'en' and local_src and os.path.isfile(local_src):
+            try:
+                if xbmc.Player().isPlayingVideo():
+                    xbmc.Player().setSubtitles(local_src)
+                    xbmc.Player().showSubtitles(True)
+            except Exception:
+                pass
+        # Hand the Hebrew translation to a background process that swaps it in
+        # progressively (writes versioned .srt + setSubtitles), same handler the
+        # search dialog's fast path uses.
+        try:
+            sid = translate._source_id_for_ai(ai_payload) or ''
+        except Exception:
+            sid = ''
+        try:
+            lk = base64.b64encode(ai_link.encode('utf-8')).decode('ascii')
+            sd = base64.b64encode(sid.encode('utf-8')).decode('ascii')
+            xbmc.executebuiltin(
+                'RunScript(service.subtitles.kodipovilai,'
+                'action=bg_translate_picker,link_b64={0},source_id_b64={1})'
+                .format(lk, sd))
+            try:
+                kodi_utils.set_current_subtitle(ai_link)
+            except Exception:
+                pass
+            kodi_utils.notify('AI: מתרגם לעברית ברקע', time_ms=3000)
+        except Exception as _e:
+            _log('ai bg fire failed: {0}'.format(_e), level='WARNING')
+    except Exception as e:
+        _log('ai apply failed: {0}'.format(e), level='WARNING')
 
 
 def show():
