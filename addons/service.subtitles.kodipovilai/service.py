@@ -2086,6 +2086,60 @@ def _maybe_patch_estuary_change_source():
             pass
 
 
+def _maybe_patch_choose_subs_buttons():
+    """Wire the player's "בחר כתוביות" button to MoranSubs's chooser window:
+    rewire FENtastic's (it pointed at the disabled DarkSubs) and ADD one to the
+    NOX OSD. Both skin-gated, XML-parse-checked, self-healing. A reload is done
+    only when the patched skin is the active one."""
+    # FENtastic + Estuary: rewire the existing DarkSubs button to our chooser.
+    try:
+        from resources.lib import choose_subs_rewire_patcher, kodi_utils
+        import xbmc
+        results = choose_subs_rewire_patcher.ensure_patched()
+        active = ''
+        try:
+            active = xbmc.getSkinDir()
+        except Exception:
+            active = ''
+        for skin_id, status in (results or {}).items():
+            if status == 'patched':
+                kodi_utils.log('choose_subs_rewire_patcher: rewired {0} button '
+                               'to MoranSubs chooser'.format(skin_id),
+                               level='INFO')
+                if skin_id == active:
+                    try:
+                        xbmc.executebuiltin('ReloadSkin()')
+                    except Exception:
+                        pass
+            elif status in ('parse_failed', 'write_failed', 'read_failed'):
+                kodi_utils.log('choose_subs_rewire_patcher: {0} -> {1}'.format(
+                    skin_id, status), level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log('choose_subs_rewire_patcher failed: {0}'
+                           .format(e), level='WARNING')
+        except Exception:
+            pass
+    # NOX: add the button.
+    try:
+        from resources.lib import nox_choose_subs_patcher, kodi_utils
+        status = nox_choose_subs_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log('nox_choose_subs_patcher: choose-subs button added '
+                           'to NOX OSD', level='INFO')
+            _maybe_reload_nox_skin()
+        elif status in ('unmatched', 'parse_failed', 'write_failed',
+                        'read_failed'):
+            kodi_utils.log('nox_choose_subs_patcher: ' + status,
+                           level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log('nox_choose_subs_patcher failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_reload_estuary_skin():
     """Reload once so a freshly-applied Estuary OSD patch shows this session --
     only when Estuary is the active skin AND the wizard's quick-update notice
@@ -3193,6 +3247,11 @@ def main():
     # Same for the Estuary skin (skin.estuary) -- it also shipped without a
     # change-source button. Skin-gated, XML-parse-checked.
     _maybe_patch_estuary_change_source()
+
+    # Point the player's "בחר כתוביות" button at MoranSubs's own subtitle
+    # chooser window (FENtastic's pointed at the now-disabled DarkSubs; NOX had
+    # no such button). Skin-gated, XML-parse-checked, self-healing.
+    _maybe_patch_choose_subs_buttons()
 
     # AllSubs Plus crashes at import on Windows when shutil.copy hits a
     # NTFS junction/hardlink (SameFileError). Patch its 6 copy lines in

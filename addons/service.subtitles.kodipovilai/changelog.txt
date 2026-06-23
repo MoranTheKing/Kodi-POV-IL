@@ -1,3 +1,25 @@
+v0.2.257
+- Picking an AI translation (English/Spanish/German/... -> Hebrew) now CLOSES
+  the dialog/window immediately and translates in the background, swapping the
+  Hebrew in when ready -- identically in BOTH the new chooser window and the
+  regular "Download subtitle" dialog: an English source shows right away
+  (readable while it translates) and Hebrew swaps in progressively. No more
+  blocking for the full 1-2 minutes. Ready Hebrew subs apply on the spot.
+- New "בחר כתוביות" (choose subtitles) window in the player, replacing the old
+  dead DarkSubs button: it lists the available Hebrew subs WITH a match % per
+  sub (and built-in/foreign options), and applies the one you pick on the spot,
+  staying open so you can try another. Built with pyxbmct so it looks the same
+  on every skin. The button is rewired in FENtastic AND Estuary, and ADDED to
+  the NOX player. (AF3 keeps its own native subtitle selector + the Download
+  dialog, which opens the same chooser.) If the window can't open it falls back
+  to Kodi's native subtitle selector.
+
+v0.2.256
+- Subtitle download list order: built-in (embedded) Hebrew stays first overall,
+  and for every OTHER language the built-in track is now shown at the TOP of
+  that language's group (instead of all built-in foreign subs being dumped at
+  the very bottom).
+
 v0.2.255
 - Source-screen Hebrew-match % is now refreshed by the actual search: the
   moment the add-on searches a title (on play, or when you open the subtitle
