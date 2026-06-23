@@ -2571,6 +2571,31 @@ def _maybe_default_remember_source():
             pass
 
 
+def _maybe_force_pool_share():
+    """One-shot rollout: turn community-pool SHARING on for EVERYONE, to grow the
+    shared Hebrew pool as fast as possible. With pool_share on, every human
+    Ktuvit Hebrew sub for a played title is mirrored to the pool in the
+    background (the harvest), and AI translations are shared too -- so the pool
+    fills for all users. Force-enabled once via a fresh marker (overriding a
+    prior opt-out); a later MANUAL opt-out AFTER this run sticks. New installs
+    already default on via settings.xml. Build-edition only (the slim standalone
+    has its own service)."""
+    try:
+        from resources.lib import kodi_utils
+        if kodi_utils.get_setting('_pool_share_force_v1', '') == '1':
+            return
+        kodi_utils.set_setting('pool_share', 'true')
+        kodi_utils.set_setting('_pool_share_force_v1', '1')
+        kodi_utils.log('pool_share force-enabled for everyone (rollout v1)',
+                       level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log('pool_share force migration failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_default_nox_poster_rating():
     """One-shot rollout: FORCE the NOX skin's rating/score circle ON for posters
     so the content score shows on artwork -- for EVERYONE, the first time NOX is
@@ -3013,6 +3038,11 @@ def main():
     # Enable "remember picked source" by default (one-shot) BEFORE the POV
     # patcher runs, so the patcher sees it on and reloads POV this session.
     _maybe_default_remember_source()
+
+    # Grow the shared Hebrew pool: force community-pool sharing ON for everyone
+    # once (a later manual opt-out sticks). Must run before the harvest/drainer
+    # below so it mirrors Ktuvit subs to the pool already this session.
+    _maybe_force_pool_share()
 
     # ROLLOUT: switch everyone to MoranSubs's built-in engine (one-shot, marker-
     # gated). Must run before _ensure_darksubs_enabled() so that when it flips
