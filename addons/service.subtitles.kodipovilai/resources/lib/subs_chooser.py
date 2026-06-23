@@ -35,11 +35,24 @@ def _video_ref(info):
 
 
 def _entry_label(c, info, translate):
-    """Build the list row text: '<lang> | <NN>% · <release>' for real Hebrew
-    subs (so the % the user asked for shows here too), or the entry's own
-    descriptive name for AI / embedded / foreign rows."""
+    """Build a COLOURED list row, in the spirit of DarkSubs's MySubs window:
+      * the currently-applied sub gets a magenta "» נוכחית" badge (it's also
+        floated to the top by list_candidates);
+      * Hebrew rows: a cyan "עברית" tag + a green/amber/red match %, and a gold
+        accent on a very strong (>=80%) match;
+      * built-in (embedded) Hebrew shows its "101%" in gold;
+      * foreign rows: a muted language tag + their own label."""
     lang = (c.get('language') or '').strip()
     name = (c.get('filename') or '').strip()
+
+    # Currently-applied sub: list_candidates prefixes the name with "» נוכחית · "
+    # and floats it to the top. Detect it, strip the marker, colour it.
+    current = False
+    if name.startswith('» נוכחית'):
+        current = True
+        # drop the "» נוכחית · " marker -- we re-render it coloured.
+        name = name.split('· ', 1)[1] if '· ' in name else name
+
     try:
         payload = translate._decode_link(c.get('link') or '') or {}
     except Exception:
@@ -47,21 +60,31 @@ def _entry_label(c, info, translate):
     kind = payload.get('type')
     is_real_he = (lang == 'he' and not payload.get('embedded')
                   and kind in ('passthrough', 'pool', 'engine'))
+
     if is_real_he:
         rel = (payload.get('filename') or name)
         try:
             pct = translate._match_pct(_video_ref(info), rel)
         except Exception:
             pct = 0
-        color = ('FF49C46A' if pct >= 66 else
-                 'FFE0B23C' if pct >= 33 else 'FFD0594F')
-        return ('[B][COLOR blue]עברית[/COLOR] |[/B] '
-                '[B][COLOR {0}]{1}%[/COLOR][/B] · {2}'.format(color, pct, name))
-    # AI-translate rows already carry their own %; embedded/foreign keep their
-    # descriptive label. Tag the language for non-Hebrew rows.
-    if lang and lang != 'he':
-        return '[B][{0}][/B] {1}'.format(lang.upper(), name)
-    return name
+        pct_col = ('FF49C46A' if pct >= 66 else
+                   'FFE0B23C' if pct >= 33 else 'FFD0594F')
+        body = ('[B][COLOR FF35B6FF]עברית[/COLOR] |[/B] '
+                '[B][COLOR {0}]{1}%[/COLOR][/B] · {2}'.format(pct_col, pct, name))
+        if pct >= 80:
+            body = '[COLOR gold]★[/COLOR] ' + body
+    elif lang == 'he':
+        # embedded Hebrew ("תרגום מובנה בעברית · 101%") and the like.
+        body = '[B][COLOR gold]{0}[/COLOR][/B]'.format(name)
+    elif lang:
+        body = ('[B][COLOR FFB0B0B0][{0}][/COLOR][/B] {1}'
+                .format(lang.upper(), name))
+    else:
+        body = name
+
+    if current:
+        body = '[B][COLOR FFFF00FE]» נוכחית[/COLOR][/B] · ' + body
+    return body
 
 
 def _start_ai_apply(link, info):
@@ -128,10 +151,8 @@ def _start_ai_apply(link, info):
                 'RunScript(service.subtitles.kodipovilai,'
                 'action=bg_translate_picker,link_b64={0},source_id_b64={1})'
                 .format(lk, sd))
-            try:
-                kodi_utils.set_current_subtitle(ai_link)
-            except Exception:
-                pass
+            # (the chooser already recorded the original picked link as the
+            # current sub, so it's marked "» נוכחית" on the next open.)
             kodi_utils.notify('AI: מתרגם לעברית ברקע', time_ms=3000)
         except Exception as _e:
             _log('ai bg fire failed: {0}'.format(_e), level='WARNING')
@@ -217,6 +238,13 @@ def show():
             try:
                 from resources.lib import translate as _t
                 link = c.get('link') or ''
+                # Remember this as the applied sub upfront (the ORIGINAL link, so
+                # it matches this same candidate next time) -- so reopening the
+                # chooser shows it at the top marked "» נוכחית".
+                try:
+                    kodi_utils.set_current_subtitle(link)
+                except Exception:
+                    pass
                 payload = _t._decode_link(link) or {}
                 kind = payload.get('type')
                 # Embedded pick: switch Kodi's stream, no file to deliver.
