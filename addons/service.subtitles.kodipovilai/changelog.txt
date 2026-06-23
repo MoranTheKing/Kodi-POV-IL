@@ -1,3 +1,15 @@
+v0.2.263
+- FENtastic: "בחר כתוביות" / "חפש כתובית" now ALWAYS opens the MoranSubs chooser,
+  on every player style and regardless of the "choose subtitles opens Kodi's
+  window" skin setting. Before, the button had a second hidden branch (and two
+  player styles only had that branch) that opened Kodi's native download window
+  instead -- so if your setting was on "Kodi window", the button skipped our
+  chooser. Now every branch in all five player layouts (and Estuary) is rewired;
+  the native download window is still one tap away inside the chooser ("הורדת
+  כתוביות (Kodi)").
+- If the chooser can't open (e.g. nothing found yet), the button now falls back
+  to Kodi's native subtitle SEARCH window instead of the delay/sync settings.
+
 v0.2.262
 - NOX player: fixed "הפרק הבא" (next episode) overlapping the play controls
   while a video was playing. Adding the "החלף מקור" button had widened NOX's
