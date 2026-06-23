@@ -1,3 +1,14 @@
+v0.2.265
+- AI translations now keep the SOURCE subtitle's real release name. The
+  delivered Hebrew file is named after the full release (e.g. "Movie.2010.1080p.
+  BluRay.x264-GROUP") instead of a random "progressive_<hash>_final", so Kodi
+  shows the real name in the subtitle list.
+- That same real release name is now sent when sharing an AI translation to the
+  community pool (live AND via "share my cached translations") -- it's stored in
+  a small ".release" file next to each cached translation. Previously the pool
+  got a generic "Title.Year", which gave almost no match-% for people who
+  download AI subs from the pool; now they get a proper release to match against.
+
 v0.2.264
 - "בחר כתוביות" window: the subtitle list now wraps around -- pressing Down on
   the last subtitle jumps to the first, and Up on the first jumps to the last,
