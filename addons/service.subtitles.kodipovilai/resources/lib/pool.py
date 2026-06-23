@@ -374,6 +374,53 @@ def report_embedded(info):
         pass
 
 
+def report_ktuvit(info, names):
+    """Fire-and-forget: publish the Hebrew release names found on Ktuvit for this
+    title to the SHARED pool registry, so every other user reads them back via
+    /lookup and never has to hit the rate-limited shared Ktuvit account. Called
+    by the background warm only when the registry was missing/stale (so Ktuvit
+    is queried ~once per title globally). Non-blocking; no-op on missing id."""
+    try:
+        if _urlreq is None:
+            return
+        p = _params(info)
+        if not _has_id(p):
+            return
+        clean = []
+        seen = set()
+        for n in (names or []):
+            n = (n or '').strip()
+            low = n.lower()
+            if n and low not in seen:
+                seen.add(low)
+                clean.append(n)
+        body = {
+            'tmdb_id': p['tmdb'], 'imdb_id': p['imdb'], 'type': p['type'],
+            'season': p['season'], 'episode': p['episode'],
+            'names': clean,
+        }
+
+        def _run():
+            try:
+                req = _urlreq.Request(
+                    POOL_URL + '/ktuvit',
+                    data=json.dumps(body).encode('utf-8'),
+                    headers={'content-type': 'application/json',
+                             'x-api-key': POOL_API_KEY, 'user-agent': _UA},
+                    method='POST')
+                _urlreq.urlopen(req, timeout=_POST_TIMEOUT).read()
+            except Exception as e:
+                try:
+                    kodi_utils.log('pool report_ktuvit failed: {0}'.format(e),
+                                   level='DEBUG')
+                except Exception:
+                    pass
+
+        threading.Thread(target=_run, daemon=True).start()
+    except Exception:
+        pass
+
+
 _CACHE_NAME_RE = None
 
 
