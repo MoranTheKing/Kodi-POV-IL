@@ -1,3 +1,11 @@
+v0.2.257
+- New "בחר כתוביות" (choose subtitles) window in the player, replacing the old
+  dead DarkSubs button: it lists the available Hebrew subs WITH a match % per
+  sub (and built-in/foreign options), and applies the one you pick on the spot,
+  staying open so you can try another. Built with pyxbmct so it looks the same
+  on every skin. The button is rewired in FENtastic and ADDED to the NOX player.
+  If the window can't open it falls back to Kodi's native subtitle selector.
+
 v0.2.256
 - Subtitle download list order: built-in (embedded) Hebrew stays first overall,
   and for every OTHER language the built-in track is now shown at the TOP of
