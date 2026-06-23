@@ -29,6 +29,10 @@ _UA = 'KodiPOVIL-AISubs/he-match'
 _ADDON_ID = 'service.subtitles.kodipovilai'
 
 _TIMEOUT = 2.5
+# Hard cap for the ONE synchronous pool lookup release_names() does on a cache
+# miss (first entry to a title). Keeps the source window from ever stalling
+# more than ~1s, while still showing the shared % on the first entry.
+_FIRST_ENTRY_TIMEOUT = 1.2
 
 # Engine (OpenSubtitles) availability is filled by a background RunScript into a
 # shared cache file; we read it cheaply on every call so the badge fills in on
@@ -87,21 +91,22 @@ def _media_key(p):
 WIZDOM_API_URL = 'https://wizdom.xyz/api/search?action=by_id'
 
 
-def _pool_lookup(p):
+def _pool_lookup(p, timeout=None):
     """One /lookup call -> dict with the pool's Hebrew data for this media:
         {'names': [...],          pool-contributed Hebrew release names
          'embedded': [...],       releases flagged as carrying built-in Hebrew
          'ktuvit': [...],         Hebrew release names cached from Ktuvit
          'ktuvit_checked': <ts>}  when Ktuvit was last checked (0 = never)
-    All keyed by release name so they match across debrid providers. Networked:
-    only called from the background warm, never from the POV source window."""
+    All keyed by release name so they match across debrid providers. Networked.
+    `timeout` overrides the default (the source window uses a tight cap for its
+    one allowed synchronous first-entry call)."""
     out = {'names': [], 'embedded': [], 'ktuvit': [],
            'ktuvit_checked': 0.0, 'ktuvit_changed': 0.0}
     try:
         q = _parse.urlencode({k: v for k, v in p.items() if v})
         req = _req.Request(POOL_URL + '/lookup?' + q,
                            headers={'user-agent': _UA})
-        raw = _req.urlopen(req, timeout=_TIMEOUT).read().decode('utf-8')
+        raw = _req.urlopen(req, timeout=(timeout or _TIMEOUT)).read().decode('utf-8')
         data = json.loads(raw)
         if data.get('ok'):
             # Only HUMAN Hebrew counts as "there's a translation" here -- an AI
@@ -295,14 +300,57 @@ def availability(p):
     }
 
 
+def _seed_from_pool(key, pl):
+    """Write the shared-pool result of the one-shot first-entry lookup into the
+    local cache (names = pool-human + Ktuvit-registry, plus embedded flags), with
+    a short TTL so the full background warm still refreshes it with Wizdom/OS
+    shortly after. So the badge shows the SHARED data on the very first entry --
+    on every device -- instead of only after that device's own warm."""
+    try:
+        names, seen = [], set()
+        for rel in list(pl.get('names') or []) + list(pl.get('ktuvit') or []):
+            low = (rel or '').strip().lower()
+            if low and low not in seen:
+                seen.add(low)
+                names.append(rel)
+        embedded = [r for r in (pl.get('embedded') or []) if r]
+        path = _engine_cache_path()
+        if not path:
+            return names
+        data = {}
+        if os.path.isfile(path):
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    data = json.load(f) or {}
+            except Exception:
+                data = {}
+        data[key] = {'ts': time.time(), 'names': names,
+                     'embedded': embedded, 'ttl': _AVAIL_TTL_NONE}
+        if len(data) > 400:
+            data = dict(sorted(data.items(),
+                               key=lambda kv: kv[1].get('ts', 0),
+                               reverse=True)[:400])
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            tmp = path + '.stmp'
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False)
+            os.replace(tmp, path)
+        except Exception:
+            pass
+        return names
+    except Exception:
+        return [n for n in (pl.get('names') or []) if n]
+
+
 def release_names(meta):
-    """Hebrew-subtitle release names available for this media -- a PURE CACHE
-    READ (pool + Wizdom + OpenSubtitles + Ktuvit-fallback, all written by the
-    background warm). NEVER networks: this runs inside POV's source-results
-    build, and the old synchronous pool/Wizdom calls froze the source list for
-    several seconds. On a cache miss we fire the warm and return [] now; the
-    badge fills in the next time the list renders (cheap disk read). [] when
-    disabled / unknown."""
+    """Hebrew-subtitle release names available for this media. Normally a pure
+    cache read (the background warm fills pool + Wizdom + OpenSubtitles + Ktuvit
+    off the source list, so the old multi-second freeze is gone). On a cache
+    MISS we also do ONE quick, tightly-capped /lookup to the SHARED pool so the
+    badge shows the shared data on the FIRST entry -- on every device -- not just
+    after that device's own warm. The full warm still runs in the background to
+    add Wizdom/OS. [] when disabled / unknown."""
     try:
         if not _enabled():
             return []
@@ -311,10 +359,17 @@ def release_names(meta):
             return []
         key = _media_key(p)
         names = _cached_names(key)
-        if names is None:
-            _fire_engine_warm(key, p, meta)   # warms pool+Wizdom+OS+Ktuvit
+        if names is not None:
+            return names
+        # Cache miss. Kick the full background warm (Wizdom/OS/Ktuvit-live)...
+        _fire_engine_warm(key, p, meta)
+        # ...and do ONE quick shared-pool lookup so the first entry isn't blank.
+        # Tight timeout so the source window can never stall more than ~1s.
+        try:
+            pl = _pool_lookup(p, timeout=_FIRST_ENTRY_TIMEOUT)
+            return _seed_from_pool(key, pl)
+        except Exception:
             return []
-        return names
     except Exception:
         return []
 
@@ -331,6 +386,70 @@ def embedded_names(meta):
         return _cached_embedded(_media_key(p))
     except Exception:
         return []
+
+
+def merge_names(meta, names):
+    """Write-through: UNION freshly-found Hebrew release names into the local
+    availability cache. Called by the live search (auto-on-play / the subtitle
+    picker) so the source-screen badge reflects what was ACTUALLY found, instead
+    of lagging behind a possibly-staler background warm. This is what fixes "the
+    picker shows a 33% Ktuvit sub but the poster badge says 25%": the moment the
+    search sees that sub, its release is written here, so the badge picks it up.
+    Union-only, so it never drops what the warm already found. Safe + atomic."""
+    try:
+        if not _enabled():
+            return
+        p = _media_params(meta)
+        if not p:
+            return
+        clean = [(_n or '').strip() for _n in (names or []) if (_n or '').strip()]
+        if not clean:
+            return
+        key = _media_key(p)
+        path = _engine_cache_path()
+        if not path:
+            return
+        data = {}
+        if os.path.isfile(path):
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    data = json.load(f) or {}
+            except Exception:
+                data = {}
+        ent = data.get(key) or {}
+        existing = [n for n in (ent.get('names') or []) if n]
+        seen = set(n.lower() for n in existing)
+        merged = list(existing)
+        for n in clean:
+            low = n.lower()
+            if low not in seen:
+                seen.add(low)
+                merged.append(n)
+        if merged == existing:
+            return   # nothing new -- skip the write
+        ent['names'] = merged
+        ent['ts'] = time.time()
+        ent.setdefault('embedded', ent.get('embedded') or [])
+        # Keep it fresh-ish so the warm still refreshes from the network later.
+        if not ent.get('ttl'):
+            ent['ttl'] = _AVAIL_TTL_NONE
+        data[key] = ent
+        # Bound the file the same way the warm does (newest ~400 titles).
+        if len(data) > 400:
+            newest = sorted(data.items(),
+                            key=lambda kv: kv[1].get('ts', 0),
+                            reverse=True)[:400]
+            data = dict(newest)
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            tmp = path + '.wtmp'
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False)
+            os.replace(tmp, path)
+        except Exception:
+            pass
+    except Exception:
+        pass
 
 
 def _tokens(s):
