@@ -2030,6 +2030,35 @@ def _maybe_patch_nox_change_source():
             pass
 
 
+def _maybe_patch_nox_osd_collision():
+    """Shrink NOX's right-side OSD buttons back to their pre-change-source total
+    width, so adding "החלף מקור" no longer pushes "הפרק הבא" left into the central
+    play controls (the overlap that only showed during playback). No-op when NOX
+    isn't installed or the buttons aren't at their known original widths. Marker-
+    gated + XML-parse-checked."""
+    try:
+        from resources.lib import nox_osd_collision_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = nox_osd_collision_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'nox_osd_collision_patcher: NOX OSD buttons re-sized so '
+                '"הפרק הבא" no longer collides with the play controls',
+                level='INFO')
+            _maybe_reload_nox_skin()
+        elif status in ('parse_failed', 'write_failed', 'read_failed'):
+            kodi_utils.log('nox_osd_collision_patcher: ' + status,
+                           level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log('nox_osd_collision_patcher failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_reload_nox_skin():
     """Skin XML is read at skin load, so a freshly-applied NOX OSD patch only
     shows after a reload. Reload once -- but only when NOX is the active skin
@@ -3285,6 +3314,12 @@ def main():
     # shipped without one, so a bad source mid-playback was a dead end.
     # Skin-gated (no-op unless skin.povil.nox is installed), XML-checked.
     _maybe_patch_nox_change_source()
+
+    # That change-source button widened NOX's right-aligned OSD group, pushing
+    # "הפרק הבא" left into the play controls during playback. Re-size the right-
+    # group buttons back to their original total width to clear it. Runs AFTER
+    # the change-source patcher so the button exists. Skin-gated, XML-checked.
+    _maybe_patch_nox_osd_collision()
 
     # Turn NOX's rating/score circle ON for posters by default (one-shot, only
     # while NOX is the active skin; a later manual change sticks).
