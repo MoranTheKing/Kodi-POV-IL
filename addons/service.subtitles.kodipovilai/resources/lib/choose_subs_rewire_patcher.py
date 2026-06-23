@@ -14,6 +14,7 @@
 # AF3 has none either.)
 
 import os
+import re
 
 try:
     import xbmcvfs
@@ -34,11 +35,32 @@ except Exception:
 OLD_CALL = 'RunScript(service.subtitles.All_Subs,sub_window_unpause)'
 NEW_CALL = 'RunScript(service.subtitles.kodipovilai,action=choose_subs)'
 
-# (skin id, OSD file holding the button)
+# (skin id, OSD file holding the button). FENtastic carries the same DarkSubs
+# button in EACH of its player styles -- the "advanced" player (Includes_
+# VideoOsd3.xml) AND the simple/other players (Includes_VideoOsd.xml,
+# Includes_VideoOsd1.xml) -- so all three must be rewired.
 TARGETS = (
     ('skin.fentastic', 'xml/Includes_VideoOsd3.xml'),
+    ('skin.fentastic', 'xml/Includes_VideoOsd.xml'),
+    ('skin.fentastic', 'xml/Includes_VideoOsd1.xml'),
     ('skin.estuary', 'xml/VideoOSD.xml'),
 )
+
+# FENtastic's OSD files use raw, unescaped "&" in RunPlugin URLs (Kodi's skin
+# parser tolerates it, strict XML does not), so a plain ET.fromstring would
+# reject them. Escape bare ampersands only for the well-formedness CHECK -- the
+# file we write keeps the original raw "&".
+_RAW_AMP = re.compile(r'&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[0-9A-Fa-f]+;)')
+
+
+def _xml_ok(content):
+    if ET is None:
+        return True
+    try:
+        ET.fromstring(_RAW_AMP.sub('&amp;', content))
+        return True
+    except Exception:
+        return False
 
 
 def _log(msg, level='INFO'):
@@ -77,13 +99,10 @@ def _patch_one(skin_id, rel):
 
     content = original.replace(OLD_CALL, NEW_CALL)
 
-    if ET is not None:
-        try:
-            ET.fromstring(content)
-        except Exception as e:
-            _log('{0}: patched XML would not parse -- skipping ({1})'.format(
-                skin_id, e), level='WARNING')
-            return 'parse_failed'
+    if not _xml_ok(content):
+        _log('{0}: patched XML would not parse -- skipping'.format(skin_id),
+             level='WARNING')
+        return 'parse_failed'
 
     try:
         tmp = path + '.tmp'

@@ -1,3 +1,18 @@
+v0.2.261
+- FENtastic: the "בחר כתוביות" rewire now covers ALL player styles, not just the
+  "advanced" one. The button also lives in the simple player (and the other
+  player layouts), and those were still pointing at the disabled DarkSubs -- they
+  now open the MoranSubs chooser too.
+- FENtastic: the "החלף מקור" pause now actually works. FENtastic's OSD files use
+  raw "&" in their plugin URLs, which made our XML safety-check reject the patch,
+  so the pause silently never applied; the check now tolerates it. The pause is
+  also injected into every change-source option in every player style (each is a
+  separate menu item), and carefully only once per click so it can never toggle
+  playback back on.
+- (Verified Arctic Fuse 3: it ships no DarkSubs button and no "החלף מקור" button
+  at all -- it uses its own native subtitle selector -- so neither change
+  applies there. Nothing to patch.)
+
 v0.2.260
 - NOX player: fixed the "החלף מקור" button overlapping the fast-forward/next
   control. The real cause was the NEW "בחר כתוביות" button we'd added: NOX's
