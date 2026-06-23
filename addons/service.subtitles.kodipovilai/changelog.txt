@@ -1,3 +1,11 @@
+v0.2.258
+- "בחר כתוביות" window is now colour-coded (like DarkSubs): the currently-
+  applied subtitle is floated to the top and marked "» נוכחית" in magenta, each
+  Hebrew row shows a green/amber/red match %, a very strong match gets a gold
+  star, and foreign rows are tagged by language.
+- Removed the "Test DarkSubs connection" button from MoranSubs settings -- it's
+  no longer relevant now that the built-in engine is the default.
+
 v0.2.257
 - Picking an AI translation (English/Spanish/German/... -> Hebrew) now CLOSES
   the dialog/window immediately and translates in the background, swapping the
