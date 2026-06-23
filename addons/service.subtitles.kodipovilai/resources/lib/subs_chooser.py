@@ -206,15 +206,50 @@ def show():
             self.placeControl(self.btn, 8, 1)
             self.connect(self.btn, self.close)
             self.connect(pyxbmct.ACTION_NAV_BACK, self.close)
-            self.lst.controlDown(self.dl)
-            self.lst.controlUp(self.dl)
+            # Up/Down CYCLE within the subtitle list (wrap-around): the list's
+            # own up/down navigation points back at itself so focus never leaves
+            # it on a plain move, and onAction() does the actual top<->bottom
+            # wrap. The action buttons are reached with Left/Right instead.
+            self.lst.controlUp(self.lst)
+            self.lst.controlDown(self.lst)
+            self.lst.controlLeft(self.dl)
+            self.lst.controlRight(self.btn)
             self.dl.controlUp(self.lst)
             self.dl.controlDown(self.lst)
             self.dl.controlRight(self.btn)
+            self.dl.controlLeft(self.lst)
             self.btn.controlUp(self.lst)
             self.btn.controlDown(self.lst)
             self.btn.controlLeft(self.dl)
+            self.btn.controlRight(self.lst)
+            self._last_pos = 0
             self.setFocus(self.lst)
+
+        def onAction(self, action):
+            """Wrap-around for the subtitle list: Down on the last row jumps to
+            the first, Up on the first row jumps to the last. Kodi runs the
+            window's default navigation BEFORE this callback, so by here the
+            selection has already settled; a row that was on a boundary and
+            stayed there (same position as last time) means the user tried to
+            step past the edge -- so we wrap. Falls through to pyxbmct for
+            everything else (e.g. Back -> close)."""
+            try:
+                aid = action.getId()
+                if (aid in (pyxbmct.ACTION_MOVE_DOWN, pyxbmct.ACTION_MOVE_UP)
+                        and self.getFocusId() == self.lst.getId()):
+                    n = self.lst.size()
+                    cur = self.lst.getSelectedPosition()
+                    if n > 1:
+                        if (aid == pyxbmct.ACTION_MOVE_DOWN
+                                and cur == n - 1 and self._last_pos == n - 1):
+                            self.lst.selectItem(0)
+                        elif (aid == pyxbmct.ACTION_MOVE_UP
+                              and cur == 0 and self._last_pos == 0):
+                            self.lst.selectItem(n - 1)
+                    self._last_pos = self.lst.getSelectedPosition()
+            except Exception:
+                pass
+            super(Chooser, self).onAction(action)
 
         def on_download(self):
             """Close the picker and open Kodi's native subtitle search/download
