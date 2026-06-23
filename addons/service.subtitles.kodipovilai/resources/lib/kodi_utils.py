@@ -182,6 +182,25 @@ def cache_dir():
     return p
 
 
+def safe_release_filename(release, fallback=''):
+    """Turn a subtitle release name into a safe filename STEM (no extension) for
+    a delivered .srt, so Kodi shows the real release instead of a hash. Strips a
+    trailing language/extension, replaces filesystem-unsafe characters, collapses
+    whitespace, and caps the length. Returns `fallback` when nothing usable
+    remains."""
+    import re
+    s = (release or '').strip()
+    # drop a trailing extension and a trailing .he/.heb language tag
+    s = re.sub(r'\.(srt|ssa|ass|sub|smi|vtt)$', '', s, flags=re.IGNORECASE)
+    s = re.sub(r'\.(he|heb|hebrew)$', '', s, flags=re.IGNORECASE)
+    # filesystem-unsafe characters -> nothing/space; keep dots/dashes/brackets
+    s = re.sub(r'[\\/:*?"<>|\r\n\t]+', ' ', s)
+    s = re.sub(r'\s{2,}', ' ', s).strip().strip('.')
+    if len(s) > 120:
+        s = s[:120].rstrip(' .-_')
+    return s or fallback
+
+
 def log(msg, level='INFO'):
     """Log to Kodi's log at the appropriate level. Honours the
     addon's log_level setting -- anything below that is suppressed."""
