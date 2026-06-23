@@ -2807,6 +2807,23 @@ def _engine_test_show(lines):
             pass
 
 
+def _handle_choose_subs(params):
+    """Open the MoranSubs subtitle-chooser window (the player's 'בחר כתוביות'
+    button). If the custom window can't open for any reason, fall back to Kodi's
+    native subtitle selector so the button is never a dead end."""
+    opened = False
+    try:
+        from resources.lib import subs_chooser
+        opened = subs_chooser.show()
+    except Exception as e:
+        _safe_log('choose_subs failed: {0}'.format(e), level='WARNING')
+    if not opened and xbmc is not None:
+        try:
+            xbmc.executebuiltin('ActivateWindow(osdsubtitlesettings)')
+        except Exception:
+            pass
+
+
 def main():
     if xbmc is None:
         _safe_log('default.py invoked outside Kodi -- nothing to do',
@@ -2870,6 +2887,8 @@ def main():
             _handle_logout_telegram(params)
         elif action == 'telegram_test':
             _handle_telegram_test(params)
+        elif action == 'choose_subs':
+            _handle_choose_subs(params)
         else:
             _safe_log('unknown action: ' + action, level='WARNING')
             if handle >= 0:
