@@ -1,3 +1,13 @@
+v0.2.259
+- "בחר כתוביות" window: the WHOLE row is now colour-coded (like DarkSubs) --
+  gold for a strong-match Hebrew sub, green for a decent match, cyan for the
+  rest, magenta for the currently-applied one, grey for foreign/AI sources.
+  (Before, only a tiny tag was coloured so it looked mostly white.)
+- NOX player: fixed the "החלף מקור" / "בחר כתוביות" buttons overlapping. The NOX
+  pack now ships the change-source button built in, but the self-healing patcher
+  didn't notice and added a SECOND copy, overcrowding the OSD. It now detects the
+  built-in button and removes its duplicate.
+
 v0.2.258
 - "בחר כתוביות" window is now colour-coded (like DarkSubs): the currently-
   applied subtitle is floated to the top and marked "» נוכחית" in magenta, each
