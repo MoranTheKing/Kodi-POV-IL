@@ -7,7 +7,10 @@ v0.2.253
   user to browse a title checks Ktuvit once and publishes the result to the
   community pool, so everyone else reads it back without ever hitting Ktuvit
   (~one check per title globally -- it never overloads the shared account). A
-  Ktuvit-only title now shows a % for everyone. (Can be turned off.)
+  Ktuvit-only title now shows a % for everyone. (Can be turned off.) Only HUMAN
+  Hebrew counts toward the % (an AI translation, which can be made for anything,
+  doesn't) -- and titles with no human Hebrew yet are re-checked every few hours,
+  so brand-new releases that get Hebrew within a day show up fast for everyone.
 - NEW: built-in Hebrew is now shared for everyone. When the add-on detects a
   source that ships an embedded Hebrew track, it flags that release in the
   community pool (automatically, no action needed), so on everyone else's source

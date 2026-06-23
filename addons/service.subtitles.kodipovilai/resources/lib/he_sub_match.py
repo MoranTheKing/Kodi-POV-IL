@@ -36,7 +36,11 @@ _TIMEOUT = 2.5
 _ENGINE_CACHE_FILE = (
     'special://profile/addon_data/service.subtitles.kodipovilai/'
     'he_avail_cache.json')
-_ENGINE_TTL = 7 * 24 * 3600.0   # 7 days; OpenSubtitles availability changes slowly
+_ENGINE_TTL = 7 * 24 * 3600.0   # 7 days; used once HUMAN Hebrew has been found
+# When NO human Hebrew exists yet (likely brand-new content), re-warm MUCH more
+# often so a sub that appears within hours shows up fast for everyone -- new
+# releases get human Hebrew within ~24h, and a 7-day cache would hide it.
+_AVAIL_TTL_NONE = 8 * 3600.0    # 8 hours
 _FIRED = {}            # media_key -> last warm-fire ts (throttle re-fires)
 _FIRE_RETRY = 120.0    # re-fire a warm at most once every 2 min per title
 
@@ -99,9 +103,14 @@ def _pool_lookup(p):
         raw = _req.urlopen(req, timeout=_TIMEOUT).read().decode('utf-8')
         data = json.loads(raw)
         if data.get('ok'):
+            # Only HUMAN Hebrew counts as "there's a translation" here -- an AI
+            # translation (kind='ai') can be generated for any source on demand,
+            # so it must NOT make us treat a title as already-having-Hebrew (that
+            # would stop us looking for real human subs on new content).
             out['names'] = [(_v.get('release') or '').strip()
                             for _v in (data.get('variants') or [])
-                            if (_v.get('release') or '').strip()]
+                            if (_v.get('release') or '').strip()
+                            and (_v.get('kind') or 'ai') != 'ai']
             out['embedded'] = [(_r or '').strip()
                                for _r in (data.get('embedded') or [])
                                if (_r or '').strip()]
@@ -173,7 +182,10 @@ def _cache_entry(key):
         ent = data.get(key)
         if not ent:
             return None
-        if (time.time() - float(ent.get('ts', 0))) > _ENGINE_TTL:
+        # Short TTL while no human Hebrew has been found yet (keep checking new
+        # content), long TTL once it has (human subs rarely change).
+        ttl = _ENGINE_TTL if (ent.get('names')) else _AVAIL_TTL_NONE
+        if (time.time() - float(ent.get('ts', 0))) > ttl:
             return None
         return ent
     except Exception:

@@ -2617,9 +2617,14 @@ def _handle_he_avail(params):
         except Exception:
             ktuvit_ok = True
         import time as _time
-        _KT_TTL = 14 * 24 * 3600.0   # re-check a title on Ktuvit at most ~biweekly
+        # Re-check Ktuvit OFTEN while it has found nothing yet (new content gets
+        # human subs within ~24h), but rarely once it has subs (they don't
+        # vanish). Still ~one Ktuvit call per title globally per window.
+        _KT_TTL_NONE = 8 * 3600.0        # 8 hours when registry is empty
+        _KT_TTL_FOUND = 30 * 24 * 3600.0  # 30 days once Ktuvit subs are known
         if ktuvit_ok:
-            fresh = kt_checked and (_time.time() - float(kt_checked)) < _KT_TTL
+            _kt_ttl = _KT_TTL_FOUND if kt_pool_names else _KT_TTL_NONE
+            fresh = kt_checked and (_time.time() - float(kt_checked)) < _kt_ttl
             if fresh:
                 _merge(names, seen, kt_pool_names)   # shared cache hit -- no call
             else:
