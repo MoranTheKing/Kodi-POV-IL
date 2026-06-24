@@ -1484,10 +1484,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         return None
     model = kodi_utils.get_setting('model', 'gemini-3.1-flash-lite') \
             or 'gemini-3.1-flash-lite'
-    temperature = kodi_utils.get_float('temperature', 0.2)
-    top_p = kodi_utils.get_float('top_p', 0.95)
-    thinking_raw = (kodi_utils.get_setting('thinking_budget', 'disabled')
-                    or 'disabled').strip().lower()
+    # Gemini 3 tuning (validated A/B): keep temperature at Google's recommended
+    # default 1.0 (lowering it degrades Gemini 3 reasoning), use thinking_level
+    # MEDIUM (HIGH burns the output budget -> truncation + garbling and is no
+    # more accurate; MEDIUM finishes clean, ~8x cheaper, best gender accuracy),
+    # and DON'T tune top_p on Gemini 3 (let the model default apply).
+    temperature = kodi_utils.get_float('temperature', 1.0)
+    top_p = (None if model.lower().startswith('gemini-3')
+             else kodi_utils.get_float('top_p', 0.95))
+    thinking_raw = (kodi_utils.get_setting('thinking_budget', 'medium')
+                    or 'medium').strip().lower()
     thinking_level = None
     thinking_budget = None
     if thinking_raw in ('minimal', 'low', 'medium', 'high'):
