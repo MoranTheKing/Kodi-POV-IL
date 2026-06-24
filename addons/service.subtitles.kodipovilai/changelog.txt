@@ -1,3 +1,14 @@
+v0.2.275
+- "בחר כתוביות" is now a brand-new, gorgeous custom window (Tal-inspired) that
+  looks the SAME on every skin (FENtastic / NOX / Estuary / Arctic Fuse 3): the
+  title's fanart + poster background, a clean two-line list with a language flag,
+  bold title line + dim release line, a colour-coded match % on the right, and a
+  smooth focus highlight. It's a self-contained window bundled in the add-on
+  (no per-skin dependency), so it no longer falls back to each skin's plain
+  download dialog. Picking AI still shows the source immediately and swaps Hebrew
+  in the background. Also fixed the NOX subtitle button still calling the old
+  All_Subs add-on.
+
 v0.2.274
 - "בחר כתוביות" now opens in the gorgeous redesigned subtitle window (on
   FENtastic, Tal's DialogSubtitles; every other skin uses its own native one),
