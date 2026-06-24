@@ -34,39 +34,86 @@ def _video_ref(info):
             or info.get('label') or info.get('title') or '')
 
 
-# Per-row category symbol (B): a leading glyph that tells the kind apart at a
-# glance. Chosen from the BMP set every Kodi skin font renders (★ ◆ ● ■ ·):
-#   ● current (applied now)   ■ built-in / embedded Hebrew (101%)
-#   ★ human Hebrew            ◆ AI Hebrew            · foreign source
-_LEGEND = ('[COLOR FFFFD700]★[/COLOR] אנושי   '
-           '[COLOR FF6FD3F0]◆[/COLOR] AI   '
-           '[COLOR FFFFD700]■[/COLOR] מובנה   '
-           '[COLOR FFFF00FE]●[/COLOR] נוכחית')
+# Real flag images (32x32, bundled in resources/media/flags) shown in the list's
+# icon column. Images never depend on the skin font, so they ALWAYS render -- the
+# old ★/◆/■ glyphs showed as empty boxes in some skins (e.g. FENtastic). The flag
+# tells the subtitle's language at a glance; foreign rows ALSO get a Hebrew
+# language tag in the text, so they're unmistakable even if an image is missing.
+_FLAG_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'media', 'flags')
+
+_LANG2FLAG = {
+    'he': 'he', 'iw': 'he', 'heb': 'he',
+    'en': 'en', 'eng': 'en',
+    'es': 'es', 'spa': 'es',
+    'de': 'de', 'ger': 'de', 'deu': 'de',
+    'fr': 'fr', 'fre': 'fr', 'fra': 'fr',
+    'pt': 'pt', 'por': 'pt', 'pb': 'pb', 'pob': 'pb',
+    'ru': 'ru', 'rus': 'ru',
+    'ar': 'ar', 'ara': 'ar',
+    'it': 'it', 'ita': 'it',
+    'nl': 'nl', 'dut': 'nl', 'nld': 'nl',
+    'pl': 'pl', 'pol': 'pl',
+    'tr': 'tr', 'tur': 'tr',
+    'zh': 'zh', 'chi': 'zh', 'zho': 'zh',
+    'ja': 'ja', 'jpn': 'ja',
+    'ko': 'ko', 'kor': 'ko',
+    'hi': 'hi', 'hin': 'hi',
+    'ro': 'ro', 'rum': 'ro', 'ron': 'ro',
+    'sv': 'sv', 'swe': 'sv',
+    'cs': 'cs', 'cze': 'cs', 'ces': 'cs',
+    'da': 'da', 'dan': 'da',
+    'fi': 'fi', 'fin': 'fi',
+    'no': 'no', 'nor': 'no',
+    'el': 'el', 'gre': 'el', 'ell': 'el',
+    'hu': 'hu', 'hun': 'hu',
+}
+_LANG_HE = {
+    'en': 'אנגלית', 'es': 'ספרדית', 'de': 'גרמנית', 'fr': 'צרפתית',
+    'pt': 'פורטוגזית', 'pb': 'פורטוגזית', 'ru': 'רוסית', 'ar': 'ערבית',
+    'it': 'איטלקית', 'nl': 'הולנדית', 'pl': 'פולנית', 'tr': 'טורקית',
+    'zh': 'סינית', 'ja': 'יפנית', 'ko': 'קוריאנית', 'hi': 'הינדית',
+    'ro': 'רומנית', 'sv': 'שוודית', 'cs': "צ'כית", 'da': 'דנית',
+    'fi': 'פינית', 'no': 'נורווגית', 'el': 'יוונית', 'hu': 'הונגרית',
+}
+
+
+def _norm_lang(lang):
+    l = (lang or '').strip().lower()
+    return _LANG2FLAG.get(l) or _LANG2FLAG.get(l[:2]) or ''
+
+
+def _flag_path(lang):
+    code = _norm_lang(lang) or 'unknown'
+    p = os.path.join(_FLAG_DIR, code + '.png')
+    if os.path.isfile(p):
+        return p
+    g = os.path.join(_FLAG_DIR, 'unknown.png')
+    return g if os.path.isfile(g) else ''
+
+
+# Legend: plain text + colours only (no glyphs that some skin fonts can't draw).
+_LEGEND = ('[COLOR FFB8D6E8]דגל = שפת הכתובית[/COLOR]   '
+           '[COLOR FFFFD700]זהב/ירוק = עברית מוכנה[/COLOR]   '
+           '[COLOR FFE0A040]כתום = שפה זרה (תתורגם)[/COLOR]')
 
 
 def _row_item(c, info, translate, xbmcgui):
-    """Build a styled list row (A+B): a leading category symbol + the kind/
-    release text on the left, and the match % on the right (label2), with the
-    whole row tinted by match quality. Mirrors DarkSubs's MySubs but richer:
-      * currently-applied sub  -> ● magenta (also floated to the top);
-      * built-in Hebrew        -> ■ gold (101%);
-      * human Hebrew           -> ★   AI Hebrew -> ◆   (gold>=80 / green>=50 /
-                                    cyan by match %);
-      * foreign / AI-from-X     -> · muted grey.
-    The % is the one list_candidates already computed; we just relocate it to
-    the right column so the left text stays short and readable."""
+    """Build a list row with a REAL flag icon (resources/media/flags) for the
+    subtitle's language -- images render on every skin, unlike the old box
+    glyphs. Foreign-language rows also get a Hebrew language tag in the text so
+    they're unmistakable. Match % goes to the right column; the row is tinted by
+    kind/quality (gold/green = ready Hebrew, orange = foreign-to-be-translated,
+    magenta = currently applied)."""
     import re as _re
     lang = (c.get('language') or '').strip()
     name = (c.get('filename') or '').strip()
     current = name.startswith('» נוכחית')
-
     payload = {}
     try:
         payload = translate._decode_link(c.get('link') or '') or {}
     except Exception:
         payload = {}
-    typ = payload.get('type')
-    embedded = bool(payload.get('embedded'))
 
     # match % already embedded in the label (list_candidates computed it).
     pct = None
@@ -77,44 +124,50 @@ def _row_item(c, info, translate, xbmcgui):
         except ValueError:
             pct = None
 
-    # Drop the "» נוכחית · " prefix from the visible text (we show ● instead),
-    # and pull the trailing "· NN%" out of the kind text into the right column.
+    # Drop the "» נוכחית · " prefix (magenta colour shows it instead) and pull the
+    # trailing "· NN%" out of the kind text into the right column.
     disp = name
     if current and '· ' in disp:
         disp = disp.split('· ', 1)[1]
     disp = _re.sub(r'\s*·\s*\d{1,3}%\s*(?=($|\s—))', ' ', disp).strip()
     disp = _re.sub(r'\s*·\s*\d{1,3}%\s*$', '', disp).strip()
 
-    if current:
-        sym, col = '●', 'FFFF00FE'                 # magenta -- applied now
-    elif embedded and lang == 'he':
-        sym, col = '■', 'FFFFD700'                 # built-in Hebrew (101%)
-    elif lang == 'he':
-        is_ai = typ in ('ai', 'engine_ai') or 'AI' in disp
-        sym = '◆' if is_ai else '★'
-        if pct is not None and pct >= 80:
-            col = 'FFFFD700'                        # gold -- strong / 101%
-        elif pct is not None and pct >= 50:
-            col = 'FF49C46A'                        # green
-        else:
-            col = 'FF6FD3F0'                        # cyan
-    elif lang:
-        sym, col = '·', 'FFB0B0B0'                  # foreign / AI source -- grey
-    else:
-        sym, col = ' ', 'FFFFFFFF'
+    code = _norm_lang(lang)
+    is_he = (code == 'he') or (lang.lower() in ('he', 'iw', 'heb'))
+    # Foreign (non-Hebrew) row -> prepend a clear Hebrew language tag.
+    he_name = _LANG_HE.get(code or lang[:2].lower())
+    if not is_he and he_name:
+        disp = '[{0}] {1}'.format(he_name, disp)
 
-    label = '[B][COLOR {0}]{1}  {2}[/COLOR][/B]'.format(col, sym, disp)
+    if current:
+        col = 'FFFF00FE'                    # magenta -- applied now
+    elif is_he:
+        if pct is not None and pct >= 80:
+            col = 'FFFFD700'                # gold -- strong match / 101%
+        elif pct is not None and pct >= 50:
+            col = 'FF49C46A'                # green
+        else:
+            col = 'FF8FE0B0'               # light green -- ready Hebrew
+    elif lang:
+        col = 'FFE0A040'                    # orange -- foreign (will translate)
+    else:
+        col = 'FFFFFFFF'
+
+    label = '[B][COLOR {0}]{1}[/COLOR][/B]'.format(col, disp)
     right = '{0}%'.format(pct) if pct is not None else ''
     label2 = ('[B][COLOR {0}]{1}[/COLOR][/B]'.format(col, right)
               if right else '')
+    flag = _flag_path('he' if is_he else lang)
     try:
         li = xbmcgui.ListItem(label)
         if label2:
             li.setLabel2(label2)
+        if flag:
+            li.setArt({'icon': flag, 'thumb': flag})
         return li
     except Exception:
         # Fall back to a plain coloured string row if ListItem isn't available.
-        return '[B][COLOR {0}]{1}  {2}[/COLOR][/B]'.format(col, sym, disp)
+        return '[B][COLOR {0}]{1}[/COLOR][/B]'.format(col, disp)
 
 
 def _start_ai_apply(link, info):
@@ -245,11 +298,11 @@ def show():
             htxt += '[CR][COLOR FF9AA0A6]{0}[/COLOR]'.format(_LEGEND)
             self.header = pyxbmct.Label(htxt)
             self.placeControl(self.header, 0, 0, rowspan=2, columnspan=2)
-            # Taller rows for readability (A); no icon column reserved. label2
-            # carries the match % on the right (B).
-            self.lst = pyxbmct.List(font='font13', _itemHeight=40, _space=2,
-                                    _imageWidth=0, _imageHeight=0,
-                                    _itemTextXOffset=14)
+            # Taller rows with a flag icon column on the left (the subtitle's
+            # language) + the match % on the right (label2).
+            self.lst = pyxbmct.List(font='font13', _itemHeight=44, _space=2,
+                                    _imageWidth=36, _imageHeight=36,
+                                    _itemTextXOffset=12)
             self.placeControl(self.lst, 2, 0, rowspan=6, columnspan=2)
             self.lst.addItems(
                 [_row_item(c, info, translate, xbmcgui) for c in self.items])
