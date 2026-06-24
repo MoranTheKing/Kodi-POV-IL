@@ -1,3 +1,12 @@
+v0.2.271
+- FENtastic player fixes (all player styles): (1) the movie/series info panel
+  shown on pause no longer stays on top of the "בחר כתוביות" chooser or any other
+  dialog -- it now hides whenever a dialog is open and returns when you close it;
+  (2) the player OSD (top/bottom bars) now auto-hides after ~4 seconds of no
+  interaction (FENtastic's built-in OSD auto-close, enabled once via a marker-
+  gated migration when FENtastic is the active skin; a later manual change in the
+  skin settings sticks). The pause-info panel fix is in the skin window itself.
+
 v0.2.270
 - "בחר כתוביות": restored the Hebrew match % on every row (it had moved to the
   list's right column, which pyxbmct doesn't render, so it vanished on device).
