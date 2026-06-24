@@ -1,3 +1,10 @@
+v0.2.272
+- Fix (FENtastic, all player styles): the pause info panel still covered the
+  "בחר כתוביות" chooser. Kodi doesn't report a script window via
+  System.HasActiveModalDialog, so that guard never fired. The chooser now sets a
+  shared window property while it's open and the skin's pause panel hides on that
+  property -- reliable. The panel returns the moment you close the chooser.
+
 v0.2.271
 - FENtastic player fixes (all player styles): (1) the movie/series info panel
   shown on pause no longer stays on top of the "בחר כתוביות" chooser or any other
