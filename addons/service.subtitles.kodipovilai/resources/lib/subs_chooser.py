@@ -441,7 +441,15 @@ def show():
                 _log('on_pick failed: {0}'.format(e), level='WARNING')
                 self._set_head('[B][COLOR red]שגיאה[/COLOR][/B]')
 
+    # Flag that the chooser is open on a shared window property, so the skin can
+    # hide overlays (e.g. FENtastic's pause-info panel) while it's up. Kodi does
+    # NOT report a pyxbmct script window via System.HasActiveModalDialog, so a
+    # property is the reliable signal. Always cleared in finally.
     try:
+        try:
+            xbmcgui.Window(10000).setProperty('MoranSubsChooserOpen', '1')
+        except Exception:
+            pass
         w = Chooser()
         w.doModal()
         del w
@@ -449,3 +457,8 @@ def show():
     except Exception as e:
         _log('window failed: {0}'.format(e), level='WARNING')
         return False
+    finally:
+        try:
+            xbmcgui.Window(10000).clearProperty('MoranSubsChooserOpen')
+        except Exception:
+            pass
