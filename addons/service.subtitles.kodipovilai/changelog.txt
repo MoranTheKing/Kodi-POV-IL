@@ -1,3 +1,10 @@
+v0.2.277
+- Subtitle chooser v2 (non-FENtastic skins): the custom window is now FULL-SCREEN
+  and far more polished -- Tal-inspired fanart background, poster + plot, a wide
+  two-line results list with language flags and a colour-coded match %, and a
+  smooth focus highlight. Fixed per-row colours not rendering (now baked into the
+  labels). FENtastic still uses Tal's own native window.
+
 v0.2.276
 - "בחר כתוביות" is now skin-aware: on FENtastic it opens Tal's own native
   subtitle window (kept exactly as he designed it); on every other skin (NOX /
