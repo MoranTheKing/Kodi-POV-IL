@@ -1,3 +1,29 @@
+v0.2.279
+- Telemetry: each AI translation now also reports its duration. The owner
+  dashboard adds an "avg translation time" card and a "daily (last 14 days)" bar
+  graph (green = used the Arabic path). Requires re-deploying the pool Worker.
+
+v0.2.278
+- Telemetry v2 (owner dashboard): each AI translation now reports WHY it used the
+  method it did -- for fallbacks, whether the Arabic option was off, no Arabic
+  subtitle was found, or the Arabic didn't time-align (with the scale/vote/overlap
+  detail). The dashboard adds a "why fallbacks happened" breakdown, per-source-
+  language and per-version breakdowns, a failures list, and clarifies the success
+  metric. (Requires re-deploying the pool Worker.)
+
+v0.2.277
+- Subtitle chooser v2 (non-FENtastic skins): the custom window is now FULL-SCREEN
+  and far more polished -- Tal-inspired fanart background, poster + plot, a wide
+  two-line results list with language flags and a colour-coded match %, and a
+  smooth focus highlight. Fixed per-row colours not rendering (now baked into the
+  labels). FENtastic still uses Tal's own native window.
+
+v0.2.276
+- "בחר כתוביות" is now skin-aware: on FENtastic it opens Tal's own native
+  subtitle window (kept exactly as he designed it); on every other skin (NOX /
+  Estuary / Arctic Fuse 3) it opens our new custom window with the same gorgeous
+  look. Best of both -- Tal's real design where it exists, ours everywhere else.
+
 v0.2.275
 - "בחר כתוביות" is now a brand-new, gorgeous custom window (Tal-inspired) that
   looks the SAME on every skin (FENtastic / NOX / Estuary / Arctic Fuse 3): the
