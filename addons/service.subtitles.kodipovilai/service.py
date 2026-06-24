@@ -2698,6 +2698,43 @@ def _maybe_force_gender_ref_arabic():
             pass
 
 
+def _maybe_tune_gemini3_defaults():
+    """One-shot: move existing users to the validated Gemini 3 translation
+    settings -- temperature 1.0 (Google's recommended default; 0.2 was our old
+    default and degrades Gemini 3 reasoning) and thinking_level MEDIUM (the old
+    'disabled'/0 left it at the expensive HIGH default, which truncates and
+    garbles long chunks). Only flips values still on the OLD defaults, so a user
+    who deliberately picked something else keeps it. Marker-gated -> fires once;
+    a later manual change sticks."""
+    try:
+        from resources.lib import kodi_utils
+    except Exception:
+        return
+    try:
+        if kodi_utils.get_setting('_gemini3_tune_v1', '') == '1':
+            return
+        # temperature: bump 0.2 (old default) -> 1.0; leave any other choice.
+        try:
+            t = float(kodi_utils.get_setting('temperature', '') or '0.2')
+        except (TypeError, ValueError):
+            t = 0.2
+        if abs(t - 0.2) < 0.005:
+            kodi_utils.set_setting('temperature', '1.0')
+        # thinking: '' / '0' / 'disabled' (old default -> HIGH) -> 'medium'.
+        th = (kodi_utils.get_setting('thinking_budget', '') or '0').strip().lower()
+        if th in ('', '0', 'disabled'):
+            kodi_utils.set_setting('thinking_budget', 'medium')
+        kodi_utils.set_setting('_gemini3_tune_v1', '1')
+        kodi_utils.log('Gemini 3 defaults tuned (temp 1.0 + thinking medium, '
+                       'migration v1)', level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log('gemini3 tune migration failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_default_remember_source():
     """Turn "remember picked source" (the source that floats to the top of the
     list, marked "« נצפה לאחרונה »") ON for everyone.
@@ -3442,6 +3479,11 @@ def main():
     # tested clean and lifts gender accuracy a lot). Forced once; a later manual
     # opt-out sticks. Marker-gated.
     _maybe_force_gender_ref_arabic()
+
+    # One-shot: move existing users to the validated Gemini 3 translation
+    # settings (temperature 1.0 + thinking medium). Marker-gated; respects a
+    # deliberate manual choice.
+    _maybe_tune_gemini3_defaults()
 
     # One-shot: enable POV Auto Play + Always-Resume so "Continue Watching" is
     # one click (no source dialog, resumes where you stopped). Marker-gated.
