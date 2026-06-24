@@ -124,13 +124,13 @@ def _row_item(c, info, translate, xbmcgui):
         except ValueError:
             pct = None
 
-    # Drop the "» נוכחית · " prefix (magenta colour shows it instead) and pull the
-    # trailing "· NN%" out of the kind text into the right column.
+    # Keep the FULL label text INCLUDING its inline match % -- do NOT move the %
+    # to label2: pyxbmct's ControlList doesn't reliably render label2, which made
+    # the % disappear on device. Only drop the "» נוכחית ·" prefix (the magenta
+    # colour already marks the current sub).
     disp = name
     if current and '· ' in disp:
         disp = disp.split('· ', 1)[1]
-    disp = _re.sub(r'\s*·\s*\d{1,3}%\s*(?=($|\s—))', ' ', disp).strip()
-    disp = _re.sub(r'\s*·\s*\d{1,3}%\s*$', '', disp).strip()
 
     code = _norm_lang(lang)
     is_he = (code == 'he') or (lang.lower() in ('he', 'iw', 'heb'))
@@ -145,29 +145,26 @@ def _row_item(c, info, translate, xbmcgui):
         if pct is not None and pct >= 80:
             col = 'FFFFD700'                # gold -- strong match / 101%
         elif pct is not None and pct >= 50:
-            col = 'FF49C46A'                # green
+            col = 'FF7BE38C'                # green
         else:
-            col = 'FF8FE0B0'               # light green -- ready Hebrew
+            col = 'FFBFE9CF'               # pale green -- ready Hebrew
     elif lang:
-        col = 'FFE0A040'                    # orange -- foreign (will translate)
+        col = 'FFF0A93A'                    # amber -- foreign (will translate)
     else:
         col = 'FFFFFFFF'
 
+    # Make the match % pop: bright white, inside the row's colour.
+    disp = _re.sub(r'(\d{1,3}%)', '[COLOR FFFFFFFF]\\1[/COLOR]', disp)
     label = '[B][COLOR {0}]{1}[/COLOR][/B]'.format(col, disp)
-    right = '{0}%'.format(pct) if pct is not None else ''
-    label2 = ('[B][COLOR {0}]{1}[/COLOR][/B]'.format(col, right)
-              if right else '')
     flag = _flag_path('he' if is_he else lang)
     try:
         li = xbmcgui.ListItem(label)
-        if label2:
-            li.setLabel2(label2)
         if flag:
             li.setArt({'icon': flag, 'thumb': flag})
         return li
     except Exception:
         # Fall back to a plain coloured string row if ListItem isn't available.
-        return '[B][COLOR {0}]{1}[/COLOR][/B]'.format(col, disp)
+        return label
 
 
 def _start_ai_apply(link, info):
@@ -299,7 +296,7 @@ def show():
             self.header = pyxbmct.Label(htxt)
             self.placeControl(self.header, 0, 0, rowspan=2, columnspan=2)
             # Taller rows with a flag icon column on the left (the subtitle's
-            # language) + the match % on the right (label2).
+            # language); the match % stays inline in the row text (bright white).
             self.lst = pyxbmct.List(font='font13', _itemHeight=44, _space=2,
                                     _imageWidth=36, _imageHeight=36,
                                     _itemTextXOffset=12)
