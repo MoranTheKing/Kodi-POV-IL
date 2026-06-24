@@ -679,6 +679,10 @@ def include_standalone(rel: Path) -> bool:
         return True
     if len(parts) >= 2 and parts[1] == "language":
         return True
+    if len(parts) >= 2 and parts[1] == "media":
+        # Bundled UI assets (e.g. the subtitle-chooser flag icons) -- skin-
+        # independent so the chooser looks right on the repo-channel add-on too.
+        return True
     if len(parts) >= 2 and parts[1] == "patches":
         return parts[2:3] == ("darksubs",)
     if len(parts) >= 3 and parts[1] == "lib":
