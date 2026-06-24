@@ -1,3 +1,9 @@
+v0.2.276
+- "בחר כתוביות" is now skin-aware: on FENtastic it opens Tal's own native
+  subtitle window (kept exactly as he designed it); on every other skin (NOX /
+  Estuary / Arctic Fuse 3) it opens our new custom window with the same gorgeous
+  look. Best of both -- Tal's real design where it exists, ours everywhere else.
+
 v0.2.275
 - "בחר כתוביות" is now a brand-new, gorgeous custom window (Tal-inspired) that
   looks the SAME on every skin (FENtastic / NOX / Estuary / Arctic Fuse 3): the
