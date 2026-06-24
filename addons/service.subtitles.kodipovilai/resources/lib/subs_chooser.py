@@ -603,12 +603,20 @@ def show():
                     for c in self.items:
                         label, label2, pct, col, flag = _classify(
                             c, self.info, self.translate)
-                        li = xbmcgui.ListItem(label)
-                        li.setLabel2(label2)
+                        # Bake colours into the label text (BBCode): per-row
+                        # <textcolor>$INFO[...]</textcolor> is unreliable in Kodi,
+                        # so the row colour lives in the label string itself.
+                        li = xbmcgui.ListItem(
+                            '[B][COLOR {0}]{1}[/COLOR][/B]'.format(col, label))
+                        li.setLabel2(
+                            '[COLOR FF9AA0A6]{0}[/COLOR]'.format(label2)
+                            if label2 else '')
                         if flag:
                             li.setArt({'thumb': flag})
-                        li.setProperty('pct', pct)
-                        li.setProperty('col', col)
+                        li.setProperty(
+                            'pct',
+                            '[B][COLOR {0}]{1}[/COLOR][/B]'.format(col, pct)
+                            if pct else '')
                         rows.append(li)
                     lst.addItems(rows)
                     try:

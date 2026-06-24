@@ -2876,10 +2876,29 @@ def _engine_test_show(lines):
 
 
 def _handle_choose_subs(params):
-    """Open the rich MoranSubs chooser -- a self-contained WindowXMLDialog that
-    renders the same gorgeous design on EVERY skin (FENtastic / NOX / Estuary /
-    Arctic Fuse 3). Falls back inside subs_chooser to the pyxbmct chooser, then
-    to Kodi's native subtitle window, so the button is never a dead end."""
+    """Open the subtitle chooser for the player's 'בחר כתוביות' button.
+
+    On FENtastic we open Kodi's NATIVE subtitle window -- that's Tal's own
+    redesigned DialogSubtitles, the real thing, so it stays exactly as he made
+    it. On every OTHER skin (NOX / Estuary / Arctic Fuse 3 / ...) the native
+    dialog is plain, so we open our self-contained WindowXMLDialog instead, which
+    brings the same gorgeous look everywhere. Both flows use the same candidate
+    list + background AI translation. Guarded fallbacks at each step."""
+    skin = ''
+    if xbmc is not None:
+        try:
+            skin = (xbmc.getSkinDir() or '').strip()
+        except Exception:
+            skin = ''
+    # FENtastic -> Tal's native window (unchanged).
+    if skin == 'skin.fentastic' and xbmc is not None:
+        try:
+            xbmc.executebuiltin('ActivateWindow(SubtitleSearch)')
+            return
+        except Exception as e:
+            _safe_log('open SubtitleSearch failed: {0}'.format(e),
+                      level='WARNING')
+    # Other skins -> our rich custom window.
     opened = False
     try:
         from resources.lib import subs_chooser
