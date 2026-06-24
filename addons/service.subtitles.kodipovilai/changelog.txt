@@ -1,3 +1,11 @@
+v0.2.270
+- "בחר כתוביות": restored the Hebrew match % on every row (it had moved to the
+  list's right column, which pyxbmct doesn't render, so it vanished on device).
+  The % is back inline and highlighted in bright white so it stands out. Also
+  refined the colour palette (gold/green = ready Hebrew by match strength, amber
+  = foreign-to-be-translated, magenta = currently applied) alongside the flag
+  icons. Same on every skin (FENtastic, Estuary, NOX).
+
 v0.2.269
 - "בחר כתוביות" chooser, much clearer: each row now shows a real FLAG icon for
   the subtitle's language (bundled images that render on every skin), instead of
