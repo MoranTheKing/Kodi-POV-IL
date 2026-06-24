@@ -1640,13 +1640,21 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # schedule -- they're usually content / parse / safety issues,
     # not infrastructure.
     GENERIC_BACKOFF = [2, 5]
-    # Prompt-level blocks (PROHIBITED_CONTENT) are often FLAKY -- the SAME prompt
-    # frequently succeeds on a retry (observed: a chunk that blocked translated
-    # fine moments later). So retry the SAME prompt up to 10 times BEFORE degrading
-    # (dropping the Arabic block), to preserve the Arabic gender quality. Only if
-    # all 10 attempts block do we fall back. Waits stay modest (flaky != rate
-    # limit) but average >4s so we never exceed the free 15 req/min limit.
-    FILTERED_BACKOFF = [2, 3, 4, 5, 6, 8, 10, 12, 15, 20]
+    # Prompt-level blocks (PROHIBITED_CONTENT) come in two flavours, confirmed by
+    # live A/B testing against the API:
+    #   * FLAKY (borderline content volume) -- the SAME prompt succeeds on a
+    #     retry. A few same-prompt retries catch these.
+    #   * PERSISTENT (high explicit-content volume in one request) -- the SAME
+    #     prompt blocks deterministically every time (measured 5-6/6 and 10/10).
+    #     Retrying the identical prompt is pure waste here.
+    # The block is driven by the absolute VOLUME of explicit content per request,
+    # and a text disclaimer does NOT help (tested: generic/specific, system-
+    # Instruction/contents -- all blocked). What actually escapes it is reducing
+    # volume: dropping the Arabic block (halves it) and bisecting (isolates the
+    # explicit cluster). So we retry the same prompt only a FEW times to catch the
+    # flaky case, then degrade FAST to the real fix instead of stalling ~70s on a
+    # persistent block. Waits average >4s to respect the free 15 req/min limit.
+    FILTERED_BACKOFF = [3, 5, 8]
 
     # Per-chunk translator. Holds the inner retry loop. Returns the
     # raw Gemini response text, or raises a Stop-style exception
