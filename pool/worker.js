@@ -744,6 +744,99 @@ $('submitBtn').addEventListener('click',function(){
 syncEpRow();
 </script></body></html>`;
 
+// ---- Usage telemetry (D1) ---------------------------------------------------
+// Anonymous AI-translation events. The table is auto-created on first use. The
+// dashboard counts only add-on versions >= the one that shipped the Arabic
+// option default-ON; telemetry itself only exists from a later version, so the
+// filter is always satisfied (kept explicit + future-proof).
+const TELE_MIN_VER = '0.2.267';
+function _ts(x) { return x === undefined || x === null ? '' : String(x); }
+function _esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function _pct(n, d) { return d ? Math.round((n * 1000) / d) / 10 : 0; }
+
+async function ensureTeleSchema(env) {
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS tr_events (
+       id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER, anon TEXT, v TEXT,
+       type TEXT, title TEXT, season TEXT, episode TEXT, year TEXT, src TEXT,
+       method TEXT, ok INTEGER, note TEXT, hinted INTEGER, model TEXT, think TEXT)`
+  ).run();
+}
+
+async function recordEvent(env, body, ts) {
+  if (!env.DB) return json({ ok: true, stored: false }); // D1 not bound yet
+  const b = body || {};
+  try {
+    await ensureTeleSchema(env);
+    await env.DB.prepare(
+      `INSERT INTO tr_events (ts,anon,v,type,title,season,episode,year,src,method,ok,note,hinted,model,think)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    ).bind(
+      ts, _ts(b.anon).slice(0, 40), _ts(b.v).slice(0, 16), _ts(b.type).slice(0, 12),
+      _ts(b.title).slice(0, 160), _ts(b.season).slice(0, 8), _ts(b.episode).slice(0, 8),
+      _ts(b.year).slice(0, 8), _ts(b.src).slice(0, 8), _ts(b.method).slice(0, 16),
+      b.ok ? 1 : 0, _ts(b.note).slice(0, 48), Number(b.hinted) || 0,
+      _ts(b.model).slice(0, 40), _ts(b.think).slice(0, 16)
+    ).run();
+  } catch (e) { return json({ ok: false, error: String(e).slice(0, 160) }); }
+  return json({ ok: true, stored: true });
+}
+
+async function renderStats(env) {
+  if (!env.DB) return new Response('D1 not bound. Create a D1 DB and bind it as "DB".', { status: 500 });
+  await ensureTeleSchema(env);
+  const W = `WHERE v >= '${TELE_MIN_VER}'`;
+  const q = async (sql) => ((await env.DB.prepare(sql).all()).results || []);
+  const tot = (await q(`SELECT COUNT(*) n, COALESCE(SUM(ok),0) oks, COUNT(DISTINCT anon) users FROM tr_events ${W}`))[0] || { n: 0, oks: 0, users: 0 };
+  const bm = await q(`SELECT method, COUNT(*) n, COALESCE(SUM(ok),0) oks FROM tr_events ${W} GROUP BY method`);
+  const d1 = (await q(`SELECT COUNT(*) n FROM tr_events ${W} AND ts >= strftime('%s','now')-86400`))[0] || { n: 0 };
+  const top = await q(`SELECT title, type, COUNT(*) n, COALESCE(SUM(method='ai_ar'),0) ar, COALESCE(SUM(method='ai_fallback'),0) fb, COALESCE(SUM(method='ai_plain'),0) pl FROM tr_events ${W} GROUP BY title ORDER BY n DESC LIMIT 30`);
+  const rec = await q(`SELECT ts,title,type,season,episode,src,method,ok,v FROM tr_events ${W} ORDER BY ts DESC LIMIT 60`);
+  const m = { ai_ar: 0, ai_fallback: 0, ai_plain: 0 };
+  bm.forEach(r => { m[r.method] = r.n; });
+  const T = tot.n || 0;
+  const newPct = _pct(m.ai_ar, T), fbPct = _pct(m.ai_fallback, T), plPct = _pct(m.ai_plain, T);
+  const okPct = _pct(tot.oks, T);
+  const bar = (label, n, p, col) => `<div class="row"><span class="lbl">${label}</span><div class="track"><div class="fill" style="width:${p}%;background:${col}"></div></div><span class="val">${n} · ${p}%</span></div>`;
+  const ep = (r) => r.type === 'episode' ? ` S${String(r.season).padStart(2, '0')}E${String(r.episode).padStart(2, '0')}` : '';
+  const fmtT = (s) => new Date(s * 1000).toISOString().replace('T', ' ').slice(0, 16);
+  const mColor = { ai_ar: '#46c46a', ai_fallback: '#e0a93a', ai_plain: '#6fb6e0' };
+  const recRows = rec.map(r => `<tr><td>${fmtT(r.ts)}</td><td>${_esc(r.title)}${ep(r)}</td><td>${_esc(r.src)}</td><td style="color:${mColor[r.method] || '#aaa'}">${_esc(r.method)}</td><td>${r.ok ? '✓' : '✗'}</td><td>${_esc(r.v)}</td></tr>`).join('');
+  const topRows = top.map(r => `<tr><td>${_esc(r.title)}</td><td>${r.n}</td><td style="color:#46c46a">${r.ar}</td><td style="color:#e0a93a">${r.fb}</td><td style="color:#6fb6e0">${r.pl}</td></tr>`).join('');
+  const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MoranSubs — Stats</title><style>
+body{background:#0e1116;color:#e6edf3;font:14px/1.5 system-ui,Segoe UI,Arial;margin:0;padding:18px}
+h1{font-size:18px;margin:0 0 4px}h2{font-size:14px;color:#9aa4b2;margin:22px 0 8px;text-transform:uppercase;letter-spacing:.5px}
+.cards{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
+.card{background:#161b22;border:1px solid #232a33;border-radius:10px;padding:12px 16px;min-width:120px}
+.card .big{font-size:26px;font-weight:700}.card .sub{color:#9aa4b2;font-size:12px}
+.headline{font-size:30px;font-weight:800;color:#46c46a}
+.row{display:flex;align-items:center;gap:10px;margin:6px 0}.lbl{width:120px}.val{width:110px;text-align:right;color:#9aa4b2}
+.track{flex:1;background:#232a33;border-radius:6px;height:14px;overflow:hidden}.fill{height:100%}
+table{width:100%;border-collapse:collapse;margin-top:6px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #232a33;font-size:13px}
+th{color:#9aa4b2;font-weight:600}small{color:#9aa4b2}
+</style>
+<h1>MoranSubs — Translation Stats</h1>
+<small>add-on ≥ ${TELE_MIN_VER} · auto-refresh 30s</small>
+<div class="cards">
+<div class="card"><div class="big">${T}</div><div class="sub">AI translations</div></div>
+<div class="card"><div class="big">${tot.users}</div><div class="sub">unique users</div></div>
+<div class="card"><div class="big">${okPct}%</div><div class="sub">success rate</div></div>
+<div class="card"><div class="big">${d1.n}</div><div class="sub">last 24h</div></div>
+</div>
+<h2>New Arabic path vs old</h2>
+<div class="headline">${newPct}% new (Arabic)</div>
+${bar('🆕 ai_ar (new)', m.ai_ar, newPct, '#46c46a')}
+${bar('↩︎ ai_fallback', m.ai_fallback, fbPct, '#e0a93a')}
+${bar('▫︎ ai_plain (off)', m.ai_plain, plPct, '#6fb6e0')}
+<h2>Top titles</h2>
+<table><tr><th>Title</th><th>Total</th><th>ai_ar</th><th>fallback</th><th>plain</th></tr>${topRows}</table>
+<h2>Recent</h2>
+<table><tr><th>Time (UTC)</th><th>Title</th><th>Src</th><th>Method</th><th>OK</th><th>Ver</th></tr>${recRows}</table>
+<script>setTimeout(function(){location.reload()},30000)</script>`;
+  return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -840,6 +933,22 @@ export default {
         srt: srt,
       };
       return await contributeCore(env, body);
+    }
+
+    // Anonymous usage telemetry from the add-on (one event per AI translation).
+    if (path === '/ev' && request.method === 'POST') {
+      if (request.headers.get('x-api-key') !== env.API_KEY)
+        return json({ ok: false, error: 'unauthorized' }, 401);
+      let body;
+      try { body = await request.json(); } catch { return json({ ok: false, error: 'bad json' }, 400); }
+      return await recordEvent(env, body, Math.floor(Date.now() / 1000));
+    }
+
+    // Owner-only stats dashboard: /stats?key=<STATS_TOKEN>
+    if (path === '/stats' && request.method === 'GET') {
+      if (!env.STATS_TOKEN || url.searchParams.get('key') !== env.STATS_TOKEN)
+        return new Response('unauthorized', { status: 401 });
+      return await renderStats(env);
     }
 
     return new Response('Kodi POV IL — AI subtitle pool', { status: 200 });
