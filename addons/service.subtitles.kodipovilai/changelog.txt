@@ -1,3 +1,11 @@
+v0.2.274
+- "בחר כתוביות" now opens in the gorgeous redesigned subtitle window (on
+  FENtastic, Tal's DialogSubtitles; every other skin uses its own native one),
+  instead of the basic pyxbmct list. It shows the same candidates -- language
+  flag, name + match %, and now a meaningful star rating derived from the match %
+  (101%/100% = 5 stars, 60% = 3...). Picking an AI-translate option still shows
+  the source immediately and swaps in the Hebrew in the background (non-blocking).
+
 v0.2.273
 - Internal: anonymous usage telemetry for AI translations (owner-only). Each
   translation reports, best-effort and fully guarded, which method was used --
