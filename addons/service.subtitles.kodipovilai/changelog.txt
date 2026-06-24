@@ -1,3 +1,23 @@
+v0.2.266
+- NEW (opt-in, OFF by default): "Improve gender accuracy using an Arabic
+  reference". Turn it on in MoranSubs settings. When on, an AI translation also
+  fetches a human Arabic subtitle for the same title (OpenSubtitles / SubSource
+  / YIFY), time-aligns it, and uses it ONLY as a per-line gender oracle -- Arabic
+  marks he/she + verb/adjective gender almost 1:1 with Hebrew, which English
+  can't. In our tests this lifted gender accuracy from ~27% (cast-only) to ~90%+
+  with no loss of general translation quality (a strict "use Arabic for gender
+  only, translate the English" rule keeps wording faithful). Works for ANY source
+  language (English/Spanish/German/Russian/...).
+- It's robust: tries several Arabic subs, each must pass a strict time-alignment
+  confidence check (handles different releases / frame-rates / SDH); if none
+  align, it silently falls back to the normal translation. Logs each step so you
+  can confirm it ran. Sound-effect/music lines are filtered (no gender there).
+- Re-translation + upgrade with NO duplicates: clicking an English sub that only
+  has an older (non-Arabic) Hebrew translation re-translates it with the Arabic
+  reference and shares the upgraded version to the pool (preferred for everyone);
+  if the upgraded version already exists it's pulled straight from the pool/cache
+  -- never re-translated, never duplicated.
+
 v0.2.265
 - AI translations now keep the SOURCE subtitle's real release name. The
   delivered Hebrew file is named after the full release (e.g. "Movie.2010.1080p.
