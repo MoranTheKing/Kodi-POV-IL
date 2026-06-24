@@ -1172,6 +1172,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     _tier = 'ar' if _ar_on else ''
     _pool_kind = 'ai_ar' if _ar_on else 'ai'
     _ar_map = None  # {srt_entry_number: arabic_line}, set just before chunking
+    _ar_diag = {}   # arabic_gender.prepare diagnostics (reason/cands/diag)
 
     def _pool_key(base_hash):
         # ai_ar variants live under "<hash>_ar" so EVERY client can prefer them
@@ -1548,11 +1549,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                            (info.get('title') or imdb_id or '?')), level='INFO')
         try:
             from . import arabic_gender
-            _ar_map = arabic_gender.prepare(info, src_text)
+            _ar_map, _ar_diag = arabic_gender.prepare(info, src_text)
         except Exception as e:
             kodi_utils.log('arabic-gender prepare crashed: {0}'.format(e),
                            level='WARNING')
             _ar_map = None
+            _ar_diag = {'reason': 'crash'}
 
     # If the feature is on but NO usable Arabic was found, this becomes a normal
     # translation -- store it as PLAIN (never masquerade a non-boosted result as
@@ -1591,6 +1593,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             from . import telemetry
             method = ('ai_ar' if (_ar_on and _used_ar)
                       else ('ai_fallback' if _ar_on else 'ai_plain'))
+            # reason: WHY it ended up on this method (esp. fallback). For
+            # ai_plain the option is off; otherwise take arabic_gender's reason
+            # (ok / no_arabic / no_align / crash). The alignment diag (scale/
+            # vote/overlap) for a near-miss goes in 'note'.
+            if method == 'ai_plain':
+                reason = 'option_off'
+            else:
+                reason = str(_ar_diag.get('reason') or '')
+            ev_note = note or ('' if reason in ('ok', '') else _ar_diag.get('diag', ''))
             telemetry.report({
                 'type': 'episode' if info.get('is_episode') else 'movie',
                 'title': (info.get('tvshow') or info.get('title') or '')[:120],
@@ -1599,8 +1610,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 'year': str(info.get('year') or ''),
                 'src': source_lang or '',
                 'method': method,
+                'reason': reason,
+                'ar_cands': int(_ar_diag.get('cands') or 0),
                 'ok': 1 if ok else 0,
-                'note': str(note or '')[:40],
+                'note': str(ev_note or '')[:80],
                 'hinted': len(_ar_map or {}),
                 'model': model,
                 'think': str(thinking_level or thinking_budget or ''),

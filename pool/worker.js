@@ -759,8 +759,14 @@ async function ensureTeleSchema(env) {
     `CREATE TABLE IF NOT EXISTS tr_events (
        id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER, anon TEXT, v TEXT,
        type TEXT, title TEXT, season TEXT, episode TEXT, year TEXT, src TEXT,
-       method TEXT, ok INTEGER, note TEXT, hinted INTEGER, model TEXT, think TEXT)`
+       method TEXT, ok INTEGER, note TEXT, hinted INTEGER, model TEXT, think TEXT,
+       reason TEXT, ar_cands INTEGER)`
   ).run();
+  // Add the newer columns to a pre-existing table (D1 has no ADD COLUMN IF NOT
+  // EXISTS, so ignore the "duplicate column" error).
+  for (const col of ['reason TEXT', 'ar_cands INTEGER']) {
+    try { await env.DB.prepare(`ALTER TABLE tr_events ADD COLUMN ${col}`).run(); } catch (e) { /* exists */ }
+  }
 }
 
 async function recordEvent(env, body, ts) {
@@ -769,14 +775,15 @@ async function recordEvent(env, body, ts) {
   try {
     await ensureTeleSchema(env);
     await env.DB.prepare(
-      `INSERT INTO tr_events (ts,anon,v,type,title,season,episode,year,src,method,ok,note,hinted,model,think)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      `INSERT INTO tr_events (ts,anon,v,type,title,season,episode,year,src,method,ok,note,hinted,model,think,reason,ar_cands)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).bind(
       ts, _ts(b.anon).slice(0, 40), _ts(b.v).slice(0, 16), _ts(b.type).slice(0, 12),
       _ts(b.title).slice(0, 160), _ts(b.season).slice(0, 8), _ts(b.episode).slice(0, 8),
       _ts(b.year).slice(0, 8), _ts(b.src).slice(0, 8), _ts(b.method).slice(0, 16),
-      b.ok ? 1 : 0, _ts(b.note).slice(0, 48), Number(b.hinted) || 0,
-      _ts(b.model).slice(0, 40), _ts(b.think).slice(0, 16)
+      b.ok ? 1 : 0, _ts(b.note).slice(0, 80), Number(b.hinted) || 0,
+      _ts(b.model).slice(0, 40), _ts(b.think).slice(0, 16),
+      _ts(b.reason).slice(0, 24), Number(b.ar_cands) || 0
     ).run();
   } catch (e) { return json({ ok: false, error: String(e).slice(0, 160) }); }
   return json({ ok: true, stored: true });
@@ -790,19 +797,31 @@ async function renderStats(env) {
   const tot = (await q(`SELECT COUNT(*) n, COALESCE(SUM(ok),0) oks, COUNT(DISTINCT anon) users FROM tr_events ${W}`))[0] || { n: 0, oks: 0, users: 0 };
   const bm = await q(`SELECT method, COUNT(*) n, COALESCE(SUM(ok),0) oks FROM tr_events ${W} GROUP BY method`);
   const d1 = (await q(`SELECT COUNT(*) n FROM tr_events ${W} AND ts >= strftime('%s','now')-86400`))[0] || { n: 0 };
+  // WHY fallbacks happened (the key diagnostic) + source-language + version.
+  const fbR = await q(`SELECT COALESCE(NULLIF(reason,''),'(unknown)') reason, COUNT(*) n FROM tr_events ${W} AND method='ai_fallback' GROUP BY reason ORDER BY n DESC`);
+  const bySrc = await q(`SELECT COALESCE(NULLIF(src,''),'?') src, COUNT(*) n, COALESCE(SUM(method='ai_ar'),0) ar FROM tr_events ${W} GROUP BY src ORDER BY n DESC LIMIT 12`);
+  const byVer = await q(`SELECT v, COUNT(*) n FROM tr_events ${W} GROUP BY v ORDER BY v DESC LIMIT 8`);
+  const fails = await q(`SELECT ts,title,type,season,episode,src,reason,note,v FROM tr_events ${W} AND ok=0 ORDER BY ts DESC LIMIT 25`);
   const top = await q(`SELECT title, type, COUNT(*) n, COALESCE(SUM(method='ai_ar'),0) ar, COALESCE(SUM(method='ai_fallback'),0) fb, COALESCE(SUM(method='ai_plain'),0) pl FROM tr_events ${W} GROUP BY title ORDER BY n DESC LIMIT 30`);
-  const rec = await q(`SELECT ts,title,type,season,episode,src,method,ok,v FROM tr_events ${W} ORDER BY ts DESC LIMIT 60`);
+  const rec = await q(`SELECT ts,title,type,season,episode,src,method,ok,reason,note,v FROM tr_events ${W} ORDER BY ts DESC LIMIT 60`);
   const m = { ai_ar: 0, ai_fallback: 0, ai_plain: 0 };
   bm.forEach(r => { m[r.method] = r.n; });
   const T = tot.n || 0;
   const newPct = _pct(m.ai_ar, T), fbPct = _pct(m.ai_fallback, T), plPct = _pct(m.ai_plain, T);
   const okPct = _pct(tot.oks, T);
+  const failN = T - (tot.oks || 0);
+  const REASONS = { option_off: 'option off (user)', no_arabic: 'no Arabic subtitle found', no_align: "Arabic didn't sync (alignment)", crash: 'error', no_source: 'no source parsed', ok: 'ok', '(unknown)': '(unknown)' };
   const bar = (label, n, p, col) => `<div class="row"><span class="lbl">${label}</span><div class="track"><div class="fill" style="width:${p}%;background:${col}"></div></div><span class="val">${n} · ${p}%</span></div>`;
   const ep = (r) => r.type === 'episode' ? ` S${String(r.season).padStart(2, '0')}E${String(r.episode).padStart(2, '0')}` : '';
   const fmtT = (s) => new Date(s * 1000).toISOString().replace('T', ' ').slice(0, 16);
   const mColor = { ai_ar: '#46c46a', ai_fallback: '#e0a93a', ai_plain: '#6fb6e0' };
-  const recRows = rec.map(r => `<tr><td>${fmtT(r.ts)}</td><td>${_esc(r.title)}${ep(r)}</td><td>${_esc(r.src)}</td><td style="color:${mColor[r.method] || '#aaa'}">${_esc(r.method)}</td><td>${r.ok ? '✓' : '✗'}</td><td>${_esc(r.v)}</td></tr>`).join('');
+  const recRows = rec.map(r => `<tr><td>${fmtT(r.ts)}</td><td>${_esc(r.title)}${ep(r)}</td><td>${_esc(r.src)}</td><td style="color:${mColor[r.method] || '#aaa'}">${_esc(r.method)}</td><td>${r.ok ? '✓' : '✗'}</td><td><small>${_esc(r.reason || '')} ${_esc(r.note || '')}</small></td></tr>`).join('');
   const topRows = top.map(r => `<tr><td>${_esc(r.title)}</td><td>${r.n}</td><td style="color:#46c46a">${r.ar}</td><td style="color:#e0a93a">${r.fb}</td><td style="color:#6fb6e0">${r.pl}</td></tr>`).join('');
+  const fbTotal = fbR.reduce((a, r) => a + r.n, 0);
+  const fbRows = fbR.map(r => bar(REASONS[r.reason] || r.reason, r.n, _pct(r.n, fbTotal), '#e0a93a')).join('');
+  const srcRows = bySrc.map(r => `<tr><td>${_esc(r.src)}</td><td>${r.n}</td><td>${_pct(r.ar, r.n)}% Arabic</td></tr>`).join('');
+  const verRows = byVer.map(r => `<tr><td>${_esc(r.v)}</td><td>${r.n}</td></tr>`).join('');
+  const failRows = fails.map(r => `<tr><td>${fmtT(r.ts)}</td><td>${_esc(r.title)}${ep(r)}</td><td>${_esc(r.reason || '')}</td><td><small>${_esc(r.note || '')}</small></td></tr>`).join('') || '<tr><td colspan="4"><small>no failures 🎉</small></td></tr>';
   const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MoranSubs — Stats</title><style>
 body{background:#0e1116;color:#e6edf3;font:14px/1.5 system-ui,Segoe UI,Arial;margin:0;padding:18px}
@@ -821,18 +840,29 @@ th{color:#9aa4b2;font-weight:600}small{color:#9aa4b2}
 <div class="cards">
 <div class="card"><div class="big">${T}</div><div class="sub">AI translations</div></div>
 <div class="card"><div class="big">${tot.users}</div><div class="sub">unique users</div></div>
-<div class="card"><div class="big">${okPct}%</div><div class="sub">success rate</div></div>
+<div class="card"><div class="big">${okPct}%</div><div class="sub">delivered ok</div></div>
+<div class="card"><div class="big" style="color:${failN ? '#d0594f' : '#46c46a'}">${failN}</div><div class="sub">failures (no subtitle)</div></div>
 <div class="card"><div class="big">${d1.n}</div><div class="sub">last 24h</div></div>
 </div>
+<small>“delivered ok” = a Hebrew subtitle was produced (incl. fallback). It stays
+~100% as long as translations succeed — the failures card is what to watch.</small>
 <h2>New Arabic path vs old</h2>
 <div class="headline">${newPct}% new (Arabic)</div>
 ${bar('🆕 ai_ar (new)', m.ai_ar, newPct, '#46c46a')}
 ${bar('↩︎ ai_fallback', m.ai_fallback, fbPct, '#e0a93a')}
 ${bar('▫︎ ai_plain (off)', m.ai_plain, plPct, '#6fb6e0')}
+<h2>Why fallbacks happened (${fbTotal})</h2>
+${fbRows || '<small>no fallbacks yet</small>'}
+<h2>By source language</h2>
+<table><tr><th>Lang</th><th>Total</th><th>% used Arabic</th></tr>${srcRows}</table>
+<h2>By add-on version</h2>
+<table><tr><th>Version</th><th>Translations</th></tr>${verRows}</table>
+<h2>Failures</h2>
+<table><tr><th>Time (UTC)</th><th>Title</th><th>Reason</th><th>Detail</th></tr>${failRows}</table>
 <h2>Top titles</h2>
 <table><tr><th>Title</th><th>Total</th><th>ai_ar</th><th>fallback</th><th>plain</th></tr>${topRows}</table>
 <h2>Recent</h2>
-<table><tr><th>Time (UTC)</th><th>Title</th><th>Src</th><th>Method</th><th>OK</th><th>Ver</th></tr>${recRows}</table>
+<table><tr><th>Time (UTC)</th><th>Title</th><th>Src</th><th>Method</th><th>OK</th><th>Reason / detail</th></tr>${recRows}</table>
 <script>setTimeout(function(){location.reload()},30000)</script>`;
   return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });
 }
