@@ -243,7 +243,9 @@ def _start_ai_apply(link, info):
         _log('ai apply failed: {0}'.format(e), level='WARNING')
 
 
-def show():
+def _show_pyxbmct():
+    """Legacy pyxbmct chooser -- kept as a fallback if the rich WindowXMLDialog
+    can't be created on a given device/skin."""
     """Open the chooser for whatever is playing. Returns True if the window was
     shown, False on any failure (so the caller can fall back)."""
     if xbmc is None:
@@ -462,3 +464,204 @@ def show():
             xbmcgui.Window(10000).clearProperty('MoranSubsChooserOpen')
         except Exception:
             pass
+
+
+# ---------------- rich WindowXMLDialog chooser (Tal-style, all skins) --------
+
+def _classify(c, info, translate):
+    """Split a candidate into the fields the window XML renders: a bold main
+    line, a dim secondary line, a match-% string, a colour, and a flag image."""
+    import re as _re
+    lang = (c.get('language') or '').strip()
+    name = (c.get('filename') or '').strip()
+    current = name.startswith('» נוכחית')
+    pct = None
+    m = _re.search(r'(\d{1,3})%', name)
+    if m:
+        try:
+            pct = int(m.group(1))
+        except ValueError:
+            pct = None
+    disp = name
+    if current and '· ' in disp:
+        disp = disp.split('· ', 1)[1]
+    disp = _re.sub(r'\s*·\s*\d{1,3}%\s*', ' ', disp).strip()
+    head, rel = disp, ''
+    for sep in ('  —  ', ' — ', '—'):
+        if sep in disp:
+            head, rel = disp.split(sep, 1)
+            break
+    head, rel = head.strip(), rel.strip()
+    code = _norm_lang(lang)
+    is_he = (code == 'he') or (lang.lower() in ('he', 'iw', 'heb'))
+    he_name = _LANG_HE.get(code or lang[:2].lower())
+    if not is_he and he_name:
+        head = '[{0}] {1}'.format(he_name, head)
+    if current:
+        col = 'FFFF00FE'
+    elif is_he:
+        if pct is not None and pct >= 80:
+            col = 'FFFFD700'
+        elif pct is not None and pct >= 50:
+            col = 'FF7BE38C'
+        else:
+            col = 'FFBFE9CF'
+    elif lang:
+        col = 'FFF0A93A'
+    else:
+        col = 'FFFFFFFF'
+    pct_txt = ('{0}%'.format(pct)) if pct is not None else ''
+    flag = _flag_path('he' if is_he else lang)
+    return (head or name), rel, pct_txt, col, flag
+
+
+def _deliver_pick(c, info, close_cb):
+    """Download/apply the picked candidate (shared by the XML window). Mirrors the
+    pyxbmct on_pick: embedded -> switch stream; AI -> close + background
+    translate; ready Hebrew -> resolve + apply. close_cb() closes the window."""
+    try:
+        from resources.lib import kodi_utils, translate as _t
+        link = c.get('link') or ''
+        try:
+            kodi_utils.set_current_subtitle(link)
+        except Exception:
+            pass
+        payload = _t._decode_link(link) or {}
+        kind = payload.get('type')
+        if kind == 'engine' and payload.get('embedded'):
+            try:
+                from resources.lib import subs_engine_bridge
+                subs_engine_bridge.select_embedded(
+                    payload.get('stream_index'), payload.get('lang') or 'he')
+                kodi_utils.notify('הופעל תרגום מובנה', time_ms=2500)
+            except Exception as _e:
+                _log('embedded select failed: {0}'.format(_e), level='WARNING')
+            close_cb()
+            return
+        if kind in ('engine_ai', 'ai'):
+            close_cb()
+            _start_ai_apply(link, info)
+            return
+        path = _t.resolve(link, info)
+        if path and os.path.isfile(path):
+            p = xbmc.Player()
+            if p.isPlayingVideo():
+                p.setSubtitles(path)
+                p.showSubtitles(True)
+            close_cb()
+        else:
+            kodi_utils.notify('ההורדה נכשלה, נסה אחרת', time_ms=3500)
+    except Exception as e:
+        _log('deliver pick failed: {0}'.format(e), level='WARNING')
+
+
+def show():
+    """Open the rich MoranSubs chooser (a self-contained WindowXMLDialog that
+    looks the same on every skin). Falls back to the pyxbmct chooser, then to
+    Kodi's native dialog, if it can't be created."""
+    if xbmc is None:
+        return False
+    try:
+        if not xbmc.Player().isPlayingVideo():
+            return False
+    except Exception:
+        return False
+    try:
+        from resources.lib import kodi_utils, translate
+    except Exception:
+        return False
+    info = kodi_utils.current_video_info()
+    try:
+        cands = translate.list_candidates(info, modal_progress=False) or []
+    except Exception as e:
+        _log('list_candidates failed: {0}'.format(e), level='WARNING')
+        cands = []
+    items = [c for c in cands if c.get('link') and c.get('filename')]
+    if not items:
+        try:
+            kodi_utils.notify('לא נמצאו כתוביות לכותר הזה', time_ms=3500)
+        except Exception:
+            pass
+        return False
+
+    try:
+        import xbmcaddon
+
+        class _ChooserXML(xbmcgui.WindowXMLDialog):
+            def onInit(self):
+                try:
+                    self.setProperty('subs.head', _video_ref(self.info) or '')
+                    self.setProperty('subs.count',
+                                     'נמצאו {0} כתוביות'.format(len(self.items)))
+                    try:
+                        xbmcgui.Window(10000).setProperty(
+                            'MoranSubsChooserOpen', '1')
+                    except Exception:
+                        pass
+                    lst = self.getControl(100)
+                    rows = []
+                    for c in self.items:
+                        label, label2, pct, col, flag = _classify(
+                            c, self.info, self.translate)
+                        li = xbmcgui.ListItem(label)
+                        li.setLabel2(label2)
+                        if flag:
+                            li.setArt({'thumb': flag})
+                        li.setProperty('pct', pct)
+                        li.setProperty('col', col)
+                        rows.append(li)
+                    lst.addItems(rows)
+                    try:
+                        self.setFocusId(100)
+                    except Exception:
+                        pass
+                except Exception as e:
+                    _log('xml onInit failed: {0}'.format(e), level='WARNING')
+
+            def onAction(self, action):
+                try:
+                    if action.getId() in (9, 10, 92, 216, 247):
+                        self.close()
+                except Exception:
+                    try:
+                        self.close()
+                    except Exception:
+                        pass
+
+            def onClick(self, controlId):
+                try:
+                    if controlId == 201:
+                        self.close()
+                        return
+                    if controlId == 202:
+                        self.close()
+                        try:
+                            xbmc.executebuiltin('ActivateWindow(SubtitleSearch)')
+                        except Exception:
+                            pass
+                        return
+                    if controlId == 100:
+                        i = self.getControl(100).getSelectedPosition()
+                        if i is None or i < 0 or i >= len(self.items):
+                            return
+                        _deliver_pick(self.items[i], self.info, self.close)
+                except Exception as e:
+                    _log('xml onClick failed: {0}'.format(e), level='WARNING')
+
+        addon_path = xbmcaddon.Addon(ADDON_ID).getAddonInfo('path')
+        w = _ChooserXML('script.moransubs.chooser.xml', addon_path,
+                        'Default', '1080i')
+        w.info = info
+        w.items = items
+        w.translate = translate
+        w.doModal()
+        del w
+        return True
+    except Exception as e:
+        _log('WindowXMLDialog failed, falling back to pyxbmct: {0}'.format(e),
+             level='WARNING')
+
+    try:
+        return _show_pyxbmct()
+    except Exception:
+        return False
