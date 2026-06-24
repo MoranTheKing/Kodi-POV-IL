@@ -180,6 +180,16 @@ def generate(api_key, model, prompt, temperature=0.2,
     except ValueError:
         raise GeminiError('Unparseable response from API')
 
+    # Prompt-level block (blockReason: PROHIBITED_CONTENT / SAFETY / ...). This
+    # rejects the whole PROMPT before any generation and is NOT overridable by
+    # safetySettings. Surface as FilteredResponse so the caller can retry the
+    # chunk WITHOUT the Arabic gender block (a common trigger) / bisect, rather
+    # than aborting the whole translation.
+    pf = data.get('promptFeedback') or {}
+    if pf.get('blockReason'):
+        raise FilteredResponse(
+            'prompt blocked: {0}'.format(pf.get('blockReason')))
+
     cands = data.get('candidates') or []
     if not cands:
         # Often means the prompt triggered a safety filter.
@@ -190,6 +200,11 @@ def generate(api_key, model, prompt, temperature=0.2,
     chunks = [p.get('text', '') for p in parts if isinstance(p, dict)]
     text = ''.join(chunks).strip()
     if not text:
+        # Empty content with a SAFETY/PROHIBITED finishReason -> treat as a
+        # block (retry without Arabic / bisect), not a hard error.
+        fr = (cands[0].get('finishReason') or '').upper()
+        if fr in ('SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'OTHER', ''):
+            raise FilteredResponse('empty/blocked content (finish={0})'.format(fr))
         raise GeminiError('Empty text in response')
 
     # If the model hit its output cap, the last entry in the
