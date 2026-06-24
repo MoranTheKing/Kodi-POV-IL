@@ -1650,26 +1650,36 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             self.reason = reason
             self.user_msg = user_msg
 
-    def _translate_one(idx, ch):
+    def _translate_one(idx, ch, no_arabic=False):
         # Recursive bisection on TruncatedResponse OR low-yield
         # response (Gemini sometimes skips entries silently --
         # observed in the first end-to-end test, a 5-minute gap
         # in the middle of a translated movie). Bisecting forces
-        # the model to spend more attention per entry.
+        # the model to spend more attention per entry. A FilteredResponse
+        # (prompt-blocked, often PROHIBITED_CONTENT) first retries WITHOUT the
+        # Arabic gender block (a common trigger), then bisects.
         if len(ch) > 1:
             try:
-                response = _call_gemini(idx, ch)
-            except (gemini.TruncatedResponse, gemini.FilteredResponse) as e:
+                response = _call_gemini(idx, ch, no_arabic=no_arabic)
+            except gemini.TruncatedResponse:
                 mid = len(ch) // 2
-                why = ('filtered' if isinstance(e, gemini.FilteredResponse)
-                       else 'truncated')
                 kodi_utils.log(
-                    'Chunk {0} {1} -- bisecting into {2} + {3}'
-                    .format(idx, why, mid, len(ch) - mid),
-                    level='WARNING')
-                left = _translate_one(idx, ch[:mid])
-                right = _translate_one(idx, ch[mid:])
-                return left + '\n\n' + right
+                    'Chunk {0} truncated -- bisecting into {1} + {2}'
+                    .format(idx, mid, len(ch) - mid), level='WARNING')
+                return (_translate_one(idx, ch[:mid], no_arabic) + '\n\n'
+                        + _translate_one(idx, ch[mid:], no_arabic))
+            except gemini.FilteredResponse:
+                if not no_arabic and _ar_map:
+                    kodi_utils.log(
+                        'Chunk {0} prompt-blocked -- retrying WITHOUT the '
+                        'Arabic gender block'.format(idx), level='WARNING')
+                    return _translate_one(idx, ch, no_arabic=True)
+                mid = len(ch) // 2
+                kodi_utils.log(
+                    'Chunk {0} blocked -- bisecting into {1} + {2}'
+                    .format(idx, mid, len(ch) - mid), level='WARNING')
+                return (_translate_one(idx, ch[:mid], True) + '\n\n'
+                        + _translate_one(idx, ch[mid:], True))
 
             # Yield check: did we get back roughly as many entries
             # as we asked for? Gemini sometimes drops entries
@@ -1684,16 +1694,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                     'bisecting into {3} + {4}'.format(
                         idx, got, expected, mid, expected - mid),
                     level='WARNING')
-                left = _translate_one(idx, ch[:mid])
-                right = _translate_one(idx, ch[mid:])
-                return left + '\n\n' + right
+                return (_translate_one(idx, ch[:mid], no_arabic) + '\n\n'
+                        + _translate_one(idx, ch[mid:], no_arabic))
 
             return response
         # single-entry chunk that still truncates -- shouldn't
         # happen (one SRT entry is < 100 tokens), but if it does
         # we surface the partial text so the user sees something.
         try:
-            return _call_gemini(idx, ch)
+            return _call_gemini(idx, ch, no_arabic=no_arabic)
         except gemini.TruncatedResponse as e:
             kodi_utils.log(
                 'Chunk {0} truncated even at size 1 -- '
@@ -1701,11 +1710,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 level='ERROR')
             return e.partial_text or ''
         except gemini.FilteredResponse:
-            # One entry still blocked by Gemini's safety filter even at size 1
-            # -- keep the SOURCE text for it so the rest of the subtitle still
+            # Retry this single entry without the Arabic block; if STILL blocked,
+            # keep the SOURCE text for it so the rest of the subtitle still
             # translates instead of the whole job aborting.
+            if not no_arabic and _ar_map:
+                try:
+                    return _call_gemini(idx, ch, no_arabic=True)
+                except gemini.FilteredResponse:
+                    pass
             kodi_utils.log(
-                'Chunk {0} filtered even at size 1 -- keeping source text'
+                'Chunk {0} blocked even at size 1 -- keeping source text'
                 .format(idx), level='WARNING')
             return '\n\n'.join(ch)
 
@@ -1727,14 +1741,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                     prev_block_texts.append(t)
             prev_context_by_idx[i] = prev_block_texts
 
-    def _call_gemini(idx, ch):
+    def _call_gemini(idx, ch, no_arabic=False):
         body = '\n\n'.join(ch)
         prev_ctx_block = prompt.build_prev_context_block(
             prev_context_by_idx.get(idx) or [])
         # Arabic gender reference for THIS chunk's entries (opt-in). Keyed by the
         # block's own SRT number so it stays aligned regardless of chunking.
+        # `no_arabic` drops it -- used when a chunk got prompt-blocked, since the
+        # Arabic dialogue text is a common PROHIBITED_CONTENT trigger.
         ar_block = ''
-        if _ar_map:
+        if _ar_map and not no_arabic:
             ent = []
             for block in ch:
                 first = block.lstrip().split('\n', 1)[0].strip()

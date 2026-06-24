@@ -1,3 +1,13 @@
+v0.2.281
+- FIX (continued): a translation could still be blocked by Gemini at the PROMPT
+  level (promptFeedback blockReason = PROHIBITED_CONTENT) -- not overridable by
+  safety settings. The Arabic gender block adds Arabic dialogue to the prompt,
+  which can trip Google's prohibited-content policy. Now, when a chunk is
+  prompt-blocked, it is retried WITHOUT the Arabic block first (you keep the
+  English->Hebrew translation, just without the Arabic gender hint for that
+  chunk), then bisected, and at worst that one line is left as source. So a
+  blocked chunk never aborts the whole subtitle.
+
 v0.2.280
 - FIX: AI translation could abort mid-way with "no candidates (filtered)" -- a
   chunk with profanity/violence/sexual dialogue was being blocked by Gemini's
