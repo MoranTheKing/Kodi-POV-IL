@@ -1586,6 +1586,22 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     _telemetry_done = [False]
     _t0 = time.time()  # translation-duration clock for telemetry
 
+    # Per-chunk outcome counters (entries, not chunks) for telemetry, so the
+    # dashboard can show -- of a translation that hit a block on some chunk --
+    # how many entries went through WITH the Arabic prompt, how many fell back
+    # to English-only (Arabic dropped), and how many were kept as source. Updated
+    # from parallel worker threads, so guard with a lock.
+    import threading as _threading
+    _chunk_lock = _threading.Lock()
+    _chunk_stat = {'ar': 0, 'noar': 0, 'src': 0, 'blocks': 0}
+
+    def _count(kind, n=1):
+        try:
+            with _chunk_lock:
+                _chunk_stat[kind] = _chunk_stat.get(kind, 0) + n
+        except Exception:
+            pass
+
     def _emit(ok, note=''):
         if _telemetry_done[0]:
             return
@@ -1619,6 +1635,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 'hinted': len(_ar_map or {}),
                 'model': model,
                 'think': str(thinking_level or thinking_budget or ''),
+                # Per-chunk outcome (entry counts): translated WITH Arabic,
+                # translated after DROPPING Arabic, and kept as source; plus the
+                # number of prompt-block events hit and the total chunk count.
+                'ent_ar': int(_chunk_stat.get('ar', 0)),
+                'ent_noar': int(_chunk_stat.get('noar', 0)),
+                'ent_src': int(_chunk_stat.get('src', 0)),
+                'blocks': int(_chunk_stat.get('blocks', 0)),
+                'chunks': int(total or 0),
             })
         except Exception:
             pass
@@ -1661,9 +1685,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # that the orchestrator below catches and converts into a
     # cancellation across all parallel chunks.
     class _AbortTranslation(Exception):
-        def __init__(self, reason, user_msg):
+        def __init__(self, reason, user_msg, detail=''):
             self.reason = reason
             self.user_msg = user_msg
+            self.detail = detail
 
     def _translate_one(idx, ch, no_arabic=False):
         # Recursive bisection on TruncatedResponse OR low-yield
@@ -1684,6 +1709,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 return (_translate_one(idx, ch[:mid], no_arabic) + '\n\n'
                         + _translate_one(idx, ch[mid:], no_arabic))
             except gemini.FilteredResponse:
+                _count('blocks')
                 if not no_arabic and _ar_map:
                     kodi_utils.log(
                         'Chunk {0} prompt-blocked -- retrying WITHOUT the '
@@ -1712,30 +1738,38 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 return (_translate_one(idx, ch[:mid], no_arabic) + '\n\n'
                         + _translate_one(idx, ch[mid:], no_arabic))
 
+            _count('noar' if no_arabic else 'ar', len(ch))
             return response
         # single-entry chunk that still truncates -- shouldn't
         # happen (one SRT entry is < 100 tokens), but if it does
         # we surface the partial text so the user sees something.
         try:
-            return _call_gemini(idx, ch, no_arabic=no_arabic)
+            _resp = _call_gemini(idx, ch, no_arabic=no_arabic)
+            _count('noar' if no_arabic else 'ar', len(ch))
+            return _resp
         except gemini.TruncatedResponse as e:
             kodi_utils.log(
                 'Chunk {0} truncated even at size 1 -- '
                 'returning partial'.format(idx),
                 level='ERROR')
+            _count('src', len(ch))
             return e.partial_text or ''
         except gemini.FilteredResponse:
             # Retry this single entry without the Arabic block; if STILL blocked,
             # keep the SOURCE text for it so the rest of the subtitle still
             # translates instead of the whole job aborting.
+            _count('blocks')
             if not no_arabic and _ar_map:
                 try:
-                    return _call_gemini(idx, ch, no_arabic=True)
+                    _resp = _call_gemini(idx, ch, no_arabic=True)
+                    _count('noar', len(ch))
+                    return _resp
                 except gemini.FilteredResponse:
                     pass
             kodi_utils.log(
                 'Chunk {0} blocked even at size 1 -- keeping source text'
                 .format(idx), level='WARNING')
+            _count('src', len(ch))
             return '\n\n'.join(ch)
 
     # Cross-chunk continuity. For chunk N, give the model the last
@@ -1859,7 +1893,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                     time.sleep(wait)
                     continue
                 raise _AbortTranslation('error',
-                    kodi_utils.localised(33008, str(e)[:80]))
+                    kodi_utils.localised(33008, str(e)[:80]),
+                    detail=str(e)[:100])
 
     # Parallel chunk dispatch. Gemini Flash Lite is 15 RPM, so 3
     # in flight at once is safe and turns a ~2-3 minute sequential
@@ -1875,6 +1910,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     completed = 0
     abort_msg = None
     abort_reason = None
+    abort_detail = ''
 
     try:
         from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -1890,6 +1926,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 except _AbortTranslation as e:
                     abort_msg = e.user_msg
                     abort_reason = e.reason
+                    abort_detail = getattr(e, 'detail', '') or ''
                     # Try to cancel pending futures; in-flight ones
                     # will run to completion but we ignore them.
                     for f in future_to_idx:
@@ -1898,6 +1935,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 except Exception as e:
                     abort_msg = 'AI: שגיאה בלתי צפויה: {0}'.format(
                         str(e)[:80])
+                    abort_reason = 'crash'
+                    abort_detail = str(e)[:100]
                     for f in future_to_idx:
                         f.cancel()
                     break
@@ -1975,7 +2014,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 kodi_utils.log(
                     'progressive_cb done(abort) raised: ' + str(e),
                     level='WARNING')
-        _emit(False, 'abort:' + str(abort_reason or ''))
+        _emit(False, 'abort:' + str(abort_reason or 'crash')
+              + ((': ' + abort_detail) if abort_detail else ''))
         return None
 
     if completed != total:

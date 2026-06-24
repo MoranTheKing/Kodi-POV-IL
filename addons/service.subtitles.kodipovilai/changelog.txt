@@ -1,3 +1,17 @@
+v0.2.285
+- TELEMETRY (dashboard only, anonymous as always): each translation now reports
+  per-chunk outcome -- how many entries went through WITH the Arabic prompt, how
+  many fell back to English-only (Arabic dropped on a blocked chunk), how many
+  were kept as source -- plus how many prompt-block events were hit. The owner
+  dashboard uses this to show, for a translation that hit a block on some chunk,
+  exactly how much was translated with Arabic vs without.
+- TELEMETRY FIX: failed translations no longer count as successful "ai_ar" in
+  the dashboard breakdowns/top-titles -- the new-Arabic % now counts only
+  translations that actually produced a subtitle.
+- TELEMETRY FIX: a failure now reports the real cause + detail (e.g. the actual
+  Gemini error string) instead of a bare "abort:error", and the dashboard no
+  longer shows the misleading Arabic-alignment "ok" next to a failure.
+
 v0.2.284
 - TUNING (based on live A/B tests against the API): PROHIBITED_CONTENT prompt
   blocks come in two kinds -- FLAKY (the same prompt passes on a retry) and
