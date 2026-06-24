@@ -30,6 +30,7 @@ DIST = ROOT / "dist"
 STANDALONE_LIB_FILES = {
     "__init__.py",
     "all_subs_samefile_patcher.py",
+    "arabic_gender.py",
     "cache.py",
     "dark_subs_integration.py",
     "darksubs_download_sub_patcher.py",
