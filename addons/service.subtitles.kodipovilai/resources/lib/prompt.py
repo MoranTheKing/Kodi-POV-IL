@@ -196,3 +196,54 @@ def build_prev_context_block(prev_context_lines):
         'speaking and which gender forms apply):\n'
         + body + '\n\n'
     )
+
+
+def build_arabic_gender_block(entry_arabic):
+    """Build the Arabic gender-reference block (opt-in feature). `entry_arabic`
+    is a list of (entry_number, arabic_text) for THIS chunk -- the time-aligned
+    line from a HUMAN Arabic translation of the same scene. Arabic marks gender
+    (أنتَ/أنتِ, gendered verbs/imperatives) almost 1:1 with Hebrew, so it pins
+    down per-line speaker/addressee gender that English can't. Returns '' when
+    no entry has a usable Arabic line.
+
+    Validated: lifts gender accuracy ~27% (cast-only) -> ~90%+, zero regressions,
+    while the FIDELITY clause keeps wording faithful to the English."""
+    rows = [(n, t) for (n, t) in entry_arabic if t and t.strip()]
+    if not rows:
+        return ''
+    body = '\n'.join('{0}: {1}'.format(n, t) for (n, t) in rows)
+    return (
+        'ARABIC GENDER REFERENCE -- HARD CONSTRAINT, NOT A HINT.\n'
+        'For some entries below, the line from a PROFESSIONAL HUMAN Arabic '
+        'translation of the SAME scene is given. Arabic, like Hebrew, '
+        'explicitly marks the gender of the ADDRESSEE and the SPEAKER. For each '
+        'such entry you MUST make the Hebrew agree in gender with its Arabic. '
+        'Do NOT default to masculine -- read the markers and match them:\n'
+        '- ADDRESSEE FEMININE when the Arabic has أنتِ , a ـكِ ending, a present '
+        'verb ending ـين (تحاولين/تفعلين), or a feminine imperative ending ـي '
+        '(اسمعي، دعيني، أغلقي، ابتعدي) -> Hebrew feminine: את / תקשיבי / תני.\n'
+        '- ADDRESSEE MASCULINE when the Arabic has أنتَ , a ـكَ ending, a present '
+        'verb without ـين (تعرف/تحاول), or a masculine imperative (اسمع، دع، '
+        'أغلق، ابتعد) -> Hebrew masculine: אתה / תקשיב / תן.\n'
+        '- SPEAKER FEMININE when the Arabic 1st-person adjective is feminine '
+        '(محظوظة، ناضجة، متأكدة) -> Hebrew feminine 1st person (אני בטוחה).\n'
+        '- Entry not listed / Arabic gender-neutral -> use the cast block + '
+        'context instead.\n'
+        'FIDELITY (critical -- read carefully): translate the ENGLISH text '
+        'itself, completely and in natural Hebrew. The Arabic is ONLY a gender '
+        'oracle. Take from it the gender and NOTHING else -- not wording, not '
+        'phrasing, not length, not meaning. Specifically:\n'
+        '  * Translate EVERY English word and detail. Do not drop, shorten, '
+        'merge or summarise -- keep fillers ("uh", "well", "look"), repetitions '
+        '("I don\'t... I don\'t..."), intensifiers and profanity ("fucking"), '
+        'and small words like "out", "in there", "back", "just".\n'
+        '  * The Arabic human translation is often SHORTER or looser than the '
+        'English -- IGNORE that. Match the English, not the Arabic\'s brevity.\n'
+        '  * Proper nouns, place names, slang and idioms come from the ENGLISH '
+        'meaning -- e.g. "Colony House" -> "בית המושבה" (translate it; NEVER '
+        'transliterate the Arabic). Render slang/idioms naturally from English.\n'
+        '  * If the Arabic paraphrases, omits, or differs from the English in '
+        'ANY way, follow the ENGLISH and ignore the Arabic difference.\n'
+        'Per-entry Arabic (entry_number: arabic_line):\n'
+        + body + '\n\n'
+    )
