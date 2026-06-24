@@ -1,3 +1,12 @@
+v0.2.273
+- Internal: anonymous usage telemetry for AI translations (owner-only). Each
+  translation reports, best-effort and fully guarded, which method was used --
+  the new Arabic-gender path (ai_ar), a fallback to plain when no Arabic aligned
+  (ai_fallback), or plain because the option was off (ai_plain) -- plus title,
+  source language and success. The only identifier is a random per-install id;
+  no account/IP/paths. Powers a private stats dashboard on the pool Worker. Never
+  blocks or affects translation.
+
 v0.2.272
 - Fix (FENtastic, all player styles): the pause info panel still covered the
   "בחר כתוביות" chooser. Kodi doesn't report a script window via

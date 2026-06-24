@@ -58,6 +58,7 @@ STANDALONE_LIB_FILES = {
     "skin_dialog_subtitles_patcher.py",
     "skin_dialog_subtitles_row_patcher.py",
     "srt.py",
+    "telemetry.py",
     "subs_engine_bridge.py",
     "subs_filename_publisher.py",
     "tmdb_helper.py",
