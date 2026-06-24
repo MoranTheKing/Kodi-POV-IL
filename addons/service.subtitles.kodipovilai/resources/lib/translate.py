@@ -1576,6 +1576,38 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     _final_pool_hash = (content_id + '_ar') if (_ar_on and _used_ar) \
         else content_id
 
+    # Anonymous usage telemetry (fire-and-forget, fully guarded). One event per
+    # AI translation outcome, recording the METHOD so we can see what share uses
+    # the new Arabic-gender path (ai_ar) vs fell back to plain (ai_fallback) vs
+    # never had it on (ai_plain), plus success/failure. _telemetry_done guards
+    # against double-emit across the multiple return paths below.
+    _telemetry_done = [False]
+
+    def _emit(ok, note=''):
+        if _telemetry_done[0]:
+            return
+        _telemetry_done[0] = True
+        try:
+            from . import telemetry
+            method = ('ai_ar' if (_ar_on and _used_ar)
+                      else ('ai_fallback' if _ar_on else 'ai_plain'))
+            telemetry.report({
+                'type': 'episode' if info.get('is_episode') else 'movie',
+                'title': (info.get('tvshow') or info.get('title') or '')[:120],
+                'season': str(info.get('season') or ''),
+                'episode': str(info.get('episode') or ''),
+                'year': str(info.get('year') or ''),
+                'src': source_lang or '',
+                'method': method,
+                'ok': 1 if ok else 0,
+                'note': str(note or '')[:40],
+                'hinted': len(_ar_map or {}),
+                'model': model,
+                'think': str(thinking_level or thinking_budget or ''),
+            })
+        except Exception:
+            pass
+
     if whole_subtitle_request:
         chunks = [blocks]
         kodi_utils.notify(
@@ -1856,6 +1888,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                         })
                     except Exception:
                         pass
+                _emit(True, 'google')
                 return gpath
         kodi_utils.notify(abort_msg, time_ms=12000)
         if progressive_cb is not None:
@@ -1868,6 +1901,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 kodi_utils.log(
                     'progressive_cb done(abort) raised: ' + str(e),
                     level='WARNING')
+        _emit(False, 'abort:' + str(abort_reason or ''))
         return None
 
     if completed != total:
@@ -1885,6 +1919,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 kodi_utils.log(
                     'progressive_cb done(partial) raised: ' + str(e),
                     level='WARNING')
+        _emit(False, 'partial')
         return None
 
     # Stitch in original order.
@@ -1914,6 +1949,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             gpath = _google_translate_and_save(
                 src_text, source_lang, translated, info)
             if gpath:
+                _emit(True, 'google')
                 return gpath
         kodi_utils.notify(
             'AI: התרגום לא הוחזר בעברית (ריק/לא תורגם). נסה שוב.', time_ms=10000)
@@ -1923,6 +1959,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                                         'source_id': _progressive_source_id})
             except Exception:
                 pass
+        _emit(False, 'not_hebrew')
         return None
     cache.save_text(translated, final)
     # Also save under the content-hash slot when it differs from
@@ -1985,4 +2022,5 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             kodi_utils.log(
                 'progressive_cb done(success) raised: ' + str(e),
                 level='WARNING')
+    _emit(True)
     return translated
