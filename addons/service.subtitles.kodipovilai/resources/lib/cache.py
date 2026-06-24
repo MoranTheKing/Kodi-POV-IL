@@ -52,11 +52,14 @@ def _key(imdb_id, season, episode, source_lang, source_id=None):
 
 
 def translated_path(imdb_id, season, episode, source_lang,
-                    source_id=None):
+                    source_id=None, tier=''):
+    # `tier` namespaces a higher-quality variant in its OWN cache file without
+    # colliding with the plain one (currently 'ar' = Arabic-gender-boosted).
+    suffix = ('.' + tier) if tier else ''
     return os.path.join(
         _ensure_subdir(CACHE_SUBDIR_TRANSLATED),
         _key(imdb_id, season, episode, source_lang, source_id) +
-        '.he.srt')
+        suffix + '.he.srt')
 
 
 def source_path(imdb_id, season, episode, source_lang,

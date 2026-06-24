@@ -811,7 +811,8 @@ def _pool_quality_ok(src_text, final):
         return True
 
 
-def _backfill_pool_async(info, translated_path, local_source, source_lang):
+def _backfill_pool_async(info, translated_path, local_source, source_lang,
+                         ar_tier=False):
     """Share an ALREADY-cached Hebrew translation to the community pool, in
     the background, the first time the user re-watches it after enabling
     pool_share. Used at the EARLY cache hit, where the source bytes (and
@@ -852,9 +853,11 @@ def _backfill_pool_async(info, translated_path, local_source, source_lang):
                     _rel = (_rf.read().strip() or None)
             except OSError:
                 _rel = None
-            pool.contribute_once(info, cid, source_lang, cached,
+            pool.contribute_once(info, (cid + '_ar') if ar_tier else cid,
+                                 source_lang, cached,
                                  marker_path=translated_path,
-                                 release_override=_rel)
+                                 release_override=_rel,
+                                 kind=('ai_ar' if ar_tier else 'ai'))
         except Exception as e:
             try:
                 kodi_utils.log('pool backfill failed: {0}'.format(e),
@@ -1155,6 +1158,27 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             pass
     _release_override = _src_release or None
 
+    # Arabic-gender-reference (opt-in, default OFF). When ON we operate in a
+    # separate 'ar' quality tier: cache + pool live under their own key, so an
+    # existing plain translation does NOT short-circuit (we re-translate to
+    # upgrade it), while a finished ai_ar IS reused (no duplicate, no re-spend).
+    # The Arabic sub is fetched + aligned later (only if we actually translate).
+    # OFF = byte-identical to today.
+    _ar_on = False
+    try:
+        _ar_on = bool(kodi_utils.get_bool('gender_ref_arabic', False))
+    except Exception:
+        _ar_on = False
+    _tier = 'ar' if _ar_on else ''
+    _pool_kind = 'ai_ar' if _ar_on else 'ai'
+    _ar_map = None  # {srt_entry_number: arabic_line}, set just before chunking
+
+    def _pool_key(base_hash):
+        # ai_ar variants live under "<hash>_ar" so EVERY client can prefer them
+        # (better quality for all) with NO worker change, and dedup-by-result
+        # still prevents duplicates.
+        return (base_hash + '_ar') if _ar_on else base_hash
+
     # Respect the user's preferred subtitle language: if they've chosen a
     # specific non-Hebrew language (e.g. English) DON'T force an AI Hebrew
     # translation -- hand back the SOURCE subtitle untranslated so they get
@@ -1185,7 +1209,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     if early_source_id:
         translated = cache.translated_path(
             imdb_id, season, episode, source_lang,
-            source_id=early_source_id)
+            source_id=early_source_id, tier=_tier)
         # Only honour the cache if it's a REAL Hebrew translation. Older buggy
         # versions could cache an empty / source-echoed file and then serve it
         # forever as "from cache (previous translation)" -- blank or foreign
@@ -1217,7 +1241,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             if (pool is not None and pool.share_enabled()
                     and not _is_google_translated(translated)):
                 _backfill_pool_async(info, translated, local_source,
-                                     source_lang)
+                                     source_lang, ar_tier=_ar_on)
             return translated
 
     # Read the source SRT recorded at list time (alongside the video
@@ -1254,7 +1278,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     if content_id != early_source_id:
         translated_by_content = cache.translated_path(
             imdb_id, season, episode, source_lang,
-            source_id=content_id)
+            source_id=content_id, tier=_tier)
         if os.path.isfile(translated_by_content) and not _is_mostly_hebrew(
                 cache.load_text(translated_by_content) or ''):
             kodi_utils.log('Discarding non-Hebrew cached translation (empty/'
@@ -1292,9 +1316,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                             pass
                     try:
                         pool.contribute_once(
-                            info, content_id, source_lang, _cached_he,
+                            info, _pool_key(content_id), source_lang,
+                            _cached_he,
                             marker_path=translated_by_content,
-                            release_override=_release_override)
+                            release_override=_release_override,
+                            kind=_pool_kind)
                     except Exception as e:
                         kodi_utils.log(
                             'pool backfill (content) failed: {0}'.format(e),
@@ -1306,7 +1332,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # when we have no stable source_id at all.
     translated = cache.translated_path(
         imdb_id, season, episode, source_lang,
-        source_id=(early_source_id or content_id))
+        source_id=(early_source_id or content_id), tier=_tier)
 
     # Stash the source release name next to the cached translation, so a later
     # "share my cached translations" upload can tag it with the real release too
@@ -1324,7 +1350,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # we fall through and translate normally. Returns a path like a cache hit
     # (no progressive callbacks -- the caller's sentinel handles that).
     if pool is not None and pool.use_enabled():
-        pooled = pool.fetch(info, content_id)
+        # Prefer the higher-quality Arabic-gender variant for EVERYONE (it lives
+        # under "<hash>_ar"). When the feature is ON we accept ONLY ai_ar -- if
+        # the pool has just a plain one, we deliberately re-translate to upgrade
+        # it. When OFF we take ai_ar if present, else plain.
+        pooled = pool.fetch(info, content_id + '_ar')
+        if pooled:
+            kodi_utils.log('pool: reusing Arabic-gender (ai_ar) variant',
+                           level='INFO')
+        elif not _ar_on:
+            pooled = pool.fetch(info, content_id)
         if pooled:
             try:
                 cache.save_text(translated, pooled)
@@ -1497,6 +1532,44 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                        level='WARNING')
         return None
 
+    # Arabic gender reference (opt-in). Only here -- after every cache/pool miss,
+    # so we never pay the fetch on a hit. Fetches + time-aligns a human Arabic
+    # sub (trying several, OpenSubtitles/SubSource/YIFY); returns a per-entry map
+    # or None. Fully guarded; None => normal translation. Logs its decision.
+    if _ar_on:
+        kodi_utils.log('arabic-gender: ON -- translating "{0}" via the Arabic '
+                       'gender reference path'.format(
+                           (info.get('title') or imdb_id or '?')), level='INFO')
+        try:
+            from . import arabic_gender
+            _ar_map = arabic_gender.prepare(info, src_text)
+        except Exception as e:
+            kodi_utils.log('arabic-gender prepare crashed: {0}'.format(e),
+                           level='WARNING')
+            _ar_map = None
+
+    # If the feature is on but NO usable Arabic was found, this becomes a normal
+    # translation -- store it as PLAIN (never masquerade a non-boosted result as
+    # ai_ar), so it can still be upgraded later when an Arabic sub appears.
+    _used_ar = bool(_ar_map)
+    if _ar_on and not _used_ar:
+        kodi_utils.log('arabic-gender: no usable Arabic this time -> normal '
+                       'translation, stored as the plain tier', level='INFO')
+        _tier = ''
+        _pool_kind = 'ai'
+        translated = cache.translated_path(
+            imdb_id, season, episode, source_lang,
+            source_id=(early_source_id or content_id), tier='')
+        if _src_release:
+            try:
+                with open(translated + '.release', 'w',
+                          encoding='utf-8') as _rf:
+                    _rf.write(_src_release)
+            except OSError:
+                pass
+    _final_pool_hash = (content_id + '_ar') if (_ar_on and _used_ar) \
+        else content_id
+
     if whole_subtitle_request:
         chunks = [blocks]
         kodi_utils.notify(
@@ -1595,8 +1668,26 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         body = '\n\n'.join(ch)
         prev_ctx_block = prompt.build_prev_context_block(
             prev_context_by_idx.get(idx) or [])
+        # Arabic gender reference for THIS chunk's entries (opt-in). Keyed by the
+        # block's own SRT number so it stays aligned regardless of chunking.
+        ar_block = ''
+        if _ar_map:
+            ent = []
+            for block in ch:
+                first = block.lstrip().split('\n', 1)[0].strip()
+                if first.isdigit():
+                    num = int(first)
+                    ar = _ar_map.get(num)
+                    if ar:
+                        ent.append((num, ar))
+            if ent:
+                try:
+                    ar_block = prompt.build_arabic_gender_block(ent)
+                except Exception:
+                    ar_block = ''
         full_prompt = (prompt_template
-                       .replace('{prev_context_block}', prev_ctx_block)
+                       .replace('{prev_context_block}',
+                                prev_ctx_block + ar_block)
                        .replace('{entry_count}', str(len(ch)))
                        .replace('{chunk}', body))
         overload_attempts = 0
@@ -1839,7 +1930,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             cache.save_text(
                 cache.translated_path(
                     imdb_id, season, episode, source_lang,
-                    source_id=content_id),
+                    source_id=content_id, tier=_tier),
                 final)
         except Exception as e:
             kodi_utils.log(
@@ -1853,9 +1944,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     if pool is not None and pool.share_enabled():
         if _pool_quality_ok(src_text, final):
             try:
-                pool.contribute_once(info, content_id, source_lang, final,
-                                     marker_path=translated,
-                                     release_override=_release_override)
+                pool.contribute_once(info, _final_pool_hash, source_lang,
+                                     final, marker_path=translated,
+                                     release_override=_release_override,
+                                     kind=_pool_kind)
             except Exception as e:
                 kodi_utils.log('pool contribute dispatch failed: {0}'.format(e),
                                level='DEBUG')

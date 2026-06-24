@@ -489,3 +489,11 @@ msgstr "Keep DarkSubs (regular Hebrew subtitle search) enabled"
 msgctxt "#32545"
 msgid "By default only MoranSubs runs while the engine is on. Turn this on to keep DarkSubs/All Subs enabled too -- it stays on across restarts and updates."
 msgstr "By default only MoranSubs runs while the engine is on. Turn this on to keep DarkSubs/All Subs enabled too -- it stays on across restarts and updates."
+
+msgctxt "#32546"
+msgid "Improve gender accuracy using an Arabic reference (experimental)"
+msgstr "Improve gender accuracy using an Arabic reference (experimental)"
+
+msgctxt "#32547"
+msgid "When ON, AI translations fetch a human Arabic subtitle for the same title and use it ONLY to pin down per-line Hebrew gender (he/she, verb/adjective agreement) -- Arabic marks gender almost 1:1 with Hebrew. Falls back silently when no aligned Arabic sub is found. Works for any source language."
+msgstr "When ON, AI translations fetch a human Arabic subtitle for the same title and use it ONLY to pin down per-line Hebrew gender (he/she, verb/adjective agreement) -- Arabic marks gender almost 1:1 with Hebrew. Falls back silently when no aligned Arabic sub is found. Works for any source language."
