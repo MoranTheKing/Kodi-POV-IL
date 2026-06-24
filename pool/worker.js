@@ -764,7 +764,8 @@ async function ensureTeleSchema(env) {
   ).run();
   // Add the newer columns to a pre-existing table (D1 has no ADD COLUMN IF NOT
   // EXISTS, so ignore the "duplicate column" error).
-  for (const col of ['reason TEXT', 'ar_cands INTEGER', 'dur INTEGER']) {
+  for (const col of ['reason TEXT', 'ar_cands INTEGER', 'dur INTEGER',
+    'ent_ar INTEGER', 'ent_noar INTEGER', 'ent_src INTEGER', 'blocks INTEGER', 'chunks INTEGER']) {
     try { await env.DB.prepare(`ALTER TABLE tr_events ADD COLUMN ${col}`).run(); } catch (e) { /* exists */ }
   }
 }
@@ -775,15 +776,17 @@ async function recordEvent(env, body, ts) {
   try {
     await ensureTeleSchema(env);
     await env.DB.prepare(
-      `INSERT INTO tr_events (ts,anon,v,type,title,season,episode,year,src,method,ok,note,hinted,model,think,reason,ar_cands,dur)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      `INSERT INTO tr_events (ts,anon,v,type,title,season,episode,year,src,method,ok,note,hinted,model,think,reason,ar_cands,dur,ent_ar,ent_noar,ent_src,blocks,chunks)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).bind(
       ts, _ts(b.anon).slice(0, 40), _ts(b.v).slice(0, 16), _ts(b.type).slice(0, 12),
       _ts(b.title).slice(0, 160), _ts(b.season).slice(0, 8), _ts(b.episode).slice(0, 8),
       _ts(b.year).slice(0, 8), _ts(b.src).slice(0, 8), _ts(b.method).slice(0, 16),
       b.ok ? 1 : 0, _ts(b.note).slice(0, 80), Number(b.hinted) || 0,
       _ts(b.model).slice(0, 40), _ts(b.think).slice(0, 16),
-      _ts(b.reason).slice(0, 24), Number(b.ar_cands) || 0, Number(b.dur) || 0
+      _ts(b.reason).slice(0, 24), Number(b.ar_cands) || 0, Number(b.dur) || 0,
+      Number(b.ent_ar) || 0, Number(b.ent_noar) || 0, Number(b.ent_src) || 0,
+      Number(b.blocks) || 0, Number(b.chunks) || 0
     ).run();
   } catch (e) { return json({ ok: false, error: String(e).slice(0, 160) }); }
   return json({ ok: true, stored: true });
@@ -795,30 +798,75 @@ async function renderStats(env) {
   const W = `WHERE v >= '${TELE_MIN_VER}'`;
   const q = async (sql) => ((await env.DB.prepare(sql).all()).results || []);
   const tot = (await q(`SELECT COUNT(*) n, COALESCE(SUM(ok),0) oks, COUNT(DISTINCT anon) users FROM tr_events ${W}`))[0] || { n: 0, oks: 0, users: 0 };
+  // Method breakdown: n = attempts, oks = SUCCESSFUL. The headline counts only
+  // successful translations so a failed attempt that happened to use Arabic does
+  // NOT inflate the "new Arabic" numbers.
   const bm = await q(`SELECT method, COUNT(*) n, COALESCE(SUM(ok),0) oks FROM tr_events ${W} GROUP BY method`);
   const d1 = (await q(`SELECT COUNT(*) n FROM tr_events ${W} AND ts >= strftime('%s','now')-86400`))[0] || { n: 0 };
   const avg = (await q(`SELECT AVG(dur) a FROM tr_events ${W} AND dur > 0 AND ok=1`))[0] || { a: 0 };
-  const days = await q(`SELECT date(ts,'unixepoch') d, COUNT(*) n, COALESCE(SUM(method='ai_ar'),0) ar FROM tr_events ${W} GROUP BY d ORDER BY d DESC LIMIT 14`);
+  const days = await q(`SELECT date(ts,'unixepoch') d, COUNT(*) n, COALESCE(SUM(method='ai_ar' AND ok=1),0) ar FROM tr_events ${W} GROUP BY d ORDER BY d DESC LIMIT 14`);
   // WHY fallbacks happened (the key diagnostic) + source-language + version.
-  const fbR = await q(`SELECT COALESCE(NULLIF(reason,''),'(unknown)') reason, COUNT(*) n FROM tr_events ${W} AND method='ai_fallback' GROUP BY reason ORDER BY n DESC`);
-  const bySrc = await q(`SELECT COALESCE(NULLIF(src,''),'?') src, COUNT(*) n, COALESCE(SUM(method='ai_ar'),0) ar FROM tr_events ${W} GROUP BY src ORDER BY n DESC LIMIT 12`);
+  const fbR = await q(`SELECT COALESCE(NULLIF(reason,''),'(unknown)') reason, COUNT(*) n FROM tr_events ${W} AND method='ai_fallback' AND ok=1 GROUP BY reason ORDER BY n DESC`);
+  const bySrc = await q(`SELECT COALESCE(NULLIF(src,''),'?') src, COUNT(*) n, COALESCE(SUM(method='ai_ar' AND ok=1),0) ar FROM tr_events ${W} GROUP BY src ORDER BY n DESC LIMIT 12`);
   const byVer = await q(`SELECT v, COUNT(*) n FROM tr_events ${W} GROUP BY v ORDER BY v DESC LIMIT 8`);
-  const fails = await q(`SELECT ts,title,type,season,episode,src,reason,note,v FROM tr_events ${W} AND ok=0 ORDER BY ts DESC LIMIT 25`);
-  const top = await q(`SELECT title, type, COUNT(*) n, COALESCE(SUM(method='ai_ar'),0) ar, COALESCE(SUM(method='ai_fallback'),0) fb, COALESCE(SUM(method='ai_plain'),0) pl FROM tr_events ${W} GROUP BY title ORDER BY n DESC LIMIT 30`);
-  const rec = await q(`SELECT ts,title,type,season,episode,src,method,ok,reason,note,v FROM tr_events ${W} ORDER BY ts DESC LIMIT 60`);
-  const m = { ai_ar: 0, ai_fallback: 0, ai_plain: 0 };
-  bm.forEach(r => { m[r.method] = r.n; });
+  const fails = await q(`SELECT ts,title,type,season,episode,src,method,reason,note,v FROM tr_events ${W} AND ok=0 ORDER BY ts DESC LIMIT 25`);
+  const top = await q(`SELECT title, type, COUNT(*) n,
+       COALESCE(SUM(ok=1),0) oks, COALESCE(SUM(ok=0),0) fails,
+       COALESCE(SUM(method='ai_ar' AND ok=1),0) ar,
+       COALESCE(SUM(method='ai_fallback' AND ok=1),0) fb,
+       COALESCE(SUM(method='ai_plain' AND ok=1),0) pl
+       FROM tr_events ${W} GROUP BY title ORDER BY n DESC LIMIT 30`);
+  const rec = await q(`SELECT ts,title,type,season,episode,src,method,ok,reason,note,ent_ar,ent_noar,ent_src,blocks,v FROM tr_events ${W} ORDER BY ts DESC LIMIT 60`);
+  // Chunk-level outcome across SUCCESSFUL translations: of all entries actually
+  // delivered, how many went through WITH the Arabic prompt, how many fell back
+  // to English-only (Arabic dropped on a blocked chunk), how many kept source.
+  const chk = (await q(`SELECT COALESCE(SUM(ent_ar),0) ar, COALESCE(SUM(ent_noar),0) noar, COALESCE(SUM(ent_src),0) src,
+       COALESCE(SUM(CASE WHEN (COALESCE(blocks,0)>0 OR COALESCE(ent_noar,0)>0 OR COALESCE(ent_src,0)>0) THEN 1 ELSE 0 END),0) degraded,
+       COALESCE(SUM(COALESCE(blocks,0)),0) blocks
+       FROM tr_events ${W} AND ok=1`))[0] || { ar: 0, noar: 0, src: 0, degraded: 0, blocks: 0 };
+  const m = { ai_ar: 0, ai_fallback: 0, ai_plain: 0 };       // successful only
+  const mAll = { ai_ar: 0, ai_fallback: 0, ai_plain: 0 };    // all attempts
+  bm.forEach(r => { m[r.method] = r.oks; mAll[r.method] = r.n; });
   const T = tot.n || 0;
-  const newPct = _pct(m.ai_ar, T), fbPct = _pct(m.ai_fallback, T), plPct = _pct(m.ai_plain, T);
+  const okTotal = tot.oks || 0;
+  const newPct = _pct(m.ai_ar, okTotal), fbPct = _pct(m.ai_fallback, okTotal), plPct = _pct(m.ai_plain, okTotal);
   const okPct = _pct(tot.oks, T);
   const failN = T - (tot.oks || 0);
+  const entTotal = (chk.ar || 0) + (chk.noar || 0) + (chk.src || 0);
   const REASONS = { option_off: 'option off (user)', no_arabic: 'no Arabic subtitle found', no_align: "Arabic didn't sync (alignment)", crash: 'error', no_source: 'no source parsed', ok: 'ok', '(unknown)': '(unknown)' };
+  // Turn a failure note (e.g. "abort:error: HTTP 400 ...", "partial",
+  // "not_hebrew") into a short human cause + the raw detail.
+  const failCause = (note) => {
+    const s = String(note || '');
+    if (!s) return { cause: 'unknown', detail: '' };
+    if (s.startsWith('abort:')) {
+      const rest = s.slice(6);
+      const i = rest.indexOf(':');
+      const code = (i >= 0 ? rest.slice(0, i) : rest).trim();
+      const map = { quota: 'daily quota exhausted', overload: 'Gemini overloaded', error: 'Gemini error', crash: 'unexpected crash', invalid_key: 'API key rejected' };
+      return { cause: map[code] || code || 'aborted', detail: (i >= 0 ? rest.slice(i + 1) : '').trim() };
+    }
+    if (s === 'partial') return { cause: 'partial (incomplete)', detail: '' };
+    if (s === 'not_hebrew') return { cause: 'output not Hebrew', detail: '' };
+    return { cause: s, detail: '' };
+  };
   const bar = (label, n, p, col) => `<div class="row"><span class="lbl">${label}</span><div class="track"><div class="fill" style="width:${p}%;background:${col}"></div></div><span class="val">${n} · ${p}%</span></div>`;
   const ep = (r) => r.type === 'episode' ? ` S${String(r.season).padStart(2, '0')}E${String(r.episode).padStart(2, '0')}` : '';
   const fmtT = (s) => new Date(s * 1000).toISOString().replace('T', ' ').slice(0, 16);
   const mColor = { ai_ar: '#46c46a', ai_fallback: '#e0a93a', ai_plain: '#6fb6e0' };
-  const recRows = rec.map(r => `<tr><td>${fmtT(r.ts)}</td><td>${_esc(r.title)}${ep(r)}</td><td>${_esc(r.src)}</td><td style="color:${mColor[r.method] || '#aaa'}">${_esc(r.method)}</td><td>${r.ok ? '✓' : '✗'}</td><td><small>${_esc(r.reason || '')} ${_esc(r.note || '')}</small></td></tr>`).join('');
-  const topRows = top.map(r => `<tr><td>${_esc(r.title)}</td><td>${r.n}</td><td style="color:#46c46a">${r.ar}</td><td style="color:#e0a93a">${r.fb}</td><td style="color:#6fb6e0">${r.pl}</td></tr>`).join('');
+  // Per-row detail: for a FAILURE show the cause; for a successful FALLBACK show
+  // why it fell back; otherwise note any per-chunk degradation (some entries
+  // dropped Arabic / kept source). A clean ai_ar success shows nothing.
+  const recDetail = (r) => {
+    if (!r.ok) { const f = failCause(r.note); return _esc(f.cause + (f.detail ? ' — ' + f.detail : '')); }
+    const bits = [];
+    if (r.method === 'ai_fallback') bits.push(REASONS[r.reason] || r.reason || 'fallback');
+    if ((r.ent_noar || 0) > 0) bits.push('⚠ ' + r.ent_noar + ' entries dropped Arabic');
+    if ((r.ent_src || 0) > 0) bits.push('⚠ ' + r.ent_src + ' kept source');
+    return _esc(bits.join(' · '));
+  };
+  const recRows = rec.map(r => `<tr><td>${fmtT(r.ts)}</td><td>${_esc(r.title)}${ep(r)}</td><td>${_esc(r.src)}</td><td style="color:${mColor[r.method] || '#aaa'}">${_esc(r.method)}</td><td>${r.ok ? '✓' : '<span style="color:#d0594f">✗</span>'}</td><td><small>${recDetail(r)}</small></td></tr>`).join('');
+  const topRows = top.map(r => `<tr><td>${_esc(r.title)}</td><td>${r.n}</td><td>${r.oks}</td><td style="color:${r.fails ? '#d0594f' : '#9aa4b2'}">${r.fails}</td><td style="color:#46c46a">${r.ar}</td><td style="color:#e0a93a">${r.fb}</td><td style="color:#6fb6e0">${r.pl}</td></tr>`).join('');
   const avgSec = Math.round(avg.a || 0);
   const avgTxt = avgSec >= 60 ? `${Math.floor(avgSec / 60)}m ${avgSec % 60}s` : `${avgSec}s`;
   const dayChrono = days.slice().reverse();
@@ -832,7 +880,13 @@ async function renderStats(env) {
   const fbRows = fbR.map(r => bar(REASONS[r.reason] || r.reason, r.n, _pct(r.n, fbTotal), '#e0a93a')).join('');
   const srcRows = bySrc.map(r => `<tr><td>${_esc(r.src)}</td><td>${r.n}</td><td>${_pct(r.ar, r.n)}% Arabic</td></tr>`).join('');
   const verRows = byVer.map(r => `<tr><td>${_esc(r.v)}</td><td>${r.n}</td></tr>`).join('');
-  const failRows = fails.map(r => `<tr><td>${fmtT(r.ts)}</td><td>${_esc(r.title)}${ep(r)}</td><td>${_esc(r.reason || '')}</td><td><small>${_esc(r.note || '')}</small></td></tr>`).join('') || '<tr><td colspan="4"><small>no failures 🎉</small></td></tr>';
+  const failRows = fails.map(r => { const f = failCause(r.note); return `<tr><td>${fmtT(r.ts)}</td><td>${_esc(r.title)}${ep(r)}</td><td style="color:${mColor[r.method] || '#aaa'}">${_esc(r.method)}</td><td style="color:#d0594f">${_esc(f.cause)}</td><td><small>${_esc(f.detail)}</small></td></tr>`; }).join('') || '<tr><td colspan="5"><small>no failures 🎉</small></td></tr>';
+  // Chunk-level outcome bars (entries delivered, by how they were translated).
+  const chkRows = entTotal ? [
+    bar('with Arabic prompt', chk.ar, _pct(chk.ar, entTotal), '#46c46a'),
+    bar('English-only (Arabic dropped)', chk.noar, _pct(chk.noar, entTotal), '#e0a93a'),
+    bar('kept as source', chk.src, _pct(chk.src, entTotal), '#d0594f'),
+  ].join('') : '<small>no per-chunk data yet (older add-on versions)</small>';
   const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MoranSubs — Stats</title><style>
 body{background:#0e1116;color:#e6edf3;font:14px/1.5 system-ui,Segoe UI,Arial;margin:0;padding:18px}
@@ -866,23 +920,28 @@ th{color:#9aa4b2;font-weight:600}small{color:#9aa4b2}
 <div class="days">${dayBars || '<small>no data yet</small>'}</div>
 <small>“delivered ok” = a Hebrew subtitle was produced (incl. fallback). It stays
 ~100% as long as translations succeed — the failures card is what to watch.</small>
-<h2>New Arabic path vs old</h2>
+<h2>New Arabic path vs old (successful translations only)</h2>
 <div class="headline">${newPct}% new (Arabic)</div>
 ${bar('🆕 ai_ar (new)', m.ai_ar, newPct, '#46c46a')}
 ${bar('↩︎ ai_fallback', m.ai_fallback, fbPct, '#e0a93a')}
 ${bar('▫︎ ai_plain (off)', m.ai_plain, plPct, '#6fb6e0')}
+<small>counts only translations that produced a subtitle (ok). Failed attempts are excluded so they no longer inflate ai_ar.</small>
+<h2>Chunk-level outcome (entries delivered)</h2>
+${chkRows}
+<small>Of the entries actually delivered: how many went through with the Arabic prompt vs fell back to English-only (Arabic dropped on a blocked chunk) vs were kept as source. ${chk.degraded} translation(s) hit a block on at least one chunk (${chk.blocks} block event(s) total) yet still delivered a subtitle.</small>
 <h2>Why fallbacks happened (${fbTotal})</h2>
 ${fbRows || '<small>no fallbacks yet</small>'}
 <h2>By source language</h2>
 <table><tr><th>Lang</th><th>Total</th><th>% used Arabic</th></tr>${srcRows}</table>
 <h2>By add-on version</h2>
 <table><tr><th>Version</th><th>Translations</th></tr>${verRows}</table>
-<h2>Failures</h2>
-<table><tr><th>Time (UTC)</th><th>Title</th><th>Reason</th><th>Detail</th></tr>${failRows}</table>
+<h2>Failures (no subtitle delivered)</h2>
+<table><tr><th>Time (UTC)</th><th>Title</th><th>Method</th><th>Cause</th><th>Detail</th></tr>${failRows}</table>
 <h2>Top titles</h2>
-<table><tr><th>Title</th><th>Total</th><th>ai_ar</th><th>fallback</th><th>plain</th></tr>${topRows}</table>
+<table><tr><th>Title</th><th>Total</th><th>ok</th><th>fail</th><th>ai_ar</th><th>fallback</th><th>plain</th></tr>${topRows}</table>
+<small>ai_ar / fallback / plain count SUCCESSFUL translations only; “fail” is attempts that produced no subtitle.</small>
 <h2>Recent</h2>
-<table><tr><th>Time (UTC)</th><th>Title</th><th>Src</th><th>Method</th><th>OK</th><th>Reason / detail</th></tr>${recRows}</table>
+<table><tr><th>Time (UTC)</th><th>Title</th><th>Src</th><th>Method</th><th>OK</th><th>Detail</th></tr>${recRows}</table>
 <script>setTimeout(function(){location.reload()},30000)</script>`;
   return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });
 }
