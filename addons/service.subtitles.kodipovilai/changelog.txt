@@ -1,3 +1,18 @@
+v0.2.267
+- The Arabic gender reference is now ON by default for everyone (it tested
+  clean: gender accuracy ~27% -> ~90%+ with no loss of translation quality, and
+  a full silent fallback when no Arabic aligns). One-shot: it's force-enabled
+  once even if you'd turned it off before; a later manual opt-out still sticks.
+- Arabic is now fetched LAZILY: the first aligning Arabic release is the only
+  one downloaded (instead of pre-fetching four), and the Arabic language filter
+  is restored to OFF right after, so stray Arabic results no longer leak into
+  your normal subtitle searches.
+- "בחר כתוביות" chooser: redesigned rows -- a found-count header with a
+  colour/symbol legend, taller rows, a per-row category symbol (★ human / ◆ AI /
+  ■ built-in / ● current) and the match % moved to the right column.
+- Built-in (embedded) Hebrew now shows 101% on the source-selection screen in
+  every skin (was 100%), so it always sorts to the very top.
+
 v0.2.266
 - NEW (opt-in, OFF by default): "Improve gender accuracy using an Arabic
   reference". Turn it on in MoranSubs settings. When on, an AI translation also

@@ -2581,7 +2581,7 @@ def _handle_he_avail(params):
       * community pool + Wizdom (networked here now, NOT synchronously in POV's
         window -- that's what removed the multi-second source-list freeze);
       * the pool's embedded-Hebrew flags (releases known to ship a built-in
-        Hebrew track) -> the "BUILT-IN 100%" badge;
+        Hebrew track) -> the "BUILT-IN 101%" badge;
       * OpenSubtitles (rotating keys, no shared-account load);
       * Ktuvit -- ONLY as a fallback when nothing else found Hebrew, and gated
         by `he_match_ktuvit`. Ktuvit runs on ONE shared, rate-limited account,

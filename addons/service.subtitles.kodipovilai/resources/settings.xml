@@ -157,7 +157,7 @@
         </setting>
         <setting id="gender_ref_arabic" type="boolean" label="32546" help="32547"> <!-- Arabic gender reference -->
           <level>0</level>
-          <default>false</default>
+          <default>true</default>
           <control type="toggle"/>
         </setting>
         <setting id="subs_notifications" type="boolean" label="32542" help="32543"> <!-- Show subtitle/translation notifications -->
@@ -265,6 +265,12 @@
         </setting>
         <!-- Hidden marker: community pool default-on migration has run. -->
         <setting id="_pool_default_on_v1" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default></default>
+          <control type="label" format="string"/>
+        </setting>
+        <!-- Hidden marker: Arabic gender-reference force-on migration has run. -->
+        <setting id="_gender_ref_on_v1" type="string" label="30000" visible="false">
           <level>3</level>
           <default></default>
           <control type="label" format="string"/>
