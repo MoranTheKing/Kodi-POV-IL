@@ -1,3 +1,16 @@
+v0.2.283
+- FIX (continued): a PROHIBITED_CONTENT prompt block is usually FLAKY -- the
+  exact same prompt frequently succeeds on a retry (observed live). So a blocked
+  chunk is now retried with the SAME prompt up to 10 times (modest waits) BEFORE
+  degrading. Only if all 10 attempts block do we drop the Arabic gender hint,
+  then bisect, then keep source. This keeps the Arabic gender quality on chunks
+  that were only blocked by a transient hiccup, instead of losing it on the
+  first block.
+- The transient subtitle shown WHILE a translation is still running is now named
+  after the release (e.g. "Movie.2024.1080p.a") instead of the opaque
+  "progressive_<hash>_a". Clean-addon users no longer see a hash in the subtitle
+  picker mid-translation; the final delivered name was already clean.
+
 v0.2.282
 - The custom "בחר כתוביות" window (non-FENtastic skins) now PAUSES playback while
   it's open and resumes when you close it -- matching the native dialog (the
