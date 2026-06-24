@@ -413,6 +413,51 @@ def _sanitise_sub_name(name):
     return cleaned
 
 
+def _progressive_slot_path(cache_dir, source_id, slot, release=''):
+    """Path for a transient progressive-translation slot file. Kodi
+    turns the basename into the subtitle label shown in the picker, so
+    when we know the source RELEASE we name the slot after it (e.g.
+    'Incendies.2010.720p.BluRay.a.he.srt' -> label 'Incendies...720p.BluRay.a')
+    instead of the opaque 'progressive_<hash>_a' the clean addon used to
+    show mid-translation. The '.a'/'.b' slot suffix is what lets us
+    alternate two paths (so Kodi re-parses and the stream count stays
+    capped at 2); it's only visible while translating -- the 'done'
+    phase swaps in the clean '<release>.he.srt'. Falls back to the hash
+    name when no release is available."""
+    try:
+        from resources.lib import kodi_utils
+        rel = kodi_utils.safe_release_filename(release or '')
+    except Exception:
+        rel = ''
+    if rel:
+        name = '{0}.{1}.he.srt'.format(rel, slot)
+    else:
+        name = 'progressive_{0}_{1}.he.srt'.format(source_id, slot)
+    return os.path.join(cache_dir, name)
+
+
+def _progressive_cleanup_patterns(source_id, release=''):
+    """Glob patterns matching every transient slot file we may have
+    written for one translation -- both the hash-named fallback and the
+    release-named slots, plus the legacy _v* names from older builds.
+    The clean '<release>.he.srt' final is deliberately NOT matched so it
+    survives the post-'done' cleanup."""
+    pats = [
+        'progressive_{0}_v*.he.srt'.format(source_id),
+        'progressive_{0}_a.he.srt'.format(source_id),
+        'progressive_{0}_b.he.srt'.format(source_id),
+    ]
+    try:
+        from resources.lib import kodi_utils
+        rel = kodi_utils.safe_release_filename(release or '')
+    except Exception:
+        rel = ''
+    if rel:
+        pats.append('{0}.a.he.srt'.format(rel))
+        pats.append('{0}.b.he.srt'.format(rel))
+    return pats
+
+
 def _subtitle_display_name(link, info, path):
     """A human-readable, filesystem-safe release name for the subtitle
     we're about to hand to the player. Kodi turns the file's basename
@@ -837,10 +882,9 @@ def _handle_bg_translate_picker(params):
                 # reported "10/10" piling up in the picker.
                 slot = 'b' if _ver.get('slot', 'b') == 'a' else 'a'
                 _ver['slot'] = slot
-                ver_path = os.path.join(
-                    kodi_utils.cache_dir(),
-                    'progressive_{0}_{1}.he.srt'.format(
-                        payload['source_id'], slot))
+                ver_path = _progressive_slot_path(
+                    kodi_utils.cache_dir(), payload['source_id'], slot,
+                    payload.get('release') or '')
                 _tmp = ver_path + '.aitmp'
                 with open(_tmp, 'w', encoding='utf-8') as _f:
                     _f.write(payload['merged_text'])
@@ -931,18 +975,13 @@ def _handle_bg_translate_picker(params):
                 if _canonical_swap_succeeded:
                     try:
                         import glob as _glob
-                        # Patterns cover BOTH legacy (_v*) from
-                        # pre-alternation builds AND the new _a/_b
-                        # alternation slots. _final stays as the
+                        # Patterns cover legacy (_v*), the hash-named
+                        # _a/_b slots AND the release-named slots. The
+                        # clean <release>.he.srt _final stays as the
                         # canonical stream Kodi is on.
-                        _patterns = [
-                            'progressive_{0}_v*.he.srt'.format(
-                                payload['source_id']),
-                            'progressive_{0}_a.he.srt'.format(
-                                payload['source_id']),
-                            'progressive_{0}_b.he.srt'.format(
-                                payload['source_id']),
-                        ]
+                        _patterns = _progressive_cleanup_patterns(
+                            payload['source_id'],
+                            payload.get('release') or '')
                         for _pat in _patterns:
                             for _stale in _glob.glob(
                                     os.path.join(
@@ -2012,10 +2051,9 @@ def _handle_translate_file(params):
                 # (plus _final after done) instead of N.
                 slot = 'b' if _ver.get('slot', 'b') == 'a' else 'a'
                 _ver['slot'] = slot
-                ver_path = os.path.join(
-                    kodi_utils.cache_dir(),
-                    'progressive_{0}_{1}.he.srt'.format(
-                        payload['source_id'], slot))
+                ver_path = _progressive_slot_path(
+                    kodi_utils.cache_dir(), payload['source_id'], slot,
+                    payload.get('release') or '')
                 _tmp = ver_path + '.aitmp'
                 with open(_tmp, 'w', encoding='utf-8') as _f:
                     _f.write(payload['merged_text'])
@@ -2123,18 +2161,13 @@ def _handle_translate_file(params):
                 if _canonical_swap_succeeded:
                     try:
                         import glob as _glob
-                        # Patterns cover BOTH legacy (_v*) from
-                        # pre-alternation builds AND the new _a/_b
-                        # alternation slots. _final stays as the
+                        # Patterns cover legacy (_v*), the hash-named
+                        # _a/_b slots AND the release-named slots. The
+                        # clean <release>.he.srt _final stays as the
                         # canonical stream Kodi is on.
-                        _patterns = [
-                            'progressive_{0}_v*.he.srt'.format(
-                                payload['source_id']),
-                            'progressive_{0}_a.he.srt'.format(
-                                payload['source_id']),
-                            'progressive_{0}_b.he.srt'.format(
-                                payload['source_id']),
-                        ]
+                        _patterns = _progressive_cleanup_patterns(
+                            payload['source_id'],
+                            payload.get('release') or '')
                         for _pat in _patterns:
                             for _stale in _glob.glob(
                                     os.path.join(

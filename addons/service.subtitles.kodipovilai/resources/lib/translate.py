@@ -1640,6 +1640,13 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # schedule -- they're usually content / parse / safety issues,
     # not infrastructure.
     GENERIC_BACKOFF = [2, 5]
+    # Prompt-level blocks (PROHIBITED_CONTENT) are often FLAKY -- the SAME prompt
+    # frequently succeeds on a retry (observed: a chunk that blocked translated
+    # fine moments later). So retry the SAME prompt up to 10 times BEFORE degrading
+    # (dropping the Arabic block), to preserve the Arabic gender quality. Only if
+    # all 10 attempts block do we fall back. Waits stay modest (flaky != rate
+    # limit) but average >4s so we never exceed the free 15 req/min limit.
+    FILTERED_BACKOFF = [2, 3, 4, 5, 6, 8, 10, 12, 15, 20]
 
     # Per-chunk translator. Holds the inner retry loop. Returns the
     # raw Gemini response text, or raises a Stop-style exception
@@ -1771,6 +1778,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                        .replace('{chunk}', body))
         overload_attempts = 0
         generic_attempts = 0
+        filtered_attempts = 0
         while True:
             try:
                 return gemini.generate(
@@ -1795,10 +1803,21 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             except gemini.TruncatedResponse:
                 # propagate up to _translate_one which will bisect
                 raise
-            except gemini.FilteredResponse:
-                # safety filter blocked this chunk -- propagate so
-                # _translate_one bisects (and keeps source at size 1) instead of
-                # aborting the whole translation.
+            except gemini.FilteredResponse as e:
+                # Prompt/safety block -- usually FLAKY. Retry the SAME prompt a
+                # few times first (preserves the Arabic gender quality); only
+                # after that do we propagate so _translate_one drops the Arabic
+                # block, then bisects, then keeps source. Never aborts the job.
+                if filtered_attempts < len(FILTERED_BACKOFF):
+                    wait = FILTERED_BACKOFF[filtered_attempts]
+                    filtered_attempts += 1
+                    kodi_utils.log(
+                        'Chunk {0}/{1} blocked ({2}) -- flaky? retry {3}/{4} '
+                        'in {5}s (same prompt)'.format(
+                            idx, total, str(e)[:50], filtered_attempts,
+                            len(FILTERED_BACKOFF), wait), level='WARNING')
+                    time.sleep(wait)
+                    continue
                 raise
             except gemini.OverloadError as e:
                 if overload_attempts < len(OVERLOAD_BACKOFF):
@@ -1903,6 +1922,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                             'total': total,
                             'merged_text': _merged_text,
                             'source_id': _progressive_source_id,
+                            'release': _src_release,
                         })
                     except Exception as e:
                         kodi_utils.log(
