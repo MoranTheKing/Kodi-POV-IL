@@ -34,18 +34,39 @@ def _video_ref(info):
             or info.get('label') or info.get('title') or '')
 
 
-def _entry_label(c, info, translate):
-    """Colour the WHOLE row (like DarkSubs's MySubs), not just a tag -- the
-    candidate label already carries its own text + match % (e.g. "כתובית · מאגר
-    · 29% — Movie..."), so we just tint all of it:
-      * currently-applied sub  -> magenta (it's also floated to the top);
-      * Hebrew sub             -> gold (>=80% match) / green (>=50%) / cyan;
-      * foreign / AI-from-X     -> muted grey.
-    The % shown is the one list_candidates already put in the label."""
+# Per-row category symbol (B): a leading glyph that tells the kind apart at a
+# glance. Chosen from the BMP set every Kodi skin font renders (★ ◆ ● ■ ·):
+#   ● current (applied now)   ■ built-in / embedded Hebrew (101%)
+#   ★ human Hebrew            ◆ AI Hebrew            · foreign source
+_LEGEND = ('[COLOR FFFFD700]★[/COLOR] אנושי   '
+           '[COLOR FF6FD3F0]◆[/COLOR] AI   '
+           '[COLOR FFFFD700]■[/COLOR] מובנה   '
+           '[COLOR FFFF00FE]●[/COLOR] נוכחית')
+
+
+def _row_item(c, info, translate, xbmcgui):
+    """Build a styled list row (A+B): a leading category symbol + the kind/
+    release text on the left, and the match % on the right (label2), with the
+    whole row tinted by match quality. Mirrors DarkSubs's MySubs but richer:
+      * currently-applied sub  -> ● magenta (also floated to the top);
+      * built-in Hebrew        -> ■ gold (101%);
+      * human Hebrew           -> ★   AI Hebrew -> ◆   (gold>=80 / green>=50 /
+                                    cyan by match %);
+      * foreign / AI-from-X     -> · muted grey.
+    The % is the one list_candidates already computed; we just relocate it to
+    the right column so the left text stays short and readable."""
     import re as _re
     lang = (c.get('language') or '').strip()
     name = (c.get('filename') or '').strip()
     current = name.startswith('» נוכחית')
+
+    payload = {}
+    try:
+        payload = translate._decode_link(c.get('link') or '') or {}
+    except Exception:
+        payload = {}
+    typ = payload.get('type')
+    embedded = bool(payload.get('embedded'))
 
     # match % already embedded in the label (list_candidates computed it).
     pct = None
@@ -56,21 +77,44 @@ def _entry_label(c, info, translate):
         except ValueError:
             pct = None
 
-    if current:
-        col = 'FFFF00FE'                       # magenta
-    elif lang == 'he':
-        if pct is not None and pct >= 80:
-            col = 'FFFFD700'                   # gold -- strong match / 101%
-        elif pct is not None and pct >= 50:
-            col = 'FF49C46A'                   # green
-        else:
-            col = 'FF6FD3F0'                   # cyan
-    elif lang:
-        col = 'FFB0B0B0'                       # foreign / AI source -- grey
-    else:
-        col = 'FFFFFFFF'
+    # Drop the "» נוכחית · " prefix from the visible text (we show ● instead),
+    # and pull the trailing "· NN%" out of the kind text into the right column.
+    disp = name
+    if current and '· ' in disp:
+        disp = disp.split('· ', 1)[1]
+    disp = _re.sub(r'\s*·\s*\d{1,3}%\s*(?=($|\s—))', ' ', disp).strip()
+    disp = _re.sub(r'\s*·\s*\d{1,3}%\s*$', '', disp).strip()
 
-    return '[B][COLOR {0}]{1}[/COLOR][/B]'.format(col, name)
+    if current:
+        sym, col = '●', 'FFFF00FE'                 # magenta -- applied now
+    elif embedded and lang == 'he':
+        sym, col = '■', 'FFFFD700'                 # built-in Hebrew (101%)
+    elif lang == 'he':
+        is_ai = typ in ('ai', 'engine_ai') or 'AI' in disp
+        sym = '◆' if is_ai else '★'
+        if pct is not None and pct >= 80:
+            col = 'FFFFD700'                        # gold -- strong / 101%
+        elif pct is not None and pct >= 50:
+            col = 'FF49C46A'                        # green
+        else:
+            col = 'FF6FD3F0'                        # cyan
+    elif lang:
+        sym, col = '·', 'FFB0B0B0'                  # foreign / AI source -- grey
+    else:
+        sym, col = ' ', 'FFFFFFFF'
+
+    label = '[B][COLOR {0}]{1}  {2}[/COLOR][/B]'.format(col, sym, disp)
+    right = '{0}%'.format(pct) if pct is not None else ''
+    label2 = ('[B][COLOR {0}]{1}[/COLOR][/B]'.format(col, right)
+              if right else '')
+    try:
+        li = xbmcgui.ListItem(label)
+        if label2:
+            li.setLabel2(label2)
+        return li
+    except Exception:
+        # Fall back to a plain coloured string row if ListItem isn't available.
+        return '[B][COLOR {0}]{1}  {2}[/COLOR][/B]'.format(col, sym, disp)
 
 
 def _start_ai_apply(link, info):
@@ -191,13 +235,24 @@ def show():
             self.items = items
             self.setGeometry(950, 620, 9, 2)
             head = _video_ref(info) or ''
-            self.header = pyxbmct.Label(
-                '[B][COLOR deepskyblue]{0}[/COLOR][/B]'.format(head))
-            self.placeControl(self.header, 0, 0, columnspan=2)
-            self.lst = pyxbmct.List()
-            self.placeControl(self.lst, 1, 0, rowspan=7, columnspan=2)
+            # Header (A): "נמצאו N כתוביות" + the title/release, with a compact
+            # colour/symbol legend underneath so the row glyphs are decodable.
+            n_found = len(self.items)
+            htxt = '[B][COLOR deepskyblue]נמצאו {0} כתוביות[/COLOR][/B]'.format(
+                n_found)
+            if head:
+                htxt += '[CR][COLOR FFB8D6E8]{0}[/COLOR]'.format(head)
+            htxt += '[CR][COLOR FF9AA0A6]{0}[/COLOR]'.format(_LEGEND)
+            self.header = pyxbmct.Label(htxt)
+            self.placeControl(self.header, 0, 0, rowspan=2, columnspan=2)
+            # Taller rows for readability (A); no icon column reserved. label2
+            # carries the match % on the right (B).
+            self.lst = pyxbmct.List(font='font13', _itemHeight=40, _space=2,
+                                    _imageWidth=0, _imageHeight=0,
+                                    _itemTextXOffset=14)
+            self.placeControl(self.lst, 2, 0, rowspan=6, columnspan=2)
             self.lst.addItems(
-                [_entry_label(c, info, translate) for c in self.items])
+                [_row_item(c, info, translate, xbmcgui) for c in self.items])
             self.connect(self.lst, self.on_pick)
             # Full native Kodi subtitle search/download -- for users who want the
             # regular "download subtitles" flow, not just this picker. Skin-

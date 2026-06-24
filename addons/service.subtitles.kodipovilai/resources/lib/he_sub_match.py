@@ -492,7 +492,7 @@ def label_prefix(src_release, names, embedded=None):
 
     If this source's release matches one the community flagged as carrying a
     BUILT-IN Hebrew track, it gets a distinct top-priority green badge
-    ('HEB BUILT-IN 100%') so everyone knows it already has Hebrew and is well
+    ('HEB BUILT-IN 101%') so everyone knows it already has Hebrew and is well
     worth picking. Otherwise a normal 'HEB <NN>%' match badge: green high /
     amber mid / red low.
 
@@ -507,7 +507,7 @@ def label_prefix(src_release, names, embedded=None):
         if embedded and src_release:
             emb_best = best_score(src_release, embedded)
             if emb_best >= 80:
-                return '[COLOR FF2ECC71][B]HEB BUILT-IN 100%[/B][/COLOR] | '
+                return '[COLOR FF2ECC71][B]HEB BUILT-IN 101%[/B][/COLOR] | '
         best = best_score(src_release, names)
         if best <= 0:
             return ''
