@@ -155,6 +155,11 @@
           <default>true</default>
           <control type="toggle"/>
         </setting>
+        <setting id="gender_ref_arabic" type="boolean" label="32546" help="32547"> <!-- Arabic gender reference -->
+          <level>0</level>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
         <setting id="subs_notifications" type="boolean" label="32542" help="32543"> <!-- Show subtitle/translation notifications -->
           <level>0</level>
           <default>true</default>
