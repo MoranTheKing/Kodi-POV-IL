@@ -43,6 +43,12 @@ class TruncatedResponse(GeminiError):
         self.partial_text = partial_text
 
 
+class FilteredResponse(GeminiError):
+    """Gemini returned no candidates (a safety filter blocked the chunk, even
+    with safety set to BLOCK_NONE). Caller should bisect; a single still-blocked
+    entry can be left in the source language rather than aborting everything."""
+
+
 def test_key(api_key, model='gemini-3.1-flash-lite'):
     """Cheap sanity check: list the user's available models and
     confirm the chosen one is in the set. Returns the model id we
@@ -131,6 +137,19 @@ def generate(api_key, model, prompt, temperature=0.2,
     payload = {
         'contents': [{'parts': [{'text': prompt}]}],
         'generationConfig': generation_config,
+        # Subtitles legitimately contain profanity / violence / sexual language;
+        # we're only TRANSLATING existing dialogue, so turn the safety filters
+        # OFF. Otherwise Gemini returns "no candidates (filtered)" on a chunk and
+        # the whole translation aborts. BLOCK_NONE is the most permissive
+        # threshold the Gemini API accepts.
+        'safetySettings': [
+            {'category': 'HARM_CATEGORY_HARASSMENT', 'threshold': 'BLOCK_NONE'},
+            {'category': 'HARM_CATEGORY_HATE_SPEECH', 'threshold': 'BLOCK_NONE'},
+            {'category': 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+             'threshold': 'BLOCK_NONE'},
+            {'category': 'HARM_CATEGORY_DANGEROUS_CONTENT',
+             'threshold': 'BLOCK_NONE'},
+        ],
     }
 
     try:
@@ -164,7 +183,8 @@ def generate(api_key, model, prompt, temperature=0.2,
     cands = data.get('candidates') or []
     if not cands:
         # Often means the prompt triggered a safety filter.
-        raise GeminiError('No candidates in response (possibly filtered)')
+        raise FilteredResponse(
+            'No candidates in response (possibly filtered)')
 
     parts = (cands[0].get('content') or {}).get('parts') or []
     chunks = [p.get('text', '') for p in parts if isinstance(p, dict)]

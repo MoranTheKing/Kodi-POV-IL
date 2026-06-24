@@ -1,3 +1,11 @@
+v0.2.280
+- FIX: AI translation could abort mid-way with "no candidates (filtered)" -- a
+  chunk with profanity/violence/sexual dialogue was being blocked by Gemini's
+  safety filter. Subtitle translation now sends safety = BLOCK_NONE (we only
+  translate existing dialogue), and as a safety net a still-blocked chunk is
+  bisected and, at worst, that one line is left in the source language instead of
+  failing the whole subtitle. No more aborted translations on strong content.
+
 v0.2.279
 - Telemetry: each AI translation now also reports its duration. The owner
   dashboard adds an "avg translation time" card and a "daily (last 14 days)" bar
