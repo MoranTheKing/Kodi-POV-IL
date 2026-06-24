@@ -764,7 +764,7 @@ async function ensureTeleSchema(env) {
   ).run();
   // Add the newer columns to a pre-existing table (D1 has no ADD COLUMN IF NOT
   // EXISTS, so ignore the "duplicate column" error).
-  for (const col of ['reason TEXT', 'ar_cands INTEGER']) {
+  for (const col of ['reason TEXT', 'ar_cands INTEGER', 'dur INTEGER']) {
     try { await env.DB.prepare(`ALTER TABLE tr_events ADD COLUMN ${col}`).run(); } catch (e) { /* exists */ }
   }
 }
@@ -775,15 +775,15 @@ async function recordEvent(env, body, ts) {
   try {
     await ensureTeleSchema(env);
     await env.DB.prepare(
-      `INSERT INTO tr_events (ts,anon,v,type,title,season,episode,year,src,method,ok,note,hinted,model,think,reason,ar_cands)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      `INSERT INTO tr_events (ts,anon,v,type,title,season,episode,year,src,method,ok,note,hinted,model,think,reason,ar_cands,dur)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).bind(
       ts, _ts(b.anon).slice(0, 40), _ts(b.v).slice(0, 16), _ts(b.type).slice(0, 12),
       _ts(b.title).slice(0, 160), _ts(b.season).slice(0, 8), _ts(b.episode).slice(0, 8),
       _ts(b.year).slice(0, 8), _ts(b.src).slice(0, 8), _ts(b.method).slice(0, 16),
       b.ok ? 1 : 0, _ts(b.note).slice(0, 80), Number(b.hinted) || 0,
       _ts(b.model).slice(0, 40), _ts(b.think).slice(0, 16),
-      _ts(b.reason).slice(0, 24), Number(b.ar_cands) || 0
+      _ts(b.reason).slice(0, 24), Number(b.ar_cands) || 0, Number(b.dur) || 0
     ).run();
   } catch (e) { return json({ ok: false, error: String(e).slice(0, 160) }); }
   return json({ ok: true, stored: true });
@@ -797,6 +797,8 @@ async function renderStats(env) {
   const tot = (await q(`SELECT COUNT(*) n, COALESCE(SUM(ok),0) oks, COUNT(DISTINCT anon) users FROM tr_events ${W}`))[0] || { n: 0, oks: 0, users: 0 };
   const bm = await q(`SELECT method, COUNT(*) n, COALESCE(SUM(ok),0) oks FROM tr_events ${W} GROUP BY method`);
   const d1 = (await q(`SELECT COUNT(*) n FROM tr_events ${W} AND ts >= strftime('%s','now')-86400`))[0] || { n: 0 };
+  const avg = (await q(`SELECT AVG(dur) a FROM tr_events ${W} AND dur > 0 AND ok=1`))[0] || { a: 0 };
+  const days = await q(`SELECT date(ts,'unixepoch') d, COUNT(*) n, COALESCE(SUM(method='ai_ar'),0) ar FROM tr_events ${W} GROUP BY d ORDER BY d DESC LIMIT 14`);
   // WHY fallbacks happened (the key diagnostic) + source-language + version.
   const fbR = await q(`SELECT COALESCE(NULLIF(reason,''),'(unknown)') reason, COUNT(*) n FROM tr_events ${W} AND method='ai_fallback' GROUP BY reason ORDER BY n DESC`);
   const bySrc = await q(`SELECT COALESCE(NULLIF(src,''),'?') src, COUNT(*) n, COALESCE(SUM(method='ai_ar'),0) ar FROM tr_events ${W} GROUP BY src ORDER BY n DESC LIMIT 12`);
@@ -817,6 +819,15 @@ async function renderStats(env) {
   const mColor = { ai_ar: '#46c46a', ai_fallback: '#e0a93a', ai_plain: '#6fb6e0' };
   const recRows = rec.map(r => `<tr><td>${fmtT(r.ts)}</td><td>${_esc(r.title)}${ep(r)}</td><td>${_esc(r.src)}</td><td style="color:${mColor[r.method] || '#aaa'}">${_esc(r.method)}</td><td>${r.ok ? '✓' : '✗'}</td><td><small>${_esc(r.reason || '')} ${_esc(r.note || '')}</small></td></tr>`).join('');
   const topRows = top.map(r => `<tr><td>${_esc(r.title)}</td><td>${r.n}</td><td style="color:#46c46a">${r.ar}</td><td style="color:#e0a93a">${r.fb}</td><td style="color:#6fb6e0">${r.pl}</td></tr>`).join('');
+  const avgSec = Math.round(avg.a || 0);
+  const avgTxt = avgSec >= 60 ? `${Math.floor(avgSec / 60)}m ${avgSec % 60}s` : `${avgSec}s`;
+  const dayChrono = days.slice().reverse();
+  const maxDay = Math.max(1, ...dayChrono.map(r => r.n));
+  const dayBars = dayChrono.map(r => {
+    const h = Math.round((r.n / maxDay) * 120);
+    const arh = Math.round((r.ar / maxDay) * 120);
+    return `<div class="day"><div class="dn">${r.n}</div><div class="dbar" style="height:${h}px"><div class="dar" style="height:${arh}px"></div></div><div class="dl">${_esc(String(r.d).slice(5))}</div></div>`;
+  }).join('');
   const fbTotal = fbR.reduce((a, r) => a + r.n, 0);
   const fbRows = fbR.map(r => bar(REASONS[r.reason] || r.reason, r.n, _pct(r.n, fbTotal), '#e0a93a')).join('');
   const srcRows = bySrc.map(r => `<tr><td>${_esc(r.src)}</td><td>${r.n}</td><td>${_pct(r.ar, r.n)}% Arabic</td></tr>`).join('');
@@ -834,6 +845,12 @@ h1{font-size:18px;margin:0 0 4px}h2{font-size:14px;color:#9aa4b2;margin:22px 0 8
 .track{flex:1;background:#232a33;border-radius:6px;height:14px;overflow:hidden}.fill{height:100%}
 table{width:100%;border-collapse:collapse;margin-top:6px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #232a33;font-size:13px}
 th{color:#9aa4b2;font-weight:600}small{color:#9aa4b2}
+.days{display:flex;gap:6px;align-items:flex-end;margin-top:10px;overflow-x:auto;padding-bottom:4px}
+.day{display:flex;flex-direction:column;align-items:center;min-width:40px}
+.day .dn{font-size:11px;color:#9aa4b2;margin-bottom:3px}
+.dbar{width:26px;height:0;background:#2f6b3f;border-radius:4px 4px 0 0;position:relative;display:flex;align-items:flex-end}
+.dar{width:26px;background:#46c46a;border-radius:4px 4px 0 0}
+.day .dl{font-size:10px;color:#9aa4b2;margin-top:4px}
 </style>
 <h1>MoranSubs — Translation Stats</h1>
 <small>add-on ≥ ${TELE_MIN_VER} · auto-refresh 30s</small>
@@ -843,7 +860,10 @@ th{color:#9aa4b2;font-weight:600}small{color:#9aa4b2}
 <div class="card"><div class="big">${okPct}%</div><div class="sub">delivered ok</div></div>
 <div class="card"><div class="big" style="color:${failN ? '#d0594f' : '#46c46a'}">${failN}</div><div class="sub">failures (no subtitle)</div></div>
 <div class="card"><div class="big">${d1.n}</div><div class="sub">last 24h</div></div>
+<div class="card"><div class="big">${avgTxt}</div><div class="sub">avg translation time</div></div>
 </div>
+<h2>Daily (last 14 days · green = used Arabic)</h2>
+<div class="days">${dayBars || '<small>no data yet</small>'}</div>
 <small>“delivered ok” = a Hebrew subtitle was produced (incl. fallback). It stays
 ~100% as long as translations succeed — the failures card is what to watch.</small>
 <h2>New Arabic path vs old</h2>

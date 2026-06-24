@@ -1,3 +1,8 @@
+v0.2.279
+- Telemetry: each AI translation now also reports its duration. The owner
+  dashboard adds an "avg translation time" card and a "daily (last 14 days)" bar
+  graph (green = used the Arabic path). Requires re-deploying the pool Worker.
+
 v0.2.278
 - Telemetry v2 (owner dashboard): each AI translation now reports WHY it used the
   method it did -- for fallbacks, whether the Arabic option was off, no Arabic

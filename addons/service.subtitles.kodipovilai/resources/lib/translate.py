@@ -1584,6 +1584,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # never had it on (ai_plain), plus success/failure. _telemetry_done guards
     # against double-emit across the multiple return paths below.
     _telemetry_done = [False]
+    _t0 = time.time()  # translation-duration clock for telemetry
 
     def _emit(ok, note=''):
         if _telemetry_done[0]:
@@ -1612,6 +1613,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 'method': method,
                 'reason': reason,
                 'ar_cands': int(_ar_diag.get('cands') or 0),
+                'dur': max(0, int(time.time() - _t0)),
                 'ok': 1 if ok else 0,
                 'note': str(ev_note or '')[:80],
                 'hinted': len(_ar_map or {}),
