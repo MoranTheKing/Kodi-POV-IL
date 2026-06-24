@@ -1,3 +1,8 @@
+v0.2.282
+- The custom "בחר כתוביות" window (non-FENtastic skins) now PAUSES playback while
+  it's open and resumes when you close it -- matching the native dialog (the
+  video used to keep playing behind it).
+
 v0.2.281
 - FIX (continued): a translation could still be blocked by Gemini at the PROMPT
   level (promptFeedback blockReason = PROHIBITED_CONTENT) -- not overridable by
