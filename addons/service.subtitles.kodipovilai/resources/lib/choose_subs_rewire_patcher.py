@@ -62,6 +62,10 @@ TARGETS = (
     ('skin.fentastic', 'xml/Includes_VideoOsd3.xml'),
     ('skin.fentastic', 'xml/Includes_VideoOsd4.xml'),
     ('skin.estuary', 'xml/VideoOSD.xml'),
+    # NOX: catches the old All_Subs button form (e.g. skin v1.0.7) so the button
+    # reaches our chooser even before the skin updates. (nox_choose_subs_patcher
+    # also handles NOX's newer ActivateWindow(2118) form -- both are idempotent.)
+    ('skin.povil.nox', 'xml/VideoOSD.xml'),
 )
 
 # FENtastic's OSD files use raw, unescaped "&" in RunPlugin URLs (Kodi's skin
