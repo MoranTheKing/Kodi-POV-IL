@@ -1659,11 +1659,13 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         if len(ch) > 1:
             try:
                 response = _call_gemini(idx, ch)
-            except gemini.TruncatedResponse as e:
+            except (gemini.TruncatedResponse, gemini.FilteredResponse) as e:
                 mid = len(ch) // 2
+                why = ('filtered' if isinstance(e, gemini.FilteredResponse)
+                       else 'truncated')
                 kodi_utils.log(
-                    'Chunk {0} truncated -- bisecting into {1} + {2}'
-                    .format(idx, mid, len(ch) - mid),
+                    'Chunk {0} {1} -- bisecting into {2} + {3}'
+                    .format(idx, why, mid, len(ch) - mid),
                     level='WARNING')
                 left = _translate_one(idx, ch[:mid])
                 right = _translate_one(idx, ch[mid:])
@@ -1698,6 +1700,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 'returning partial'.format(idx),
                 level='ERROR')
             return e.partial_text or ''
+        except gemini.FilteredResponse:
+            # One entry still blocked by Gemini's safety filter even at size 1
+            # -- keep the SOURCE text for it so the rest of the subtitle still
+            # translates instead of the whole job aborting.
+            kodi_utils.log(
+                'Chunk {0} filtered even at size 1 -- keeping source text'
+                .format(idx), level='WARNING')
+            return '\n\n'.join(ch)
 
     # Cross-chunk continuity. For chunk N, give the model the last
     # PREV_CONTEXT_LINES dialogue lines from chunk N-1's SOURCE so
@@ -1768,6 +1778,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                     kodi_utils.localised(33004, 'API key rejected'))
             except gemini.TruncatedResponse:
                 # propagate up to _translate_one which will bisect
+                raise
+            except gemini.FilteredResponse:
+                # safety filter blocked this chunk -- propagate so
+                # _translate_one bisects (and keeps source at size 1) instead of
+                # aborting the whole translation.
                 raise
             except gemini.OverloadError as e:
                 if overload_attempts < len(OVERLOAD_BACKOFF):
