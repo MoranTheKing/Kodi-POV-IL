@@ -1,3 +1,15 @@
+v0.2.284
+- TUNING (based on live A/B tests against the API): PROHIBITED_CONTENT prompt
+  blocks come in two kinds -- FLAKY (the same prompt passes on a retry) and
+  PERSISTENT (the same prompt blocks every time, driven by the sheer VOLUME of
+  explicit content in one request). Tests proved a text disclaimer does NOT
+  help (generic or film-specific, in systemInstruction or in the prompt -- all
+  still blocked), and that what actually escapes the block is reducing volume:
+  dropping the Arabic block and bisecting. So same-prompt retries were cut from
+  10 to 3 -- enough to catch the flaky case, without stalling ~70s on a
+  persistent block before degrading to the real fix (drop Arabic -> bisect ->
+  keep source). Blocked chunks now resolve much faster.
+
 v0.2.283
 - FIX (continued): a PROHIBITED_CONTENT prompt block is usually FLAKY -- the
   exact same prompt frequently succeeds on a retry (observed live). So a blocked
