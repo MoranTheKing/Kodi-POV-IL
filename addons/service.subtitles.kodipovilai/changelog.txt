@@ -1,3 +1,11 @@
+v0.2.278
+- Telemetry v2 (owner dashboard): each AI translation now reports WHY it used the
+  method it did -- for fallbacks, whether the Arabic option was off, no Arabic
+  subtitle was found, or the Arabic didn't time-align (with the scale/vote/overlap
+  detail). The dashboard adds a "why fallbacks happened" breakdown, per-source-
+  language and per-version breakdowns, a failures list, and clarifies the success
+  metric. (Requires re-deploying the pool Worker.)
+
 v0.2.277
 - Subtitle chooser v2 (non-FENtastic skins): the custom window is now FULL-SCREEN
   and far more polished -- Tal-inspired fanart background, poster + plot, a wide

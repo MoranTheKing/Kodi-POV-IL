@@ -283,23 +283,26 @@ def prepare(info, src_text):
     stopping at the first that aligns -- so the common case (the first release
     aligns) pulls a SINGLE Arabic file instead of pre-fetching four. Returns a
     dict {srt_entry_number: arabic_text} (gender hints) or None to fall back to
-    the normal translation. Fully guarded."""
+    the normal translation. ALSO returns a small diag dict (reason + details) for
+    telemetry: reason is 'ok' / 'no_source' / 'no_arabic' / 'no_align' / 'crash'.
+    Fully guarded."""
     try:
         from resources.lib import srt as _srt
         src_blocks = _srt.parse_blocks(src_text)
     except Exception:
-        return None
+        return None, {'reason': 'crash'}
     if not src_blocks:
-        return None
+        return None, {'reason': 'no_source'}
     try:
         cands = _arabic_candidates(info)
     except Exception as e:
         _log('fetch crashed: {0}'.format(e), level='WARNING')
-        return None
+        return None, {'reason': 'crash'}
     if not cands:
         _log('no Arabic candidates -> normal translation (fallback)')
-        return None
+        return None, {'reason': 'no_arabic', 'cands': 0}
     total = len(cands)
+    best_diag = ''
     for idx, c in enumerate(cands, 1):
         ar_text = _download_arabic(c)   # lazy: fetch only when we reach it
         if not ar_text:
@@ -313,9 +316,11 @@ def prepare(info, src_text):
         if mapping is not None:
             _log('candidate {0}/{1} {2} -> using Arabic gender reference '
                  '({3} entries hinted)'.format(idx, total, diag, len(mapping)))
-            return mapping
+            return mapping, {'reason': 'ok', 'cands': total,
+                             'hinted': len(mapping), 'diag': diag}
+        best_diag = diag
         _log('candidate {0}/{1} rejected: {2} -- trying next'.format(
             idx, total, diag))
     _log('all {0} Arabic candidate(s) failed alignment -> normal translation '
          '(fallback)'.format(total))
-    return None
+    return None, {'reason': 'no_align', 'cands': total, 'diag': best_diag}
