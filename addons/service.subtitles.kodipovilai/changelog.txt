@@ -1,3 +1,16 @@
+v0.2.268
+- Tuned the Gemini 3 translation settings (validated with real A/B tests on the
+  free flash-lite model): temperature back to Google's recommended 1.0 (lowering
+  it degrades Gemini 3's reasoning), thinking level set to MEDIUM, and top_p left
+  at the model default. The old effective setup ran at the HIGH thinking default,
+  which burned up to ~15k thinking tokens per chunk -> hit the output cap ->
+  truncated/duplicated lines. MEDIUM finishes cleanly, uses ~8x fewer thinking
+  tokens (much easier on the free 250K/min quota), and was the MOST accurate on
+  gender in testing (From episode 93%, Mario 100% on clearly-marked lines; no
+  truncation). One-shot migration moves existing users to temp 1.0 + thinking
+  medium, but only if they were still on the old defaults -- a manual choice is
+  kept.
+
 v0.2.267
 - The Arabic gender reference is now ON by default for everyone (it tested
   clean: gender accuracy ~27% -> ~90%+ with no loss of translation quality, and

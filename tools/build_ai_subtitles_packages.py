@@ -207,6 +207,28 @@ def _maybe_force_gender_ref_arabic():
         pass
 
 
+def _maybe_tune_gemini3_defaults():
+    """One-shot: move existing users to the validated Gemini 3 settings --
+    temperature 1.0 + thinking_level medium. Only flips values still on the old
+    defaults (0.2 / disabled); a deliberate choice sticks. Marker-gated."""
+    try:
+        from resources.lib import kodi_utils
+        if kodi_utils.get_setting('_gemini3_tune_v1', '') == '1':
+            return
+        try:
+            t = float(kodi_utils.get_setting('temperature', '') or '0.2')
+        except (TypeError, ValueError):
+            t = 0.2
+        if abs(t - 0.2) < 0.005:
+            kodi_utils.set_setting('temperature', '1.0')
+        th = (kodi_utils.get_setting('thinking_budget', '') or '0').strip().lower()
+        if th in ('', '0', 'disabled'):
+            kodi_utils.set_setting('thinking_budget', 'medium')
+        kodi_utils.set_setting('_gemini3_tune_v1', '1')
+    except Exception:
+        pass
+
+
 def _start_pool_queue_drainer(monitor):
     """Drive both pool queues from the long-lived service: gently pull queued
     Ktuvit subs from Ktuvit (process_harvest_queue) and upload queued
@@ -476,6 +498,7 @@ def main():
     _maybe_repair_rtl_cache()
     _maybe_default_fast_first_chunk()
     _maybe_force_gender_ref_arabic()
+    _maybe_tune_gemini3_defaults()
 
     global _subs_filename_publisher
     try:

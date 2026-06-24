@@ -275,6 +275,12 @@
           <default></default>
           <control type="label" format="string"/>
         </setting>
+        <!-- Hidden marker: Gemini 3 temp/thinking tuning migration has run. -->
+        <setting id="_gemini3_tune_v1" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default></default>
+          <control type="label" format="string"/>
+        </setting>
         <!-- Hidden marker: POV always-resume default migration. -->
         <setting id="_pov_autoplay_default_v1" type="string" label="30000" visible="false">
           <level>3</level>
@@ -696,7 +702,7 @@
         </setting>
         <setting id="temperature" type="number" label="32403"> <!-- Model temperature -->
           <level>0</level>
-          <default>0.2</default>
+          <default>1.0</default>
           <constraints>
             <minimum>0.0</minimum>
             <maximum>1.0</maximum>
@@ -720,7 +726,7 @@
         </setting>
         <setting id="thinking_budget" type="string" label="32409" help="32410"> <!-- Gemini thinking level / budget -->
           <level>0</level>
-          <default>0</default>
+          <default>medium</default>
           <constraints>
             <options>
               <option label="32414">0</option>
