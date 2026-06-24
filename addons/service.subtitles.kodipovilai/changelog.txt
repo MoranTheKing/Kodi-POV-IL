@@ -1,3 +1,12 @@
+v0.2.269
+- "בחר כתוביות" chooser, much clearer: each row now shows a real FLAG icon for
+  the subtitle's language (bundled images that render on every skin), instead of
+  the symbols that showed as empty boxes in some skins. Foreign-language rows
+  also get a Hebrew language tag (e.g. "[אנגלית]") and an orange tint, so it's
+  obvious at a glance which subtitles are foreign (and will be AI-translated)
+  versus ready Hebrew (gold/green). Match % stays on the right; the colour/flag
+  legend was rewritten with no font-dependent glyphs.
+
 v0.2.268
 - Tuned the Gemini 3 translation settings (validated with real A/B tests on the
   free flash-lite model): temperature back to Google's recommended 1.0 (lowering
