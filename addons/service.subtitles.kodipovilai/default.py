@@ -122,12 +122,24 @@ def _handle_search(handle, params):
         _safe_log('list_candidates crashed: {0}'.format(e), level='ERROR')
         candidates = []
 
+    import re as _re_rating
     for c in candidates:
         try:
             label = c.get('filename', 'AI Hebrew')
+            # Star rating (0-5) reflects the match % so Tal's DialogSubtitles
+            # shows a meaningful star count (101%/100% -> 5 stars, 60% -> 3...).
+            # No % in the label (e.g. an AI-translate-from-foreign action) -> use
+            # the candidate's own rating, defaulting high (it's a good option).
+            _m = _re_rating.search(r'(\d{1,3})%', label)
+            if _m:
+                _stars = int(round(min(100, int(_m.group(1))) / 20.0))
+                _stars = max(1, min(5, _stars))
+                _rating = str(_stars)
+            else:
+                _rating = str(c.get('rating', '4'))
             listitem = xbmcgui.ListItem(label=c.get('language', 'he'),
                                         label2=label)
-            listitem.setArt({'icon': str(c.get('rating', '3')),
+            listitem.setArt({'icon': _rating,
                              'thumb': c.get('language', 'he')})
             listitem.setProperty('sync', c.get('sync', 'false'))
             listitem.setProperty('hearing_imp',
@@ -2864,21 +2876,26 @@ def _engine_test_show(lines):
 
 
 def _handle_choose_subs(params):
-    """Open the MoranSubs subtitle-chooser window (the player's 'בחר כתוביות'
-    button). If the custom window can't open for any reason (e.g. nothing found),
-    fall back to Kodi's native subtitle SEARCH/download window -- the same one the
-    button used to open -- so the button is never a dead end."""
-    opened = False
-    try:
-        from resources.lib import subs_chooser
-        opened = subs_chooser.show()
-    except Exception as e:
-        _safe_log('choose_subs failed: {0}'.format(e), level='WARNING')
-    if not opened and xbmc is not None:
+    """Open Kodi's native subtitle search/download window for the player's
+    'בחר כתוביות' button. On FENtastic this is Tal's redesigned DialogSubtitles,
+    which renders our rich results (language flag + name + match-star rating)
+    beautifully -- it reads as a gorgeous subtitle CHOOSER, not a download box;
+    every other skin shows its own native dialog. Our search (_handle_search)
+    feeds it the SAME candidates the old pyxbmct chooser used, and our download
+    handler delivers / AI-translates them in the background (non-blocking). Falls
+    back to the pyxbmct chooser only if the native window can't be opened."""
+    if xbmc is not None:
         try:
             xbmc.executebuiltin('ActivateWindow(SubtitleSearch)')
-        except Exception:
-            pass
+            return
+        except Exception as e:
+            _safe_log('open SubtitleSearch failed: {0}'.format(e),
+                      level='WARNING')
+    try:
+        from resources.lib import subs_chooser
+        subs_chooser.show()
+    except Exception as e:
+        _safe_log('choose_subs fallback failed: {0}'.format(e), level='WARNING')
 
 
 def main():
