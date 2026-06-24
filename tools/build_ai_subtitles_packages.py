@@ -194,6 +194,19 @@ def _maybe_default_fast_first_chunk():
         pass
 
 
+def _maybe_force_gender_ref_arabic():
+    """One-shot: turn the Arabic gender reference ON for everyone (forced once,
+    even if previously off; a later manual opt-out sticks). Marker-gated."""
+    try:
+        from resources.lib import kodi_utils
+        if kodi_utils.get_setting('_gender_ref_on_v1', '') == '1':
+            return
+        kodi_utils.set_setting('gender_ref_arabic', 'true')
+        kodi_utils.set_setting('_gender_ref_on_v1', '1')
+    except Exception:
+        pass
+
+
 def _start_pool_queue_drainer(monitor):
     """Drive both pool queues from the long-lived service: gently pull queued
     Ktuvit subs from Ktuvit (process_harvest_queue) and upload queued
@@ -462,6 +475,7 @@ def main():
 
     _maybe_repair_rtl_cache()
     _maybe_default_fast_first_chunk()
+    _maybe_force_gender_ref_arabic()
 
     global _subs_filename_publisher
     try:

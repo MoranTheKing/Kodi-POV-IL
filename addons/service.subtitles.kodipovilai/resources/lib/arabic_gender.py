@@ -217,52 +217,73 @@ def align_one(src_text, src_blocks, ar_text):
 
 # ---------------- fetch Arabic candidates from the engine -------------------
 
-def _fetch_arabic_texts(info, limit=4):
-    """Best-effort: return up to `limit` Arabic SRT texts for this media from
-    the built-in engine (OpenSubtitles / SubSource / YIFY). Empty list on any
-    problem. Guarded; never raises."""
+def _arabic_candidates(info, limit=5):
+    """Return up to `limit` Arabic subtitle CANDIDATES (metadata only -- NOT yet
+    downloaded) for this media from the built-in engine (OpenSubtitles /
+    SubSource / YIFY).
+
+    The engine gates languages by setting, so we flip `language_arab` on JUST
+    for this search and restore it to 'false' immediately after. That matters:
+    leaving it on (the old behaviour) made every ordinary subtitle search start
+    surfacing Arabic results too -- the stray Arabic entries the user noticed.
+    Arabic is only ever an internal gender oracle here, never a target language,
+    so 'false' is always the right resting state. Guarded; never raises."""
     try:
-        from resources.lib import subs_engine_bridge, translate
+        from resources.lib import subs_engine_bridge
     except Exception:
         return []
+    cands = []
     try:
-        # Make sure the engine will return Arabic results (it gates languages
-        # by setting). Idempotent + only when our feature is on.
         if kodi_utils is not None:
             try:
                 kodi_utils.set_setting('language_arab', 'true')
             except Exception:
                 pass
-        cands = subs_engine_bridge.search(info, modal_progress=False) or []
-    except Exception as e:
-        _log('engine search for Arabic failed: {0}'.format(e), level='WARNING')
-        return []
+        try:
+            cands = subs_engine_bridge.search(info, modal_progress=False) or []
+        except Exception as e:
+            _log('engine search for Arabic failed: {0}'.format(e),
+                 level='WARNING')
+            cands = []
+    finally:
+        # Always settle Arabic back OFF so it never pollutes normal searches
+        # (also self-heals installs left 'true' by the old eager code).
+        if kodi_utils is not None:
+            try:
+                kodi_utils.set_setting('language_arab', 'false')
+            except Exception:
+                pass
     ar_cands = [c for c in cands
                 if (c.get('language') or '').lower() in ('ar', 'ara', 'arabic')]
     if not ar_cands:
         _log('no Arabic subtitle found from the engine for this title')
-        return []
-    texts = []
-    for c in ar_cands[:limit]:
-        try:
-            payload = translate._decode_link(c.get('link') or '')
-            if not payload:
-                continue
-            path = subs_engine_bridge.download(payload)
-            if path and os.path.isfile(path):
-                with open(path, 'r', encoding='utf-8', errors='replace') as f:
-                    texts.append(f.read())
-        except Exception as e:
-            _log('Arabic download failed (continuing): {0}'.format(e),
-                 level='DEBUG')
-    return texts
+    return ar_cands[:limit]
+
+
+def _download_arabic(c):
+    """Download ONE Arabic candidate and return its text, or None. Guarded."""
+    try:
+        from resources.lib import subs_engine_bridge, translate
+        payload = translate._decode_link(c.get('link') or '')
+        if not payload:
+            return None
+        path = subs_engine_bridge.download(payload)
+        if path and os.path.isfile(path):
+            with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                return f.read()
+    except Exception as e:
+        _log('Arabic download failed (continuing): {0}'.format(e),
+             level='DEBUG')
+    return None
 
 
 def prepare(info, src_text):
-    """ENTRY POINT. When the feature is on, fetch Arabic subs for `info`, and try
-    each in turn until one aligns confidently. Returns a list `ar_for_blocks`
-    (one entry per source SRT block, '' where no gender hint) or None to fall
-    back to the normal translation. Fully guarded."""
+    """ENTRY POINT. When the feature is on, find Arabic subs for `info` and try
+    them in turn until one aligns confidently. Downloads LAZILY -- one at a time,
+    stopping at the first that aligns -- so the common case (the first release
+    aligns) pulls a SINGLE Arabic file instead of pre-fetching four. Returns a
+    dict {srt_entry_number: arabic_text} (gender hints) or None to fall back to
+    the normal translation. Fully guarded."""
     try:
         from resources.lib import srt as _srt
         src_blocks = _srt.parse_blocks(src_text)
@@ -271,14 +292,18 @@ def prepare(info, src_text):
     if not src_blocks:
         return None
     try:
-        ar_texts = _fetch_arabic_texts(info)
+        cands = _arabic_candidates(info)
     except Exception as e:
         _log('fetch crashed: {0}'.format(e), level='WARNING')
         return None
-    if not ar_texts:
+    if not cands:
         _log('no Arabic candidates -> normal translation (fallback)')
         return None
-    for idx, ar_text in enumerate(ar_texts, 1):
+    total = len(cands)
+    for idx, c in enumerate(cands, 1):
+        ar_text = _download_arabic(c)   # lazy: fetch only when we reach it
+        if not ar_text:
+            continue
         try:
             mapping, diag = align_one(src_text, src_blocks, ar_text)
         except Exception as e:
@@ -286,13 +311,11 @@ def prepare(info, src_text):
                  level='WARNING')
             continue
         if mapping is not None:
-            hinted = len(mapping)
             _log('candidate {0}/{1} {2} -> using Arabic gender reference '
-                 '({3} entries hinted)'.format(idx, len(ar_texts), diag,
-                                               hinted))
+                 '({3} entries hinted)'.format(idx, total, diag, len(mapping)))
             return mapping
         _log('candidate {0}/{1} rejected: {2} -- trying next'.format(
-            idx, len(ar_texts), diag))
+            idx, total, diag))
     _log('all {0} Arabic candidate(s) failed alignment -> normal translation '
-         '(fallback)'.format(len(ar_texts)))
+         '(fallback)'.format(total))
     return None
