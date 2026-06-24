@@ -2876,26 +2876,21 @@ def _engine_test_show(lines):
 
 
 def _handle_choose_subs(params):
-    """Open Kodi's native subtitle search/download window for the player's
-    'בחר כתוביות' button. On FENtastic this is Tal's redesigned DialogSubtitles,
-    which renders our rich results (language flag + name + match-star rating)
-    beautifully -- it reads as a gorgeous subtitle CHOOSER, not a download box;
-    every other skin shows its own native dialog. Our search (_handle_search)
-    feeds it the SAME candidates the old pyxbmct chooser used, and our download
-    handler delivers / AI-translates them in the background (non-blocking). Falls
-    back to the pyxbmct chooser only if the native window can't be opened."""
-    if xbmc is not None:
-        try:
-            xbmc.executebuiltin('ActivateWindow(SubtitleSearch)')
-            return
-        except Exception as e:
-            _safe_log('open SubtitleSearch failed: {0}'.format(e),
-                      level='WARNING')
+    """Open the rich MoranSubs chooser -- a self-contained WindowXMLDialog that
+    renders the same gorgeous design on EVERY skin (FENtastic / NOX / Estuary /
+    Arctic Fuse 3). Falls back inside subs_chooser to the pyxbmct chooser, then
+    to Kodi's native subtitle window, so the button is never a dead end."""
+    opened = False
     try:
         from resources.lib import subs_chooser
-        subs_chooser.show()
+        opened = subs_chooser.show()
     except Exception as e:
-        _safe_log('choose_subs fallback failed: {0}'.format(e), level='WARNING')
+        _safe_log('choose_subs failed: {0}'.format(e), level='WARNING')
+    if not opened and xbmc is not None:
+        try:
+            xbmc.executebuiltin('ActivateWindow(SubtitleSearch)')
+        except Exception:
+            pass
 
 
 def main():
