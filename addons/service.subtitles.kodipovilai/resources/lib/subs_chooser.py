@@ -656,6 +656,17 @@ def show():
                 except Exception as e:
                     _log('xml onClick failed: {0}'.format(e), level='WARNING')
 
+        # Pause playback while the chooser is open (Kodi's native subtitle
+        # dialog does this; our custom window doesn't unless we tell it to), then
+        # resume on close if WE paused it.
+        _paused = False
+        try:
+            if (xbmc.Player().isPlayingVideo()
+                    and not xbmc.getCondVisibility('Player.Paused')):
+                xbmc.Player().pause()
+                _paused = True
+        except Exception:
+            pass
         addon_path = xbmcaddon.Addon(ADDON_ID).getAddonInfo('path')
         w = _ChooserXML('script.moransubs.chooser.xml', addon_path,
                         'Default', '1080i')
@@ -664,6 +675,13 @@ def show():
         w.translate = translate
         w.doModal()
         del w
+        if _paused:
+            try:
+                if (xbmc.Player().isPlayingVideo()
+                        and xbmc.getCondVisibility('Player.Paused')):
+                    xbmc.Player().pause()  # resume
+            except Exception:
+                pass
         return True
     except Exception as e:
         _log('WindowXMLDialog failed, falling back to pyxbmct: {0}'.format(e),
