@@ -2735,6 +2735,38 @@ def _maybe_tune_gemini3_defaults():
             pass
 
 
+def _maybe_enable_fentastic_osd_autoclose():
+    """One-shot: turn on FENtastic's built-in OSD auto-close (4s) so the player's
+    top/bottom OSD bars hide after a few seconds of no interaction instead of
+    staying until Back. FENtastic ships the feature (Timers.xml) but off by
+    default. Applies to ALL FENtastic player styles (the timer keys on the shared
+    `videoosd` window). Only when skin.fentastic is the ACTIVE skin; marker-gated
+    once it's applied, so a later manual change in the skin settings sticks. If
+    FENtastic isn't active yet we DON'T set the marker, so it applies the first
+    time the user is on FENtastic."""
+    try:
+        from resources.lib import kodi_utils
+        import xbmc
+    except Exception:
+        return
+    try:
+        if kodi_utils.get_setting('_fen_osd_autoclose_v1', '') == '1':
+            return
+        if (xbmc.getSkinDir() or '') != 'skin.fentastic':
+            return  # retry on a later boot when FENtastic is the active skin
+        xbmc.executebuiltin('Skin.SetBool(OSDAutoClose)')
+        xbmc.executebuiltin('Skin.SetString(OSDAutoCloseTime,4)')
+        kodi_utils.set_setting('_fen_osd_autoclose_v1', '1')
+        kodi_utils.log('FENtastic OSD auto-close enabled (4s, migration v1)',
+                       level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log('FENtastic OSD auto-close migration failed: '
+                           '{0}'.format(e), level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_default_remember_source():
     """Turn "remember picked source" (the source that floats to the top of the
     list, marked "« נצפה לאחרונה »") ON for everyone.
@@ -3484,6 +3516,10 @@ def main():
     # settings (temperature 1.0 + thinking medium). Marker-gated; respects a
     # deliberate manual choice.
     _maybe_tune_gemini3_defaults()
+
+    # One-shot: enable FENtastic's OSD auto-close (4s) so the player bars hide
+    # after a few idle seconds. Only when FENtastic is the active skin.
+    _maybe_enable_fentastic_osd_autoclose()
 
     # One-shot: enable POV Auto Play + Always-Resume so "Continue Watching" is
     # one click (no source dialog, resumes where you stopped). Marker-gated.
