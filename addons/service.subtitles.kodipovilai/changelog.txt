@@ -1,3 +1,33 @@
+v0.2.288
+- UX: shortened the long on-screen notifications. Several toasts lasted 8-15
+  seconds (some error/status messages up to 15s) and lingered annoyingly; all
+  toasts are now capped at 5 seconds.
+
+v0.2.287
+- BLOCK FALLBACK is now SURGICAL: if a chunk still gets blocked, we no longer
+  drop the Arabic gender reference for the whole chunk. Instead we bisect while
+  KEEPING the Arabic, isolating the specific offending line(s); only that line
+  (at size 1) falls back to English-only (or source), while every other line in
+  the chunk keeps its Arabic gender oracle. Previously one bad line cost the
+  entire chunk its gender (and the dashboard showed e.g. "100 entries dropped
+  Arabic" when a single line was the culprit).
+
+v0.2.286
+- BLOCK FIX (the real one, validated live against the API): the prompt-level
+  PROHIBITED_CONTENT block is driven by the VOLUME of explicit terms in one
+  request. The English subtitle alone translates fine, but the Arabic gender
+  reference REPEATS those same explicit words (rape/torture/slur) and tips it
+  over. Since the Arabic is only a gender oracle -- and the gender of such lines
+  is clear from context anyway -- we now OMIT just the explicit Arabic reference
+  lines from the prompt. Confirmed: gender stays correct (the hard feminine
+  forms came out right) while the block trigger is removed. The whole-chunk
+  drop-Arabic -> bisect -> keep-source cascade stays as a safety net.
+- top_p is now always sent (default 0.95), for all models. Tested decisively:
+  top_p has ZERO effect on the block (a blocked prompt blocks identically with
+  top_p unset / 0.9 / 0.95 -- the block is decided on the INPUT before sampling)
+  but it shapes output quality, so it's kept explicit and consistent instead of
+  left to the model default (earlier builds skipped it on Gemini 3).
+
 v0.2.285
 - TELEMETRY (dashboard only, anonymous as always): each translation now reports
   per-chunk outcome -- how many entries went through WITH the Arabic prompt, how
