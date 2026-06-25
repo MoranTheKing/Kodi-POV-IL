@@ -762,7 +762,7 @@ def list_candidates(info, modal_progress=True):
         msg = 'AI: אין מקור לתרגום ({0}). בחר כתובית באנגלית מ-DarkSubs ' \
               'ופתח שוב את חיפוש הכתוביות — התרגום ל-AI יופעל אוטומטית.'.format(
                 ' / '.join(reasons) or 'לא ידוע')
-        kodi_utils.notify(msg, time_ms=15000)
+        kodi_utils.notify(msg, time_ms=5000)
         kodi_utils.log('list_candidates returned empty: ' + repr(
             {'imdb_id': imdb_id, 'tmdb_id': tmdb_id,
              'alongside_count': len(alongside),
@@ -1433,7 +1433,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # explanation that used to bloat this kickoff line.
     kodi_utils.notify(
         'AI מתרגם (כדקה-שתיים). תתעלם משגיאות ביניים.',
-        time_ms=8000,
+        time_ms=5000,
     )
 
     # Sanity: if the source is actually Hebrew (mislabeled),
@@ -1670,7 +1670,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         chunks = [blocks]
         kodi_utils.notify(
             'AI: מתרגם את כל הכתוביות בפעימה אחת. זה יכול לקחת כמה דקות.',
-            time_ms=7000)
+            time_ms=5000)
     else:
         chunks = list(srt.chunk_blocks(blocks, per_chunk=chunk_lines))
     total = len(chunks)
@@ -2008,7 +2008,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         # Older Python without concurrent.futures -- shouldn't
         # happen on Kodi 21 but bail safely.
         kodi_utils.notify('AI: שגיאה פנימית, התקן Python 3.6+',
-                          time_ms=8000)
+                          time_ms=5000)
         return None
 
     if abort_msg:
@@ -2031,7 +2031,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                         pass
                 _emit(True, 'google')
                 return gpath
-        kodi_utils.notify(abort_msg, time_ms=12000)
+        kodi_utils.notify(abort_msg, time_ms=5000)
         if progressive_cb is not None:
             try:
                 progressive_cb('done', {
@@ -2050,7 +2050,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         kodi_utils.notify(
             'AI: תרגום הסתיים חלקית ({0}/{1}). נסה שוב.'.format(
                 completed, total),
-            time_ms=10000)
+            time_ms=5000)
         if progressive_cb is not None:
             try:
                 progressive_cb('done', {
@@ -2094,7 +2094,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 _emit(True, 'google')
                 return gpath
         kodi_utils.notify(
-            'AI: התרגום לא הוחזר בעברית (ריק/לא תורגם). נסה שוב.', time_ms=10000)
+            'AI: התרגום לא הוחזר בעברית (ריק/לא תורגם). נסה שוב.', time_ms=5000)
         if progressive_cb is not None:
             try:
                 progressive_cb('done', {'success': False,
