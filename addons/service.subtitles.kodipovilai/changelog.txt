@@ -1,3 +1,8 @@
+v0.2.288
+- UX: shortened the long on-screen notifications. Several toasts lasted 8-15
+  seconds (some error/status messages up to 15s) and lingered annoyingly; all
+  toasts are now capped at 5 seconds.
+
 v0.2.287
 - BLOCK FALLBACK is now SURGICAL: if a chunk still gets blocked, we no longer
   drop the Arabic gender reference for the whole chunk. Instead we bisect while
