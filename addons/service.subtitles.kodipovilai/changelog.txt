@@ -1,3 +1,13 @@
+v0.2.289
+- Default translation chunk lowered 100 -> 50 lines. Live full-subtitle tests
+  (Super Mario Bros. 872 lines, From S03E09 924 lines, both with the real Arabic
+  gender reference) showed 50-line chunks translate with ZERO content blocks and
+  no loss of gender accuracy or quality, whereas 100-line chunks of graphic
+  dialogue block. Smaller requests stay under Google's volume threshold, so most
+  translations never hit a block at all (the strip + surgical bisection remain
+  as safety nets). Existing installs are moved to 50 once via a marker-gated
+  migration (a smaller manual choice is left untouched).
+
 v0.2.288
 - UX: shortened the long on-screen notifications. Several toasts lasted 8-15
   seconds (some error/status messages up to 15s) and lingered annoyingly; all
