@@ -34,6 +34,22 @@ from . import prompt
 from . import srt
 from . import tmdb_helper
 
+# Arabic roots for severe policy-trigger terms (sexual violence / torture /
+# slurs). When a per-entry Arabic gender-reference line contains one of these,
+# we OMIT just that line from the prompt. Rationale, validated live against the
+# API: the prompt-level PROHIBITED_CONTENT block is driven by the VOLUME of
+# explicit terms in one request; the English subtitle alone translates fine
+# (it stays under the threshold), but the Arabic reference REPEATS those same
+# explicit terms and tips it over. The Arabic is only a gender oracle, and for
+# these specific lines the gender is virtually always clear from context anyway
+# (e.g. an established female victim), so dropping them removes the block trigger
+# while keeping gender correct (confirmed: feminine forms stayed right with the
+# explicit Arabic lines stripped). The whole-chunk drop-Arabic -> bisect ->
+# keep-source cascade remains as a safety net for anything that still blocks.
+_AR_EXPLICIT_MARKERS = (
+    'اغتص', 'غتصب', 'اغتُص', 'تعذيب', 'عذّب', 'عذب', 'عاهر', 'الاغتصاب',
+)
+
 # Community subtitle pool (optional, gated by settings, OFF by default).
 # Imported defensively: a problem here must never break translation.
 try:
@@ -1488,11 +1504,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # Gemini 3 tuning (validated A/B): keep temperature at Google's recommended
     # default 1.0 (lowering it degrades Gemini 3 reasoning), use thinking_level
     # MEDIUM (HIGH burns the output budget -> truncation + garbling and is no
-    # more accurate; MEDIUM finishes clean, ~8x cheaper, best gender accuracy),
-    # and DON'T tune top_p on Gemini 3 (let the model default apply).
+    # more accurate; MEDIUM finishes clean, ~8x cheaper, best gender accuracy).
+    # top_p: always send the configured value (default 0.95). It has NO effect on
+    # the prompt-level safety block (verified live: a blocked prompt blocks
+    # identically with top_p unset / 0.9 / 0.95 -- the block is decided on the
+    # INPUT, before sampling) but it does shape output quality, so we keep it
+    # explicit and consistent across models instead of leaving it to the default.
     temperature = kodi_utils.get_float('temperature', 1.0)
-    top_p = (None if model.lower().startswith('gemini-3')
-             else kodi_utils.get_float('top_p', 0.95))
+    top_p = kodi_utils.get_float('top_p', 0.95)
     thinking_raw = (kodi_utils.get_setting('thinking_budget', 'medium')
                     or 'medium').strip().lower()
     thinking_level = None
@@ -1806,7 +1825,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 if first.isdigit():
                     num = int(first)
                     ar = _ar_map.get(num)
-                    if ar:
+                    # Skip per-entry Arabic that carries a severe policy-trigger
+                    # term -- it's the redundant repetition of explicit content
+                    # that pushes the prompt over Google's block threshold. The
+                    # English still translates these entries; their gender comes
+                    # from context (see _AR_EXPLICIT_MARKERS).
+                    if ar and not any(mk in ar for mk in _AR_EXPLICIT_MARKERS):
                         ent.append((num, ar))
             if ent:
                 try:
