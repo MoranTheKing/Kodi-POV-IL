@@ -230,6 +230,26 @@ def _maybe_tune_gemini3_defaults():
         pass
 
 
+def _maybe_lower_chunk_lines():
+    """One-shot: lower the translation chunk to 50 lines (block-avoidance).
+    Big chunks of explicit dialogue trip Google's prompt-level block; 50-line
+    chunks stay under the threshold with no loss of gender/quality. Only lowers
+    old defaults (>=100 -> 50); a smaller manual choice sticks. Marker-gated."""
+    try:
+        from resources.lib import kodi_utils
+        if kodi_utils.get_setting('_chunk_lines_50_v1', '') == '1':
+            return
+        try:
+            cur = int(kodi_utils.get_setting('chunk_lines', '') or '100')
+        except (TypeError, ValueError):
+            cur = 100
+        if cur >= 100:
+            kodi_utils.set_setting('chunk_lines', '50')
+        kodi_utils.set_setting('_chunk_lines_50_v1', '1')
+    except Exception:
+        pass
+
+
 def _start_pool_queue_drainer(monitor):
     """Drive both pool queues from the long-lived service: gently pull queued
     Ktuvit subs from Ktuvit (process_harvest_queue) and upload queued
@@ -500,6 +520,7 @@ def main():
     _maybe_default_fast_first_chunk()
     _maybe_force_gender_ref_arabic()
     _maybe_tune_gemini3_defaults()
+    _maybe_lower_chunk_lines()
 
     global _subs_filename_publisher
     try:

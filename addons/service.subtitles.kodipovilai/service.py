@@ -2735,6 +2735,38 @@ def _maybe_tune_gemini3_defaults():
             pass
 
 
+def _maybe_lower_chunk_lines():
+    """One-shot: move existing users to the smaller 50-line translation chunk.
+    Live testing showed big chunks (100+) of graphically-explicit dialogue trip
+    Google's prompt-level PROHIBITED_CONTENT block, while 50-line chunks stay
+    under the threshold and translate cleanly -- with NO loss of gender accuracy
+    or quality (the Arabic gender oracle is per-entry and the cast/context carry
+    the rest). Only lowers values still at the OLD defaults (>=100 -> 50); a user
+    who deliberately picked something smaller keeps it. Marker-gated -> once."""
+    try:
+        from resources.lib import kodi_utils
+    except Exception:
+        return
+    try:
+        if kodi_utils.get_setting('_chunk_lines_50_v1', '') == '1':
+            return
+        try:
+            cur = int(kodi_utils.get_setting('chunk_lines', '') or '100')
+        except (TypeError, ValueError):
+            cur = 100
+        if cur >= 100:
+            kodi_utils.set_setting('chunk_lines', '50')
+            kodi_utils.log('chunk_lines lowered {0} -> 50 (block-avoidance '
+                           'migration v1)'.format(cur), level='INFO')
+        kodi_utils.set_setting('_chunk_lines_50_v1', '1')
+    except Exception as e:
+        try:
+            kodi_utils.log('chunk_lines migration failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_enable_fentastic_osd_autoclose():
     """One-shot: turn on FENtastic's built-in OSD auto-close (4s) so the player's
     top/bottom OSD bars hide after a few seconds of no interaction instead of
@@ -3516,6 +3548,8 @@ def main():
     # settings (temperature 1.0 + thinking medium). Marker-gated; respects a
     # deliberate manual choice.
     _maybe_tune_gemini3_defaults()
+    # Lower chunk size to 50 (block-avoidance), one-shot for existing installs.
+    _maybe_lower_chunk_lines()
 
     # One-shot: enable FENtastic's OSD auto-close (4s) so the player bars hide
     # after a few idle seconds. Only when FENtastic is the active skin.
