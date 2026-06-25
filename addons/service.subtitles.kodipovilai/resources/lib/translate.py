@@ -1539,7 +1539,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         'whole_subtitle_request', False)
     max_output_tokens = 65535 if whole_subtitle_request else 16384
     gemini_timeout = 300 if whole_subtitle_request else None
-    chunk_lines = kodi_utils.get_int('chunk_lines', 250)
+    chunk_lines = kodi_utils.get_int('chunk_lines', 50)
 
     prompt_template = prompt.build(
         source_lang=source_lang,
