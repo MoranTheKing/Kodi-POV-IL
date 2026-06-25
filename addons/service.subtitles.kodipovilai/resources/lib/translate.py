@@ -1729,17 +1729,21 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                         + _translate_one(idx, ch[mid:], no_arabic))
             except gemini.FilteredResponse:
                 _count('blocks')
-                if not no_arabic and _ar_map:
-                    kodi_utils.log(
-                        'Chunk {0} prompt-blocked -- retrying WITHOUT the '
-                        'Arabic gender block'.format(idx), level='WARNING')
-                    return _translate_one(idx, ch, no_arabic=True)
+                # Isolate the offending line(s): bisect while KEEPING the Arabic,
+                # so only the minimal blocking sub-chunk eventually drops it (at
+                # size 1, below) and every OTHER line keeps its Arabic gender
+                # oracle. Previously the first block dropped Arabic for the WHOLE
+                # chunk -- which is why a single bad line cost the entire chunk
+                # its gender (and showed up as "all N entries dropped Arabic").
+                # Halving also reduces the per-request explicit-content volume,
+                # so most halves pass on their own.
                 mid = len(ch) // 2
                 kodi_utils.log(
-                    'Chunk {0} blocked -- bisecting into {1} + {2}'
-                    .format(idx, mid, len(ch) - mid), level='WARNING')
-                return (_translate_one(idx, ch[:mid], True) + '\n\n'
-                        + _translate_one(idx, ch[mid:], True))
+                    'Chunk {0} blocked -- bisecting (keeping Arabic) into {1} + '
+                    '{2} to isolate the offending line(s)'.format(
+                        idx, mid, len(ch) - mid), level='WARNING')
+                return (_translate_one(idx, ch[:mid], no_arabic) + '\n\n'
+                        + _translate_one(idx, ch[mid:], no_arabic))
 
             # Yield check: did we get back roughly as many entries
             # as we asked for? Gemini sometimes drops entries

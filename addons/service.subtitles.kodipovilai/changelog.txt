@@ -1,3 +1,12 @@
+v0.2.287
+- BLOCK FALLBACK is now SURGICAL: if a chunk still gets blocked, we no longer
+  drop the Arabic gender reference for the whole chunk. Instead we bisect while
+  KEEPING the Arabic, isolating the specific offending line(s); only that line
+  (at size 1) falls back to English-only (or source), while every other line in
+  the chunk keeps its Arabic gender oracle. Previously one bad line cost the
+  entire chunk its gender (and the dashboard showed e.g. "100 entries dropped
+  Arabic" when a single line was the culprit).
+
 v0.2.286
 - BLOCK FIX (the real one, validated live against the API): the prompt-level
   PROHIBITED_CONTENT block is driven by the VOLUME of explicit terms in one
