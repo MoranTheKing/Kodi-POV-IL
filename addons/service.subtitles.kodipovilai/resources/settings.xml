@@ -678,7 +678,7 @@
           <dependencies>
             <dependency type="enable" setting="whole_subtitle_request" operator="equals">false</dependency>
           </dependencies>
-          <default>100</default>
+          <default>50</default>
           <constraints>
             <minimum>30</minimum>
             <maximum>250</maximum>
