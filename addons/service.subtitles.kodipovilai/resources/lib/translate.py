@@ -34,6 +34,22 @@ from . import prompt
 from . import srt
 from . import tmdb_helper
 
+# Arabic roots for severe policy-trigger terms (sexual violence / torture /
+# slurs). When a per-entry Arabic gender-reference line contains one of these,
+# we OMIT just that line from the prompt. Rationale, validated live against the
+# API: the prompt-level PROHIBITED_CONTENT block is driven by the VOLUME of
+# explicit terms in one request; the English subtitle alone translates fine
+# (it stays under the threshold), but the Arabic reference REPEATS those same
+# explicit terms and tips it over. The Arabic is only a gender oracle, and for
+# these specific lines the gender is virtually always clear from context anyway
+# (e.g. an established female victim), so dropping them removes the block trigger
+# while keeping gender correct (confirmed: feminine forms stayed right with the
+# explicit Arabic lines stripped). The whole-chunk drop-Arabic -> bisect ->
+# keep-source cascade remains as a safety net for anything that still blocks.
+_AR_EXPLICIT_MARKERS = (
+    'اغتص', 'غتصب', 'اغتُص', 'تعذيب', 'عذّب', 'عذب', 'عاهر', 'الاغتصاب',
+)
+
 # Community subtitle pool (optional, gated by settings, OFF by default).
 # Imported defensively: a problem here must never break translation.
 try:
@@ -746,7 +762,7 @@ def list_candidates(info, modal_progress=True):
         msg = 'AI: אין מקור לתרגום ({0}). בחר כתובית באנגלית מ-DarkSubs ' \
               'ופתח שוב את חיפוש הכתוביות — התרגום ל-AI יופעל אוטומטית.'.format(
                 ' / '.join(reasons) or 'לא ידוע')
-        kodi_utils.notify(msg, time_ms=15000)
+        kodi_utils.notify(msg, time_ms=5000)
         kodi_utils.log('list_candidates returned empty: ' + repr(
             {'imdb_id': imdb_id, 'tmdb_id': tmdb_id,
              'alongside_count': len(alongside),
@@ -1417,7 +1433,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # explanation that used to bloat this kickoff line.
     kodi_utils.notify(
         'AI מתרגם (כדקה-שתיים). תתעלם משגיאות ביניים.',
-        time_ms=8000,
+        time_ms=5000,
     )
 
     # Sanity: if the source is actually Hebrew (mislabeled),
@@ -1488,11 +1504,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # Gemini 3 tuning (validated A/B): keep temperature at Google's recommended
     # default 1.0 (lowering it degrades Gemini 3 reasoning), use thinking_level
     # MEDIUM (HIGH burns the output budget -> truncation + garbling and is no
-    # more accurate; MEDIUM finishes clean, ~8x cheaper, best gender accuracy),
-    # and DON'T tune top_p on Gemini 3 (let the model default apply).
+    # more accurate; MEDIUM finishes clean, ~8x cheaper, best gender accuracy).
+    # top_p: always send the configured value (default 0.95). It has NO effect on
+    # the prompt-level safety block (verified live: a blocked prompt blocks
+    # identically with top_p unset / 0.9 / 0.95 -- the block is decided on the
+    # INPUT, before sampling) but it does shape output quality, so we keep it
+    # explicit and consistent across models instead of leaving it to the default.
     temperature = kodi_utils.get_float('temperature', 1.0)
-    top_p = (None if model.lower().startswith('gemini-3')
-             else kodi_utils.get_float('top_p', 0.95))
+    top_p = kodi_utils.get_float('top_p', 0.95)
     thinking_raw = (kodi_utils.get_setting('thinking_budget', 'medium')
                     or 'medium').strip().lower()
     thinking_level = None
@@ -1651,7 +1670,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         chunks = [blocks]
         kodi_utils.notify(
             'AI: מתרגם את כל הכתוביות בפעימה אחת. זה יכול לקחת כמה דקות.',
-            time_ms=7000)
+            time_ms=5000)
     else:
         chunks = list(srt.chunk_blocks(blocks, per_chunk=chunk_lines))
     total = len(chunks)
@@ -1710,17 +1729,21 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                         + _translate_one(idx, ch[mid:], no_arabic))
             except gemini.FilteredResponse:
                 _count('blocks')
-                if not no_arabic and _ar_map:
-                    kodi_utils.log(
-                        'Chunk {0} prompt-blocked -- retrying WITHOUT the '
-                        'Arabic gender block'.format(idx), level='WARNING')
-                    return _translate_one(idx, ch, no_arabic=True)
+                # Isolate the offending line(s): bisect while KEEPING the Arabic,
+                # so only the minimal blocking sub-chunk eventually drops it (at
+                # size 1, below) and every OTHER line keeps its Arabic gender
+                # oracle. Previously the first block dropped Arabic for the WHOLE
+                # chunk -- which is why a single bad line cost the entire chunk
+                # its gender (and showed up as "all N entries dropped Arabic").
+                # Halving also reduces the per-request explicit-content volume,
+                # so most halves pass on their own.
                 mid = len(ch) // 2
                 kodi_utils.log(
-                    'Chunk {0} blocked -- bisecting into {1} + {2}'
-                    .format(idx, mid, len(ch) - mid), level='WARNING')
-                return (_translate_one(idx, ch[:mid], True) + '\n\n'
-                        + _translate_one(idx, ch[mid:], True))
+                    'Chunk {0} blocked -- bisecting (keeping Arabic) into {1} + '
+                    '{2} to isolate the offending line(s)'.format(
+                        idx, mid, len(ch) - mid), level='WARNING')
+                return (_translate_one(idx, ch[:mid], no_arabic) + '\n\n'
+                        + _translate_one(idx, ch[mid:], no_arabic))
 
             # Yield check: did we get back roughly as many entries
             # as we asked for? Gemini sometimes drops entries
@@ -1806,7 +1829,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 if first.isdigit():
                     num = int(first)
                     ar = _ar_map.get(num)
-                    if ar:
+                    # Skip per-entry Arabic that carries a severe policy-trigger
+                    # term -- it's the redundant repetition of explicit content
+                    # that pushes the prompt over Google's block threshold. The
+                    # English still translates these entries; their gender comes
+                    # from context (see _AR_EXPLICIT_MARKERS).
+                    if ar and not any(mk in ar for mk in _AR_EXPLICIT_MARKERS):
                         ent.append((num, ar))
             if ent:
                 try:
@@ -1980,7 +2008,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         # Older Python without concurrent.futures -- shouldn't
         # happen on Kodi 21 but bail safely.
         kodi_utils.notify('AI: שגיאה פנימית, התקן Python 3.6+',
-                          time_ms=8000)
+                          time_ms=5000)
         return None
 
     if abort_msg:
@@ -2003,7 +2031,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                         pass
                 _emit(True, 'google')
                 return gpath
-        kodi_utils.notify(abort_msg, time_ms=12000)
+        kodi_utils.notify(abort_msg, time_ms=5000)
         if progressive_cb is not None:
             try:
                 progressive_cb('done', {
@@ -2022,7 +2050,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         kodi_utils.notify(
             'AI: תרגום הסתיים חלקית ({0}/{1}). נסה שוב.'.format(
                 completed, total),
-            time_ms=10000)
+            time_ms=5000)
         if progressive_cb is not None:
             try:
                 progressive_cb('done', {
@@ -2066,7 +2094,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 _emit(True, 'google')
                 return gpath
         kodi_utils.notify(
-            'AI: התרגום לא הוחזר בעברית (ריק/לא תורגם). נסה שוב.', time_ms=10000)
+            'AI: התרגום לא הוחזר בעברית (ריק/לא תורגם). נסה שוב.', time_ms=5000)
         if progressive_cb is not None:
             try:
                 progressive_cb('done', {'success': False,
