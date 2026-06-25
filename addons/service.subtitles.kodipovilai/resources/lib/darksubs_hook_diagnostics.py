@@ -352,7 +352,7 @@ def surface_status_if_problem():
                                     'פתח "בדיקת חיבור DarkSubs"')
     try:
         kodi_utils.notify(msg, title='Kodi POV IL - AI Subtitles',
-                          time_ms=8000)
+                          time_ms=5000)
     except Exception:
         pass
     kodi_utils.log(
