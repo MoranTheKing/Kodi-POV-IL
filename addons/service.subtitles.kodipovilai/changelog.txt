@@ -1,3 +1,19 @@
+v0.2.286
+- BLOCK FIX (the real one, validated live against the API): the prompt-level
+  PROHIBITED_CONTENT block is driven by the VOLUME of explicit terms in one
+  request. The English subtitle alone translates fine, but the Arabic gender
+  reference REPEATS those same explicit words (rape/torture/slur) and tips it
+  over. Since the Arabic is only a gender oracle -- and the gender of such lines
+  is clear from context anyway -- we now OMIT just the explicit Arabic reference
+  lines from the prompt. Confirmed: gender stays correct (the hard feminine
+  forms came out right) while the block trigger is removed. The whole-chunk
+  drop-Arabic -> bisect -> keep-source cascade stays as a safety net.
+- top_p is now always sent (default 0.95), for all models. Tested decisively:
+  top_p has ZERO effect on the block (a blocked prompt blocks identically with
+  top_p unset / 0.9 / 0.95 -- the block is decided on the INPUT before sampling)
+  but it shapes output quality, so it's kept explicit and consistent instead of
+  left to the model default (earlier builds skipped it on Gemini 3).
+
 v0.2.285
 - TELEMETRY (dashboard only, anonymous as always): each translation now reports
   per-chunk outcome -- how many entries went through WITH the Arabic prompt, how
