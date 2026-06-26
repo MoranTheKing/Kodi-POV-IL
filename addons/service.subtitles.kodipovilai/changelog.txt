@@ -1,3 +1,12 @@
+v0.2.290
+- SECURITY: the community pool is now locked to the genuine POV-IL add-on.
+  Every pull/publish is HMAC-signed (no more copyable static key), the old key
+  is retired, and the Worker enforces a minimum add-on version, a per-install
+  daily upload cap, a strict quality gate (rejects junk / non-Hebrew / dupes),
+  and a blocklist. Forks/copies can no longer pollute or freeload off the pool.
+  (No effect on subtitles: if an old install can't reach the pool it simply
+  falls back to normal AI translation, as if the pool were empty.)
+
 v0.2.289
 - Default translation chunk lowered 100 -> 50 lines. Live full-subtitle tests
   (Super Mario Bros. 872 lines, From S03E09 924 lines, both with the real Arabic
