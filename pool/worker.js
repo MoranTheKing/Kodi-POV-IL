@@ -26,7 +26,6 @@ const tg = (token, method) => `https://api.telegram.org/bot${token}/${method}`;
 // ---------------------------------------------------------------------------
 // Request validation + server-side limits.
 const POOL_MIN_VER = '0.2.291';
-const UPLOAD_CAP_PER_DAY = 250;
 const MIN_SRT_ENTRIES = 15;
 const MIN_HE_RATIO = 0.5;
 
@@ -75,16 +74,16 @@ async function poolAuth(request, env, path) {
 }
 
 // Per-install daily upload cap (KV counter). Returns true if allowed.
+// Per-install per-day upload counter. This NEVER blocks anyone -- it only
+// keeps a tally so the owner can SEE who is uploading a lot on the dashboard
+// and decide manually. Legitimate power users (large pool / AI backlogs)
+// upload many subs a day; that is normal and welcome, so there is no cap.
 async function uploadAllowed(env, anon) {
   if (!anon) return true;
   const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   const k = 'up:' + anon + ':' + day;
   let n = 0;
   try { n = parseInt(await env.POOL.get(k), 10) || 0; } catch (_) { n = 0; }
-  // Daily cap is a TEMPORARY per-day limit (resets next day) -- never a
-  // permanent block. No install is ever auto-blocked; blocking is owner-only
-  // from the dashboard.
-  if (n >= UPLOAD_CAP_PER_DAY) return false;
   try { await env.POOL.put(k, String(n + 1), { expirationTtl: 172800 }); } catch (_) { /* ignore */ }
   return true;
 }
@@ -1086,7 +1085,7 @@ export default {
     if (path === '/embedded' && request.method === 'POST') {
       const auth = await poolAuth(request, env, path);
       if (!auth.ok) return json({ ok: false, error: auth.error }, auth.code);
-      if (!await uploadAllowed(env, auth.anon)) return json({ ok: false, error: 'rate limit' }, 429);
+      await uploadAllowed(env, auth.anon);  // count only (never blocks)
       let body;
       try { body = await request.json(); } catch { return json({ ok: false, error: 'bad json' }, 400); }
       return await recordEmbedded(env, body);
@@ -1097,7 +1096,7 @@ export default {
     if (path === '/ktuvit' && request.method === 'POST') {
       const auth = await poolAuth(request, env, path);
       if (!auth.ok) return json({ ok: false, error: auth.error }, auth.code);
-      if (!await uploadAllowed(env, auth.anon)) return json({ ok: false, error: 'rate limit' }, 429);
+      await uploadAllowed(env, auth.anon);  // count only (never blocks)
       let body;
       try { body = await request.json(); } catch { return json({ ok: false, error: 'bad json' }, 400); }
       return await recordKtuvit(env, body);
@@ -1120,7 +1119,7 @@ export default {
     if (path === '/contribute' && request.method === 'POST') {
       const auth = await poolAuth(request, env, path);
       if (!auth.ok) return json({ ok: false, error: auth.error }, auth.code);
-      if (!await uploadAllowed(env, auth.anon)) return json({ ok: false, error: 'rate limit' }, 429);
+      await uploadAllowed(env, auth.anon);  // count only (never blocks)
       let body;
       try { body = await request.json(); } catch { return json({ ok: false, error: 'bad json' }, 400); }
       if (!srtQualityOk(body.srt)) return json({ ok: false, error: 'quality' }, 422);
