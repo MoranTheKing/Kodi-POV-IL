@@ -58,11 +58,11 @@ def report(event):
             import urllib.request
             from resources.lib import pool
             data = json.dumps(event).encode('utf-8')
+            headers = {'content-type': 'application/json',
+                       'user-agent': 'Mozilla/5.0'}
+            headers.update(pool.sign_headers('POST', '/ev'))
             req = urllib.request.Request(
-                pool.POOL_URL + '/ev', data=data,
-                headers={'content-type': 'application/json',
-                         'x-api-key': pool.POOL_API_KEY,
-                         'user-agent': 'Mozilla/5.0'})
+                pool.POOL_URL + '/ev', data=data, headers=headers)
             urllib.request.urlopen(req, timeout=8).read()
         except Exception:
             pass  # telemetry must never matter to the user
