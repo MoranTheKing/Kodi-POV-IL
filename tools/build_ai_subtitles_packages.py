@@ -741,8 +741,30 @@ def build_one(name: str, standalone: bool) -> Path:
         tmp_path = Path(tmp)
         addon_dst = tmp_path / ADDON_ID
         copy_common(addon_dst, standalone=standalone)
+        inject_pool_secret(addon_dst)
         make_zip(addon_dst, out)
     return out
+
+
+def inject_pool_secret(addon_dst: Path) -> None:
+    """Bake the real pool signing secret (from $POOL_SECRET) into the shipped
+    pool.py, replacing the __POOL_SECRET__ placeholder. The committed source
+    keeps only the placeholder, so the real secret never lives in the public
+    repo. If $POOL_SECRET is unset we leave the placeholder and warn loudly --
+    the build will work but its pool access will be rejected by the Worker."""
+    secret = os.environ.get("POOL_SECRET", "").strip()
+    pool_py = addon_dst / "resources" / "lib" / "pool.py"
+    if not pool_py.is_file():
+        return
+    txt = pool_py.read_text(encoding="utf-8")
+    if "__POOL_SECRET__" not in txt:
+        return
+    if not secret:
+        print("  !! WARNING: $POOL_SECRET not set -- pool signing placeholder "
+              "left in place; this build CANNOT use the community pool.")
+        return
+    pool_py.write_text(txt.replace("__POOL_SECRET__", secret), encoding="utf-8")
+    print(f"  pool secret injected ({len(secret)} chars)")
 
 
 def assert_no_standalone_build_payload(zip_path: Path) -> None:

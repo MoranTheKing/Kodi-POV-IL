@@ -23,6 +23,92 @@ const BUNDLED_TMDB_KEY = 'a07324c669cac4d96789197134ce272b';
 
 const tg = (token, method) => `https://api.telegram.org/bot${token}/${method}`;
 
+// ---------------------------------------------------------------------------
+// Access control: only the genuine POV-IL add-on may pull or publish. Every
+// pool request is HMAC-signed by the client with POOL_SECRET (a Cloudflare
+// secret, baked into the shipped add-on at build time, NOT in the public repo).
+// The signature proves possession of the secret; we also gate by minimum
+// add-on version, a per-install daily upload cap, and a blocklist. NOTE: since
+// the add-on ships as a public zip the secret is ultimately extractable, so
+// these are deterrents + the real anti-pollution defense is the server-side
+// quality gate + rate limit + blocklist below.
+const POOL_MIN_VER = '0.2.290';      // reject pool calls from older add-ons
+const UPLOAD_CAP_PER_DAY = 250;      // per anonymous install
+const MIN_SRT_ENTRIES = 15;          // reject near-empty "subtitles"
+const MIN_HE_RATIO = 0.5;            // body must be majority Hebrew
+
+function verCmp(a, b) {
+  const pa = String(a || '0').split('.').map(n => parseInt(n, 10) || 0);
+  const pb = String(b || '0').split('.').map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d < 0 ? -1 : 1;
+  }
+  return 0;
+}
+
+async function hmacHex(secret, msg) {
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(msg));
+  return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function timingEq(a, b) {
+  a = String(a || ''); b = String(b || '');
+  if (a.length !== b.length) return false;
+  let r = 0;
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
+
+// Verify a request is from a genuine, current add-on. Returns {ok, code, error}.
+async function poolAuth(request, env, path) {
+  const sec = env.POOL_SECRET;
+  // Fail CLOSED: if the signing secret isn't configured, the pool is disabled
+  // (clients transparently fall back to AI translation) rather than left open.
+  if (!sec) return { ok: false, code: 503, error: 'pool disabled' };
+  const v = request.headers.get('x-pov-v') || '';
+  const anon = (request.headers.get('x-pov-anon') || '').slice(0, 64);
+  const sig = request.headers.get('x-pov-sig') || '';
+  if (verCmp(v, POOL_MIN_VER) < 0)
+    return { ok: false, code: 426, error: 'add-on update required' };
+  if (anon) {
+    try { if (await env.POOL.get('block:' + anon)) return { ok: false, code: 403, error: 'blocked' }; }
+    catch (_) { /* ignore */ }
+  }
+  const want = await hmacHex(sec, request.method.toUpperCase() + '\n' + path + '\n' + anon);
+  if (!timingEq(sig, want)) return { ok: false, code: 401, error: 'unauthorized' };
+  return { ok: true, anon };
+}
+
+// Per-install daily upload cap (KV counter). Returns true if allowed.
+async function uploadAllowed(env, anon) {
+  if (!anon) return true;
+  const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const k = 'up:' + anon + ':' + day;
+  let n = 0;
+  try { n = parseInt(await env.POOL.get(k), 10) || 0; } catch (_) { n = 0; }
+  if (n >= UPLOAD_CAP_PER_DAY) return false;
+  try { await env.POOL.put(k, String(n + 1), { expirationTtl: 172800 }); } catch (_) { /* ignore */ }
+  return true;
+}
+
+// Server-side quality gate: the real anti-pollution defense. Rejects junk even
+// from an impersonator who extracted the secret.
+function srtQualityOk(srt) {
+  const t = String(srt || '');
+  const entries = (t.match(/-->/g) || []).length;
+  if (entries < MIN_SRT_ENTRIES) return false;
+  const heb = (t.match(/[֐-׿]/g) || []).length;
+  const letters = (t.match(/[A-Za-z֐-׿؀-ۿ]/g) || []).length;
+  if (letters < 200) return false;
+  if (heb / letters < MIN_HE_RATIO) return false;   // must be majority Hebrew
+  return true;
+}
+
+
 function keyFor(p) {
   const lang = (p.lang || 'he').toLowerCase();
   const id = String(p.tmdb || p.imdb || '').trim();
@@ -954,6 +1040,8 @@ export default {
     if (path === '/health') return json({ ok: true });
 
     if (path === '/lookup' && request.method === 'GET') {
+      const auth = await poolAuth(request, env, path);
+      if (!auth.ok) return json({ ok: false, error: auth.error }, auth.code);
       const p = Object.fromEntries(url.searchParams);
       const { variants, primaryKey, keys } = await readMergedIndex(env, p);
       const embedded = await readEmbedded(env, keys);
@@ -969,8 +1057,9 @@ export default {
 
     // Add-on report: "this release ships a built-in Hebrew subtitle track."
     if (path === '/embedded' && request.method === 'POST') {
-      if (request.headers.get('x-api-key') !== env.API_KEY)
-        return json({ ok: false, error: 'unauthorized' }, 401);
+      const auth = await poolAuth(request, env, path);
+      if (!auth.ok) return json({ ok: false, error: auth.error }, auth.code);
+      if (!await uploadAllowed(env, auth.anon)) return json({ ok: false, error: 'rate limit' }, 429);
       let body;
       try { body = await request.json(); } catch { return json({ ok: false, error: 'bad json' }, 400); }
       return await recordEmbedded(env, body);
@@ -979,14 +1068,17 @@ export default {
     // Add-on report: Hebrew release names found on Ktuvit for this title (the
     // first browser checks once; everyone else reads it back via /lookup).
     if (path === '/ktuvit' && request.method === 'POST') {
-      if (request.headers.get('x-api-key') !== env.API_KEY)
-        return json({ ok: false, error: 'unauthorized' }, 401);
+      const auth = await poolAuth(request, env, path);
+      if (!auth.ok) return json({ ok: false, error: auth.error }, auth.code);
+      if (!await uploadAllowed(env, auth.anon)) return json({ ok: false, error: 'rate limit' }, 429);
       let body;
       try { body = await request.json(); } catch { return json({ ok: false, error: 'bad json' }, 400); }
       return await recordKtuvit(env, body);
     }
 
     if (path === '/sub' && request.method === 'GET') {
+      const auth = await poolAuth(request, env, path);
+      if (!auth.ok) return new Response(auth.error, { status: auth.code });
       const p = Object.fromEntries(url.searchParams);
       const { variants } = await readMergedIndex(env, p);
       if (!variants.length) return new Response('not found', { status: 404 });
@@ -999,10 +1091,13 @@ export default {
     }
 
     if (path === '/contribute' && request.method === 'POST') {
-      if (request.headers.get('x-api-key') !== env.API_KEY)
-        return json({ ok: false, error: 'unauthorized' }, 401);
+      const auth = await poolAuth(request, env, path);
+      if (!auth.ok) return json({ ok: false, error: auth.error }, auth.code);
+      if (!await uploadAllowed(env, auth.anon)) return json({ ok: false, error: 'rate limit' }, 429);
       let body;
       try { body = await request.json(); } catch { return json({ ok: false, error: 'bad json' }, 400); }
+      // Server-side quality gate -- the real anti-pollution defense.
+      if (!srtQualityOk(body.srt)) return json({ ok: false, error: 'quality' }, 422);
       return await contributeCore(env, body);
     }
 
@@ -1046,8 +1141,8 @@ export default {
 
     // Anonymous usage telemetry from the add-on (one event per AI translation).
     if (path === '/ev' && request.method === 'POST') {
-      if (request.headers.get('x-api-key') !== env.API_KEY)
-        return json({ ok: false, error: 'unauthorized' }, 401);
+      const auth = await poolAuth(request, env, path);
+      if (!auth.ok) return json({ ok: false, error: auth.error }, auth.code);
       let body;
       try { body = await request.json(); } catch { return json({ ok: false, error: 'bad json' }, 400); }
       return await recordEvent(env, body, Math.floor(Date.now() / 1000));
