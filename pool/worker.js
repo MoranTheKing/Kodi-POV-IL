@@ -25,10 +25,11 @@ const tg = (token, method) => `https://api.telegram.org/bot${token}/${method}`;
 
 // ---------------------------------------------------------------------------
 // Request validation + server-side limits.
-const POOL_MIN_VER = '0.2.290';
+const POOL_MIN_VER = '0.2.291';
 const UPLOAD_CAP_PER_DAY = 250;
 const MIN_SRT_ENTRIES = 15;
 const MIN_HE_RATIO = 0.5;
+const STRIKE_LIMIT = 8;        // auto-deny after this many bad attempts
 
 function verCmp(a, b) {
   const pa = String(a || '0').split('.').map(n => parseInt(n, 10) || 0);
@@ -81,9 +82,23 @@ async function uploadAllowed(env, anon) {
   const k = 'up:' + anon + ':' + day;
   let n = 0;
   try { n = parseInt(await env.POOL.get(k), 10) || 0; } catch (_) { n = 0; }
-  if (n >= UPLOAD_CAP_PER_DAY) return false;
+  if (n >= UPLOAD_CAP_PER_DAY) { await strike(env, anon); return false; }
   try { await env.POOL.put(k, String(n + 1), { expirationTtl: 172800 }); } catch (_) { /* ignore */ }
   return true;
+}
+
+// Self-defending pool: count bad attempts per install and auto-add to the
+// blocklist past STRIKE_LIMIT. The owner can review/undo from the dashboard.
+async function strike(env, anon) {
+  if (!anon) return;
+  const k = 'strike:' + anon;
+  let n = 0;
+  try { n = parseInt(await env.POOL.get(k), 10) || 0; } catch (_) { n = 0; }
+  n += 1;
+  try { await env.POOL.put(k, String(n), { expirationTtl: 604800 }); } catch (_) { /* ignore */ }
+  if (n >= STRIKE_LIMIT) {
+    try { await env.POOL.put('block:' + anon, 'auto'); } catch (_) { /* ignore */ }
+  }
 }
 
 function srtQualityOk(srt) {
@@ -1120,7 +1135,7 @@ export default {
       if (!await uploadAllowed(env, auth.anon)) return json({ ok: false, error: 'rate limit' }, 429);
       let body;
       try { body = await request.json(); } catch { return json({ ok: false, error: 'bad json' }, 400); }
-      if (!srtQualityOk(body.srt)) return json({ ok: false, error: 'quality' }, 422);
+      if (!srtQualityOk(body.srt)) { await strike(env, auth.anon); return json({ ok: false, error: 'quality' }, 422); }
       return await contributeCore(env, body);
     }
 
