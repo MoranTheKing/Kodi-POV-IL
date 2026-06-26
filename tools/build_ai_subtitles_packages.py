@@ -747,11 +747,8 @@ def build_one(name: str, standalone: bool) -> Path:
 
 
 def inject_pool_secret(addon_dst: Path) -> None:
-    """Bake the real pool signing secret (from $POOL_SECRET) into the shipped
-    pool.py, replacing the __POOL_SECRET__ placeholder. The committed source
-    keeps only the placeholder, so the real secret never lives in the public
-    repo. If $POOL_SECRET is unset we leave the placeholder and warn loudly --
-    the build will work but its pool access will be rejected by the Worker."""
+    """Set the build-time POOL_SECRET value in the shipped pool.py (from the
+    $POOL_SECRET env var, replacing the placeholder). Warns if unset."""
     secret = os.environ.get("POOL_SECRET", "").strip()
     pool_py = addon_dst / "resources" / "lib" / "pool.py"
     if not pool_py.is_file():

@@ -24,18 +24,10 @@ const BUNDLED_TMDB_KEY = 'a07324c669cac4d96789197134ce272b';
 const tg = (token, method) => `https://api.telegram.org/bot${token}/${method}`;
 
 // ---------------------------------------------------------------------------
-// Access control: only the genuine POV-IL add-on may pull or publish. Every
-// pool request is HMAC-signed by the client with POOL_SECRET (a Cloudflare
-// secret, baked into the shipped add-on at build time, NOT in the public repo).
-// The signature proves possession of the secret; we also gate by minimum
-// add-on version, a per-install daily upload cap, and a blocklist. NOTE: since
-// the add-on ships as a public zip the secret is ultimately extractable, so
-// these are deterrents + the real anti-pollution defense is the server-side
-// quality gate + rate limit + blocklist below.
-const POOL_MIN_VER = '0.2.290';      // reject pool calls from older add-ons
-const UPLOAD_CAP_PER_DAY = 250;      // per anonymous install
-const MIN_SRT_ENTRIES = 15;          // reject near-empty "subtitles"
-const MIN_HE_RATIO = 0.5;            // body must be majority Hebrew
+// Request validation + server-side limits.
+const POOL_MIN_VER = '0.2.291';
+const MIN_SRT_ENTRIES = 15;
+const MIN_HE_RATIO = 0.5;
 
 function verCmp(a, b) {
   const pa = String(a || '0').split('.').map(n => parseInt(n, 10) || 0);
@@ -66,9 +58,7 @@ function timingEq(a, b) {
 // Verify a request is from a genuine, current add-on. Returns {ok, code, error}.
 async function poolAuth(request, env, path) {
   const sec = env.POOL_SECRET;
-  // Fail CLOSED: if the signing secret isn't configured, the pool is disabled
-  // (clients transparently fall back to AI translation) rather than left open.
-  if (!sec) return { ok: false, code: 503, error: 'pool disabled' };
+  if (!sec) return { ok: false, code: 503, error: 'unavailable' };
   const v = request.headers.get('x-pov-v') || '';
   const anon = (request.headers.get('x-pov-anon') || '').slice(0, 64);
   const sig = request.headers.get('x-pov-sig') || '';
@@ -84,19 +74,20 @@ async function poolAuth(request, env, path) {
 }
 
 // Per-install daily upload cap (KV counter). Returns true if allowed.
+// Per-install per-day upload counter. This NEVER blocks anyone -- it only
+// keeps a tally so the owner can SEE who is uploading a lot on the dashboard
+// and decide manually. Legitimate power users (large pool / AI backlogs)
+// upload many subs a day; that is normal and welcome, so there is no cap.
 async function uploadAllowed(env, anon) {
   if (!anon) return true;
   const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   const k = 'up:' + anon + ':' + day;
   let n = 0;
   try { n = parseInt(await env.POOL.get(k), 10) || 0; } catch (_) { n = 0; }
-  if (n >= UPLOAD_CAP_PER_DAY) return false;
   try { await env.POOL.put(k, String(n + 1), { expirationTtl: 172800 }); } catch (_) { /* ignore */ }
   return true;
 }
 
-// Server-side quality gate: the real anti-pollution defense. Rejects junk even
-// from an impersonator who extracted the secret.
 function srtQualityOk(srt) {
   const t = String(srt || '');
   const entries = (t.match(/-->/g) || []).length;
@@ -878,9 +869,40 @@ async function recordEvent(env, body, ts) {
   return json({ ok: true, stored: true });
 }
 
-async function renderStats(env) {
+async function renderStats(env, token) {
   if (!env.DB) return new Response('D1 not bound. Create a D1 DB and bind it as "DB".', { status: 500 });
   await ensureTeleSchema(env);
+  // --- Owner dashboard: top uploaders + manage list. ---
+  let abuseRows = '<tr><td colspan="3"><small>no upload activity</small></td></tr>';
+  let blockedRows = '<small>none</small>';
+  try {
+    const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const ups = await env.POOL.list({ prefix: 'up:' });
+    const counts = [];
+    let scanned = 0;
+    for (const k of (ups.keys || [])) {
+      if (!k.name.endsWith(':' + day)) continue;
+      if (scanned++ > 400) break;   // bound KV reads (dashboard auto-refreshes)
+      const anon = k.name.slice(3, -(day.length + 1));
+      let n = 0; try { n = parseInt(await env.POOL.get(k.name), 10) || 0; } catch (_) { n = 0; }
+      counts.push({ anon, n });
+    }
+    counts.sort((a, b) => b.n - a.n);
+    const tk = encodeURIComponent(token || '');
+    if (counts.length) {
+      abuseRows = counts.slice(0, 20).map(c => {
+        const a = encodeURIComponent(c.anon);
+        const hot = c.n >= 100 ? ' style="color:#d0594f;font-weight:700"' : '';
+        return `<tr><td><code>${_esc(c.anon)}</code></td><td${hot}>${c.n}</td>`
+          + `<td><a href="/block?key=${tk}&anon=${a}&do=block">block</a></td></tr>`;
+      }).join('');
+    }
+    const blk = await env.POOL.list({ prefix: 'block:' });
+    const bk = (blk.keys || []).map(k => k.name.slice(6));
+    if (bk.length) {
+      blockedRows = bk.map(a => `<code>${_esc(a)}</code> <a href="/block?key=${tk}&anon=${encodeURIComponent(a)}&do=unblock">unblock</a>`).join(' &nbsp;|&nbsp; ');
+    }
+  } catch (_) { /* ignore */ }
   const W = `WHERE v >= '${TELE_MIN_VER}'`;
   const q = async (sql) => ((await env.DB.prepare(sql).all()).results || []);
   const tot = (await q(`SELECT COUNT(*) n, COALESCE(SUM(ok),0) oks, COUNT(DISTINCT anon) users FROM tr_events ${W}`))[0] || { n: 0, oks: 0, users: 0 };
@@ -1021,6 +1043,10 @@ ${fbRows || '<small>no fallbacks yet</small>'}
 <table><tr><th>Lang</th><th>Total</th><th>% used Arabic</th></tr>${srcRows}</table>
 <h2>By add-on version</h2>
 <table><tr><th>Version</th><th>Translations</th></tr>${verRows}</table>
+<h2>Abuse watch — top uploaders today</h2>
+<small>A genuine user uploads a handful of subs a day. An install spamming dozens/hundreds (red) is the one to block. The known fork is already auto-rejected (wrong version / no signature) and never appears here.</small>
+<table><tr><th>Install (anon id)</th><th>Uploads today</th><th></th></tr>${abuseRows}</table>
+<div style="margin-top:8px"><b>Blocked:</b> ${blockedRows}</div>
 <h2>Failures (no subtitle delivered)</h2>
 <table><tr><th>Time (UTC)</th><th>Title</th><th>Method</th><th>Cause</th><th>Detail</th></tr>${failRows}</table>
 <h2>Top titles</h2>
@@ -1059,7 +1085,7 @@ export default {
     if (path === '/embedded' && request.method === 'POST') {
       const auth = await poolAuth(request, env, path);
       if (!auth.ok) return json({ ok: false, error: auth.error }, auth.code);
-      if (!await uploadAllowed(env, auth.anon)) return json({ ok: false, error: 'rate limit' }, 429);
+      await uploadAllowed(env, auth.anon);  // count only (never blocks)
       let body;
       try { body = await request.json(); } catch { return json({ ok: false, error: 'bad json' }, 400); }
       return await recordEmbedded(env, body);
@@ -1070,7 +1096,7 @@ export default {
     if (path === '/ktuvit' && request.method === 'POST') {
       const auth = await poolAuth(request, env, path);
       if (!auth.ok) return json({ ok: false, error: auth.error }, auth.code);
-      if (!await uploadAllowed(env, auth.anon)) return json({ ok: false, error: 'rate limit' }, 429);
+      await uploadAllowed(env, auth.anon);  // count only (never blocks)
       let body;
       try { body = await request.json(); } catch { return json({ ok: false, error: 'bad json' }, 400); }
       return await recordKtuvit(env, body);
@@ -1093,10 +1119,9 @@ export default {
     if (path === '/contribute' && request.method === 'POST') {
       const auth = await poolAuth(request, env, path);
       if (!auth.ok) return json({ ok: false, error: auth.error }, auth.code);
-      if (!await uploadAllowed(env, auth.anon)) return json({ ok: false, error: 'rate limit' }, 429);
+      await uploadAllowed(env, auth.anon);  // count only (never blocks)
       let body;
       try { body = await request.json(); } catch { return json({ ok: false, error: 'bad json' }, 400); }
-      // Server-side quality gate -- the real anti-pollution defense.
       if (!srtQualityOk(body.srt)) return json({ ok: false, error: 'quality' }, 422);
       return await contributeCore(env, body);
     }
@@ -1148,11 +1173,27 @@ export default {
       return await recordEvent(env, body, Math.floor(Date.now() / 1000));
     }
 
+    // Owner-only: block / unblock an abusive install. /block?key=<TOKEN>&anon=<id>&do=block|unblock
+    if (path === '/block' && request.method === 'GET') {
+      if (!env.STATS_TOKEN || url.searchParams.get('key') !== env.STATS_TOKEN)
+        return new Response('unauthorized', { status: 401 });
+      const anon = (url.searchParams.get('anon') || '').slice(0, 64);
+      const doWhat = url.searchParams.get('do') || 'block';
+      if (anon) {
+        try {
+          if (doWhat === 'unblock') await env.POOL.delete('block:' + anon);
+          else await env.POOL.put('block:' + anon, '1');
+        } catch (_) { /* ignore */ }
+      }
+      // bounce back to the dashboard
+      return new Response('', { status: 302, headers: { Location: '/stats?key=' + encodeURIComponent(env.STATS_TOKEN) } });
+    }
+
     // Owner-only stats dashboard: /stats?key=<STATS_TOKEN>
     if (path === '/stats' && request.method === 'GET') {
       if (!env.STATS_TOKEN || url.searchParams.get('key') !== env.STATS_TOKEN)
         return new Response('unauthorized', { status: 401 });
-      return await renderStats(env);
+      return await renderStats(env, env.STATS_TOKEN);
     }
 
     return new Response('Kodi POV IL — AI subtitle pool', { status: 200 });
