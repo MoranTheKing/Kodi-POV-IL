@@ -21,14 +21,9 @@ except ImportError:        # pragma: no cover
     _urlparse = None
 
 POOL_URL = 'https://povil-subs-pool.moran200333.workers.dev'
-# Legacy static key (deprecated -- the Worker now requires HMAC request signing,
-# see sign_headers below). Kept only so old references don't break.
 POOL_API_KEY = 'povil_x8FayxrUOAS9Qew1sFWzO6UgAnEAgJAG'
 
-# Shared signing secret. This PLACEHOLDER is replaced with the real secret at
-# BUILD time (tools/build_ai_subtitles_packages.py injects $POOL_SECRET), so the
-# real secret is NOT in the public source tree. Every pool/telemetry request is
-# HMAC-signed with it; the Worker rejects unsigned/old-version/forged calls.
+# Build-time value (placeholder in source; set during packaging).
 POOL_SECRET = '__POOL_SECRET__'
 
 import hmac as _hmac
@@ -59,9 +54,7 @@ def _addon_version():
 
 
 def sign_headers(method, path):
-    """HMAC-sign a pool request. Returns the x-pov-* headers the Worker checks:
-    the signature proves possession of POOL_SECRET, plus the anon id (for the
-    blocklist/rate-limit) and the add-on version (min-version gate)."""
+    """Return the request headers the Worker expects."""
     anon = _anon_id()
     try:
         msg = (method.upper() + '\n' + path + '\n' + anon).encode('utf-8')
