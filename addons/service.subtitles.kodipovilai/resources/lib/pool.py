@@ -21,7 +21,62 @@ except ImportError:        # pragma: no cover
     _urlparse = None
 
 POOL_URL = 'https://povil-subs-pool.moran200333.workers.dev'
+# Legacy static key (deprecated -- the Worker now requires HMAC request signing,
+# see sign_headers below). Kept only so old references don't break.
 POOL_API_KEY = 'povil_x8FayxrUOAS9Qew1sFWzO6UgAnEAgJAG'
+
+# Shared signing secret. This PLACEHOLDER is replaced with the real secret at
+# BUILD time (tools/build_ai_subtitles_packages.py injects $POOL_SECRET), so the
+# real secret is NOT in the public source tree. Every pool/telemetry request is
+# HMAC-signed with it; the Worker rejects unsigned/old-version/forged calls.
+POOL_SECRET = '__POOL_SECRET__'
+
+import hmac as _hmac
+import hashlib as _hashlib
+
+
+def _anon_id():
+    """Stable anonymous per-install id (shared with telemetry)."""
+    try:
+        from resources.lib import kodi_utils
+        v = (kodi_utils.get_setting('_telemetry_id', '') or '').strip()
+        if not v:
+            import uuid
+            v = uuid.uuid4().hex
+            kodi_utils.set_setting('_telemetry_id', v)
+        return v
+    except Exception:
+        return ''
+
+
+def _addon_version():
+    try:
+        import xbmcaddon
+        return xbmcaddon.Addon(
+            'service.subtitles.kodipovilai').getAddonInfo('version') or ''
+    except Exception:
+        return ''
+
+
+def sign_headers(method, path):
+    """HMAC-sign a pool request. Returns the x-pov-* headers the Worker checks:
+    the signature proves possession of POOL_SECRET, plus the anon id (for the
+    blocklist/rate-limit) and the add-on version (min-version gate)."""
+    anon = _anon_id()
+    try:
+        msg = (method.upper() + '\n' + path + '\n' + anon).encode('utf-8')
+        sig = _hmac.new(POOL_SECRET.encode('utf-8'), msg,
+                        _hashlib.sha256).hexdigest()
+    except Exception:
+        sig = ''
+    return {'x-pov-sig': sig, 'x-pov-anon': anon, 'x-pov-v': _addon_version()}
+
+
+def _post_headers(path):
+    """Headers for a signed POST to `path`."""
+    h = {'content-type': 'application/json', 'user-agent': _UA}
+    h.update(sign_headers('POST', path))
+    return h
 
 # Cloudflare's browser-integrity check rejects plain urllib requests (HTTP
 # 1010); a normal browser UA passes. Harmless for our own Worker.
@@ -94,7 +149,9 @@ def _has_id(p):
 
 def _get(path, params):
     q = _urlparse.urlencode({k: v for k, v in params.items() if v})
-    req = _urlreq.Request(POOL_URL + path + '?' + q, headers={'user-agent': _UA})
+    hdrs = {'user-agent': _UA}
+    hdrs.update(sign_headers('GET', path))
+    req = _urlreq.Request(POOL_URL + path + '?' + q, headers=hdrs)
     with _urlreq.urlopen(req, timeout=_GET_TIMEOUT) as r:
         return r.read()
 
@@ -174,8 +231,7 @@ def _post(body, marker_path=None):
         req = _urlreq.Request(
             POOL_URL + '/contribute',
             data=json.dumps(body).encode('utf-8'),
-            headers={'content-type': 'application/json',
-                     'x-api-key': POOL_API_KEY, 'user-agent': _UA},
+            headers=_post_headers('/contribute'),
             method='POST')
         _urlreq.urlopen(req, timeout=_POST_TIMEOUT).read()
     except Exception as e:
@@ -354,8 +410,7 @@ def report_embedded(info):
                 req = _urlreq.Request(
                     POOL_URL + '/embedded',
                     data=json.dumps(body).encode('utf-8'),
-                    headers={'content-type': 'application/json',
-                             'x-api-key': POOL_API_KEY, 'user-agent': _UA},
+                    headers=_post_headers('/embedded'),
                     method='POST')
                 _urlreq.urlopen(req, timeout=_POST_TIMEOUT).read()
                 # Mark locally only on a successful send, so a failed report
@@ -405,8 +460,7 @@ def report_ktuvit(info, names):
                 req = _urlreq.Request(
                     POOL_URL + '/ktuvit',
                     data=json.dumps(body).encode('utf-8'),
-                    headers={'content-type': 'application/json',
-                             'x-api-key': POOL_API_KEY, 'user-agent': _UA},
+                    headers=_post_headers('/ktuvit'),
                     method='POST')
                 _urlreq.urlopen(req, timeout=_POST_TIMEOUT).read()
             except Exception as e:
@@ -723,8 +777,7 @@ def _post_sync(body):
         req = _urlreq.Request(
             POOL_URL + '/contribute',
             data=json.dumps(body).encode('utf-8'),
-            headers={'content-type': 'application/json',
-                     'x-api-key': POOL_API_KEY, 'user-agent': _UA},
+            headers=_post_headers('/contribute'),
             method='POST')
         resp = _urlreq.urlopen(req, timeout=_POST_TIMEOUT).read()
         try:
