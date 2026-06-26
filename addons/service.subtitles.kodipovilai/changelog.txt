@@ -1,3 +1,6 @@
+v0.2.291
+- Maintenance and infrastructure hardening. No effect on subtitles.
+
 v0.2.290
 - Maintenance and infrastructure hardening for the community pool. No effect on
   subtitles -- everything behaves as before.
