@@ -359,6 +359,25 @@ async function readIndex(env, key) {
 // episodes), which previously left the Telegram post with no series name,
 // poster, or plot. For episodes we want the SHOW's tmdb id (tv_results, or the
 // show_id behind an episode-level imdb).
+// The shared/bundled TMDB key gets rate-limited (429) under load, and transient
+// 5xx/network blips happen. A single failed fetch used to make tmdbMeta return
+// {} -> the channel post lost its poster, IMDb link, genres and plot (only the
+// bare TMDb link from the client survived), so the SAME title posted richly one
+// time and bare the next. Retry with a short backoff for consistent results.
+async function tmdbFetch(url) {
+  for (let i = 0; i < 3; i++) {
+    try {
+      const r = await fetch(url);
+      if ((r.status === 429 || r.status >= 500) && i < 2) { await sleep(400 * (i + 1)); continue; }
+      return r;
+    } catch (_) {
+      if (i < 2) { await sleep(400 * (i + 1)); continue; }
+      return null;
+    }
+  }
+  return null;
+}
+
 async function resolveTmdbId(env, body) {
   const direct = String(body.tmdb_id || '').trim();
   if (/^\d+$/.test(direct)) return direct;
@@ -366,9 +385,9 @@ async function resolveTmdbId(env, body) {
   if (!/^tt\d+$/.test(imdb)) return '';
   const key = env.TMDB_KEY || BUNDLED_TMDB_KEY;
   try {
-    const r = await fetch(`https://api.themoviedb.org/3/find/${imdb}` +
+    const r = await tmdbFetch(`https://api.themoviedb.org/3/find/${imdb}` +
       `?api_key=${key}&external_source=imdb_id`);
-    if (!r.ok) return '';
+    if (!r || !r.ok) return '';
     const d = await r.json();
     if (body.type === 'episode') {
       if (d.tv_results && d.tv_results.length) return String(d.tv_results[0].id || '');
@@ -388,9 +407,9 @@ async function tmdbMeta(env, body) {
   const isEp = body.type === 'episode';
   const base = isEp ? 'tv' : 'movie';
   try {
-    const r = await fetch(`https://api.themoviedb.org/3/${base}/${id}` +
+    const r = await tmdbFetch(`https://api.themoviedb.org/3/${base}/${id}` +
       `?api_key=${key}&language=he&append_to_response=external_ids`);
-    if (!r.ok) return {};
+    if (!r || !r.ok) return {};
     const d = await r.json();
     const meta = {
       tmdb_id: id,
@@ -410,9 +429,9 @@ async function tmdbMeta(env, body) {
     let latin = meta.original_title || meta.title || '';
     if (!/[A-Za-z]/.test(latin)) {
       try {
-        const enr = await fetch(`https://api.themoviedb.org/3/${base}/${id}` +
+        const enr = await tmdbFetch(`https://api.themoviedb.org/3/${base}/${id}` +
           `?api_key=${key}&language=en-US`);
-        if (enr.ok) {
+        if (enr && enr.ok) {
           const end = await enr.json();
           const en = end.title || end.name || '';
           if (/[A-Za-z]/.test(en)) latin = en;
@@ -422,9 +441,9 @@ async function tmdbMeta(env, body) {
     meta.latin_title = latin;
     if (isEp && body.season && body.episode) {
       try {
-        const er = await fetch(`https://api.themoviedb.org/3/tv/${id}/season/` +
+        const er = await tmdbFetch(`https://api.themoviedb.org/3/tv/${id}/season/` +
           `${body.season}/episode/${body.episode}?api_key=${key}&language=he`);
-        if (er.ok) {
+        if (er && er.ok) {
           const ed = await er.json();
           if (ed.overview) meta.overview = ed.overview;
           if (ed.name) meta.ep_name = ed.name;
