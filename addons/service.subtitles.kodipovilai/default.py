@@ -83,6 +83,18 @@ def _safe_log(msg, level='INFO'):
 def _handle_search(handle, params):
     """List available subtitles. Kodi calls this when the user opens
     the subtitle search dialog."""
+    # A playback source can opt out of automatic subtitle search by setting the
+    # 'skip_autosub' window property (e.g. content already in the target
+    # language). One-shot, honoured only when fresh (this playback), then cleared.
+    try:
+        import xbmcgui, xbmcplugin, time
+        _ts = xbmcgui.Window(10000).getProperty('skip_autosub')
+        if _ts and (time.time() - float(_ts)) < 90:
+            xbmcgui.Window(10000).clearProperty('skip_autosub')
+            xbmcplugin.endOfDirectory(handle)
+            return
+    except Exception:
+        pass
     from resources.lib import kodi_utils, translate
 
     # Make sure DarkSubs's machine-translate hook is in place. The
