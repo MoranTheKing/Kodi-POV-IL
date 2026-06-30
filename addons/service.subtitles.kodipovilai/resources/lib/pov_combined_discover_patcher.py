@@ -18,20 +18,18 @@
 #      tmdb_trending_all(), each returning the TMDB results filtered to
 #      movie/tv (drops 'person'), mirroring the existing search functions'
 #      caching exactly.
-#   2) resources/lib/menus/tmdb.py build_tmdb_list(): branch on the params
-#      so action=search_multi&query=... uses tmdb_search_multi (or trending
-#      when the query is empty); otherwise unchanged (list_details).
+#   2) resources/lib/menus/tmdb.py TmdbListBuilder.fetch_results(): branch on
+#      the params so action=search_multi&query=... uses tmdb_search_multi (or
+#      trending when the query is empty); otherwise unchanged (list_details).
 #      Everything downstream (merge/sort/render) is reused.
 #   3) resources/lib/modules/kodi_utils.py container_refresh(): ALSO fire
 #      the widget-reload ping (UpdateLibrary(video,special://skin/foo)) so
 #      AF3's HOME widgets re-query after clear-progress / mark-watched --
 #      which otherwise only showed after a manual skin reload (uses its own
 #      marker so it applies independently of edits 1/2).
-#   4) resources/lib/modules/dialogs.py trakt_manager_choice(): drop POV's
-#      redirect that sent the "Trakt list manager" context item to the
-#      TMDB manager whenever a personal TMDB account is connected, so the
-#      Trakt item actually opens Trakt (the separate TMDB item still opens
-#      TMDB). Own marker; idempotent.
+#   4) RETIRED in POV 6.07: the old dialogs.py trakt_manager_choice() redirect
+#      is gone (managers are independent classes now), so there is nothing
+#      to patch -- the Trakt context item already opens Trakt natively.
 #
 # Safe no-op if POV isn't installed or was refactored away from the anchors.
 
@@ -52,11 +50,9 @@ POV_ADDON_ID = 'plugin.video.pov'
 TMDB_API_REL = 'resources/lib/indexers/tmdb_api.py'
 TMDB_MENU_REL = 'resources/lib/menus/tmdb.py'
 KODI_UTILS_REL = 'resources/lib/modules/kodi_utils.py'
-DIALOGS_REL = 'resources/lib/modules/dialogs.py'
 
 MARKER = '# AI_SUBS_POV_COMBINED_DISCOVER_v1'
 MARKER_REFRESH = '# AI_SUBS_POV_WIDGET_REFRESH_v1'
-MARKER_TRAKT = '# AI_SUBS_POV_TRAKT_MANAGER_v1'
 
 # --- edit 1: tmdb_api.py -- add the two data functions after the existing
 #     tmdb_movies_search (exact-string anchor; both funcs reuse base_url,
@@ -92,23 +88,25 @@ _API_ADDITION = (
     "\treturn [i for i in results if i.get('media_type') in "
     "('movie', 'tv')]\n")
 
-# --- edit 2: menus/tmdb.py build_tmdb_list -- swap the single data line
-#     for a branch on the params (exact-string anchor). For the unified
-#     Discover the skin always passes action=search_multi with the typed
-#     query; when the query is empty (nothing typed) we fall back to
-#     trending so Discover shows a unified popular grid, otherwise a
-#     unified movie+tv search. One skin binding covers both cases.
-_MENU_ANCHOR = "\tresults = tmdb_api.list_details(list_id)\n"
+# --- edit 2: menus/tmdb.py TmdbListBuilder.fetch_results -- branch on the
+#     params (exact-string anchor). POV 6.07 refactored build_tmdb_list()
+#     into the class TmdbListBuilder whose fetch_results() returns
+#     tmdb_api.list_details(self.list_id); we wrap that with the unified
+#     Discover branch. For the unified Discover the skin passes
+#     action=search_multi with the typed query; when the query is empty
+#     (nothing typed) we fall back to trending so Discover shows a unified
+#     popular grid, otherwise a unified movie+tv search. One skin binding
+#     covers both cases; the else path is byte-identical to stock POV.
+_MENU_ANCHOR = "\t\treturn tmdb_api.list_details(self.list_id)\n"
 _MENU_REPLACEMENT = (
-    "\t_action = params.get('action')\n"
-    "\t_query = (params.get('query') or '').strip()\n"
-    "\tif _action == 'search_multi':\n"
-    "\t\tresults = tmdb_api.tmdb_search_multi(_query, page) if _query "
-    "else tmdb_api.tmdb_trending_all(page)\n"
-    "\telif _action == 'trending_all':\n"
-    "\t\tresults = tmdb_api.tmdb_trending_all(page)\n"
-    "\telse:\n"
-    "\t\tresults = tmdb_api.list_details(list_id)\n")
+    "\t\t_action = self.params.get('action')\n"
+    "\t\t_query = (self.params.get('query') or '').strip()\n"
+    "\t\tif _action == 'search_multi':\n"
+    "\t\t\treturn tmdb_api.tmdb_search_multi(_query) if _query "
+    "else tmdb_api.tmdb_trending_all()\n"
+    "\t\telif _action == 'trending_all':\n"
+    "\t\t\treturn tmdb_api.tmdb_trending_all()\n"
+    "\t\treturn tmdb_api.list_details(self.list_id)\n")
 
 # --- edit 3: kodi_utils.py container_refresh() -- ALSO fire the AF3/
 #     TMDbHelper widget-reload signal so HOME widgets re-query after a
@@ -134,22 +132,11 @@ _REFRESH_REPLACEMENT = (
     "\t# this ping makes them re-query (no-op for the library).\n"
     "\treturn execute_builtin('UpdateLibrary(video,special://skin/foo)')\n")
 
-# --- edit 4: modules/dialogs.py trakt_manager_choice() -- the context
-#     menu has THREE separate manager items ("ניהול רשימות (Trakt)",
-#     "(TMDB)", "מועדפים (POV)"). POV deliberately redirects the Trakt one
-#     to the TMDB manager whenever a personal TMDB account is connected
-#     (first line of the function). The user wants the Trakt item to
-#     actually open Trakt. We remove ONLY that redirect line; the rest of
-#     trakt_manager_choice already works with just trakt_user, and the
-#     separate "(TMDB)" item still opens the TMDB manager for those who
-#     want it. Exact-string, own marker, idempotent.
-_TRAKT_ANCHOR = (
-    "\tif get_setting('tmdb.account_id'): "
-    "return tmdb_manager_choice(params)\n")
-_TRAKT_REPLACEMENT = (
-    "\t# AI_SUBS: redirect removed so the Trakt manager opens Trakt even "
-    "when a TMDB account is connected (the separate TMDB item still opens "
-    "TMDB).\n")
+# --- edit 4 (RETIRED in POV 6.07): the old trakt_manager_choice() redirect
+#     in modules/dialogs.py no longer exists. POV 6.07 split the managers
+#     into independent classes (menus/trakt.py TraktManager,
+#     menus/tmdb.py TmdbManager) with NO cross-redirect, so the Trakt
+#     context item already opens Trakt on its own. Nothing to patch.
 
 
 def _log(msg, level='INFO'):
@@ -265,18 +252,7 @@ def ensure_patched():
     else:
         results.append('refresh=no_file')
 
-    # edit 4: make the "Trakt list manager" context item actually open
-    # Trakt (drop POV's redirect to the TMDB manager when a TMDB account
-    # is connected).
-    dlg_path = os.path.join(base, *DIALOGS_REL.split('/'))
-    if os.path.isfile(dlg_path):
-        st = _patch_one(
-            dlg_path, _TRAKT_ANCHOR,
-            lambda t: t.replace(_TRAKT_ANCHOR, _TRAKT_REPLACEMENT, 1),
-            'dialogs.py(trakt_manager_choice)', marker=MARKER_TRAKT)
-        results.append('trakt=' + st)
-    else:
-        results.append('trakt=no_file')
+    # edit 4 retired in POV 6.07 (no trakt_manager_choice redirect to drop).
 
     summary = ', '.join(results)
     if any('=patched' in r for r in results):
