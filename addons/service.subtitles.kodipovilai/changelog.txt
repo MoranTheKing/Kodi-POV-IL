@@ -1,3 +1,10 @@
+v0.2.294
+- Maintenance and stability improvements.
+- Build: re-aligned the POV companion patchers after POV's 6.07 update so the
+  My Movies / My Series lists, add-to favourites/watchlist, the Trakt/TMDB list
+  managers and the watched-state caching all work again; clearer last-watched
+  source badge.
+
 v0.2.291
 - Maintenance and infrastructure hardening. No effect on subtitles.
 
