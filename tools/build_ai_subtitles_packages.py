@@ -747,21 +747,31 @@ def build_one(name: str, standalone: bool) -> Path:
 
 
 def inject_pool_secret(addon_dst: Path) -> None:
-    """Set the build-time POOL_SECRET value in the shipped pool.py (from the
-    $POOL_SECRET env var, replacing the placeholder). Warns if unset."""
+    """Set the build-time pool credential in the shipped pool.py from the
+    $POOL_SECRET env var, via the local packaging helper. Warns if unset/missing."""
     secret = os.environ.get("POOL_SECRET", "").strip()
     pool_py = addon_dst / "resources" / "lib" / "pool.py"
     if not pool_py.is_file():
         return
     txt = pool_py.read_text(encoding="utf-8")
-    if "__POOL_SECRET__" not in txt:
+    if "__POOL_KEY_BEGIN__" not in txt:
         return
     if not secret:
-        print("  !! WARNING: $POOL_SECRET not set -- pool signing placeholder "
-              "left in place; this build CANNOT use the community pool.")
+        print("  !! WARNING: $POOL_SECRET not set -- credential left unset; "
+              "this build CANNOT use the community pool.")
         return
-    pool_py.write_text(txt.replace("__POOL_SECRET__", secret), encoding="utf-8")
-    print(f"  pool secret injected ({len(secret)} chars)")
+    import sys as _sys
+    work = str(ROOT / "work")
+    if work not in _sys.path:
+        _sys.path.insert(0, work)
+    try:
+        import pkgkey
+    except Exception:
+        print("  !! WARNING: packaging helper missing -- credential NOT set; "
+              "this build CANNOT use the community pool.")
+        return
+    pool_py.write_text(pkgkey.inject(txt, secret), encoding="utf-8")
+    print("  pool credential set")
 
 
 def assert_no_standalone_build_payload(zip_path: Path) -> None:
