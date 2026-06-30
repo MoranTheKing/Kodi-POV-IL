@@ -108,7 +108,7 @@ def _norm(x):
 # the start (left) and the "..." truncation of a long title eats the END, never
 # the badge. The trailing dot keeps the gold badge visually separate from the
 # white title.
-_MARK = '[B][COLOR FFD700]★ נצפה לאחרונה ★[/COLOR][/B]  ·  '
+_MARK = '[B][COLOR FFD700]«« נצפה לאחרונה »»[/COLOR][/B]  ·  '
 
 # Earlier marker(s) we may still find on a freshly-scraped name (results are
 # rebuilt every scrape, so this is just belt-and-braces for an in-memory list
