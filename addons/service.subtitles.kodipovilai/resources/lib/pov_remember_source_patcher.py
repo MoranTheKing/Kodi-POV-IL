@@ -43,10 +43,19 @@ _DISPLAY_RE = re.compile(
     r'^(?P<indent>[ \t]*)def display_results\(self, results\):[ \t]*$',
     re.MULTILINE,
 )
-# Revert: capture block (marker comment .. yield link) -> plain yield.
+# POV 6.07+ play site: the resolved source is handed to the player here, in
+# play_file(); `item` (the successfully-resolved source) is in scope, so we
+# capture it just before play. Used when the old `yield link` site is absent.
+_PLAY_RE = re.compile(
+    r'^(?P<indent>[ \t]*)(?P<stmt>return POVPlayer\(\)\.run\(link, self\.meta, progress_media\))[ \t]*$',
+    re.MULTILINE,
+)
+# Revert: remove the capture block (marker comment .. its closing except line),
+# leaving the following statement (yield link / play return) intact. Works for
+# both the old `yield link` form and the new play-site form.
 _REVERT_CAP_RE = re.compile(
-    r'[ \t]*#[ \t]*AI_SUBS_REMEMBER_SOURCE_v\d+.*?\n(?P<yi>[ \t]*)yield link[ \t]*$',
-    re.DOTALL | re.MULTILINE,
+    r'[ \t]*#[ \t]*AI_SUBS_REMEMBER_SOURCE_v\d+.*?except Exception: pass[ \t]*\n',
+    re.DOTALL,
 )
 # Revert: autopick block (marker comment .. its closing `except Exception: pass`).
 _REVERT_PICK_RE = re.compile(
@@ -122,37 +131,43 @@ def ensure_patched():
     already = CAP_MARKER in original and PICK_MARKER in original
 
     # Revert any prior versions of either hook so we re-apply cleanly.
-    content = _REVERT_CAP_RE.sub(lambda m: m.group('yi') + 'yield link', original)
+    content = _REVERT_CAP_RE.sub('', original)
     content = _REVERT_PICK_RE.sub('', content)
 
-    # 1) capture hook at the yield site.
+    # 1) capture hook -- old POV: at the `yield link` site; POV 6.07+: just
+    # before the resolved source is handed to the player in play_file().
     m = _YIELD_RE.search(content)
-    if not m:
-        _log('yield site not found -- skipping', level='WARNING')
-        return 'unmatched'
-    indent = m.group('indent')
-    if m.group('iff'):
-        body = indent + '\t'
-        cap = (indent + 'if not link is None:' + eol
-               + _capture_lines(body, eol) + body + 'yield link')
+    if m:
+        indent = m.group('indent')
+        if m.group('iff'):
+            body = indent + '\t'
+            cap = (indent + 'if not link is None:' + eol
+                   + _capture_lines(body, eol) + body + 'yield link')
+        else:
+            cap = _capture_lines(indent, eol) + indent + 'yield link'
+        content = content[:m.start()] + cap + content[m.end():]
     else:
-        cap = _capture_lines(indent, eol) + indent + 'yield link'
-    content = content[:m.start()] + cap + content[m.end():]
+        p = _PLAY_RE.search(content)
+        if p:
+            indent = p.group('indent')
+            cap = _capture_lines(indent, eol) + indent + p.group('stmt')
+            content = content[:p.start()] + cap + content[p.end():]
+        else:
+            _log('capture site not found -- skipping capture hook', level='WARNING')
 
-    # 2) autopick hook at the top of display_results().
+    # 2) autopick hook at the top of display_results(). Applied independently of
+    # the capture hook, so a POV change to one site never disables the other.
     d = _DISPLAY_RE.search(content)
-    if not d:
-        _log('display_results not found -- skipping', level='WARNING')
-        return 'unmatched'
-    body = d.group('indent') + '\t'
-    after = content[d.end():]
-    if after.startswith(eol):
-        # insert the block right after the def line's newline (idempotent: the
-        # revert removes exactly the block, restoring the original).
-        content = (content[:d.end()] + eol + _autopick_lines(body, eol)
-                   + after[len(eol):])
+    if d:
+        body = d.group('indent') + '\t'
+        after = content[d.end():]
+        if after.startswith(eol):
+            content = (content[:d.end()] + eol + _autopick_lines(body, eol)
+                       + after[len(eol):])
+        else:
+            content = (content[:d.end()] + eol + _autopick_lines(body, eol) + after)
     else:
-        content = (content[:d.end()] + eol + _autopick_lines(body, eol) + after)
+        _log('display_results not found -- skipping autopick hook', level='WARNING')
 
     # SAFETY: never write a file that doesn't compile.
     try:
