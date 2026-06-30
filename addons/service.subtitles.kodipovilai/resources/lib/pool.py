@@ -23,11 +23,14 @@ except ImportError:        # pragma: no cover
 POOL_URL = 'https://povil-subs-pool.moran200333.workers.dev'
 POOL_API_KEY = 'povil_x8FayxrUOAS9Qew1sFWzO6UgAnEAgJAG'
 
-# Build-time value (placeholder in source; set during packaging).
-POOL_SECRET = '__POOL_SECRET__'
-
 import hmac as _hmac
 import hashlib as _hashlib
+
+# Build-time pool credential (set during packaging). Fails closed if un-set.
+# __POOL_KEY_BEGIN__
+def _pool_key():
+    return ''
+# __POOL_KEY_END__
 
 
 def _anon_id():
@@ -58,7 +61,7 @@ def sign_headers(method, path):
     anon = _anon_id()
     try:
         msg = (method.upper() + '\n' + path + '\n' + anon).encode('utf-8')
-        sig = _hmac.new(POOL_SECRET.encode('utf-8'), msg,
+        sig = _hmac.new(_pool_key().encode('utf-8'), msg,
                         _hashlib.sha256).hexdigest()
     except Exception:
         sig = ''
