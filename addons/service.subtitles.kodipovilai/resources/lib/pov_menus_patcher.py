@@ -1,27 +1,38 @@
-# Self-healing replacement of three plugin.video.pov menu source
-# files (movies.py, tvshows.py, episodes.py) so the context-menu
-# logic matches what PR #98 added: only show Trakt/MDBList/TMDB
-# Manager entries that correspond to actually-connected services,
-# with TMDB at the top when personally connected.
+# Adds our custom "My Movies" / "My Series" merged personal lists to POV by
+# SURGICALLY injecting four list actions into plugin.video.pov's menu list
+# builders -- instead of copying whole override files over POV (which is how
+# this used to work and which broke hard when POV 6.07 refactored its menus
+# from functions to classes: the stale 5.12-shaped override clobbered POV's
+# good 6.07 movies.py/tvshows.py and emptied every list).
 #
-# Detection by marker substring (not byte-exact compare) so future
-# inconsequential edits to upstream POV (whitespace, a comment
-# tweak) don't trip the patcher into unnecessary rewrites. The
-# marker is a phrase that only exists in the PR #98 version of
-# these files:
+# The home-screen personal-area tiles (set by pov_navigator_patcher) point at
+# the actions:
+#     tmdb_my_movies / trakt_my_movies      (movies page)
+#     tmdb_my_tvshows / trakt_my_tvshows    (tv shows page)
+# POV has no such actions natively, so without this patch those tiles build an
+# empty list. Each action is a MERGE of the user's personal lists:
+#     tmdb_my_*  = TMDB favorites + watchlist        (dedup by tmdb id)
+#     trakt_my_* = Trakt collection + watchlist + favorites (dedup by ids)
+# mirroring exactly how POV's own tmdb_personal / trakt_personal branches
+# fetch and shape their data, so everything downstream (threaded metadata
+# build, sort, render) is reused untouched.
 #
-#     tmdb_sort_key = min(self.cm_sort[
+# Injection point: menus/movies.py and menus/tvshows.py, class Menu.run(),
+# right before the dispatch chain `if self.action in Menu.tmdb_main:` -- we
+# prepend our own `if self.action in (...):` branch and turn POV's leading
+# `if` into an `elif`, so the chain stays intact and stock actions are
+# byte-for-byte unchanged. Marker-gated, revert-then-reapply (so our own
+# version bumps don't stack), compile()-checked before writing (never break
+# POV), atomic, .pyc invalidated, re-applied every boot.
 #
-# If the marker is present, the file is already migrated. If not,
-# we copy our bundled canonical version over.
-#
-# Defensive: if POV isn't installed, if the bundled overrides are
-# missing (zip extraction edge case), or if the write fails
-# (permission denied on Android), log and skip -- the patcher
-# retries on the next Kodi startup.
+# Defensive no-ops: if POV isn't installed, if the anchor is absent (POV
+# refactored again -> the tiles just fall back to POV's empty list until we
+# re-anchor), or if the file still carries our OLD whole-file override
+# (`_flex_call`) -- in which case the next POV self-update restores POV's
+# native menu file and this injector takes over on the boot after that.
 
 import os
-import shutil
+import re
 
 try:
     import xbmcvfs
@@ -35,20 +46,61 @@ except Exception:
 
 
 POV_ADDON_ID = 'plugin.video.pov'
-MENU_FILES = ('movies.py', 'tvshows.py', 'episodes.py')
 
-# Substring that ONLY the current canonical menu files contain, so we
-# know whether the device's copy is up to date. Bumped to the
-# `_flex_call` helper name in v0.2.80: that version-resilient call
-# wrapper was added to movies.py/tvshows.py to fix the
-# "tmdb_favorites() takes 2 positional arguments but 3 were given"
-# TypeError that emptied every personal list when POV auto-updated its
-# indexers/caches to a different arity than our synced movies.py
-# expected. Earlier synced copies lack `_flex_call`, so this marker
-# forces a one-time re-sync of the fixed files onto existing installs.
-# (The previous marker, the Hebrew "ניהול רשימות (Trakt)" label, is
-# still in the files but is no longer the freshness signal.)
-MARKER = 'tmdb_my_movies'
+MARKER = '# AI_SUBS_POV_MY_LISTS_v1'
+# Substring that only our OLD whole-file override carries; if we see it, the
+# device file is the stale override sitting on a 6.07 core -- don't touch it,
+# the next POV self-update restores the native file.
+STALE_OVERRIDE_MARK = '_flex_call'
+
+# (relative path, tmdb media-type, trakt media-type, action suffix)
+TARGETS = (
+    ('resources/lib/menus/movies.py', 'movie', 'movies', 'movies'),
+    ('resources/lib/menus/tvshows.py', 'tv', 'shows', 'tvshows'),
+)
+
+# POV's dispatch chain always opens with this line (3 tabs inside run()).
+_ANCHOR = '\t\t\tif self.action in Menu.tmdb_main:'
+
+# Strip a previously injected block (marker line .. the elif we converted the
+# anchor into) so we can re-apply cleanly across our own version bumps.
+_REVERT_RE = re.compile(
+    r'[ \t]*' + re.escape(MARKER) + r'\n.*?\n\t\t\telif self\.action in Menu\.tmdb_main:',
+    re.DOTALL,
+)
+
+
+_BLOCK_TEMPLATE = (
+    '\t\t\t{marker}\n'
+    "\t\t\tif self.action in ('tmdb_my_{suffix}', 'trakt_my_{suffix}'):\n"
+    '\t\t\t\ttry:\n'
+    "\t\t\t\t\tif self.action[:5] == 'tmdb_':\n"
+    '\t\t\t\t\t\tfrom indexers.tmdb_api import tmdb_favorites as _ai_f, tmdb_watchlist as _ai_w\n'
+    '\t\t\t\t\t\t_ai_seen, _ai_list = set(), []\n'
+    '\t\t\t\t\t\tfor _ai_fn in (_ai_f, _ai_w):\n'
+    "\t\t\t\t\t\t\tfor _ai_i in _ai_fn('{tmdb}', page_no)[0]:\n"
+    "\t\t\t\t\t\t\t\tif _ai_i['id'] not in _ai_seen:\n"
+    "\t\t\t\t\t\t\t\t\t_ai_seen.add(_ai_i['id']); _ai_list.append(_ai_i['id'])\n"
+    '\t\t\t\t\t\tself.list = _ai_list\n'
+    '\t\t\t\t\telse:\n'
+    "\t\t\t\t\t\tself.id_type = 'trakt_dict'\n"
+    '\t\t\t\t\t\tfrom indexers.trakt_api import trakt_collection as _ai_c, trakt_watchlist as _ai_tw, trakt_favorites as _ai_tf\n'
+    '\t\t\t\t\t\t_ai_seen, _ai_list = set(), []\n'
+    '\t\t\t\t\t\tfor _ai_fn in (_ai_c, _ai_tw, _ai_tf):\n'
+    "\t\t\t\t\t\t\tfor _ai_i in _ai_fn('{trakt}', page_no)[0]:\n"
+    "\t\t\t\t\t\t\t\t_ai_k = _ai_i['media_ids'].get('tmdb') or _ai_i['media_ids'].get('imdb') or repr(_ai_i['media_ids'])\n"
+    '\t\t\t\t\t\t\t\tif _ai_k not in _ai_seen:\n'
+    "\t\t\t\t\t\t\t\t\t_ai_seen.add(_ai_k); _ai_list.append(_ai_i['media_ids'])\n"
+    '\t\t\t\t\t\tself.list = _ai_list\n'
+    '\t\t\t\texcept Exception: pass\n'
+    '\t\t\telif self.action in Menu.tmdb_main:'
+)
+
+
+def _block(tmdb_mt, trakt_mt, suffix):
+    """The injected branch for one file. 3-tab base indent (run() body)."""
+    return _BLOCK_TEMPLATE.format(
+        marker=MARKER, suffix=suffix, tmdb=tmdb_mt, trakt=trakt_mt)
 
 
 def _log(msg, level='INFO'):
@@ -60,106 +112,99 @@ def _log(msg, level='INFO'):
         pass
 
 
-def _bundled_dir():
-    """Where our canonical POV menu files live inside this addon."""
-    here = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(here, 'pov_overrides', 'menus')
-
-
-def _target_dir():
-    """Where to install them in the user's POV addon."""
+def _pov_base():
     if xbmcvfs is None:
         return ''
     try:
-        return xbmcvfs.translatePath(
-            'special://home/addons/' + POV_ADDON_ID
-            + '/resources/lib/menus/')
+        return xbmcvfs.translatePath('special://home/addons/' + POV_ADDON_ID + '/')
     except Exception:
         return ''
 
 
-def _has_marker(path):
-    try:
-        with open(path, 'rb') as f:
-            return MARKER.encode('utf-8') in f.read()
-    except OSError:
-        return False
-
-
-def _drop_pyc(dst, name):
-    """Drop the matching __pycache__ entry so the next plugin
-    invocation picks up the new code without waiting for Kodi
-    to recompile."""
-    pycache_dir = os.path.join(os.path.dirname(dst), '__pycache__')
-    if not os.path.isdir(pycache_dir):
+def _invalidate_pyc(py_path):
+    d = os.path.join(os.path.dirname(py_path), '__pycache__')
+    if not os.path.isdir(d):
         return
-    stem = name.replace('.py', '.')
-    for fn in os.listdir(pycache_dir):
-        if fn.startswith(stem) and fn.endswith('.pyc'):
+    stem = os.path.basename(py_path)[:-3]
+    for fn in os.listdir(d):
+        if fn.startswith(stem + '.') and fn.endswith('.pyc'):
             try:
-                os.remove(os.path.join(pycache_dir, fn))
+                os.remove(os.path.join(d, fn))
             except OSError:
                 pass
+
+
+def _patch_one(path, tmdb_mt, trakt_mt, suffix):
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            original = f.read()
+    except OSError as e:
+        _log('{0}: read failed: {1}'.format(path, e), level='WARNING')
+        return 'read_failed'
+
+    if STALE_OVERRIDE_MARK in original:
+        _log('{0}: stale whole-file override detected -- leaving for POV '
+             'self-update to restore native menu, will inject next boot'
+             .format(os.path.basename(path)), level='WARNING')
+        return 'stale_override'
+
+    # Revert any prior injection so we re-apply our current version cleanly.
+    content = _REVERT_RE.sub('\t\t\tif self.action in Menu.tmdb_main:', original)
+
+    if _ANCHOR not in content:
+        _log('{0}: dispatch anchor not found -- POV may have changed; '
+             'skipping'.format(os.path.basename(path)), level='WARNING')
+        return 'unmatched'
+
+    content = content.replace(_ANCHOR, _block(tmdb_mt, trakt_mt, suffix), 1)
+
+    # SAFETY: never write a file that doesn't compile.
+    try:
+        compile(content, path, 'exec')
+    except SyntaxError as e:
+        _log('{0}: patched content would not compile -- skipping ({1})'
+             .format(os.path.basename(path), e), level='WARNING')
+        return 'compile_failed'
+
+    if content == original:
+        return 'unchanged'
+
+    tmp = path + '.aitmp'
+    try:
+        with open(tmp, 'w', encoding='utf-8') as f:
+            f.write(content)
+        os.replace(tmp, path)
+    except OSError as e:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        _log('{0}: write failed: {1}'.format(os.path.basename(path), e),
+             level='WARNING')
+        return 'write_failed'
+    _invalidate_pyc(path)
+    return 'patched'
 
 
 def ensure_patched():
-    """Copy each bundled menu file over to the user's POV addon
-    when the destination lacks the PR #98 marker. Returns a
-    {filename: status} dict where status is one of:
-      'unchanged'    -- marker present, no write needed
-      'patched'      -- file rewritten with canonical version
-      'no_source'    -- bundled copy missing (shouldn't happen)
-      'no_target'    -- POV addon file not present
-      'failed'       -- write error; will retry next startup
-    Plus a special key '_status' with values:
-      'no_bundled'   -- our pov_overrides/menus dir missing
-      'no_pov'       -- POV addon not installed
-    """
-    bdir = _bundled_dir()
-    tdir = _target_dir()
-    if not os.path.isdir(bdir):
-        _log('bundled dir missing at {0}'.format(bdir),
-             level='WARNING')
-        return {'_status': 'no_bundled'}
-    if not tdir or not os.path.isdir(tdir):
-        _log('POV target dir missing at {0}'.format(tdir),
-             level='INFO')
+    """Inject the merged My Movies / My Series personal-list actions into
+    POV's movies.py and tvshows.py list builders. Returns a {filename:
+    status} dict. Never raises."""
+    base = _pov_base()
+    if not base or not os.path.isdir(base):
         return {'_status': 'no_pov'}
 
     results = {}
-    for name in MENU_FILES:
-        src = os.path.join(bdir, name)
-        dst = os.path.join(tdir, name)
-        if not os.path.isfile(src):
-            results[name] = 'no_source'
-            _log('{0}: bundled source missing at {1}'.format(name, src),
-                 level='WARNING')
-            continue
-        if not os.path.isfile(dst):
+    for rel, tmdb_mt, trakt_mt, suffix in TARGETS:
+        path = os.path.join(base, *rel.split('/'))
+        name = os.path.basename(path)
+        if not os.path.isfile(path):
             results[name] = 'no_target'
-            _log('{0}: POV target missing at {1}'.format(name, dst),
-                 level='INFO')
             continue
-        if _has_marker(dst):
-            results[name] = 'unchanged'
-            _log('{0}: marker present, already migrated'.format(name),
-                 level='DEBUG')
-            continue
-        # Marker missing -- copy our canonical version over.
-        tmp = dst + '.aitmp'
-        try:
-            shutil.copyfile(src, tmp)
-            os.replace(tmp, dst)
-            _drop_pyc(dst, name)
-            results[name] = 'patched'
-            _log('{0}: copied canonical PR #98 version over'.format(
-                name), level='INFO')
-        except OSError as e:
-            try:
-                os.remove(tmp)
-            except OSError:
-                pass
-            results[name] = 'failed'
-            _log('{0}: write failed: {1}'.format(name, e),
-                 level='WARNING')
+        results[name] = _patch_one(path, tmdb_mt, trakt_mt, suffix)
+
+    if any(v == 'patched' for v in results.values()):
+        _log('injected merged personal-list actions ({0})'.format(
+            ', '.join('%s=%s' % (k, v) for k, v in results.items())),
+            level='INFO')
     return results
