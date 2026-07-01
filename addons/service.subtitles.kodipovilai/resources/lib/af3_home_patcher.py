@@ -1007,11 +1007,11 @@ def _set_af3_runtime_defaults():
         'Skin.SetString(HomeSwitcher.1101.Mode,Standard)',
         'Skin.SetString(HomeSwitcher.1102.Mode,Standard)',
         'Skin.SetBool(Textboxes.DisableFakeBox)',
-        # NOTE: the Spotlight.* strings are NOT seeded here every boot anymore --
-        # they're user-customisable (path/target/label/limit, incl. setting the
-        # path to None), and re-setting them on every startup reverted the user's
-        # change. They're now seeded once via _seed_af3_spotlight_once().
-        'Skin.SetString(HomeSwitcher.Home.Shortcut.Path,ActivateWindow(1181))',
+        # NOTE: the Spotlight.* strings AND the Home.Shortcut.Path are NOT seeded
+        # here every boot anymore -- they're user-customisable (path/target/
+        # label/limit), and re-setting them on every startup reverted the user's
+        # change (arctic.fuse 3: edited menu-hub path reverted after restart).
+        # They're now seeded once via _seed_af3_spotlight_once().
         'Skin.Reset(TMDbHelper.DisableRatings)',
         'Skin.SetBool(TMDbHelper.EnableData)',
         'Skin.SetBool(TMDbHelper.Service)',
@@ -1044,6 +1044,10 @@ _SPOTLIGHT_COMMANDS = [
     'Skin.SetString(HomeSwitcher.Home.Spotlight.Target,videos)',
     'Skin.SetString(HomeSwitcher.Home.Spotlight.Label,סרטים חדשים)',
     'Skin.SetString(HomeSwitcher.Home.Spotlight.Limit,10)',
+    # The main menu-hub shortcut path: seeded once here (was previously re-set
+    # on every boot in _set_af3_runtime_defaults, which reverted a user's edit
+    # of the hub path after each restart).
+    'Skin.SetString(HomeSwitcher.Home.Shortcut.Path,ActivateWindow(1181))',
 ]
 
 
