@@ -1,3 +1,9 @@
+v0.2.295
+- Maintenance and stability improvements.
+- Build: heal POV's missing trakt_data table so the Trakt list manager and the
+  "My Movies/My Series (Trakt)" tiles stop crashing / showing empty after POV
+  recreates its trakt cache DB.
+
 v0.2.294
 - Maintenance and stability improvements.
 - Build: re-aligned the POV companion patchers after POV's 6.07 update so the
