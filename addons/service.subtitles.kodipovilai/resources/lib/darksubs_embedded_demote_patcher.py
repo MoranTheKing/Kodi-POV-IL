@@ -8,7 +8,7 @@
 #   site_id '[LOC]'. The list builder in engine.py sorts each
 #   language group by descending sync percent (-x[5]), so 101 always
 #   wins -- the embedded English line lands FIRST in the English
-#   group. On this POV/streaming build the embedded track is almost
+#   group. On this POV build the embedded track is almost
 #   always identical to (or worse than) an external English sub, and
 #   crucially DarkSubs's download_sub() short-circuits embedded picks
 #   with setSubtitleStream() + 'EmbeddedSubSelected' BEFORE
