@@ -382,6 +382,16 @@ def report_embedded(info):
     try:
         if kodi_utils.get_setting('he_embedded_report', 'true') == 'false':
             return
+        # A playback source can opt this playback out of pool embedded-reporting
+        # by stamping a window property at play start (same pattern as the
+        # autosub opt-out). Honoured only when fresh.
+        try:
+            import xbmcgui, time as _t
+            _sp = xbmcgui.Window(10000).getProperty('skip_pool_report')
+            if _sp and (_t.time() - float(_sp)) < 120:
+                return
+        except Exception:
+            pass
         if _urlreq is None:
             return
         p = _params(info)

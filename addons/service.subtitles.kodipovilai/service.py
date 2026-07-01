@@ -1243,7 +1243,7 @@ def _maybe_patch_darksubs_embedded_demote():
     """Self-healing patch of DarkSubs's engine.py so embedded ('[LOC]')
     subtitle entries sink to the BOTTOM of their language group instead
     of floating to the top on their hard-coded 101% sync. On this
-    streaming build the embedded track can't be AI-translated (DarkSubs
+    build the embedded track can't be AI-translated (DarkSubs
     short-circuits embedded picks with setSubtitleStream before our
     hook runs), so demoting it makes an external, AI-translatable
     English source the natural first pick."""
@@ -2438,7 +2438,7 @@ def _maybe_patch_af3_home():
     """Seed Arctic Fuse 3 with POV/FENtastic-style home widgets.
 
     AF3's default home widgets are Kodi-library smart playlists, which
-    are empty in this streaming build and show "No Results" on fresh
+    are empty in this build and show "No Results" on fresh
     installs. This writes script.skinvariables' per-user node JSON so
     the AF3 home screen opens directly into POV rows: new movies,
     trending shows, continue watching, personal lists, genres, AI
