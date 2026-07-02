@@ -163,6 +163,7 @@ def _run_build_startup_repairs():
         _maybe_patch_brand_favourites,
         _maybe_patch_pov_genre_icons,
         _maybe_patch_pov_hebrew_genres,
+        _maybe_patch_pov_hebrew_ui,
         _maybe_patch_pov_genre_menu_icons,
         _maybe_patch_pov_combined_discover,
         _maybe_patch_af3_home,
@@ -778,6 +779,34 @@ def _maybe_patch_pov_hebrew_genres():
         try:
             kodi_utils.log(
                 'pov_hebrew_genres_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_hebrew_ui():
+    """Hebrew-ise POV's own in-app UI strings (resume dialog + search hub),
+    which are English because POV ships only en_gb. Sets the Hebrew msgstr on
+    the relevant ids in POV's strings.po. Idempotent, self-healing."""
+    try:
+        from resources.lib import pov_hebrew_ui_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_hebrew_ui_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_hebrew_ui_patcher: POV UI strings set to Hebrew',
+                level='INFO')
+        elif status in ('no_pov', 'no_file', 'already_patched'):
+            pass
+        else:
+            kodi_utils.log(
+                'pov_hebrew_ui_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_hebrew_ui_patcher failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
