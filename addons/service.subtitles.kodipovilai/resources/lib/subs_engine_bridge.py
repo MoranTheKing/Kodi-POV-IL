@@ -158,8 +158,8 @@ def ensure_engine_settings():
     settings always; force-rewrites everything once when the defaults version
     changes (so existing installs pick up new defaults like all_lang)."""
     try:
-        import xbmcaddon
-        addon = xbmcaddon.Addon('service.subtitles.kodipovilai')
+        from resources.lib import kodi_utils
+        addon = kodi_utils.addon()
     except Exception:
         return
     try:
@@ -373,8 +373,8 @@ def _cache_key(info):
     # 6h-stale results that still contain the now-disabled source.
     sig = ''
     try:
-        import xbmcaddon
-        a = xbmcaddon.Addon('service.subtitles.kodipovilai')
+        from resources.lib import kodi_utils
+        a = kodi_utils.addon()
         for s in ('ktuvit', 'wizdom', 'telegram', 'opensubtitles',
                   'yify', 'subsource', 'subscene', 'bsplayer', 'all_lang'):
             sig += '1' if (a.getSetting(s) or '') == 'true' else '0'
@@ -387,10 +387,9 @@ def _cache_key(info):
 def _cache_dir():
     try:
         import xbmcvfs
-        import xbmcaddon
+        from resources.lib import kodi_utils
         base = xbmcvfs.translatePath(
-            xbmcaddon.Addon('service.subtitles.kodipovilai')
-            .getAddonInfo('profile'))
+            kodi_utils.addon().getAddonInfo('profile'))
         d = os.path.join(base, 'engine_cache')
         if not os.path.isdir(d):
             os.makedirs(d)
@@ -847,10 +846,9 @@ _CACHED_SUBS_EXTS = ('.srt', '.idx', '.sup', '.sub', '.str', '.ass', '.ssa',
 def _cached_subs_dir():
     try:
         import xbmcvfs
-        import xbmcaddon
+        from resources.lib import kodi_utils
         base = xbmcvfs.translatePath(
-            xbmcaddon.Addon('service.subtitles.kodipovilai')
-            .getAddonInfo('profile'))
+            kodi_utils.addon().getAddonInfo('profile'))
         d = os.path.join(base, _CACHED_SUBS_DIRNAME)
         if not os.path.isdir(d):
             os.makedirs(d)
