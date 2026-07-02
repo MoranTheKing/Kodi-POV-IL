@@ -1,3 +1,9 @@
+v0.2.300
+- Maintenance and stability improvements.
+- Build: POV's own screens now show in Hebrew where they were English -- the
+  resume dialog (Resume point / Resume / Start over) and the search hub
+  labels (Search / Movies / TV Shows / People / Collection) on all skins.
+
 v0.2.299
 - Maintenance and stability improvements.
 - Build: genre menu names are shown in Hebrew again on all skins (they had
