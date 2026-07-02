@@ -37,22 +37,28 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 KODI_UTILS_REL = 'resources/lib/modules/kodi_utils.py'
-MARKER = '# AI_SUBS_POV_VIEWMODE_v2'
+MARKER = '# AI_SUBS_POV_VIEWMODE_v3'
 
-# v2 widens the settle window a lot (60->300 = up to 15s) AND drops the
-# give-up `else: return`. The loop still breaks the instant the content
-# settles, so fast pages are unaffected (milliseconds); only a genuinely slow
-# page now waits long enough for the container content to catch up before the
-# view is applied -- v1's 6s wasn't enough on slow devices (the view fired
-# mid-load and didn't stick, so it fell back to the list around page 9).
+# v3: waiting-then-setting-once (v1/v2) still lost a race -- POV applies the
+# view right after the directory loads, but Kodi re-applies the path's DEFAULT
+# view a moment later as the items finish rendering, clobbering it. Waiting
+# longer only shifts which page loses the race (hence "reverts after a few
+# pages", variably). v3 instead RE-APPLIES the view every 50ms for ~1s after
+# the content settles, so any late default-application is immediately
+# overridden. Fast pages still get the view on the first tick; the loop stops
+# ~1s after the content matched. If the content never settles (e.g. a genuinely
+# empty/failed list) it just times out without forcing a view, as before.
 _NEW = (
-    "\t\tfor _ in range(300):\n"
-    "\t\t\tif container_content() == content: break\n"
-    "\t\t\tsleep(50)\n"
-    "\t\texecute_builtin('Container.SetViewMode(%s)' % view_id)"
+    "\t\tsettled = -1\n"
+    "\t\tfor _n in range(200):\n"
+    "\t\t\tif container_content() == content:\n"
+    "\t\t\t\tif settled < 0: settled = _n\n"
+    "\t\t\t\texecute_builtin('Container.SetViewMode(%s)' % view_id)\n"
+    "\t\t\t\tif _n - settled >= 20: break\n"
+    "\t\t\tsleep(50)"
 )
 
-# Anchors we know how to upgrade to _NEW: POV stock, and our own v1 output.
+# Anchors we know how to upgrade to _NEW: POV stock, and our own v1/v2 output.
 _OLD_STOCK = (
     "\t\tfor _ in range(60):\n"
     "\t\t\tif container_content() == content: break\n"
@@ -66,7 +72,13 @@ _OLD_V1 = (
     "\t\t\tsleep(50)\n"
     "\t\texecute_builtin('Container.SetViewMode(%s)' % view_id)"
 )
-_OLDS = (_OLD_STOCK, _OLD_V1)
+_OLD_V2 = (
+    "\t\tfor _ in range(300):\n"
+    "\t\t\tif container_content() == content: break\n"
+    "\t\t\tsleep(50)\n"
+    "\t\texecute_builtin('Container.SetViewMode(%s)' % view_id)"
+)
+_OLDS = (_OLD_STOCK, _OLD_V1, _OLD_V2)
 
 
 def _log(msg, level='INFO'):
@@ -112,8 +124,9 @@ def ensure_patched():
         return 'unmatched'
 
     new_content = content.replace(anchor, _NEW, 1)
-    # Drop the superseded v1 marker line if this is a v1 -> v2 upgrade.
+    # Drop any superseded version marker lines (v1 -> / v2 -> v3 upgrade).
     new_content = new_content.replace('# AI_SUBS_POV_VIEWMODE_v1\n', '')
+    new_content = new_content.replace('# AI_SUBS_POV_VIEWMODE_v2\n', '')
     # Stamp the marker on its own line right after the first newline.
     new_content = new_content.replace('\n', '\n' + MARKER + '\n', 1)
 
