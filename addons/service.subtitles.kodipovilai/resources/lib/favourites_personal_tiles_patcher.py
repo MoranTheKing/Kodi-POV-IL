@@ -92,6 +92,15 @@ SERVICE_RESEED_MARKER = '<!-- AI_SUBS_FAVOURITES_PREMIUMIZE_RESEED_v1 -->'
 # genuine future deletions are respected again.
 PERSONAL_RESEED_MARKER = '<!-- AI_SUBS_FAVOURITES_PERSONAL_RESEED_v1 -->'
 FULL_BUILD_SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_FULL_BUILD_TILES_SEEN_v2 -->'
+# One-time re-seed of the WHOLE canonical build surface (genre / popular /
+# per-service network rows -- e.g. the "Netflix/Disney+/HBO... סדרות" home
+# tiles). These live in Kodi favourites, not in navigator.db or the skin; some
+# installs lost the service rows to a favourites reseed (not a user deletion),
+# and _should_restore_full_build_tiles() deliberately refuses to rebuild on
+# every update. This marker forces exactly one insert-only restore of every
+# canonical tile the user is missing, then never repeats -- so genuine future
+# deletions stay respected. User-added custom favourites are never touched.
+FULL_BUILD_RESEED_MARKER = '<!-- AI_SUBS_FAVOURITES_FULL_BUILD_RESEED_v1 -->'
 DEBRID_NOTICE_SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_DEBRID_NOTICE_SEEN_v1 -->'
 BROKEN_DEBRID_NOTICE_ACTION = (
     'RunPlugin("plugin://service.subtitles.kodipovilai/?'
@@ -496,6 +505,7 @@ def ensure_patched():
     had_full_marker = _has_marker(content, FULL_BUILD_SEEN_MARKER)
     had_premiumize_reseed = _has_marker(content, SERVICE_RESEED_MARKER)
     had_personal_reseed = _has_marker(content, PERSONAL_RESEED_MARKER)
+    had_full_reseed = _has_marker(content, FULL_BUILD_RESEED_MARKER)
     content, fixed_existing = _fix_existing_debrid_notice_action(content)
     content, fixed_torbox_status = _fix_existing_torbox_status_action(content)
     content, debrid_notice_restored = _insert_debrid_notice_tile(
@@ -508,12 +518,20 @@ def ensure_patched():
     # missing. Restore the whole canonical build surface once, without
     # replacing the file or deleting user custom favourites.
     missing_full_tiles = []
-    if not had_full_marker:
-        missing_full_tiles = _canonical_tiles_missing_from_content(
+    if not had_full_marker or not had_full_reseed:
+        candidate_full_tiles = _canonical_tiles_missing_from_content(
             content, fixture_text)
-        if (missing_full_tiles
-                and _should_restore_full_build_tiles(content,
-                                                     missing_full_tiles)):
+        # One-time forced restore of the whole canonical surface (see
+        # FULL_BUILD_RESEED_MARKER): fires once per install regardless of the
+        # normally-disabled _should_restore_full_build_tiles(), so the lost
+        # per-service network tiles (Netflix/Disney+/HBO... סדרות) come back.
+        force_full = (not had_full_reseed) and bool(candidate_full_tiles)
+        if candidate_full_tiles and (
+                force_full
+                or (not had_full_marker
+                    and _should_restore_full_build_tiles(
+                        content, candidate_full_tiles))):
+            missing_full_tiles = candidate_full_tiles
             positioned_tiles = []
             append_tiles = []
             for tile in missing_full_tiles:
@@ -577,6 +595,12 @@ def ensure_patched():
     if not had_personal_reseed:
         new_content, personal_reseed_added = _insert_marker(
             new_content, PERSONAL_RESEED_MARKER)
+    # Stamp the full-build re-seed marker once, so the forced canonical restore
+    # above can never repeat (genuine future deletions stay respected).
+    full_reseed_added = False
+    if not had_full_reseed:
+        new_content, full_reseed_added = _insert_marker(
+            new_content, FULL_BUILD_RESEED_MARKER)
     if not missing:
         new_content, marker_added = _insert_marker(new_content)
         new_content, service_marker_added = _insert_marker(
@@ -594,6 +618,7 @@ def ensure_patched():
             and not debrid_notice_restored
             and not service_position_fixed and not full_marker_added
             and not reseed_marker_added and not personal_reseed_added
+            and not full_reseed_added
             and not missing_full_tiles):
         return 'already_complete'
 
