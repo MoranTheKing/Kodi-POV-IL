@@ -1,3 +1,9 @@
+v0.2.299
+- Maintenance and stability improvements.
+- Build: genre menu names are shown in Hebrew again on all skins (they had
+  reverted to English after a POV self-update); collection search remains
+  available via the search hub.
+
 v0.2.298
 - Maintenance and stability improvements.
 - Build: added the change-source button to FENtastic's simple player OSD
