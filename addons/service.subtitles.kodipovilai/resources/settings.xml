@@ -91,7 +91,7 @@
           <level>0</level>
           <default>true</default>
           <dependencies>
-            <dependency type="visible" setting="use_builtin_engine" operator="equals">false</dependency>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">false</dependency>
           </dependencies>
           <control type="toggle"/>
         </setting>
@@ -99,7 +99,7 @@
           <level>0</level>
           <default>true</default>
           <dependencies>
-            <dependency type="visible" setting="use_builtin_engine" operator="equals">false</dependency>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">false</dependency>
           </dependencies>
           <control type="toggle"/>
         </setting>
@@ -107,7 +107,7 @@
           <level>0</level>
           <default>false</default>
           <dependencies>
-            <dependency type="visible" setting="use_builtin_engine" operator="equals">false</dependency>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">false</dependency>
           </dependencies>
           <control type="toggle"/>
         </setting>
@@ -115,7 +115,7 @@
           <level>0</level>
           <default>false</default>
           <dependencies>
-            <dependency type="visible" setting="use_builtin_engine" operator="equals">false</dependency>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">false</dependency>
           </dependencies>
           <control type="toggle"/>
         </setting>
@@ -123,7 +123,7 @@
           <level>0</level>
           <default>false</default>
           <dependencies>
-            <dependency type="visible" setting="use_builtin_engine" operator="equals">false</dependency>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">false</dependency>
           </dependencies>
           <control type="toggle"/>
         </setting>
@@ -399,7 +399,7 @@
             <allowempty>true</allowempty>
           </constraints>
           <dependencies>
-            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
           </dependencies>
           <control type="button" format="action">
             <heading>32525</heading>
@@ -410,7 +410,7 @@
           <level>0</level>
           <default>true</default>
           <dependencies>
-            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
           </dependencies>
           <control type="toggle"/>
         </setting>
@@ -418,7 +418,7 @@
           <level>0</level>
           <default>false</default>
           <dependencies>
-            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
           </dependencies>
           <control type="toggle"/>
         </setting>
@@ -431,7 +431,7 @@
             <maximum>60</maximum>
           </constraints>
           <dependencies>
-            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
           </dependencies>
           <control type="slider" format="integer"/>
         </setting>
@@ -439,7 +439,7 @@
           <level>0</level>
           <default>false</default>
           <dependencies>
-            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
           </dependencies>
           <control type="toggle"/>
         </setting>
@@ -450,7 +450,7 @@
             <allowempty>true</allowempty>
           </constraints>
           <dependencies>
-            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
           </dependencies>
           <control type="button" format="action">
             <heading>32528</heading>
@@ -464,7 +464,7 @@
             <allowempty>true</allowempty>
           </constraints>
           <dependencies>
-            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
           </dependencies>
           <control type="button" format="action">
             <heading>32529</heading>
@@ -478,7 +478,7 @@
             <allowempty>true</allowempty>
           </constraints>
           <dependencies>
-            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
           </dependencies>
           <control type="button" format="action">
             <heading>32533</heading>
@@ -491,7 +491,7 @@
           <level>0</level>
           <default>true</default>
           <dependencies>
-            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
           </dependencies>
           <control type="toggle"/>
         </setting>
@@ -499,7 +499,7 @@
           <level>0</level>
           <default>true</default>
           <dependencies>
-            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
           </dependencies>
           <control type="toggle"/>
         </setting>
@@ -507,7 +507,7 @@
           <level>0</level>
           <default>false</default>
           <dependencies>
-            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
           </dependencies>
           <control type="toggle"/>
         </setting>
@@ -515,7 +515,7 @@
           <level>0</level>
           <default>true</default>
           <dependencies>
-            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
           </dependencies>
           <control type="toggle"/>
         </setting>
@@ -523,7 +523,7 @@
           <level>0</level>
           <default>true</default>
           <dependencies>
-            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
           </dependencies>
           <control type="toggle"/>
         </setting>
@@ -531,7 +531,7 @@
           <level>0</level>
           <default>true</default>
           <dependencies>
-            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
           </dependencies>
           <control type="toggle"/>
         </setting>
@@ -539,7 +539,7 @@
           <level>0</level>
           <default>true</default>
           <dependencies>
-            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
           </dependencies>
           <control type="toggle"/>
         </setting>
@@ -547,7 +547,7 @@
           <level>0</level>
           <default>true</default>
           <dependencies>
-            <dependency type="visible" setting="use_builtin_engine" operator="equals">true</dependency>
+            <dependency type="visible" setting="use_builtin_engine" operator="is">true</dependency>
           </dependencies>
           <control type="toggle"/>
         </setting>
@@ -676,7 +676,7 @@
         <setting id="chunk_lines" type="integer" label="32402"> <!-- Lines per translation request -->
           <level>0</level>
           <dependencies>
-            <dependency type="enable" setting="whole_subtitle_request" operator="equals">false</dependency>
+            <dependency type="enable" setting="whole_subtitle_request" operator="is">false</dependency>
           </dependencies>
           <default>50</default>
           <constraints>
@@ -691,7 +691,7 @@
         <setting id="parallel_chunks" type="integer" label="32404"> <!-- Concurrent translation requests -->
           <level>0</level>
           <dependencies>
-            <dependency type="enable" setting="whole_subtitle_request" operator="equals">false</dependency>
+            <dependency type="enable" setting="whole_subtitle_request" operator="is">false</dependency>
           </dependencies>
           <default>3</default>
           <constraints>
@@ -707,7 +707,7 @@
                  label="32405" help="32406"> <!-- Fast subtitles -->
           <level>0</level>
           <dependencies>
-            <dependency type="enable" setting="whole_subtitle_request" operator="equals">false</dependency>
+            <dependency type="enable" setting="whole_subtitle_request" operator="is">false</dependency>
           </dependencies>
           <default>true</default>
           <control type="toggle"/>
