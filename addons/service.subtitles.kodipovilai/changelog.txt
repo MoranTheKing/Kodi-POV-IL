@@ -1,3 +1,10 @@
+v0.2.306
+- Maintenance and stability improvements.
+- Build: one-time restore of the "series by network" tiles (Netflix / Disney+ /
+  Apple TV+ / HBO / HBO Max / FOX / Amazon / Hulu / CW) on the NOX home screen.
+  Some devices lost most of these when the base build self-updated and reset its
+  home-menu database; they are restored once, then left to the user's edits.
+
 v0.2.305
 - Maintenance and stability improvements.
 - Build: the 'movies by streaming service' tiles (Netflix/Disney+/Apple TV+

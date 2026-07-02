@@ -175,6 +175,7 @@ def _run_build_startup_repairs():
         _maybe_fix_pov_favourites_typo,
         _maybe_patch_pov_menus,
         _maybe_patch_pov_personal_area,
+        _maybe_reseed_series_networks,
         _maybe_patch_fentastic_widgets,
         _maybe_patch_favourites_xml,
         _maybe_patch_favourites_personal_tiles,
@@ -557,6 +558,32 @@ def _maybe_patch_pov_personal_area():
         try:
             kodi_utils.log(
                 'pov_navigator_patcher (personal area) failed: '
+                '{0}'.format(e), level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_reseed_series_networks():
+    """One-time restore of the NOX 'series by networks' home row in
+    POV's navigator.db. Some devices lost most of the per-service
+    series tiles when POV self-updated and re-extracted a fresh DB;
+    this rewrites the row to its known-good nine-tile contents exactly
+    once per install, then leaves it alone.
+    """
+    try:
+        from resources.lib import pov_series_networks_reseed_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_series_networks_reseed_patcher.maybe_reseed_series_networks()
+        if status == 'reseeded':
+            kodi_utils.log(
+                'pov_series_networks_reseed_patcher: restored series-by-'
+                'networks home row', level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_series_networks_reseed_patcher run failed: '
                 '{0}'.format(e), level='WARNING')
         except Exception:
             pass
