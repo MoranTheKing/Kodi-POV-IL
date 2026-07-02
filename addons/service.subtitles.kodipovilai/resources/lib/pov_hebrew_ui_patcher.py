@@ -7,10 +7,11 @@
 # from navigator.db / favourites seeds, but POV's own windows fall back to the
 # English source strings.
 #
-# Fix: set the Hebrew translation directly on the msgstr of the relevant ids in
-# POV's en_gb strings.po (Kodi returns msgstr when present, else the English
-# msgid). Only the msgstr line that immediately follows each targeted
-# msgctxt/msgid is touched; format tokens like [B]%s[/B] are preserved. The
+# Fix: set the Hebrew text on BOTH the msgid and msgstr of the relevant ids in
+# POV's en_gb strings.po. (For its own source language, Kodi shows the msgid,
+# not the msgstr -- so a Hebrew msgstr alone was ignored; the msgid must be
+# Hebrew too.) Only the msgid/msgstr lines that immediately follow each
+# targeted msgctxt are touched; format tokens like [B]%s[/B] are preserved. The
 # lookup is by numeric id, so translating the text changes nothing else.
 #
 # Idempotent (re-run leaves an already-Hebrew msgstr unchanged), atomic, and
@@ -91,11 +92,13 @@ def ensure_patched():
     applied = 0
     for sid, he in HE.items():
         # msgctxt "#<id>" \n msgid "<english>" \n msgstr "<current>"
-        # -> set the msgstr to Hebrew. Tolerates LF or CRLF.
+        # -> set BOTH msgid and msgstr to Hebrew. Tolerates LF or CRLF.
         pat = re.compile(
-            r'(msgctxt "#' + sid + r'"\r?\nmsgid "[^"]*"\r?\nmsgstr )"[^"]*"')
-        new_content, n = pat.subn(lambda m: m.group(1) + '"' + he + '"',
-                                  new_content, count=1)
+            r'(msgctxt "#' + sid + r'"\r?\nmsgid )"[^"]*"(\r?\nmsgstr )"[^"]*"')
+        he_q = '"' + he + '"'
+        new_content, n = pat.subn(
+            lambda m: m.group(1) + he_q + m.group(2) + he_q,
+            new_content, count=1)
         applied += n
 
     if applied == 0:
