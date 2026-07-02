@@ -1,3 +1,10 @@
+v0.2.308
+- Maintenance and stability improvements.
+- Build: the "Netflix under Movies" tile no longer hangs -- reverted the
+  0.2.305 query change that caused it to spin forever; it returns a list again.
+- Build: further hardened the fix for the view mode reverting to a plain list
+  when paging -- widened the settle wait so it holds on slower pages too.
+
 v0.2.307
 - Maintenance and stability improvements.
 - Build: fixed the view mode intermittently reverting to a plain no-poster list
