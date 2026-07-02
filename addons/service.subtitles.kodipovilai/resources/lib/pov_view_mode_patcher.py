@@ -37,21 +37,36 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 KODI_UTILS_REL = 'resources/lib/modules/kodi_utils.py'
-MARKER = '# AI_SUBS_POV_VIEWMODE_v1'
+MARKER = '# AI_SUBS_POV_VIEWMODE_v2'
 
-_OLD = (
+# v2 widens the settle window a lot (60->300 = up to 15s) AND drops the
+# give-up `else: return`. The loop still breaks the instant the content
+# settles, so fast pages are unaffected (milliseconds); only a genuinely slow
+# page now waits long enough for the container content to catch up before the
+# view is applied -- v1's 6s wasn't enough on slow devices (the view fired
+# mid-load and didn't stick, so it fell back to the list around page 9).
+_NEW = (
+    "\t\tfor _ in range(300):\n"
+    "\t\t\tif container_content() == content: break\n"
+    "\t\t\tsleep(50)\n"
+    "\t\texecute_builtin('Container.SetViewMode(%s)' % view_id)"
+)
+
+# Anchors we know how to upgrade to _NEW: POV stock, and our own v1 output.
+_OLD_STOCK = (
     "\t\tfor _ in range(60):\n"
     "\t\t\tif container_content() == content: break\n"
     "\t\t\tsleep(50)\n"
     "\t\telse: return\n"
     "\t\texecute_builtin('Container.SetViewMode(%s)' % view_id)"
 )
-_NEW = (
+_OLD_V1 = (
     "\t\tfor _ in range(120):\n"
     "\t\t\tif container_content() == content: break\n"
     "\t\t\tsleep(50)\n"
     "\t\texecute_builtin('Container.SetViewMode(%s)' % view_id)"
 )
+_OLDS = (_OLD_STOCK, _OLD_V1)
 
 
 def _log(msg, level='INFO'):
@@ -90,12 +105,15 @@ def ensure_patched():
 
     if MARKER in content:
         return 'already_patched'
-    if _OLD not in content:
+    anchor = next((a for a in _OLDS if a in content), None)
+    if anchor is None:
         _log('set_view_mode body not found -- POV may have changed it; '
              'leaving alone', level='WARNING')
         return 'unmatched'
 
-    new_content = content.replace(_OLD, _NEW, 1)
+    new_content = content.replace(anchor, _NEW, 1)
+    # Drop the superseded v1 marker line if this is a v1 -> v2 upgrade.
+    new_content = new_content.replace('# AI_SUBS_POV_VIEWMODE_v1\n', '')
     # Stamp the marker on its own line right after the first newline.
     new_content = new_content.replace('\n', '\n' + MARKER + '\n', 1)
 
