@@ -2176,6 +2176,37 @@ def _maybe_patch_choose_subs_buttons():
             pass
 
 
+def _maybe_patch_fentastic_simpleplayer_source():
+    """Add the 'החלף מקור' (change source) button to FENtastic's SIMPLE player
+    OSD (Includes_VideoOsd3.xml) -- the only player variant that shipped without
+    one. Inserted into the auto-laid-out action grouplist (no overlap), reusing
+    the skin's own __ChooseSourceOsd__ behaviour. Skin-gated, XML-parse-checked,
+    self-healing. No-op when FENtastic isn't installed."""
+    try:
+        from resources.lib import (
+            fentastic_simpleplayer_source_patcher, kodi_utils)
+    except Exception:
+        return
+    try:
+        status = fentastic_simpleplayer_source_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'fentastic_simpleplayer_source_patcher: change-source button '
+                'added to the simple player OSD', level='INFO')
+        elif status in ('unmatched', 'compile_failed', 'write_failed',
+                        'read_failed'):
+            kodi_utils.log(
+                'fentastic_simpleplayer_source_patcher: ' + status,
+                level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'fentastic_simpleplayer_source_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_change_source_pause():
     """Make the player's "החלף מקור" (change source) button pause the video
     before opening the source-selection screen -- it used to pause but started
@@ -3462,6 +3493,11 @@ def main():
     # Same for the Estuary skin (skin.estuary) -- it also shipped without a
     # change-source button. Skin-gated, XML-parse-checked.
     _maybe_patch_estuary_change_source()
+
+    # FENtastic's SIMPLE player OSD shipped without a change-source button
+    # (every other FENtastic player variant has one). Add it. Skin-gated,
+    # XML-parse-checked, self-healing.
+    _maybe_patch_fentastic_simpleplayer_source()
 
     # Point the player's subtitle button at MoranSubs's own chooser window
     # (FENtastic + Estuary pointed at the now-disabled DarkSubs; NOX's existing
