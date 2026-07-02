@@ -1,3 +1,10 @@
+v0.2.297
+- Maintenance and stability improvements.
+- Build: restored the Premiumize subscription-status home tile; the search
+  (magnifying glass) now offers actor/director and movie-collection search in
+  all skins; embedded-Hebrew subtitle shows its 101% match on the first play;
+  Arctic Fuse 3 keeps a user-edited menu-hub path across restarts.
+
 v0.2.296
 - Maintenance and stability improvements.
 
