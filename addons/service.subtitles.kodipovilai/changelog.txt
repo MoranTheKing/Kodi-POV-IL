@@ -1,3 +1,12 @@
+v0.2.309
+- Maintenance and stability improvements.
+- Build: one-time restore of the home-screen "by service" tiles (Netflix /
+  Disney+ / Apple TV / HBO / HBO Max / FOX / Amazon / Hulu / CW and the other
+  canonical rows). These are Kodi favourites; some installs lost them and the
+  normal logic wouldn't re-add them. Restored once from the bundled canonical
+  set (existing and custom favourites are kept), then future edits are
+  respected again.
+
 v0.2.308
 - Maintenance and stability improvements.
 - Build: the "Netflix under Movies" tile no longer hangs -- reverted the
