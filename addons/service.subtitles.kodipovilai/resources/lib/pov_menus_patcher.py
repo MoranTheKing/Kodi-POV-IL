@@ -48,15 +48,25 @@ except Exception:
 POV_ADDON_ID = 'plugin.video.pov'
 
 MARKER = '# AI_SUBS_POV_MY_LISTS_v1'
-# Substring that only our OLD whole-file override carries; if we see it, the
-# device file is the stale override sitting on a 6.07 core -- don't touch it,
-# the next POV self-update restores the native file.
+# Substring that only our OLD (pre-0.2.294) whole-file override carries. If we
+# see it, the device file is the stale 5.12-shaped override sitting on a 6.07
+# core -- which HANGS POV (e.g. entering a TV show). We used to just wait for a
+# POV self-update to restore the native file, but on devices where POV doesn't
+# re-extract that never heals, so we now actively restore the bundled native
+# 6.07 copy over it (then inject as usual).
 STALE_OVERRIDE_MARK = '_flex_call'
 
-# (relative path, tmdb media-type, trakt media-type, action suffix)
+# Our bundled pristine POV 6.07 menu files (used to heal a stale override).
+_NATIVE_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), 'pov_native_menus')
+
+# (relative path, bundled-native filename, tmdb media-type, trakt media-type,
+#  action suffix). suffix=None -> restore-only (episodes.py has no merged
+#  personal-list action to inject, but its stale override must still be healed).
 TARGETS = (
-    ('resources/lib/menus/movies.py', 'movie', 'movies', 'movies'),
-    ('resources/lib/menus/tvshows.py', 'tv', 'shows', 'tvshows'),
+    ('resources/lib/menus/movies.py', 'movies.py', 'movie', 'movies', 'movies'),
+    ('resources/lib/menus/tvshows.py', 'tvshows.py', 'tv', 'shows', 'tvshows'),
+    ('resources/lib/menus/episodes.py', 'episodes.py', None, None, None),
 )
 
 # POV's dispatch chain always opens with this line (3 tabs inside run()).
@@ -134,7 +144,34 @@ def _invalidate_pyc(py_path):
                 pass
 
 
-def _patch_one(path, tmdb_mt, trakt_mt, suffix):
+def _restore_native(path, native_filename):
+    """Overwrite the device file with our bundled pristine POV 6.07 copy.
+    compile()-checked + atomic. Returns True on success."""
+    src = os.path.join(_NATIVE_DIR, native_filename)
+    if not os.path.isfile(src):
+        return False
+    try:
+        with open(src, 'r', encoding='utf-8') as f:
+            native = f.read()
+        compile(native, src, 'exec')
+    except (OSError, SyntaxError):
+        return False
+    tmp = path + '.aitmp'
+    try:
+        with open(tmp, 'w', encoding='utf-8') as f:
+            f.write(native)
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        return False
+    _invalidate_pyc(path)
+    return True
+
+
+def _patch_one(path, native_filename, tmdb_mt, trakt_mt, suffix):
     try:
         with open(path, 'r', encoding='utf-8') as f:
             original = f.read()
@@ -142,11 +179,27 @@ def _patch_one(path, tmdb_mt, trakt_mt, suffix):
         _log('{0}: read failed: {1}'.format(path, e), level='WARNING')
         return 'read_failed'
 
+    restored = False
     if STALE_OVERRIDE_MARK in original:
-        _log('{0}: stale whole-file override detected -- leaving for POV '
-             'self-update to restore native menu, will inject next boot'
-             .format(os.path.basename(path)), level='WARNING')
-        return 'stale_override'
+        # Heal the stale 5.12 override by restoring the bundled native 6.07
+        # file (POV wasn't re-extracting it on its own on this device).
+        if not _restore_native(path, native_filename):
+            _log('{0}: stale override, native restore unavailable -- leaving '
+                 'for POV self-update'.format(os.path.basename(path)),
+                 level='WARNING')
+            return 'stale_override'
+        _log('{0}: restored native POV 6.07 menu over stale override'
+             .format(os.path.basename(path)), level='INFO')
+        restored = True
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                original = f.read()
+        except OSError:
+            return 'restored'
+
+    # episodes.py (suffix=None): restore-only, nothing to inject.
+    if suffix is None:
+        return 'restored' if restored else 'unchanged'
 
     # Revert any prior injection so we re-apply our current version cleanly.
     content = _REVERT_RE.sub('\t\t\tif self.action in Menu.tmdb_main:', original)
@@ -154,7 +207,7 @@ def _patch_one(path, tmdb_mt, trakt_mt, suffix):
     if _ANCHOR not in content:
         _log('{0}: dispatch anchor not found -- POV may have changed; '
              'skipping'.format(os.path.basename(path)), level='WARNING')
-        return 'unmatched'
+        return 'restored' if restored else 'unmatched'
 
     content = content.replace(_ANCHOR, _block(tmdb_mt, trakt_mt, suffix), 1)
 
@@ -164,10 +217,10 @@ def _patch_one(path, tmdb_mt, trakt_mt, suffix):
     except SyntaxError as e:
         _log('{0}: patched content would not compile -- skipping ({1})'
              .format(os.path.basename(path), e), level='WARNING')
-        return 'compile_failed'
+        return 'restored' if restored else 'compile_failed'
 
     if content == original:
-        return 'unchanged'
+        return 'restored' if restored else 'unchanged'
 
     tmp = path + '.aitmp'
     try:
@@ -195,16 +248,17 @@ def ensure_patched():
         return {'_status': 'no_pov'}
 
     results = {}
-    for rel, tmdb_mt, trakt_mt, suffix in TARGETS:
+    for rel, native_filename, tmdb_mt, trakt_mt, suffix in TARGETS:
         path = os.path.join(base, *rel.split('/'))
         name = os.path.basename(path)
         if not os.path.isfile(path):
             results[name] = 'no_target'
             continue
-        results[name] = _patch_one(path, tmdb_mt, trakt_mt, suffix)
+        results[name] = _patch_one(path, native_filename, tmdb_mt,
+                                   trakt_mt, suffix)
 
-    if any(v == 'patched' for v in results.values()):
-        _log('injected merged personal-list actions ({0})'.format(
+    if any(v in ('patched', 'restored') for v in results.values()):
+        _log('healed/injected POV menus ({0})'.format(
             ', '.join('%s=%s' % (k, v) for k, v in results.items())),
             level='INFO')
     return results

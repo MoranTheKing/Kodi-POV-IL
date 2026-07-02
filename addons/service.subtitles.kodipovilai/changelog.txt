@@ -1,3 +1,10 @@
+v0.2.303
+- Maintenance and stability improvements.
+- Build: fixed TV shows freezing when opening a series (from Netflix, POV menus,
+  etc.) after POV's 6.07 update. Some installs were left with old 5.12-era menu
+  files that hang on the new POV core; the addon now restores the correct menu
+  files automatically instead of waiting for POV to redownload them.
+
 v0.2.302
 - Maintenance and stability improvements.
 - Build: fixed a performance issue where every settings read/write re-parsed
