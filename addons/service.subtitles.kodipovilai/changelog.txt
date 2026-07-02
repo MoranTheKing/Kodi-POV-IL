@@ -1,3 +1,9 @@
+v0.2.305
+- Maintenance and stability improvements.
+- Build: the 'movies by streaming service' tiles (Netflix/Disney+/Apple TV+
+  under Movies) now actually return that service's movies -- they were
+  filtered by production company instead of watch provider.
+
 v0.2.304
 - Maintenance and stability improvements.
 - Build: one-time restore of home tiles that had vanished after a favourites
