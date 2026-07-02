@@ -57,22 +57,40 @@ POV_SEARCH_ONCLICK = (
     'ActivateWindow(videos,'
     'plugin://plugin.video.pov/?mode=navigator.search,return)')
 
+# NOX also has a main-menu "חיפוש" hub item that points at POV's TV-only
+# search-history; repoint it to the full search hub too. Matched by the exact
+# encoded path (unique in the file), keeping the ActivateWindow(...) wrapper.
+NOX_MAIN_MENU = ('special://home/addons/skin.povil.nox/xml/'
+                 'Custom_nox_main_menu.xml')
+_NOX_OLD_SEARCH = ('plugin://plugin.video.pov/?mode=search_history'
+                   '&amp;action=tvshow'
+                   '&amp;iconImage=https%3A%2F%2Fi.imgur.com%2FxYTdX3O.png')
+_NOX_NEW_SEARCH = 'plugin://plugin.video.pov/?mode=navigator.search'
+
 # Per-skin search-button definitions. For each skin: the search-icon
 # control_id(s) -> the skin's default onclick (used for ensure_unpatched).
 _SEARCH_SKINS = (
-    ('skin.fentastic', {
+    ('skin.fentastic', 'Home.xml', {
         '804': 'ActivateWindow(1107)',
         '805': 'RunScript(script.fentastic.helper,mode=search_input)',
         '806': 'RunScript(script.fentastic.helper,mode=open_search_window)',
     }),
-    ('skin.estuary', {
+    ('skin.estuary', 'Home.xml', {
         '801': 'ActivateWindow(1107)',
+    }),
+    # NOX uses the same search control ids but its own Home file. One of 806
+    # has the default onclick sitting AFTER an XML comment, so _onclick_re
+    # tolerates a comment between control_id and onclick.
+    ('skin.povil.nox', 'Home_nox.xml', {
+        '804': 'ActivateWindow(1107)',
+        '805': 'RunScript(script.fentastic.helper,mode=search_input)',
+        '806': 'ActivateWindow(1107)',
     }),
 )
 
 
-def _home_xml(skin_addon_id):
-    return 'special://home/addons/' + skin_addon_id + '/xml/Home.xml'
+def _home_xml(skin_addon_id, filename):
+    return 'special://home/addons/' + skin_addon_id + '/xml/' + filename
 
 
 def _log(msg, level='INFO'):
@@ -113,9 +131,10 @@ def _onclick_re(control_id):
     search button), tolerating whitespace and attribute spacing."""
     return re.compile(
         r'(<param\s+name="control_id"\s+value="' + control_id +
-        r'"\s*/>\s*<param\s+name="onclick"\s+value=")'
+        r'"\s*/>\s*(?:<!--.*?-->\s*)?<param\s+name="onclick"\s+value=")'
         r'([^"]*)'
-        r'("\s*/>)')
+        r'("\s*/>)',
+        re.DOTALL)
 
 
 def _set_onclick(content, control_id, new_onclick):
@@ -134,13 +153,13 @@ def _set_onclick(content, control_id, new_onclick):
     return new_content, changed['v']
 
 
-def _apply_skin(skin_addon_id, buttons, target_onclick_for):
-    """Apply to one skin's Home.xml. target_onclick_for(control_id) ->
+def _apply_skin(skin_addon_id, filename, buttons, target_onclick_for):
+    """Apply to one skin's home file. target_onclick_for(control_id) ->
     desired onclick. Returns 'patched' / 'unchanged' / 'no_target' /
     'failed'."""
     if xbmcvfs is None:
         return 'failed'
-    home_xml = _home_xml(skin_addon_id)
+    home_xml = _home_xml(skin_addon_id, filename)
     if not _exists(home_xml):
         return 'no_target'
     try:
@@ -173,9 +192,10 @@ def _apply(target_onclick_for_factory):
     returns a target_onclick_for(control_id) callable. Returns 'patched'
     if any skin changed, else the most informative aggregate status."""
     statuses = []
-    for skin_addon_id, buttons in _SEARCH_SKINS:
+    for skin_addon_id, filename, buttons in _SEARCH_SKINS:
         statuses.append(_apply_skin(
-            skin_addon_id, buttons, target_onclick_for_factory(buttons)))
+            skin_addon_id, filename, buttons,
+            target_onclick_for_factory(buttons)))
     if 'patched' in statuses:
         return 'patched'
     if 'unchanged' in statuses:
@@ -185,19 +205,44 @@ def _apply(target_onclick_for_factory):
     return 'no_target'
 
 
+def _repoint_nox_main_menu():
+    """Repoint NOX's main-menu search item to the full POV search hub.
+    Returns 'patched' / 'unchanged' / 'no_target' / 'failed'."""
+    if xbmcvfs is None:
+        return 'failed'
+    if not _exists(NOX_MAIN_MENU):
+        return 'no_target'
+    try:
+        content = _read(NOX_MAIN_MENU)
+    except Exception as e:
+        _log('nox main-menu read failed: {0}'.format(e), level='WARNING')
+        return 'failed'
+    if _NOX_OLD_SEARCH not in content:
+        return 'unchanged'
+    try:
+        _write(NOX_MAIN_MENU, content.replace(_NOX_OLD_SEARCH, _NOX_NEW_SEARCH))
+    except Exception as e:
+        _log('nox main-menu write failed: {0}'.format(e), level='WARNING')
+        return 'failed'
+    return 'patched'
+
+
 def ensure_patched():
     """Repoint the home search icon to POV's full search hub
     (navigator.search: Movies / TV Shows / People / Movies Collection) on
-    BOTH FENtastic and Estuary, so every skin's magnifying glass offers the
-    same richer set of search options -- not just movie+show."""
+    FENtastic, Estuary and NOX -- plus NOX's main-menu search item -- so every
+    skin's magnifying glass offers the same richer set of search options, not
+    just movie+show."""
     def _target_factory(buttons):
         def _target(cid):
             return POV_SEARCH_ONCLICK
         return _target
 
     status = _apply(_target_factory)
-    if status == 'patched':
+    nox_menu = _repoint_nox_main_menu()
+    if status == 'patched' or nox_menu == 'patched':
         _log('search buttons repointed to POV full search hub')
+        return 'patched'
     return status
 
 
