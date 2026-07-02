@@ -1,20 +1,19 @@
-# Fix POV's "movies by streaming service" tiles (Netflix / Disney+ / Apple TV+
-# under the Movies hub) so they actually return that service's movies.
+# Revert POV's "movies by streaming service" query back to stock.
 #
-# The build's home tiles pass a TMDB *watch-provider* id (Netflix=8,
-# Disney+=337, Apple TV+=350) to action=tmdb_movies_networks. But POV's
-# indexers/tmdb_api.py tmdb_movies_networks() applies that id as
-# `with_companies=<id>` -- a PRODUCTION-COMPANY filter -- so e.g. Netflix's
-# provider id 8 is treated as company 8 (not Netflix), returning wrong/empty
-# results. (TV works because tmdb_tv_networks correctly uses with_networks.)
+# 0.2.305 rewrote tmdb_movies_networks() in resources/lib/indexers/tmdb_api.py
+# from POV's stock `with_companies=%s` to a TMDB watch-provider discovery query
+# (with_watch_providers + watch_region + flatrate), so the Netflix/Disney/Apple
+# movie tiles would return that service's movies. In practice that tile then
+# hung ("spins forever, returns nothing") on real devices, while every other
+# movie list kept working -- so the watch-provider query is the regression.
 #
-# Fix: rewrite that one query to use TMDB's watch-provider discovery
-# (with_watch_providers + watch_region + flatrate), which is what "movies on
-# <service>" actually means. One exact-string swap; the id passed by the tiles
-# is already the right (provider) id, so nothing else changes.
+# Until the provider query can be made to work reliably, this restores POV's
+# stock line so the tile behaves exactly as it did before 0.2.305 (returns a
+# result instead of hanging). Fresh/stock installs already have the stock line,
+# so they're left untouched.
 #
 # Marker-gated, compile()-checked, atomic, .pyc dropped. Safe no-op if POV
-# isn't installed or the line changed upstream.
+# isn't installed or the line was changed by something else.
 
 import os
 
@@ -31,12 +30,15 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 TMDB_API_REL = 'resources/lib/indexers/tmdb_api.py'
-MARKER = '# AI_SUBS_POV_MOVIE_PROVIDERS_v1'
+MARKER = '# AI_SUBS_POV_MOVIE_PROVIDERS_REVERT_v1'
+# The now-superseded forward-patch marker, stripped on revert.
+OLD_FWD_MARKER = '# AI_SUBS_POV_MOVIE_PROVIDERS_v1'
 
-_OLD = ("&sort_by=popularity.desc&certification_country=US"
-        "&with_companies=%s' % network_id")
-_NEW = ("&sort_by=popularity.desc&watch_region=US&with_watch_providers=%s"
-        "&with_watch_monetization_types=flatrate' % network_id")
+# What 0.2.305 wrote (the hanging query) -> restore POV's stock query.
+_PATCHED = ("&sort_by=popularity.desc&watch_region=US&with_watch_providers=%s"
+            "&with_watch_monetization_types=flatrate' % network_id")
+_STOCK = ("&sort_by=popularity.desc&certification_country=US"
+          "&with_companies=%s' % network_id")
 
 
 def _log(msg, level='INFO'):
@@ -61,8 +63,10 @@ def _tmdb_api_path():
 
 
 def ensure_patched():
-    """Returns 'patched' | 'already_patched' | 'no_pov' | 'no_file'
-    | 'unmatched' | 'compile_failed' | 'read_failed' | 'write_failed'."""
+    """Restore POV's stock movie-networks query. Returns
+    'patched' (reverted) | 'already_patched' | 'already_stock' | 'no_pov'
+    | 'no_file' | 'unmatched' | 'compile_failed' | 'read_failed'
+    | 'write_failed'."""
     path = _tmdb_api_path()
     if not path:
         return 'no_pov' if xbmcvfs is None else 'no_file'
@@ -75,19 +79,21 @@ def ensure_patched():
 
     if MARKER in content:
         return 'already_patched'
-    if _OLD not in content:
-        _log('movie-networks line not found -- POV may have changed it; '
-             'leaving alone', level='WARNING')
-        return 'unmatched'
+    if _PATCHED not in content:
+        # Nothing to revert. Stock line present -> leave as-is (no write);
+        # neither present -> POV changed it, leave alone.
+        return 'already_stock' if _STOCK in content else 'unmatched'
 
-    new_content = content.replace(_OLD, _NEW, 1)
-    # Stamp the marker on its own line right after the first newline.
+    new_content = content.replace(_PATCHED, _STOCK, 1)
+    # Strip the superseded forward-patch marker line (best-effort).
+    new_content = new_content.replace(OLD_FWD_MARKER + '\n', '')
+    # Stamp the revert marker on its own line right after the first newline.
     new_content = new_content.replace('\n', '\n' + MARKER + '\n', 1)
 
     try:
         compile(new_content, path, 'exec')
     except SyntaxError as e:
-        _log('patched content would not compile -- skipping ({0})'.format(e),
+        _log('reverted content would not compile -- skipping ({0})'.format(e),
              level='WARNING')
         return 'compile_failed'
 
@@ -113,5 +119,6 @@ def ensure_patched():
                 except OSError:
                     pass
 
-    _log('movie streaming-service tiles now use watch-providers', level='INFO')
+    _log('movie streaming-service query reverted to stock (un-hang)',
+         level='INFO')
     return 'patched'
