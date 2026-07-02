@@ -162,6 +162,7 @@ def _run_build_startup_repairs():
         _maybe_install_build_icons,
         _maybe_patch_brand_favourites,
         _maybe_patch_pov_genre_icons,
+        _maybe_patch_pov_hebrew_genres,
         _maybe_patch_pov_genre_menu_icons,
         _maybe_patch_pov_combined_discover,
         _maybe_patch_af3_home,
@@ -747,6 +748,36 @@ def _maybe_patch_pov_genre_menu_icons():
         try:
             kodi_utils.log(
                 'pov_genre_icons_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_hebrew_genres():
+    """Translate POV's genre menu labels to Hebrew (all skins). POV's genre
+    names come from the dict keys of modules/meta_lists.py; a POV self-update
+    reverted them to English everywhere. This rewrites each key to Hebrew
+    while keeping the [tmdb_id, icon] value, so genres show in Hebrew again
+    without changing what each genre loads. Compile-checked, idempotent."""
+    try:
+        from resources.lib import pov_hebrew_genres_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_hebrew_genres_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_hebrew_genres_patcher: genre labels set to Hebrew',
+                level='INFO')
+        elif status in ('no_pov', 'no_file', 'already_patched'):
+            pass
+        else:
+            kodi_utils.log(
+                'pov_hebrew_genres_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_hebrew_genres_patcher failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
