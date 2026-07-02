@@ -665,6 +665,36 @@ def note_playback_streams(info, streams=None):
         pass
 
 
+def _wait_for_snapshot(key, timeout=3.0):
+    """Bounded wait for the play-start snapshot to be populated for `key`.
+
+    On the FIRST play, the subtitle dialog / autosub search can fire before the
+    service process finished capturing the snapshot (note_playback_streams waits
+    for the embedded streams to enumerate). Without this, the embedded-Hebrew
+    101% entry only appeared from the SECOND open onward. We poll the same
+    play-start snapshot -- never the live stream list -- so there is still no
+    risk of misreading an external sub as embedded. Returns the snapshot dict or
+    None."""
+    try:
+        import xbmc
+        player = xbmc.Player()
+        monitor = xbmc.Monitor()
+        elapsed = 0.0
+        while elapsed < timeout:
+            if not player.isPlayingVideo():
+                return None
+            snap = _snap_get()
+            if (snap and snap.get('key') == key
+                    and snap.get('streams') is not None):
+                return snap
+            if monitor.waitForAbort(0.2):
+                return None
+            elapsed += 0.2
+        return None
+    except Exception:
+        return None
+
+
 def embedded_candidates(info):
     """Offer the file's EMBEDDED / local subtitle streams (mirroring DarkSubs's
     [LOC] entries): Hebrew at the top as 101%, other languages as selectable
@@ -678,7 +708,12 @@ def embedded_candidates(info):
     key = _stream_key(info)
     snap = _snap_get()
     if not snap or snap.get('key') != key:
-        return []
+        # First-play race: the play-start snapshot is captured in the service
+        # process and may not be ready when the dialog opens. Wait briefly for
+        # it so the embedded-Hebrew 101% entry shows on the FIRST open too.
+        snap = _wait_for_snapshot(key)
+        if not snap or snap.get('key') != key:
+            return []
     streams = snap.get('streams')
     if not streams:
         return []
