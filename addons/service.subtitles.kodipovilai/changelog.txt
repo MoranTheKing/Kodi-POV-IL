@@ -1,3 +1,8 @@
+v0.2.301
+- Maintenance and stability improvements.
+- Build: POV's resume dialog + search hub labels now actually render in Hebrew
+  (the source msgid is translated, not just the msgstr Kodi ignored for en_gb).
+
 v0.2.300
 - Maintenance and stability improvements.
 - Build: POV's own screens now show in Hebrew where they were English -- the
