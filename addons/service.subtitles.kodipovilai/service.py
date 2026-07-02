@@ -167,6 +167,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_genre_menu_icons,
         _maybe_patch_pov_combined_discover,
         _maybe_patch_pov_movie_networks,
+        _maybe_patch_pov_view_mode,
         _maybe_patch_af3_home,
         _maybe_cleanup_wizard,
         _maybe_patch_pov_repeat_timer,
@@ -836,6 +837,36 @@ def _maybe_patch_pov_movie_networks():
         try:
             kodi_utils.log(
                 'pov_movie_networks_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_view_mode():
+    """Fix POV's intermittent 'view resets to a plain list when paging
+    forward': POV's set_view_mode gave up applying the chosen view if the new
+    page's content didn't settle within 3s, leaving the skin default (a
+    no-poster list on Estuary). Widens the wait and always re-applies the view.
+    Idempotent, compile-checked."""
+    try:
+        from resources.lib import pov_view_mode_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_view_mode_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_view_mode_patcher: view no longer reverts to list on '
+                'paging', level='INFO')
+        elif status in ('no_pov', 'no_file', 'already_patched'):
+            pass
+        else:
+            kodi_utils.log(
+                'pov_view_mode_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_view_mode_patcher failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass

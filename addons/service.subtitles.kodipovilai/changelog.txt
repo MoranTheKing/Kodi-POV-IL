@@ -1,3 +1,11 @@
+v0.2.307
+- Maintenance and stability improvements.
+- Build: fixed the view mode intermittently reverting to a plain no-poster list
+  when paging forward through lists (networks / latest / popular, etc.). The
+  base build gave up re-applying the chosen view if a page was slow to load; it
+  now always re-applies it, so the poster view stays across pages. Most visible
+  on Estuary, but the fix is skin-agnostic.
+
 v0.2.306
 - Maintenance and stability improvements.
 - Build: one-time restore of the "series by network" tiles (Netflix / Disney+ /
