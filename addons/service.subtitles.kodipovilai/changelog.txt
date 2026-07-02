@@ -1,3 +1,10 @@
+v0.2.310
+- Maintenance and stability improvements.
+- Build: stronger fix for the view reverting to a plain list while paging. The
+  base build applied the chosen view once per page and a late redraw could
+  clobber it back to a list (variably, after a few pages). It now re-applies
+  the view briefly after each page settles, so the poster view holds.
+
 v0.2.309
 - Maintenance and stability improvements.
 - Build: one-time restore of the home-screen "by service" tiles (Netflix /
