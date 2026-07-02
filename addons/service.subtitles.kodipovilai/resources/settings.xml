@@ -343,6 +343,14 @@
           <default></default>
           <control type="label" format="string"/>
         </setting>
+        <!-- Hidden marker: one-time restore of the NOX "series by
+             networks" home row has been applied. Read/written by
+             pov_series_networks_reseed_patcher.py. -->
+        <setting id="_pov_series_networks_reseed" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default></default>
+          <control type="label" format="string"/>
+        </setting>
         <!-- Hidden marker: AF3 first-launch dialog has been shown
              (and the user picked something other than 'remind me
              later' / ESC). Read by af3_first_launch.py. -->
