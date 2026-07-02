@@ -85,6 +85,12 @@ SERVICE_SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_BUILD_SERVICE_TILES_SEEN_v1 -->'
 # logic then refused to bring it back. This marker forces a single restore for
 # everyone; once written, genuine future deletions are respected again.
 SERVICE_RESEED_MARKER = '<!-- AI_SUBS_FAVOURITES_PREMIUMIZE_RESEED_v1 -->'
+# One-time re-seed of the personal tiles (subscription-reminder settings +
+# "My Movies/My Series" TMDB/Trakt/POV). Same idea as the Premiumize re-seed:
+# some installs lost them to a favourites reseed (not a user deletion) and the
+# respect-deletion logic then refused to bring them back. Fires once, then
+# genuine future deletions are respected again.
+PERSONAL_RESEED_MARKER = '<!-- AI_SUBS_FAVOURITES_PERSONAL_RESEED_v1 -->'
 FULL_BUILD_SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_FULL_BUILD_TILES_SEEN_v2 -->'
 DEBRID_NOTICE_SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_DEBRID_NOTICE_SEEN_v1 -->'
 BROKEN_DEBRID_NOTICE_ACTION = (
@@ -489,6 +495,7 @@ def ensure_patched():
     had_service_marker = _has_marker(content, SERVICE_SEEN_MARKER)
     had_full_marker = _has_marker(content, FULL_BUILD_SEEN_MARKER)
     had_premiumize_reseed = _has_marker(content, SERVICE_RESEED_MARKER)
+    had_personal_reseed = _has_marker(content, PERSONAL_RESEED_MARKER)
     content, fixed_existing = _fix_existing_debrid_notice_action(content)
     content, fixed_torbox_status = _fix_existing_torbox_status_action(content)
     content, debrid_notice_restored = _insert_debrid_notice_tile(
@@ -538,16 +545,20 @@ def ensure_patched():
     # SERVICE_RESEED_MARKER): distinguishes "the reseed wiped it" from "the user
     # deleted it" by firing exactly once per install, then never again.
     force_premiumize = (not had_premiumize_reseed) and bool(missing_service)
+    # One-time forced restore of the personal tiles (see PERSONAL_RESEED_MARKER).
+    force_personal = (not had_personal_reseed) and bool(missing_personal)
     if missing_personal:
         if (not fixed_existing and not fixed_torbox_status
                 and not service_position_fixed and not force_premiumize
+                and not force_personal
                 and (not missing_service or had_service_marker)
                 ):
             return 'user_removed_tiles'
         # A user may delete the tiles after receiving the broken-action
-        # version. Keep the deletion respected, but still persist the
-        # action fix if that old action exists elsewhere in favourites.
-        missing_personal = ()
+        # version. Keep the deletion respected (unless this is the one-time
+        # re-seed), but still persist the action fix if the old action exists.
+        if not force_personal:
+            missing_personal = ()
     if missing_service and not force_premiumize:
         missing_service = ()
     missing = missing_personal + missing_service
@@ -562,6 +573,10 @@ def ensure_patched():
     if not had_premiumize_reseed:
         new_content, reseed_marker_added = _insert_marker(
             new_content, SERVICE_RESEED_MARKER)
+    personal_reseed_added = False
+    if not had_personal_reseed:
+        new_content, personal_reseed_added = _insert_marker(
+            new_content, PERSONAL_RESEED_MARKER)
     if not missing:
         new_content, marker_added = _insert_marker(new_content)
         new_content, service_marker_added = _insert_marker(
@@ -578,7 +593,7 @@ def ensure_patched():
             and not fixed_torbox_status and not service_marker_added
             and not debrid_notice_restored
             and not service_position_fixed and not full_marker_added
-            and not reseed_marker_added
+            and not reseed_marker_added and not personal_reseed_added
             and not missing_full_tiles):
         return 'already_complete'
 
