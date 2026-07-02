@@ -1,3 +1,12 @@
+v0.2.302
+- Maintenance and stability improvements.
+- Build: fixed a performance issue where every settings read/write re-parsed
+  the addon's entire settings.xml from scratch; a periodic background check
+  did this roughly once a minute, which could make Kodi feel stuck/unresponsive
+  for long stretches (e.g. right after boot, or when opening a menu). Also
+  fixed 24 settings visibility rules that used an operator Kodi doesn't
+  recognise, so they now apply as intended.
+
 v0.2.301
 - Maintenance and stability improvements.
 - Build: POV's resume dialog + search hub labels now actually render in Hebrew
