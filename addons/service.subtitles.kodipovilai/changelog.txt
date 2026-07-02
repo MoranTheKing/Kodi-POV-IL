@@ -1,3 +1,9 @@
+v0.2.304
+- Maintenance and stability improvements.
+- Build: one-time restore of home tiles that had vanished after a favourites
+  reseed -- the subscription-reminder settings tile and the My Movies / My
+  Series (TMDB/Trakt/POV) tiles. A tile the user deletes afterwards stays gone.
+
 v0.2.303
 - Maintenance and stability improvements.
 - Build: fixed TV shows freezing when opening a series (from Netflix, POV menus,
