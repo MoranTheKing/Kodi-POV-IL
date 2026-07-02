@@ -814,10 +814,10 @@ def _maybe_patch_pov_hebrew_genres():
 
 
 def _maybe_patch_pov_movie_networks():
-    """Fix the 'movies by streaming service' tiles (Netflix/Disney+/Apple TV+
-    under Movies): POV filtered them by production company instead of watch
-    provider, so they returned wrong/empty results. Switches the query to
-    TMDB watch-providers. Idempotent, compile-checked."""
+    """Restore POV's stock 'movies by streaming service' query. The 0.2.305
+    watch-provider rewrite made that tile hang on real devices, so this reverts
+    it to stock (returns a result instead of spinning forever). Idempotent,
+    compile-checked."""
     try:
         from resources.lib import pov_movie_networks_patcher, kodi_utils
     except Exception:
@@ -826,8 +826,8 @@ def _maybe_patch_pov_movie_networks():
         status = pov_movie_networks_patcher.ensure_patched()
         if status == 'patched':
             kodi_utils.log(
-                'pov_movie_networks_patcher: movie service tiles use '
-                'watch-providers', level='INFO')
+                'pov_movie_networks_patcher: reverted movie service query to '
+                'stock', level='INFO')
         elif status in ('no_pov', 'no_file', 'already_patched'):
             pass
         else:
