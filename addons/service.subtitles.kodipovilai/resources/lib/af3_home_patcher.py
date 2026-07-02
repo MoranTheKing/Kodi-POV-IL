@@ -463,6 +463,22 @@ SEARCH_WIDGETS = [
         'target': 'videos',
         'widget_style': 'Poster',
     },
+    {
+        'guid': 'pov-search-people',
+        'label': 'שחקן / במאי',
+        'icon': 'special://home/media/build_icons/Twilight/Movies/Movies_Popular.png',
+        'path': 'DefaultSearch-POVPeople',
+        'target': 'videos',
+        'widget_style': 'Poster',
+    },
+    {
+        'guid': 'pov-search-collections',
+        'label': 'קולקציות',
+        'icon': 'special://home/media/build_icons/Twilight/Movies/Movies_Popular.png',
+        'path': 'DefaultSearch-POVCollections',
+        'target': 'videos',
+        'widget_style': 'Poster',
+    },
 ]
 
 

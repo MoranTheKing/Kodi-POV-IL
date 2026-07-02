@@ -48,7 +48,7 @@ AF3_SKIN_ID = 'skin.arctic.fuse.3'
 SEARCH_PATH_REL = ('addons/' + AF3_SKIN_ID +
                    '/shortcuts/generator/data/setup/search_path.xml')
 
-MARKER = '<!-- AI_SUBS_POV_SEARCH_v2_rollback -->'
+MARKER = '<!-- AI_SUBS_POV_SEARCH_v3_rollback -->'
 # Older markers: our #207 v1 marker plus any Codex search markers. When any
 # of these (or a Codex artifact below) is present we STRIP everything and
 # re-inject ONLY the #207 rules, forcing a device stuck on a Codex build
@@ -58,6 +58,9 @@ OLD_MARKERS = (
     '<!-- AI_SUBS_POV_SEARCH_v1 -->',
     '<!-- AI_SUBS_POV_SEARCH_v2 -->',
     '<!-- AI_SUBS_POV_SEARCH_v3 -->',
+    # v2_rollback shipped movie+tv only; bumping to v3_rollback re-injects the
+    # added People (actor/director) + Collections search rows for everyone.
+    '<!-- AI_SUBS_POV_SEARCH_v2_rollback -->',
 )
 
 # Any of these in the file means a Codex build wrote combined-search /
@@ -74,7 +77,7 @@ _CODEX_ARTIFACTS = (
 _POV_RULE_RE = re.compile(
     r'        <rule>\n'
     r'            <condition>\{item_path\}=='
-    r'DefaultSearch-POV(?:Discover|Movies|Tv)</condition>\n'
+    r'DefaultSearch-POV(?:Discover|Movies|Tv|People|Collections)</condition>\n'
     r'            <value>.*?</value>\n'
     r'        </rule>\n',
     re.DOTALL)
@@ -87,6 +90,15 @@ _POV_MOVIE_PREFIX = ('plugin://plugin.video.pov/?mode=build_movie_list'
                      '&amp;amp;action=tmdb_movies_search&amp;amp;query=')
 _POV_TV_PREFIX = ('plugin://plugin.video.pov/?mode=build_tvshow_list'
                   '&amp;amp;action=tmdb_tv_search&amp;amp;query=')
+# People search (actors AND directors): POV's router does
+# person_search(params['query']) (entry.py mode=person_search).
+_POV_PEOPLE_PREFIX = ('plugin://plugin.video.pov/?mode=person_search'
+                      '&amp;amp;query=')
+# Movie collections: same shape as movie search, action=..._collections
+# (menus/movies.py handles tmdb_movies_search_collections).
+_POV_COLLECTIONS_PREFIX = (
+    'plugin://plugin.video.pov/?mode=build_movie_list'
+    '&amp;amp;action=tmdb_movies_search_collections&amp;amp;query=')
 
 
 def _log(msg, level='INFO'):
@@ -169,22 +181,30 @@ def ensure_patched():
     for m in (MARKER,) + OLD_MARKERS:
         text = text.replace(m + '\n', '').replace(m, '')
 
-    # Build the per-rule-set injections.
+    # Build the per-rule-set injections (movies, tv, people, collections).
     path_rules = (
         _rule('DefaultSearch-POVMovies', _POV_MOVIE_PREFIX)
-        + _rule('DefaultSearch-POVTv', _POV_TV_PREFIX))
-    # suffix empty for both
+        + _rule('DefaultSearch-POVTv', _POV_TV_PREFIX)
+        + _rule('DefaultSearch-POVPeople', _POV_PEOPLE_PREFIX)
+        + _rule('DefaultSearch-POVCollections', _POV_COLLECTIONS_PREFIX))
+    # suffix empty for all
     end_rules = (
         _rule('DefaultSearch-POVMovies', '')
-        + _rule('DefaultSearch-POVTv', ''))
+        + _rule('DefaultSearch-POVTv', '')
+        + _rule('DefaultSearch-POVPeople', '')
+        + _rule('DefaultSearch-POVCollections', ''))
     # single-encoded query (POV decodes once via parse_qsl)
     var_rules = (
         _rule('DefaultSearch-POVMovies', 'Path_SearchTerm_SingleEncoded')
-        + _rule('DefaultSearch-POVTv', 'Path_SearchTerm_SingleEncoded'))
-    # target: videos for both
+        + _rule('DefaultSearch-POVTv', 'Path_SearchTerm_SingleEncoded')
+        + _rule('DefaultSearch-POVPeople', 'Path_SearchTerm_SingleEncoded')
+        + _rule('DefaultSearch-POVCollections', 'Path_SearchTerm_SingleEncoded'))
+    # target: videos for all
     target_rules = (
         _rule('DefaultSearch-POVMovies', 'videos')
-        + _rule('DefaultSearch-POVTv', 'videos'))
+        + _rule('DefaultSearch-POVTv', 'videos')
+        + _rule('DefaultSearch-POVPeople', 'videos')
+        + _rule('DefaultSearch-POVCollections', 'videos'))
 
     new_text = text
     for rules_open, blocks in (
@@ -223,5 +243,6 @@ def ensure_patched():
         _log('write failed: {0}'.format(e), level='WARNING')
         return 'write_failed'
 
-    _log('added POV movie/tv search rules to search_path.xml', 'INFO')
+    _log('added POV movie/tv/people/collections search rules to '
+         'search_path.xml', 'INFO')
     return 'patched'
