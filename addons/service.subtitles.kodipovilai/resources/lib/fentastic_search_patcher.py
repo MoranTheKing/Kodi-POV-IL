@@ -16,9 +16,10 @@
 # (POV's router maps navigator.search -> Navigator(params).search(),
 # which builds exactly that 4-item node.)
 #
-# FENtastic is intentionally restored to its own upstream search flow. Its
-# native search dialog gives the "New Search" flow and mixed movie+show
-# results users expect, while Estuary needed the simpler POV node.
+# BOTH skins are now repointed to the POV search node: users asked for the
+# magnifying glass to offer more than movie+show (actor, director, movies
+# collection) uniformly across skins, and navigator.search is exactly that
+# 4-item hub. (Previously FENtastic was left on its own movie+show search.)
 #
 #   * skin.fentastic: the icon is defined three times, gated by skin
 #     settings (only one renders at a time):
@@ -185,15 +186,18 @@ def _apply(target_onclick_for_factory):
 
 
 def ensure_patched():
-    """Keep FENtastic native search and repoint Estuary to POV search."""
+    """Repoint the home search icon to POV's full search hub
+    (navigator.search: Movies / TV Shows / People / Movies Collection) on
+    BOTH FENtastic and Estuary, so every skin's magnifying glass offers the
+    same richer set of search options -- not just movie+show."""
     def _target_factory(buttons):
         def _target(cid):
-            return POV_SEARCH_ONCLICK if cid == '801' else buttons[cid]
+            return POV_SEARCH_ONCLICK
         return _target
 
     status = _apply(_target_factory)
     if status == 'patched':
-        _log('search buttons adjusted per skin')
+        _log('search buttons repointed to POV full search hub')
     return status
 
 
