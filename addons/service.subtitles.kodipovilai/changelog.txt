@@ -1,3 +1,9 @@
+v0.2.311
+- Maintenance and stability improvements.
+- Build: restore the "Movies by genre" / "Series by genre" home widgets when a
+  base-build self-update had emptied their menu data. Restored once, only when
+  missing/empty, so a curated list is left untouched.
+
 v0.2.310
 - Maintenance and stability improvements.
 - Build: stronger fix for the view reverting to a plain list while paging. The
