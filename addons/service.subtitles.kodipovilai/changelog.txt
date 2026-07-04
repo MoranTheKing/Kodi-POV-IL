@@ -1,3 +1,10 @@
+v0.2.316
+- Maintenance and stability improvements.
+- Hebrew-availability %: now shows on the FIRST entry for titles whose subs are
+  on OpenSubtitles/Ktuvit too -- the availability check now starts together with
+  the source scrape (running in parallel), instead of only when the source list
+  opens, so it's ready in time. No extra lookups.
+
 v0.2.315
 - Maintenance and stability improvements.
 - Fixed the recurring "received file is not a valid subtitle (ktuvit)" popup
