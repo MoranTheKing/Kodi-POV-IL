@@ -177,6 +177,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_menus,
         _maybe_patch_pov_personal_area,
         _maybe_reseed_series_networks,
+        _maybe_reseed_genre_folders,
         _maybe_patch_fentastic_widgets,
         _maybe_patch_favourites_xml,
         _maybe_patch_favourites_personal_tiles,
@@ -586,6 +587,30 @@ def _maybe_reseed_series_networks():
             kodi_utils.log(
                 'pov_series_networks_reseed_patcher run failed: '
                 '{0}'.format(e), level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_reseed_genre_folders():
+    """One-time restore of POV's FENtastic genre shortcut-folder rows in
+    navigator.db (movies/series by genre) when a POV self-update dropped them,
+    which empties the AF3/FENtastic 'by genre' home widgets. Restores only
+    missing/empty rows, then leaves them to the user's edits."""
+    try:
+        from resources.lib import pov_genre_folders_reseed_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_genre_folders_reseed_patcher.maybe_reseed_genre_folders()
+        if status == 'reseeded':
+            kodi_utils.log(
+                'pov_genre_folders_reseed_patcher: restored genre folders',
+                level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_genre_folders_reseed_patcher run failed: {0}'.format(e),
+                level='WARNING')
         except Exception:
             pass
 
