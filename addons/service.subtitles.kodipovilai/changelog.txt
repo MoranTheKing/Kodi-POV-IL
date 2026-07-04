@@ -1,3 +1,16 @@
+v0.2.320
+- Maintenance and stability improvements.
+- Hebrew-availability %: fixed the two real causes the first-entry % was still
+  missing (and the source window felt slow):
+  (1) the background availability worker now starts at the very beginning of
+      Kodi startup, so it is already running when you play something right after
+      an update/restart -- before it started too late and the first title's check
+      sat waiting several seconds;
+  (2) the check now stores its fast result (pool + Wizdom + OpenSubtitles) right
+      away and does the slow כתובית/Ktuvit lookup in the background, so the source
+      window is no longer held up by it. The % is ready on the first entry and
+      the window opens promptly.
+
 v0.2.319
 - Maintenance and stability improvements.
 - Hebrew-availability %: the source window now briefly waits (up to ~3s) for the
