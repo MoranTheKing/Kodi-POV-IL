@@ -70,6 +70,25 @@ _FIRE_RETRY = 120.0    # re-fire a warm at most once every 2 min per title
 # and finishes inside the scrape window -> Hebrew % on the FIRST entry.
 _WARM_QUEUE_DIR = (
     'special://profile/addon_data/service.subtitles.kodipovilai/he_warm_queue')
+# Cap the concurrent pool/Wizdom/OpenSubtitles fetch so one hung source can't
+# stall the fast first-entry store. Kept just under _FIRST_ENTRY_WAIT so the
+# source window's wait reliably catches the phase-1 store. These usually answer
+# in <2s anyway.
+_WARM_FETCH_TIMEOUT = 3.0
+# Serializes the SLOW live-Ktuvit top-up across warms so the one shared,
+# rate-limited Ktuvit account is never hit by several titles at once.
+_KT_LIVE_LOCK = None
+
+
+def _kt_live_lock():
+    global _KT_LIVE_LOCK
+    if _KT_LIVE_LOCK is None:
+        try:
+            import threading
+            _KT_LIVE_LOCK = threading.Lock()
+        except Exception:
+            return None
+    return _KT_LIVE_LOCK
 
 
 def _enabled():
@@ -429,16 +448,23 @@ def _store_avail(mk, names, embedded, ttl):
 
 
 def run_warm(info):
-    """Full background availability warm for ONE title -- runs in MoranSubs's
-    OWN addon context (the service queue drainer, or the RunScript fallback),
-    never inside POV's process. Gathers every Hebrew-availability source and
-    writes the merged result to the shared cache the badge reads next open:
-      * community pool + Wizdom, and OpenSubtitles -- fetched CONCURRENTLY so the
-        warm finishes inside POV's ~2s scrape window (that's what makes the % show
-        on the FIRST entry, not the 2nd/3rd);
-      * the pool's embedded-Hebrew flags -> the "BUILT-IN" badge;
-      * Ktuvit -- ONLY via the shared registry / as a gated fallback, at most
-        ~once per title globally, so the one shared account is never hammered.
+    """Background availability warm for ONE title -- runs in MoranSubs's OWN addon
+    context (the service queue drainer, or the RunScript fallback), never inside
+    POV's process. Two phases so the source window's first-entry wait catches a
+    FAST result instead of blocking on the slow one:
+
+      PHASE 1 (fast, ~1-2s, stored before we return): community pool + Wizdom and
+        OpenSubtitles fetched CONCURRENTLY, plus any Ktuvit release names ALREADY
+        in the shared registry (free -- no live call). This covers the large
+        majority of titles and is what the first-entry wait blocks for.
+
+      PHASE 2 (slow, background, never blocks): only when the shared Ktuvit
+        registry is missing/stale for this title, a LIVE Ktuvit lookup (login +
+        search, ~3-6s) runs in a daemon thread, serialized across warms, and tops
+        up the same cache entry + publishes to the shared registry so nobody else
+        has to ask Ktuvit again. So Ktuvit's cost is paid once per title globally,
+        off the critical path.
+
     `info` is the payload dict written by _fire_engine_warm. Fully guarded."""
     try:
         import threading
@@ -452,11 +478,14 @@ def run_warm(info):
     is_ep = (info.get('type') == 'episode')
 
     def _merge(dst, seen, items):
+        added = 0
         for rel in items or []:
             low = (rel or '').strip().lower()
             if low and low not in seen:
                 seen.add(low)
                 dst.append(rel)
+                added += 1
+        return added
 
     _p = {
         'tmdb': info.get('tmdb', ''), 'imdb': info.get('imdb', ''),
@@ -506,14 +535,16 @@ def run_warm(info):
         except Exception as e:
             _warm_log('opensubtitles failed: {0}'.format(e), level='WARNING')
 
-    # 1+2) Pool+Wizdom and OpenSubtitles CONCURRENTLY (the slow part).
+    # PHASE 1 -- pool+Wizdom and OpenSubtitles CONCURRENTLY, tight timeout.
     if threading is not None:
         t1 = threading.Thread(target=_fetch_pool_wizdom)
         t2 = threading.Thread(target=_fetch_opensubtitles)
+        t1.daemon = True
+        t2.daemon = True
         t1.start()
         t2.start()
-        t1.join(timeout=8.0)
-        t2.join(timeout=8.0)
+        t1.join(timeout=_WARM_FETCH_TIMEOUT)
+        t2.join(timeout=_WARM_FETCH_TIMEOUT)
     else:
         _fetch_pool_wizdom()
         _fetch_opensubtitles()
@@ -528,9 +559,6 @@ def run_warm(info):
     _merge(names, seen, av.get('names') or [])
     _merge(names, seen, box['os_names'] or [])
 
-    # 3) Ktuvit via the SHARED registry -- at most ~once per title globally.
-    #    Re-check often while a title is still GAINING Hebrew, back off once
-    #    stable. Gated by `he_match_ktuvit`. Needs the OpenSubtitles video data.
     try:
         from resources.lib import kodi_utils as _ku
         ktuvit_ok = _ku.get_setting('he_match_ktuvit', 'true') != 'false'
@@ -541,59 +569,79 @@ def run_warm(info):
     _KT_LONG = 30 * 24 * 3600.0       # 30 days once stable
     _KT_STABILIZE = 14 * 24 * 3600.0  # "active" window since last growth
     kt_active = (not kt_changed) or ((_now - float(kt_changed)) < _KT_STABILIZE)
-    if ktuvit_ok:
-        _kt_ttl = _KT_SHORT if kt_active else _KT_LONG
-        fresh = kt_checked and (_now - float(kt_checked)) < _kt_ttl
-        if fresh:
-            _merge(names, seen, kt_pool_names)   # shared cache hit -- no call
-        else:
-            vd = box['vd']
-            if vd is None:
-                try:
-                    from resources.lib import subs_engine_bridge as bridge
-                    bridge.ensure_engine_settings()
-                    vd = bridge.build_video_data(bridge_info)
-                except Exception:
-                    vd = None
-            if vd is not None:
-                try:
-                    from resources.lib.subs_engine.sources import ktuvit as _kt
-                    _kt.global_var = []
-                    _kt.get_subs(vd)
-                    kt_names = []
-                    for d in (_kt.global_var or []):
-                        fn = (d.get('filename') or '').strip()
-                        if fn:
-                            kt_names.append(fn)
-                    _merge(names, seen, kt_names)
-                    try:
-                        from resources.lib import pool as _pool
-                        _pool.report_ktuvit({
-                            'tmdb_id': info.get('tmdb', ''),
-                            'imdb_id': info.get('imdb', ''),
-                            'is_episode': is_ep,
-                            'season': info.get('season', '0') if is_ep else '0',
-                            'episode': info.get('episode', '0') if is_ep else '0',
-                        }, kt_names)
-                    except Exception:
-                        pass
-                except Exception as e:
-                    _warm_log('ktuvit check failed: {0}'.format(e),
-                              level='WARNING')
+    kt_fresh = bool(ktuvit_ok and kt_checked
+                    and (_now - float(kt_checked)) < (_KT_SHORT if kt_active else _KT_LONG))
+    if kt_fresh:
+        _merge(names, seen, kt_pool_names)   # shared registry hit -- free, no call
 
     _LOCAL_SHORT = 8 * 3600.0
     _LOCAL_LONG = 7 * 24 * 3600.0
-    if not names:
-        local_ttl = _LOCAL_SHORT
-    elif ktuvit_ok and kt_active:
-        local_ttl = _LOCAL_SHORT
+
+    def _pick_ttl(has_names):
+        if not has_names:
+            return _LOCAL_SHORT
+        if ktuvit_ok and kt_active:
+            return _LOCAL_SHORT
+        return _LOCAL_LONG
+
+    # Store the fast result NOW -- this is what the first-entry wait blocks for.
+    _store_avail(mk, names, embedded, _pick_ttl(bool(names)))
+    _warm_log('phase1 stored {0} names ({1} embedded) for {2} in {3:.1f}s'.format(
+        len(names), len(embedded), mk, time.time() - _t0))
+
+    # PHASE 2 -- live Ktuvit only when the shared registry is stale/missing, in a
+    # daemon thread so it NEVER blocks the drainer or the first-entry wait.
+    if not (ktuvit_ok and not kt_fresh):
+        return
+
+    def _ktuvit_topup():
+        try:
+            lock = _kt_live_lock()
+            if lock is not None:
+                lock.acquire()
+            try:
+                vd = box['vd']
+                if vd is None:
+                    from resources.lib import subs_engine_bridge as bridge
+                    bridge.ensure_engine_settings()
+                    vd = bridge.build_video_data(bridge_info)
+                if vd is None:
+                    return
+                from resources.lib.subs_engine.sources import ktuvit as _kt
+                _kt.global_var = []
+                _kt.get_subs(vd)
+                kt_names = []
+                for d in (_kt.global_var or []):
+                    fn = (d.get('filename') or '').strip()
+                    if fn:
+                        kt_names.append(fn)
+                added = _merge(names, seen, kt_names)
+                try:
+                    from resources.lib import pool as _pool
+                    _pool.report_ktuvit({
+                        'tmdb_id': info.get('tmdb', ''),
+                        'imdb_id': info.get('imdb', ''),
+                        'is_episode': is_ep,
+                        'season': info.get('season', '0') if is_ep else '0',
+                        'episode': info.get('episode', '0') if is_ep else '0',
+                    }, kt_names)
+                except Exception:
+                    pass
+                if added:
+                    _store_avail(mk, names, embedded, _pick_ttl(bool(names)))
+                _warm_log('ktuvit top-up added {0} names for {1} '
+                          '(total {2}, took {3:.1f}s)'.format(
+                              added, mk, len(names), time.time() - _t0))
+            finally:
+                if lock is not None:
+                    lock.release()
+        except Exception as e:
+            _warm_log('ktuvit top-up failed: {0}'.format(e), level='WARNING')
+
+    if threading is not None:
+        threading.Thread(target=_ktuvit_topup, daemon=True).start()
     else:
-        local_ttl = _LOCAL_LONG
-    _store_avail(mk, names, embedded, local_ttl)
-    _warm_log('stored {0} Hebrew release names ({1} embedded) for {2} '
-              '(ttl={3}h, warm took {4:.1f}s)'.format(
-                  len(names), len(embedded), mk, int(local_ttl / 3600),
-                  time.time() - _t0))
+        _ktuvit_topup()
 
 
 def _seed_from_pool(key, pl):

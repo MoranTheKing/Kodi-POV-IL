@@ -1988,7 +1988,7 @@ def _start_he_warm_drainer(monitor):
 
     def _loop():
         try:
-            if monitor.waitForAbort(3):   # brief settle, then poll fast
+            if monitor.waitForAbort(0.5):   # tiny settle, then poll fast
                 return
             # Pre-import the engine ONCE now, on this thread, so the FIRST real
             # warm doesn't pay the ~2-3s cold-import (that made the first title of
@@ -3625,6 +3625,16 @@ def main():
     if _check_first_run_marker():
         return
 
+    # Start the Hebrew-availability warm drainer FIRST -- before the seconds of
+    # build startup repairs below. Otherwise the drainer thread isn't spawned yet
+    # when the user plays something right after boot, so the first title's warm
+    # sits queued for several seconds and misses the source window's first-entry
+    # wait. It's a cheap idle poll until a job appears.
+    try:
+        _start_he_warm_drainer(xbmc.Monitor())
+    except Exception:
+        pass
+
     # Initial prune.
     _prune_once()
     _prune_source_memory_once()
@@ -3965,7 +3975,8 @@ def main():
     # uploaded from this thread one at a time with a throttle -- never bursting
     # past Telegram's bot rate limit. Best-effort; never blocks.
     _start_pool_queue_drainer(monitor)
-    _start_he_warm_drainer(monitor)
+    # (the Hebrew warm drainer was already started at the top of main(), before
+    # the build startup repairs, so it's alive for the first play of the session)
 
     # 24h between passes. waitForAbort returns True when Kodi is
     # shutting down, so we just need to loop until that fires.
