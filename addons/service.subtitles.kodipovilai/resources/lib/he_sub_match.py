@@ -36,7 +36,7 @@ _TIMEOUT = 2.5
 # background warm had filled the cache). Still ONE lookup per title (no extra
 # Cloudflare reads); worst case the source window opens ~1.3s later on the first
 # entry to a not-yet-cached title.
-_FIRST_ENTRY_TIMEOUT = 2.5
+_FIRST_ENTRY_TIMEOUT = 3.5
 
 # Engine (OpenSubtitles) availability is filled by a background RunScript into a
 # shared cache file; we read it cheaply on every call so the badge fills in on
