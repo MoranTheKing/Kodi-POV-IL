@@ -52,6 +52,18 @@ _AVAIL_TTL_NONE = 8 * 3600.0    # 8 hours
 _FIRED = {}            # media_key -> last warm-fire ts (throttle re-fires)
 _FIRE_RETRY = 120.0    # re-fire a warm at most once every 2 min per title
 
+# Warm-request queue. prewarm()/release_names() drop a tiny JSON job here (a
+# pure disk write in POV's process -- no network, no new interpreter); the
+# long-lived MoranSubs service drains it within a fraction of a second and runs
+# the full warm in its OWN addon context (all engine imports + the right API
+# keys resolve there, but NOT inside POV's process). This replaced the old
+# RunScript-per-warm: RunScript spins up a fresh Python interpreter (~3s to boot
+# + re-import the addon), which was SLOWER than POV's ~2s scrape, so the badge
+# only appeared on the 2nd/3rd entry. The queued in-service warm starts in ~0.4s
+# and finishes inside the scrape window -> Hebrew % on the FIRST entry.
+_WARM_QUEUE_DIR = (
+    'special://profile/addon_data/service.subtitles.kodipovilai/he_warm_queue')
+
 
 def _enabled():
     try:
@@ -238,12 +250,54 @@ def _meta_str(meta, keys):
     return ''
 
 
-def _fire_engine_warm(key, p, meta):
-    """Fire-and-forget RunScript so MoranSubs runs OpenSubtitles for this title in its
-    own context and writes the result to the shared cache. Throttled per title
-    so reopening the source window doesn't spam it. Non-blocking."""
+def _warm_queue_dir():
     try:
-        import xbmc
+        import xbmcvfs
+        return xbmcvfs.translatePath(_WARM_QUEUE_DIR)
+    except Exception:
+        return ''
+
+
+def _enqueue_warm(key, payload):
+    """Drop a warm job on disk for the long-lived service to pick up. A tiny,
+    atomic write -- no network, no new interpreter. Returns True on success so
+    the caller can fall back to RunScript only when the queue is unwritable."""
+    d = _warm_queue_dir()
+    if not d:
+        return False
+    try:
+        os.makedirs(d, exist_ok=True)
+        # Sanitize the key into a filename (media keys are like "60625:episode:8:3:he").
+        safe = re.sub(r'[^0-9A-Za-z]+', '_', key) or 'job'
+        path = os.path.join(d, safe + '.json')
+        # Skip if an identical, still-fresh job is already queued (belt-and-
+        # braces on top of the in-process _FIRED throttle -- covers separate
+        # POV plugin invocations that don't share _FIRED).
+        try:
+            if os.path.isfile(path) and (time.time() - os.path.getmtime(path)) < _FIRE_RETRY:
+                return True
+        except OSError:
+            pass
+        tmp = path + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(payload, f, ensure_ascii=False)
+        os.replace(tmp, path)
+        return True
+    except Exception:
+        return False
+
+
+def _fire_engine_warm(key, p, meta):
+    """Kick MoranSubs's background availability warm for this title (pool +
+    Wizdom + OpenSubtitles + Ktuvit -> shared cache the "HEB NN%" badge reads).
+    Throttled per title so reopening the source window doesn't spam it.
+    Non-blocking.
+
+    Primary path: enqueue a disk job the long-lived service drains in ~0.4s and
+    runs in its own addon context. Fallback: the old fire-and-forget RunScript
+    (only when the queue can't be written) -- correct context but ~3s slower to
+    start because it boots a fresh interpreter."""
+    try:
         now = time.time()
         if (now - _FIRED.get(key, 0)) < _FIRE_RETRY:
             return
@@ -261,6 +315,10 @@ def _fire_engine_warm(key, p, meta):
                                        'TVShowTitle')),
             'year': str((meta.get('year') if meta else '') or ''),
         }
+        if _enqueue_warm(key, payload):
+            return
+        # Queue unwritable -- fall back to the slower RunScript path.
+        import xbmc
         blob = base64.b64encode(
             json.dumps(payload).encode('utf-8')).decode('ascii')
         xbmc.executebuiltin(
@@ -302,6 +360,211 @@ def availability(p):
         'ktuvit_checked': pl.get('ktuvit_checked') or 0.0,
         'ktuvit_changed': pl.get('ktuvit_changed') or 0.0,
     }
+
+
+def _warm_log(msg, level='INFO'):
+    try:
+        from resources.lib import kodi_utils
+        kodi_utils.log('he_avail: ' + msg, level=level)
+    except Exception:
+        pass
+
+
+def _store_avail(mk, names, embedded, ttl):
+    """Write {mk: {ts, names, embedded, ttl}} into the shared he_avail cache the
+    source window reads. Same file/format as default.py's _he_avail_store, so
+    either warm path (in-service queue drain OR the RunScript fallback) fills the
+    exact cache the badge reads. Atomic + size-bounded."""
+    path = _engine_cache_path()
+    if not path:
+        return
+    try:
+        data = {}
+        if os.path.isfile(path):
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    data = json.load(f) or {}
+            except Exception:
+                data = {}
+        data[mk] = {'ts': time.time(), 'names': list(names),
+                    'embedded': list(embedded or []), 'ttl': float(ttl or 0)}
+        if len(data) > 400:
+            data = dict(sorted(data.items(),
+                               key=lambda kv: kv[1].get('ts', 0),
+                               reverse=True)[:400])
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False)
+        os.replace(tmp, path)
+    except Exception as e:
+        _warm_log('store failed: {0}'.format(e), level='WARNING')
+
+
+def run_warm(info):
+    """Full background availability warm for ONE title -- runs in MoranSubs's
+    OWN addon context (the service queue drainer, or the RunScript fallback),
+    never inside POV's process. Gathers every Hebrew-availability source and
+    writes the merged result to the shared cache the badge reads next open:
+      * community pool + Wizdom, and OpenSubtitles -- fetched CONCURRENTLY so the
+        warm finishes inside POV's ~2s scrape window (that's what makes the % show
+        on the FIRST entry, not the 2nd/3rd);
+      * the pool's embedded-Hebrew flags -> the "BUILT-IN" badge;
+      * Ktuvit -- ONLY via the shared registry / as a gated fallback, at most
+        ~once per title globally, so the one shared account is never hammered.
+    `info` is the payload dict written by _fire_engine_warm. Fully guarded."""
+    try:
+        import threading
+    except Exception:
+        threading = None
+
+    mk = (info.get('mk') or '').strip()
+    if not mk:
+        return
+    is_ep = (info.get('type') == 'episode')
+
+    def _merge(dst, seen, items):
+        for rel in items or []:
+            low = (rel or '').strip().lower()
+            if low and low not in seen:
+                seen.add(low)
+                dst.append(rel)
+
+    _p = {
+        'tmdb': info.get('tmdb', ''), 'imdb': info.get('imdb', ''),
+        'type': 'episode' if is_ep else 'movie',
+        'season': info.get('season', '0') if is_ep else '0',
+        'episode': info.get('episode', '0') if is_ep else '0',
+        'lang': 'he',
+    }
+    bridge_info = {
+        'imdb_id': info.get('imdb', ''),
+        'tmdb_id': info.get('tmdb', ''),
+        'title': info.get('title', ''),
+        'tvshow': info.get('tvshow', ''),
+        'year': info.get('year', ''),
+        'season': info.get('season', '') if is_ep else '',
+        'episode': info.get('episode', '') if is_ep else '',
+        'is_episode': is_ep,
+    }
+
+    # Results the two concurrent fetchers write into.
+    box = {'av': None, 'os_names': [], 'vd': None}
+
+    def _fetch_pool_wizdom():
+        try:
+            box['av'] = availability(_p)
+        except Exception as e:
+            _warm_log('pool/wizdom failed: {0}'.format(e), level='WARNING')
+
+    def _fetch_opensubtitles():
+        try:
+            from resources.lib import subs_engine_bridge as bridge
+            bridge.ensure_engine_settings()
+            vd = bridge.build_video_data(bridge_info)
+            box['vd'] = vd
+            from resources.lib.subs_engine.sources import opensubtitles
+            opensubtitles.global_var = []
+            opensubtitles.get_subs(vd, True)  # all languages; we keep Hebrew
+            names = []
+            for d in (opensubtitles.global_var or []):
+                lang = (d.get('label') or '').strip().lower()
+                code = (d.get('thumbnailImage') or '').strip().lower()
+                if lang == 'hebrew' or code in ('he', 'heb', 'iw'):
+                    fn = (d.get('filename') or '').strip()
+                    if fn:
+                        names.append(fn)
+            box['os_names'] = names
+        except Exception as e:
+            _warm_log('opensubtitles failed: {0}'.format(e), level='WARNING')
+
+    # 1+2) Pool+Wizdom and OpenSubtitles CONCURRENTLY (the slow part).
+    if threading is not None:
+        t1 = threading.Thread(target=_fetch_pool_wizdom)
+        t2 = threading.Thread(target=_fetch_opensubtitles)
+        t1.start()
+        t2.start()
+        t1.join(timeout=8.0)
+        t2.join(timeout=8.0)
+    else:
+        _fetch_pool_wizdom()
+        _fetch_opensubtitles()
+
+    av = box['av'] or {}
+    embedded = av.get('embedded') or []
+    kt_pool_names = av.get('ktuvit') or []
+    kt_checked = av.get('ktuvit_checked') or 0.0
+    kt_changed = av.get('ktuvit_changed') or 0.0
+
+    names, seen = [], set()
+    _merge(names, seen, av.get('names') or [])
+    _merge(names, seen, box['os_names'] or [])
+
+    # 3) Ktuvit via the SHARED registry -- at most ~once per title globally.
+    #    Re-check often while a title is still GAINING Hebrew, back off once
+    #    stable. Gated by `he_match_ktuvit`. Needs the OpenSubtitles video data.
+    try:
+        from resources.lib import kodi_utils as _ku
+        ktuvit_ok = _ku.get_setting('he_match_ktuvit', 'true') != 'false'
+    except Exception:
+        ktuvit_ok = True
+    _now = time.time()
+    _KT_SHORT = 8 * 3600.0            # 8 hours while still active
+    _KT_LONG = 30 * 24 * 3600.0       # 30 days once stable
+    _KT_STABILIZE = 14 * 24 * 3600.0  # "active" window since last growth
+    kt_active = (not kt_changed) or ((_now - float(kt_changed)) < _KT_STABILIZE)
+    if ktuvit_ok:
+        _kt_ttl = _KT_SHORT if kt_active else _KT_LONG
+        fresh = kt_checked and (_now - float(kt_checked)) < _kt_ttl
+        if fresh:
+            _merge(names, seen, kt_pool_names)   # shared cache hit -- no call
+        else:
+            vd = box['vd']
+            if vd is None:
+                try:
+                    from resources.lib import subs_engine_bridge as bridge
+                    bridge.ensure_engine_settings()
+                    vd = bridge.build_video_data(bridge_info)
+                except Exception:
+                    vd = None
+            if vd is not None:
+                try:
+                    from resources.lib.subs_engine.sources import ktuvit as _kt
+                    _kt.global_var = []
+                    _kt.get_subs(vd)
+                    kt_names = []
+                    for d in (_kt.global_var or []):
+                        fn = (d.get('filename') or '').strip()
+                        if fn:
+                            kt_names.append(fn)
+                    _merge(names, seen, kt_names)
+                    try:
+                        from resources.lib import pool as _pool
+                        _pool.report_ktuvit({
+                            'tmdb_id': info.get('tmdb', ''),
+                            'imdb_id': info.get('imdb', ''),
+                            'is_episode': is_ep,
+                            'season': info.get('season', '0') if is_ep else '0',
+                            'episode': info.get('episode', '0') if is_ep else '0',
+                        }, kt_names)
+                    except Exception:
+                        pass
+                except Exception as e:
+                    _warm_log('ktuvit check failed: {0}'.format(e),
+                              level='WARNING')
+
+    _LOCAL_SHORT = 8 * 3600.0
+    _LOCAL_LONG = 7 * 24 * 3600.0
+    if not names:
+        local_ttl = _LOCAL_SHORT
+    elif ktuvit_ok and kt_active:
+        local_ttl = _LOCAL_SHORT
+    else:
+        local_ttl = _LOCAL_LONG
+    _store_avail(mk, names, embedded, local_ttl)
+    _warm_log('stored {0} Hebrew release names ({1} embedded) for {2} '
+              '(ttl={3}h)'.format(len(names), len(embedded), mk,
+                                  int(local_ttl / 3600)))
 
 
 def _seed_from_pool(key, pl):
