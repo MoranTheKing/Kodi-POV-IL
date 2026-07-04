@@ -1969,6 +1969,68 @@ def _start_pool_queue_drainer(monitor):
         pass
 
 
+def _start_he_warm_drainer(monitor):
+    """Drain the Hebrew-availability warm queue from this long-lived service.
+
+    POV's source window (a SEPARATE, short-lived interpreter) can't run the warm
+    itself -- OpenSubtitles/Ktuvit need MoranSubs's own addon context + API keys.
+    It used to kick a fresh interpreter via RunScript, but booting one (~3s) was
+    slower than POV's ~2s scrape, so the "HEB NN%" badge only showed on the 2nd/
+    3rd entry. Instead, prewarm() now drops a tiny JSON job on disk; we pick it up
+    here within a fraction of a second and run the (parallelized) warm in the
+    already-imported service process, so the cache is ready by the time the source
+    dialog opens -> % on the FIRST entry. Best-effort; never blocks."""
+    try:
+        import json
+        from resources.lib import he_sub_match as _hsm
+    except Exception:
+        return
+
+    def _loop():
+        try:
+            if monitor.waitForAbort(3):   # brief settle, then poll fast
+                return
+            while not monitor.abortRequested():
+                try:
+                    d = _hsm._warm_queue_dir()
+                    if d and os.path.isdir(d):
+                        for fn in sorted(os.listdir(d)):
+                            if monitor.abortRequested():
+                                return
+                            if not fn.endswith('.json'):
+                                continue
+                            path = os.path.join(d, fn)
+                            info = None
+                            try:
+                                with open(path, 'r', encoding='utf-8') as f:
+                                    info = json.load(f)
+                            except Exception:
+                                info = None
+                            # Claim the job (delete first) so a slow/failed warm
+                            # can't make us reprocess it in a tight loop.
+                            try:
+                                os.remove(path)
+                            except OSError:
+                                pass
+                            if info:
+                                try:
+                                    _hsm.run_warm(info)
+                                except Exception:
+                                    pass
+                except Exception:
+                    pass
+                # Sub-second poll so prewarm -> warm start is nearly immediate.
+                if monitor.waitForAbort(0.4):
+                    break
+        except Exception:
+            pass
+
+    try:
+        threading.Thread(target=_loop, daemon=True).start()
+    except Exception:
+        pass
+
+
 def _maybe_start_autosub_player():
     """Register a Player listener so we can auto-search + auto-apply Hebrew on
     play, but ONLY when the engine is on and autosub is enabled. The service's
@@ -3881,6 +3943,7 @@ def main():
     # uploaded from this thread one at a time with a throttle -- never bursting
     # past Telegram's bot rate limit. Best-effort; never blocks.
     _start_pool_queue_drainer(monitor)
+    _start_he_warm_drainer(monitor)
 
     # 24h between passes. waitForAbort returns True when Kodi is
     # shutting down, so we just need to loop until that fires.
