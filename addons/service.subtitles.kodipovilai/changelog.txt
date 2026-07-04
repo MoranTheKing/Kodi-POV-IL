@@ -1,3 +1,13 @@
+v0.2.315
+- Maintenance and stability improvements.
+- Fixed the recurring "received file is not a valid subtitle (ktuvit)" popup
+  during playback: a single failed background/secondary download no longer shows
+  a notification (the subtitle you picked still loads) -- it's logged only.
+- Restored the gold "last watched" badge on the remembered source (its colour
+  code was invalid, so the text rendered invisibly).
+- Hebrew-availability %: widened the first-entry lookup a bit more so it shows
+  even sooner on the first entry.
+
 v0.2.314
 - Maintenance and stability improvements.
 - Hebrew-availability %: the shared % now shows on the FIRST entry to a title far
