@@ -1990,6 +1990,20 @@ def _start_he_warm_drainer(monitor):
         try:
             if monitor.waitForAbort(3):   # brief settle, then poll fast
                 return
+            # Pre-import the engine ONCE now, on this thread, so the FIRST real
+            # warm doesn't pay the ~2-3s cold-import (that made the first title of
+            # a session lose the race even though later ones were quick). Harmless
+            # if it fails -- run_warm re-imports lazily and guards everything.
+            try:
+                import time as _t
+                _pt0 = _t.time()
+                from resources.lib import subs_engine_bridge as _b
+                _b.ensure_engine_settings()
+                from resources.lib.subs_engine.sources import opensubtitles as _o  # noqa: F401
+                from resources.lib.subs_engine.sources import ktuvit as _k  # noqa: F401
+                _hsm._dbg('drainer engine pre-imported in {0:.1f}s'.format(_t.time() - _pt0))
+            except Exception as e:
+                _hsm._dbg('drainer engine pre-import failed: ' + repr(e))
             while not monitor.abortRequested():
                 try:
                     d = _hsm._warm_queue_dir()
@@ -2001,6 +2015,12 @@ def _start_he_warm_drainer(monitor):
                                 continue
                             path = os.path.join(d, fn)
                             info = None
+                            age = -1.0
+                            try:
+                                import time as _t
+                                age = _t.time() - os.path.getmtime(path)
+                            except OSError:
+                                pass
                             try:
                                 with open(path, 'r', encoding='utf-8') as f:
                                     info = json.load(f)
@@ -2013,6 +2033,8 @@ def _start_he_warm_drainer(monitor):
                             except OSError:
                                 pass
                             if info:
+                                _hsm._dbg('drainer picked up {0} (queued {1:.1f}s ago)'.format(
+                                    (info.get('mk') or fn), age))
                                 try:
                                     _hsm.run_warm(info)
                                 except Exception:
@@ -2020,7 +2042,7 @@ def _start_he_warm_drainer(monitor):
                 except Exception:
                     pass
                 # Sub-second poll so prewarm -> warm start is nearly immediate.
-                if monitor.waitForAbort(0.4):
+                if monitor.waitForAbort(0.2):
                     break
         except Exception:
             pass

@@ -250,6 +250,18 @@ def _meta_str(meta, keys):
     return ''
 
 
+def _dbg(msg):
+    """Log via xbmc directly so it works in EITHER process -- POV's source-scrape
+    interpreter (where 'from resources.lib import kodi_utils' fails because only
+    resources/lib is on sys.path) AND MoranSubs's own service. Timing diagnostics
+    for the first-entry Hebrew-% warm."""
+    try:
+        import xbmc
+        xbmc.log('[service.subtitles.kodipovilai] he_warm: ' + msg, xbmc.LOGINFO)
+    except Exception:
+        pass
+
+
 def _warm_queue_dir():
     try:
         import xbmcvfs
@@ -275,6 +287,7 @@ def _enqueue_warm(key, payload):
         # POV plugin invocations that don't share _FIRED).
         try:
             if os.path.isfile(path) and (time.time() - os.path.getmtime(path)) < _FIRE_RETRY:
+                _dbg('enqueue skip (fresh job already queued) ' + key)
                 return True
         except OSError:
             pass
@@ -282,8 +295,10 @@ def _enqueue_warm(key, payload):
         with open(tmp, 'w', encoding='utf-8') as f:
             json.dump(payload, f, ensure_ascii=False)
         os.replace(tmp, path)
+        _dbg('enqueued ' + key)
         return True
-    except Exception:
+    except Exception as e:
+        _dbg('enqueue FAILED ' + key + ': ' + repr(e))
         return False
 
 
@@ -418,6 +433,7 @@ def run_warm(info):
     except Exception:
         threading = None
 
+    _t0 = time.time()
     mk = (info.get('mk') or '').strip()
     if not mk:
         return
@@ -563,8 +579,9 @@ def run_warm(info):
         local_ttl = _LOCAL_LONG
     _store_avail(mk, names, embedded, local_ttl)
     _warm_log('stored {0} Hebrew release names ({1} embedded) for {2} '
-              '(ttl={3}h)'.format(len(names), len(embedded), mk,
-                                  int(local_ttl / 3600)))
+              '(ttl={3}h, warm took {4:.1f}s)'.format(
+                  len(names), len(embedded), mk, int(local_ttl / 3600),
+                  time.time() - _t0))
 
 
 def _seed_from_pool(key, pl):
@@ -652,16 +669,20 @@ def prewarm(meta):
     no id."""
     try:
         if not _enabled():
+            _dbg('prewarm skip (disabled)')
             return
         p = _media_params(meta)
         if not p:
+            _dbg('prewarm skip (no media id in meta)')
             return
         key = _media_key(p)
         if _cached_names(key) is not None:
+            _dbg('prewarm skip (already warm) ' + key)
             return  # already warm -- nothing to do
+        _dbg('prewarm fired ' + key)
         _fire_engine_warm(key, p, meta)
-    except Exception:
-        pass
+    except Exception as e:
+        _dbg('prewarm crashed: ' + repr(e))
 
 
 def embedded_names(meta):
