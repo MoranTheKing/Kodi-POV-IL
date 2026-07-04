@@ -1,3 +1,11 @@
+v0.2.319
+- Maintenance and stability improvements.
+- Hebrew-availability %: the source window now briefly waits (up to ~3s) for the
+  availability answer before showing the list, so the % is reliably there on the
+  FIRST entry -- including titles whose Hebrew lives only on OpenSubtitles/כתובית
+  (previously those showed only on the 2nd/3rd entry). Titles already known to the
+  community pool still show instantly with no wait.
+
 v0.2.318
 - Maintenance and stability improvements.
 - Hebrew-availability %: preload the lookup engine when the service starts (so
