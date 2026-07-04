@@ -2232,6 +2232,32 @@ def _maybe_patch_old_osd_collision():
             pass
 
 
+def _maybe_patch_old_next_episode():
+    """Repoint OLD's fullscreen-OSD "next episode" button from POV's dropped
+    play_media&next=1 call to POV's working next-episode list. No-op when OLD
+    isn't installed or the button was already repointed / changed upstream."""
+    try:
+        from resources.lib import old_next_episode_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = old_next_episode_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'old_next_episode_patcher: OSD next-episode button repointed',
+                level='INFO')
+            _maybe_reload_old_skin()
+        elif status in ('write_failed', 'read_failed', 'unmatched'):
+            kodi_utils.log('old_next_episode_patcher: ' + status,
+                           level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log('old_next_episode_patcher failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_reload_old_skin():
     """Skin XML is read at skin load, so a freshly-applied OLD OSD patch only
     shows after a reload. Reload once -- but only when OLD is the active skin
@@ -3658,6 +3684,11 @@ def main():
     # group buttons back to their original total width to clear it. Runs AFTER
     # the change-source patcher so the button exists. Skin-gated, XML-checked.
     _maybe_patch_old_osd_collision()
+
+    # Repoint OLD's OSD "next episode" button: it used POV's old
+    # play_media&next=1 (dropped in POV 6.07, so it errored). Point it at POV's
+    # working next-episode list instead. Skin-gated, idempotent.
+    _maybe_patch_old_next_episode()
 
     # Turn OLD's rating/score circle ON for posters by default (one-shot, only
     # while OLD is the active skin; a later manual change sticks).
