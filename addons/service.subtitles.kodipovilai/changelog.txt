@@ -1,3 +1,9 @@
+v0.2.313
+- Maintenance and stability improvements.
+- Build: fixed the release-name feed used for Hebrew subtitle matching, which
+  broke when the base build refactored how it plays a source. Re-anchored to the
+  new play path so the subtitle search matches against the real release name.
+
 v0.2.312
 - Maintenance and stability improvements.
 - Build (NOX): the player-OSD "next episode" button no longer errors -- the
