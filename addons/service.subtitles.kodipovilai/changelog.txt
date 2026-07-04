@@ -1,3 +1,9 @@
+v0.2.312
+- Maintenance and stability improvements.
+- Build (NOX): the player-OSD "next episode" button no longer errors -- the
+  base build changed how it plays the next episode, so the button now opens the
+  working "Next Episode" list instead.
+
 v0.2.311
 - Maintenance and stability improvements.
 - Build: restore the "Movies by genre" / "Series by genre" home widgets when a
