@@ -378,6 +378,29 @@ def release_names(meta):
         return []
 
 
+def prewarm(meta):
+    """Kick the background availability warm EARLY -- called at the START of
+    POV's source scrape (before get_sources), so the OpenSubtitles/Wizdom/Ktuvit
+    warm runs CONCURRENTLY with the ~1.5-3s scrape and the cache is ready by the
+    time the source dialog opens. That's what makes the Hebrew % show on the
+    FIRST entry for titles whose subs live on OS/Ktuvit (not the shared pool),
+    instead of only the 2nd/3rd. No network in THIS call (only fires the
+    throttled fire-and-forget RunScript); no-op when disabled / already cached /
+    no id."""
+    try:
+        if not _enabled():
+            return
+        p = _media_params(meta)
+        if not p:
+            return
+        key = _media_key(p)
+        if _cached_names(key) is not None:
+            return  # already warm -- nothing to do
+        _fire_engine_warm(key, p, meta)
+    except Exception:
+        pass
+
+
 def embedded_names(meta):
     """Release names flagged (by the community) as carrying a built-in Hebrew
     track, for THIS media. Pure cache read; [] when none / not warmed yet."""
