@@ -1,3 +1,9 @@
+v0.2.314
+- Maintenance and stability improvements.
+- Hebrew-availability %: the shared % now shows on the FIRST entry to a title far
+  more often (the first-entry lookup was timing out too early). Same single
+  lookup per title -- no extra network load.
+
 v0.2.313
 - Maintenance and stability improvements.
 - Build: fixed the release-name feed used for Hebrew subtitle matching, which

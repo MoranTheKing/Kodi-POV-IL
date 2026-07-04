@@ -157,6 +157,14 @@ def reorder(sources_self, results):
             _log('reorder: no confident match in current results')
             return False
         item = results.pop(idx)
+        # DIAGNOSTIC (temporary): the badge is applied to URLName but wasn't
+        # showing on POV 6.07 -- log the fields so we see which one the dialog
+        # actually renders and whether URLName was populated at mark time.
+        try:
+            _log('reorder fields: URLName=%r name=%r' % (
+                (item.get('URLName') or '')[:60], (item.get('name') or '')[:60]))
+        except Exception:
+            pass
         # Mark the displayed name (POV shows item['URLName'] as tikiskins.name).
         # The stored record reads item['name'], not URLName, so the marker never
         # pollutes the remembered record on a re-pick.
