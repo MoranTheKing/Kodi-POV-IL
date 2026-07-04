@@ -30,9 +30,13 @@ _ADDON_ID = 'service.subtitles.kodipovilai'
 
 _TIMEOUT = 2.5
 # Hard cap for the ONE synchronous pool lookup release_names() does on a cache
-# miss (first entry to a title). Keeps the source window from ever stalling
-# more than ~1s, while still showing the shared % on the first entry.
-_FIRST_ENTRY_TIMEOUT = 1.2
+# miss (first entry to a title). Widened from 1.2s -> 2.5s so the shared % shows
+# on the FIRST entry far more reliably (the 1.2s cap was timing out before the
+# pool worker answered, so the badge only appeared on the 2nd/3rd entry once the
+# background warm had filled the cache). Still ONE lookup per title (no extra
+# Cloudflare reads); worst case the source window opens ~1.3s later on the first
+# entry to a not-yet-cached title.
+_FIRST_ENTRY_TIMEOUT = 2.5
 
 # Engine (OpenSubtitles) availability is filled by a background RunScript into a
 # shared cache file; we read it cheaply on every call so the badge fills in on
