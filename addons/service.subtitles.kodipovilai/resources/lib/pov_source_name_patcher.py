@@ -48,11 +48,30 @@ except Exception:
 POV_ADDON_ID = 'plugin.video.pov'
 SOURCES_REL_PATH = 'resources/lib/modules/sources.py'
 
-MARKER = '# AI_SUBS_POV_SOURCE_NAME_v2'
+MARKER = '# AI_SUBS_POV_SOURCE_NAME_v3'
 
-# Match the single-line yield inside _process() in play_file().
-# POV uses tabs for indentation (4 tabs deep inside the generator
-# function). Verified by inspecting the upstream file.
+# POV 6.07 refactored the old `_process()` generator (which yielded links)
+# into `play_file()`, which resolves the picked source and hands it straight to
+# the player:  `return POVPlayer().run(link, self.meta, progress_media)`.
+# At that line the picked source dict `item` and the resolved `link` are in
+# scope, so we stash the name+URL right before the player runs. (3 tabs deep.)
+PLAY_ANCHOR = (
+    '\t\t\treturn POVPlayer().run(link, self.meta, progress_media)\r\n'
+)
+PLAY_BLOCK = (
+    '\t\t\ttry:\r\n'
+    '\t\t\t\timport xbmcgui as _aix_gui_pov  ' + MARKER + '\r\n'
+    '\t\t\t\t_aix_w_pov = _aix_gui_pov.Window(10000)\r\n'
+    "\t\t\t\t_aix_name = (item.get('name') or item.get('URLName') or '')\r\n"
+    "\t\t\t\t_aix_w_pov.setProperty('subs.player_filename', _aix_name)\r\n"
+    "\t\t\t\t_aix_w_pov.setProperty('pov_picked_source_name', _aix_name)\r\n"
+    "\t\t\t\t_aix_w_pov.setProperty('pov_picked_source_url', link or '')\r\n"
+    '\t\t\texcept Exception: pass\r\n'
+    '\t\t\treturn POVPlayer().run(link, self.meta, progress_media)\r\n'
+)
+
+# Legacy single-line yield inside the old _process() (pre-6.07). Still handled
+# as a fallback anchor for anyone on an old POV.
 OLD_BLOCK = (
     '\t\t\t\tif link is not None: yield link\r\n'
 )
@@ -155,23 +174,27 @@ def ensure_patched():
     if MARKER.encode('utf-8') in content:
         return 'unchanged'
     eol = _detect_lineendings(content)
-    old_bytes = OLD_BLOCK.encode('utf-8')
-    new_bytes = NEW_BLOCK.encode('utf-8')
-    v1_bytes = V1_INJECTION.encode('utf-8')
-    if eol == b'\n':
-        old_bytes = old_bytes.replace(b'\r\n', b'\n')
-        new_bytes = new_bytes.replace(b'\r\n', b'\n')
-        v1_bytes = v1_bytes.replace(b'\r\n', b'\n')
-    # Revert legacy v1 injection if present so the v2 anchor (the
-    # original single-line yield) is back in place before we patch.
-    if v1_bytes in content:
-        content = content.replace(v1_bytes, old_bytes, 1)
-        _log('reverted v1 injection before applying v2', level='INFO')
-    if old_bytes not in content:
-        _log('_process() yield shape changed upstream -- skipping',
-             level='WARNING')
-        return 'unmatched'
-    new_content = content.replace(old_bytes, new_bytes, 1)
+
+    def _b(s):
+        b = s.encode('utf-8')
+        return b.replace(b'\r\n', b'\n') if eol == b'\n' else b
+
+    # POV 6.07+ play_file() site (preferred): stash right before the player runs.
+    play_anchor, play_block = _b(PLAY_ANCHOR), _b(PLAY_BLOCK)
+    if play_anchor in content:
+        new_content = content.replace(play_anchor, play_block, 1)
+    else:
+        # Fallback: legacy _process() single-line yield (pre-6.07 POV).
+        old_bytes, new_bytes = _b(OLD_BLOCK), _b(NEW_BLOCK)
+        v1_bytes = _b(V1_INJECTION)
+        if v1_bytes in content:
+            content = content.replace(v1_bytes, old_bytes, 1)
+            _log('reverted v1 injection before applying', level='INFO')
+        if old_bytes not in content:
+            _log('play_file()/_process() shape changed upstream -- skipping',
+                 level='WARNING')
+            return 'unmatched'
+        new_content = content.replace(old_bytes, new_bytes, 1)
     tmp = path + '.aitmp'
     try:
         with open(tmp, 'wb') as f:
