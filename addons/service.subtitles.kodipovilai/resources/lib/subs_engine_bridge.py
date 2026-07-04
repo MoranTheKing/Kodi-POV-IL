@@ -1092,11 +1092,9 @@ def _download_inner(payload):
         kodi_utils.log('subs_engine_bridge: download returned no file '
                        '(source={0}, got={1})'.format(source, sub_file),
                        level='WARNING')
-        try:
-            kodi_utils.notify('השרת לא החזיר קובץ כתובית ({0})'.format(source),
-                              time_ms=6000)
-        except Exception:
-            pass
+        # Log only -- no user popup. This fires for a single failed provider
+        # download (e.g. a background/secondary Ktuvit fetch) while the sub the
+        # user actually picked works fine; a popup here just spams playback.
         return None
 
     # Validate it's an actual subtitle, not an HTML error page / un-extracted
@@ -1106,11 +1104,9 @@ def _download_inner(payload):
         kodi_utils.log('subs_engine_bridge: downloaded file is not a valid '
                        'subtitle ({0})'.format(os.path.basename(sub_file)),
                        level='WARNING')
-        try:
-            kodi_utils.notify('הקובץ שהתקבל אינו כתובית תקינה ({0})'.format(
-                source), time_ms=6000)
-        except Exception:
-            pass
+        # Log only -- no user popup. A provider (often Ktuvit, when rate-limited)
+        # occasionally hands back an HTML/empty blob for ONE result; the user's
+        # actual subtitle still loads, so the repeated popup was pure noise.
         return None
 
     # Optional Hebrew punctuation fix, mirroring engine.download_sub.
