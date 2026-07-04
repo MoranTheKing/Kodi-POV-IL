@@ -1,3 +1,12 @@
+v0.2.317
+- Maintenance and stability improvements.
+- Hebrew-availability %: made the first-entry check reliably ready in time. The
+  availability warm now runs inside the already-running background service
+  (started via a tiny on-disk hand-off) instead of booting a fresh helper
+  process each time -- the old helper took a few seconds just to start up, which
+  was slower than the source scrape, so the % often only appeared on the 2nd/3rd
+  entry. The warm also queries the sources concurrently now. No extra lookups.
+
 v0.2.316
 - Maintenance and stability improvements.
 - Hebrew-availability %: now shows on the FIRST entry for titles whose subs are
