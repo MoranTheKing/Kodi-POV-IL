@@ -37,6 +37,13 @@ _TIMEOUT = 2.5
 # Cloudflare reads); worst case the source window opens ~1.3s later on the first
 # entry to a not-yet-cached title.
 _FIRST_ENTRY_TIMEOUT = 3.5
+# On a cache miss the source window WAITS this long (total) for the availability
+# answer before it shows the list, so the Hebrew % is there on the FIRST entry
+# rather than only after the background warm wins a race. Pool-HAVE titles return
+# almost instantly (the pool answers in well under a second); only titles whose
+# Hebrew lives on OpenSubtitles/Ktuvit pay most of this wait, while the in-service
+# warm checks them. Kept to ~3s so the window never feels frozen.
+_FIRST_ENTRY_WAIT = 3.2
 
 # Engine (OpenSubtitles) availability is filled by a background RunScript into a
 # shared cache file; we read it cheaply on every call so the badge fills in on
@@ -401,8 +408,13 @@ def _store_avail(mk, names, embedded, ttl):
                     data = json.load(f) or {}
             except Exception:
                 data = {}
+        # 'warm': 1 marks a FULL warm result (pool+Wizdom+OS+Ktuvit), so the
+        # first-entry wait in release_names can tell it apart from a pool-only
+        # seed (which _seed_from_pool writes without this flag) and keep waiting
+        # for the real OS/Ktuvit answer instead of returning the seed early.
         data[mk] = {'ts': time.time(), 'names': list(names),
-                    'embedded': list(embedded or []), 'ttl': float(ttl or 0)}
+                    'embedded': list(embedded or []), 'ttl': float(ttl or 0),
+                    'warm': 1}
         if len(data) > 400:
             data = dict(sorted(data.items(),
                                key=lambda kv: kv[1].get('ts', 0),
@@ -645,15 +657,34 @@ def release_names(meta):
         names = _cached_names(key)
         if names is not None:
             return names
-        # Cache miss. Kick the full background warm (Wizdom/OS/Ktuvit-live)...
+        # Cache miss. Kick the full in-service warm (pool+Wizdom+OS+Ktuvit)...
         _fire_engine_warm(key, p, meta)
-        # ...and do ONE quick shared-pool lookup so the first entry isn't blank.
-        # Tight timeout so the source window can never stall more than ~1s.
+        deadline = time.time() + _FIRST_ENTRY_WAIT
+        # ...and do ONE quick shared-pool lookup. Pool-HAVE titles answer here in
+        # well under a second, so they show their % with no perceptible wait.
+        seeded = []
         try:
-            pl = _pool_lookup(p, timeout=_FIRST_ENTRY_TIMEOUT)
-            return _seed_from_pool(key, pl)
+            pl = _pool_lookup(p, timeout=min(1.5, _FIRST_ENTRY_WAIT))
+            seeded = _seed_from_pool(key, pl)
         except Exception:
-            return []
+            seeded = []
+        if seeded:
+            return seeded
+        # Pool has nothing -> Hebrew (if any) lives on OpenSubtitles/Ktuvit, which
+        # only the background warm checks. WAIT briefly for that warm to land so
+        # the % still shows on the FIRST entry (the chosen short in-window wait).
+        # We poll the shared cache the in-service warm writes; 'warm' marks its
+        # full result so we don't return our own empty pool seed by mistake.
+        while time.time() < deadline:
+            time.sleep(0.12)
+            ent = _cache_entry(key)
+            if ent is not None and ent.get('warm'):
+                n = [x for x in (ent.get('names') or []) if x]
+                _dbg('first-entry wait: warm landed for ' + key
+                     + (' (%d names)' % len(n)))
+                return n
+        _dbg('first-entry wait: timed out (~%.1fs) for %s' % (_FIRST_ENTRY_WAIT, key))
+        return seeded
     except Exception:
         return []
 
