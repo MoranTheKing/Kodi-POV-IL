@@ -2021,6 +2021,36 @@ def _maybe_prewarm_engine():
         pass
 
 
+def _maybe_patch_pov_prewarm():
+    """Fire the Hebrew-availability warm at the START of POV's source scrape (in
+    source_select, before get_sources) instead of when the dialog builds -- so
+    the OS/Wizdom/Ktuvit warm runs concurrently with the scrape and the % is
+    ready on the FIRST entry. Idempotent, compile-checked."""
+    try:
+        from resources.lib import pov_prewarm_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_prewarm_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log('pov_prewarm_patcher: prewarm hooked into source scrape',
+                           level='INFO')
+            try:
+                from resources.lib import pov_reload
+                pov_reload.note_patched()
+            except Exception:
+                pass
+        elif status in ('unmatched', 'compile_failed', 'write_failed',
+                        'read_failed'):
+            kodi_utils.log('pov_prewarm_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log('pov_prewarm_patcher failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_subtitle_match():
     """Show a Hebrew-subtitle match % under each source in POV's source-results
     window (gated by `show_subtitle_match`, default on). Patches POV's
@@ -3631,6 +3661,10 @@ def main():
     # (skin-agnostic: prepends to a property shown in every layout). Gated by
     # show_subtitle_match (default on); compile-checked so it can't break POV.
     _maybe_patch_pov_subtitle_match()
+
+    # Fire the Hebrew-availability warm at the START of the source scrape (in
+    # source_select), so the % is ready on the FIRST entry for OS/Ktuvit titles.
+    _maybe_patch_pov_prewarm()
 
     # Pre-warm the built-in sources engine (only when the user enabled it) so
     # the first subtitle search doesn't pay the heavy import cost inline.
