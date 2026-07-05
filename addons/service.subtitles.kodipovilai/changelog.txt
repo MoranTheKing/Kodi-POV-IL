@@ -1,3 +1,11 @@
+v0.2.324
+- Built-in Hebrew badge: wider detection + diagnostics. Embedded tracks labelled
+  with a descriptive name ("Hebrew SDH", "Forced Hebrew") or Hebrew script
+  ("עברית") -- which a language-code lookup missed -- are now recognised. Added a
+  one-line "embedded-report" log at play (Hebrew detected? which release was
+  stored, from which field) so any remaining source that isn't flagged can be
+  diagnosed precisely instead of guessed at.
+
 v0.2.323
 - Built-in Hebrew badge FINALLY works (root cause fixed): the embedded-Hebrew
   track WAS being detected at playback, but the release name a debrid stream

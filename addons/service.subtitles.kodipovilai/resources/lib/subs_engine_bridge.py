@@ -651,20 +651,43 @@ def note_playback_streams(info, streams=None):
         # source screen flags it "BUILT-IN 100%" for everyone. Automatic,
         # deduped + backgrounded inside pool.report_embedded; never blocks.
         try:
-            has_he = any(
-                (_LANG_NORMALIZE.get((n or '').strip().lower(),
-                                     (n or '').strip().lower()[:2]) == 'he')
-                for n in (streams or []))
+            def _is_he_label(n):
+                low = (n or '').strip().lower()
+                if not low:
+                    return False
+                if _LANG_NORMALIZE.get(low, low[:2]) == 'he':
+                    return True
+                # Descriptive labels a code/2-char lookup misses:
+                # "Hebrew", "Hebrew SDH", "Forced Hebrew", or Hebrew script.
+                if 'hebrew' in low:
+                    return True
+                return any('֐' <= ch <= 'ת' for ch in (n or ''))
+            has_he = any(_is_he_label(n) for n in (streams or []))
+            _rel = ''
             if has_he:
                 from resources.lib import pool
+                _rel = pool._release_from(info)
                 pool.report_embedded(info)
                 try:
                     from resources.lib import he_sub_match as _hsm
-                    _rel = pool._release_from(info)
                     if _rel:
                         _hsm.merge_embedded(info, [_rel])
                 except Exception:
                     pass
+            # Diagnostic (once per play): shows WHY a source did/didn't get the
+            # BUILT-IN flag -- whether Hebrew was detected, the release we stored,
+            # and which field it came from. Makes a release-name mismatch vs the
+            # source row, or an empty release, visible in a single line.
+            try:
+                kodi_utils.log(
+                    'embedded-report he={0} rel={1!r} (picked={2!r} '
+                    'tagline={3!r} label={4!r} li={5!r} fp={6!r})'.format(
+                        has_he, _rel, info.get('picked_release', ''),
+                        info.get('tagline', ''), info.get('label', ''),
+                        info.get('li_filename', ''), info.get('filepath', '')),
+                    level='INFO')
+            except Exception:
+                pass
         except Exception:
             pass
     except Exception:
