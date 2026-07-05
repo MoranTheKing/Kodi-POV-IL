@@ -842,6 +842,69 @@ def merge_names(meta, names):
         pass
 
 
+def merge_embedded(meta, releases):
+    """Write-through: UNION release names carrying a BUILT-IN Hebrew track into
+    the local availability cache's `embedded` list, so the source screen flags
+    'HEB BUILT-IN 101%' IMMEDIATELY on this device -- instead of only after the
+    next background warm re-reads the pool (which is what made a track detected
+    at play vanish from the source list when you went back). Mirrors merge_names
+    (which does this for external-sub names). pool.report_embedded still
+    propagates it to every other device; this fixes the reporting device's own
+    view lagging. Union-only, atomic, never raises."""
+    try:
+        if not _enabled():
+            return
+        p = _media_params(meta)
+        if not p:
+            return
+        clean = [(_r or '').strip() for _r in (releases or []) if (_r or '').strip()]
+        if not clean:
+            return
+        key = _media_key(p)
+        path = _engine_cache_path()
+        if not path:
+            return
+        data = {}
+        if os.path.isfile(path):
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    data = json.load(f) or {}
+            except Exception:
+                data = {}
+        ent = data.get(key) or {}
+        existing = [n for n in (ent.get('embedded') or []) if n]
+        seen = set(n.lower() for n in existing)
+        merged = list(existing)
+        for n in clean:
+            low = n.lower()
+            if low not in seen:
+                seen.add(low)
+                merged.append(n)
+        if merged == existing:
+            return   # nothing new -- skip the write
+        ent['embedded'] = merged
+        ent.setdefault('names', ent.get('names') or [])
+        ent['ts'] = time.time()
+        if not ent.get('ttl'):
+            ent['ttl'] = _AVAIL_TTL_NONE
+        data[key] = ent
+        if len(data) > 400:
+            newest = sorted(data.items(),
+                            key=lambda kv: kv[1].get('ts', 0),
+                            reverse=True)[:400]
+            data = dict(newest)
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            tmp = path + '.wtmp'
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False)
+            os.replace(tmp, path)
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
 def _tokens(s):
     # MUST mirror translate._match_pct so the source-screen badge and the
     # subtitle picker's % agree (the user saw 29% on the poster but 33% in the
