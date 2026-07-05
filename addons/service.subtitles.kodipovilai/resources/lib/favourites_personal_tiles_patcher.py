@@ -503,9 +503,19 @@ def ensure_patched():
     had_restore_marker = _has_restore_marker(content)
     had_service_marker = _has_marker(content, SERVICE_SEEN_MARKER)
     had_full_marker = _has_marker(content, FULL_BUILD_SEEN_MARKER)
-    had_premiumize_reseed = _has_marker(content, SERVICE_RESEED_MARKER)
-    had_personal_reseed = _has_marker(content, PERSONAL_RESEED_MARKER)
-    had_full_reseed = _has_marker(content, FULL_BUILD_RESEED_MARKER)
+    # Reseed "already done" flags: check the PERSISTENT json sidecar too, not
+    # only the XML comment markers. Kodi STRIPS XML comments from favourites.xml
+    # whenever the user edits favourites via the GUI -- which wiped these markers
+    # and made the one-time forced restores RE-FIRE on the next update, bringing
+    # back tiles the user had deliberately deleted. The json sidecar (which Kodi
+    # never touches) makes each forced reseed fire exactly ONCE, ever.
+    _reseed_seen = _load_seen_state()
+    had_premiumize_reseed = (_has_marker(content, SERVICE_RESEED_MARKER)
+                             or 'premiumize_reseed' in _reseed_seen)
+    had_personal_reseed = (_has_marker(content, PERSONAL_RESEED_MARKER)
+                           or 'personal_reseed' in _reseed_seen)
+    had_full_reseed = (_has_marker(content, FULL_BUILD_RESEED_MARKER)
+                       or 'full_build_reseed' in _reseed_seen)
     content, fixed_existing = _fix_existing_debrid_notice_action(content)
     content, fixed_torbox_status = _fix_existing_torbox_status_action(content)
     content, debrid_notice_restored = _insert_debrid_notice_tile(
@@ -601,6 +611,23 @@ def ensure_patched():
     if not had_full_reseed:
         new_content, full_reseed_added = _insert_marker(
             new_content, FULL_BUILD_RESEED_MARKER)
+    # Persist the reseed flags to the json sidecar (survives Kodi's comment
+    # stripping) so each forced restore fires ONCE ever -- after that, a genuine
+    # deletion is respected permanently, including across every future update.
+    _new_reseed = set()
+    if not had_premiumize_reseed:
+        _new_reseed.add('premiumize_reseed')
+    if not had_personal_reseed:
+        _new_reseed.add('personal_reseed')
+    if not had_full_reseed:
+        _new_reseed.add('full_build_reseed')
+    if _new_reseed:
+        try:
+            _s = _load_seen_state()
+            _s |= _new_reseed
+            _save_seen_state(_s)
+        except Exception:
+            pass
     if not missing:
         new_content, marker_added = _insert_marker(new_content)
         new_content, service_marker_added = _insert_marker(
