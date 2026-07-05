@@ -1,3 +1,14 @@
+v0.2.323
+- Built-in Hebrew badge FINALLY works (root cause fixed): the embedded-Hebrew
+  track WAS being detected at playback, but the release name a debrid stream
+  carries in ListItem.FileNameAndPath (li_filename) was invisible to
+  _release_from(), so both the pool report and the local write-through got an
+  empty release and silently did nothing -- the source screen never learned the
+  release had built-in Hebrew, locally OR from the shared pool. _release_from()
+  now consults li_filename (basename, debrid-token-guarded) like _release_ready()
+  already did, so playing a built-in-Hebrew source now flags it BUILT-IN for you
+  immediately and for everyone via the pool.
+
 v0.2.322
 - Home tiles no longer come back after you delete them: the "one-time" forced
   restores of favourites tiles (service / personal / full-build) were gated on

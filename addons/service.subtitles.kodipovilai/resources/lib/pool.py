@@ -121,11 +121,23 @@ def _release_from(info):
         rel = (info.get(key) or '').strip()
         if rel and not _is_token_like(rel):
             return rel
-    fp = info.get('filepath') or ''
-    base = os.path.basename(fp)
-    if '.' in base:
-        base = base.rsplit('.', 1)[0]
-    return '' if _is_token_like(base) else base
+    # li_filename (ListItem.FileNameAndPath) and filepath are PATHS whose
+    # basename is often the real release even when the player's filepath is a
+    # tokenized debrid URL. _release_ready() treats li_filename as a valid
+    # release (so autosub proceeds and embedded detection runs on it), so
+    # _release_from MUST consult it too -- otherwise report_embedded and the
+    # local merge_embedded get an empty release and silently no-op, and the
+    # source screen never gets the BUILT-IN flag locally OR from the pool.
+    for pathkey in ('li_filename', 'filepath'):
+        fp = (info.get(pathkey) or '').strip()
+        if not fp:
+            continue
+        base = os.path.basename(fp)
+        if '.' in base:
+            base = base.rsplit('.', 1)[0]
+        if base and not _is_token_like(base):
+            return base
+    return ''
 
 
 def _params(info):
