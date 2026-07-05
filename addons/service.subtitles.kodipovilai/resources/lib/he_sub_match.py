@@ -431,8 +431,25 @@ def _store_avail(mk, names, embedded, ttl):
         # first-entry wait in release_names can tell it apart from a pool-only
         # seed (which _seed_from_pool writes without this flag) and keep waiting
         # for the real OS/Ktuvit answer instead of returning the seed early.
+        #
+        # UNION the embedded list with whatever is already cached instead of
+        # overwriting it. A release carrying a built-in Hebrew track is an
+        # immutable fact; merge_embedded() writes it LOCALLY the instant we
+        # detect it at play, before the pool round-trip completes. If this warm
+        # (whose `embedded` comes from the pool, which may not have that release
+        # yet) overwrote the list, it would WIPE the just-detected flag -- so the
+        # source the user just played loses its BUILT-IN badge while pool-sourced
+        # ones keep theirs. Unioning preserves both.
+        _existing_emb = [e for e in ((data.get(mk) or {}).get('embedded') or [])
+                         if e]
+        _emb_seen = set(e.lower() for e in _existing_emb)
+        _merged_emb = list(_existing_emb)
+        for _e in (embedded or []):
+            if _e and _e.lower() not in _emb_seen:
+                _emb_seen.add(_e.lower())
+                _merged_emb.append(_e)
         data[mk] = {'ts': time.time(), 'names': list(names),
-                    'embedded': list(embedded or []), 'ttl': float(ttl or 0),
+                    'embedded': _merged_emb, 'ttl': float(ttl or 0),
                     'warm': 1}
         if len(data) > 400:
             data = dict(sorted(data.items(),
