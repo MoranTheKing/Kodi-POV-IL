@@ -790,7 +790,14 @@ def embedded_names(meta):
         p = _media_params(meta)
         if not p:
             return []
-        return _cached_embedded(_media_key(p))
+        _emb = _cached_embedded(_media_key(p))
+        try:
+            from resources.lib import kodi_utils as _ku
+            _ku.log('embedded_names {0}: {1}'.format(_media_key(p), _emb),
+                    level='INFO')
+        except Exception:
+            pass
+        return _emb
     except Exception:
         return []
 
@@ -897,6 +904,12 @@ def merge_embedded(meta, releases):
             if low not in seen:
                 seen.add(low)
                 merged.append(n)
+        try:
+            from resources.lib import kodi_utils as _ku
+            _ku.log('merge_embedded {0}: existing={1} +{2} -> {3}'.format(
+                key, existing, clean, merged), level='INFO')
+        except Exception:
+            pass
         if merged == existing:
             return   # nothing new -- skip the write
         ent['embedded'] = merged
@@ -976,6 +989,14 @@ def label_prefix(src_release, names, embedded=None):
         # the % badge, threshold 80) so it survives small release-name diffs.
         if embedded and src_release:
             emb_best = best_score(src_release, embedded)
+            if emb_best >= 40:
+                try:
+                    from resources.lib import kodi_utils as _ku
+                    _ku.log('built-in check: emb_best={0} src={1!r} emb={2}'
+                            .format(emb_best, src_release, embedded),
+                            level='INFO')
+                except Exception:
+                    pass
             if emb_best >= 80:
                 return '[COLOR FF2ECC71][B]HEB BUILT-IN 101%[/B][/COLOR] | '
         best = best_score(src_release, names)
