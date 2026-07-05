@@ -1038,15 +1038,13 @@ def download(payload):
     try:
         return _download_inner(payload)
     except Exception as e:
-        kodi_utils.log('subs_engine_bridge.download failed: {0}'.format(e),
-                       level='ERROR')
-        # Surface the real reason instead of Kodi's generic "download failed",
-        # so a problem is reportable without digging through the log.
-        try:
-            kodi_utils.notify('הורדה נכשלה ({0}): {1}'.format(
-                (payload.get('source') or '?'), str(e)[:90]), time_ms=6000)
-        except Exception:
-            pass
+        kodi_utils.log('subs_engine_bridge.download failed ({0}): {1}'.format(
+            (payload.get('source') or '?'), e), level='ERROR')
+        # Log only -- no user popup. This fired on every failed provider download,
+        # including background/secondary Ktuvit fetches the server "refuses"
+        # (raising "Ktuvit refused the file...") while the subtitle the user
+        # actually picked loads fine -- which spammed a popup on every playback.
+        # The exact reason is in the ERROR log above for diagnosis.
         return None
 
 
@@ -1072,11 +1070,8 @@ def _download_inner(payload):
     if module is None or not hasattr(module, 'download'):
         kodi_utils.log('subs_engine_bridge: no download() for source '
                        + str(source), level='WARNING')
-        try:
-            kodi_utils.notify('מקור לא נתמך להורדה: {0}'.format(source or '?'),
-                              time_ms=6000)
-        except Exception:
-            pass
+        # Log only (logged above) -- no user popup; this fired during background
+        # resolution too and was just playback noise.
         return None
 
     from resources.lib.subs_engine import general
