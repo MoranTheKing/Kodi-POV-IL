@@ -1,3 +1,11 @@
+v0.2.322
+- Home tiles no longer come back after you delete them: the "one-time" forced
+  restores of favourites tiles (service / personal / full-build) were gated on
+  XML comment markers that Kodi strips whenever favourites are edited, so they
+  re-fired on every update and re-added deleted tiles. They now persist their
+  "already restored once" flag in the JSON sidecar Kodi never touches, so each
+  forced restore fires exactly once ever and deletions are respected forever.
+
 v0.2.321
 - Built-in Hebrew badge: when a source's embedded Hebrew track is detected at
   play, its release is now written through to the local availability cache
