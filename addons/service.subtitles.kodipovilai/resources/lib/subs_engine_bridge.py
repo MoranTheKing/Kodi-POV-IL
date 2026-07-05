@@ -680,10 +680,13 @@ def note_playback_streams(info, streams=None):
             # source row, or an empty release, visible in a single line.
             try:
                 kodi_utils.log(
-                    'embedded-report he={0} rel={1!r} (picked={2!r} '
-                    'tagline={3!r} label={4!r} li={5!r} fp={6!r})'.format(
-                        has_he, _rel, info.get('picked_release', ''),
-                        info.get('tagline', ''), info.get('label', ''),
+                    'embedded-report he={0} rel={1!r} ids(tmdb={2!r} imdb={3!r} '
+                    's={4!r} e={5!r} mt={6!r} isep={7}) (picked={8!r} li={9!r} '
+                    'fp={10!r})'.format(
+                        has_he, _rel, info.get('tmdb_id', ''),
+                        info.get('imdb_id', ''), info.get('season', ''),
+                        info.get('episode', ''), info.get('media_type', ''),
+                        info.get('is_episode', ''), info.get('picked_release', ''),
                         info.get('li_filename', ''), info.get('filepath', '')),
                     level='INFO')
             except Exception:
