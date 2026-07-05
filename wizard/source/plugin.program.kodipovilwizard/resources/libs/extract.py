@@ -198,6 +198,17 @@ def all_with_progress(_in, _out, dp, ignore, title, progress_dialog_bg):
             skip = True
         elif file[0] == 'userdata' and file[1] == 'addon_data' and file[2] in excludes:
             skip = True
+        # Preserve the user's FENtastic home-widget layout across QUICK
+        # UPDATES only (ignore is not None == the quick_update path). The
+        # home widgets are rendered from these script-fentastic-widget_*.xml
+        # files, which FENtastic's widget editor rewrites from the user's
+        # saved skin settings. Overwriting them on every quickfix reverted
+        # the home to our default until the user re-touched a widget. A full
+        # / deliberate (re)install (ignore is None) still lays down defaults.
+        elif (ignore is not None and file[0] == 'addons' and len(file) >= 4
+              and file[1] == 'skin.fentastic' and file[2] == 'xml'
+              and file[-1].startswith('script-fentastic-widget_')):
+            skip = True
         elif file[-1] in CONFIG.LOGFILES:
             skip = True
         elif file[-1] in CONFIG.EXCLUDE_FILES:
