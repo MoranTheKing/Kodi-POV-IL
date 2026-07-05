@@ -1,3 +1,9 @@
+v0.2.327
+- Diagnostics for the built-in Hebrew badge: logs the exact cached built-in list
+  the source screen reads (embedded_names), what merge_embedded writes at play,
+  and the match score per candidate row (built-in check) -- to pinpoint the one
+  source that still isn't flagged despite correct detection.
+
 v0.2.326
 - Built-in Hebrew badge no longer gets wiped by a background refresh: a source's
   built-in-Hebrew flag detected at play was written to the local cache, but the
