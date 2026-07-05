@@ -658,6 +658,13 @@ def note_playback_streams(info, streams=None):
             if has_he:
                 from resources.lib import pool
                 pool.report_embedded(info)
+                try:
+                    from resources.lib import he_sub_match as _hsm
+                    _rel = pool._release_from(info)
+                    if _rel:
+                        _hsm.merge_embedded(info, [_rel])
+                except Exception:
+                    pass
         except Exception:
             pass
     except Exception:
@@ -724,6 +731,13 @@ def embedded_candidates(info):
                for n in streams):
             from resources.lib import pool
             pool.report_embedded(info)
+            try:
+                from resources.lib import he_sub_match as _hsm
+                _rel = pool._release_from(info)
+                if _rel:
+                    _hsm.merge_embedded(info, [_rel])
+            except Exception:
+                pass
     except Exception:
         pass
     out = []
