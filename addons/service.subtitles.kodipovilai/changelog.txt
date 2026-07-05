@@ -1,3 +1,12 @@
+v0.2.326
+- Built-in Hebrew badge no longer gets wiped by a background refresh: a source's
+  built-in-Hebrew flag detected at play was written to the local cache, but the
+  next availability warm overwrote the whole cache entry with the pool's list --
+  which didn't have that release yet -- erasing the just-detected flag (so the
+  source you played kept showing a % instead of BUILT-IN). The warm now UNIONS
+  the built-in list with what's already cached instead of replacing it, since a
+  built-in track is a permanent fact. Added media-id fields to the diagnostic log.
+
 v0.2.325
 - No more recurring "הורדה נכשלה (ktuvit)" popup during playback. When Ktuvit
   "refuses" a single background/secondary download (its rate-limit "request not
