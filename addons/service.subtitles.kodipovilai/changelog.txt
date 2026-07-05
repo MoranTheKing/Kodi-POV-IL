@@ -1,3 +1,10 @@
+v0.2.321
+- Built-in Hebrew badge: when a source's embedded Hebrew track is detected at
+  play, its release is now written through to the local availability cache
+  immediately (merge_embedded), so the source screen flags it "HEB BUILT-IN
+  101%" the moment you go back -- instead of only after the next background
+  warm re-read the pool. The pool report still propagates it to everyone else.
+
 v0.2.320
 - Maintenance and stability improvements.
 - Hebrew-availability %: fixed the two real causes the first-entry % was still
