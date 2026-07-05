@@ -1,3 +1,10 @@
+v0.2.325
+- No more recurring "הורדה נכשלה (ktuvit)" popup during playback. When Ktuvit
+  "refuses" a single background/secondary download (its rate-limit "request not
+  found" response), the subtitle you actually picked still loads -- but the
+  failure was still popping a notification every time. It's now logged only (the
+  exact reason stays in the log). Same for the rare "unsupported source" popup.
+
 v0.2.324
 - Built-in Hebrew badge: wider detection + diagnostics. Embedded tracks labelled
   with a descriptive name ("Hebrew SDH", "Forced Hebrew") or Hebrew script
