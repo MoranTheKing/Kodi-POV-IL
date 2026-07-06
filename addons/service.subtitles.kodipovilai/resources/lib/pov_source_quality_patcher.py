@@ -1,24 +1,29 @@
-# Fix "a source whose NAME says 1080p is shown with an SD badge" in POV's
-# source-results window.
+# Fix "a source whose NAME says 1080p is shown with an SD badge" -- AND keep the
+# list ordered by quality then size -- in POV's source-results window.
 #
-# Why it happens (stock POV, verified): in POV the quality badge is derived from
-# a scraper-supplied `name_info` field (or the stripped URL), NOT from the
-# release name shown on the row. When a provider gives a display name containing
+# Why it happens (stock POV, verified): POV derives the quality badge from a
+# scraper-supplied `name_info` field (or the stripped URL), NOT from the release
+# name shown on the row. When a provider gives a display name containing
 # "1080p"/"2160p"/"720p" but a name_info/URL without a resolution token,
 # get_release_quality returns 'SD', so the row shows the 1080p name with an SD
-# badge. Toggling scraper settings can't change this -- it's how POV classifies.
+# badge. POV then SORTS the whole list by that stored quality upstream
+# (modules/sources.py sort_results), so a misclassified row is also mis-sorted
+# -- e.g. a genuinely-1080p release sits down among the SD rows.
 #
-# Fix: patch windows/sources.py::make_items so, at the TOP of each row, when the
-# stored quality is SD/empty we re-run POV's OWN get_release_quality against the
-# visible name (URLName/name) and upgrade item['quality'] only to a real
-# resolution (4K/1080p/720p). This is upgrade-only -- it can never downgrade a
-# row or invent a quality the name doesn't contain -- and every downstream
-# reader in make_items (badge icon, colour, quality text) picks up item.
+# Fix: patch windows/sources.py::make_items to, once per window BEFORE the row
+# loop: (1) for every result whose stored quality is SD/empty, re-derive it from
+# the visible name (URLName/name) with POV's OWN get_release_quality and upgrade
+# ONLY to a real resolution (4K/1080p/720p) -- upgrade-only, never downgrades or
+# invents a quality the name lacks; then (2) re-order self.results by quality
+# high->low, then size (GB) high->low, matching POV's default "Quality, Size"
+# order -- so the corrected rows land in the right group instead of stuck in the
+# SD block. Every downstream reader (badge icon, colour, quality text) then
+# reflects the corrected, correctly-ordered list.
 #
-# Anchored on the same row-loop line the subtitle-match patcher already uses, so
-# it is proven to exist in the installed POV. Idempotent (reverts its own marker
-# first), marker-gated, and compile()-checked before writing so it can never
-# break POV. POV also wraps each row build in try/except as a backstop.
+# Inserted just before the same row-loop line the subtitle-match patcher relies
+# on, so it is proven to exist in the installed POV. Idempotent (reverts its own
+# marker first), marker-gated, and compile()-checked before writing so it can
+# never break POV. POV also wraps each row build in try/except as a backstop.
 
 import os
 import re
@@ -36,10 +41,10 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 SOURCES_REL_PATH = 'resources/lib/windows/sources.py'
-MARKER = 'AI_SUBS_QUALITY_FIX_v1'
+MARKER = 'AI_SUBS_QUALITY_FIX_v2'
 
-# The for-loop that builds each source row (insert our block as its first body
-# statements). Same anchor the subtitle-match patcher relies on.
+# The for-loop that builds each source row (insert our block just before it).
+# Same anchor the subtitle-match patcher relies on.
 _LOOP_RE = re.compile(
     r'^(?P<indent>[ \t]*)for count, item in enumerate\(self\.results, 1\):[ \t]*$',
     re.MULTILINE,
@@ -71,21 +76,26 @@ def _sources_path():
     return p if os.path.isfile(p) else ''
 
 
-def _block(body_indent, eol):
-    # body_indent = the loop body's indent (loop indent + one tab). Inner lines
-    # nest with additional tabs, matching POV's tab-indented sources.
+def _block(indent, eol):
+    # indent = the for-loop's own indent (our block is a sibling statement placed
+    # just before it). Inner lines nest with tabs, matching POV's tab-indented
+    # sources. Upgrades SD rows from their visible name, then re-orders the whole
+    # result list by quality high->low, then size (GB) high->low.
     t = '\t'
     raw = [
         '# ' + MARKER,
         'try:',
-        t + "if (item.get('quality') or 'SD').upper() == 'SD':",
-        t + t + 'from modules.source_utils import get_release_quality as _aq_grq',
-        t + t + "_aq_nm = item.get('URLName') or item.get('name') or ''",
-        t + t + "_aq_q = _aq_grq(_aq_nm) if _aq_nm else ''",
-        t + t + "if _aq_q in ('4K', '1080p', '720p'): item['quality'] = _aq_q",
+        t + 'from modules.source_utils import get_release_quality as _aq_grq',
+        t + "_aq_rank = {'4K': 0, '1080p': 1, '720p': 2, 'SD': 3}",
+        t + 'for _aq_it in self.results:',
+        t + t + "if (_aq_it.get('quality') or 'SD').upper() == 'SD':",
+        t + t + t + "_aq_nm = _aq_it.get('URLName') or _aq_it.get('name') or ''",
+        t + t + t + "_aq_q = _aq_grq(_aq_nm) if _aq_nm else ''",
+        t + t + t + "if _aq_q in ('4K', '1080p', '720p'): _aq_it['quality'] = _aq_q",
+        t + "self.results.sort(key=lambda _aq_i: (_aq_rank.get((_aq_i.get('quality') or 'SD'), 3), -float(_aq_i.get('size') or 0)))",
         'except Exception: pass',
     ]
-    return ''.join(body_indent + ln + eol for ln in raw)
+    return ''.join(indent + ln + eol for ln in raw)
 
 
 def ensure_patched():
@@ -111,13 +121,9 @@ def ensure_patched():
     if not m:
         _log('row loop not found -- skipping', level='WARNING')
         return 'unmatched'
-    body_indent = m.group('indent') + '\t'
-    # Insert right after the for-line's line ending, as the first body stmts.
-    nl = content.find('\n', m.end())
-    if nl == -1:
-        return 'unmatched'
-    insert_at = nl + 1
-    content = content[:insert_at] + _block(body_indent, eol) + content[insert_at:]
+    indent = m.group('indent')
+    # Insert our block as a sibling statement right before the row loop.
+    content = content[:m.start()] + _block(indent, eol) + content[m.start():]
 
     # SAFETY: never write a file that doesn't compile.
     try:

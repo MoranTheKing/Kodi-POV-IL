@@ -2235,11 +2235,13 @@ def _maybe_patch_pov_subtitle_match():
 
 def _maybe_patch_pov_source_quality():
     """Fix a source whose NAME reads 1080p/2160p/720p being shown with an SD
-    badge. POV classifies quality from a scraper `name_info` field (or the URL),
-    not from the visible name, so a well-named release can still land on SD. The
-    patcher re-derives quality from the visible name via POV's own
-    get_release_quality and upgrades the row ONLY to a real resolution --
-    upgrade-only, compile-checked, revertible."""
+    badge, and keep the list ordered by quality then size. POV classifies quality
+    from a scraper `name_info` field (or the URL), not from the visible name, and
+    then SORTS by that value -- so a well-named release lands on SD and is also
+    mis-sorted among the SD rows. The patcher re-derives quality from the visible
+    name via POV's own get_release_quality (upgrade-only, to real resolutions)
+    and re-orders the results by quality high->low then size high->low.
+    Compile-checked and revertible."""
     try:
         from resources.lib import pov_source_quality_patcher, kodi_utils
     except Exception:
