@@ -969,7 +969,7 @@ def best_score(src_release, names):
         return 0
 
 
-def label_prefix(src_release, names, embedded=None):
+def label_prefix(src_release, names, embedded=None, alt_release=''):
     """A small coloured prefix for the START of the source's info line, or ''
     when there's no usable match.
 
@@ -987,14 +987,21 @@ def label_prefix(src_release, names, embedded=None):
         # Embedded Hebrew = best possible: it's already in the file. We treat a
         # high token overlap with a flagged release as a match (same scorer as
         # the % badge, threshold 80) so it survives small release-name diffs.
-        if embedded and src_release:
-            emb_best = best_score(src_release, embedded)
+        # Score against BOTH the row's URLName (src_release) AND its name
+        # (alt_release) and take the max: the flag is stored at play from the
+        # 'name' field (via picked_release/_release_from) while the row is
+        # displayed/scored by URLName, and POV makes those two fields differ --
+        # so matching either identifier is what lets a just-played release light
+        # up BUILT-IN instead of dropping to the % badge.
+        if embedded and (src_release or alt_release):
+            emb_best = max(best_score(src_release, embedded),
+                           best_score(alt_release, embedded))
             if emb_best >= 40:
                 try:
                     from resources.lib import kodi_utils as _ku
-                    _ku.log('built-in check: emb_best={0} src={1!r} emb={2}'
-                            .format(emb_best, src_release, embedded),
-                            level='INFO')
+                    _ku.log('built-in check: emb_best={0} src={1!r} alt={2!r} '
+                            'emb={3}'.format(emb_best, src_release, alt_release,
+                                             embedded), level='INFO')
                 except Exception:
                     pass
             if emb_best >= 80:
