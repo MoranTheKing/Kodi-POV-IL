@@ -113,6 +113,45 @@ def _wait_until_idle(timeout=120):
     return True
 
 
+def _capture_home_focus():
+    # Best-effort snapshot of the focused home control + its item position.
+    # Disabling/enabling POV rebuilds every POV-backed home widget/tile, which
+    # otherwise dumps the user back on the FIRST tile; we restore this afterward.
+    try:
+        if not xbmc.getCondVisibility('Window.IsVisible(home)'):
+            return None
+        cid = (xbmc.getInfoLabel('System.CurrentControlId') or '').strip()
+        if not cid or cid == '0':
+            return None
+        pos = (xbmc.getInfoLabel('Container(%s).Position' % cid) or '').strip()
+        return (cid, pos)
+    except Exception:
+        return None
+
+
+def _restore_home_focus(saved):
+    if not saved or xbmc is None:
+        return
+    cid, pos = saved
+    try:
+        monitor = xbmc.Monitor()
+        # Wait (bounded) for home + that container to repopulate after the cycle.
+        for _ in range(20):
+            if monitor.waitForAbort(0.5):
+                return
+            if not xbmc.getCondVisibility('Window.IsVisible(home)'):
+                continue
+            n = (xbmc.getInfoLabel('Container(%s).NumItems' % cid) or '').strip()
+            if n and n != '0':
+                break
+        cmd = ('SetFocus(%s,%s)' % (cid, pos)) if pos else ('SetFocus(%s)' % cid)
+        xbmc.executebuiltin(cmd)
+        _log('restored home focus -> control %s item %s' % (cid, pos),
+             level='INFO')
+    except Exception:
+        pass
+
+
 def _deferred_cycle():
     if not _wait_until_idle():
         _log('aborted before cycle', level='WARNING')
@@ -124,6 +163,7 @@ def _deferred_cycle():
             return
     except Exception:
         pass
+    saved_focus = _capture_home_focus()
     try:
         _set_enabled(False)
         try:
@@ -146,6 +186,7 @@ def _deferred_cycle():
              level='INFO')
         if not ok:
             _set_enabled(True)
+        _restore_home_focus(saved_focus)
     except Exception as e:
         _log('cycle failed: {0}'.format(e), level='WARNING')
         try:
