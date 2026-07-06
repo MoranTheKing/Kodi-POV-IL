@@ -1,3 +1,11 @@
+v0.2.328
+- Fixed POV getting STUCK when you press BACK on the "Resume / Play from
+  beginning" prompt (all skins - NOX/Estuary/FENtastic/AF3). Picking a source
+  for a mid-watched title opens a modal resolving window; POV's player showed
+  the resume prompt over it, and pressing BACK ('cancel') returned WITHOUT
+  closing that window - so the UI froze and needed a full Kodi restart. The
+  cancel path now closes the dialog(s) first (self-healing POV patcher).
+
 v0.2.327
 - Diagnostics for the built-in Hebrew badge: logs the exact cached built-in list
   the source screen reads (embedded_names), what merge_embedded writes at play,
