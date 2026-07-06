@@ -169,6 +169,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_movie_networks,
         _maybe_patch_pov_view_mode,
         _maybe_patch_pov_resume_cancel,
+        _maybe_patch_pov_scraper_settings,
         _maybe_patch_af3_home,
         _maybe_cleanup_wizard,
         _maybe_patch_pov_repeat_timer,
@@ -924,6 +925,38 @@ def _maybe_patch_pov_resume_cancel():
         try:
             kodi_utils.log(
                 'pov_resume_cancel_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_scraper_settings():
+    """One-time tune of POV's scraper settings to match a clean POV: turn OFF
+    include_prerelease_results (CAM/SCR/TELE) and include_3d_results -- the two
+    options that flood our source list with junk a clean POV hides -- and turn
+    provider.piratebay back ON (a default-ON provider the build left off, which
+    reduced source counts). Applied once, only where the value still differs, so
+    a user who later changes any of these keeps their choice."""
+    try:
+        from resources.lib import pov_scraper_settings_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_scraper_settings_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_scraper_settings_patcher: aligned POV scraper settings '
+                'with a clean POV (pre-release/3D off, piratebay on)',
+                level='INFO')
+        elif status in ('already', 'no_pov', 'unchanged'):
+            pass
+        else:
+            kodi_utils.log(
+                'pov_scraper_settings_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_scraper_settings_patcher failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass

@@ -1,3 +1,15 @@
+v0.2.330
+- Source list now matches a clean POV: the build shipped POV with
+  "Include Pre-Release Results" (CAM/SCR/TELE) and "Include 3D Results" turned
+  ON, which flooded the results with low-quality rows a clean POV hides -- this
+  is the "lots of SD in our build vs clean POV" report. Both are now turned OFF,
+  and the default-ON "piratebay" provider (which the build had left off,
+  reducing source counts) is turned back ON. Applied once, only where the value
+  still differs, so any manual change you make afterwards is kept. The foreign/
+  single-audio filter is deliberately left off so Hebrew-audio releases are not
+  dropped. The 4K/1080p/720p labels themselves were never wrong -- POV derives
+  them by regex from the release name, identical code on a clean POV and here.
+
 v0.2.329
 - Built-in Hebrew badge now matches reliably: a source's built-in flag is stored
   at play from the file's 'name', but the source row is scored by its 'URLName'
