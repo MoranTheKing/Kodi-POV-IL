@@ -1,28 +1,24 @@
-# One-time tune of plugin.video.pov's scraper settings so the build's shipped
-# defaults match how a clean POV behaves.
+# One-time tune of plugin.video.pov's scraper settings for the build.
 #
-# Background: the build ships a POV userdata settings.xml that turns ON a few
-# options a clean POV keeps OFF. Two of them flood the source list with junk
-# that a clean POV hides, which is exactly the "our build shows a pile of SD
-# while clean POV looks filtered" report:
-#   * include_prerelease_results = true  -> CAM/SCR/TELE (pre-release) sources
-#   * include_3d_results         = true  -> 3D sources
-# and one that REDUCES sources vs a clean install:
-#   * provider.piratebay         = false -> a default-ON provider left off
+# The build owner WANTS pre-release (CAM/SCR/TELE) and 3D results included by
+# default, so this restores both to ON. It also turns the default-ON
+# "piratebay" provider back on (the build's userdata left it off, which reduced
+# source counts). v1 of this patcher briefly turned pre-release/3D off; v2
+# restores them, and because the marker version changed it re-applies on any
+# device that got v1.
 #
-# The source quality label itself is NOT the problem: POV derives 4K/1080p/720p
-# from a regex on the release name (source_utils.get_release_quality) -- the
-# exact same code on a clean POV and on ours, so a genuine 4K release is still
-# labelled 4K here. The extra "SD" rows are extra (lower-quality/unlabelled)
-# sources these settings surface. Turning the two junk options off and piratebay
-# back on brings the list in line with a clean POV.
+# NOTE: this does NOT affect the "1080p-named source shown as SD" report. POV
+# derives 4K/1080p/720p by regex on the release name
+# (source_utils.get_release_quality) -- the same code on a clean POV and here --
+# so these settings do not change how a source is labelled, only which sources
+# appear. That display report is tracked separately.
 #
 # We deliberately DO NOT touch filter.foreign.single.audio (the build keeps it
 # off on purpose so Hebrew / foreign-audio releases are not dropped).
 #
-# Applied ONCE, gated by a marker in our own settings, and only where the value
-# still differs -- so a user who later changes any of these keeps their choice.
-# If POV is not installed yet we skip WITHOUT marking done, so it retries.
+# Applied once per marker version, only where the value still differs -- so a
+# user who later changes any of these keeps their choice. If POV is not
+# installed yet we skip WITHOUT marking done, so it retries.
 
 try:
     import xbmcaddon
@@ -37,12 +33,12 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 TUNE_FLAG = '_pov_scraper_tune'
-TUNE_VERSION = 'v1'
+TUNE_VERSION = 'v2'
 
 # id -> desired value ('true'/'false' as POV stores bools).
 DESIRED = (
-    ('include_prerelease_results', 'false'),
-    ('include_3d_results', 'false'),
+    ('include_prerelease_results', 'true'),
+    ('include_3d_results', 'true'),
     ('provider.piratebay', 'true'),
 )
 
