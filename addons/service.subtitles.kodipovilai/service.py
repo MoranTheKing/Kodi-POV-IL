@@ -2233,6 +2233,39 @@ def _maybe_patch_pov_subtitle_match():
             pass
 
 
+def _maybe_patch_pov_source_quality():
+    """Fix a source whose NAME reads 1080p/2160p/720p being shown with an SD
+    badge. POV classifies quality from a scraper `name_info` field (or the URL),
+    not from the visible name, so a well-named release can still land on SD. The
+    patcher re-derives quality from the visible name via POV's own
+    get_release_quality and upgrades the row ONLY to a real resolution --
+    upgrade-only, compile-checked, revertible."""
+    try:
+        from resources.lib import pov_source_quality_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_source_quality_patcher.ensure_patched()
+        if status in ('patched', 'unmatched', 'compile_failed',
+                      'write_failed', 'read_failed'):
+            kodi_utils.log('pov_source_quality_patcher: ' + status,
+                           level=('INFO' if status == 'patched' else 'WARNING'))
+        # Cycle POV so its reuse-language-invoker interpreter re-imports the
+        # patched window this session.
+        if status == 'patched':
+            try:
+                from resources.lib import pov_reload
+                pov_reload.note_patched()
+            except Exception:
+                pass
+    except Exception as e:
+        try:
+            kodi_utils.log('pov_source_quality_patcher failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_source_name():
     """Self-healing patch of POV's sources.py so that when POV picks
     a source from the source-select dialog (the one with cached/
@@ -3819,6 +3852,11 @@ def main():
     # (skin-agnostic: prepends to a property shown in every layout). Gated by
     # show_subtitle_match (default on); compile-checked so it can't break POV.
     _maybe_patch_pov_subtitle_match()
+
+    # Fix source rows whose NAME says 1080p/2160p/720p but POV labelled SD
+    # (POV classifies from name_info/URL, not the visible name). Upgrade-only,
+    # same source-results window, compile-checked so it can't break POV.
+    _maybe_patch_pov_source_quality()
 
     # Fire the Hebrew-availability warm at the START of the source scrape (in
     # source_select), so the % is ready on the FIRST entry for OS/Ktuvit titles.
