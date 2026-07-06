@@ -168,6 +168,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_combined_discover,
         _maybe_patch_pov_movie_networks,
         _maybe_patch_pov_view_mode,
+        _maybe_patch_pov_resume_cancel,
         _maybe_patch_af3_home,
         _maybe_cleanup_wizard,
         _maybe_patch_pov_repeat_timer,
@@ -892,6 +893,37 @@ def _maybe_patch_pov_view_mode():
         try:
             kodi_utils.log(
                 'pov_view_mode_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_resume_cancel():
+    """Fix POV's 'stuck on BACK at the Resume/Restart prompt' (all skins): when
+    you pick a source for a mid-watched title, POVPlayer.run() shows the resume
+    prompt while a modal resolving window is open; pressing BACK returned
+    'cancel' and run() returned WITHOUT closing that window -> UI stuck until a
+    full Kodi restart. The cancel path now closes the dialog(s) first.
+    Idempotent, compile-checked, revertible."""
+    try:
+        from resources.lib import pov_resume_cancel_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_resume_cancel_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_resume_cancel_patcher: BACK on the resume prompt no longer '
+                'hangs', level='INFO')
+        elif status in ('no_file', 'already_patched'):
+            pass
+        else:
+            kodi_utils.log(
+                'pov_resume_cancel_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_resume_cancel_patcher failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
