@@ -1,3 +1,10 @@
+v0.2.331
+- Reverted the 0.2.330 change per request: "Include Pre-Release Results"
+  (CAM/SCR/TELE) and "Include 3D Results" are restored to ON. The default-ON
+  "piratebay" provider stays ON (more sources). This does NOT touch the
+  separate "1080p-named source shown as SD" report, which is a display issue
+  tracked on its own.
+
 v0.2.330
 - Source list now matches a clean POV: the build shipped POV with
   "Include Pre-Release Results" (CAM/SCR/TELE) and "Include 3D Results" turned
