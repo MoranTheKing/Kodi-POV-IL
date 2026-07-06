@@ -1,3 +1,13 @@
+v0.2.334
+- Quality fix now also keeps the ORDER correct. Because POV sorts the source
+  list by its stored quality (upstream), a row we upgrade from SD to 1080p would
+  otherwise stay stuck in the SD region (a "1080P" badge sitting below an "SD"
+  row). The patcher now, once per window, upgrades the mislabelled rows AND
+  re-orders the whole list by quality high->low then size (GB) high->low --
+  matching the default "Quality, Size" order -- so 4K first, then 1080p (GB
+  descending), 720p, then SD, with no SD stranded among the 1080p rows and no
+  720p above 1080p.
+
 v0.2.333
 - Quality badge fix: a source whose NAME clearly reads 1080p/2160p/720p is no
   longer shown with an SD badge. POV derives the badge from a scraper-supplied
