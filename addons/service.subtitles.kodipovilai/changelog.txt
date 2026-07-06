@@ -1,3 +1,13 @@
+v0.2.333
+- Quality badge fix: a source whose NAME clearly reads 1080p/2160p/720p is no
+  longer shown with an SD badge. POV derives the badge from a scraper-supplied
+  name_info field (or the URL), not from the release name on the row, so a
+  well-named release could still land on SD. A new patcher re-checks the visible
+  name with POV's own get_release_quality and upgrades the row ONLY to a real
+  resolution (4K/1080p/720p) -- upgrade-only, it can never downgrade a row or
+  invent a quality the name doesn't contain. Same source-results window as the
+  Hebrew-match badge, compile-checked so it can't break POV.
+
 v0.2.332
 - Estuary home no longer jumps to the FIRST tile after the startup refresh.
   Root cause: the focus-restore captured the on-screen SLOT via
