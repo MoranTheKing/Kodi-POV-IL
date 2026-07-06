@@ -1,3 +1,12 @@
+v0.2.332
+- Estuary home no longer jumps to the FIRST tile after the startup refresh.
+  Root cause: the focus-restore captured the on-screen SLOT via
+  Container(id).Position, which on Estuary's home is a fixedlist pinned to
+  slot 0 -- so it always reported "0" and restored focus to the first tile.
+  It now captures the ABSOLUTE selected index (Container(id).CurrentItem) and
+  restores with SetFocus(...,absolute), which round-trips correctly on
+  Estuary's fixedlist as well as regular lists/panels on FENtastic/NOX.
+
 v0.2.331
 - Reverted the 0.2.330 change per request: "Include Pre-Release Results"
   (CAM/SCR/TELE) and "Include 3D Results" are restored to ON. The default-ON

@@ -123,7 +123,13 @@ def _capture_home_focus():
         cid = (xbmc.getInfoLabel('System.CurrentControlId') or '').strip()
         if not cid or cid == '0':
             return None
-        pos = (xbmc.getInfoLabel('Container(%s).Position' % cid) or '').strip()
+        # Use CurrentItem (1-based ABSOLUTE index), not Position. Position is the
+        # on-screen SLOT, which on Estuary's home fixedlist (focusposition=0) is
+        # pinned to "0" regardless of the selected tile -- so restoring by
+        # Position always snapped focus back to the first tile. SetFocus expects
+        # a 0-based absolute index, so convert CurrentItem (1-based) to 0-based.
+        cur = (xbmc.getInfoLabel('Container(%s).CurrentItem' % cid) or '').strip()
+        pos = str(int(cur) - 1) if cur.isdigit() and int(cur) > 0 else ''
         return (cid, pos)
     except Exception:
         return None
@@ -144,7 +150,10 @@ def _restore_home_focus(saved):
             n = (xbmc.getInfoLabel('Container(%s).NumItems' % cid) or '').strip()
             if n and n != '0':
                 break
-        cmd = ('SetFocus(%s,%s)' % (cid, pos)) if pos else ('SetFocus(%s)' % cid)
+        # Restore by ABSOLUTE index so it round-trips on Estuary's home
+        # fixedlist (where the on-screen slot is pinned) as well as regular
+        # lists/panels on FENtastic/NOX.
+        cmd = ('SetFocus(%s,%s,absolute)' % (cid, pos)) if pos else ('SetFocus(%s)' % cid)
         xbmc.executebuiltin(cmd)
         _log('restored home focus -> control %s item %s' % (cid, pos),
              level='INFO')
