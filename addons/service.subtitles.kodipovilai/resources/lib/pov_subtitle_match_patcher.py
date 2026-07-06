@@ -29,7 +29,7 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 SOURCES_REL_PATH = 'resources/lib/windows/sources.py'
-MARKER = 'AI_SUBS_MATCH_v3'
+MARKER = 'AI_SUBS_MATCH_v4'
 
 # The for-loop that builds each source row (insert SETUP just before it).
 _LOOP_RE = re.compile(
@@ -129,7 +129,8 @@ def ensure_patched():
     si = s.group('indent')
     wrapped = (si + "set_property('tikiskins.size_label', "
                "(_sm_m.label_prefix((get('URLName') or get('name') or ''), "
-               "_sm_names, _sm_emb) if _sm_m else '') + get('size_label', 'N/A'))")
+               "_sm_names, _sm_emb, (get('name') or '')) if _sm_m else '') "
+               "+ get('size_label', 'N/A'))")
     content = content[:s.start()] + wrapped + content[s.end():]
 
     # SAFETY: never write a file that doesn't compile.
