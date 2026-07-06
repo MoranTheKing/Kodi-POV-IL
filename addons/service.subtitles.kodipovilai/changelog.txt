@@ -1,3 +1,14 @@
+v0.2.329
+- Built-in Hebrew badge now matches reliably: a source's built-in flag is stored
+  at play from the file's 'name', but the source row is scored by its 'URLName'
+  (POV makes those differ), so a just-played release could drop to "HEB NN%"
+  instead of "HEB BUILT-IN 101%". The badge now scores the row against BOTH
+  identifiers and takes the best, so it lights up whichever field matched.
+- Home screen no longer jumps back to the FIRST tile after the startup refresh:
+  applying POV patches cycles POV (disable/enable), which rebuilds the home tiles
+  and lost your focused tile. Your focused tile is now captured before the cycle
+  and restored after it.
+
 v0.2.328
 - Fixed POV getting STUCK when you press BACK on the "Resume / Play from
   beginning" prompt (all skins - NOX/Estuary/FENtastic/AF3). Picking a source
