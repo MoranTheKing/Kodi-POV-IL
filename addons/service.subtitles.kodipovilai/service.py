@@ -1701,6 +1701,19 @@ def _autosub_on_play():
     except Exception:
         return
 
+    # Honor the one-shot 'skip_autosub' marker on Window(10000): set when the
+    # item being played is already in the target language, so our auto-on-play
+    # search must NOT run for it -- same guard as default.py::_handle_search. We
+    # do NOT clear the prop here (the search-path guard clears it / it expires at
+    # 90s), so both paths still see it fresh.
+    try:
+        import xbmcgui
+        _sa = xbmcgui.Window(10000).getProperty('skip_autosub')
+        if _sa and (time.time() - float(_sa)) < 90:
+            return
+    except Exception:
+        pass
+
     if _AUTOSUB_STATE['busy']:
         return
     _AUTOSUB_STATE['busy'] = True
