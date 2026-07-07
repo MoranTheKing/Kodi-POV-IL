@@ -24,6 +24,11 @@
 # lacks; genuine-SD names stay SD. Every downstream reader (badge icon, colour,
 # quality text) reflects the corrected list.
 #
+# Rows flagged with a truthy '_pin_top' (sources that must always stay at the
+# top, e.g. built-in-language sources) are kept at the top and are exempt from
+# the upgrade, the filter-drop, and the quality/size re-sort -- they retain
+# their original order.
+#
 # Inserted just before the same row-loop line the subtitle-match patcher relies
 # on, so it is proven to exist in the installed POV. Idempotent (reverts its own
 # marker first), marker-gated, and compile()-checked before writing so it can
@@ -45,7 +50,7 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 SOURCES_REL_PATH = 'resources/lib/windows/sources.py'
-MARKER = 'AI_SUBS_QUALITY_FIX_v3'
+MARKER = 'AI_SUBS_QUALITY_FIX_v4'
 
 # The for-loop that builds each source row (insert our block just before it).
 # Same anchor the subtitle-match patcher relies on.
@@ -109,6 +114,8 @@ def _block(indent, eol):
         t + t + '_aq_allow = None',
         t + '_aq_new = []',
         t + 'for _aq_it in self.results:',
+        t + t + "if _aq_it.get('_pin_top'):",
+        t + t + t + '_aq_new.append(_aq_it); continue',
         t + t + "if (_aq_it.get('quality') or 'SD').upper() == 'SD':",
         t + t + t + "_aq_nm = _aq_it.get('URLName') or _aq_it.get('name') or ''",
         t + t + t + "_aq_q = _aq_grq(_aq_nm) if _aq_nm else ''",
@@ -119,7 +126,7 @@ def _block(indent, eol):
         t + t + t + t + t + 'continue',
         t + t + '_aq_new.append(_aq_it)',
         t + 'self.results[:] = _aq_new',
-        t + "self.results.sort(key=lambda _aq_i: (_aq_rank.get((_aq_i.get('quality') or 'SD'), 3), -float(_aq_i.get('size') or 0)))",
+        t + "self.results.sort(key=lambda _aq_i: (0, 0, 0.0) if _aq_i.get('_pin_top') else (1, _aq_rank.get((_aq_i.get('quality') or 'SD'), 3), -float(_aq_i.get('size') or 0)))",
         'except Exception: pass',
     ]
     return ''.join(indent + ln + eol for ln in raw)
