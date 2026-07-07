@@ -1,3 +1,15 @@
+v0.2.340
+- Fixed empty "My Movies / My Series" home tiles (TMDB / Trakt / POV). The
+  tiles invoked POV plugin actions that POV doesn't have (trakt_my_tvshows,
+  tmdb_my_tvshows, favorites_tvshows, and the movie equivalents), so they opened
+  EMPTY while POV's own menu was full. Corrected to POV's real actions
+  (trakt->trakt_collection, TMDB->tmdb_favorite, POV->favourites_tvshows/
+  favourites_movies), for both movies and shows. The patcher now also REPAIRS an
+  already-broken tile in place (previous versions treated the wrong action as
+  "present" and never fixed it); correct and user-customised tiles are left
+  untouched, and no duplicate tiles are created. The seed fixture was corrected
+  too so fresh restores are right.
+
 v0.2.339
 - Fixed a crash when adding a search result to a list (TMDB/Trakt/MDBList/
   favourites). The add-refresh introduced earlier re-ran the OPEN container
