@@ -106,7 +106,7 @@ MEDIA = (
         # to find the tile and to test "has TMDB tile already".
         'tmdb_pattern': re.compile(
             r'<favourite\s[^>]*?name="\[B\]הסדרות שלי \(TMDB\)\[/B\]"[^>]*>'
-            r'(?:(?!</favourite>).)*?action=tmdb_(?:favorites|my_tvshows)'
+            r'(?:(?!</favourite>).)*?action=tmdb_(?:favorite|favorites|my_tvshows)'
             r'(?:(?!</favourite>).)*?mode=build_tvshow_list'
             r'(?:(?!</favourite>).)*?</favourite>',
             re.DOTALL,
@@ -126,7 +126,7 @@ MEDIA = (
             'thumb="special://home/media/build_icons/Twilight/Shows/'
             'My_Shows_TMDB.png">'
             'ActivateWindow(10025,"plugin://plugin.video.pov/?'
-            'action=tmdb_my_tvshows&amp;iconImage=special%3a%2f%2fhome%2f'
+            'action=tmdb_favorite&amp;iconImage=special%3a%2f%2fhome%2f'
             'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
             'media%2ftmdb.png&amp;mode=build_tvshow_list&amp;'
             'name=TV%20Show%20Favorites",return)</favourite>'
@@ -138,7 +138,7 @@ MEDIA = (
             'thumb="special://home/media/build_icons/Twilight/Shows/'
             'My_Shows.png">'
             'ActivateWindow(10025,"plugin://plugin.video.pov/?'
-            'action=trakt_my_tvshows&amp;iconImage=special%3a%2f%2fhome%2f'
+            'action=trakt_collection&amp;iconImage=special%3a%2f%2fhome%2f'
             'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
             'media%2ftrakt.png&amp;mode=build_tvshow_list&amp;'
             'name=TV%20Shows",return)</favourite>'
@@ -149,7 +149,7 @@ MEDIA = (
         # without depending on any external service.
         'pov_pattern': re.compile(
             r'<favourite\s[^>]*?name="\[B\]הסדרות שלי \(POV\)\[/B\]"[^>]*>'
-            r'(?:(?!</favourite>).)*?action=favorites_tvshows'
+            r'(?:(?!</favourite>).)*?action=favou?rites_tvshows'
             r'(?:(?!</favourite>).)*?mode=build_tvshow_list'
             r'(?:(?!</favourite>).)*?</favourite>',
             re.DOTALL,
@@ -159,7 +159,7 @@ MEDIA = (
             'thumb="special://home/media/build_icons/Twilight/Shows/'
             'My_Shows_POV.png">'
             'ActivateWindow(10025,"plugin://plugin.video.pov/?'
-            'action=favorites_tvshows&amp;iconImage=special%3a%2f%2fhome%2f'
+            'action=favourites_tvshows&amp;iconImage=special%3a%2f%2fhome%2f'
             'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
             'media%2ffavorites.png&amp;mode=build_tvshow_list&amp;'
             'name=TV%20Show%20Favorites%20(POV)",return)</favourite>'
@@ -171,7 +171,7 @@ MEDIA = (
         'mode': 'build_movie_list',
         'tmdb_pattern': re.compile(
             r'<favourite\s[^>]*?name="\[B\]הסרטים שלי \(TMDB\)\[/B\]"[^>]*>'
-            r'(?:(?!</favourite>).)*?action=tmdb_(?:favorites|my_movies)'
+            r'(?:(?!</favourite>).)*?action=tmdb_(?:favorite|favorites|my_movies)'
             r'(?:(?!</favourite>).)*?mode=build_movie_list'
             r'(?:(?!</favourite>).)*?</favourite>',
             re.DOTALL,
@@ -188,7 +188,7 @@ MEDIA = (
             'thumb="special://home/media/build_icons/Twilight/Movies/'
             'My_Movies_TMDB.png">'
             'ActivateWindow(10025,"plugin://plugin.video.pov/?'
-            'action=tmdb_my_movies&amp;iconImage=special%3a%2f%2fhome%2f'
+            'action=tmdb_favorite&amp;iconImage=special%3a%2f%2fhome%2f'
             'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
             'media%2ftmdb.png&amp;mode=build_movie_list&amp;'
             'name=Movie%20Favorites",return)</favourite>'
@@ -198,14 +198,14 @@ MEDIA = (
             'thumb="special://home/media/build_icons/Twilight/Movies/'
             'My_Movies.png">'
             'ActivateWindow(10025,"plugin://plugin.video.pov/?'
-            'action=trakt_my_movies&amp;iconImage=special%3a%2f%2fhome%2f'
+            'action=trakt_collection&amp;iconImage=special%3a%2f%2fhome%2f'
             'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
             'media%2ftrakt.png&amp;mode=build_movie_list&amp;'
             'name=Movies",return)</favourite>'
         ),
         'pov_pattern': re.compile(
             r'<favourite\s[^>]*?name="\[B\]הסרטים שלי \(POV\)\[/B\]"[^>]*>'
-            r'(?:(?!</favourite>).)*?action=favorites_movies'
+            r'(?:(?!</favourite>).)*?action=favou?rites_movies'
             r'(?:(?!</favourite>).)*?mode=build_movie_list'
             r'(?:(?!</favourite>).)*?</favourite>',
             re.DOTALL,
@@ -215,12 +215,26 @@ MEDIA = (
             'thumb="special://home/media/build_icons/Twilight/Movies/'
             'My_Movies_POV.png">'
             'ActivateWindow(10025,"plugin://plugin.video.pov/?'
-            'action=favorites_movies&amp;iconImage=special%3a%2f%2fhome%2f'
+            'action=favourites_movies&amp;iconImage=special%3a%2f%2fhome%2f'
             'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
             'media%2ffavorites.png&amp;mode=build_movie_list&amp;'
             'name=Movie%20Favorites%20(POV)",return)</favourite>'
         ),
     },
+)
+
+# In-place repair of tile actions written by earlier builds that POV does NOT
+# recognise (those tiles opened EMPTY). Map each wrong action string to the real
+# POV action (verified against POV's own navigator/indexers). Only the exact
+# wrong strings are rewritten, so already-correct tiles and any user-customised
+# tile (different action/name) are left untouched.
+_ACTION_REPAIRS = (
+    ('action=trakt_my_tvshows', 'action=trakt_collection'),
+    ('action=trakt_my_movies', 'action=trakt_collection'),
+    ('action=tmdb_my_tvshows', 'action=tmdb_favorite'),
+    ('action=tmdb_my_movies', 'action=tmdb_favorite'),
+    ('action=favorites_tvshows', 'action=favourites_tvshows'),
+    ('action=favorites_movies', 'action=favourites_movies'),
 )
 
 
@@ -426,6 +440,13 @@ def ensure_patched():
             removed.add(key)
 
     content = original
+    # Repair broken tile actions in place (earlier builds wrote actions POV
+    # doesn't have -> those tiles opened empty). The detection patterns match
+    # both the old and corrected actions, so repaired tiles still read as
+    # "present" below (no duplicate insert, no false "removed").
+    for _wrong, _right in _ACTION_REPAIRS:
+        content = content.replace(_wrong, _right)
+
     all_actions = {}
     for media in MEDIA:
         content, actions = _process_one(content, media, trakt_on, removed)
