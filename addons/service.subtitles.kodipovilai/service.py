@@ -2491,7 +2491,7 @@ def _maybe_reload_nox_skin():
                 return
         except Exception:
             pass
-        xbmc.executebuiltin('ReloadSkin()')
+        _reload_skin_if_safe()
     except Exception:
         pass
 
@@ -2559,7 +2559,7 @@ def _maybe_patch_choose_subs_buttons():
                     key, status), level='WARNING')
         if active_patched:
             try:
-                xbmc.executebuiltin('ReloadSkin()')
+                _reload_skin_if_safe()
             except Exception:
                 pass
     except Exception as e:
@@ -2651,7 +2651,7 @@ def _maybe_patch_change_source_pause():
                     key, status), level='WARNING')
         if active_patched:
             try:
-                xbmc.executebuiltin('ReloadSkin()')
+                _reload_skin_if_safe()
             except Exception:
                 pass
     except Exception as e:
@@ -2660,6 +2660,24 @@ def _maybe_patch_change_source_pause():
                            level='WARNING')
         except Exception:
             pass
+
+
+def _reload_skin_if_safe():
+    """ReloadSkin() -- but NEVER while the home window is showing. All our
+    reloads here refresh player-OSD XML (VideoOSD.xml on Estuary/FENtastic/NOX)
+    after a fresh patch. ReloadSkin() rebuilds every window, and on Estuary/
+    FENtastic the home menu is a fixedlist (defaultcontrol 9000, focusposition=0)
+    that then snaps focus to the FIRST tile -- the "home jumps to tile 1 after an
+    update" bug. Kodi loads VideoOSD.xml fresh on the next OSD open regardless, so
+    skipping the reload while on home costs nothing and removes the focus jump.
+    (If we're not on home when a patch lands, reload normally.)"""
+    try:
+        import xbmc
+        if xbmc.getCondVisibility('Window.IsVisible(home)'):
+            return
+        xbmc.executebuiltin("ReloadSkin()")
+    except Exception:
+        pass
 
 
 def _maybe_reload_estuary_skin():
@@ -2681,7 +2699,7 @@ def _maybe_reload_estuary_skin():
                 return
         except Exception:
             pass
-        xbmc.executebuiltin('ReloadSkin()')
+        _reload_skin_if_safe()
     except Exception:
         pass
 
