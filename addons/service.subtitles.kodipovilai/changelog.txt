@@ -1,3 +1,9 @@
+v0.2.337
+- Auto-on-play subtitle search now honors the one-shot 'skip_autosub' marker
+  (set when the item being played is already in the target language), matching
+  the subtitle-search path. Previously only the search path checked it, so the
+  service-side auto-on-play player could still run for flagged content.
+
 v0.2.336
 - Estuary home no longer jumps to the first tile after an update (real fix).
   Root cause found: on a post-update boot, three patchers freshly patch
