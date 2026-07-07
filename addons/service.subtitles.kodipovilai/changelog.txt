@@ -1,3 +1,14 @@
+v0.2.335
+- Quality fix is now filter-aware (fixes "I hid 4K but 4K still shows"). The
+  0.2.333/334 fix relabelled SD rows to their true resolution AFTER POV's own
+  resolution filter had already run, so a source really 4K but mislabelled SD
+  (which slipped past the filter) reappeared as 4K once we corrected its badge.
+  Now the patcher reads your quality filter (results_quality_movie/episode):
+  if the corrected resolution is one you allow it upgrades the badge; if it is a
+  resolution you filtered OUT it DROPS the row entirely. Net result: 1080p is
+  still shown correctly (not as SD), AND hiding a resolution actually hides it,
+  even for rows POV had mislabelled. Never downgrades; genuine SD stays SD.
+
 v0.2.334
 - Quality fix now also keeps the ORDER correct. Because POV sorts the source
   list by its stored quality (upstream), a row we upgrade from SD to 1080p would
