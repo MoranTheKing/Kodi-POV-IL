@@ -11,14 +11,18 @@
 # -- e.g. a genuinely-1080p release sits down among the SD rows.
 #
 # Fix: patch windows/sources.py::make_items to, once per window BEFORE the row
-# loop: (1) for every result whose stored quality is SD/empty, re-derive it from
-# the visible name (URLName/name) with POV's OWN get_release_quality and upgrade
-# ONLY to a real resolution (4K/1080p/720p) -- upgrade-only, never downgrades or
-# invents a quality the name lacks; then (2) re-order self.results by quality
-# high->low, then size (GB) high->low, matching POV's default "Quality, Size"
-# order -- so the corrected rows land in the right group instead of stuck in the
-# SD block. Every downstream reader (badge icon, colour, quality text) then
-# reflects the corrected, correctly-ordered list.
+# loop: (1) read the user's resolution filter (results_quality_movie/episode);
+# (2) for every result whose stored quality is SD/empty, re-derive it from the
+# visible name (URLName/name) with POV's OWN get_release_quality -- if the true
+# resolution is ALLOWED, upgrade the badge to it (4K/1080p/720p); if it is a
+# resolution the user FILTERED OUT, DROP the row (POV's upstream filter had
+# missed it only because it was mislabelled SD -- now that we know it is really
+# that resolution, honour the filter); (3) re-order self.results by quality
+# high->low, then size (GB) high->low. This fixes both the "1080p shown as SD"
+# mislabel AND the resolution filter (e.g. "hide 4K" no longer leaks 4K back in
+# via a mislabelled row). Never downgrades and never invents a quality the name
+# lacks; genuine-SD names stay SD. Every downstream reader (badge icon, colour,
+# quality text) reflects the corrected list.
 #
 # Inserted just before the same row-loop line the subtitle-match patcher relies
 # on, so it is proven to exist in the installed POV. Idempotent (reverts its own
@@ -41,7 +45,7 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 SOURCES_REL_PATH = 'resources/lib/windows/sources.py'
-MARKER = 'AI_SUBS_QUALITY_FIX_v2'
+MARKER = 'AI_SUBS_QUALITY_FIX_v3'
 
 # The for-loop that builds each source row (insert our block just before it).
 # Same anchor the subtitle-match patcher relies on.
@@ -79,19 +83,42 @@ def _sources_path():
 def _block(indent, eol):
     # indent = the for-loop's own indent (our block is a sibling statement placed
     # just before it). Inner lines nest with tabs, matching POV's tab-indented
-    # sources. Upgrades SD rows from their visible name, then re-orders the whole
-    # result list by quality high->low, then size (GB) high->low.
+    # sources. For each SD/empty row we re-derive quality from the visible name:
+    #   * if the true resolution is ALLOWED by the user's quality filter -> upgrade
+    #     the badge to it;
+    #   * if the true resolution is one the user FILTERED OUT -> DROP the row (the
+    #     upstream filter missed it only because POV had mislabelled it SD; now
+    #     that we know it is really 4K/1080p/720p, honour the filter).
+    # Then re-order by quality high->low, size (GB) high->low. This both fixes the
+    # "1080p shown as SD" mislabel AND makes the resolution filter actually work,
+    # instead of relabelling a filtered-out quality back into view.
     t = '\t'
     raw = [
         '# ' + MARKER,
         'try:',
         t + 'from modules.source_utils import get_release_quality as _aq_grq',
         t + "_aq_rank = {'4K': 0, '1080p': 1, '720p': 2, 'SD': 3}",
+        t + '_aq_allow = None',
+        t + 'try:',
+        t + t + 'import xbmcaddon as _aq_x',
+        t + t + '_aq_m = getattr(self, "meta", None) or {}',
+        t + t + '_aq_ep = bool(_aq_m.get("episode") or _aq_m.get("season") or str(_aq_m.get("mediatype") or _aq_m.get("media_type") or "").lower() in ("episode","tvshow","tv","season","show"))',
+        t + t + '_aq_qv = _aq_x.Addon("plugin.video.pov").getSetting("results_quality_episode" if _aq_ep else "results_quality_movie") or ""',
+        t + t + 'if _aq_qv.strip(): _aq_allow = set(x.strip().upper() for x in _aq_qv.split(",") if x.strip())',
+        t + 'except Exception:',
+        t + t + '_aq_allow = None',
+        t + '_aq_new = []',
         t + 'for _aq_it in self.results:',
         t + t + "if (_aq_it.get('quality') or 'SD').upper() == 'SD':",
         t + t + t + "_aq_nm = _aq_it.get('URLName') or _aq_it.get('name') or ''",
         t + t + t + "_aq_q = _aq_grq(_aq_nm) if _aq_nm else ''",
-        t + t + t + "if _aq_q in ('4K', '1080p', '720p'): _aq_it['quality'] = _aq_q",
+        t + t + t + "if _aq_q in ('4K', '1080p', '720p'):",
+        t + t + t + t + 'if _aq_allow is None or _aq_q.upper() in _aq_allow:',
+        t + t + t + t + t + "_aq_it['quality'] = _aq_q",
+        t + t + t + t + 'else:',
+        t + t + t + t + t + 'continue',
+        t + t + '_aq_new.append(_aq_it)',
+        t + 'self.results[:] = _aq_new',
         t + "self.results.sort(key=lambda _aq_i: (_aq_rank.get((_aq_i.get('quality') or 'SD'), 3), -float(_aq_i.get('size') or 0)))",
         'except Exception: pass',
     ]
