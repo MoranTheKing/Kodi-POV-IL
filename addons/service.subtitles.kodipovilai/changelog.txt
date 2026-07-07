@@ -1,3 +1,18 @@
+v0.2.341
+- Corrected the "My Movies / My Series" home tiles for the current POV build.
+  The previous version misdiagnosed the empty tiles: the merged-list actions
+  (tmdb_my_tvshows / trakt_my_tvshows and the movie equivalents) ARE valid on
+  the current POV -- they are the UNION lists we inject into POV's menu
+  (TMDB favorites+watchlist; Trakt collection+watchlist+favorites). The tiles
+  looked empty only because that injection had not gone live in POV's warm
+  interpreter yet. So the tiles now point back at the merged actions (adding an
+  item to EITHER underlying list makes it show in the tile), the POV tile uses
+  POV's real "favorites" spelling, and the startup patcher now cycles POV once
+  after injecting the merged menu so the tiles fill in the same session instead
+  of after the next restart. Devices that took the previous version are repaired
+  in place -- name-anchored, so only these tiles change and any tile you
+  customised or deleted is left alone; no duplicates. Seed fixture corrected too.
+
 v0.2.340
 - Fixed empty "My Movies / My Series" home tiles (TMDB / Trakt / POV). The
   tiles invoked POV plugin actions that POV doesn't have (trakt_my_tvshows,
