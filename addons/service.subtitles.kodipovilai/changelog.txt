@@ -1,3 +1,14 @@
+v0.2.339
+- Fixed a crash when adding a search result to a list (TMDB/Trakt/MDBList/
+  favourites). The add-refresh introduced earlier re-ran the OPEN container
+  after an add; when that container was a search-results list, re-fetching it
+  crashed the screen ("Error getting plugin://"). The refresh now skips search
+  containers (a refresh there wouldn't show the added item anyway) and still
+  refreshes normal browse lists on add. Most visible on Arctic Fuse 3, whose
+  search feeds a browsable results list. The guard is applied to both the
+  unified list manager and the local favourites path, and upgrades installs
+  that already carried the un-guarded refresh.
+
 v0.2.338
 - Sources flagged to always stay at the top (a truthy '_pin_top' flag on the
   source, e.g. built-in-language sources) are now kept at the top and exempt
