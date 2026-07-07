@@ -47,22 +47,37 @@ POV_ADDON_ID = 'plugin.video.pov'
 DIALOGS_REL_PATH = 'resources/lib/modules/dialogs.py'
 LIST_HELPER_REL_PATH = 'resources/lib/indexers/list_helper.py'
 
-MARKER = '# AI_SUBS_FAV_REFRESH_v2'
-MARKER_MANAGE = '# AI_SUBS_FAV_REFRESH_MANAGE_v1'
+MARKER = '# AI_SUBS_FAV_REFRESH_v3'
+MARKER_MANAGE = '# AI_SUBS_FAV_REFRESH_MANAGE_v2'
 
-# The safe v2 refresh line: container refresh only, no widget_refresh.
-_REFRESH = 'container_refresh()  ' + MARKER \
-    + ': refresh open list on add too (widget_refresh removed -- it crashed Kodi on add)'
+# v3 change: the refresh is now GUARDED. Firing Container.Refresh after an add
+# re-invokes the OPEN container's plugin GetDirectory. For a normal browse list
+# (saved TMDB/Trakt/MDBList list, watchlist, genre, popular) that re-fetch is
+# cheap and correct -- it's what makes the added item appear. But when the open
+# container is a SEARCH-results list (e.g. .../?mode=build_tvshow_list&
+# action=tmdb_tv_search&query=...), re-running that GetDirectory re-entrantly
+# from the add-to-list RunPlugin FAILS ("Error getting plugin://") / crashes
+# the screen -- and refreshing a search wouldn't show the added item anyway
+# (you're viewing search results, not the list). So we skip the refresh when
+# the open container path is a search. Reading Container.FolderPath via
+# __import__('xbmc') needs no extra import in the patched module.
+_GUARD = ("if 'search' not in "
+          "(__import__('xbmc').getInfoLabel('Container.FolderPath') or '').lower(): ")
 
-# The exact tail the crashing v1 (0.2.70) appended after container_refresh().
-# Stripping it turns a v1-patched line back into the safe v2 line.
-_V1_TAIL = '; kodi_utils.widget_refresh()  # AI_SUBS_FAV_REFRESH' \
-    ': refresh open list + home widgets on add too, not just remove'
-_V1_TAIL_REPLACEMENT = '  ' + MARKER \
-    + ': container refresh only (widget_refresh removed -- it crashed Kodi on add)'
+# The guarded v3 refresh (container refresh only, and not for search).
+_REFRESH = _GUARD + 'container_refresh()  ' + MARKER \
+    + ': refresh open list on add, but NOT for search containers'
+
+# ---- prior forms we upgrade from (so already-patched devices get the guard) ----
+# Legacy crashing v1 (0.2.70) line (container_refresh + widget_refresh).
+_FAV_V1 = ('container_refresh(); kodi_utils.widget_refresh()  # AI_SUBS_FAV_REFRESH'
+           ': refresh open list + home widgets on add too, not just remove')
+# v2 line (container refresh only, UNguarded).
+_FAV_V2 = ('container_refresh()  # AI_SUBS_FAV_REFRESH_v2'
+           ': refresh open list on add too (widget_refresh removed -- it crashed Kodi on add)')
 
 # dialogs.py favorites_choice -- POV-local favorites. Original gated line
-# (refresh stays False on add) -> unconditional refresh. Tabs match POV.
+# (refresh stays False on add) -> guarded refresh. Tabs match POV.
 _FAV_CHOICE_OLD = (
     '\t\tnotification(32576) if action(mediatype, tmdb_id, title) else notification(32574)\n'
     '\t\tif refresh: container_refresh()'
@@ -74,12 +89,19 @@ _FAV_CHOICE_NEW = (
 
 # indexers/list_helper.py BaseListManager.manage() -- the single shared toggle
 # point for TMDB / Trakt / MDBList managers. Refresh right after the toggle so
-# an ADD shows immediately (POV only refreshed on remove, and Trakt/MDBList
-# never refreshed at all). kodi_utils is already imported in this module.
+# an ADD shows immediately (POV only refreshed on remove), but guarded so a
+# search container is never re-fetched. kodi_utils is imported in this module.
 _MANAGE_OLD = '\t\treturn self.execute_toggle(choice, action_add)\n'
 _MANAGE_NEW = (
     '\t\t_ai_toggle_result = self.execute_toggle(choice, action_add)  '
     + MARKER_MANAGE + '\n'
+    '\t\t' + _GUARD + 'kodi_utils.container_refresh()\n'
+    '\t\treturn _ai_toggle_result\n'
+)
+# The prior UNguarded v1 manage block (upgrade it to the guarded v2 block).
+_MANAGE_V1 = (
+    '\t\t_ai_toggle_result = self.execute_toggle(choice, action_add)  '
+    '# AI_SUBS_FAV_REFRESH_MANAGE_v1\n'
     '\t\tkodi_utils.container_refresh()\n'
     '\t\treturn _ai_toggle_result\n'
 )
@@ -137,19 +159,25 @@ def _patch_dialogs():
     if MARKER in content:
         return 'unchanged'
 
+    # Normalise whatever prior form is present to the guarded v3 refresh.
     new_content = content
-    applied = 0
-    if _V1_TAIL in new_content:
-        applied += new_content.count(_V1_TAIL)
-        new_content = new_content.replace(_V1_TAIL, _V1_TAIL_REPLACEMENT)
-    if _FAV_CHOICE_OLD in new_content:
+    if _FAV_V1 in new_content:                       # legacy crashing v1
+        new_content = new_content.replace(_FAV_V1, _REFRESH)
+    elif _FAV_V2 in new_content:                     # unguarded v2 -> guarded
+        new_content = new_content.replace(_FAV_V2, _REFRESH)
+    elif _FAV_CHOICE_OLD in new_content:             # fresh POV -> guarded
         new_content = new_content.replace(_FAV_CHOICE_OLD, _FAV_CHOICE_NEW, 1)
-        applied += 1
 
-    if applied == 0:
+    if new_content == content:
         _log('dialogs.py: no favorites add-refresh anchor matched -- shape '
              'changed upstream, skipping', level='WARNING')
         return 'unmatched'
+    try:
+        compile(new_content, path, 'exec')
+    except SyntaxError as e:
+        _log('dialogs.py: patched content would not compile -- skipping '
+             '({0})'.format(e), level='WARNING')
+        return 'compile_failed'
     return 'patched' if _write(path, new_content) else 'write_failed'
 
 
@@ -168,11 +196,14 @@ def _patch_list_helper():
         return 'read_failed'
     if MARKER_MANAGE in content:
         return 'unchanged'
-    if _MANAGE_OLD not in content:
+    if _MANAGE_V1 in content:                        # unguarded v1 -> guarded v2
+        new_content = content.replace(_MANAGE_V1, _MANAGE_NEW, 1)
+    elif _MANAGE_OLD in content:                     # fresh POV -> guarded v2
+        new_content = content.replace(_MANAGE_OLD, _MANAGE_NEW, 1)
+    else:
         _log('list_helper.py: manage() toggle anchor not found -- shape '
              'changed upstream, skipping', level='WARNING')
         return 'unmatched'
-    new_content = content.replace(_MANAGE_OLD, _MANAGE_NEW, 1)
     # SAFETY: never write a file that doesn't compile.
     try:
         compile(new_content, path, 'exec')
