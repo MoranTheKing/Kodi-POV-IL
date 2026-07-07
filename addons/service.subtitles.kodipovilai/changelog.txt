@@ -1,3 +1,15 @@
+v0.2.336
+- Estuary home no longer jumps to the first tile after an update (real fix).
+  Root cause found: on a post-update boot, three patchers freshly patch
+  Estuary's player-OSD XML (VideoOSD.xml) and each called ReloadSkin(), which
+  rebuilds every window -- and Estuary/FENtastic's home menu is a fixedlist
+  (defaultcontrol 9000, focusposition=0) that then snaps focus to the first
+  tile. None of those reload paths preserved focus (the earlier pov_reload
+  focus-restore was correct but on a different code path, so it couldn't help).
+  ReloadSkin() is now skipped whenever the home screen is showing: the OSD XML
+  is re-read by Kodi on the next OSD open anyway, so nothing is lost and the
+  focus jump is gone. (Applies to Estuary, FENtastic and NOX reload paths.)
+
 v0.2.335
 - Quality fix is now filter-aware (fixes "I hid 4K but 4K still shows"). The
   0.2.333/334 fix relabelled SD rows to their true resolution AFTER POV's own
