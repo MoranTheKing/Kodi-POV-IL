@@ -504,6 +504,20 @@ def _maybe_patch_pov_menus():
             kodi_utils.log(
                 'pov_menus_patcher: skipped {0}'.format(
                     ', '.join(failed)), level='WARNING')
+        # POV runs with <reuselanguageinvoker>true</>, so its warm interpreter
+        # keeps the pre-patch movies.py/tvshows.py imported -- the merged
+        # tmdb_my_*/trakt_my_* branch we just injected only goes live after the
+        # interpreter is torn down. Arm a deferred POV cycle so the merged home
+        # tiles populate THIS session instead of after the next Kodi restart.
+        # note_patched only sets a flag; the actual cycle is deferred to idle,
+        # guarded against playback, and restores home focus. Fires only the
+        # session the injection actually lands (writes happen only on change).
+        if any(v in ('patched', 'restored') for v in results.values()):
+            try:
+                from resources.lib import pov_reload
+                pov_reload.note_patched()
+            except Exception:
+                pass
     except Exception as e:
         try:
             kodi_utils.log(

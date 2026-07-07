@@ -126,7 +126,7 @@ MEDIA = (
             'thumb="special://home/media/build_icons/Twilight/Shows/'
             'My_Shows_TMDB.png">'
             'ActivateWindow(10025,"plugin://plugin.video.pov/?'
-            'action=tmdb_favorite&amp;iconImage=special%3a%2f%2fhome%2f'
+            'action=tmdb_my_tvshows&amp;iconImage=special%3a%2f%2fhome%2f'
             'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
             'media%2ftmdb.png&amp;mode=build_tvshow_list&amp;'
             'name=TV%20Show%20Favorites",return)</favourite>'
@@ -138,7 +138,7 @@ MEDIA = (
             'thumb="special://home/media/build_icons/Twilight/Shows/'
             'My_Shows.png">'
             'ActivateWindow(10025,"plugin://plugin.video.pov/?'
-            'action=trakt_collection&amp;iconImage=special%3a%2f%2fhome%2f'
+            'action=trakt_my_tvshows&amp;iconImage=special%3a%2f%2fhome%2f'
             'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
             'media%2ftrakt.png&amp;mode=build_tvshow_list&amp;'
             'name=TV%20Shows",return)</favourite>'
@@ -159,7 +159,7 @@ MEDIA = (
             'thumb="special://home/media/build_icons/Twilight/Shows/'
             'My_Shows_POV.png">'
             'ActivateWindow(10025,"plugin://plugin.video.pov/?'
-            'action=favourites_tvshows&amp;iconImage=special%3a%2f%2fhome%2f'
+            'action=favorites_tvshows&amp;iconImage=special%3a%2f%2fhome%2f'
             'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
             'media%2ffavorites.png&amp;mode=build_tvshow_list&amp;'
             'name=TV%20Show%20Favorites%20(POV)",return)</favourite>'
@@ -188,7 +188,7 @@ MEDIA = (
             'thumb="special://home/media/build_icons/Twilight/Movies/'
             'My_Movies_TMDB.png">'
             'ActivateWindow(10025,"plugin://plugin.video.pov/?'
-            'action=tmdb_favorite&amp;iconImage=special%3a%2f%2fhome%2f'
+            'action=tmdb_my_movies&amp;iconImage=special%3a%2f%2fhome%2f'
             'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
             'media%2ftmdb.png&amp;mode=build_movie_list&amp;'
             'name=Movie%20Favorites",return)</favourite>'
@@ -198,7 +198,7 @@ MEDIA = (
             'thumb="special://home/media/build_icons/Twilight/Movies/'
             'My_Movies.png">'
             'ActivateWindow(10025,"plugin://plugin.video.pov/?'
-            'action=trakt_collection&amp;iconImage=special%3a%2f%2fhome%2f'
+            'action=trakt_my_movies&amp;iconImage=special%3a%2f%2fhome%2f'
             'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
             'media%2ftrakt.png&amp;mode=build_movie_list&amp;'
             'name=Movies",return)</favourite>'
@@ -215,7 +215,7 @@ MEDIA = (
             'thumb="special://home/media/build_icons/Twilight/Movies/'
             'My_Movies_POV.png">'
             'ActivateWindow(10025,"plugin://plugin.video.pov/?'
-            'action=favourites_movies&amp;iconImage=special%3a%2f%2fhome%2f'
+            'action=favorites_movies&amp;iconImage=special%3a%2f%2fhome%2f'
             'addons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2f'
             'media%2ffavorites.png&amp;mode=build_movie_list&amp;'
             'name=Movie%20Favorites%20(POV)",return)</favourite>'
@@ -223,18 +223,42 @@ MEDIA = (
     },
 )
 
-# In-place repair of tile actions written by earlier builds that POV does NOT
-# recognise (those tiles opened EMPTY). Map each wrong action string to the real
-# POV action (verified against POV's own navigator/indexers). Only the exact
-# wrong strings are rewritten, so already-correct tiles and any user-customised
-# tile (different action/name) are left untouched.
+# In-place repair of tile actions written by build 0.1.375, which mistakenly
+# repointed these tiles at single-source / mis-spelled actions and so opened
+# EMPTY or wrong on POV 6.07.02. The correct actions are the MERGED lists our
+# own pov_menus_patcher injects (tmdb_my_*/trakt_my_*: TMDB favorites+watchlist,
+# Trakt collection+watchlist+favorites) plus POV's American-spelled favorites_*.
+#
+# Each entry carries the tile's exact Hebrew name AND its build mode, and the
+# repair is a name+mode-anchored, action-only re.sub(count=1). This is required
+# because the wrong tokens (trakt_collection / tmdb_favorite) appear in BOTH the
+# shows and movies tiles, so a bare string replace could neither disambiguate
+# tvshow-vs-movie nor avoid clobbering a user's own standalone trakt_collection
+# tile elsewhere. Anchoring on our label + mode touches ONLY our tiles, leaves
+# already-correct (State-A) tiles untouched (no-op), and never inserts, so it
+# cannot create duplicates or re-add a tile the user deleted.
+#
+# (visible name token, build mode, wrong action from 0.1.375, correct 6.07.02 action)
 _ACTION_REPAIRS = (
-    ('action=trakt_my_tvshows', 'action=trakt_collection'),
-    ('action=trakt_my_movies', 'action=trakt_collection'),
-    ('action=tmdb_my_tvshows', 'action=tmdb_favorite'),
-    ('action=tmdb_my_movies', 'action=tmdb_favorite'),
-    ('action=favorites_tvshows', 'action=favourites_tvshows'),
-    ('action=favorites_movies', 'action=favourites_movies'),
+    ('הסדרות שלי (TMDB)',  'build_tvshow_list', 'tmdb_favorite',      'tmdb_my_tvshows'),
+    ('הסרטים שלי (TMDB)',  'build_movie_list',  'tmdb_favorite',      'tmdb_my_movies'),
+    ('הסדרות שלי (Trakt)', 'build_tvshow_list', 'trakt_collection',   'trakt_my_tvshows'),
+    ('הסרטים שלי (Trakt)', 'build_movie_list',  'trakt_collection',   'trakt_my_movies'),
+    ('הסדרות שלי (POV)',   'build_tvshow_list', 'favourites_tvshows', 'favorites_tvshows'),
+    ('הסרטים שלי (POV)',   'build_movie_list',  'favourites_movies',  'favorites_movies'),
+)
+
+# Compiled name+mode-anchored patterns. Group 1 = "<favourite ... name=...action=",
+# group 2 = "...mode=<mode>"; only the action token between them is substituted.
+# re.escape on the name is required because the labels contain literal ( ).
+_REPAIR_RES = tuple(
+    (re.compile(
+        r'(<favourite\s[^>]*?name="\[B\]' + re.escape(_nm) + r'\[/B\]"'
+        r'(?:(?!</favourite>).)*?action=)' + re.escape(_wrong)
+        + r'((?:(?!</favourite>).)*?mode=' + _md + r')',
+        re.DOTALL),
+     r'\g<1>' + _right + r'\g<2>')
+    for _nm, _md, _wrong, _right in _ACTION_REPAIRS
 )
 
 
@@ -440,12 +464,16 @@ def ensure_patched():
             removed.add(key)
 
     content = original
-    # Repair broken tile actions in place (earlier builds wrote actions POV
-    # doesn't have -> those tiles opened empty). The detection patterns match
-    # both the old and corrected actions, so repaired tiles still read as
-    # "present" below (no duplicate insert, no false "removed").
-    for _wrong, _right in _ACTION_REPAIRS:
-        content = content.replace(_wrong, _right)
+    # Repair tile actions written by build 0.1.375 in place (it repointed these
+    # tiles at single-source / mis-spelled actions -> wrong or empty on POV
+    # 6.07.02). Name+mode-anchored, action-only substitution: touches ONLY our
+    # tiles, leaves already-correct tiles untouched, never inserts. The detection
+    # patterns match both the old and corrected actions, so repaired tiles still
+    # read as "present" below (no duplicate insert, no false "removed"). Note the
+    # ordering: this runs AFTER _present(original) above, so a 0.1.375 tile is
+    # counted present before being rewritten.
+    for _pat, _repl in _REPAIR_RES:
+        content = _pat.sub(_repl, content, count=1)
 
     all_actions = {}
     for media in MEDIA:
