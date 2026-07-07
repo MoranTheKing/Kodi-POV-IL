@@ -1,3 +1,10 @@
+v0.2.338
+- Sources flagged to always stay at the top (a truthy '_pin_top' flag on the
+  source, e.g. built-in-language sources) are now kept at the top and exempt
+  from the quality upgrade, the resolution-filter drop, and the quality/size
+  re-sort added in 0.2.333-335. Previously the re-sort reordered such sources
+  by quality/size like any other; now they keep their position at the top.
+
 v0.2.337
 - Auto-on-play subtitle search now honors the one-shot 'skip_autosub' marker
   (set when the item being played is already in the target language), matching
