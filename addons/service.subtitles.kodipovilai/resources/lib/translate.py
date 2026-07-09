@@ -1053,7 +1053,6 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             # SubSync S2: pool variants carry the release of their SOURCE sub;
             # if that doesn't match the playing release, verify/fix timing
             # against a release-matched oracle. Fail-open.
-            _sv = None
             try:
                 from . import subsync
                 _newp, _sv = subsync.process(
@@ -1063,13 +1062,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             except Exception as _se:
                 kodi_utils.log('subsync pool hook failed: {0}'.format(_se),
                                level='WARNING')
-            _line = ''
-            try:
-                from . import subsync as _ss
-                _line = _ss.status_line(_sv)
-            except Exception:
-                _line = ''
-            _status(_line or 'כתוביות מהמאגר הקהילתי', time_ms=4000)
+            _status('כתוביות מהמאגר הקהילתי', time_ms=4000)
             return out
         except OSError:
             return None
@@ -1145,7 +1138,6 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             # release, verify -- and if a confident linear map exists, FIX --
             # its timing against a release-matched oracle sub (any language).
             # Fail-open: any problem delivers the file exactly as before.
-            _sv = None
             try:
                 if 'Hebrew' in (payload.get('language') or ''):
                     from . import subsync
@@ -1156,13 +1148,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             except Exception as _se:
                 kodi_utils.log('subsync engine hook failed: {0}'.format(_se),
                                level='WARNING')
-            _line = ''
-            try:
-                from . import subsync as _ss
-                _line = _ss.status_line(_sv)
-            except Exception:
-                _line = ''
-            _status(_line or 'כתוביות עברית מ-{0}'.format(
+            _status('כתוביות עברית מ-{0}'.format(
                 payload.get('source') or 'מקור'), time_ms=4000)
             return path
         kodi_utils.notify('לא ניתן היה להוריד את הכתובית', time_ms=4000)
