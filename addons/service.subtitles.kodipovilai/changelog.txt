@@ -1,3 +1,24 @@
+v0.2.344
+- SubSync S2: automatic subtitle re-timing. When a delivered Hebrew subtitle
+  (engine human pick or community-pool entry) belongs to a DIFFERENT release
+  than the one playing, it is now verified against a timing oracle -- a
+  release-matched subtitle in any language from the engine's cached search --
+  and, when a confident linear map exists (offset and/or FPS drift), a
+  RETIMED copy is delivered instead, with a single toast
+  ("הכתובית סונכרנה אוטומטית"). New modules:
+  * sync_align.py -- language-agnostic aligner generalized from
+    arabic_gender.py's production estimator: voting-histogram offset search,
+    FPS-ratio scale candidates, overlap-rate confidence gate, SRT retiming,
+    credit/watermark filtering, oracle selection.
+  * subsync.py -- delivery orchestration: release tier-check (matching
+    releases are trusted and untouched), per-device verdict cache keyed
+    (subtitle content, playing release) so each pair is computed once,
+    fail-open at every step (any problem delivers the file exactly as
+    before), gated by the subsync_verify setting (default on).
+  Recuts/extended cuts are detected and REFUSED rather than mangled. Pool
+  links now carry their source release name for the tier check. No pool /
+  worker / translation-engine changes.
+
 v0.2.343
 - SubSync S1: honest sync percentages everywhere. A new structured release
   scorer (release_match.py) replaces the three divergent token-similarity
