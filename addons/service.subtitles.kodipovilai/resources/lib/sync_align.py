@@ -1,0 +1,288 @@
+# SubSync Phase S2 -- verify & auto-retime engine.
+#
+# Generalizes the production-proven aligner from arabic_gender.py (voting-
+# histogram offset search x FPS-ratio scale candidates x overlap-rate gate,
+# which today aligns the Arabic gender ORACLE to the English source) into a
+# language-agnostic module that verifies -- and when confidently possible,
+# FIXES -- the timing of a delivered subtitle against a trusted reference:
+#
+#   reference = a subtitle known to match the PLAYING release (any language;
+#               the aligner never reads text, only cue timestamps), or later
+#               (S4) the playing file's own embedded track cues.
+#   candidate = the Hebrew sub we are about to deliver (human/pool/AI).
+#
+#   verify(ref_srt, cand_srt) -> {'status': CONFIRMED|FIXABLE|UNKNOWN, ...}
+#   retime(cand_srt, scale, offset_ms) -> retimed SRT text
+#
+# CONFIRMED: candidate already lines up with the reference (map ~identity).
+# FIXABLE:   a confident linear map exists but is not identity -> retime.
+# UNKNOWN:   the gate failed (recut/extended/too few cues) -> deliver as-is,
+#            label honestly, NEVER guess.
+#
+# Self-contained on purpose (stdlib only, no xbmc, no package imports) so it
+# is testable offline and importable from any interpreter, like
+# release_match.py.
+
+import re
+import bisect
+
+# ---- gate thresholds (mirroring arabic_gender's production values) --------
+_FPS = [24000 / 1001, 24.0, 25.0, 30000 / 1001, 30.0]
+SCALES = sorted({1.0} | {round(p / q, 6) for p in _FPS for q in _FPS
+                         if 0.9 <= p / q <= 1.11})
+_TOL = 500            # offset histogram bin (ms)
+_MAXOFF = 600000      # search window: +/-10 minutes
+_SAMPLE = 500         # cap sampled reference cues
+MIN_CUES = 8          # min dialogue cues on each side
+MIN_VOTE = 0.65       # histogram peak must carry >=65% of sampled cues
+MIN_OVERLAP = 0.80    # >=80% of ref cues must overlap after the map
+SCALE_MIN, SCALE_MAX = 0.90, 1.11
+CONFIRM_OFFSET_MS = 350   # |offset| <= this and scale==1.0 -> already synced
+
+STATUS_CONFIRMED = 'CONFIRMED'
+STATUS_FIXABLE = 'FIXABLE'
+STATUS_UNKNOWN = 'UNKNOWN'
+
+
+# ---- SRT parsing -----------------------------------------------------------
+
+_TIME_RE = re.compile(
+    r'(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*'
+    r'(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})')
+
+_TAG_RE = re.compile(r'<[^>]+>|\{\\[^}]*\}')
+
+# Credit/watermark lines (translator credits, site plugs) cluster at the very
+# start/end of subtitle files and do NOT correspond to dialogue -- they poison
+# the histogram, so cues that are clearly credits are dropped before aligning.
+_CREDIT_RE = re.compile(
+    r'(תורגם|תרגום|סונכרן|סנכרון|כתוביות|הובא|צפייה מהנה|subs?\s*by|'
+    r'subtitles?\s+by|sync(?:ed)?\s+by|corrected\s+by|www\.|https?://|\.com|'
+    r'\.net|\.org|opensubtitles|subscene|ktuvit|wizdom)', re.I)
+
+
+def _to_ms(h, m, s, ms):
+    return ((int(h) * 60 + int(m)) * 60 + int(s)) * 1000 + int(ms.ljust(3, '0'))
+
+
+def _ms_to_stamp(ms):
+    if ms < 0:
+        ms = 0
+    ms = int(round(ms))
+    h, rem = divmod(ms, 3600000)
+    m, rem = divmod(rem, 60000)
+    s, ms = divmod(rem, 1000)
+    return '{0:02d}:{1:02d}:{2:02d},{3:03d}'.format(h, m, s, ms)
+
+
+def parse_srt(text):
+    """[{'start': ms, 'end': ms, 'text': str}] for every timed block.
+    Tolerant: skips malformed blocks, handles BOM/CRLF, '.' or ',' millis."""
+    cues = []
+    if not text:
+        return cues
+    text = text.lstrip('﻿')
+    for block in re.split(r'\r?\n\r?\n+', text):
+        m = _TIME_RE.search(block)
+        if not m:
+            continue
+        start = _to_ms(*m.group(1, 2, 3, 4))
+        end = _to_ms(*m.group(5, 6, 7, 8))
+        if end < start:
+            continue
+        body = block[m.end():].strip()
+        body = _TAG_RE.sub('', body)
+        cues.append({'start': start, 'end': end, 'text': body.strip()})
+    cues.sort(key=lambda c: c['start'])
+    return cues
+
+
+def _is_dialogue(c):
+    t = (c.get('text') or '').strip()
+    if not t or t.startswith(('♪', '♫', '#')):
+        return False
+    letters = re.sub(r'[^A-Za-z֐-׿؀-ۿÀ-ɏ'
+                     r'Ѐ-ӿ぀-ヿ一-鿿가-힯]',
+                     '', t)
+    return len(letters) >= 2
+
+
+def dialogue_cues(text_or_cues):
+    """Dialogue-only cues (SFX/music and credit/watermark lines dropped)."""
+    cues = (text_or_cues if isinstance(text_or_cues, list)
+            else parse_srt(text_or_cues))
+    out = [c for c in cues if _is_dialogue(c)]
+    if not out:
+        return out
+    span_end = out[-1]['end']
+    kept = []
+    for c in out:
+        near_edge = c['start'] < 120000 or c['start'] > span_end - 120000
+        if near_edge and _CREDIT_RE.search(c['text']):
+            continue
+        kept.append(c)
+    return kept
+
+
+# ---- linear time-map estimation (from arabic_gender, generalized) ----------
+
+def _best_offset(ref_on, cand_on, a):
+    step = max(1, len(ref_on) // _SAMPLE)
+    hist = {}
+    for e in ref_on[::step]:
+        pe = a * e
+        lo = bisect.bisect_left(cand_on, pe - _MAXOFF)
+        hi = bisect.bisect_right(cand_on, pe + _MAXOFF)
+        for j in range(lo, hi):
+            b = int(round((cand_on[j] - pe) / _TOL))
+            hist[b] = hist.get(b, 0) + 1
+    if not hist:
+        return 0.0, 0
+    peak = max(hist, key=lambda k: hist[k] + hist.get(k - 1, 0)
+               + hist.get(k + 1, 0))
+    votes = hist.get(peak - 1, 0) + hist.get(peak, 0) + hist.get(peak + 1, 0)
+    return float(peak * _TOL), votes
+
+
+def estimate(ref_cues, cand_cues):
+    """Best linear map cand_time ~= a*ref_time + b over the scale candidates.
+    Returns (a, b_ms, vote_ratio)."""
+    ref_on = [c['start'] for c in ref_cues]
+    cand_on = [c['start'] for c in cand_cues]
+    if not ref_on or not cand_on:
+        return 1.0, 0.0, 0.0
+    sampled = len(ref_on[::max(1, len(ref_on) // _SAMPLE)])
+    best = (1.0, 0.0, -1)
+    for a in SCALES:
+        b, v = _best_offset(ref_on, cand_on, a)
+        if v > best[2]:
+            best = (a, b, v)
+    a, b, v = best
+    return a, b, (v / sampled if sampled else 0.0)
+
+
+def overlap_rate(ref_cues, cand_cues, a, b):
+    """Share of reference cues that overlap SOME candidate cue after mapping
+    ref time t -> a*t + b."""
+    cand_starts = [c['start'] for c in cand_cues]
+    cand_ends = [c['end'] for c in cand_cues]
+    ok = 0
+    for c in ref_cues:
+        es, ee = a * c['start'] + b, a * c['end'] + b
+        lo = bisect.bisect_left(cand_ends, es)
+        k = lo
+        while k < len(cand_cues) and cand_starts[k] < ee:
+            if min(ee, cand_ends[k]) - max(es, cand_starts[k]) > 0:
+                ok += 1
+                break
+            k += 1
+    return ok / len(ref_cues) if ref_cues else 0.0
+
+
+# ---- public API -------------------------------------------------------------
+
+def verify(ref_srt_text, cand_srt_text):
+    """Verdict dict:
+      {'status': CONFIRMED|FIXABLE|UNKNOWN,
+       'scale': a, 'offset_ms': b,          # map: cand ~= a*ref + b, i.e. to
+                                             # FIX cand apply t' = (t - b) / a
+       'vote': 0..1, 'overlap': 0..1, 'diag': str}
+    NOTE on direction: estimate() maps REF time onto CAND time. A candidate
+    that lags the reference by +12s yields offset_ms=+12000; retime() is then
+    called with (scale, offset_ms) and applies the INVERSE map to the
+    candidate so it lands on the reference timeline."""
+    ref = dialogue_cues(ref_srt_text)
+    cand = dialogue_cues(cand_srt_text)
+    if len(ref) < MIN_CUES or len(cand) < MIN_CUES:
+        return {'status': STATUS_UNKNOWN, 'scale': 1.0, 'offset_ms': 0.0,
+                'vote': 0.0, 'overlap': 0.0,
+                'diag': 'too few dialogue cues (ref=%d cand=%d)'
+                        % (len(ref), len(cand))}
+    a, b, vote = estimate(ref, cand)
+    ov = overlap_rate(ref, cand, a, b)
+    diag = 'scale=%.6f offset=%+dms vote=%.0f%% overlap=%.0f%%' % (
+        a, int(b), vote * 100, ov * 100)
+    if not (SCALE_MIN <= a <= SCALE_MAX) or vote < MIN_VOTE or ov < MIN_OVERLAP:
+        return {'status': STATUS_UNKNOWN, 'scale': a, 'offset_ms': b,
+                'vote': vote, 'overlap': ov, 'diag': 'gate FAILED (' + diag + ')'}
+    if a == 1.0 and abs(b) <= CONFIRM_OFFSET_MS:
+        return {'status': STATUS_CONFIRMED, 'scale': a, 'offset_ms': b,
+                'vote': vote, 'overlap': ov, 'diag': diag}
+    return {'status': STATUS_FIXABLE, 'scale': a, 'offset_ms': b,
+            'vote': vote, 'overlap': ov, 'diag': diag}
+
+
+def retime(cand_srt_text, scale, offset_ms):
+    """Apply the INVERSE of the estimated map to the candidate so it lands on
+    the reference timeline: t' = (t - offset_ms) / scale. Rewrites every
+    timestamp, renumbers blocks, preserves text/formatting untouched."""
+    if not cand_srt_text:
+        return cand_srt_text
+    scale = float(scale) or 1.0
+    out_blocks = []
+    idx = 0
+    text = cand_srt_text.lstrip('﻿')
+    for block in re.split(r'\r?\n\r?\n+', text):
+        m = _TIME_RE.search(block)
+        if not m:
+            continue
+        start = _to_ms(*m.group(1, 2, 3, 4))
+        end = _to_ms(*m.group(5, 6, 7, 8))
+        ns = (start - offset_ms) / scale
+        ne = (end - offset_ms) / scale
+        if ne < 0:
+            continue   # cue mapped before t=0 (credit before the new start)
+        body = block[m.end():].strip('\r\n')
+        body = body.strip('\n')
+        idx += 1
+        out_blocks.append('{0}\n{1} --> {2}\n{3}'.format(
+            idx, _ms_to_stamp(ns), _ms_to_stamp(ne), body.strip()))
+    return '\n\n'.join(out_blocks) + '\n'
+
+
+def verify_and_fix(ref_srt_text, cand_srt_text):
+    """One-call convenience: (fixed_or_original_text, verdict). The text is
+    retimed ONLY on FIXABLE; CONFIRMED/UNKNOWN return the original."""
+    verdict = verify(ref_srt_text, cand_srt_text)
+    if verdict['status'] == STATUS_FIXABLE:
+        try:
+            fixed = retime(cand_srt_text, verdict['scale'],
+                           verdict['offset_ms'])
+            if fixed and fixed.strip():
+                return fixed, verdict
+        except Exception as e:
+            verdict = dict(verdict, status=STATUS_UNKNOWN,
+                           diag=verdict['diag'] + ' | retime failed: %r' % e)
+    return cand_srt_text, verdict
+
+
+# ---- oracle selection --------------------------------------------------------
+
+def pick_oracle(candidates, playing_release):
+    """Choose the best timing-reference candidate for the playing release.
+    `candidates`: iterable of dicts with at least {'release': name} (any extra
+    keys pass through). Returns (candidate, tier) of the best release-matched
+    one, or (None, '') when nothing anchors. Synthetic playing names never
+    anchor an oracle."""
+    try:
+        try:
+            from resources.lib import release_match as rm
+        except Exception:
+            import release_match as rm
+    except Exception:
+        return None, ''
+    if not playing_release or rm.is_synthetic(playing_release):
+        return None, ''
+    best_c, best_tier, best_pct = None, '', 0
+    order = {rm.TIER_EXACT: 2, rm.TIER_GROUP: 1}
+    for c in candidates or []:
+        rel = (c.get('release') or '').strip()
+        if not rel:
+            continue
+        pct, tier, _ = rm.score(playing_release, rel)
+        rank = order.get(tier, 0)
+        if rank == 0:
+            continue
+        if (rank, pct) > (order.get(best_tier, 0), best_pct):
+            best_c, best_tier, best_pct = c, tier, pct
+    return best_c, best_tier
