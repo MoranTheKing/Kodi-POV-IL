@@ -208,6 +208,35 @@ picker shows the tier badges above instead of a bare %; a manual
 visible progress dialog. The source-screen `HEB NN%` badge (he_sub_match)
 upgrades to `HEB מסונכרן ✓` when the registry has a CONFIRMED record.
 
+## 4b. The certainty model — what can honestly reach ~100%
+
+"100% synced" is only meaningful when the evidence is anchored to the
+**actual playing file**. Ranked anchors, strongest first:
+
+| Anchor | Certainty | Coverage |
+|--------|-----------|----------|
+| A. Embedded Hebrew track in the file | 100% by construction | rare |
+| B. **File-anchored verify (container probe, §7.3/S4):** candidate aligned against the playing file's own embedded text-track cues | ~100% — the reference IS this file | high: WEB-DL/remux MKVs almost always mux English subs |
+| C. Pool variant, same source_hash + viewer-confirmed via `/sync` votes | ~100% statistically (each vote = a human who watched THIS release) | grows with use |
+| D. Exact release identity + cross-oracle agreement | very high | high |
+| E. Retimed vs oracle (gate passed) | high | — |
+| F. No anchor (no embedded track, no matching sub, HLS) | honest "לא מאומת" — physically unverifiable without audio (S5 Gemini-audio covers part) | small |
+
+Implications:
+- **Anchor B is the "100%" workhorse and serves human subs FIRST**: whenever
+  the playing file carries any embedded text track, every human Hebrew
+  candidate can be verified — and retimed — against the file itself before
+  (or seconds after) delivery. Because certainty is the maintainer's top
+  goal, the container probe should be pulled forward if S2's sub-vs-sub
+  verification proves insufficient in the field.
+- **Self-healing delivery:** deliver the best candidate immediately, run the
+  file-anchored verify in parallel; if a mismatch is detected in the first
+  ~minute, swap in the retimed version silently. The user experiences
+  "always synced" without waiting on verification.
+- **Convergence:** every play adds a vote; for any reasonably popular
+  title+release the record reaches anchor-C certainty within days, and every
+  subsequent viewer gets a 100%-confirmed answer instantly.
+
 ## 5. Phasing (each shippable via quick_update, standalone-safe)
 
 - **Phase S1 — unified structured scorer (low risk).** `release_match.py` +
@@ -268,12 +297,20 @@ the PR; what it does:
 
 ### Adopted into this plan
 
-1. **Instant-AI-then-swap-in-place (Phase S2 UX).** Don't make the user wait
-   for the ladder: deliver the best instant option (pool hit / progressive AI
-   first-chunk — the `progressive_cb('first_ready')` seam already exists in
-   `translate.resolve`) and let the scan continue in the background; when a
-   higher-tier verified human sub lands, `setSubtitles` swaps it in-place
-   with a small toast ("הוחלף לתרגום אנושי מסונכרן"). Never downgrade.
+1. **Instant-best-then-swap-in-place (Phase S2 UX) — with a quota guard.**
+   Don't make the user wait for the ladder; but "instant" prefers ZERO-COST
+   options first: embedded → cached translation → pool fetch. **Gemini is
+   invoked in exactly the same cases it is today** (the fast human-Hebrew
+   scan — a few seconds — came up empty and translation_mode allows it); the
+   change is only that the user sees the progressive first-chunk immediately
+   instead of waiting, while the SLOW tail of the scan (oracle download,
+   verify, retime — tens of seconds) keeps running in the background. When
+   that tail lands a verified human sub, `setSubtitles` swaps it in-place
+   with a toast ("הוחלף לתרגום אנושי מסונכרן"). The translation still
+   completes, is cached and pooled — so the "wasted" quota case is only
+   "human sub existed but was found late", bounded by making the human scan
+   phase complete BEFORE Gemini starts (ARVIO's `aiFindBestMatchFirst`
+   equivalent, our default). Never downgrade.
 2. **User-pick-always-wins as a hard rule (Phase S2).** An explicit pick in
    the picker sets a per-file override flag; the ladder never replaces it
    (generalizes today's one-shot `skip_autosub` marker).
