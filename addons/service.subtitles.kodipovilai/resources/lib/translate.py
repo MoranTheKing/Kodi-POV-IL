@@ -95,9 +95,16 @@ def _looks_like_token(s):
 
 
 def _match_pct(video_name, sub_name):
-    """Release-name match %, same idea as the engine's sort_subtitles
-    (token-list similarity). Used to show a sync % on community-pool
-    entries the way human sources show one."""
+    """Release-name match % via the ONE structured scorer (release_match,
+    SubSync S1): exact release=100, same group+source ~90, cross-source
+    (WEB vs BluRay) capped low -- so the picker %, the source-screen badge
+    and the engine ordering all agree AND the number reflects sync
+    likelihood. Legacy token-similarity kept only as an import fallback."""
+    try:
+        from resources.lib import release_match as _rm
+        return _rm.match_pct(video_name, sub_name)
+    except Exception:
+        pass
     import re as _re
     import difflib as _dl
 

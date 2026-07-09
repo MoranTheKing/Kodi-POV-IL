@@ -177,11 +177,20 @@ def sort_subtitles(f_result,video_data):
         return percent
     ###############################################################################################
     
+    # SubSync S1: the ONE structured release scorer (exact=100, same
+    # group+source ~90, cross-source capped low). When importable, it scores
+    # the RAW strings and replaces the legacy token-similarity below, so the
+    # engine's %, the picker's % and the source-screen badge all agree.
+    try:
+        from resources.lib import release_match as _release_match
+    except Exception:
+        _release_match = None
+
     # Clean video file_original_path
     video_file_original_path_array = clean_string_and_create_array(video_data['file_original_path'])
     # Clean video Tagline
     video_tagline_array = clean_string_and_create_array(video_data['Tagline'])
-    
+
     for result_value in f_result:
     
         if Addon.getSetting("enable_autosub_notifications")=='true' or not xbmc.Player().isPlaying():
@@ -192,16 +201,25 @@ def sort_subtitles(f_result,video_data):
         json_value = json.loads(json.dumps(result_value))
         
         ################### Calculate Sync Percentage #################################################
-        # Clean subtitle name
-        subtitle_name_array = clean_string_and_create_array(json_value['filename'])
-        
-        # Video file_original_path sync percentage
-        percent_from_file_original_path = calculate_sync_percentage(video_file_original_path_array, subtitle_name_array)
-        
-        # Video Tagline sync percentage
-        percent_from_video_tagline = calculate_sync_percentage(video_tagline_array, subtitle_name_array)
-        
-        percent = max(percent_from_file_original_path, percent_from_video_tagline)
+        if _release_match is not None:
+            # Structured scorer on the raw strings (also avoids the legacy
+            # path's cross-iteration array mutation).
+            percent = max(
+                _release_match.match_pct(video_data['file_original_path'],
+                                         json_value['filename']),
+                _release_match.match_pct(video_data['Tagline'],
+                                         json_value['filename']))
+        else:
+            # Clean subtitle name
+            subtitle_name_array = clean_string_and_create_array(json_value['filename'])
+
+            # Video file_original_path sync percentage
+            percent_from_file_original_path = calculate_sync_percentage(video_file_original_path_array, subtitle_name_array)
+
+            # Video Tagline sync percentage
+            percent_from_video_tagline = calculate_sync_percentage(video_tagline_array, subtitle_name_array)
+
+            percent = max(percent_from_file_original_path, percent_from_video_tagline)
         ###############################################################################################
         
         

@@ -208,6 +208,21 @@ picker shows the tier badges above instead of a bare %; a manual
 visible progress dialog. The source-screen `HEB NN%` badge (he_sub_match)
 upgrades to `HEB מסונכרן ✓` when the registry has a CONFIRMED record.
 
+**Notification policy — quiet by default, no toast spam:**
+- The verdict for a (sub, release) pair is CACHED — locally and in `/sync` —
+  so it is NOT re-checked on every play. The background verify runs only
+  when no verdict exists yet (typically once per release, globally, by the
+  first viewer). A confirmed pair plays silently forever after.
+- Silent events (NO toast): registry-confirmed delivery, exact-match
+  delivery, background verify that CONFIRMS the already-playing sub
+  (nothing changed for the user — the tier just shows in the overlay's
+  final status line and the picker labels, where the % badge lives today).
+- One toast, only when something CHANGES for the user: an in-place swap to
+  a better sub ("הוחלף לתרגום אנושי מסונכרן") or a retime correction
+  applied mid-play. One per playback, max.
+- Low-confidence delivery (nothing verifiable found): the honest tier shows
+  in the overlay status + picker label — not as a recurring toast.
+
 ## 4b. The certainty model — what can honestly reach ~100%
 
 "100% synced" is only meaningful when the evidence is anchored to the
@@ -275,6 +290,10 @@ subtitle in the same ~5s as today; certainty arrives behind it.
 - **Phase S3 — community sync registry.** Worker `/sync` (KV), pool.py
   contribute/consume piggybacked on `/lookup`, subtitle-delay feedback
   capture in service.py, badge upgrade in he_sub_match.
+  **IMPORTANT (maintainer):** the repo's `pool/worker.js` is deliberately
+  STALE — the live worker code exists only on Cloudflare and is newer. Before
+  ANY S3 worker edit, ask the maintainer for the current worker.js; do not
+  base changes on (or commit updates to) the repo copy.
 - **Phase S4 — container-probe reference (video-anchored oracle).** HTTP
   Range probe of MKV/WebM direct streams → embedded text-track cue
   timestamps as a TRUE reference for estimate() (see §7.3). Ships after S2/S3
@@ -347,16 +366,67 @@ the PR; what it does:
    for the same estimate() (offset + scale). This anchors sync to the actual
    playing file, beating any oracle sub. Scope: MKV/WebM direct files (most
    debrid remuxes); not HLS. Pure Python; cache per file hash.
+
+   **Probe mechanics & download budget (never the whole file):**
+   - ~1–2 MB from the head: EBML header + SeekHead + Tracks (find the text
+     subtitle tracks: codec S_TEXT/UTF8 or S_TEXT/ASS, language, and the
+     `forced` flag) + the Cues index position.
+   - The Cues (usually a few hundred KB near the end): cluster byte offsets
+     by timestamp → we can jump to any minute of the film directly.
+   - ~10–20 sample windows of ~4–8 MB spread across the runtime (each window
+     covers a few seconds of interleaved data; sub blocks inside carry
+     timestamp+duration+text, video/audio blocks are skipped by header). If a
+     window lands on a dialogue-free scene (no sub blocks), slide forward.
+   - Total: typically **~50–100 MB of ranged reads** (tunable; ≈ under a
+     minute of normal streaming buffer), NOT a contiguous "3 minutes of
+     video". Runs in the background verify stage; the result (scale/offset/
+     verdict) is cached per file hash and shared via `/sync`, so the cost is
+     paid once per release globally.
+   - **The reference is LANGUAGE-AGNOSTIC.** The aligner never reads cue
+     text — only timestamps — so an embedded track in ANY language (source
+     language of a foreign film, French, Korean…) is exactly as good an
+     oracle as English. Filter: skip `forced`-flagged or cue-sparse tracks
+     (forced tracks mark only foreign-line moments — too sparse to anchor);
+     prefer the densest text track.
+   - Coverage note (maintainer): most MKV releases carry SOME embedded text
+     track even when not English; the practical gap is MP4 (no usable text
+     tracks), a small minority of today's sources. MP4 files simply stay on
+     the oracle-sub anchors (D/E) + community confirmation (C) — verified,
+     just not file-anchored.
+   - The embedded track is a timing reference ONLY — extracting its full
+     text for translation would require scanning the whole file, so the
+     TRANSLATION source remains an external sub (any language; Gemini
+     translates any→Hebrew), which the probe then verifies/retimes.
+   - **Bitmap subtitle tracks anchor too.** Since the aligner reads only
+     timestamps, an IMAGE-sub track (PGS `S_HDMV/PGS` on BluRay remuxes,
+     VobSub) is a valid timing reference — its display events mark the same
+     dialogue moments. We never need OCR. This closes the "BluRay remux with
+     PGS-only subs" case that a text-only design would miss.
+
+   **Container matrix (what the probe supports):**
+   | Container | Embedded-sub probe | Notes |
+   |---|---|---|
+   | MKV / WebM | Full (windows method above) | text (SRT/ASS) AND bitmap (PGS/VobSub) timestamps |
+   | MP4 / M4V | Full — and CHEAPER | `mov_text`/`tx3g` cue timing lives entirely in the `moov` sample tables (stts/stco): ONE ranged read of moov (few MB, head or tail) yields the COMPLETE cue timeline — no sample windows needed. Most MP4s carry no sub track at all, but when one exists this is the cheapest anchor of all |
+   | AVI / TS / M2TS | No text-sub anchor | rare via debrid; fall to anchors C/D/E |
+   | HLS / DASH | No single file — no probe | fall to anchors C/D/E |
+   The ladder NEVER breaks on an unsupported container — it just loses the
+   file-anchor tier and keeps oracle + community verification.
 4. **Gemini-audio deep verify (last-resort tier, Phase S5, opt-in).** Kodi
    exposes NO player audio API — but the stream URL is known, so audio can be
    range-fetched and DEMUXED (never decoded) from MKV clusters in pure
    Python. Reality check on codecs: Gemini accepts AAC/MP3/FLAC/WAV/OGG —
    so an **AAC track** can be sent as-is (ADTS wrap) for speech-interval
    timestamps; **AC3/E-AC3/DTS tracks cannot** (Gemini doesn't accept them,
-   and on-device decode is impossible). Coverage is therefore partial by
-   nature — which is fine: this tier only exists for the small anchor-F
-   slice (no embedded text track AND no matching sub anywhere). 2–3 × ~60s
-   segments per check, quota-aware, off by default.
+   and on-device decode is impossible). Before giving up on a DTS/AC3 main
+   track, check the OTHER audio tracks — releases often mux a secondary
+   stereo AAC "compatibility" track, which serves fine. Coverage is
+   therefore partial by nature — which is fine: this tier only exists for
+   the tiny anchor-F slice (no embedded sub track of ANY kind — text or
+   bitmap — AND no matching external sub in any language). If in that rare
+   slice the audio is also DTS/AC3-only: honest "לא מאומת" label, and the
+   community delay-feedback loop still converges it to confirmed within a
+   few viewers. 2–3 × ~60s segments per check, quota-aware, off by default.
 
 ### Where this plan is deliberately stronger
 
