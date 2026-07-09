@@ -1,3 +1,15 @@
+v0.2.351
+- SubSync audio anchor: adaptive second pass. When the coarse histogram
+  finds a STRONG peak (vote>=80%) that fails only the tight +/-450ms check
+  -- i.e. promising but under-determined by too few speech cues -- the probe
+  now samples TWO additional audio positions once, merges the speech cues
+  with the cached first pass, and re-judges. The extension is marked in the
+  probe cache so it never repeats per release. Gemini prompt sharpened to
+  demand word-onset precision (two decimals) -- the tight check depends on
+  it. Field context: the ColdFilm case now correctly REFUSES the spurious
+  +72s peak (tight=20%), and the second pass gives genuine alignments a
+  fair chance to reach confidence instead of giving up at 10 cues.
+
 v0.2.350
 - CRITICAL SubSync fix: a spurious alignment could shift subtitles out of
   sight. Field case: a sparse 10-cue audio reference against a dense
