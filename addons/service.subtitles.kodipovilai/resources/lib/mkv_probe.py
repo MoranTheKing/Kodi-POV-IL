@@ -38,9 +38,13 @@ _TRACKENTRY = 0xAE
 _TRACKNUM = 0xD7
 _TRACKTYPE = 0x83
 _CODEC = 0x86
+_CODEC_PRIVATE = 0x63A2
 _LANG = 0x22B59C
 _LANG_BCP47 = 0x22B59D
 _FORCED = 0x55AA
+_AUDIO_EL = 0xE1
+_SAMPLERATE = 0xB5
+_CHANNELS = 0x9F
 _CLUSTER = 0x1F43B675
 _CLUSTER_MAGIC = b'\x1f\x43\xb6\x75'
 _TIMESTAMP = 0xE7
@@ -50,6 +54,7 @@ _BLOCK = 0xA1
 _BLOCKDUR = 0x9B
 
 _SUB_TRACK_TYPE = 0x11
+_AUDIO_TRACK_TYPE = 0x02
 
 DEFAULT_HEAD_BYTES = 2 * 1024 * 1024
 DEFAULT_WINDOW_BYTES = 3 * 1024 * 1024
@@ -183,7 +188,8 @@ def _walk(buf, end):
 
 
 def _parse_track_entry(data):
-    t = {'num': None, 'type': None, 'codec': '', 'lang': '', 'forced': False}
+    t = {'num': None, 'type': None, 'codec': '', 'lang': '', 'forced': False,
+         'private': b'', 'samplerate': 0.0, 'channels': 0}
     buf = _Buf(data, 0)
     for eid, size, start in _walk(buf, len(data)):
         if size is None:
@@ -196,11 +202,29 @@ def _parse_track_entry(data):
             t['type'] = _read_uint(payload)
         elif eid == _CODEC:
             t['codec'] = payload.decode('ascii', 'replace')
+        elif eid == _CODEC_PRIVATE:
+            t['private'] = payload
         elif eid in (_LANG, _LANG_BCP47):
             if not t['lang']:
                 t['lang'] = payload.decode('ascii', 'replace').strip('\x00')
         elif eid == _FORCED:
             t['forced'] = bool(_read_uint(payload))
+        elif eid == _AUDIO_EL:
+            abuf = _Buf(payload, 0)
+            for aeid, asize, astart in _walk(abuf, len(payload)):
+                if asize is None:
+                    break
+                ap = payload[astart:astart + asize]
+                abuf.p = astart + asize
+                if aeid == _SAMPLERATE:
+                    try:
+                        t['samplerate'] = (struct.unpack('>f', ap)[0]
+                                           if len(ap) == 4 else
+                                           struct.unpack('>d', ap)[0])
+                    except Exception:
+                        pass
+                elif aeid == _CHANNELS:
+                    t['channels'] = _read_uint(ap)
     return t
 
 
@@ -388,7 +412,7 @@ def _parse_head(src, head_bytes, log):
         len(tracks), len(subs),
         ['#%s %s %s%s' % (t['num'], t['codec'], t['lang'] or '?',
                           ' FORCED' if t['forced'] else '') for t in subs]))
-    return seg_start, ts_scale, subs
+    return seg_start, ts_scale, tracks
 
 
 def subtitle_reference(url_or_path,
@@ -409,7 +433,9 @@ def subtitle_reference(url_or_path,
     try:
         src = _Source(url_or_path)
         t0 = time.time()
-        seg_start, ts_scale, subs = _parse_head(src, head_bytes, _log)
+        seg_start, ts_scale, tracks = _parse_head(src, head_bytes, _log)
+        subs = [t for t in tracks
+                if t['type'] == _SUB_TRACK_TYPE and t['num'] is not None]
         if not subs or not src.total:
             return None
         scale_ms = ts_scale / 1e6
@@ -462,6 +488,237 @@ def subtitle_reference(url_or_path,
     except Exception as e:
         _log('probe failed: %r' % e)
         return None
+    finally:
+        if src is not None:
+            src.close()
+
+
+# ---- S5: audio segment extraction (demux-only, AAC -> ADTS) ------------------
+
+def _block_frames(payload):
+    """((track, rel_ts), [frame bytes...]) for a (Simple)Block payload,
+    handling all lacing modes. None on malformed."""
+    buf = _Buf(payload, 0)
+    tnum, _l = _read_vint(buf, False)
+    if tnum is None or buf.left() < 3:
+        return None
+    rel = struct.unpack('>h', payload[buf.p:buf.p + 2])[0]
+    flags = payload[buf.p + 2]
+    buf.p += 3
+    lacing = (flags >> 1) & 0x03
+    data = payload[buf.p:]
+    if lacing == 0:
+        return (tnum, rel), [data]
+    if not data:
+        return None
+    n = data[0] + 1
+    pos = 1
+    sizes = []
+    if lacing == 1:      # Xiph
+        for _ in range(n - 1):
+            s = 0
+            while pos < len(data):
+                s += data[pos]
+                brk = data[pos] < 255
+                pos += 1
+                if brk:
+                    break
+            sizes.append(s)
+    elif lacing == 2:    # fixed
+        rem = len(data) - 1
+        if n <= 0 or rem % n:
+            return None
+        sizes = [rem // n] * (n - 1)
+    else:                # EBML
+        b2 = _Buf(data, 0)
+        b2.p = pos
+        first, flen = _read_vint(b2, False)
+        if first is None:
+            return None
+        sizes.append(first)
+        prev = first
+        for _ in range(n - 2):
+            # signed vint delta
+            start_p = b2.p
+            raw, rlen = _read_vint(b2, False)
+            if raw is None:
+                return None
+            delta = raw - ((1 << (7 * rlen - 1)) - 1)
+            prev += delta
+            sizes.append(prev)
+        pos = b2.p
+    frames = []
+    off = pos
+    for s in sizes:
+        if off + s > len(data):
+            return None
+        frames.append(data[off:off + s])
+        off += s
+    frames.append(data[off:])   # last frame = remainder
+    return (tnum, rel), frames
+
+
+def _asc_adts_header(private, frame_len):
+    """7-byte ADTS header for one raw AAC frame, from the track's
+    AudioSpecificConfig (CodecPrivate)."""
+    if len(private) < 2:
+        return b''
+    aot = (private[0] >> 3) & 0x1F
+    freq_idx = ((private[0] & 0x07) << 1) | (private[1] >> 7)
+    chan = (private[1] >> 3) & 0x0F
+    if aot < 1 or aot > 4 or freq_idx > 12:
+        return b''
+    profile = aot - 1
+    total = frame_len + 7
+    return bytes([
+        0xFF, 0xF1,
+        (profile << 6) | (freq_idx << 2) | (chan >> 2),
+        ((chan & 0x03) << 6) | ((total >> 11) & 0x03),
+        (total >> 3) & 0xFF,
+        ((total & 0x07) << 5) | 0x1F,
+        0xFC,
+    ])
+
+
+def _scan_cluster_audio(window, base, tnum, scale_ms, out):
+    """Collect (abs_ms, raw_frame) for audio track `tnum` from clusters found
+    in `window`. Laced frames get per-frame times spaced by out['frame_dur']."""
+    pos = 0
+    fdur = out['frame_dur']
+    while True:
+        idx = window.find(_CLUSTER_MAGIC, pos)
+        if idx < 0:
+            return
+        buf = _Buf(window, base)
+        buf.p = idx + 4
+        csize, _sl = _read_vint(buf, False)
+        if _sl == 0:
+            return
+        limit = buf.n if csize is None else min(buf.n, buf.p + csize)
+        cluster_ts = None
+        while buf.p < limit:
+            if window[buf.p:buf.p + 4] == _CLUSTER_MAGIC:
+                break
+            eid, idl = _read_vint(buf, True)
+            if eid is None:
+                break
+            size, sl = _read_vint(buf, False)
+            if sl == 0 or size is None:
+                break
+            if buf.p + size > buf.n:
+                break
+            payload = window[buf.p:buf.p + size]
+            blk = None
+            if eid == _SIMPLEBLOCK and cluster_ts is not None:
+                blk = payload
+            elif eid == _BLOCKGROUP and cluster_ts is not None:
+                gbuf = _Buf(payload, 0)
+                for geid, gsize, gstart in _walk(gbuf, len(payload)):
+                    if gsize is None:
+                        break
+                    if geid == _BLOCK:
+                        blk = payload[gstart:gstart + gsize]
+                    gbuf.p = gstart + gsize
+            elif eid == _TIMESTAMP:
+                cluster_ts = _read_uint(payload)
+            if blk is not None:
+                r = _block_frames(blk)
+                if r and r[0][0] == tnum:
+                    t0 = (cluster_ts + r[0][1]) * scale_ms
+                    for i, fr in enumerate(r[1]):
+                        if fr:
+                            out['frames'].append((t0 + i * fdur, fr))
+            buf.p += size
+        pos = buf.p if buf.p > idx + 4 else idx + 4
+
+
+def audio_segments(url_or_path, seg_seconds=20, positions=(0.22, 0.50, 0.78),
+                   window_bytes=6 * 1024 * 1024,
+                   max_bytes=48 * 1024 * 1024,
+                   deadline_s=30.0, log=None):
+    """Extract 2 short CONTIGUOUS AAC audio segments from the file (demux
+    only, no decoding), each wrapped as a playable ADTS stream:
+        [{'start_ms': t, 'seconds': s, 'data': adts_bytes}, ...]
+    Returns [] when the audio codec isn't AAC (Gemini can't take AC3/DTS and
+    on-device decode is impossible) or the container is unsupported. Never
+    raises."""
+    _log = log or (lambda m: None)
+    src = None
+    try:
+        src = _Source(url_or_path)
+        t0 = time.time()
+        seg_start, ts_scale, tracks = _parse_head(
+            src, DEFAULT_HEAD_BYTES, _log)
+        if not src.total:
+            return []
+        auds = [t for t in tracks
+                if t['type'] == _AUDIO_TRACK_TYPE and t['num'] is not None]
+        aac = [t for t in auds if (t['codec'] or '').startswith('A_AAC')
+               and len(t['private'] or b'') >= 2 and t['samplerate'] > 0]
+        _log('audio tracks: %s' % (
+            ['#%s %s %.0fHz' % (t['num'], t['codec'], t['samplerate'])
+             for t in auds] or '-'))
+        if not aac:
+            _log('no AAC audio track -- audio anchor unavailable')
+            return []
+        tr = aac[0]
+        sr = tr['samplerate']
+        frame_dur = 1024.0 / sr * 1000.0
+        scale_ms = ts_scale / 1e6
+        segments = []
+        for f in positions:
+            if src.fetched >= max_bytes or (time.time() - t0) > deadline_s:
+                break
+            state = {'frames': [], 'frame_dur': frame_dur}
+            off = max(seg_start, int(src.total * f))
+            got_s = 0.0
+            while (got_s < seg_seconds and src.fetched < max_bytes
+                   and (time.time() - t0) <= deadline_s):
+                window = src.read(off, min(window_bytes,
+                                           max_bytes - src.fetched))
+                if not window:
+                    break
+                _scan_cluster_audio(window, off, tr['num'], scale_ms, state)
+                off += len(window)
+                if state['frames']:
+                    ts = sorted(t for t, _f in state['frames'])
+                    got_s = (ts[-1] - ts[0]) / 1000.0
+                if len(window) < window_bytes:
+                    break   # EOF
+            frames = sorted(state['frames'], key=lambda x: x[0])
+            if not frames:
+                continue
+            # Longest CONTIGUOUS run (gaps shift every later VAD timestamp).
+            runs, cur = [], [frames[0]]
+            for prev, nxt in zip(frames, frames[1:]):
+                if nxt[0] - prev[0] <= 3 * frame_dur:
+                    cur.append(nxt)
+                else:
+                    runs.append(cur)
+                    cur = [nxt]
+            runs.append(cur)
+            best = max(runs, key=len)
+            need = int(seg_seconds * 1000 / frame_dur)
+            best = best[:need]
+            if len(best) * frame_dur < 8000:
+                continue   # under ~8s of clean audio -- not worth a call
+            adts = bytearray()
+            for _t, fr in best:
+                hdr = _asc_adts_header(tr['private'], len(fr))
+                if not hdr:
+                    return []
+                adts += hdr + fr
+            segments.append({
+                'start_ms': int(best[0][0]),
+                'seconds': len(best) * frame_dur / 1000.0,
+                'data': bytes(adts),
+            })
+        _log('audio: %d segment(s), %.1fMB fetched in %.1fs' % (
+            len(segments), src.fetched / 1e6, time.time() - t0))
+        return segments
+    except Exception as e:
+        _log('audio extraction failed: %r' % e)
+        return []
     finally:
         if src is not None:
             src.close()

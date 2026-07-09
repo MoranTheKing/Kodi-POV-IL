@@ -100,6 +100,61 @@ def test_key(api_key, model='gemini-3.1-flash-lite'):
     return available[0] if available else 'unknown'
 
 
+def generate_media(api_key, model, prompt, media_bytes, mime,
+                   temperature=0.0, max_output_tokens=8192,
+                   timeout=REQUEST_TIMEOUT):
+    """One-shot generation with an inline media part (e.g. an AAC audio clip
+    for speech-interval extraction -- SubSync S5). Same error contract as
+    generate(). Kept separate so the translation path is untouched."""
+    if not requests:
+        raise GeminiError('python-requests is not installed')
+    if not api_key:
+        raise InvalidKey('No API key provided')
+    if not model:
+        raise GeminiError('No model selected')
+    import base64 as _b64
+    url = '{0}/models/{1}:generateContent?key={2}'.format(
+        API_BASE, urllib.parse.quote(model, safe=''),
+        urllib.parse.quote(api_key, safe=''))
+    payload = {
+        'contents': [{'parts': [
+            {'text': prompt},
+            {'inline_data': {
+                'mime_type': mime,
+                'data': _b64.b64encode(media_bytes).decode('ascii'),
+            }},
+        ]}],
+        'generationConfig': {
+            'temperature': temperature,
+            'maxOutputTokens': max_output_tokens,
+        },
+    }
+    try:
+        r = requests.post(url, data=json.dumps(payload),
+                          headers={'Content-Type': 'application/json'},
+                          timeout=timeout)
+    except requests.RequestException as e:
+        raise GeminiError('Network error: {0}'.format(e))
+    if r.status_code == 429:
+        raise QuotaExceeded('Daily quota exceeded')
+    if r.status_code in (500, 502, 503, 504):
+        raise OverloadError(
+            'Gemini overloaded (HTTP {0})'.format(r.status_code))
+    if r.status_code in (400, 403):
+        snippet = r.text[:300] if r.text else ''
+        if 'API key' in snippet or 'API_KEY' in snippet:
+            raise InvalidKey('Key rejected: {0}'.format(snippet))
+        raise GeminiError('Request rejected: {0}'.format(snippet))
+    if r.status_code != 200:
+        raise GeminiError('HTTP {0}: {1}'.format(r.status_code, r.text[:200]))
+    try:
+        data = r.json()
+        parts = data['candidates'][0]['content']['parts']
+        return ''.join(p.get('text', '') for p in parts)
+    except (ValueError, KeyError, IndexError, TypeError) as e:
+        raise GeminiError('Bad response shape: {0}'.format(e))
+
+
 def generate(api_key, model, prompt, temperature=0.2,
              max_output_tokens=16384, top_p=None,
              thinking_budget=None, thinking_level=None,
