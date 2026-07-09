@@ -37,9 +37,11 @@ _VERDICT_FILE = ('special://profile/addon_data/service.subtitles.kodipovilai/'
                  'subsync_verdicts.json')
 _MAX_VERDICTS = 400
 # Bump to invalidate ALL previously stored verdicts after an engine change.
-# v2: the pre-dedupe voting could store a spurious FIXABLE (field case:
+# v3: force recompute so UNKNOWNs stored before the adaptive second pass
+# get their pass-2 chance. v2: the pre-dedupe voting could store a spurious
+# FIXABLE (field case:
 # offset=-350s) -- those cached verdicts must never be re-applied.
-_VERDICT_VERSION = 2
+_VERDICT_VERSION = 3
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
