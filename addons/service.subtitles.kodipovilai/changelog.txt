@@ -1,3 +1,10 @@
+v0.2.352
+- Verdict-cache version bump (v3): UNKNOWN verdicts stored by 0.2.350/351
+  (before the adaptive second pass existed) are recomputed, so an already-
+  judged (subtitle, release) pair gets its pass-2 chance instead of being
+  short-circuited by the cached refusal. The audio-cue cache is reused, so
+  the recompute costs no new downloads or Gemini calls beyond pass 2 itself.
+
 v0.2.351
 - SubSync audio anchor: adaptive second pass. When the coarse histogram
   finds a STRONG peak (vote>=80%) that fails only the tight +/-450ms check
