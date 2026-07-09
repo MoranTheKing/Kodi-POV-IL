@@ -1,3 +1,19 @@
+v0.2.345
+- SubSync field fix: releases with an UNTAGGED source (e.g. Russian groups
+  like ColdFilm that ship no WEB/BluRay token in the name) could never
+  anchor a timing oracle -- a real device hit "no oracle for
+  From.S04E10.1080p.ColdFilm (88 foreign candidates)" and skipped the
+  auto-retime. Two scorer upgrades:
+  * same release GROUP now reaches the trusted GROUP tier even when the
+    source tag is missing on one/both sides (contradicting sources still cap
+    LOW as before);
+  * a normalized release name fully CONTAINED in the other (provider
+    decorations like a trailing ".rus") now scores 96/GROUP -- after the
+    edition/source/PROPER contradiction guards, which containment never
+    bypasses.
+  Regression tests added for the exact field case. No other behaviour
+  changes.
+
 v0.2.344
 - SubSync S2: automatic subtitle re-timing. When a delivered Hebrew subtitle
   (engine human pick or community-pool entry) belongs to a DIFFERENT release
