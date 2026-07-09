@@ -208,6 +208,21 @@ picker shows the tier badges above instead of a bare %; a manual
 visible progress dialog. The source-screen `HEB NN%` badge (he_sub_match)
 upgrades to `HEB מסונכרן ✓` when the registry has a CONFIRMED record.
 
+**Notification policy — quiet by default, no toast spam:**
+- The verdict for a (sub, release) pair is CACHED — locally and in `/sync` —
+  so it is NOT re-checked on every play. The background verify runs only
+  when no verdict exists yet (typically once per release, globally, by the
+  first viewer). A confirmed pair plays silently forever after.
+- Silent events (NO toast): registry-confirmed delivery, exact-match
+  delivery, background verify that CONFIRMS the already-playing sub
+  (nothing changed for the user — the tier just shows in the overlay's
+  final status line and the picker labels, where the % badge lives today).
+- One toast, only when something CHANGES for the user: an in-place swap to
+  a better sub ("הוחלף לתרגום אנושי מסונכרן") or a retime correction
+  applied mid-play. One per playback, max.
+- Low-confidence delivery (nothing verifiable found): the honest tier shows
+  in the overlay status + picker label — not as a recurring toast.
+
 ## 4b. The certainty model — what can honestly reach ~100%
 
 "100% synced" is only meaningful when the evidence is anchored to the
@@ -275,6 +290,10 @@ subtitle in the same ~5s as today; certainty arrives behind it.
 - **Phase S3 — community sync registry.** Worker `/sync` (KV), pool.py
   contribute/consume piggybacked on `/lookup`, subtitle-delay feedback
   capture in service.py, badge upgrade in he_sub_match.
+  **IMPORTANT (maintainer):** the repo's `pool/worker.js` is deliberately
+  STALE — the live worker code exists only on Cloudflare and is newer. Before
+  ANY S3 worker edit, ask the maintainer for the current worker.js; do not
+  base changes on (or commit updates to) the repo copy.
 - **Phase S4 — container-probe reference (video-anchored oracle).** HTTP
   Range probe of MKV/WebM direct streams → embedded text-track cue
   timestamps as a TRUE reference for estimate() (see §7.3). Ships after S2/S3
