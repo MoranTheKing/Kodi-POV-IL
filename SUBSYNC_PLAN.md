@@ -237,6 +237,30 @@ Implications:
   title+release the record reaches anchor-C certainty within days, and every
   subsequent viewer gets a 100%-confirmed answer instantly.
 
+## 4c. Latency budget — nothing gets slower than today's ~5s
+
+Hard rule: **verification NEVER delays the first subtitle.** The user gets a
+subtitle in the same ~5s as today; certainty arrives behind it.
+
+- **T-10s→0 (before playback even starts):** the scan begins at SOURCE PICK,
+  not at play. The release name is known the moment the user picks a source
+  (`picked_release` / `pov_picked_source_name`), and debrid resolve +
+  buffering takes seconds anyway — the same window the existing
+  `he_sub_match.prewarm` already exploits. Provider search, `/lookup`
+  (which now carries `/sync` records), and even the oracle download can
+  complete before the first frame renders.
+- **T+0–5s:** deliver by ladder from whatever the prewarm produced —
+  registry-confirmed pick (zero extra work), embedded, exact-release Hebrew,
+  pool fetch (~1–2s). Same perceived speed as today.
+- **T+5–60s (background):** the slow tail — oracle verify, retime, container
+  probe (a few MB of Range fetches + <1s parse). If it contradicts the
+  delivered sub → self-healing in-place swap to the retimed version.
+- **At scale:** every verified record lands in `/sync`, so for any title
+  people actually watch the FIRST tier already answers "confirmed" — the
+  steady state is *instant AND certain*, and the background tail does
+  nothing. The slow path is paid once per (release, sub) globally, by the
+  first viewer, invisibly.
+
 ## 5. Phasing (each shippable via quick_update, standalone-safe)
 
 - **Phase S1 — unified structured scorer (low risk).** `release_match.py` +
@@ -323,11 +347,16 @@ the PR; what it does:
    for the same estimate() (offset + scale). This anchors sync to the actual
    playing file, beating any oracle sub. Scope: MKV/WebM direct files (most
    debrid remuxes); not HLS. Pure Python; cache per file hash.
-4. **Gemini-audio deep verify (last-resort tier, Phase S5, opt-in).** When no
-   embedded text track and no oracle sub exist: demux (not decode) 2–3 short
-   audio segments from the same range-probed clusters (AAC→ADTS wrap), send
-   to Gemini with the user's existing key asking for speech-interval
-   timestamps, align candidates against them. Quota-aware, off by default.
+4. **Gemini-audio deep verify (last-resort tier, Phase S5, opt-in).** Kodi
+   exposes NO player audio API — but the stream URL is known, so audio can be
+   range-fetched and DEMUXED (never decoded) from MKV clusters in pure
+   Python. Reality check on codecs: Gemini accepts AAC/MP3/FLAC/WAV/OGG —
+   so an **AAC track** can be sent as-is (ADTS wrap) for speech-interval
+   timestamps; **AC3/E-AC3/DTS tracks cannot** (Gemini doesn't accept them,
+   and on-device decode is impossible). Coverage is therefore partial by
+   nature — which is fine: this tier only exists for the small anchor-F
+   slice (no embedded text track AND no matching sub anywhere). 2–3 × ~60s
+   segments per check, quota-aware, off by default.
 
 ### Where this plan is deliberately stronger
 
