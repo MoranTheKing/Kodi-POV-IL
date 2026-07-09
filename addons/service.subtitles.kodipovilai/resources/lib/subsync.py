@@ -36,6 +36,10 @@ except Exception:
 _VERDICT_FILE = ('special://profile/addon_data/service.subtitles.kodipovilai/'
                  'subsync_verdicts.json')
 _MAX_VERDICTS = 400
+# Bump to invalidate ALL previously stored verdicts after an engine change.
+# v2: the pre-dedupe voting could store a spurious FIXABLE (field case:
+# offset=-350s) -- those cached verdicts must never be re-applied.
+_VERDICT_VERSION = 2
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
@@ -108,7 +112,7 @@ def _store_verdict(key, verdict):
         return
     try:
         data = _load_verdicts()
-        data[key] = {'ts': time.time(),
+        data[key] = {'ts': time.time(), 'v': _VERDICT_VERSION,
                      'status': verdict.get('status'),
                      'scale': verdict.get('scale', 1.0),
                      'offset_ms': verdict.get('offset_ms', 0.0),
@@ -227,9 +231,16 @@ _AUDIO_PROMPT = (
     'and end in SECONDS relative to the beginning of THIS clip, e.g. '
     '[{"s": 1.2, "e": 3.4}, {"s": 5.0, "e": 7.7}]. Split segments at pauses '
     'longer than 0.7 seconds. Ignore music, effects and silence.')
-# Audio-VAD boundaries are softer than subtitle cues -> relaxed gate.
+# Audio-VAD boundaries are softer than subtitle cues -> relaxed vote/overlap,
+# BUT hard discipline everywhere else: identity scale only (a sparse VAD
+# reference cannot support scale estimation -- every extra scale candidate
+# multiplies the spurious-peak chance) and a narrow offset window. The field
+# incident: 10 sparse cues x 15 scales x +/-10min window "found" a bogus
+# offset=-350s that shifted the subs out of sight.
 _AUDIO_MIN_VOTE = 0.55
 _AUDIO_MIN_OVERLAP = 0.65
+_AUDIO_SCALES = (1.0,)
+_AUDIO_MAX_OFFSET_MS = 180000
 
 
 def _audio_probe_reference(info, playing):
@@ -413,6 +424,8 @@ def process(info, path, delivered_release):
 
         key = _cache_key(text, playing)
         cached = _load_verdicts().get(key)
+        if cached and cached.get('v') != _VERDICT_VERSION:
+            cached = None   # stored by an older engine -- recompute
         if cached:
             status = cached.get('status')
             if status == sync_align.STATUS_FIXABLE:
@@ -478,7 +491,9 @@ def process(info, path, delivered_release):
                 ref_cues = _audio_probe_reference(info, playing)
                 ref_kind = 'AUDIO PROBE'
                 gate_kw = {'min_vote': _AUDIO_MIN_VOTE,
-                           'min_overlap': _AUDIO_MIN_OVERLAP}
+                           'min_overlap': _AUDIO_MIN_OVERLAP,
+                           'scales': _AUDIO_SCALES,
+                           'max_offset_ms': _AUDIO_MAX_OFFSET_MS}
             if not ref_cues:
                 return path, {'status': _STATUS_NO_ORACLE}
             verdict = sync_align.verify_cues(ref_cues, text, **gate_kw)
