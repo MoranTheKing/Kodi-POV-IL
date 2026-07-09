@@ -90,6 +90,33 @@ p2 = rm.parse('Movie.2021.1080p.BluRay.DTS.x264-CMRG')
 check('source bluray', p2['source'] == 'bluray', repr(p2))
 check('group cmrg', p2['group'] == 'cmrg', repr(p2))
 
+print('== untagged-source groups (the ColdFilm case from the field) ==')
+# Playing release has a group but NO source tag -- a same-group candidate
+# must still reach TIER_GROUP so it can anchor an oracle (this exact case
+# returned "no oracle" with 88 candidates on a real device).
+t('From.S04E10.1080p.ColdFilm.mkv',
+  'From.S04E10.1080p.WEBRip.ColdFilm', rm.TIER_GROUP, 86)
+t('From.S04E10.1080p.ColdFilm.mkv',
+  'From.S04E10.1080p.ColdFilm.rus.srt', rm.TIER_GROUP, 90)
+# But a contradicting source still caps low even with the same group.
+t('Movie.2024.1080p.BluRay.x264-SPARKS',
+  'Movie.2024.1080p.WEB-DL.x264-SPARKS', rm.TIER_CROSS, None, 35)
+# Containment never bypasses the PROPER guard.
+t('Show.S02E03.1080p.WEB.h264-GRP',
+  'Show.S02E03.PROPER.1080p.WEB.h264-GRP', rm.TIER_CROSS, None, 40)
+
+print('== oracle eligibility for untagged release (regression) ==')
+sys.path.insert(0, os.path.join(
+    os.path.dirname(__file__), '..',
+    'addons', 'service.subtitles.kodipovilai', 'resources', 'lib'))
+import sync_align as _sa  # noqa: E402
+_c, _tier = _sa.pick_oracle(
+    [{'release': 'From.S04E10.1080p.WEBRip.ColdFilm', 'id': 1},
+     {'release': 'From.S04E10.720p.HDTV.x264-KILLERS', 'id': 2}],
+    'From.S04E10.1080p.ColdFilm.mkv')
+check('ColdFilm oracle now picked', _c is not None and _c['id'] == 1,
+      str(_tier))
+
 print('== synthetic release detection ==')
 check('synthetic Title.S01E02.1080p.mkv',
       rm.is_synthetic('Some Show.S01E02.1080p.mkv') is True)
