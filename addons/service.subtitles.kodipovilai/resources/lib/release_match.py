@@ -189,9 +189,26 @@ def score(video_name, sub_name):
     same_source = bool(v['source'] and s['source'])  # equal if both set here
     same_group = bool(v['group'] and s['group'] and v['group'] == s['group'])
 
-    if same_group and same_source:
-        pct = 90
-        reasons.append('same group + source')
+    # Containment: one normalized name fully inside the other (after the
+    # contradiction guards above). Covers provider-decorated variants of the
+    # SAME release ("...ColdFilm" vs "...ColdFilm.rus"). Requires the shorter
+    # side to be a real identity (enough tokens + some structural field).
+    shorter, longer = (va, sa) if len(va) <= len(sa) else (sa, va)
+    if shorter in longer:
+        sp = v if shorter == va else s
+        if (len(shorter.split('.')) >= 4
+                and (sp['group'] or sp['source'] or sp['resolution'])):
+            return 96, TIER_GROUP, ['release name contained']
+
+    if same_group:
+        # Same release group is the strongest identity signal. With the same
+        # source class it's a near-certain sync; with source UNKNOWN on one or
+        # both sides (groups like ColdFilm often ship no WEB/BluRay tag at
+        # all) it's still group-level trust -- contradicting sources already
+        # returned TIER_CROSS above.
+        pct = 90 if same_source else 86
+        reasons.append('same group + source' if same_source
+                       else 'same group (source untagged)')
         if v['resolution'] and v['resolution'] == s['resolution']:
             pct += 4
             reasons.append('same resolution')
@@ -214,12 +231,9 @@ def score(video_name, sub_name):
         pct += int(ratio * 15)   # token tie-break WITHIN the tier
         return max(20, min(pct, 84)), TIER_SOURCE, reasons
 
-    # Source unknown on at least one side: token similarity only, bounded so
-    # it can never outrank a structural match.
+    # Source unknown on at least one side (and groups don't match): token
+    # similarity only, bounded so it can never outrank a structural match.
     pct = int(10 + ratio * 55)
-    if same_group:
-        pct = max(pct, 72)
-        reasons.append('same group (source unknown)')
     return min(pct, 79), TIER_FUZZY, reasons
 
 
