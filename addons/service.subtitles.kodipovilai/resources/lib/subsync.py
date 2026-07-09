@@ -462,6 +462,8 @@ def process(info, path, delivered_release):
                                           cached.get('offset_ms', 0.0))
                 out = _write_fixed(path, fixed)
                 if out:
+                    # Quiet on repeat plays: the fix was announced ONCE when it
+                    # was first computed; from then on it just works silently.
                     _log('cached FIXABLE applied: ' + cached.get('diag', ''))
                     return out, {'status': status, 'applied': True,
                                  'offset_ms': cached.get('offset_ms', 0.0),
@@ -472,6 +474,30 @@ def process(info, path, delivered_release):
                 return path, {'status': status, 'cached': True,
                               'diag': cached.get('diag', '')}
 
+        # DEEP verification needed (oracle download / file probe / audio) --
+        # NEVER inline: it can take 10-30s and used to hold the autosub
+        # "searching subtitles" overlay up (and the picker spinner) the whole
+        # time. Hand the job to the long-lived service (same disk-queue
+        # pattern as the he_warm drainer), deliver the ORIGINAL file now, and
+        # let the worker swap in a fixed copy when (and only when) it proves
+        # one -- self-healing delivery, per the plan's latency budget.
+        _mark_pending(key)
+        if _enqueue_deep(info, path, rel, playing, key):
+            return path, {'status': 'PENDING'}
+        # Queue unwritable (rare) -- fall back to the old synchronous path.
+        out, verdict = _deep_verify(info, path, text, rel, playing, key)
+        _announce(verdict, fresh=True)
+        return out, verdict
+    except Exception as e:
+        _log('process failed (fail-open): %r' % e, level='WARNING')
+        return path, None
+
+
+def _deep_verify(info, path, text, rel, playing, key):
+    """The slow anchors: oracle sub -> file probe -> audio. Stores the verdict
+    and returns (final_path, verdict). Runs in the SERVICE worker (or the rare
+    synchronous fallback). Never raises."""
+    try:
         # Need an oracle: best release-matched foreign sub for THIS release.
         cands = _oracle_candidates(info)
         oracle, tier = (sync_align.pick_oracle(cands, playing)
@@ -560,8 +586,211 @@ def process(info, path, delivered_release):
                 return out, dict(verdict, applied=True)
         return path, verdict
     except Exception as e:
-        _log('process failed (fail-open): %r' % e, level='WARNING')
+        _log('deep verify failed (fail-open): %r' % e, level='WARNING')
         return path, None
+
+
+# ---- background worker plumbing (service-side) -------------------------------
+
+_QUEUE_DIR = ('special://profile/addon_data/service.subtitles.kodipovilai/'
+              'subsync_queue')
+_PENDING_PROP = 'subsync.pending'
+_JOB_FRESH_S = 120
+
+# Keys that must survive the JSON round-trip for bridge.search /
+# playing_release to work in the service process.
+_INFO_KEYS = ('imdb_id', 'tmdb_id', 'season', 'episode', 'title', 'tvshow',
+              'tvshowtitle', 'year', 'filepath', 'picked_release', 'tagline',
+              'label', 'media_type', 'is_episode')
+
+
+def _queue_dir():
+    try:
+        import xbmcvfs
+        return xbmcvfs.translatePath(_QUEUE_DIR)
+    except Exception:
+        return ''
+
+
+def _mark_pending(key):
+    """Remember which (sub, release) pair we delivered un-verified, so the
+    worker only swaps if the user hasn't picked something else meanwhile."""
+    try:
+        import xbmcgui
+        xbmcgui.Window(10000).setProperty(
+            _PENDING_PROP, json.dumps({'key': key, 'ts': time.time()}))
+    except Exception:
+        pass
+
+
+def _pending_key():
+    try:
+        import xbmcgui
+        raw = xbmcgui.Window(10000).getProperty(_PENDING_PROP) or ''
+        return (json.loads(raw) or {}).get('key', '') if raw else ''
+    except Exception:
+        return ''
+
+
+def _enqueue_deep(info, path, rel, playing, key):
+    """Drop a deep-verify job for the service drainer. True on success."""
+    d = _queue_dir()
+    if not d:
+        return False
+    try:
+        os.makedirs(d, exist_ok=True)
+        safe = re.sub(r'[^0-9A-Za-z]+', '_', key)[:80] or 'job'
+        jpath = os.path.join(d, safe + '.json')
+        try:
+            if (os.path.isfile(jpath)
+                    and time.time() - os.path.getmtime(jpath) < _JOB_FRESH_S):
+                return True   # identical job already queued
+        except OSError:
+            pass
+        job = {
+            'key': key, 'path': path, 'release': rel, 'playing': playing,
+            'ts': time.time(),
+            'info': {k: info.get(k) for k in _INFO_KEYS
+                     if isinstance(info.get(k), (str, int, float, bool))},
+        }
+        tmp = jpath + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(job, f, ensure_ascii=False)
+        os.replace(tmp, jpath)
+        _log('deep job enqueued for %r' % key)
+        return True
+    except Exception as e:
+        _log('enqueue failed: %r' % e, level='WARNING')
+        return False
+
+
+def _announce(verdict, fresh, offset_hint=None):
+    """The ONE gentle toast policy: a single notification per (sub, release)
+    pair EVER -- only when a verdict was freshly computed. Cached verdicts,
+    trusted tiers and nothing-to-verify (NO_ORACLE) stay silent. Most toasts
+    in this addon were deliberately silenced after user complaints -- keep it
+    that way; this speaks only when it has news the user can act on/feel."""
+    try:
+        if not fresh or not verdict:
+            return
+        st = verdict.get('status')
+        if st == sync_align.STATUS_FIXABLE and verdict.get('applied'):
+            off = float(offset_hint if offset_hint is not None
+                        else verdict.get('offset_ms') or 0.0)
+            scale = float(verdict.get('scale') or 1.0)
+            if scale == 1.0 and off:
+                msg = 'הכתובית סונכרנה אוטומטית ({0:+.1f} שנ׳)'.format(
+                    -off / 1000.0)
+            else:
+                msg = 'הכתובית סונכרנה אוטומטית'
+            kodi_utils.notify(msg, time_ms=5000)
+        elif st == sync_align.STATUS_UNKNOWN:
+            kodi_utils.notify('לא ניתן לאמת סנכרון — הכתובית מוצגת כפי שהיא',
+                              time_ms=4000)
+    except Exception:
+        pass
+
+
+def _swap_if_current(job, fixed_path, verdict):
+    """Swap the playing subtitle to the fixed copy -- ONLY if the user is
+    still watching the same stream and hasn't picked a different subtitle
+    since we delivered (the pending marker still names our job)."""
+    try:
+        import xbmc
+        if _pending_key() != job.get('key'):
+            _log('swap skipped: user picked something else meanwhile')
+            return False
+        player = xbmc.Player()
+        if not player.isPlaying():
+            return False
+        try:
+            cur_url = (player.getPlayingFile() or '').split('|')[0]
+        except Exception:
+            cur_url = ''
+        job_url = (job.get('info', {}).get('filepath') or '')
+        # Same stream check is best-effort: tokens rotate between plays, so
+        # compare only when both sides exist.
+        if cur_url and job_url and cur_url.split('?')[0] != job_url.split('|')[0].split('?')[0]:
+            _log('swap skipped: different stream playing')
+            return False
+        player.setSubtitles(fixed_path)
+        try:
+            import xbmcgui
+            xbmcgui.Window(10000).clearProperty(_PENDING_PROP)
+        except Exception:
+            pass
+        _log('fixed subtitle swapped in-place: ' + fixed_path)
+        return True
+    except Exception as e:
+        _log('swap failed: %r' % e, level='WARNING')
+        return False
+
+
+def run_deep_job(job):
+    """Service-side execution of one queued deep-verify job. Computes the
+    verdict, and on FIXABLE swaps the playing subtitle in place. One gentle
+    toast per pair, ever (see _announce). Never raises."""
+    try:
+        key = job.get('key') or ''
+        path = job.get('path') or ''
+        if not key or not path or not os.path.isfile(path):
+            return
+        # Someone may have computed it while the job sat in the queue.
+        cached = _load_verdicts().get(key)
+        if cached and cached.get('v') == _VERDICT_VERSION:
+            return
+        try:
+            with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                text = f.read()
+        except OSError:
+            return
+        if not text.strip():
+            return
+        info = job.get('info') or {}
+        playing = job.get('playing') or ''
+        rel = job.get('release') or ''
+        out, verdict = _deep_verify(info, path, text, rel, playing, key)
+        if not verdict:
+            return
+        swapped = False
+        if (verdict.get('status') == sync_align.STATUS_FIXABLE
+                and verdict.get('applied') and out and out != path):
+            swapped = _swap_if_current(job, out, verdict)
+        # Announce ONLY what the user experiences: a swap they can see, or a
+        # fresh attempted-but-failed verification. NO_ORACLE stays silent.
+        if swapped or verdict.get('status') == sync_align.STATUS_UNKNOWN:
+            _announce(dict(verdict, applied=swapped), fresh=True)
+    except Exception as e:
+        _log('deep job failed: %r' % e, level='WARNING')
+
+
+def drain_queue_once():
+    """Pick up and run every queued deep job. Called by the service loop."""
+    d = _queue_dir()
+    if not d or not os.path.isdir(d):
+        return 0
+    ran = 0
+    try:
+        for fn in sorted(os.listdir(d)):
+            if not fn.endswith('.json'):
+                continue
+            jpath = os.path.join(d, fn)
+            job = None
+            try:
+                with open(jpath, 'r', encoding='utf-8') as f:
+                    job = json.load(f)
+            except Exception:
+                job = None
+            try:
+                os.remove(jpath)   # claim before running
+            except OSError:
+                pass
+            if job:
+                run_deep_job(job)
+                ran += 1
+    except Exception:
+        pass
+    return ran
 
 
 def _write_fixed(orig_path, fixed_text):
