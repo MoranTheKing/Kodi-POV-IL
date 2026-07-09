@@ -1,3 +1,22 @@
+v0.2.343
+- SubSync S1: honest sync percentages everywhere. A new structured release
+  scorer (release_match.py) replaces the three divergent token-similarity
+  scorers behind the subtitle picker %, the source-screen HEB badge and the
+  engine's result ordering -- all three now show the SAME number, and the
+  number reflects sync likelihood instead of raw text overlap:
+  * identical release -> 100%; same release group + source -> ~90%+;
+  * same source class (e.g. two different WEB rips) -> mid range;
+  * contradicting source (WEB vs BluRay), edition (Extended vs Theatrical)
+    or PROPER state -> capped LOW (the old scorer gave such pairs a
+    misleading 60-75% on token overlap alone);
+  * synthesized player filenames are recognized and never treated as a real
+    release identity.
+  Badge look/format unchanged -- same colors, same position; only the number
+  is now truthful. Also sidesteps a legacy scoring bug where the video's
+  token arrays were mutated across iterations, skewing later results. Each
+  wiring point keeps the old scorer as an import-failure fallback. No
+  pool/translation behaviour changes.
+
 v0.2.342
 - User customizations now survive updates and restarts. An audit of every
   startup patcher found four mechanisms that silently reverted a user's own
