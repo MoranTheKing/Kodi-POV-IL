@@ -287,9 +287,16 @@ subtitle in the same ~5s as today; certainty arrives behind it.
   `translate.resolve` / autosub ladder steps 3–6 + per-device cache.
   Testable offline with SRT fixture pairs (known offset/FPS cases +
   must-refuse recut cases) under `resources/fixtures/`.
-- **Phase S3 — community sync registry.** Worker `/sync` (KV), pool.py
-  contribute/consume piggybacked on `/lookup`, subtitle-delay feedback
-  capture in service.py, badge upgrade in he_sub_match.
+- **Phase S3 — community sync registry. SHIPPED (0.1.389 + Worker deploy).**
+  Worker `/syncrep` + `/lookup` `sync` field (maintainer-deployed to
+  Cloudflare); client consume-before-compute (rides the picker's lookup,
+  zero extra requests), auto-contribute of fresh deep verdicts
+  (share-gated, once per pair), and the HUMAN anchor: the service
+  delay-watcher turns a settled manual subtitle delay into a human FIXABLE
+  report (folded with any applied auto-fix) and a clean 15-minute watch
+  into a CONFIRMED vote; humans override auto server-side.
+  REMAINING POLISH (backlog): upgrade the source-screen HEB badge to
+  "מסונכרן ✓" when the registry holds a CONFIRMED record for the title.
   **IMPORTANT (maintainer):** the repo's `pool/worker.js` is deliberately
   STALE — the live worker code exists only on Cloudflare and is newer. Before
   ANY S3 worker edit, ask the maintainer for the current worker.js; do not
