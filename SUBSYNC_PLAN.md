@@ -347,6 +347,37 @@ the PR; what it does:
    for the same estimate() (offset + scale). This anchors sync to the actual
    playing file, beating any oracle sub. Scope: MKV/WebM direct files (most
    debrid remuxes); not HLS. Pure Python; cache per file hash.
+
+   **Probe mechanics & download budget (never the whole file):**
+   - ~1–2 MB from the head: EBML header + SeekHead + Tracks (find the text
+     subtitle tracks: codec S_TEXT/UTF8 or S_TEXT/ASS, language, and the
+     `forced` flag) + the Cues index position.
+   - The Cues (usually a few hundred KB near the end): cluster byte offsets
+     by timestamp → we can jump to any minute of the film directly.
+   - ~10–20 sample windows of ~4–8 MB spread across the runtime (each window
+     covers a few seconds of interleaved data; sub blocks inside carry
+     timestamp+duration+text, video/audio blocks are skipped by header). If a
+     window lands on a dialogue-free scene (no sub blocks), slide forward.
+   - Total: typically **~50–100 MB of ranged reads** (tunable; ≈ under a
+     minute of normal streaming buffer), NOT a contiguous "3 minutes of
+     video". Runs in the background verify stage; the result (scale/offset/
+     verdict) is cached per file hash and shared via `/sync`, so the cost is
+     paid once per release globally.
+   - **The reference is LANGUAGE-AGNOSTIC.** The aligner never reads cue
+     text — only timestamps — so an embedded track in ANY language (source
+     language of a foreign film, French, Korean…) is exactly as good an
+     oracle as English. Filter: skip `forced`-flagged or cue-sparse tracks
+     (forced tracks mark only foreign-line moments — too sparse to anchor);
+     prefer the densest text track.
+   - Coverage note (maintainer): most MKV releases carry SOME embedded text
+     track even when not English; the practical gap is MP4 (no usable text
+     tracks), a small minority of today's sources. MP4 files simply stay on
+     the oracle-sub anchors (D/E) + community confirmation (C) — verified,
+     just not file-anchored.
+   - The embedded track is a timing reference ONLY — extracting its full
+     text for translation would require scanning the whole file, so the
+     TRANSLATION source remains an external sub (any language; Gemini
+     translates any→Hebrew), which the probe then verifies/retimes.
 4. **Gemini-audio deep verify (last-resort tier, Phase S5, opt-in).** Kodi
    exposes NO player audio API — but the stream URL is known, so audio can be
    range-fetched and DEMUXED (never decoded) from MKV clusters in pure
