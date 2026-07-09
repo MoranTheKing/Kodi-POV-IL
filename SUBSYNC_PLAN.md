@@ -302,10 +302,23 @@ subtitle in the same ~5s as today; certainty arrives behind it.
   NO matching subtitle in any DB (88 candidates, best 46%/fuzzy) — could
   only be anchored by the playing file itself. Shipped as `mkv_probe.py` +
   the probe fallback in `subsync.process` (quickfix 0.1.382).
-- **Phase S5 — research (optional, later).** Gemini-audio deep verify
-  (§7.4, opt-in) and piecewise alignment for recut releases (mid-roll
-  recaps, extended cuts) via anchor cues (numbers/names/latin tokens that
-  survive translation). No on-device audio DECODING ever — demux-only.
+- **Phase S5 — Gemini-audio anchor. SHIPPED (0.1.383–387) and
+  field-calibrated to its ceiling.** Findings from the ColdFilm case:
+  Gemini VAD timestamps carry ~±1s error, and DUBBED audio adds inherent
+  bias (dub line onsets differ from the source-timeline sub cues by a
+  variable ±0.5–1.5s — lipsync is approximate per line). The offset
+  ESTIMATE converges statistically with more segments, but sub-second
+  VERIFICATION cannot: the field estimate (-17s) was seconds off the
+  user-measured truth. Conclusion: the audio anchor correctly refuses in
+  this class (dubbed re-encode, nothing else to anchor to), and MORE
+  segments cannot fix a bias floor. Adaptive second pass + tight-agreement
+  gate + spurious-peak protections are in and verified. The designed
+  resolution for this residual class is the S3 human anchor.
+- **Phase S6 — research (optional, later).** Piecewise alignment for recut
+  releases (mid-roll recaps, extended cuts); transcript-anchor matching
+  (Gemini word-level transcription; translation-invariant anchors like
+  numbers/names matched against sub text) as a sharper-than-VAD audio
+  anchor. No on-device audio DECODING ever — demux-only.
 
 ## 6. Risks & mitigations
 
