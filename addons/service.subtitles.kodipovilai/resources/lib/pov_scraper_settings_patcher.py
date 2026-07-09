@@ -79,6 +79,37 @@ def _pov_addon():
         return None
 
 
+# Per-key memory of the value WE last wrote, so a FUTURE TUNE_VERSION bump can
+# tell "still on our value" (safe to re-tune) apart from "the user changed it
+# since" (hands off). Without this, every version bump re-forced all DESIRED
+# keys and silently overrode a user's deliberate opt-out -- the "every update
+# resets my settings" complaint. JSON dict {key: value_we_set} in our own
+# addon settings (survives updates).
+STATE_FLAG = '_pov_scraper_tune_state'
+
+
+def _load_state():
+    if kodi_utils is None:
+        return {}
+    try:
+        import json
+        raw = kodi_utils.get_setting(STATE_FLAG, '') or ''
+        data = json.loads(raw) if raw else {}
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save_state(state):
+    if kodi_utils is None:
+        return
+    try:
+        import json
+        kodi_utils.set_setting(STATE_FLAG, json.dumps(state))
+    except Exception:
+        pass
+
+
 def ensure_patched():
     """Returns 'already' | 'no_pov' | 'unchanged' | 'patched'."""
     if _already_done():
@@ -87,6 +118,7 @@ def ensure_patched():
     if addon is None:
         return 'no_pov'  # not installed yet -- retry next startup, do not mark
 
+    state = _load_state()
     changed = []
     for key, want in DESIRED:
         try:
@@ -95,14 +127,25 @@ def ensure_patched():
             cur = None
         if cur is None:
             continue  # key absent in this POV schema -- leave it alone
-        if (cur or '').strip().lower() == want:
+        cur_norm = (cur or '').strip().lower()
+        if cur_norm == want:
+            state[key] = want
+            continue
+        # A recorded prior write that no longer matches the live value means
+        # the USER changed this key since we set it -- respect their choice
+        # even across a TUNE_VERSION bump.
+        if key in state and cur_norm != (state.get(key) or '').strip().lower():
+            _log('skipping {0}: user-changed since last tune '
+                 '(now {1!r})'.format(key, cur), level='INFO')
             continue
         try:
             addon.setSetting(key, want)
+            state[key] = want
             changed.append('{0}={1}'.format(key, want))
         except Exception as e:
             _log('failed to set {0}: {1}'.format(key, e), level='WARNING')
 
+    _save_state(state)
     _mark_done()
     if changed:
         _log('tuned ' + ', '.join(changed), level='INFO')

@@ -1,3 +1,27 @@
+v0.2.342
+- User customizations now survive updates and restarts. An audit of every
+  startup patcher found four mechanisms that silently reverted a user's own
+  changes -- the classic "every update resets my home screen / settings"
+  complaint -- and all four now seed their defaults ONCE per device and then
+  leave the user's choice alone:
+  * AF3 home layout (HomeSwitcher modes/vertical) and the CustomRating rows
+    were re-forced on every quickfix rebuild, resetting a customised Arctic
+    Fuse 3 home to Standard after each update. Now seeded once (same pattern
+    as the spotlight seed); only infra settings (TMDbHelper etc.) stay forced.
+  * Audio language (English), keyboard layouts and the two FENtastic home
+    settings (favourites button, choose-OSD-player) were re-forced on EVERY
+    Kodi start, reverting users who changed them. Now a one-time seed.
+  * FENtastic Movies/TV-Shows page widgets: a widget row the user deleted in
+    the skin's widget editor was force-re-inserted on every start. Inserts are
+    now a one-time seed; the old->new URL migrations (which only match our own
+    baselines) still self-heal every start.
+  * POV scraper tune (prerelease/3D/piratebay) now remembers the value it
+    wrote per key, so a future re-tune never overrides a key the user changed
+    deliberately.
+  No pool/translation/subtitle behaviour changes in this release. Existing
+  devices apply each seed once more after this update (their markers don't
+  exist yet), then never again.
+
 v0.2.341
 - Corrected the "My Movies / My Series" home tiles for the current POV build.
   The previous version misdiagnosed the empty tiles: the merged-list actions

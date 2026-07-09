@@ -385,26 +385,56 @@ def _ensure_runtime_english_audio_preference():
     return changed
 
 
+# One-shot marker for the USER-PREFERENCE seeds below (audio language,
+# keyboard layouts, the two FENtastic home settings). These used to be forced
+# on EVERY start, which meant a user who changed them (audio language back to
+# original, hiding the favourites home button, switching the active keyboard
+# layout) was silently reverted on the next boot -- exactly the "every update
+# resets my settings" complaint. Now they seed ONCE per device; afterwards the
+# user owns them. Bump the version only for a deliberate one-time re-seed.
+_PREFS_SEED_FLAG = '_ui_prefs_seeded'
+_PREFS_SEED_VERSION = 'v1'
+
+
+def _prefs_already_seeded():
+    try:
+        return kodi_utils.get_setting(_PREFS_SEED_FLAG, '') == _PREFS_SEED_VERSION
+    except Exception:
+        return False
+
+
+def _mark_prefs_seeded():
+    try:
+        kodi_utils.set_setting(_PREFS_SEED_FLAG, _PREFS_SEED_VERSION)
+    except Exception:
+        pass
+
+
 def ensure_patched():
     changed = []
     # Repair a blanked/truncated skin strings.po FIRST, so the label patch below
     # works on a healthy file and the user never sees a text-less skin.
+    # These skin-FILE repairs stay every-start: they touch the skin addon's own
+    # files (which an update may replace), never a user preference.
     if _restore_corrupt_skin_strings():
         changed.append('restored_skin_strings')
-    if _clear_skin_bool('HomeMenuNoFavButton'):
-        changed.append('skin_bool')
-    if _ensure_fentastic_setting_file():
-        changed.append('skin_settings')
     if _patch_fentastic_home_label():
         changed.append('home_label')
     if _patch_hebrew_skin_strings():
         changed.append('he_strings')
-    if _ensure_hebrew_keyboard_layout():
-        changed.append('keyboard_layouts')
-    if _ensure_runtime_keyboard_layout():
-        changed.append('runtime_keyboard_layouts')
-    if _ensure_english_audio_preference_file():
-        changed.append('english_audio_file')
-    if _ensure_runtime_english_audio_preference():
-        changed.append('english_audio_runtime')
+    # USER-PREFERENCE seeds: once per device, then hands-off (see marker note).
+    if not _prefs_already_seeded():
+        if _clear_skin_bool('HomeMenuNoFavButton'):
+            changed.append('skin_bool')
+        if _ensure_fentastic_setting_file():
+            changed.append('skin_settings')
+        if _ensure_hebrew_keyboard_layout():
+            changed.append('keyboard_layouts')
+        if _ensure_runtime_keyboard_layout():
+            changed.append('runtime_keyboard_layouts')
+        if _ensure_english_audio_preference_file():
+            changed.append('english_audio_file')
+        if _ensure_runtime_english_audio_preference():
+            changed.append('english_audio_runtime')
+        _mark_prefs_seeded()
     return 'patched:' + ','.join(changed) if changed else 'already_ok'
