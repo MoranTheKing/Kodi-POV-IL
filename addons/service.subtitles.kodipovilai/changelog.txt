@@ -1,3 +1,17 @@
+v0.2.346
+- "Last watched" source now actually stays at the TOP of the source list.
+  source_capture.reorder moved it to the top and badged it, but the
+  quality/size re-sort injected by pov_source_quality_patcher (0.1.373) runs
+  AFTER the reorder inside make_items and pushed it back down (seen in the
+  field at position 80/212, badge intact). The re-sort has always exempted
+  rows flagged '_pin_top' -- but nothing ever set that flag; reorder now pins
+  the remembered source, so it keeps the top spot and is also exempt from the
+  filter-drop.
+- SubSync diagnostics: when no timing oracle is found, the log now lists the
+  5 closest candidates with their score/tier plus the addon version, so field
+  logs distinguish "genuinely no matching release" from a scorer gap or a
+  stale interpreter.
+
 v0.2.345
 - SubSync field fix: releases with an UNTAGGED source (e.g. Russian groups
   like ColdFilm that ship no WEB/BluRay token in the name) could never
