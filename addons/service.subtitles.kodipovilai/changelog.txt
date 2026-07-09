@@ -1,3 +1,25 @@
+v0.2.353
+- SubSync goes fully background (self-healing delivery). Field complaints:
+  the "searching subtitles" overlay stayed up for the whole deep
+  verification (10-30s of oracle download / container probe / Gemini audio),
+  and the sync toasts never appeared (they went through the translate
+  status channel, which autosub deliberately silences).
+  * resolve() now delivers the subtitle IMMEDIATELY; deep verification is
+    queued to the long-lived service (subsync_queue, same disk-queue pattern
+    as the he_warm drainer) -- the overlay drops right away.
+  * When the worker proves a fix, it swaps the playing subtitle in place --
+    but ONLY if the user still watches the same stream and hasn't picked a
+    different subtitle meanwhile (pending-marker check).
+  * GENTLE toast policy (most toasts in this build were deliberately
+    silenced after user complaints -- this respects that): at most ONE
+    notification per (subtitle, release) pair EVER -- either "synced
+    automatically (+X.Xs)" when a fix is applied, or "couldn't verify sync"
+    when a fresh deep verification came up empty. Repeat plays, cached
+    verdicts, trusted tiers and nothing-to-verify cases are all SILENT.
+    Toasts go directly through kodi_utils.notify (respecting the master
+    subs_notifications switch), bypassing autosub's quiet mode.
+  Cached verdicts still apply instantly and synchronously as before.
+
 v0.2.352
 - Verdict-cache version bump (v3): UNKNOWN verdicts stored by 0.2.350/351
   (before the adaptive second pass existed) are recomputed, so an already-

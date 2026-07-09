@@ -2144,6 +2144,32 @@ def _start_he_warm_drainer(monitor):
         pass
 
 
+def _start_subsync_drainer(monitor):
+    """Drain the SubSync deep-verify queue (see subsync._enqueue_deep) in this
+    long-lived service. Jobs are rare (once per new subtitle+release pair) and
+    each can take 10-30s (oracle download / container probe / Gemini audio),
+    which is exactly why they must not run inline in resolve(). Best-effort."""
+    def _loop():
+        try:
+            if monitor.waitForAbort(1.0):
+                return
+            from resources.lib import subsync as _ss
+            while not monitor.abortRequested():
+                try:
+                    _ss.drain_queue_once()
+                except Exception:
+                    pass
+                if monitor.waitForAbort(1.0):
+                    break
+        except Exception:
+            pass
+
+    try:
+        threading.Thread(target=_loop, daemon=True).start()
+    except Exception:
+        pass
+
+
 def _maybe_start_autosub_player():
     """Register a Player listener so we can auto-search + auto-apply Hebrew on
     play, but ONLY when the engine is on and autosub is enabled. The service's
@@ -3776,6 +3802,15 @@ def main():
     # wait. It's a cheap idle poll until a job appears.
     try:
         _start_he_warm_drainer(xbmc.Monitor())
+    except Exception:
+        pass
+
+    # SubSync deep-verify worker: resolve() delivers the subtitle IMMEDIATELY
+    # and queues the slow verification (oracle download / file probe / audio)
+    # here, so the autosub overlay / picker never waits on it; on a proven fix
+    # the worker swaps the playing subtitle in place (subsync.run_deep_job).
+    try:
+        _start_subsync_drainer(xbmc.Monitor())
     except Exception:
         pass
 
