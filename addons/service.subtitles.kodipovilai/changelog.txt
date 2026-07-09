@@ -1,3 +1,25 @@
+v0.2.350
+- CRITICAL SubSync fix: a spurious alignment could shift subtitles out of
+  sight. Field case: a sparse 10-cue audio reference against a dense
+  (600-cue) candidate reported vote=120% on a bogus offset of -350s -- the
+  gate passed and the subtitles "disappeared" (they were 6 minutes late).
+  Four-layer fix in the alignment engine:
+  * vote counting deduped -- ONE vote per reference cue per histogram bin
+    (a dense candidate could previously multi-vote a single ref cue, which
+    is how 120% happened);
+  * audio references now search identity scale ONLY and a narrow +/-3min
+    offset window (a sparse VAD reference cannot support scale estimation;
+    every extra scale candidate multiplied the spurious-peak chance);
+  * a global plausibility cap: FIXABLE offsets beyond +/-4min are refused
+    (real wrong-release desyncs are seconds, recuts are refused anyway);
+  * sparse references (<40 cues) additionally require 65% of ref cues to
+    agree at a TIGHT +/-450ms tolerance -- random matches at that tolerance
+    are rare, killing peaks that survive the coarse 500ms bins.
+  Verdict-cache version bumped: verdicts stored by the old engine
+  (including the field device's bad -350s entry) are ignored and recomputed.
+  Regression tests reproduce the exact field failure (must refuse) and the
+  genuine sparse case (must still fix).
+
 v0.2.349
 - SubSync S5 quota hardening (free-tier discipline, same care as the
   translation path): a Gemini failure (429 quota / key / network) during the

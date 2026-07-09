@@ -149,6 +149,50 @@ check('no oracle for unmatched release', c is None)
 c, tier = sa.pick_oracle(cands, 'Some Show.S01E05.1080p.mkv')
 check('synthetic name never anchors', c is None)
 
+print('== FIELD REGRESSION: sparse audio ref vs UNRELATED dense candidate ==')
+# The exact failure mode seen live: 10 sparse VAD cues x dense (600-cue)
+# unrelated subtitle -> a spurious histogram peak passed the old gate with
+# vote=120% and applied offset=-350s (subs vanished). With vote dedupe +
+# identity-scale-only + narrow window + the tight check, this MUST refuse.
+rng_f = random.Random(42)
+sparse_ref = []
+for base_pos in (0.22, 0.5, 0.78):
+    t0 = int(40 * 60 * 1000 * base_pos)
+    t = t0
+    while t < t0 + 20000:
+        d = rng_f.randint(900, 2500)
+        sparse_ref.append({'start': t, 'end': t + d})
+        t += d + rng_f.randint(500, 4000)
+sparse_ref = sparse_ref[:10]
+unrelated = dialogue_times(n=600, seed=99, span_ms=45 * 60 * 1000)
+cand_unrelated = make_srt(unrelated, 'he')
+v = sa.verify_cues(sparse_ref, cand_unrelated,
+                   min_vote=0.55, min_overlap=0.65,
+                   scales=(1.0,), max_offset_ms=180000)
+check('spurious alignment REFUSED', v['status'] == sa.STATUS_UNKNOWN,
+      v['diag'])
+
+print('== sparse audio ref vs TRUE shifted candidate still FIXABLE ==')
+# Same sparse-ref conditions, but the candidate genuinely matches (+7s).
+true_cand_times = []
+for c in sparse_ref:
+    true_cand_times.append((c['start'] + 7000, c['end'] - c['start']))
+# pad with plausible other dialogue OUTSIDE the ref windows (dense candidate)
+for s, d in dialogue_times(n=500, seed=7, span_ms=45 * 60 * 1000):
+    if all(abs(s - (c['start'] + 7000)) > 4000 for c in sparse_ref):
+        true_cand_times.append((s, d))
+v = sa.verify_cues(sparse_ref, make_srt(sorted(true_cand_times), 'he'),
+                   min_vote=0.55, min_overlap=0.65,
+                   scales=(1.0,), max_offset_ms=180000)
+check('true sparse alignment FIXABLE', v['status'] == sa.STATUS_FIXABLE,
+      v['diag'])
+check('offset ~ +7000', abs(v['offset_ms'] - 7000) <= 500, v['diag'])
+
+print('== implausible-offset cap ==')
+v = sa.verify(REF, transformed(offset=300000))
+check('offset 300s refused as implausible',
+      v['status'] == sa.STATUS_UNKNOWN, v['diag'])
+
 print()
 if FAILS:
     print('FAILED (%d):' % len(FAILS))

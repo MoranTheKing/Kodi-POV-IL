@@ -126,40 +126,52 @@ def dialogue_cues(text_or_cues):
 
 # ---- linear time-map estimation (from arabic_gender, generalized) ----------
 
-def _best_offset(ref_on, cand_on, a):
+def _best_offset(ref_on, cand_on, a, max_off=_MAXOFF):
     step = max(1, len(ref_on) // _SAMPLE)
     hist = {}
     for e in ref_on[::step]:
         pe = a * e
-        lo = bisect.bisect_left(cand_on, pe - _MAXOFF)
-        hi = bisect.bisect_right(cand_on, pe + _MAXOFF)
+        lo = bisect.bisect_left(cand_on, pe - max_off)
+        hi = bisect.bisect_right(cand_on, pe + max_off)
+        # ONE vote per reference cue per bin. Without the dedupe, a DENSE
+        # candidate (600 cues) inflated bins with multiple hits per ref cue,
+        # so a sparse 10-cue reference could report vote=120% on a spurious
+        # alignment (seen in the field: offset=-350s applied, subs vanished).
+        bins = set()
         for j in range(lo, hi):
-            b = int(round((cand_on[j] - pe) / _TOL))
+            bins.add(int(round((cand_on[j] - pe) / _TOL)))
+        for b in bins:
             hist[b] = hist.get(b, 0) + 1
     if not hist:
         return 0.0, 0
     peak = max(hist, key=lambda k: hist[k] + hist.get(k - 1, 0)
                + hist.get(k + 1, 0))
-    votes = hist.get(peak - 1, 0) + hist.get(peak, 0) + hist.get(peak + 1, 0)
+    votes = min(hist.get(peak - 1, 0) + hist.get(peak, 0)
+                + hist.get(peak + 1, 0),
+                len(ref_on[::step]))
     return float(peak * _TOL), votes
 
 
-def estimate(ref_cues, cand_cues):
+def estimate(ref_cues, cand_cues, scales=None, max_offset_ms=None):
     """Best linear map cand_time ~= a*ref_time + b over the scale candidates.
-    Returns (a, b_ms, vote_ratio)."""
+    Returns (a, b_ms, vote_ratio). `scales` restricts the candidate scale set
+    (sparse references can't support scale estimation -- every extra scale
+    multiplies the chance of a spurious histogram peak); `max_offset_ms`
+    narrows the offset search window for the same reason."""
     ref_on = [c['start'] for c in ref_cues]
     cand_on = [c['start'] for c in cand_cues]
     if not ref_on or not cand_on:
         return 1.0, 0.0, 0.0
     sampled = len(ref_on[::max(1, len(ref_on) // _SAMPLE)])
+    max_off = _MAXOFF if max_offset_ms is None else max_offset_ms
     best = (1.0, 0.0, -1)
     # Try scales nearest-to-1.0 FIRST and require a STRICTLY better vote to
     # switch away: neighbouring FPS ratios (e.g. 23.976/24 = 0.999) can tie
     # with the identity map inside the histogram bin tolerance on short
     # spans, and picking 0.999 over a true 1.0 accumulates seconds of drift
     # by the end of a long movie.
-    for a in sorted(SCALES, key=lambda s: abs(s - 1.0)):
-        b, v = _best_offset(ref_on, cand_on, a)
+    for a in sorted(scales or SCALES, key=lambda s: abs(s - 1.0)):
+        b, v = _best_offset(ref_on, cand_on, a, max_off)
         if v > best[2]:
             best = (a, b, v)
     a, b, v = best
@@ -199,19 +211,50 @@ def verify(ref_srt_text, cand_srt_text):
     return _gate(dialogue_cues(ref_srt_text), dialogue_cues(cand_srt_text))
 
 
-def verify_cues(ref_cues, cand_srt_text, min_vote=None, min_overlap=None):
+def verify_cues(ref_cues, cand_srt_text, min_vote=None, min_overlap=None,
+                scales=None, max_offset_ms=None):
     """verify() variant whose reference is a raw cue list (start/end ms) --
     e.g. embedded-track timestamps from the mkv_probe container probe, where
     there is no text to filter. Same gate, same verdict shape. min_vote /
-    min_overlap override the gate thresholds (audio-VAD references have
-    softer boundaries than subtitle cues)."""
+    min_overlap override the gate thresholds; `scales` restricts the scale
+    candidates and `max_offset_ms` the offset window (MANDATORY discipline
+    for sparse audio-VAD references -- see _gate notes)."""
     ref = [c for c in (ref_cues or [])
            if isinstance(c, dict) and 'start' in c and 'end' in c]
     return _gate(ref, dialogue_cues(cand_srt_text),
-                 min_vote=min_vote, min_overlap=min_overlap)
+                 min_vote=min_vote, min_overlap=min_overlap,
+                 scales=scales, max_offset_ms=max_offset_ms)
 
 
-def _gate(ref, cand, min_vote=None, min_overlap=None):
+# A FIXABLE offset beyond this is almost surely a spurious histogram peak,
+# not a real desync -- real wrong-release offsets are seconds, not minutes
+# (recuts are refused anyway). Field case: a sparse 10-cue audio reference
+# against a dense candidate "found" offset=-350s and shifted the subs out of
+# sight.
+MAX_PLAUSIBLE_OFFSET_MS = 240000
+# Sparse references (< this many cues) additionally require most ref cues to
+# agree at a TIGHT tolerance -- random matches at +/-350ms are rare, so this
+# kills spurious peaks that survive the coarse 500ms bins.
+_SPARSE_REF = 40
+_TIGHT_MS = 450     # genuine sub-vs-speech onsets land within ~0.4s; random
+_TIGHT_MIN = 0.65   # matches at this tolerance are rare (~0.2/ref)
+
+
+def _tight_agreement(ref, cand, a, b):
+    cand_on = sorted(c['start'] for c in cand)
+    ok = 0
+    for c in ref:
+        pe = a * c['start'] + b
+        i = bisect.bisect_left(cand_on, pe)
+        for j in (i - 1, i):
+            if 0 <= j < len(cand_on) and abs(cand_on[j] - pe) <= _TIGHT_MS:
+                ok += 1
+                break
+    return ok / len(ref) if ref else 0.0
+
+
+def _gate(ref, cand, min_vote=None, min_overlap=None, scales=None,
+          max_offset_ms=None):
     _mv = MIN_VOTE if min_vote is None else min_vote
     _mo = MIN_OVERLAP if min_overlap is None else min_overlap
     if len(ref) < MIN_CUES or len(cand) < MIN_CUES:
@@ -219,13 +262,25 @@ def _gate(ref, cand, min_vote=None, min_overlap=None):
                 'vote': 0.0, 'overlap': 0.0,
                 'diag': 'too few dialogue cues (ref=%d cand=%d)'
                         % (len(ref), len(cand))}
-    a, b, vote = estimate(ref, cand)
+    a, b, vote = estimate(ref, cand, scales=scales,
+                          max_offset_ms=max_offset_ms)
     ov = overlap_rate(ref, cand, a, b)
     diag = 'scale=%.6f offset=%+dms vote=%.0f%% overlap=%.0f%%' % (
         a, int(b), vote * 100, ov * 100)
     if not (SCALE_MIN <= a <= SCALE_MAX) or vote < _mv or ov < _mo:
         return {'status': STATUS_UNKNOWN, 'scale': a, 'offset_ms': b,
                 'vote': vote, 'overlap': ov, 'diag': 'gate FAILED (' + diag + ')'}
+    if abs(b) > MAX_PLAUSIBLE_OFFSET_MS:
+        return {'status': STATUS_UNKNOWN, 'scale': a, 'offset_ms': b,
+                'vote': vote, 'overlap': ov,
+                'diag': 'implausible offset (' + diag + ')'}
+    if len(ref) < _SPARSE_REF:
+        tight = _tight_agreement(ref, cand, a, b)
+        diag += ' tight=%.0f%%' % (tight * 100)
+        if tight < _TIGHT_MIN:
+            return {'status': STATUS_UNKNOWN, 'scale': a, 'offset_ms': b,
+                    'vote': vote, 'overlap': ov,
+                    'diag': 'tight check FAILED (' + diag + ')'}
     if a == 1.0 and abs(b) <= CONFIRM_OFFSET_MS:
         return {'status': STATUS_CONFIRMED, 'scale': a, 'offset_ms': b,
                 'vote': vote, 'overlap': ov, 'diag': diag}
