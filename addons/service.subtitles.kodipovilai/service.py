@@ -2170,6 +2170,95 @@ def _start_subsync_drainer(monitor):
         pass
 
 
+def _start_subsync_delay_watch(monitor):
+    """The HUMAN sync anchor (SubSync S3): while a MoranSubs-delivered
+    subtitle plays, sample the user's manual subtitle delay (JSON-RPC); when
+    playback ends, a settled non-zero delay becomes a community FIXABLE
+    report, and a long zero-delay watch becomes a CONFIRMED vote -- both via
+    pool.report_sync (share-gated, fire-and-forget). One report per
+    (subtitle, release) pair per Kodi session. This is what resolves files no
+    algorithm can anchor (dubbed re-encodes with no subs anywhere)."""
+    def _delay_now():
+        try:
+            raw = xbmc.executeJSONRPC(json.dumps({
+                'jsonrpc': '2.0', 'id': 1,
+                'method': 'Player.GetProperties',
+                'params': {'playerid': 1,
+                           'properties': ['subtitledelay']}}))
+            return float((json.loads(raw).get('result') or {})
+                         .get('subtitledelay') or 0.0)
+        except Exception:
+            return 0.0
+
+    def _loop():
+        try:
+            if monitor.waitForAbort(2.0):
+                return
+            from resources.lib import subsync as _ss
+            from resources.lib import pool as _pool
+            import xbmcgui
+            active, watched, last_delay = None, 0, 0.0
+            reported = set()
+            while not monitor.abortRequested():
+                try:
+                    playing = False
+                    try:
+                        playing = xbmc.Player().isPlayingVideo()
+                    except Exception:
+                        playing = False
+                    if playing:
+                        raw = xbmcgui.Window(10000).getProperty(
+                            _ss._DELIVERED_PROP) or ''
+                        rec = None
+                        if raw:
+                            try:
+                                rec = json.loads(raw)
+                            except Exception:
+                                rec = None
+                        if rec and (active is None
+                                    or rec.get('key') != active.get('key')
+                                    or float(rec.get('ts') or 0)
+                                    != float(active.get('ts') or 0)):
+                            active, watched, last_delay = rec, 0, 0.0
+                        if active is not None:
+                            watched += 10
+                            last_delay = _delay_now()
+                    elif active is not None:
+                        akey = active.get('key') or ''
+                        if akey and akey not in reported:
+                            rep = _ss.finalize_delay_session(
+                                active, last_delay, watched)
+                            if rep:
+                                _pool.report_sync(
+                                    rep.get('info') or {}, rep['sub_hash'],
+                                    rep['release'], rep['scale'],
+                                    rep['offset_ms'], rep['status'],
+                                    origin='human')
+                                reported.add(akey)
+                                kodi_utils.log(
+                                    'subsync delay-watch: human report '
+                                    '({0}, {1:+.0f}ms, watched {2}s)'.format(
+                                        rep['status'], rep['offset_ms'],
+                                        watched), level='INFO')
+                        try:
+                            xbmcgui.Window(10000).clearProperty(
+                                _ss._DELIVERED_PROP)
+                        except Exception:
+                            pass
+                        active, watched, last_delay = None, 0, 0.0
+                except Exception:
+                    pass
+                if monitor.waitForAbort(10.0):
+                    break
+        except Exception:
+            pass
+
+    try:
+        threading.Thread(target=_loop, daemon=True).start()
+    except Exception:
+        pass
+
+
 def _maybe_start_autosub_player():
     """Register a Player listener so we can auto-search + auto-apply Hebrew on
     play, but ONLY when the engine is on and autosub is enabled. The service's
@@ -3811,6 +3900,13 @@ def main():
     # the worker swaps the playing subtitle in place (subsync.run_deep_job).
     try:
         _start_subsync_drainer(xbmc.Monitor())
+    except Exception:
+        pass
+
+    # SubSync S3 human anchor: watch the viewer's manual subtitle delay and
+    # turn a settled fix / a long clean watch into a community sync report.
+    try:
+        _start_subsync_delay_watch(xbmc.Monitor())
     except Exception:
         pass
 

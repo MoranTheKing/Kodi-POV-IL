@@ -436,13 +436,6 @@ def process(info, path, delivered_release):
         if not playing:
             return path, None
 
-        # Trusted tier -> synced by release identity; nothing to do.
-        rel = (delivered_release or '').strip()
-        if rel:
-            _pct, tier, _ = release_match.score(playing, rel)
-            if tier in release_match.AUTO_OK_TIERS:
-                return path, {'status': _STATUS_TRUSTED, 'tier': tier}
-
         try:
             with open(path, 'r', encoding='utf-8', errors='replace') as f:
                 text = f.read()
@@ -450,8 +443,17 @@ def process(info, path, delivered_release):
             return path, None
         if not text.strip():
             return path, None
-
         key = _cache_key(text, playing)
+
+        # Trusted tier -> synced by release identity; nothing to do (still
+        # recorded so a manual-delay fix on it feeds the community registry).
+        rel = (delivered_release or '').strip()
+        if rel:
+            _pct, tier, _ = release_match.score(playing, rel)
+            if tier in release_match.AUTO_OK_TIERS:
+                _record_delivery(info, playing, key, 1.0, 0.0)
+                return path, {'status': _STATUS_TRUSTED, 'tier': tier}
+
         cached = _load_verdicts().get(key)
         if cached and cached.get('v') != _VERDICT_VERSION:
             cached = None   # stored by an older engine -- recompute
@@ -465,14 +467,45 @@ def process(info, path, delivered_release):
                     # Quiet on repeat plays: the fix was announced ONCE when it
                     # was first computed; from then on it just works silently.
                     _log('cached FIXABLE applied: ' + cached.get('diag', ''))
+                    _record_delivery(info, playing, key,
+                                     cached.get('scale', 1.0),
+                                     cached.get('offset_ms', 0.0))
                     return out, {'status': status, 'applied': True,
                                  'offset_ms': cached.get('offset_ms', 0.0),
                                  'scale': cached.get('scale', 1.0),
                                  'diag': cached.get('diag', ''), 'cached': True}
             if status in (sync_align.STATUS_CONFIRMED,
                           sync_align.STATUS_UNKNOWN):
+                _record_delivery(info, playing, key, 1.0, 0.0)
                 return path, {'status': status, 'cached': True,
                               'diag': cached.get('diag', '')}
+
+        # COMMUNITY registry (S3): a verdict some other device (or a human
+        # delay-fix) already established for this exact (subtitle, release)
+        # pair -- served inside the pool /lookup the picker already made, so
+        # this is a dict lookup, not a request. First hit on THIS device gets
+        # the one gentle toast; it's stored locally so repeats are silent.
+        cv = _community_verdict(info, key, playing)
+        if cv is not None:
+            status = cv.get('status')
+            if status == sync_align.STATUS_FIXABLE:
+                fixed = sync_align.retime(text, cv.get('scale', 1.0),
+                                          cv.get('offset_ms', 0.0))
+                out = _write_fixed(path, fixed)
+                if out:
+                    _store_verdict(key, cv)
+                    _log('community FIXABLE applied: ' + cv.get('diag', ''))
+                    verdict = dict(cv, applied=True, community=True)
+                    _record_delivery(info, playing, key,
+                                     cv.get('scale', 1.0),
+                                     cv.get('offset_ms', 0.0))
+                    _announce(verdict, fresh=True)
+                    return out, verdict
+            elif status == sync_align.STATUS_CONFIRMED:
+                _store_verdict(key, cv)
+                _log('community CONFIRMED: ' + cv.get('diag', ''))
+                _record_delivery(info, playing, key, 1.0, 0.0)
+                return path, dict(cv, community=True)
 
         # DEEP verification needed (oracle download / file probe / audio) --
         # NEVER inline: it can take 10-30s and used to hold the autosub
@@ -482,6 +515,7 @@ def process(info, path, delivered_release):
         # let the worker swap in a fixed copy when (and only when) it proves
         # one -- self-healing delivery, per the plan's latency budget.
         _mark_pending(key)
+        _record_delivery(info, playing, key, 1.0, 0.0)
         if _enqueue_deep(info, path, rel, playing, key):
             return path, {'status': 'PENDING'}
         # Queue unwritable (rare) -- fall back to the old synchronous path.
@@ -491,6 +525,108 @@ def process(info, path, delivered_release):
     except Exception as e:
         _log('process failed (fail-open): %r' % e, level='WARNING')
         return path, None
+
+
+def _community_verdict(info, key, playing):
+    """A community /sync record for this (subtitle, release) pair, converted
+    to a local-verdict dict -- or None. Never raises, never blocks (the map
+    was stashed by the picker's pool lookup; at worst ONE throttled lookup)."""
+    try:
+        from resources.lib import pool as _pool
+        sm = _pool.sync_map(info)
+        if not sm:
+            return None
+        sub_hash = key.split('|', 1)[0]
+        ent = sm.get(sub_hash + '|' + _pool.worker_norm_release(playing))
+        if not isinstance(ent, dict):
+            return None
+        scale = float(ent.get('s') or 1.0)
+        off = float(ent.get('o') or 0.0)
+        st = ent.get('st')
+        diag = 'community record (votes=%s human=%s)' % (
+            ent.get('n', 1), ent.get('h', 0))
+        if st == 'CONFIRMED' or (scale == 1.0
+                                 and abs(off) <= sync_align.CONFIRM_OFFSET_MS):
+            return {'status': sync_align.STATUS_CONFIRMED, 'scale': 1.0,
+                    'offset_ms': 0.0, 'diag': diag}
+        if not (sync_align.SCALE_MIN <= scale <= sync_align.SCALE_MAX):
+            return None
+        if abs(off) > sync_align.MAX_PLAUSIBLE_OFFSET_MS:
+            return None
+        return {'status': sync_align.STATUS_FIXABLE, 'scale': scale,
+                'offset_ms': off, 'diag': diag}
+    except Exception as e:
+        _log('community verdict failed: %r' % e, level='DEBUG')
+        return None
+
+
+_DELIVERED_PROP = 'subsync.delivered'
+
+
+def _record_delivery(info, playing, key, scale, offset_ms):
+    """Remember what we just delivered (and any applied fix), so the service's
+    delay watcher can turn the viewer's manual subtitle-delay into a HUMAN
+    community sync report -- the anchor of last resort."""
+    try:
+        import xbmcgui
+        payload = {
+            'key': key, 'playing': playing, 'ts': time.time(),
+            'scale': float(scale or 1.0),
+            'offset': float(offset_ms or 0.0),
+            'info': {k: info.get(k) for k in _INFO_KEYS
+                     if isinstance(info.get(k), (str, int, float, bool))},
+        }
+        xbmcgui.Window(10000).setProperty(
+            _DELIVERED_PROP, json.dumps(payload, ensure_ascii=False))
+    except Exception:
+        pass
+
+
+def finalize_delay_session(record, delay_s, watched_s):
+    """Decide whether a finished viewing session yields a HUMAN sync report.
+    Returns the report dict for pool.report_sync, or None.
+      - settled manual delay >= 0.4s after >= 5 min watched -> FIXABLE
+        (combined with whatever fix was already applied at delivery);
+      - zero delay after >= 15 min watched -> a confirming vote for the
+        delivered timing.
+    Pure function (no Kodi imports) so it is unit-testable."""
+    try:
+        if not record or watched_s < 300:
+            return None
+        key = record.get('key') or ''
+        playing = (record.get('playing') or '').strip()
+        if not key or not playing:
+            return None
+        sub_hash = key.split('|', 1)[0]
+        base_scale = float(record.get('scale') or 1.0)
+        base_off = float(record.get('offset') or 0.0)
+        d = float(delay_s or 0.0)
+        if abs(d) >= 0.4:
+            # Kodi delay d shows subs d seconds LATER; our fix map is
+            # t' = (t - offset)/scale, so the user's correction folds in as
+            # offset' = offset - d*1000*scale (measured on the sub timeline).
+            off = base_off - d * 1000.0 * base_scale
+            if abs(off) > 240000:
+                return None
+            return {'sub_hash': sub_hash, 'release': playing,
+                    'scale': base_scale, 'offset_ms': off,
+                    'status': 'FIXABLE', 'origin': 'human',
+                    'info': record.get('info') or {}}
+        if watched_s >= 900 and abs(d) < 0.05:
+            if base_scale == 1.0 and abs(base_off) < 1.0:
+                return {'sub_hash': sub_hash, 'release': playing,
+                        'scale': 1.0, 'offset_ms': 0.0,
+                        'status': 'CONFIRMED', 'origin': 'human',
+                        'info': record.get('info') or {}}
+            # Zero manual delay on an APPLIED fix = a human vote that the fix
+            # is right (agrees with the stored record -> just bumps votes).
+            return {'sub_hash': sub_hash, 'release': playing,
+                    'scale': base_scale, 'offset_ms': base_off,
+                    'status': 'FIXABLE', 'origin': 'human',
+                    'info': record.get('info') or {}}
+        return None
+    except Exception:
+        return None
 
 
 def _deep_verify(info, path, text, rel, playing, key):
@@ -579,6 +715,20 @@ def _deep_verify(info, path, text, rel, playing, key):
                                    status=sync_align.STATUS_UNKNOWN)
 
         _store_verdict(key, verdict)
+
+        # S3: share the freshly-computed verdict with the community registry
+        # (fire-and-forget, share-gated, once -- the verdict cache guarantees
+        # this pair never recomputes, so it never re-reports either).
+        try:
+            if verdict['status'] in (sync_align.STATUS_CONFIRMED,
+                                     sync_align.STATUS_FIXABLE):
+                from resources.lib import pool as _pool
+                _pool.report_sync(info, key.split('|', 1)[0], playing,
+                                  verdict.get('scale', 1.0),
+                                  verdict.get('offset_ms', 0.0),
+                                  verdict['status'], origin='auto')
+        except Exception:
+            pass
 
         if verdict['status'] == sync_align.STATUS_FIXABLE:
             out = _write_fixed(path, fixed_text)
@@ -756,6 +906,12 @@ def run_deep_job(job):
         if (verdict.get('status') == sync_align.STATUS_FIXABLE
                 and verdict.get('applied') and out and out != path):
             swapped = _swap_if_current(job, out, verdict)
+            if swapped:
+                # Refresh the delivery record with the APPLIED fix, so a later
+                # manual delay on top of it folds into the human report right.
+                _record_delivery(info, playing, key,
+                                 verdict.get('scale', 1.0),
+                                 verdict.get('offset_ms', 0.0))
         # Announce ONLY what the user experiences: a swap they can see, or a
         # fresh attempted-but-failed verification. NO_ORACLE stays silent.
         if swapped or verdict.get('status') == sync_align.STATUS_UNKNOWN:
