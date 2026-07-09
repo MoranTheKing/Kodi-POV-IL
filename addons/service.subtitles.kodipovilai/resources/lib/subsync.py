@@ -172,6 +172,104 @@ def _download_oracle(payload):
     return ''
 
 
+# ---- file probe (S4): the playing file's own embedded track as reference ----
+
+_PROBE_CACHE_FILE = ('special://profile/addon_data/'
+                     'service.subtitles.kodipovilai/subsync_probe_cache.json')
+_MAX_PROBE_ENTRIES = 60
+
+
+def _probe_enabled():
+    try:
+        return (kodi_utils.get_setting('subsync_probe', 'true') or
+                'true').strip().lower() != 'false'
+    except Exception:
+        return True
+
+
+def _playing_url(info):
+    """The URL/path of the file being played -- a direct http(s) stream
+    (debrid) or a local file. '' when unavailable or not probeable (HLS,
+    plugin:// etc.)."""
+    url = ''
+    try:
+        import xbmc
+        url = xbmc.Player().getPlayingFile() or ''
+    except Exception:
+        url = ''
+    if not url:
+        url = (info.get('filepath') or '').strip()
+    low = (url or '').lower().split('|')[0]
+    if not low:
+        return ''
+    if low.startswith(('http://', 'https://')):
+        if '.m3u8' in low or 'manifest' in low:
+            return ''
+        return url.split('|')[0]
+    if os.path.isfile(url):
+        return url
+    return ''
+
+
+def _probe_cache_path():
+    try:
+        import xbmcvfs
+        return xbmcvfs.translatePath(_PROBE_CACHE_FILE)
+    except Exception:
+        return ''
+
+
+def _probe_reference_cues(info, playing):
+    """Embedded-track cue times for the PLAYING file (S4 container probe),
+    cached per release so the ranged reads happen once. None when the probe
+    is disabled/unavailable/found nothing."""
+    if not _probe_enabled():
+        return None
+    rel_key = (release_match.normalize(playing)
+               if release_match else (playing or '').lower())
+    cpath = _probe_cache_path()
+    data = {}
+    if cpath and os.path.isfile(cpath):
+        try:
+            with open(cpath, 'r', encoding='utf-8') as f:
+                data = json.load(f) or {}
+        except Exception:
+            data = {}
+        ent = data.get(rel_key)
+        if ent and isinstance(ent.get('cues'), list) and ent['cues']:
+            _log('probe: cache hit for %r (%d cues)'
+                 % (rel_key, len(ent['cues'])))
+            return ent['cues']
+        if ent is not None and not ent.get('cues'):
+            return None   # remembered "nothing there" -- don't re-probe
+    url = _playing_url(info)
+    if not url:
+        _log('probe: no probeable playing url')
+        return None
+    try:
+        from resources.lib import mkv_probe
+    except Exception:
+        return None
+    res = mkv_probe.subtitle_reference(url, log=lambda m: _log('probe: ' + m))
+    cues = (res or {}).get('cues') or None
+    try:
+        if cpath:
+            data[rel_key] = {'ts': time.time(), 'cues': cues or [],
+                             'track': (res or {}).get('track') or {}}
+            if len(data) > _MAX_PROBE_ENTRIES:
+                data = dict(sorted(data.items(),
+                                   key=lambda kv: kv[1].get('ts', 0),
+                                   reverse=True)[:_MAX_PROBE_ENTRIES])
+            os.makedirs(os.path.dirname(cpath), exist_ok=True)
+            tmp = cpath + '.tmp'
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(data, f)
+            os.replace(tmp, cpath)
+    except Exception as e:
+        _log('probe cache store failed: %r' % e, level='WARNING')
+    return cues
+
+
 # ---- main entry -------------------------------------------------------------
 
 def process(info, path, delivered_release):
@@ -247,14 +345,36 @@ def process(info, path, delivered_release):
                 top = '?'
             _log('no oracle for release %r (%d foreign candidates, v%s); '
                  'closest: %s' % (playing, len(cands), _ver, top))
-            return path, {'status': _STATUS_NO_ORACLE}
-        oracle_text = _download_oracle(oracle['payload'])
-        if not oracle_text.strip():
-            return path, {'status': _STATUS_NO_ORACLE}
+            oracle_text = ''
+        else:
+            oracle_text = _download_oracle(oracle['payload'])
 
-        fixed_text, verdict = sync_align.verify_and_fix(oracle_text, text)
-        _log('verdict for %r vs oracle %r [%s]: %s'
-             % (rel or '?', oracle['release'], tier, verdict['diag']))
+        if oracle_text.strip():
+            fixed_text, verdict = sync_align.verify_and_fix(oracle_text, text)
+            _log('verdict for %r vs oracle %r [%s]: %s'
+                 % (rel or '?', oracle['release'], tier, verdict['diag']))
+        else:
+            # S4 fallback: no release-matched sub anywhere (or its download
+            # failed) -> the playing FILE's own embedded track as the timing
+            # reference. Covers releases no subtitle DB knows (ColdFilm-style
+            # re-encodes); anchored to the actual file = strongest anchor.
+            ref_cues = _probe_reference_cues(info, playing)
+            if not ref_cues:
+                return path, {'status': _STATUS_NO_ORACLE}
+            verdict = sync_align.verify_cues(ref_cues, text)
+            _log('verdict for %r vs FILE PROBE (%d ref cues): %s'
+                 % (rel or '?', len(ref_cues), verdict['diag']))
+            fixed_text = None
+            if verdict['status'] == sync_align.STATUS_FIXABLE:
+                try:
+                    fixed_text = sync_align.retime(
+                        text, verdict['scale'], verdict['offset_ms'])
+                except Exception:
+                    fixed_text = None
+                if not (fixed_text and fixed_text.strip()):
+                    verdict = dict(verdict,
+                                   status=sync_align.STATUS_UNKNOWN)
+
         _store_verdict(key, verdict)
 
         if verdict['status'] == sync_align.STATUS_FIXABLE:

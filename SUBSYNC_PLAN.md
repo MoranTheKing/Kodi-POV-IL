@@ -296,8 +296,12 @@ subtitle in the same ~5s as today; certainty arrives behind it.
   base changes on (or commit updates to) the repo copy.
 - **Phase S4 — container-probe reference (video-anchored oracle).** HTTP
   Range probe of MKV/WebM direct streams → embedded text-track cue
-  timestamps as a TRUE reference for estimate() (see §7.3). Ships after S2/S3
-  prove the sub-vs-sub path.
+  timestamps as a TRUE reference for estimate() (see §7.3).
+  **PULLED FORWARD before S3 (maintainer decision)** after a field case
+  proved the need: `From.S04E10.1080p.ColdFilm` — a Russian re-encode with
+  NO matching subtitle in any DB (88 candidates, best 46%/fuzzy) — could
+  only be anchored by the playing file itself. Shipped as `mkv_probe.py` +
+  the probe fallback in `subsync.process` (quickfix 0.1.382).
 - **Phase S5 — research (optional, later).** Gemini-audio deep verify
   (§7.4, opt-in) and piecewise alignment for recut releases (mid-roll
   recaps, extended cuts) via anchor cues (numbers/names/latin tokens that
