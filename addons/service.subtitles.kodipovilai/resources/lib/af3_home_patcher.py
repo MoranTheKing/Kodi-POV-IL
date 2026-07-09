@@ -1012,22 +1012,18 @@ def _set_af3_runtime_defaults():
     if xbmc is None:
         return
     commands = [
-        'Skin.SetString(CustomRating.Movies.Item01,TMDb)',
-        'Skin.SetString(CustomRating.Movies.Item02,IMDb)',
-        'Skin.SetString(CustomRating.Movies.Item03,RottenTomatoesUser)',
-        'Skin.SetString(CustomRating.TVShows.Item01,TMDb)',
-        'Skin.SetString(CustomRating.TVShows.Item02,IMDb)',
-        'Skin.SetString(CustomRating.TVShows.Item03,Trakt)',
-        'Skin.Reset(HomeSwitcher.Vertical)',
-        'Skin.SetString(HomeSwitcher.Home.Mode,Standard)',
-        'Skin.SetString(HomeSwitcher.1101.Mode,Standard)',
-        'Skin.SetString(HomeSwitcher.1102.Mode,Standard)',
         'Skin.SetBool(Textboxes.DisableFakeBox)',
         # NOTE: the Spotlight.* strings AND the Home.Shortcut.Path are NOT seeded
         # here every boot anymore -- they're user-customisable (path/target/
         # label/limit), and re-setting them on every startup reverted the user's
         # change (arctic.fuse 3: edited menu-hub path reverted after restart).
         # They're now seeded once via _seed_af3_spotlight_once().
+        # SAME treatment for the HomeSwitcher layout (Vertical/Mode) and the
+        # CustomRating rows: they're user-facing skin choices, and forcing them
+        # on every rebuild reset a customised AF3 home layout after each
+        # quickfix (PATCH_VERSION bump -> rebuild -> layout back to Standard).
+        # They're now seeded once via _seed_af3_layout_once(). Only the infra
+        # settings the build NEEDS to function stay forced here.
         'Skin.Reset(TMDbHelper.DisableRatings)',
         'Skin.SetBool(TMDbHelper.EnableData)',
         'Skin.SetBool(TMDbHelper.Service)',
@@ -1052,6 +1048,45 @@ def _set_af3_runtime_defaults():
             xbmc.executebuiltin(command)
         except Exception:
             pass
+
+
+_LAYOUT_MARKER = AF3_NODES + '.pov_layout_seeded'
+_LAYOUT_COMMANDS = [
+    'Skin.SetString(CustomRating.Movies.Item01,TMDb)',
+    'Skin.SetString(CustomRating.Movies.Item02,IMDb)',
+    'Skin.SetString(CustomRating.Movies.Item03,RottenTomatoesUser)',
+    'Skin.SetString(CustomRating.TVShows.Item01,TMDb)',
+    'Skin.SetString(CustomRating.TVShows.Item02,IMDb)',
+    'Skin.SetString(CustomRating.TVShows.Item03,Trakt)',
+    'Skin.Reset(HomeSwitcher.Vertical)',
+    'Skin.SetString(HomeSwitcher.Home.Mode,Standard)',
+    'Skin.SetString(HomeSwitcher.1101.Mode,Standard)',
+    'Skin.SetString(HomeSwitcher.1102.Mode,Standard)',
+]
+
+
+def _seed_af3_layout_once():
+    """Seed the home-layout / rating-row defaults ONCE, then never touch them
+    again, so a user who changes the AF3 home layout (switcher mode, vertical
+    menu) or the rating rows keeps that across restarts AND quickfix updates
+    (every PATCH_VERSION bump used to force these back to Standard). Mirrors
+    _seed_af3_spotlight_once: brand-new AF3 installs get the defaults; devices
+    that were already seeded before just claim ownership without overwriting."""
+    if xbmc is None:
+        return
+    try:
+        if _exists(_LAYOUT_MARKER):
+            return  # already decided once -> never re-seed (user owns it now)
+        fresh = not _exists(AF3_NODES + '.pov_home_version')
+        if fresh:
+            for command in _LAYOUT_COMMANDS:
+                try:
+                    xbmc.executebuiltin(command)
+                except Exception:
+                    pass
+        _write(_LAYOUT_MARKER, PATCH_VERSION + '\n')
+    except Exception:
+        pass
 
 
 _SPOTLIGHT_MARKER = AF3_NODES + '.pov_spotlight_seeded'
@@ -1142,6 +1177,7 @@ def _rebuild_af3_shortcuts():
         return
     _set_af3_runtime_defaults()
     _seed_af3_spotlight_once()
+    _seed_af3_layout_once()
     stamp = '{0}-{1}'.format(PATCH_VERSION, int(time.time()))
     xbmc.executebuiltin('Skin.SetString(Shortcuts.RebuildDateTime,{0})'.format(stamp))
     xbmc.executebuiltin('RunScript(script.skinvariables,action=buildtemplate,force=True,background=true)')
@@ -1199,6 +1235,7 @@ def ensure_patched():
     if _is_af3_active():
         _set_af3_runtime_defaults()
         _seed_af3_spotlight_once()
+        _seed_af3_layout_once()
 
     marker = AF3_NODES + '.pov_home_version'
     marker_changed = True

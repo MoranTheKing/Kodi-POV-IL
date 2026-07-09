@@ -109,7 +109,38 @@ def _insert_after_token(content, anchor_token, block):
     return content[:match.end(1)] + block + content[match.end(1):], True
 
 
-def _ensure_content_widgets(filename, content):
+# One-shot marker for the ADD-if-absent widget seeds below. These widget XMLs
+# are the same files FENtastic's own widget editor writes user customisations
+# into (and the wizard's quick-update extractor deliberately preserves them for
+# that reason). Re-adding a missing block on EVERY start meant a user who
+# deleted one of our widget rows got it back on the next boot, forever. Now the
+# blocks are seeded once per device; afterwards the user owns the widget list.
+# The old->new URL migrations and header rewrite still run every start -- they
+# only match our own previous baselines, never a user-authored row.
+_WIDGET_SEED_FLAG = '_fen_widgets_seeded'
+_WIDGET_SEED_VERSION = 'v1'
+
+
+def _widgets_already_seeded():
+    if kodi_utils is None:
+        return False
+    try:
+        return (kodi_utils.get_setting(_WIDGET_SEED_FLAG, '')
+                == _WIDGET_SEED_VERSION)
+    except Exception:
+        return False
+
+
+def _mark_widgets_seeded():
+    if kodi_utils is None:
+        return
+    try:
+        kodi_utils.set_setting(_WIDGET_SEED_FLAG, _WIDGET_SEED_VERSION)
+    except Exception:
+        pass
+
+
+def _ensure_content_widgets(filename, content, allow_insert=True):
     """Repair the dedicated FENtastic Movies/TV Shows page widgets."""
     changed = False
     if filename == 'script-fentastic-widget_movies.xml':
@@ -126,12 +157,12 @@ def _ensure_content_widgets(filename, content):
         if old_movie_genres in content:
             content = content.replace(old_movie_genres, new_movie_genres)
             changed = True
-        if 'tmdb_movies_popular' not in content:
+        if allow_insert and 'tmdb_movies_popular' not in content:
             content, did = _insert_after_token(
                 content, 'tmdb_movies_latest_releases',
                 MOVIES_POPULAR_BLOCK)
             changed = changed or did
-        if 'menu_type=movie&amp;mode=navigator.genres' not in content:
+        if allow_insert and 'menu_type=movie&amp;mode=navigator.genres' not in content:
             content, did = _insert_after_token(
                 content,
                 '%D7%A1%D7%A8%D7%98%D7%99%D7%9D+-+%D7%9C%D7%A4%D7%99+%D7%A8%D7%A9%D7%AA%D7%95%D7%AA',
@@ -151,12 +182,12 @@ def _ensure_content_widgets(filename, content):
         if old_tv_genres in content:
             content = content.replace(old_tv_genres, new_tv_genres)
             changed = True
-        if 'tmdb_tv_premieres' not in content:
+        if allow_insert and 'tmdb_tv_premieres' not in content:
             content, did = _insert_after_token(
                 content, 'trakt_tv_trending',
                 TV_PREMIERES_BLOCK)
             changed = changed or did
-        if 'menu_type=tvshow&amp;mode=navigator.genres' not in content:
+        if allow_insert and 'menu_type=tvshow&amp;mode=navigator.genres' not in content:
             content, did = _insert_after_token(
                 content,
                 '%D7%A1%D7%93%D7%A8%D7%95%D7%AA+-+%D7%9C%D7%A4%D7%99+%D7%A8%D7%A9%D7%AA%D7%95%D7%AA',
@@ -186,7 +217,7 @@ def _widget_path(filename):
     return p if os.path.isfile(p) else ''
 
 
-def _patch_one(filename):
+def _patch_one(filename, allow_insert=True):
     path = _widget_path(filename)
     if not path:
         _log('{0}: file not found'.format(filename), level='INFO')
@@ -210,7 +241,7 @@ def _patch_one(filename):
             header_status = 'patched'
 
     new_content, widgets_changed = _ensure_content_widgets(
-        filename, new_content)
+        filename, new_content, allow_insert=allow_insert)
     if new_content == content:
         _log('{0}: already migrated'.format(filename), level='DEBUG')
         return header_status
@@ -241,6 +272,15 @@ def _patch_one(filename):
 
 def ensure_patched():
     """Apply the header rewrite to both widget XML files. Returns a
-    {filename: status} dict.
+    {filename: status} dict. Add-if-absent widget blocks are seeded once per
+    device (see _WIDGET_SEED_FLAG); the marker is only written once BOTH files
+    were actually seen, so a not-yet-installed skin retries next start.
     """
-    return {name: _patch_one(name) for name in WIDGET_FILES}
+    allow_insert = not _widgets_already_seeded()
+    results = {name: _patch_one(name, allow_insert=allow_insert)
+               for name in WIDGET_FILES}
+    if allow_insert and all(
+            status not in ('no_file', 'read_failed', 'write_failed')
+            for status in results.values()):
+        _mark_widgets_seeded()
+    return results
