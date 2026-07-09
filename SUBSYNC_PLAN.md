@@ -100,6 +100,11 @@ New module, replaces/backs all three difflib scorers so every surface (picker
   - token-similarity only as a tie-breaker *within* a tier, never across.
 - Emits `(score, tier, reasons)` so the UI can say *why* ("אותה קבוצת
   ריליס").
+- **Synthesized names are low-trust:** `subs_filename_publisher` sometimes
+  *invents* a name (`Title.SxxExx.QUALITYp.mkv`) when POV publishes no real
+  release. An "exact match" against a synthesized name is meaningless — the
+  scorer must flag such names (no group + synthetic pattern) and never award
+  the exact/group tiers against them, and they must never anchor an oracle.
 - Wire-in points: `subs_engine/engine.py::calculate_sync_percentage`,
   `translate._match_pct`, `he_sub_match._score` become thin calls into it
   (keeping their signatures).
@@ -128,6 +133,21 @@ Extract + generalize the proven estimator from `arabic_gender.py`:
 2. tier≈group+source match.
 3. None → Layer B is skipped for this play (behave as today).
 
+**Oracle cross-checking:** a single exact-name sub can itself be mis-synced
+or mislabeled on the provider. When ≥2 release-matched subs exist (any
+languages), align them to each other first; mutual agreement (map ≈ identity)
+promotes them to trusted, an outlier is discarded. With only one candidate
+oracle, retime verdicts are recorded at lower confidence until the Layer-C
+feedback loop (or a second oracle) confirms them.
+
+**What actually touches the video:** nothing in Layers A/B reads the video's
+audio — the anchor to the real file is the release identity (same release =
+byte-identical timing for everyone) plus the Layer-C human feedback (a viewer
+who watched ≥15 min without touching subtitle delay = ground-truth
+confirmation; a settled manual delay = a ground-truth correction). The system
+is a chain of evidence with honest confidence tiers, not a mathematical proof
+— tiers that can't be backed are labeled "לא מאומת", never upgraded.
+
 Cost: at most **one extra source-sub download** per play (the oracle) + <1s
 CPU. Results cached per `(candidate_hash, release_norm)` so each pair is
 computed once per device — and once *globally* with Layer C.
@@ -151,6 +171,17 @@ files):
   the ground truth loop that keeps the whole system honest.
 - `/lookup` response gains the sync records for the media so ONE existing
   round-trip serves them (no new request on the hot path).
+- **Privacy surface: nothing new.** The pool already receives, per install
+  (anon id): what media is looked up, which release names were played
+  (`/embedded`, `/ktuvit`), and shared SRTs. A sync record is the same
+  category of metadata (media, sub-id, release → offset) with no new content.
+  All contribution rides the existing `pool_share` gate; gate off = no sends.
+- **Write discipline (Cloudflare KV free tier ≈ 1,000 writes/day):** votes
+  must NOT be written per-playback. Contribute only on state change — a newly
+  computed retime, the FIRST confirmation of a record, or a manual-delay
+  measurement that disagrees with the stored record — deduped client-side
+  with `.shared`-style sidecar markers (same pattern as `/contribute`).
+  Routine playback of an already-CONFIRMED record writes nothing.
 
 ### The scan ladder (rework of `_autosub_on_play` + `list_candidates` order)
 
