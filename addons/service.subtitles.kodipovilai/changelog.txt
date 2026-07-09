@@ -1,3 +1,14 @@
+v0.2.349
+- SubSync S5 quota hardening (free-tier discipline, same care as the
+  translation path): a Gemini failure (429 quota / key / network) during the
+  audio anchor now STOPS the remaining segment calls immediately instead of
+  burning two more, and -- critically -- no longer caches a permanent
+  "no audio anchor" negative for the release: quota exhaustion is transient,
+  so the next play (e.g. tomorrow, quota refreshed) gets a fresh chance.
+  Genuine negatives (no AAC track / Gemini answered but found no speech)
+  are still cached so they never cost calls again. No key = the audio tier
+  is skipped before any network work; every other tier works keyless.
+
 v0.2.348
 - SubSync S5: AUDIO as the last-resort timing anchor. The field case
   (From.S04E10.ColdFilm) turned out to have NO embedded subtitle tracks at

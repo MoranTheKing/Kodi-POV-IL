@@ -273,6 +273,7 @@ def _audio_probe_reference(info, playing):
         segs = mkv_probe.audio_segments(
             url, log=lambda m: _log('audio: ' + m))
         cues = []
+        api_failed = False
         if segs:
             model = (kodi_utils.get_setting('model', '') or
                      'gemini-3.1-flash-lite')
@@ -282,8 +283,12 @@ def _audio_probe_reference(info, playing):
                         api_key, model, _AUDIO_PROMPT, seg['data'],
                         'audio/aac', timeout=60)
                 except Exception as e:
+                    # Quota/key/network failure is TRANSIENT: stop burning
+                    # further calls now, and do NOT cache a negative below --
+                    # tomorrow's refreshed quota should get a fresh chance.
                     _log('audio: gemini failed: %r' % e, level='WARNING')
-                    continue
+                    api_failed = True
+                    break
                 m = re.search(r'\[.*\]', txt or '', re.DOTALL)
                 if not m:
                     continue
@@ -301,6 +306,8 @@ def _audio_probe_reference(info, playing):
                         continue
             _log('audio: %d speech cues from %d segment(s)'
                  % (len(cues), len(segs)))
+        if api_failed and not cues:
+            return None   # transient -- no negative cache, retry next time
         try:
             if cpath:
                 data[rel_key] = {'ts': time.time(), 'cues': cues}
