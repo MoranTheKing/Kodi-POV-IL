@@ -199,16 +199,21 @@ def verify(ref_srt_text, cand_srt_text):
     return _gate(dialogue_cues(ref_srt_text), dialogue_cues(cand_srt_text))
 
 
-def verify_cues(ref_cues, cand_srt_text):
+def verify_cues(ref_cues, cand_srt_text, min_vote=None, min_overlap=None):
     """verify() variant whose reference is a raw cue list (start/end ms) --
     e.g. embedded-track timestamps from the mkv_probe container probe, where
-    there is no text to filter. Same gate, same verdict shape."""
+    there is no text to filter. Same gate, same verdict shape. min_vote /
+    min_overlap override the gate thresholds (audio-VAD references have
+    softer boundaries than subtitle cues)."""
     ref = [c for c in (ref_cues or [])
            if isinstance(c, dict) and 'start' in c and 'end' in c]
-    return _gate(ref, dialogue_cues(cand_srt_text))
+    return _gate(ref, dialogue_cues(cand_srt_text),
+                 min_vote=min_vote, min_overlap=min_overlap)
 
 
-def _gate(ref, cand):
+def _gate(ref, cand, min_vote=None, min_overlap=None):
+    _mv = MIN_VOTE if min_vote is None else min_vote
+    _mo = MIN_OVERLAP if min_overlap is None else min_overlap
     if len(ref) < MIN_CUES or len(cand) < MIN_CUES:
         return {'status': STATUS_UNKNOWN, 'scale': 1.0, 'offset_ms': 0.0,
                 'vote': 0.0, 'overlap': 0.0,
@@ -218,7 +223,7 @@ def _gate(ref, cand):
     ov = overlap_rate(ref, cand, a, b)
     diag = 'scale=%.6f offset=%+dms vote=%.0f%% overlap=%.0f%%' % (
         a, int(b), vote * 100, ov * 100)
-    if not (SCALE_MIN <= a <= SCALE_MAX) or vote < MIN_VOTE or ov < MIN_OVERLAP:
+    if not (SCALE_MIN <= a <= SCALE_MAX) or vote < _mv or ov < _mo:
         return {'status': STATUS_UNKNOWN, 'scale': a, 'offset_ms': b,
                 'vote': vote, 'overlap': ov, 'diag': 'gate FAILED (' + diag + ')'}
     if a == 1.0 and abs(b) <= CONFIRM_OFFSET_MS:
