@@ -153,7 +153,12 @@ def estimate(ref_cues, cand_cues):
         return 1.0, 0.0, 0.0
     sampled = len(ref_on[::max(1, len(ref_on) // _SAMPLE)])
     best = (1.0, 0.0, -1)
-    for a in SCALES:
+    # Try scales nearest-to-1.0 FIRST and require a STRICTLY better vote to
+    # switch away: neighbouring FPS ratios (e.g. 23.976/24 = 0.999) can tie
+    # with the identity map inside the histogram bin tolerance on short
+    # spans, and picking 0.999 over a true 1.0 accumulates seconds of drift
+    # by the end of a long movie.
+    for a in sorted(SCALES, key=lambda s: abs(s - 1.0)):
         b, v = _best_offset(ref_on, cand_on, a)
         if v > best[2]:
             best = (a, b, v)
@@ -191,8 +196,19 @@ def verify(ref_srt_text, cand_srt_text):
     that lags the reference by +12s yields offset_ms=+12000; retime() is then
     called with (scale, offset_ms) and applies the INVERSE map to the
     candidate so it lands on the reference timeline."""
-    ref = dialogue_cues(ref_srt_text)
-    cand = dialogue_cues(cand_srt_text)
+    return _gate(dialogue_cues(ref_srt_text), dialogue_cues(cand_srt_text))
+
+
+def verify_cues(ref_cues, cand_srt_text):
+    """verify() variant whose reference is a raw cue list (start/end ms) --
+    e.g. embedded-track timestamps from the mkv_probe container probe, where
+    there is no text to filter. Same gate, same verdict shape."""
+    ref = [c for c in (ref_cues or [])
+           if isinstance(c, dict) and 'start' in c and 'end' in c]
+    return _gate(ref, dialogue_cues(cand_srt_text))
+
+
+def _gate(ref, cand):
     if len(ref) < MIN_CUES or len(cand) < MIN_CUES:
         return {'status': STATUS_UNKNOWN, 'scale': 1.0, 'offset_ms': 0.0,
                 'vote': 0.0, 'overlap': 0.0,

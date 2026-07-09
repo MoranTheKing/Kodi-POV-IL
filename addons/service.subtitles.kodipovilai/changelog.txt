@@ -1,3 +1,23 @@
+v0.2.347
+- SubSync S4: the playing FILE itself is now a timing anchor. New
+  mkv_probe.py reads the EMBEDDED subtitle track's cue TIMESTAMPS straight
+  out of the playing MKV via HTTP Range requests (debrid direct links) --
+  head + ~10 small sample windows, hard-capped at 40MB / 25s, no decoding,
+  works for text AND bitmap (PGS) tracks, any language, forced tracks
+  skipped. When no release-matched subtitle exists in ANY database (the
+  field case: From.S04E10.1080p.ColdFilm, a re-encode absent from every
+  subtitle DB -- best candidate 46%/fuzzy), subsync now probes the file and
+  verifies/retimes the chosen Hebrew sub against the file's own embedded
+  track. Probe results are cached per release (including "nothing there"),
+  so the ranged reads happen once. Gated by the subsync_probe setting
+  (default on); fail-open as always.
+- sync_align: scale tie-break now prefers the identity map -- neighbouring
+  FPS ratios (23.976/24=0.999) could tie with 1.0 inside the histogram bin
+  tolerance and accumulate seconds of drift by the end of a long movie.
+- Offline test suite for the probe: synthetic Matroska builder + a real
+  Range-supporting HTTP server + the full probe->verify->retime->CONFIRMED
+  loop, plus an end-to-end simulation of the exact ColdFilm field scenario.
+
 v0.2.346
 - "Last watched" source now actually stays at the TOP of the source list.
   source_capture.reorder moved it to the top and badged it, but the
