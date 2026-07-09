@@ -582,7 +582,10 @@ def list_candidates(info, modal_progress=True):
             label = 'כתובית · מאגר'
         return {
             'filename': label, 'language': 'he',
-            'link': _encode_link({'type': 'pool', 'hash': v.get('hash')}),
+            # 'release' rides in the link so resolve() can tier-check the
+            # pool sub against the playing release (SubSync S2 verify/fix).
+            'link': _encode_link({'type': 'pool', 'hash': v.get('hash'),
+                                  'release': release or ''}),
             'sync': 'false', 'rating': '5', 'is_hi': False, 'is_hd': False,
         }
 
@@ -632,7 +635,8 @@ def list_candidates(info, modal_progress=True):
         results.append({
             'filename': label,
             'language': 'he',
-            'link': _encode_link({'type': 'pool', 'hash': v.get('hash')}),
+            'link': _encode_link({'type': 'pool', 'hash': v.get('hash'),
+                                  'release': release or ''}),
             'sync': 'false', 'rating': '5',
             'is_hi': False, 'is_hd': False,
         })
@@ -1046,7 +1050,26 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             with open(out, 'w', encoding='utf-8') as f:
                 f.write(text)
             _reapply_rtl_fix_in_place(out)
-            _status('כתוביות מהמאגר הקהילתי', time_ms=4000)
+            # SubSync S2: pool variants carry the release of their SOURCE sub;
+            # if that doesn't match the playing release, verify/fix timing
+            # against a release-matched oracle. Fail-open.
+            _sv = None
+            try:
+                from . import subsync
+                _newp, _sv = subsync.process(
+                    info, out, payload.get('release') or '')
+                if _newp:
+                    out = _newp
+            except Exception as _se:
+                kodi_utils.log('subsync pool hook failed: {0}'.format(_se),
+                               level='WARNING')
+            _line = ''
+            try:
+                from . import subsync as _ss
+                _line = _ss.status_line(_sv)
+            except Exception:
+                _line = ''
+            _status(_line or 'כתוביות מהמאגר הקהילתי', time_ms=4000)
             return out
         except OSError:
             return None
@@ -1118,7 +1141,28 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             except Exception as e:
                 kodi_utils.log('ktuvit pool mirror failed: {0}'.format(e),
                                level='WARNING')
-            _status('כתוביות עברית מ-{0}'.format(
+            # SubSync S2: when this sub's release doesn't match the playing
+            # release, verify -- and if a confident linear map exists, FIX --
+            # its timing against a release-matched oracle sub (any language).
+            # Fail-open: any problem delivers the file exactly as before.
+            _sv = None
+            try:
+                if 'Hebrew' in (payload.get('language') or ''):
+                    from . import subsync
+                    _newp, _sv = subsync.process(
+                        info, path, payload.get('filename') or '')
+                    if _newp:
+                        path = _newp
+            except Exception as _se:
+                kodi_utils.log('subsync engine hook failed: {0}'.format(_se),
+                               level='WARNING')
+            _line = ''
+            try:
+                from . import subsync as _ss
+                _line = _ss.status_line(_sv)
+            except Exception:
+                _line = ''
+            _status(_line or 'כתוביות עברית מ-{0}'.format(
                 payload.get('source') or 'מקור'), time_ms=4000)
             return path
         kodi_utils.notify('לא ניתן היה להוריד את הכתובית', time_ms=4000)
