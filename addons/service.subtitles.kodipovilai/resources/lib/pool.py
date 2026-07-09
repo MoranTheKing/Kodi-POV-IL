@@ -173,10 +173,125 @@ def lookup(info):
         return []
     try:
         data = json.loads(_get('/lookup', p).decode('utf-8'))
-        return (data.get('variants') or []) if data.get('ok') else []
+        if not data.get('ok'):
+            return []
+        _sync_cache_put(p, data.get('sync') or {})
+        return data.get('variants') or []
     except Exception as e:
         kodi_utils.log('pool lookup failed: {0}'.format(e), level='DEBUG')
         return []
+
+
+# --- SubSync S3: community sync registry (client side) ----------------------
+# The Worker serves per-media sync verdicts inside the /lookup response
+# (`sync`: {"<sub_hash>|<normalized release>": {s, o, st, n, h, ts}}). lookup()
+# stashes them here so subsync can consume the registry with ZERO extra
+# requests in the common flow; sync_map() falls back to one /lookup when the
+# picker's lookup didn't run (e.g. engine-only picks), throttled by TTL.
+
+_SYNC_CACHE = {}
+_SYNC_TTL = 600.0
+_SYNC_CACHE_MAX = 30
+
+
+def _sync_cache_key(p):
+    return '|'.join((p.get('tmdb') or p.get('imdb') or '', p.get('type') or '',
+                     str(p.get('season') or '0'), str(p.get('episode') or '0')))
+
+
+def _sync_cache_put(p, sync):
+    try:
+        import time as _t
+        _SYNC_CACHE[_sync_cache_key(p)] = (_t.time(), sync or {})
+        if len(_SYNC_CACHE) > _SYNC_CACHE_MAX:
+            oldest = sorted(_SYNC_CACHE.items(), key=lambda kv: kv[1][0])
+            for k, _v in oldest[:len(_SYNC_CACHE) - _SYNC_CACHE_MAX]:
+                _SYNC_CACHE.pop(k, None)
+    except Exception:
+        pass
+
+
+def worker_norm_release(s):
+    """EXACT mirror of the Worker's normRelease() -- the registry key must be
+    computed identically on both sides or lookups silently miss."""
+    import re as _re
+    s = str(s or '').lower()
+    s = _re.sub(r'\.(mkv|mp4|avi|srt)$', '', s)
+    s = _re.sub(r'[\s_+/\-]+', '.', s)
+    s = _re.sub(r'\.+', '.', s).strip('.')
+    return s
+
+
+def sync_map(info):
+    """The community sync map for this media ({} when unavailable). Prefers
+    the copy stashed by the picker's lookup(); otherwise ONE /lookup per TTL.
+    Read side -- gated by pool_use like every other pool read."""
+    try:
+        if _urlreq is None or not use_enabled():
+            return {}
+        p = _params(info)
+        if not _has_id(p):
+            return {}
+        import time as _t
+        ent = _SYNC_CACHE.get(_sync_cache_key(p))
+        if ent and (_t.time() - ent[0]) < _SYNC_TTL:
+            return ent[1]
+        data = json.loads(_get('/lookup', p).decode('utf-8'))
+        if not data.get('ok'):
+            return {}
+        sm = data.get('sync') or {}
+        _sync_cache_put(p, sm)
+        return sm
+    except Exception as e:
+        kodi_utils.log('pool sync_map failed: {0}'.format(e), level='DEBUG')
+        return {}
+
+
+def report_sync(info, sub_hash, release, scale, offset_ms, status,
+                origin='auto'):
+    """Fire-and-forget POST /syncrep: share a sync verdict (auto-computed
+    retime/confirm, or a HUMAN manual-delay fix) so every other viewer of this
+    (subtitle, release) pair gets it instantly. Gated by pool_share; the
+    Worker enforces plausibility and merges votes server-side. Never raises,
+    never blocks the caller."""
+    try:
+        if _urlreq is None or not share_enabled():
+            return
+        p = _params(info)
+        if not _has_id(p) or not (sub_hash or '').strip():
+            return
+        rel = (release or '').strip()
+        if not rel or _is_token_like(rel):
+            return
+        body = {
+            'tmdb_id': p['tmdb'], 'imdb_id': p['imdb'], 'type': p['type'],
+            'season': p['season'], 'episode': p['episode'],
+            'sub_hash': (sub_hash or '').strip().lower(),
+            'release': rel,
+            'scale': float(scale or 1.0),
+            'offset_ms': int(round(float(offset_ms or 0.0))),
+            'status': 'CONFIRMED' if status == 'CONFIRMED' else 'FIXABLE',
+            'origin': 'human' if origin == 'human' else 'auto',
+        }
+
+        def _send():
+            try:
+                data = json.dumps(body).encode('utf-8')
+                req = _urlreq.Request(POOL_URL + '/syncrep', data=data,
+                                      headers=_post_headers('/syncrep'))
+                _urlreq.urlopen(req, timeout=_POST_TIMEOUT).read()
+                kodi_utils.log(
+                    'pool syncrep sent ({0}, {1}, {2:+d}ms, {3})'.format(
+                        body['status'], body['origin'], body['offset_ms'],
+                        rel), level='INFO')
+            except Exception as e:
+                kodi_utils.log('pool syncrep failed: {0}'.format(e),
+                               level='DEBUG')
+
+        import threading as _th
+        _th.Thread(target=_send, daemon=True).start()
+    except Exception:
+        pass
 
 
 def fetch(info, source_hash=None):
