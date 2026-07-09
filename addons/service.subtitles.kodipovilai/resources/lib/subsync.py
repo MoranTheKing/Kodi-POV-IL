@@ -12,6 +12,7 @@
 # delivers the original file exactly as today. Never raises.
 
 import os
+import re
 import json
 import time
 import hashlib
@@ -219,6 +220,107 @@ def _probe_cache_path():
         return ''
 
 
+_AUDIO_PROMPT = (
+    'This is a short audio clip from a TV episode or movie. Identify every '
+    'segment of human SPEECH (dialogue in any language, including dubbed '
+    'speech). Return ONLY a JSON array, no other text, of objects with start '
+    'and end in SECONDS relative to the beginning of THIS clip, e.g. '
+    '[{"s": 1.2, "e": 3.4}, {"s": 5.0, "e": 7.7}]. Split segments at pauses '
+    'longer than 0.7 seconds. Ignore music, effects and silence.')
+# Audio-VAD boundaries are softer than subtitle cues -> relaxed gate.
+_AUDIO_MIN_VOTE = 0.55
+_AUDIO_MIN_OVERLAP = 0.65
+
+
+def _audio_probe_reference(info, playing):
+    """LAST-RESORT reference (S5): speech intervals from the playing file's
+    own AUDIO, timestamped by Gemini (user's existing key). Only reached when
+    there is no matching sub in any DB AND no embedded subtitle track. AAC
+    audio only (Gemini accepts it as-is after ADTS wrap; AC3/DTS cannot be
+    sent or decoded on device). Cached per release. None when unavailable."""
+    try:
+        if (kodi_utils.get_setting('subsync_audio', 'true') or
+                'true').strip().lower() == 'false':
+            return None
+        api_key = (kodi_utils.get_setting('api_key', '') or '').strip()
+        if not api_key:
+            return None
+        rel_key = ((release_match.normalize(playing) if release_match
+                    else (playing or '').lower()) + '|audio')
+        cpath = _probe_cache_path()
+        data = {}
+        if cpath and os.path.isfile(cpath):
+            try:
+                with open(cpath, 'r', encoding='utf-8') as f:
+                    data = json.load(f) or {}
+            except Exception:
+                data = {}
+            ent = data.get(rel_key)
+            if ent is not None:
+                cues = ent.get('cues') or []
+                _log('audio: cache %s for %r'
+                     % ('hit (%d cues)' % len(cues) if cues else 'negative',
+                        rel_key))
+                return cues or None
+        url = _playing_url(info)
+        if not url:
+            return None
+        try:
+            from resources.lib import mkv_probe
+            from resources.lib import gemini
+        except Exception:
+            return None
+        segs = mkv_probe.audio_segments(
+            url, log=lambda m: _log('audio: ' + m))
+        cues = []
+        if segs:
+            model = (kodi_utils.get_setting('model', '') or
+                     'gemini-3.1-flash-lite')
+            for seg in segs[:3]:
+                try:
+                    txt = gemini.generate_media(
+                        api_key, model, _AUDIO_PROMPT, seg['data'],
+                        'audio/aac', timeout=60)
+                except Exception as e:
+                    _log('audio: gemini failed: %r' % e, level='WARNING')
+                    continue
+                m = re.search(r'\[.*\]', txt or '', re.DOTALL)
+                if not m:
+                    continue
+                try:
+                    items = json.loads(m.group(0))
+                except Exception:
+                    continue
+                for it in items or []:
+                    try:
+                        s = float(it.get('s')) * 1000.0 + seg['start_ms']
+                        e = float(it.get('e')) * 1000.0 + seg['start_ms']
+                        if e > s:
+                            cues.append({'start': int(s), 'end': int(e)})
+                    except Exception:
+                        continue
+            _log('audio: %d speech cues from %d segment(s)'
+                 % (len(cues), len(segs)))
+        try:
+            if cpath:
+                data[rel_key] = {'ts': time.time(), 'cues': cues}
+                if len(data) > _MAX_PROBE_ENTRIES:
+                    data = dict(sorted(data.items(),
+                                       key=lambda kv: kv[1].get('ts', 0),
+                                       reverse=True)[:_MAX_PROBE_ENTRIES])
+                os.makedirs(os.path.dirname(cpath), exist_ok=True)
+                tmp = cpath + '.tmp'
+                with open(tmp, 'w', encoding='utf-8') as f:
+                    json.dump(data, f)
+                os.replace(tmp, cpath)
+        except Exception:
+            pass
+        return cues or None
+    except Exception as e:
+        _log('audio reference failed: %r' % e, level='WARNING')
+        return None
+
+
 def _probe_reference_cues(info, playing):
     """Embedded-track cue times for the PLAYING file (S4 container probe),
     cached per release so the ranged reads happen once. None when the probe
@@ -358,12 +460,23 @@ def process(info, path, delivered_release):
             # failed) -> the playing FILE's own embedded track as the timing
             # reference. Covers releases no subtitle DB knows (ColdFilm-style
             # re-encodes); anchored to the actual file = strongest anchor.
+            ref_kind = 'FILE PROBE'
+            gate_kw = {}
             ref_cues = _probe_reference_cues(info, playing)
             if not ref_cues:
+                # S5 last resort: the file has no embedded subtitle track at
+                # all (dubbed re-encodes) -> speech intervals from its AUDIO,
+                # timestamped by Gemini. Relaxed gate (VAD boundaries are
+                # softer than subtitle cues).
+                ref_cues = _audio_probe_reference(info, playing)
+                ref_kind = 'AUDIO PROBE'
+                gate_kw = {'min_vote': _AUDIO_MIN_VOTE,
+                           'min_overlap': _AUDIO_MIN_OVERLAP}
+            if not ref_cues:
                 return path, {'status': _STATUS_NO_ORACLE}
-            verdict = sync_align.verify_cues(ref_cues, text)
-            _log('verdict for %r vs FILE PROBE (%d ref cues): %s'
-                 % (rel or '?', len(ref_cues), verdict['diag']))
+            verdict = sync_align.verify_cues(ref_cues, text, **gate_kw)
+            _log('verdict for %r vs %s (%d ref cues): %s'
+                 % (rel or '?', ref_kind, len(ref_cues), verdict['diag']))
             fixed_text = None
             if verdict['status'] == sync_align.STATUS_FIXABLE:
                 try:
