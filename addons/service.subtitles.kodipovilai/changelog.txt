@@ -1,3 +1,26 @@
+v0.2.348
+- SubSync S5: AUDIO as the last-resort timing anchor. The field case
+  (From.S04E10.ColdFilm) turned out to have NO embedded subtitle tracks at
+  all (dubbed re-encode: video + Russian audio only), so S4's file probe had
+  nothing to anchor to either. Now, when no matching sub exists in any DB
+  AND the file has no embedded subtitle track:
+  * mkv_probe.audio_segments extracts 2-3 short CONTIGUOUS AAC audio clips
+    (~20s each) by demuxing cluster blocks (full lacing support: Xiph/
+    fixed/EBML) and wrapping raw frames as playable ADTS -- no decoding,
+    hard byte/time caps, longest-contiguous-run selection so a window gap
+    can never skew timestamps.
+  * gemini.generate_media (new, separate from the translation path) sends
+    each clip to Gemini with the user's existing key and gets back speech
+    intervals; those become reference cues on the file's own timeline.
+  * subsync verifies/retimes the Hebrew sub against them with a slightly
+    relaxed gate (VAD boundaries are softer than subtitle cues). Works for
+    dubbed audio too -- dubs are lip-synced, so speech happens at the same
+    moments. AAC only (Gemini can't take AC3/DTS; a secondary AAC track is
+    used when present). Gated by subsync_audio (default on) + requires a
+    Gemini key; results (and negatives) cached per release; fail-open.
+  Anchor chain is now: matched sub -> embedded track -> audio -> honest
+  no-op. E2E test reproduces the exact ColdFilm scenario end to end.
+
 v0.2.347
 - SubSync S4: the playing FILE itself is now a timing anchor. New
   mkv_probe.py reads the EMBEDDED subtitle track's cue TIMESTAMPS straight
