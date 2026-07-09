@@ -945,10 +945,41 @@ def _tokens(s):
     return [x.lower() for x in s.split('.') if x]
 
 
+_RM = None
+_RM_TRIED = False
+
+
+def _release_match_mod():
+    """release_match (the ONE structured scorer, SubSync S1), importable both
+    in MoranSubs's own process AND in POV's interpreter where only
+    resources/lib is on sys.path (so try the flat import too). None when
+    unavailable -> difflib fallback keeps the badge working."""
+    global _RM, _RM_TRIED
+    if _RM_TRIED:
+        return _RM
+    _RM_TRIED = True
+    try:
+        from resources.lib import release_match as _m
+        _RM = _m
+    except Exception:
+        try:
+            import release_match as _m
+            _RM = _m
+        except Exception:
+            _RM = None
+    return _RM
+
+
 def _score(src_release, sub_release):
-    """Release-name match %, IDENTICAL to translate._match_pct (difflib token
-    sequence ratio) so the badge on the source screen and the % shown in the
-    subtitle picker are the same number for the same source + sub."""
+    """Release-name match %, IDENTICAL to translate._match_pct (both delegate
+    to release_match) so the badge on the source screen and the % shown in
+    the subtitle picker are the same number for the same source + sub."""
+    rm = _release_match_mod()
+    if rm is not None:
+        try:
+            return rm.match_pct(src_release, sub_release)
+        except Exception:
+            pass
     import difflib
     a = _tokens(src_release)
     b = _tokens(sub_release)
