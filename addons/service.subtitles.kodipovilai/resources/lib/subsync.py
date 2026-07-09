@@ -228,8 +228,25 @@ def process(info, path, delivered_release):
         oracle, tier = (sync_align.pick_oracle(cands, playing)
                         if cands else (None, ''))
         if oracle is None:
-            _log('no oracle for release %r (%d foreign candidates)'
-                 % (playing, len(cands)))
+            # Diagnostic: show the closest candidates + their tier so a field
+            # log tells us WHY nothing anchored (genuinely no matching release
+            # vs a scorer gap). Also stamps the addon version so we can tell a
+            # stale interpreter from a real miss.
+            try:
+                import xbmcaddon as _xa
+                _ver = _xa.Addon().getAddonInfo('version')
+            except Exception:
+                _ver = '?'
+            try:
+                scored = sorted(
+                    ((release_match.match_pct(playing, c['release']),
+                      release_match.match_tier(playing, c['release']),
+                      c['release']) for c in cands), reverse=True)[:5]
+                top = '; '.join('%d%%/%s %r' % s for s in scored) or '-'
+            except Exception:
+                top = '?'
+            _log('no oracle for release %r (%d foreign candidates, v%s); '
+                 'closest: %s' % (playing, len(cands), _ver, top))
             return path, {'status': _STATUS_NO_ORACLE}
         oracle_text = _download_oracle(oracle['payload'])
         if not oracle_text.strip():
