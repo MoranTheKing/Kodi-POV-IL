@@ -1,3 +1,26 @@
+v0.2.354
+- SubSync S3: the community sync registry goes live (Worker /syncrep +
+  /lookup `sync` field deployed by the maintainer).
+  * CONSUME: before any local computation, subsync checks the community map
+    for this exact (subtitle, release) pair -- it rides the pool /lookup the
+    picker already made, so the common case costs a dict lookup, zero
+    requests. A community FIXABLE applies instantly (one gentle toast on the
+    first play on this device, then silent); CONFIRMED delivers as-is.
+    Client-side plausibility gates mirror the engine's before applying.
+  * CONTRIBUTE: every freshly-computed deep verdict (CONFIRMED/FIXABLE) is
+    reported once, fire-and-forget, share-gated (pool_share) -- the verdict
+    cache guarantees no recompute means no re-report.
+  * HUMAN ANCHOR: a new service delay-watcher samples the viewer's manual
+    subtitle delay while a MoranSubs sub plays. A settled >=0.4s delay after
+    5+ minutes watched becomes a human FIXABLE report (correctly folded with
+    any auto-fix already applied); a clean 15+ minute watch becomes a
+    CONFIRMED vote. One report per pair per session. Humans override auto on
+    the server. This closes the class no algorithm can anchor (dubbed
+    re-encodes with no subs anywhere, e.g. the ColdFilm field case): one
+    viewer fixes the delay once -- every future viewer gets it instantly.
+  pool.py: sync_map()/report_sync() + worker_norm_release() (exact mirror of
+  the Worker's key normalization). All existing pool endpoints unchanged.
+
 v0.2.353
 - SubSync goes fully background (self-healing delivery). Field complaints:
   the "searching subtitles" overlay stayed up for the whole deep
