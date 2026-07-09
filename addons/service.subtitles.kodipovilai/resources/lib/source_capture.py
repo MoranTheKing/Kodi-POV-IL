@@ -172,8 +172,17 @@ def reorder(sources_self, results):
                 item['URLName'] = _MARK + nm
         except Exception:
             pass
+        # Pin it: make_items' quality/size re-sort (pov_source_quality_patcher)
+        # runs AFTER this reorder and re-orders the whole list -- rows flagged
+        # '_pin_top' are exempt and stay at the top. Without the flag the
+        # remembered source got its badge but was re-sorted back down the list
+        # (seen in the field at position 80/212).
+        try:
+            item['_pin_top'] = True
+        except Exception:
+            pass
         results.insert(0, item)
-        _log('reorder: remembered source moved to top + marked')
+        _log('reorder: remembered source moved to top + marked + pinned')
         return True
     except Exception as e:
         _log('reorder error: ' + str(e), 3)
