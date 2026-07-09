@@ -378,16 +378,36 @@ the PR; what it does:
      text for translation would require scanning the whole file, so the
      TRANSLATION source remains an external sub (any language; Gemini
      translates any→Hebrew), which the probe then verifies/retimes.
+   - **Bitmap subtitle tracks anchor too.** Since the aligner reads only
+     timestamps, an IMAGE-sub track (PGS `S_HDMV/PGS` on BluRay remuxes,
+     VobSub) is a valid timing reference — its display events mark the same
+     dialogue moments. We never need OCR. This closes the "BluRay remux with
+     PGS-only subs" case that a text-only design would miss.
+
+   **Container matrix (what the probe supports):**
+   | Container | Embedded-sub probe | Notes |
+   |---|---|---|
+   | MKV / WebM | Full (windows method above) | text (SRT/ASS) AND bitmap (PGS/VobSub) timestamps |
+   | MP4 / M4V | Full — and CHEAPER | `mov_text`/`tx3g` cue timing lives entirely in the `moov` sample tables (stts/stco): ONE ranged read of moov (few MB, head or tail) yields the COMPLETE cue timeline — no sample windows needed. Most MP4s carry no sub track at all, but when one exists this is the cheapest anchor of all |
+   | AVI / TS / M2TS | No text-sub anchor | rare via debrid; fall to anchors C/D/E |
+   | HLS / DASH | No single file — no probe | fall to anchors C/D/E |
+   The ladder NEVER breaks on an unsupported container — it just loses the
+   file-anchor tier and keeps oracle + community verification.
 4. **Gemini-audio deep verify (last-resort tier, Phase S5, opt-in).** Kodi
    exposes NO player audio API — but the stream URL is known, so audio can be
    range-fetched and DEMUXED (never decoded) from MKV clusters in pure
    Python. Reality check on codecs: Gemini accepts AAC/MP3/FLAC/WAV/OGG —
    so an **AAC track** can be sent as-is (ADTS wrap) for speech-interval
    timestamps; **AC3/E-AC3/DTS tracks cannot** (Gemini doesn't accept them,
-   and on-device decode is impossible). Coverage is therefore partial by
-   nature — which is fine: this tier only exists for the small anchor-F
-   slice (no embedded text track AND no matching sub anywhere). 2–3 × ~60s
-   segments per check, quota-aware, off by default.
+   and on-device decode is impossible). Before giving up on a DTS/AC3 main
+   track, check the OTHER audio tracks — releases often mux a secondary
+   stereo AAC "compatibility" track, which serves fine. Coverage is
+   therefore partial by nature — which is fine: this tier only exists for
+   the tiny anchor-F slice (no embedded sub track of ANY kind — text or
+   bitmap — AND no matching external sub in any language). If in that rare
+   slice the audio is also DTS/AC3-only: honest "לא מאומת" label, and the
+   community delay-feedback loop still converges it to confirmed within a
+   few viewers. 2–3 × ~60s segments per check, quota-aware, off by default.
 
 ### Where this plan is deliberately stronger
 
