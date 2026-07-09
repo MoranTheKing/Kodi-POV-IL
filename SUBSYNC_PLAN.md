@@ -222,10 +222,14 @@ upgrades to `HEB מסונכרן ✓` when the registry has a CONFIRMED record.
 - **Phase S3 — community sync registry.** Worker `/sync` (KV), pool.py
   contribute/consume piggybacked on `/lookup`, subtitle-delay feedback
   capture in service.py, badge upgrade in he_sub_match.
-- **Phase S4 — research (optional, later).** Piecewise alignment for recut
-  releases (mid-roll recaps, extended cuts) via anchor cues
-  (numbers/names/latin tokens that survive translation); NOT audio-based —
-  audio decoding is not feasible in Kodi's Python across devices.
+- **Phase S4 — container-probe reference (video-anchored oracle).** HTTP
+  Range probe of MKV/WebM direct streams → embedded text-track cue
+  timestamps as a TRUE reference for estimate() (see §7.3). Ships after S2/S3
+  prove the sub-vs-sub path.
+- **Phase S5 — research (optional, later).** Gemini-audio deep verify
+  (§7.4, opt-in) and piecewise alignment for recut releases (mid-roll
+  recaps, extended cuts) via anchor cues (numbers/names/latin tokens that
+  survive translation). No on-device audio DECODING ever — demux-only.
 
 ## 6. Risks & mitigations
 
@@ -245,7 +249,63 @@ upgrades to `HEB מסונכרן ✓` when the registry has a CONFIRMED record.
   build-agnostic lib files; add to `STANDALONE_LIB_FILES` in
   `tools/build_ai_subtitles_packages.py`.
 
-## 7. Non-goals
+## 7. Prior art: ARVIO "Find Best Match" (ProdigyV21/ARVIO PR #446)
+
+A comparable feature in an Android streaming app (ExoPlayer-based, so it has
+two capabilities Kodi Python lacks: live access to embedded-track cue
+intervals during playback, and raw audio capture for Gemini). Reviewed from
+the PR; what it does:
+
+- Collects cue-visible intervals from the built-in English track while
+  playing (+ buffered lookahead), scores external Hebrew candidates against
+  those intervals over a handful of cues/scenes, auto-picks the best ≥~80%.
+- Embedded preferred-language always wins; a fallback-language embedded must
+  not block a later preferred-language external; an explicit user pick
+  always overrides auto-logic.
+- UX: AI translation starts immediately during the scan; when a synced human
+  sub is found it swaps in-place; otherwise the user stays on AI. "You only
+  gain."
+
+### Adopted into this plan
+
+1. **Instant-AI-then-swap-in-place (Phase S2 UX).** Don't make the user wait
+   for the ladder: deliver the best instant option (pool hit / progressive AI
+   first-chunk — the `progressive_cb('first_ready')` seam already exists in
+   `translate.resolve`) and let the scan continue in the background; when a
+   higher-tier verified human sub lands, `setSubtitles` swaps it in-place
+   with a small toast ("הוחלף לתרגום אנושי מסונכרן"). Never downgrade.
+2. **User-pick-always-wins as a hard rule (Phase S2).** An explicit pick in
+   the picker sets a per-file override flag; the ladder never replaces it
+   (generalizes today's one-shot `skip_autosub` marker).
+3. **Embedded-track cues as a TRUE video-anchored reference (new Phase S4).**
+   Kodi's Python API exposes embedded stream names only, not cues — but
+   debrid direct links support HTTP Range. A container probe can fetch a few
+   MB at several file positions, parse Matroska/EBML clusters, and read the
+   **text-subtitle block timestamps** (SRT/ASS tracks store plain text; no
+   decoding needed) → a sparse reference timeline across the runtime, enough
+   for the same estimate() (offset + scale). This anchors sync to the actual
+   playing file, beating any oracle sub. Scope: MKV/WebM direct files (most
+   debrid remuxes); not HLS. Pure Python; cache per file hash.
+4. **Gemini-audio deep verify (last-resort tier, Phase S5, opt-in).** When no
+   embedded text track and no oracle sub exist: demux (not decode) 2–3 short
+   audio segments from the same range-probed clusters (AAC→ADTS wrap), send
+   to Gemini with the user's existing key asking for speech-interval
+   timestamps, align candidates against them. Quota-aware, off by default.
+
+### Where this plan is deliberately stronger
+
+- **Global alignment vs a few cues:** scoring a handful of early scenes
+  passes subs with progressive FPS drift (23.976↔25) that desync by minute
+  30. The voting-histogram estimate uses ALL cues and detects scale, not
+  just offset.
+- **Fix, don't just filter:** ARVIO selects a sub only if it already matches
+  ≥80%; near-misses are discarded. We retime them — turning the (common)
+  "right sub, wrong release" case into a win.
+- **Compute once, share globally:** ARVIO re-scans on every device/play; the
+  `/sync` registry means most users get a pre-verified answer with zero
+  extra work, plus the human delay-feedback loop ARVIO doesn't have.
+
+## 8. Non-goals
 
 - No audio/ffmpeg-based syncing inside Kodi.
 - No change to the pool's variant key scheme (source_hash stays).
