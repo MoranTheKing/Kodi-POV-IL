@@ -295,8 +295,15 @@ subtitle in the same ~5s as today; certainty arrives behind it.
   delay-watcher turns a settled manual subtitle delay into a human FIXABLE
   report (folded with any applied auto-fix) and a clean 15-minute watch
   into a CONFIRMED vote; humans override auto server-side.
-  REMAINING POLISH (backlog): upgrade the source-screen HEB badge to
-  "מסונכרן ✓" when the registry holds a CONFIRMED record for the title.
+  BADGE POLISH — SHIPPED (0.1.396): the source-screen `HEB NN%` badge now
+  gains a trailing green tick and turns bright green (`HEB NN% ✓`, or `HEB ✓`
+  when there's no name-match) for a release the registry holds a CONFIRMED
+  synced record for. Zero extra requests — the CONFIRMED release set rides the
+  same `/lookup` the availability warm already makes, is cached next to
+  `names` in the shared he_avail cache (union-preserved so a later warm can't
+  wipe it), and read purely from cache in POV's source window. LTR-only tick
+  (no Hebrew letters) so it never triggers bidi reordering/clipping. Only
+  CONFIRMED (human-anchored) is surfaced; FIXABLE/auto verdicts are not.
   **IMPORTANT (maintainer):** the repo's `pool/worker.js` is deliberately
   STALE — the live worker code exists only on Cloudflare and is newer. Before
   ANY S3 worker edit, ask the maintainer for the current worker.js; do not

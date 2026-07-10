@@ -142,7 +142,7 @@ def _pool_lookup(p, timeout=None):
     All keyed by release name so they match across debrid providers. Networked.
     `timeout` overrides the default (the source window uses a tight cap for its
     one allowed synchronous first-entry call)."""
-    out = {'names': [], 'embedded': [], 'ktuvit': [],
+    out = {'names': [], 'embedded': [], 'ktuvit': [], 'sync_rel': [],
            'ktuvit_checked': 0.0, 'ktuvit_changed': 0.0}
     try:
         q = _parse.urlencode({k: v for k, v in p.items() if v})
@@ -165,6 +165,24 @@ def _pool_lookup(p, timeout=None):
             out['ktuvit'] = [(_r or '').strip()
                              for _r in (data.get('ktuvit') or [])
                              if (_r or '').strip()]
+            # SubSync S3 badge: the normalized VIDEO releases the community
+            # registry has CONFIRMED as carrying a synced Hebrew subtitle. The
+            # /lookup `sync` map is keyed "<sub_hash>|<worker-normalized release>";
+            # we keep only the release part of entries whose status is CONFIRMED
+            # (the strongest, human-anchored signal), so the source screen can
+            # show a "synced" tick on exactly those releases. Conservative on
+            # purpose -- FIXABLE/auto verdicts are NOT surfaced as "synced".
+            try:
+                _sr = set()
+                for _k, _v in (data.get('sync') or {}).items():
+                    if (isinstance(_v, dict) and _v.get('st') == 'CONFIRMED'
+                            and '|' in _k):
+                        _rel = _k.split('|', 1)[1].strip()
+                        if _rel:
+                            _sr.add(_rel)
+                out['sync_rel'] = sorted(_sr)
+            except Exception:
+                out['sync_rel'] = []
             try:
                 out['ktuvit_checked'] = float(data.get('ktuvit_checked') or 0)
             except (TypeError, ValueError):
@@ -398,9 +416,43 @@ def availability(p):
         'names': names,
         'embedded': list(pl.get('embedded') or []),
         'ktuvit': list(pl.get('ktuvit') or []),
+        'sync_rel': list(pl.get('sync_rel') or []),
         'ktuvit_checked': pl.get('ktuvit_checked') or 0.0,
         'ktuvit_changed': pl.get('ktuvit_changed') or 0.0,
     }
+
+
+def _worker_norm(s):
+    """Mirror of pool.worker_norm_release()/the Worker's normRelease() -- the
+    registry release keys are normalized this way, so a source row's release
+    must be normalized identically before we test it against the CONFIRMED set.
+    Kept inline (not imported from pool) so this module stays self-contained in
+    POV's source-window interpreter, where only resources/lib is on sys.path."""
+    s = str(s or '').lower()
+    s = re.sub(r'\.(mkv|mp4|avi|srt)$', '', s)
+    s = re.sub(r'[\s_+/\-]+', '.', s)
+    s = re.sub(r'\.+', '.', s).strip('.')
+    return s
+
+
+def confirmed_releases(meta):
+    """The set of worker-normalized VIDEO releases the community registry has
+    CONFIRMED as carrying a synced Hebrew subtitle for this media. PURE cache
+    read (the warm/first-entry lookup stashes it next to `names`); never
+    networks -- safe to call inside POV's source-window build. set() when none
+    / not warmed / disabled."""
+    try:
+        if not _enabled():
+            return set()
+        p = _media_params(meta)
+        if not p:
+            return set()
+        ent = _cache_entry(_media_key(p))
+        if ent is None:
+            return set()
+        return set(r for r in (ent.get('sync_rel') or []) if r)
+    except Exception:
+        return set()
 
 
 def _warm_log(msg, level='INFO'):
@@ -411,8 +463,9 @@ def _warm_log(msg, level='INFO'):
         pass
 
 
-def _store_avail(mk, names, embedded, ttl):
-    """Write {mk: {ts, names, embedded, ttl}} into the shared he_avail cache the
+def _store_avail(mk, names, embedded, ttl, sync_rel=None):
+    """Write {mk: {ts, names, embedded, sync_rel, ttl}} into the shared he_avail
+    cache the
     source window reads. Same file/format as default.py's _he_avail_store, so
     either warm path (in-service queue drain OR the RunScript fallback) fills the
     exact cache the badge reads. Atomic + size-bounded."""
@@ -448,9 +501,21 @@ def _store_avail(mk, names, embedded, ttl):
             if _e and _e.lower() not in _emb_seen:
                 _emb_seen.add(_e.lower())
                 _merged_emb.append(_e)
+        # UNION sync_rel with what's cached, for the same reason as embedded: a
+        # CONFIRMED synced release is a durable fact, and a later warm whose pool
+        # response happens not to include it (throttle/miss) must not wipe the
+        # tick from a release already known-synced.
+        _existing_sr = [s for s in ((data.get(mk) or {}).get('sync_rel') or [])
+                        if s]
+        _sr_seen = set(_existing_sr)
+        _merged_sr = list(_existing_sr)
+        for _s in (sync_rel or []):
+            if _s and _s not in _sr_seen:
+                _sr_seen.add(_s)
+                _merged_sr.append(_s)
         data[mk] = {'ts': time.time(), 'names': list(names),
-                    'embedded': _merged_emb, 'ttl': float(ttl or 0),
-                    'warm': 1}
+                    'embedded': _merged_emb, 'sync_rel': _merged_sr,
+                    'ttl': float(ttl or 0), 'warm': 1}
         if len(data) > 400:
             data = dict(sorted(data.items(),
                                key=lambda kv: kv[1].get('ts', 0),
@@ -568,6 +633,7 @@ def run_warm(info):
 
     av = box['av'] or {}
     embedded = av.get('embedded') or []
+    sync_rel = av.get('sync_rel') or []
     kt_pool_names = av.get('ktuvit') or []
     kt_checked = av.get('ktuvit_checked') or 0.0
     kt_changed = av.get('ktuvit_changed') or 0.0
@@ -602,7 +668,7 @@ def run_warm(info):
         return _LOCAL_LONG
 
     # Store the fast result NOW -- this is what the first-entry wait blocks for.
-    _store_avail(mk, names, embedded, _pick_ttl(bool(names)))
+    _store_avail(mk, names, embedded, _pick_ttl(bool(names)), sync_rel)
     _warm_log('phase1 stored {0} names ({1} embedded) for {2} in {3:.1f}s'.format(
         len(names), len(embedded), mk, time.time() - _t0))
 
@@ -645,7 +711,8 @@ def run_warm(info):
                 except Exception:
                     pass
                 if added:
-                    _store_avail(mk, names, embedded, _pick_ttl(bool(names)))
+                    _store_avail(mk, names, embedded, _pick_ttl(bool(names)),
+                                 sync_rel)
                 _warm_log('ktuvit top-up added {0} names for {1} '
                           '(total {2}, took {3:.1f}s)'.format(
                               added, mk, len(names), time.time() - _t0))
@@ -675,6 +742,7 @@ def _seed_from_pool(key, pl):
                 seen.add(low)
                 names.append(rel)
         embedded = [r for r in (pl.get('embedded') or []) if r]
+        sync_rel = [r for r in (pl.get('sync_rel') or []) if r]
         path = _engine_cache_path()
         if not path:
             return names
@@ -685,8 +753,15 @@ def _seed_from_pool(key, pl):
                     data = json.load(f) or {}
             except Exception:
                 data = {}
+        # Preserve any sync_rel a prior warm already cached (union), so this
+        # short-TTL first-entry seed never wipes a known-synced tick.
+        _prev_sr = [s for s in ((data.get(key) or {}).get('sync_rel') or []) if s]
+        for _s in _prev_sr:
+            if _s not in sync_rel:
+                sync_rel.append(_s)
         data[key] = {'ts': time.time(), 'names': names,
-                     'embedded': embedded, 'ttl': _AVAIL_TTL_NONE}
+                     'embedded': embedded, 'sync_rel': sync_rel,
+                     'ttl': _AVAIL_TTL_NONE}
         if len(data) > 400:
             data = dict(sorted(data.items(),
                                key=lambda kv: kv[1].get('ts', 0),
@@ -1000,7 +1075,8 @@ def best_score(src_release, names):
         return 0
 
 
-def label_prefix(src_release, names, embedded=None, alt_release=''):
+def label_prefix(src_release, names, embedded=None, alt_release='',
+                 synced_releases=None):
     """A small coloured prefix for the START of the source's info line, or ''
     when there's no usable match.
 
@@ -1009,6 +1085,12 @@ def label_prefix(src_release, names, embedded=None, alt_release=''):
     ('HEB BUILT-IN 101%') so everyone knows it already has Hebrew and is well
     worth picking. Otherwise a normal 'HEB <NN>%' match badge: green high /
     amber mid / red low.
+
+    When `synced_releases` (the community-CONFIRMED set from confirmed_releases)
+    contains THIS row's normalized release, the badge gains a trailing green
+    tick and turns bright green -- "the community verified a synced Hebrew
+    subtitle for this exact release". The tick is an LTR symbol (no Hebrew
+    letters) so it never triggers bidi reordering / clipping of the badge.
 
     Deliberately LTR-only (no Hebrew letters): a Hebrew word inline in the
     mostly-English info line triggers bidi reordering (it jumps to the end) and
@@ -1037,9 +1119,28 @@ def label_prefix(src_release, names, embedded=None, alt_release=''):
                     pass
             if emb_best >= 80:
                 return '[COLOR FF2ECC71][B]HEB BUILT-IN 101%[/B][/COLOR] | '
+        # Community-CONFIRMED synced record for this exact release (strongest
+        # signal: a human verified the Hebrew is in sync). Overrides the amber/
+        # red name-match colour -- if the registry says this release has a synced
+        # sub, it's the pick to make regardless of the name-similarity guess.
+        synced = False
+        try:
+            if synced_releases:
+                for _r in (src_release, alt_release):
+                    if _r and _worker_norm(_r) in synced_releases:
+                        synced = True
+                        break
+        except Exception:
+            synced = False
         best = best_score(src_release, names)
         if best <= 0:
+            # No name-match, but if the community confirmed THIS release is
+            # synced, still surface the tick (a synced Hebrew sub exists for it).
+            if synced:
+                return '[COLOR FF2ECC71][B]HEB ✓[/B][/COLOR] | '
             return ''
+        if synced:
+            return '[COLOR FF2ECC71][B]HEB {0}% ✓[/B][/COLOR] | '.format(best)
         if best >= 66:
             color = 'FF49C46A'
         elif best >= 33:

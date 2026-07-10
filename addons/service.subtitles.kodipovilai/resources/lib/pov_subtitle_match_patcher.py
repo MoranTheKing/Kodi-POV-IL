@@ -29,7 +29,7 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 SOURCES_REL_PATH = 'resources/lib/windows/sources.py'
-MARKER = 'AI_SUBS_MATCH_v4'
+MARKER = 'AI_SUBS_MATCH_v5'
 
 # The for-loop that builds each source row (insert SETUP just before it).
 _LOOP_RE = re.compile(
@@ -45,7 +45,7 @@ _SIZE_RE = re.compile(
 # Revert: SETUP block (marker comment .. its `except` fallback line).
 _REVERT_SETUP_RE = re.compile(
     r"[ \t]*#[ \t]*AI_SUBS_MATCH_v\d+.*?_sm_m = None; _sm_names = \[\]"
-    r"(?:; _sm_emb = \[\])?[ \t]*\r?\n",
+    r"(?:; _sm_emb = \[\])?(?:; _sm_syncrel = set\(\))?[ \t]*\r?\n",
     re.DOTALL,
 )
 # Revert: wrapped size_label line -> plain.
@@ -86,8 +86,9 @@ def _setup_lines(indent, eol):
         '\timport he_sub_match as _sm_m',
         '\t_sm_names = _sm_m.release_names(self.meta)',
         '\t_sm_emb = _sm_m.embedded_names(self.meta)',
+        '\t_sm_syncrel = _sm_m.confirmed_releases(self.meta)',
         'except Exception:',
-        '\t_sm_m = None; _sm_names = []; _sm_emb = []',
+        '\t_sm_m = None; _sm_names = []; _sm_emb = []; _sm_syncrel = set()',
     ]
     return ''.join(indent + ln + eol for ln in raw)
 
@@ -129,8 +130,8 @@ def ensure_patched():
     si = s.group('indent')
     wrapped = (si + "set_property('tikiskins.size_label', "
                "(_sm_m.label_prefix((get('URLName') or get('name') or ''), "
-               "_sm_names, _sm_emb, (get('name') or '')) if _sm_m else '') "
-               "+ get('size_label', 'N/A'))")
+               "_sm_names, _sm_emb, (get('name') or ''), _sm_syncrel) "
+               "if _sm_m else '') + get('size_label', 'N/A'))")
     content = content[:s.start()] + wrapped + content[s.end():]
 
     # SAFETY: never write a file that doesn't compile.
