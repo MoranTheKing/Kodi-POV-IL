@@ -867,8 +867,8 @@ def _maybe_patch_pov_movie_networks():
         status = pov_movie_networks_patcher.ensure_patched()
         if status == 'patched':
             kodi_utils.log(
-                'pov_movie_networks_patcher: reverted movie service query to '
-                'stock', level='INFO')
+                'pov_movie_networks_patcher: movie service query set to '
+                'watch-provider discovery', level='INFO')
         elif status in ('no_pov', 'no_file', 'already_patched'):
             pass
         else:
