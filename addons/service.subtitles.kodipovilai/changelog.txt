@@ -1,3 +1,24 @@
+v0.2.356
+- SubSync probe: PTS-origin rebase -- the root cause of "synced subtitle
+  fails verification" on certain remuxes/re-encodes. Field case: an AI-AV1
+  BluRay whose container timestamps START AT ~313s (the source disc's PTS
+  origin, preserved by the muxer). Players rebase to the first timestamp at
+  playback -- so the subtitle looked perfectly synced on screen -- but the
+  probe read RAW cluster timestamps and concluded the sub was +313s off
+  (vote=90%, overlap=100%: a strong, consistent, WRONG verdict, refused only
+  by the implausible-offset cap). The probe now reads the file's FIRST
+  cluster timestamp (the playback zero point) and rebases every cue -- both
+  the subtitle-track reference AND the audio-segment anchors. Zero-based
+  files are unaffected.
+- Window/budget balance: bitrate-scaled windows are now also capped so the
+  byte budget always spans the WHOLE runtime (field: 8.4MB windows burned
+  the 40MB cap after 5 of 10 fractions, so the reference only covered the
+  first half of the file).
+- Probe cue cache is now versioned (v2): entries stored by the un-rebased
+  engine re-probe. Verdict cache v5: UNKNOWNs judged against un-rebased
+  references recompute. Regression test reproduces the exact +313s field
+  file: the synced subtitle now verifies CONFIRMED.
+
 v0.2.355
 - SubSync probe: three field fixes from a Rick&Morty season-pack BDRip where
   a SYNCED subtitle came back "couldn't verify" (spurious -48.5s peak
