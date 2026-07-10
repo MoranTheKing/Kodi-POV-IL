@@ -36,17 +36,27 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 TMDB_API_REL = 'resources/lib/indexers/tmdb_api.py'
-MARKER = '# AI_SUBS_POV_MOVIE_PROVIDERS_v2'
-# Superseded markers from the earlier forward-patch (v1) and the revert, both
-# stripped when we re-apply the corrected forward patch.
+MARKER = '# AI_SUBS_POV_MOVIE_PROVIDERS_v3'
+# Superseded markers stripped when we re-apply the corrected forward patch.
 OLD_MARKERS = ('# AI_SUBS_POV_MOVIE_PROVIDERS_v1',
+               '# AI_SUBS_POV_MOVIE_PROVIDERS_v2',
                '# AI_SUBS_POV_MOVIE_PROVIDERS_REVERT_v1')
 
-# TARGET = the correct watch-provider query; STOCK = POV's company filter.
-_TARGET = ("&sort_by=popularity.desc&watch_region=US&with_watch_providers=%s"
-           "&with_watch_monetization_types=flatrate' % network_id")
-_STOCK = ("&sort_by=popularity.desc&certification_country=US"
-          "&with_companies=%s' % network_id")
+# MINIMAL-substring swap (robust): rewrite ONLY the discriminating fragment
+# `with_companies=%s` -> watch-provider discovery, WITHOUT depending on POV's
+# exact surrounding params (sort_by / certification_country order or values).
+# The earlier v2 matched the whole line and silently no-op'd ('unmatched') on
+# devices whose POV line differed by a hair -> the query stayed with_companies,
+# so Disney+ (company 337 -> 3 unrelated films) looked broken while Netflix
+# (company 8 -> 44 films) looked "ok". This fragment is what actually matters.
+# TMDB REQUIRES watch_region alongside with_watch_providers (without it the
+# provider filter is ignored and it returns the entire catalogue), so we add
+# watch_region=US inline. A leftover certification_country=US is a harmless
+# no-op (it only filters when paired with &certification=). Verified against
+# TMDB: id 8 -> 4680 Netflix movies, 337 -> 1560 Disney movies.
+_COMPANIES_FRAG = "with_companies=%s"
+_PROVIDERS_FRAG = ("with_watch_providers=%s&watch_region=US"
+                   "&with_watch_monetization_types=flatrate")
 
 
 def _log(msg, level='INFO'):
@@ -90,16 +100,21 @@ def ensure_patched():
     for _m in OLD_MARKERS:
         content = content.replace(_m + '\n', '')
 
-    if MARKER in content and _TARGET in content:
+    # "Already correct" = the query uses watch-provider discovery WITH a
+    # watch_region (order-independent -- covers this version's fragment and the
+    # earlier v2 whole-line form where watch_region preceded the providers).
+    already = ('with_watch_providers=%s' in content
+               and 'watch_region=US' in content)
+    if MARKER in content and already:
         return 'already_patched'
-    if _TARGET in content:
+    if already:
         # Query already correct but our marker was stripped above -> re-stamp.
         new_content = content.replace('\n', '\n' + MARKER + '\n', 1)
-    elif _STOCK in content:
-        new_content = content.replace(_STOCK, _TARGET, 1)
+    elif _COMPANIES_FRAG in content:
+        new_content = content.replace(_COMPANIES_FRAG, _PROVIDERS_FRAG, 1)
         new_content = new_content.replace('\n', '\n' + MARKER + '\n', 1)
     else:
-        # POV changed the line to something we don't recognise -- leave alone.
+        # Neither fragment present -> POV changed it; leave alone.
         return 'unmatched'
 
     try:
