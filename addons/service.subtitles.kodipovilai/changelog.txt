@@ -1,3 +1,28 @@
+v0.2.361
+- Fixed: the home/favourites screen reverted to default on every quick update.
+  The startup favourites patcher carried three "forced restore" migrations
+  (full canonical surface, Premiumize status tile, personal tiles) that were
+  meant to repair, once per device, an old buggy reseed that had wiped the
+  per-service network rows. While active they also RE-ADDED tiles the user had
+  deliberately deleted, so each update looked like it reset the home screen back
+  to default. That repair is long finished for the whole fleet, so all three
+  forced restores are now retired: deletions are honoured permanently, on every
+  skin (nox, fentastic, estuary, arctic fuse 3). The only remaining canonical
+  restore is the already-disabled heuristic, so a missing tile is treated as
+  intentional user customisation. Action-repair fixes (debrid/torbox tiles) and
+  clean-install seeding from the build zip are unchanged.
+
+v0.2.360
+- Fixed: Disney+ (and other) MOVIE tiles showed only 2-3 unrelated films. The
+  0.2.359 param-key fix un-hung the tiles, but the query correction did not
+  actually apply on many devices: it matched POV's whole query line exactly,
+  and any small difference in POV's surrounding params made it silently no-op,
+  leaving `with_companies=<id>`. Netflix (company 8 -> 44 films) looked okay;
+  Disney+ (company 337 -> exactly 3 unrelated films) looked broken. The patch
+  now rewrites only the minimal `with_companies=%s` fragment to watch-provider
+  discovery (adding the REQUIRED watch_region), independent of POV's other
+  params -- verified against TMDB: Netflix ~4680 movies, Disney+ ~1560.
+
 v0.2.359
 - Fixed: Netflix/Disney (and other streaming-service) MOVIE tiles on the home
   screen spun forever and never loaded. Root cause: the movie tiles pass a
