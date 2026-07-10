@@ -1,3 +1,18 @@
+v0.2.357
+- SubSync: removed the "couldn't verify sync" toast entirely. It was firing
+  on subtitles that were ALREADY perfectly synced on screen (the verification
+  simply couldn't PROVE it -- e.g. a high-bitrate 2160p file whose embedded
+  reference is too sparse to sample densely), which read as a failure when
+  nothing had failed and was exactly the kind of toast noise this build works
+  to avoid. Policy now: SubSync speaks only when it actually APPLIED a timing
+  fix ("synced automatically") -- a sub it can't verify is delivered silently
+  as-is, unchanged, no toast.
+- Sparse container-probe references (few cues within the byte budget on
+  high-bitrate files) now use identity-scale-only alignment like the audio
+  anchor, so a handful of points can't be fit to a spurious FPS stretch
+  (field: 16 cues -> bogus scale=1.0427/-77s). A dense reference keeps the
+  full FPS-scale search.
+
 v0.2.356
 - SubSync probe: PTS-origin rebase -- the root cause of "synced subtitle
   fails verification" on certain remuxes/re-encodes. Field case: an AI-AV1
