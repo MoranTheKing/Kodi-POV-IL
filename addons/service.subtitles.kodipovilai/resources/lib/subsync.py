@@ -258,6 +258,10 @@ _AUDIO_MIN_VOTE = 0.55
 _AUDIO_MIN_OVERLAP = 0.65
 _AUDIO_SCALES = (1.0,)
 _AUDIO_MAX_OFFSET_MS = 180000
+# A container-probe reference with fewer than this many cues is treated as
+# sparse (identity scale only) -- high-bitrate 2160p files can't be sampled
+# densely within the byte budget.
+_SPARSE_PROBE_CUES = 40
 
 
 def _audio_probe_reference(info, playing, second_pass=False):
@@ -688,8 +692,19 @@ def _deep_verify(info, path, text, rel, playing, key):
             # reference. Covers releases no subtitle DB knows (ColdFilm-style
             # re-encodes); anchored to the actual file = strongest anchor.
             ref_kind = 'FILE PROBE'
-            gate_kw = {}
             ref_cues = _probe_reference_cues(info, playing)
+            # A SPARSE container-probe reference (high-bitrate 2160p files
+            # yield few cues within the byte budget) has the same limitation
+            # as an audio-VAD reference: it cannot support scale estimation.
+            # Restrict to identity scale + a bounded window so a handful of
+            # points can't be fit to a spurious FPS stretch (field: 16 cues
+            # -> bogus scale=1.0427/-77s that failed the tight check). A dense
+            # reference keeps the full scale search.
+            if ref_cues and len(ref_cues) < _SPARSE_PROBE_CUES:
+                gate_kw = {'scales': _AUDIO_SCALES,
+                           'max_offset_ms': _AUDIO_MAX_OFFSET_MS}
+            else:
+                gate_kw = {}
             if not ref_cues:
                 # S5 last resort: the file has no embedded subtitle track at
                 # all (dubbed re-encodes) -> speech intervals from its AUDIO,
@@ -831,16 +846,20 @@ def _enqueue_deep(info, path, rel, playing, key):
 
 
 def _announce(verdict, fresh, offset_hint=None):
-    """The ONE gentle toast policy: a single notification per (sub, release)
-    pair EVER -- only when a verdict was freshly computed. Cached verdicts,
-    trusted tiers and nothing-to-verify (NO_ORACLE) stay silent. Most toasts
-    in this addon were deliberately silenced after user complaints -- keep it
-    that way; this speaks only when it has news the user can act on/feel."""
+    """The ONE gentle toast policy: speak ONLY when a timing fix was actually
+    APPLIED to the subtitle -- that's the single event the user can feel and
+    wants to know about ("synced automatically"). Everything else is SILENT:
+    a sub that couldn't be verified is delivered exactly as-is (fail-open), so
+    there is nothing to tell the user -- a "couldn't verify" toast on an
+    already-synced subtitle is pure noise and reads as a failure when nothing
+    failed. (Most toasts in this build were deliberately silenced after user
+    complaints; this stays in that spirit.) One toast per (sub,release) pair,
+    ever -- fresh applied fixes only."""
     try:
         if not fresh or not verdict:
             return
-        st = verdict.get('status')
-        if st == sync_align.STATUS_FIXABLE and verdict.get('applied'):
+        if (verdict.get('status') == sync_align.STATUS_FIXABLE
+                and verdict.get('applied')):
             off = float(offset_hint if offset_hint is not None
                         else verdict.get('offset_ms') or 0.0)
             scale = float(verdict.get('scale') or 1.0)
@@ -850,9 +869,6 @@ def _announce(verdict, fresh, offset_hint=None):
             else:
                 msg = 'הכתובית סונכרנה אוטומטית'
             kodi_utils.notify(msg, time_ms=5000)
-        elif st == sync_align.STATUS_UNKNOWN:
-            kodi_utils.notify('לא ניתן לאמת סנכרון — הכתובית מוצגת כפי שהיא',
-                              time_ms=4000)
     except Exception:
         pass
 
@@ -928,10 +944,10 @@ def run_deep_job(job):
                 _record_delivery(info, playing, key,
                                  verdict.get('scale', 1.0),
                                  verdict.get('offset_ms', 0.0))
-        # Announce ONLY what the user experiences: a swap they can see, or a
-        # fresh attempted-but-failed verification. NO_ORACLE stays silent.
-        if swapped or verdict.get('status') == sync_align.STATUS_UNKNOWN:
-            _announce(dict(verdict, applied=swapped), fresh=True)
+        # Announce ONLY an actual in-place swap the user can see. A verdict
+        # that couldn't be verified changes nothing on screen -> stay silent.
+        if swapped:
+            _announce(dict(verdict, applied=True), fresh=True)
     except Exception as e:
         _log('deep job failed: %r' % e, level='WARNING')
 
