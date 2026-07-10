@@ -37,6 +37,9 @@ _VERDICT_FILE = ('special://profile/addon_data/service.subtitles.kodipovilai/'
                  'subsync_verdicts.json')
 _MAX_VERDICTS = 400
 # Bump to invalidate ALL previously stored verdicts after an engine change.
+# v5: probe cues are rebased to the playback timeline (first-cluster PTS
+# origin) -- UNKNOWNs judged against un-rebased references (field: +313s
+# "implausible offset" on a synced sub) deserve a recompute.
 # v4: the probe now unions ALL embedded tracks + bitrate-aware windows --
 # UNKNOWNs stored while it sampled one sparse track (9 cues on a BDRip in the
 # field) deserve a recompute.
@@ -44,7 +47,7 @@ _MAX_VERDICTS = 400
 # get their pass-2 chance. v2: the pre-dedupe voting could store a spurious
 # FIXABLE (field case:
 # offset=-350s) -- those cached verdicts must never be re-applied.
-_VERDICT_VERSION = 4
+_VERDICT_VERSION = 5
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
@@ -187,6 +190,10 @@ def _download_oracle(payload):
 _PROBE_CACHE_FILE = ('special://profile/addon_data/'
                      'service.subtitles.kodipovilai/subsync_probe_cache.json')
 _MAX_PROBE_ENTRIES = 60
+# Bump when the probe's cue semantics change; older entries re-probe.
+# v2: cues are rebased to the playback timeline (first-cluster origin) and
+# union all non-forced tracks -- v1 entries may carry an un-rebased origin.
+_PROBE_CACHE_VERSION = 2
 
 
 def _probe_enabled():
@@ -281,6 +288,8 @@ def _audio_probe_reference(info, playing, second_pass=False):
             except Exception:
                 data = {}
             ent = data.get(rel_key)
+            if ent is not None and ent.get('pv') != _PROBE_CACHE_VERSION:
+                ent = None   # older engine (un-rebased origin) -- redo
             if ent is not None:
                 prior = ent.get('cues') or []
                 if not second_pass:
@@ -351,7 +360,8 @@ def _audio_probe_reference(info, playing, second_pass=False):
             cues = merged
         try:
             if cpath:
-                data[rel_key] = {'ts': time.time(), 'cues': cues}
+                data[rel_key] = {'ts': time.time(), 'cues': cues,
+                                 'pv': _PROBE_CACHE_VERSION}
                 if second_pass:
                     data[rel_key]['pass2'] = True
                 if len(data) > _MAX_PROBE_ENTRIES:
@@ -388,6 +398,8 @@ def _probe_reference_cues(info, playing):
         except Exception:
             data = {}
         ent = data.get(rel_key)
+        if ent is not None and ent.get('pv') != _PROBE_CACHE_VERSION:
+            ent = None   # stored by an older probe engine -- re-probe
         if ent and isinstance(ent.get('cues'), list) and ent['cues']:
             _log('probe: cache hit for %r (%d cues)'
                  % (rel_key, len(ent['cues'])))
@@ -407,6 +419,7 @@ def _probe_reference_cues(info, playing):
     try:
         if cpath:
             data[rel_key] = {'ts': time.time(), 'cues': cues or [],
+                             'pv': _PROBE_CACHE_VERSION,
                              'track': (res or {}).get('track') or {}}
             if len(data) > _MAX_PROBE_ENTRIES:
                 data = dict(sorted(data.items(),
