@@ -25,11 +25,16 @@
 </addon>
 <addon id="service.subtitles.kodipovilai"
        name="MoranSubs"
-       version="0.2.320"
+       version="0.2.363"
        provider-name="MoranTheKing">
   <requires>
     <import addon="xbmc.python" version="3.0.0"/>
     <import addon="script.module.requests" version="2.22.0"/>
+    <!-- Optional: used only by the built-in sources engine's download-time
+         cleanup (encoding detection). optional=true so a missing chardet
+         never blocks the add-on from loading (standalone installs exclude
+         the engine entirely). -->
+    <import addon="script.module.chardet" version="4.0.0" optional="true"/>
   </requires>
 
   <!-- Subtitle service entry point. Kodi calls default.py with
@@ -46,8 +51,8 @@
     <platform>all</platform>
     <language>en he</language>
     <license>MIT</license>
-    <summary lang="en">AI-translated Hebrew subtitles via Gemini API</summary>
-    <summary lang="he">תרגום AI לעברית של כתוביות, באמצעות Gemini API</summary>
+    <summary lang="en">MoranSubs - Hebrew subtitles: human sources + AI translation + community pool</summary>
+    <summary lang="he">MoranSubs - כתוביות עברית: מקורות אנושיים + תרגום AI + מאגר קהילתי</summary>
     <description lang="en">
 Translates English (or Spanish, etc.) subtitles to Hebrew on the fly
 using Google's Gemini 2.5/3.1 Flash Lite API. Falls back to existing
