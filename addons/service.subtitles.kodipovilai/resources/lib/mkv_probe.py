@@ -319,6 +319,7 @@ def _parse_head(src, head_bytes, log):
     seg_start = buf.p          # segment payload start (SeekPositions base)
 
     ts_scale = 1000000         # ns per tick (default -> 1ms)
+    duration_ticks = 0.0
     tracks = []
     seeks = {}
     p = seg_start
@@ -367,6 +368,13 @@ def _parse_head(src, head_bytes, log):
                 ibuf.p = istart + isize
                 if ieid == _TS_SCALE:
                     ts_scale = _read_uint(ip) or 1000000
+                elif ieid == _DURATION:
+                    try:
+                        duration_ticks = (struct.unpack('>f', ip)[0]
+                                          if len(ip) == 4 else
+                                          struct.unpack('>d', ip)[0])
+                    except Exception:
+                        duration_ticks = 0.0
         elif eid == _TRACKS and payload_in_head:
             tbuf = _Buf(payload, 0)
             for teid, tsize, tstart in _walk(tbuf, len(payload)):
@@ -412,7 +420,8 @@ def _parse_head(src, head_bytes, log):
         len(tracks), len(subs),
         ['#%s %s %s%s' % (t['num'], t['codec'], t['lang'] or '?',
                           ' FORCED' if t['forced'] else '') for t in subs]))
-    return seg_start, ts_scale, tracks
+    duration_s = duration_ticks * ts_scale / 1e9
+    return seg_start, ts_scale, tracks, duration_s
 
 
 def subtitle_reference(url_or_path,
@@ -433,57 +442,89 @@ def subtitle_reference(url_or_path,
     try:
         src = _Source(url_or_path)
         t0 = time.time()
-        seg_start, ts_scale, tracks = _parse_head(src, head_bytes, _log)
+        seg_start, ts_scale, tracks, duration_s = _parse_head(
+            src, head_bytes, _log)
         subs = [t for t in tracks
                 if t['type'] == _SUB_TRACK_TYPE and t['num'] is not None]
         if not subs or not src.total:
             return None
+        # Only NON-FORCED tracks anchor (forced = a handful of foreign-line
+        # cues), but ALL of them together: every subtitle track of the file
+        # lives on the SAME timeline, so their union is a valid -- and much
+        # denser -- reference (a sparse signs track alone got 9 cues in the
+        # field and produced a spurious peak).
+        anchor = [t for t in subs if not t.get('forced')]
+        if not anchor:
+            _log('only forced track(s) present -- too sparse to anchor')
+            return None
         scale_ms = ts_scale / 1e6
-        want = set(t['num'] for t in subs)
+        want = set(t['num'] for t in anchor)
+        # Bitrate-aware window: on a high-bitrate BDRip a fixed 3MB window
+        # covers ~2s of stream and catches ~0-1 cues; size the window to span
+        # ~8s of media (capped) when the head told us the duration.
+        win = window_bytes
+        if duration_s > 60 and src.total:
+            byterate = src.total / duration_s
+            win = int(max(window_bytes, min(8 * 1024 * 1024, byterate * 8)))
         collected = {}
-        fractions = [0.06 + i * (0.86 / max(1, max_windows - 1))
-                     for i in range(max_windows)]
-        for f in fractions:
-            if src.fetched >= max_bytes or (time.time() - t0) > deadline_s:
-                _log('budget/deadline reached (%.1fMB, %.1fs)'
-                     % (src.fetched / 1e6, time.time() - t0))
-                break
-            off = max(seg_start, int(src.total * f))
-            window = src.read(off, min(window_bytes,
-                                       max_bytes - src.fetched))
-            if not window:
-                continue
-            _scan_cluster_blocks(window, off, want, scale_ms, collected)
-            best_n = max((len(v) for v in collected.values()), default=0)
-            if best_n >= min_cues and f > 0.7:
-                break   # enough spread + enough cues
+
+        def _union_count():
+            seen = set()
+            for lst in collected.values():
+                for t, _d in lst:
+                    seen.add(int(t))
+            return len(seen)
+
+        def _sample(fractions):
+            for f in fractions:
+                if src.fetched >= max_bytes or (time.time() - t0) > deadline_s:
+                    _log('budget/deadline reached (%.1fMB, %.1fs)'
+                         % (src.fetched / 1e6, time.time() - t0))
+                    return
+                off = max(seg_start, int(src.total * f))
+                window = src.read(off, min(win, max_bytes - src.fetched))
+                if not window:
+                    continue
+                _scan_cluster_blocks(window, off, want, scale_ms, collected)
+
+        step = 0.86 / max(1, max_windows - 1)
+        _sample([0.06 + i * step for i in range(max_windows)])
+        # Adaptive top-up: still sparse and budget left -> sample the midpoints.
+        if _union_count() < min_cues:
+            _sample([0.06 + (i + 0.5) * step for i in range(max_windows - 1)])
         if not collected:
-            _log('no subtitle blocks found in %d windows' % len(fractions))
+            _log('no subtitle blocks found')
             return None
 
-        def _track_score(tnum):
-            t = next((x for x in subs if x['num'] == tnum), {})
-            n = len(collected.get(tnum, ()))
-            return (0 if t.get('forced') else 1, n)
-
-        best = max(collected, key=_track_score)
-        track = next((x for x in subs if x['num'] == best), {})
-        if track.get('forced'):
-            _log('only forced track(s) found -- too sparse to anchor')
-            return None
-        pts = sorted(set(int(t) for t, _d in collected[best]))
-        durs = {int(t): d for t, d in collected[best] if d}
+        merged = {}
+        for lst in collected.values():
+            for t, d in lst:
+                ti = int(t)
+                if d and (ti not in merged or not merged[ti]):
+                    merged[ti] = d
+                else:
+                    merged.setdefault(ti, None)
+        pts = sorted(merged)
         cues = []
         for i, t in enumerate(pts):
-            d = durs.get(t)
+            d = merged.get(t)
             if not d:
                 gap = (pts[i + 1] - t) if i + 1 < len(pts) else 3000
                 d = max(600, min(3000, gap - 100))
             cues.append({'start': t, 'end': t + int(d)})
-        _log('probe ok: track #%s (%s %s) %d cues, %.1fMB in %.1fs' % (
-            best, track.get('codec'), track.get('lang') or '?', len(cues),
-            src.fetched / 1e6, time.time() - t0))
-        return {'cues': cues, 'track': track, 'tracks': subs,
+
+        def _sanitize(t):
+            return {k: v for k, v in t.items() if not isinstance(v, bytes)}
+
+        best = max(collected, key=lambda n: len(collected[n]))
+        track = next((x for x in anchor if x['num'] == best), {})
+        _log('probe ok: %d cues from %d track(s) (densest #%s %s %s), '
+             '%.1fMB in %.1fs (win %.1fMB)' % (
+                 len(cues), len(collected), best, track.get('codec'),
+                 track.get('lang') or '?', src.fetched / 1e6,
+                 time.time() - t0, win / 1e6))
+        return {'cues': cues, 'track': _sanitize(track),
+                'tracks': [_sanitize(t) for t in subs],
                 'bytes': src.fetched}
     except Exception as e:
         _log('probe failed: %r' % e)
@@ -647,7 +688,7 @@ def audio_segments(url_or_path, seg_seconds=20, positions=(0.22, 0.50, 0.78),
     try:
         src = _Source(url_or_path)
         t0 = time.time()
-        seg_start, ts_scale, tracks = _parse_head(
+        seg_start, ts_scale, tracks, _dur = _parse_head(
             src, DEFAULT_HEAD_BYTES, _log)
         if not src.total:
             return []
