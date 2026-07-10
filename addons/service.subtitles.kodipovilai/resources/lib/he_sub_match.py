@@ -1087,10 +1087,13 @@ def label_prefix(src_release, names, embedded=None, alt_release='',
     amber mid / red low.
 
     When `synced_releases` (the community-CONFIRMED set from confirmed_releases)
-    contains THIS row's normalized release, the badge gains a trailing green
-    tick and turns bright green -- "the community verified a synced Hebrew
-    subtitle for this exact release". The tick is an LTR symbol (no Hebrew
-    letters) so it never triggers bidi reordering / clipping of the badge.
+    contains THIS row's normalized release, the badge gains a trailing 'SYNC'
+    tag and turns bright green -- "the community verified a synced Hebrew
+    subtitle for this exact release". We use the ASCII word 'SYNC' rather than a
+    check-mark glyph (U+2713): that glyph is MISSING from some skin fonts (NOX's
+    among them) and renders as an empty tofu box -- plain ASCII letters render in
+    every font on every skin. Kept LTR (no Hebrew) so it never triggers bidi
+    reordering / clipping of the badge.
 
     Deliberately LTR-only (no Hebrew letters): a Hebrew word inline in the
     mostly-English info line triggers bidi reordering (it jumps to the end) and
@@ -1135,12 +1138,12 @@ def label_prefix(src_release, names, embedded=None, alt_release='',
         best = best_score(src_release, names)
         if best <= 0:
             # No name-match, but if the community confirmed THIS release is
-            # synced, still surface the tick (a synced Hebrew sub exists for it).
+            # synced, still surface it (a synced Hebrew sub exists for it).
             if synced:
-                return '[COLOR FF2ECC71][B]HEB ✓[/B][/COLOR] | '
+                return '[COLOR FF2ECC71][B]HEB SYNC[/B][/COLOR] | '
             return ''
         if synced:
-            return '[COLOR FF2ECC71][B]HEB {0}% ✓[/B][/COLOR] | '.format(best)
+            return '[COLOR FF2ECC71][B]HEB {0}% SYNC[/B][/COLOR] | '.format(best)
         if best >= 66:
             color = 'FF49C46A'
         elif best >= 33:

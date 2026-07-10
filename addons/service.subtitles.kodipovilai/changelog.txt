@@ -1,3 +1,11 @@
+v0.2.363
+- Fixed: the "synced" mark added in 0.2.362 used a check-mark glyph (✓, U+2713)
+  that is missing from some skin fonts (NOX among them), so it rendered as an
+  empty tofu box instead of a tick. Replaced it with the plain ASCII word
+  "SYNC" ("HEB NN% SYNC", or "HEB SYNC" when there's no name match), which
+  renders in every font on every skin. Same bright-green highlight, same
+  meaning; no glyph risk. Nothing else about the badge or syncing changed.
+
 v0.2.362
 - Added (SubSync final polish): the source screen now marks releases the
   community has CONFIRMED as having a synced Hebrew subtitle. The existing
