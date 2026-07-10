@@ -1,3 +1,21 @@
+v0.2.355
+- SubSync probe: three field fixes from a Rick&Morty season-pack BDRip where
+  a SYNCED subtitle came back "couldn't verify" (spurious -48.5s peak
+  refused at tight=22%) and the probe re-ran per subtitle:
+  * CRITICAL: the probe cue cache write failed since 0.2.348 ("bytes is not
+    JSON serializable" -- the audio feature added raw CodecPrivate to the
+    track dict), so EVERY probe re-fetched ~30MB. Track dicts are sanitized;
+    results cache again.
+  * The reference now UNIONS all non-forced embedded subtitle tracks (they
+    share one timeline) instead of sampling a single track -- the field file
+    had rus+en+en tracks but only a sparse en signs track was used (9 cues).
+  * Windows are bitrate-aware: the head's Duration + file size scale the
+    window to span ~8s of media (a fixed 3MB window covers ~2s of a BDRip),
+    with an adaptive midpoint top-up when the union is still sparse.
+  Verdict cache v4: UNKNOWNs stored by the sparse-probe engine recompute.
+  Expected outcome for the field case: dense union -> the synced subtitle
+  now verifies CONFIRMED instead of "couldn't verify".
+
 v0.2.354
 - SubSync S3: the community sync registry goes live (Worker /syncrep +
   /lookup `sync` field deployed by the maintainer).

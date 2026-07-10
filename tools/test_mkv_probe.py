@@ -152,6 +152,63 @@ if res:
     check('every recovered cue is a REAL cue time (no garbage)',
           got.issubset(real), str(sorted(got - real)[:5]))
 
+print('== result is JSON-serializable (field bug: CodecPrivate bytes) ==')
+import json as _json
+try:
+    _json.dumps(res)
+    check('json.dumps(probe result) works', True)
+except TypeError as e:
+    check('json.dumps(probe result) works', False, repr(e))
+
+print('== multi-track union (field case: sparse signs track alone -> 9 cues) ==')
+def build_mkv2(dense_times, signs_times):
+    """Two NON-forced text tracks: dense full subs (#3) + sparse signs (#7)."""
+    ebml = el(0x1A45DFA3, uint_el(0x4286, 1) + str_el(0x4282, 'matroska'))
+    info = el(0x1549A966, uint_el(0x2AD7B1, 1000000, 3))
+    tracks = el(0x1654AE6B,
+                el(0xAE, uint_el(0xD7, 1) + uint_el(0x83, 1)
+                   + str_el(0x86, 'V_MPEG4/ISO/AVC'))
+                + el(0xAE, uint_el(0xD7, 3) + uint_el(0x83, 0x11)
+                     + str_el(0x86, 'S_TEXT/UTF8') + str_el(0x22B59C, 'rus'))
+                + el(0xAE, uint_el(0xD7, 7) + uint_el(0x83, 0x11)
+                     + str_el(0x86, 'S_TEXT/UTF8') + str_el(0x22B59C, 'eng')))
+    total_ms = max(dense_times + signs_times) + 8000
+    rng2 = random.Random(4)
+    clusters = b''
+    di = si = 0
+    d_sorted, s_sorted = sorted(dense_times), sorted(signs_times)
+    ts = 0
+    while ts < total_ms:
+        body = uint_el(0xE7, ts, 4)
+        for k in range(4):
+            body += simpleblock(1, k * 40, bytes([rng2.randrange(256)]) * 6000)
+        while di < len(d_sorted) and ts <= d_sorted[di] < ts + 5000:
+            body += blockgroup(3, d_sorted[di] - ts, 2000, b'full dialogue line')
+            di += 1
+        while si < len(s_sorted) and ts <= s_sorted[si] < ts + 5000:
+            body += blockgroup(7, s_sorted[si] - ts, 1500, b'sign text')
+            si += 1
+        clusters += el(0x1F43B675, body)
+        ts += 5000
+    return ebml + el(0x18538067, info + tracks + clusters)
+
+DENSE = SUB_TIMES
+SIGNS = [t + 1111 for t in SUB_TIMES[::15]]
+mkv2 = build_mkv2(DENSE, SIGNS)
+p2path = os.path.join(tmpdir, 'two.mkv')
+open(p2path, 'wb').write(mkv2)
+res2u = mp.subtitle_reference(p2path, window_bytes=512 * 1024,
+                              max_windows=12, log=lambda m: None)
+check('union probe returned', res2u is not None)
+if res2u:
+    got_u = set(c['start'] for c in res2u['cues'])
+    check('union contains BOTH tracks',
+          got_u & set(DENSE) and got_u & set(SIGNS),
+          '%d dense, %d signs' % (len(got_u & set(DENSE)),
+                                  len(got_u & set(SIGNS))))
+    check('union result JSON-serializable',
+          (lambda: (_json.dumps(res2u), True)[1])())
+
 print('== HTTP Range probe (real socket) ==')
 import http.server
 
