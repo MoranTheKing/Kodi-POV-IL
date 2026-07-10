@@ -1,3 +1,12 @@
+v0.2.358
+- SubSync: sub-100ms offset precision. The alignment histogram bins offsets
+  at 500ms, so a computed fix could over/under-shoot the true offset by up to
+  half a second -- field case: a real ~+1s offset landed on the +1500ms bin
+  and left the subtitle ~0.5s early after the fix. The offset is now REFINED
+  after the coarse peak: the median of the actual per-cue deltas nearest the
+  peak, which lands within ~50ms of the truth. Applies to every anchor
+  (oracle, file probe, audio). Existing fixes recompute (verdict cache).
+
 v0.2.357
 - SubSync: removed the "couldn't verify sync" toast entirely. It was firing
   on subtitles that were ALREADY perfectly synced on screen (the verification

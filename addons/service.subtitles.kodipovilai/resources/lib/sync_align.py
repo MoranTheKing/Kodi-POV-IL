@@ -128,8 +128,9 @@ def dialogue_cues(text_or_cues):
 
 def _best_offset(ref_on, cand_on, a, max_off=_MAXOFF):
     step = max(1, len(ref_on) // _SAMPLE)
+    sampled = ref_on[::step]
     hist = {}
-    for e in ref_on[::step]:
+    for e in sampled:
         pe = a * e
         lo = bisect.bisect_left(cand_on, pe - max_off)
         hi = bisect.bisect_right(cand_on, pe + max_off)
@@ -148,8 +149,31 @@ def _best_offset(ref_on, cand_on, a, max_off=_MAXOFF):
                + hist.get(k + 1, 0))
     votes = min(hist.get(peak - 1, 0) + hist.get(peak, 0)
                 + hist.get(peak + 1, 0),
-                len(ref_on[::step]))
-    return float(peak * _TOL), votes
+                len(sampled))
+    # REFINE: the histogram bin is 500ms, so peak*_TOL is only accurate to
+    # +/-250ms -- enough to over/under-shoot a real fix by up to half a second
+    # (field: a +1500ms bin fix left subs ~0.5s early). Take the MEDIAN of the
+    # actual per-ref-cue deltas closest to the peak center -> sub-50ms offset.
+    center = peak * _TOL
+    deltas = []
+    for e in sampled:
+        pe = a * e
+        i = bisect.bisect_left(cand_on, pe + center)
+        best_d = None
+        for j in (i - 1, i):
+            if 0 <= j < len(cand_on):
+                d = cand_on[j] - pe
+                if abs(d - center) <= 1.5 * _TOL and (
+                        best_d is None or abs(d - center) < abs(best_d - center)):
+                    best_d = d
+        if best_d is not None:
+            deltas.append(best_d)
+    if deltas:
+        deltas.sort()
+        refined = float(deltas[len(deltas) // 2])
+    else:
+        refined = float(center)
+    return refined, votes
 
 
 def estimate(ref_cues, cand_cues, scales=None, max_offset_ms=None):

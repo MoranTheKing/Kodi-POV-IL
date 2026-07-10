@@ -75,11 +75,21 @@ print('== identical -> CONFIRMED ==')
 v = sa.verify(REF, transformed())
 check('status CONFIRMED', v['status'] == sa.STATUS_CONFIRMED, v['diag'])
 
-print('== constant offset +12.3s -> FIXABLE, offset recovered ==')
+print('== constant offset +12.3s -> FIXABLE, offset recovered PRECISELY ==')
 v = sa.verify(REF, transformed(offset=12300))
 check('status FIXABLE', v['status'] == sa.STATUS_FIXABLE, v['diag'])
-check('offset ~ +12300 (+/-500)', abs(v['offset_ms'] - 12300) <= 500, v['diag'])
+# Refinement (median of raw deltas) must beat the 500ms histogram bin.
+check('offset ~ +12300 (+/-100 after refine)',
+      abs(v['offset_ms'] - 12300) <= 100, v['diag'])
 check('scale == 1.0', v['scale'] == 1.0, v['diag'])
+
+print('== NON-bin-aligned offset +1180ms recovered to sub-100ms ==')
+# The field bug: a true ~+1000-1200ms offset landed on a +1500ms bin and
+# over-shifted subs ~0.5s early. Refinement must recover it precisely.
+v = sa.verify(REF, transformed(offset=1180))
+check('status FIXABLE', v['status'] == sa.STATUS_FIXABLE, v['diag'])
+check('offset ~ +1180 (+/-120), not a 500ms-bin value',
+      abs(v['offset_ms'] - 1180) <= 120, v['diag'])
 
 print('== negative offset -8s -> FIXABLE ==')
 v = sa.verify(REF, transformed(offset=-8000))
