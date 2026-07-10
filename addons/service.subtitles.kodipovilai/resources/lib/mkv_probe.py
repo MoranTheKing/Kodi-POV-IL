@@ -424,6 +424,48 @@ def _parse_head(src, head_bytes, log):
     return seg_start, ts_scale, tracks, duration_s
 
 
+def _timeline_origin_ms(src, seg_start, scale_ms, log):
+    """The file's FIRST cluster timestamp in ms -- the playback zero point.
+    Some remuxes/re-encodes keep the source disc's PTS origin (field case: an
+    AI-AV1 BluRay whose timestamps start at ~313s); players rebase to the
+    first timestamp at play, so probe cues must be rebased the same way or
+    every embedded cue looks shifted by the origin. Scans forward from the
+    segment start (past Tracks/attachments) up to a small cap; 0 when not
+    found (normal zero-based files are unaffected either way)."""
+    try:
+        pos = seg_start
+        cap = seg_start + 8 * 1024 * 1024
+        carry = b''
+        while pos < cap:
+            chunk = src.read(pos, 1024 * 1024)
+            if not chunk:
+                return 0.0
+            data = carry + chunk
+            idx = data.find(_CLUSTER_MAGIC)
+            if idx >= 0:
+                buf = _Buf(data, pos - len(carry))
+                buf.p = idx + 4
+                _csize, _sl = _read_vint(buf, False)
+                if _sl == 0:
+                    return 0.0
+                # First child of a cluster is (nearly always) its Timestamp.
+                eid, _l = _read_vint(buf, True)
+                size, sl = _read_vint(buf, False)
+                if (eid == _TIMESTAMP and sl and size
+                        and buf.p + size <= len(data)):
+                    origin = _read_uint(data[buf.p:buf.p + size]) * scale_ms
+                    if origin > 1000:
+                        log('timeline origin: first cluster at %.1fs -- '
+                            'rebasing cues' % (origin / 1000.0))
+                    return float(origin)
+                return 0.0
+            carry = data[-4:]
+            pos += len(chunk)
+        return 0.0
+    except Exception:
+        return 0.0
+
+
 def subtitle_reference(url_or_path,
                        head_bytes=DEFAULT_HEAD_BYTES,
                        window_bytes=DEFAULT_WINDOW_BYTES,
@@ -465,7 +507,15 @@ def subtitle_reference(url_or_path,
         win = window_bytes
         if duration_s > 60 and src.total:
             byterate = src.total / duration_s
-            win = int(max(window_bytes, min(8 * 1024 * 1024, byterate * 8)))
+            # Span ~8s of media per window, but NEVER let big windows eat the
+            # whole byte budget in the first few fractions (field case: 8.4MB
+            # windows hit the 40MB cap after 5 of 10 windows, so the reference
+            # only covered the first ~half of the file).
+            win = int(max(window_bytes,
+                          min(byterate * 8, 8 * 1024 * 1024,
+                              max_bytes // max(8, max_windows))))
+        origin_ms = _timeline_origin_ms(
+            src, seg_start, ts_scale / 1e6, _log)
         collected = {}
 
         def _union_count():
@@ -499,7 +549,9 @@ def subtitle_reference(url_or_path,
         merged = {}
         for lst in collected.values():
             for t, d in lst:
-                ti = int(t)
+                ti = int(t - origin_ms)   # rebase to the playback timeline
+                if ti < 0:
+                    continue
                 if d and (ti not in merged or not merged[ti]):
                     merged[ti] = d
                 else:
@@ -706,6 +758,7 @@ def audio_segments(url_or_path, seg_seconds=20, positions=(0.22, 0.50, 0.78),
         sr = tr['samplerate']
         frame_dur = 1024.0 / sr * 1000.0
         scale_ms = ts_scale / 1e6
+        origin_ms = _timeline_origin_ms(src, seg_start, scale_ms, _log)
         segments = []
         for f in positions:
             if src.fetched >= max_bytes or (time.time() - t0) > deadline_s:
@@ -750,7 +803,7 @@ def audio_segments(url_or_path, seg_seconds=20, positions=(0.22, 0.50, 0.78),
                     return []
                 adts += hdr + fr
             segments.append({
-                'start_ms': int(best[0][0]),
+                'start_ms': int(max(0.0, best[0][0] - origin_ms)),
                 'seconds': len(best) * frame_dur / 1000.0,
                 'data': bytes(adts),
             })
