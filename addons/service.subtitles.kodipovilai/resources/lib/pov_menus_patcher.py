@@ -204,6 +204,19 @@ def _patch_one(path, native_filename, tmdb_mt, trakt_mt, suffix):
     # Revert any prior injection so we re-apply our current version cleanly.
     content = _REVERT_RE.sub('\t\t\tif self.action in Menu.tmdb_main:', original)
 
+    # Movie "by streaming service" tiles pass network_id (a TMDB watch-provider
+    # id, e.g. Netflix=8), but POV's native 6.07 movies.py maps
+    # tmdb_movies_networks -> the 'company' key. On a healed device that reads
+    # params_get('company') -> None -> `if not function_var: return`, which
+    # exits run() BEFORE end_directory() -> the folder never finishes loading
+    # and Kodi spins forever (the reported Netflix/Disney movie-tile hang).
+    # Normalize the key to 'network_id' here so it matches every network tile
+    # in the build (series + AF3 + favourites all use network_id). Idempotent.
+    if native_filename == 'movies.py':
+        content = content.replace(
+            "'tmdb_movies_networks': 'company'",
+            "'tmdb_movies_networks': 'network_id'")
+
     if _ANCHOR not in content:
         _log('{0}: dispatch anchor not found -- POV may have changed; '
              'skipping'.format(os.path.basename(path)), level='WARNING')

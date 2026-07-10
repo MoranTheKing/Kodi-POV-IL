@@ -1,3 +1,22 @@
+v0.2.359
+- Fixed: Netflix/Disney (and other streaming-service) MOVIE tiles on the home
+  screen spun forever and never loaded. Root cause: the movie tiles pass a
+  TMDB watch-provider id via network_id (Netflix=8, Disney+=337...), but
+  POV's native movies.py maps the tmdb_movies_networks action to the 'company'
+  param -> params_get('company') is None -> `if not function_var: return`,
+  which exits the list builder BEFORE end_directory() is ever called, so Kodi
+  waits on the directory forever (the infinite spinner). Two fixes:
+  * The movie-networks param key is normalized to 'network_id' (matching every
+    other network tile in the build) in pov_menus_patcher and the bundled
+    native movies.py, so the id is actually read and the folder finishes.
+  * The TMDB query is corrected from `with_companies=<id>` (which treated the
+    provider id as a production-company id -> ~44 unrelated films) to
+    watch-provider discovery `with_watch_providers=<id>&watch_region=US&
+    flatrate` -- verified against TMDB: Netflix now returns its ~4600-movie
+    catalogue, Disney+ ~1500. This also explains why the earlier 0.2.305 try
+    "hung": it fixed the query but not the param key, so the tile stayed empty
+    and spun. Series-by-network tiles were already correct and are unchanged.
+
 v0.2.358
 - SubSync: sub-100ms offset precision. The alignment histogram bins offsets
   at 500ms, so a computed fix could over/under-shoot the true offset by up to
