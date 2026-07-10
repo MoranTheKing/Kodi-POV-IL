@@ -531,11 +531,16 @@ def ensure_patched():
     if not had_full_marker or not had_full_reseed:
         candidate_full_tiles = _canonical_tiles_missing_from_content(
             content, fixture_text)
-        # One-time forced restore of the whole canonical surface (see
-        # FULL_BUILD_RESEED_MARKER): fires once per install regardless of the
-        # normally-disabled _should_restore_full_build_tiles(), so the lost
-        # per-service network tiles (Netflix/Disney+/HBO... סדרות) come back.
-        force_full = (not had_full_reseed) and bool(candidate_full_tiles)
+        # Forced restore of the canonical surface is RETIRED (was: fire once per
+        # install to repair the old buggy reseed that wiped per-service network
+        # tiles). That migration is long past for the whole fleet, and while it
+        # was live it also resurrected tiles users had DELIBERATELY deleted --
+        # so every quick update looked like it "reset the home screen back to
+        # default". We now honour deletions permanently on every skin: the only
+        # remaining canonical restore is the normally-disabled heuristic
+        # (_should_restore_full_build_tiles, which returns False), so a genuinely
+        # missing tile is treated as intentional user customisation, not damage.
+        force_full = False
         if candidate_full_tiles and (
                 force_full
                 or (not had_full_marker
@@ -569,12 +574,14 @@ def ensure_patched():
 
     missing_personal = _missing_tiles(content)
     missing_service = _missing_tiles(content, BUILD_SERVICE_TILE_NAMES)
-    # One-time forced restore of the Premiumize status tile (see
-    # SERVICE_RESEED_MARKER): distinguishes "the reseed wiped it" from "the user
-    # deleted it" by firing exactly once per install, then never again.
-    force_premiumize = (not had_premiumize_reseed) and bool(missing_service)
-    # One-time forced restore of the personal tiles (see PERSONAL_RESEED_MARKER).
-    force_personal = (not had_personal_reseed) and bool(missing_personal)
+    # Forced restore of the Premiumize status tile and of the personal tiles is
+    # RETIRED for the same reason as the full-build force above: it repaired the
+    # old buggy reseed once, but also brought back tiles users had deleted, so it
+    # read as "the update reset my home screen". Deletions are now respected
+    # permanently on every skin. (The reseed markers/sidecar keys are still
+    # stamped below so nothing regresses if this ever gets re-enabled.)
+    force_premiumize = False
+    force_personal = False
     if missing_personal:
         if (not fixed_existing and not fixed_torbox_status
                 and not service_position_fixed and not force_premiumize
