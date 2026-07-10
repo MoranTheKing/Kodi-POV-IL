@@ -1,3 +1,16 @@
+v0.2.362
+- Added (SubSync final polish): the source screen now marks releases the
+  community has CONFIRMED as having a synced Hebrew subtitle. The existing
+  "HEB NN%" badge gains a green tick and turns bright green ("HEB NN% ✓", or
+  "HEB ✓" when there's no name match) for exactly those releases, so the pick
+  that is verified in-sync stands out at a glance. Purely visual — it changes
+  nothing about how syncing works, adds ZERO network requests (the confirmed
+  set rides the /lookup the availability warm already makes and is cached next
+  to the release names), and the tick is an LTR symbol so it never disturbs the
+  badge layout on any skin. Only human-CONFIRMED records are shown; provisional
+  auto verdicts are not surfaced as synced. This completes the subtitle-sync
+  feature (S1-S5 + community registry); no server/pool change was required.
+
 v0.2.361
 - Fixed: the home/favourites screen reverted to default on every quick update.
   The startup favourites patcher carried three "forced restore" migrations
