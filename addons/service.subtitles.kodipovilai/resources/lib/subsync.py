@@ -37,6 +37,9 @@ _VERDICT_FILE = ('special://profile/addon_data/service.subtitles.kodipovilai/'
                  'subsync_verdicts.json')
 _MAX_VERDICTS = 400
 # Bump to invalidate ALL previously stored verdicts after an engine change.
+# v6: offset refinement (median of deltas) supersedes the coarse 500ms bin
+# -- fixes stored at bin precision (field: +1500ms should have been ~+1000)
+# recompute to the refined value.
 # v5: probe cues are rebased to the playback timeline (first-cluster PTS
 # origin) -- UNKNOWNs judged against un-rebased references (field: +313s
 # "implausible offset" on a synced sub) deserve a recompute.
@@ -47,7 +50,7 @@ _MAX_VERDICTS = 400
 # get their pass-2 chance. v2: the pre-dedupe voting could store a spurious
 # FIXABLE (field case:
 # offset=-350s) -- those cached verdicts must never be re-applied.
-_VERDICT_VERSION = 5
+_VERDICT_VERSION = 6
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
