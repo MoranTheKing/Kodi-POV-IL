@@ -1,16 +1,22 @@
-# Revert POV's "movies by streaming service" query back to stock.
+# Make POV's "movies by streaming service" query return the RIGHT movies.
 #
-# 0.2.305 rewrote tmdb_movies_networks() in resources/lib/indexers/tmdb_api.py
-# from POV's stock `with_companies=%s` to a TMDB watch-provider discovery query
-# (with_watch_providers + watch_region + flatrate), so the Netflix/Disney/Apple
-# movie tiles would return that service's movies. In practice that tile then
-# hung ("spins forever, returns nothing") on real devices, while every other
-# movie list kept working -- so the watch-provider query is the regression.
+# The Netflix/Disney/Apple movie tiles pass TMDB watch-PROVIDER ids
+# (Netflix=8, Disney+=337, Apple TV+=350). POV's stock tmdb_movies_networks()
+# applies them as `with_companies=%s` -- a production-company filter -- so
+# `with_companies=8` returns ~44 random films (company 8 is NOT Netflix), not
+# Netflix's catalogue. The correct TMDB query is watch-provider discovery:
+# `with_watch_providers=<id>&watch_region=US&with_watch_monetization_types=flatrate`
+# (verified: id 8 -> 4675 Netflix movies, 337 -> 1560 Disney movies).
 #
-# Until the provider query can be made to work reliably, this restores POV's
-# stock line so the tile behaves exactly as it did before 0.2.305 (returns a
-# result instead of hanging). Fresh/stock installs already have the stock line,
-# so they're left untouched.
+# HISTORY / why this is safe now: 0.2.305 first tried exactly this query, it
+# appeared to "hang forever", so 0.2.308 reverted it to `with_companies`. The
+# hang was NOT the query -- it was a SEPARATE param-key bug: POV's native
+# movies.py maps tmdb_movies_networks -> the 'company' key, so the tile's
+# network_id was never read -> `if not function_var: return` exits run() before
+# end_directory() -> infinite spinner. That key is now fixed to 'network_id'
+# (pov_menus_patcher + pov_native_menus/movies.py), so the watch-provider query
+# runs correctly and returns instantly. This patcher now FORWARD-patches the
+# query (companies -> watch-providers) instead of reverting it.
 #
 # Marker-gated, compile()-checked, atomic, .pyc dropped. Safe no-op if POV
 # isn't installed or the line was changed by something else.
@@ -30,13 +36,15 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 TMDB_API_REL = 'resources/lib/indexers/tmdb_api.py'
-MARKER = '# AI_SUBS_POV_MOVIE_PROVIDERS_REVERT_v1'
-# The now-superseded forward-patch marker, stripped on revert.
-OLD_FWD_MARKER = '# AI_SUBS_POV_MOVIE_PROVIDERS_v1'
+MARKER = '# AI_SUBS_POV_MOVIE_PROVIDERS_v2'
+# Superseded markers from the earlier forward-patch (v1) and the revert, both
+# stripped when we re-apply the corrected forward patch.
+OLD_MARKERS = ('# AI_SUBS_POV_MOVIE_PROVIDERS_v1',
+               '# AI_SUBS_POV_MOVIE_PROVIDERS_REVERT_v1')
 
-# What 0.2.305 wrote (the hanging query) -> restore POV's stock query.
-_PATCHED = ("&sort_by=popularity.desc&watch_region=US&with_watch_providers=%s"
-            "&with_watch_monetization_types=flatrate' % network_id")
+# TARGET = the correct watch-provider query; STOCK = POV's company filter.
+_TARGET = ("&sort_by=popularity.desc&watch_region=US&with_watch_providers=%s"
+           "&with_watch_monetization_types=flatrate' % network_id")
 _STOCK = ("&sort_by=popularity.desc&certification_country=US"
           "&with_companies=%s' % network_id")
 
@@ -63,10 +71,10 @@ def _tmdb_api_path():
 
 
 def ensure_patched():
-    """Restore POV's stock movie-networks query. Returns
-    'patched' (reverted) | 'already_patched' | 'already_stock' | 'no_pov'
-    | 'no_file' | 'unmatched' | 'compile_failed' | 'read_failed'
-    | 'write_failed'."""
+    """Forward-patch POV's movie-networks query to watch-provider discovery.
+    Returns 'patched' | 'already_patched' | 'already_stock'(nothing to change,
+    POV line not found in either form) | 'no_pov' | 'no_file' | 'unmatched'
+    | 'compile_failed' | 'read_failed' | 'write_failed'."""
     path = _tmdb_api_path()
     if not path:
         return 'no_pov' if xbmcvfs is None else 'no_file'
@@ -77,23 +85,27 @@ def ensure_patched():
         _log('read failed: {0}'.format(e), level='WARNING')
         return 'read_failed'
 
-    if MARKER in content:
-        return 'already_patched'
-    if _PATCHED not in content:
-        # Nothing to revert. Stock line present -> leave as-is (no write);
-        # neither present -> POV changed it, leave alone.
-        return 'already_stock' if _STOCK in content else 'unmatched'
+    # Strip any superseded marker lines from a prior version so a re-apply is
+    # clean (they may sit above an already-correct or a stock line).
+    for _m in OLD_MARKERS:
+        content = content.replace(_m + '\n', '')
 
-    new_content = content.replace(_PATCHED, _STOCK, 1)
-    # Strip the superseded forward-patch marker line (best-effort).
-    new_content = new_content.replace(OLD_FWD_MARKER + '\n', '')
-    # Stamp the revert marker on its own line right after the first newline.
-    new_content = new_content.replace('\n', '\n' + MARKER + '\n', 1)
+    if MARKER in content and _TARGET in content:
+        return 'already_patched'
+    if _TARGET in content:
+        # Query already correct but our marker was stripped above -> re-stamp.
+        new_content = content.replace('\n', '\n' + MARKER + '\n', 1)
+    elif _STOCK in content:
+        new_content = content.replace(_STOCK, _TARGET, 1)
+        new_content = new_content.replace('\n', '\n' + MARKER + '\n', 1)
+    else:
+        # POV changed the line to something we don't recognise -- leave alone.
+        return 'unmatched'
 
     try:
         compile(new_content, path, 'exec')
     except SyntaxError as e:
-        _log('reverted content would not compile -- skipping ({0})'.format(e),
+        _log('patched content would not compile -- skipping ({0})'.format(e),
              level='WARNING')
         return 'compile_failed'
 
@@ -119,6 +131,6 @@ def ensure_patched():
                 except OSError:
                     pass
 
-    _log('movie streaming-service query reverted to stock (un-hang)',
+    _log('movie streaming-service query set to watch-provider discovery',
          level='INFO')
     return 'patched'
