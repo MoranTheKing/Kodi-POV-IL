@@ -286,7 +286,7 @@ def _tight_agreement(ref, cand, a, b):
     return ok / len(ref) if ref else 0.0
 
 
-def _required_tight(offset_ms, n_ref):
+def _required_tight(offset_ms, n_ref, overlap=1.0):
     """Minimum tight-agreement needed to APPLY a shift of `offset_ms`.
 
     A genuine constant offset makes almost every reference cue land within
@@ -296,10 +296,20 @@ def _required_tight(offset_ms, n_ref):
     borderline match may nudge a sub by a fraction of a second, but can never
     move it many seconds on thin evidence (field: a 31-cue file-probe union
     voted -20.3s at 68% tight and de-synced an already-good sub). Sparse
-    references are noisier, so they're held a notch stricter."""
+    references are noisier, so they're held a notch stricter.
+
+    SMALL shifts are the exception. A sub-1.5s correction is low-harm, and real
+    subtitles from a different subber/translator segment their lines
+    differently, so even at the CORRECT offset the tight agreement caps around
+    ~45% (field: The Flash Pilot, a real ~1s-early Hebrew pool sub scored 45%
+    tight against every BluRay oracle). When the coarse signals still
+    corroborate strongly -- high overlap -- we accept that low tight for a small
+    shift. This can't de-sync an already-good sub: the estimate only picks a
+    small NON-ZERO offset when the sub is genuinely off; a synced sub peaks at 0
+    and returns CONFIRMED before reaching here."""
     a = abs(offset_ms)
     if a <= 1500:
-        need = _TIGHT_MIN          # small correction -- low risk if slightly off
+        need = 0.42 if overlap >= 0.85 else _TIGHT_MIN
     elif a <= 6000:
         need = 0.78
     elif a <= 15000:
@@ -347,7 +357,7 @@ def _gate(ref, cand, min_vote=None, min_overlap=None, scales=None,
     # 68% tight and de-sync an already-good sub. Now every non-trivial offset
     # must clear a bar that grows with the size of the jump, on dense refs too.
     if tight is not None:
-        need = _required_tight(b, len(ref))
+        need = _required_tight(b, len(ref), ov)
         diag += ' (need %.0f%%)' % (need * 100)
         if tight < need:
             return {'status': STATUS_UNKNOWN, 'scale': a, 'offset_ms': b,

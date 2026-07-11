@@ -46,6 +46,11 @@ _MAX_VERDICTS = 400
 # v4: the probe now unions ALL embedded tracks + bitrate-aware windows --
 # UNKNOWNs stored while it sampled one sparse track (9 cues on a BDRip in the
 # field) deserve a recompute.
+# v11: the tight floor for SMALL (<1.5s) shifts is relaxed to ~0.42 when the
+# overlap corroborates (>=0.85). Real subs from a different subber segment lines
+# differently, capping tight ~45% even at the correct offset (field: The Flash
+# Pilot ~1s-early sub, 45% tight against every oracle) -- previously rejected.
+# Recompute so those small real offsets now apply.
 # v10: pick_oracle now prefers an ENGLISH oracle within the same tier (the
 # Hebrew candidate is translated from English, so an English reference segments
 # like it and aligns tightly; a Dutch oracle gave only 45% tight on the real
@@ -71,7 +76,7 @@ _MAX_VERDICTS = 400
 # get their pass-2 chance. v2: the pre-dedupe voting could store a spurious
 # FIXABLE (field case:
 # offset=-350s) -- those cached verdicts must never be re-applied.
-_VERDICT_VERSION = 10
+_VERDICT_VERSION = 11
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
