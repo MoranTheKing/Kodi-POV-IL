@@ -286,7 +286,7 @@ def _tight_agreement(ref, cand, a, b):
     return ok / len(ref) if ref else 0.0
 
 
-def _required_tight(offset_ms, n_ref, overlap=1.0):
+def _required_tight(offset_ms, n_ref, vote=1.0, overlap=1.0):
     """Minimum tight-agreement needed to APPLY a shift of `offset_ms`.
 
     A genuine constant offset makes almost every reference cue land within
@@ -309,7 +309,17 @@ def _required_tight(offset_ms, n_ref, overlap=1.0):
     and returns CONFIRMED before reaching here."""
     a = abs(offset_ms)
     if a <= 1500:
-        need = 0.42 if overlap >= 0.85 else _TIGHT_MIN
+        # A small shift is low-harm and lives in a completely different regime
+        # from the spurious matches we must reject -- those are always LARGE
+        # (field garbage: +230s, +560s, -20s), caught by the magnitude-scaled
+        # bars below. So for a small shift we trust the two COARSE signals when
+        # they corroborate strongly (good vote AND high overlap) and drop the
+        # tight floor: real different-subber subs cap ~40% tight even at the
+        # CORRECT offset (field: -436ms/64% vote/87% overlap/40% tight, and
+        # -954ms/61%/89%/45% -- both right, both were rejected). It cannot
+        # de-sync a good sub: the estimate only picks a small NON-ZERO offset
+        # when the sub is genuinely off (a synced sub peaks at 0 -> CONFIRMED).
+        need = 0.35 if (vote >= 0.60 and overlap >= 0.85) else _TIGHT_MIN
     elif a <= 6000:
         need = 0.78
     elif a <= 15000:
@@ -357,7 +367,7 @@ def _gate(ref, cand, min_vote=None, min_overlap=None, scales=None,
     # 68% tight and de-sync an already-good sub. Now every non-trivial offset
     # must clear a bar that grows with the size of the jump, on dense refs too.
     if tight is not None:
-        need = _required_tight(b, len(ref), ov)
+        need = _required_tight(b, len(ref), vote, ov)
         diag += ' (need %.0f%%)' % (need * 100)
         if tight < need:
             return {'status': STATUS_UNKNOWN, 'scale': a, 'offset_ms': b,

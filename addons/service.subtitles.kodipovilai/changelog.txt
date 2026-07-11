@@ -1,3 +1,14 @@
+v0.2.369
+- Improved (SubSync): apply small real offsets more reliably. Two field subs for
+  the same episode made the tuning precise: a genuinely-correct -436ms (64% vote,
+  87% overlap, 40% tight) that was still being rejected, vs. a garbage +230s
+  match (51% vote, 31% tight). The garbage is always a LARGE offset, already
+  rejected by the magnitude-scaled bar; so for SMALL shifts (<1.5s) the tight
+  floor now drops to ~35% when BOTH the vote (>=60%) and overlap (>=85%)
+  corroborate. Different-subber subtitles cap around ~40% tight even at the
+  correct offset, so this lets the real small fix apply while large/weak/noisy
+  matches stay rejected. Verdict cache bumped.
+
 v0.2.368
 - Fixed (SubSync): auto-sync now actually APPLIES a small, real offset that a
   different-subber reference can only loosely confirm. Real subtitles from
