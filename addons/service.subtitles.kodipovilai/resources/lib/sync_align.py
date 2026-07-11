@@ -425,7 +425,7 @@ def pick_oracle(candidates, playing_release):
         return None, ''
     if not playing_release or rm.is_synthetic(playing_release):
         return None, ''
-    best_c, best_tier, best_pct = None, '', 0
+    best_c, best_tier, best_key = None, '', (0, 0, 0)
     # Accept SAME-SOURCE-class oracles ONLY for physical-disc masters
     # (BluRay/DVD), ranked below exact/group. A BluRay sub is the correct TIMING
     # reference for a BluRay REMUX (same disc master = identical timing) even
@@ -453,6 +453,15 @@ def pick_oracle(candidates, playing_release):
         rank = order.get(tier, 0)
         if rank == 0:
             continue
-        if (rank, pct) > (order.get(best_tier, 0), best_pct):
-            best_c, best_tier, best_pct = c, tier, pct
+        # Within the same tier, prefer an ENGLISH oracle: the Hebrew candidate
+        # is almost always translated from English, so an English reference
+        # splits its lines the same way -> far higher tight agreement than a
+        # foreign-language oracle of the same release (field: a Dutch ROVERS
+        # oracle gave only 45% tight on a real -926ms offset, so the fix was
+        # rejected). Tier still wins first, so this never downgrades the match.
+        lang = (c.get('language') or '').strip().lower()
+        is_en = 1 if lang in ('en', 'eng', 'english') else 0
+        key = (rank, is_en, pct)
+        if key > best_key:
+            best_c, best_tier, best_key = c, tier, key
     return best_c, best_tier
