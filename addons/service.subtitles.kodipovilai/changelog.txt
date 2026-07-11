@@ -1,3 +1,16 @@
+v0.2.366
+- Improved (SubSync): make the same-source oracle alignment actually land the
+  small real offset it finds. When aligning against a same-source (BluRay/DVD)
+  oracle in a different LANGUAGE, cross-translation cue segmentation depresses
+  the coarse "vote" metric -- a genuine ~1s offset (field: The Flash Pilot,
+  -926ms) scored 61% and was dropped just under the 65% floor, and a full scale
+  search on the cross-language oracle produced a spurious FPS fit (+560s). Now
+  same-source oracle alignment is pinned to identity scale (same disc master =
+  same framerate) and uses a relaxed vote floor, with the graduated tight-
+  agreement gate from 0.2.364 as the real correctness guard -- so a genuine
+  small offset applies while a large/loose one is still rejected. The tight
+  agreement is now shown in every sync diagnostic. Verdict cache bumped.
+
 v0.2.365
 - Improved (SubSync): auto-sync can now actually FIX small real offsets on files
   that previously found no timing reference. It now accepts a same-source-class
