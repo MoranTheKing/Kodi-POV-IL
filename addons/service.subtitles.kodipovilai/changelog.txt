@@ -1,3 +1,24 @@
+v0.2.364
+- Fixed (SubSync, important): auto-sync could push an ALREADY-SYNCED subtitle
+  many seconds out of sync. On files whose embedded-subtitle "file probe" yields
+  few, mixed-language cues (BluRay REMUX with many forced foreign PGS tracks),
+  the aligner could land on a spurious large offset (field: a 31-cue union voted
+  -20.3s at only 68% tight agreement) and the old gate applied it, de-syncing a
+  sub that needed no more than a few ms. Three coordinated fixes:
+  * The tight-agreement check is now REQUIRED for every non-trivial shift (not
+    only sparse references) and scaled by the size of the jump -- a multi-second
+    move must clear ~85-93% agreement, a small nudge stays lenient. A genuine
+    offset easily clears it; a coincidental peak (~68%) is rejected and the sub
+    is delivered untouched. Small ms-level corrections are unchanged.
+  * A large shift from an AUTO (machine) community-pool record is no longer
+    applied blindly -- only human-confirmed records jump a sub by many seconds;
+    otherwise the device re-verifies locally. This also neutralises any spurious
+    auto record already shared before this fix.
+  * The verdict cache version is bumped so any shift stored under the looser
+    gate recomputes and is dropped if it can't clear the new bar.
+  Net: subsync only moves a subtitle when it is highly confident, and never
+  turns a good sub into a badly-timed one.
+
 v0.2.363
 - Fixed: the "synced" mark added in 0.2.362 used a check-mark glyph (✓, U+2713)
   that is missing from some skin fonts (NOX among them), so it rendered as an
