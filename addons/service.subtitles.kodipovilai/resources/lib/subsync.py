@@ -46,15 +46,29 @@ _MAX_VERDICTS = 400
 # v4: the probe now unions ALL embedded tracks + bitrate-aware windows --
 # UNKNOWNs stored while it sampled one sparse track (9 cues on a BDRip in the
 # field) deserve a recompute.
+# v7: the tight-agreement gate is now REQUIRED for every non-trivial shift and
+# scaled by its magnitude (a multi-second jump needs ~0.85-0.9 agreement, not
+# the old flat 0.65 that only ran for sparse refs). Field: a 31-cue file-probe
+# union voted -20.3s at 68% tight and de-synced an already-good sub -- any
+# FIXABLE stored under the looser gate must recompute so those spurious large
+# shifts are dropped.
 # v3: force recompute so UNKNOWNs stored before the adaptive second pass
 # get their pass-2 chance. v2: the pre-dedupe voting could store a spurious
 # FIXABLE (field case:
 # offset=-350s) -- those cached verdicts must never be re-applied.
-_VERDICT_VERSION = 6
+_VERDICT_VERSION = 7
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
 _STATUS_NO_ORACLE = 'NO_ORACLE'
+# A community sync record with a shift larger than this is only APPLIED blindly
+# when a human confirmed it. A large AUTO (machine-computed) offset can be a
+# poisoned share (field: a spurious -20.3s file-probe verdict reached the
+# registry before the local gate was tightened); rather than jump an
+# already-good sub by many seconds on one unverified auto vote, we skip the
+# record and let the locally-gated deep-verify decide. Small auto offsets stay
+# on the fast pool path.
+_COMMUNITY_AUTO_MAX_OFFSET_MS = 6000
 
 
 def _log(msg, level='INFO'):
@@ -566,8 +580,9 @@ def _community_verdict(info, key, playing):
         scale = float(ent.get('s') or 1.0)
         off = float(ent.get('o') or 0.0)
         st = ent.get('st')
+        human = int(ent.get('h') or 0)
         diag = 'community record (votes=%s human=%s)' % (
-            ent.get('n', 1), ent.get('h', 0))
+            ent.get('n', 1), human)
         if st == 'CONFIRMED' or (scale == 1.0
                                  and abs(off) <= sync_align.CONFIRM_OFFSET_MS):
             return {'status': sync_align.STATUS_CONFIRMED, 'scale': 1.0,
@@ -575,6 +590,14 @@ def _community_verdict(info, key, playing):
         if not (sync_align.SCALE_MIN <= scale <= sync_align.SCALE_MAX):
             return None
         if abs(off) > sync_align.MAX_PLAUSIBLE_OFFSET_MS:
+            return None
+        # Don't blindly jump a sub by many seconds on one unverified AUTO vote
+        # (poisoned-record guard) -- fall through to the locally-gated
+        # deep-verify instead. Human-confirmed records apply at any magnitude.
+        if abs(off) > _COMMUNITY_AUTO_MAX_OFFSET_MS and human < 1:
+            _log('community record skipped (large auto offset %+dms, no human '
+                 'confirmation) -- deferring to local verify' % int(off),
+                 level='DEBUG')
             return None
         return {'status': sync_align.STATUS_FIXABLE, 'scale': scale,
                 'offset_ms': off, 'diag': diag}
