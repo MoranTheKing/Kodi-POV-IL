@@ -1,3 +1,19 @@
+v0.2.365
+- Improved (SubSync): auto-sync can now actually FIX small real offsets on files
+  that previously found no timing reference. It now accepts a same-source-class
+  oracle for PHYSICAL-DISC masters -- a BluRay sub anchors a BluRay REMUX even
+  when the codec/group differ (REMUX/NOGRP vs x264/ROVERS), because they come
+  from the same disc master and share timing. This matters for season-pack-named
+  files ("...S01..." with no episode token), where every episode-matched sub
+  scored just below the old exact/group-only bar, so subsync had nothing to
+  anchor to and fell back to the noisy embedded-track probe -- leaving a
+  genuinely ~1s-early sub unfixed (field: The Flash Pilot on a BluRay REMUX).
+  WEB/HDTV still require an exact/group match (their "same class" can be
+  different services/airings with different timing), and every offset is still
+  verified by the graduated tight gate from 0.2.364, so a wrong reference is
+  rejected. Verdict cache bumped so affected episodes recompute and pick up the
+  now-eligible oracle.
+
 v0.2.364
 - Fixed (SubSync, important): auto-sync could push an ALREADY-SYNCED subtitle
   many seconds out of sync. On files whose embedded-subtitle "file probe" yields
