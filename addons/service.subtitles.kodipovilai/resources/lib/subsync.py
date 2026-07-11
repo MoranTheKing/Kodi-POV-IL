@@ -46,6 +46,11 @@ _MAX_VERDICTS = 400
 # v4: the probe now unions ALL embedded tracks + bitrate-aware windows --
 # UNKNOWNs stored while it sampled one sparse track (9 cues on a BDRip in the
 # field) deserve a recompute.
+# v10: pick_oracle now prefers an ENGLISH oracle within the same tier (the
+# Hebrew candidate is translated from English, so an English reference segments
+# like it and aligns tightly; a Dutch oracle gave only 45% tight on the real
+# -926ms offset). Verdicts that failed the gate against a foreign oracle must
+# recompute so the English oracle can be chosen.
 # v9: same-source oracle alignment is pinned to identity scale + a relaxed vote
 # floor (cross-language segmentation depressed a real -926ms match to 61% vote,
 # and a full scale search produced a +560s FPS-fit). Verdicts that FAILED the
@@ -66,7 +71,7 @@ _MAX_VERDICTS = 400
 # get their pass-2 chance. v2: the pre-dedupe voting could store a spurious
 # FIXABLE (field case:
 # offset=-350s) -- those cached verdicts must never be re-applied.
-_VERDICT_VERSION = 9
+_VERDICT_VERSION = 10
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
@@ -202,7 +207,14 @@ def _oracle_candidates(info):
                 continue
             rel = (pl.get('filename') or '').strip()
             if rel:
-                out.append({'release': rel, 'payload': pl})
+                # Keep the language so the picker can prefer an oracle that
+                # SEGMENTS like the Hebrew candidate (which is almost always
+                # translated from English). A same-release oracle in a different
+                # language splits lines differently -> its cue onsets drift from
+                # the Hebrew's, tanking the tight agreement (field: a Dutch
+                # ROVERS oracle gave only 45% tight on a real -926ms offset).
+                out.append({'release': rel, 'payload': pl,
+                            'language': (c.get('language') or '').strip().lower()})
     except Exception as e:
         _log('oracle candidate scan failed: %r' % e, level='WARNING')
     return out
