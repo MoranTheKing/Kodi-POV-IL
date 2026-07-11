@@ -277,6 +277,31 @@ def _tight_agreement(ref, cand, a, b):
     return ok / len(ref) if ref else 0.0
 
 
+def _required_tight(offset_ms, n_ref):
+    """Minimum tight-agreement needed to APPLY a shift of `offset_ms`.
+
+    A genuine constant offset makes almost every reference cue land within
+    _TIGHT_MS of a candidate cue (tight ~0.9+). A SPURIOUS peak from a sparse or
+    heterogeneous reference only reaches ~0.65-0.72. Since a wrong shift is far
+    worse than no shift, the requirement RISES with the size of the jump: a
+    borderline match may nudge a sub by a fraction of a second, but can never
+    move it many seconds on thin evidence (field: a 31-cue file-probe union
+    voted -20.3s at 68% tight and de-synced an already-good sub). Sparse
+    references are noisier, so they're held a notch stricter."""
+    a = abs(offset_ms)
+    if a <= 1500:
+        need = _TIGHT_MIN          # small correction -- low risk if slightly off
+    elif a <= 6000:
+        need = 0.78
+    elif a <= 15000:
+        need = 0.85
+    else:
+        need = 0.90                # a multi-second jump must be near-certain
+    if n_ref < _SPARSE_REF:
+        need = min(0.93, need + 0.05)
+    return need
+
+
 def _gate(ref, cand, min_vote=None, min_overlap=None, scales=None,
           max_offset_ms=None):
     _mv = MIN_VOTE if min_vote is None else min_vote
@@ -298,10 +323,16 @@ def _gate(ref, cand, min_vote=None, min_overlap=None, scales=None,
         return {'status': STATUS_UNKNOWN, 'scale': a, 'offset_ms': b,
                 'vote': vote, 'overlap': ov,
                 'diag': 'implausible offset (' + diag + ')'}
-    if len(ref) < _SPARSE_REF:
+    # Tight-agreement gate for ANY real shift, scaled by its magnitude (see
+    # _required_tight). Previously this ran only for sparse (<40) refs at a flat
+    # 0.65 floor -- which let a 31-cue file-probe union apply a -20.3s jump at
+    # 68% tight and de-sync an already-good sub. Now every non-trivial offset
+    # must clear a bar that grows with the size of the jump, on dense refs too.
+    if abs(b) > CONFIRM_OFFSET_MS:
         tight = _tight_agreement(ref, cand, a, b)
-        diag += ' tight=%.0f%%' % (tight * 100)
-        if tight < _TIGHT_MIN:
+        need = _required_tight(b, len(ref))
+        diag += ' tight=%.0f%% (need %.0f%%)' % (tight * 100, need * 100)
+        if tight < need:
             return {'status': STATUS_UNKNOWN, 'scale': a, 'offset_ms': b,
                     'vote': vote, 'overlap': ov,
                     'diag': 'tight check FAILED (' + diag + ')'}
