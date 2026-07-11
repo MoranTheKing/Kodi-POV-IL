@@ -46,6 +46,10 @@ _MAX_VERDICTS = 400
 # v4: the probe now unions ALL embedded tracks + bitrate-aware windows --
 # UNKNOWNs stored while it sampled one sparse track (9 cues on a BDRip in the
 # field) deserve a recompute.
+# v12: the small-shift (<1.5s) tight floor now drops to ~0.35 when BOTH vote
+# (>=0.60) and overlap (>=0.85) corroborate -- different-subber subs cap ~40%
+# tight even at the correct offset (field: S01E02 -436ms/64%/87%/40% was right
+# but rejected at 42%). Large spurious offsets stay strict. Recompute.
 # v11: the tight floor for SMALL (<1.5s) shifts is relaxed to ~0.42 when the
 # overlap corroborates (>=0.85). Real subs from a different subber segment lines
 # differently, capping tight ~45% even at the correct offset (field: The Flash
@@ -76,7 +80,7 @@ _MAX_VERDICTS = 400
 # get their pass-2 chance. v2: the pre-dedupe voting could store a spurious
 # FIXABLE (field case:
 # offset=-350s) -- those cached verdicts must never be re-applied.
-_VERDICT_VERSION = 11
+_VERDICT_VERSION = 12
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
