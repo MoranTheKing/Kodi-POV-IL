@@ -46,6 +46,11 @@ _MAX_VERDICTS = 400
 # v4: the probe now unions ALL embedded tracks + bitrate-aware windows --
 # UNKNOWNs stored while it sampled one sparse track (9 cues on a BDRip in the
 # field) deserve a recompute.
+# v9: same-source oracle alignment is pinned to identity scale + a relaxed vote
+# floor (cross-language segmentation depressed a real -926ms match to 61% vote,
+# and a full scale search produced a +560s FPS-fit). Verdicts that FAILED the
+# gate under v8 must recompute so a genuine small offset now reaches the tight
+# gate and applies.
 # v8: pick_oracle now accepts SAME-SOURCE-class oracles (a BluRay sub anchors a
 # BluRay REMUX even with a different group/codec). Files that found NO oracle
 # under v7 -- and were left unfixed or judged only against the noisy file probe
@@ -61,7 +66,7 @@ _MAX_VERDICTS = 400
 # get their pass-2 chance. v2: the pre-dedupe voting could store a spurious
 # FIXABLE (field case:
 # offset=-350s) -- those cached verdicts must never be re-applied.
-_VERDICT_VERSION = 8
+_VERDICT_VERSION = 9
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
@@ -74,6 +79,14 @@ _STATUS_NO_ORACLE = 'NO_ORACLE'
 # record and let the locally-gated deep-verify decide. Small auto offsets stay
 # on the fast pool path.
 _COMMUNITY_AUTO_MAX_OFFSET_MS = 6000
+# Same-source oracles (BluRay/DVD) are the SAME disc master -> framerate is
+# identical, so their alignment is pinned to identity scale: a full scale search
+# on a cross-language oracle finds spurious FPS fits (field: scale=0.999/+560s).
+# Cross-language cue segmentation also depresses the coarse vote (field: a real
+# -926ms offset scored only 61%), so the vote floor is relaxed for this path --
+# the graduated tight gate (sync_align) stays the real correctness guard.
+_ORACLE_SOURCE_SCALES = (1.0,)
+_ORACLE_SOURCE_MIN_VOTE = 0.55
 
 
 def _log(msg, level='INFO'):
@@ -714,7 +727,17 @@ def _deep_verify(info, path, text, rel, playing, key):
             oracle_text = _download_oracle(oracle['payload'])
 
         if oracle_text.strip():
-            fixed_text, verdict = sync_align.verify_and_fix(oracle_text, text)
+            # A same-source (BluRay/DVD) oracle is the same disc master: pin the
+            # alignment to identity scale and relax the coarse vote floor (see
+            # the constants) so a real small offset a cross-language oracle
+            # depressed to ~61% vote can still reach -- and be judged by -- the
+            # graduated tight gate, instead of being dropped outright.
+            okw = {}
+            if tier == release_match.TIER_SOURCE:
+                okw = {'scales': _ORACLE_SOURCE_SCALES,
+                       'min_vote': _ORACLE_SOURCE_MIN_VOTE}
+            fixed_text, verdict = sync_align.verify_and_fix(
+                oracle_text, text, **okw)
             _log('verdict for %r vs oracle %r [%s]: %s'
                  % (rel or '?', oracle['release'], tier, verdict['diag']))
         else:
