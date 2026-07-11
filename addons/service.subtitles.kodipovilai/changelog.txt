@@ -1,3 +1,17 @@
+v0.2.368
+- Fixed (SubSync): auto-sync now actually APPLIES a small, real offset that a
+  different-subber reference can only loosely confirm. Real subtitles from
+  another translator split their lines differently, so even at the CORRECT
+  offset the "tight" agreement caps around ~45% -- which the previous floor
+  rejected, leaving a genuinely ~1s-early sub unfixed even though the offset was
+  found (field: The Flash Pilot, -954ms, 89% overlap, 45% tight). The tight
+  requirement is now relaxed for SMALL shifts (<1.5s) when the overlap strongly
+  corroborates (>=85%). This is safe: a small shift is low-harm, and the aligner
+  only picks a small non-zero offset when the sub is genuinely off (an
+  already-synced sub resolves to "confirmed" and is never touched). Large shifts
+  keep the strict, magnitude-scaled bar from 0.2.364, so the old spurious -20s
+  case is still rejected. Verdict cache bumped.
+
 v0.2.367
 - Improved (SubSync): prefer an ENGLISH timing oracle. The Hebrew subtitle is
   almost always translated from English, so an English reference sub splits its
