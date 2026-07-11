@@ -405,7 +405,25 @@ def pick_oracle(candidates, playing_release):
     if not playing_release or rm.is_synthetic(playing_release):
         return None, ''
     best_c, best_tier, best_pct = None, '', 0
-    order = {rm.TIER_EXACT: 2, rm.TIER_GROUP: 1}
+    # Accept SAME-SOURCE-class oracles ONLY for physical-disc masters
+    # (BluRay/DVD), ranked below exact/group. A BluRay sub is the correct TIMING
+    # reference for a BluRay REMUX (same disc master = identical timing) even
+    # when the codec/group differ (REMUX/NOGRP vs x264/ROVERS -> 70%/source).
+    # WEB/HDTV "same class" can be different services/airings with different
+    # timing, so those still require exact/group. The chosen offset is VERIFIED
+    # by the graduated tight gate regardless. Without this, season-pack-named
+    # files ("...S01..." with no episode token) found no oracle and fell back to
+    # the noisy file probe -- leaving a genuinely ~1s-early sub unfixed (field:
+    # The Flash Pilot). A CONTRADICTING source (WEB vs BluRay) is TIER_CROSS and
+    # still never anchors.
+    _RELIABLE_SOURCE = ('bluray', 'dvd')
+    try:
+        _psrc = rm.parse(playing_release).get('source', '')
+    except Exception:
+        _psrc = ''
+    order = {rm.TIER_EXACT: 3, rm.TIER_GROUP: 2}
+    if _psrc in _RELIABLE_SOURCE:
+        order[rm.TIER_SOURCE] = 1
     for c in candidates or []:
         rel = (c.get('release') or '').strip()
         if not rel:
