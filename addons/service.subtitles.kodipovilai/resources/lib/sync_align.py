@@ -222,7 +222,8 @@ def overlap_rate(ref_cues, cand_cues, a, b):
 
 # ---- public API -------------------------------------------------------------
 
-def verify(ref_srt_text, cand_srt_text):
+def verify(ref_srt_text, cand_srt_text, min_vote=None, min_overlap=None,
+           scales=None, max_offset_ms=None):
     """Verdict dict:
       {'status': CONFIRMED|FIXABLE|UNKNOWN,
        'scale': a, 'offset_ms': b,          # map: cand ~= a*ref + b, i.e. to
@@ -231,8 +232,16 @@ def verify(ref_srt_text, cand_srt_text):
     NOTE on direction: estimate() maps REF time onto CAND time. A candidate
     that lags the reference by +12s yields offset_ms=+12000; retime() is then
     called with (scale, offset_ms) and applies the INVERSE map to the
-    candidate so it lands on the reference timeline."""
-    return _gate(dialogue_cues(ref_srt_text), dialogue_cues(cand_srt_text))
+    candidate so it lands on the reference timeline.
+
+    Optional gate overrides (min_vote / min_overlap / scales / max_offset_ms)
+    let a caller tune the coarse pre-filters -- e.g. a same-source oracle pins
+    scales to identity (same disc master = same framerate) and relaxes the vote
+    floor, since cross-language cue segmentation depresses the vote while the
+    graduated tight gate still guards correctness."""
+    return _gate(dialogue_cues(ref_srt_text), dialogue_cues(cand_srt_text),
+                 min_vote=min_vote, min_overlap=min_overlap,
+                 scales=scales, max_offset_ms=max_offset_ms)
 
 
 def verify_cues(ref_cues, cand_srt_text, min_vote=None, min_overlap=None,
@@ -314,8 +323,17 @@ def _gate(ref, cand, min_vote=None, min_overlap=None, scales=None,
     a, b, vote = estimate(ref, cand, scales=scales,
                           max_offset_ms=max_offset_ms)
     ov = overlap_rate(ref, cand, a, b)
-    diag = 'scale=%.6f offset=%+dms vote=%.0f%% overlap=%.0f%%' % (
-        a, int(b), vote * 100, ov * 100)
+    # Tight agreement is the REAL quality signal (a genuine offset lands almost
+    # every ref cue within _TIGHT_MS; a spurious peak ~0.65-0.72). Compute it up
+    # front for any real shift so it's visible in EVERY diagnostic -- including
+    # gate-failed ones -- which is what tells us whether a vote-rejected match
+    # was actually good (field: an oracle match at -926ms/61% vote).
+    tight = None
+    if abs(b) > CONFIRM_OFFSET_MS:
+        tight = _tight_agreement(ref, cand, a, b)
+    diag = 'scale=%.6f offset=%+dms vote=%.0f%% overlap=%.0f%%%s' % (
+        a, int(b), vote * 100, ov * 100,
+        '' if tight is None else ' tight=%.0f%%' % (tight * 100))
     if not (SCALE_MIN <= a <= SCALE_MAX) or vote < _mv or ov < _mo:
         return {'status': STATUS_UNKNOWN, 'scale': a, 'offset_ms': b,
                 'vote': vote, 'overlap': ov, 'diag': 'gate FAILED (' + diag + ')'}
@@ -328,10 +346,9 @@ def _gate(ref, cand, min_vote=None, min_overlap=None, scales=None,
     # 0.65 floor -- which let a 31-cue file-probe union apply a -20.3s jump at
     # 68% tight and de-sync an already-good sub. Now every non-trivial offset
     # must clear a bar that grows with the size of the jump, on dense refs too.
-    if abs(b) > CONFIRM_OFFSET_MS:
-        tight = _tight_agreement(ref, cand, a, b)
+    if tight is not None:
         need = _required_tight(b, len(ref))
-        diag += ' tight=%.0f%% (need %.0f%%)' % (tight * 100, need * 100)
+        diag += ' (need %.0f%%)' % (need * 100)
         if tight < need:
             return {'status': STATUS_UNKNOWN, 'scale': a, 'offset_ms': b,
                     'vote': vote, 'overlap': ov,
@@ -371,10 +388,14 @@ def retime(cand_srt_text, scale, offset_ms):
     return '\n\n'.join(out_blocks) + '\n'
 
 
-def verify_and_fix(ref_srt_text, cand_srt_text):
+def verify_and_fix(ref_srt_text, cand_srt_text, min_vote=None, min_overlap=None,
+                   scales=None, max_offset_ms=None):
     """One-call convenience: (fixed_or_original_text, verdict). The text is
-    retimed ONLY on FIXABLE; CONFIRMED/UNKNOWN return the original."""
-    verdict = verify(ref_srt_text, cand_srt_text)
+    retimed ONLY on FIXABLE; CONFIRMED/UNKNOWN return the original. Gate
+    overrides pass straight through to verify()."""
+    verdict = verify(ref_srt_text, cand_srt_text, min_vote=min_vote,
+                     min_overlap=min_overlap, scales=scales,
+                     max_offset_ms=max_offset_ms)
     if verdict['status'] == STATUS_FIXABLE:
         try:
             fixed = retime(cand_srt_text, verdict['scale'],
