@@ -1,3 +1,15 @@
+v0.2.367
+- Improved (SubSync): prefer an ENGLISH timing oracle. The Hebrew subtitle is
+  almost always translated from English, so an English reference sub splits its
+  lines the same way and its cue onsets line up -- while a foreign-language
+  oracle of the same release (e.g. a Dutch sub) segments differently and tanks
+  the tight-agreement check (field: The Flash Pilot got a real -926ms offset but
+  only 45% tight against a Dutch oracle, so the fix was correctly rejected).
+  pick_oracle now prefers English within the same match tier (tier still wins
+  first, so this never downgrades the match), which should let the genuine small
+  offset align tightly and apply. Verdict cache bumped so affected episodes
+  recompute and re-pick the oracle.
+
 v0.2.366
 - Improved (SubSync): make the same-source oracle alignment actually land the
   small real offset it finds. When aligning against a same-source (BluRay/DVD)
