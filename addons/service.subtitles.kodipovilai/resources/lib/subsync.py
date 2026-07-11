@@ -46,6 +46,11 @@ _MAX_VERDICTS = 400
 # v4: the probe now unions ALL embedded tracks + bitrate-aware windows --
 # UNKNOWNs stored while it sampled one sparse track (9 cues on a BDRip in the
 # field) deserve a recompute.
+# v8: pick_oracle now accepts SAME-SOURCE-class oracles (a BluRay sub anchors a
+# BluRay REMUX even with a different group/codec). Files that found NO oracle
+# under v7 -- and were left unfixed or judged only against the noisy file probe
+# (field: The Flash Pilot, ~1s early, no oracle) -- must recompute so the newly
+# eligible oracle can supply the real offset.
 # v7: the tight-agreement gate is now REQUIRED for every non-trivial shift and
 # scaled by its magnitude (a multi-second jump needs ~0.85-0.9 agreement, not
 # the old flat 0.65 that only ran for sparse refs). Field: a 31-cue file-probe
@@ -56,7 +61,7 @@ _MAX_VERDICTS = 400
 # get their pass-2 chance. v2: the pre-dedupe voting could store a spurious
 # FIXABLE (field case:
 # offset=-350s) -- those cached verdicts must never be re-applied.
-_VERDICT_VERSION = 7
+_VERDICT_VERSION = 8
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
