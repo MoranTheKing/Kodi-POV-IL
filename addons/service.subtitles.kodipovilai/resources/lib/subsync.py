@@ -46,6 +46,10 @@ _MAX_VERDICTS = 400
 # v4: the probe now unions ALL embedded tracks + bitrate-aware windows --
 # UNKNOWNs stored while it sampled one sparse track (9 cues on a BDRip in the
 # field) deserve a recompute.
+# v13: small-shift (<1.5s) acceptance now leans on OVERLAP (>=0.85) + magnitude
+# rather than the coarse vote (source-oracle min_vote lowered 0.55->0.50). Field:
+# four correct small offsets ran vote 54-64% / overlap 87-90% / tight 40-45% --
+# the -677ms/54% one still failed the vote floor. Recompute.
 # v12: the small-shift (<1.5s) tight floor now drops to ~0.35 when BOTH vote
 # (>=0.60) and overlap (>=0.85) corroborate -- different-subber subs cap ~40%
 # tight even at the correct offset (field: S01E02 -436ms/64%/87%/40% was right
@@ -80,7 +84,7 @@ _MAX_VERDICTS = 400
 # get their pass-2 chance. v2: the pre-dedupe voting could store a spurious
 # FIXABLE (field case:
 # offset=-350s) -- those cached verdicts must never be re-applied.
-_VERDICT_VERSION = 12
+_VERDICT_VERSION = 13
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
@@ -100,7 +104,11 @@ _COMMUNITY_AUTO_MAX_OFFSET_MS = 6000
 # -926ms offset scored only 61%), so the vote floor is relaxed for this path --
 # the graduated tight gate (sync_align) stays the real correctness guard.
 _ORACLE_SOURCE_SCALES = (1.0,)
-_ORACLE_SOURCE_MIN_VOTE = 0.55
+# A majority (>50%) of cues must still agree on the offset, but not more: a
+# different-subber sub segments its lines differently, so the correct small
+# offset ran as low as 54% vote in the field (S01E04 -677ms) -- the real
+# correctness guard is the graduated tight/overlap gate, not the coarse vote.
+_ORACLE_SOURCE_MIN_VOTE = 0.50
 
 
 def _log(msg, level='INFO'):
