@@ -309,17 +309,21 @@ def _required_tight(offset_ms, n_ref, vote=1.0, overlap=1.0):
     and returns CONFIRMED before reaching here."""
     a = abs(offset_ms)
     if a <= 1500:
-        # A small shift is low-harm and lives in a completely different regime
+        # A small shift is low-harm and lives in a COMPLETELY different regime
         # from the spurious matches we must reject -- those are always LARGE
         # (field garbage: +230s, +560s, -20s), caught by the magnitude-scaled
-        # bars below. So for a small shift we trust the two COARSE signals when
-        # they corroborate strongly (good vote AND high overlap) and drop the
-        # tight floor: real different-subber subs cap ~40% tight even at the
-        # CORRECT offset (field: -436ms/64% vote/87% overlap/40% tight, and
-        # -954ms/61%/89%/45% -- both right, both were rejected). It cannot
-        # de-sync a good sub: the estimate only picks a small NON-ZERO offset
-        # when the sub is genuinely off (a synced sub peaks at 0 -> CONFIRMED).
-        need = 0.35 if (vote >= 0.60 and overlap >= 0.85) else _TIGHT_MIN
+        # bars below. The reliable discriminator for a small shift is OVERLAP:
+        # the shifted sub must cover the same time regions as the reference. The
+        # `vote` and `tight` metrics are dominated by different-subber cue
+        # segmentation and cap low even at the CORRECT offset -- across four
+        # field subs the correct small offset ran vote 54-64%, overlap 87-90%,
+        # tight 40-45% (all were being rejected). So when the overlap
+        # corroborates strongly we drop the tight floor and lean on overlap +
+        # magnitude. This cannot de-sync a good sub: the estimate only picks a
+        # small NON-ZERO offset when the sub is genuinely off (a synced sub
+        # peaks at 0 -> CONFIRMED before reaching here); vote is still floored by
+        # the gate's min_vote so a true non-match can't sneak through.
+        need = 0.35 if overlap >= 0.85 else _TIGHT_MIN
     elif a <= 6000:
         need = 0.78
     elif a <= 15000:
