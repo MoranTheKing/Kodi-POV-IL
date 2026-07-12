@@ -1,3 +1,14 @@
+v0.2.370
+- Improved (SubSync): small-offset acceptance now leans on OVERLAP + magnitude,
+  not the coarse "vote". Four correct small offsets for The Flash pinned it down:
+  the right shift ran vote 54-64%, overlap 87-90%, tight 40-45% -- and one at 54%
+  vote was still being rejected on the vote floor. Since every spurious match is
+  a LARGE offset (already blocked by the magnitude-scaled bar), a SMALL shift is
+  now accepted whenever the overlap corroborates strongly (>=85%), with vote kept
+  only as a low >50% majority floor. This lets these genuinely-off community subs
+  self-sync while large/low-overlap/noisy matches stay rejected. Verdict cache
+  bumped.
+
 v0.2.369
 - Improved (SubSync): apply small real offsets more reliably. Two field subs for
   the same episode made the tuning precise: a genuinely-correct -436ms (64% vote,
