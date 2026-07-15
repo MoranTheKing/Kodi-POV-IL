@@ -13,7 +13,8 @@ LANG_NAME = {
     'zh': 'Chinese', 'cs': 'Czech', 'ro': 'Romanian', 'sv': 'Swedish',
     'da': 'Danish', 'fi': 'Finnish', 'no': 'Norwegian', 'hu': 'Hungarian',
     'uk': 'Ukrainian', 'bg': 'Bulgarian', 'hr': 'Croatian', 'sr': 'Serbian',
-    'th': 'Thai', 'id': 'Indonesian', 'vi': 'Vietnamese',
+    'th': 'Thai', 'id': 'Indonesian', 'vi': 'Vietnamese', 'he': 'Hebrew',
+    'sk': 'Slovak', 'ur': 'Urdu',
 }
 
 
@@ -198,20 +199,130 @@ def build_prev_context_block(prev_context_lines):
     )
 
 
-def build_arabic_gender_block(entry_arabic):
-    """Build the Arabic gender-reference block (opt-in feature). `entry_arabic`
-    is a list of (entry_number, arabic_text) for THIS chunk -- the time-aligned
-    line from a HUMAN Arabic translation of the same scene. Arabic marks gender
-    (أنتَ/أنتِ, gendered verbs/imperatives) almost 1:1 with Hebrew, so it pins
-    down per-line speaker/addressee gender that English can't. Returns '' when
-    no entry has a usable Arabic line.
+# How each reference-chain language marks gender -- one compact line injected
+# into the generic gender-reference block (see build_gender_block). Only the
+# non-Arabic, non-Hebrew languages need an entry; unknown codes get a safe
+# generic sentence.
+_GENDER_SIGNALS = {
+    'es': 'adjectives and participles end in -o (masc) / -a (fem); pronouns '
+          'and articles (el/ella, este/esta) mark referent gender',
+    'fr': 'adjectives and past participles agree in gender (fatigué/fatiguée, '
+          'il/elle); "tu es ...e" endings mark the ADDRESSEE as feminine',
+    'ru': 'past-tense verbs mark the SPEAKER/subject gender (сказал/сказала, '
+          'устал/устала); adjectives agree in gender',
+    'it': 'adjectives and participles end in -o (masc) / -a (fem) '
+          '(stanco/stanca, sei sicuro/sicura); lui/lei mark referents',
+    'pt': 'adjectives and participles end in -o (masc) / -a (fem) '
+          '(cansado/cansada, obrigado/obrigada); ele/ela mark referents',
+    'pl': 'past-tense verbs mark gender (zrobiłem/zrobiłam for the speaker, '
+          'zrobiłeś/zrobiłaś for the addressee); adjectives agree',
+    'uk': 'past-tense verbs mark the speaker/subject gender (сказав/сказала); '
+          'adjectives agree in gender',
+    'hi': 'verbs inflect for gender (karta/karti hoon marks the SPEAKER, '
+          'karte/karti ho the ADDRESSEE); adjectives in -a/-i agree',
+    'cs': 'past-tense verbs mark gender (řekl/řekla, byl jsi/byla jsi for '
+          'the addressee); adjectives agree',
+    'ro': 'adjectives and participles agree in gender (obosit/obosită, '
+          'sigur/sigură); el/ea mark referents',
+    'el': 'articles, adjectives and participles mark gender '
+          '(κουρασμένος/κουρασμένη, αυτός/αυτή)',
+    'bg': 'past-tense verbs mark gender (казал/казала, уморен/уморена); '
+          'adjectives agree',
+    'sr': 'past participles mark gender (rekao/rekla, umoran/umorna for '
+          'speaker and addressee); adjectives agree',
+    'hr': 'past participles mark gender (rekao/rekla, umoran/umorna for '
+          'speaker and addressee); adjectives agree',
+    'sk': 'past-tense verbs mark gender (povedal/povedala, bol si/bola si '
+          'for the addressee); adjectives agree',
+    'ur': 'verbs inflect for gender (karta/karti hoon marks the SPEAKER, '
+          'karte/karti ho the ADDRESSEE); adjectives agree',
+    'nl': 'pronouns (hij/zij, hem/haar) mark referent gender',
+}
 
-    Validated: lifts gender accuracy ~27% (cast-only) -> ~90%+, zero regressions,
-    while the FIDELITY clause keeps wording faithful to the English."""
-    rows = [(n, t) for (n, t) in entry_arabic if t and t.strip()]
+# Shared FIDELITY clause: the reference is ONLY a gender oracle; wording always
+# comes from the source text being translated.
+_FIDELITY_CLAUSE = (
+    'FIDELITY (critical -- read carefully): translate the SOURCE text '
+    'itself, completely and in natural Hebrew. The {ref} reference is ONLY a '
+    'gender oracle. Take from it the gender and NOTHING else -- not wording, '
+    'not phrasing, not length, not meaning. Specifically:\n'
+    '  * Translate EVERY source word and detail. Do not drop, shorten, '
+    'merge or summarise -- keep fillers ("uh", "well", "look"), repetitions '
+    '("I don\'t... I don\'t..."), intensifiers and profanity ("fucking"), '
+    'and small words like "out", "in there", "back", "just".\n'
+    '  * The {ref} human translation is often SHORTER or looser than the '
+    'source -- IGNORE that. Match the source, not the reference\'s brevity.\n'
+    '  * Proper nouns, place names, slang and idioms come from the SOURCE '
+    'meaning -- NEVER transliterate the reference. Render slang/idioms '
+    'naturally from the source.\n'
+    '  * If the reference paraphrases, omits, or differs from the source in '
+    'ANY way, follow the SOURCE and ignore the reference difference.\n'
+)
+
+
+def build_gender_block(entry_ref, lang='ar'):
+    """Build the gender-reference block for any chain language. `entry_ref` is
+    a list of (entry_number, reference_text) for THIS chunk -- the time-aligned
+    line from a HUMAN translation of the same scene in `lang`. Returns '' when
+    no entry has a usable reference line.
+
+    'ar' keeps the original, field-validated Arabic wording verbatim (lifts
+    gender accuracy ~27% -> ~90%+); 'he' gets a dedicated block (the reference
+    IS Hebrew -- read the gender straight off it); anything else gets a generic
+    block with a per-language description of the gender markers."""
+    rows = [(n, t) for (n, t) in entry_ref if t and t.strip()]
     if not rows:
         return ''
     body = '\n'.join('{0}: {1}'.format(n, t) for (n, t) in rows)
+    if lang == 'ar':
+        return _arabic_block_text(body)
+    if lang == 'he':
+        return (
+            'HEBREW GENDER REFERENCE -- HARD CONSTRAINT, NOT A HINT.\n'
+            'For some entries below, the line from a PROFESSIONAL HUMAN Hebrew '
+            'translation of the SAME scene is given (it comes from a different '
+            'video cut, so its wording may be aligned imperfectly). Hebrew '
+            'marks gender everywhere; for each such entry you MUST make your '
+            'Hebrew agree in SPEAKER / ADDRESSEE / REFERENT gender with the '
+            'reference line (אתה/את, masculine/feminine verbs and adjectives). '
+            'Do NOT default to masculine -- read the reference and match it.\n'
+            '- Entry not listed / reference gender-neutral -> use the cast '
+            'block + context instead.\n'
+            + _FIDELITY_CLAUSE.format(ref='Hebrew') +
+            'Per-entry Hebrew reference (entry_number: hebrew_line):\n'
+            + body + '\n\n'
+        )
+    name = LANG_NAME.get(lang, lang.upper())
+    signals = _GENDER_SIGNALS.get(
+        lang, 'gendered forms (adjectives, verbs, pronouns) mark speaker / '
+              'addressee / referent gender')
+    return (
+        '{0} GENDER REFERENCE -- HARD CONSTRAINT, NOT A HINT.\n'
+        'For some entries below, the line from a PROFESSIONAL HUMAN {1} '
+        'translation of the SAME scene is given. In {1}, {2}. For each such '
+        'entry you MUST make the Hebrew agree in gender with the reference: '
+        'identify from the {1} line whether the SPEAKER, the ADDRESSEE or a '
+        'REFERENT is masculine or feminine, and pick the matching Hebrew '
+        'forms (אתה/את, masculine/feminine verbs and adjectives). Do NOT '
+        'default to masculine -- read the markers and match them.\n'
+        '- Entry not listed / reference gender-neutral -> use the cast '
+        'block + context instead.\n'.format(name.upper(), name, signals)
+        + _FIDELITY_CLAUSE.format(ref=name) +
+        'Per-entry {0} reference (entry_number: reference_line):\n'.format(name)
+        + body + '\n\n'
+    )
+
+
+def build_arabic_gender_block(entry_arabic):
+    """Back-compat wrapper: the original Arabic-only entry point."""
+    return build_gender_block(entry_arabic, 'ar')
+
+
+def _arabic_block_text(body):
+    """The original, field-validated Arabic gender block (verbatim).
+
+    Validated: lifts gender accuracy ~27% (cast-only) -> ~90%+, zero regressions,
+    while the FIDELITY clause keeps wording faithful to the English."""
     return (
         'ARABIC GENDER REFERENCE -- HARD CONSTRAINT, NOT A HINT.\n'
         'For some entries below, the line from a PROFESSIONAL HUMAN Arabic '

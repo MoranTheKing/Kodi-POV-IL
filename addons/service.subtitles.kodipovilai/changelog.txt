@@ -1,3 +1,23 @@
+v0.2.371
+- New: Gemini 3.5 Flash is now available in the model list (Settings ->
+  Translation -> Model). NOT the default -- 3.1 Flash Lite stays the
+  recommended default; pick 3.5 Flash if you have quota to spare.
+- New: the gender-reference feature now falls through a PRIORITY CHAIN of
+  languages when no Arabic subtitle exists (or none aligns): an out-of-sync
+  human HEBREW sub first (the strongest oracle -- it IS Hebrew), then Arabic,
+  then Spanish / French / Russian / Italian / Portuguese / Polish / Ukrainian /
+  Hindi / Czech / Romanian / Greek / Bulgarian / Serbian / Croatian / Slovak /
+  Urdu / Dutch. Each language's block teaches the model that language's gender
+  markers; machine-translated Hebrew is never used (poisoned oracle). One
+  engine search covers the whole chain; still fully fail-open.
+- New (standalone): the repo-channel addon now runs the SAME auto-on-play
+  Hebrew search as the full build -- making MoranSubs a complete PRIMARY
+  subtitle addon on a clean Kodi with independent POV/Umbrella (like DarkSubs):
+  embedded-Hebrew detection, human sources, community pool, and AI translation
+  when no Hebrew exists. The machinery moved verbatim to
+  resources/lib/autosub_service.py (one source of truth for both editions);
+  the full build's behavior is unchanged.
+
 v0.2.370
 - Improved (SubSync): small-offset acceptance now leans on OVERLAP + magnitude,
   not the coarse "vote". Four correct small offsets for The Flash pinned it down:

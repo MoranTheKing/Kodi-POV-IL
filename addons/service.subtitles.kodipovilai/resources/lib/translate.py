@@ -514,6 +514,7 @@ def list_candidates(info, modal_progress=True):
     def _clean(c):
         c.pop('_engine_kind', None)
         c.pop('_pct', None)
+        c.pop('_is_mt', None)
         return c
 
     # Embedded Hebrew (101%) goes to the very top -- above even a local
@@ -941,7 +942,7 @@ def _google_translate_and_save(src_text, source_lang, translated, info,
     return translated
 
 
-# When the auto-on-play flow is driving (service._autosub_on_play), success /
+# When the auto-on-play flow is driving (autosub_service.autosub_on_play), success /
 # progress notifications are shown in the top overlay by the caller -- so the
 # scattered success toasts here are suppressed to avoid double messaging. Error
 # toasts still fire. Mirrors DarkSubs, which shows status only in its on-play
@@ -1224,8 +1225,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         _ar_on = False
     _tier = 'ar' if _ar_on else ''
     _pool_kind = 'ai_ar' if _ar_on else 'ai'
-    _ar_map = None  # {srt_entry_number: arabic_line}, set just before chunking
-    _ar_diag = {}   # arabic_gender.prepare diagnostics (reason/cands/diag)
+    _ar_map = None  # {srt_entry_number: reference_line}, set just before chunking
+    _ar_diag = {}   # arabic_gender.prepare diagnostics (reason/cands/diag/lang)
+    _ref_lang = 'ar'  # chain language actually used (he/ar/es/fr/ru/...)
 
     def _pool_key(base_hash):
         # ai_ar variants live under "<hash>_ar" so EVERY client can prefer them
@@ -1595,30 +1597,35 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                        level='WARNING')
         return None
 
-    # Arabic gender reference (opt-in). Only here -- after every cache/pool miss,
-    # so we never pay the fetch on a hit. Fetches + time-aligns a human Arabic
-    # sub (trying several, OpenSubtitles/SubSource/YIFY); returns a per-entry map
-    # or None. Fully guarded; None => normal translation. Logs its decision.
+    # Gender reference (opt-in). Only here -- after every cache/pool miss,
+    # so we never pay the fetch on a hit. Fetches + time-aligns a human sub in
+    # the reference-language priority chain (Hebrew, Arabic, then other
+    # gender-marking languages -- see arabic_gender._REF_CHAIN); returns a
+    # per-entry map or None. Fully guarded; None => normal translation.
     if _ar_on:
-        kodi_utils.log('arabic-gender: ON -- translating "{0}" via the Arabic '
-                       'gender reference path'.format(
+        kodi_utils.log('gender-ref: ON -- translating "{0}" via the gender '
+                       'reference path'.format(
                            (info.get('title') or imdb_id or '?')), level='INFO')
         try:
             from . import arabic_gender
             _ar_map, _ar_diag = arabic_gender.prepare(info, src_text)
+            if _ar_map:
+                _ref_lang = (_ar_diag.get('lang') or 'ar')
         except Exception as e:
-            kodi_utils.log('arabic-gender prepare crashed: {0}'.format(e),
+            kodi_utils.log('gender-ref prepare crashed: {0}'.format(e),
                            level='WARNING')
             _ar_map = None
             _ar_diag = {'reason': 'crash'}
 
-    # If the feature is on but NO usable Arabic was found, this becomes a normal
-    # translation -- store it as PLAIN (never masquerade a non-boosted result as
-    # ai_ar), so it can still be upgraded later when an Arabic sub appears.
+    # If the feature is on but NO usable reference was found, this becomes a
+    # normal translation -- store it as PLAIN (never masquerade a non-boosted
+    # result as ai_ar), so it can still be upgraded later when a reference
+    # sub appears.
     _used_ar = bool(_ar_map)
     if _ar_on and not _used_ar:
-        kodi_utils.log('arabic-gender: no usable Arabic this time -> normal '
-                       'translation, stored as the plain tier', level='INFO')
+        kodi_utils.log('gender-ref: no usable reference sub in any chain '
+                       'language this time -> normal translation, stored as '
+                       'the plain tier', level='INFO')
         _tier = ''
         _pool_kind = 'ai'
         translated = cache.translated_path(
@@ -1689,6 +1696,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 'ok': 1 if ok else 0,
                 'note': str(ev_note or '')[:80],
                 'hinted': len(_ar_map or {}),
+                'ref_lang': (_ref_lang if (_ar_on and _used_ar) else ''),
                 'model': model,
                 'think': str(thinking_level or thinking_budget or ''),
                 # Per-chunk outcome (entry counts): translated WITH Arabic,
@@ -1875,7 +1883,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                         ent.append((num, ar))
             if ent:
                 try:
-                    ar_block = prompt.build_arabic_gender_block(ent)
+                    ar_block = prompt.build_gender_block(ent, _ref_lang)
                 except Exception:
                     ar_block = ''
         full_prompt = (prompt_template
