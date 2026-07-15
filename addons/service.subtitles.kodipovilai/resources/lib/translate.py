@@ -514,6 +514,7 @@ def list_candidates(info, modal_progress=True):
     def _clean(c):
         c.pop('_engine_kind', None)
         c.pop('_pct', None)
+        c.pop('_is_mt', None)
         return c
 
     # Embedded Hebrew (101%) goes to the very top -- above even a local
