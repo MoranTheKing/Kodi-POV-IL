@@ -1,4 +1,4 @@
-# Arabic-as-gender-reference for AI translation (opt-in, default OFF).
+# Gendered-language reference for AI translation (opt-in).
 #
 # Hebrew is heavily gendered and the #1 quality issue is per-line gender (who is
 # speaking / who is addressed). English doesn't mark it; Arabic does, almost 1:1
@@ -7,8 +7,14 @@
 # Arabic sub for the same media, time-align it to the source SRT, and hand each
 # entry its aligned Arabic line as a GENDER ORACLE in the prompt (see prompt.py).
 #
+# When no Arabic subtitle exists (or none aligns), we fall through a PRIORITY
+# CHAIN of other gender-marking languages (see _REF_CHAIN): an out-of-sync human
+# HEBREW sub is the best oracle of all, then Arabic, then Romance/Slavic/Indic
+# languages whose adjectives/verbs mark speaker+addressee gender. Same
+# fetch-align-hint pipeline, one engine search for all of them.
+#
 # This module is self-contained + fully guarded: ANY failure returns None and the
-# caller falls back to the normal (no-Arabic) translation. It NEVER raises.
+# caller falls back to the normal (no-reference) translation. It NEVER raises.
 #
 # Validated on real OpenSubtitles pairs (From S03E09, Super Mario Bros Movie):
 # global alignment is reliable across different releases + SDH once SFX/music is
@@ -82,7 +88,14 @@ def _is_dialogue(text):
     if any(mk in t for mk in _MUSIC):
         return False
     t = _NONDIALOG.sub(' ', t)
-    letters = re.sub(r'[^A-Za-z֐-׿؀-ۿ]', '', t)
+    # Letter ranges cover every script in the reference chain: basic+extended
+    # Latin (es/fr/it/pt/pl/cs/ro/hr/sk/nl), Greek, Cyrillic (ru/uk/bg/sr),
+    # Hebrew, Arabic (also Urdu), Devanagari (Hindi). Without the extra ranges
+    # a Cyrillic/Greek/Hindi reference sub would parse as "no dialogue" and be
+    # rejected before alignment even ran.
+    letters = re.sub(
+        r'[^A-Za-zÀ-ɏͰ-ϿЀ-ӿ'
+        r'֐-׿؀-ۿऀ-ॿ]', '', t)
     return len(letters) >= 2
 
 
@@ -215,34 +228,104 @@ def align_one(src_text, src_blocks, ar_text):
     return _arabic_for_blocks(src_blocks, ar, a, b), 'gate OK (' + diag + ')'
 
 
-# ---------------- fetch Arabic candidates from the engine -------------------
+# ---------------- the reference-language priority chain ---------------------
 
-def _arabic_candidates(info, limit=5):
-    """Return up to `limit` Arabic subtitle CANDIDATES (metadata only -- NOT yet
-    downloaded) for this media from the built-in engine (OpenSubtitles /
-    SubSource / YIFY).
+# Priority order for the gender oracle. An out-of-sync HUMAN Hebrew sub is the
+# strongest possible reference (it IS the target language); Arabic is the gold
+# standard among foreign ones (Semitic, near-1:1 gender marking with Hebrew);
+# then languages ranked by gender-signal strength x real-world availability.
+_REF_CHAIN = ('he', 'ar', 'es', 'fr', 'ru', 'it', 'pt', 'pl', 'uk', 'hi',
+              'cs', 'ro', 'el', 'bg', 'sr', 'hr', 'sk', 'ur', 'nl')
 
-    The engine gates languages by setting, so we flip `language_arab` on JUST
-    for this search and restore it to 'false' immediately after. That matters:
-    leaving it on (the old behaviour) made every ordinary subtitle search start
-    surfacing Arabic results too -- the stray Arabic entries the user noticed.
-    Arabic is only ever an internal gender oracle here, never a target language,
-    so 'false' is always the right resting state. Guarded; never raises."""
+# Codes/names a provider might report for each chain language (lowercase).
+# Providers emit a mix of ISO 639-1, 639-2/B, 639-2/T and English names; the
+# bridge normalizes most but not all, so we match generously here.
+_REF_LANG_ALIASES = {
+    'he': ('he', 'iw', 'heb', 'hebrew'),
+    'ar': ('ar', 'ara', 'arabic'),
+    'es': ('es', 'sp', 'spa', 'spanish'),
+    'fr': ('fr', 'fre', 'fra', 'french'),
+    'ru': ('ru', 'rus', 'russian'),
+    'it': ('it', 'ita', 'italian'),
+    'pt': ('pt', 'por', 'pb', 'pob', 'pt-br', 'ptbr', 'portuguese',
+           'brazilian portuguese', 'brazillian portuguese'),
+    'pl': ('pl', 'pol', 'polish'),
+    'uk': ('uk', 'ukr', 'ukrainian'),
+    'hi': ('hi', 'hin', 'hindi'),
+    'cs': ('cs', 'cze', 'ces', 'czech'),
+    'ro': ('ro', 'rum', 'ron', 'romanian'),
+    'el': ('el', 'gr', 'gre', 'ell', 'greek'),
+    'bg': ('bg', 'bul', 'bulgarian'),
+    'sr': ('sr', 'srp', 'scc', 'serbian'),
+    'hr': ('hr', 'hrv', 'scr', 'croatian'),
+    'sk': ('sk', 'slo', 'slk', 'slovak'),
+    'ur': ('ur', 'urd', 'urdu'),
+    'nl': ('nl', 'dut', 'nld', 'dutch'),
+}
+
+_ALIAS_TO_CHAIN = {alias: code
+                   for code, aliases in _REF_LANG_ALIASES.items()
+                   for alias in aliases}
+
+# Try at most this many candidates per language, and at most this many
+# downloads in total across the whole chain (latency bound: the common case --
+# an Arabic or Hebrew sub that aligns -- still downloads a SINGLE file).
+_PER_LANG_LIMIT = 3
+_TOTAL_DOWNLOAD_BUDGET = 8
+
+
+def _chain_lang_of(cand):
+    """Map an engine candidate to its chain language code, or None if the
+    candidate's language isn't in the chain (or is unusable as an oracle)."""
+    lang = _ALIAS_TO_CHAIN.get((cand.get('language') or '').strip().lower())
+    if lang == 'he':
+        # A machine-translated Hebrew sub is a POISONED oracle (MT defaults to
+        # masculine) -- only HUMAN Hebrew subs may anchor gender.
+        kind = (cand.get('_engine_kind') or '').strip().lower()
+        if kind and kind != 'human_he':
+            return None
+        if 'HebrewMachineTranslated' in (cand.get('filename') or ''):
+            return None
+    return lang
+
+
+# ---------------- fetch reference candidates from the engine ----------------
+
+def _reference_candidates(info):
+    """Return ALL subtitle CANDIDATES (metadata only -- NOT yet downloaded) for
+    this media from the built-in engine (OpenSubtitles / SubSource / YIFY /
+    Hebrew providers). Filtering to chain languages happens in prepare().
+
+    The engine gates languages by setting, so JUST for this search we flip
+    `language_arab` on and force `all_lang` on (so every chain language comes
+    back in one search), then restore. language_arab always settles to 'false'
+    (it must never pollute normal searches -- Arabic is only ever an internal
+    gender oracle, not a target language); all_lang is restored to whatever the
+    user had. Guarded; never raises."""
     try:
         from resources.lib import subs_engine_bridge
     except Exception:
         return []
     cands = []
+    prev_all_lang = None
     try:
         if kodi_utils is not None:
             try:
                 kodi_utils.set_setting('language_arab', 'true')
             except Exception:
                 pass
+            try:
+                prev_all_lang = kodi_utils.get_setting('all_lang', '')
+                if (prev_all_lang or '').strip().lower() != 'true':
+                    kodi_utils.set_setting('all_lang', 'true')
+                else:
+                    prev_all_lang = None  # already true -> nothing to restore
+            except Exception:
+                prev_all_lang = None
         try:
             cands = subs_engine_bridge.search(info, modal_progress=False) or []
         except Exception as e:
-            _log('engine search for Arabic failed: {0}'.format(e),
+            _log('engine search for gender reference failed: {0}'.format(e),
                  level='WARNING')
             cands = []
     finally:
@@ -253,15 +336,16 @@ def _arabic_candidates(info, limit=5):
                 kodi_utils.set_setting('language_arab', 'false')
             except Exception:
                 pass
-    ar_cands = [c for c in cands
-                if (c.get('language') or '').lower() in ('ar', 'ara', 'arabic')]
-    if not ar_cands:
-        _log('no Arabic subtitle found from the engine for this title')
-    return ar_cands[:limit]
+            if prev_all_lang is not None:
+                try:
+                    kodi_utils.set_setting('all_lang', prev_all_lang)
+                except Exception:
+                    pass
+    return cands
 
 
-def _download_arabic(c):
-    """Download ONE Arabic candidate and return its text, or None. Guarded."""
+def _download_candidate(c):
+    """Download ONE reference candidate and return its text, or None. Guarded."""
     try:
         from resources.lib import subs_engine_bridge, translate
         payload = translate._decode_link(c.get('link') or '')
@@ -272,19 +356,21 @@ def _download_arabic(c):
             with open(path, 'r', encoding='utf-8', errors='replace') as f:
                 return f.read()
     except Exception as e:
-        _log('Arabic download failed (continuing): {0}'.format(e),
+        _log('reference download failed (continuing): {0}'.format(e),
              level='DEBUG')
     return None
 
 
 def prepare(info, src_text):
-    """ENTRY POINT. When the feature is on, find Arabic subs for `info` and try
-    them in turn until one aligns confidently. Downloads LAZILY -- one at a time,
-    stopping at the first that aligns -- so the common case (the first release
-    aligns) pulls a SINGLE Arabic file instead of pre-fetching four. Returns a
-    dict {srt_entry_number: arabic_text} (gender hints) or None to fall back to
-    the normal translation. ALSO returns a small diag dict (reason + details) for
-    telemetry: reason is 'ok' / 'no_source' / 'no_arabic' / 'no_align' / 'crash'.
+    """ENTRY POINT. When the feature is on, find gender-reference subs for
+    `info` and try them in PRIORITY-CHAIN order (Hebrew, Arabic, then the other
+    gender-marking languages) until one aligns confidently. Downloads LAZILY --
+    one at a time, stopping at the first that aligns -- so the common case pulls
+    a SINGLE reference file. Returns a dict {srt_entry_number: reference_text}
+    (gender hints) or None to fall back to the normal translation. ALSO returns
+    a small diag dict for telemetry: reason is 'ok' / 'no_source' / 'no_arabic'
+    (kept name: means NO chain-language candidate at all) / 'no_align' /
+    'crash'; on success diag['lang'] is the chain code actually used.
     Fully guarded."""
     try:
         from resources.lib import srt as _srt
@@ -294,33 +380,60 @@ def prepare(info, src_text):
     if not src_blocks:
         return None, {'reason': 'no_source'}
     try:
-        cands = _arabic_candidates(info)
+        all_cands = _reference_candidates(info)
     except Exception as e:
         _log('fetch crashed: {0}'.format(e), level='WARNING')
         return None, {'reason': 'crash'}
-    if not cands:
-        _log('no Arabic candidates -> normal translation (fallback)')
+
+    # Bucket by chain language, preserving the engine's own ranking (it sorts
+    # by release-match %, so earlier candidates align more often).
+    by_lang = {}
+    for c in all_cands:
+        lang = _chain_lang_of(c)
+        if lang and len(by_lang.setdefault(lang, [])) < _PER_LANG_LIMIT:
+            by_lang[lang].append(c)
+
+    # NOTE on Hebrew-first: the user reached AI translation, so any Hebrew sub
+    # here is out-of-sync / unmatched for their release -- but as a GENDER
+    # ORACLE it only needs to time-align to the SOURCE sub, which the scale+
+    # offset estimator handles. It is the strongest oracle (it IS Hebrew).
+    ordered = [(lang, c) for lang in _REF_CHAIN for c in by_lang.get(lang, [])]
+    if not ordered:
+        _log('no gender-reference candidates in any chain language -> normal '
+             'translation (fallback)')
         return None, {'reason': 'no_arabic', 'cands': 0}
-    total = len(cands)
+
+    total = len(ordered)
+    langs_present = [l for l in _REF_CHAIN if l in by_lang]
+    _log('reference candidates: {0} across {1}'.format(
+        total, ','.join(langs_present)))
     best_diag = ''
-    for idx, c in enumerate(cands, 1):
-        ar_text = _download_arabic(c)   # lazy: fetch only when we reach it
-        if not ar_text:
+    attempts = 0
+    for idx, (lang, c) in enumerate(ordered, 1):
+        if attempts >= _TOTAL_DOWNLOAD_BUDGET:
+            _log('download budget ({0}) exhausted -- stopping the chain'.format(
+                _TOTAL_DOWNLOAD_BUDGET))
+            break
+        attempts += 1
+        ref_text = _download_candidate(c)  # lazy: fetch only when we reach it
+        if not ref_text:
             continue
         try:
-            mapping, diag = align_one(src_text, src_blocks, ar_text)
+            mapping, diag = align_one(src_text, src_blocks, ref_text)
         except Exception as e:
-            _log('align candidate {0} crashed: {1}'.format(idx, e),
+            _log('align candidate {0} [{1}] crashed: {2}'.format(idx, lang, e),
                  level='WARNING')
             continue
         if mapping is not None:
-            _log('candidate {0}/{1} {2} -> using Arabic gender reference '
-                 '({3} entries hinted)'.format(idx, total, diag, len(mapping)))
+            _log('candidate {0}/{1} [{2}] {3} -> using {2} gender reference '
+                 '({4} entries hinted)'.format(idx, total, lang, diag,
+                                               len(mapping)))
             return mapping, {'reason': 'ok', 'cands': total,
-                             'hinted': len(mapping), 'diag': diag}
+                             'hinted': len(mapping), 'diag': diag,
+                             'lang': lang}
         best_diag = diag
-        _log('candidate {0}/{1} rejected: {2} -- trying next'.format(
-            idx, total, diag))
-    _log('all {0} Arabic candidate(s) failed alignment -> normal translation '
-         '(fallback)'.format(total))
+        _log('candidate {0}/{1} [{2}] rejected: {3} -- trying next'.format(
+            idx, total, lang, diag))
+    _log('all {0} reference candidate(s) failed alignment -> normal '
+         'translation (fallback)'.format(total))
     return None, {'reason': 'no_align', 'cands': total, 'diag': best_diag}
