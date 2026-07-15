@@ -13,7 +13,8 @@ LANG_NAME = {
     'zh': 'Chinese', 'cs': 'Czech', 'ro': 'Romanian', 'sv': 'Swedish',
     'da': 'Danish', 'fi': 'Finnish', 'no': 'Norwegian', 'hu': 'Hungarian',
     'uk': 'Ukrainian', 'bg': 'Bulgarian', 'hr': 'Croatian', 'sr': 'Serbian',
-    'th': 'Thai', 'id': 'Indonesian', 'vi': 'Vietnamese',
+    'th': 'Thai', 'id': 'Indonesian', 'vi': 'Vietnamese', 'he': 'Hebrew',
+    'sk': 'Slovak', 'ur': 'Urdu',
 }
 
 

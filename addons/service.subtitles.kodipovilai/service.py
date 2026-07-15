@@ -1697,18 +1697,6 @@ def _maybe_patch_pov_remember_source():
 # The auto-on-play machinery (state, the on-play search/apply flow, and the
 # Player listener) lives in resources/lib/autosub_service.py -- extracted
 # VERBATIM so the standalone (repo-channel) service runs the exact same code.
-# These thin delegators keep the historical names used elsewhere in this file.
-def _autosub_on_play():
-    try:
-        from resources.lib import autosub_service
-        autosub_service.autosub_on_play()
-    except Exception as e:
-        try:
-            from resources.lib import kodi_utils
-            kodi_utils.log('autosub_on_play delegate failed: {0}'.format(e),
-                           level='WARNING')
-        except Exception:
-            pass
 
 
 def _start_pool_queue_drainer(monitor):
