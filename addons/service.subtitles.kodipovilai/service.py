@@ -1694,320 +1694,21 @@ def _maybe_patch_pov_remember_source():
             pass
 
 
-_AUTOSUB_STATE = {'last_file': None, 'busy': False, 'player': None}
-
-
+# The auto-on-play machinery (state, the on-play search/apply flow, and the
+# Player listener) lives in resources/lib/autosub_service.py -- extracted
+# VERBATIM so the standalone (repo-channel) service runs the exact same code.
+# These thin delegators keep the historical names used elsewhere in this file.
 def _autosub_on_play():
-    """Phase C auto-on-play: when the built-in engine is on, search and apply
-    the best Hebrew subtitle automatically (replacing DarkSubs's autosub).
-    Runs in its own thread so it never blocks Kodi's playback callback."""
     try:
-        from resources.lib import kodi_utils, translate, subs_engine_bridge
-    except Exception:
-        return
-    try:
-        if not kodi_utils.get_bool('use_builtin_engine', False):
-            return
-        if not kodi_utils.get_bool('engine_autosub', True):
-            return
-        if not kodi_utils.hebrew_subtitle_wanted():
-            return
-    except Exception:
-        return
-
-    # Honor the one-shot 'skip_autosub' marker on Window(10000): set when the
-    # item being played is already in the target language, so our auto-on-play
-    # search must NOT run for it -- same guard as default.py::_handle_search. We
-    # do NOT clear the prop here (the search-path guard clears it / it expires at
-    # 90s), so both paths still see it fresh.
-    try:
-        import xbmcgui
-        _sa = xbmcgui.Window(10000).getProperty('skip_autosub')
-        if _sa and (time.time() - float(_sa)) < 90:
-            return
-    except Exception:
-        pass
-
-    if _AUTOSUB_STATE['busy']:
-        return
-    _AUTOSUB_STATE['busy'] = True
-    _eng_general = None
-    try:
-        # Show the DarkSubs-style top overlay IMMEDIATELY (with live per-source
-        # counts the engine fills into general.show_msg as it searches), so the
-        # user sees the same "loading subtitles" screen the moment playback
-        # starts -- not after the metadata wait below.
-        try:
-            subs_engine_bridge.ensure_engine_settings()
-            from resources.lib.subs_engine import general as _eng_general
-            _eng_general.break_all = False
-            _eng_general.with_dp = False
-            _eng_general.show_msg = 'MoranSubs — מחפש כתוביות עברית'
-            threading.Thread(target=_eng_general.show_results,
-                             args=(False,), daemon=True).start()
-        except Exception:
-            _eng_general = None
-
-        # While auto-on-play drives, success/progress toasts from resolve() are
-        # suppressed -- the top overlay shows status instead (exactly like
-        # DarkSubs, which never toasts during autosub).
-        try:
-            translate.set_quiet(True)
-        except Exception:
-            pass
-
-        def _final_overlay(msg, hold=5.0):
-            """Show a final status line in the top overlay for ~hold seconds
-            (DarkSubs shows its 'כתובית מוכנה' / 'אין כתוביות' line for ~5s
-            before the overlay closes). No-op if the overlay isn't up."""
-            if _eng_general is None:
-                return
-            try:
-                _eng_general.show_msg = msg
-            except Exception:
-                return
-            waited = 0.0
-            while waited < hold:
-                try:
-                    if not xbmc.Player().isPlayingVideo():
-                        break
-                except Exception:
-                    break
-                xbmc.sleep(200)
-                waited += 0.2
-
-        # Right after onAVStarted the player metadata (imdb/title) often
-        # isn't populated yet -- poll briefly until it is (mirrors how
-        # DarkSubs waits for the video before searching).
-        info = {}
-        for _ in range(40):  # up to ~8s
-            info = kodi_utils.current_video_info()
-            have_id = (info.get('imdb_id') or info.get('tmdb_id')
-                       or info.get('title'))
-            # Also wait for the release name to settle: on an auto-advance to
-            # the next episode the metadata transitions a moment after play,
-            # and the sync-% is computed from the release name -- searching
-            # (and caching) before it's ready yields 0% matches. Once we have
-            # both an id/title AND a release name, proceed.
-            try:
-                have_release = subs_engine_bridge._release_ready(info)
-            except Exception:
-                have_release = True
-            if have_id and have_release:
-                break
-            try:
-                if not xbmc.Player().isPlayingVideo():
-                    return
-            except Exception:
-                pass
-            xbmc.sleep(200)
-
-        f = info.get('filepath') or info.get('title') or ''
-        # onAVStarted can fire more than once for the same file; act once.
-        if f and f == _AUTOSUB_STATE['last_file']:
-            return
-        _AUTOSUB_STATE['last_file'] = f
-        if not (info.get('imdb_id') or info.get('tmdb_id')
-                or info.get('title')):
-            return
-
-        # Embedded Hebrew is the best, perfectly-synced subtitle -- apply it
-        # FIRST whenever the file has one. The demuxer often hasn't exposed the
-        # embedded streams yet this early after play, so poll while the stream
-        # list is still empty (then check once for a 'heb' track). Matches how
-        # DarkSubs waits for the stream list before deciding.
-        try:
-            _pl = xbmc.Player()
-            _heb_idx = None
-            _streams = []
-            for _ in range(80):  # up to ~8s, but only while streams aren't listed yet
-                try:
-                    _streams = _pl.getAvailableSubtitleStreams() or []
-                except Exception:
-                    _streams = []
-                if _streams:
-                    _heb_idx = next(
-                        (i for i, n in enumerate(_streams)
-                         if (n or '').strip().lower() == 'heb'), None)
-                    break  # streams listed -- decided (heb or not)
-                if not _pl.isPlayingVideo():
-                    break
-                xbmc.sleep(100)
-            # Snapshot these PLAY-START streams as the embedded baseline. This is
-            # the only moment we're sure no external sub (incl. one WE load
-            # below) is present, so the picker can later tell embedded from
-            # external and never mistake an AI translation for "embedded Hebrew".
-            try:
-                subs_engine_bridge.note_playback_streams(info, _streams)
-            except Exception:
-                pass
-            if _heb_idx is not None:
-                _pl.setSubtitleStream(_heb_idx)
-                _pl.showSubtitles(True)
-                try:
-                    import json as _json
-                    import urllib.parse as _up
-                    _elink = _up.quote(_json.dumps(
-                        {'type': 'engine', 'embedded': True,
-                         'stream_index': _heb_idx}, ensure_ascii=False))
-                    kodi_utils.set_current_subtitle(_elink)
-                except Exception:
-                    pass
-                _final_overlay('[COLOR lightblue]הופעל תרגום מובנה בעברית[/COLOR]')
-                return  # embedded Hebrew applied -- it's the best, we're done
-        except Exception:
-            pass
-
-        # Non-modal search (the overlay above is the progress). list_candidates
-        # returns everything in priority order; the first 'he' row is the best
-        # Hebrew (embedded > human > pool > MT).
-        cands = translate.list_candidates(info, modal_progress=False)
-        # (list_candidates already queued every human Ktuvit release for the
-        # background harvest; the service drainer downloads + uploads them
-        # gently over time. Nothing to do here.)
-        # Try the ready Hebrew candidates in priority order until one actually
-        # downloads. If a source fails (e.g. Ktuvit rate-limited / "refused"),
-        # skip the rest from that SAME source (they fail identically) and move
-        # straight on to the next source -- OpenSubtitles / pool / Wizdom.
-        he_list = [c for c in cands if c.get('language') == 'he']
-        applied = False
-        chosen_link = None
-        chosen_name = ''
-        chosen_from_cache = False
-        failed_sources = set()
-        for c in he_list[:12]:
-            link2 = c.get('link') or ''
-            try:
-                pl = translate._decode_link(link2) or {}
-            except Exception:
-                pl = {}
-            src = pl.get('source')
-            if src and src in failed_sources:
-                continue  # this source already failed -- don't waste time on it
-            is_embedded = (pl.get('type') == 'engine' and pl.get('embedded'))
-            try:
-                path = translate.resolve(link2, info)
-            except Exception:
-                path = None
-            if is_embedded:
-                # resolve() switched the embedded stream and returns None -- that
-                # IS success for an embedded pick.
-                applied = True
-                chosen_link = link2
-                chosen_name = 'תרגום מובנה בעברית'
-                break
-            if path:
-                try:
-                    p = xbmc.Player()
-                    if p.isPlayingVideo():
-                        p.setSubtitles(path)
-                        p.showSubtitles(True)
-                    applied = True
-                    chosen_link = link2
-                    # Full subtitle name + cache note for the overlay status,
-                    # exactly like DarkSubs's "כתובית מוכנה\n{name}".
-                    chosen_name = (pl.get('filename')
-                                   or c.get('filename') or '').strip()
-                    try:
-                        if pl.get('type') == 'engine':
-                            chosen_from_cache = bool(
-                                subs_engine_bridge.LAST_DOWNLOAD_FROM_CACHE)
-                    except Exception:
-                        chosen_from_cache = False
-                    break
-                except Exception:
-                    pass
-            if src:
-                failed_sources.add(src)
-
-        # No Hebrew anywhere -- not embedded, not human, not the community pool,
-        # not machine-translated. ONLY in that case, auto-translate the best
-        # foreign sub (the highest-match English, which list_candidates already
-        # orders first) to Hebrew on play, exactly like DarkSubs's auto_translate.
-        # Gated so we NEVER spend quota when a ready Hebrew sub exists:
-        #   * a Gemini API key must be connected (nothing to translate with
-        #     otherwise), and
-        #   * the user hasn't opted out of AI (translation_mode != 'none').
-        # (The legacy engine_force_translate toggle still forces it if set.)
-        _have_key = bool((kodi_utils.get_setting('api_key', '') or '').strip())
-        _ai_ok = (kodi_utils.get_setting('translation_mode', 'ai')
-                  or 'ai') != 'none'
-        _auto_ai = (_have_key and _ai_ok) or kodi_utils.get_bool(
-            'engine_force_translate', False)
-        if not applied and _auto_ai:
-            for c in cands:
-                try:
-                    p2 = translate._decode_link(c.get('link') or '')
-                except Exception:
-                    p2 = None
-                if p2 and p2.get('type') == 'engine_ai':
-                    if _eng_general is not None:
-                        try:
-                            _eng_general.show_msg = (
-                                '[COLOR lightblue]אין עברית — מתרגם ב-AI[/COLOR]')
-                        except Exception:
-                            pass
-                    try:
-                        path = translate.resolve(c.get('link'), info)
-                    except Exception:
-                        path = None
-                    if path:
-                        try:
-                            pp = xbmc.Player()
-                            if pp.isPlayingVideo():
-                                pp.setSubtitles(path)
-                                pp.showSubtitles(True)
-                            applied = True
-                            chosen_link = c.get('link')
-                        except Exception:
-                            pass
-                    break
-
-        if not applied:
-            _final_overlay('[COLOR red]לא נמצאה כתובית עברית[/COLOR]', hold=4.0)
-            return
-        # Remember it as the current sub so the picker marks it '» נוכחית'.
-        try:
-            kodi_utils.set_current_subtitle(chosen_link or '')
-        except Exception:
-            pass
-        # DarkSubs-style final status in the top overlay (full subtitle name,
-        # + cache note when it came straight from the Cached_subs folder),
-        # instead of a success toast.
-        _status_msg = '[COLOR lightblue]כתובית מוכנה'
-        if chosen_name:
-            _status_msg += '\n' + chosen_name
-        if chosen_from_cache:
-            _status_msg += '\n(נטענה מהקאש)'
-        _status_msg += '[/COLOR]'
-        _final_overlay(_status_msg)
+        from resources.lib import autosub_service
+        autosub_service.autosub_on_play()
     except Exception as e:
         try:
-            kodi_utils.log('autosub_on_play failed: {0}'.format(e),
+            from resources.lib import kodi_utils
+            kodi_utils.log('autosub_on_play delegate failed: {0}'.format(e),
                            level='WARNING')
         except Exception:
             pass
-    finally:
-        _AUTOSUB_STATE['busy'] = False
-        try:
-            translate.set_quiet(False)
-        except Exception:
-            pass
-        # Close the overlay (show_results exits on 'END').
-        if _eng_general is not None:
-            try:
-                _eng_general.show_msg = 'END'
-            except Exception:
-                pass
-
-
-if xbmc is not None:
-    class _AutoSubPlayer(xbmc.Player):
-        def onAVStarted(self):
-            try:
-                threading.Thread(target=_autosub_on_play, daemon=True).start()
-            except Exception:
-                pass
 
 
 def _start_pool_queue_drainer(monitor):
@@ -2260,53 +1961,19 @@ def _start_subsync_delay_watch(monitor):
 
 
 def _maybe_start_autosub_player():
-    """Register a Player listener so we can auto-search + auto-apply Hebrew on
-    play, but ONLY when the engine is on and autosub is enabled. The service's
-    existing prune loop keeps the process alive, so the Player callbacks fire;
-    we just hold a reference. When off, does nothing (behavior unchanged)."""
-    if xbmc is None:
-        return
+    """Register the auto-on-play Hebrew listener (autosub_service holds the
+    Player reference in its module STATE, which outlives this call)."""
     try:
-        from resources.lib import kodi_utils
-        if not kodi_utils.get_bool('use_builtin_engine', False):
-            return
-        if not kodi_utils.get_bool('engine_autosub', True):
-            return
-    except Exception:
-        return
-    try:
-        _AUTOSUB_STATE['player'] = _AutoSubPlayer()  # keep a ref alive
-        # If a video is already playing when the service starts, kick once.
-        try:
-            if xbmc.Player().isPlayingVideo():
-                threading.Thread(target=_autosub_on_play, daemon=True).start()
-        except Exception:
-            pass
+        from resources.lib import autosub_service
+        autosub_service.start_if_enabled()
     except Exception:
         pass
 
 
 def _maybe_prewarm_engine():
-    """If the built-in sources engine is enabled, import it (and ensure its
-    settings) in a background thread so the first subtitle search is warm.
-    Fully guarded; a failure here never affects anything."""
     try:
-        from resources.lib import kodi_utils
-        if not kodi_utils.get_bool('use_builtin_engine', False):
-            return
-    except Exception:
-        return
-
-    def _work():
-        try:
-            from resources.lib import subs_engine_bridge
-            subs_engine_bridge.ensure_engine_settings()
-            from resources.lib.subs_engine import engine  # noqa: F401
-        except Exception:
-            pass
-
-    try:
-        threading.Thread(target=_work, daemon=True).start()
+        from resources.lib import autosub_service
+        autosub_service.prewarm_engine()
     except Exception:
         pass
 

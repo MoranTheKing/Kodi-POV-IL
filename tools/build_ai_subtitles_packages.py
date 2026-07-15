@@ -31,6 +31,7 @@ STANDALONE_LIB_FILES = {
     "__init__.py",
     "all_subs_samefile_patcher.py",
     "arabic_gender.py",
+    "autosub_service.py",
     "cache.py",
     "dark_subs_integration.py",
     "darksubs_download_sub_patcher.py",
@@ -408,6 +409,23 @@ def _engine_on():
         return False
 
 
+def _maybe_prewarm_engine():
+    """Warm the sources engine in the background so the first search is fast."""
+    from resources.lib import autosub_service
+    autosub_service.prewarm_engine()
+
+
+def _maybe_start_autosub_player():
+    """Register the auto-on-play Hebrew listener (Phase C): search + apply the
+    best Hebrew subtitle automatically at playback start, exactly like the full
+    build -- this is what makes the standalone act as a PRIMARY subtitle addon
+    on a clean Kodi. autosub_service holds the Player reference in its module
+    STATE, which outlives this call; the service keep-alive loop below keeps
+    the process (and therefore the Player callbacks) running."""
+    from resources.lib import autosub_service
+    autosub_service.start_if_enabled()
+
+
 def _ensure_darksubs_enabled():
     """When the engine is ON, disable DarkSubs + All Subs Plus so only MoranSubs
     runs (reversible: turn the engine off and they come back). When OFF, ensure
@@ -491,6 +509,7 @@ def main():
     _maybe_default_builtin_engine()
     _ensure_darksubs_enabled()
     _maybe_set_default_subtitle_service()
+    _run('engine prewarm', _maybe_prewarm_engine)
 
     if not _engine_on():
         # DarkSubs provides the sources when the engine is off: keep our hooks
@@ -528,6 +547,10 @@ def main():
         _subs_filename_publisher = subs_filename_publisher.SubsFilenamePublisher()
     except Exception:
         pass
+
+    # Auto-on-play Hebrew (Phase C): the same listener the full build runs.
+    # Gated inside on use_builtin_engine + engine_autosub, both default ON.
+    _run('autosub player', _maybe_start_autosub_player)
 
     monitor = xbmc.Monitor()
     # Upload any queued community-pool contributions (e.g. mirrored Ktuvit
