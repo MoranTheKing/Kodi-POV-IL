@@ -282,6 +282,10 @@ msgctxt "#32233"
 msgid "2.5 Flash (fallback)"
 msgstr "2.5 Flash (fallback)"
 
+msgctxt "#32234"
+msgid "3.5 Flash (newest, heavier quota use)"
+msgstr "3.5 Flash (newest, heavier quota use)"
+
 msgctxt "#32254"
 msgid "Test Wyzie connection"
 msgstr ""
@@ -491,9 +495,9 @@ msgid "By default only MoranSubs runs while the engine is on. Turn this on to ke
 msgstr "By default only MoranSubs runs while the engine is on. Turn this on to keep DarkSubs/All Subs enabled too -- it stays on across restarts and updates."
 
 msgctxt "#32546"
-msgid "Improve gender accuracy using an Arabic reference (experimental)"
-msgstr "Improve gender accuracy using an Arabic reference (experimental)"
+msgid "Improve gender accuracy using a reference subtitle (experimental)"
+msgstr "Improve gender accuracy using a reference subtitle (experimental)"
 
 msgctxt "#32547"
-msgid "When ON, AI translations fetch a human Arabic subtitle for the same title and use it ONLY to pin down per-line Hebrew gender (he/she, verb/adjective agreement) -- Arabic marks gender almost 1:1 with Hebrew. Falls back silently when no aligned Arabic sub is found. Works for any source language."
-msgstr "When ON, AI translations fetch a human Arabic subtitle for the same title and use it ONLY to pin down per-line Hebrew gender (he/she, verb/adjective agreement) -- Arabic marks gender almost 1:1 with Hebrew. Falls back silently when no aligned Arabic sub is found. Works for any source language."
+msgid "When ON, AI translations fetch a human subtitle of the same title in a gender-marking language and use it ONLY to pin down per-line Hebrew gender (he/she, verb/adjective agreement). Tries an out-of-sync Hebrew sub first, then Arabic (marks gender almost 1:1 with Hebrew), then Spanish/French/Russian and more. Falls back silently when nothing aligns. Works for any source language."
+msgstr "When ON, AI translations fetch a human subtitle of the same title in a gender-marking language and use it ONLY to pin down per-line Hebrew gender (he/she, verb/adjective agreement). Tries an out-of-sync Hebrew sub first, then Arabic (marks gender almost 1:1 with Hebrew), then Spanish/French/Russian and more. Falls back silently when nothing aligns. Works for any source language."
