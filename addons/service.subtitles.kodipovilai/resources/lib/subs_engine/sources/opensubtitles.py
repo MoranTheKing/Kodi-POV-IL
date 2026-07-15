@@ -258,6 +258,13 @@ def get_subs(video_data, all_lang_override=False):
             attributes = search_item.get('attributes', {})
             SubRating = attributes.get("ratings", '0')
             hearing_impaired = "true" if attributes.get("hearing_impaired", False) else "false"
+            # The search requests ai_translated/machine_translated subs too, but
+            # these attributes were dropped here -- so an MT sub arrived looking
+            # exactly like a human one. Carry the flag through download_data so
+            # downstream consumers (bridge classification, the gender-reference
+            # oracle) can tell them apart.
+            machine_translated = "true" if (attributes.get("ai_translated")
+                                            or attributes.get("machine_translated")) else "false"
             
             thumbnailImageLanguageName = attributes.get("language")
             if thumbnailImageLanguageName is None:
@@ -295,6 +302,8 @@ def get_subs(video_data, all_lang_override=False):
             download_data['format']="srt"
             # Send Hearing Impaired (HI) flag to determine if to clean HI tags or not.
             download_data['hearing_imp'] = hearing_impaired
+            # Machine/AI-translated flag (see above).
+            download_data['mt'] = machine_translated
             
             url = "plugin://%s/?action=download&filename=%s&language=%s&download_data=%s&source=opensubtitles" % (MyScriptID,
                                                                                                 que(SubFileName),

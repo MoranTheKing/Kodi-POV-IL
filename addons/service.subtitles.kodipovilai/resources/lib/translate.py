@@ -941,7 +941,7 @@ def _google_translate_and_save(src_text, source_lang, translated, info,
     return translated
 
 
-# When the auto-on-play flow is driving (service._autosub_on_play), success /
+# When the auto-on-play flow is driving (autosub_service.autosub_on_play), success /
 # progress notifications are shown in the top overlay by the caller -- so the
 # scattered success toasts here are suppressed to avoid double messaging. Error
 # toasts still fire. Mirrors DarkSubs, which shows status only in its on-play

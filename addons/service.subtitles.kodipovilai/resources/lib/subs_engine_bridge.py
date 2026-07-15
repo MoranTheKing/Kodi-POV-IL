@@ -500,8 +500,17 @@ def _search_inner(info, modal_progress=True):
         # thumbnail field (via xbmc.convertLanguage) -- use it so Kodi shows
         # the right flag. Normalize a few common non-standard codes.
         code = _LANG_NORMALIZE.get(thumb_code, thumb_code)
+        # Machine/AI-translated flag carried by the provider (currently the
+        # OpenSubtitles source sets download_data['mt']; it requests MT subs
+        # from the API but the flag used to be dropped, letting an MT Hebrew
+        # sub masquerade as human). Old cached results simply lack the key ->
+        # False, same behavior as before.
+        is_mt = ((parsed['download_data'] or {}).get('mt') == 'true')
         # Classify. Hebrew (human / machine) first, everything else after.
-        if lang == 'HebrewMachineTranslated' or 'HebrewMachineTranslated' in label0:
+        if (lang == 'HebrewMachineTranslated'
+                or 'HebrewMachineTranslated' in label0
+                or (is_mt and (code in ('he', 'iw', 'heb')
+                               or lang == 'Hebrew' or 'Hebrew' in label0))):
             kind = 'mt_he'
             code = 'he'
         elif (code in ('he', 'iw', 'heb') or lang == 'Hebrew'
@@ -544,6 +553,10 @@ def _search_inner(info, modal_progress=True):
             'is_hd': False,
             '_engine_kind': kind,
             '_pct': pct,
+            # Machine/AI-translated (any language). The gender-reference oracle
+            # rejects these outright -- an MT sub in ANY language is a poisoned
+            # gender oracle (MT defaults to masculine).
+            '_is_mt': is_mt,
         })
 
     kodi_utils.log('subs_engine_bridge: {0} engine results'.format(len(out)),
