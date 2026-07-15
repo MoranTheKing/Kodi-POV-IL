@@ -94,7 +94,7 @@ def _is_dialogue(text):
     # a Cyrillic/Greek/Hindi reference sub would parse as "no dialogue" and be
     # rejected before alignment even ran.
     letters = re.sub(
-        r'[^A-Za-zÀ-ɏͰ-ϿЀ-ӿ'
+        r'[^A-Za-zÀ-ÖØ-öø-ɏͰ-ϿЀ-ӿ'
         r'֐-׿؀-ۿऀ-ॿ]', '', t)
     return len(letters) >= 2
 
@@ -277,10 +277,16 @@ _TOTAL_DOWNLOAD_BUDGET = 8
 def _chain_lang_of(cand):
     """Map an engine candidate to its chain language code, or None if the
     candidate's language isn't in the chain (or is unusable as an oracle)."""
+    # A machine/AI-translated sub in ANY language is a POISONED oracle (MT
+    # defaults to masculine) -- only human subs may anchor gender. The bridge
+    # sets '_is_mt' from the provider's flag (e.g. OpenSubtitles ai_translated/
+    # machine_translated); missing key (old cached results) -> not flagged.
+    if cand.get('_is_mt'):
+        return None
     lang = _ALIAS_TO_CHAIN.get((cand.get('language') or '').strip().lower())
     if lang == 'he':
-        # A machine-translated Hebrew sub is a POISONED oracle (MT defaults to
-        # masculine) -- only HUMAN Hebrew subs may anchor gender.
+        # Hebrew gets an extra belt-and-braces check via the engine kind: only
+        # candidates the bridge classified as HUMAN Hebrew are accepted.
         kind = (cand.get('_engine_kind') or '').strip().lower()
         if kind and kind != 'human_he':
             return None
