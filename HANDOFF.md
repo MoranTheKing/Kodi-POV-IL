@@ -109,6 +109,36 @@ tools/publish_repo_channel.py           # publishes repo/addons.xml + zips
 6. Bump the id in `quick_update.txt` + gentle Hebrew title/body.
 7. Commit to the working branch, fast-forward `main`, push.
 
+## Integrating third-party skin updates (playbook, learned the hard way)
+
+The FENtastic skin receives updates from a community author as full-folder
+zips. NEVER copy the folder wholesale; integrate file-by-file:
+
+1. **Diff against the currently-shipped quickfix** and take ONLY files that
+   actually changed (his zips re-ship everything, including files we already
+   optimized or fixed).
+2. **Scan deletions in every changed file** for OUR features (grep for
+   MoranSubs / chooser / patcher markers / Hebrew labels). His base tree
+   predates some of our baked-in fixes — re-splice what his copy drops
+   (e.g. the pause-window `MoranSubsChooserOpen` visibility guard).
+3. **XML regression gate**: a file that parses clean today must still parse
+   clean after his update (raw `&` in plugin URLs is his recurring bug —
+   escape to `&amp;`). Pre-existing quirk files are tolerated as-is.
+4. **Exclude his personal `userdata` skin-settings snapshot** — shipping it
+   resets every user's customizations.
+5. **Feature gates must be unset-safe**: his view-locking rewrote view
+   visibility to `Skin.String(lock.view.type)` equality checks that are
+   FALSE for everyone until the string exists — every gated view rendered
+   empty. Any skin-string gate must carry a `String.IsEmpty(...)` default
+   branch. Scan for BOTH literal and `$PARAM`'d gate forms.
+6. **A typo can be load-bearing.** His `fullscreenvidep` typo silently
+   disabled half a visibility condition; "fixing" it changed a window's
+   auto-open behavior and shipped a field bug. Author-tested behavior is
+   the spec — never correct a third-party typo without re-deriving what
+   the running behavior actually was.
+7. Re-encode oversized preview PNGs to the display size before shipping.
+8. Independent validation on every integration, and again on every fix.
+
 ## Working style
 
 - Be certain before shipping: read the code, reproduce with a unit test.
