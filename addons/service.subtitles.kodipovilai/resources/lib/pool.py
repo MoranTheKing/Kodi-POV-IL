@@ -164,6 +164,52 @@ def _get(path, params):
         return r.read()
 
 
+# --- Client-side /lookup response cache -------------------------------------
+# A single browse/play flow calls /lookup several times for the SAME media (the
+# picker, sync_map, and the contribute pre-check). Caching the full response for
+# a short window collapses those into ONE Worker request -- the main lever for
+# staying under the free plan's 100k-requests/day cap. Negative results are
+# cached too (briefly) so repeated misses don't re-hit the Worker. In-memory
+# (per session), fail-open.
+_LOOKUP_CACHE = {}
+_LOOKUP_TTL = 90.0
+_LOOKUP_CACHE_MAX = 40
+
+
+def _lookup_cache_key(p):
+    return '|'.join((p.get('tmdb') or p.get('imdb') or '', p.get('type') or '',
+                     str(p.get('season') or '0'), str(p.get('episode') or '0'),
+                     (p.get('lang') or 'he')))
+
+
+def _lookup_raw(p):
+    """Fetch (and briefly cache) the full /lookup response dict for these media
+    params. Returns {} on error/miss. Shared by lookup(), sync_map() and the
+    contribute pre-check so they cost ONE request per media per ~TTL."""
+    import time as _t
+    ck = _lookup_cache_key(p)
+    now = _t.time()
+    ent = _LOOKUP_CACHE.get(ck)
+    if ent and (now - ent[0]) < _LOOKUP_TTL:
+        return ent[1]
+    try:
+        data = json.loads(_get('/lookup', p).decode('utf-8'))
+        if not isinstance(data, dict) or not data.get('ok'):
+            data = {}
+    except Exception as e:
+        kodi_utils.log('pool lookup failed: {0}'.format(e), level='DEBUG')
+        data = {}
+    try:
+        _LOOKUP_CACHE[ck] = (now, data)
+        if len(_LOOKUP_CACHE) > _LOOKUP_CACHE_MAX:
+            for k, _v in sorted(_LOOKUP_CACHE.items(),
+                                key=lambda kv: kv[1][0])[:len(_LOOKUP_CACHE) - _LOOKUP_CACHE_MAX]:
+                _LOOKUP_CACHE.pop(k, None)
+    except Exception:
+        pass          # cache mgmt must never raise (concurrent-mutation safe)
+    return data
+
+
 def lookup(info):
     """Return a list of available Hebrew variants for this media, or []."""
     if _urlreq is None:
@@ -171,15 +217,11 @@ def lookup(info):
     p = _params(info)
     if not _has_id(p):
         return []
-    try:
-        data = json.loads(_get('/lookup', p).decode('utf-8'))
-        if not data.get('ok'):
-            return []
-        _sync_cache_put(p, data.get('sync') or {})
-        return data.get('variants') or []
-    except Exception as e:
-        kodi_utils.log('pool lookup failed: {0}'.format(e), level='DEBUG')
+    data = _lookup_raw(p)
+    if not data:
         return []
+    _sync_cache_put(p, data.get('sync') or {})
+    return data.get('variants') or []
 
 
 # --- SubSync S3: community sync registry (client side) ----------------------
@@ -236,15 +278,27 @@ def sync_map(info):
         ent = _SYNC_CACHE.get(_sync_cache_key(p))
         if ent and (_t.time() - ent[0]) < _SYNC_TTL:
             return ent[1]
-        data = json.loads(_get('/lookup', p).decode('utf-8'))
-        if not data.get('ok'):
-            return {}
-        sm = data.get('sync') or {}
+        data = _lookup_raw(p)          # request-cached; ONE /lookup per media/TTL
+        sm = (data.get('sync') or {}) if data else {}
         _sync_cache_put(p, sm)
         return sm
     except Exception as e:
         kodi_utils.log('pool sync_map failed: {0}'.format(e), level='DEBUG')
         return {}
+
+
+# Client-side de-dupe for AUTO sync reports: don't re-send the same
+# (media, subtitle, release) verdict for a while -- the Worker already has it
+# (and now skips the write on agreement). Human delay-fixes are NEVER throttled.
+_SYNCREP_SENT = {}
+_SYNCREP_TTL = 6 * 3600.0
+_SYNCREP_SENT_MAX = 200
+
+
+def _syncrep_key(p, sub_hash, rel):
+    return '|'.join((p.get('tmdb') or p.get('imdb') or '', p.get('type') or '',
+                     str(p.get('season') or '0'), str(p.get('episode') or '0'),
+                     (sub_hash or '').lower(), (rel or '').lower()))
 
 
 def report_sync(info, sub_hash, release, scale, offset_ms, status,
@@ -263,6 +317,19 @@ def report_sync(info, sub_hash, release, scale, offset_ms, status,
         rel = (release or '').strip()
         if not rel or _is_token_like(rel):
             return
+        # De-dupe AUTO reports (human fixes always go through): if we already
+        # shared this exact verdict recently, skip -- the Worker has it.
+        if origin != 'human':
+            import time as _t
+            sk = _syncrep_key(p, sub_hash, rel)
+            ent = _SYNCREP_SENT.get(sk)
+            if ent and (_t.time() - ent) < _SYNCREP_TTL:
+                return
+            _SYNCREP_SENT[sk] = _t.time()
+            if len(_SYNCREP_SENT) > _SYNCREP_SENT_MAX:
+                for _k, _v in sorted(_SYNCREP_SENT.items(),
+                                     key=lambda kv: kv[1])[:len(_SYNCREP_SENT) - _SYNCREP_SENT_MAX]:
+                    _SYNCREP_SENT.pop(_k, None)
         body = {
             'tmdb_id': p['tmdb'], 'imdb_id': p['imdb'], 'type': p['type'],
             'season': p['season'], 'episode': p['episode'],
@@ -330,9 +397,8 @@ def _pool_has_hash(body, source_hash):
     if not source_hash:
         return False
     try:
-        data = json.loads(
-            _get('/lookup', _lookup_params_from_body(body)).decode('utf-8'))
-        variants = (data.get('variants') or []) if data.get('ok') else []
+        data = _lookup_raw(_lookup_params_from_body(body))   # request-cached
+        variants = data.get('variants') or []
         return any(v.get('hash') == source_hash for v in variants)
     except Exception:
         return False
