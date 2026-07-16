@@ -167,6 +167,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_anime_hebrew,
         _maybe_patch_pov_genre_menu_icons,
         _maybe_patch_pov_combined_discover,
+        _maybe_fix_pov_container_refresh_crash,
         _maybe_patch_pov_movie_networks,
         _maybe_patch_pov_view_mode,
         _maybe_patch_pov_resume_cancel,
@@ -1352,6 +1353,41 @@ def _maybe_run_fav_diagnostic():
         try:
             kodi_utils.log(
                 'pov_favorites_diagnostic run failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_fix_pov_container_refresh_crash():
+    """Revert the harmful container_refresh() widget-reload ping a previous
+    build injected into POV. That ping (UpdateLibrary(video,special://skin/foo)
+    after every Container.Refresh, including Trakt adds) reloaded all POV home
+    widgets at once -> concurrent router.py on POV's reuselanguageinvoker
+    interpreter -> CPython dict corruption -> native crash (confirmed from a
+    field log). Restoring container_refresh() to stock removes the crash; POV
+    is cycled so the fix applies this session, not only after a restart."""
+    try:
+        from resources.lib import pov_container_refresh_crash_fix, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_container_refresh_crash_fix.ensure_patched()
+        if status == 'reverted':
+            kodi_utils.log(
+                'pov_container_refresh_crash_fix: reverted container_refresh '
+                'ping (prevents the Trakt-add native crash)', level='INFO')
+            try:
+                from resources.lib import pov_reload
+                pov_reload.note_patched()
+            except Exception:
+                pass
+        elif status in ('read_failed', 'write_failed', 'compile_failed'):
+            kodi_utils.log(
+                'pov_container_refresh_crash_fix: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_container_refresh_crash_fix run failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
