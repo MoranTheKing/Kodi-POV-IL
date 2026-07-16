@@ -1,3 +1,21 @@
+v0.2.372
+- Fixed (standalone, field log + screenshot): the addon disabled itself
+  entirely ("no subtitles found") on Kodi installs whose PLAYBACK subtitle
+  language names a non-Hebrew language, even when Hebrew was wanted. The
+  language gate now treats Hebrew in "languages to download subtitles for"
+  as the strongest signal (it wins over the playback preference), and the
+  standalone service one-shot-seeds Hebrew into Kodi's subtitle-language
+  settings on first run (a later manual change sticks).
+- Fixed: every search on engine-enabled installs logged "EXCEPTION: Unknown
+  addon id 'service.subtitles.All_Subs'" -- the DarkSubs hook check now
+  skips entirely when the engine is on (DarkSubs is deliberately disabled
+  then), mirroring the service-side gate.
+- New: automatic subtitle search is now SKIPPED for live/IPTV playback --
+  PVR channels, streams with no duration, and a configurable addon
+  exclusion list (Settings -> engine; default: plugin.video.idanplus), so
+  channel zapping (e.g. Idan Plus) no longer triggers the Hebrew search
+  overlay.
+
 v0.2.371
 - New: Gemini 3.5 Flash is now available in the model list (Settings ->
   Translation -> Model). NOT the default -- 3.1 Flash Lite stays the
