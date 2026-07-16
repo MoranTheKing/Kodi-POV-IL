@@ -29,9 +29,24 @@ except Exception:
     xbmcvfs = None
 
 try:
+    import sqlite3
+except Exception:
+    sqlite3 = None
+
+try:
     from resources.lib import kodi_utils
 except Exception:
     kodi_utils = None
+
+# POV stores the RENDERED main menus in navigator.db (seeded ONCE from
+# menu_lists.py) and caches them as Window(10000) properties. Patching the .py
+# only affects a FRESH seed, so existing installs keep the English anime menu
+# forever. We therefore ALSO rewrite the stored rows + clear the memory cache.
+NAV_DB_REL = 'navigator.db'
+# Rows carrying anime labels: AnimeList = the 13 submenu names; RootList = the
+# top-level 'Anime' entry. Both stored per list_type.
+_DB_ROWS = ('AnimeList', 'RootList')
+_DB_TYPES = ('default', 'edited', 'shortcut_folder')
 
 
 POV_ADDON_ID = 'plugin.video.pov'
@@ -164,9 +179,129 @@ def _patch_file(rel, pairs):
     return 'patched'
 
 
+def _nav_db_path():
+    if xbmcvfs is None:
+        return ''
+    try:
+        base = xbmcvfs.translatePath(
+            'special://profile/addon_data/' + POV_ADDON_ID + '/')
+    except Exception:
+        return ''
+    p = os.path.join(base, NAV_DB_REL)
+    return p if os.path.isfile(p) else ''
+
+
+def _apply_menu_map(text):
+    """Apply the anime-name English->Hebrew replacements to a stored
+    list_contents string (a repr()'d list of dicts, so the same
+    "'name': 'English'" tokens match). Returns (new_text, hit_count)."""
+    hits = 0
+    for old, new in MENU_LISTS_MAP:
+        if old in text:
+            text = text.replace(old, new)
+            hits += 1
+    return text, hits
+
+
+def _clear_menu_memory_cache():
+    """Clear POV's in-memory menu cache (Window(10000) properties named
+    pov_<list>_<type>) so the rewritten DB rows are read fresh THIS session
+    instead of only after POV's process restarts."""
+    try:
+        import xbmcgui
+        w = xbmcgui.Window(10000)
+        for name in _DB_ROWS:
+            for ltype in _DB_TYPES:
+                try:
+                    w.clearProperty('pov_{0}_{1}'.format(name, ltype))
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
+def _patch_navigator_db():
+    """Rewrite the anime labels in POV's navigator.db (the ACTUAL source the
+    main menu renders from -- menu_lists.py only seeds it once). Only the
+    AnimeList/RootList rows are touched, only the anime name tokens are
+    replaced, and only when present -- everything else (user edits, other
+    lists) is left byte-identical. Returns 'no_sqlite' | 'no_db' | 'unchanged'
+    | 'patched' | 'failed'. Never raises."""
+    if sqlite3 is None:
+        return 'no_sqlite'
+    path = _nav_db_path()
+    if not path:
+        return 'no_db'
+    changed = False
+    errored = False
+    conn = None
+    try:
+        conn = sqlite3.connect(path, timeout=2.0, isolation_level=None)
+        conn.execute('PRAGMA busy_timeout=2000')
+        cur = conn.cursor()
+        for name in _DB_ROWS:
+            if errored:
+                break
+            for ltype in _DB_TYPES:
+                try:
+                    cur.execute(
+                        'SELECT list_contents FROM navigator '
+                        'WHERE list_name=? AND list_type=?', (name, ltype))
+                    row = cur.fetchone()
+                except sqlite3.DatabaseError:
+                    # Locked / corrupt / unexpected schema -> stop touching the
+                    # DB. Fall through to the shared exit so a partial rewrite
+                    # still clears the in-memory cache for the rows we DID
+                    # change (otherwise POV keeps serving the stale English
+                    # props this session).
+                    errored = True
+                    break
+                if not row:
+                    continue
+                cur_contents = row[0] or ''
+                new_contents, hits = _apply_menu_map(cur_contents)
+                if not hits or new_contents == cur_contents:
+                    continue
+                try:
+                    cur.execute('BEGIN IMMEDIATE')
+                    cur.execute(
+                        'UPDATE navigator SET list_contents=? '
+                        'WHERE list_name=? AND list_type=?',
+                        (new_contents, name, ltype))
+                    cur.execute('COMMIT')
+                    changed = True
+                except Exception:
+                    try:
+                        cur.execute('ROLLBACK')
+                    except Exception:
+                        pass
+    except sqlite3.OperationalError:
+        return 'failed'  # DB locked/unreadable -- retry next startup
+    except Exception:
+        return 'failed'
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+    if changed:
+        # Always clear the in-memory cache when we committed ANY row -- even if
+        # a later row hit a DB error -- so POV serves the Hebrew rows this
+        # session instead of the stale English Window props.
+        _clear_menu_memory_cache()
+        _log('navigator.db anime rows translated to Hebrew')
+        return 'patched'
+    return 'failed' if errored else 'unchanged'
+
+
 def ensure_patched():
     """Translate POV's Anime section to Hebrew. Idempotent, defensive,
-    never raises. Returns a short combined status string."""
+    never raises. Returns a short combined status string.
+
+    Three surfaces: menu_lists.py (fresh-install seed), navigator.py (anime
+    breadcrumb titles), and navigator.db (the stored menu existing installs
+    actually render -- the real fix for a device that already seeded English)."""
     a = _patch_file(MENU_LISTS_REL, MENU_LISTS_MAP)
     # Patch whichever navigator.py this POV release ships (only one exists).
     b = 'no_file'
@@ -174,4 +309,5 @@ def ensure_patched():
         if _pov_path(rel):
             b = _patch_file(rel, NAVIGATOR_MAP)
             break
-    return 'menu_lists={0}, navigator={1}'.format(a, b)
+    c = _patch_navigator_db()
+    return 'menu_lists={0}, navigator={1}, db={2}'.format(a, b, c)

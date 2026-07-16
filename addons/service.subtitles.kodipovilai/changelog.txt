@@ -1,3 +1,14 @@
+v0.2.375
+- Fixed (POV Anime Hebrew, the real root cause): POV renders its main menus
+  from a STORED copy in navigator.db (seeded once from menu_lists.py) and an
+  in-memory Window cache -- so patching the .py only helped fresh installs and
+  existing devices kept the English anime menu forever. The patcher now also
+  rewrites the anime labels directly in navigator.db (AnimeList submenu +
+  RootList 'Anime' entry, all list types) and clears POV's in-memory menu
+  cache, so the anime section turns Hebrew this session. Only anime rows and
+  only the name tokens are touched; user menu edits and all other lists stay
+  byte-identical.
+
 v0.2.374
 - Fixed (POV Anime Hebrew, field log + screenshots): on POV 6.07 the anime
   breadcrumb titles stayed English because navigator.py moved from indexers/
