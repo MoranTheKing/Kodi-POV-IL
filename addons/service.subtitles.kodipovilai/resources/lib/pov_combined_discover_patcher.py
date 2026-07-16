@@ -22,11 +22,17 @@
 #      the params so action=search_multi&query=... uses tmdb_search_multi (or
 #      trending when the query is empty); otherwise unchanged (list_details).
 #      Everything downstream (merge/sort/render) is reused.
-#   3) resources/lib/modules/kodi_utils.py container_refresh(): ALSO fire
-#      the widget-reload ping (UpdateLibrary(video,special://skin/foo)) so
-#      AF3's HOME widgets re-query after clear-progress / mark-watched --
-#      which otherwise only showed after a manual skin reload (uses its own
-#      marker so it applies independently of edits 1/2).
+#   3) REMOVED (was harmful): this patcher used to also make
+#      kodi_utils.py container_refresh() fire the widget-reload ping
+#      (UpdateLibrary(video,special://skin/foo)) so AF3 home widgets re-query
+#      after clear-progress / mark-watched. But container_refresh() is called
+#      from ~30 sites (incl. every Trakt add), and that ping triggers a
+#      RecentlyAdded home update that reloads ALL POV home widgets at once ->
+#      concurrent router.py on POV's reuselanguageinvoker interpreter ->
+#      CPython dict corruption (SystemError: dictobject.c:1756) -> native
+#      crash. Confirmed from a field crash log. The ping is now REVERTED by
+#      pov_container_refresh_crash_fix.py; FENtastic already reloads its
+#      widgets on Container.Refresh alone, so nothing is lost there.
 #   4) RETIRED in POV 6.07: the old dialogs.py trakt_manager_choice() redirect
 #      is gone (managers are independent classes now), so there is nothing
 #      to patch -- the Trakt context item already opens Trakt natively.
@@ -49,10 +55,8 @@ except Exception:
 POV_ADDON_ID = 'plugin.video.pov'
 TMDB_API_REL = 'resources/lib/indexers/tmdb_api.py'
 TMDB_MENU_REL = 'resources/lib/menus/tmdb.py'
-KODI_UTILS_REL = 'resources/lib/modules/kodi_utils.py'
 
 MARKER = '# AI_SUBS_POV_COMBINED_DISCOVER_v1'
-MARKER_REFRESH = '# AI_SUBS_POV_WIDGET_REFRESH_v1'
 
 # --- edit 1: tmdb_api.py -- add the two data functions after the existing
 #     tmdb_movies_search (exact-string anchor; both funcs reuse base_url,
@@ -108,29 +112,9 @@ _MENU_REPLACEMENT = (
     "\t\t\treturn tmdb_api.tmdb_trending_all()\n"
     "\t\treturn tmdb_api.list_details(self.list_id)\n")
 
-# --- edit 3: kodi_utils.py container_refresh() -- ALSO fire the AF3/
-#     TMDbHelper widget-reload signal so HOME widgets re-query after a
-#     watched/progress change. POV's clear-progress + mark-watched (and
-#     several others) all funnel through container_refresh(), which today
-#     only does Container.Refresh -- that updates POV's own focused list
-#     but NOT AF3's home widgets, so on AF3 the change shows only after a
-#     manual skin reload (FENtastic's widgets re-run the raw POV path on
-#     Container.Refresh, which is why it works there). POV already ships
-#     the right helper (widget_refresh -> UpdateLibrary(video,
-#     special://skin/foo), the standard no-op library-scan ping that AF3 /
-#     TMDbHelper widgets listen for); we just make container_refresh fire
-#     it too. Exact-string, marker-gated (separate marker so it applies
-#     even on a POV that lacks the tmdb.py anchors), idempotent.
-_REFRESH_ANCHOR = (
-    "def container_refresh():\n"
-    "\treturn execute_builtin('Container.Refresh')\n")
-_REFRESH_REPLACEMENT = (
-    "def container_refresh():\n"
-    "\texecute_builtin('Container.Refresh')\n"
-    "\t# AF3/TMDbHelper home widgets don't reload on Container.Refresh "
-    "alone;\n"
-    "\t# this ping makes them re-query (no-op for the library).\n"
-    "\treturn execute_builtin('UpdateLibrary(video,special://skin/foo)')\n")
+# --- edit 3 REMOVED (was harmful): the container_refresh() widget-reload
+#     ping is now reverted by pov_container_refresh_crash_fix.py. See the
+#     module docstring above for the crash it caused.
 
 # --- edit 4 (RETIRED in POV 6.07): the old trakt_manager_choice() redirect
 #     in modules/dialogs.py no longer exists. POV 6.07 split the managers
@@ -240,17 +224,9 @@ def ensure_patched():
     else:
         results.append('menu=no_file')
 
-    # edit 3: make container_refresh() also reload home widgets, so
-    # clear-progress / mark-watched show up on AF3 without a skin reload.
-    ku_path = os.path.join(base, *KODI_UTILS_REL.split('/'))
-    if os.path.isfile(ku_path):
-        st = _patch_one(
-            ku_path, _REFRESH_ANCHOR,
-            lambda t: t.replace(_REFRESH_ANCHOR, _REFRESH_REPLACEMENT, 1),
-            'kodi_utils.py(container_refresh)', marker=MARKER_REFRESH)
-        results.append('refresh=' + st)
-    else:
-        results.append('refresh=no_file')
+    # edit 3 removed: the container_refresh() widget-reload ping caused a
+    # native crash (see docstring); it is reverted by
+    # pov_container_refresh_crash_fix.py instead.
 
     # edit 4 retired in POV 6.07 (no trakt_manager_choice redirect to drop).
 
