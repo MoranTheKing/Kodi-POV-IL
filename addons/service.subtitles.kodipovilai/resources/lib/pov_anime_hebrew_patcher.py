@@ -36,7 +36,12 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 MENU_LISTS_REL = 'resources/lib/modules/menu_lists.py'
-NAVIGATOR_REL = 'resources/lib/indexers/navigator.py'
+# navigator.py moved between POV releases: indexers/ in 5.12, menus/ in 6.07.
+# Try both; whichever exists gets patched (the other is a clean no_file).
+NAVIGATOR_RELS = (
+    'resources/lib/menus/navigator.py',
+    'resources/lib/indexers/navigator.py',
+)
 
 # modules/menu_lists.py -- exact source tokens (single-quoted English) -> the
 # replacement Python expression (note double quotes around Hebrew with ').
@@ -163,5 +168,10 @@ def ensure_patched():
     """Translate POV's Anime section to Hebrew. Idempotent, defensive,
     never raises. Returns a short combined status string."""
     a = _patch_file(MENU_LISTS_REL, MENU_LISTS_MAP)
-    b = _patch_file(NAVIGATOR_REL, NAVIGATOR_MAP)
+    # Patch whichever navigator.py this POV release ships (only one exists).
+    b = 'no_file'
+    for rel in NAVIGATOR_RELS:
+        if _pov_path(rel):
+            b = _patch_file(rel, NAVIGATOR_MAP)
+            break
     return 'menu_lists={0}, navigator={1}'.format(a, b)
