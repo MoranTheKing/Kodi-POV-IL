@@ -439,6 +439,16 @@
           </dependencies>
           <control type="toggle"/>
         </setting>
+        <setting id="autosub_excluded_addons" type="string" label="32548" help="32549"> <!-- Addons excluded from autosub -->
+          <level>0</level>
+          <default>plugin.video.idanplus</default>
+          <dependencies>
+            <dependency type="visible" setting="engine_autosub" operator="is">true</dependency>
+          </dependencies>
+          <control type="edit" format="string">
+            <heading>32548</heading>
+          </control>
+        </setting>
         <setting id="engine_force_translate" type="boolean" label="32531" help="32532">
           <level>0</level>
           <default>false</default>

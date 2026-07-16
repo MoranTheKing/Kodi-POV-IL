@@ -467,6 +467,79 @@ def _ensure_darksubs_enabled():
             pass
 
 
+def _maybe_seed_hebrew_subtitle_prefs():
+    """One-shot: make Kodi's subtitle-language settings match the intent of
+    installing a HEBREW subtitles addon. On foreign builds / clean Kodi the
+    defaults point elsewhere, and the addon's language gate then disables
+    itself ("preferred subtitle language is not Hebrew") -- the user installed
+    a Hebrew subtitle addon and gets NOTHING (field log, Arctic Zephyr user).
+    Adds Hebrew to "languages to download subtitles for" (keeping the user's
+    other entries) and sets the preferred subtitle language to Hebrew when it
+    currently names a different concrete language. Marker-gated: runs once,
+    so a later manual change by the user STICKS."""
+    if xbmc is None:
+        return
+    try:
+        from resources.lib import kodi_utils
+        if kodi_utils.get_setting('_he_subs_prefs_v1', '') == '1':
+            return
+    except Exception:
+        return
+    import json as _json
+
+    def _get(sid):
+        try:
+            q = _json.dumps({'jsonrpc': '2.0', 'id': 1,
+                             'method': 'Settings.GetSettingValue',
+                             'params': {'setting': sid}})
+            return (_json.loads(xbmc.executeJSONRPC(q) or '{}')
+                    .get('result') or {}).get('value')
+        except Exception:
+            return None
+
+    def _set(sid, value):
+        try:
+            q = _json.dumps({'jsonrpc': '2.0', 'id': 1,
+                             'method': 'Settings.SetSettingValue',
+                             'params': {'setting': sid, 'value': value}})
+            xbmc.executeJSONRPC(q)
+        except Exception:
+            pass
+
+    try:
+        def _is_he(v):
+            return str(v).strip().lower() in (
+                'he', 'iw', 'heb', 'hebrew', 'עברית')
+        dl = _get('subtitles.languages')
+        pref = _get('locale.subtitlelanguage')
+        if dl is None and pref is None:
+            # JSON-RPC gave us nothing (transient failure at service start?).
+            # Do NOT write the marker -- retry on the next service start, so
+            # one bad boot can't leave the user unseeded forever.
+            return
+        if isinstance(dl, str):
+            # Some builds return the list as a CSV string; seed in kind.
+            parts = [p for p in dl.replace(';', ',').split(',') if p.strip()]
+            if not any(_is_he(x) for x in parts):
+                _set('subtitles.languages',
+                     ','.join(parts + ['Hebrew']) if parts else 'Hebrew')
+        elif isinstance(dl, list) and not any(_is_he(x) for x in dl):
+            _set('subtitles.languages', dl + ['Hebrew'])
+        elif dl in (None, []):
+            _set('subtitles.languages', ['Hebrew'])
+        specials = ('', 'none', 'forced_only', 'forcedonly', 'original',
+                    'default', 'mediadefault')
+        if (isinstance(pref, str)
+                and pref.strip().lower() not in specials
+                and not _is_he(pref)):
+            _set('locale.subtitlelanguage', 'Hebrew')
+        kodi_utils.set_setting('_he_subs_prefs_v1', '1')
+        kodi_utils.log('[{0}] Hebrew subtitle preferences seeded '
+                       '(one-shot)'.format(ADDON_ID), level=xbmc.LOGINFO)
+    except Exception:
+        pass
+
+
 def _maybe_set_default_subtitle_service():
     """When the engine is on, make MoranSubs the default subtitle service for
     movies + TV. Only when the engine is on (we don't override otherwise)."""
@@ -509,6 +582,7 @@ def main():
     _maybe_default_builtin_engine()
     _ensure_darksubs_enabled()
     _maybe_set_default_subtitle_service()
+    _run('hebrew subtitle prefs', _maybe_seed_hebrew_subtitle_prefs)
     _run('engine prewarm', _maybe_prewarm_engine)
 
     if not _engine_on():
