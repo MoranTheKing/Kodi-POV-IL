@@ -139,6 +139,16 @@ zips. NEVER copy the folder wholesale; integrate file-by-file:
 7. Re-encode oversized preview PNGs to the display size before shipping.
 8. Independent validation on every integration, and again on every fix.
 
+## Resolved questions (so they don't resurface)
+
+- **FENtastic DialogSubtitles "row height" marker (investigated 2026-07):**
+  the shipped skin carries the `AI_SUBS_DIALOG_ROW_HEIGHT_v1` marker while
+  its rows are 75px. That is a DELIBERATE bake-out: the current picker
+  design is a compact single-line row whose release-name label has
+  `<scroll>true</scroll>` in the focused layout — long names marquee-scroll
+  when focused, nothing is clipped. The row-height patcher targeted the OLD
+  two-line-wrap design and must stay no-op'd on FENtastic. Do not "fix" it.
+
 ## Working style
 
 - Be certain before shipping: read the code, reproduce with a unit test.
