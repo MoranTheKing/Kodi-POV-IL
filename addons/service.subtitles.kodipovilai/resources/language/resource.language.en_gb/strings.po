@@ -498,6 +498,14 @@ msgctxt "#32546"
 msgid "Improve gender accuracy using a reference subtitle (experimental)"
 msgstr "Improve gender accuracy using a reference subtitle (experimental)"
 
+msgctxt "#32548"
+msgid "Addons without automatic subtitle search"
+msgstr ""
+
+msgctxt "#32549"
+msgid "Comma-separated addon IDs (e.g. plugin.video.idanplus). Playback started from these addons never triggers the automatic Hebrew subtitle search. Live TV (PVR channels / streams with no duration) is always skipped automatically."
+msgstr ""
+
 msgctxt "#32547"
 msgid "When ON, AI translations fetch a human subtitle of the same title in a gender-marking language and use it ONLY to pin down per-line Hebrew gender (he/she, verb/adjective agreement). Tries an out-of-sync Hebrew sub first, then Arabic (marks gender almost 1:1 with Hebrew), then Spanish/French/Russian and more. Falls back silently when nothing aligns. Works for any source language."
 msgstr "When ON, AI translations fetch a human subtitle of the same title in a gender-marking language and use it ONLY to pin down per-line Hebrew gender (he/she, verb/adjective agreement). Tries an out-of-sync Hebrew sub first, then Arabic (marks gender almost 1:1 with Hebrew), then Spanish/French/Russian and more. Falls back silently when nothing aligns. Works for any source language."
