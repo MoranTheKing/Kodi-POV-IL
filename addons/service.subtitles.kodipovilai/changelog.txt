@@ -1,3 +1,17 @@
+v0.2.376
+- Fixed (POV Trakt add crash, confirmed from a field crash log): adding a
+  title to a Trakt watchlist/favourites/collection could crash Kodi to the
+  Android home screen. Chain: POV's SyncMonitor, when the setting
+  "Attempt to Refresh Widgets After Refresh" (trakt.sync_refresh_widgets) is
+  ON, runs UpdateLibrary(video,special://skin/foo) after the sync -> every
+  home widget reloads at once -> many POV router.py invocations run
+  concurrently on POV's reuselanguageinvoker interpreter -> CPython dict
+  corruption (SystemError: Objects/dictobject.c:1756) -> native crash. A new
+  guard (pov_widget_crash_guard) forces that single setting OFF at startup,
+  but only when it is actually on -- widgets then refresh on the next
+  navigation instead of in a crash-inducing burst. No POV source files are
+  touched.
+
 v0.2.375
 - Fixed (POV Anime Hebrew, the real root cause): POV renders its main menus
   from a STORED copy in navigator.db (seeded once from menu_lists.py) and an
