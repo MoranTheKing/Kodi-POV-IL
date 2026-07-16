@@ -149,6 +149,68 @@ zips. NEVER copy the folder wholesale; integrate file-by-file:
   when focused, nothing is clipped. The row-height patcher targeted the OLD
   two-line-wrap design and must stay no-op'd on FENtastic. Do not "fix" it.
 
+## POV is patched at THREE layers — know which one renders (critical)
+
+POV self-updates (users jump from the build's bundled 5.12 to 6.07+ from an
+external repo), and it moved files between releases. When Hebrew-ising or
+fixing POV, remember:
+
+1. **Source `.py`** (`menu_lists.py`, `menus/` or `indexers/navigator.py`,
+   `modules/dialogs.py`, ...). Patching these only affects behavior POV
+   computes fresh. `navigator.py` lives in `indexers/` on 5.12 and `menus/`
+   on 6.07 — patchers must try both paths.
+2. **reuselanguageinvoker** — POV keeps a live Python process across a
+   session, so a `.py` patch applied at our service startup is NOT re-imported
+   until POV cycles. Call `pov_reload.note_patched()` after a `.py` patch to
+   cycle POV the same session (guard: only on a real `patched`, or it loops).
+3. **navigator.db + Window(10000) cache** — POV renders the MAIN MENUS from a
+   STORED copy in `special://profile/addon_data/plugin.video.pov/navigator.db`
+   (table `navigator(list_name,list_type,list_contents)`, `list_contents =
+   repr(list)`), seeded ONCE from `menu_lists.py`, and memoised in
+   `Window(10000)` props `pov_<list>_<type>`. So a `menu_lists.py` patch alone
+   NEVER changes an existing install's menu — you must rewrite the DB rows AND
+   clear the memory props. This is exactly what `pov_anime_hebrew_patcher.py`
+   does (anime rows only, name tokens only, other lists byte-identical). The
+   personal-area rows are handled the same way by `pov_navigator_patcher.py`.
+
+## Gemini API auth
+
+Calls use the `x-goog-api-key` HEADER, not `?key=` (newer `AQ.`-prefixed keys
+401 on the query param). One credential per request. `gemini.py` only.
+
+## autosub live/IPTV guard
+
+`autosub_service.py` skips the auto Hebrew search for live playback: PVR
+protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
+(5 s grace), and a configurable addon exclusion list `autosub_excluded_addons`
+(default `plugin.video.idanplus`). All fail-open.
+
+## Open items (as of this handoff)
+
+1. **Trakt/TMDB add "crash"** (not POV-local). Field log shows the add
+   SUCCEEDS, then `UpdateLibrary(video,special://skin/foo)` (POV's
+   `widget_refresh`, gated by POV setting **"Attempt to Refresh Widgets After
+   Refresh"**, `trakt.sync_refresh_widgets`, default OFF) fires and every home
+   widget reloads at once; the log ends there. Only Trakt/TMDB do this sync;
+   POV-local doesn't — matching the symptom. NEEDS an Android **crashlog**
+   (native crash, not in kodi.log) to confirm, or a test with that POV setting
+   OFF. Our `pov_favorites_refresh_patcher` adds only `Container.Refresh` (not
+   widget_refresh) and is search-guarded.
+2. **Anime navigation, POV 6.07 (open):** hard to scroll horizontally + a
+   long-press bounces to the Kodi home, ONLY inside anime lists, on a **phone**.
+   VERIFIED: POV's anime list-building + context-menu code is byte-identical to
+   regular tvshow/movie lists (`build_tvshow_content`) — no anime-specific
+   broken action, so it is NOT a POV logic bug. Candidates: Kodi touch handling
+   of horizontal poster views on the phone, or skin-view perf. Need a debug log
+   of the exact interaction (enter anime list → long-press) and confirmation of
+   whether it also happens on the TV/remote (not just phone touch).
+3. **Pool secret rotation + server rate-limiting** — needs the current
+   `worker.js` from the user (repo copy is stale on purpose).
+4. **iPhone Gemini key pairing** — the local-HTTP QR pair server is blocked by
+   iOS (Local Network permission / Safari http). Planned fix: pairing via the
+   Cloudflare Worker (encrypt key on the phone, poll from Kodi) — free, ~no
+   ops; do it together with the worker.js rotation.
+
 ## Working style
 
 - Be certain before shipping: read the code, reproduce with a unit test.
