@@ -187,29 +187,41 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
 
 ## Open items (as of this handoff)
 
-1. **Trakt/TMDB add "crash"** (not POV-local). Field log shows the add
-   SUCCEEDS, then `UpdateLibrary(video,special://skin/foo)` (POV's
-   `widget_refresh`, gated by POV setting **"Attempt to Refresh Widgets After
-   Refresh"**, `trakt.sync_refresh_widgets`, default OFF) fires and every home
-   widget reloads at once; the log ends there. Only Trakt/TMDB do this sync;
-   POV-local doesn't — matching the symptom. NEEDS an Android **crashlog**
-   (native crash, not in kodi.log) to confirm, or a test with that POV setting
-   OFF. Our `pov_favorites_refresh_patcher` adds only `Container.Refresh` (not
-   widget_refresh) and is search-guarded.
+1. **Trakt/TMDB add crash — RESOLVED (AI 0.2.376 / quickfix 0.1.415).** A
+   field Android crash log (2026-07-16) confirmed the full chain: the add
+   SUCCEEDS → POV's SyncMonitor runs `UpdateLibrary(video,special://skin/foo)`
+   (POV's `widget_refresh()`, the ONLY call site, gated ONLY by the POV setting
+   **"Attempt to Refresh Widgets After Refresh"** = `trakt.sync_refresh_widgets`)
+   → every home widget reloads at once → many `plugin.video.pov/router.py`
+   invocations run concurrently on POV's `reuselanguageinvoker` interpreter →
+   CPython dict corruption `SystemError: Objects/dictobject.c:1756: bad argument
+   to internal function` → native crash (Kodi closes to the Android home). The
+   `special://skin/foo` fingerprint at 13:34:15.658 directly preceded the
+   SystemError at 13:34:15.792. Fix: `pov_widget_crash_guard.py` forces
+   `trakt.sync_refresh_widgets='false'` at every startup, but ONLY when it is
+   actually on (plain no-op otherwise; touches no POV source). Widgets then
+   refresh on the next navigation instead of in a crash-inducing burst. The
+   setting's default is `false`; this device had it on. (Distinct from
+   `pov_favorites_refresh_patcher`, which adds only a scoped `Container.Refresh`
+   on add and is search-guarded.)
 2. **Anime navigation, POV 6.07 (open):** hard to scroll horizontally + a
    long-press bounces to the Kodi home, ONLY inside anime lists, on a **phone**.
    VERIFIED: POV's anime list-building + context-menu code is byte-identical to
    regular tvshow/movie lists (`build_tvshow_content`) — no anime-specific
-   broken action, so it is NOT a POV logic bug. Candidates: Kodi touch handling
-   of horizontal poster views on the phone, or skin-view perf. Need a debug log
-   of the exact interaction (enter anime list → long-press) and confirmation of
-   whether it also happens on the TV/remote (not just phone touch).
-3. **Pool secret rotation + server rate-limiting** — needs the current
-   `worker.js` from the user (repo copy is stale on purpose).
-4. **iPhone Gemini key pairing** — the local-HTTP QR pair server is blocked by
-   iOS (Local Network permission / Safari http). Planned fix: pairing via the
-   Cloudflare Worker (encrypt key on the phone, poll from Kodi) — free, ~no
-   ops; do it together with the worker.js rotation.
+   broken action, so it is NOT a POV logic bug. User confirmed it happens on the
+   **phone (touch)**; anime submenus route through the identical
+   `build_tvshow_list`/`build_movie_list` builders as regular lists, so the
+   items inside anime are byte-identical to a regular list. Next diagnostic step
+   (pending): an A/B on the SAME phone — long-press an item in a REGULAR POV list
+   (e.g. Movies → Popular). If it ALSO bounces to home, it's general Kodi-Android
+   touch handling (not anime, not patchable by us); if only in anime, capture a
+   debug log of the exact interaction. Candidates otherwise: Kodi touch handling
+   of horizontal poster views, or skin-view perf.
+3. **iPhone Gemini API-key pairing** — the local-HTTP QR pair server is blocked
+   by iOS (Local Network permission / Safari http), so users on iPhone can't
+   pair a key the way Android does. A server-assisted pairing path is planned.
+4. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
+   not here (this file is public and carries no backend or pool internals).
 
 ## Working style
 

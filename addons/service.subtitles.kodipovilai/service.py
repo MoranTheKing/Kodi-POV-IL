@@ -174,6 +174,7 @@ def _run_build_startup_repairs():
         _maybe_patch_af3_home,
         _maybe_cleanup_wizard,
         _maybe_patch_pov_repeat_timer,
+        _maybe_patch_pov_widget_crash_guard,
         _maybe_patch_pov_favorites_refresh,
         _maybe_run_fav_diagnostic,
         _maybe_fix_pov_favourites_typo,
@@ -1351,6 +1352,39 @@ def _maybe_run_fav_diagnostic():
         try:
             kodi_utils.log(
                 'pov_favorites_diagnostic run failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_widget_crash_guard():
+    """Stop the "add to Trakt -> refresh widgets -> Kodi native crash".
+    POV's SyncMonitor, when `trakt.sync_refresh_widgets` is ON, fires
+    UpdateLibrary(video,special://skin/foo) after a Trakt/MDBList sync; every
+    home widget then reloads at once, spawning concurrent POV router.py
+    invocations that share POV's reuselanguageinvoker interpreter and corrupt
+    CPython dict internals (SystemError: dictobject.c:1756) -> the app dies.
+    Confirmed from a field crash log. We force that single setting OFF (only
+    when it is actually on); widgets then refresh on the next navigation
+    instead of in a crash-inducing burst. No source files touched."""
+    try:
+        from resources.lib import pov_widget_crash_guard, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_widget_crash_guard.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_widget_crash_guard: disabled POV trakt.sync_refresh_'
+                'widgets (was ON -- prevents the add-to-Trakt native crash)',
+                level='INFO')
+        elif status in ('read_failed', 'write_failed'):
+            kodi_utils.log(
+                'pov_widget_crash_guard: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_widget_crash_guard run failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
