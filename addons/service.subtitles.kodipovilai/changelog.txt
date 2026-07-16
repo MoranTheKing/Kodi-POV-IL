@@ -1,3 +1,15 @@
+v0.2.373
+- Improved: Gemini API calls now authenticate via the x-goog-api-key HEADER
+  instead of the ?key= query parameter. Google's newer 'AQ.'-prefixed keys
+  reject the query-param method with 401; the header method works for every
+  key type. One credential per request (never both).
+- New (POV): the Anime section is now in proper Hebrew on every skin -- the
+  anime menu (trending/most watched/popular/recent/genres/years for both
+  series and movies), the root Anime entry, the Anime Calendar label and the
+  anime year/genre breadcrumb titles. Genre names inside were already Hebrew
+  via the existing genres patcher. Self-healing on every start, so a POV
+  self-update cannot revert it.
+
 v0.2.372
 - Fixed (standalone, field log + screenshot): the addon disabled itself
   entirely ("no subtitles found") on Kodi installs whose PLAYBACK subtitle
