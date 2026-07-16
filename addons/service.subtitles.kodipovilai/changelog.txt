@@ -1,3 +1,13 @@
+v0.2.378
+- Pool efficiency (client side): a single browse/play flow used to call the
+  pool's /lookup several times for the same title (picker + sync_map + the
+  contribute pre-check). They now share one short-lived (90s) in-memory
+  response cache, collapsing them into ONE request per title -- fewer Worker
+  requests, same results (negative results cached briefly too; fully
+  fail-open). AUTO sync reports (/syncrep) are also de-duped client-side (the
+  same verdict isn't re-sent for 6h); human delay-fixes are never throttled.
+  No behavior change for users -- purely fewer redundant network calls.
+
 v0.2.377
 - Fixed (POV Trakt add crash -- the REAL root cause, from a second field crash
   log): the crash was NOT POV's Trakt widget-refresh setting (that path never
