@@ -58,9 +58,14 @@ def test_key(api_key, model='gemini-3.1-flash-lite'):
     if not api_key:
         raise InvalidKey('No API key provided')
 
-    url = '{0}/models?key={1}'.format(API_BASE, urllib.parse.quote(api_key, safe=''))
+    # Auth via the x-goog-api-key HEADER, not ?key= -- Google's newer
+    # 'AQ.'-prefixed keys reject the query-param method with 401 while the
+    # header method works for every key type. Send exactly ONE credential
+    # (key in both places returns 400 "multiple auth").
+    url = '{0}/models'.format(API_BASE)
     try:
-        r = requests.get(url, timeout=REQUEST_TIMEOUT)
+        r = requests.get(url, headers={'x-goog-api-key': api_key},
+                         timeout=REQUEST_TIMEOUT)
     except requests.RequestException as e:
         raise GeminiError('Network error: {0}'.format(e))
 
@@ -113,9 +118,8 @@ def generate_media(api_key, model, prompt, media_bytes, mime,
     if not model:
         raise GeminiError('No model selected')
     import base64 as _b64
-    url = '{0}/models/{1}:generateContent?key={2}'.format(
-        API_BASE, urllib.parse.quote(model, safe=''),
-        urllib.parse.quote(api_key, safe=''))
+    url = '{0}/models/{1}:generateContent'.format(
+        API_BASE, urllib.parse.quote(model, safe=''))
     payload = {
         'contents': [{'parts': [
             {'text': prompt},
@@ -131,7 +135,8 @@ def generate_media(api_key, model, prompt, media_bytes, mime,
     }
     try:
         r = requests.post(url, data=json.dumps(payload),
-                          headers={'Content-Type': 'application/json'},
+                          headers={'Content-Type': 'application/json',
+                                   'x-goog-api-key': api_key},
                           timeout=timeout)
     except requests.RequestException as e:
         raise GeminiError('Network error: {0}'.format(e))
@@ -170,9 +175,8 @@ def generate(api_key, model, prompt, temperature=0.2,
     if not model:
         raise GeminiError('No model selected')
 
-    url = '{0}/models/{1}:generateContent?key={2}'.format(
-        API_BASE, urllib.parse.quote(model, safe=''),
-        urllib.parse.quote(api_key, safe=''))
+    url = '{0}/models/{1}:generateContent'.format(
+        API_BASE, urllib.parse.quote(model, safe=''))
 
     generation_config = {
         'temperature': temperature,
@@ -210,7 +214,8 @@ def generate(api_key, model, prompt, temperature=0.2,
     try:
         r = requests.post(url,
                           data=json.dumps(payload),
-                          headers={'Content-Type': 'application/json'},
+                          headers={'Content-Type': 'application/json',
+                                   'x-goog-api-key': api_key},
                           timeout=timeout)
     except requests.RequestException as e:
         raise GeminiError('Network error: {0}'.format(e))
