@@ -164,6 +164,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_genre_icons,
         _maybe_patch_pov_hebrew_genres,
         _maybe_patch_pov_hebrew_ui,
+        _maybe_patch_pov_anime_hebrew,
         _maybe_patch_pov_genre_menu_icons,
         _maybe_patch_pov_combined_discover,
         _maybe_patch_pov_movie_networks,
@@ -970,6 +971,33 @@ def _maybe_patch_pov_scraper_settings():
         try:
             kodi_utils.log(
                 'pov_scraper_settings_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_anime_hebrew():
+    """Hebrew-ise POV's Anime section: the anime menu names in
+    menu_lists.py are hardcoded English (unlike the id-based Movies/TV
+    menus), as are the anime breadcrumb titles in navigator.py.
+    Idempotent, compile-checked, self-healing."""
+    try:
+        from resources.lib import pov_anime_hebrew_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_anime_hebrew_patcher.ensure_patched()
+        if 'patched' in status:
+            kodi_utils.log(
+                'pov_anime_hebrew_patcher: ' + status, level='INFO')
+        elif any(bad in status for bad in
+                 ('failed', 'compile', 'write', 'read')):
+            kodi_utils.log(
+                'pov_anime_hebrew_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_anime_hebrew_patcher failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
