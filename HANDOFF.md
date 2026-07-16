@@ -187,23 +187,33 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
 
 ## Open items (as of this handoff)
 
-1. **Trakt/TMDB add crash — RESOLVED (AI 0.2.376 / quickfix 0.1.415).** A
-   field Android crash log (2026-07-16) confirmed the full chain: the add
-   SUCCEEDS → POV's SyncMonitor runs `UpdateLibrary(video,special://skin/foo)`
-   (POV's `widget_refresh()`, the ONLY call site, gated ONLY by the POV setting
-   **"Attempt to Refresh Widgets After Refresh"** = `trakt.sync_refresh_widgets`)
-   → every home widget reloads at once → many `plugin.video.pov/router.py`
+1. **Trakt/TMDB add crash — RESOLVED (AI 0.2.377 / quickfix 0.1.416).** The
+   REAL root cause (from a SECOND field crash log, 2026-07-16) was **our own
+   patch**, not POV's setting. `pov_combined_discover_patcher` (edit 3) had
+   rewritten POV's `kodi_utils.py container_refresh()` to ALSO fire
+   `UpdateLibrary(video,special://skin/foo)` (the widget-reload ping) so AF3
+   home widgets would reload after mark-watched/clear-progress. But
+   `container_refresh()` is called from ~30 sites **including every Trakt add**
+   (`indexers/trakt_api.py`). The ping triggers a RecentlyAdded home update →
+   ALL POV home widgets reload at once → many `plugin.video.pov/router.py`
    invocations run concurrently on POV's `reuselanguageinvoker` interpreter →
-   CPython dict corruption `SystemError: Objects/dictobject.c:1756: bad argument
-   to internal function` → native crash (Kodi closes to the Android home). The
-   `special://skin/foo` fingerprint at 13:34:15.658 directly preceded the
-   SystemError at 13:34:15.792. Fix: `pov_widget_crash_guard.py` forces
-   `trakt.sync_refresh_widgets='false'` at every startup, but ONLY when it is
-   actually on (plain no-op otherwise; touches no POV source). Widgets then
-   refresh on the next navigation instead of in a crash-inducing burst. The
-   setting's default is `false`; this device had it on. (Distinct from
-   `pov_favorites_refresh_patcher`, which adds only a scoped `Container.Refresh`
-   on add and is search-guarded.)
+   CPython dict corruption `SystemError: Objects/dictobject.c:1756` → native
+   crash. The log had ZERO "Widget Refresh Performed" lines, proving POV's own
+   setting-gated `refresh_widgets()` (entry.py) never ran — the ping was ours.
+   `special://skin/foo` fired at 13:56:44.849, SystemError at 13:56:44.988.
+   Two more traps this exposed: POV renders settings from an in-memory
+   `SettingsManager` cache (Window prop `pov_settings`), so an `xbmcaddon`
+   `setSetting` to disk is invisible to POV's live session — a setting-flip
+   fix can't work same-session; and `UpdateLibrary(video,special://skin/foo)`
+   /`widget_refresh` exists at exactly one POV source line, so a grep for
+   `skin/foo` across OUR repo is the way to find every injector. Fix: edit 3
+   removed from the discover patcher, and `pov_container_refresh_crash_fix.py`
+   reverts the ping to stock `Container.Refresh` on already-patched devices
+   (compile-checked, atomic, `.pyc` dropped, then `pov_reload.note_patched()`
+   so it applies this session). FENtastic already reloads its widgets on
+   `Container.Refresh`, so nothing is lost. The 0.2.376 `pov_widget_crash_guard`
+   (forces `trakt.sync_refresh_widgets` off) is kept as harmless
+   defense-in-depth for the separate SyncMonitor path.
 2. **Anime navigation, POV 6.07 (open):** hard to scroll horizontally + a
    long-press bounces to the Kodi home, ONLY inside anime lists, on a **phone**.
    VERIFIED: POV's anime list-building + context-menu code is byte-identical to
