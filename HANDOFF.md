@@ -214,19 +214,21 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    `Container.Refresh`, so nothing is lost. The 0.2.376 `pov_widget_crash_guard`
    (forces `trakt.sync_refresh_widgets` off) is kept as harmless
    defense-in-depth for the separate SyncMonitor path.
-2. **Anime navigation, POV 6.07 (open):** hard to scroll horizontally + a
-   long-press bounces to the Kodi home, ONLY inside anime lists, on a **phone**.
-   VERIFIED: POV's anime list-building + context-menu code is byte-identical to
-   regular tvshow/movie lists (`build_tvshow_content`) — no anime-specific
-   broken action, so it is NOT a POV logic bug. User confirmed it happens on the
-   **phone (touch)**; anime submenus route through the identical
-   `build_tvshow_list`/`build_movie_list` builders as regular lists, so the
-   items inside anime are byte-identical to a regular list. Next diagnostic step
-   (pending): an A/B on the SAME phone — long-press an item in a REGULAR POV list
-   (e.g. Movies → Popular). If it ALSO bounces to home, it's general Kodi-Android
-   touch handling (not anime, not patchable by us); if only in anime, capture a
-   debug log of the exact interaction. Candidates otherwise: Kodi touch handling
-   of horizontal poster views, or skin-view perf.
+2. **Anime "navigation" on phone — RESOLVED (not a bug, no code change).** The
+   report was: hard to scroll left/right + a long-press bounces to home inside
+   anime lists on a phone. Root cause found: it is NOT anime-specific and NOT a
+   POV bug — the user confirmed the SAME thing in regular POV lists, while the
+   HOME-screen widgets scroll fine. POV lists render in FENtastic's **Poster**
+   view (`View_51_Poster`, `<orientation>horizontal</orientation>`), and Kodi on
+   Android doesn't swipe HORIZONTALLY inside a full-window list view (only the
+   home widget carousels do). Fix is per-device, not code: in POV → Settings →
+   **Set Views** (`navigator.set_view_modes`, label #32510) pick a VERTICAL view
+   (Wall #500 / InfoWall #54, both `type="panel"`) for Movies/TV Shows — then
+   up/down touch works. Anime submenus route through the identical
+   `build_tvshow_list`/`build_movie_list` builders as regular lists (byte-
+   identical), which is why it was never anime-specific. Do NOT change the
+   shipped default view (it would affect TV/remote users too — the user
+   explicitly declined that).
 3. **iPhone Gemini API-key pairing** — the local-HTTP QR pair server is blocked
    by iOS (Local Network permission / Safari http), so users on iPhone can't
    pair a key the way Android does. A server-assisted pairing path is planned.
