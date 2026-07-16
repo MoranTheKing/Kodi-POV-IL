@@ -990,6 +990,17 @@ def _maybe_patch_pov_anime_hebrew():
         if 'patched' in status:
             kodi_utils.log(
                 'pov_anime_hebrew_patcher: ' + status, level='INFO')
+            # POV runs with reuselanguageinvoker, so its interpreter already
+            # imported menu_lists.py/navigator.py with the OLD English labels
+            # before this patch landed on disk. Cycle POV so it re-imports the
+            # Hebrew version THIS session instead of only after the next
+            # restart (the reason a freshly-updated device still showed the
+            # anime menu in English).
+            try:
+                from resources.lib import pov_reload
+                pov_reload.note_patched()
+            except Exception:
+                pass
         elif any(bad in status for bad in
                  ('failed', 'compile', 'write', 'read')):
             kodi_utils.log(
