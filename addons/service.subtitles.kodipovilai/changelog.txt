@@ -1,3 +1,19 @@
+v0.2.377
+- Fixed (POV Trakt add crash -- the REAL root cause, from a second field crash
+  log): the crash was NOT POV's Trakt widget-refresh setting (that path never
+  ran -- zero "Widget Refresh Performed" lines in the log). It was OUR OWN
+  patch: pov_combined_discover_patcher used to rewrite POV's container_refresh()
+  to also fire UpdateLibrary(video,special://skin/foo) so AF3 home widgets
+  reload after mark-watched. But container_refresh() runs from ~30 sites incl.
+  every Trakt add (indexers/trakt_api.py); that ping reloads ALL POV home
+  widgets at once -> concurrent router.py on POV's reuselanguageinvoker
+  interpreter -> CPython dict corruption (SystemError: dictobject.c:1756) ->
+  native crash. Removed the ping from the discover patcher and added
+  pov_container_refresh_crash_fix to revert it on already-patched devices
+  (restores stock Container.Refresh, cycles POV so it applies this session).
+  FENtastic already reloads its widgets on Container.Refresh, so nothing is
+  lost. The 0.2.376 setting-guard is kept as harmless defense-in-depth.
+
 v0.2.376
 - Fixed (POV Trakt add crash, confirmed from a field crash log): adding a
   title to a Trakt watchlist/favourites/collection could crash Kodi to the
