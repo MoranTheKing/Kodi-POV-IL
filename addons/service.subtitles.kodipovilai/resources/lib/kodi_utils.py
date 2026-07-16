@@ -119,23 +119,36 @@ def hebrew_subtitle_wanted():
     that other settings (DarkSubs auto_translate / force_ai_when_auto_translate_off)
     have already turned off."""
     try:
-        # 1. "Preferred subtitle language" (locale.subtitlelanguage) -- a
-        #    single value. When it names a concrete language it is the
-        #    clearest statement of intent, so it wins outright.
+        # 1. "Languages to download subtitles for" (subtitles.languages).
+        #    Hebrew HERE is the strongest positive signal there is -- it is
+        #    exactly the list Kodi's subtitle search uses -- so it wins even
+        #    when the PLAYBACK preference (locale.subtitlelanguage) names
+        #    another language. Field case: a standalone user on a foreign
+        #    build had locale.subtitlelanguage=English, and the old
+        #    precedence silently disabled the entire addon ("offers no AI
+        #    entries") even though Hebrew was in their download list.
+        dl = _read_kodi_setting_value('subtitles.languages')
+        if isinstance(dl, str):
+            dl = [p for p in dl.replace(';', ',').split(',') if p.strip()]
+        dl_has_hebrew = (isinstance(dl, (list, tuple)) and dl
+                         and any(_is_hebrew_lang(x) for x in dl))
+        if dl_has_hebrew:
+            return True
+
+        # 2. "Preferred subtitle language" (locale.subtitlelanguage) -- a
+        #    single value naming a concrete language.
         pref = (_read_kodi_setting_value('locale.subtitlelanguage') or '')
         pref_norm = str(pref).strip().lower()
         if pref_norm and pref_norm not in _SUBTITLE_LANG_SPECIAL:
             return _is_hebrew_lang(pref_norm)
 
-        # 2. Otherwise defer to "Languages to download subtitles for"
-        #    (subtitles.languages) -- a list (or, on some builds, a CSV).
-        dl = _read_kodi_setting_value('subtitles.languages')
-        if isinstance(dl, str):
-            dl = [p for p in dl.replace(';', ',').split(',') if p.strip()]
+        # 3. Download list readable, non-empty and Hebrew-less (and no
+        #    concrete playback preference) -> the user asked for other
+        #    languages only.
         if isinstance(dl, (list, tuple)) and dl:
-            return any(_is_hebrew_lang(x) for x in dl)
+            return False
 
-        # 3. Nothing conclusive -> keep the AI-Hebrew default.
+        # 4. Nothing conclusive -> keep the AI-Hebrew default.
         return True
     except Exception:
         return True

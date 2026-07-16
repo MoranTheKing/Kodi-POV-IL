@@ -52,6 +52,49 @@ def autosub_on_play():
     except Exception:
         pass
 
+    # LIVE / IPTV playback (Idan Plus, PVR channels, live plugins) must never
+    # trigger the Hebrew auto-search: there is no release to match and the
+    # search overlay just gets in the way of channel zapping. Three guards:
+    # a PVR/streaming-protocol path, a PVR channel name, and a per-addon
+    # exclusion list (comma-separated plugin ids, configurable) matched
+    # against both the playing plugin:// path and the window the playback
+    # was started from. The zero-duration live check runs later, after the
+    # player has settled (see below). All guarded: on any doubt, autosub runs.
+    try:
+        _pf = (xbmc.Player().getPlayingFile() or '')
+    except Exception:
+        _pf = ''
+    if _pf.startswith(('pvr://', 'udp://', 'rtp://', 'rtsp://')):
+        return
+    try:
+        if (xbmc.getInfoLabel('VideoPlayer.ChannelName') or '').strip():
+            return
+    except Exception:
+        pass
+    try:
+        # An EMPTY value is a deliberate user choice ("no exclusions") and is
+        # respected; the default only applies when the setting can't be read.
+        _raw = kodi_utils.get_setting('autosub_excluded_addons',
+                                      'plugin.video.idanplus')
+    except Exception:
+        _raw = 'plugin.video.idanplus'
+    _excluded = {x.strip().lower() for x in _raw.split(',') if x.strip()}
+    if _excluded:
+        _src_ids = set()
+        try:
+            if _pf.startswith('plugin://'):
+                import urllib.parse as _up
+                _src_ids.add((_up.urlparse(_pf).netloc or '').lower())
+        except Exception:
+            pass
+        try:
+            _src_ids.add((xbmc.getInfoLabel('Container.PluginName')
+                          or '').strip().lower())
+        except Exception:
+            pass
+        if _src_ids & _excluded:
+            return
+
     if STATE['busy']:
         return
     STATE['busy'] = True
@@ -134,6 +177,23 @@ def autosub_on_play():
         if not (info.get('imdb_id') or info.get('tmdb_id')
                 or info.get('title')):
             return
+
+        # Deferred live-stream check: a genuinely live stream (IPTV channel
+        # played over plain http, so the protocol/plugin guards above can't
+        # see it) reports NO total duration; VOD always has one. Duration can
+        # lag a moment at start even for VOD, so give it a bounded grace
+        # period before concluding "live". Fail-open: any doubt -> autosub.
+        try:
+            _pl_live = xbmc.Player()
+            _dur_waited = 0.0
+            while (_pl_live.isPlayingVideo()
+                   and _pl_live.getTotalTime() <= 0 and _dur_waited < 5.0):
+                xbmc.sleep(250)
+                _dur_waited += 0.25
+            if _pl_live.isPlayingVideo() and _pl_live.getTotalTime() <= 0:
+                return  # no duration after the grace period -> live stream
+        except Exception:
+            pass
 
         # Embedded Hebrew is the best, perfectly-synced subtitle -- apply it
         # FIRST whenever the file has one. The demuxer often hasn't exposed the

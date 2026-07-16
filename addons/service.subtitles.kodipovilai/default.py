@@ -102,9 +102,15 @@ def _handle_search(handle, params):
     # well catches the case where DarkSubs was installed (or
     # updated) AFTER Kodi started -- the patch goes in immediately,
     # without needing a reboot. Idempotent.
+    # SKIPPED when the built-in engine is on: DarkSubs is deliberately
+    # DISABLED then, and touching it here made Kodi log
+    # "EXCEPTION: Unknown addon id 'service.subtitles.All_Subs'" on
+    # every search (field log, standalone install).
     try:
-        from resources.lib import dark_subs_integration
-        dark_subs_integration.maybe_patch_darksubs()
+        from resources.lib import subs_engine_bridge as _seb_gate
+        if not _seb_gate.enabled():
+            from resources.lib import dark_subs_integration
+            dark_subs_integration.maybe_patch_darksubs()
     except Exception as e:
         _safe_log('darksubs patch skipped: {0}'.format(e),
                   level='DEBUG')
@@ -1517,9 +1523,12 @@ def _handle_test_connection(_params):
         # Test-connection is the canonical "I've adopted this addon"
         # moment; make sure DarkSubs's hook is in place right now so
         # the next subtitle pick already routes through our AI.
+        # Skipped when the engine is on (DarkSubs deliberately disabled).
         try:
-            from resources.lib import dark_subs_integration
-            dark_subs_integration.maybe_patch_darksubs()
+            from resources.lib import subs_engine_bridge as _seb_gate
+            if not _seb_gate.enabled():
+                from resources.lib import dark_subs_integration
+                dark_subs_integration.maybe_patch_darksubs()
         except Exception:
             pass
         xbmcgui.Dialog().ok('Kodi POV IL',
