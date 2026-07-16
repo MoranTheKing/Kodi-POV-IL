@@ -199,11 +199,14 @@ def _lookup_raw(p):
     except Exception as e:
         kodi_utils.log('pool lookup failed: {0}'.format(e), level='DEBUG')
         data = {}
-    _LOOKUP_CACHE[ck] = (now, data)
-    if len(_LOOKUP_CACHE) > _LOOKUP_CACHE_MAX:
-        for k, _v in sorted(_LOOKUP_CACHE.items(),
-                            key=lambda kv: kv[1][0])[:len(_LOOKUP_CACHE) - _LOOKUP_CACHE_MAX]:
-            _LOOKUP_CACHE.pop(k, None)
+    try:
+        _LOOKUP_CACHE[ck] = (now, data)
+        if len(_LOOKUP_CACHE) > _LOOKUP_CACHE_MAX:
+            for k, _v in sorted(_LOOKUP_CACHE.items(),
+                                key=lambda kv: kv[1][0])[:len(_LOOKUP_CACHE) - _LOOKUP_CACHE_MAX]:
+                _LOOKUP_CACHE.pop(k, None)
+    except Exception:
+        pass          # cache mgmt must never raise (concurrent-mutation safe)
     return data
 
 
