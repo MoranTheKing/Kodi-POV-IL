@@ -1,3 +1,12 @@
+v0.2.374
+- Fixed (POV Anime Hebrew, field log + screenshots): on POV 6.07 the anime
+  breadcrumb titles stayed English because navigator.py moved from indexers/
+  to menus/ between POV releases -- the patcher now handles both locations.
+  And because POV runs with reuselanguageinvoker, the freshly-patched menu
+  files were only picked up on the NEXT restart (so an updated device still
+  showed the anime menu in English); the patch now cycles POV so it applies
+  the same session, like the other POV code patchers.
+
 v0.2.373
 - Improved: Gemini API calls now authenticate via the x-goog-api-key HEADER
   instead of the ?key= query parameter. Google's newer 'AQ.'-prefixed keys
