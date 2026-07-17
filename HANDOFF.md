@@ -247,7 +247,22 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    (two rounds) + unit-tested; shipped by key-preserving zip surgery (the shipped
    `pool.py` credential is transplanted from the prior zip, never rebuilt from
    source — see the packaging rule above).
-5. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
+5. **AI translation stopping mid-title on a rate limit — RESOLVED (AI 0.2.380 /
+   quickfix 0.1.419).** Gemini returns HTTP 429 for BOTH a temporary per-minute
+   rate limit (RPM/TPM, clears in ~60s) AND the daily quota (RPD); `gemini.py`
+   treated *any* 429 as a terminal "daily quota exceeded" and aborted AI
+   translation to Google mid-movie. During a burst of chunk translations a long
+   title routinely trips the per-minute limit, so AI would quit partway even with
+   the daily quota untouched. Fix: `gemini._classify_429()` inspects the 429 body
+   -- a QuotaFailure naming a per-DAY quota stays terminal (`QuotaExceeded`),
+   anything else becomes a new `RateLimited(retry_after)`; `translate._call_gemini`
+   backs off (Gemini's own `retryDelay`, 3-65s, up to 5 tries) and retries the
+   SAME chunk so AI continues to the end. The exhausted-rate-limit fallback shows
+   a distinct "temporary overload" toast instead of the misleading "quota
+   exhausted, try again after midnight". Separate-validator reviewed (19-case
+   classifier harness + focused re-review); shipped by key-preserving zip surgery
+   (pool.py untouched this round).
+6. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
 ## Working style
