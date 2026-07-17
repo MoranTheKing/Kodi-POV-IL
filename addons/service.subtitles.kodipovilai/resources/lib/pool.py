@@ -224,6 +224,27 @@ def lookup(info):
     return data.get('variants') or []
 
 
+def lookup_cached(info):
+    """Variants for this media ONLY if the in-memory /lookup cache is already warm
+    for it -- NEVER networks. Returns the variants list on a fresh cache hit
+    (possibly []), or None when not cached / the cached response was a failure, so
+    a caller can gate on the variant list WITHOUT triggering a /lookup request of
+    its own (keeps the reuse pre-check from ever ADDING a Worker request)."""
+    import time as _t
+    try:
+        if _urlreq is None:
+            return None
+        p = _params(info)
+        if not _has_id(p):
+            return None
+        ent = _LOOKUP_CACHE.get(_lookup_cache_key(p))
+        if ent and (_t.time() - ent[0]) < _LOOKUP_TTL and ent[1]:
+            return ent[1].get('variants') or []
+    except Exception:
+        return None
+    return None
+
+
 # --- SubSync S3: community sync registry (client side) ----------------------
 # The Worker serves per-media sync verdicts inside the /lookup response
 # (`sync`: {"<sub_hash>|<normalized release>": {s, o, st, n, h, ts}}). lookup()

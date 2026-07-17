@@ -57,6 +57,39 @@ try:
 except Exception:
     pool = None
 
+
+def _pool_reuse_fetch(info, content_id, ar_on):
+    """Whether the community pool already has a translation for THIS source hash;
+    returns (path_or_None, is_ar). Consults the ALREADY-CACHED /lookup variant list
+    (a cache-only peek that NEVER networks) so we only /sub-fetch a hash the pool
+    actually has -- avoiding the blind "<hash>_ar then <hash>" GETs (the _ar probe
+    is almost always a 404). When the list isn't cached (or lookup failed) we fall
+    back to the original blind probe, so this pre-check can NEVER add a request nor
+    hide a real pooled translation. `pool` is non-None (caller's use_enabled())."""
+    ar_hash = content_id + '_ar'
+    try:
+        variants = pool.lookup_cached(info)   # cache-only; None = not warm/unknown
+        if variants is None:
+            have = None
+        else:
+            have = set(v.get('hash') for v in variants
+                       if isinstance(v, dict) and v.get('hash'))
+    except Exception:
+        have = None
+    if have is None:
+        pooled = pool.fetch(info, ar_hash)
+        if pooled:
+            return pooled, True
+        if not ar_on:
+            return pool.fetch(info, content_id), False
+        return None, False
+    if ar_hash in have:
+        return pool.fetch(info, ar_hash), True
+    if (not ar_on) and (content_id in have):
+        return pool.fetch(info, content_id), False
+    return None, False
+
+
 # Iteration order = priority order. settings.xml exposes
 # checkboxes -- we filter the disabled ones out at runtime.
 ALL_SOURCE_LANGS = [
@@ -1410,12 +1443,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         # under "<hash>_ar"). When the feature is ON we accept ONLY ai_ar -- if
         # the pool has just a plain one, we deliberately re-translate to upgrade
         # it. When OFF we take ai_ar if present, else plain.
-        pooled = pool.fetch(info, content_id + '_ar')
-        if pooled:
+        pooled, _pooled_ar = _pool_reuse_fetch(info, content_id, _ar_on)
+        if pooled and _pooled_ar:
             kodi_utils.log('pool: reusing Arabic-gender (ai_ar) variant',
                            level='INFO')
-        elif not _ar_on:
-            pooled = pool.fetch(info, content_id)
         if pooled:
             try:
                 cache.save_text(translated, pooled)
