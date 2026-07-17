@@ -232,7 +232,22 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
 3. **iPhone Gemini API-key pairing** — the local-HTTP QR pair server is blocked
    by iOS (Local Network permission / Safari http), so users on iPhone can't
    pair a key the way Android does. A server-assisted pairing path is planned.
-4. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
+4. **Community-pool request reduction — SHIPPED (AI 0.2.379 / quickfix 0.1.418).**
+   Removed two redundant round-trips to the community-pool Worker. (a) On the
+   first entry to a title the source-window Hebrew-% seed
+   (`he_sub_match._pool_lookup`) and the background availability warm each hit
+   `/lookup` for the same media within ~1s; a short (15 s) cross-process memo
+   (`he_pool_raw.json`, unique per-writer temp suffix like the `.tmp`/`.stmp`
+   avail-cache writers) makes them share ONE request. (b) The pool reuse
+   pre-check in `translate.py` did a blind `<hash>_ar` then `<hash>` `/sub` GET
+   (the `_ar` one almost always a 404); it now consults the already-cached
+   `/lookup` variant list via a new cache-only `pool.lookup_cached()` and fetches
+   only a hash that exists, falling back to the old blind probe only when the list
+   isn't cached — so it can never ADD a request. Separate-validator reviewed
+   (two rounds) + unit-tested; shipped by key-preserving zip surgery (the shipped
+   `pool.py` credential is transplanted from the prior zip, never rebuilt from
+   source — see the packaging rule above).
+5. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
 ## Working style
