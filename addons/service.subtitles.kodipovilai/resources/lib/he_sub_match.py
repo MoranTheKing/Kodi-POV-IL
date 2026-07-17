@@ -56,6 +56,16 @@ _ENGINE_TTL = 7 * 24 * 3600.0   # 7 days; used once HUMAN Hebrew has been found
 # often so a sub that appears within hours shows up fast for everyone -- new
 # releases get human Hebrew within ~24h, and a 7-day cache would hide it.
 _AVAIL_TTL_NONE = 8 * 3600.0    # 8 hours
+# Cross-process memo for _pool_lookup: on a first entry BOTH release_names (the
+# source-window seed) and run_warm/availability (the background warm) hit the
+# Worker's /lookup for the SAME title within ~1s. Stashing the first successful
+# result here for a few seconds lets the second reuse it -- ONE Worker request
+# instead of two (the single biggest chunk of avoidable pool traffic). Both
+# processes share this file the same way they already share he_avail_cache.json.
+_POOL_RAW_FILE = (
+    'special://profile/addon_data/service.subtitles.kodipovilai/'
+    'he_pool_raw.json')
+_POOL_MEMO_TTL = 15.0
 _FIRED = {}            # media_key -> last warm-fire ts (throttle re-fires)
 _FIRE_RETRY = 120.0    # re-fire a warm at most once every 2 min per title
 
@@ -143,7 +153,7 @@ def _pool_lookup(p, timeout=None):
     `timeout` overrides the default (the source window uses a tight cap for its
     one allowed synchronous first-entry call)."""
     out = {'names': [], 'embedded': [], 'ktuvit': [], 'sync_rel': [],
-           'ktuvit_checked': 0.0, 'ktuvit_changed': 0.0}
+           'ktuvit_checked': 0.0, 'ktuvit_changed': 0.0, '_ok': False}
     try:
         q = _parse.urlencode({k: v for k, v in p.items() if v})
         req = _req.Request(POOL_URL + '/lookup?' + q,
@@ -151,6 +161,7 @@ def _pool_lookup(p, timeout=None):
         raw = _req.urlopen(req, timeout=(timeout or _TIMEOUT)).read().decode('utf-8')
         data = json.loads(raw)
         if data.get('ok'):
+            out['_ok'] = True   # a real, successful response (memoize-able)
             # Only HUMAN Hebrew counts as "there's a translation" here -- an AI
             # translation (kind='ai') can be generated for any source on demand,
             # so it must NOT make us treat a title as already-having-Hebrew (that
@@ -196,6 +207,73 @@ def _pool_lookup(p, timeout=None):
     return out
 
 
+
+
+def _pool_raw_path():
+    try:
+        import xbmcvfs
+        return xbmcvfs.translatePath(_POOL_RAW_FILE)
+    except Exception:
+        return ''
+
+
+def _pool_lookup_memo(p, timeout=None):
+    """_pool_lookup() behind a short cross-process memo keyed by media, so the two
+    ~concurrent first-entry lookups (release_names seed + run_warm/availability
+    warm) cost ONE Worker /lookup, not two. Only a SUCCESSFUL response (_ok) is
+    stashed, so a transient failure is never cached; any error along the way falls
+    back to a direct _pool_lookup(). Same shared file model as he_avail_cache."""
+    try:
+        key = _media_key(p)
+    except Exception:
+        key = ''
+    path = _pool_raw_path()
+    now = time.time()
+    if key and path:
+        try:
+            if os.path.isfile(path):
+                with open(path, 'r', encoding='utf-8') as f:
+                    data = json.load(f) or {}
+                ent = data.get(key)
+                if ent and (now - float(ent.get('ts') or 0)) < _POOL_MEMO_TTL:
+                    d = ent.get('data')
+                    if isinstance(d, dict):
+                        return d
+        except Exception:
+            pass
+    out = _pool_lookup(p, timeout)
+    if key and path and isinstance(out, dict) and out.get('_ok'):
+        try:
+            data = {}
+            if os.path.isfile(path):
+                try:
+                    with open(path, 'r', encoding='utf-8') as f:
+                        data = json.load(f) or {}
+                except Exception:
+                    data = {}
+            data[key] = {'ts': now, 'data': out}
+            if len(data) > 120:
+                data = dict(sorted(data.items(),
+                                   key=lambda kv: kv[1].get('ts', 0),
+                                   reverse=True)[:120])
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            # Unique per-writer temp name so POV's process and the service
+            # process (or two warm threads) never truncate each other's
+            # in-progress temp before os.replace -- mirrors the .tmp/.stmp split
+            # _store_avail/_seed_from_pool already use for he_avail_cache.
+            _suffix = str(os.getpid())
+            try:
+                import threading as _thr
+                _suffix += '.' + str(_thr.get_ident())
+            except Exception:
+                pass
+            tmp = path + '.ptmp.' + _suffix
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False)
+            os.replace(tmp, path)
+        except Exception:
+            pass
+    return out
 
 
 def _wizdom_release_names(p):
@@ -399,7 +477,7 @@ def availability(p):
     the local speed cache."""
     pl = {}
     try:
-        pl = _pool_lookup(p)
+        pl = _pool_lookup_memo(p)
     except Exception:
         pl = {}
     try:
@@ -804,7 +882,7 @@ def release_names(meta):
         # well under a second, so they show their % with no perceptible wait.
         seeded = []
         try:
-            pl = _pool_lookup(p, timeout=min(1.5, _FIRST_ENTRY_WAIT))
+            pl = _pool_lookup_memo(p, timeout=min(1.5, _FIRST_ENTRY_WAIT))
             seeded = _seed_from_pool(key, pl)
         except Exception:
             seeded = []
