@@ -20,8 +20,19 @@ class GeminiError(Exception):
 
 
 class QuotaExceeded(GeminiError):
-    """Daily request limit hit (HTTP 429). Caller may want to
-    suggest waiting until UTC midnight."""
+    """DAILY request limit hit (HTTP 429, RPD). Terminal for today -- caller
+    should fall back (Google Translate) and may suggest waiting until UTC
+    midnight. Distinct from RateLimited (a temporary per-minute 429)."""
+
+
+class RateLimited(GeminiError):
+    """TEMPORARY per-minute rate limit (HTTP 429, RPM/TPM) -- NOT the daily
+    quota. Clears within ~60s, so the caller should back off and RETRY the same
+    request rather than abort. `retry_after` is the API-suggested wait in seconds
+    (0 when the response didn't provide one)."""
+    def __init__(self, message, retry_after=0):
+        super().__init__(message)
+        self.retry_after = retry_after
 
 
 class OverloadError(GeminiError):
@@ -47,6 +58,40 @@ class FilteredResponse(GeminiError):
     """Gemini returned no candidates (a safety filter blocked the chunk, even
     with safety set to BLOCK_NONE). Caller should bisect; a single still-blocked
     entry can be left in the source language rather than aborting everything."""
+
+
+def _classify_429(r):
+    """A Gemini 429 is EITHER a temporary per-minute rate limit (RPM/TPM) OR the
+    daily quota (RPD) -- identical status code, so inspect the body. A QuotaFailure
+    violation whose quota id/metric mentions 'per day' -> terminal QuotaExceeded;
+    anything else (per-minute, or unparseable) -> RateLimited so the caller retries.
+    Defaulting the ambiguous case to RateLimited is safe: if it truly were daily the
+    retries keep getting 429 and the caller falls back anyway (just later), whereas
+    mislabelling a per-minute burst as 'daily quota' (the old behaviour) needlessly
+    kills AI translation for the rest of the movie."""
+    retry_after = 0
+    is_daily = False
+    try:
+        err = (r.json() or {}).get('error', {}) or {}
+        for d in err.get('details', []) or []:
+            typ = str(d.get('@type', ''))
+            if typ.endswith('RetryInfo'):
+                rd = str(d.get('retryDelay', '') or '').strip().rstrip('s')
+                try:
+                    retry_after = int(float(rd)) if rd else 0
+                except (ValueError, TypeError):
+                    retry_after = 0
+            if typ.endswith('QuotaFailure'):
+                for v in d.get('violations', []) or []:
+                    q = (str(v.get('quotaId', '')) + '|'
+                         + str(v.get('quotaMetric', ''))).lower()
+                    if 'perday' in q or 'per_day' in q:
+                        is_daily = True
+    except (ValueError, KeyError, TypeError, AttributeError):
+        pass
+    if is_daily:
+        return QuotaExceeded('Daily quota exceeded')
+    return RateLimited('Per-minute rate limit (HTTP 429)', retry_after=retry_after)
 
 
 def test_key(api_key, model='gemini-3.1-flash-lite'):
@@ -141,7 +186,7 @@ def generate_media(api_key, model, prompt, media_bytes, mime,
     except requests.RequestException as e:
         raise GeminiError('Network error: {0}'.format(e))
     if r.status_code == 429:
-        raise QuotaExceeded('Daily quota exceeded')
+        raise _classify_429(r)
     if r.status_code in (500, 502, 503, 504):
         raise OverloadError(
             'Gemini overloaded (HTTP {0})'.format(r.status_code))
@@ -221,7 +266,7 @@ def generate(api_key, model, prompt, temperature=0.2,
         raise GeminiError('Network error: {0}'.format(e))
 
     if r.status_code == 429:
-        raise QuotaExceeded('Daily quota exceeded')
+        raise _classify_429(r)
     if r.status_code in (500, 502, 503, 504):
         raise OverloadError(
             'Gemini overloaded (HTTP {0})'.format(r.status_code))
