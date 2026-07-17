@@ -944,7 +944,7 @@ def _is_google_translated(path):
 
 
 def _google_translate_and_save(src_text, source_lang, translated, info,
-                               via_quota=False):
+                               reason=''):
     """Translate src_text to Hebrew with Google Translate and save it to the
     cache path `translated`. Marks it Google-translated (sidecar) so it is
     never pooled, applies the RTL punctuation fix, and returns the path (or
@@ -969,9 +969,13 @@ def _google_translate_and_save(src_text, source_lang, translated, info,
     except Exception as e:
         kodi_utils.log('google save failed: {0}'.format(e), level='WARNING')
         return None
-    kodi_utils.notify(
-        'מכסת ה-AI נגמרה — תורגם עם Google Translate' if via_quota
-        else 'תורגם עם Google Translate', time_ms=4000)
+    if reason == 'quota':
+        _fb_msg = 'מכסת ה-AI היומית נגמרה — תורגם עם Google Translate'
+    elif reason == 'ratelimit':
+        _fb_msg = 'AI: עומס זמני חורג — תורגם עם Google Translate'
+    else:
+        _fb_msg = 'תורגם עם Google Translate'
+    kodi_utils.notify(_fb_msg, time_ms=4000)
     return translated
 
 
@@ -1774,6 +1778,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # flaky case, then degrade FAST to the real fix instead of stalling ~70s on a
     # persistent block. Waits average >4s to respect the free 15 req/min limit.
     FILTERED_BACKOFF = [3, 5, 8]
+    # Per-minute rate limit (HTTP 429, RPM/TPM) -- TEMPORARY, clears within ~60s.
+    # Back off (preferring Gemini's own retryDelay) and retry the SAME chunk so AI
+    # translation continues to the end instead of aborting to Google mid-movie.
+    # Only a genuine per-DAY 429 (gemini.QuotaExceeded) is terminal.
+    RATELIMIT_BACKOFF = [20, 30, 45, 60, 60]
 
     # Per-chunk translator. Holds the inner retry loop. Returns the
     # raw Gemini response text, or raises a Stop-style exception
@@ -1925,6 +1934,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         overload_attempts = 0
         generic_attempts = 0
         filtered_attempts = 0
+        ratelimit_attempts = 0
         while True:
             try:
                 return gemini.generate(
@@ -1938,6 +1948,28 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                     thinking_level=thinking_level,
                     timeout=gemini_timeout or gemini.REQUEST_TIMEOUT,
                 )
+            except gemini.RateLimited as e:
+                # TEMPORARY per-minute limit (not the daily quota): back off and
+                # retry the SAME chunk so AI keeps going to the end of the movie.
+                if ratelimit_attempts < len(RATELIMIT_BACKOFF):
+                    wait = e.retry_after or RATELIMIT_BACKOFF[ratelimit_attempts]
+                    wait = max(3, min(int(wait), 65))
+                    ratelimit_attempts += 1
+                    kodi_utils.log(
+                        'Gemini per-minute rate limit chunk {0}/{1}, '
+                        'retry {2}/{3} in {4}s'.format(
+                            idx, total, ratelimit_attempts,
+                            len(RATELIMIT_BACKOFF), wait), level='WARNING')
+                    kodi_utils.notify(
+                        'AI: קצב זמני מוגבל, ממשיך בעוד {0}ש'.format(wait),
+                        time_ms=min(wait * 1000, 6000))
+                    time.sleep(wait)
+                    continue
+                # Still limited after the whole per-minute window -> fall back so
+                # the user still gets subtitles for the remainder. Distinct reason
+                # ('ratelimit') so the toast says "temporary overload", not the
+                # misleading "daily quota exhausted, try again after midnight".
+                raise _AbortTranslation('ratelimit', 'AI: עומס זמני חורג')
             except gemini.QuotaExceeded:
                 raise _AbortTranslation('quota',
                     kodi_utils.localised(33005))
@@ -2088,13 +2120,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         return None
 
     if abort_msg:
-        # Daily Gemini quota exhausted -> fall back to Google Translate so the
-        # user still gets Hebrew (machine quality; never pooled). Only for the
-        # quota case -- other aborts (invalid key, overload, error) surface as
-        # before so the user can fix them.
-        if abort_reason == 'quota':
+        # Daily quota exhausted OR a per-minute rate limit that outlasted all the
+        # retries -> fall back to Google Translate so the user still gets Hebrew
+        # (machine quality; never pooled). Other aborts (invalid key, overload,
+        # error) surface as before so the user can fix them.
+        if abort_reason in ('quota', 'ratelimit'):
             gpath = _google_translate_and_save(src_text, source_lang,
-                                               translated, info, via_quota=True)
+                                               translated, info,
+                                               reason=abort_reason)
             if gpath:
                 if progressive_cb is not None:
                     try:
