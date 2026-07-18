@@ -194,6 +194,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_debrid_status,
         _maybe_show_af3_first_launch_dialog,
         _maybe_show_debrid_status,
+        _maybe_reload_for_tiles,
     )
     for step in steps:
         try:
@@ -683,6 +684,12 @@ def _maybe_patch_fentastic_search():
             pass
 
 
+# Set by _maybe_install_build_icons when the tiles' texture cache was dropped
+# this boot; consumed by _maybe_reload_for_tiles (the LAST startup step) so the
+# fresh tile art re-renders now instead of only on the next Kodi restart.
+_TILE_REFRESH_NEEDED = [False]
+
+
 def _maybe_install_build_icons():
     """Install the bundled TMDB-branded home-tile icons under
     media/build_icons/ so the favourites_xml_patcher can point at
@@ -701,6 +708,8 @@ def _maybe_install_build_icons():
             kodi_utils.log(
                 'build_icons_patcher: updated {0}'.format(
                     ', '.join(result['updated'])), level='INFO')
+        if isinstance(result, dict) and result.get('refresh_needed'):
+            _TILE_REFRESH_NEEDED[0] = True
     except Exception as e:
         try:
             kodi_utils.log(
@@ -708,6 +717,46 @@ def _maybe_install_build_icons():
                 level='WARNING')
         except Exception:
             pass
+
+
+def _maybe_reload_for_tiles():
+    """LAST startup step: if build_icons_patcher dropped stale tile textures this
+    boot, do ONE skin reload so the fresh home-tile art shows now rather than only
+    on the next restart. The cache entries are already gone; ReloadSkin re-caches
+    them from disk. Runs after every other repair has settled and at most once per
+    tile generation (the patcher's gen marker), so unlike a routine reload this is
+    a boot-time, one-off event -- but we still snapshot + restore the home focus
+    around it (via pov_reload's helpers) so the menu never snaps to the first tile.
+    No-op while media is playing (applies on the next idle boot instead)."""
+    if not _TILE_REFRESH_NEEDED[0]:
+        return
+    _TILE_REFRESH_NEEDED[0] = False
+    try:
+        import xbmc
+    except Exception:
+        return
+    try:
+        if xbmc.getCondVisibility('Player.HasMedia'):
+            return
+        saved = None
+        try:
+            from resources.lib import pov_reload
+            saved = pov_reload._capture_home_focus()
+        except Exception:
+            saved = None
+        xbmc.executebuiltin('ReloadSkin()')
+        try:
+            xbmc.sleep(1200)
+        except Exception:
+            pass
+        if saved:
+            try:
+                from resources.lib import pov_reload
+                pov_reload._restore_home_focus(saved)
+            except Exception:
+                pass
+    except Exception:
+        pass
 
 
 def _maybe_patch_brand_assets():
