@@ -384,7 +384,25 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    separate validator reviewed the batch and caught a real bug (paid mode was
    reading the free-tier parallelism default), fixed and re-verified before release.
    Built by key-preserving zip surgery.
-12. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
+12. **Model-aware AI rate limits + a fix for the rebrand not sticking — SHIPPED
+   (AI 0.2.387 / quickfix 0.1.426 / wizard 0.1.32).** Two things. **(a) Rate limits
+   per model.** The free-tier throttle and the daily-usage counter were both tuned
+   only for Flash-Lite (~15 req/min, 500/day). Regular Flash's free tier is far
+   tighter (5 req/min, ~20/day), so choosing it caused per-minute rate-limit errors
+   and no daily warning. The pacing and the counter are now derived from the selected
+   model — Flash-Lite unchanged; regular Flash paced to ~4/min and counted against
+   20/day. Paid "fast mode" still lifts the throttle for every model. (A separate
+   validator caught that the new per-model counter setting wasn't declared, so it
+   would have silently failed to persist — fixed and re-verified before release.)
+   **(b) Rebrand propagation.** Item 11's branding was correct in the wizard's own
+   update channel but a **quick update** re-extracts the build over the home dir, and
+   the copy of the wizard bundled in the quickfix was an old snapshot — so every quick
+   update re-imposed the old notification frame and icon on top of the new branding.
+   The quickfix now carries the current wizard rebuilt from source (correct frame,
+   icon, and skin wiring), and the home tiles drop their stale texture-cache entry so
+   the new art shows on the next render instead of after a manual navigation. Built by
+   key-preserving zip surgery.
+13. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
 ## Working style
