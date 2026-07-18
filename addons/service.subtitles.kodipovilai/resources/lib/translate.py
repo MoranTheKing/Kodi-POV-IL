@@ -1877,11 +1877,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # bisect-storming a PROHIBITED_CONTENT block for ~5 min and never finishing,
     # so the job never cached/uploaded).
     FILTERED_BACKOFF = [4]
-    # On a blocked chunk, try up to this many ALTERNATE chain languages (e.g.
-    # Spanish after Arabic) before dropping the gender reference. The user asked
-    # for "the next language after Arabic"; 1 keeps the block path fast while
-    # still preserving per-line gender when the alternate language passes.
-    _MAX_ALT_LEVELS = 1
+    # On a blocked chunk, try ALTERNATE chain languages (Spanish after Arabic,
+    # then French, Russian, ...) before dropping the gender reference -- try
+    # EVERY aligned language available, not just one, so a stubborn block gets
+    # the best chance to keep per-line gender. This is bounded on its own: the
+    # lazy reference download budget (arabic_gender._TOTAL_DOWNLOAD_BUDGET) caps
+    # how many languages ever get pulled, _ref_ensure() returns False the moment
+    # the chain is exhausted (so the loop stops early), and the per-chunk wall-
+    # clock circuit-breaker below caps total time. 5 covers the core gender-
+    # marking set (ar/es/fr/ru/it) beyond the primary.
+    _MAX_ALT_LEVELS = 5
     NO_REF = -1                # _call_gemini ref_level meaning "English only"
     # Generous per-chunk wall-clock backstop for fighting content blocks. It is a
     # pure CIRCUIT-BREAKER: the structured fallback (alt language -> bisect to
@@ -1988,6 +1993,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 #    never repeated at every bisect node.
                 if try_alts:
                     for _lvl in range(1, _MAX_ALT_LEVELS + 1):
+                        if time.monotonic() > deadline:
+                            break     # out of block-budget -> stop, isolate/degrade
                         if not _ref_ensure(_lvl):
                             break     # no more aligned languages available
                         try:
@@ -2055,6 +2062,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             # first (e.g. Spanish after Arabic)...
             _count('blocks')
             for _lvl in range(1, _MAX_ALT_LEVELS + 1):
+                # Cap the uninterruptible window: once past the block-budget, stop
+                # trying more languages for THIS line and degrade -- so one
+                # pathological chunk can't hog the shared RPM gate for other jobs.
+                if time.monotonic() > deadline:
+                    break
                 if not _ref_ensure(_lvl):
                     break
                 try:
