@@ -114,6 +114,12 @@ def test_key(api_key, model='gemini-3.1-flash-lite'):
     except requests.RequestException as e:
         raise GeminiError('Network error: {0}'.format(e))
 
+    if r.status_code in (401, 407):
+        # 401 is always an auth failure (invalid/expired/revoked key) -- surface
+        # it as a rejected key so the connect dialog says so plainly.
+        raise InvalidKey('Gemini rejected the key (HTTP {0} -- invalid or '
+                         'expired): {1}'.format(r.status_code,
+                                                (r.text or '').strip()[:140]))
     if r.status_code == 400 or r.status_code == 403:
         # Surface Google's actual error reason -- the API returns JSON
         # like {"error":{"code":400,"message":"API key not valid. ..."}}
@@ -190,6 +196,9 @@ def generate_media(api_key, model, prompt, media_bytes, mime,
     if r.status_code in (500, 502, 503, 504):
         raise OverloadError(
             'Gemini overloaded (HTTP {0})'.format(r.status_code))
+    if r.status_code in (401, 407):
+        raise InvalidKey('Key rejected (HTTP {0} -- invalid/expired key): {1}'
+                         .format(r.status_code, (r.text or '')[:180]))
     if r.status_code in (400, 403):
         snippet = r.text[:300] if r.text else ''
         if 'API key' in snippet or 'API_KEY' in snippet:
@@ -270,6 +279,13 @@ def generate(api_key, model, prompt, temperature=0.2,
     if r.status_code in (500, 502, 503, 504):
         raise OverloadError(
             'Gemini overloaded (HTTP {0})'.format(r.status_code))
+    if r.status_code in (401, 407):
+        # 401 (and 407 proxy-auth) is ALWAYS an authentication failure -- the key
+        # is invalid / expired / revoked, or the project has no access. It is
+        # never a transient error, so classify it as InvalidKey (terminal, no
+        # retries) rather than a generic GeminiError (which retries pointlessly).
+        raise InvalidKey('Key rejected (HTTP {0} -- invalid/expired key): {1}'
+                         .format(r.status_code, (r.text or '')[:180]))
     if r.status_code in (400, 403):
         # Distinguish key-related vs content-related rejection by
         # looking at the body when we can.

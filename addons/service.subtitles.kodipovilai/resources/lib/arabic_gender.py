@@ -268,17 +268,19 @@ _ALIAS_TO_CHAIN = {alias: code
                    for code, aliases in _REF_LANG_ALIASES.items()
                    for alias in aliases}
 
-# Try at most this many candidates per language, and at most this many
-# downloads in total across the whole chain (latency bound: the common case --
-# an Arabic or Hebrew sub that aligns -- still downloads a SINGLE file).
-# The total budget must be big enough to REACH the deeper chain languages: with
-# up to _PER_LANG_LIMIT (3) candidates each, Hebrew + Arabic alone can consume 6
-# downloads, so a budget of 8 barely reached Spanish before giving up (-> lots of
-# ai_fallback / "no_align" on titles whose he/ar exist but don't sync). 12 lets
-# the chain get through he, ar, es, fr with 3 candidates each. It only bites the
-# HARD cases (early languages don't align); the common case still downloads one.
+# Try at most this many candidates per language. The total download budget now
+# covers the ENTIRE chain (every language, up to _PER_LANG_LIMIT each), so a
+# blocked/unaligned title keeps trying deeper languages instead of giving up at
+# an arbitrary cutoff -- the goal being the most accurate gender reference we can
+# find, even if it's the 15th language rather than the 3rd. This does NOT slow
+# the common case: the search STOPS at the first sub that aligns (usually he/ar/
+# es, a single download), and downloads are lazy. It only downloads more on the
+# HARD minority of titles where the earlier languages don't time-sync -- exactly
+# the titles that most need a deeper search. (If this ever proves too slow or
+# strains the subtitle-source rate limits on hard titles, lower the budget or add
+# a per-search time cap.)
 _PER_LANG_LIMIT = 3
-_TOTAL_DOWNLOAD_BUDGET = 12
+_TOTAL_DOWNLOAD_BUDGET = len(_REF_CHAIN) * _PER_LANG_LIMIT   # full chain (~57)
 
 
 def _chain_lang_of(cand):
