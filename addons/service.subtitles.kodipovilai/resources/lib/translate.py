@@ -1306,8 +1306,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     def _ref_ensure(level):
         """Ensure _ref_stack has a reference at `level` (0 = primary), pulling
         the next aligning chain language from the plan on demand. Returns True if
-        a reference exists at that level. Thread-safe (parallel chunk workers may
-        request a fallback at once); fully guarded."""
+        a reference exists at that level. Fully guarded.
+
+        Building a fallback tier runs an un-timed provider download; that must
+        never stall OTHER blocked chunks. So the lock is taken NON-BLOCKING: if
+        another worker is already building the next tier, this caller does not
+        wait -- it returns the current state (usually False) and proceeds to
+        bisect / English-only / source instead of blocking behind the download.
+        The builder appends the tier for everyone; a later call picks it up. The
+        startup primary pull (level 0) is single-threaded, so it always wins the
+        lock uncontended."""
         if level < 0:
             return False
         if level < len(_ref_stack):
@@ -1315,7 +1323,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         plan = _ref_plan[0]
         if plan is None:
             return False
-        with _ref_lock:
+        if not _ref_lock.acquire(False):
+            return level < len(_ref_stack)   # someone else is building -> proceed
+        try:
             while len(_ref_stack) <= level:
                 try:
                     lang, mp = plan.next()
@@ -1329,6 +1339,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                         'gender-ref: added fallback tier {0} [{1}] for blocked '
                         'chunks'.format(len(_ref_stack) - 1, lang or '?'),
                         level='INFO')
+        finally:
+            _ref_lock.release()
         return level < len(_ref_stack)
 
     def _pool_key(base_hash):
@@ -1716,14 +1728,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 _ref_lang = (_ref_stack[0][0] or 'ar')
                 _ar_map = _ref_stack[0][1]
                 _ar_diag = {'reason': 'ok', 'cands': _diag0.get('cands', 0),
-                            'diag': getattr(plan, 'first_diag', ''),
-                            'lang': _ref_lang}
+                            'diag': getattr(plan, 'last_diag', ''),
+                            'hinted': len(_ar_map or {}), 'lang': _ref_lang}
             elif plan is not None:
                 # candidates existed but none aligned confidently
                 _ar_map = None
                 _ar_diag = {'reason': 'no_align',
                             'cands': _diag0.get('cands', 0),
-                            'diag': getattr(plan, 'first_diag', '')}
+                            'diag': getattr(plan, 'last_diag', '')}
             else:
                 # no candidate at all: crash / no_source / no_arabic
                 _ar_map = None
@@ -1904,6 +1916,34 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             self.user_msg = user_msg
             self.detail = detail
 
+    def _english_only_safe(idx, ch):
+        """Translate `ch` with NO gender reference (English only), splitting on
+        truncation / residual blocks so a large remainder still completes, and
+        keeping source only for an individual entry that stays blocked or
+        truncates at size 1. Applies the SAME low-yield bisection as the main
+        path so silently-dropped entries are re-done, not shipped. This is the
+        circuit-breaker's finalization guarantee -- it never propagates a
+        content/format error; a genuine quota/overload abort (_AbortTranslation)
+        still propagates, as it must."""
+        try:
+            resp = _call_gemini(idx, ch, NO_REF)
+        except (gemini.FilteredResponse, gemini.TruncatedResponse):
+            if len(ch) > 1:
+                mid = len(ch) // 2
+                return (_english_only_safe(idx, ch[:mid]) + '\n\n'
+                        + _english_only_safe(idx, ch[mid:]))
+            _count('src', len(ch))
+            return '\n\n'.join(ch)
+        # Low-yield guard: Gemini silently dropped entries -> bisect and re-do.
+        if len(ch) > 1:
+            got = len(srt.parse_blocks(resp))
+            if got < max(1, int(len(ch) * 0.85)):
+                mid = len(ch) // 2
+                return (_english_only_safe(idx, ch[:mid]) + '\n\n'
+                        + _english_only_safe(idx, ch[mid:]))
+        _count('noar', len(ch))
+        return resp
+
     def _translate_one(idx, ch, deadline=None, try_alts=True):
         # Recursive bisection on TruncatedResponse OR low-yield response (Gemini
         # sometimes silently skips entries -- observed as a 5-minute gap in the
@@ -1918,22 +1958,17 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         if deadline is None:
             deadline = time.monotonic() + _CHUNK_BLOCK_BUDGET
         elif time.monotonic() > deadline:
-            # Circuit-breaker (rare, pathologically explicit chunk): translate
-            # the remainder ENGLISH-ONLY in ONE call so the viewer still gets
-            # Hebrew and the JOB finalizes (cache + pool); keep source only if
-            # even that is blocked. Never dumps a whole sub-chunk to source while
-            # a single-line isolation could still have translated it.
+            # Circuit-breaker (rare, pathologically explicit chunk): translate the
+            # remainder ENGLISH-ONLY so the viewer still gets Hebrew and the JOB
+            # finalizes (cache + pool). _english_only_safe splits on truncation /
+            # residual blocks, so a LARGE remainder is still translated piece by
+            # piece -- source is kept only for an individual line that stays
+            # blocked, never a whole sub-chunk dumped at once.
             kodi_utils.log(
                 'Chunk {0} over block-budget ({1:.0f}s) -- translating the '
                 'remainder English-only'.format(idx, _CHUNK_BLOCK_BUDGET),
                 level='WARNING')
-            try:
-                _resp = _call_gemini(idx, ch, NO_REF)
-                _count('noar', len(ch))
-                return _resp
-            except gemini.FilteredResponse:
-                _count('src', len(ch))
-                return '\n\n'.join(ch)
+            return _english_only_safe(idx, ch)
         if len(ch) > 1:
             try:
                 response = _call_gemini(idx, ch, 0)      # primary reference
@@ -1957,13 +1992,19 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                             break     # no more aligned languages available
                         try:
                             _resp = _call_gemini(idx, ch, _lvl)
-                            kodi_utils.log(
-                                'Chunk {0} passed with fallback reference [{1}]'
-                                .format(idx, _ref_stack[_lvl][0]), level='INFO')
-                            _count('alt', len(ch))
-                            return _resp
                         except gemini.FilteredResponse:
-                            continue
+                            continue   # this language blocked too -> try next
+                        except gemini.TruncatedResponse:
+                            break      # too long -> stop trying alts, isolate
+                        # Accept only if the yield is adequate (Gemini can silently
+                        # drop entries); otherwise stop and isolate by bisection.
+                        if len(srt.parse_blocks(_resp)) < max(1, int(len(ch) * 0.85)):
+                            break
+                        kodi_utils.log(
+                            'Chunk {0} passed with fallback reference [{1}]'
+                            .format(idx, _ref_stack[_lvl][0]), level='INFO')
+                        _count('alt', len(ch))
+                        return _resp
                 # 2) Still blocked -> bisect to ISOLATE the offending line(s),
                 #    keeping the primary reference on every OTHER line. Children
                 #    do NOT re-try whole-chunk alts (try_alts=False); the isolated
@@ -2020,7 +2061,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                     _resp = _call_gemini(idx, ch, _lvl)
                     _count('alt', len(ch))
                     return _resp
-                except gemini.FilteredResponse:
+                except (gemini.FilteredResponse, gemini.TruncatedResponse):
                     continue
             # ...then English-only (translated, gender dropped for this line)...
             if _ref_stack:
@@ -2028,7 +2069,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                     _resp = _call_gemini(idx, ch, NO_REF)
                     _count('noar', len(ch))
                     return _resp
-                except gemini.FilteredResponse:
+                except (gemini.FilteredResponse, gemini.TruncatedResponse):
                     pass
             # ...and only as an ABSOLUTE LAST RESORT keep the source for this ONE
             # line, so the rest of the subtitle still translates.

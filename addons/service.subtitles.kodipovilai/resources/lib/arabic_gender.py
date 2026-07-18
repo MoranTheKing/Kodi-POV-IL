@@ -392,7 +392,9 @@ class ReferencePlan(object):
         self._downloads = 0
         self._used = set()           # chain langs already returned (one map each)
         self._lock = threading.Lock()
-        self.first_diag = ''         # alignment diag of the first attempt (telemetry)
+        self.last_diag = ''          # diag of the candidate examined last: the
+        #                              WINNER right after a successful next(), or
+        #                              the last rejection once the chain is dry
 
     def next(self):
         """Return (lang, map) for the next chain language that aligns, or
@@ -419,8 +421,7 @@ class ReferencePlan(object):
                         _log('align [{0}] crashed: {1}'.format(lang, e),
                              level='WARNING')
                         continue
-                    if not self.first_diag:
-                        self.first_diag = diag
+                    self.last_diag = diag   # winner (on return) or last rejection
                     if mapping is not None:
                         self._used.add(lang)
                         _log('reference [{0}] {1} -> {2} entries hinted'.format(
@@ -497,6 +498,6 @@ def prepare(info, src_text):
         _log('all {0} reference candidate(s) failed alignment -> normal '
              'translation (fallback)'.format(cands))
         return None, {'reason': 'no_align', 'cands': cands,
-                      'diag': plan.first_diag}
+                      'diag': plan.last_diag}
     return mapping, {'reason': 'ok', 'cands': cands, 'hinted': len(mapping),
-                     'diag': plan.first_diag, 'lang': lang}
+                     'diag': plan.last_diag, 'lang': lang}
