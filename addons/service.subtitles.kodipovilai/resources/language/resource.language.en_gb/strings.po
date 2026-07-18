@@ -509,3 +509,11 @@ msgstr ""
 msgctxt "#32547"
 msgid "When ON, AI translations fetch a human subtitle of the same title in a gender-marking language and use it ONLY to pin down per-line Hebrew gender (he/she, verb/adjective agreement). Tries an out-of-sync Hebrew sub first, then Arabic (marks gender almost 1:1 with Hebrew), then Spanish/French/Russian and more. Falls back silently when nothing aligns. Works for any source language."
 msgstr "When ON, AI translations fetch a human subtitle of the same title in a gender-marking language and use it ONLY to pin down per-line Hebrew gender (he/she, verb/adjective agreement). Tries an out-of-sync Hebrew sub first, then Arabic (marks gender almost 1:1 with Hebrew), then Spanish/French/Russian and more. Falls back silently when nothing aligns. Works for any source language."
+
+msgctxt "#32550"
+msgid "Fast mode (paid Gemini API tier)"
+msgstr "Fast mode (paid Gemini API tier)"
+
+msgctxt "#32551"
+msgid "Turn ON only if you are on a PAID Gemini plan (billing enabled on your API key). The add-on normally paces requests and limits parallel chunks to stay under the free tier's ~15 requests/minute limit; a paid key has thousands, so this lifts those limits for much faster translation. Leave OFF for a free key (ON would just cause rate-limit errors and retries). Does not change translation quality -- that is set by the Model option."
+msgstr "Turn ON only if you are on a PAID Gemini plan (billing enabled on your API key). The add-on normally paces requests and limits parallel chunks to stay under the free tier's ~15 requests/minute limit; a paid key has thousands, so this lifts those limits for much faster translation. Leave OFF for a free key (ON would just cause rate-limit errors and retries). Does not change translation quality -- that is set by the Model option."

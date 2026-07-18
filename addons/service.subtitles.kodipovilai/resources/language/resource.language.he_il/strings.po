@@ -497,3 +497,11 @@ msgstr "מזהי תוספים מופרדים בפסיק (למשל plugin.video.i
 msgctxt "#32547"
 msgid "כשמופעל, תרגומי ה-AI מורידים כתובית אנושית של אותו כותר בשפה שמסמנת מגדר ומשתמשים בה רק כדי לקבוע מגדר נכון בעברית בכל שורה (הוא/היא, התאמת פועל/תואר). מנסה קודם כתובית עברית לא מסונכרנת, אחר כך ערבית (מסמנת מגדר כמעט זהה לעברית), ואז ספרדית/צרפתית/רוסית ועוד. אם שום כתובית לא מתיישרת, חוזר אוטומטית לתרגום הרגיל. עובד מכל שפת מקור."
 msgstr "כשמופעל, תרגומי ה-AI מורידים כתובית אנושית של אותו כותר בשפה שמסמנת מגדר ומשתמשים בה רק כדי לקבוע מגדר נכון בעברית בכל שורה (הוא/היא, התאמת פועל/תואר). מנסה קודם כתובית עברית לא מסונכרנת, אחר כך ערבית (מסמנת מגדר כמעט זהה לעברית), ואז ספרדית/צרפתית/רוסית ועוד. אם שום כתובית לא מתיישרת, חוזר אוטומטית לתרגום הרגיל. עובד מכל שפת מקור."
+
+msgctxt "#32550"
+msgid "Fast mode (paid Gemini API tier)"
+msgstr "מצב מהיר (למשתמשי Gemini API בתשלום)"
+
+msgctxt "#32551"
+msgid "Turn ON only if you are on a PAID Gemini plan (billing enabled on your API key). The add-on normally paces requests and limits parallel chunks to stay under the free tier's ~15 requests/minute limit; a paid key has thousands, so this lifts those limits for much faster translation. Leave OFF for a free key (ON would just cause rate-limit errors and retries). Does not change translation quality -- that is set by the Model option."
+msgstr "הפעילו רק אם אתם על תוכנית Gemini בתשלום (חיוב מופעל על מפתח ה-API). התוסף בדרך כלל מווסת את קצב הבקשות ומגביל את מספר המקטעים המקבילים כדי להישאר מתחת למגבלת ~15 בקשות לדקה של התוכנית החינמית; למפתח בתשלום יש אלפים, כך שאפשרות זו מסירה את ההגבלות לתרגום מהיר בהרבה. השאירו כבוי עם מפתח חינמי (הפעלה רק תגרום לשגיאות מגבלת-קצב ולניסיונות חוזרים). לא משנה את איכות התרגום — היא נקבעת באפשרות 'מודל'."
