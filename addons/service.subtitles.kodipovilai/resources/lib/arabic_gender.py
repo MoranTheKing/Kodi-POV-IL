@@ -223,8 +223,16 @@ def align_one(src_text, src_blocks, ar_text):
     ov = _overlap_rate(en, ar, a, b)
     diag = 'scale=%.4f offset=%+dms vote=%.0f%% overlap=%.0f%%' % (
         a, int(b), vote * 100, ov * 100)
-    # Confidence gate (chunk-level architecture): correct map + good coverage.
-    if not (0.90 <= a <= 1.11) or vote < 0.65 or ov < 0.80:
+    # Confidence gate. The MAP must be trustworthy (right framerate band + a
+    # strong offset vote), but COVERAGE may be partial: as a gender ORACLE, a
+    # reference that overlaps 65-79% of the source still hints gender for most
+    # entries -- strictly better than no reference (the un-hinted entries simply
+    # translate without a hint, exactly as if there were none). Field data (the
+    # D1 no_align overlap distribution) showed ~65% of rejections sat in this
+    # 65-79% band WITH a correct map, so the old 0.80 coverage floor was throwing
+    # away usable oracles. vote>=0.65 + the framerate band stay the real guards
+    # against a spurious alignment (a random pairing votes ~0.30).
+    if not (0.90 <= a <= 1.11) or vote < 0.65 or ov < 0.65:
         return None, 'gate FAILED (' + diag + ')'
     return _arabic_for_blocks(src_blocks, ar, a, b), 'gate OK (' + diag + ')'
 
