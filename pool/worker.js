@@ -945,7 +945,7 @@ async function renderStats(env, token) {
        COALESCE(SUM(method='ai_fallback' AND ok=1),0) fb,
        COALESCE(SUM(method='ai_plain' AND ok=1),0) pl
        FROM tr_events ${W} GROUP BY title ORDER BY n DESC LIMIT 30`);
-  const rec = await q(`SELECT ts,title,type,season,episode,src,method,ok,reason,note,ent_ar,ent_noar,ent_src,blocks,v FROM tr_events ${W} ORDER BY ts DESC LIMIT 60`);
+  const rec = await q(`SELECT ts,title,type,season,episode,src,method,ok,reason,note,ent_ar,ent_alt,ent_noar,ent_src,blocks,v FROM tr_events ${W} ORDER BY ts DESC LIMIT 60`);
   // Chunk-level outcome across SUCCESSFUL translations: of all entries actually
   // delivered, how many went through WITH the Arabic prompt, how many fell back
   // to English-only (Arabic dropped on a blocked chunk), how many kept source.
@@ -999,7 +999,8 @@ async function renderStats(env, token) {
     if (!r.ok) { const f = failCause(r.note); return _esc(f.cause + (f.detail ? ' — ' + f.detail : '')); }
     const bits = [];
     if (r.method === 'ai_fallback') bits.push(REASONS[r.reason] || r.reason || 'fallback');
-    if ((r.ent_noar || 0) > 0) bits.push('⚠ ' + r.ent_noar + ' entries dropped Arabic');
+    if ((r.ent_alt || 0) > 0) bits.push('↺ ' + r.ent_alt + ' via alt language');
+    if ((r.ent_noar || 0) > 0) bits.push('⚠ ' + r.ent_noar + ' entries dropped reference');
     if ((r.ent_src || 0) > 0) bits.push('⚠ ' + r.ent_src + ' kept source');
     return _esc(bits.join(' · '));
   };
