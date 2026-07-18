@@ -1141,7 +1141,7 @@ def _show_gemini_usage():
     """Render the daily quota status in a Dialog().ok(). Used by
     the 'ניצול היום' menu entry and the runscript action."""
     try:
-        from resources.lib import gemini_quota
+        from resources.lib import gemini_quota, kodi_utils
     except Exception as e:
         try:
             xbmcgui.Dialog().ok('Kodi POV IL',
@@ -1150,7 +1150,19 @@ def _show_gemini_usage():
             pass
         return
     try:
-        body = gemini_quota.format_status_long()
+        # Report against the CURRENTLY selected model (not just the last one
+        # translated), and short-circuit in paid mode where the free daily cap
+        # doesn't apply (otherwise a paid user on regular Flash could see an
+        # alarming "147/20" against a limit that isn't theirs).
+        paid = kodi_utils.get_bool('ai_paid_mode', False)
+        model = (kodi_utils.get_setting('model', 'gemini-3.1-flash-lite')
+                 or 'gemini-3.1-flash-lite')
+        if paid:
+            body = ('מצב מהיר (למשתמשי Gemini API בתשלום) פעיל.\n'
+                    'הגבלות המכסה החינמית אינן חלות, ולכן אין ספירת ניצול יומי.\n\n'
+                    'מודל נוכחי: {0}').format(model)
+        else:
+            body = gemini_quota.format_status_long(model)
     except Exception as e:
         body = 'שגיאה בקריאת הנתונים: {0}'.format(e)
     try:

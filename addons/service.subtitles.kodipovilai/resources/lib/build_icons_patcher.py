@@ -26,6 +26,11 @@ except Exception:
     xbmcvfs = None
 
 try:
+    import xbmc
+except Exception:
+    xbmc = None
+
+try:
     from resources.lib import kodi_utils
 except Exception:
     kodi_utils = None
@@ -91,10 +96,50 @@ def _same_file(src, dst):
         return False
 
 
+def _invalidate_texture_cache(rel_keys):
+    """Drop Kodi's cached copy of the given build_icons tiles so a freshly
+    written PNG is re-read from disk instead of served from the stale texture
+    cache. Without this, replacing a tile at the same path leaves the home
+    showing the OLD image until the user happens to navigate away and back
+    (the texture is already cached under its special:// url). Best-effort:
+    JSON-RPC only, wrapped so a failure can never break startup."""
+    if not rel_keys or xbmc is None:
+        return
+    try:
+        import json
+    except Exception:
+        return
+    for rel_key in rel_keys:
+        try:
+            # Match on the distinctive tail of the path (build_icons/<rel>) so
+            # we never collide with an unrelated texture that merely shares a
+            # bare filename. The stored url is the special:// path the skin
+            # referenced, which ends with this.
+            needle = 'build_icons/' + rel_key
+            q = {'jsonrpc': '2.0', 'id': 1, 'method': 'Textures.GetTextures',
+                 'params': {'filter': {'field': 'url', 'operator': 'contains',
+                                       'value': needle}}}
+            res = json.loads(xbmc.executeJSONRPC(json.dumps(q))) or {}
+            textures = ((res.get('result') or {}).get('textures') or [])
+            for tex in textures:
+                tid = tex.get('textureid')
+                if tid is None:
+                    continue
+                rq = {'jsonrpc': '2.0', 'id': 1,
+                      'method': 'Textures.RemoveTexture',
+                      'params': {'textureid': tid}}
+                xbmc.executeJSONRPC(json.dumps(rq))
+        except Exception:
+            pass
+
+
 def ensure_installed():
     """Copy each bundled PNG into the live media/build_icons/
     subtree, skipping files that already exist there. Returns
     {'installed': [...], 'skipped': [...]} or {'_status': '...'}.
+    Any FORCE_SYNC tile whose bytes actually changed also has its
+    stale texture-cache entry dropped so the new art shows without a
+    manual navigation.
     """
     src_root = _bundled_root()
     dst_root = _target_root()
@@ -135,4 +180,8 @@ def ensure_installed():
 
     if not installed and not updated:
         _log('all bundled icons already on disk', level='DEBUG')
+    # Only FORCE_SYNC tiles land in `updated` (a bytes-changed replace of an
+    # existing file); those are exactly the ones whose texture cache is stale.
+    if updated:
+        _invalidate_texture_cache([r.replace(os.sep, '/') for r in updated])
     return {'installed': installed, 'updated': updated, 'skipped': skipped}
