@@ -17,16 +17,36 @@ def convert_to_utf(file):
 def extract(archive_file,MySubFolder):
     try:
         with zipfile.ZipFile(archive_file, 'r') as zip_ref:
-                    zip_ref.extractall(MySubFolder)
-                        
+            names = zip_ref.namelist()
+            zip_ref.extractall(MySubFolder)
+
         os.remove(archive_file)
+        # Return a subtitle file THIS archive actually contained -- keyed off the
+        # zip's own namelist, NOT "the first subtitle-shaped file in the shared
+        # folder". The folder is reused by every source/title, so scanning the
+        # whole folder could hand back a LEFTOVER from a previous, unrelated
+        # download (a different title, or an English file from another source
+        # stamped Hebrew). We resolve each entry to its extracted path.
+        for name in names:
+            base = os.path.basename(name)
+            if not base:
+                continue                      # directory entry
+            if os.path.splitext(base)[1].lower() in exts:
+                cand = os.path.join(MySubFolder, *name.split('/'))
+                if not os.path.isfile(cand):
+                    cand = os.path.join(MySubFolder, base)
+                if os.path.isfile(cand):
+                    convert_to_utf(cand)
+                    return cand
+        # Fallback for an oddly-packed archive with no recognised entry name:
+        # the old whole-folder scan (kept so such archives still work).
         for file_ in xbmcvfs.listdir(MySubFolder)[1]:
             ufile = file_
             file_ = os.path.join(MySubFolder, ufile)
             for items in exts:
                 if os.path.splitext(ufile)[1] == items:
                     convert_to_utf(file_)
-                    
+
                     return file_
     except Exception as e:
         log.warning('Error Extract:'+str(e))
