@@ -285,7 +285,27 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    Wizdom incl. an old-vs-fixed regression repro); shipped by key-preserving zip
    surgery. Known non-blocking follow-ups: SubSync's audio-probe Gemini calls and
    the `g_extract` gzip path aren't yet routed through the new pacer/namelist fix.
-7. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
+7. **AI translation not finalizing on a content-blocked chunk — SHIPPED (AI
+   0.2.382 / quickfix 0.1.421).** When Gemini refused a chunk with
+   `PROHIBITED_CONTENT`, the translator could fight the block for minutes and
+   never finish — so the fully-translated Hebrew was never cached and never
+   uploaded to the community pool, and re-selecting the subtitle re-translated
+   the whole title from scratch. The block handling is now quality-first and
+   guaranteed to terminate: on a block it (a) retries the whole chunk with the
+   NEXT human-subtitle language in the gender-reference chain (e.g. Spanish after
+   Arabic — a different language often passes while keeping per-line gender
+   correct), (b) if that still blocks, bisects to ISOLATE the offending line so
+   every other line keeps its gender reference, and (c) at the single blocked
+   line falls back to English-only (still translated, just no gender hint) and
+   only as an absolute last resort keeps that ONE source line. A per-chunk
+   wall-clock budget is now a pure circuit-breaker whose fallback is English-only
+   (split so a large remainder is still translated, never dumped to source), so
+   the job ALWAYS completes and uploads. The gender-reference fetch is lazy —
+   a title that never blocks still downloads exactly one reference. Two
+   independent validator rounds (round 1 found and fixed 5 defects around
+   finalization and silently-dropped lines; round 2 confirmed the fixes);
+   shipped by key-preserving zip surgery (`pool.py` untouched).
+8. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
 ## Working style
