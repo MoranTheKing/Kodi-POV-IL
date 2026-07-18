@@ -138,8 +138,10 @@ def ensure_installed():
     subtree, skipping files that already exist there. Returns
     {'installed': [...], 'skipped': [...]} or {'_status': '...'}.
     Any FORCE_SYNC tile whose bytes actually changed also has its
-    stale texture-cache entry dropped so the new art shows without a
-    manual navigation.
+    stale texture-cache entry dropped so the tile is correct the NEXT
+    time it is rendered. (A frame the home already painted this session,
+    before this ran, may still need one navigation away-and-back to
+    refresh; the next Kodi start is always correct.)
     """
     src_root = _bundled_root()
     dst_root = _target_root()
