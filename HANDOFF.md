@@ -323,7 +323,27 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    all-explicit chunk trying many languages per line could hog the shared request
    pacer); fixed by checking the per-chunk time budget *inside* the retry loops so
    the worst case stays bounded. Shipped by key-preserving zip surgery.
-9. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
+9. **Rejected-key clarity + full-chain gender reference — SHIPPED (AI 0.2.384 /
+   quickfix 0.1.423).** Two refinements from real usage. **(a) A rejected Gemini
+   API key is reported immediately and clearly.** An HTTP 401 (invalid / expired /
+   revoked key) used to fall through to a generic error that the translator
+   *retried* several times before giving up with an unhelpful reason — wasting
+   calls against a key that can never recover. A 401/407 is always a terminal
+   auth failure, so it now aborts at once as "API key rejected" (in all three
+   Gemini entry points), telling the user exactly what to fix (regenerate the key)
+   with zero wasted retries. **(b) The gender-reference search now covers the whole
+   language chain.** 0.2.383 raised the download budget to reach the common
+   gender-marking languages; it still gave up at a fixed cutoff. It now walks the
+   entire priority chain (all reference languages, up to a few candidates each),
+   so a title whose earlier languages exist but don't time-sync can still find an
+   accurate reference further down — the everyday case is unchanged (the search
+   stops at the first sub that aligns, usually one download). A separate validator
+   confirmed correctness (the 401 routing was proven with a real-code probe) and
+   flagged one non-blocking latency note: on the rare title where *no* language
+   aligns, the search now downloads more subtitles before falling back to "no
+   reference" — a deeper-search follow-up left for later if it proves slow. Shipped
+   by key-preserving zip surgery.
+10. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
 ## Working style
