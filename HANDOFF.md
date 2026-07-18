@@ -361,7 +361,30 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    auth/version rejections, which was fixed and re-verified before shipping).
    Shipped by key-preserving zip surgery (`pool.py` + `telemetry.py`, credential
    block spliced through byte-identical).
-11. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
+11. **Rebrand, distinguishable menu tiles, and a paid-tier fast mode — SHIPPED
+   (AI 0.2.386 / quickfix 0.1.425 / wizard 0.1.31).** Three refinements. **(a)
+   Branding.** The update-notification frame now reads "KODI POV IL" (it still said
+   "KODI + REAL DEBRID ISRAEL") and its badge is the POV IL icon; the notification
+   also leads with a visible update number ("עדכון #N") so users can tell which
+   update they're on. Ships through the wizard's own update channel (build.txt →
+   the 0.1.31 wizard zip), not the quickfix. **(b) Menu tiles.** The "quick update"
+   and "install wizard" home tiles were byte-identical images, so when the skin's
+   text label briefly vanishes they were indistinguishable; each now bakes its
+   Hebrew label into the image (below the intact POV square). One pair of images
+   covers every skin (FEN / Estuary / NOX / Arctic Fuse 3) because the service
+   force-syncs them to the live media dir on boot; Arctic Fuse 3's "switch skin"
+   tile — which reused the same image — got its own so it isn't mislabelled.
+   **(c) Paid-tier fast mode.** A new **`ai_paid_mode`** toggle (Settings →
+   Translation, under *Model*; **default OFF**) for users on a *paid* Gemini plan:
+   the add-on normally paces requests and limits parallel chunks to stay under the
+   free tier's ~15 req/min cap, which only slows a paid key down — turning this on
+   removes the pacing and raises parallel chunks (8, up to 16) for much faster
+   translation. Leave it OFF on a free key (it would just cause rate-limit retries).
+   It does **not** change translation quality — that's the *Model* setting. A
+   separate validator reviewed the batch and caught a real bug (paid mode was
+   reading the free-tier parallelism default), fixed and re-verified before release.
+   Built by key-preserving zip surgery.
+12. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
 ## Working style
