@@ -271,8 +271,14 @@ _ALIAS_TO_CHAIN = {alias: code
 # Try at most this many candidates per language, and at most this many
 # downloads in total across the whole chain (latency bound: the common case --
 # an Arabic or Hebrew sub that aligns -- still downloads a SINGLE file).
+# The total budget must be big enough to REACH the deeper chain languages: with
+# up to _PER_LANG_LIMIT (3) candidates each, Hebrew + Arabic alone can consume 6
+# downloads, so a budget of 8 barely reached Spanish before giving up (-> lots of
+# ai_fallback / "no_align" on titles whose he/ar exist but don't sync). 12 lets
+# the chain get through he, ar, es, fr with 3 candidates each. It only bites the
+# HARD cases (early languages don't align); the common case still downloads one.
 _PER_LANG_LIMIT = 3
-_TOTAL_DOWNLOAD_BUDGET = 8
+_TOTAL_DOWNLOAD_BUDGET = 12
 
 
 def _chain_lang_of(cand):
