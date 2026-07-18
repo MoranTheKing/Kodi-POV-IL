@@ -305,7 +305,25 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    independent validator rounds (round 1 found and fixed 5 defects around
    finalization and silently-dropped lines; round 2 confirmed the fixes);
    shipped by key-preserving zip surgery (`pool.py` untouched).
-8. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
+8. **Gender reference: try every language on a block + reach deeper — SHIPPED
+   (AI 0.2.383 / quickfix 0.1.422).** Two refinements from real usage data. **(a)
+   On a content block, try ALL available reference languages, not one.** The
+   0.2.382 fallback tried a single alternate language and, if it also blocked,
+   dropped straight to English-only; it now walks the whole aligned chain
+   (Spanish, French, Russian, Italian, … after Arabic) before giving up the
+   gender reference, so far more blocked lines keep correct gender. **(b) Let the
+   reference search reach deeper into the chain.** With up to 3 candidates per
+   language and an 8-download cap, Hebrew + Arabic candidates alone could exhaust
+   the budget before the search ever reached Spanish — so a title whose Hebrew/
+   Arabic subs existed but didn't time-sync fell back to *no* reference even when
+   a Spanish/French sub would have aligned. The download budget is raised so the
+   search gets through the common gender-marking languages; the everyday case
+   (first candidate aligns) still downloads exactly one file. A separate validator
+   confirmed correctness and flagged one worst-case latency edge (a pathological
+   all-explicit chunk trying many languages per line could hog the shared request
+   pacer); fixed by checking the per-chunk time budget *inside* the retry loops so
+   the worst case stays bounded. Shipped by key-preserving zip surgery.
+9. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
 ## Working style
