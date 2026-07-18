@@ -887,7 +887,9 @@ _SUB_EXTS = ('.srt', '.ssa', '.ass', '.sub', '.smi', '.vtt', '.txt')
 # reads it to show "(נטענה מהקאש)", exactly like DarkSubs's cache note.
 LAST_DOWNLOAD_FROM_CACHE = False
 
-_CACHED_SUBS_DIRNAME = 'Cached_subs'
+_CACHED_SUBS_DIRNAME = 'Cached_subs_v2'   # bumped: flush pre-fix (possibly
+#   poisoned) cache -- see _cached_subs_dir. The old shared-folder extraction bug
+#   could pin a WRONG-title / English-as-Hebrew file to a title's cache stem.
 # DarkSubs caches every download keyed {source}_{language}_{filename}{ext} and
 # wipes the whole folder once it exceeds this many files (its
 # "subtitle_trans_cache" setting). We keep the same count-based prune.
@@ -905,6 +907,16 @@ def _cached_subs_dir():
         d = os.path.join(base, _CACHED_SUBS_DIRNAME)
         if not os.path.isdir(d):
             os.makedirs(d)
+            # One-time flush of the pre-fix cache on first use of the bumped dir:
+            # the old shared-folder extraction bug could pin a wrong-title /
+            # English-as-Hebrew file to a title's cache stem, which the lookup
+            # would then serve forever. Drop the old dir once; entries simply
+            # re-download (now correctly).
+            try:
+                import shutil as _sh
+                _sh.rmtree(os.path.join(base, 'Cached_subs'), ignore_errors=True)
+            except Exception:
+                pass
         return d
     except Exception:
         return None
@@ -1104,9 +1116,20 @@ def _download_inner(payload):
         pass
 
     sub_folder = general.MySubFolder
+    # Clear the shared download folder before EVERY fetch. It is one persistent
+    # dir reused by every source/title, and extract() picks a subtitle file out of
+    # it -- so a leftover from a previous, unrelated download (a different title,
+    # or an English file from another source) could be handed back mislabeled.
+    # rmtree+recreate mirrors the reference engine.download_sub, which the bridge
+    # dropped when it added the Cached_subs disk cache (the Wizdom regression:
+    # wrong-title / English-as-Hebrew / unsynced subtitles).
     try:
-        if not os.path.exists(sub_folder):
-            os.makedirs(sub_folder)
+        import shutil as _shutil
+        _shutil.rmtree(sub_folder, ignore_errors=True)
+    except Exception:
+        pass
+    try:
+        os.makedirs(sub_folder)
     except OSError:
         pass
 
