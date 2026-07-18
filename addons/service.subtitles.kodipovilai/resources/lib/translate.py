@@ -1802,10 +1802,18 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # and a text disclaimer does NOT help (tested: generic/specific, system-
     # Instruction/contents -- all blocked). What actually escapes it is reducing
     # volume: dropping the Arabic block (halves it) and bisecting (isolates the
-    # explicit cluster). So we retry the same prompt only a FEW times to catch the
-    # flaky case, then degrade FAST to the real fix instead of stalling ~70s on a
-    # persistent block. Waits average >4s to respect the free 15 req/min limit.
-    FILTERED_BACKOFF = [3, 5, 8]
+    # explicit cluster). So we retry the same prompt only ONCE to catch the flaky
+    # case, then degrade FAST to bisect/drop-Arabic. Rate-limiting is now handled by
+    # the global pacer (_gemini_rate_gate), so extra filtered retries are pure
+    # latency; and the per-chunk budget below guarantees a stubborn chunk keeps
+    # SOURCE rather than stalling the whole job (a real log showed one chunk
+    # bisect-storming a PROHIBITED_CONTENT block for ~5 min and never finishing,
+    # so the job never cached/uploaded).
+    FILTERED_BACKOFF = [4]
+    # Hard per-chunk wall-clock budget for fighting content blocks: once exceeded,
+    # _translate_one keeps the SOURCE text for the remainder and returns, so ONE
+    # stubborn PROHIBITED_CONTENT chunk can never block the job's finalization.
+    _CHUNK_BLOCK_BUDGET = 45.0
     # Per-minute rate limit (HTTP 429, RPM/TPM) -- TEMPORARY, clears within ~60s.
     # Back off (preferring Gemini's own retryDelay) and retry the SAME chunk so AI
     # translation continues to the end instead of aborting to Google mid-movie.
@@ -1830,7 +1838,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             self.user_msg = user_msg
             self.detail = detail
 
-    def _translate_one(idx, ch, no_arabic=False):
+    def _translate_one(idx, ch, no_arabic=False, deadline=None):
         # Recursive bisection on TruncatedResponse OR low-yield
         # response (Gemini sometimes skips entries silently --
         # observed in the first end-to-end test, a 5-minute gap
@@ -1838,6 +1846,18 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         # the model to spend more attention per entry. A FilteredResponse
         # (prompt-blocked, often PROHIBITED_CONTENT) first retries WITHOUT the
         # Arabic gender block (a common trigger), then bisects.
+        if deadline is None:
+            deadline = time.monotonic() + _CHUNK_BLOCK_BUDGET
+        elif time.monotonic() > deadline:
+            # Spent the whole block-fighting budget on this chunk -- keep the
+            # source for what's left so the JOB finishes (cache + pool) instead of
+            # one stubborn PROHIBITED_CONTENT chunk stalling it. Normal chunks
+            # finish in a fraction of the budget and never trip this.
+            kodi_utils.log(
+                'Chunk {0} over block-budget ({1:.0f}s) -- keeping source for the '
+                'remainder'.format(idx, _CHUNK_BLOCK_BUDGET), level='WARNING')
+            _count('src', len(ch))
+            return '\n\n'.join(ch)
         if len(ch) > 1:
             try:
                 response = _call_gemini(idx, ch, no_arabic=no_arabic)
@@ -1846,8 +1866,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 kodi_utils.log(
                     'Chunk {0} truncated -- bisecting into {1} + {2}'
                     .format(idx, mid, len(ch) - mid), level='WARNING')
-                return (_translate_one(idx, ch[:mid], no_arabic) + '\n\n'
-                        + _translate_one(idx, ch[mid:], no_arabic))
+                return (_translate_one(idx, ch[:mid], no_arabic, deadline) + '\n\n'
+                        + _translate_one(idx, ch[mid:], no_arabic, deadline))
             except gemini.FilteredResponse:
                 _count('blocks')
                 # Isolate the offending line(s): bisect while KEEPING the Arabic,
@@ -1863,8 +1883,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                     'Chunk {0} blocked -- bisecting (keeping Arabic) into {1} + '
                     '{2} to isolate the offending line(s)'.format(
                         idx, mid, len(ch) - mid), level='WARNING')
-                return (_translate_one(idx, ch[:mid], no_arabic) + '\n\n'
-                        + _translate_one(idx, ch[mid:], no_arabic))
+                return (_translate_one(idx, ch[:mid], no_arabic, deadline) + '\n\n'
+                        + _translate_one(idx, ch[mid:], no_arabic, deadline))
 
             # Yield check: did we get back roughly as many entries
             # as we asked for? Gemini sometimes drops entries
@@ -1879,8 +1899,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                     'bisecting into {3} + {4}'.format(
                         idx, got, expected, mid, expected - mid),
                     level='WARNING')
-                return (_translate_one(idx, ch[:mid], no_arabic) + '\n\n'
-                        + _translate_one(idx, ch[mid:], no_arabic))
+                return (_translate_one(idx, ch[:mid], no_arabic, deadline) + '\n\n'
+                        + _translate_one(idx, ch[mid:], no_arabic, deadline))
 
             _count('noar' if no_arabic else 'ar', len(ch))
             return response
