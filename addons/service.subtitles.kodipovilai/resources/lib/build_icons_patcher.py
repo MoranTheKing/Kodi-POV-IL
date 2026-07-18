@@ -45,6 +45,15 @@ FORCE_SYNC = set([
     'Wizard/switch_skin_pov_il.png',   # AF3 "switch skin" tile (distinct baked text)
 ])
 
+# Bump this whenever the shipped branding tiles CHANGE. On a bump, every install
+# drops its (now stale) texture-cache entries for the FORCE_SYNC tiles exactly
+# ONCE, even when the new bytes are already on disk from a prior release -- that
+# is the case that bit us: 0.2.386 synced the new baked-text tiles to disk, but
+# Kodi kept showing the OLD cached bitmap, and 0.2.387 wouldn't re-trigger because
+# the files already matched. The gen marker forces the one-time cache drop.
+TILE_REFRESH_GEN = '2'
+SETTING_REFRESH_GEN = '_tiles_refresh_gen'
+
 
 def _log(msg, level='INFO'):
     if kodi_utils is None:
@@ -182,8 +191,31 @@ def ensure_installed():
 
     if not installed and not updated:
         _log('all bundled icons already on disk', level='DEBUG')
-    # Only FORCE_SYNC tiles land in `updated` (a bytes-changed replace of an
-    # existing file); those are exactly the ones whose texture cache is stale.
-    if updated:
-        _invalidate_texture_cache([r.replace(os.sep, '/') for r in updated])
-    return {'installed': installed, 'updated': updated, 'skipped': skipped}
+
+    # Drop stale texture-cache entries so the fresh art actually shows. Two
+    # triggers: (a) `updated` -- a FORCE_SYNC tile's bytes changed THIS boot;
+    # (b) a TILE_REFRESH_GEN bump -- the tiles are already correct on disk (a
+    # prior release synced them) but Kodi still shows the OLD cached bitmap, so
+    # we drop ALL branding tiles' cache once. Kodi re-caches from disk on the
+    # next render; service.py triggers one focus-preserving reload after startup
+    # so it shows THIS boot instead of the next restart.
+    gen_stale = False
+    try:
+        if kodi_utils is not None:
+            gen_stale = (kodi_utils.get_setting(SETTING_REFRESH_GEN, '') or '') \
+                != TILE_REFRESH_GEN
+    except Exception:
+        gen_stale = False
+    refresh_keys = set(r.replace(os.sep, '/') for r in updated)
+    if gen_stale:
+        refresh_keys |= set(FORCE_SYNC)
+    refresh_needed = bool(refresh_keys)
+    if refresh_needed:
+        _invalidate_texture_cache(sorted(refresh_keys))
+    if gen_stale and kodi_utils is not None:
+        try:
+            kodi_utils.set_setting(SETTING_REFRESH_GEN, TILE_REFRESH_GEN)
+        except Exception:
+            pass
+    return {'installed': installed, 'updated': updated, 'skipped': skipped,
+            'refresh_needed': refresh_needed}
