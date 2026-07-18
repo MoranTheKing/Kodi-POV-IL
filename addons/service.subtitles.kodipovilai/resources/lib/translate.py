@@ -1993,6 +1993,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 #    never repeated at every bisect node.
                 if try_alts:
                     for _lvl in range(1, _MAX_ALT_LEVELS + 1):
+                        if time.monotonic() > deadline:
+                            break     # out of block-budget -> stop, isolate/degrade
                         if not _ref_ensure(_lvl):
                             break     # no more aligned languages available
                         try:
@@ -2060,6 +2062,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             # first (e.g. Spanish after Arabic)...
             _count('blocks')
             for _lvl in range(1, _MAX_ALT_LEVELS + 1):
+                # Cap the uninterruptible window: once past the block-budget, stop
+                # trying more languages for THIS line and degrade -- so one
+                # pathological chunk can't hog the shared RPM gate for other jobs.
+                if time.monotonic() > deadline:
+                    break
                 if not _ref_ensure(_lvl):
                     break
                 try:
