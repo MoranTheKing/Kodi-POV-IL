@@ -343,7 +343,25 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    aligns, the search now downloads more subtitles before falling back to "no
    reference" — a deeper-search follow-up left for later if it proves slow. Shipped
    by key-preserving zip surgery.
-10. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
+10. **Batched, piggybacked usage telemetry — SHIPPED (AI 0.2.385 / quickfix
+   0.1.424).** The add-on's anonymous usage events used to be sent as one network
+   request per AI translation. They're now collected into a small **durable queue**
+   (persisted to the add-on's data dir, so a short-lived subtitle process never
+   loses one) and delivered **without a dedicated request** in the common case:
+   they ride along on the community-pool contribution the add-on already sends
+   after a shared translation, and anything not carried that way is flushed in a
+   single batched request per handful of events. This collapses the per-translation
+   request into (usually) zero extra requests — a large cut in redundant traffic to
+   the community server, fully transparent to the user (translation and download
+   behave exactly as before). Delivery is confirmed by HTTP status so an
+   out-of-date or briefly-unreachable install re-queues rather than silently
+   dropping events, and each event keeps its own timestamp so the maintainer's
+   stats stay time-accurate despite the batching delay. Client-side only; a
+   separate validator reviewed it in two rounds (it caught a real event-loss bug on
+   auth/version rejections, which was fixed and re-verified before shipping).
+   Shipped by key-preserving zip surgery (`pool.py` + `telemetry.py`, credential
+   block spliced through byte-identical).
+11. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
 ## Working style
