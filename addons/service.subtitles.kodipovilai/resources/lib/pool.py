@@ -16,9 +16,19 @@ from resources.lib import kodi_utils
 try:
     import urllib.request as _urlreq
     import urllib.parse as _urlparse
+    import urllib.error as _urlerr
 except ImportError:        # pragma: no cover
     _urlreq = None
     _urlparse = None
+    _urlerr = None
+
+# HTTP status codes the Worker returns BEFORE it reads the request body (auth /
+# version / precondition rejects) or on an internal error. In these cases any
+# telemetry piggybacked on the request was NOT recorded, so it must be re-queued
+# rather than dropped -- 426 in particular is what an out-of-date install gets on
+# EVERY request until it updates. Every other HTTP response (2xx, or an app-level
+# 400/422/429/502 from AFTER the body was parsed) means the events WERE recorded.
+_EV_REQUEUE_CODES = (401, 403, 426, 500, 503)
 
 POOL_URL = 'https://povil-subs-pool.moran200333.workers.dev'
 POOL_API_KEY = 'povil_x8FayxrUOAS9Qew1sFWzO6UgAnEAgJAG'
@@ -437,6 +447,22 @@ def _post(body, marker_path=None):
             return
     except Exception:
         pass
+    # Piggyback pending usage telemetry onto this /contribute we're already
+    # sending, so a shared translation costs ONE Worker request instead of two
+    # (the main lever for staying under the free plan's 100k-requests/day cap).
+    # Drained ONLY here -- past the dedup short-circuit above -- so a skipped
+    # upload never eats the events; they wait for the next contribute or
+    # telemetry's own batched /ev flush. The signature covers method+path+anon,
+    # not the body, so adding this field can't break auth.
+    evs = []
+    try:
+        from resources.lib import telemetry
+        evs = telemetry.drain_batch(telemetry.PIGGYBACK_MAX)
+    except Exception:
+        evs = []
+    if evs:
+        body = dict(body)
+        body['ev'] = evs
     try:
         req = _urlreq.Request(
             POOL_URL + '/contribute',
@@ -445,8 +471,29 @@ def _post(body, marker_path=None):
             method='POST')
         _urlreq.urlopen(req, timeout=_POST_TIMEOUT).read()
     except Exception as e:
+        # Decide the fate of the piggybacked events. The Worker records them ONLY
+        # after it has read the body (i.e. after auth + JSON parse). So an HTTP
+        # response whose code is NOT an auth/version/precondition/server-error
+        # reject means the body WAS read and the events ARE recorded -- even a
+        # quality-422 / dedup / telegram-502: delivered, do NOT requeue (that
+        # would duplicate them). An auth/version reject (401/403/426/503), a 500,
+        # or a transport failure (no HTTPError at all) means they were NOT
+        # recorded: requeue so an out-of-date or briefly-unreachable install
+        # never silently loses them. Either way leave no marker, so the
+        # contribute itself still retries on the next watch.
+        code = getattr(e, 'code', None)
+        delivered = (_urlerr is not None
+                     and isinstance(e, _urlerr.HTTPError)
+                     and code not in _EV_REQUEUE_CODES)
+        if evs and not delivered:
+            try:
+                from resources.lib import telemetry
+                telemetry.restore(evs)
+            except Exception:
+                pass
         try:
-            kodi_utils.log('pool contribute failed: {0}'.format(e), level='DEBUG')
+            kodi_utils.log('pool contribute failed (http {0}): {1}'.format(code, e),
+                           level='DEBUG')
         except Exception:
             pass
         return
