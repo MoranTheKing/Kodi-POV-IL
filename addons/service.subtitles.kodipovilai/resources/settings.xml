@@ -82,6 +82,17 @@
             <heading>32201</heading>
           </control>
         </setting>
+        <!-- Paid-tier fast mode: the built-in pacing (RPM cap + limited parallel
+             chunks) exists to keep FREE keys under Gemini's ~15 req/min limit.
+             A user on a paid Gemini plan has thousands of RPM, so this toggle
+             lifts those speed limits (no pacing + more parallel chunks) for much
+             faster translation. Default OFF. Quality (model/thinking) is separate
+             and unchanged. -->
+        <setting id="ai_paid_mode" type="boolean" label="32550" help="32551">
+          <level>0</level>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
       </group>
 
       <!-- Legacy "source language priority" for the old local-file flow. The
@@ -729,9 +740,11 @@
             <dependency type="enable" setting="whole_subtitle_request" operator="is">false</dependency>
           </dependencies>
           <default>3</default>
+          <!-- max 16 so paid-tier "fast mode" (ai_paid_mode) can tune 8..16; the
+               free path still caps itself at 8 in translate.py regardless. -->
           <constraints>
             <minimum>1</minimum>
-            <maximum>8</maximum>
+            <maximum>16</maximum>
             <step>1</step>
           </constraints>
           <control type="slider" format="integer">
