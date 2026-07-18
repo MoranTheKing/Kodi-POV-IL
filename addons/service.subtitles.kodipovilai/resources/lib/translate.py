@@ -1290,9 +1290,46 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         _ar_on = False
     _tier = 'ar' if _ar_on else ''
     _pool_kind = 'ai_ar' if _ar_on else 'ai'
-    _ar_map = None  # {srt_entry_number: reference_line}, set just before chunking
-    _ar_diag = {}   # arabic_gender.prepare diagnostics (reason/cands/diag/lang)
-    _ref_lang = 'ar'  # chain language actually used (he/ar/es/fr/ru/...)
+    _ar_map = None  # {srt_entry_number: reference_line}, PRIMARY ref (_ref_stack[0][1])
+    _ar_diag = {}   # gender-reference diagnostics (reason/cands/diag/lang)
+    _ref_lang = 'ar'  # PRIMARY chain language actually used (he/ar/es/fr/ru/...)
+    # Reference STACK of gender oracles. [0] = primary; higher tiers are
+    # ALTERNATE chain languages pulled LAZILY -- only when a chunk is prompt-
+    # blocked -- so a job that never blocks downloads exactly one reference. A
+    # blocked chunk is retried with the NEXT human-subtitle language (e.g.
+    # Spanish after Arabic) before ever dropping the reference, preserving
+    # per-line gender instead of falling straight to English-only.
+    _ref_stack = []            # [(lang, {entry_number: reference_line}), ...]
+    _ref_plan = [None]         # arabic_gender.ReferencePlan (boxed for the closure)
+    _ref_lock = threading.Lock()
+
+    def _ref_ensure(level):
+        """Ensure _ref_stack has a reference at `level` (0 = primary), pulling
+        the next aligning chain language from the plan on demand. Returns True if
+        a reference exists at that level. Thread-safe (parallel chunk workers may
+        request a fallback at once); fully guarded."""
+        if level < 0:
+            return False
+        if level < len(_ref_stack):
+            return True
+        plan = _ref_plan[0]
+        if plan is None:
+            return False
+        with _ref_lock:
+            while len(_ref_stack) <= level:
+                try:
+                    lang, mp = plan.next()
+                except Exception:
+                    lang, mp = None, None
+                if mp is None:
+                    return False
+                _ref_stack.append((lang or 'ar', mp))
+                if len(_ref_stack) > 1:
+                    kodi_utils.log(
+                        'gender-ref: added fallback tier {0} [{1}] for blocked '
+                        'chunks'.format(len(_ref_stack) - 1, lang or '?'),
+                        level='INFO')
+        return level < len(_ref_stack)
 
     def _pool_key(base_hash):
         # ai_ar variants live under "<hash>_ar" so EVERY client can prefer them
@@ -1671,9 +1708,26 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                            (info.get('title') or imdb_id or '?')), level='INFO')
         try:
             from . import arabic_gender
-            _ar_map, _ar_diag = arabic_gender.prepare(info, src_text)
-            if _ar_map:
-                _ref_lang = (_ar_diag.get('lang') or 'ar')
+            plan, _diag0 = arabic_gender.begin(info, src_text)
+            _ref_plan[0] = plan
+            if plan is not None and _ref_ensure(0):
+                # primary reference pulled (same single-download cost as before);
+                # fallback languages stay un-downloaded until a chunk blocks.
+                _ref_lang = (_ref_stack[0][0] or 'ar')
+                _ar_map = _ref_stack[0][1]
+                _ar_diag = {'reason': 'ok', 'cands': _diag0.get('cands', 0),
+                            'diag': getattr(plan, 'first_diag', ''),
+                            'lang': _ref_lang}
+            elif plan is not None:
+                # candidates existed but none aligned confidently
+                _ar_map = None
+                _ar_diag = {'reason': 'no_align',
+                            'cands': _diag0.get('cands', 0),
+                            'diag': getattr(plan, 'first_diag', '')}
+            else:
+                # no candidate at all: crash / no_source / no_arabic
+                _ar_map = None
+                _ar_diag = _diag0
         except Exception as e:
             kodi_utils.log('gender-ref prepare crashed: {0}'.format(e),
                            level='WARNING')
@@ -1719,7 +1773,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # from parallel worker threads, so guard with a lock.
     import threading as _threading
     _chunk_lock = _threading.Lock()
-    _chunk_stat = {'ar': 0, 'noar': 0, 'src': 0, 'blocks': 0}
+    _chunk_stat = {'ar': 0, 'alt': 0, 'noar': 0, 'src': 0, 'blocks': 0}
 
     def _count(kind, n=1):
         try:
@@ -1766,6 +1820,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 # translated after DROPPING Arabic, and kept as source; plus the
                 # number of prompt-block events hit and the total chunk count.
                 'ent_ar': int(_chunk_stat.get('ar', 0)),
+                'ent_alt': int(_chunk_stat.get('alt', 0)),
                 'ent_noar': int(_chunk_stat.get('noar', 0)),
                 'ent_src': int(_chunk_stat.get('src', 0)),
                 'blocks': int(_chunk_stat.get('blocks', 0)),
@@ -1810,10 +1865,21 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # bisect-storming a PROHIBITED_CONTENT block for ~5 min and never finishing,
     # so the job never cached/uploaded).
     FILTERED_BACKOFF = [4]
-    # Hard per-chunk wall-clock budget for fighting content blocks: once exceeded,
-    # _translate_one keeps the SOURCE text for the remainder and returns, so ONE
-    # stubborn PROHIBITED_CONTENT chunk can never block the job's finalization.
-    _CHUNK_BLOCK_BUDGET = 45.0
+    # On a blocked chunk, try up to this many ALTERNATE chain languages (e.g.
+    # Spanish after Arabic) before dropping the gender reference. The user asked
+    # for "the next language after Arabic"; 1 keeps the block path fast while
+    # still preserving per-line gender when the alternate language passes.
+    _MAX_ALT_LEVELS = 1
+    NO_REF = -1                # _call_gemini ref_level meaning "English only"
+    # Generous per-chunk wall-clock backstop for fighting content blocks. It is a
+    # pure CIRCUIT-BREAKER: the structured fallback (alt language -> bisect to
+    # isolate -> English-only per line -> keep source) already terminates on its
+    # own, so this only trips on a pathological, pervasively-explicit chunk to
+    # stop it stalling the JOB's finalization (a real log showed one chunk
+    # bisect-storming a block for ~5 min, so the job never cached/uploaded). When
+    # it trips it translates the remainder ENGLISH-ONLY in one shot (still
+    # Hebrew, just no gender); source is kept only if even that is blocked.
+    _CHUNK_BLOCK_BUDGET = 120.0
     # Per-minute rate limit (HTTP 429, RPM/TPM) -- TEMPORARY, clears within ~60s.
     # Back off (preferring Gemini's own retryDelay) and retry the SAME chunk so AI
     # translation continues to the end instead of aborting to Google mid-movie.
@@ -1838,53 +1904,77 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             self.user_msg = user_msg
             self.detail = detail
 
-    def _translate_one(idx, ch, no_arabic=False, deadline=None):
-        # Recursive bisection on TruncatedResponse OR low-yield
-        # response (Gemini sometimes skips entries silently --
-        # observed in the first end-to-end test, a 5-minute gap
-        # in the middle of a translated movie). Bisecting forces
-        # the model to spend more attention per entry. A FilteredResponse
-        # (prompt-blocked, often PROHIBITED_CONTENT) first retries WITHOUT the
-        # Arabic gender block (a common trigger), then bisects.
+    def _translate_one(idx, ch, deadline=None, try_alts=True):
+        # Recursive bisection on TruncatedResponse OR low-yield response (Gemini
+        # sometimes silently skips entries -- observed as a 5-minute gap in the
+        # middle of a translated movie). Bisecting forces the model to spend more
+        # attention per entry. A FilteredResponse (prompt-blocked, usually
+        # PROHIBITED_CONTENT) is handled QUALITY-FIRST: retry the whole chunk
+        # with the NEXT human-subtitle language (gender preserved); if that still
+        # blocks, bisect to ISOLATE the offending line(s) so every OTHER line
+        # keeps its reference; at a single blocked entry, try each alternate
+        # language, then English-only (translated, gender dropped), and only as
+        # an ABSOLUTE LAST RESORT keep the source for that ONE line.
         if deadline is None:
             deadline = time.monotonic() + _CHUNK_BLOCK_BUDGET
         elif time.monotonic() > deadline:
-            # Spent the whole block-fighting budget on this chunk -- keep the
-            # source for what's left so the JOB finishes (cache + pool) instead of
-            # one stubborn PROHIBITED_CONTENT chunk stalling it. Normal chunks
-            # finish in a fraction of the budget and never trip this.
+            # Circuit-breaker (rare, pathologically explicit chunk): translate
+            # the remainder ENGLISH-ONLY in ONE call so the viewer still gets
+            # Hebrew and the JOB finalizes (cache + pool); keep source only if
+            # even that is blocked. Never dumps a whole sub-chunk to source while
+            # a single-line isolation could still have translated it.
             kodi_utils.log(
-                'Chunk {0} over block-budget ({1:.0f}s) -- keeping source for the '
-                'remainder'.format(idx, _CHUNK_BLOCK_BUDGET), level='WARNING')
-            _count('src', len(ch))
-            return '\n\n'.join(ch)
+                'Chunk {0} over block-budget ({1:.0f}s) -- translating the '
+                'remainder English-only'.format(idx, _CHUNK_BLOCK_BUDGET),
+                level='WARNING')
+            try:
+                _resp = _call_gemini(idx, ch, NO_REF)
+                _count('noar', len(ch))
+                return _resp
+            except gemini.FilteredResponse:
+                _count('src', len(ch))
+                return '\n\n'.join(ch)
         if len(ch) > 1:
             try:
-                response = _call_gemini(idx, ch, no_arabic=no_arabic)
+                response = _call_gemini(idx, ch, 0)      # primary reference
             except gemini.TruncatedResponse:
                 mid = len(ch) // 2
                 kodi_utils.log(
                     'Chunk {0} truncated -- bisecting into {1} + {2}'
                     .format(idx, mid, len(ch) - mid), level='WARNING')
-                return (_translate_one(idx, ch[:mid], no_arabic, deadline) + '\n\n'
-                        + _translate_one(idx, ch[mid:], no_arabic, deadline))
+                return (_translate_one(idx, ch[:mid], deadline, try_alts) + '\n\n'
+                        + _translate_one(idx, ch[mid:], deadline, try_alts))
             except gemini.FilteredResponse:
                 _count('blocks')
-                # Isolate the offending line(s): bisect while KEEPING the Arabic,
-                # so only the minimal blocking sub-chunk eventually drops it (at
-                # size 1, below) and every OTHER line keeps its Arabic gender
-                # oracle. Previously the first block dropped Arabic for the WHOLE
-                # chunk -- which is why a single bad line cost the entire chunk
-                # its gender (and showed up as "all N entries dropped Arabic").
-                # Halving also reduces the per-request explicit-content volume,
-                # so most halves pass on their own.
+                # 1) Try the WHOLE chunk with the next human-subtitle language(s)
+                #    -- gender-preserving. Handles the aggregate-volume block
+                #    (Arabic DOUBLED the explicit content; a lighter language may
+                #    pass) in one fast call. Only at the top level (try_alts),
+                #    never repeated at every bisect node.
+                if try_alts:
+                    for _lvl in range(1, _MAX_ALT_LEVELS + 1):
+                        if not _ref_ensure(_lvl):
+                            break     # no more aligned languages available
+                        try:
+                            _resp = _call_gemini(idx, ch, _lvl)
+                            kodi_utils.log(
+                                'Chunk {0} passed with fallback reference [{1}]'
+                                .format(idx, _ref_stack[_lvl][0]), level='INFO')
+                            _count('alt', len(ch))
+                            return _resp
+                        except gemini.FilteredResponse:
+                            continue
+                # 2) Still blocked -> bisect to ISOLATE the offending line(s),
+                #    keeping the primary reference on every OTHER line. Children
+                #    do NOT re-try whole-chunk alts (try_alts=False); the isolated
+                #    single entry (below) tries alts + English-only + source.
                 mid = len(ch) // 2
                 kodi_utils.log(
-                    'Chunk {0} blocked -- bisecting (keeping Arabic) into {1} + '
-                    '{2} to isolate the offending line(s)'.format(
-                        idx, mid, len(ch) - mid), level='WARNING')
-                return (_translate_one(idx, ch[:mid], no_arabic, deadline) + '\n\n'
-                        + _translate_one(idx, ch[mid:], no_arabic, deadline))
+                    'Chunk {0} blocked -- bisecting into {1} + {2} to isolate '
+                    'the offending line(s)'.format(idx, mid, len(ch) - mid),
+                    level='WARNING')
+                return (_translate_one(idx, ch[:mid], deadline, False) + '\n\n'
+                        + _translate_one(idx, ch[mid:], deadline, False))
 
             # Yield check: did we get back roughly as many entries
             # as we asked for? Gemini sometimes drops entries
@@ -1899,19 +1989,19 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                     'bisecting into {3} + {4}'.format(
                         idx, got, expected, mid, expected - mid),
                     level='WARNING')
-                return (_translate_one(idx, ch[:mid], no_arabic, deadline) + '\n\n'
-                        + _translate_one(idx, ch[mid:], no_arabic, deadline))
+                return (_translate_one(idx, ch[:mid], deadline, try_alts) + '\n\n'
+                        + _translate_one(idx, ch[mid:], deadline, try_alts))
 
-            _count('noar' if no_arabic else 'ar', len(ch))
+            _count('ar', len(ch))
             return response
-        # single-entry chunk that still truncates -- shouldn't
-        # happen (one SRT entry is < 100 tokens), but if it does
-        # we surface the partial text so the user sees something.
+        # ---- single-entry chunk ----
         try:
-            _resp = _call_gemini(idx, ch, no_arabic=no_arabic)
-            _count('noar' if no_arabic else 'ar', len(ch))
+            _resp = _call_gemini(idx, ch, 0)
+            _count('ar', len(ch))
             return _resp
         except gemini.TruncatedResponse as e:
+            # shouldn't happen (one SRT entry is < 100 tokens), but if it does
+            # we surface the partial text so the user sees something.
             kodi_utils.log(
                 'Chunk {0} truncated even at size 1 -- '
                 'returning partial'.format(idx),
@@ -1919,20 +2009,32 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             _count('src', len(ch))
             return e.partial_text or ''
         except gemini.FilteredResponse:
-            # Retry this single entry without the Arabic block; if STILL blocked,
-            # keep the SOURCE text for it so the rest of the subtitle still
-            # translates instead of the whole job aborting.
+            # This ONE entry blocked with the primary reference. Preserve gender
+            # if at all possible: try each ALTERNATE human-subtitle language
+            # first (e.g. Spanish after Arabic)...
             _count('blocks')
-            if not no_arabic and _ar_map:
+            for _lvl in range(1, _MAX_ALT_LEVELS + 1):
+                if not _ref_ensure(_lvl):
+                    break
                 try:
-                    _resp = _call_gemini(idx, ch, no_arabic=True)
+                    _resp = _call_gemini(idx, ch, _lvl)
+                    _count('alt', len(ch))
+                    return _resp
+                except gemini.FilteredResponse:
+                    continue
+            # ...then English-only (translated, gender dropped for this line)...
+            if _ref_stack:
+                try:
+                    _resp = _call_gemini(idx, ch, NO_REF)
                     _count('noar', len(ch))
                     return _resp
                 except gemini.FilteredResponse:
                     pass
+            # ...and only as an ABSOLUTE LAST RESORT keep the source for this ONE
+            # line, so the rest of the subtitle still translates.
             kodi_utils.log(
-                'Chunk {0} blocked even at size 1 -- keeping source text'
-                .format(idx), level='WARNING')
+                'Chunk {0} blocked even English-only at size 1 -- keeping '
+                'source text (last resort)'.format(idx), level='WARNING')
             _count('src', len(ch))
             return '\n\n'.join(ch)
 
@@ -1954,32 +2056,39 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                     prev_block_texts.append(t)
             prev_context_by_idx[i] = prev_block_texts
 
-    def _call_gemini(idx, ch, no_arabic=False):
+    def _call_gemini(idx, ch, ref_level=0):
         body = '\n\n'.join(ch)
         prev_ctx_block = prompt.build_prev_context_block(
             prev_context_by_idx.get(idx) or [])
-        # Arabic gender reference for THIS chunk's entries (opt-in). Keyed by the
-        # block's own SRT number so it stays aligned regardless of chunking.
-        # `no_arabic` drops it -- used when a chunk got prompt-blocked, since the
-        # Arabic dialogue text is a common PROHIBITED_CONTENT trigger.
+        # Gender reference for THIS chunk's entries (opt-in), keyed by the block's
+        # own SRT number so it stays aligned regardless of chunking. `ref_level`
+        # selects WHICH human-subtitle language: 0 = primary, 1.. = fallback
+        # languages (tried when a chunk is prompt-blocked, since the primary --
+        # often Arabic -- dialogue text is a common PROHIBITED_CONTENT trigger),
+        # NO_REF (-1) = none (English only, when even the fallbacks were blocked).
         ar_block = ''
-        if _ar_map and not no_arabic:
+        if 0 <= ref_level < len(_ref_stack):
+            ref_lang, ref_map = _ref_stack[ref_level]
             ent = []
             for block in ch:
                 first = block.lstrip().split('\n', 1)[0].strip()
                 if first.isdigit():
                     num = int(first)
-                    ar = _ar_map.get(num)
-                    # Skip per-entry Arabic that carries a severe policy-trigger
+                    ref_line = ref_map.get(num)
+                    # Skip per-entry ARABIC that carries a severe policy-trigger
                     # term -- it's the redundant repetition of explicit content
                     # that pushes the prompt over Google's block threshold. The
                     # English still translates these entries; their gender comes
-                    # from context (see _AR_EXPLICIT_MARKERS).
-                    if ar and not any(mk in ar for mk in _AR_EXPLICIT_MARKERS):
-                        ent.append((num, ar))
+                    # from context (see _AR_EXPLICIT_MARKERS). Only the Arabic
+                    # oracle has this marker list; other languages pass through.
+                    if ref_line and not (
+                            ref_lang == 'ar'
+                            and any(mk in ref_line
+                                    for mk in _AR_EXPLICIT_MARKERS)):
+                        ent.append((num, ref_line))
             if ent:
                 try:
-                    ar_block = prompt.build_gender_block(ent, _ref_lang)
+                    ar_block = prompt.build_gender_block(ent, ref_lang)
                 except Exception:
                     ar_block = ''
         full_prompt = (prompt_template
