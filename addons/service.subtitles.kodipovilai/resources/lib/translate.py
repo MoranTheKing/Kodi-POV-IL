@@ -22,6 +22,7 @@
 
 import json
 import os
+import threading
 import time
 import urllib.parse
 
@@ -88,6 +89,33 @@ def _pool_reuse_fetch(info, content_id, ar_on):
     if (not ar_on) and (content_id in have):
         return pool.fetch(info, content_id), False
     return None, False
+
+
+# --- Gemini request pacing (shared across all chunk threads + concurrent jobs) --
+# Free-tier Gemini Flash Lite is ~15 requests/minute (RPM). Dispatching chunks in
+# parallel with NO pacing bursts well above that -> constant per-minute 429s ->
+# noisy retries that waste requests and burn the daily quota. One global "minimum
+# interval between request STARTS" caps the rate just under the limit so we almost
+# never hit 429. Module scope so it holds across the ThreadPoolExecutor workers AND
+# across two titles translating at once (they share one API key's RPM budget).
+_GEMINI_RATE_LOCK = threading.Lock()
+_GEMINI_NEXT_SLOT = [0.0]
+
+
+def _gemini_rate_gate(min_interval):
+    """Block until this thread's reserved slot, spacing all Gemini request STARTS
+    >= min_interval seconds apart process-wide. No-op when min_interval <= 0."""
+    if min_interval <= 0:
+        return
+    with _GEMINI_RATE_LOCK:
+        now = time.monotonic()
+        slot = _GEMINI_NEXT_SLOT[0]
+        if slot < now:
+            slot = now
+        _GEMINI_NEXT_SLOT[0] = slot + min_interval
+    delay = slot - time.monotonic()
+    if delay > 0:
+        time.sleep(delay)
 
 
 # Iteration order = priority order. settings.xml exposes
@@ -1783,6 +1811,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # translation continues to the end instead of aborting to Google mid-movie.
     # Only a genuine per-DAY 429 (gemini.QuotaExceeded) is terminal.
     RATELIMIT_BACKOFF = [20, 30, 45, 60, 60]
+    # Global request pacing: keep Gemini request starts under the RPM cap (default
+    # 14, safely below the free 15) so we (almost) never hit the per-minute limit
+    # in the first place -- no 429s to retry, no wasted requests, no toast spam.
+    # Advanced/paid-tier users can raise `gemini_rpm`.
+    _rpm_interval = 60.0 / max(1, kodi_utils.get_int('gemini_rpm', 14))
+    # Show the "rate limited" toast at most ONCE per job (shared across chunks),
+    # not once per chunk per retry.
+    _ratelimit_notified = [False]
 
     # Per-chunk translator. Holds the inner retry loop. Returns the
     # raw Gemini response text, or raises a Stop-style exception
@@ -1936,6 +1972,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         filtered_attempts = 0
         ratelimit_attempts = 0
         while True:
+            _gemini_rate_gate(_rpm_interval)   # pace to stay under the RPM cap
             try:
                 return gemini.generate(
                     api_key=api_key,
@@ -1960,9 +1997,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                         'retry {2}/{3} in {4}s'.format(
                             idx, total, ratelimit_attempts,
                             len(RATELIMIT_BACKOFF), wait), level='WARNING')
-                    kodi_utils.notify(
-                        'AI: קצב זמני מוגבל, ממשיך בעוד {0}ש'.format(wait),
-                        time_ms=min(wait * 1000, 6000))
+                    if not _ratelimit_notified[0]:
+                        _ratelimit_notified[0] = True
+                        kodi_utils.notify(
+                            'AI: קצב זמני מוגבל, ממתין רגע…', time_ms=4000)
                     time.sleep(wait)
                     continue
                 # Still limited after the whole per-minute window -> fall back so
