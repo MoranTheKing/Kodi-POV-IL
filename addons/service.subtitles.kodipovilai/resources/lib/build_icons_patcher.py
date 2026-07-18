@@ -37,6 +37,7 @@ FORCE_SYNC = set([
     'Wizard/fast_update.png',
     'Wizard/wizard_pov_il.png',
     'Wizard/wizard.png',
+    'Wizard/switch_skin_pov_il.png',   # AF3 "switch skin" tile (distinct baked text)
 ])
 
 

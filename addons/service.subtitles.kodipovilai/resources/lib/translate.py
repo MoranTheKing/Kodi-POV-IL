@@ -1905,8 +1905,19 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # Global request pacing: keep Gemini request starts under the RPM cap (default
     # 14, safely below the free 15) so we (almost) never hit the per-minute limit
     # in the first place -- no 429s to retry, no wasted requests, no toast spam.
-    # Advanced/paid-tier users can raise `gemini_rpm`.
-    _rpm_interval = 60.0 / max(1, kodi_utils.get_int('gemini_rpm', 14))
+    # `ai_paid_mode` (a paid Gemini plan has thousands of RPM) disables the pacing
+    # entirely, since the free cap only slows a paid key down. An explicitly pinned
+    # `gemini_rpm` still wins in either mode.
+    _paid_mode = kodi_utils.get_bool('ai_paid_mode', False)
+    if _paid_mode:
+        # Paid tier has thousands of RPM, so disable pacing (0 -> the gate no-ops).
+        # An explicitly pinned gemini_rpm still wins.
+        _rpm = kodi_utils.get_int('gemini_rpm', 0)
+        _rpm_interval = (60.0 / _rpm) if _rpm > 0 else 0.0
+    else:
+        # Free tier: UNCHANGED -- clamp to >=1 RPM so a pinned 0/negative can't
+        # accidentally unpace a free key (which would 429-storm the 15 RPM cap).
+        _rpm_interval = 60.0 / max(1, kodi_utils.get_int('gemini_rpm', 14))
     # Show the "rate limited" toast at most ONCE per job (shared across chunks),
     # not once per chunk per retry.
     _ratelimit_notified = [False]
@@ -2259,6 +2270,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # advanced settings.
     if whole_subtitle_request:
         parallel = 1
+    elif _paid_mode:
+        # Paid tier: no RPM cap to respect, so run more chunks in flight for a
+        # much faster wall-time. FLOOR at 8 -- the parallel_chunks setting defaults
+        # to 3 (free-tier safe) so we can't rely on its default here; the slider's
+        # max is raised to 16 so a paid user can still tune 8..16 up.
+        parallel = max(8, min(16, kodi_utils.get_int('parallel_chunks', 8)))
     else:
         parallel = max(1, min(8, kodi_utils.get_int(
             'parallel_chunks', 3)))
@@ -2470,13 +2487,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 'pool: skipped share -- translation looks incomplete or not '
                 'Hebrew (quality gate)', level='INFO')
 
-    # Append today's Gemini quota usage to the success toast, but
-    # only if the user is on the tracked model (3.1 Flash Lite).
+    # Append today's Gemini quota usage to the success toast, but only if the user
+    # is on the tracked model (3.1 Flash Lite) AND not in paid mode (the "X/1000"
+    # figure is the FREE daily cap, meaningless/misleading for a paid key).
     # Wrapped so a quota-module bug can't drop the toast itself.
     quota_suffix = ''
     try:
         from . import gemini_quota
-        if gemini_quota.is_tracked(model):
+        if gemini_quota.is_tracked(model) and not _paid_mode:
             quota_suffix = ' · ' + gemini_quota.format_status_short()
     except Exception:
         quota_suffix = ''

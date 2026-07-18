@@ -356,7 +356,7 @@ HOME_SUBMENU = [
     },
     {
         'label': 'החלף סקין',
-        'icon': 'special://home/media/build_icons/Wizard/wizard_pov_il.png',
+        'icon': 'special://home/media/build_icons/Wizard/switch_skin_pov_il.png',
         'path': 'RunPlugin("plugin://plugin.program.kodipovilwizard/?mode=install&action=build_switch_skin")',
         'target': '',
     },
@@ -396,7 +396,7 @@ POWER_MENU = [
     },
     {
         'label': 'החלף סקין',
-        'icon': 'special://home/media/build_icons/Wizard/wizard_pov_il.png',
+        'icon': 'special://home/media/build_icons/Wizard/switch_skin_pov_il.png',
         'path': 'RunPlugin("plugin://plugin.program.kodipovilwizard/?mode=install&action=build_switch_skin")',
         'target': '',
     },
