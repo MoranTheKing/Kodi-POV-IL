@@ -118,6 +118,22 @@ def _gemini_rate_gate(min_interval):
         time.sleep(delay)
 
 
+def _gemini_free_rpm_cap(model):
+    """Requests-per-minute ceiling for the FREE Gemini tier, by model family.
+
+    Flash-Lite's free RPM is ~15, so we pace at 14. Regular Flash's free RPM
+    is only ~5 (and just ~20 requests per DAY), so we pace at 4. Pacing regular
+    Flash at Flash-Lite's ceiling is exactly what 429-storms it, so the cap has
+    to follow the selected model rather than assume Flash-Lite. Anything we
+    don't recognise falls back to the most conservative cap."""
+    m = (model or '').lower()
+    if 'flash-lite' in m or 'flash_lite' in m or 'flashlite' in m:
+        return 14
+    if 'flash' in m:
+        return 4
+    return 4
+
+
 # Iteration order = priority order. settings.xml exposes
 # checkboxes -- we filter the disabled ones out at runtime.
 ALL_SOURCE_LANGS = [
@@ -1902,12 +1918,13 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
     # translation continues to the end instead of aborting to Google mid-movie.
     # Only a genuine per-DAY 429 (gemini.QuotaExceeded) is terminal.
     RATELIMIT_BACKOFF = [20, 30, 45, 60, 60]
-    # Global request pacing: keep Gemini request starts under the RPM cap (default
-    # 14, safely below the free 15) so we (almost) never hit the per-minute limit
-    # in the first place -- no 429s to retry, no wasted requests, no toast spam.
+    # Global request pacing: keep Gemini request starts under the free RPM cap
+    # so we (almost) never hit the per-minute limit in the first place -- no 429s
+    # to retry, no wasted requests, no toast spam. The cap is MODEL-AWARE: ~14 for
+    # Flash-Lite (free ~15 RPM) but only ~4 for regular Flash (free ~5 RPM), so
+    # picking regular Flash no longer 429-storms at Flash-Lite's pace.
     # `ai_paid_mode` (a paid Gemini plan has thousands of RPM) disables the pacing
-    # entirely, since the free cap only slows a paid key down. An explicitly pinned
-    # `gemini_rpm` still wins in either mode.
+    # entirely, since the free cap only slows a paid key down.
     _paid_mode = kodi_utils.get_bool('ai_paid_mode', False)
     if _paid_mode:
         # Paid tier has thousands of RPM, so disable pacing (0 -> the gate no-ops).
@@ -1915,9 +1932,13 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         _rpm = kodi_utils.get_int('gemini_rpm', 0)
         _rpm_interval = (60.0 / _rpm) if _rpm > 0 else 0.0
     else:
-        # Free tier: UNCHANGED -- clamp to >=1 RPM so a pinned 0/negative can't
-        # accidentally unpace a free key (which would 429-storm the 15 RPM cap).
-        _rpm_interval = 60.0 / max(1, kodi_utils.get_int('gemini_rpm', 14))
+        # Free tier: pace at the model's free ceiling. A user who pins a LOWER
+        # gemini_rpm is honoured (min picks it); a pinned value ABOVE the model's
+        # free cap is clamped down so it can't 429-storm. >=1 keeps a pinned
+        # 0/negative from accidentally unpacing a free key.
+        _free_cap = _gemini_free_rpm_cap(model)
+        _rpm_interval = 60.0 / max(1, min(
+            kodi_utils.get_int('gemini_rpm', _free_cap), _free_cap))
     # Show the "rate limited" toast at most ONCE per job (shared across chunks),
     # not once per chunk per retry.
     _ratelimit_notified = [False]
@@ -2488,14 +2509,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
                 'Hebrew (quality gate)', level='INFO')
 
     # Append today's Gemini quota usage to the success toast, but only if the user
-    # is on the tracked model (3.1 Flash Lite) AND not in paid mode (the "X/1000"
-    # figure is the FREE daily cap, meaningless/misleading for a paid key).
-    # Wrapped so a quota-module bug can't drop the toast itself.
+    # is on a tracked free model (Flash / Flash-Lite) AND not in paid mode (the
+    # "X/limit" figure is the FREE daily cap, meaningless/misleading for a paid
+    # key). The limit shown follows the model (~500/day Flash-Lite, ~20/day regular
+    # Flash). Wrapped so a quota-module bug can't drop the toast itself.
     quota_suffix = ''
     try:
         from . import gemini_quota
         if gemini_quota.is_tracked(model) and not _paid_mode:
-            quota_suffix = ' · ' + gemini_quota.format_status_short()
+            quota_suffix = ' · ' + gemini_quota.format_status_short(model)
     except Exception:
         quota_suffix = ''
     kodi_utils.notify('AI: תרגום הסתיים בהצלחה ({0} chunks){1}'
