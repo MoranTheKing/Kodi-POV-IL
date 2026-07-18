@@ -861,7 +861,8 @@ async function ensureTeleSchema(env) {
   // Add the newer columns to a pre-existing table (D1 has no ADD COLUMN IF NOT
   // EXISTS, so ignore the "duplicate column" error).
   for (const col of ['reason TEXT', 'ar_cands INTEGER', 'dur INTEGER',
-    'ent_ar INTEGER', 'ent_noar INTEGER', 'ent_src INTEGER', 'blocks INTEGER', 'chunks INTEGER']) {
+    'ent_ar INTEGER', 'ent_noar INTEGER', 'ent_src INTEGER', 'blocks INTEGER', 'chunks INTEGER',
+    'ref_lang TEXT', 'ent_alt INTEGER']) {
     try { await env.DB.prepare(`ALTER TABLE tr_events ADD COLUMN ${col}`).run(); } catch (e) { /* exists */ }
   }
 }
@@ -872,8 +873,8 @@ async function recordEvent(env, body, ts) {
   try {
     await ensureTeleSchema(env);
     await env.DB.prepare(
-      `INSERT INTO tr_events (ts,anon,v,type,title,season,episode,year,src,method,ok,note,hinted,model,think,reason,ar_cands,dur,ent_ar,ent_noar,ent_src,blocks,chunks)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      `INSERT INTO tr_events (ts,anon,v,type,title,season,episode,year,src,method,ok,note,hinted,model,think,reason,ar_cands,dur,ent_ar,ent_noar,ent_src,blocks,chunks,ref_lang,ent_alt)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).bind(
       ts, _ts(b.anon).slice(0, 40), _ts(b.v).slice(0, 16), _ts(b.type).slice(0, 12),
       _ts(b.title).slice(0, 160), _ts(b.season).slice(0, 8), _ts(b.episode).slice(0, 8),
@@ -882,7 +883,8 @@ async function recordEvent(env, body, ts) {
       _ts(b.model).slice(0, 40), _ts(b.think).slice(0, 16),
       _ts(b.reason).slice(0, 24), Number(b.ar_cands) || 0, Number(b.dur) || 0,
       Number(b.ent_ar) || 0, Number(b.ent_noar) || 0, Number(b.ent_src) || 0,
-      Number(b.blocks) || 0, Number(b.chunks) || 0
+      Number(b.blocks) || 0, Number(b.chunks) || 0,
+      _ts(b.ref_lang).slice(0, 8), Number(b.ent_alt) || 0
     ).run();
   } catch (e) { return json({ ok: false, error: String(e).slice(0, 160) }); }
   return json({ ok: true, stored: true });
@@ -947,10 +949,15 @@ async function renderStats(env, token) {
   // Chunk-level outcome across SUCCESSFUL translations: of all entries actually
   // delivered, how many went through WITH the Arabic prompt, how many fell back
   // to English-only (Arabic dropped on a blocked chunk), how many kept source.
-  const chk = (await q(`SELECT COALESCE(SUM(ent_ar),0) ar, COALESCE(SUM(ent_noar),0) noar, COALESCE(SUM(ent_src),0) src,
-       COALESCE(SUM(CASE WHEN (COALESCE(blocks,0)>0 OR COALESCE(ent_noar,0)>0 OR COALESCE(ent_src,0)>0) THEN 1 ELSE 0 END),0) degraded,
+  const chk = (await q(`SELECT COALESCE(SUM(ent_ar),0) ar, COALESCE(SUM(ent_alt),0) alt, COALESCE(SUM(ent_noar),0) noar, COALESCE(SUM(ent_src),0) src,
+       COALESCE(SUM(CASE WHEN (COALESCE(blocks,0)>0 OR COALESCE(ent_alt,0)>0 OR COALESCE(ent_noar,0)>0 OR COALESCE(ent_src,0)>0) THEN 1 ELSE 0 END),0) degraded,
        COALESCE(SUM(COALESCE(blocks,0)),0) blocks
-       FROM tr_events ${W} AND ok=1`))[0] || { ar: 0, noar: 0, src: 0, degraded: 0, blocks: 0 };
+       FROM tr_events ${W} AND ok=1`))[0] || { ar: 0, alt: 0, noar: 0, src: 0, degraded: 0, blocks: 0 };
+  // Helper (reference) language distribution across successful ai_ar
+  // translations: WHICH human-subtitle language was aligned as the gender oracle
+  // and sent alongside the English source (he/ar/es/fr/...). Populates going
+  // forward -- older rows predate the ref_lang column and read back as '(none)'.
+  const byRef = await q(`SELECT COALESCE(NULLIF(ref_lang,''),'(none)') ref_lang, COUNT(*) n FROM tr_events ${W} AND method='ai_ar' AND ok=1 GROUP BY ref_lang ORDER BY n DESC`);
   const m = { ai_ar: 0, ai_fallback: 0, ai_plain: 0 };       // successful only
   const mAll = { ai_ar: 0, ai_fallback: 0, ai_plain: 0 };    // all attempts
   bm.forEach(r => { m[r.method] = r.oks; mAll[r.method] = r.n; });
@@ -959,7 +966,11 @@ async function renderStats(env, token) {
   const newPct = _pct(m.ai_ar, okTotal), fbPct = _pct(m.ai_fallback, okTotal), plPct = _pct(m.ai_plain, okTotal);
   const okPct = _pct(tot.oks, T);
   const failN = T - (tot.oks || 0);
-  const entTotal = (chk.ar || 0) + (chk.noar || 0) + (chk.src || 0);
+  const entTotal = (chk.ar || 0) + (chk.alt || 0) + (chk.noar || 0) + (chk.src || 0);
+  // Friendly names for the reference-chain language codes (mirrors the add-on's
+  // arabic_gender._REF_CHAIN order for display).
+  const REFLANG_NAME = { he: 'Hebrew', ar: 'Arabic', es: 'Spanish', fr: 'French', ru: 'Russian', it: 'Italian', pt: 'Portuguese', pl: 'Polish', uk: 'Ukrainian', hi: 'Hindi', cs: 'Czech', ro: 'Romanian', el: 'Greek', bg: 'Bulgarian', sr: 'Serbian', hr: 'Croatian', sk: 'Slovak', ur: 'Urdu', nl: 'Dutch', '(none)': '(none / older version)' };
+  const refTotal = byRef.reduce((a, r) => a + r.n, 0);
   const REASONS = { option_off: 'option off (user)', no_arabic: 'no Arabic subtitle found', no_align: "Arabic didn't sync (alignment)", crash: 'error', no_source: 'no source parsed', ok: 'ok', '(unknown)': '(unknown)' };
   // Turn a failure note (e.g. "abort:error: HTTP 400 ...", "partial",
   // "not_hebrew") into a short human cause + the raw detail.
@@ -1010,10 +1021,15 @@ async function renderStats(env, token) {
   const failRows = fails.map(r => { const f = failCause(r.note); return `<tr><td>${fmtT(r.ts)}</td><td>${_esc(r.title)}${ep(r)}</td><td style="color:${mColor[r.method] || '#aaa'}">${_esc(r.method)}</td><td style="color:#d0594f">${_esc(f.cause)}</td><td><small>${_esc(f.detail)}</small></td></tr>`; }).join('') || '<tr><td colspan="5"><small>no failures 🎉</small></td></tr>';
   // Chunk-level outcome bars (entries delivered, by how they were translated).
   const chkRows = entTotal ? [
-    bar('with Arabic prompt', chk.ar, _pct(chk.ar, entTotal), '#46c46a'),
-    bar('English-only (Arabic dropped)', chk.noar, _pct(chk.noar, entTotal), '#e0a93a'),
+    bar('primary reference', chk.ar, _pct(chk.ar, entTotal), '#46c46a'),
+    bar('alternate-language ref', chk.alt, _pct(chk.alt, entTotal), '#8bd450'),
+    bar('English-only (ref dropped)', chk.noar, _pct(chk.noar, entTotal), '#e0a93a'),
     bar('kept as source', chk.src, _pct(chk.src, entTotal), '#d0594f'),
   ].join('') : '<small>no per-chunk data yet (older add-on versions)</small>';
+  // Helper-language distribution bars (which gender oracle was sent with English).
+  const refRows = refTotal ? byRef.map(r =>
+    bar(_esc(REFLANG_NAME[r.ref_lang] || r.ref_lang), r.n, _pct(r.n, refTotal), '#46c46a')
+  ).join('') : '<small>no helper-language data yet (populates as add-ons on the new version translate)</small>';
   const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MoranSubs — Stats</title><style>
 body{background:#0e1116;color:#e6edf3;font:14px/1.5 system-ui,Segoe UI,Arial;margin:0;padding:18px}
@@ -1055,7 +1071,10 @@ ${bar('▫︎ ai_plain (off)', m.ai_plain, plPct, '#6fb6e0')}
 <small>counts only translations that produced a subtitle (ok). Failed attempts are excluded so they no longer inflate ai_ar.</small>
 <h2>Chunk-level outcome (entries delivered)</h2>
 ${chkRows}
-<small>Of the entries actually delivered: how many went through with the Arabic prompt vs fell back to English-only (Arabic dropped on a blocked chunk) vs were kept as source. ${chk.degraded} translation(s) hit a block on at least one chunk (${chk.blocks} block event(s) total) yet still delivered a subtitle.</small>
+<small>Of the entries actually delivered: how many went through with the primary gender reference, with an ALTERNATE-language reference (a different human sub tried after the primary was prompt-blocked — gender still preserved), fell back to English-only (reference dropped on a blocked line), or were kept as source (last resort). ${chk.degraded} translation(s) hit a block on at least one chunk (${chk.blocks} block event(s) total) yet still delivered a subtitle.</small>
+<h2>By helper (reference) language — ai_ar successes</h2>
+${refRows}
+<small>Which human-subtitle language was time-aligned as the gender oracle and sent alongside the English source. Priority chain: Hebrew › Arabic › Spanish › French › Russian › … ; the distribution reflects what was actually available and aligned per title. Older add-on versions predate this field and read back as “(none)”.</small>
 <h2>Why fallbacks happened (${fbTotal})</h2>
 ${fbRows || '<small>no fallbacks yet</small>'}
 <h2>By source language</h2>

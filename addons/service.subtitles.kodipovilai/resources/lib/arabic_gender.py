@@ -23,6 +23,7 @@
 
 import os
 import re
+import threading
 
 try:
     from resources.lib import kodi_utils
@@ -367,17 +368,81 @@ def _download_candidate(c):
     return None
 
 
-def prepare(info, src_text):
-    """ENTRY POINT. When the feature is on, find gender-reference subs for
-    `info` and try them in PRIORITY-CHAIN order (Hebrew, Arabic, then the other
-    gender-marking languages) until one aligns confidently. Downloads LAZILY --
-    one at a time, stopping at the first that aligns -- so the common case pulls
-    a SINGLE reference file. Returns a dict {srt_entry_number: reference_text}
-    (gender hints) or None to fall back to the normal translation. ALSO returns
-    a small diag dict for telemetry: reason is 'ok' / 'no_source' / 'no_arabic'
-    (kept name: means NO chain-language candidate at all) / 'no_align' /
-    'crash'; on success diag['lang'] is the chain code actually used.
-    Fully guarded."""
+class ReferencePlan(object):
+    """A lazy, resumable gender-reference chain. Holds the ordered candidate list
+    (metadata only, no downloads yet) and yields aligned per-entry maps ONE
+    LANGUAGE AT A TIME in priority order via .next().
+
+    The FIRST .next() gives the primary reference (same single-download cost as
+    the old prepare()); each subsequent .next() downloads+aligns the NEXT chain
+    language that aligns -- used by translate.py as a fallback when a chunk gets
+    prompt-blocked (PROHIBITED_CONTENT), so a blocked chunk can be retried with a
+    DIFFERENT human-subtitle gender oracle (e.g. Spanish after Arabic) before
+    dropping the reference entirely. Downloads are lazy + bounded by
+    _TOTAL_DOWNLOAD_BUDGET, so a job that never blocks pays for exactly one
+    reference. Thread-safe (parallel chunk workers may pull a fallback at once)
+    and fully guarded: any failure yields (None, None), never raises."""
+
+    def __init__(self, src_text, src_blocks, ordered, total):
+        self._src_text = src_text
+        self._src_blocks = src_blocks
+        self._ordered = ordered      # [(lang, candidate), ...] in chain order
+        self.total = total
+        self._pos = 0
+        self._downloads = 0
+        self._used = set()           # chain langs already returned (one map each)
+        self._lock = threading.Lock()
+        self.first_diag = ''         # alignment diag of the first attempt (telemetry)
+
+    def next(self):
+        """Return (lang, map) for the next chain language that aligns, or
+        (None, None) when the chain / download budget is exhausted."""
+        try:
+            with self._lock:
+                while self._pos < len(self._ordered):
+                    if self._downloads >= _TOTAL_DOWNLOAD_BUDGET:
+                        _log('download budget ({0}) exhausted -- stopping the '
+                             'chain'.format(_TOTAL_DOWNLOAD_BUDGET))
+                        return None, None
+                    lang, cand = self._ordered[self._pos]
+                    self._pos += 1
+                    if lang in self._used:
+                        continue     # already yielded a map for this language
+                    ref_text = _download_candidate(cand)  # lazy fetch
+                    self._downloads += 1
+                    if not ref_text:
+                        continue
+                    try:
+                        mapping, diag = align_one(
+                            self._src_text, self._src_blocks, ref_text)
+                    except Exception as e:
+                        _log('align [{0}] crashed: {1}'.format(lang, e),
+                             level='WARNING')
+                        continue
+                    if not self.first_diag:
+                        self.first_diag = diag
+                    if mapping is not None:
+                        self._used.add(lang)
+                        _log('reference [{0}] {1} -> {2} entries hinted'.format(
+                            lang, diag, len(mapping)))
+                        return lang, mapping
+                    _log('candidate [{0}] rejected: {1} -- trying next'.format(
+                        lang, diag))
+                return None, None
+        except Exception as e:
+            _log('ReferencePlan.next crashed: {0}'.format(e), level='WARNING')
+            return None, None
+
+
+def begin(info, src_text):
+    """ENTRY POINT (lazy). When the feature is on, find gender-reference
+    candidates for `info` and return a ReferencePlan that yields aligned maps in
+    PRIORITY-CHAIN order (Hebrew, Arabic, then the other gender-marking
+    languages -- see _REF_CHAIN), ONE language per .next() call, downloading
+    lazily. Returns (plan, diag). `plan` is None when there is no candidate at
+    all (diag.reason = 'crash'/'no_source'/'no_arabic'); otherwise call
+    plan.next() to pull the primary (and, later, fallback) references. Fully
+    guarded; never raises."""
     try:
         from resources.lib import srt as _srt
         src_blocks = _srt.parse_blocks(src_text)
@@ -413,33 +478,25 @@ def prepare(info, src_text):
     langs_present = [l for l in _REF_CHAIN if l in by_lang]
     _log('reference candidates: {0} across {1}'.format(
         total, ','.join(langs_present)))
-    best_diag = ''
-    attempts = 0
-    for idx, (lang, c) in enumerate(ordered, 1):
-        if attempts >= _TOTAL_DOWNLOAD_BUDGET:
-            _log('download budget ({0}) exhausted -- stopping the chain'.format(
-                _TOTAL_DOWNLOAD_BUDGET))
-            break
-        attempts += 1
-        ref_text = _download_candidate(c)  # lazy: fetch only when we reach it
-        if not ref_text:
-            continue
-        try:
-            mapping, diag = align_one(src_text, src_blocks, ref_text)
-        except Exception as e:
-            _log('align candidate {0} [{1}] crashed: {2}'.format(idx, lang, e),
-                 level='WARNING')
-            continue
-        if mapping is not None:
-            _log('candidate {0}/{1} [{2}] {3} -> using {2} gender reference '
-                 '({4} entries hinted)'.format(idx, total, lang, diag,
-                                               len(mapping)))
-            return mapping, {'reason': 'ok', 'cands': total,
-                             'hinted': len(mapping), 'diag': diag,
-                             'lang': lang}
-        best_diag = diag
-        _log('candidate {0}/{1} [{2}] rejected: {3} -- trying next'.format(
-            idx, total, lang, diag))
-    _log('all {0} reference candidate(s) failed alignment -> normal '
-         'translation (fallback)'.format(total))
-    return None, {'reason': 'no_align', 'cands': total, 'diag': best_diag}
+    return (ReferencePlan(src_text, src_blocks, ordered, total),
+            {'reason': 'pending', 'cands': total})
+
+
+def prepare(info, src_text):
+    """Back-compat single-shot entry point (used where only the primary
+    reference is needed). Returns (map, diag) -- identical semantics to the
+    original: map is the primary aligned reference (or None), diag.reason is
+    'ok'/'no_source'/'no_arabic'/'no_align'/'crash', and diag['lang'] is the
+    chain code used on success. Implemented over begin()+plan.next()."""
+    plan, diag = begin(info, src_text)
+    if plan is None:
+        return None, diag
+    lang, mapping = plan.next()
+    cands = diag.get('cands', 0)
+    if mapping is None:
+        _log('all {0} reference candidate(s) failed alignment -> normal '
+             'translation (fallback)'.format(cands))
+        return None, {'reason': 'no_align', 'cands': cands,
+                      'diag': plan.first_diag}
+    return mapping, {'reason': 'ok', 'cands': cands, 'hinted': len(mapping),
+                     'diag': plan.first_diag, 'lang': lang}
