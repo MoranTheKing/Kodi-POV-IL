@@ -355,6 +355,15 @@
           <default></default>
           <control type="label" format="string"/>
         </setting>
+        <!-- Hidden: model id the counter above belongs to, so the
+             daily count is scoped per-model (Flash-Lite 500/day vs
+             regular Flash 20/day) and resets on a model switch.
+             MUST be declared or set_setting silently no-ops. -->
+        <setting id="_usage_model" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default></default>
+          <control type="label" format="string"/>
+        </setting>
         <!-- Hidden marker: one-time restore of the NOX "series by
              networks" home row has been applied. Read/written by
              pov_series_networks_reseed_patcher.py. -->

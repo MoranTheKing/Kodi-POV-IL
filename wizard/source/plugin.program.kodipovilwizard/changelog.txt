@@ -1,3 +1,15 @@
+[COLOR yellow][B]v0.1.32[/B][/COLOR]
+* Fixed the "Kodi POV IL" rebrand not sticking after an update. The update-
+  notification frame and the bottom badge are now carried inside the FENtastic
+  quickfix, so a quick update no longer re-imposes the old Real-Debrid/KODI art
+  on top of the new branding. The wizard bundled in the build is rebuilt from
+  source (correct icons + notification title, home-widget preservation across
+  quick updates, NOX skin 1.0.10) instead of a stale snapshot.
+
+[COLOR yellow][B]v0.1.31[/B][/COLOR]
+* Rebrand: the update-notification title now reads "KODI POV IL" and the bottom
+  badge is the POV IL square (replacing the old circular Real-Debrid/KODI logo).
+
 [COLOR yellow][B]v0.1.30[/B][/COLOR]
 * NOX gate -> skin 1.0.10. Reordered the "my content" tiles on the NOX home
   so each provider's movies and series sit next to each other -- my movies
