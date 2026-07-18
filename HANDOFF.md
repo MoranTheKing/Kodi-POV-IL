@@ -262,7 +262,30 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    exhausted, try again after midnight". Separate-validator reviewed (19-case
    classifier harness + focused re-review); shipped by key-preserving zip surgery
    (pool.py untouched this round).
-6. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
+6. **AI request pacing + Wizdom wrong-subtitle fix — SHIPPED (AI 0.2.381 /
+   quickfix 0.1.420).** Two fixes: **(a) Gemini RPM pacing** — free Flash Lite is
+   15 requests/min, but chunks were dispatched 3-parallel with no rate limiting,
+   so a long title constantly tripped the per-minute limit -> retry-toast spam,
+   wasted requests, and the job never finishing cleanly (so the finished AI sub
+   never uploaded to the community pool). A process-wide `_gemini_rate_gate`
+   (ticket-dispenser: reserve a slot under a lock, sleep outside it) now caps
+   request starts to `gemini_rpm`=14/min shared across the ThreadPoolExecutor
+   workers and concurrent jobs, and the "rate limited" toast fires at most once
+   per job. Net: no 429s, no waste, clean completion -> pool upload restored (so
+   re-watches/other users reuse the translation for 0 requests). **(b) Wizdom (and
+   all sources) returning wrong-title / unsynced / English-labelled-Hebrew subs**
+   — the download path reused ONE shared `Downloaded_subs` folder and `extract()`
+   returned the first subtitle-shaped file in it, often a leftover from a previous
+   unrelated download; the reference engine cleared the folder before each fetch
+   but the bridge dropped that step and then pinned the wrong file in the
+   `Cached_subs` cache. Fix: `extract()` returns the file the ZIP itself contained
+   (namelist), the shared folder is rmtree'd before every download, and
+   `Cached_subs` is bumped to `_v2` with a one-time flush of the poisoned old dir.
+   Both separate-validator reviewed (pacing incl. a boundedness stress test;
+   Wizdom incl. an old-vs-fixed regression repro); shipped by key-preserving zip
+   surgery. Known non-blocking follow-ups: SubSync's audio-probe Gemini calls and
+   the `g_extract` gzip path aren't yet routed through the new pacer/namelist fix.
+7. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
 ## Working style
