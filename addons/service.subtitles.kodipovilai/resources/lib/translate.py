@@ -1175,13 +1175,24 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         except Exception:
             _win = None
         _ACTIVE = 'povil.embedded_extract_active'
-        if _win is not None and _win.getProperty(_ACTIVE) == '1':
-            kodi_utils.log('embedded: another extraction already running -- '
-                           'skipping to avoid doubling the debrid load',
-                           level='INFO')
-            return None
         if _win is not None:
-            _win.setProperty(_ACTIVE, '1')
+            import time as _tm
+            _raw = _win.getProperty(_ACTIVE)
+            if _raw:
+                # The flag stores the start TIMESTAMP. A live extraction is bounded
+                # by deadline_s; anything older (or an unparseable/legacy value) is
+                # a stale flag left by a killed RunScript process -- reclaim it so
+                # the feature can't wedge OFF for the rest of the Kodi session.
+                try:
+                    _age = _tm.time() - float(_raw)
+                except (ValueError, TypeError):
+                    _age = deadline_s + 999.0
+                if 0 <= _age < (deadline_s + 120):
+                    kodi_utils.log('embedded: another extraction already running '
+                                   '-- skipping to avoid doubling the debrid load',
+                                   level='INFO')
+                    return None
+            _win.setProperty(_ACTIVE, str(_tm.time()))
 
         # Player-stall guard: our range requests share the debrid TOKEN with the
         # player. If playback is PLAYING (not paused) but its clock stops
