@@ -1130,9 +1130,15 @@ def _playing_video_url(info):
     return ''
 
 
-def _extract_embedded_srt(info, src_lang, track_num=None):
+def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
+                          progress_cb=None):
     """Extract the playing file's embedded `src_lang` subtitle track to a temp
-    SRT and return its path, or None. The extracted cues carry the video's OWN
+    SRT and return its path, or None. `deadline_s` bounds the extraction (default
+    900s). Every current caller runs in the BACKGROUND -- the auto-on-play thread
+    and resolve() from the bg_translate_picker RunScript (the native picker and
+    chooser now FIRE that RunScript and return immediately, rather than extracting
+    inline) -- so the long default is safe; playback-end (abort_cb) is the real
+    stop. `progress_cb(done, total)`, if given, drives a corner progress bar. The extracted cues carry the video's OWN
     timestamps, so the Hebrew translated from this file needs no re-sync. Fully
     guarded + fail-open: any problem returns None and resolve() lets the caller
     fall through to the external-subtitle path. Aborts if playback ends mid-
@@ -1162,10 +1168,15 @@ def _extract_embedded_srt(info, src_lang, track_num=None):
         # player; still, this setting is the instant manual escape hatch. A
         # generous background deadline lets a long movie's subs finish.
         _allow_http = kodi_utils.get_bool('embedded_http_extract', True)
+        # The relpos fast path keeps DATA tiny (~130 KB/s, a couple hundred MB
+        # total) so a long run is bandwidth-safe for the player; the deadline is
+        # a wall-clock upper bound (a scattered remux is ~1-2 range requests per
+        # cue, several minutes). It comes from the caller so a UI path can cap it
+        # short; abort_cb (playback ended) is the real stop regardless.
         srt_text = embedded_extract.extract_srt(
             url, track_num=track_num, lang=src_lang,
-            allow_http=_allow_http, deadline_s=120.0,
-            abort_cb=_should_abort,
+            allow_http=_allow_http, deadline_s=deadline_s,
+            abort_cb=_should_abort, progress_cb=progress_cb,
             log=lambda m: kodi_utils.log('embedded_extract: ' + m,
                                          level='INFO'))
         if not srt_text or srt_text.count('-->') < 3:
@@ -1186,7 +1197,8 @@ def _extract_embedded_srt(info, src_lang, track_num=None):
         return None
 
 
-def resolve(link, info, progress_cb=None, progressive_cb=None):
+def resolve(link, info, progress_cb=None, progressive_cb=None,
+            extract_progress_cb=None):
     """Return a filesystem path to the SRT for the chosen link.
 
     For passthrough, hand back the existing file path. For ai
@@ -1363,7 +1375,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         _emb_lang = payload.get('src_lang') or 'en'
         _status('AI: מחלץ תרגום מובנה...', time_ms=3000)
         emb_path = _extract_embedded_srt(
-            info, _emb_lang, payload.get('track_num'))
+            info, _emb_lang, payload.get('track_num'),
+            progress_cb=extract_progress_cb)
         if not emb_path or not os.path.isfile(emb_path):
             kodi_utils.log('embedded_ai: extraction failed -- deferring to the '
                            'external path', level='INFO')
