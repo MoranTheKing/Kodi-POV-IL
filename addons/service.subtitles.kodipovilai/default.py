@@ -254,8 +254,13 @@ def _handle_download(handle, params):
         emb_path = None
         try:
             kodi_utils.notify('AI: מחלץ תרגום מובנה...', time_ms=2500)
+            # UI-blocking path (Kodi's download dialog waits on us): bound the
+            # extraction so a scattered remux can't freeze the dialog for
+            # minutes. If it doesn't finish in time it defers to the external
+            # Hebrew path. The auto-on-play thread runs unbounded (900s) instead.
             emb_path = translate._extract_embedded_srt(
-                info, _p.get('src_lang') or 'en', _p.get('track_num'))
+                info, _p.get('src_lang') or 'en', _p.get('track_num'),
+                deadline_s=180.0)
         except Exception as _e:
             _safe_log('embedded_ai extraction failed: {0}'.format(_e),
                       level='ERROR')
