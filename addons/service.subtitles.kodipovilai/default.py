@@ -1093,9 +1093,10 @@ def _handle_bg_translate_picker(params):
                 'bg_translate_picker on_phase({0}) raised: '
                 '{1}'.format(phase, _e), level='WARNING')
 
+    _resolved = None
     try:
-        translate.resolve(link, info, progressive_cb=on_phase,
-                          extract_progress_cb=_extract_progress)
+        _resolved = translate.resolve(link, info, progressive_cb=on_phase,
+                                      extract_progress_cb=_extract_progress)
     except Exception as e:
         _safe_log(
             'bg_translate_picker resolve crashed: {0}'.format(e),
@@ -1112,6 +1113,19 @@ def _handle_bg_translate_picker(params):
                 'ai_subs.live_translate_active')
             xbmcgui.Window(10000).clearProperty(
                 'ai_subs.live_translate_source')
+        except Exception:
+            pass
+    # The picker/chooser already closed, so a failed background job would
+    # otherwise be SILENT -- the user explicitly picked this sub and must know it
+    # didn't land (and to try another). resolve() returns a path only on success;
+    # a falsy result means extraction/translation deferred or failed.
+    if not _resolved:
+        try:
+            _pl = translate._decode_link(link) or {}
+            _msg = ('AI: לא ניתן היה לחלץ תרגום מובנה — נסו כתובית אחרת'
+                    if _pl.get('type') == 'embedded_ai'
+                    else 'AI: לא ניתן היה לתרגם — נסו כתובית אחרת')
+            kodi_utils.notify(_msg, time_ms=4500)
         except Exception:
             pass
 
