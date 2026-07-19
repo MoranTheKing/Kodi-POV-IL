@@ -459,7 +459,22 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    (`embedded_http_extract`, default on) is the instant manual escape hatch;
    the extractor's truncation-recovery was also hardened after validation found
    a co-located block could silently drop a later cue. Local extraction is
-   unchanged.
+   unchanged. **Made it actually work + backgrounded manual picks (AI 0.2.392 /
+   quickfix 0.1.431):** a field test showed extraction still failing two ways.
+   (a) A partial-read bug — a single raw socket read returned only a few KB, not
+   the requested range, so a "successful" pass parsed 2 cues out of 1568; fixed
+   with a fill-loop that reads until the full length or EOF. (b) A too-small
+   window and tight caps deferred scattered remuxes; now the Cues index's
+   CueRelativePosition (present in most files) is used to fetch just the subtitle
+   block — about 18× less data — so a spread file stays gentle on the player,
+   with the proven window-scan as the fallback. A validation pass also caught a
+   data-loss case where two subtitle lines sharing one cluster collapsed to one;
+   fixed by keeping every distinct relpos. Finally, a **manual** pick (chooser or
+   native picker) now runs the whole extract-then-translate job in the background
+   like a normal AI pick — the dialog closes immediately, a non-modal corner
+   progress bar shows extraction %, and the Hebrew swaps in progressively when
+   ready, with a toast if it can't be produced. Every change was reviewed by a
+   separate validator and exercised against synthetic MKVs before release.
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
