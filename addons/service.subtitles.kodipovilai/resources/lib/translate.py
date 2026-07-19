@@ -1177,22 +1177,31 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         _ACTIVE = 'povil.embedded_extract_active'
         if _win is not None:
             import time as _tm
+            # MONOTONIC clock: immune to wall-clock jumps (NTP/RTC steps on cheap
+            # Android boxes) that could otherwise make a LIVE flag look stale and
+            # let a 2nd concurrent extraction start -- the exact 2x-load that
+            # closed the movie. It's per-boot and shared across processes on this
+            # machine; the flag lives on a Window prop that a Kodi restart clears,
+            # so there's no cross-boot concern.
+            _now = _tm.monotonic()
             _raw = _win.getProperty(_ACTIVE)
             if _raw:
-                # The flag stores the start TIMESTAMP. A live extraction is bounded
-                # by deadline_s; anything older (or an unparseable/legacy value) is
-                # a stale flag left by a killed RunScript process -- reclaim it so
-                # the feature can't wedge OFF for the rest of the Kodi session.
+                # The flag stores the monotonic START time. A live extraction is
+                # bounded by deadline_s; anything older (or a legacy '1' / garbage)
+                # is a stale flag from a killed RunScript process -- reclaim it so
+                # the feature can't wedge OFF for the rest of the session.
                 try:
-                    _age = _tm.time() - float(_raw)
+                    _age = _now - float(_raw)
                 except (ValueError, TypeError):
                     _age = deadline_s + 999.0
-                if 0 <= _age < (deadline_s + 120):
+                if _age < 0:
+                    _age = 0.0   # defensive: never treat a fresh flag as stale
+                if _age < (deadline_s + 120):
                     kodi_utils.log('embedded: another extraction already running '
                                    '-- skipping to avoid doubling the debrid load',
                                    level='INFO')
                     return None
-            _win.setProperty(_ACTIVE, str(_tm.time()))
+            _win.setProperty(_ACTIVE, str(_now))
 
         # Player-stall guard: our range requests share the debrid TOKEN with the
         # player. If playback is PLAYING (not paused) but its clock stops
