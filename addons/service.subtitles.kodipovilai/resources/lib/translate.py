@@ -766,16 +766,20 @@ def list_candidates(info, modal_progress=True):
                 continue
             _emb_ai_seen.add(code)
             have_hebrew = True
+            # The real Kodi stream index lives INSIDE this candidate's own
+            # engine link payload (not a top-level key), so decode it out. Carry
+            # it on the embedded_ai link so the pick can show this embedded track
+            # NATIVELY (instant, already synced) while the Hebrew is extracted+
+            # translated in the background.
+            _emb_src = _decode_link(c.get('link') or '') or {}
             results.append({
                 'filename': 'תרגום מובנה → עברית (AI) · {0}'.format(
                     _lang_display(code)),
                 'language': 'he',
-                # Carry the play-start snapshot's stream index so the pick can
-                # show this embedded track NATIVELY (instant, synced) while the
-                # Hebrew is extracted+translated in the background.
                 'link': _encode_link({'type': 'embedded_ai',
                                       'src_lang': code,
-                                      'stream_index': c.get('stream_index')}),
+                                      'stream_index': _emb_src.get(
+                                          'stream_index')}),
                 'sync': 'true',
                 'rating': '5', 'is_hi': False, 'is_hd': False,
             })
