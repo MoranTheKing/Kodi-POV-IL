@@ -475,6 +475,18 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    progress bar shows extraction %, and the Hebrew swaps in progressively when
    ready, with a toast if it can't be produced. Every change was reviewed by a
    separate validator and exercised against synthetic MKVs before release.
+   **Rate-limit resilience + source preview (AI 0.2.393 / quickfix 0.1.432):**
+   the next field test showed the relpos path working (all cues targeted) but the
+   debrid CDN rate-limiting the token (HTTP 429) partway, which the one-strike
+   breaker turned into a give-up. It now backs off (honors Retry-After, with a
+   validated non-negative/finite guard so a malformed header can't disable the
+   breaker) and retries before tripping, plus a small per-request pace to stay
+   under the limiter — so extraction rides out a transient 429 and completes. And
+   picking "embedded → Hebrew" now shows the embedded SOURCE track natively and
+   instantly (it's already synced to the video) while the Hebrew cooks, instead
+   of leaving the stale sub the user picked embedded to replace; the background
+   job swaps to Hebrew when ready. The validator caught, and this release closes,
+   a malformed-Retry-After breaker-defeat bug and a mis-sourced stream index.
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
