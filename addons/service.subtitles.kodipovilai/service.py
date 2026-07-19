@@ -719,23 +719,12 @@ def _maybe_install_build_icons():
             pass
 
 
-def _maybe_reload_for_tiles():
-    """LAST startup step: if build_icons_patcher dropped stale tile textures this
-    boot, do ONE skin reload so the fresh home-tile art shows now rather than only
-    on the next restart. The cache entries are already gone; ReloadSkin re-caches
-    them from disk. Runs after every other repair has settled and at most once per
-    tile generation (the patcher's gen marker), so unlike a routine reload this is
-    a boot-time, one-off event -- but we still snapshot + restore the home focus
-    around it (via pov_reload's helpers) so the menu never snaps to the first tile.
-    No-op while media is playing (applies on the next idle boot instead)."""
-    if not _TILE_REFRESH_NEEDED[0]:
-        return
-    _TILE_REFRESH_NEEDED[0] = False
+def _tile_reload_worker():
+    """Do ONE skin reload so freshly-cache-dropped tiles re-cache from disk. The
+    home focus is snapshotted + restored (via pov_reload) so the menu doesn't snap
+    to the first tile if the user was already navigating. No-op while playing."""
     try:
         import xbmc
-    except Exception:
-        return
-    try:
         if xbmc.getCondVisibility('Player.HasMedia'):
             return
         saved = None
@@ -757,6 +746,27 @@ def _maybe_reload_for_tiles():
                 pass
     except Exception:
         pass
+
+
+def _maybe_reload_for_tiles():
+    """LAST startup step: if build_icons_patcher dropped stale tile textures this
+    boot (a TILE_REFRESH_GEN bump, or a FORCE_SYNC tile whose bytes changed), do
+    one skin reload so the fresh home-tile art shows now rather than only on the
+    next restart -- the cache entries are already gone, ReloadSkin re-caches them
+    from disk. Runs on a BACKGROUND thread: the reload + bounded focus-restore
+    (~1-11s) must not block the rest of main() (autosub listener registration,
+    etc.). Gen-triggered reloads are one-off per generation (marker-gated in the
+    patcher, and only after the marker actually persisted)."""
+    if not _TILE_REFRESH_NEEDED[0]:
+        return
+    _TILE_REFRESH_NEEDED[0] = False
+    try:
+        import threading
+        threading.Thread(target=_tile_reload_worker,
+                         name='pov-tile-reload', daemon=True).start()
+    except Exception:
+        # Couldn't spawn a thread -> run inline (still fully guarded).
+        _tile_reload_worker()
 
 
 def _maybe_patch_brand_assets():
