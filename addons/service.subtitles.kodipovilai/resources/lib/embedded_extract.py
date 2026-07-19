@@ -59,6 +59,7 @@ _CUE_TIME = 0xB3
 _CUE_TRACK_POS = 0xB7
 _CUE_TRACK = 0xF7
 _CUE_CLUSTER_POS = 0xF1
+_CUE_RELATIVE_POS = 0xF0
 _CLUSTER = 0x1F43B675
 _CLUSTER_MAGIC = b'\x1f\x43\xb6\x75'
 _TIMESTAMP = 0xE7
@@ -84,11 +85,25 @@ _CUES_CAP = 24 * 1024 * 1024              # hard ceiling on the Cues element rea
 # Range requests, a circuit-breaker on the first 429/5xx, a top-up for clusters
 # bigger than the window, and hard byte/time caps so a spread-out file DEFERS to
 # the external path rather than fetch gigabytes alongside the player.
-_CLUSTER_WINDOW_HTTP = 512 * 1024         # first window fetched per cue cluster
-_CLUSTER_TOPUP_MAX = 4 * 1024 * 1024      # top-up read cap for one big cluster
+# Per-cluster window for the WINDOW-SCAN fallback (files whose Cues carry NO
+# CueRelativePosition). 1792KB, not 512KB: his live debrid telemetry (2026-06,
+# real 1080p WEB-DL) showed the TRUE cluster median ~1.51MB, p99 ~1.72MB -- the
+# subtitle block sits AFTER the cluster's video keyframe, so a 512KB window
+# truncated nearly every cluster and forced a top-up round-trip. 1792KB covers
+# p99 in one fetch; the top-up stays as the safety net for the rare outlier.
+_CLUSTER_WINDOW_HTTP = 1792 * 1024        # window-scan read per cue cluster
+_CLUSTER_TOPUP_MAX = 8 * 1024 * 1024      # top-up read cap for one big cluster
 _COALESCE_GAP = 1 * 1024 * 1024           # merge cluster positions within this
 _MAX_RANGE = 8 * 1024 * 1024              # cap per coalesced Range request
-_HTTP_TOTAL_CAP = 220 * 1024 * 1024       # give up (defer) past this many bytes
+_HTTP_TOTAL_CAP = 700 * 1024 * 1024       # give up (defer) past this many bytes
+# CueRelativePosition FAST PATH (the common case: mkvmerge writes relpos by
+# default). When a cue tells us the subtitle block's offset INSIDE its cluster
+# we fetch just a tiny header (to resolve the cluster prefix + timestamp) and a
+# small window AT the block, instead of pulling the whole ~1.5MB cluster. ~18x
+# less data than the window scan -> far gentler on the player's bandwidth on a
+# scattered remux, which is exactly the debrid case.
+_CLUSTER_HDR_READ = 16 * 1024             # header read to resolve prefix + ts
+_BLOCK_READ_HTTP = 128 * 1024             # window fetched AT a targeted block
 _UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
        '(KHTML, like Gecko) Chrome/120.0 Safari/537.36')
 
@@ -295,7 +310,19 @@ class _Source(object):
                 return b''
             if code == 200 and offset > 0:
                 return b''
-            data = r.raw.read(size)
+            # r.raw.read(size) is a SINGLE raw read: on a urllib3 stream it
+            # returns only what's already in the socket buffer (often a few KB),
+            # NOT the full `size`. That silently truncated every range window ->
+            # cue offsets fell outside it -> near-empty extractions in the field
+            # (11MB fetched, 2 cues parsed). Loop until we have `size` bytes or
+            # hit EOF, exactly like requests' own resp.content.
+            buf = bytearray()
+            while len(buf) < size:
+                chunk = r.raw.read(size - len(buf))
+                if not chunk:
+                    break
+                buf += chunk
+            data = bytes(buf)
             self.fetched += len(data)
             return data
         except Exception:
@@ -319,8 +346,16 @@ class _Source(object):
             if code == 200 and offset > 0:
                 resp.close()
                 return b''
-            data = resp.read(size)
+            # Fill-loop (see _read_session): a single resp.read(size) may return
+            # short; accumulate until `size` bytes or EOF.
+            buf = bytearray()
+            while len(buf) < size:
+                chunk = resp.read(size - len(buf))
+                if not chunk:
+                    break
+                buf += chunk
             resp.close()
+            data = bytes(buf)
             self.fetched += len(data)
             return data
         except Exception:
@@ -513,7 +548,7 @@ def _read_cues(src, seeks, seg_start, want_track, log):
             pbuf.p = pstart + psize
             if peid != _CUE_TRACK_POS:
                 continue
-            ctrack, cpos = None, None
+            ctrack, cpos, crel = None, None, None
             tbuf = _Buf(pp, 0)
             for teid, tsize, tstart in _walk(tbuf, len(pp)):
                 if tsize is None:
@@ -524,14 +559,24 @@ def _read_cues(src, seeks, seg_start, want_track, log):
                     ctrack = _read_uint(tp)
                 elif teid == _CUE_CLUSTER_POS:
                     cpos = seg_start + _read_uint(tp)
+                elif teid == _CUE_RELATIVE_POS:
+                    crel = _read_uint(tp)
             if cpos is not None:
-                any_pos.append(cpos)
+                any_pos.append((cpos, crel))
                 if ctrack == want_track:
-                    want_pos.append(cpos)
+                    want_pos.append((cpos, crel))
     is_sub = bool(want_pos)
-    out = sorted(set(want_pos if is_sub else any_pos))
-    log('cues: %d position(s) (%s)'
-        % (len(out), 'sub-track' if is_sub else 'whole-file'))
+    # Dedup by cluster position, preserving a CueRelativePosition when present
+    # (a cluster can hold >1 subtitle cue; keep the first relpos we saw for it,
+    # but never let a later relpos-less entry clobber a good one).
+    by_cpos = {}
+    for cpos, crel in (want_pos if is_sub else any_pos):
+        if cpos not in by_cpos or by_cpos[cpos] is None:
+            by_cpos[cpos] = crel
+    out = [(cpos, by_cpos[cpos]) for cpos in sorted(by_cpos)]
+    nrel = sum(1 for _c, r in out if r is not None)
+    log('cues: %d position(s) (%s, %d with relpos)'
+        % (len(out), 'sub-track' if is_sub else 'whole-file', nrel))
     return out, is_sub
 
 
@@ -990,7 +1035,7 @@ def _extract_cues(src, seeks, seg_start, want, entries,
         log('no per-subtitle Cues -- deferring (avoid a partial extract)')
         return False
     if not src.is_http:
-        for cpos in positions:
+        for cpos, _rel in positions:
             if (time.time() - t0) > deadline_s or _aborted(abort_cb):
                 return False
             _read_and_collect_cluster(
@@ -1000,65 +1045,208 @@ def _extract_cues(src, seeks, seg_start, want, entries,
                               abort_cb, log)
 
 
+def _cluster_prefix_and_ts(header):
+    """From bytes that START at a Cluster element, return (prefix_len,
+    cluster_ts). `prefix_len` = Cluster-ID length + Size-VINT length -- the byte
+    distance from the cluster start to the first octet of cluster DATA, which is
+    exactly what CueRelativePosition is measured from. `cluster_ts` = the
+    cluster's Timestamp (its first child; a small header read always contains
+    it). (None, None) when the bytes don't start with a Cluster or are too
+    short to resolve both."""
+    b = _Buf(header, 0)
+    eid, idlen = _read_vint(b, True)
+    if eid != _CLUSTER or idlen == 0:
+        return None, None
+    size, slen = _read_vint(b, False)   # size may be None (unknown-size) -- ok
+    if slen == 0:
+        return None, None
+    prefix = idlen + slen
+    cluster_ts = None
+    limit = b.n if size is None else min(b.n, b.p + size)
+    while b.p < limit:
+        ceid, _cidl = _read_vint(b, True)
+        if ceid is None:
+            break
+        csize, cslen = _read_vint(b, False)
+        if cslen == 0 or csize is None:
+            break
+        cst = b.p
+        if cst + csize > b.n:
+            break
+        if ceid == _TIMESTAMP:
+            cluster_ts = _read_uint(header[cst:cst + csize])
+            break
+        b.p = cst + csize
+    if cluster_ts is None:
+        return None, None
+    return prefix, cluster_ts
+
+
+def _collect_one_block(window, want_track, cluster_ts, out):
+    """Parse ONE (Simple)Block or BlockGroup element at the START of `window` (a
+    CueRelativePosition target). Append (abs_ticks, dur_or_None, frame) when it
+    carries want_track. Returns True when a want_track block was found & appended;
+    False when the element is truncated by the window OR is not want_track's block
+    (the caller then falls back to a full window-scan of the cluster, so a mis-
+    resolved target never silently drops a line)."""
+    b = _Buf(window, 0)
+    eid, _l = _read_vint(b, True)
+    if eid is None:
+        return False
+    size, slen = _read_vint(b, False)
+    if slen == 0 or size is None:
+        return False
+    if b.p + size > b.n:
+        return False   # element runs past the window -> truncated
+    payload = window[b.p:b.p + size]
+    if eid == _SIMPLEBLOCK:
+        r = _block_frame(payload, cluster_ts, want_track)
+        if r:
+            out.append((r[0], None, r[1]))
+            return True
+        return False
+    if eid == _BLOCKGROUP:
+        gbuf = _Buf(payload, 0)
+        block, gdur = None, None
+        for geid, gsize, gstart in _walk(gbuf, len(payload)):
+            if gsize is None:
+                break
+            gp = payload[gstart:gstart + gsize]
+            gbuf.p = gstart + gsize
+            if geid == _BLOCK:
+                block = gp
+            elif geid == _BLOCKDUR:
+                gdur = _read_uint(gp)
+        if block:
+            r = _block_frame(block, cluster_ts, want_track)
+            if r:
+                out.append((r[0], gdur, r[1]))
+                return True
+        return False
+    return False
+
+
+def _fetch_targeted_block(src, cpos, relpos, want, entries, log):
+    """CueRelativePosition FAST PATH: fetch just the subtitle block. A tiny
+    header read resolves the cluster prefix + Timestamp; the block then sits at
+    cpos + prefix + relpos, so we fetch a small window THERE (reusing header
+    bytes if the block already fell inside them). ~18x less data than pulling
+    the whole ~1.5MB cluster. Returns True when the block was located & parsed,
+    False when the cue couldn't be resolved (caller window-scans it as a net)."""
+    header = src.read(cpos, _CLUSTER_HDR_READ)
+    if src.tripped or not header:
+        return False
+    prefix, cluster_ts = _cluster_prefix_and_ts(header)
+    if prefix is None:
+        return False
+    target = cpos + prefix + relpos
+    if cpos <= target < cpos + len(header):
+        if _collect_one_block(header[target - cpos:], want, cluster_ts, entries):
+            return True   # block already inside the header read
+    if src.fetched >= _HTTP_TOTAL_CAP:
+        return False
+    blk = src.read(target, min(_BLOCK_READ_HTTP, _HTTP_TOTAL_CAP - src.fetched))
+    if src.tripped or not blk:
+        return False
+    return _collect_one_block(blk, want, cluster_ts, entries)
+
+
 def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                        log):
-    """HTTP/debrid: ONE keep-alive connection, single-range serial, coalesced
-    sweep-ranges, circuit-breaker, per-cluster top-up, hard byte/time caps.
-    Player-safe by construction. Returns True on a complete pass, False to defer
-    (breaker tripped / cap hit / aborted)."""
-    ranges = _coalesce_ranges(positions, _CLUSTER_WINDOW_HTTP, _COALESCE_GAP,
-                              _MAX_RANGE, src.total)
+    """HTTP/debrid: ONE keep-alive connection, single-range serial. Per cue,
+    two strategies chosen by whether the Cues carried a CueRelativePosition:
+      * relpos present -> TARGETED: tiny header read + a small window AT the
+        subtitle block. ~18x less data than a full cluster -- gentle on the
+        player's bandwidth over a scattered remux (the debrid case).
+      * relpos absent  -> WINDOW SCAN: fetch a ~1.79MB window at the cluster
+        start and parse forward (his proven fallback), topping up the rare
+        cluster bigger than the window.
+    Player-safe by construction (single serial connection, byte/time caps, 429
+    circuit-breaker). Returns True on a COMPLETE pass, False to defer."""
     budget = max(deadline_s, 90.0)
-    log('%d sub-cue cluster(s) -> %d coalesced range(s); caps %dMB / %.0fs'
-        % (len(positions), len(ranges), _HTTP_TOTAL_CAP // (1 << 20), budget))
-    for (rstart, rend, cposes) in ranges:
+    rel_cues = [(c, r) for (c, r) in positions if r is not None]
+    scan_cues = [c for (c, r) in positions if r is None]
+    total = len(positions)
+    log('%d sub-cue cluster(s): %d targeted (relpos) + %d window-scan; '
+        'caps %dMB / %.0fs'
+        % (total, len(rel_cues), len(scan_cues),
+           _HTTP_TOTAL_CAP // (1 << 20), budget))
+
+    def _defer():
+        """Return a reason string when we must stop, else None."""
         if src.tripped:
-            log('circuit-breaker tripped (CDN 429/5xx) -- deferring')
-            return False
+            return 'circuit-breaker tripped (CDN 429/5xx)'
         if src.fetched >= _HTTP_TOTAL_CAP:
-            log('http byte cap reached (%.0fMB) -- deferring' % (src.fetched / 1e6))
-            return False
+            return 'http byte cap reached (%.0fMB)' % (src.fetched / 1e6)
         if (time.time() - t0) > budget:
-            log('http time budget reached (%.0fs) -- deferring'
-                % (time.time() - t0))
-            return False
+            return 'http time budget reached (%.0fs)' % (time.time() - t0)
         if _aborted(abort_cb):
-            log('http extract aborted (playback ended)')
+            return 'http extract aborted (playback ended)'
+        return None
+
+    done = 0
+    # 1) targeted relpos fetches
+    for (cpos, relpos) in rel_cues:
+        reason = _defer()
+        if reason:
+            log(reason + ' -- deferring')
             return False
-        window = src.read(rstart, min(rend - rstart, _HTTP_TOTAL_CAP - src.fetched))
-        if src.tripped:
-            log('circuit-breaker tripped mid-fetch -- deferring')
-            return False
-        if not window:
-            continue
-        for cpos in cposes:
+        if not _fetch_targeted_block(src, cpos, relpos, want, entries, log):
             if src.tripped:
-                break
-            off = cpos - rstart
-            if not (0 <= off < len(window)):
-                continue
-            _end, truncated = _collect_one_cluster(window[off:], want, entries)
-            if not truncated:
-                continue
-            # The range window was too small for this cluster (a big co-located
-            # video/audio block sits around the subtitle block, a common layout),
-            # so a LATER subtitle block was not seen. Re-read the whole cluster
-            # with a bigger cap; dedup in _entries_to_srt drops any block
-            # re-parsed here. If it's STILL truncated (cluster > top-up cap),
-            # DEFER -- never deliver a silently-partial subtitle.
-            if src.fetched >= _HTTP_TOTAL_CAP:
-                log('byte cap reached at top-up -- deferring')
+                log('circuit-breaker tripped mid-fetch -- deferring')
                 return False
-            tup = src.read(cpos, min(_CLUSTER_TOPUP_MAX,
-                                     _HTTP_TOTAL_CAP - src.fetched))
+            # Couldn't resolve the block from relpos (odd prefix / short read /
+            # wrong track) -> window-scan THIS cue so we never drop a line.
+            scan_cues.append(cpos)
+        done += 1
+        if done % 100 == 0:
+            log('extract progress: %d/%d cue(s), %.0fMB'
+                % (done, total, src.fetched / 1e6))
+
+    # 2) window-scan the remainder (no-relpos cues + any relpos misses)
+    if scan_cues:
+        ranges = _coalesce_ranges(sorted(set(scan_cues)), _CLUSTER_WINDOW_HTTP,
+                                  _COALESCE_GAP, _MAX_RANGE, src.total)
+        for (rstart, rend, cposes) in ranges:
+            reason = _defer()
+            if reason:
+                log(reason + ' -- deferring')
+                return False
+            window = src.read(rstart,
+                              min(rend - rstart, _HTTP_TOTAL_CAP - src.fetched))
             if src.tripped:
-                log('circuit-breaker tripped during top-up -- deferring')
+                log('circuit-breaker tripped mid-fetch -- deferring')
                 return False
-            _tend, tup_trunc = _collect_one_cluster(tup, want, entries)
-            if tup_trunc:
-                log('cluster exceeds top-up cap (%dMB) -- deferring to avoid a '
-                    'partial subtitle' % (_CLUSTER_TOPUP_MAX >> 20))
-                return False
+            if not window:
+                continue
+            for cpos in cposes:
+                if src.tripped:
+                    break
+                off = cpos - rstart
+                if not (0 <= off < len(window)):
+                    continue
+                _end, truncated = _collect_one_cluster(window[off:], want, entries)
+                if not truncated:
+                    continue
+                # Window too small for this cluster (a big co-located video/audio
+                # block sits around the subtitle one) -> a LATER subtitle block
+                # was not seen. Top-up the whole cluster; dedup in _entries_to_srt
+                # drops any re-parsed block. STILL truncated -> DEFER (never
+                # deliver a silently-partial subtitle).
+                if src.fetched >= _HTTP_TOTAL_CAP:
+                    log('byte cap reached at top-up -- deferring')
+                    return False
+                tup = src.read(cpos, min(_CLUSTER_TOPUP_MAX,
+                                         _HTTP_TOTAL_CAP - src.fetched))
+                if src.tripped:
+                    log('circuit-breaker tripped during top-up -- deferring')
+                    return False
+                _tend, tup_trunc = _collect_one_cluster(tup, want, entries)
+                if tup_trunc:
+                    log('cluster exceeds top-up cap (%dMB) -- deferring to avoid '
+                        'a partial subtitle' % (_CLUSTER_TOPUP_MAX >> 20))
+                    return False
+
     if src.tripped:
         log('circuit-breaker tripped -- deferring')
         return False
