@@ -502,6 +502,17 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    single extraction may still fall back to the external Hebrew rather than
    always completing — but it no longer closes the movie. Request-count halving
    (1 range read per cue) is the plan-B lever if a strict-token case recurs.
+   **Read-size cut (AI 0.2.395 / quickfix 0.1.434):** the next field test (TorBox)
+   confirmed the movie now survives (stall-guard fired at 71s) but the player
+   stalled from pure BANDWIDTH contention — no 429, so pacing never engaged. The
+   relpos fast path was fetching 16KB header + 128KB block (~144KB) per cue for a
+   subtitle that's <1KB, so the reads were cut to 8KB + 32KB (~40KB/cue, ~3.6×
+   less throughput); 32KB still covers a text block + BlockGroup (validated at the
+   boundary — a rarer larger element just falls to the window-scan for that cue).
+   Whether this is enough is a provider-headroom question; if a strict token still
+   stalls, the real fix is a "spare-bandwidth" mode (extract only from the
+   player's leftover capacity, pausing when its buffer dips) — awaiting the
+   maintainer's call on that vs an extract-during-pause approach.
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
