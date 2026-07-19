@@ -1162,9 +1162,14 @@ def _extract_embedded_srt(info, src_lang, track_num=None):
         # player; still, this setting is the instant manual escape hatch. A
         # generous background deadline lets a long movie's subs finish.
         _allow_http = kodi_utils.get_bool('embedded_http_extract', True)
+        # Generous background deadline: a scattered debrid remux needs ~1-2 range
+        # requests per subtitle cue (~1500-1700 of them), which is several
+        # minutes. The relpos fast path keeps the DATA tiny (~130 KB/s, a couple
+        # hundred MB total) so a long run is bandwidth-safe for the player;
+        # abort_cb (playback ended) is the real stop, this is just an upper bound.
         srt_text = embedded_extract.extract_srt(
             url, track_num=track_num, lang=src_lang,
-            allow_http=_allow_http, deadline_s=120.0,
+            allow_http=_allow_http, deadline_s=900.0,
             abort_cb=_should_abort,
             log=lambda m: kodi_utils.log('embedded_extract: ' + m,
                                          level='INFO'))
