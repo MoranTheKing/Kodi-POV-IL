@@ -364,6 +364,15 @@
           <default></default>
           <control type="label" format="string"/>
         </setting>
+        <!-- Hidden: which tile-refresh generation this install has already
+             applied (build_icons_patcher.TILE_REFRESH_GEN). Gates the one-time
+             texture-cache drop when the branding tiles change. MUST be declared
+             or set_setting silently no-ops. -->
+        <setting id="_tiles_refresh_gen" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default></default>
+          <control type="label" format="string"/>
+        </setting>
         <!-- Hidden marker: one-time restore of the NOX "series by
              networks" home row has been applied. Read/written by
              pov_series_networks_reseed_patcher.py. -->

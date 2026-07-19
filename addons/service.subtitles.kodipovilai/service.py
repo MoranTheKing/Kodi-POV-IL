@@ -194,6 +194,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_debrid_status,
         _maybe_show_af3_first_launch_dialog,
         _maybe_show_debrid_status,
+        _maybe_reload_for_tiles,
     )
     for step in steps:
         try:
@@ -683,6 +684,12 @@ def _maybe_patch_fentastic_search():
             pass
 
 
+# Set by _maybe_install_build_icons when the tiles' texture cache was dropped
+# this boot; consumed by _maybe_reload_for_tiles (the LAST startup step) so the
+# fresh tile art re-renders now instead of only on the next Kodi restart.
+_TILE_REFRESH_NEEDED = [False]
+
+
 def _maybe_install_build_icons():
     """Install the bundled TMDB-branded home-tile icons under
     media/build_icons/ so the favourites_xml_patcher can point at
@@ -701,6 +708,8 @@ def _maybe_install_build_icons():
             kodi_utils.log(
                 'build_icons_patcher: updated {0}'.format(
                     ', '.join(result['updated'])), level='INFO')
+        if isinstance(result, dict) and result.get('refresh_needed'):
+            _TILE_REFRESH_NEEDED[0] = True
     except Exception as e:
         try:
             kodi_utils.log(
@@ -708,6 +717,56 @@ def _maybe_install_build_icons():
                 level='WARNING')
         except Exception:
             pass
+
+
+def _tile_reload_worker():
+    """Do ONE skin reload so freshly-cache-dropped tiles re-cache from disk. The
+    home focus is snapshotted + restored (via pov_reload) so the menu doesn't snap
+    to the first tile if the user was already navigating. No-op while playing."""
+    try:
+        import xbmc
+        if xbmc.getCondVisibility('Player.HasMedia'):
+            return
+        saved = None
+        try:
+            from resources.lib import pov_reload
+            saved = pov_reload._capture_home_focus()
+        except Exception:
+            saved = None
+        xbmc.executebuiltin('ReloadSkin()')
+        try:
+            xbmc.sleep(1200)
+        except Exception:
+            pass
+        if saved:
+            try:
+                from resources.lib import pov_reload
+                pov_reload._restore_home_focus(saved)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+def _maybe_reload_for_tiles():
+    """LAST startup step: if build_icons_patcher dropped stale tile textures this
+    boot (a TILE_REFRESH_GEN bump, or a FORCE_SYNC tile whose bytes changed), do
+    one skin reload so the fresh home-tile art shows now rather than only on the
+    next restart -- the cache entries are already gone, ReloadSkin re-caches them
+    from disk. Runs on a BACKGROUND thread: the reload + bounded focus-restore
+    (~1-11s) must not block the rest of main() (autosub listener registration,
+    etc.). Gen-triggered reloads are one-off per generation (marker-gated in the
+    patcher, and only after the marker actually persisted)."""
+    if not _TILE_REFRESH_NEEDED[0]:
+        return
+    _TILE_REFRESH_NEEDED[0] = False
+    try:
+        import threading
+        threading.Thread(target=_tile_reload_worker,
+                         name='pov-tile-reload', daemon=True).start()
+    except Exception:
+        # Couldn't spawn a thread -> run inline (still fully guarded).
+        _tile_reload_worker()
 
 
 def _maybe_patch_brand_assets():
