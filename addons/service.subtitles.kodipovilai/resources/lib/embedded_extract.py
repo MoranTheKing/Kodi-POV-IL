@@ -74,17 +74,21 @@ DEFAULT_HEAD_BYTES = 2 * 1024 * 1024
 DEFAULT_MAX_BYTES = 80 * 1024 * 1024      # surgical Cues fetch stays well under
 DEFAULT_DEADLINE_S = 30.0
 _HTTP_TIMEOUT = 15
-_CLUSTER_CAP_HTTP = 3 * 1024 * 1024       # max bytes fetched per cue cluster
 _CLUSTER_CAP_LOCAL = 32 * 1024 * 1024     # local: effectively read whole clusters
 _CUES_CAP = 24 * 1024 * 1024              # hard ceiling on the Cues element read
 
-# Debrid/HTTP extraction reads from the SAME CDN token the player is streaming
-# from; hitting it hard triggers a 429 that STARVES AND KILLS playback (field
-# incident 2026-07-19: 1720 cue fetches -> HTTP 429 -> CVideoPlayer eof -> the
-# movie closed). OFF by default until a gentle one-connection + coalesced-range +
-# paced path is device-tested. Local extraction never competes with a CDN, so it
-# stays on. Flip to True only in a build that is under on-device test.
-_HTTP_EXTRACT_ENABLED = False
+# HTTP/debrid Cues extraction (field incident 2026-07-19: a fresh-connection-per-
+# read storm 429'd the CDN token and KILLED playback). The safe shape, proven in
+# the wild: ONE keep-alive connection (see _Source._sess) + single-range serial
+# fetches of cluster windows, coalescing nearby cluster positions into few large
+# Range requests, a circuit-breaker on the first 429/5xx, a top-up for clusters
+# bigger than the window, and hard byte/time caps so a spread-out file DEFERS to
+# the external path rather than fetch gigabytes alongside the player.
+_CLUSTER_WINDOW_HTTP = 512 * 1024         # first window fetched per cue cluster
+_CLUSTER_TOPUP_MAX = 4 * 1024 * 1024      # top-up read cap for one big cluster
+_COALESCE_GAP = 1 * 1024 * 1024           # merge cluster positions within this
+_MAX_RANGE = 8 * 1024 * 1024              # cap per coalesced Range request
+_HTTP_TOTAL_CAP = 220 * 1024 * 1024       # give up (defer) past this many bytes
 _UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
        '(KHTML, like Gecko) Chrome/120.0 Safari/537.36')
 
@@ -171,16 +175,40 @@ def _walk(buf, end):
         yield eid, size, buf.p
 
 
+def _new_session():
+    """ONE keep-alive requests.Session (single pooled connection). This is the
+    heart of debrid-safety: all Range reads reuse ONE TCP connection -- the same
+    shape as the player's own single connection -- instead of storming the CDN
+    with a fresh connection per read (which 429'd the token and killed playback
+    in the field). None when requests isn't importable (then HTTP extraction is
+    declined rather than risk a fresh-connection storm)."""
+    try:
+        import requests
+        s = requests.Session()
+        a = requests.adapters.HTTPAdapter(
+            pool_connections=1, pool_maxsize=1, max_retries=1)
+        s.mount('https://', a)
+        s.mount('http://', a)
+        return s
+    except Exception:
+        return None
+
+
 class _Source(object):
-    """Byte source with .read(offset, size) -- local file or HTTP Range.
-    Reads are hard-capped at `size`: a server that ignores Range (200) at a
-    non-zero offset yields b'' rather than streaming the whole file."""
+    """Byte source with .read(offset, size) -- local file or HTTP Range. HTTP
+    reads go over ONE reused keep-alive connection (see _new_session); a 429/5xx
+    trips a circuit-breaker so every later read returns b'' and we back off the
+    instant the CDN pushes back. Reads are hard-capped at `size`: a server that
+    ignores Range (200) at a non-zero offset yields b'' rather than the file."""
 
     def __init__(self, url_or_path):
         self.url = url_or_path or ''
         self.is_http = bool(re.match(r'^https?://', self.url, re.I))
         self.fetched = 0
+        self.reqs = 0
+        self.tripped = False          # circuit-breaker: set on a 429/5xx
         self.total = 0
+        self._sess = _new_session() if self.is_http else None
         if not self.is_http:
             try:
                 self.total = os.path.getsize(self.url)
@@ -189,7 +217,30 @@ class _Source(object):
         else:
             self.total = self._http_size()
 
+    @property
+    def has_session(self):
+        """A reused keep-alive connection is available. HTTP extraction requires
+        this so it never storms the CDN with fresh connections."""
+        return self._sess is not None
+
     def _http_size(self):
+        try:
+            if self._sess is not None:
+                r = self._sess.get(
+                    self.url, headers={'Range': 'bytes=0-0', 'User-Agent': _UA},
+                    timeout=_HTTP_TIMEOUT, stream=True)
+                cr = r.headers.get('Content-Range') or ''
+                cl = r.headers.get('Content-Length')
+                try:
+                    r.close()
+                except Exception:
+                    pass
+                m = re.search(r'/(\d+)\s*$', cr)
+                if m:
+                    return int(m.group(1))
+                return int(cl) if cl else 0
+        except Exception:
+            return 0
         if _urlreq is None:
             return 0
         try:
@@ -222,6 +273,41 @@ class _Source(object):
                 return data
             except Exception:
                 return b''
+        if self.tripped:
+            return b''
+        if self._sess is not None:
+            return self._read_session(offset, size)
+        return self._read_urllib(offset, size)
+
+    def _read_session(self, offset, size):
+        """One Range GET over the SHARED keep-alive connection. Single-range,
+        never multipart (a fat multi-range body starves the hardware decoder).
+        A 429/5xx trips the breaker so every later read backs off immediately."""
+        self.reqs += 1
+        r = None
+        try:
+            r = self._sess.get(self.url, headers={
+                'Range': 'bytes={0}-{1}'.format(offset, offset + size - 1),
+                'User-Agent': _UA}, timeout=_HTTP_TIMEOUT, stream=True)
+            code = r.status_code
+            if code == 429 or code >= 500:
+                self.tripped = True
+                return b''
+            if code == 200 and offset > 0:
+                return b''
+            data = r.raw.read(size)
+            self.fetched += len(data)
+            return data
+        except Exception:
+            return b''
+        finally:
+            if r is not None:
+                try:
+                    r.close()
+                except Exception:
+                    pass
+
+    def _read_urllib(self, offset, size):
         if _urlreq is None:
             return b''
         try:
@@ -232,7 +318,7 @@ class _Source(object):
             code = getattr(resp, 'status', None) or resp.getcode()
             if code == 200 and offset > 0:
                 resp.close()
-                return b''   # server ignored Range; can't safely seek
+                return b''
             data = resp.read(size)
             resp.close()
             self.fetched += len(data)
@@ -715,7 +801,8 @@ def probe_tracks(url_or_path, head_bytes=DEFAULT_HEAD_BYTES, log=None):
 
 def extract_srt(url_or_path, track_num=None, lang=None,
                 head_bytes=DEFAULT_HEAD_BYTES, max_bytes=DEFAULT_MAX_BYTES,
-                deadline_s=DEFAULT_DEADLINE_S, abort_cb=None, log=None):
+                deadline_s=DEFAULT_DEADLINE_S, allow_http=False,
+                abort_cb=None, log=None):
     """Extract an embedded TEXT subtitle track as an SRT string.
 
     Pick the track by `track_num`, else by `lang` (BCP-47 prefix, e.g. 'en'
@@ -723,7 +810,10 @@ def extract_srt(url_or_path, track_num=None, lang=None,
     or None when there is no matching text track / the file has no usable Cues
     over HTTP / anything fails. NEVER raises -- the caller always has the
     external path to fall back to. `abort_cb`, if given, is polled between
-    clusters; when it returns True (e.g. playback ended) extraction stops."""
+    clusters; when it returns True (e.g. playback ended) extraction stops.
+    `allow_http` must be True to extract from a debrid/HTTP stream (default
+    False -- local-only); HTTP extraction then uses ONE keep-alive connection
+    with coalesced ranges + a 429 circuit-breaker so it can't starve playback."""
     _log = log or _noop
     t0 = time.time()
     try:
@@ -747,14 +837,18 @@ def extract_srt(url_or_path, track_num=None, lang=None,
         scale_ms = ts_scale / 1e6
         origin_ms = _timeline_origin(src, seg_start, scale_ms, _log)
         entries = []
-        # DEBRID SAFETY: never extract from a live HTTP stream by default -- it
-        # competes with the player on the same CDN token and can 429 it dead.
-        # Defer to the external path (which still yields AI Hebrew). Local files
-        # are safe and continue below.
-        if src.is_http and not _HTTP_EXTRACT_ENABLED:
-            _log('HTTP embedded extraction OFF (debrid-safety) -- deferring to '
-                 'the external path')
-            return None
+        # DEBRID SAFETY: only extract from a live HTTP stream when explicitly
+        # allowed, AND only when a reused keep-alive connection is available
+        # (fresh-connection-per-read storms the CDN token and kills playback).
+        # Otherwise defer to the external path (which still yields AI Hebrew).
+        if src.is_http:
+            if not allow_http:
+                _log('HTTP extraction not allowed (setting off) -- deferring')
+                return None
+            if not src.has_session:
+                _log('no keep-alive session (requests missing) -- declining '
+                     'HTTP extraction to avoid a connection storm')
+                return None
         # Surgical Cues-guided fetch first (per-track subtitle cues -- fast for
         # both local and debrid HTTP). If there are none: over HTTP defer to the
         # external path; a local file gets a complete sequential walk. A partial
@@ -845,30 +939,96 @@ def _extract_sequential(src, seg_start, want, entries, deadline_s, t0,
     return True
 
 
+def _coalesce_ranges(positions, window, gap, max_range, total):
+    """Group sorted cluster positions into (start, end, [positions]) sweep
+    ranges: each covers ~`window` bytes per cluster, and adjacent positions
+    within `gap` share ONE Range request (his proven request-count cut). Capped
+    at `max_range` per range and the file size."""
+    ranges = []
+    ps = sorted(set(positions))
+    if not ps:
+        return ranges
+    cap = total or (ps[-1] + window)
+    cur_start = ps[0]
+    cur_end = cur_start + window
+    cur = [cur_start]
+    for p in ps[1:]:
+        if p < cur_end + gap and (p + window - cur_start) <= max_range:
+            cur_end = max(cur_end, p + window)
+            cur.append(p)
+        else:
+            ranges.append((cur_start, min(cur_end, cap), cur))
+            cur_start, cur_end, cur = p, p + window, [p]
+    ranges.append((cur_start, min(cur_end, cap), cur))
+    return ranges
+
+
 def _extract_cues(src, seeks, seg_start, want, entries,
                   max_bytes, deadline_s, t0, abort_cb, log):
-    """Cues-guided extraction: visit only the referenced clusters via Range.
-    Uses per-track SUBTITLE cues over HTTP (whole-file/video cues would risk a
-    partial extract, so over HTTP we defer instead). Returns True on a COMPLETE
-    pass, False otherwise (no usable sub cues, or budget/deadline/abort cut it
-    short -- caller then defers to the external path / a local full walk)."""
+    """Cues-guided extraction from per-track SUBTITLE cues. Local visits each
+    cluster directly; HTTP uses coalesced sweep-ranges over the single keep-alive
+    connection with a 429 circuit-breaker. Returns True only on a COMPLETE pass;
+    False (no sub cues / breaker / budget / abort) -> the caller defers to the
+    external path (HTTP) or a full sequential walk (local)."""
     positions, is_sub = _read_cues(src, seeks, seg_start, want, log)
     if not positions:
         return False
     if not is_sub:
         # Whole-file/video cues don't point at subtitle blocks, so a capped
-        # per-cluster fetch would risk missing lines. Defer: over HTTP the
-        # caller goes external; a local file gets a complete sequential walk.
+        # per-cluster fetch would risk missing lines. Defer.
         log('no per-subtitle Cues -- deferring (avoid a partial extract)')
         return False
-    for cpos in positions:
-        if src.fetched >= max_bytes or (time.time() - t0) > deadline_s:
-            log('cues extract budget/deadline reached (%.1fMB, %.1fs)'
-                % (src.fetched / 1e6, time.time() - t0))
+    if not src.is_http:
+        for cpos in positions:
+            if (time.time() - t0) > deadline_s or _aborted(abort_cb):
+                return False
+            _read_and_collect_cluster(
+                src, cpos, want, entries, _CLUSTER_CAP_LOCAL, log)
+        return True
+    return _extract_cues_http(src, positions, entries, want, deadline_s, t0,
+                              abort_cb, log)
+
+
+def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
+                       log):
+    """HTTP/debrid: ONE keep-alive connection, single-range serial, coalesced
+    sweep-ranges, circuit-breaker, per-cluster top-up, hard byte/time caps.
+    Player-safe by construction. Returns True on a complete pass, False to defer
+    (breaker tripped / cap hit / aborted)."""
+    ranges = _coalesce_ranges(positions, _CLUSTER_WINDOW_HTTP, _COALESCE_GAP,
+                              _MAX_RANGE, src.total)
+    budget = max(deadline_s, 90.0)
+    log('%d sub-cue cluster(s) -> %d coalesced range(s); caps %dMB / %.0fs'
+        % (len(positions), len(ranges), _HTTP_TOTAL_CAP // (1 << 20), budget))
+    for (rstart, rend, cposes) in ranges:
+        if src.tripped:
+            log('circuit-breaker tripped (CDN 429/5xx) -- deferring')
+            return False
+        if src.fetched >= _HTTP_TOTAL_CAP:
+            log('http byte cap reached (%.0fMB) -- deferring' % (src.fetched / 1e6))
+            return False
+        if (time.time() - t0) > budget:
+            log('http time budget reached (%.0fs) -- deferring'
+                % (time.time() - t0))
             return False
         if _aborted(abort_cb):
-            log('cues extract aborted (playback ended)')
+            log('http extract aborted (playback ended)')
             return False
-        _read_and_collect_cluster(
-            src, cpos, want, entries, _CLUSTER_CAP_HTTP, log)
+        window = src.read(rstart, min(rend - rstart, _HTTP_TOTAL_CAP - src.fetched))
+        if src.tripped:
+            log('circuit-breaker tripped mid-fetch -- deferring')
+            return False
+        if not window:
+            continue
+        for cpos in cposes:
+            off = cpos - rstart
+            if not (0 <= off < len(window)):
+                continue
+            end = _collect_one_cluster(window[off:], want, entries)
+            # Cluster was truncated by the window -> top-up the WHOLE cluster
+            # (one bigger read); dedup in _entries_to_srt drops any re-read block.
+            if (off + end) >= len(window) and not src.tripped \
+                    and src.fetched < _HTTP_TOTAL_CAP:
+                _read_and_collect_cluster(
+                    src, cpos, want, entries, _CLUSTER_TOPUP_MAX, log)
     return True
