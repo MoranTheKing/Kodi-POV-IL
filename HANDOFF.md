@@ -422,7 +422,31 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    most lines instead of being thrown away (the alignment-confidence and framerate
    checks are unchanged, so a wrong match is still rejected). Built by key-preserving
    zip surgery; the standalone edition got only the translation change.
-14. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
+14. **Embedded-subtitle → AI translation: perfectly-synced Hebrew — BUILT &
+   VALIDATED (AI 0.2.389 / quickfix 0.1.428; wizard unchanged), Phase 1 (staged
+   on the feature branch, pending merge to main).** The add-on can now translate
+   the video's OWN embedded subtitle track — the English/Spanish/etc. already
+   inside the MKV — instead of only external subs. Because an embedded track's
+   cue timings ARE the video's timeline, the Hebrew it produces is perfectly
+   synced from the first second: no external search, no re-timing guesswork. A
+   new self-contained MKV/WebM text extractor reads the embedded track straight
+   from the playing file — local or debrid HTTP, using the Cues index + surgical
+   Range requests (tens of MB, never the whole file), or a full sequential walk
+   for local files — decodes SRT/ASS text, and feeds it to the existing AI
+   pipeline. It appears both automatically (when no ready Hebrew exists) and as a
+   pick in the subtitle chooser ("תרגום מובנה → עברית"), ranked right after
+   Hebrew and above every external sub; English is preferred as the source (best
+   translation quality) while gender accuracy still comes from the reference
+   chain. Fully fail-open: only text codecs are extracted — bitmap PGS/VOBSUB and
+   any failure fall through to the existing external path, so nothing that worked
+   before changes. The standalone edition also gained the full sync stack
+   (container probe + re-timer), so it re-times subtitles and extracts embedded
+   text too. Two separate validation passes found and fixed five correctness bugs
+   — including a chunk-boundary and an unknown-size-cluster data-loss bug — each
+   verified against purpose-built synthetic MKVs before the release was cut.
+   Bitmap-embedded sync (via the embedded track's timestamps), an OCR path, and
+   an ffmpeg fast path are planned follow-ups.
+15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
 ## Working style
