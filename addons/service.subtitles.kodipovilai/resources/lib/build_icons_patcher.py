@@ -206,16 +206,27 @@ def ensure_installed():
                 != TILE_REFRESH_GEN
     except Exception:
         gen_stale = False
+    # Persist the marker FIRST and CONFIRM it stuck before doing the one-time full
+    # refresh. kodi_utils.set_setting read-backs and returns False when the write
+    # silently no-ops (a documented Kodi/Android failure mode); if the marker
+    # can't persist we must NOT do the gen refresh, else gen_stale stays True and
+    # we'd ReloadSkin on EVERY boot forever. The per-`updated` path below is
+    # unaffected -- it's bounded by real byte changes, not a marker.
+    gen_committed = False
+    if gen_stale and kodi_utils is not None:
+        try:
+            gen_committed = bool(kodi_utils.set_setting(
+                SETTING_REFRESH_GEN, TILE_REFRESH_GEN))
+        except Exception:
+            gen_committed = False
+        if not gen_committed:
+            _log('tile-refresh gen marker did not persist -- skipping the '
+                 'one-time reload so it cannot repeat every boot', level='WARNING')
     refresh_keys = set(r.replace(os.sep, '/') for r in updated)
-    if gen_stale:
+    if gen_stale and gen_committed:
         refresh_keys |= set(FORCE_SYNC)
     refresh_needed = bool(refresh_keys)
     if refresh_needed:
         _invalidate_texture_cache(sorted(refresh_keys))
-    if gen_stale and kodi_utils is not None:
-        try:
-            kodi_utils.set_setting(SETTING_REFRESH_GEN, TILE_REFRESH_GEN)
-        except Exception:
-            pass
     return {'installed': installed, 'updated': updated, 'skipped': skipped,
             'refresh_needed': refresh_needed}
