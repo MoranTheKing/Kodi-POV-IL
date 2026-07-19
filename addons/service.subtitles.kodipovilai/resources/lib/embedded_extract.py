@@ -123,8 +123,15 @@ _HTTP_TOTAL_CAP = 700 * 1024 * 1024       # give up (defer) past this many bytes
 # small window AT the block, instead of pulling the whole ~1.5MB cluster. ~18x
 # less data than the window scan -> far gentler on the player's bandwidth on a
 # scattered remux, which is exactly the debrid case.
-_CLUSTER_HDR_READ = 16 * 1024             # header read to resolve prefix + ts
-_BLOCK_READ_HTTP = 128 * 1024             # window fetched AT a targeted block
+# Kept SMALL on purpose: a subtitle (Simple)Block/BlockGroup is well under 1 KB,
+# so we only need a few KB at the target. The prior 16KB+128KB (~144 KB/cue) was
+# wasteful THROUGHPUT that -- on a strict token (TorBox) sharing bandwidth with
+# the player -- drained the player's buffer and stalled it (field, 2026-07-19,
+# no 429: pure bandwidth contention). 8KB header + 32KB block = ~40 KB/cue, ~3.6x
+# less. 32KB still comfortably covers a block + BlockGroup; a rare larger element
+# just falls through to the window-scan for that one cue.
+_CLUSTER_HDR_READ = 8 * 1024              # header read to resolve prefix + ts
+_BLOCK_READ_HTTP = 32 * 1024              # window fetched AT a targeted block
 _UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
        '(KHTML, like Gecko) Chrome/120.0 Safari/537.36')
 
