@@ -247,6 +247,31 @@ def _handle_download(handle, params):
             xbmcplugin.endOfDirectory(handle)
             return
 
+    if _p and _p.get('type') == 'embedded_ai':
+        # Extract the embedded track's TEXT and rewrite to a plain 'ai' link, so
+        # it gets the SAME fast-path/background/progressive treatment as
+        # engine_ai (instead of the slow, blocking legacy path). Fail-open.
+        emb_path = None
+        try:
+            kodi_utils.notify('AI: מחלץ תרגום מובנה...', time_ms=2500)
+            emb_path = translate._extract_embedded_srt(
+                info, _p.get('src_lang') or 'en', _p.get('track_num'))
+        except Exception as _e:
+            _safe_log('embedded_ai extraction failed: {0}'.format(_e),
+                      level='ERROR')
+        if emb_path and os.path.isfile(emb_path):
+            link = translate._encode_link({
+                'type': 'ai',
+                'source_lang': _p.get('src_lang') or 'en',
+                'local_path': emb_path,
+                'release': info.get('picked_release') or '',
+                'force_ai': True,
+            })
+        else:
+            kodi_utils.notify('AI: לא ניתן לחלץ תרגום מובנה', time_ms=4000)
+            xbmcplugin.endOfDirectory(handle)
+            return
+
     # Opt-in fast path for the NATIVE Kodi subtitle picker. Mirrors
     # the DarkSubs fast_first_chunk flow in _handle_translate_file:
     # deliver the English source to Kodi immediately and continue
