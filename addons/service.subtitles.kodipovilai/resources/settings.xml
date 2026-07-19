@@ -383,6 +383,16 @@
           <default>true</default>
           <control type="toggle"/>
         </setting>
+        <!-- Hidden kill-switch: allow embedded extraction over a live debrid/HTTP
+             stream. The extractor uses ONE keep-alive connection + coalesced
+             ranges + a 429 circuit-breaker so it can't starve the player, but
+             this is the instant manual escape hatch if a device/CDN misbehaves.
+             Flip to false to keep embedded extraction local-only. -->
+        <setting id="embedded_http_extract" type="boolean" label="30000" visible="false">
+          <level>3</level>
+          <default>true</default>
+          <control type="toggle"/>
+        </setting>
         <!-- Hidden marker: one-time restore of the NOX "series by
              networks" home row has been applied. Read/written by
              pov_series_networks_reseed_patcher.py. -->
