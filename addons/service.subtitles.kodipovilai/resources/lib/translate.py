@@ -1133,11 +1133,12 @@ def _playing_video_url(info):
 def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                           progress_cb=None):
     """Extract the playing file's embedded `src_lang` subtitle track to a temp
-    SRT and return its path, or None. `deadline_s` bounds the extraction: the
-    default (900s) suits BACKGROUND callers (the auto-on-play thread, resolve()
-    from bg_translate_picker); a UI-blocking caller (the native picker / chooser,
-    which the user is actively waiting on) MUST pass a short bound so a scattered
-    remux -- minutes of serial range requests -- can't freeze Kodi's dialog. The extracted cues carry the video's OWN
+    SRT and return its path, or None. `deadline_s` bounds the extraction (default
+    900s). Every current caller runs in the BACKGROUND -- the auto-on-play thread
+    and resolve() from the bg_translate_picker RunScript (the native picker and
+    chooser now FIRE that RunScript and return immediately, rather than extracting
+    inline) -- so the long default is safe; playback-end (abort_cb) is the real
+    stop. `progress_cb(done, total)`, if given, drives a corner progress bar. The extracted cues carry the video's OWN
     timestamps, so the Hebrew translated from this file needs no re-sync. Fully
     guarded + fail-open: any problem returns None and resolve() lets the caller
     fall through to the external-subtitle path. Aborts if playback ends mid-
