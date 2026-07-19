@@ -75,6 +75,16 @@ DEFAULT_HEAD_BYTES = 2 * 1024 * 1024
 DEFAULT_MAX_BYTES = 80 * 1024 * 1024      # surgical Cues fetch stays well under
 DEFAULT_DEADLINE_S = 30.0
 _HTTP_TIMEOUT = 15
+# A debrid CDN token rate-limits by request COUNT and recovers after a short
+# cooldown, so a transient 429 is EXPECTED (the relpos fast path issues many
+# small requests). Back off (honor Retry-After) and retry rather than tripping
+# the breaker on the first 429; only give up after exhausting retries. A small
+# per-request pace keeps the burst rate under the limiter in the first place
+# (the field 429 fired at ~35 req/s). Sleeping is safe -- extraction runs in a
+# background thread, never the player's callback.
+_HTTP_429_RETRIES = 5
+_HTTP_429_MAX_WAIT = 20.0          # cap on one backoff sleep (seconds)
+_HTTP_REQ_PACE_S = 0.07           # min gap between range requests
 _CLUSTER_CAP_LOCAL = 32 * 1024 * 1024     # local: effectively read whole clusters
 _CUES_CAP = 24 * 1024 * 1024              # hard ceiling on the Cues element read
 
@@ -296,43 +306,70 @@ class _Source(object):
 
     def _read_session(self, offset, size):
         """One Range GET over the SHARED keep-alive connection. Single-range,
-        never multipart (a fat multi-range body starves the hardware decoder).
-        A 429/5xx trips the breaker so every later read backs off immediately."""
+        never multipart (a fat multi-range body starves the hardware decoder). On
+        a 429/5xx we BACK OFF (honor Retry-After) and retry a few times -- a
+        debrid CDN token rate-limits by request count and recovers after a short
+        cooldown -- and only trip the breaker after exhausting retries. A small
+        per-request pace keeps the burst rate under the limiter."""
+        import time as _t
         self.reqs += 1
-        r = None
-        try:
-            r = self._sess.get(self.url, headers={
-                'Range': 'bytes={0}-{1}'.format(offset, offset + size - 1),
-                'User-Agent': _UA}, timeout=_HTTP_TIMEOUT, stream=True)
-            code = r.status_code
-            if code == 429 or code >= 500:
-                self.tripped = True
+        if self.reqs > 1 and _HTTP_REQ_PACE_S > 0:
+            _t.sleep(_HTTP_REQ_PACE_S)
+        for _attempt in range(_HTTP_429_RETRIES):
+            r = None
+            try:
+                r = self._sess.get(self.url, headers={
+                    'Range': 'bytes={0}-{1}'.format(offset, offset + size - 1),
+                    'User-Agent': _UA}, timeout=_HTTP_TIMEOUT, stream=True)
+                code = r.status_code
+                if code == 429 or code >= 500:
+                    ra = r.headers.get('Retry-After')
+                    try:
+                        r.close()
+                    except Exception:
+                        pass
+                    r = None
+                    if _attempt >= _HTTP_429_RETRIES - 1:
+                        self.tripped = True   # limiter not recovering -> give up
+                        return b''
+                    try:
+                        wait = (min(float(ra), _HTTP_429_MAX_WAIT) if ra
+                                else min(1.5 * (2 ** _attempt), _HTTP_429_MAX_WAIT))
+                        # A negative / NaN / -inf Retry-After parses via float()
+                        # WITHOUT raising, but then time.sleep(wait) throws -- and
+                        # the outer `except Exception` would swallow it and return
+                        # b'' WITHOUT ever setting self.tripped, silently killing
+                        # both the backoff AND the breaker (unbounded hammering).
+                        # Reject any non-finite / out-of-range value up front.
+                        if not (0 <= wait <= _HTTP_429_MAX_WAIT):
+                            raise ValueError
+                    except (ValueError, TypeError, OverflowError):
+                        wait = min(1.5 * (2 ** _attempt), _HTTP_429_MAX_WAIT)
+                    _t.sleep(wait)
+                    continue
+                if code == 200 and offset > 0:
+                    return b''
+                # Full-body fill-loop: a single r.raw.read(size) short-reads on a
+                # urllib3 stream (returned 2 cues/1568 in the field); read until
+                # `size` bytes or EOF, exactly like requests' own resp.content.
+                buf = bytearray()
+                while len(buf) < size:
+                    chunk = r.raw.read(size - len(buf))
+                    if not chunk:
+                        break
+                    buf += chunk
+                data = bytes(buf)
+                self.fetched += len(data)
+                return data
+            except Exception:
                 return b''
-            if code == 200 and offset > 0:
-                return b''
-            # r.raw.read(size) is a SINGLE raw read: on a urllib3 stream it
-            # returns only what's already in the socket buffer (often a few KB),
-            # NOT the full `size`. That silently truncated every range window ->
-            # cue offsets fell outside it -> near-empty extractions in the field
-            # (11MB fetched, 2 cues parsed). Loop until we have `size` bytes or
-            # hit EOF, exactly like requests' own resp.content.
-            buf = bytearray()
-            while len(buf) < size:
-                chunk = r.raw.read(size - len(buf))
-                if not chunk:
-                    break
-                buf += chunk
-            data = bytes(buf)
-            self.fetched += len(data)
-            return data
-        except Exception:
-            return b''
-        finally:
-            if r is not None:
-                try:
-                    r.close()
-                except Exception:
-                    pass
+            finally:
+                if r is not None:
+                    try:
+                        r.close()
+                    except Exception:
+                        pass
+        return b''
 
     def _read_urllib(self, offset, size):
         if _urlreq is None:

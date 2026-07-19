@@ -213,9 +213,18 @@ def _start_ai_apply(link, info):
         # would freeze this short-lived chooser process. Hand the embedded_ai
         # link straight to the background translator below (ai_link / ai_payload
         # stay as the embedded_ai link set above): its resolve() extracts, with a
-        # corner progress bar, THEN translates. No local source to pre-show.
+        # corner progress bar, THEN translates.
         elif payload.get('type') == 'embedded_ai':
-            pass
+            # Show the embedded SOURCE track now (native, instant + already synced
+            # to the video) so the user sees it while the Hebrew cooks, instead of
+            # the stale sub they picked embedded to replace. Best-effort.
+            try:
+                _si = payload.get('stream_index')
+                if _si is not None:
+                    subs_engine_bridge.select_embedded(
+                        _si, lang=payload.get('src_lang') or 'en')
+            except Exception:
+                pass
         # English source -> show it immediately (broadly readable); other
         # languages get no intermediate, exactly like the fast path.
         src_lang = ai_payload.get('source_lang') or 'en'
