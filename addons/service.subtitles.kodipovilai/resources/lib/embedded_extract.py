@@ -83,8 +83,19 @@ _HTTP_TIMEOUT = 15
 # (the field 429 fired at ~35 req/s). Sleeping is safe -- extraction runs in a
 # background thread, never the player's callback.
 _HTTP_429_RETRIES = 5
-_HTTP_429_MAX_WAIT = 20.0          # cap on one backoff sleep (seconds)
-_HTTP_REQ_PACE_S = 0.07           # min gap between range requests
+_HTTP_429_MAX_WAIT = 30.0          # cap on one backoff sleep (seconds)
+# A 429 means the shared token is at its limit and the PLAYER needs that
+# headroom, so back off substantially (not just enough for our own retry).
+_HTTP_429_BASE_WAIT = 3.0
+# Gentle baseline pace. On a strict provider (TorBox) our small fast requests
+# plus the player's stream tripped the per-token limit and 429'd the PLAYER,
+# closing the movie. Pace hard so our added request rate stays well under the
+# limit; the player-stall abort (translate.py) is the backstop if it still bites.
+_HTTP_REQ_PACE_S = 0.2            # STARTING gap between range requests
+_HTTP_REQ_PACE_MAX = 2.0         # ceiling: every 429 widens the gap toward this
+#                                  (AIMD-style back-pressure -- we can't know a
+#                                  provider's exact limit, so let the CDN's own
+#                                  429s tune us down to a rate it tolerates)
 _CLUSTER_CAP_LOCAL = 32 * 1024 * 1024     # local: effectively read whole clusters
 _CUES_CAP = 24 * 1024 * 1024              # hard ceiling on the Cues element read
 
@@ -232,6 +243,7 @@ class _Source(object):
         self.fetched = 0
         self.reqs = 0
         self.tripped = False          # circuit-breaker: set on a 429/5xx
+        self._pace = _HTTP_REQ_PACE_S  # adaptive inter-request gap (grows on 429)
         self.total = 0
         self._sess = _new_session() if self.is_http else None
         if not self.is_http:
@@ -312,9 +324,10 @@ class _Source(object):
         cooldown -- and only trip the breaker after exhausting retries. A small
         per-request pace keeps the burst rate under the limiter."""
         import time as _t
+        _pace = getattr(self, '_pace', _HTTP_REQ_PACE_S)
         self.reqs += 1
-        if self.reqs > 1 and _HTTP_REQ_PACE_S > 0:
-            _t.sleep(_HTTP_REQ_PACE_S)
+        if self.reqs > 1 and _pace > 0:
+            _t.sleep(_pace)
         for _attempt in range(_HTTP_429_RETRIES):
             r = None
             try:
@@ -323,6 +336,14 @@ class _Source(object):
                     'User-Agent': _UA}, timeout=_HTTP_TIMEOUT, stream=True)
                 code = r.status_code
                 if code == 429 or code >= 500:
+                    # Back-pressure: widen the pace so we ease off the contended
+                    # token (protects the player, converges toward a rate the CDN
+                    # tolerates). Persists for the rest of this extraction.
+                    try:
+                        self._pace = min(getattr(self, '_pace', _HTTP_REQ_PACE_S)
+                                         * 1.5, _HTTP_REQ_PACE_MAX)
+                    except Exception:
+                        pass
                     ra = r.headers.get('Retry-After')
                     try:
                         r.close()
@@ -334,7 +355,7 @@ class _Source(object):
                         return b''
                     try:
                         wait = (min(float(ra), _HTTP_429_MAX_WAIT) if ra
-                                else min(1.5 * (2 ** _attempt), _HTTP_429_MAX_WAIT))
+                                else min(_HTTP_429_BASE_WAIT * (2 ** _attempt), _HTTP_429_MAX_WAIT))
                         # A negative / NaN / -inf Retry-After parses via float()
                         # WITHOUT raising, but then time.sleep(wait) throws -- and
                         # the outer `except Exception` would swallow it and return
@@ -344,7 +365,7 @@ class _Source(object):
                         if not (0 <= wait <= _HTTP_429_MAX_WAIT):
                             raise ValueError
                     except (ValueError, TypeError, OverflowError):
-                        wait = min(1.5 * (2 ** _attempt), _HTTP_429_MAX_WAIT)
+                        wait = min(_HTTP_429_BASE_WAIT * (2 ** _attempt), _HTTP_429_MAX_WAIT)
                     _t.sleep(wait)
                     continue
                 if code == 200 and offset > 0:
