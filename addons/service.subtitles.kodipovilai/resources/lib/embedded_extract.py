@@ -576,36 +576,47 @@ def _collect_one_cluster(window, want_track, out):
     declared size -- no magic-byte scan, so binary block data can never be
     mis-read as a nested cluster) and append (abs_ticks, dur_or_None, frame) for
     want_track into `out`. Returns the offset within `window` one past the
-    cluster's last child (where the NEXT element begins), so the caller can
-    recover an UNKNOWN-size cluster's true length."""
+    cluster's last child (where the NEXT element begins, so an UNKNOWN-size
+    cluster's true length is recoverable); `truncated` is True when parsing
+    stopped because a child element ran PAST the end of `window` -- i.e. the read
+    was too small and a later block (possibly a subtitle one) was NOT seen, so
+    the caller must top-up rather than trust the result as complete. It is False
+    on a genuine end (declared size reached, or an unbounded cluster's next
+    segment-level element)."""
     b = _Buf(window, 0)
     eid, _l = _read_vint(b, True)
     if eid != _CLUSTER:
-        return 0
+        return 0, False
     size, slen = _read_vint(b, False)
     if slen == 0:
-        return 0
+        return 0, False
     bounded = size is not None
     limit = min(b.n, b.p + size) if bounded else b.n
     cluster_ts = None
+    truncated = False
     while b.p < limit:
         child_start = b.p
         ceid, _cidl = _read_vint(b, True)
         if ceid is None:
+            truncated = True   # child-id VINT cut off by the window
+            b.p = child_start
             break
         if not bounded and ceid not in _CLUSTER_CHILD_IDS:
             # Unknown-size cluster: a non-child id is the next segment-level
-            # element -> this cluster ends here (do NOT consume that element).
+            # element -> this cluster ends here (do NOT consume it). A genuine
+            # end, NOT a truncation.
             b.p = child_start
             break
         csize, cslen = _read_vint(b, False)
         if cslen == 0 or csize is None:
+            truncated = True   # child-size VINT cut off by the window
             b.p = child_start
             break
         cstart = b.p
         if cstart + csize > b.n:
+            truncated = True   # this child runs past the window -> need more
             b.p = child_start
-            break   # child runs past our (capped) window -> stop before it
+            break
         payload = window[cstart:cstart + csize]
         if ceid == _TIMESTAMP:
             cluster_ts = _read_uint(payload)
@@ -630,7 +641,7 @@ def _collect_one_cluster(window, want_track, out):
                 if r:
                     out.append((r[0], gdur, r[1]))
         b.p = cstart + csize
-    return b.p
+    return b.p, truncated
 
 
 def _read_and_collect_cluster(src, cpos, want_track, out, cap, log):
@@ -657,7 +668,7 @@ def _read_and_collect_cluster(src, cpos, want_track, out, cap, log):
         # fills the whole capped read (next element not seen), advance by the
         # read length (best effort).
         window = src.read(cpos, cap)
-        consumed = _collect_one_cluster(window, want_track, out)
+        consumed, _trunc = _collect_one_cluster(window, want_track, out)
         return consumed if 0 < consumed < len(window) else len(window)
     clen = hlen + size
     window = src.read(cpos, min(clen, cap))
@@ -1021,14 +1032,34 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
         if not window:
             continue
         for cpos in cposes:
+            if src.tripped:
+                break
             off = cpos - rstart
             if not (0 <= off < len(window)):
                 continue
-            end = _collect_one_cluster(window[off:], want, entries)
-            # Cluster was truncated by the window -> top-up the WHOLE cluster
-            # (one bigger read); dedup in _entries_to_srt drops any re-read block.
-            if (off + end) >= len(window) and not src.tripped \
-                    and src.fetched < _HTTP_TOTAL_CAP:
-                _read_and_collect_cluster(
-                    src, cpos, want, entries, _CLUSTER_TOPUP_MAX, log)
+            _end, truncated = _collect_one_cluster(window[off:], want, entries)
+            if not truncated:
+                continue
+            # The range window was too small for this cluster (a big co-located
+            # video/audio block sits around the subtitle block, a common layout),
+            # so a LATER subtitle block was not seen. Re-read the whole cluster
+            # with a bigger cap; dedup in _entries_to_srt drops any block
+            # re-parsed here. If it's STILL truncated (cluster > top-up cap),
+            # DEFER -- never deliver a silently-partial subtitle.
+            if src.fetched >= _HTTP_TOTAL_CAP:
+                log('byte cap reached at top-up -- deferring')
+                return False
+            tup = src.read(cpos, min(_CLUSTER_TOPUP_MAX,
+                                     _HTTP_TOTAL_CAP - src.fetched))
+            if src.tripped:
+                log('circuit-breaker tripped during top-up -- deferring')
+                return False
+            _tend, tup_trunc = _collect_one_cluster(tup, want, entries)
+            if tup_trunc:
+                log('cluster exceeds top-up cap (%dMB) -- deferring to avoid a '
+                    'partial subtitle' % (_CLUSTER_TOPUP_MAX >> 20))
+                return False
+    if src.tripped:
+        log('circuit-breaker tripped -- deferring')
+        return False
     return True
