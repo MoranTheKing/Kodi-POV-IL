@@ -77,6 +77,14 @@ _HTTP_TIMEOUT = 15
 _CLUSTER_CAP_HTTP = 3 * 1024 * 1024       # max bytes fetched per cue cluster
 _CLUSTER_CAP_LOCAL = 32 * 1024 * 1024     # local: effectively read whole clusters
 _CUES_CAP = 24 * 1024 * 1024              # hard ceiling on the Cues element read
+
+# Debrid/HTTP extraction reads from the SAME CDN token the player is streaming
+# from; hitting it hard triggers a 429 that STARVES AND KILLS playback (field
+# incident 2026-07-19: 1720 cue fetches -> HTTP 429 -> CVideoPlayer eof -> the
+# movie closed). OFF by default until a gentle one-connection + coalesced-range +
+# paced path is device-tested. Local extraction never competes with a CDN, so it
+# stays on. Flip to True only in a build that is under on-device test.
+_HTTP_EXTRACT_ENABLED = False
 _UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
        '(KHTML, like Gecko) Chrome/120.0 Safari/537.36')
 
@@ -739,6 +747,14 @@ def extract_srt(url_or_path, track_num=None, lang=None,
         scale_ms = ts_scale / 1e6
         origin_ms = _timeline_origin(src, seg_start, scale_ms, _log)
         entries = []
+        # DEBRID SAFETY: never extract from a live HTTP stream by default -- it
+        # competes with the player on the same CDN token and can 429 it dead.
+        # Defer to the external path (which still yields AI Hebrew). Local files
+        # are safe and continue below.
+        if src.is_http and not _HTTP_EXTRACT_ENABLED:
+            _log('HTTP embedded extraction OFF (debrid-safety) -- deferring to '
+                 'the external path')
+            return None
         # Surgical Cues-guided fetch first (per-track subtitle cues -- fast for
         # both local and debrid HTTP). If there are none: over HTTP defer to the
         # external path; a local file gets a complete sequential walk. A partial
