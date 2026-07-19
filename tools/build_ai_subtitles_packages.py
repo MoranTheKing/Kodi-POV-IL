@@ -64,6 +64,24 @@ STANDALONE_LIB_FILES = {
     "subs_filename_publisher.py",
     "tmdb_helper.py",
     "translate.py",
+    # --- Sync stack: parity with the build edition. mkv_probe/sync_align/
+    #     subsync/release_match were build-only, so the standalone never
+    #     re-timed subtitles; now it does (an integral part of the add-on).
+    #     Dependency closure is self-contained: mkv_probe + release_match have
+    #     no internal imports; sync_align needs only release_match; subsync
+    #     needs kodi_utils/release_match/sync_align/subs_engine_bridge/
+    #     mkv_probe/gemini/pool -- all present here. No pov_/build deps, and
+    #     every subsync call site in translate.py is already try/guarded
+    #     (fail-open), so this can only add re-timing, never break a path.
+    "mkv_probe.py",
+    "release_match.py",
+    "sync_align.py",
+    "subsync.py",
+    # --- Embedded-subtitle text extraction (self-contained, stdlib only).
+    #     Reads the video's embedded foreign track (SRT/ASS) so the AI pipeline
+    #     can translate a perfectly-synced source. Fail-open: any failure falls
+    #     through to the existing external-subtitle path.
+    "embedded_extract.py",
 }
 
 
