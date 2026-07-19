@@ -1163,30 +1163,101 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                            level='WARNING')
             return None
 
+        # ONE extraction at a time. Two concurrent runs (e.g. the user picking
+        # "embedded" twice) DOUBLE the range-request load on the shared debrid
+        # TOKEN and can push the CDN over its per-token rate limit -- which then
+        # 429s the PLAYER's own video stream and CLOSES the movie (field crash on
+        # TorBox). A cross-process flag (Window prop -- RunScript runs in its own
+        # process) refuses a second run.
+        try:
+            import xbmcgui as _xg
+            _win = _xg.Window(10000)
+        except Exception:
+            _win = None
+        _ACTIVE = 'povil.embedded_extract_active'
+        if _win is not None:
+            import time as _tm
+            # MONOTONIC clock: immune to wall-clock jumps (NTP/RTC steps on cheap
+            # Android boxes) that could otherwise make a LIVE flag look stale and
+            # let a 2nd concurrent extraction start -- the exact 2x-load that
+            # closed the movie. It's per-boot and shared across processes on this
+            # machine; the flag lives on a Window prop that a Kodi restart clears,
+            # so there's no cross-boot concern.
+            _now = _tm.monotonic()
+            _raw = _win.getProperty(_ACTIVE)
+            if _raw:
+                # The flag stores the monotonic START time. A live extraction is
+                # bounded by deadline_s; anything older (or a legacy '1' / garbage)
+                # is a stale flag from a killed RunScript process -- reclaim it so
+                # the feature can't wedge OFF for the rest of the session.
+                try:
+                    _age = _now - float(_raw)
+                except (ValueError, TypeError):
+                    _age = deadline_s + 999.0
+                if _age < 0:
+                    _age = 0.0   # defensive: never treat a fresh flag as stale
+                if _age < (deadline_s + 120):
+                    kodi_utils.log('embedded: another extraction already running '
+                                   '-- skipping to avoid doubling the debrid load',
+                                   level='INFO')
+                    return None
+            _win.setProperty(_ACTIVE, str(_now))
+
+        # Player-stall guard: our range requests share the debrid TOKEN with the
+        # player. If playback is PLAYING (not paused) but its clock stops
+        # advancing, the player is buffering/starved -- most likely our load
+        # contending for the token -- so ABORT at once to hand the bandwidth and
+        # request budget back and KEEP THE MOVIE ALIVE. A pause is not a stall.
+        _STALL_ABORT_S = 8
+        _stall = {'t': None, 'since': None}
+
         def _should_abort():
             try:
                 import xbmc as _x
-                return not _x.Player().isPlayingVideo()
+                import time as _tt
+                p = _x.Player()
+                if not p.isPlayingVideo():
+                    return True
+                if _x.getCondVisibility('Player.Paused'):
+                    _stall['t'] = None
+                    return False
+                now = _tt.time()
+                try:
+                    cur = p.getTime()
+                except Exception:
+                    return False
+                if _stall['t'] is None or abs(cur - _stall['t']) > 0.4:
+                    _stall['t'] = cur
+                    _stall['since'] = now
+                    return False
+                if _stall['since'] and (now - _stall['since']) > _STALL_ABORT_S:
+                    kodi_utils.log('embedded: player stalled >{0}s -- aborting '
+                                   'extraction to free the debrid token'
+                                   .format(_STALL_ABORT_S), level='WARNING')
+                    return True
+                return False
             except Exception:
                 return False
 
         # Extract from a live debrid/HTTP stream ONLY when the user leaves the
-        # kill-switch on. Over HTTP the extractor uses ONE keep-alive connection
-        # with coalesced ranges + a 429 circuit-breaker so it can't starve the
-        # player; still, this setting is the instant manual escape hatch. A
-        # generous background deadline lets a long movie's subs finish.
+        # kill-switch on. Over HTTP the extractor uses ONE keep-alive connection,
+        # paced requests + 429 backoff, and the stall-abort above, so it yields to
+        # the player instead of starving it. A generous background deadline lets a
+        # long movie's subs finish.
         _allow_http = kodi_utils.get_bool('embedded_http_extract', True)
-        # The relpos fast path keeps DATA tiny (~130 KB/s, a couple hundred MB
-        # total) so a long run is bandwidth-safe for the player; the deadline is
-        # a wall-clock upper bound (a scattered remux is ~1-2 range requests per
-        # cue, several minutes). It comes from the caller so a UI path can cap it
-        # short; abort_cb (playback ended) is the real stop regardless.
-        srt_text = embedded_extract.extract_srt(
-            url, track_num=track_num, lang=src_lang,
-            allow_http=_allow_http, deadline_s=deadline_s,
-            abort_cb=_should_abort, progress_cb=progress_cb,
-            log=lambda m: kodi_utils.log('embedded_extract: ' + m,
-                                         level='INFO'))
+        try:
+            srt_text = embedded_extract.extract_srt(
+                url, track_num=track_num, lang=src_lang,
+                allow_http=_allow_http, deadline_s=deadline_s,
+                abort_cb=_should_abort, progress_cb=progress_cb,
+                log=lambda m: kodi_utils.log('embedded_extract: ' + m,
+                                             level='INFO'))
+        finally:
+            if _win is not None:
+                try:
+                    _win.clearProperty(_ACTIVE)
+                except Exception:
+                    pass
         if not srt_text or srt_text.count('-->') < 3:
             kodi_utils.log(
                 'embedded: no usable text track for {0}'.format(src_lang),
