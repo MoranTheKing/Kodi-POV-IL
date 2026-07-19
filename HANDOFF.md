@@ -513,6 +513,27 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    stalls, the real fix is a "spare-bandwidth" mode (extract only from the
    player's leftover capacity, pausing when its buffer dips) — awaiting the
    maintainer's call on that vs an extract-during-pause approach.
+
+   **Track-selection fix (AI 0.2.396 / quickfix 0.1.435):** field log c23c5040
+   (TorBox, a Rick&Morty upscale) failed in ~6ms at track selection — NOT
+   bandwidth — with `no matching text track (num=None lang=en)`. `_sub_tracks`
+   was non-empty, so a subtitle track existed, but `_pick_track` matched none.
+   Root cause: the release omits the Language element on its English text sub
+   track, and our parser left `lang=''` so `''.startswith('en')` failed. Per the
+   Matroska spec a TrackEntry with NO Language element IS English (`eng`; `en`
+   for LanguageBCP47) — which is exactly why Kodi surfaced it as `eng`; we were
+   stricter than the spec. Fixes in `embedded_extract.py` (Sonnet-validated,
+   two adversarial rounds): (a) `_parse_track_entry` now parses `FlagForced`
+   (0x55AA) — it was declared and used in the sort but never actually read, so
+   `forced` was always False — and defaults an absent Language to `eng`, tagging
+   `lang_explicit` so a genuinely-tagged track outranks a defaulted one; (b)
+   `_pick_track`'s lang branch prefers explicit-tag matches, excludes forced/
+   signs-only tracks from auto-pick (a sparse signs sub is a worse deliverable
+   than deferring to the external search), and falls back to the sole non-forced
+   text track when nothing matches the language (handles an explicit `und` tag).
+   This is orthogonal to the bandwidth question above: it makes extraction
+   *start* on files that previously failed instantly; a strict provider may
+   still stall mid-extract on bandwidth, which is still the open item.
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
