@@ -256,6 +256,16 @@ def _handle_download(handle, params):
         # when ready. No pre-extracted source id yet, so pass an empty one (the
         # bg handler adopts the id resolve() computes). Fail-open: if extraction
         # yields nothing the bg job just delivers nothing (external path remains).
+        # Show the embedded SOURCE track now (native, instant + already synced to
+        # the video) so the user sees it while the Hebrew cooks -- instead of
+        # leaving the stale sub they picked embedded to replace. Best-effort.
+        try:
+            from resources.lib import subs_engine_bridge as _seb
+            _si = _p.get('stream_index')
+            if _si is not None:
+                _seb.select_embedded(_si, lang=_p.get('src_lang') or 'en')
+        except Exception:
+            pass
         try:
             import base64 as _b64m
             _lk = _b64m.b64encode(link.encode('utf-8')).decode('ascii')
