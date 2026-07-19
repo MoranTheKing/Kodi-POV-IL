@@ -476,9 +476,20 @@ def _parse_track_entry(data):
             t['codec'] = payload.decode('ascii', 'replace')
         elif eid == _CODEC_PRIVATE:
             t['private'] = payload
+        elif eid == _FORCED:
+            t['forced'] = bool(_read_uint(payload))
         elif eid in (_LANG, _LANG_BCP47):
             if not t['lang']:
                 t['lang'] = payload.decode('ascii', 'replace').strip('\x00')
+    # Matroska spec: a TrackEntry with NO Language element IS English ('eng',
+    # or 'en' for LanguageBCP47). Many upscale/anime releases omit the tag on
+    # their English sub track; Kodi shows it as 'eng' for exactly this reason.
+    # Without this default we are stricter than the spec and miss the very
+    # track the user asked for. Record whether the tag was explicit so a track
+    # that really carries 'eng' outranks one that only defaulted to it.
+    t['lang_explicit'] = bool(t['lang'])
+    if not t['lang']:
+        t['lang'] = 'eng'
     return t
 
 
@@ -1053,12 +1064,28 @@ def _pick_track(subs, track_num, lang):
         return None
     if lang:
         pref = lang.lower()[:2]
+        # Forced/signs-only tracks are excluded from auto-pick (same rule as the
+        # no-lang branch below): a sparse signs-only sub is a worse deliverable
+        # than falling through to the external subtitle search. This matters now
+        # that an untagged forced track defaults to 'eng' and would otherwise
+        # match the prefix.
         cand = [t for t in subs if _is_text_codec(t['codec'])
+                and not t['forced']
                 and (t['lang'] or '').lower().startswith(pref)]
-        # non-forced first, then forced
-        cand.sort(key=lambda t: (t['forced'], t['num']))
+        # Explicitly-tagged match first, so a track that really carries 'eng'
+        # outranks one that only defaulted to it; then track order.
+        cand.sort(key=lambda t: (not t.get('lang_explicit', True), t['num']))
         if cand:
             return cand[0]
+        # No language match. When the file carries exactly ONE non-forced text
+        # track it is almost certainly the stream Kodi surfaced (its tag may be
+        # 'und' or otherwise not our prefix); use it rather than failing the
+        # whole extraction. Multiple candidates with none matching stays
+        # ambiguous -> None, so we never grab a genuinely wrong-language sub.
+        texts = [t for t in subs
+                 if _is_text_codec(t['codec']) and not t['forced']]
+        if len(texts) == 1:
+            return texts[0]
         return None
     cand = [t for t in subs if _is_text_codec(t['codec']) and not t['forced']]
     cand.sort(key=lambda t: t['num'])
