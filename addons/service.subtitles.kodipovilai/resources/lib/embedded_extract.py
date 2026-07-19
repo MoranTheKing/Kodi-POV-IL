@@ -463,30 +463,55 @@ def _block_frame(payload, cluster_ts, want_track):
     return cluster_ts + rel, frame
 
 
+# Legitimate children of a Cluster. Inside an UNKNOWN-size cluster, ANY other id
+# marks the start of the next segment-level element (the cluster has ended) --
+# that's how an unbounded cluster's extent is recovered. Void/CRC-32 can appear.
+_CLUSTER_CHILD_IDS = frozenset((
+    _TIMESTAMP, _SIMPLEBLOCK, _BLOCKGROUP,
+    0xA7,    # Position
+    0xAB,    # PrevSize
+    0x5854,  # SilentTracks
+    0xAF,    # EncryptedBlock
+    0xEC,    # Void
+    0xBF,    # CRC-32
+))
+
+
 def _collect_one_cluster(window, want_track, out):
     """`window` starts at a Cluster element. Parse its children STRUCTURALLY (by
     declared size -- no magic-byte scan, so binary block data can never be
     mis-read as a nested cluster) and append (abs_ticks, dur_or_None, frame) for
-    want_track into `out`."""
+    want_track into `out`. Returns the offset within `window` one past the
+    cluster's last child (where the NEXT element begins), so the caller can
+    recover an UNKNOWN-size cluster's true length."""
     b = _Buf(window, 0)
     eid, _l = _read_vint(b, True)
     if eid != _CLUSTER:
-        return
+        return 0
     size, slen = _read_vint(b, False)
     if slen == 0:
-        return
-    limit = b.n if size is None else min(b.n, b.p + size)
+        return 0
+    bounded = size is not None
+    limit = min(b.n, b.p + size) if bounded else b.n
     cluster_ts = None
     while b.p < limit:
+        child_start = b.p
         ceid, _cidl = _read_vint(b, True)
         if ceid is None:
             break
+        if not bounded and ceid not in _CLUSTER_CHILD_IDS:
+            # Unknown-size cluster: a non-child id is the next segment-level
+            # element -> this cluster ends here (do NOT consume that element).
+            b.p = child_start
+            break
         csize, cslen = _read_vint(b, False)
         if cslen == 0 or csize is None:
+            b.p = child_start
             break
         cstart = b.p
         if cstart + csize > b.n:
-            break   # child runs past our (capped) window -> stop
+            b.p = child_start
+            break   # child runs past our (capped) window -> stop before it
         payload = window[cstart:cstart + csize]
         if ceid == _TIMESTAMP:
             cluster_ts = _read_uint(payload)
@@ -511,6 +536,7 @@ def _collect_one_cluster(window, want_track, out):
                 if r:
                     out.append((r[0], gdur, r[1]))
         b.p = cstart + csize
+    return b.p
 
 
 def _read_and_collect_cluster(src, cpos, want_track, out, cap, log):
@@ -531,9 +557,14 @@ def _read_and_collect_cluster(src, cpos, want_track, out, cap, log):
         return 0
     hlen = hb.p
     if size is None:
-        window = src.read(cpos, cap)     # unknown size: bounded best-effort read
-        _collect_one_cluster(window, want_track, out)
-        return len(window)
+        # Unknown-size cluster: read a bounded window; the structural parser
+        # stops at the next segment-level element and reports where. Advance by
+        # that so the walker resumes exactly at that element. If the cluster
+        # fills the whole capped read (next element not seen), advance by the
+        # read length (best effort).
+        window = src.read(cpos, cap)
+        consumed = _collect_one_cluster(window, want_track, out)
+        return consumed if 0 < consumed < len(window) else len(window)
     clen = hlen + size
     window = src.read(cpos, min(clen, cap))
     if len(window) >= hlen:
@@ -779,16 +810,21 @@ def _extract_sequential(src, seg_start, want, entries, deadline_s, t0,
         if eid is None:
             break
         size, slen = _read_vint(hb, False)
-        if slen == 0 or size is None:
+        if slen == 0:
             break
         hlen = hb.p
         if eid == _CLUSTER:
+            # Route to the cluster reader FIRST -- it handles unknown-size
+            # clusters (size is None), which are legitimate EBML; bailing on
+            # size-None here would silently truncate the file.
             clen = _read_and_collect_cluster(
                 src, pos, want, entries, _CLUSTER_CAP_LOCAL, log)
             if clen <= 0:
                 break
             pos += clen
         else:
+            if size is None:
+                break   # unknown-size non-cluster element: can't skip reliably
             pos += hlen + size
     return True
 
