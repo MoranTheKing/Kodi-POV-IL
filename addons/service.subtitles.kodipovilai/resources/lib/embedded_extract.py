@@ -244,6 +244,7 @@ class _Source(object):
         self.reqs = 0
         self.tripped = False          # circuit-breaker: set on a 429/5xx
         self._pace = _HTTP_REQ_PACE_S  # adaptive inter-request gap (grows on 429)
+        self._abort_cb = None         # set by extract_srt; polled DURING sleeps
         self.total = 0
         self._sess = _new_session() if self.is_http else None
         if not self.is_http:
@@ -316,19 +317,48 @@ class _Source(object):
             return self._read_session(offset, size)
         return self._read_urllib(offset, size)
 
+    def _sleep_or_abort(self, secs):
+        """Sleep up to `secs`, in <=1s slices, polling the abort callback between
+        them. Returns True the moment we're asked to stop (playback ended / the
+        player stalled), so a long 429 backoff can't block us from yielding the
+        token back to the player for up to two minutes."""
+        import time as _t
+        cb = getattr(self, '_abort_cb', None)
+        remaining = secs
+        while remaining > 0:
+            if cb is not None:
+                try:
+                    if cb():
+                        return True
+                except Exception:
+                    pass
+            step = 1.0 if remaining > 1.0 else remaining
+            _t.sleep(step)
+            remaining -= step
+        return False
+
     def _read_session(self, offset, size):
         """One Range GET over the SHARED keep-alive connection. Single-range,
         never multipart (a fat multi-range body starves the hardware decoder). On
         a 429/5xx we BACK OFF (honor Retry-After) and retry a few times -- a
         debrid CDN token rate-limits by request count and recovers after a short
-        cooldown -- and only trip the breaker after exhausting retries. A small
-        per-request pace keeps the burst rate under the limiter."""
-        import time as _t
+        cooldown -- and only trip the breaker after exhausting retries. Both the
+        per-request pace and the backoff are abort-aware, so a stalled player is
+        noticed within ~1s instead of behind a 2-minute retry storm."""
         _pace = getattr(self, '_pace', _HTTP_REQ_PACE_S)
         self.reqs += 1
         if self.reqs > 1 and _pace > 0:
-            _t.sleep(_pace)
+            if self._sleep_or_abort(_pace):
+                self.tripped = True
+                return b''
         for _attempt in range(_HTTP_429_RETRIES):
+            if getattr(self, '_abort_cb', None) is not None:
+                try:
+                    if self._abort_cb():
+                        self.tripped = True
+                        return b''
+                except Exception:
+                    pass
             r = None
             try:
                 r = self._sess.get(self.url, headers={
@@ -366,7 +396,9 @@ class _Source(object):
                             raise ValueError
                     except (ValueError, TypeError, OverflowError):
                         wait = min(_HTTP_429_BASE_WAIT * (2 ** _attempt), _HTTP_429_MAX_WAIT)
-                    _t.sleep(wait)
+                    if self._sleep_or_abort(wait):
+                        self.tripped = True   # player needs the token -- stop now
+                        return b''
                     continue
                 if code == 200 and offset > 0:
                     return b''
@@ -946,6 +978,7 @@ def extract_srt(url_or_path, track_num=None, lang=None,
     t0 = time.time()
     try:
         src = _Source(url_or_path)
+        src._abort_cb = abort_cb   # polled DURING pace/backoff sleeps too
         if not src.total:
             return None
         seg_start, ts_scale, tracks, seeks = _parse_head(src, head_bytes, _log)
