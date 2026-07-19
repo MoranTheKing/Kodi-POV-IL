@@ -487,6 +487,21 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    of leaving the stale sub the user picked embedded to replace; the background
    job swaps to Hebrew when ready. The validator caught, and this release closes,
    a malformed-Retry-After breaker-defeat bug and a mis-sourced stream index.
+   **Yield to the player (AI 0.2.394 / quickfix 0.1.433):** on a strict provider
+   (TorBox) a field test closed the MOVIE — two concurrent extractions' range
+   requests on the shared token pushed the CDN over its per-token limit, which
+   429'd the player's own video stream to eof. The extractor is now a good
+   citizen: a monotonic-TTL cross-process flag runs ONE extraction at a time; a
+   player-stall guard aborts the moment the player buffers (its clock stalls >8s
+   while playing) to hand the token back; and request pacing is adaptive (starts
+   0.2s, widens ×1.5 on every 429 up to 2s — AIMD back-pressure toward a rate the
+   provider tolerates) with the pace/backoff sleeps made abort-aware (~1s
+   granularity) so the stall-abort can actually fire in time. Validation across
+   this pass fixed a negative-clock-skew inversion in the TTL guard (was
+   re-admitting a second concurrent run). Honest limit: on a very strict token a
+   single extraction may still fall back to the external Hebrew rather than
+   always completing — but it no longer closes the movie. Request-count halving
+   (1 range read per cue) is the plan-B lever if a strict-token case recurs.
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
