@@ -209,6 +209,32 @@ def _start_ai_apply(link, info):
                 'force_ai': True,
             }
             ai_link = translate._encode_link(ai_payload)
+        # embedded_ai: extract the embedded track's TEXT now (bounded), then
+        # continue as 'ai' -- same shape as the engine_ai step above. On failure
+        # we stop here (the user can pick another); we do NOT block the window.
+        elif payload.get('type') == 'embedded_ai':
+            try:
+                kodi_utils.notify('AI: מחלץ תרגום מובנה...', time_ms=2500)
+                src_path = translate._extract_embedded_srt(
+                    info, payload.get('src_lang') or 'en',
+                    payload.get('track_num'))
+            except Exception:
+                src_path = None
+            if not (src_path and os.path.isfile(src_path)):
+                try:
+                    kodi_utils.notify('AI: לא ניתן לחלץ תרגום מובנה',
+                                      time_ms=4000)
+                except Exception:
+                    pass
+                return
+            ai_payload = {
+                'type': 'ai',
+                'source_lang': payload.get('src_lang') or 'en',
+                'local_path': src_path,
+                'release': info.get('picked_release') or '',
+                'force_ai': True,
+            }
+            ai_link = translate._encode_link(ai_payload)
         # English source -> show it immediately (broadly readable); other
         # languages get no intermediate, exactly like the fast path.
         src_lang = ai_payload.get('source_lang') or 'en'
@@ -418,7 +444,7 @@ def _show_pyxbmct():
                 # 1-2 minutes, so it must NOT block the window. CLOSE the window
                 # and translate in the background, applying when ready, with a
                 # progress banner -- exactly like picking it from the search.
-                if kind in ('engine_ai', 'ai'):
+                if kind in ('engine_ai', 'ai', 'embedded_ai'):
                     self.close()
                     _start_ai_apply(link, self.info)
                     return
@@ -538,7 +564,7 @@ def _deliver_pick(c, info, close_cb):
                 _log('embedded select failed: {0}'.format(_e), level='WARNING')
             close_cb()
             return
-        if kind in ('engine_ai', 'ai'):
+        if kind in ('engine_ai', 'ai', 'embedded_ai'):
             close_cb()
             _start_ai_apply(link, info)
             return

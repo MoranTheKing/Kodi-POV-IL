@@ -74,9 +74,9 @@ DEFAULT_HEAD_BYTES = 2 * 1024 * 1024
 DEFAULT_MAX_BYTES = 80 * 1024 * 1024      # surgical Cues fetch stays well under
 DEFAULT_DEADLINE_S = 30.0
 _HTTP_TIMEOUT = 15
-_CLUSTER_WINDOW = 256 * 1024              # first fetch per referenced cluster
-_CLUSTER_WINDOW_MAX = 2 * 1024 * 1024     # grow to this before giving up on it
-_LOCAL_CHUNK = 4 * 1024 * 1024
+_CLUSTER_CAP_HTTP = 3 * 1024 * 1024       # max bytes fetched per cue cluster
+_CLUSTER_CAP_LOCAL = 32 * 1024 * 1024     # local: effectively read whole clusters
+_CUES_CAP = 24 * 1024 * 1024              # hard ceiling on the Cues element read
 _UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
        '(KHTML, like Gecko) Chrome/120.0 Safari/537.36')
 
@@ -371,22 +371,28 @@ def _sub_tracks(tracks):
 
 
 # ---- Cues -------------------------------------------------------------------
-def _read_cues(src, seeks, seg_start, log):
-    """Return sorted, de-duplicated absolute cluster positions from the Cues
-    index (any track), or [] when there is no usable Cues element."""
+def _read_cues(src, seeks, seg_start, want_track, log):
+    """Absolute cluster positions from the Cues index, as (positions, is_sub).
+    Prefers cue points that reference `want_track` (per-track subtitle cues,
+    which point straight at subtitle-bearing clusters); falls back to all cue
+    positions when the file has none. ([], False) when there's no usable Cues.
+    Hard-capped by _CUES_CAP so a corrupt/huge Cues size can NEVER trigger a
+    multi-GB read."""
     pos = seeks.get(_CUES)
     if not pos:
-        return []
+        return [], False
     raw = src.read(pos, 64 * 1024)
     if not raw:
-        return []
+        return [], False
     b = _Buf(raw, pos)
     eid, _l = _read_vint(b, True)
     size, slen = _read_vint(b, False)
     if eid != _CUES or slen == 0 or size is None:
-        return []
-    # Pull in the whole Cues element (it can exceed the first fetch).
+        return [], False
     need = b.p + size
+    if need > _CUES_CAP:
+        log('cues element too large (%d bytes) -- skipping' % size)
+        return [], False
     while len(raw) < need:
         more = src.read(pos + len(raw), min(4 * 1024 * 1024, need - len(raw)))
         if not more:
@@ -396,7 +402,7 @@ def _read_cues(src, seeks, seg_start, log):
     _read_vint(b, True)
     _read_vint(b, False)
     data = raw[b.p:b.p + size]
-    positions = set()
+    want_pos, any_pos = [], []
     cbuf = _Buf(data, 0)
     for eid2, size2, start2 in _walk(cbuf, len(data)):
         if size2 is None:
@@ -411,18 +417,28 @@ def _read_cues(src, seeks, seg_start, log):
                 break
             pp = cp[pstart:pstart + psize]
             pbuf.p = pstart + psize
-            if peid == _CUE_TRACK_POS:
-                tbuf = _Buf(pp, 0)
-                for teid, tsize, tstart in _walk(tbuf, len(pp)):
-                    if tsize is None:
-                        break
-                    tp = pp[tstart:tstart + tsize]
-                    tbuf.p = tstart + tsize
-                    if teid == _CUE_CLUSTER_POS:
-                        positions.add(seg_start + _read_uint(tp))
-    out = sorted(positions)
-    log('cues: %d cluster position(s)' % len(out))
-    return out
+            if peid != _CUE_TRACK_POS:
+                continue
+            ctrack, cpos = None, None
+            tbuf = _Buf(pp, 0)
+            for teid, tsize, tstart in _walk(tbuf, len(pp)):
+                if tsize is None:
+                    break
+                tp = pp[tstart:tstart + tsize]
+                tbuf.p = tstart + tsize
+                if teid == _CUE_TRACK:
+                    ctrack = _read_uint(tp)
+                elif teid == _CUE_CLUSTER_POS:
+                    cpos = seg_start + _read_uint(tp)
+            if cpos is not None:
+                any_pos.append(cpos)
+                if ctrack == want_track:
+                    want_pos.append(cpos)
+    is_sub = bool(want_pos)
+    out = sorted(set(want_pos if is_sub else any_pos))
+    log('cues: %d position(s) (%s)'
+        % (len(out), 'sub-track' if is_sub else 'whole-file'))
+    return out, is_sub
 
 
 # ---- block / cluster text ---------------------------------------------------
@@ -447,61 +463,82 @@ def _block_frame(payload, cluster_ts, want_track):
     return cluster_ts + rel, frame
 
 
-def _collect_cluster(window, base, want_track, out):
-    """Parse cluster(s) in `window` (bytes at absolute offset `base`) and append
-    (abs_ticks, dur_ticks_or_None, frame_bytes) for want_track into `out`.
-    Returns the absolute offset one past the last fully-parsed cluster."""
-    pos = 0
-    last_end = base
-    while True:
-        idx = window.find(_CLUSTER_MAGIC, pos)
-        if idx < 0:
-            return last_end
-        buf = _Buf(window, base)
-        buf.p = idx + 4
-        csize, sl = _read_vint(buf, False)
-        if sl == 0:
-            return last_end
-        limit = buf.n if csize is None else min(buf.n, buf.p + csize)
-        cluster_ts = None
-        while buf.p < limit:
-            if window[buf.p:buf.p + 4] == _CLUSTER_MAGIC:
-                break
-            eid, _idl = _read_vint(buf, True)
-            if eid is None:
-                break
-            size, slen = _read_vint(buf, False)
-            if slen == 0 or size is None:
-                break
-            if buf.p + size > buf.n:
-                break   # element runs past the window -> stop this cluster
-            payload = window[buf.p:buf.p + size]
-            if eid == _TIMESTAMP:
-                cluster_ts = _read_uint(payload)
-            elif eid == _SIMPLEBLOCK and cluster_ts is not None:
-                r = _block_frame(payload, cluster_ts, want_track)
+def _collect_one_cluster(window, want_track, out):
+    """`window` starts at a Cluster element. Parse its children STRUCTURALLY (by
+    declared size -- no magic-byte scan, so binary block data can never be
+    mis-read as a nested cluster) and append (abs_ticks, dur_or_None, frame) for
+    want_track into `out`."""
+    b = _Buf(window, 0)
+    eid, _l = _read_vint(b, True)
+    if eid != _CLUSTER:
+        return
+    size, slen = _read_vint(b, False)
+    if slen == 0:
+        return
+    limit = b.n if size is None else min(b.n, b.p + size)
+    cluster_ts = None
+    while b.p < limit:
+        ceid, _cidl = _read_vint(b, True)
+        if ceid is None:
+            break
+        csize, cslen = _read_vint(b, False)
+        if cslen == 0 or csize is None:
+            break
+        cstart = b.p
+        if cstart + csize > b.n:
+            break   # child runs past our (capped) window -> stop
+        payload = window[cstart:cstart + csize]
+        if ceid == _TIMESTAMP:
+            cluster_ts = _read_uint(payload)
+        elif ceid == _SIMPLEBLOCK and cluster_ts is not None:
+            r = _block_frame(payload, cluster_ts, want_track)
+            if r:
+                out.append((r[0], None, r[1]))
+        elif ceid == _BLOCKGROUP and cluster_ts is not None:
+            gbuf = _Buf(payload, 0)
+            block, gdur = None, None
+            for geid, gsize, gstart in _walk(gbuf, len(payload)):
+                if gsize is None:
+                    break
+                gp = payload[gstart:gstart + gsize]
+                gbuf.p = gstart + gsize
+                if geid == _BLOCK:
+                    block = gp
+                elif geid == _BLOCKDUR:
+                    gdur = _read_uint(gp)
+            if block:
+                r = _block_frame(block, cluster_ts, want_track)
                 if r:
-                    out.append((r[0], None, r[1]))
-            elif eid == _BLOCKGROUP and cluster_ts is not None:
-                gbuf = _Buf(payload, 0)
-                block, gdur = None, None
-                for geid, gsize, gstart in _walk(gbuf, len(payload)):
-                    if gsize is None:
-                        break
-                    gp = payload[gstart:gstart + gsize]
-                    gbuf.p = gstart + gsize
-                    if geid == _BLOCK:
-                        block = gp
-                    elif geid == _BLOCKDUR:
-                        gdur = _read_uint(gp)
-                if block:
-                    r = _block_frame(block, cluster_ts, want_track)
-                    if r:
-                        out.append((r[0], gdur, r[1]))
-            buf.p += size
-        if csize is not None:
-            last_end = base + min(buf.p, limit)
-        pos = buf.p if buf.p > idx + 4 else idx + 4
+                    out.append((r[0], gdur, r[1]))
+        b.p = cstart + csize
+
+
+def _read_and_collect_cluster(src, cpos, want_track, out, cap, log):
+    """Read ONE cluster at absolute offset `cpos` by its DECLARED size (capped
+    at `cap` bytes -- so a subtitle block deep inside a huge cluster is the only
+    thing ever missed, never memory/bandwidth) and collect want_track blocks.
+    Returns the declared full cluster length (header + payload) for sequential
+    advancement, or 0 when `cpos` is not a Cluster."""
+    hdr = src.read(cpos, 16)
+    if len(hdr) < 2:
+        return 0
+    hb = _Buf(hdr, 0)
+    eid, _idl = _read_vint(hb, True)
+    if eid != _CLUSTER:
+        return 0
+    size, slen = _read_vint(hb, False)
+    if slen == 0:
+        return 0
+    hlen = hb.p
+    if size is None:
+        window = src.read(cpos, cap)     # unknown size: bounded best-effort read
+        _collect_one_cluster(window, want_track, out)
+        return len(window)
+    clen = hlen + size
+    window = src.read(cpos, min(clen, cap))
+    if len(window) >= hlen:
+        _collect_one_cluster(window, want_track, out)
+    return clen
 
 
 # ---- text decode ------------------------------------------------------------
@@ -671,13 +708,17 @@ def extract_srt(url_or_path, track_num=None, lang=None,
         scale_ms = ts_scale / 1e6
         origin_ms = _timeline_origin(src, seg_start, scale_ms, _log)
         entries = []
-        if not src.is_http:
-            _extract_local(src, seg_start, want, entries, deadline_s, t0,
-                           abort_cb, _log)
-        else:
-            ok = _extract_http(src, seeks, seg_start, want, entries,
-                               max_bytes, deadline_s, t0, abort_cb, _log)
-            if not ok:
+        # Surgical Cues-guided fetch first (per-track subtitle cues -- fast for
+        # both local and debrid HTTP). If there are none: over HTTP defer to the
+        # external path; a local file gets a complete sequential walk. A partial
+        # extract is NEVER delivered -- we return None so the caller falls back.
+        if not _extract_cues(src, seeks, seg_start, want, entries,
+                             max_bytes, deadline_s, t0, abort_cb, _log):
+            entries = []
+            if src.is_http:
+                return None
+            if not _extract_sequential(src, seg_start, want, entries,
+                                       deadline_s, t0, abort_cb, _log):
                 return None
         if not entries:
             _log('no subtitle blocks collected for track #%s' % want)
@@ -714,67 +755,68 @@ def _pick_track(subs, track_num, lang):
     return cand[0] if cand else None
 
 
-def _extract_local(src, seg_start, want, entries, deadline_s, t0,
-                   abort_cb, log):
-    """One sequential pass over the file's clusters (cheap on local disk)."""
+def _extract_sequential(src, seg_start, want, entries, deadline_s, t0,
+                        abort_cb, log):
+    """Walk the segment element-by-element on a seekable source, reading each
+    Cluster in full by its DECLARED size (no chunk-straddle loss) and skipping
+    every non-cluster element. Used for local files. Returns True if it reached
+    EOF (complete), False if a deadline/abort cut it short (caller returns None
+    so a partial extract is never delivered)."""
     pos = seg_start
-    carry = b''
-    carry_base = seg_start
-    while pos < src.total:
+    total = src.total
+    while pos < total:
         if (time.time() - t0) > deadline_s:
-            log('local extract deadline reached')
-            break
+            log('sequential extract deadline reached -- incomplete')
+            return False
         if _aborted(abort_cb):
-            log('local extract aborted (playback ended)')
+            log('sequential extract aborted (playback ended) -- incomplete')
+            return False
+        hdr = src.read(pos, 16)
+        if len(hdr) < 2:
             break
-        chunk = src.read(pos, _LOCAL_CHUNK)
-        if not chunk:
+        hb = _Buf(hdr, 0)
+        eid, _idl = _read_vint(hb, True)
+        if eid is None:
             break
-        window = carry + chunk
-        end = _collect_cluster(window, carry_base, want, entries)
-        # keep a tail overlap so a cluster split across chunks is re-tried
-        consumed = end - carry_base
-        if consumed <= 0 or consumed >= len(window):
-            carry = b''
-            carry_base = pos + len(chunk)
+        size, slen = _read_vint(hb, False)
+        if slen == 0 or size is None:
+            break
+        hlen = hb.p
+        if eid == _CLUSTER:
+            clen = _read_and_collect_cluster(
+                src, pos, want, entries, _CLUSTER_CAP_LOCAL, log)
+            if clen <= 0:
+                break
+            pos += clen
         else:
-            keep = min(len(window) - consumed, 1024 * 1024)
-            carry = window[len(window) - keep:]
-            carry_base = (pos + len(chunk)) - keep
-        pos += len(chunk)
+            pos += hlen + size
+    return True
 
 
-def _extract_http(src, seeks, seg_start, want, entries,
+def _extract_cues(src, seeks, seg_start, want, entries,
                   max_bytes, deadline_s, t0, abort_cb, log):
-    """Cues-guided extraction: fetch only the referenced clusters via Range.
-    Returns True on a completed pass, False when there is no usable Cues index
-    (caller then falls back to the external path)."""
-    positions = _read_cues(src, seeks, seg_start, log)
+    """Cues-guided extraction: visit only the referenced clusters via Range.
+    Uses per-track SUBTITLE cues over HTTP (whole-file/video cues would risk a
+    partial extract, so over HTTP we defer instead). Returns True on a COMPLETE
+    pass, False otherwise (no usable sub cues, or budget/deadline/abort cut it
+    short -- caller then defers to the external path / a local full walk)."""
+    positions, is_sub = _read_cues(src, seeks, seg_start, want, log)
     if not positions:
-        log('no usable Cues over HTTP -- deferring to external path')
+        return False
+    if not is_sub:
+        # Whole-file/video cues don't point at subtitle blocks, so a capped
+        # per-cluster fetch would risk missing lines. Defer: over HTTP the
+        # caller goes external; a local file gets a complete sequential walk.
+        log('no per-subtitle Cues -- deferring (avoid a partial extract)')
         return False
     for cpos in positions:
         if src.fetched >= max_bytes or (time.time() - t0) > deadline_s:
-            log('http extract budget/deadline reached (%.1fMB, %.1fs)'
+            log('cues extract budget/deadline reached (%.1fMB, %.1fs)'
                 % (src.fetched / 1e6, time.time() - t0))
             return False
         if _aborted(abort_cb):
-            log('http extract aborted (playback ended)')
+            log('cues extract aborted (playback ended)')
             return False
-        window = src.read(cpos, _CLUSTER_WINDOW)
-        if not window or window[:4] != _CLUSTER_MAGIC:
-            continue
-        before = len(entries)
-        _collect_cluster(window, cpos, want, entries)
-        # Grow the window if this cluster held no want-track block yet but may
-        # extend beyond the first fetch (a big cluster whose sub block is late).
-        grow = _CLUSTER_WINDOW
-        while (len(entries) == before and grow < _CLUSTER_WINDOW_MAX
-               and src.fetched < max_bytes):
-            grow *= 2
-            window = src.read(cpos, grow)
-            if not window:
-                break
-            del entries[before:]
-            _collect_cluster(window, cpos, want, entries)
+        _read_and_collect_cluster(
+            src, cpos, want, entries, _CLUSTER_CAP_HTTP, log)
     return True

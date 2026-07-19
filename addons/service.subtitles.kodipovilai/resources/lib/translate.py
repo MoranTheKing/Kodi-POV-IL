@@ -771,8 +771,7 @@ def list_candidates(info, modal_progress=True):
                     _lang_display(code)),
                 'language': 'he',
                 'link': _encode_link({'type': 'embedded_ai',
-                                      'src_lang': code,
-                                      'filename': c.get('filename') or code}),
+                                      'src_lang': code}),
                 'sync': 'true',
                 'rating': '5', 'is_hi': False, 'is_hd': False,
             })
@@ -1366,10 +1365,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         payload = {'type': 'ai',
                    'source_lang': _emb_lang,
                    'local_path': emb_path,
-                   'release': (payload.get('filename')
-                               or info.get('picked_release') or ''),
-                   'force_ai': True,
-                   '_embedded': True}
+                   # An embedded track carries no release string of its own, so
+                   # use the video's real release (the 'ai' pipeline's own
+                   # fallback chain -- picked_release/tagline/label -- fills any
+                   # gap). NEVER reuse the '[מובנה] XX' placeholder here: it
+                   # would poison the pool upload's release tag and the display
+                   # name for every embedded translation.
+                   'release': info.get('picked_release') or '',
+                   'force_ai': True}
         kind = 'ai'
         # fall through to the AI logic below
 
