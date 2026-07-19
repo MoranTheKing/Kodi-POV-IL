@@ -1130,7 +1130,8 @@ def _playing_video_url(info):
     return ''
 
 
-def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0):
+def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
+                          progress_cb=None):
     """Extract the playing file's embedded `src_lang` subtitle track to a temp
     SRT and return its path, or None. `deadline_s` bounds the extraction: the
     default (900s) suits BACKGROUND callers (the auto-on-play thread, resolve()
@@ -1174,7 +1175,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0):
         srt_text = embedded_extract.extract_srt(
             url, track_num=track_num, lang=src_lang,
             allow_http=_allow_http, deadline_s=deadline_s,
-            abort_cb=_should_abort,
+            abort_cb=_should_abort, progress_cb=progress_cb,
             log=lambda m: kodi_utils.log('embedded_extract: ' + m,
                                          level='INFO'))
         if not srt_text or srt_text.count('-->') < 3:
@@ -1195,7 +1196,8 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0):
         return None
 
 
-def resolve(link, info, progress_cb=None, progressive_cb=None):
+def resolve(link, info, progress_cb=None, progressive_cb=None,
+            extract_progress_cb=None):
     """Return a filesystem path to the SRT for the chosen link.
 
     For passthrough, hand back the existing file path. For ai
@@ -1372,7 +1374,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
         _emb_lang = payload.get('src_lang') or 'en'
         _status('AI: מחלץ תרגום מובנה...', time_ms=3000)
         emb_path = _extract_embedded_srt(
-            info, _emb_lang, payload.get('track_num'))
+            info, _emb_lang, payload.get('track_num'),
+            progress_cb=extract_progress_cb)
         if not emb_path or not os.path.isfile(emb_path):
             kodi_utils.log('embedded_ai: extraction failed -- deferring to the '
                            'external path', level='INFO')
