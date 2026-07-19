@@ -566,17 +566,31 @@ def _read_cues(src, seeks, seg_start, want_track, log):
                 if ctrack == want_track:
                     want_pos.append((cpos, crel))
     is_sub = bool(want_pos)
-    # Dedup by cluster position, preserving a CueRelativePosition when present
-    # (a cluster can hold >1 subtitle cue; keep the first relpos we saw for it,
-    # but never let a later relpos-less entry clobber a good one).
-    by_cpos = {}
+    # Keep EVERY distinct (cluster, relpos) pair. A single cluster routinely
+    # holds >1 subtitle cue (two lines a couple seconds apart in fast dialogue),
+    # and the relpos fast path fetches EXACTLY ONE block per relpos -- collapsing
+    # them by cluster would silently drop every line but the first. A cue WITHOUT
+    # relpos forces a full window-scan of its cluster (which recovers every block
+    # in it), so it subsumes and REPLACES any relpos entries for the same cluster
+    # (avoids fetching the same cluster twice).
+    scan_only = set()          # clusters that carry a relpos-less cue
+    rel_by_cpos = {}           # cpos -> set of distinct relpos values
     for cpos, crel in (want_pos if is_sub else any_pos):
-        if cpos not in by_cpos or by_cpos[cpos] is None:
-            by_cpos[cpos] = crel
-    out = [(cpos, by_cpos[cpos]) for cpos in sorted(by_cpos)]
+        if crel is None:
+            scan_only.add(cpos)
+        else:
+            rel_by_cpos.setdefault(cpos, set()).add(crel)
+    out = []
+    for cpos in sorted(scan_only | set(rel_by_cpos)):
+        if cpos in scan_only:
+            out.append((cpos, None))
+        else:
+            for relpos in sorted(rel_by_cpos[cpos]):
+                out.append((cpos, relpos))
     nrel = sum(1 for _c, r in out if r is not None)
-    log('cues: %d position(s) (%s, %d with relpos)'
-        % (len(out), 'sub-track' if is_sub else 'whole-file', nrel))
+    log('cues: %d cue(s) / %d cluster(s) (%s, %d with relpos)'
+        % (len(out), len(scan_only | set(rel_by_cpos)),
+           'sub-track' if is_sub else 'whole-file', nrel))
     return out, is_sub
 
 
@@ -1035,7 +1049,13 @@ def _extract_cues(src, seeks, seg_start, want, entries,
         log('no per-subtitle Cues -- deferring (avoid a partial extract)')
         return False
     if not src.is_http:
+        # positions can now list a cluster more than once (one entry per relpos);
+        # a local full-cluster parse recovers every block, so visit each cpos ONCE.
+        seen_local = set()
         for cpos, _rel in positions:
+            if cpos in seen_local:
+                continue
+            seen_local.add(cpos)
             if (time.time() - t0) > deadline_s or _aborted(abort_cb):
                 return False
             _read_and_collect_cluster(

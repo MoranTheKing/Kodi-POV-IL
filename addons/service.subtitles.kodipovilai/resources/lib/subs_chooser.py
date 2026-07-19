@@ -215,9 +215,13 @@ def _start_ai_apply(link, info):
         elif payload.get('type') == 'embedded_ai':
             try:
                 kodi_utils.notify('AI: מחלץ תרגום מובנה...', time_ms=2500)
+                # This chooser process blocks while extracting, so bound it: a
+                # scattered remux takes minutes and would freeze the window. On
+                # timeout we defer (the user can pick another / auto-on-play
+                # extracts it unbounded in the background).
                 src_path = translate._extract_embedded_srt(
                     info, payload.get('src_lang') or 'en',
-                    payload.get('track_num'))
+                    payload.get('track_num'), deadline_s=180.0)
             except Exception:
                 src_path = None
             if not (src_path and os.path.isfile(src_path)):

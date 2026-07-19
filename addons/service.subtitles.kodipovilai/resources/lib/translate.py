@@ -1130,9 +1130,13 @@ def _playing_video_url(info):
     return ''
 
 
-def _extract_embedded_srt(info, src_lang, track_num=None):
+def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0):
     """Extract the playing file's embedded `src_lang` subtitle track to a temp
-    SRT and return its path, or None. The extracted cues carry the video's OWN
+    SRT and return its path, or None. `deadline_s` bounds the extraction: the
+    default (900s) suits BACKGROUND callers (the auto-on-play thread, resolve()
+    from bg_translate_picker); a UI-blocking caller (the native picker / chooser,
+    which the user is actively waiting on) MUST pass a short bound so a scattered
+    remux -- minutes of serial range requests -- can't freeze Kodi's dialog. The extracted cues carry the video's OWN
     timestamps, so the Hebrew translated from this file needs no re-sync. Fully
     guarded + fail-open: any problem returns None and resolve() lets the caller
     fall through to the external-subtitle path. Aborts if playback ends mid-
@@ -1162,14 +1166,14 @@ def _extract_embedded_srt(info, src_lang, track_num=None):
         # player; still, this setting is the instant manual escape hatch. A
         # generous background deadline lets a long movie's subs finish.
         _allow_http = kodi_utils.get_bool('embedded_http_extract', True)
-        # Generous background deadline: a scattered debrid remux needs ~1-2 range
-        # requests per subtitle cue (~1500-1700 of them), which is several
-        # minutes. The relpos fast path keeps the DATA tiny (~130 KB/s, a couple
-        # hundred MB total) so a long run is bandwidth-safe for the player;
-        # abort_cb (playback ended) is the real stop, this is just an upper bound.
+        # The relpos fast path keeps DATA tiny (~130 KB/s, a couple hundred MB
+        # total) so a long run is bandwidth-safe for the player; the deadline is
+        # a wall-clock upper bound (a scattered remux is ~1-2 range requests per
+        # cue, several minutes). It comes from the caller so a UI path can cap it
+        # short; abort_cb (playback ended) is the real stop regardless.
         srt_text = embedded_extract.extract_srt(
             url, track_num=track_num, lang=src_lang,
-            allow_http=_allow_http, deadline_s=900.0,
+            allow_http=_allow_http, deadline_s=deadline_s,
             abort_cb=_should_abort,
             log=lambda m: kodi_utils.log('embedded_extract: ' + m,
                                          level='INFO'))
