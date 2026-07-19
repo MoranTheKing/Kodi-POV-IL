@@ -770,8 +770,12 @@ def list_candidates(info, modal_progress=True):
                 'filename': 'תרגום מובנה → עברית (AI) · {0}'.format(
                     _lang_display(code)),
                 'language': 'he',
+                # Carry the play-start snapshot's stream index so the pick can
+                # show this embedded track NATIVELY (instant, synced) while the
+                # Hebrew is extracted+translated in the background.
                 'link': _encode_link({'type': 'embedded_ai',
-                                      'src_lang': code}),
+                                      'src_lang': code,
+                                      'stream_index': c.get('stream_index')}),
                 'sync': 'true',
                 'rating': '5', 'is_hi': False, 'is_hd': False,
             })

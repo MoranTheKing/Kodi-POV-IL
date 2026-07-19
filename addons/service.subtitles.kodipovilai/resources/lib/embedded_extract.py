@@ -335,7 +335,15 @@ class _Source(object):
                     try:
                         wait = (min(float(ra), _HTTP_429_MAX_WAIT) if ra
                                 else min(1.5 * (2 ** _attempt), _HTTP_429_MAX_WAIT))
-                    except (ValueError, TypeError):
+                        # A negative / NaN / -inf Retry-After parses via float()
+                        # WITHOUT raising, but then time.sleep(wait) throws -- and
+                        # the outer `except Exception` would swallow it and return
+                        # b'' WITHOUT ever setting self.tripped, silently killing
+                        # both the backoff AND the breaker (unbounded hammering).
+                        # Reject any non-finite / out-of-range value up front.
+                        if not (0 <= wait <= _HTTP_429_MAX_WAIT):
+                            raise ValueError
+                    except (ValueError, TypeError, OverflowError):
                         wait = min(1.5 * (2 ** _attempt), _HTTP_429_MAX_WAIT)
                     _t.sleep(wait)
                     continue
