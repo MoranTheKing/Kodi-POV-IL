@@ -209,36 +209,13 @@ def _start_ai_apply(link, info):
                 'force_ai': True,
             }
             ai_link = translate._encode_link(ai_payload)
-        # embedded_ai: extract the embedded track's TEXT now (bounded), then
-        # continue as 'ai' -- same shape as the engine_ai step above. On failure
-        # we stop here (the user can pick another); we do NOT block the window.
+        # embedded_ai: do NOT extract here -- a scattered remux takes minutes and
+        # would freeze this short-lived chooser process. Hand the embedded_ai
+        # link straight to the background translator below (ai_link / ai_payload
+        # stay as the embedded_ai link set above): its resolve() extracts, with a
+        # corner progress bar, THEN translates. No local source to pre-show.
         elif payload.get('type') == 'embedded_ai':
-            try:
-                kodi_utils.notify('AI: מחלץ תרגום מובנה...', time_ms=2500)
-                # This chooser process blocks while extracting, so bound it: a
-                # scattered remux takes minutes and would freeze the window. On
-                # timeout we defer (the user can pick another / auto-on-play
-                # extracts it unbounded in the background).
-                src_path = translate._extract_embedded_srt(
-                    info, payload.get('src_lang') or 'en',
-                    payload.get('track_num'), deadline_s=180.0)
-            except Exception:
-                src_path = None
-            if not (src_path and os.path.isfile(src_path)):
-                try:
-                    kodi_utils.notify('AI: לא ניתן לחלץ תרגום מובנה',
-                                      time_ms=4000)
-                except Exception:
-                    pass
-                return
-            ai_payload = {
-                'type': 'ai',
-                'source_lang': payload.get('src_lang') or 'en',
-                'local_path': src_path,
-                'release': info.get('picked_release') or '',
-                'force_ai': True,
-            }
-            ai_link = translate._encode_link(ai_payload)
+            pass
         # English source -> show it immediately (broadly readable); other
         # languages get no intermediate, exactly like the fast path.
         src_lang = ai_payload.get('source_lang') or 'en'

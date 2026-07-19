@@ -248,34 +248,38 @@ def _handle_download(handle, params):
             return
 
     if _p and _p.get('type') == 'embedded_ai':
-        # Extract the embedded track's TEXT and rewrite to a plain 'ai' link, so
-        # it gets the SAME fast-path/background/progressive treatment as
-        # engine_ai (instead of the slow, blocking legacy path). Fail-open.
-        emb_path = None
+        # Extraction of a scattered debrid remux takes minutes, so run the WHOLE
+        # embedded->Hebrew job in the BACKGROUND (like an 'ai' pick) instead of
+        # freezing Kodi's download dialog: close the dialog now and fire
+        # bg_translate_picker with the embedded_ai link -- its resolve() extracts
+        # (showing a corner progress bar) THEN translates, swapping the Hebrew in
+        # when ready. No pre-extracted source id yet, so pass an empty one (the
+        # bg handler adopts the id resolve() computes). Fail-open: if extraction
+        # yields nothing the bg job just delivers nothing (external path remains).
         try:
-            kodi_utils.notify('AI: מחלץ תרגום מובנה...', time_ms=2500)
-            # UI-blocking path (Kodi's download dialog waits on us): bound the
-            # extraction so a scattered remux can't freeze the dialog for
-            # minutes. If it doesn't finish in time it defers to the external
-            # Hebrew path. The auto-on-play thread runs unbounded (900s) instead.
-            emb_path = translate._extract_embedded_srt(
-                info, _p.get('src_lang') or 'en', _p.get('track_num'),
-                deadline_s=180.0)
+            import base64 as _b64m
+            _lk = _b64m.b64encode(link.encode('utf-8')).decode('ascii')
+            _sd = _b64m.b64encode(b'').decode('ascii')
+            xbmc.executebuiltin(
+                'RunScript(service.subtitles.kodipovilai,'
+                'action=bg_translate_picker,link_b64={0},source_id_b64={1})'
+                .format(_lk, _sd))
+            kodi_utils.notify('AI: מחלץ ומתרגם תרגום מובנה ברקע', time_ms=3500)
         except Exception as _e:
-            _safe_log('embedded_ai extraction failed: {0}'.format(_e),
-                      level='ERROR')
-        if emb_path and os.path.isfile(emb_path):
-            link = translate._encode_link({
-                'type': 'ai',
-                'source_lang': _p.get('src_lang') or 'en',
-                'local_path': emb_path,
-                'release': info.get('picked_release') or '',
-                'force_ai': True,
-            })
-        else:
-            kodi_utils.notify('AI: לא ניתן לחלץ תרגום מובנה', time_ms=4000)
-            xbmcplugin.endOfDirectory(handle)
-            return
+            _safe_log('embedded_ai bg fire failed: {0}'.format(_e),
+                      level='WARNING')
+        try:
+            xbmc.executebuiltin('Dialog.Close(all,true)')
+            xbmcplugin.addDirectoryItems(handle, [], 0)
+            xbmc.sleep(100)
+            xbmcplugin.endOfDirectory(handle, updateListing=True,
+                                      cacheToDisc=True)
+        except Exception:
+            try:
+                xbmcplugin.endOfDirectory(handle)
+            except Exception:
+                pass
+        return
 
     # Opt-in fast path for the NATIVE Kodi subtitle picker. Mirrors
     # the DarkSubs fast_first_chunk flow in _handle_translate_file:
@@ -896,8 +900,46 @@ def _handle_bg_translate_picker(params):
 
     _ver = {'n': 0}
 
+    # Corner progress bar for the (long) embedded-extraction phase. Created
+    # lazily on the first extract-progress tick and closed when translation
+    # starts or resolve() returns. DialogProgressBG is non-modal -- it shows in
+    # the corner and never blocks playback or input. A normal 'ai' pick has no
+    # extraction phase, so the bar simply never appears for it.
+    _ebar = {'d': None}
+
+    def _extract_progress(done, total):
+        try:
+            if _ebar['d'] is None:
+                _ebar['d'] = xbmcgui.DialogProgressBG()
+                _ebar['d'].create('MoranSubs', 'מחלץ תרגום מובנה...')
+            pct = int(done * 100 / total) if total else 0
+            _ebar['d'].update(
+                pct, 'MoranSubs', 'מחלץ תרגום מובנה... {0}%'.format(pct))
+        except Exception:
+            pass
+
+    def _close_ebar():
+        try:
+            if _ebar['d'] is not None:
+                _ebar['d'].close()
+                _ebar['d'] = None
+        except Exception:
+            pass
+
     def on_phase(phase, payload):
         try:
+            # embedded_ai: we fired bg WITHOUT a pre-extracted source id, so
+            # adopt the id resolve() computed (the first phase that carries one)
+            # -- setting the live prop makes the chunk_ready gate below match, so
+            # the progressive line-by-line swap works for embedded picks too.
+            if (not xbmcgui.Window(10000).getProperty(
+                    'ai_subs.live_translate_source')
+                    and payload.get('source_id')):
+                xbmcgui.Window(10000).setProperty(
+                    'ai_subs.live_translate_source', payload['source_id'])
+            # Any translation phase means extraction has finished -> drop the bar.
+            if phase in ('first_ready', 'chunk_ready', 'done'):
+                _close_ebar()
             # We tolerate first_ready -- it's a no-op here, the
             # fallback is already on Kodi. We just guard against
             # an unexpected source_id mismatch (sanity check, should
@@ -1052,7 +1094,8 @@ def _handle_bg_translate_picker(params):
                 '{1}'.format(phase, _e), level='WARNING')
 
     try:
-        translate.resolve(link, info, progressive_cb=on_phase)
+        translate.resolve(link, info, progressive_cb=on_phase,
+                          extract_progress_cb=_extract_progress)
     except Exception as e:
         _safe_log(
             'bg_translate_picker resolve crashed: {0}'.format(e),
@@ -1061,7 +1104,9 @@ def _handle_bg_translate_picker(params):
         # Belt-and-suspenders -- the done phase clears these too,
         # but on a resolve() crash before done we still want the
         # active flag cleared so a follow-up pick isn't gated by
-        # a stale source_id.
+        # a stale source_id. Also drop the extraction bar if it's
+        # still up (e.g. extraction failed -> no translation phase fired).
+        _close_ebar()
         try:
             xbmcgui.Window(10000).clearProperty(
                 'ai_subs.live_translate_active')

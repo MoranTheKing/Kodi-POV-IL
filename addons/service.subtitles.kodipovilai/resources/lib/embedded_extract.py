@@ -872,7 +872,7 @@ def probe_tracks(url_or_path, head_bytes=DEFAULT_HEAD_BYTES, log=None):
 def extract_srt(url_or_path, track_num=None, lang=None,
                 head_bytes=DEFAULT_HEAD_BYTES, max_bytes=DEFAULT_MAX_BYTES,
                 deadline_s=DEFAULT_DEADLINE_S, allow_http=False,
-                abort_cb=None, log=None):
+                abort_cb=None, log=None, progress_cb=None):
     """Extract an embedded TEXT subtitle track as an SRT string.
 
     Pick the track by `track_num`, else by `lang` (BCP-47 prefix, e.g. 'en'
@@ -924,7 +924,8 @@ def extract_srt(url_or_path, track_num=None, lang=None,
         # external path; a local file gets a complete sequential walk. A partial
         # extract is NEVER delivered -- we return None so the caller falls back.
         if not _extract_cues(src, seeks, seg_start, want, entries,
-                             max_bytes, deadline_s, t0, abort_cb, _log):
+                             max_bytes, deadline_s, t0, abort_cb, _log,
+                             progress_cb):
             entries = []
             if src.is_http:
                 return None
@@ -1034,7 +1035,7 @@ def _coalesce_ranges(positions, window, gap, max_range, total):
 
 
 def _extract_cues(src, seeks, seg_start, want, entries,
-                  max_bytes, deadline_s, t0, abort_cb, log):
+                  max_bytes, deadline_s, t0, abort_cb, log, progress_cb=None):
     """Cues-guided extraction from per-track SUBTITLE cues. Local visits each
     cluster directly; HTTP uses coalesced sweep-ranges over the single keep-alive
     connection with a 429 circuit-breaker. Returns True only on a COMPLETE pass;
@@ -1062,7 +1063,7 @@ def _extract_cues(src, seeks, seg_start, want, entries,
                 src, cpos, want, entries, _CLUSTER_CAP_LOCAL, log)
         return True
     return _extract_cues_http(src, positions, entries, want, deadline_s, t0,
-                              abort_cb, log)
+                              abort_cb, log, progress_cb)
 
 
 def _cluster_prefix_and_ts(header):
@@ -1172,7 +1173,7 @@ def _fetch_targeted_block(src, cpos, relpos, want, entries, log):
 
 
 def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
-                       log):
+                       log, progress_cb=None):
     """HTTP/debrid: ONE keep-alive connection, single-range serial. Per cue,
     two strategies chosen by whether the Cues carried a CueRelativePosition:
       * relpos present -> TARGETED: tiny header read + a small window AT the
@@ -1204,6 +1205,14 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
             return 'http extract aborted (playback ended)'
         return None
 
+    def _tick(n):
+        """Report progress to the UI (throttled). Never fatal."""
+        if progress_cb:
+            try:
+                progress_cb(min(n, total), total)
+            except Exception:
+                pass
+
     done = 0
     # 1) targeted relpos fetches
     for (cpos, relpos) in rel_cues:
@@ -1222,6 +1231,8 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
         if done % 100 == 0:
             log('extract progress: %d/%d cue(s), %.0fMB'
                 % (done, total, src.fetched / 1e6))
+        if done % 10 == 0:
+            _tick(done)
 
     # 2) window-scan the remainder (no-relpos cues + any relpos misses)
     if scan_cues:
@@ -1266,8 +1277,12 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                     log('cluster exceeds top-up cap (%dMB) -- deferring to avoid '
                         'a partial subtitle' % (_CLUSTER_TOPUP_MAX >> 20))
                     return False
+            done += len(cposes)
+            _tick(done)
 
     if src.tripped:
         log('circuit-breaker tripped -- deferring')
         return False
+    if progress_cb:
+        _tick(total)   # 100% on a complete pass
     return True
