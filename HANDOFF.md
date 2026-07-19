@@ -445,7 +445,14 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    — including a chunk-boundary and an unknown-size-cluster data-loss bug — each
    verified against purpose-built synthetic MKVs before the release was cut.
    Bitmap-embedded sync (via the embedded track's timestamps), an OCR path, and
-   an ffmpeg fast path are planned follow-ups.
+   an ffmpeg fast path are planned follow-ups. **Hotfix (AI 0.2.390 / quickfix
+   0.1.429):** the first field test showed that extracting over a live debrid
+   stream competes with the player on the same CDN token and can trip a rate
+   limit that stalls playback — so extraction over HTTP is now OFF by default
+   (it defers to the external path, which still yields AI Hebrew); local-file
+   extraction is unaffected. A gentle, single-connection, paced HTTP path that
+   won't disturb the player is the next step before re-enabling streaming
+   extraction.
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
