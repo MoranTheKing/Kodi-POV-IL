@@ -402,7 +402,27 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    icon, and skin wiring), and the home tiles drop their stale texture-cache entry so
    the new art shows on the next render instead of after a manual navigation. Built by
    key-preserving zip surgery.
-13. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
+13. **Home tiles finally refresh + more subtitles get gender-accurate AI — SHIPPED
+   (AI 0.2.388 / quickfix 0.1.427; wizard unchanged).** Two things. **(a) Tile
+   texture cache.** After item 11/12, the "quick update" and "install wizard" home
+   tiles were correct ON DISK but Kodi kept drawing the OLD cached bitmap (it caches
+   skin textures by path and keeps them resident, so overwriting a PNG in place
+   doesn't refresh the screen), and the previous cache-drop couldn't re-trigger once
+   the bytes already matched. A one-time, generation-marked cache drop now clears the
+   stale tile textures and does a single focus-preserving skin reload on boot, so the
+   correct distinct logos actually show. (The marker is persisted-and-verified first,
+   so a device that can't save it degrades to a harmless log line, never a reload
+   loop; the reload runs off-thread so it can't delay startup.) **(b) Looser
+   gender-reference gate.** For gender-accurate translation the add-on aligns a
+   reference subtitle (any language) to the source and hands each line its gender
+   hint. It was discarding any reference that didn't cover ≥80% of the lines — but
+   real usage data showed ~65% of those rejections were correctly-aligned references
+   that merely had partial coverage (65-79%). The coverage floor is now 65%: a
+   reference that lines up but covers two-thirds of the dialogue is kept and hints
+   most lines instead of being thrown away (the alignment-confidence and framerate
+   checks are unchanged, so a wrong match is still rejected). Built by key-preserving
+   zip surgery; the standalone edition got only the translation change.
+14. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
 ## Working style
