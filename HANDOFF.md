@@ -448,11 +448,18 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    an ffmpeg fast path are planned follow-ups. **Hotfix (AI 0.2.390 / quickfix
    0.1.429):** the first field test showed that extracting over a live debrid
    stream competes with the player on the same CDN token and can trip a rate
-   limit that stalls playback — so extraction over HTTP is now OFF by default
-   (it defers to the external path, which still yields AI Hebrew); local-file
-   extraction is unaffected. A gentle, single-connection, paced HTTP path that
-   won't disturb the player is the next step before re-enabling streaming
-   extraction.
+   limit that stalls playback — so extraction over HTTP was turned OFF by
+   default in the hotfix (it defers to the external path, which still yields AI
+   Hebrew); local-file extraction is unaffected. **Streaming re-enabled (AI
+   0.2.391 / quickfix 0.1.430):** the HTTP path was rebuilt to be gentle — ONE
+   keep-alive connection (pool size 1), coalesced serial byte-ranges instead of
+   a fresh fetch per cue, a total-bytes cap and a deadline, and a 429/5xx
+   circuit-breaker that stops the moment the CDN pushes back and defers to the
+   external path. It can no longer starve the player. A hidden kill-switch
+   (`embedded_http_extract`, default on) is the instant manual escape hatch;
+   the extractor's truncation-recovery was also hardened after validation found
+   a co-located block could silently drop a later cue. Local extraction is
+   unchanged.
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
