@@ -1156,8 +1156,15 @@ def _extract_embedded_srt(info, src_lang, track_num=None):
             except Exception:
                 return False
 
+        # Extract from a live debrid/HTTP stream ONLY when the user leaves the
+        # kill-switch on. Over HTTP the extractor uses ONE keep-alive connection
+        # with coalesced ranges + a 429 circuit-breaker so it can't starve the
+        # player; still, this setting is the instant manual escape hatch. A
+        # generous background deadline lets a long movie's subs finish.
+        _allow_http = kodi_utils.get_bool('embedded_http_extract', True)
         srt_text = embedded_extract.extract_srt(
             url, track_num=track_num, lang=src_lang,
+            allow_http=_allow_http, deadline_s=120.0,
             abort_cb=_should_abort,
             log=lambda m: kodi_utils.log('embedded_extract: ' + m,
                                          level='INFO'))
