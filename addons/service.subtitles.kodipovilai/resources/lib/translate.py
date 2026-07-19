@@ -745,6 +745,37 @@ def list_candidates(info, modal_progress=True):
     for c in embedded_foreign:
         _emb_by_lang.setdefault(c.get('language') or '?', []).append(c)
 
+    # Embedded FOREIGN tracks as "translate the embedded (perfectly-synced)
+    # track to Hebrew" actions. The embedded cue timings ARE the video's own, so
+    # the Hebrew we produce is synced with NO re-sync -- these therefore rank
+    # right after every Hebrew option and ABOVE all external subs. English first
+    # (best AI source; gender still comes from the reference chain), then
+    # es/de/fr/pt, then the rest. Only when AI translation is on (opt-out users
+    # keep the raw embedded stream in its language group below) and the hidden
+    # kill-switch is set. resolve() re-checks and fail-opens to the external
+    # path if a track turns out non-text (PGS/VOBSUB) or can't be read.
+    if (ai_translation_on and embedded_foreign
+            and kodi_utils.get_bool('embedded_translate', True)):
+        _emb_ai_seen = set()
+        for c in sorted(embedded_foreign,
+                        key=lambda x: (_lang_rank(x.get('language') or '?'),
+                                       x.get('language') or '?')):
+            code = c.get('language') or ''
+            if (not code or code in _emb_ai_seen
+                    or code in ('?', 'und', 'mis', 'zxx')):
+                continue
+            _emb_ai_seen.add(code)
+            have_hebrew = True
+            results.append({
+                'filename': 'תרגום מובנה → עברית (AI) · {0}'.format(
+                    _lang_display(code)),
+                'language': 'he',
+                'link': _encode_link({'type': 'embedded_ai',
+                                      'src_lang': code}),
+                'sync': 'true',
+                'rating': '5', 'is_hi': False, 'is_hd': False,
+            })
+
     for code in sorted(set(_ai_by_lang) | set(_emb_by_lang),
                        key=lambda l: (_lang_rank(l), l)):
         # Built-in (embedded) track of this language -> top of its group.
@@ -1071,6 +1102,83 @@ def _status(msg, **kwargs):
         pass
 
 
+def _playing_video_url(info):
+    """URL/path of the file being played -- a direct http(s) stream (debrid) or
+    a local file; '' for HLS/plugin:// or when unavailable. Mirrors the probe-
+    URL logic subsync uses, so embedded extraction reads the same bytes the
+    player does."""
+    url = ''
+    try:
+        import xbmc as _xbmc
+        url = _xbmc.Player().getPlayingFile() or ''
+    except Exception:
+        url = ''
+    if not url:
+        url = (info.get('filepath') or '').strip()
+    low = (url or '').lower().split('|')[0]
+    if not low:
+        return ''
+    if low.startswith(('http://', 'https://')):
+        if '.m3u8' in low or 'manifest' in low:
+            return ''
+        return url.split('|')[0]
+    try:
+        if os.path.isfile(url):
+            return url
+    except Exception:
+        pass
+    return ''
+
+
+def _extract_embedded_srt(info, src_lang, track_num=None):
+    """Extract the playing file's embedded `src_lang` subtitle track to a temp
+    SRT and return its path, or None. The extracted cues carry the video's OWN
+    timestamps, so the Hebrew translated from this file needs no re-sync. Fully
+    guarded + fail-open: any problem returns None and resolve() lets the caller
+    fall through to the external-subtitle path. Aborts if playback ends mid-
+    extraction (bandwidth hygiene)."""
+    try:
+        url = _playing_video_url(info)
+        if not url:
+            kodi_utils.log('embedded: no probeable playing url', level='INFO')
+            return None
+        try:
+            from . import embedded_extract
+        except Exception as e:
+            kodi_utils.log('embedded_extract import failed: {0}'.format(e),
+                           level='WARNING')
+            return None
+
+        def _should_abort():
+            try:
+                import xbmc as _x
+                return not _x.Player().isPlayingVideo()
+            except Exception:
+                return False
+
+        srt_text = embedded_extract.extract_srt(
+            url, track_num=track_num, lang=src_lang,
+            abort_cb=_should_abort,
+            log=lambda m: kodi_utils.log('embedded_extract: ' + m,
+                                         level='INFO'))
+        if not srt_text or srt_text.count('-->') < 3:
+            kodi_utils.log(
+                'embedded: no usable text track for {0}'.format(src_lang),
+                level='INFO')
+            return None
+        out = os.path.join(kodi_utils.cache_dir(),
+                           'embedded_{0}.srt'.format(src_lang or 'src'))
+        with open(out, 'w', encoding='utf-8') as f:
+            f.write(srt_text)
+        kodi_utils.log('embedded: extracted {0} cue(s) for {1}'.format(
+            srt_text.count('-->'), src_lang), level='INFO')
+        return out
+    except Exception as e:
+        kodi_utils.log('embedded extract failed: {0}'.format(e),
+                       level='WARNING')
+        return None
+
+
 def resolve(link, info, progress_cb=None, progressive_cb=None):
     """Return a filesystem path to the SRT for the chosen link.
 
@@ -1235,6 +1343,38 @@ def resolve(link, info, progress_cb=None, progressive_cb=None):
             return path
         kodi_utils.notify('לא ניתן היה להוריד את הכתובית', time_ms=4000)
         return None
+
+    if kind == 'embedded_ai':
+        # Translate the video's EMBEDDED foreign subtitle. Extract its text
+        # (which carries the video's OWN cue timestamps) and feed it to the AI
+        # pipeline below, so the Hebrew is perfectly synced with NO re-sync step.
+        # Gated by a hidden kill-switch (default on). Fail-open: on any problem
+        # we return None and the caller falls through to the external-subtitle
+        # candidates (the same Hebrew, just sourced externally + re-timed).
+        if not kodi_utils.get_bool('embedded_translate', True):
+            return None
+        _emb_lang = payload.get('src_lang') or 'en'
+        _status('AI: מחלץ תרגום מובנה...', time_ms=3000)
+        emb_path = _extract_embedded_srt(
+            info, _emb_lang, payload.get('track_num'))
+        if not emb_path or not os.path.isfile(emb_path):
+            kodi_utils.log('embedded_ai: extraction failed -- deferring to the '
+                           'external path', level='INFO')
+            return None
+        _status('AI: מתרגם תרגום מובנה לעברית...', time_ms=3000)
+        payload = {'type': 'ai',
+                   'source_lang': _emb_lang,
+                   'local_path': emb_path,
+                   # An embedded track carries no release string of its own, so
+                   # use the video's real release (the 'ai' pipeline's own
+                   # fallback chain -- picked_release/tagline/label -- fills any
+                   # gap). NEVER reuse the '[מובנה] XX' placeholder here: it
+                   # would poison the pool upload's release tag and the display
+                   # name for every embedded translation.
+                   'release': info.get('picked_release') or '',
+                   'force_ai': True}
+        kind = 'ai'
+        # fall through to the AI logic below
 
     if kind == 'engine_ai':
         # User picked "AI Hebrew (translate from English)" sourced from the
