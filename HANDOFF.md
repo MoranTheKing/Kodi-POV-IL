@@ -587,6 +587,22 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    (offset+fps) -- a genuinely different CUT is (correctly) rejected as UNKNOWN
    and defers. Three Sonnet rounds, all CONFIRMED-SAFE. Full text extract remains
    the perfect path on lenient providers (Real-Debrid).
+
+   **Cross-language fallback (AI 0.2.399 / quickfix 0.1.438):**
+   `_embedded_aligned_source_srt` now returns `(path, used_lang)` and, when the
+   PICKED language has no external sub, aligns an external sub in another
+   language onto THAT language's embedded cue skeleton (try-order: picked, then
+   English, then any language with an external candidate; capped at 3 total
+   head+Cues reads; stops at first success). The embedded_ai branch adopts
+   `used_lang` as the AI source language so the cache key / prompt / pool tag
+   reflect the language actually translated. Field-verified (log 1bd4c4e7:
+   Obsession 2160p, 1688 dense cue times in 4 requests / 3.6MB, external English
+   CONFIRMED already-synced at offset -27ms, handed to the full gender-aware AI
+   pipeline). CONFIRMED-SAFE. Open follow-ups: (i) read head+Cues ONCE and slice
+   per-track times instead of re-reading per language on the fallback (~3x
+   redundant on the fallback path only; the common path is 1 read); (ii) label
+   pooled embedded-sourced translations distinctly -- needs a pool-schema flag
+   (worker.js + pool.py + list_candidates).
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
