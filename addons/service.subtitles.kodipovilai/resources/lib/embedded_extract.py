@@ -724,29 +724,34 @@ def _read_cues(src, seeks, seg_start, want_track, log):
     return out, is_sub
 
 
-def _read_cue_times(src, seeks, seg_start, want_track, log):
-    """Return the SORTED distinct raw CueTime values (in ts_scale ticks) for cue
-    points that reference `want_track` (the subtitle track), or [] when the file
-    has no per-subtitle Cues index. Reads ONLY the Cues element -- NO cluster
-    block fetches -- so it's a handful of range requests even on a huge file
-    (this is what makes it viable on a strict debrid token where the full-text
-    extract is not). CueTime is the cue's START on the segment timeline. Never
-    raises (caller wraps)."""
+def _read_cue_times_multi(src, seeks, seg_start, want_tracks, log):
+    """{track_num: SORTED distinct raw CueTime (ts_scale ticks)} for every track
+    in `want_tracks`, from ONE Cues-element read. This is the read-once core: a
+    subtitle file's single Cues index carries cue points for EVERY track, so N
+    tracks (e.g. the cross-language align fallback trying several languages) cost
+    ONE head+Cues read instead of one per track. Reads ONLY the Cues element --
+    NO cluster block fetches -- so it stays a handful of range requests even on a
+    huge file (viable on a strict debrid token where the full extract is not).
+    CueTime is the cue's START on the segment timeline. A track with no per-cue
+    index is simply absent from the result. Never raises (caller wraps)."""
+    want_tracks = set(want_tracks)
+    if not want_tracks:
+        return {}
     pos = seeks.get(_CUES)
     if not pos:
-        return []
+        return {}
     raw = src.read(pos, 64 * 1024)
     if not raw:
-        return []
+        return {}
     b = _Buf(raw, pos)
     eid, _l = _read_vint(b, True)
     size, slen = _read_vint(b, False)
     if eid != _CUES or slen == 0 or size is None:
-        return []
+        return {}
     need = b.p + size
     if need > _CUES_CAP:
         log('cue-times: cues element too large (%d bytes) -- skipping' % size)
-        return []
+        return {}
     while len(raw) < need:
         more = src.read(pos + len(raw), min(4 * 1024 * 1024, need - len(raw)))
         if not more:
@@ -756,7 +761,7 @@ def _read_cue_times(src, seeks, seg_start, want_track, log):
     _read_vint(b, True)
     _read_vint(b, False)
     data = raw[b.p:b.p + size]
-    want_times = []
+    buckets = {t: [] for t in want_tracks}
     cbuf = _Buf(data, 0)
     for eid2, size2, start2 in _walk(cbuf, len(data)):
         if size2 is None:
@@ -786,12 +791,21 @@ def _read_cue_times(src, seeks, seg_start, want_track, log):
                         tracks_here.add(_read_uint(tp))
         if ctime is None:
             continue
-        # Only cue points that index the wanted subtitle track: those mark when
-        # each subtitle line appears (video-keyframe cues have the wrong
-        # granularity and are NOT a subtitle timeline).
-        if want_track in tracks_here:
-            want_times.append(ctime)
-    return sorted(set(want_times))
+        # Bucket this cue's START under every WANTED subtitle track it indexes.
+        # (Video-keyframe cues reference the video track, which isn't in
+        # want_tracks, so they're ignored -- only per-subtitle cues mark when a
+        # subtitle line appears.)
+        for t in (tracks_here & want_tracks):
+            buckets[t].append(ctime)
+    return {t: sorted(set(v)) for t, v in buckets.items() if v}
+
+
+def _read_cue_times(src, seeks, seg_start, want_track, log):
+    """SORTED distinct raw CueTime values (ts_scale ticks) for `want_track`, or []
+    when the file has no per-subtitle Cues index for it. Thin wrapper over the
+    read-once core (`_read_cue_times_multi`) -- byte-identical parse, one track."""
+    return _read_cue_times_multi(
+        src, seeks, seg_start, {want_track}, log).get(want_track, [])
 
 
 # ---- block / cluster text ---------------------------------------------------
@@ -1117,6 +1131,73 @@ def cue_reference_times(url_or_path, track_num=None, lang=None,
     except Exception as e:
         (log or _noop)('cue_reference_times failed: %s' % e)
         return []
+
+
+def cue_reference_times_multi(url_or_path, langs, track_num=None,
+                              head_bytes=DEFAULT_HEAD_BYTES, allow_http=False,
+                              abort_cb=None, log=None):
+    """Dense cue START times for SEVERAL languages in ONE head+Cues read.
+
+    Returns {lang: sorted_times_ms} -- the same per-language skeleton
+    `cue_reference_times` returns, but computed for every language in `langs` at
+    once, reading the head + Cues element + timeline origin EXACTLY ONCE and
+    slicing per track (one Cues index carries every track's cue points). This is
+    what the cross-language embedded-align fallback uses so trying 2-3 languages
+    costs ONE read, not one per language. `langs` is normalised to 2-letter
+    codes; several may resolve to the same track. A language whose track has no
+    per-cue index is omitted from the result. `allow_http` must be True for an
+    HTTP/debrid source. Never raises."""
+    _log = log or _noop
+    try:
+        seen = list(dict.fromkeys(
+            [str(l).lower()[:2] for l in (langs or []) if l]))
+        if not seen:
+            return {}
+        src = _Source(url_or_path)
+        src._abort_cb = abort_cb
+        if not src.total:
+            return {}
+        if src.is_http and not allow_http:
+            _log('cue-times: HTTP not allowed (setting off) -- skipping')
+            return {}
+        seg_start, ts_scale, tracks, seeks = _parse_head(src, head_bytes, _log)
+        subs = _sub_tracks(tracks)
+        if not subs:
+            return {}
+        # Map each requested language -> the track it selects (the SAME picker the
+        # single-lang path uses); several langs can resolve to one track (e.g. the
+        # sole-text-track fallback), which then serves them all from one bucket.
+        lang_track = {}
+        want_tracks = set()
+        for lg in seen:
+            tr = _pick_track(subs, track_num, lg)
+            if tr is not None:
+                lang_track[lg] = tr['num']
+                want_tracks.add(tr['num'])
+        if not want_tracks:
+            _log('cue-times(multi): no matching track for langs=%s' % (seen,))
+            return {}
+        by_track = _read_cue_times_multi(src, seeks, seg_start, want_tracks, _log)
+        if not by_track:
+            _log('cue-times(multi): no per-subtitle Cues index for track(s) %s'
+                 % (sorted(want_tracks),))
+            return {}
+        scale_ms = ts_scale / 1e6
+        origin_ms = _timeline_origin(src, seg_start, scale_ms, _log)
+        out = {}
+        for lg, tnum in lang_track.items():
+            raw_times = by_track.get(tnum)
+            if not raw_times:
+                continue
+            out[lg] = sorted({int(round(t * scale_ms - origin_ms))
+                              for t in raw_times
+                              if (t * scale_ms - origin_ms) >= 0})
+        _log('cue-times(multi): %d/%d lang(s) indexed in %d req / %.0fKB'
+             % (len(out), len(seen), src.reqs, src.fetched / 1024.0))
+        return out
+    except Exception as e:
+        (log or _noop)('cue_reference_times_multi failed: %s' % e)
+        return {}
 
 
 def extract_srt(url_or_path, track_num=None, lang=None,
