@@ -1176,10 +1176,27 @@ def _embedded_aligned_source_srt(info, src_lang, progress_cb=None):
                            level='WARNING')
             return None
 
+        # Pause-aware abort (mirrors _extract_embedded_srt's resume guard): the
+        # cue-index reads share the debrid token with the player, so if the user
+        # PAUSED to let this run and then RESUMES, hand the token back INSTANTLY
+        # -- the exact crash mechanism the full-text path guards against. This
+        # path is only a handful of requests, but the resume-into-a-hot-token
+        # window is real, so guard it the same way. (A never-paused run is
+        # unaffected: saw_pause stays False and only playback ending aborts.)
+        _al = {'saw_pause': False}
+
         def _abort():
             try:
                 import xbmc as _x
-                return not _x.Player().isPlayingVideo()
+                p = _x.Player()
+                if not p.isPlayingVideo():
+                    return True
+                if _x.getCondVisibility('Player.Paused'):
+                    _al['saw_pause'] = True
+                    return False
+                if _al['saw_pause']:
+                    return True
+                return False
             except Exception:
                 return False
 
