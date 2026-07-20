@@ -1314,16 +1314,13 @@ def _embedded_aligned_source_srt(info, src_lang, progress_cb=None):
         # minutes while holding the token warm. On timeout we abort and defer to
         # the fallback, keeping this path genuinely FAST as designed.
         _ALIGN_DEADLINE_S = 45.0
-        # How hard to hunt for a SYNCED source before giving up on a language.
-        # Release-NAME similarity is NOT timing similarity, so a lower-ranked
-        # release can align to the embedded skeleton better than the top
-        # name-match -- try MANY candidates per language, not just the top few.
-        # Bounded by a total per-attempt download budget so a language with
-        # dozens of subs can't burn the provider's daily download quota (and by
-        # the 45s ceiling above; the picked language is tried first, so a couple
-        # of downloads are always left for the reliable English fallback).
-        _ALIGN_PER_LANG = 12          # candidates tried per language (was 3)
-        _ALIGN_DL_BUDGET = 18         # total oracle downloads across the attempt
+        # Search EXHAUSTIVELY: try every external subtitle candidate for a
+        # language until one clears the sync gate. Release-NAME similarity is NOT
+        # timing similarity, so a lower-ranked release can align to the embedded
+        # skeleton better than the top name-match -- there is deliberately NO
+        # download-count cap. The search is bounded instead by the 45s wall-clock
+        # deadline above (_abort, checked every candidate), the pause/playback-end
+        # abort, and the <=3-language read cap. The picked language is tried FIRST.
 
         # Pause-aware abort (mirrors _extract_embedded_srt's resume guard): the
         # cue-index reads share the debrid token with the player, so if the user
@@ -1385,9 +1382,8 @@ def _embedded_aligned_source_srt(info, src_lang, progress_cb=None):
 
         allow = kodi_utils.get_bool('embedded_http_extract', True)
         reads = 0                     # cap total head+Cues reads (bound cost)
-        dls = 0                       # cap total oracle downloads (bound quota)
         for lang in try_langs:
-            if reads >= 3 or dls >= _ALIGN_DL_BUDGET or _abort():
+            if reads >= 3 or _abort():
                 break
             # DENSE embedded cue-time skeleton for THIS language's track (cheap:
             # head + Cues only). [] when that track isn't per-cue indexed.
@@ -1417,23 +1413,18 @@ def _embedded_aligned_source_srt(info, src_lang, progress_cb=None):
 
             _p(60, 100, 'מסנכרן לפי הכתובית המובנית...' if lang == pref
                else 'מסנכרן ({0}) לפי הכתובית המובנית...'.format(lang))
-            # Try MANY release matches (not just the top few) until one clears
-            # the gate -- a lower name-match can still be the best timing-match.
-            # Bounded by the shared download budget so this can't spiral.
-            for c in cands[:_ALIGN_PER_LANG]:
+            # Try EVERY release match for this language until one clears the gate
+            # -- a lower name-match can still be the best TIMING match. No
+            # download cap; _abort() (checked each iteration) enforces the 45s
+            # deadline + pause/playback-end so the exhaustive search can't hang
+            # the player.
+            for c in cands:
                 if _abort():
                     return None, None
-                if dls >= _ALIGN_DL_BUDGET:
-                    kodi_utils.log(
-                        'embedded-align: download budget (%d) reached -- '
-                        'stopping candidate search' % _ALIGN_DL_BUDGET,
-                        level='INFO')
-                    break
                 try:
                     src_text = subsync._download_oracle(c.get('payload'))
                 except Exception:
                     src_text = ''
-                dls += 1
                 if not src_text or src_text.count('-->') < 8:
                     continue
                 try:
