@@ -1454,6 +1454,11 @@ def _embedded_aligned_source_srt(info, src_lang, progress_cb=None):
         # aligns on its first candidate -- costs the SAME single read it always
         # did, and a fallback across languages no longer pays ~1 read per language.
         try_set = try_langs[:3]
+        # Abort BEFORE the read (the old per-language loop checked _abort() ahead
+        # of every read): if the deadline already passed, or playback ended, or
+        # the user resumed during the candidate scan above, do zero network reads.
+        if _abort():
+            return None, None
         _p(30, 100, 'קורא תזמון מובנה...')
         times_by_lang = embedded_extract.cue_reference_times_multi(
             url, try_set, allow_http=allow, abort_cb=_abort,
