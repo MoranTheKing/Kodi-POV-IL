@@ -200,6 +200,29 @@ def _match_pct(video_name, sub_name):
         return 0
 
 
+def _release_from_path(p):
+    """Release name from a PATH field (li_filename / filepath): basename with the
+    last extension stripped, or '' when it's a debrid URL / token / UUID. Mirrors
+    pool._release_from's path handling (same _is_token_like guard) so the lookup-
+    side release derivation matches the CONTRIBUTION side -- otherwise a
+    token-like li_filename would win the _video_ref or-chain with garbage and the
+    embedded same-source gate would diverge for the very same file. Never raises."""
+    base = os.path.basename((p or '').strip())
+    if '.' in base:
+        base = base.rsplit('.', 1)[0]
+    if not base:
+        return ''
+    try:
+        if pool is not None:
+            return '' if pool._is_token_like(base) else base
+    except Exception:
+        pass
+    low = base.lower()
+    if ('token=' in low or '://' in low or '?' in low or '&' in low):
+        return ''
+    return base
+
+
 def _is_same_source(video_name, sub_name):
     """True only when the two release names are the SAME source (normalized
     identical -- release_match's TIER_EXACT). Used to gate embedded-sourced pool
@@ -649,7 +672,7 @@ def list_candidates(info, modal_progress=True):
         # embedded same-source gate wrongly hide the viewer's OWN item on replay.
         _video_ref = (info.get('picked_release') or info.get('tagline')
                       or info.get('label')
-                      or os.path.basename(info.get('li_filename') or '')
+                      or _release_from_path(info.get('li_filename'))
                       or os.path.basename(filepath)
                       or info.get('title') or '')
         try:
