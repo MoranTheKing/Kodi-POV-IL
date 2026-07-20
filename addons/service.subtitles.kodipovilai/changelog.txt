@@ -1,3 +1,14 @@
+v0.2.403
+- Embedded pool item polish. The community-pool "תרגום מובנה AI" row is surfaced
+  only for your EXACT source, so it now shows "100%" (like the regular AI rows)
+  instead of a blank percentage that looked broken beside a "· 100%" sibling for
+  the same release. Also, re-picking "embedded translation" for a title whose
+  Hebrew was already cached now UPGRADES the pool entry to embedded ('ai_emb'):
+  the early-cache-hit backfill contributes the embedded kind under its own
+  one-shot marker, so a file previously shared as a plain AI translation gets
+  relabeled server-side instead of being skipped by the "already shared" guard.
+  Client-side only; no change to the translation itself.
+
 v0.2.402
 - Embedded translation now works in EVERY language, not just the ones whose
   2-letter code happens to prefix their 3-letter one. The picker hands a 2-letter
