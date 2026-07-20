@@ -1388,6 +1388,18 @@ def _embedded_aligned_source_srt(info, src_lang, progress_cb=None):
                            '-- deferring to full extract', level='INFO')
             return None, None
 
+        # Languages EXEMPT from the mid-search time-yield (they may run to the
+        # full deadline): English -- the reliable, most-available fallback, so it
+        # ALWAYS gets its shot even if the picked language's search ran long (NOT
+        # merely whichever language sits last, which would let an arbitrary 3rd
+        # language steal English's reserved time) -- and whichever language is
+        # processed LAST (nothing after it to reserve time for). Bounded to the
+        # <=3 languages actually processed (the reads cap), so a 4th+ never-read
+        # language can't become the sentinel. `_yield_after_s` floors at 1s so a
+        # future reserve>=deadline mis-edit can't collapse it to <=0.
+        _yield_exempt = {'en', try_langs[:3][-1]}
+        _yield_after_s = max(1.0, _ALIGN_DEADLINE_S - _ALIGN_FALLBACK_RESERVE_S)
+
         allow = kodi_utils.get_bool('embedded_http_extract', True)
         reads = 0                     # cap total head+Cues reads (bound cost)
         for lang in try_langs:
@@ -1433,12 +1445,11 @@ def _embedded_aligned_source_srt(info, src_lang, progress_cb=None):
                 # deadline on one language's many non-matching subs, so English
                 # still gets its turn. The LAST try-language has nothing after it,
                 # so it may run to the full deadline.
-                if (lang != try_langs[-1]
-                        and _time.time() - _t0
-                        > _ALIGN_DEADLINE_S - _ALIGN_FALLBACK_RESERVE_S):
+                if (lang not in _yield_exempt
+                        and _time.time() - _t0 > _yield_after_s):
                     kodi_utils.log('embedded-align: [%s] search time budget '
-                                   'reached -- yielding to fallback language'
-                                   % lang, level='INFO')
+                                   'reached -- yielding to the English/fallback '
+                                   'language' % lang, level='INFO')
                     break
                 try:
                     src_text = subsync._download_oracle(c.get('payload'))
