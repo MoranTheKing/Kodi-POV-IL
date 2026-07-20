@@ -598,11 +598,29 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    reflect the language actually translated. Field-verified (log 1bd4c4e7:
    Obsession 2160p, 1688 dense cue times in 4 requests / 3.6MB, external English
    CONFIRMED already-synced at offset -27ms, handed to the full gender-aware AI
-   pipeline). CONFIRMED-SAFE. Open follow-ups: (i) read head+Cues ONCE and slice
+   pipeline). CONFIRMED-SAFE. Open follow-up: read head+Cues ONCE and slice
    per-track times instead of re-reading per language on the fallback (~3x
-   redundant on the fallback path only; the common path is 1 read); (ii) label
-   pooled embedded-sourced translations distinctly -- needs a pool-schema flag
-   (worker.js + pool.py + list_candidates).
+   redundant on the fallback path only; the common path is 1 read).
+
+   **Embedded pool labeling + same-source gate (AI 0.2.400 / quickfix 0.1.439 +
+   a worker.js change delivered OUT-OF-BAND, NOT committed):** embedded-sourced
+   translations now store in the pool under a new `kind='ai_emb'` (the
+   embedded_ai payload carries `'embedded': True`; `_pool_kind` becomes
+   `'ai_emb'`; both feed only `contribute_once`, not telemetry).
+   `list_candidates` surfaces an `ai_emb` variant as "תרגום מובנה AI · מאגר
+   קהילתי", sorted FIRST among AI pool items -- but ONLY for the SAME source
+   (exact release, `release_match.TIER_EXACT` via new `_is_same_source`); for any
+   other release the `ai_emb` variant is HIDDEN entirely (a viewer on a different
+   release makes their own). The embedded row drops the match-% (it is, by
+   definition, the viewer's exact release). worker.js: preserves the `ai_emb`
+   kind (previously collapsed every non-ktuvit to `ai`) and, on a dedup match,
+   PROMOTES an existing `ai` variant to `ai_emb` (never downgrades) so history is
+   relabeled organically as embedded translations flow in (no bulk relabel is
+   possible -- origin was never recorded). pool.py UNCHANGED. Two Sonnet rounds,
+   CONFIRMED-SAFE. **worker.js must be deployed to Cloudflare separately (it is
+   the local-only pool server; never commit it).** Optional follow-up: widen the
+   lookup-side `_video_ref` fallback to also try `li_filename` for closer
+   same-source parity.
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
