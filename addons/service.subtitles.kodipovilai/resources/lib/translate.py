@@ -695,21 +695,34 @@ def list_candidates(info, modal_progress=True):
         results.append(_pool_entry(v, _pool_release(v)))
 
     # AI pool (machine translations) -- below all the human Ktuvit entries.
-    for v in _pool_variants:
-        if (v.get('kind') or 'ai') == 'ktuvit':
-            continue
+    # EMBEDDED-sourced translations (kind='ai_emb') are synced to the video's
+    # OWN timing, so they lead the AI list and are labelled distinctly as
+    # "תרגום מובנה". Within each group, order by release-match %.
+    _ai_variants = [v for v in _pool_variants
+                    if (v.get('kind') or 'ai') != 'ktuvit']
+
+    def _ai_sort_key(v):
+        rel = _pool_release(v)
+        pct = _match_pct(_video_ref, rel) if rel else 0
+        is_emb = (v.get('kind') or '') == 'ai_emb'
+        return (0 if is_emb else 1, -pct)
+
+    for v in sorted(_ai_variants, key=_ai_sort_key):
         have_hebrew = True
         release = _pool_release(v)
         pct = _match_pct(_video_ref, release) if release else 0
+        _base = ('תרגום מובנה AI · מאגר קהילתי'
+                 if (v.get('kind') or '') == 'ai_emb'
+                 else 'תרגום AI · מאגר קהילתי')
         # Only show a % when we actually have a meaningful match (a 0% almost
         # always means we couldn't read the video's release name, not a real
         # zero -- showing "0%" is misleading).
         if release and pct > 0:
-            label = 'תרגום AI · מאגר קהילתי · {0}%  —  {1}'.format(pct, release)
+            label = '{0} · {1}%  —  {2}'.format(_base, pct, release)
         elif release:
-            label = 'תרגום AI · מאגר קהילתי  —  {0}'.format(release)
+            label = '{0}  —  {1}'.format(_base, release)
         else:
-            label = 'תרגום AI · מאגר קהילתי'
+            label = _base
         results.append({
             'filename': label,
             'language': 'he',
@@ -1708,6 +1721,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                    # would poison the pool upload's release tag and the display
                    # name for every embedded translation.
                    'release': info.get('picked_release') or '',
+                   # Mark this as an EMBEDDED-sourced translation so the pool
+                   # stores it under kind='ai_emb' -- it is synced to the video's
+                   # own timing, so it is surfaced distinctly ("תרגום מובנה")
+                   # and sorted first among the community AI translations.
+                   'embedded': True,
                    'force_ai': True}
         kind = 'ai'
         # fall through to the AI logic below
@@ -1781,7 +1799,13 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     except Exception:
         _ar_on = False
     _tier = 'ar' if _ar_on else ''
-    _pool_kind = 'ai_ar' if _ar_on else 'ai'
+    # Embedded-sourced translations (synced to the video's own timing) are
+    # stored under 'ai_emb' so the pool can surface them distinctly. Embedded
+    # wins over the ar/plain distinction for the POOL kind (the 'ai_ar' tag was
+    # already collapsed to 'ai' server-side -- it only ever mattered for
+    # telemetry, which is unaffected here).
+    _pool_kind = ('ai_emb' if payload.get('embedded')
+                  else ('ai_ar' if _ar_on else 'ai'))
     _ar_map = None  # {srt_entry_number: reference_line}, PRIMARY ref (_ref_stack[0][1])
     _ar_diag = {}   # gender-reference diagnostics (reason/cands/diag/lang)
     _ref_lang = 'ar'  # PRIMARY chain language actually used (he/ar/es/fr/ru/...)
@@ -2248,7 +2272,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                        'language this time -> normal translation, stored as '
                        'the plain tier', level='INFO')
         _tier = ''
-        _pool_kind = 'ai'
+        # Keep the embedded marker even when the Arabic gender-ref found no
+        # usable reference and we fall back to the plain tier.
+        _pool_kind = 'ai_emb' if payload.get('embedded') else 'ai'
         translated = cache.translated_path(
             imdb_id, season, episode, source_lang,
             source_id=(early_source_id or content_id), tier='')
