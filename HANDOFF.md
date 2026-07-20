@@ -641,6 +641,44 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    `pool/worker.js` is a STALE 1.2k-line frozen reference; the LIVE worker is
    ~2k lines. ALWAYS request the current live worker.js before editing it, and
    deliver changes as a file for Cloudflare deploy -- never commit worker.js.
+
+   **Embedded track language matching -- CRITICAL fix (AI 0.2.402 / quickfix
+   0.1.441; notification #501):** clicking "תרגום מובנה" in ANY language whose
+   2-letter ISO 639-1 code is not a prefix of its 3-letter ISO 639-2/B code was
+   silently broken. The picker passes a 2-letter code (`es`, `de`, `nl`, `ja`,
+   `sv`, `el`, `zh`, ...) but a Matroska TrackEntry's Language element carries the
+   3-letter code (`spa`, `ger`, `dut`, `jpn`, `swe`, `gre`, `chi`, ...), and
+   `_pick_track` matched with `track_lang.startswith(lang[:2])` -- so
+   `'spa'.startswith('es')` was False and ~20 languages NEVER matched their
+   embedded track. The request fell through the cross-language fallback to
+   English, whose translation was already cached, so the user saw "מ-cache
+   (תרגום קודם)" for a language they never translated (field log 7af3569d:
+   Obsession 2026, `es` AND `de` both `no matching track` -> re-read English's
+   1688 cue times -> English cache). Fix (embedded_extract.py only): a canonical
+   ISO 639-1/2B/2T table (`_ISO639_ROWS`/`_ISO639_CANON`) + `_lang_key()`;
+   `_pick_track` now matches on canonical keys, with a prefix fallback kept ONLY
+   for codes not in the table (so it also stops the OLD latent false-matches --
+   `es`->Estonian `est`, `ar`->Armenian `arm`). The single-text-track fallback is
+   tightened to not hand back a lone EXPLICIT different-known-language track
+   (would mislabel the source) while still using `und`/unrecognised or
+   defaulted-`eng` (lang_explicit=False) tags. Norwegian Bokmal/Nynorsk are folded
+   into one `no` bucket (the add-on only ever requests generic `no`; keeping them
+   split would have dropped `nob`/`nno` tags the old prefix code matched). Fully
+   fail-open (any miss still defers to the external path); translate.py/pool.py
+   UNCHANGED (inherited byte-identical; pool key 802ba87a preserved); standalone
+   repo bumped (repo/addons.xml + md5 + repo/zips + dist/-latest.zip). 80-case
+   test (`test_lang_match.py`), Sonnet CONFIRMED-SAFE (its two non-blocking
+   findings -- the Norwegian fold and a dead `_lang_match` disjunct -- were both
+   applied). Notification #501 carries the fix note + the DeDuplicate credit,
+   emoji-free (the trophy glyph rendered as an empty box on the user's skin).
+   **Two user-reported items still OPEN (NOT this fix):** (a) the pooled "תרגום
+   מובנה AI · מאגר" item didn't appear because the client's pool UPLOAD queue was
+   stuck (field log: `pool drain: failed=1 remaining=28`, uploaded=0) -- the
+   ai_emb item never reached the pool; likely env/worker-side, needs the live
+   worker checked. (b) only ONE embedded item per language shows even when a file
+   has multiple same-language tracks (`list_candidates` de-dups by language code)
+   -- that is task #31 (per-track items), which needs the real MKV TrackNumber
+   plumbed to `resolve()` so it can target a specific same-language track.
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
