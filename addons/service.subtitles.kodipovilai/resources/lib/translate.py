@@ -200,6 +200,22 @@ def _match_pct(video_name, sub_name):
         return 0
 
 
+def _is_same_source(video_name, sub_name):
+    """True only when the two release names are the SAME source (normalized
+    identical -- release_match's TIER_EXACT). Used to gate embedded-sourced pool
+    variants: an embedded translation is synced to ONE specific source's timing,
+    so it is only surfaced as "תרגום מובנה" for that exact release. Conservative
+    -- anything short of an exact release match is treated as a different source.
+    Never raises (returns False on any problem)."""
+    if not video_name or not sub_name:
+        return False
+    try:
+        from resources.lib import release_match as _rm
+        return _rm.match_tier(video_name, sub_name) == _rm.TIER_EXACT
+    except Exception:
+        return False
+
+
 def _encode_link(payload):
     return urllib.parse.quote(json.dumps(payload, ensure_ascii=False))
 
@@ -695,11 +711,21 @@ def list_candidates(info, modal_progress=True):
         results.append(_pool_entry(v, _pool_release(v)))
 
     # AI pool (machine translations) -- below all the human Ktuvit entries.
-    # EMBEDDED-sourced translations (kind='ai_emb') are synced to the video's
-    # OWN timing, so they lead the AI list and are labelled distinctly as
-    # "תרגום מובנה". Within each group, order by release-match %.
+    # EMBEDDED-sourced translations (kind='ai_emb') are synced to ONE specific
+    # source's OWN timing, so they are surfaced as "תרגום מובנה" ONLY for that
+    # exact source (release). For any other release they are hidden entirely --
+    # a viewer on a different source can create their own embedded translation
+    # for THEIR file (which then pools for that source). An exact-source
+    # embedded item leads the AI list and shows NO match-% (it IS your release,
+    # so a "%" would be redundant/confusing). Regular AI variants order by %.
     _ai_variants = [v for v in _pool_variants
                     if (v.get('kind') or 'ai') != 'ktuvit']
+
+    def _emb_ok(v):
+        # Embedded variant -> eligible ONLY for its own (exact) source.
+        if (v.get('kind') or '') != 'ai_emb':
+            return True
+        return _is_same_source(_video_ref, _pool_release(v))
 
     def _ai_sort_key(v):
         rel = _pool_release(v)
@@ -708,21 +734,24 @@ def list_candidates(info, modal_progress=True):
         return (0 if is_emb else 1, -pct)
 
     for v in sorted(_ai_variants, key=_ai_sort_key):
+        if not _emb_ok(v):
+            continue   # embedded translation for a DIFFERENT source -> hidden
         have_hebrew = True
         release = _pool_release(v)
-        pct = _match_pct(_video_ref, release) if release else 0
-        _base = ('תרגום מובנה AI · מאגר קהילתי'
-                 if (v.get('kind') or '') == 'ai_emb'
-                 else 'תרגום AI · מאגר קהילתי')
-        # Only show a % when we actually have a meaningful match (a 0% almost
-        # always means we couldn't read the video's release name, not a real
-        # zero -- showing "0%" is misleading).
-        if release and pct > 0:
-            label = '{0} · {1}%  —  {2}'.format(_base, pct, release)
-        elif release:
-            label = '{0}  —  {1}'.format(_base, release)
+        if (v.get('kind') or '') == 'ai_emb':
+            label = ('תרגום מובנה AI · מאגר קהילתי  —  {0}'.format(release)
+                     if release else 'תרגום מובנה AI · מאגר קהילתי')
         else:
-            label = _base
+            pct = _match_pct(_video_ref, release) if release else 0
+            # Only show a % when we actually have a meaningful match (a 0% almost
+            # always means we couldn't read the video's release name, not a real
+            # zero -- showing "0%" is misleading).
+            if release and pct > 0:
+                label = 'תרגום AI · מאגר קהילתי · {0}%  —  {1}'.format(pct, release)
+            elif release:
+                label = 'תרגום AI · מאגר קהילתי  —  {0}'.format(release)
+            else:
+                label = 'תרגום AI · מאגר קהילתי'
         results.append({
             'filename': label,
             'language': 'he',
