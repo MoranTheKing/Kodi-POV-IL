@@ -771,8 +771,14 @@ def list_candidates(info, modal_progress=True):
         have_hebrew = True
         release = _pool_release(v)
         if (v.get('kind') or '') == 'ai_emb':
-            label = ('תרגום מובנה AI · מאגר קהילתי  —  {0}'.format(release)
-                     if release else 'תרגום מובנה AI · מאגר קהילתי')
+            # Embedded is surfaced ONLY for the EXACT source (_emb_ok ->
+            # TIER_EXACT), so it is a 100% match by definition. Show 100%
+            # (rather than a blank) so it reads consistently beside the regular
+            # AI pool items -- an embedded translation of your own release, shown
+            # with no %, looked broken next to a "· 100%" sibling for the same
+            # release.
+            label = ('תרגום מובנה AI · מאגר קהילתי · 100%  —  {0}'.format(release)
+                     if release else 'תרגום מובנה AI · מאגר קהילתי · 100%')
         else:
             pct = _match_pct(_video_ref, release) if release else 0
             # Only show a % when we actually have a meaningful match (a 0% almost
@@ -1029,8 +1035,23 @@ def _pool_quality_ok(src_text, final):
         return True
 
 
+def _pool_marker(translated_path, kind):
+    """One-shot '.shared' marker path for a pool contribution of `kind`.
+    Embedded ('ai_emb') translations track a SEPARATE '<path>.emb' marker
+    (physical '<path>.emb.shared') so they can UPGRADE a file already shared as
+    plain 'ai'/'ai_ar' -- the Worker promotes a dedup-matched entry to 'ai_emb'
+    (never downgrades). Using it at EVERY ai-translation contribute site (fresh
+    upload, early-cache backfill, content-hash backfill) keeps the convention
+    consistent: an embedded file seeds ONLY the '.emb' marker, so a later
+    embedded re-share is correctly one-shot (no redundant round-trip), while a
+    plain entry that pre-dates it is never wrongly blocked from upgrading. Ktuvit
+    mirror/harvest markers are unaffected -- they live on the downloaded sub
+    files, not these translation-cache paths."""
+    return (translated_path + '.emb') if kind == 'ai_emb' else translated_path
+
+
 def _backfill_pool_async(info, translated_path, local_source, source_lang,
-                         ar_tier=False):
+                         ar_tier=False, embedded=False):
     """Share an ALREADY-cached Hebrew translation to the community pool, in
     the background, the first time the user re-watches it after enabling
     pool_share. Used at the EARLY cache hit, where the source bytes (and
@@ -1038,14 +1059,30 @@ def _backfill_pool_async(info, translated_path, local_source, source_lang,
     daemon thread so playback is never delayed, compute the same content hash
     the fresh-translation path uses, and contribute_once (marker + server-side
     dedup => never a duplicate). One-shot per file thanks to the .shared
-    marker; silent to the user on any failure."""
+    marker; silent to the user on any failure.
+
+    `embedded=True` means this cache hit came from the embedded-AI path (the
+    Hebrew is synced to the video's own timing): contribute it as kind='ai_emb'
+    so the pool surfaces it as "תרגום מובנה". Crucially it tracks its OWN
+    one-shot marker ('<path>.emb.shared') instead of the plain '.shared' -- so a
+    file that was ALREADY shared as plain 'ai' (e.g. an earlier non-embedded run,
+    or the very first embedded click that hit the cache before this fix) is NOT
+    blocked, and its pool entry gets UPGRADED to 'ai_emb' server-side (the Worker
+    promotes a dedup-matched 'ai' variant to 'ai_emb', never downgrades). Without
+    the separate marker the '.shared' guard would swallow the upgrade and the
+    embedded label would never appear on a re-click."""
     if pool is None:
         return
 
     def _work():
         try:
-            if not pool.share_enabled() or pool.was_contributed(
-                    translated_path):
+            kind = ('ai_emb' if embedded
+                    else ('ai_ar' if ar_tier else 'ai'))
+            # Embedded upgrades run under a distinct '.emb' marker (see
+            # _pool_marker) so an already-'ai'-shared file can still emit its one
+            # ai_emb contribution.
+            _marker = _pool_marker(translated_path, kind)
+            if not pool.share_enabled() or pool.was_contributed(_marker):
                 return
             cached = cache.load_text(translated_path)
             if not cached:
@@ -1073,9 +1110,9 @@ def _backfill_pool_async(info, translated_path, local_source, source_lang,
                 _rel = None
             pool.contribute_once(info, (cid + '_ar') if ar_tier else cid,
                                  source_lang, cached,
-                                 marker_path=translated_path,
+                                 marker_path=_marker,
                                  release_override=_rel,
-                                 kind=('ai_ar' if ar_tier else 'ai'))
+                                 kind=kind)
         except Exception as e:
             try:
                 kodi_utils.log('pool backfill failed: {0}'.format(e),
@@ -1988,7 +2025,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             if (pool is not None and pool.share_enabled()
                     and not _is_google_translated(translated)):
                 _backfill_pool_async(info, translated, local_source,
-                                     source_lang, ar_tier=_ar_on)
+                                     source_lang, ar_tier=_ar_on,
+                                     embedded=(_pool_kind == 'ai_emb'))
             return translated
 
     # Read the source SRT recorded at list time (alongside the video
@@ -2065,7 +2103,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         pool.contribute_once(
                             info, _pool_key(content_id), source_lang,
                             _cached_he,
-                            marker_path=translated_by_content,
+                            marker_path=_pool_marker(translated_by_content,
+                                                     _pool_kind),
                             release_override=_release_override,
                             kind=_pool_kind)
                     except Exception as e:
@@ -3060,7 +3099,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         if _pool_quality_ok(src_text, final):
             try:
                 pool.contribute_once(info, _final_pool_hash, source_lang,
-                                     final, marker_path=translated,
+                                     final,
+                                     marker_path=_pool_marker(translated,
+                                                              _pool_kind),
                                      release_override=_release_override,
                                      kind=_pool_kind)
             except Exception as e:
