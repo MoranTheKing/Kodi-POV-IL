@@ -1138,6 +1138,186 @@ def _playing_video_url(info):
     return ''
 
 
+def _embedded_aligned_source_srt(info, src_lang, progress_cb=None):
+    """FAST, debrid-safe source SRT for the embedded-AI path.
+
+    Instead of pulling the embedded track's ~1700 text blocks over the shared
+    debrid token (a request storm that a strict provider like TorBox 429s, which
+    starves and closes the movie), this reads ONLY the embedded subtitle track's
+    DENSE cue-time skeleton from the Matroska Cues index (a handful of range
+    requests) and RE-TIMES an external `src_lang` subtitle onto it. The embedded
+    timestamps are the video's own ground-truth timeline, so the re-timed source
+    -- and therefore the AI Hebrew translated from it, which inherits timing 1:1
+    -- is perfectly synced. Returns the path to a re-timed SRT, or None to defer
+    to the full-text extract. Fail-open: never raises, and any miss (no dense
+    Cues index, no external source, low-confidence alignment) returns None so the
+    caller falls through to `_extract_embedded_srt`."""
+    def _p(done, total, label=None):
+        if not progress_cb:
+            return
+        try:
+            progress_cb(done, total, label)
+        except TypeError:
+            try:
+                progress_cb(done, total)
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    try:
+        import time as _time
+        _t0 = _time.time()
+        url = _playing_video_url(info)
+        if not url:
+            return None
+        try:
+            from . import embedded_extract, sync_align, subsync, release_match
+        except Exception as e:
+            kodi_utils.log('embedded-align: import failed: {0}'.format(e),
+                           level='WARNING')
+            return None
+
+        # Total wall-clock ceiling on the WHOLE align attempt. The happy path is
+        # a fraction of a second; this bounds the adversarial "flaky token" shape
+        # -- reads that each recover after a few 429 retries but never exhaust
+        # the per-read breaker or the streak-of-6 (the align path makes too few
+        # reads to accumulate a 6-streak) -- which could otherwise crawl for
+        # minutes while holding the token warm. On timeout we abort and defer to
+        # the fallback, keeping this path genuinely FAST as designed.
+        _ALIGN_DEADLINE_S = 45.0
+
+        # Pause-aware abort (mirrors _extract_embedded_srt's resume guard): the
+        # cue-index reads share the debrid token with the player, so if the user
+        # PAUSED to let this run and then RESUMES, hand the token back INSTANTLY
+        # -- the exact crash mechanism the full-text path guards against. This
+        # path is only a handful of requests, but the resume-into-a-hot-token
+        # window is real, so guard it the same way. (A never-paused run is
+        # unaffected: saw_pause stays False and only playback ending aborts.)
+        _al = {'saw_pause': False}
+
+        def _abort():
+            try:
+                if _time.time() - _t0 > _ALIGN_DEADLINE_S:
+                    return True
+                import xbmc as _x
+                p = _x.Player()
+                if not p.isPlayingVideo():
+                    return True
+                if _x.getCondVisibility('Player.Paused'):
+                    _al['saw_pause'] = True
+                    return False
+                if _al['saw_pause']:
+                    return True
+                return False
+            except Exception:
+                return False
+
+        # 1) DENSE embedded cue-time skeleton (cheap: head + Cues element only).
+        _p(5, 100, 'קורא תזמון מהכתובית המובנית...')
+        allow = kodi_utils.get_bool('embedded_http_extract', True)
+        starts = embedded_extract.cue_reference_times(
+            url, lang=src_lang, allow_http=allow, abort_cb=_abort,
+            log=lambda m: kodi_utils.log('embedded-align: ' + m, level='INFO'))
+        if not starts or len(starts) < 8:
+            kodi_utils.log('embedded-align: no dense cue index ({0} time(s)) '
+                           '-- deferring to full extract'.format(
+                               len(starts or [])), level='INFO')
+            return None
+        n = len(starts)
+        # Adapt flat start times -> {start,end} the aligner expects; synthesize a
+        # plausible end from the gap to the next cue (mirrors mkv_probe).
+        ref = []
+        for i, t in enumerate(starts):
+            nxt = starts[i + 1] if i + 1 < n else t + 3000
+            ref.append({'start': t,
+                        'end': t + max(600, min(3000, nxt - t - 100))})
+
+        # 2) Best external source (`src_lang`) candidate(s), release-ranked.
+        _p(45, 100, 'מחפש כתובית מקור תואמת...')
+        try:
+            playing = subsync.playing_release(info) or ''
+        except Exception:
+            playing = ''
+        pref = (src_lang or 'en').lower()[:2]
+        try:
+            cands = [c for c in subsync._oracle_candidates(info)
+                     if (c.get('language') or '').lower().startswith(pref)]
+        except Exception:
+            cands = []
+        if not cands:
+            kodi_utils.log('embedded-align: no external %s candidate -- deferring'
+                           % src_lang, level='INFO')
+            return None
+        if playing:
+            try:
+                cands.sort(
+                    key=lambda c: release_match.match_pct(playing, c['release']),
+                    reverse=True)
+            except Exception:
+                pass
+
+        # 3) Align the source onto the embedded timeline. Try the best few
+        # release matches until one clears the gate (each align is CPU-only).
+        _p(70, 100, 'מסנכרן לפי הכתובית המובנית...')
+        aligned = None
+        for c in cands[:3]:
+            if _abort():
+                return None
+            try:
+                src_text = subsync._download_oracle(c.get('payload'))
+            except Exception:
+                src_text = ''
+            if not src_text or src_text.count('-->') < 8:
+                continue
+            try:
+                verdict = sync_align.verify_cues(ref, src_text)
+            except Exception as e:
+                kodi_utils.log('embedded-align: verify failed: {0}'.format(e),
+                               level='WARNING')
+                continue
+            st = verdict.get('status')
+            if st == sync_align.STATUS_CONFIRMED:
+                aligned = src_text
+                kodi_utils.log('embedded-align: %r already synced (%s)'
+                               % (c.get('release'), verdict.get('diag')),
+                               level='INFO')
+                break
+            if st == sync_align.STATUS_FIXABLE:
+                try:
+                    aligned = sync_align.retime(
+                        src_text, verdict['scale'], verdict['offset_ms'])
+                except Exception:
+                    aligned = None
+                if aligned and aligned.count('-->') >= 8:
+                    kodi_utils.log('embedded-align: %r retimed (%s)'
+                                   % (c.get('release'), verdict.get('diag')),
+                                   level='INFO')
+                    break
+                aligned = None
+            else:
+                kodi_utils.log('embedded-align: %r not confident (%s)'
+                               % (c.get('release'), verdict.get('diag')),
+                               level='INFO')
+        if not aligned or aligned.count('-->') < 8:
+            kodi_utils.log('embedded-align: no source aligned to the embedded '
+                           'timeline -- deferring to full extract', level='INFO')
+            return None
+
+        out = os.path.join(kodi_utils.cache_dir(),
+                           'embedded_aligned_{0}.srt'.format(src_lang or 'src'))
+        with open(out, 'w', encoding='utf-8') as f:
+            f.write(aligned)
+        _p(100, 100, 'מוכן')
+        kodi_utils.log('embedded-align: synced %s source ready (%d embedded cue '
+                       'ref, %d requests avoided)' % (src_lang, n, n),
+                       level='INFO')
+        return out
+    except Exception as e:
+        kodi_utils.log('embedded-align failed: {0}'.format(e), level='WARNING')
+        return None
+
+
 def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                           progress_cb=None):
     """Extract the playing file's embedded `src_lang` subtitle track to a temp
@@ -1471,13 +1651,24 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         if not kodi_utils.get_bool('embedded_translate', True):
             return None
         _emb_lang = payload.get('src_lang') or 'en'
-        _status('AI: מחלץ תרגום מובנה...', time_ms=3000)
-        emb_path = _extract_embedded_srt(
-            info, _emb_lang, payload.get('track_num'),
-            progress_cb=extract_progress_cb)
+        # FAST PATH first (debrid-safe): re-sync an external source sub to the
+        # embedded track's DENSE cue-time skeleton (~5 range requests) rather
+        # than pulling ~1700 text blocks -- which a strict provider (TorBox)
+        # 429s, starving the player. Only if that misses (no dense Cues index /
+        # no external source / low-confidence alignment) do we fall back to the
+        # full-text extract (perfect on a lenient provider like Real-Debrid).
+        _status('AI: מסנכרן לפי הכתובית המובנית...', time_ms=3000)
+        emb_path = _embedded_aligned_source_srt(
+            info, _emb_lang, progress_cb=extract_progress_cb)
         if not emb_path or not os.path.isfile(emb_path):
-            kodi_utils.log('embedded_ai: extraction failed -- deferring to the '
-                           'external path', level='INFO')
+            _status('AI: מחלץ תרגום מובנה...', time_ms=3000)
+            emb_path = _extract_embedded_srt(
+                info, _emb_lang, payload.get('track_num'),
+                progress_cb=extract_progress_cb)
+        if not emb_path or not os.path.isfile(emb_path):
+            kodi_utils.log('embedded_ai: no synced source (align+extract both '
+                           'missed) -- deferring to the external path',
+                           level='INFO')
             return None
         _status('AI: מתרגם תרגום מובנה לעברית...', time_ms=3000)
         payload = {'type': 'ai',
