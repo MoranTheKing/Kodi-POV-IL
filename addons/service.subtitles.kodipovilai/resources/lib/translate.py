@@ -804,8 +804,13 @@ def list_candidates(info, modal_progress=True):
         # gender-accurate first (strong-gender sources before English) -- then a
         # deterministic tie-break on source lang. Regular AI items keep ordering
         # by match % (g held constant so it's a no-op for them).
-        g = _gender_src_rank(v.get('source_lang')) if is_emb else 1
-        return (0 if is_emb else 1, g, -pct, (v.get('source_lang') or '').lower())
+        # Normalise the source lang ONCE, the same way the rank and the label do
+        # (default 'en', region-strip, 2-letter), so the tie-break agrees with
+        # what's shown and ranked -- a missing source_lang ties with explicit
+        # 'en', and 'pt-BR'/'pt-PT' tie-break identically.
+        src = (v.get('source_lang') or 'en').strip().lower()[:2]
+        g = _gender_src_rank(src) if is_emb else 1
+        return (0 if is_emb else 1, g, -pct, src)
 
     for v in sorted(_ai_variants, key=_ai_sort_key):
         if not _emb_ok(v):
