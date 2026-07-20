@@ -746,6 +746,23 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    0.2.403; here round 2 caught the exhaustive search could starve English -> added
    reserve; round 3 caught the reserve's `try_langs[-1]` sentinel protected the
    wrong language for 3+ langs -> exempt English explicitly; final CONFIRMED-SAFE).
+
+   **Relabel migration: `.emb` -> `.emb2` marker (AI 0.2.405 / quickfix 0.1.444;
+   notification #504):** field log showed the user still on 0.2.403, whose `_post`
+   had NO ai_emb bypass -- its dedup pre-check WROTE `<path>.emb.shared` (via
+   `mark_contributed`) and returned WITHOUT posting the promote. So every title a
+   0.2.403 user clicked got the one-shot marker set but the Worker never got the
+   signal, and after updating, `_backfill_pool_async`'s `was_contributed('.emb')`
+   would skip the relabel forever. Fix: `_pool_marker`'s ai_emb suffix bumped
+   `.emb` -> `.emb2`, so stale `.emb.shared` markers are ignored and the promote
+   fires exactly once now (a genuine 0.2.404 promoter gets ONE redundant re-POST
+   the Worker dedups; harmless). translate.py-only SWAP -- pool.py INHERITED
+   byte-identical from the 0.2.404 base zip (real key 802ba87a + the
+   `_post`/`_post_sync` bypass), asserted `out_pool == base_pool`. Sonnet
+   CONFIRMED-SAFE. NOTE for a future bump (`.emb2` -> `.emb3`): update ALL the
+   marker prose too (three spots: `_pool_marker` docstring, `_backfill_pool_async`
+   docstring, and its `_work()` inline comment) -- the 0.2.405 review flagged one
+   stale sentence, now fixed, but the pattern recurs on every suffix bump.
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
