@@ -917,14 +917,18 @@ def _handle_bg_translate_picker(params):
     # extraction phase, so the bar simply never appears for it.
     _ebar = {'d': None}
 
-    def _extract_progress(done, total):
+    def _extract_progress(done, total, label=None):
+        # `label` (optional) lets the resolve-side phases narrate what's
+        # happening -- the align path reports "reading timing / finding source /
+        # syncing", the full-text extract omits it and keeps the default. Two-arg
+        # callers (embedded_extract.extract_srt) still work unchanged.
         try:
+            msg = label or 'מכין תרגום מובנה...'
             if _ebar['d'] is None:
                 _ebar['d'] = xbmcgui.DialogProgressBG()
-                _ebar['d'].create('MoranSubs', 'מחלץ תרגום מובנה...')
+                _ebar['d'].create('MoranSubs', msg)
             pct = int(done * 100 / total) if total else 0
-            _ebar['d'].update(
-                pct, 'MoranSubs', 'מחלץ תרגום מובנה... {0}%'.format(pct))
+            _ebar['d'].update(pct, 'MoranSubs', '{0} {1}%'.format(msg, pct))
         except Exception:
             pass
 
