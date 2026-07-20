@@ -1166,6 +1166,8 @@ def _embedded_aligned_source_srt(info, src_lang, progress_cb=None):
             pass
 
     try:
+        import time as _time
+        _t0 = _time.time()
         url = _playing_video_url(info)
         if not url:
             return None
@@ -1175,6 +1177,15 @@ def _embedded_aligned_source_srt(info, src_lang, progress_cb=None):
             kodi_utils.log('embedded-align: import failed: {0}'.format(e),
                            level='WARNING')
             return None
+
+        # Total wall-clock ceiling on the WHOLE align attempt. The happy path is
+        # a fraction of a second; this bounds the adversarial "flaky token" shape
+        # -- reads that each recover after a few 429 retries but never exhaust
+        # the per-read breaker or the streak-of-6 (the align path makes too few
+        # reads to accumulate a 6-streak) -- which could otherwise crawl for
+        # minutes while holding the token warm. On timeout we abort and defer to
+        # the fallback, keeping this path genuinely FAST as designed.
+        _ALIGN_DEADLINE_S = 45.0
 
         # Pause-aware abort (mirrors _extract_embedded_srt's resume guard): the
         # cue-index reads share the debrid token with the player, so if the user
@@ -1187,6 +1198,8 @@ def _embedded_aligned_source_srt(info, src_lang, progress_cb=None):
 
         def _abort():
             try:
+                if _time.time() - _t0 > _ALIGN_DEADLINE_S:
+                    return True
                 import xbmc as _x
                 p = _x.Player()
                 if not p.isPlayingVideo():
