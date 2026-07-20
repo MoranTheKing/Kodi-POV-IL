@@ -1050,17 +1050,27 @@ def _pool_quality_ok(src_text, final):
 
 def _pool_marker(translated_path, kind):
     """One-shot '.shared' marker path for a pool contribution of `kind`.
-    Embedded ('ai_emb') translations track a SEPARATE '<path>.emb' marker
-    (physical '<path>.emb.shared') so they can UPGRADE a file already shared as
+    Embedded ('ai_emb') translations track a SEPARATE '<path>.emb2' marker
+    (physical '<path>.emb2.shared') so they can UPGRADE a file already shared as
     plain 'ai'/'ai_ar' -- the Worker promotes a dedup-matched entry to 'ai_emb'
     (never downgrades). Using it at EVERY ai-translation contribute site (fresh
     upload, early-cache backfill, content-hash backfill) keeps the convention
-    consistent: an embedded file seeds ONLY the '.emb' marker, so a later
+    consistent: an embedded file seeds ONLY the '.emb2' marker, so a later
     embedded re-share is correctly one-shot (no redundant round-trip), while a
     plain entry that pre-dates it is never wrongly blocked from upgrading. Ktuvit
     mirror/harvest markers are unaffected -- they live on the downloaded sub
-    files, not these translation-cache paths."""
-    return (translated_path + '.emb') if kind == 'ai_emb' else translated_path
+    files, not these translation-cache paths.
+
+    Suffix is '.emb2', NOT '.emb': an early build (0.2.403) shipped the '.emb'
+    marker together with a `_post` that still had the OLD dedup pre-check (no
+    ai_emb bypass). That pre-check WROTE '<path>.emb.shared' and returned WITHOUT
+    posting the ai_emb promote -- so on every title a 0.2.403 user clicked, the
+    one-shot marker was set but the Worker never got the promote signal, and once
+    they update, the backfill's `was_contributed('.emb')` would skip forever.
+    Bumping the suffix makes those stale '.emb.shared' markers irrelevant so the
+    promote fires exactly once now. (A 0.2.404 user who genuinely promoted has a
+    real '.emb.shared'; they get one extra POST the Worker dedups -- harmless.)"""
+    return (translated_path + '.emb2') if kind == 'ai_emb' else translated_path
 
 
 def _backfill_pool_async(info, translated_path, local_source, source_lang,
@@ -1077,7 +1087,7 @@ def _backfill_pool_async(info, translated_path, local_source, source_lang,
     `embedded=True` means this cache hit came from the embedded-AI path (the
     Hebrew is synced to the video's own timing): contribute it as kind='ai_emb'
     so the pool surfaces it as "תרגום מובנה". Crucially it tracks its OWN
-    one-shot marker ('<path>.emb.shared') instead of the plain '.shared' -- so a
+    one-shot marker ('<path>.emb2.shared') instead of the plain '.shared' -- so a
     file that was ALREADY shared as plain 'ai' (e.g. an earlier non-embedded run,
     or the very first embedded click that hit the cache before this fix) is NOT
     blocked, and its pool entry gets UPGRADED to 'ai_emb' server-side (the Worker
@@ -1091,7 +1101,7 @@ def _backfill_pool_async(info, translated_path, local_source, source_lang,
         try:
             kind = ('ai_emb' if embedded
                     else ('ai_ar' if ar_tier else 'ai'))
-            # Embedded upgrades run under a distinct '.emb' marker (see
+            # Embedded upgrades run under a distinct '.emb2' marker (see
             # _pool_marker) so an already-'ai'-shared file can still emit its one
             # ai_emb contribution.
             _marker = _pool_marker(translated_path, kind)
