@@ -1055,12 +1055,22 @@ def _pool_marker(translated_path, kind):
     plain 'ai'/'ai_ar' -- the Worker promotes a dedup-matched entry to 'ai_emb'
     (never downgrades). Using it at EVERY ai-translation contribute site (fresh
     upload, early-cache backfill, content-hash backfill) keeps the convention
-    consistent: an embedded file seeds ONLY the '.emb' marker, so a later
+    consistent: an embedded file seeds ONLY the '.emb2' marker, so a later
     embedded re-share is correctly one-shot (no redundant round-trip), while a
     plain entry that pre-dates it is never wrongly blocked from upgrading. Ktuvit
     mirror/harvest markers are unaffected -- they live on the downloaded sub
-    files, not these translation-cache paths."""
-    return (translated_path + '.emb') if kind == 'ai_emb' else translated_path
+    files, not these translation-cache paths.
+
+    Suffix is '.emb2', NOT '.emb': an early build (0.2.403) shipped the '.emb'
+    marker together with a `_post` that still had the OLD dedup pre-check (no
+    ai_emb bypass). That pre-check WROTE '<path>.emb.shared' and returned WITHOUT
+    posting the ai_emb promote -- so on every title a 0.2.403 user clicked, the
+    one-shot marker was set but the Worker never got the promote signal, and once
+    they update, the backfill's `was_contributed('.emb')` would skip forever.
+    Bumping the suffix makes those stale '.emb.shared' markers irrelevant so the
+    promote fires exactly once now. (A 0.2.404 user who genuinely promoted has a
+    real '.emb.shared'; they get one extra POST the Worker dedups -- harmless.)"""
+    return (translated_path + '.emb2') if kind == 'ai_emb' else translated_path
 
 
 def _backfill_pool_async(info, translated_path, local_source, source_lang,
