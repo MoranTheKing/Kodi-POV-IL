@@ -1198,6 +1198,64 @@ def extract_srt(url_or_path, track_num=None, lang=None,
         return None
 
 
+# ISO 639 language-code equivalences. Kodi and the subtitle providers hand us a
+# 2-letter ISO 639-1 code (e.g. 'es'), but a Matroska TrackEntry's Language
+# element almost always carries the 3-letter ISO 639-2/B (bibliographic) code
+# (e.g. 'spa'). For ~20 languages the 2-letter code is NOT a prefix of the
+# 3-letter one -- 'es'!='spa', 'de'!='ger', 'nl'!='dut', 'ja'!='jpn', 'sv'!=
+# 'swe', 'el'!='gre', 'zh'!='chi', 'cs'!='cze', 'ro'!='rum', 'sk'!='slo',
+# 'is'!='ice', ... -- so a naive `track_lang.startswith(pref)` SILENTLY fails to
+# match the track and the embedded translation falls through to another language
+# (or the wrong cache). Canonicalize BOTH the requested code and the track code
+# to a single ISO 639-1 key before comparing. Each row lists every code that
+# means the same language (639-1, 639-2/B, 639-2/T, plus a couple of legacy
+# aliases); every code in the row maps to the row's first (2-letter) entry.
+# Languages where the 2-letter code IS a prefix of the 3-letter one (en/eng,
+# fr/fre, it/ita, ru/rus, pt/por, ...) still resolve -- through this table or the
+# startswith() fallback that is kept as a safety net for any code not listed.
+_ISO639_ROWS = (
+    ('en', 'eng'), ('es', 'spa'), ('fr', 'fre', 'fra'), ('de', 'ger', 'deu'),
+    ('it', 'ita'), ('pt', 'por', 'pob', 'pb'), ('nl', 'dut', 'nld'),
+    ('ru', 'rus'), ('pl', 'pol'), ('cs', 'cze', 'ces'), ('sk', 'slo', 'slk'),
+    ('sl', 'slv'), ('ro', 'rum', 'ron'), ('el', 'gre', 'ell'), ('hu', 'hun'),
+    ('fi', 'fin'), ('sv', 'swe'), ('da', 'dan'),
+    # Norwegian + Bokmal/Nynorsk all fold to 'no': the add-on never distinguishes
+    # them (it always requests generic 'no'), and a track tagged 'nob'/'nno' must
+    # still match a 'no' request the way the old prefix code did ('nob'.startswith
+    # ('no')). Keeping them as separate canonicals would silently drop those tags.
+    ('no', 'nor', 'nb', 'nob', 'nn', 'nno'),
+    ('is', 'ice', 'isl'), ('tr', 'tur'), ('ar', 'ara'),
+    ('he', 'heb', 'iw'), ('fa', 'per', 'fas'), ('hi', 'hin'), ('ja', 'jpn'),
+    ('ko', 'kor'), ('zh', 'chi', 'zho'), ('th', 'tha'), ('vi', 'vie'),
+    ('id', 'ind'), ('ms', 'may', 'msa'), ('uk', 'ukr'), ('bg', 'bul'),
+    ('sr', 'srp', 'scc'), ('hr', 'hrv', 'scr'), ('bs', 'bos'),
+    ('mk', 'mac', 'mkd'), ('sq', 'alb', 'sqi'), ('et', 'est'), ('lv', 'lav'),
+    ('lt', 'lit'), ('ka', 'geo', 'kat'), ('hy', 'arm', 'hye'), ('az', 'aze'),
+    ('kk', 'kaz'), ('eu', 'baq', 'eus'), ('gl', 'glg'), ('ca', 'cat'),
+    ('cy', 'wel', 'cym'), ('ga', 'gle'), ('af', 'afr'), ('sw', 'swa'),
+    ('ta', 'tam'), ('te', 'tel'), ('ml', 'mal'), ('kn', 'kan'), ('bn', 'ben'),
+    ('mr', 'mar'), ('gu', 'guj'), ('pa', 'pan'), ('ur', 'urd'), ('ne', 'nep'),
+    ('si', 'sin'), ('my', 'bur', 'mya'), ('km', 'khm'), ('lo', 'lao'),
+    ('bo', 'tib', 'bod'), ('mn', 'mon'), ('mi', 'mao', 'mri'),
+)
+_ISO639_CANON = {alias: row[0] for row in _ISO639_ROWS for alias in row}
+
+
+def _lang_key(code):
+    """Canonical ISO 639-1 key for a language code, so 'es' and 'spa' (and 'de'/
+    'ger', 'ja'/'jpn', ...) compare equal. Strips any region/script suffix
+    ('pt-BR' -> 'pt', 'zh_Hans' -> 'zh') and lowercases; returns the mapped
+    2-letter code, or the cleaned input when the code isn't in the table (so an
+    unknown/exotic code still self-compares)."""
+    c = (code or '').strip().lower()
+    if not c:
+        return ''
+    for sep in ('-', '_'):
+        if sep in c:
+            c = c.split(sep, 1)[0]
+    return _ISO639_CANON.get(c, c)
+
+
 def _pick_track(subs, track_num, lang):
     if track_num is not None:
         for t in subs:
@@ -1205,7 +1263,26 @@ def _pick_track(subs, track_num, lang):
                 return t
         return None
     if lang:
-        pref = lang.lower()[:2]
+        want = _lang_key(lang)
+        pref = (lang or '').strip().lower()[:2]
+
+        def _lang_match(tl):
+            tl = (tl or '').strip().lower()
+            if not tl:
+                return False
+            # Canonical ISO 639-1/2B/2T equivalence (es<->spa, de<->ger, ...).
+            if want and _lang_key(tl) == want:
+                return True
+            # Prefix fallback ONLY for a code we don't recognise. A RECOGNISED
+            # code whose canonical differs from `want` is a definitively
+            # different language, so we must NOT prefix-match it -- otherwise a
+            # request for 'es' would wrongly grab Estonian 'est', or 'ar' would
+            # grab Armenian 'arm' (a latent bug in the old startswith-only path).
+            base = tl.split('-', 1)[0].split('_', 1)[0]
+            if base in _ISO639_CANON:
+                return False
+            return bool(pref) and tl.startswith(pref)
+
         # Forced/signs-only tracks are excluded from auto-pick (same rule as the
         # no-lang branch below): a sparse signs-only sub is a worse deliverable
         # than falling through to the external subtitle search. This matters now
@@ -1213,7 +1290,7 @@ def _pick_track(subs, track_num, lang):
         # match the prefix.
         cand = [t for t in subs if _is_text_codec(t['codec'])
                 and not t['forced']
-                and (t['lang'] or '').lower().startswith(pref)]
+                and _lang_match(t['lang'])]
         # Explicitly-tagged match first, so a track that really carries 'eng'
         # outranks one that only defaulted to it; then track order.
         cand.sort(key=lambda t: (not t.get('lang_explicit', True), t['num']))
@@ -1222,12 +1299,28 @@ def _pick_track(subs, track_num, lang):
         # No language match. When the file carries exactly ONE non-forced text
         # track it is almost certainly the stream Kodi surfaced (its tag may be
         # 'und' or otherwise not our prefix); use it rather than failing the
-        # whole extraction. Multiple candidates with none matching stays
-        # ambiguous -> None, so we never grab a genuinely wrong-language sub.
+        # whole extraction -- BUT only when that lone track's language is genuinely
+        # unknown, not when it is explicitly a DIFFERENT known language. Handing
+        # back an explicit 'eng' text track for a Spanish request (e.g. the file's
+        # only text sub is English while the Spanish track is a bitmap PGS) would
+        # mislabel the source language and translate the wrong text. A tag is
+        # "genuinely unknown" when it isn't a recognised ISO code (und/mis/...) OR
+        # it only DEFAULTED to 'eng' (absent Language element, lang_explicit=False)
+        # -- that track's real language is unknown, so it stays eligible.
         texts = [t for t in subs
                  if _is_text_codec(t['codec']) and not t['forced']]
         if len(texts) == 1:
-            return texts[0]
+            only = texts[0]
+            tl = (only['lang'] or '').strip().lower()
+            base = tl.split('-', 1)[0].split('_', 1)[0]
+            # We only reach here when `only` did NOT lang-match (a matching track
+            # would already have been returned via `cand` above). Use it anyway
+            # when its language is genuinely unknown -- an unrecognised tag
+            # (und/mis/...) or one that merely DEFAULTED to 'eng' (absent Language
+            # element, lang_explicit=False) -- but NOT when it is an explicit,
+            # recognised, DIFFERENT language (that would mislabel the source).
+            if base not in _ISO639_CANON or not only.get('lang_explicit', True):
+                return only
         return None
     cand = [t for t in subs if _is_text_codec(t['codec']) and not t['forced']]
     cand.sort(key=lambda t: t['num'])
