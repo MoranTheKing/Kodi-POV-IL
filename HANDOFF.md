@@ -618,9 +618,29 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    relabeled organically as embedded translations flow in (no bulk relabel is
    possible -- origin was never recorded). pool.py UNCHANGED. Two Sonnet rounds,
    CONFIRMED-SAFE. **worker.js must be deployed to Cloudflare separately (it is
-   the local-only pool server; never commit it).** Optional follow-up: widen the
-   lookup-side `_video_ref` fallback to also try `li_filename` for closer
-   same-source parity.
+   the local-only pool server; never commit it).**
+
+   **li_filename release parity (AI 0.2.401 / quickfix 0.1.440):** the
+   lookup-side `_video_ref` (used by the embedded same-source gate + the pool
+   match-%) now derives the release the same way the CONTRIBUTION side does --
+   new `_release_from_path()` tries `basename(li_filename)` before
+   `basename(filepath)`, ext-stripped, and rejects a debrid URL/token/UUID via
+   `pool._is_token_like` (falling through to `filepath`). Without it, a debrid
+   replay (tokenized `filepath`, blank picked_release/tagline/label) derived a
+   token as the release and wrongly HID the viewer's own embedded pool item.
+   Sonnet CONFIRMED-SAFE. **Known follow-up (pool.py-scoped, NOT done):** both
+   `_release_from_path` and `pool._release_from` use a blind `rsplit('.',1)`
+   extension strip; for a basename with NO real container extension (e.g.
+   `Show.S01E01`) this collapses the last dotted token (`-> Show`), which for two
+   different releases of the SAME episode bucket can produce a spurious
+   TIER_EXACT match (a false-positive "same source"). Narrow (real files carry an
+   extension; never seen in field logs) and same-episode timing is usually
+   identical anyway, but the proper fix is to swap both sides' blind strip for a
+   whitelist-anchored one (reuse `release_match._strip_ext` / `normalize`).
+   The maintainer runs the community pool worker OUT-OF-BAND: the repo's
+   `pool/worker.js` is a STALE 1.2k-line frozen reference; the LIVE worker is
+   ~2k lines. ALWAYS request the current live worker.js before editing it, and
+   deliver changes as a file for Cloudflare deploy -- never commit worker.js.
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
