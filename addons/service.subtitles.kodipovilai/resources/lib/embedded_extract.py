@@ -724,6 +724,76 @@ def _read_cues(src, seeks, seg_start, want_track, log):
     return out, is_sub
 
 
+def _read_cue_times(src, seeks, seg_start, want_track, log):
+    """Return the SORTED distinct raw CueTime values (in ts_scale ticks) for cue
+    points that reference `want_track` (the subtitle track), or [] when the file
+    has no per-subtitle Cues index. Reads ONLY the Cues element -- NO cluster
+    block fetches -- so it's a handful of range requests even on a huge file
+    (this is what makes it viable on a strict debrid token where the full-text
+    extract is not). CueTime is the cue's START on the segment timeline. Never
+    raises (caller wraps)."""
+    pos = seeks.get(_CUES)
+    if not pos:
+        return []
+    raw = src.read(pos, 64 * 1024)
+    if not raw:
+        return []
+    b = _Buf(raw, pos)
+    eid, _l = _read_vint(b, True)
+    size, slen = _read_vint(b, False)
+    if eid != _CUES or slen == 0 or size is None:
+        return []
+    need = b.p + size
+    if need > _CUES_CAP:
+        log('cue-times: cues element too large (%d bytes) -- skipping' % size)
+        return []
+    while len(raw) < need:
+        more = src.read(pos + len(raw), min(4 * 1024 * 1024, need - len(raw)))
+        if not more:
+            break
+        raw += more
+    b = _Buf(raw, pos)
+    _read_vint(b, True)
+    _read_vint(b, False)
+    data = raw[b.p:b.p + size]
+    want_times = []
+    cbuf = _Buf(data, 0)
+    for eid2, size2, start2 in _walk(cbuf, len(data)):
+        if size2 is None:
+            break
+        cbuf.p = start2 + size2
+        if eid2 != _CUE_POINT:
+            continue
+        cp = data[start2:start2 + size2]
+        pbuf = _Buf(cp, 0)
+        ctime = None
+        tracks_here = set()
+        for peid, psize, pstart in _walk(pbuf, len(cp)):
+            if psize is None:
+                break
+            pp = cp[pstart:pstart + psize]
+            pbuf.p = pstart + psize
+            if peid == _CUE_TIME:
+                ctime = _read_uint(pp)
+            elif peid == _CUE_TRACK_POS:
+                tbuf = _Buf(pp, 0)
+                for teid, tsize, tstart in _walk(tbuf, len(pp)):
+                    if tsize is None:
+                        break
+                    tp = pp[tstart:tstart + tsize]
+                    tbuf.p = tstart + tsize
+                    if teid == _CUE_TRACK:
+                        tracks_here.add(_read_uint(tp))
+        if ctime is None:
+            continue
+        # Only cue points that index the wanted subtitle track: those mark when
+        # each subtitle line appears (video-keyframe cues have the wrong
+        # granularity and are NOT a subtitle timeline).
+        if want_track in tracks_here:
+            want_times.append(ctime)
+    return sorted(set(want_times))
+
+
 # ---- block / cluster text ---------------------------------------------------
 def _block_frame(payload, cluster_ts, want_track):
     """(abs_ticks, frame_bytes) for a (Simple)Block of want_track, or None.
@@ -996,6 +1066,56 @@ def probe_tracks(url_or_path, head_bytes=DEFAULT_HEAD_BYTES, log=None):
         return out
     except Exception as e:
         _log('probe_tracks failed: %s' % e)
+        return []
+
+
+def cue_reference_times(url_or_path, track_num=None, lang=None,
+                        head_bytes=DEFAULT_HEAD_BYTES, allow_http=False,
+                        abort_cb=None, log=None):
+    """Return the embedded subtitle track's dense cue START times as a SORTED
+    list of ints (milliseconds, rebased to the playback timeline), or [] when
+    the file has no per-subtitle Cues index / no matching track / can't be read.
+
+    CHEAP by design: reads ONLY the head + the Cues element + a tiny timeline-
+    origin probe -- a handful of range requests, NEVER the ~1 request-per-cue
+    cluster fetches that `extract_srt` needs. That makes it safe on a strict
+    debrid token (e.g. TorBox) where the full-text extract starves the player.
+    The returned times are the exact instants each embedded subtitle line
+    appears, i.e. a dense, ground-truth timing skeleton for re-syncing an
+    external subtitle. `allow_http` must be True for an HTTP/debrid source
+    (default False = local only). Never raises."""
+    _log = log or _noop
+    try:
+        src = _Source(url_or_path)
+        src._abort_cb = abort_cb
+        if not src.total:
+            return []
+        if src.is_http and not allow_http:
+            _log('cue-times: HTTP not allowed (setting off) -- skipping')
+            return []
+        seg_start, ts_scale, tracks, seeks = _parse_head(src, head_bytes, _log)
+        subs = _sub_tracks(tracks)
+        if not subs:
+            return []
+        track = _pick_track(subs, track_num, lang)
+        if track is None:
+            _log('cue-times: no matching track (num=%s lang=%s)'
+                 % (track_num, lang))
+            return []
+        raw_times = _read_cue_times(src, seeks, seg_start, track['num'], _log)
+        if not raw_times:
+            _log('cue-times: no per-subtitle Cues index for track #%s'
+                 % track['num'])
+            return []
+        scale_ms = ts_scale / 1e6
+        origin_ms = _timeline_origin(src, seg_start, scale_ms, _log)
+        out = sorted({int(round(t * scale_ms - origin_ms)) for t in raw_times
+                      if (t * scale_ms - origin_ms) >= 0})
+        _log('cue-times: %d dense reference time(s) in %d req / %.0fKB'
+             % (len(out), src.reqs, src.fetched / 1024.0))
+        return out
+    except Exception as e:
+        (log or _noop)('cue_reference_times failed: %s' % e)
         return []
 
 
