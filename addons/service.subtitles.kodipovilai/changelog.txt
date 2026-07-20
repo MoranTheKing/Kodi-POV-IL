@@ -1,3 +1,12 @@
+v0.2.406
+- Multiple embedded translations of the same title are now ordered by gender
+  accuracy, and each shows the language it was translated FROM. Hebrew renders
+  speaker gender; the gender-reference chain covers most lines, but on the rest
+  the AI falls back to the source text's own gender -- so a source that marks
+  gender (Spanish/French/Russian/Arabic/Hindi...) is more accurate than English
+  or German (which don't mark predicative gender and must guess). Strong-gender
+  sources are listed first, e.g. "תרגום מובנה AI (ספרדית)" above "(אנגלית)".
+
 v0.2.405
 - Embedded relabel now also fixes titles clicked on 0.2.403. That build wrote the
   ai_emb one-shot marker WITHOUT actually posting the promote (its _post still had

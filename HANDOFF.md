@@ -763,6 +763,25 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    marker prose too (three spots: `_pool_marker` docstring, `_backfill_pool_async`
    docstring, and its `_work()` inline comment) -- the 0.2.405 review flagged one
    stale sentence, now fixed, but the pattern recurs on every suffix bump.
+
+   **Embedded pool items ordered by source-language gender accuracy (AI 0.2.406 /
+   quickfix 0.1.445; notification #505):** with several embedded translations of
+   the SAME release (from different source languages) in the pool, they now order
+   by the source language's gender-marking strength, and each label names the
+   source it was translated from ("תרגום מובנה AI (ספרדית) ..."). Rationale: Hebrew
+   renders speaker gender; the gender-reference chain covers most lines, but on the
+   gap lines the AI falls back to the SOURCE text's own gender -- so a source that
+   marks predicative gender (Semitic/Romance/Slavic/Indo-Aryan) beats English/German
+   (which don't). `_gender_src_rank` -> 0 (strong) / 1 (weak, en/de/nl/...);
+   `_ai_sort_key` sorts ai_emb by it, then a normalised (`or 'en'`, region-strip,
+   2-letter) source-lang tie-break that matches the rank + label. Client-only: the
+   pool already returns `source_lang` per variant (worker.js stores at :678,
+   returns in /lookup at :1096) -- NO pool/worker change. Regular AI items keep
+   ordering by match-% (g held constant). pool.py INHERITED byte-identical from the
+   0.2.405 base. Sonnet CONFIRMED-SAFE (tuple-type safety proven; two cosmetic
+   tie-break-normalisation NITs applied). NOTE: "English last" is not literal --
+   within the weak tier it's alphabetical (e.g. Dutch `nl` sorts after `en`); the
+   design goal (gender-accurate sources FIRST) is what holds.
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
