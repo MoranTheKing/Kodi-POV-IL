@@ -96,6 +96,13 @@ _HTTP_REQ_PACE_MAX = 2.0         # ceiling: every 429 widens the gap toward this
 #                                  (AIMD-style back-pressure -- we can't know a
 #                                  provider's exact limit, so let the CDN's own
 #                                  429s tune us down to a rate it tolerates)
+# Fail-fast on a token the provider rate-limits HARD (TorBox): if this many
+# fetches IN A ROW each need a 429 backoff, the token is saturated and a
+# ~1700-request extraction is hopeless -- crawling on keeps the token hot for
+# minutes, and the movie dies the moment the user unpauses into it. Give up
+# early (~20s) with a clean deferral instead. A healthy provider (Real-Debrid)
+# lands clean fetches that reset the streak, so it never trips there.
+_HTTP_429_STREAK_MAX = 6
 _CLUSTER_CAP_LOCAL = 32 * 1024 * 1024     # local: effectively read whole clusters
 _CUES_CAP = 24 * 1024 * 1024              # hard ceiling on the Cues element read
 
@@ -251,6 +258,7 @@ class _Source(object):
         self.reqs = 0
         self.tripped = False          # circuit-breaker: set on a 429/5xx
         self._pace = _HTTP_REQ_PACE_S  # adaptive inter-request gap (grows on 429)
+        self._429_streak = 0          # consecutive 429-needing fetches (fail-fast)
         self._abort_cb = None         # set by extract_srt; polled DURING sleeps
         self.total = 0
         self._sess = _new_session() if self.is_http else None
@@ -354,6 +362,7 @@ class _Source(object):
         noticed within ~1s instead of behind a 2-minute retry storm."""
         _pace = getattr(self, '_pace', _HTTP_REQ_PACE_S)
         self.reqs += 1
+        saw_429 = False               # did THIS fetch need a 429 backoff?
         if self.reqs > 1 and _pace > 0:
             if self._sleep_or_abort(_pace):
                 self.tripped = True
@@ -373,6 +382,7 @@ class _Source(object):
                     'User-Agent': _UA}, timeout=_HTTP_TIMEOUT, stream=True)
                 code = r.status_code
                 if code == 429 or code >= 500:
+                    saw_429 = True
                     # Back-pressure: widen the pace so we ease off the contended
                     # token (protects the player, converges toward a rate the CDN
                     # tolerates). Persists for the rest of this extraction.
@@ -420,6 +430,18 @@ class _Source(object):
                     buf += chunk
                 data = bytes(buf)
                 self.fetched += len(data)
+                # Fail-fast bookkeeping: a clean fetch resets the streak; a fetch
+                # that only succeeded after 429 backoff extends it. Too many in a
+                # row => the token is saturated (TorBox), so trip the breaker now
+                # rather than crawl for minutes with the token held hot. This
+                # cue's data is still returned; the caller sees `tripped` next and
+                # defers (a partial extract is never delivered anyway).
+                if saw_429:
+                    self._429_streak = getattr(self, '_429_streak', 0) + 1
+                    if self._429_streak >= _HTTP_429_STREAK_MAX:
+                        self.tripped = True
+                else:
+                    self._429_streak = 0
                 return data
             except Exception:
                 return b''
