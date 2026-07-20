@@ -771,8 +771,14 @@ def list_candidates(info, modal_progress=True):
         have_hebrew = True
         release = _pool_release(v)
         if (v.get('kind') or '') == 'ai_emb':
-            label = ('תרגום מובנה AI · מאגר קהילתי  —  {0}'.format(release)
-                     if release else 'תרגום מובנה AI · מאגר קהילתי')
+            # Embedded is surfaced ONLY for the EXACT source (_emb_ok ->
+            # TIER_EXACT), so it is a 100% match by definition. Show 100%
+            # (rather than a blank) so it reads consistently beside the regular
+            # AI pool items -- an embedded translation of your own release, shown
+            # with no %, looked broken next to a "· 100%" sibling for the same
+            # release.
+            label = ('תרגום מובנה AI · מאגר קהילתי · 100%  —  {0}'.format(release)
+                     if release else 'תרגום מובנה AI · מאגר קהילתי · 100%')
         else:
             pct = _match_pct(_video_ref, release) if release else 0
             # Only show a % when we actually have a meaningful match (a 0% almost
@@ -1030,7 +1036,7 @@ def _pool_quality_ok(src_text, final):
 
 
 def _backfill_pool_async(info, translated_path, local_source, source_lang,
-                         ar_tier=False):
+                         ar_tier=False, embedded=False):
     """Share an ALREADY-cached Hebrew translation to the community pool, in
     the background, the first time the user re-watches it after enabling
     pool_share. Used at the EARLY cache hit, where the source bytes (and
@@ -1038,14 +1044,27 @@ def _backfill_pool_async(info, translated_path, local_source, source_lang,
     daemon thread so playback is never delayed, compute the same content hash
     the fresh-translation path uses, and contribute_once (marker + server-side
     dedup => never a duplicate). One-shot per file thanks to the .shared
-    marker; silent to the user on any failure."""
+    marker; silent to the user on any failure.
+
+    `embedded=True` means this cache hit came from the embedded-AI path (the
+    Hebrew is synced to the video's own timing): contribute it as kind='ai_emb'
+    so the pool surfaces it as "תרגום מובנה". Crucially it tracks its OWN
+    one-shot marker ('<path>.emb.shared') instead of the plain '.shared' -- so a
+    file that was ALREADY shared as plain 'ai' (e.g. an earlier non-embedded run,
+    or the very first embedded click that hit the cache before this fix) is NOT
+    blocked, and its pool entry gets UPGRADED to 'ai_emb' server-side (the Worker
+    promotes a dedup-matched 'ai' variant to 'ai_emb', never downgrades). Without
+    the separate marker the '.shared' guard would swallow the upgrade and the
+    embedded label would never appear on a re-click."""
     if pool is None:
         return
 
     def _work():
         try:
-            if not pool.share_enabled() or pool.was_contributed(
-                    translated_path):
+            # Embedded upgrades run under a distinct marker so an already-'ai'-
+            # shared file can still emit its one ai_emb contribution.
+            _marker = (translated_path + '.emb') if embedded else translated_path
+            if not pool.share_enabled() or pool.was_contributed(_marker):
                 return
             cached = cache.load_text(translated_path)
             if not cached:
@@ -1073,9 +1092,10 @@ def _backfill_pool_async(info, translated_path, local_source, source_lang,
                 _rel = None
             pool.contribute_once(info, (cid + '_ar') if ar_tier else cid,
                                  source_lang, cached,
-                                 marker_path=translated_path,
+                                 marker_path=_marker,
                                  release_override=_rel,
-                                 kind=('ai_ar' if ar_tier else 'ai'))
+                                 kind=('ai_emb' if embedded
+                                       else ('ai_ar' if ar_tier else 'ai')))
         except Exception as e:
             try:
                 kodi_utils.log('pool backfill failed: {0}'.format(e),
@@ -1988,7 +2008,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             if (pool is not None and pool.share_enabled()
                     and not _is_google_translated(translated)):
                 _backfill_pool_async(info, translated, local_source,
-                                     source_lang, ar_tier=_ar_on)
+                                     source_lang, ar_tier=_ar_on,
+                                     embedded=(_pool_kind == 'ai_emb'))
             return translated
 
     # Read the source SRT recorded at list time (alongside the video
