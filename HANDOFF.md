@@ -552,11 +552,41 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    hard -- ~1700 sequential range requests is hopeless there, paused or playing.
    Real-Debrid (the friend's setup) has no such limit, which is why it works for
    him on both Android and PC.** Maintainer's chosen direction: make it fast AND
-   fill in progressively (like the live AI translation). Next: study the friend's
-   working extractor files (uploaded: sources.py / align_stage / srt_utils /
-   update_*.zip) then build either multipart-batched range reads (~34 reqs
-   instead of 1700, done while paused) or playhead-synced progressive extraction.
-   See tasks #29/#33.
+   fill in progressively (like the live AI translation).
+
+   **The alignment pivot (AI 0.2.398 / quickfix 0.1.437) -- the feature that
+   actually works on TorBox.** Key realisation: the embedded subtitle's TEXT is
+   scattered across ~1700 clusters (inherently ~1700 requests -> hopeless on
+   TorBox), but its dense cue TIMESTAMPS live in ONE contiguous Cues index (a
+   handful of requests). And sync is a timing problem, not a text problem. So
+   "embedded translation" no longer extracts the embedded text; it reads only the
+   embedded track's dense cue-time skeleton and RE-TIMES an external source sub
+   onto that ground-truth timeline, then AI-translates the re-timed source (the
+   pipeline preserves timing 1:1) -> synced Hebrew that fills in progressively.
+   This directly solves the maintainer's original pain (external subs are often
+   unsynced) by re-syncing them to the embedded timing, cheaply. Pieces:
+   - `embedded_extract.cue_reference_times()` -- dense cue START times from the
+     Cues index ONLY (parses CueTime 0xB3 per CuePoint for the wanted sub track,
+     rebased via `_timeline_origin`; no cluster block fetches). Verified: **3
+     requests / 163KB** for a ~1700-cue file (vs ~1700 for full extract).
+   - `translate._embedded_aligned_source_srt()` -- adapts the flat times to
+     `[{start,end}]`, fetches the best release-matched external source via
+     `subsync._oracle_candidates`/`_download_oracle`, aligns with the EXISTING
+     `sync_align.verify_cues`/`retime`, tries up to 3 candidates, writes a
+     re-timed SRT. Fail-open: any miss (no dense Cues index / no external source
+     / low-confidence alignment) returns None. Pause-aware abort + a 45s total
+     wall-clock ceiling (the flaky-token guard). The embedded_ai branch tries
+     this FIRST, then falls back to the full-text `extract_srt`, then to the
+     external-subtitle path.
+   - `default._extract_progress()` gains a label so the bar narrates
+     read->find->sync; then the AI pipeline's progressive chunk swaps take over.
+   Why dense beats sparse: the old SubSync file-probe sampled ~33 sparse cues and
+   found a SPURIOUS +17s peak (log c23c5040, tight 73% < 93% needed); with
+   hundreds/thousands of real cue times the estimate lands on the true offset and
+   `_required_tight` no longer applies the sparse penalty. Global-linear only
+   (offset+fps) -- a genuinely different CUT is (correctly) rejected as UNKNOWN
+   and defers. Three Sonnet rounds, all CONFIRMED-SAFE. Full text extract remains
+   the perfect path on lenient providers (Real-Debrid).
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
