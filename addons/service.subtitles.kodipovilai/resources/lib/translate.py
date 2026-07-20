@@ -1035,6 +1035,21 @@ def _pool_quality_ok(src_text, final):
         return True
 
 
+def _pool_marker(translated_path, kind):
+    """One-shot '.shared' marker path for a pool contribution of `kind`.
+    Embedded ('ai_emb') translations track a SEPARATE '<path>.emb' marker
+    (physical '<path>.emb.shared') so they can UPGRADE a file already shared as
+    plain 'ai'/'ai_ar' -- the Worker promotes a dedup-matched entry to 'ai_emb'
+    (never downgrades). Using it at EVERY ai-translation contribute site (fresh
+    upload, early-cache backfill, content-hash backfill) keeps the convention
+    consistent: an embedded file seeds ONLY the '.emb' marker, so a later
+    embedded re-share is correctly one-shot (no redundant round-trip), while a
+    plain entry that pre-dates it is never wrongly blocked from upgrading. Ktuvit
+    mirror/harvest markers are unaffected -- they live on the downloaded sub
+    files, not these translation-cache paths."""
+    return (translated_path + '.emb') if kind == 'ai_emb' else translated_path
+
+
 def _backfill_pool_async(info, translated_path, local_source, source_lang,
                          ar_tier=False, embedded=False):
     """Share an ALREADY-cached Hebrew translation to the community pool, in
@@ -1061,9 +1076,12 @@ def _backfill_pool_async(info, translated_path, local_source, source_lang,
 
     def _work():
         try:
-            # Embedded upgrades run under a distinct marker so an already-'ai'-
-            # shared file can still emit its one ai_emb contribution.
-            _marker = (translated_path + '.emb') if embedded else translated_path
+            kind = ('ai_emb' if embedded
+                    else ('ai_ar' if ar_tier else 'ai'))
+            # Embedded upgrades run under a distinct '.emb' marker (see
+            # _pool_marker) so an already-'ai'-shared file can still emit its one
+            # ai_emb contribution.
+            _marker = _pool_marker(translated_path, kind)
             if not pool.share_enabled() or pool.was_contributed(_marker):
                 return
             cached = cache.load_text(translated_path)
@@ -1094,8 +1112,7 @@ def _backfill_pool_async(info, translated_path, local_source, source_lang,
                                  source_lang, cached,
                                  marker_path=_marker,
                                  release_override=_rel,
-                                 kind=('ai_emb' if embedded
-                                       else ('ai_ar' if ar_tier else 'ai')))
+                                 kind=kind)
         except Exception as e:
             try:
                 kodi_utils.log('pool backfill failed: {0}'.format(e),
@@ -2086,7 +2103,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         pool.contribute_once(
                             info, _pool_key(content_id), source_lang,
                             _cached_he,
-                            marker_path=translated_by_content,
+                            marker_path=_pool_marker(translated_by_content,
+                                                     _pool_kind),
                             release_override=_release_override,
                             kind=_pool_kind)
                     except Exception as e:
@@ -3081,7 +3099,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         if _pool_quality_ok(src_text, final):
             try:
                 pool.contribute_once(info, _final_pool_hash, source_lang,
-                                     final, marker_path=translated,
+                                     final,
+                                     marker_path=_pool_marker(translated,
+                                                              _pool_kind),
                                      release_override=_release_override,
                                      kind=_pool_kind)
             except Exception as e:
