@@ -679,6 +679,35 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    has multiple same-language tracks (`list_candidates` de-dups by language code)
    -- that is task #31 (per-track items), which needs the real MKV TrackNumber
    plumbed to `resolve()` so it can target a specific same-language track.
+
+   **Embedded pool item: 100% + relabel-on-re-click (AI 0.2.403 / quickfix
+   0.1.442; notification #502):** two client-side (translate.py only) follow-ups
+   to the user seeing an embedded pool row with a BLANK % beside a regular "·
+   100%" sibling for the same release, and a re-click NOT relabeling the pooled
+   entry to embedded. (a) `list_candidates` now shows "100%" on the `ai_emb` row
+   -- it is gated to the EXACT source (`_emb_ok` -> TIER_EXACT), so 100% is exact,
+   not cosmetic (`release_match` returns TIER_EXACT iff pct==100). (b) An embedded
+   translation that hit the translation CACHE was contributed as plain `ai` and
+   its one-shot `.shared` marker then blocked any upgrade, so the pool row never
+   got the embedded label. Fix: a `_pool_marker(path, kind)` helper returns
+   `<path>.emb` for `ai_emb` (else the plain path); ALL THREE ai-contribute sites
+   (fresh upload, early-cache backfill, content-hash backfill) route through it,
+   so an embedded contribution tracks its OWN `.emb.shared` marker and can UPGRADE
+   a file already shared as plain `ai`/`ai_ar` (the Worker promotes a dedup-matched
+   entry to `ai_emb`, never downgrades) instead of being swallowed. Non-embedded
+   paths are byte-identical (`_pool_marker(p,'ai') == p`); the ktuvit
+   mirror/harvest markers are on the downloaded-sub files, not these cache paths,
+   so they're unaffected. **Two Sonnet rounds:** round 1 caught that only the
+   early-cache site had been patched -- the content-hash backfill (a real sibling
+   path this codebase's two-tier cache designs around) still swallowed the upgrade
+   (BLOCKER), plus a guaranteed redundant re-share round-trip because the
+   fresh-upload seeded only the plain marker; the single `_pool_marker` helper
+   applied at all three sites closes both. CONFIRMED-SAFE otherwise (% never a lie;
+   marker one-shot holds; kind precedence = `_pool_kind`; fail-open preserved).
+   **Correction to the prior handoff note:** the "pool drain stuck (28 items)"
+   theory for the missing label was WRONG -- embedded items DO reach the pool via
+   the direct `contribute_once` POST (the drain queue is a separate, unrelated
+   backlog); the real cause was the backfill kind, fixed here.
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
