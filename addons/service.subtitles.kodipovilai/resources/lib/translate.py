@@ -1209,7 +1209,7 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         # contending for the token -- so ABORT at once to hand the bandwidth and
         # request budget back and KEEP THE MOVIE ALIVE. A pause is not a stall.
         _STALL_ABORT_S = 8
-        _stall = {'t': None, 'since': None}
+        _stall = {'t': None, 'since': None, 'saw_pause': False}
 
         def _should_abort():
             try:
@@ -1220,7 +1220,26 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                     return True
                 if _x.getCondVisibility('Player.Paused'):
                     _stall['t'] = None
+                    _stall['saw_pause'] = True
                     return False
+                # Playing (not paused). If the user PAUSED to let extraction run
+                # and has now RESUMED, hand the debrid token back INSTANTLY: on a
+                # strict provider our crawl leaves the token rate-limited, and the
+                # player's first read on resume 429s and the movie closes (field
+                # log 78e1c97c) faster than the 8s stall guard below can react.
+                # Aborting on resume keeps the movie alive; extraction defers to
+                # the external path. (A never-paused, Real-Debrid-style extract
+                # during playback never sets saw_pause, so it is unaffected.)
+                # NOTE: Player.Paused can also read True during a seek or a
+                # buffering hiccup, so this may abort on those too -- that's
+                # acceptable (a seek is likewise a moment of extra contention for
+                # the same rate-limited token; the cost of over-aborting is only
+                # a clean defer to the external path).
+                if _stall['saw_pause']:
+                    kodi_utils.log('embedded: playback resumed after a pause -- '
+                                   'aborting extraction to free the debrid token '
+                                   'for the player', level='INFO')
+                    return True
                 now = _tt.time()
                 try:
                     cur = p.getTime()
