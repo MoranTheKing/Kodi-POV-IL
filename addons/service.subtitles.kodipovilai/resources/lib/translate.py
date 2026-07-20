@@ -1314,13 +1314,21 @@ def _embedded_aligned_source_srt(info, src_lang, progress_cb=None):
         # minutes while holding the token warm. On timeout we abort and defer to
         # the fallback, keeping this path genuinely FAST as designed.
         _ALIGN_DEADLINE_S = 45.0
+        # Headroom reserved at the END of the deadline for the fallback
+        # language(s): a picked language's exhaustive search YIELDS once it has
+        # consumed (deadline - reserve), so a picked language with many
+        # non-matching subs can't eat the whole clock and STARVE the reliable
+        # English fallback (which usually aligns on its first candidate). The last
+        # try-language has nothing after it, so it may use the full deadline.
+        _ALIGN_FALLBACK_RESERVE_S = 15.0
         # Search EXHAUSTIVELY: try every external subtitle candidate for a
         # language until one clears the sync gate. Release-NAME similarity is NOT
         # timing similarity, so a lower-ranked release can align to the embedded
         # skeleton better than the top name-match -- there is deliberately NO
         # download-count cap. The search is bounded instead by the 45s wall-clock
-        # deadline above (_abort, checked every candidate), the pause/playback-end
-        # abort, and the <=3-language read cap. The picked language is tried FIRST.
+        # deadline above (_abort, checked every candidate), the per-language
+        # yield-with-reserve just described, the pause/playback-end abort, and the
+        # <=3-language read cap. The picked language is tried FIRST.
 
         # Pause-aware abort (mirrors _extract_embedded_srt's resume guard): the
         # cue-index reads share the debrid token with the player, so if the user
@@ -1421,6 +1429,17 @@ def _embedded_aligned_source_srt(info, src_lang, progress_cb=None):
             for c in cands:
                 if _abort():
                     return None, None
+                # Yield to the fallback language(s) rather than eat the whole
+                # deadline on one language's many non-matching subs, so English
+                # still gets its turn. The LAST try-language has nothing after it,
+                # so it may run to the full deadline.
+                if (lang != try_langs[-1]
+                        and _time.time() - _t0
+                        > _ALIGN_DEADLINE_S - _ALIGN_FALLBACK_RESERVE_S):
+                    kodi_utils.log('embedded-align: [%s] search time budget '
+                                   'reached -- yielding to fallback language'
+                                   % lang, level='INFO')
+                    break
                 try:
                     src_text = subsync._download_oracle(c.get('payload'))
                 except Exception:
