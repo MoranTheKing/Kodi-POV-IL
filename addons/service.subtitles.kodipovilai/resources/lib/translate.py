@@ -257,6 +257,19 @@ def _lang_display(code):
     }.get(code, code or 'Unknown')
 
 
+def _lang_display_he(code):
+    """Hebrew language name for user-facing notifications (English name / the raw
+    code when unknown)."""
+    return {
+        'en': 'אנגלית', 'es': 'ספרדית', 'fr': 'צרפתית', 'de': 'גרמנית',
+        'pt': 'פורטוגזית', 'it': 'איטלקית', 'ru': 'רוסית', 'ar': 'ערבית',
+        'he': 'עברית', 'nl': 'הולנדית', 'sv': 'שוודית', 'da': 'דנית',
+        'no': 'נורווגית', 'fi': 'פינית', 'pl': 'פולנית', 'tr': 'טורקית',
+        'ja': 'יפנית', 'ko': 'קוריאנית', 'zh': 'סינית', 'el': 'יוונית',
+        'cs': 'צ׳כית', 'hi': 'הינדי', 'ro': 'רומנית', 'uk': 'אוקראינית',
+    }.get(code, _lang_display(code))
+
+
 def _source_id_for_ai(payload):
     """Stable identifier for one source SRT, used as part of the
     cache key. Local files get content-hashed because Kodi reuses
@@ -1301,6 +1314,21 @@ def _embedded_aligned_source_srt(info, src_lang, progress_cb=None):
         # minutes while holding the token warm. On timeout we abort and defer to
         # the fallback, keeping this path genuinely FAST as designed.
         _ALIGN_DEADLINE_S = 45.0
+        # Headroom reserved at the END of the deadline for the fallback
+        # language(s): a picked language's exhaustive search YIELDS once it has
+        # consumed (deadline - reserve), so a picked language with many
+        # non-matching subs can't eat the whole clock and STARVE the reliable
+        # English fallback (which usually aligns on its first candidate). The last
+        # try-language has nothing after it, so it may use the full deadline.
+        _ALIGN_FALLBACK_RESERVE_S = 15.0
+        # Search EXHAUSTIVELY: try every external subtitle candidate for a
+        # language until one clears the sync gate. Release-NAME similarity is NOT
+        # timing similarity, so a lower-ranked release can align to the embedded
+        # skeleton better than the top name-match -- there is deliberately NO
+        # download-count cap. The search is bounded instead by the 45s wall-clock
+        # deadline above (_abort, checked every candidate), the per-language
+        # yield-with-reserve just described, the pause/playback-end abort, and the
+        # <=3-language read cap. The picked language is tried FIRST.
 
         # Pause-aware abort (mirrors _extract_embedded_srt's resume guard): the
         # cue-index reads share the debrid token with the player, so if the user
@@ -1360,6 +1388,18 @@ def _embedded_aligned_source_srt(info, src_lang, progress_cb=None):
                            '-- deferring to full extract', level='INFO')
             return None, None
 
+        # Languages EXEMPT from the mid-search time-yield (they may run to the
+        # full deadline): English -- the reliable, most-available fallback, so it
+        # ALWAYS gets its shot even if the picked language's search ran long (NOT
+        # merely whichever language sits last, which would let an arbitrary 3rd
+        # language steal English's reserved time) -- and whichever language is
+        # processed LAST (nothing after it to reserve time for). Bounded to the
+        # <=3 languages actually processed (the reads cap), so a 4th+ never-read
+        # language can't become the sentinel. `_yield_after_s` floors at 1s so a
+        # future reserve>=deadline mis-edit can't collapse it to <=0.
+        _yield_exempt = {'en', try_langs[:3][-1]}
+        _yield_after_s = max(1.0, _ALIGN_DEADLINE_S - _ALIGN_FALLBACK_RESERVE_S)
+
         allow = kodi_utils.get_bool('embedded_http_extract', True)
         reads = 0                     # cap total head+Cues reads (bound cost)
         for lang in try_langs:
@@ -1393,10 +1433,24 @@ def _embedded_aligned_source_srt(info, src_lang, progress_cb=None):
 
             _p(60, 100, 'מסנכרן לפי הכתובית המובנית...' if lang == pref
                else 'מסנכרן ({0}) לפי הכתובית המובנית...'.format(lang))
-            # Try the best few release matches until one clears the gate.
-            for c in cands[:3]:
+            # Try EVERY release match for this language until one clears the gate
+            # -- a lower name-match can still be the best TIMING match. No
+            # download cap; _abort() (checked each iteration) enforces the 45s
+            # deadline + pause/playback-end so the exhaustive search can't hang
+            # the player.
+            for c in cands:
                 if _abort():
                     return None, None
+                # Yield to the fallback language(s) rather than eat the whole
+                # deadline on one language's many non-matching subs, so English
+                # still gets its turn. The LAST try-language has nothing after it,
+                # so it may run to the full deadline.
+                if (lang not in _yield_exempt
+                        and _time.time() - _t0 > _yield_after_s):
+                    kodi_utils.log('embedded-align: [%s] search time budget '
+                                   'reached -- yielding to the English/fallback '
+                                   'language' % lang, level='INFO')
+                    break
                 try:
                     src_text = subsync._download_oracle(c.get('payload'))
                 except Exception:
@@ -1797,6 +1851,21 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # The cross-language fallback may have aligned a different language
             # than the picked track (e.g. picked Spanish, no external Spanish ->
             # aligned English); translate from the language we ACTUALLY produced.
+            if _used_lang and _used_lang != _emb_lang:
+                # Tell the user plainly WHY the source language changed: no
+                # external subtitle in the picked language syncs to its embedded
+                # timeline (typically only CAM/other-release subs exist, whose
+                # cuts don't line up), so we used another language that does.
+                # Without this, a "from cache" for English after the user picked
+                # French/German reads like a bug rather than a graceful fallback.
+                try:
+                    kodi_utils.notify(
+                        'AI: אין כתובית מסונכרנת ב{0} — מתרגם מ{1}'.format(
+                            _lang_display_he(_emb_lang),
+                            _lang_display_he(_used_lang)),
+                        time_ms=5000)
+                except Exception:
+                    pass
             _emb_lang = _used_lang or _emb_lang
         else:
             _status('AI: מחלץ תרגום מובנה...', time_ms=3000)
