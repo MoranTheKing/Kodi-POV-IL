@@ -1,3 +1,11 @@
+v0.2.405
+- Embedded relabel now also fixes titles clicked on 0.2.403. That build wrote the
+  ai_emb one-shot marker WITHOUT actually posting the promote (its _post still had
+  the old dedup pre-check), so after updating, the relabel would have been skipped
+  forever for any title a 0.2.403 user already opened. The marker suffix is bumped
+  (.emb -> .emb2) so those stale markers are ignored and the promote fires exactly
+  once. No user action needed -- just re-pick "embedded translation" once.
+
 v0.2.404
 - Embedded pool relabel actually lands now. The community-pool "תרגום מובנה AI"
   upgrade could never reach the server: pool._post short-circuits the upload when
