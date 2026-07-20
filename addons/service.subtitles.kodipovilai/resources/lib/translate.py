@@ -1446,17 +1446,25 @@ def _embedded_aligned_source_srt(info, src_lang, progress_cb=None):
         _yield_after_s = max(1.0, _ALIGN_DEADLINE_S - _ALIGN_FALLBACK_RESERVE_S)
 
         allow = kodi_utils.get_bool('embedded_http_extract', True)
-        reads = 0                     # cap total head+Cues reads (bound cost)
-        for lang in try_langs:
-            if reads >= 3 or _abort():
+        # Read the embedded head + Cues index ONCE for the <=3 try-languages and
+        # slice each track's dense cue-time skeleton from it, instead of
+        # re-reading the head+Cues per language on the cross-language fallback
+        # (all tracks share ONE Cues index). The <=3 bound that used to cap the
+        # READS is now a track/language cap; the happy path -- the picked language
+        # aligns on its first candidate -- costs the SAME single read it always
+        # did, and a fallback across languages no longer pays ~1 read per language.
+        try_set = try_langs[:3]
+        _p(30, 100, 'קורא תזמון מובנה...')
+        times_by_lang = embedded_extract.cue_reference_times_multi(
+            url, try_set, allow_http=allow, abort_cb=_abort,
+            log=lambda m: kodi_utils.log('embedded-align: ' + m, level='INFO'))
+        for lang in try_set:
+            if _abort():
                 break
-            # DENSE embedded cue-time skeleton for THIS language's track (cheap:
-            # head + Cues only). [] when that track isn't per-cue indexed.
-            starts = embedded_extract.cue_reference_times(
-                url, lang=lang, allow_http=allow, abort_cb=_abort,
-                log=lambda m: kodi_utils.log('embedded-align: ' + m, level='INFO'))
-            reads += 1
-            if not starts or len(starts) < 8:
+            # DENSE embedded cue-time skeleton for THIS language's track, sliced
+            # from the single read above. [] when that track isn't per-cue indexed.
+            starts = times_by_lang.get(lang) or []
+            if len(starts) < 8:
                 continue
             n = len(starts)
             # Adapt flat start times -> {start,end}; synthesize a plausible end
