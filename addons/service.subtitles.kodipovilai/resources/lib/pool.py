@@ -441,7 +441,17 @@ def _post(body, marker_path=None):
     # source hash too, so this is purely to avoid sending an SRT that would be
     # discarded (and to suppress retries when another device already shared it).
     try:
-        if _pool_has_hash(body, (body.get('source_hash') or '').strip()):
+        # ai_emb (embedded-sourced) contributions must ALWAYS reach the Worker,
+        # even when this exact source is already in the pool: the Worker PROMOTES
+        # a dedup-matched 'ai' entry to 'ai_emb' (so it surfaces as "תרגום מובנה"),
+        # and that can only happen if it actually receives the ai_emb signal.
+        # Taking the normal dedup short-circuit here would swallow the promote and
+        # the embedded label would never appear. The per-file '.emb.shared' marker
+        # still makes this one-shot, and the Worker dedups by hash -- so no
+        # duplicate row is created, only the kind is upgraded.
+        if (body.get('kind') != 'ai_emb'
+                and _pool_has_hash(body,
+                                   (body.get('source_hash') or '').strip())):
             if marker_path:
                 mark_contributed(marker_path)
             return
@@ -1035,8 +1045,15 @@ def _post_sync(body):
       'retry' -> transient failure (network / 429 / 5xx): keep for next pass.
     Never raises."""
     # Cheap pre-check: already in the pool -> done, no upload (= no TG message).
+    # MIRRORS the bypass in _post(): ai_emb (embedded) contributions must reach
+    # the Worker so it can PROMOTE a dedup-matched entry to 'ai_emb', so they skip
+    # this short-circuit. Today only ktuvit reaches the durable queue -> this
+    # branch is defensive, but kept consistent with _post so a future author who
+    # routes ai_emb through the queue doesn't silently re-break the promote.
     try:
-        if _pool_has_hash(body, (body.get('source_hash') or '').strip()):
+        if (body.get('kind') != 'ai_emb'
+                and _pool_has_hash(body,
+                                   (body.get('source_hash') or '').strip())):
             return 'ok'
     except Exception:
         pass

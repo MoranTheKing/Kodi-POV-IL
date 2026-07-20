@@ -708,6 +708,44 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    theory for the missing label was WRONG -- embedded items DO reach the pool via
    the direct `contribute_once` POST (the drain queue is a separate, unrelated
    backlog); the real cause was the backfill kind, fixed here.
+
+   **Relabel actually reaches the Worker + exhaustive synced-source search (AI
+   0.2.404 / quickfix 0.1.443; notification #503):** the 0.2.403 relabel still
+   didn't land -- `pool._post` has a dedup PRE-CHECK (`if _pool_has_hash(...):
+   mark + return`) that skips the upload when the source is already pooled, so
+   the `ai_emb` "promote" signal never reached the Worker. Fix (pool.py): the
+   pre-check now bypasses for `kind == 'ai_emb'` (both `_post` AND its durable-
+   queue twin `_post_sync`, kept consistent so a future author routing embedded
+   through the queue can't re-break it); one-shot per file still holds via the
+   `.emb` marker, and the Worker dedups by hash so it PROMOTES rather than
+   duplicating. **pool.py is the SENSITIVE file: the repo copy carries a
+   PLACEHOLDER key (md5 5a7e487ddf83), the REAL key (802ba87a) lives only in the
+   release zips -- so the surgery NEVER swaps the repo pool.py; it SPLICES the
+   repo's edited CODE with the base zip's real key block and asserts (a) key md5
+   still 802ba87a, (b) the fix present in both sites, (c) a round-trip undo of the
+   key swap reproduces the repo file byte-for-byte, (d) it compiles.** translate.py
+   also: (1) a clear cross-language fallback notification (`_lang_display_he`:
+   "אין כתובית מסונכרנת ב<שפה> — מתרגם מ<שפה>") replacing a confusing "from cache"
+   when the picked language has no external sub that time-syncs (its only subs are
+   CAM/other-release, structurally mistimed -- the sync gate correctly rejects
+   them; alignment fixes a linear offset, not structural cut differences); (2)
+   EXHAUSTIVE candidate search -- tries EVERY external sub per language (was
+   capped at 3) until one syncs, NO download-count cap (user opted to search
+   exhaustively over protecting the provider quota), bounded by the 45s deadline +
+   abort + <=3-language read cap; stops immediately on the first sync (return),
+   so downloads = candidates-until-first-success, and each embedded-track click is
+   an INDEPENDENT attempt (the 3-language cap is the per-click FALLBACK chain, not
+   a global limit -- clicking N embedded tracks translates all N). (3) To stop the
+   exhaustive picked-language search from eating the whole 45s and starving the
+   reliable English fallback, a non-exempt language YIELDS (break to next) once it
+   has used `_ALIGN_DEADLINE_S - _ALIGN_FALLBACK_RESERVE_S` (30s); `_yield_exempt =
+   {'en', try_langs[:3][-1]}` exempts English EXPLICITLY (always gets its turn --
+   NOT merely the positionally-last language) plus the last actually-processed
+   language. **Four Sonnet rounds** (round 1: pool `_post` + message CONFIRMED;
+   round 2 caught that only the early-cache site was patched -- no, that was
+   0.2.403; here round 2 caught the exhaustive search could starve English -> added
+   reserve; round 3 caught the reserve's `try_langs[-1]` sentinel protected the
+   wrong language for 3+ langs -> exempt English explicitly; final CONFIRMED-SAFE).
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
