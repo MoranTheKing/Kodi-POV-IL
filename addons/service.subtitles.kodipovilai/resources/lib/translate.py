@@ -640,8 +640,17 @@ def list_candidates(info, modal_progress=True):
     _pool_variants = []
     _video_ref = ''
     if pool is not None and pool.use_enabled():
+        # Mirror the CONTRIBUTION-side release derivation (pool._release_from):
+        # it tries basename(li_filename) BEFORE basename(filepath), because on a
+        # debrid stream `filepath` is a tokenized URL while `li_filename`
+        # (ListItem.FileNameAndPath) carries the real release. Without li_filename
+        # here the lookup and the stored release could differ for the SAME file
+        # (when picked_release/tagline/label are all blank), which would make the
+        # embedded same-source gate wrongly hide the viewer's OWN item on replay.
         _video_ref = (info.get('picked_release') or info.get('tagline')
-                      or info.get('label') or os.path.basename(filepath)
+                      or info.get('label')
+                      or os.path.basename(info.get('li_filename') or '')
+                      or os.path.basename(filepath)
                       or info.get('title') or '')
         try:
             _pool_variants = pool.lookup(info)
