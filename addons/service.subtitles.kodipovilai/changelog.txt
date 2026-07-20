@@ -1,3 +1,16 @@
+v0.2.402
+- Embedded translation now works in EVERY language, not just the ones whose
+  2-letter code happens to prefix their 3-letter one. The picker hands a 2-letter
+  ISO 639-1 code (es, de, nl, ja, sv, el, zh, ...) but a Matroska track tags its
+  language with the 3-letter ISO 639-2/B code (spa, ger, dut, jpn, swe, gre,
+  chi, ...); the old prefix match silently failed for ~20 languages, so clicking
+  "embedded translation" in e.g. Spanish or German never found the right track,
+  fell through to English, and served English's cached Hebrew instead of a fresh
+  translation from the language you actually picked. Track selection now
+  canonicalizes both codes (ISO 639-1 / 639-2B / 639-2T) before matching, and no
+  longer hands back a lone English text track for a different-language request.
+  Fully fail-open: any miss still defers to the external-subtitle path.
+
 v0.2.378
 - Pool efficiency (client side): a single browse/play flow used to call the
   pool's /lookup several times for the same title (picker + sync_map + the
