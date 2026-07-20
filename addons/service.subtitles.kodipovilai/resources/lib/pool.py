@@ -1045,8 +1045,15 @@ def _post_sync(body):
       'retry' -> transient failure (network / 429 / 5xx): keep for next pass.
     Never raises."""
     # Cheap pre-check: already in the pool -> done, no upload (= no TG message).
+    # MIRRORS the bypass in _post(): ai_emb (embedded) contributions must reach
+    # the Worker so it can PROMOTE a dedup-matched entry to 'ai_emb', so they skip
+    # this short-circuit. Today only ktuvit reaches the durable queue -> this
+    # branch is defensive, but kept consistent with _post so a future author who
+    # routes ai_emb through the queue doesn't silently re-break the promote.
     try:
-        if _pool_has_hash(body, (body.get('source_hash') or '').strip()):
+        if (body.get('kind') != 'ai_emb'
+                and _pool_has_hash(body,
+                                   (body.get('source_hash') or '').strip())):
             return 'ok'
     except Exception:
         pass
