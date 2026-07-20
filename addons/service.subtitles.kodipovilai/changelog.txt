@@ -1,3 +1,11 @@
+v0.2.407
+- Embedded (תרגום מובנה) translations are now tracked on the owner dashboard.
+  They already run through the exact same AI + gender pipeline as every other
+  translation -- so they were always counted, just never MARKED as embedded.
+  Each AI translation now tags whether it was embedded-sourced, letting the
+  dashboard surface them in the recent feed, per-title, and in an embedded-only
+  gender-coverage view. Telemetry-only; no user-visible behaviour change.
+
 v0.2.406
 - Multiple embedded translations of the same title are now ordered by gender
   accuracy, and each shows the language it was translated FROM. Hebrew renders

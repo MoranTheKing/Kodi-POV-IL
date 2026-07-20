@@ -782,6 +782,53 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    tie-break-normalisation NITs applied). NOTE: "English last" is not literal --
    within the weak tier it's alphabetical (e.g. Dutch `nl` sorts after `en`); the
    design goal (gender-accurate sources FIRST) is what holds.
+
+   **Embedded translations on the owner dashboard (AI 0.2.407 / quickfix 0.1.446;
+   NO notification -- telemetry-only, no user-visible change; + a worker.js change
+   delivered OUT-OF-BAND):** embedded (`ai_emb`) translations uploaded to the pool
+   + Telegram fine but were invisible on the Worker's `/stats` dashboard, because
+   the dashboard is 100% telemetry-driven and (a) the telemetry `method` only ever
+   carried `ai_ar`/`ai_fallback`/`ai_plain` -- never an "embedded" marker -- and
+   (b) the add-on's cache-hit / pool-reuse paths emit no telemetry at all. (The
+   dashboard's pre-existing "embedded-Hebrew track lists" card is the unrelated
+   `emb:` registry of releases that SHIP a built-in Hebrew track, not ai_emb
+   translations.) Two coordinated mechanisms:
+   - **Telemetry-integrated (client + worker):** `translate.py` tags each AI
+     translation's telemetry event with `emb` (`1 if _pool_kind == 'ai_emb'`).
+     Embedded runs the SAME AI+gender pipeline, so it was always counted in the
+     method/recent/title stats -- this just MARKS it. worker.js: `emb INTEGER`
+     column on `tr_events` (schema ALTER + evStmt, 26/26/26); rollup folds it
+     (`ROLL_SCHEMA` 4->5 forces a bounded rebuild; `emb:{n,oks,m}` accumulator +
+     per-title `emb` (ok-gated) + `recTail` flag); renders a "מובנה" badge in
+     Recent activity, an `emb` column in Top titles, and a "Gender coverage ·
+     embedded only" subsection. Current-builds-forward (past rows were never
+     tagged; can't backfill telemetry).
+   - **Pool-derived (worker only, backfills history):** an `emb_stats` KV blob
+     maintained in `contributeCore` on fresh-store + ai->ai_emb promote (deduped
+     by Telegram `file_id`; guarded so a `ktuvit` variant is never counted;
+     best-effort read-modify-write, same race class as the `up:` counters);
+     `GET /backfill-emb?key=<STATS_TOKEN>[&reset=1]` seeds it EXACTLY from the
+     existing `v1:` pool keys (paginate via `after` cursor to `done`). Feeds a
+     dedicated "Embedded translations" section (total / by-source-language /
+     movies-vs-episodes / top titles / recent). Backfilled history is
+     release-labeled (the pool variant never stored a title) -- counts exact,
+     labels coarser.
+   pool.py UNCHANGED -> INHERITED byte-identical from the 0.2.406 base (real key
+   802ba87a + the ai_emb bypass; asserted). THREE Sonnet rounds: round 1 caught a
+   ts ms-vs-seconds render bug (pool `variant.ts` is `Date.now()` ms, dashboard
+   renders seconds -> year-58000 timestamps) + blob-size caps; round 2 (full set)
+   caught a **stored-XSS BLOCKER** -- attacker-controlled `season`/`episode` from a
+   `/contribute` body reached the owner's `/stats` HTML unescaped via `ep()`
+   (STATS_TOKEN exfiltration); fixed by digit-restricting them at the fold sink
+   AND `esc()`-ing them in `ep()`. Round 3 CONFIRMED-SAFE (no second sink). Tests:
+   41 helper assertions + a 15-assertion render smoke test (mock D1/KV through the
+   real updateRoll+renderStats). **worker.js redeploys to Cloudflare separately;
+   after deploy, hit `/backfill-emb?key=...&reset=1` once (follow `after` to
+   `done`) to seed history, then `/stats?key=...` shows it (backfill clears the
+   HTML cache on completion).** Open (pre-existing, out of scope): `/web-upload`'s
+   client-side TMDB-search dropdown builds `innerHTML` from TMDB-API titles
+   (different threat model; not attacker `/contribute` data; doesn't touch
+   STATS_TOKEN).
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 

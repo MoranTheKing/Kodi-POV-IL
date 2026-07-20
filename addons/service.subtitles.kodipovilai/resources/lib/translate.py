@@ -2551,6 +2551,13 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 'year': str(info.get('year') or ''),
                 'src': source_lang or '',
                 'method': method,
+                # Embedded-sourced (translated from the video's OWN subtitle
+                # track -> pooled as 'ai_emb'). It still goes through the exact
+                # same AI + gender pipeline, so `method` above is its real
+                # gender path; this flag just lets the dashboard mark it as
+                # "תרגום מובנה" wherever it already appears (recent / by-method /
+                # top titles), without splitting it out of the method stats.
+                'emb': 1 if _pool_kind == 'ai_emb' else 0,
                 'reason': reason,
                 'ar_cands': int(_ar_diag.get('cands') or 0),
                 'dur': max(0, int(time.time() - _t0)),
