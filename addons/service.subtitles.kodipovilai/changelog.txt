@@ -1,3 +1,23 @@
+v0.2.404
+- Embedded pool relabel actually lands now. The community-pool "תרגום מובנה AI"
+  upgrade could never reach the server: pool._post short-circuits the upload when
+  the source is already pooled (dedup), so the ai_emb "promote" signal was
+  swallowed and the entry stayed labeled plain AI. ai_emb contributions now
+  bypass that pre-check (still one-shot per file via the .emb marker; the server
+  dedups by hash, so no duplicate row -- only the kind is upgraded). Requires the
+  pool worker's promote logic (already deployed).
+- Clearer cross-language fallback message. When you pick an embedded track in a
+  language whose only external subtitles are CAM/other-release (they don't sync
+  to the embedded timeline and are correctly rejected), the add-on falls back to
+  a language that does sync (usually English) and now says so explicitly ("אין
+  כתובית מסונכרנת ב<שפה> — מתרגם מ<שפה>") instead of a confusing "from cache".
+- Exhaustive synced-source search. When you pick an embedded track, the aligner
+  now tries EVERY external subtitle candidate for a language (was capped at 3)
+  until one syncs -- release-NAME similarity isn't timing similarity, so a
+  lower-ranked release can be the best timing match. No download cap; the search
+  is bounded only by the existing 45s time ceiling (and pause/stop), and the
+  picked language is searched first.
+
 v0.2.403
 - Embedded pool item polish. The community-pool "תרגום מובנה AI" row is surfaced
   only for your EXACT source, so it now shows "100%" (like the regular AI rows)
