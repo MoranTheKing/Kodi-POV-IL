@@ -270,6 +270,29 @@ def _lang_display_he(code):
     }.get(code, _lang_display(code))
 
 
+# Source-language gender-marking strength, for ordering embedded pool
+# translations by gender accuracy. Hebrew renders speaker gender ("אני עייף/
+# עייפה"); the gender-reference chain covers most lines, but on the lines it
+# doesn't, the AI falls back to the SOURCE text's own gender. A source that marks
+# speaker gender on verbs/adjectives (Semitic, Romance, Slavic, Indo-Aryan) gets
+# those right; English/German/Dutch don't mark PREDICATIVE gender ("I'm tired" /
+# "Ich bin müde" carry none) and must guess -> so a strong-gender source is more
+# gender-accurate and is shown FIRST among same-source embedded items.
+_GENDER_STRONG_SRC = frozenset((
+    'ar', 'he',                                       # Semitic
+    'es', 'fr', 'it', 'pt', 'ro', 'ca', 'gl',         # Romance
+    'ru', 'uk', 'pl', 'cs', 'sk', 'sr', 'hr', 'bg',   # Slavic
+    'sl', 'be',
+    'hi', 'ur', 'pa', 'mr', 'gu', 'bn',               # Indo-Aryan
+))
+
+
+def _gender_src_rank(source_lang):
+    """0 for a source language that marks speaker gender (best Hebrew gender on
+    reference-gap lines), 1 for weakly/non-gendered (en/de/nl/...). Lower first."""
+    return 0 if (source_lang or 'en').strip().lower()[:2] in _GENDER_STRONG_SRC else 1
+
+
 def _source_id_for_ai(payload):
     """Stable identifier for one source SRT, used as part of the
     cache key. Local files get content-hashed because Kodi reuses
@@ -776,7 +799,13 @@ def list_candidates(info, modal_progress=True):
         rel = _pool_release(v)
         pct = _match_pct(_video_ref, rel) if rel else 0
         is_emb = (v.get('kind') or '') == 'ai_emb'
-        return (0 if is_emb else 1, -pct)
+        # Embedded items lead (0). Among the (tied at 100%) embedded items for
+        # THIS source, order by the source language's gender strength -- the most
+        # gender-accurate first (strong-gender sources before English) -- then a
+        # deterministic tie-break on source lang. Regular AI items keep ordering
+        # by match % (g held constant so it's a no-op for them).
+        g = _gender_src_rank(v.get('source_lang')) if is_emb else 1
+        return (0 if is_emb else 1, g, -pct, (v.get('source_lang') or '').lower())
 
     for v in sorted(_ai_variants, key=_ai_sort_key):
         if not _emb_ok(v):
@@ -785,13 +814,14 @@ def list_candidates(info, modal_progress=True):
         release = _pool_release(v)
         if (v.get('kind') or '') == 'ai_emb':
             # Embedded is surfaced ONLY for the EXACT source (_emb_ok ->
-            # TIER_EXACT), so it is a 100% match by definition. Show 100%
-            # (rather than a blank) so it reads consistently beside the regular
-            # AI pool items -- an embedded translation of your own release, shown
-            # with no %, looked broken next to a "· 100%" sibling for the same
-            # release.
-            label = ('תרגום מובנה AI · מאגר קהילתי · 100%  —  {0}'.format(release)
-                     if release else 'תרגום מובנה AI · מאגר קהילתי · 100%')
+            # TIER_EXACT), so it is a 100% match by definition -> show 100%. Also
+            # name the SOURCE language it was translated FROM: among several
+            # embedded translations of the same release the list is ordered by
+            # that language's gender accuracy (strong-gender first), so showing it
+            # makes the order legible ("מובנה AI (ספרדית)" ranks above "(אנגלית)").
+            _slh = _lang_display_he((v.get('source_lang') or 'en').strip().lower()[:2])
+            _emb_base = 'תרגום מובנה AI ({0}) · מאגר קהילתי · 100%'.format(_slh)
+            label = ('{0}  —  {1}'.format(_emb_base, release) if release else _emb_base)
         else:
             pct = _match_pct(_video_ref, release) if release else 0
             # Only show a % when we actually have a meaningful match (a 0% almost
