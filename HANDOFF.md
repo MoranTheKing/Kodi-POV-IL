@@ -534,6 +534,29 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    This is orthogonal to the bandwidth question above: it makes extraction
    *start* on files that previously failed instantly; a strict provider may
    still stall mid-extract on bandwidth, which is still the open item.
+
+   **Debrid safety layer (AI 0.2.397 / quickfix 0.1.436):** the track fix let
+   extraction START on TorBox (log 78e1c97c: 1688 cues), but it then crawled
+   ~2min delivering nothing while TorBox 429'd every request, holding the token
+   hot; the moment the user unpaused, the PLAYER's own read 429'd and the movie
+   closed. Two Sonnet-validated safety fixes: (a) `embedded_extract.py` fail-fast
+   -- `_HTTP_429_STREAK_MAX=6` consecutive 429-needing fetches trip the breaker
+   (~20s) instead of a 2-min hot-token crawl; a clean fetch resets the streak so
+   Real-Debrid never trips (known gap: a perfectly alternating 429/clean pattern
+   never trips -- a ratio counter is the future hardening). (b) `translate.py`
+   `_should_abort` aborts the instant playback RESUMES after a pause (`saw_pause`
+   latch), handing the token back before the player starves -- the 8s stall guard
+   was too slow (player died ~1s after resume). These make the failure fast+clean
+   and stop the movie-close; they do NOT make extraction SUCCEED on TorBox.
+   **Root cause is now definitive: TorBox rate-limits the token by REQUEST COUNT,
+   hard -- ~1700 sequential range requests is hopeless there, paused or playing.
+   Real-Debrid (the friend's setup) has no such limit, which is why it works for
+   him on both Android and PC.** Maintainer's chosen direction: make it fast AND
+   fill in progressively (like the live AI translation). Next: study the friend's
+   working extractor files (uploaded: sources.py / align_stage / srt_utils /
+   update_*.zip) then build either multipart-batched range reads (~34 reqs
+   instead of 1700, done while paused) or playhead-synced progressive extraction.
+   See tasks #29/#33.
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
