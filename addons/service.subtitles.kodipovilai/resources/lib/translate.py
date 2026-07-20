@@ -257,6 +257,19 @@ def _lang_display(code):
     }.get(code, code or 'Unknown')
 
 
+def _lang_display_he(code):
+    """Hebrew language name for user-facing notifications (English name / the raw
+    code when unknown)."""
+    return {
+        'en': 'אנגלית', 'es': 'ספרדית', 'fr': 'צרפתית', 'de': 'גרמנית',
+        'pt': 'פורטוגזית', 'it': 'איטלקית', 'ru': 'רוסית', 'ar': 'ערבית',
+        'he': 'עברית', 'nl': 'הולנדית', 'sv': 'שוודית', 'da': 'דנית',
+        'no': 'נורווגית', 'fi': 'פינית', 'pl': 'פולנית', 'tr': 'טורקית',
+        'ja': 'יפנית', 'ko': 'קוריאנית', 'zh': 'סינית', 'el': 'יוונית',
+        'cs': 'צ׳כית', 'hi': 'הינדי', 'ro': 'רומנית', 'uk': 'אוקראינית',
+    }.get(code, _lang_display(code))
+
+
 def _source_id_for_ai(payload):
     """Stable identifier for one source SRT, used as part of the
     cache key. Local files get content-hashed because Kodi reuses
@@ -1797,6 +1810,21 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # The cross-language fallback may have aligned a different language
             # than the picked track (e.g. picked Spanish, no external Spanish ->
             # aligned English); translate from the language we ACTUALLY produced.
+            if _used_lang and _used_lang != _emb_lang:
+                # Tell the user plainly WHY the source language changed: no
+                # external subtitle in the picked language syncs to its embedded
+                # timeline (typically only CAM/other-release subs exist, whose
+                # cuts don't line up), so we used another language that does.
+                # Without this, a "from cache" for English after the user picked
+                # French/German reads like a bug rather than a graceful fallback.
+                try:
+                    kodi_utils.notify(
+                        'AI: אין כתובית מסונכרנת ב{0} — מתרגם מ{1}'.format(
+                            _lang_display_he(_emb_lang),
+                            _lang_display_he(_used_lang)),
+                        time_ms=5000)
+                except Exception:
+                    pass
             _emb_lang = _used_lang or _emb_lang
         else:
             _status('AI: מחלץ תרגום מובנה...', time_ms=3000)
