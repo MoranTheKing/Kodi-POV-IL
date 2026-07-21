@@ -962,8 +962,9 @@ def list_candidates(info, modal_progress=True):
         for c in _emb_by_lang.get(code, []):
             results.append(_clean(c))
         # Then the foreign subs of this language. Annotate each with SDH-ness
-        # (provider hearing-impaired flag or a whole-token 'SDH' release marker),
-        # then order SDH FIRST -- an SDH sub has the complete dialogue + speaker
+        # (a whole-token 'SDH' release marker, or a content-detected release --
+        # NOT the provider's unreliable hearing-impaired flag), then order SDH
+        # FIRST -- an SDH sub has the complete dialogue + speaker
         # labels, the best source for AI gender accuracy -- and within that by
         # best match %. Decode the engine link ONCE here (reused below).
         _lang_cands = []

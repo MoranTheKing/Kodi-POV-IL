@@ -195,17 +195,21 @@ def fix_rtl_punctuation(text, mode=None):
         return text
     trailing_nl = '\n' if text.endswith(('\n', '\r')) else ''
     out_lines = []
+    cue_hebrew = False   # did an earlier text line of THIS cue carry Hebrew?
     for line in text.splitlines():
         stripped = line.strip()
         if not stripped or _INDEX_RE.match(stripped) or \
                 _TIMECODE_RE.match(stripped):
             out_lines.append(line)
+            cue_hebrew = False   # blank / index / timecode = cue boundary
             continue
+        if _HEB_LETTER_RE.search(stripped):
+            cue_hebrew = True
         if mode == 'legacy':
             out_lines.append(_fix_one_text_line(line))
         else:
             # 'reverse' (default) or anything unrecognised
-            out_lines.append(_reverse_fix_one_text_line(line))
+            out_lines.append(_reverse_fix_one_text_line(line, cue_hebrew=cue_hebrew))
     return '\n'.join(out_lines) + trailing_nl
 
 
@@ -230,15 +234,34 @@ _REVERSE_DASHED_LEADING_PUNCT_RE = re.compile(
 )
 
 
+# A line that carries a Hebrew letter (used to tell a Hebrew-cue continuation
+# line from a genuinely standalone Latin line).
+_HEB_LETTER_RE = re.compile('[' + _HEB_LETTER + ']')
+# End-of-line sentence punctuation with NO Hebrew-in-line requirement. Only used
+# for the Latin-continuation case below (guarded by cue_hebrew), so it never
+# touches a standalone Latin line.
+_LATIN_TAIL_PUNCT_RE = re.compile(
+    r'^(?P<pre>.*?[^' + _TRAILING_PUNCT_CHARS + r'\s])'
+    r'(?P<trailing>[' + _TRAILING_PUNCT_CHARS + r']+)'
+    r'(?P<close_tags>(?:</[a-zA-Z][^>]*>)*)\s*$'
+)
+
+
 def _reverse_dash_suffix(dash):
     return ' -' if dash else ''
 
 
-def _reverse_fix_one_text_line(line):
+def _reverse_fix_one_text_line(line, cue_hebrew=False):
     """Move END-of-line punctuation to the START. Used by the
     'reverse' rtl_punct_mode for Kodi setups whose subtitle
     renderer doesn't BiDi-reorder Hebrew lines and shows source
-    text in physical L-to-R order."""
+    text in physical L-to-R order.
+
+    `cue_hebrew` is True when an EARLIER line of the same cue carried Hebrew.
+    It only enables the Latin-continuation case below (a sentence-ending punct
+    that wrapped onto a Latin-only line of a Hebrew cue, e.g. a username
+    'Modelbehavior36.' on its own line); it never affects a standalone Latin
+    line (cue_hebrew stays False there)."""
     stripped = line.strip()
     while stripped and stripped[0] in _INVISIBLE_BIDI:
         stripped = stripped[1:]
@@ -256,6 +279,19 @@ def _reverse_fix_one_text_line(line):
             return open_tags + leading + rest + close_tags + ' -'
     m = _TRAILING_PUNCT_RE.match(stripped)
     if not m:
+        # Latin-continuation: the Hebrew cue's sentence-ending punct wrapped
+        # onto a line that is itself Latin-only, so the Hebrew-requiring match
+        # above skipped it. Move that trailing punct to the line start the same
+        # way -- ONLY inside a Hebrew cue (cue_hebrew) and only when the line has
+        # no Hebrew of its own, so a genuinely standalone Latin line is untouched.
+        if cue_hebrew and not _HEB_LETTER_RE.search(stripped):
+            lm = _LATIN_TAIL_PUNCT_RE.match(stripped)
+            if lm:
+                pre = lm.group('pre') or ''
+                lat_trailing = lm.group('trailing')
+                lat_close = lm.group('close_tags') or ''
+                if pre and pre[0] not in _TRAILING_PUNCT_CHARS:
+                    return lat_trailing + pre + lat_close
         if stripped != line.strip():
             return stripped
         return line
