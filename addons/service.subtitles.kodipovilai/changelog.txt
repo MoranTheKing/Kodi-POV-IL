@@ -1,3 +1,10 @@
+v0.2.410
+- Idan Plus self-heal now runs FIRST at startup (before any other build repair),
+  so a corrupt channel file is healed before you can navigate to the addon.
+- Fixed the quick-update notification popup: the notification file had two
+  entries, and the wizard's parser expects exactly one, so it raised
+  "too many values to unpack" and showed no notification. Back to a single entry.
+
 v0.2.409
 - Idan Plus (עידן פלוס): fixed the failure where no channel loaded or played and
   nothing was even shown. idanplus keeps its channel map in displayChannels.json
