@@ -293,6 +293,32 @@ def _gender_src_rank(source_lang):
     return 0 if (source_lang or 'en').strip().lower()[:2] in _GENDER_STRONG_SRC else 1
 
 
+def _is_sdh_ext(cand, release):
+    """True when an EXTERNAL subtitle is hearing-impaired / SDH: the provider's
+    own flag, or a WHOLE-TOKEN 'sdh' / 'hearing impaired' marker in the release
+    name. NEVER a bare substring -- 'hi' inside 'Highlander' / 'cc' inside
+    'Soccer' must not match; bare 'hi'/'cc' are not markers at all (too
+    ambiguous). SDH subs carry the full dialogue + speaker labels, so they are
+    the most complete source and (with speaker-gender harvesting) the most
+    gender-accurate. Best-effort; never raises."""
+    try:
+        if cand and cand.get('is_hi'):
+            return True
+    except Exception:
+        pass
+    try:
+        from . import release_match
+        toks = release_match.tokens(release or '')
+    except Exception:
+        return False
+    if 'sdh' in toks:
+        return True
+    for i in range(len(toks) - 1):
+        if toks[i] == 'hearing' and toks[i + 1] == 'impaired':
+            return True
+    return False
+
+
 def _source_id_for_ai(payload):
     """Stable identifier for one source SRT, used as part of the
     cache key. Local files get content-hashed because Kodi reuses
@@ -917,12 +943,20 @@ def list_candidates(info, modal_progress=True):
         # Built-in (embedded) track of this language -> top of its group.
         for c in _emb_by_lang.get(code, []):
             results.append(_clean(c))
-        # Then the foreign subs of this language, best match % first.
-        for c in sorted(_ai_by_lang.get(code, []),
-                        key=lambda x: -x.get('_pct', 0)):
+        # Then the foreign subs of this language. Annotate each with SDH-ness
+        # (provider hearing-impaired flag or a whole-token 'SDH' release marker),
+        # then order SDH FIRST -- an SDH sub has the complete dialogue + speaker
+        # labels, the best source for AI gender accuracy -- and within that by
+        # best match %. Decode the engine link ONCE here (reused below).
+        _lang_cands = []
+        for c in _ai_by_lang.get(code, []):
+            _s = _decode_link(c.get('link') or '') or {}
+            _sdh = _is_sdh_ext(c, _s.get('filename') or '')
+            _lang_cands.append((c, _s, _sdh))
+        _lang_cands.sort(key=lambda t: (not t[2], -t[0].get('_pct', 0)))
+        for c, src, _sdh in _lang_cands:
             pct = c.get('_pct', 0)
             if ai_translation_on:
-                src = _decode_link(c.get('link') or '')
                 if not src or src.get('type') != 'engine':
                     continue
                 src = dict(src)
@@ -930,16 +964,25 @@ def list_candidates(info, modal_progress=True):
                 src['src_lang'] = code
                 rel = src.get('filename') or code
                 have_hebrew = True
+                # SDH items are tagged so the user knows they're the best pick for
+                # זכר/נקבה accuracy (complete dialogue + speaker labels).
+                _label = ('תרגום AI לעברית · SDH (מדויק למגדר) · {0}%  —  {1}'
+                          if _sdh else
+                          'תרגום AI לעברית · {0}%  —  {1}').format(pct, rel)
                 results.append({
-                    'filename': 'תרגום AI לעברית · {0}%  —  {1}'.format(pct, rel),
+                    'filename': _label,
                     'language': code,
                     'link': _encode_link(src),
                     'sync': 'false',
                     'rating': c.get('rating', '3'),
+                    # NOT is_hi: the DELIVERED Hebrew is plain dialogue (the HI
+                    # brackets/sound cues are stripped before translation), so
+                    # Kodi's hearing_imp badge would mislabel it. The SDH signal
+                    # for the user is the label text above, not this flag.
                     'is_hi': False, 'is_hd': False,
                 })
             else:
-                # Opt-out: deliver the raw foreign sub as-is.
+                # Opt-out: deliver the raw foreign sub as-is (SDH still sorts first).
                 results.append(_clean(c))
 
     skip_when_hebrew = kodi_utils.get_bool('skip_if_hebrew', True)
@@ -1446,17 +1489,30 @@ def _embedded_aligned_source_srt(info, src_lang, progress_cb=None):
         _yield_after_s = max(1.0, _ALIGN_DEADLINE_S - _ALIGN_FALLBACK_RESERVE_S)
 
         allow = kodi_utils.get_bool('embedded_http_extract', True)
-        reads = 0                     # cap total head+Cues reads (bound cost)
-        for lang in try_langs:
-            if reads >= 3 or _abort():
+        # Read the embedded head + Cues index ONCE for the <=3 try-languages and
+        # slice each track's dense cue-time skeleton from it, instead of
+        # re-reading the head+Cues per language on the cross-language fallback
+        # (all tracks share ONE Cues index). The <=3 bound that used to cap the
+        # READS is now a track/language cap; the happy path -- the picked language
+        # aligns on its first candidate -- costs the SAME single read it always
+        # did, and a fallback across languages no longer pays ~1 read per language.
+        try_set = try_langs[:3]
+        # Abort BEFORE the read (the old per-language loop checked _abort() ahead
+        # of every read): if the deadline already passed, or playback ended, or
+        # the user resumed during the candidate scan above, do zero network reads.
+        if _abort():
+            return None, None
+        _p(30, 100, 'קורא תזמון מובנה...')
+        times_by_lang = embedded_extract.cue_reference_times_multi(
+            url, try_set, allow_http=allow, abort_cb=_abort,
+            log=lambda m: kodi_utils.log('embedded-align: ' + m, level='INFO'))
+        for lang in try_set:
+            if _abort():
                 break
-            # DENSE embedded cue-time skeleton for THIS language's track (cheap:
-            # head + Cues only). [] when that track isn't per-cue indexed.
-            starts = embedded_extract.cue_reference_times(
-                url, lang=lang, allow_http=allow, abort_cb=_abort,
-                log=lambda m: kodi_utils.log('embedded-align: ' + m, level='INFO'))
-            reads += 1
-            if not starts or len(starts) < 8:
+            # DENSE embedded cue-time skeleton for THIS language's track, sliced
+            # from the single read above. [] when that track isn't per-cue indexed.
+            starts = times_by_lang.get(lang) or []
+            if len(starts) < 8:
                 continue
             n = len(starts)
             # Adapt flat start times -> {start,end}; synthesize a plausible end
