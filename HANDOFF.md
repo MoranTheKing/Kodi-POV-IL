@@ -1041,6 +1041,27 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
      mid-line under `rtl_base` -- the dash is fixed but the "..." placement is the
      same imperfection as 0.2.415, since `_ELLIPSIS_RE` can't tell a genuine
      leading ellipsis from a relocated one.
+   **Large-source translate fix + progress logging (AI 0.2.417 / quickfix
+   0.1.456; notif #515):** a user reported clicking embedded (SDH) translation --
+   the "AI מתרגם" toast showed but NO Hebrew ever appeared. Log trace: the thread
+   logged `Starting translation src_len=152554` (a 152KB SDH source) then went
+   totally silent -- translate.py had NO per-chunk logging, so the run was a black
+   box; the result was discarded as empty/echoed. Leading cause: with
+   `whole_subtitle_request` ON, a 152KB source goes as ONE Gemini request whose
+   Hebrew output overflows the 65535-token cap -> truncated -> whole result
+   dropped as empty, and whole-request mode shows no progressive display. Fix in
+   translate.py: (1) after reading `whole_subtitle_request`, if it is ON and
+   `len(src_text) > 80000`, log a WARNING and force `whole_subtitle_request=False`
+   (fall back to chunked -- the guard sits before ALL downstream uses so it
+   cascades: max_output_tokens 16384, chunk_blocks, parallel, prev_context, and
+   per-chunk `progressive_cb` all re-enable). (2) Added a dispatch-summary INFO log
+   (chunk count / mode / parallel / paid / src_len) + a first-chunk-returned log,
+   so a future stall is diagnosable from the log. NOTE: the whole-request cause is
+   a HYPOTHESIS (the reporter's exact settings were unknown); the change is a safe
+   guard + observability either way -- if the guess is wrong, the new logs pin the
+   real cause (the same session's log also showed heavy network contention: TorBox
+   CDN streaming + 28 stuck pool uploads, which can starve the Gemini API calls).
+   Sonnet: SHIP-READY (cascade correct, no regression, progressive re-enabled).
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
