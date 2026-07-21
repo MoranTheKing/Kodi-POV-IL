@@ -303,7 +303,7 @@ msgid "RTL punctuation fix direction"
 msgstr "RTL punctuation fix direction"
 
 msgctxt "#32223"
-msgid "How to handle Hebrew end-of-sentence punctuation. Default 'reverse' moves trailing punct to the line start -- correct for Kodi setups that render source order without BiDi reorder (the observed default behaviour across Windows / Android / FENtastic). 'legacy' is the previous default (move leading punct to end) -- only use it if 'reverse' produces wrong output on your particular setup. 'off' disables the post-processor entirely."
+msgid "How to handle Hebrew end-of-sentence punctuation. Default 'reverse' moves trailing punct to the line start -- correct for Kodi setups that render source order without BiDi reorder (the observed default behaviour across Windows / Android / FENtastic). 'rtl_base' instead wraps each Hebrew line in an explicit right-to-left embedding so the renderer's own BiDi places punctuation, numbers, English names and parentheses correctly -- a root-cause fix, but depends on your renderer honouring the marks, so try it and check. 'legacy' is the previous default (move leading punct to end). 'off' disables the post-processor entirely."
 msgstr ""
 
 msgctxt "#32224"
@@ -317,6 +317,10 @@ msgstr "Reverse (move to start - default, correct on most setups)"
 msgctxt "#32226"
 msgid "Off (no punctuation processing)"
 msgstr "Off (no punctuation processing)"
+
+msgctxt "#32227"
+msgid "RTL base (wrap lines RTL - fixes numbers/English/parentheses too; try + verify)"
+msgstr "RTL base (wrap lines RTL - fixes numbers/English/parentheses too; try + verify)"
 
 msgctxt "#32500"
 msgid "Community pool"
