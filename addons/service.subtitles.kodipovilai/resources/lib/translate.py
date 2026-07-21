@@ -975,7 +975,11 @@ def list_candidates(info, modal_progress=True):
                     'link': _encode_link(src),
                     'sync': 'false',
                     'rating': c.get('rating', '3'),
-                    'is_hi': bool(_sdh), 'is_hd': False,
+                    # NOT is_hi: the DELIVERED Hebrew is plain dialogue (the HI
+                    # brackets/sound cues are stripped before translation), so
+                    # Kodi's hearing_imp badge would mislabel it. The SDH signal
+                    # for the user is the label text above, not this flag.
+                    'is_hi': False, 'is_hd': False,
                 })
             else:
                 # Opt-out: deliver the raw foreign sub as-is (SDH still sorts first).
