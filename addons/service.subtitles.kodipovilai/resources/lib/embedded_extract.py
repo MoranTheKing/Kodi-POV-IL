@@ -1235,7 +1235,10 @@ def extract_srt(url_or_path, track_num=None, lang=None,
         subs = _sub_tracks(tracks)
         if not subs:
             return None
-        track = _pick_track(subs, track_num, lang)
+        # We translate THIS track's own text, so prefer an SDH track: it carries
+        # the complete dialogue. (The cue_reference_times* callers deliberately do
+        # NOT prefer SDH -- there the track is only a timing skeleton.)
+        track = _pick_track(subs, track_num, lang, prefer_sdh=True)
         if track is None:
             _log('no matching text track (num=%s lang=%s)' % (track_num, lang))
             return None
@@ -1368,7 +1371,15 @@ def _track_is_sdh(t):
     return bool(t.get('hearing_impaired')) or _name_is_sdh(t.get('name'))
 
 
-def _pick_track(subs, track_num, lang):
+def _pick_track(subs, track_num, lang, prefer_sdh=False):
+    # prefer_sdh: order an SDH/hearing-impaired track FIRST among equally-tagged
+    # matches. Turn it on ONLY when the track's own TEXT is what we translate
+    # (extract_srt) -- SDH carries the complete dialogue. Keep it OFF (default)
+    # when the track is used merely as a TIMING skeleton to align an EXTERNAL sub
+    # (cue_reference_times*): an SDH track's extra sound-description cues have no
+    # match in a plain external subtitle and would only depress the align overlap/
+    # vote ratios, risking a previously-synced sub failing the gate.
+    _sdh_key = ((lambda t: not _track_is_sdh(t)) if prefer_sdh else (lambda t: 0))
     if track_num is not None:
         for t in subs:
             if t['num'] == track_num:
@@ -1409,7 +1420,7 @@ def _pick_track(subs, track_num, lang):
         # complete dialogue, so it translates more fully (and, later, is the best
         # gender source); (3) then track order.
         cand.sort(key=lambda t: (not t.get('lang_explicit', True),
-                                 not _track_is_sdh(t), t['num']))
+                                 _sdh_key(t), t['num']))
         if cand:
             return cand[0]
         # No language match. When the file carries exactly ONE non-forced text
@@ -1439,7 +1450,7 @@ def _pick_track(subs, track_num, lang):
                 return only
         return None
     cand = [t for t in subs if _is_text_codec(t['codec']) and not t['forced']]
-    cand.sort(key=lambda t: (not _track_is_sdh(t), t['num']))   # SDH first, then order
+    cand.sort(key=lambda t: (_sdh_key(t), t['num']))   # SDH first (if prefer_sdh), then order
     return cand[0] if cand else None
 
 
