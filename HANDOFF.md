@@ -923,6 +923,27 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    addon (was ~35 steps in). Only service.py + changelog changed in the addon;
    idanplus_channels_patcher.py + srt.py + translate.py + pool.py +
    embedded_extract.py inherited byte-identical (pool key 802ba87a preserved).
+
+   **SDH Phase 3: content-based SDH classification (AI 0.2.411 / quickfix
+   0.1.450; notification #509):** an SDH sub is now also recognised from its
+   TEXT, not just a provider flag / release marker. `srt.is_sdh_content` (+
+   `sdh_content_stats`) is a DELIBERATELY conservative, zero-false-positive
+   classifier: it counts cue entries carrying an SDH marker (a bracketed
+   sound/action cue with >=2 letters -- so "[2020]"/"(?)" never count -- an
+   ALL-CAPS "NAME:" speaker label, or a music glyph) and returns True only when
+   total>=20 AND annotated>=12 AND ratio>=0.12 (a regular sub sits well under a
+   couple %). New `sdh_registry.py` is a local, fail-open, capped (800), atomic
+   JSON store of releases content-detected SDH. In translate.py: the RAW source
+   is classified BEFORE `_prepare_source` strips the markers (ordering is
+   load-bearing), and if SDH the normalized release is recorded; `_is_sdh_ext`
+   then also consults the registry so a future ranking of that release prefers +
+   labels it -- content isn't available when the list is first built. A wrong
+   entry is cosmetic only (sort + label; delivered Hebrew is always is_hi=False
+   plain dialogue), never corrupts a translation. Sonnet: SHIP-READY (could not
+   construct a realistic plain sub that classifies SDH). 19 classifier + 22
+   registry assertions. Phase 3b (deferred): share this registry via a
+   pool-backed SDH registry so users benefit from each other's downloads
+   (heavier -- touches pool.py + the worker).
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
