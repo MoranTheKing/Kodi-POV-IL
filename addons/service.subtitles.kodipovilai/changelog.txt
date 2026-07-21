@@ -1,3 +1,11 @@
+v0.2.413
+- SDH detection is now stricter, to stop false "SDH (מדויק למגדר)" labels: a
+  subtitle is marked SDH ONLY when the release name has a whole-token "SDH" /
+  "Hearing Impaired" marker, or its CONTENT was detected as SDH (dense speaker
+  labels / sound cues). The subtitle provider's own hearing-impaired flag is no
+  longer trusted -- it flagged ordinary subs as SDH, and "has sound cues" is not
+  the same as "has speaker labels" (what the gender-accuracy claim needs).
+
 v0.2.412
 - SDH-aware AI translation, Phase 3b: content-detected SDH subtitles are now
   shared through the community pool, so a subtitle one user found to be SDH is
