@@ -1,3 +1,14 @@
+v0.2.414
+- New optional RTL rendering mode "RTL base" (Settings > RTL punctuation fix
+  direction). It wraps each Hebrew subtitle line in an explicit right-to-left
+  embedding so the player's own BiDi puts numbers ("50 miles"), English names
+  ("cutie-patotie87"), quoted English ("Model behavior") and parentheses on the
+  correct side -- not just the end-of-sentence punctuation the default handles.
+  This is a root-cause fix for setups whose base text direction defaults to
+  left-to-right. It is OPT-IN because it relies on the player honouring the
+  directional marks: turn it on and verify on your device; the default
+  "reverse" mode is unchanged.
+
 v0.2.413
 - SDH detection is now stricter, to stop false "SDH (מדויק למגדר)" labels: a
   subtitle is marked SDH ONLY when the release name has a whole-token "SDH" /

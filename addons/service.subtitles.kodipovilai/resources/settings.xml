@@ -183,6 +183,7 @@
           <constraints>
             <options>
               <option label="32225">reverse</option>
+              <option label="32227">rtl_base</option>
               <option label="32224">legacy</option>
               <option label="32226">off</option>
             </options>
