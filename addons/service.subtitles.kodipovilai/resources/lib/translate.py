@@ -2431,6 +2431,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         return _google_translate_and_save(src_text, source_lang, translated,
                                           info)
 
+    # Bisection markers (temporary, cheap): a report showed the translation thread
+    # going silent between 'Starting translation' and the dispatch summary, never
+    # reaching the executor. These pin WHICH pre-dispatch step hangs.
+    kodi_utils.log('translate step: resolving cast metadata', level='INFO')
     # Cast metadata (cached per-imdb).
     meta_path = cache.metadata_path(imdb_id) if imdb_id else None
     cast = None
@@ -2473,6 +2477,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                            level='WARNING')
             cast = []
 
+    kodi_utils.log('translate step: cast ready ({0} members); building '
+                   'prompt'.format(len(cast or [])), level='INFO')
     # Prompt + chunk + translate via Gemini.
     api_key = kodi_utils.get_setting('api_key', '')
     if not api_key:
@@ -2549,6 +2555,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         kodi_utils.log('Source SRT had no parseable blocks',
                        level='WARNING')
         return None
+    kodi_utils.log('translate step: {0} blocks parsed, gender_ref={1} -- '
+                   'setting up chunks'.format(len(blocks), _ar_on), level='INFO')
 
     # Gender reference (opt-in). Only here -- after every cache/pool miss,
     # so we never pay the fetch on a hit. Fetches + time-aligns a human sub in

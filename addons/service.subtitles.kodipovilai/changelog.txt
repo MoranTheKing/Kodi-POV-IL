@@ -1,3 +1,8 @@
+v0.2.418
+- More translation progress logging (cast / prompt / blocks milestones) to pin down
+  a translation that stalls before it starts sending chunks. Diagnostic only -- no
+  behaviour change.
+
 v0.2.417
 - Fix: a very large subtitle (e.g. a long SDH / embedded track) could silently fail
   to translate when "Translate whole subtitle in one request" was ON -- the single
