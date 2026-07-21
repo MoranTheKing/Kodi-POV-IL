@@ -866,6 +866,47 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
      speaker-label genders BEFORE strip_hi_annotations drops them -> the real gender
      win.** Phase 3 (not done): content-based SDH classification, cached locally /
      shared via a pool SDH registry.
+
+   **Idan Plus self-heal + SDH Phase 2 (AI 0.2.409 / quickfix 0.1.448;
+   notification #508):** two things, both inside service.subtitles.kodipovilai
+   (pool.py + embedded_extract.py INHERITED byte-identical; worker untouched).
+   - **Idan Plus fix (`idanplus_channels_patcher.py`, NEW; wired into service.py's
+     `_run_build_startup_repairs`):** the user's idanplus (plugin.video.idanplus,
+     Fishenzon, v3.9.9 -- latest, so "update it" does NOT fix it) showed no
+     channels, nothing played, nothing even listed. Root cause: idanplus keeps its
+     channel map in `displayChannels.json` as a JSON OBJECT `{chID: chan}` (every
+     writer writes a dict), but its `ReadList()` swallows any read/parse error and
+     returns `[]` (a LIST) as its empty sentinel. A single corrupt/partial file →
+     `items(displayChannels)` = `[].items()` → `'list' object has no attribute
+     'items'` (common.py:575/709), and the rebuild path (`displayChannels.get`,
+     common.py:556) crashes on the same list so it can NEVER self-repair. Our
+     patcher: (1) DATA HEAL (version-agnostic) -- if `displayChannels.json` doesn't
+     parse to a dict, back it up (`.povil-bak`) and delete it, so idanplus rebuilds
+     from its server (idanplus's own mode-22 reset does exactly `DelFile` on this
+     file -> delete→rebuild is native); (2) CODE HARDEN (best-effort, exact-match on
+     3.9.9 source, atomic tmp+rename write with a `.povil-orig` backup) -- make
+     `GetDisplayChannels` always return a dict and `items()` tolerate a non-dict, so
+     a future corruption rebuilds instead of crashing. No-op if idanplus isn't
+     installed; a valid dict (incl. the user's my_name/my_index/... customisations)
+     is never touched; favorites live in a SEPARATE file and are never inspected.
+     Sonnet: SHIP-READY (traced every `items()`/`GetDisplayChannels` caller in
+     common.py/main.py/iptv.py/reshet.py -- OrderedDict passes the isinstance gate,
+     so it's transparent to real data in both py2 and py3). 41 patcher assertions.
+   - **SDH Phase 2 (translate.py + srt.py):** keep ALL-CAPS source speaker prefixes
+     ("MABEL:") through `_prepare_source` (`keep_speaker_prefixes=True`) so the
+     model matches them to the TMDB cast for per-line זכר/נקבה (the pre-existing
+     prompt.py SPEAKER-PREFIX HINT -- was dead code because strip_hi_annotations ate
+     the prefixes first), then drops the tag. Two Sonnet BLOCKERS from round 1 fixed:
+     (1) the fast_first_chunk interim ENGLISH placeholder no longer shows raw tags --
+     `fallback_text` is a display-only `strip_leaked_speaker_prefix(src_text)` copy
+     (src_text to Gemini keeps the prefixes); (2) the shipped-Hebrew leaked-tag strip
+     is now Hebrew-GATED (`_LEAKED_SPEAKER_RE_HE`, lookahead `(?=[^\n]*[֐-׿])`) at the
+     FINAL/pooled output only, so an English caption/chyron/URL the model left
+     untranslated ("WARNING:", "PART 2:", "HTTP://") is never eaten; the un-gated
+     strip stays on the transient/display + pre-Google-source paths (historical
+     behavior, never reaches canonical bytes). Content-hash unchanged (single
+     `_prepare_source` on both live+backfill). Sonnet re-review: SHIP-READY, both
+     blockers fixed, no new shipped-path defects. 38 speaker-prefix assertions.
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 

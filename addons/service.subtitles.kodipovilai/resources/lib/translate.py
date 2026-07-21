@@ -1074,13 +1074,17 @@ def list_candidates(info, modal_progress=True):
 # ---- download / translate -------------------------------------------
 
 def _prepare_source(raw_src):
-    """Strip hearing-impaired noise from a source SRT, but only if the
-    cleaner left at least 30% of the entries (otherwise keep the raw text).
-    This is the SAME transform the main translate path applies before
-    hashing -- factored out so the content hash is computed identically
-    here and in the backfill path, guaranteeing both produce the same
-    source_hash and the pool never stores two copies of one translation."""
-    cleaned = srt.strip_hi_annotations(raw_src)
+    """Strip hearing-impaired SOUND cues from a source SRT (but KEEP ALL-CAPS
+    speaker prefixes like 'MABEL:' -- the AI uses them to look up the character's
+    gender in the cast block, then drops the tag from its Hebrew output), and only
+    if the cleaner left at least 30% of the entries (otherwise keep the raw text).
+    This is the SAME transform the main translate path applies before hashing --
+    factored out so the content hash is computed identically here and in the
+    backfill path, guaranteeing both produce the same source_hash and the pool
+    never stores two copies of one translation. (Keeping speaker prefixes changes
+    the hash ONLY for subs that carry them -- i.e. SDH -- so those re-translate
+    once to gain the per-line gender; prefix-free subs hash identically to before.)"""
+    cleaned = srt.strip_hi_annotations(raw_src, keep_speaker_prefixes=True)
     if cleaned and srt.count_entries(cleaned) >= max(
             1, int(srt.count_entries(raw_src) * 0.3)):
         return cleaned
@@ -1247,6 +1251,11 @@ def _google_translate_and_save(src_text, source_lang, translated, info,
     heb = None
     try:
         from . import google_translate
+        # Google Translate has no cast/gender mechanism, so the 'MABEL:' speaker
+        # prefixes we keep for the AI are just noise to it (and would leak into its
+        # output). Strip them from Google's source only -- entry-preserving, so the
+        # cache path (keyed by the prefix-kept source hash) still lines up.
+        src_text = srt.strip_leaked_speaker_prefix(src_text)
         heb = google_translate.translate_srt(src_text, source_lang)
     except Exception as e:
         kodi_utils.log('google translate failed: {0}'.format(e),
@@ -2333,14 +2342,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
 
     # Fast-first-chunk hand-off: release the English fallback to the
     # caller (e.g. DarkSubs) so Kodi can start showing SOMETHING in
-    # seconds while we translate in the background. The bytes are
-    # the POST-strip src_text -- the same source we'll feed to
-    # Gemini -- so what the user sees onscreen matches what gets
-    # translated. A buggy callback must not abort us.
+    # seconds while we translate in the background. The bytes are the
+    # POST-strip src_text with any leading ALL-CAPS speaker prefix removed
+    # for display -- src_text itself keeps those prefixes (Gemini uses them
+    # for per-line gender), but the onscreen English placeholder must not
+    # show raw "MABEL:" tags. A buggy callback must not abort us.
     if progressive_cb is not None:
         try:
             progressive_cb('first_ready', {
-                'fallback_text': src_text,
+                'fallback_text': srt.strip_leaked_speaker_prefix(src_text),
                 'source_id': _progressive_source_id,
                 'release': _src_release,
             })
@@ -3136,7 +3146,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                             else:
                                 _merged_blocks.extend(_ch)
                         _merged_text = srt.fix_rtl_punctuation(
-                            srt.stitch_blocks(_merged_blocks))
+                            srt.strip_leaked_speaker_prefix(
+                                srt.stitch_blocks(_merged_blocks)))
                         progressive_cb('chunk_ready', {
                             'completed': completed,
                             'total': total,
@@ -3216,6 +3227,13 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         out_blocks.extend(out_blocks_by_index[i])
 
     final = srt.stitch_blocks(out_blocks)
+    # Defensive backstop for the SPEAKER-PREFIX HINT: we now KEEP 'MABEL:' prefixes
+    # in the source so the model can use them for per-line gender (prompt.py), and
+    # it's told to drop the tag from its Hebrew output. Strip any it failed to drop,
+    # but ONLY on a line that actually has Hebrew (hebrew_only) -- so a leaked tag on
+    # a translated line is removed while a caption/chyron/URL the model deliberately
+    # left in English ("WARNING: ...", "PART 2: ...", "HTTP://...") is never eaten.
+    final = srt.strip_leaked_speaker_prefix(final, hebrew_only=True)
     # Defensive backstop for RTL punctuation: Gemini sometimes puts
     # punctuation at the logical start of a Hebrew line ("?שלום")
     # when it belongs at the logical end ("שלום?"). The prompt
