@@ -239,9 +239,14 @@ _REVERSE_DASHED_LEADING_PUNCT_RE = re.compile(
 _HEB_LETTER_RE = re.compile('[' + _HEB_LETTER + ']')
 # End-of-line sentence punctuation with NO Hebrew-in-line requirement. Only used
 # for the Latin-continuation case below (guarded by cue_hebrew), so it never
-# touches a standalone Latin line.
+# touches a standalone Latin line. Mirrors _TRAILING_PUNCT_RE's dash + open/close
+# tag groups (minus the Hebrew lookahead) so a dialogue dash is relocated to the
+# line end and the moved punct stays INSIDE an italic/tag pair, exactly like the
+# Hebrew-line path does -- not scrambled in front of the dash or tag.
 _LATIN_TAIL_PUNCT_RE = re.compile(
-    r'^(?P<pre>.*?[^' + _TRAILING_PUNCT_CHARS + r'\s])'
+    r'^(?P<dash>-\s+)?'
+    r'(?P<open_tags>(?:<[a-zA-Z!][^>]*>)*)'
+    r'(?P<pre>.*?[^' + _TRAILING_PUNCT_CHARS + r'\s])'
     r'(?P<trailing>[' + _TRAILING_PUNCT_CHARS + r']+)'
     r'(?P<close_tags>(?:</[a-zA-Z][^>]*>)*)\s*$'
 )
@@ -287,11 +292,16 @@ def _reverse_fix_one_text_line(line, cue_hebrew=False):
         if cue_hebrew and not _HEB_LETTER_RE.search(stripped):
             lm = _LATIN_TAIL_PUNCT_RE.match(stripped)
             if lm:
+                lat_dash = lm.group('dash') or ''
+                lat_open = lm.group('open_tags') or ''
                 pre = lm.group('pre') or ''
                 lat_trailing = lm.group('trailing')
                 lat_close = lm.group('close_tags') or ''
                 if pre and pre[0] not in _TRAILING_PUNCT_CHARS:
-                    return lat_trailing + pre + lat_close
+                    # Move the punct to the start, INSIDE any tag pair, and send a
+                    # dialogue dash to the end -- same shape as the Hebrew path.
+                    return lat_open + lat_trailing + pre + lat_close + \
+                        _reverse_dash_suffix(lat_dash)
         if stripped != line.strip():
             return stripped
         return line

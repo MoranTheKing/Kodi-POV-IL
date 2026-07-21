@@ -10,9 +10,10 @@
 # protected community key is never read here, only its public helpers are).
 #
 # Purely a best-effort HINT: push is share-gated, pull is use-gated, everything
-# fails open, and it is never authoritative -- the provider is_hi flag, a
-# whole-token release marker, and the LOCAL registry all still decide first in
-# _is_sdh_ext. is_shared_sdh() reads a LOCAL cache only (never the network), so
+# fails open, and it is never authoritative -- a whole-token release marker and
+# the LOCAL registry decide first in _is_sdh_ext (the provider is_hi flag is no
+# longer trusted -- it produced false SDH labels). is_shared_sdh() reads a LOCAL
+# cache only (never the network), so
 # it is safe to call on the ranking path; the cache is warmed out-of-band by
 # refresh_shared_sdh() from the background service.
 
