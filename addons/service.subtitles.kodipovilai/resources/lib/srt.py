@@ -227,7 +227,7 @@ def fix_rtl_punctuation(text, mode=None):
         if mode == 'legacy':
             out_lines.append(_fix_one_text_line(line))
         elif mode == 'rtl_base':
-            out_lines.append(_wrap_rtl_base_line(line))
+            out_lines.append(_wrap_rtl_base_line(line, cue_hebrew=cue_hebrew))
         else:
             # 'reverse' (default) or anything unrecognised
             out_lines.append(_reverse_fix_one_text_line(line, cue_hebrew=cue_hebrew))
@@ -342,7 +342,31 @@ def _reverse_fix_one_text_line(line, cue_hebrew=False):
         _reverse_dash_suffix(dash)
 
 
-def _wrap_rtl_base_line(line):
+# A Latin-only line that is provably SAFE to wrap in RTL base: a single
+# username / handle shaped token -- ASCII letter-first, alphanumeric runs joined
+# by single hyphens, ending in exactly ONE sentence-punct char ('Modelbehavior36.',
+# 'cutie-patotie87.', 'X-Ray.', 'john-doe99!'). Fuzzed at 50k tokens against a
+# reference BiDi engine: wrapping this class reorders ONLY the trailing punct (to
+# the RTL-correct left side) and NEVER the token body. Anything outside it -- a
+# leading digit or symbol ('7-Eleven.' -> '.Eleven-7', '@handle.' -> '.handle@'),
+# an internal symbol or dot, a multi-word line ('50 miles.' -> '.miles 50'), a
+# double / edge hyphen, or a trailing symbol -- can have its segments swapped
+# under the RTL embedding, so it is excluded and left LTR (unwrapped, unmodified).
+# \Z (not $) so a stray trailing newline can never sneak a match, even if this
+# helper is ever reused somewhere that doesn't pre-split lines.
+_WRAPPABLE_LATIN_TAIL_RE = re.compile(
+    r'^[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*[' + _TRAILING_PUNCT_CHARS + r']\Z')
+
+
+def _is_wrappable_latin_tail(s):
+    """True for a username/handle-shaped Latin token that is the TAIL of a Hebrew
+    sentence wrapped onto its own line (see _WRAPPABLE_LATIN_TAIL_RE). Wrapping it
+    in RTL base moves ONLY its trailing period to the RTL-correct (left) side; the
+    body is provably never reordered. Non-mutating (marks only). Never raises."""
+    return bool(_WRAPPABLE_LATIN_TAIL_RE.match(s))
+
+
+def _wrap_rtl_base_line(line, cue_hebrew=False):
     """Wrap a Hebrew text line in an explicit RTL embedding (RLE .. PDF) so the
     subtitle renderer treats it with a right-to-left BASE direction. Used by the
     'rtl_base' rtl_punct_mode.
@@ -354,9 +378,13 @@ def _wrap_rtl_base_line(line):
     setups whose paragraph base defaults to LTR (which shoves that content to the
     wrong edge).
 
-    Only Hebrew-carrying lines are wrapped: a line deliberately left in English
-    (an on-screen caption / URL) is returned untouched so it stays LTR. Index /
-    timecode / blank lines never reach here (the caller skips them).
+    A Hebrew line is wrapped. A Latin-only line is normally left LTR (an on-screen
+    caption / URL stays as-is) -- EXCEPT a single-token username/handle that ends a
+    Hebrew sentence on its own line (see _is_wrappable_latin_tail): when it sits
+    inside a Hebrew cue (cue_hebrew) it is ALSO wrapped, so its trailing period
+    lands on the RTL-correct side. The wrap is non-mutating (marks only), so a
+    genuine '.NET' / '.exe' is never corrupted. Index / timecode / blank lines
+    never reach here (the caller skips them).
 
     Crucially, the line is first NORMALIZED back to pristine LOGICAL order before
     wrapping. Cached and pool-shared SRT text was post-processed once already, by
@@ -376,11 +404,15 @@ def _wrap_rtl_base_line(line):
     if not s.strip():
         return line
     if not _HEB_LETTER_RE.search(s):
-        # No Hebrew -> leave it LTR, unwrapped and UNMODIFIED. A pure-Latin line
-        # renders identically under 'reverse' and 'rtl_base' (no marks either way),
-        # so whatever shape it already carries is left exactly as-is -- we do NOT
-        # try to "undo" a possible reverse-mode move, because a leading '.' is
-        # indistinguishable from a genuine one (".NET", ".exe", ".22-caliber").
+        # No Hebrew. A single-token username/handle ending a Hebrew sentence on its
+        # own line ('Modelbehavior36.') is wrapped so BiDi moves its trailing period
+        # to the RTL-correct side; everything else Latin stays LTR, UNMODIFIED. The
+        # wrap is marks-only, so a genuine '.NET'/'.exe' can never be corrupted (and
+        # is excluded anyway -- it starts with the punct). We do NOT try to "undo" a
+        # possible reverse-mode move, because a leading '.' is indistinguishable
+        # from a genuine one.
+        if cue_hebrew and _is_wrappable_latin_tail(s):
+            return _RLE + s + _PDF
         # Return the cleaned form only if we removed stray edge marks; else verbatim.
         return s if s != line else line
     # Undo any 'reverse'/'legacy' mutation baked into cached/pool text: move a
