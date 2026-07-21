@@ -352,8 +352,10 @@ def _reverse_fix_one_text_line(line, cue_hebrew=False):
 # an internal symbol or dot, a multi-word line ('50 miles.' -> '.miles 50'), a
 # double / edge hyphen, or a trailing symbol -- can have its segments swapped
 # under the RTL embedding, so it is excluded and left LTR (unwrapped, unmodified).
+# \Z (not $) so a stray trailing newline can never sneak a match, even if this
+# helper is ever reused somewhere that doesn't pre-split lines.
 _WRAPPABLE_LATIN_TAIL_RE = re.compile(
-    r'^[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*[' + _TRAILING_PUNCT_CHARS + r']$')
+    r'^[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*[' + _TRAILING_PUNCT_CHARS + r']\Z')
 
 
 def _is_wrappable_latin_tail(s):
