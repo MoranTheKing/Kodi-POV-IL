@@ -53,6 +53,8 @@ _CODEC_PRIVATE = 0x63A2
 _LANG = 0x22B59C
 _LANG_BCP47 = 0x22B59D
 _FORCED = 0x55AA
+_HEARING_IMPAIRED = 0x55AB     # FlagHearingImpaired (Matroska): 1 == SDH/CC track
+_TRACKNAME = 0x536E            # TrackName: human label, often "English (SDH)" etc.
 _CUES = 0x1C53BB6B
 _CUE_POINT = 0xBB
 _CUE_TIME = 0xB3
@@ -483,7 +485,7 @@ class _Source(object):
 
 def _parse_track_entry(data):
     t = {'num': None, 'type': None, 'codec': '', 'lang': '', 'forced': False,
-         'private': b''}
+         'private': b'', 'name': '', 'hearing_impaired': False}
     buf = _Buf(data, 0)
     for eid, size, start in _walk(buf, len(data)):
         if size is None:
@@ -500,6 +502,13 @@ def _parse_track_entry(data):
             t['private'] = payload
         elif eid == _FORCED:
             t['forced'] = bool(_read_uint(payload))
+        elif eid == _HEARING_IMPAIRED:
+            # Authoritative SDH flag -- no guessing. Read from the head bytes we
+            # ALREADY parse for lang/codec, so it's free and works on a strict
+            # debrid token (this is the cheap head read, not the full extract).
+            t['hearing_impaired'] = bool(_read_uint(payload))
+        elif eid == _TRACKNAME:
+            t['name'] = payload.decode('utf-8', 'replace').strip('\x00')
         elif eid in (_LANG, _LANG_BCP47):
             if not t['lang']:
                 t['lang'] = payload.decode('ascii', 'replace').strip('\x00')
@@ -724,29 +733,34 @@ def _read_cues(src, seeks, seg_start, want_track, log):
     return out, is_sub
 
 
-def _read_cue_times(src, seeks, seg_start, want_track, log):
-    """Return the SORTED distinct raw CueTime values (in ts_scale ticks) for cue
-    points that reference `want_track` (the subtitle track), or [] when the file
-    has no per-subtitle Cues index. Reads ONLY the Cues element -- NO cluster
-    block fetches -- so it's a handful of range requests even on a huge file
-    (this is what makes it viable on a strict debrid token where the full-text
-    extract is not). CueTime is the cue's START on the segment timeline. Never
-    raises (caller wraps)."""
+def _read_cue_times_multi(src, seeks, seg_start, want_tracks, log):
+    """{track_num: SORTED distinct raw CueTime (ts_scale ticks)} for every track
+    in `want_tracks`, from ONE Cues-element read. This is the read-once core: a
+    subtitle file's single Cues index carries cue points for EVERY track, so N
+    tracks (e.g. the cross-language align fallback trying several languages) cost
+    ONE head+Cues read instead of one per track. Reads ONLY the Cues element --
+    NO cluster block fetches -- so it stays a handful of range requests even on a
+    huge file (viable on a strict debrid token where the full extract is not).
+    CueTime is the cue's START on the segment timeline. A track with no per-cue
+    index is simply absent from the result. Never raises (caller wraps)."""
+    want_tracks = set(want_tracks)
+    if not want_tracks:
+        return {}
     pos = seeks.get(_CUES)
     if not pos:
-        return []
+        return {}
     raw = src.read(pos, 64 * 1024)
     if not raw:
-        return []
+        return {}
     b = _Buf(raw, pos)
     eid, _l = _read_vint(b, True)
     size, slen = _read_vint(b, False)
     if eid != _CUES or slen == 0 or size is None:
-        return []
+        return {}
     need = b.p + size
     if need > _CUES_CAP:
         log('cue-times: cues element too large (%d bytes) -- skipping' % size)
-        return []
+        return {}
     while len(raw) < need:
         more = src.read(pos + len(raw), min(4 * 1024 * 1024, need - len(raw)))
         if not more:
@@ -756,7 +770,7 @@ def _read_cue_times(src, seeks, seg_start, want_track, log):
     _read_vint(b, True)
     _read_vint(b, False)
     data = raw[b.p:b.p + size]
-    want_times = []
+    buckets = {t: [] for t in want_tracks}
     cbuf = _Buf(data, 0)
     for eid2, size2, start2 in _walk(cbuf, len(data)):
         if size2 is None:
@@ -786,12 +800,21 @@ def _read_cue_times(src, seeks, seg_start, want_track, log):
                         tracks_here.add(_read_uint(tp))
         if ctime is None:
             continue
-        # Only cue points that index the wanted subtitle track: those mark when
-        # each subtitle line appears (video-keyframe cues have the wrong
-        # granularity and are NOT a subtitle timeline).
-        if want_track in tracks_here:
-            want_times.append(ctime)
-    return sorted(set(want_times))
+        # Bucket this cue's START under every WANTED subtitle track it indexes.
+        # (Video-keyframe cues reference the video track, which isn't in
+        # want_tracks, so they're ignored -- only per-subtitle cues mark when a
+        # subtitle line appears.)
+        for t in (tracks_here & want_tracks):
+            buckets[t].append(ctime)
+    return {t: sorted(set(v)) for t, v in buckets.items() if v}
+
+
+def _read_cue_times(src, seeks, seg_start, want_track, log):
+    """SORTED distinct raw CueTime values (ts_scale ticks) for `want_track`, or []
+    when the file has no per-subtitle Cues index for it. Thin wrapper over the
+    read-once core (`_read_cue_times_multi`) -- byte-identical parse, one track."""
+    return _read_cue_times_multi(
+        src, seeks, seg_start, {want_track}, log).get(want_track, [])
 
 
 # ---- block / cluster text ---------------------------------------------------
@@ -1119,6 +1142,73 @@ def cue_reference_times(url_or_path, track_num=None, lang=None,
         return []
 
 
+def cue_reference_times_multi(url_or_path, langs, track_num=None,
+                              head_bytes=DEFAULT_HEAD_BYTES, allow_http=False,
+                              abort_cb=None, log=None):
+    """Dense cue START times for SEVERAL languages in ONE head+Cues read.
+
+    Returns {lang: sorted_times_ms} -- the same per-language skeleton
+    `cue_reference_times` returns, but computed for every language in `langs` at
+    once, reading the head + Cues element + timeline origin EXACTLY ONCE and
+    slicing per track (one Cues index carries every track's cue points). This is
+    what the cross-language embedded-align fallback uses so trying 2-3 languages
+    costs ONE read, not one per language. `langs` is normalised to 2-letter
+    codes; several may resolve to the same track. A language whose track has no
+    per-cue index is omitted from the result. `allow_http` must be True for an
+    HTTP/debrid source. Never raises."""
+    _log = log or _noop
+    try:
+        seen = list(dict.fromkeys(
+            [str(l).lower()[:2] for l in (langs or []) if l]))
+        if not seen:
+            return {}
+        src = _Source(url_or_path)
+        src._abort_cb = abort_cb
+        if not src.total:
+            return {}
+        if src.is_http and not allow_http:
+            _log('cue-times: HTTP not allowed (setting off) -- skipping')
+            return {}
+        seg_start, ts_scale, tracks, seeks = _parse_head(src, head_bytes, _log)
+        subs = _sub_tracks(tracks)
+        if not subs:
+            return {}
+        # Map each requested language -> the track it selects (the SAME picker the
+        # single-lang path uses); several langs can resolve to one track (e.g. the
+        # sole-text-track fallback), which then serves them all from one bucket.
+        lang_track = {}
+        want_tracks = set()
+        for lg in seen:
+            tr = _pick_track(subs, track_num, lg)
+            if tr is not None:
+                lang_track[lg] = tr['num']
+                want_tracks.add(tr['num'])
+        if not want_tracks:
+            _log('cue-times(multi): no matching track for langs=%s' % (seen,))
+            return {}
+        by_track = _read_cue_times_multi(src, seeks, seg_start, want_tracks, _log)
+        if not by_track:
+            _log('cue-times(multi): no per-subtitle Cues index for track(s) %s'
+                 % (sorted(want_tracks),))
+            return {}
+        scale_ms = ts_scale / 1e6
+        origin_ms = _timeline_origin(src, seg_start, scale_ms, _log)
+        out = {}
+        for lg, tnum in lang_track.items():
+            raw_times = by_track.get(tnum)
+            if not raw_times:
+                continue
+            out[lg] = sorted({int(round(t * scale_ms - origin_ms))
+                              for t in raw_times
+                              if (t * scale_ms - origin_ms) >= 0})
+        _log('cue-times(multi): %d/%d lang(s) indexed in %d req / %.0fKB'
+             % (len(out), len(seen), src.reqs, src.fetched / 1024.0))
+        return out
+    except Exception as e:
+        (log or _noop)('cue_reference_times_multi failed: %s' % e)
+        return {}
+
+
 def extract_srt(url_or_path, track_num=None, lang=None,
                 head_bytes=DEFAULT_HEAD_BYTES, max_bytes=DEFAULT_MAX_BYTES,
                 deadline_s=DEFAULT_DEADLINE_S, allow_http=False,
@@ -1145,7 +1235,10 @@ def extract_srt(url_or_path, track_num=None, lang=None,
         subs = _sub_tracks(tracks)
         if not subs:
             return None
-        track = _pick_track(subs, track_num, lang)
+        # We translate THIS track's own text, so prefer an SDH track: it carries
+        # the complete dialogue. (The cue_reference_times* callers deliberately do
+        # NOT prefer SDH -- there the track is only a timing skeleton.)
+        track = _pick_track(subs, track_num, lang, prefer_sdh=True)
         if track is None:
             _log('no matching text track (num=%s lang=%s)' % (track_num, lang))
             return None
@@ -1256,7 +1349,37 @@ def _lang_key(code):
     return _ISO639_CANON.get(c, c)
 
 
-def _pick_track(subs, track_num, lang):
+def _name_is_sdh(name):
+    """True when a TrackName clearly marks a hearing-impaired / SDH track. Matches
+    ONLY whole tokens ("english (sdh)" -> ['english','sdh']) -- never a bare
+    substring, so "hi" inside "Highlander" can't match. Bare "hi"/"cc" are
+    deliberately NOT markers (too ambiguous); the authoritative FlagHearingImpaired
+    catches flag-tagged tracks regardless of name."""
+    toks = [t for t in re.split(r'[^a-z0-9]+', (name or '').lower()) if t]
+    if 'sdh' in toks:
+        return True
+    for i in range(len(toks) - 1):
+        if toks[i] == 'hearing' and toks[i + 1] == 'impaired':
+            return True
+    return False
+
+
+def _track_is_sdh(t):
+    """A subtitle track is SDH if the authoritative Matroska flag is set, or its
+    name says so. SDH tracks carry the FULL dialogue (nothing dropped for the
+    hearing), so they translate more completely -- preferred by _pick_track."""
+    return bool(t.get('hearing_impaired')) or _name_is_sdh(t.get('name'))
+
+
+def _pick_track(subs, track_num, lang, prefer_sdh=False):
+    # prefer_sdh: order an SDH/hearing-impaired track FIRST among equally-tagged
+    # matches. Turn it on ONLY when the track's own TEXT is what we translate
+    # (extract_srt) -- SDH carries the complete dialogue. Keep it OFF (default)
+    # when the track is used merely as a TIMING skeleton to align an EXTERNAL sub
+    # (cue_reference_times*): an SDH track's extra sound-description cues have no
+    # match in a plain external subtitle and would only depress the align overlap/
+    # vote ratios, risking a previously-synced sub failing the gate.
+    _sdh_key = ((lambda t: not _track_is_sdh(t)) if prefer_sdh else (lambda t: 0))
     if track_num is not None:
         for t in subs:
             if t['num'] == track_num:
@@ -1291,9 +1414,13 @@ def _pick_track(subs, track_num, lang):
         cand = [t for t in subs if _is_text_codec(t['codec'])
                 and not t['forced']
                 and _lang_match(t['lang'])]
-        # Explicitly-tagged match first, so a track that really carries 'eng'
-        # outranks one that only defaulted to it; then track order.
-        cand.sort(key=lambda t: (not t.get('lang_explicit', True), t['num']))
+        # Order among matched tracks: (1) an explicitly-tagged language beats one
+        # that only defaulted to 'eng' (stronger language-confidence); (2) among
+        # equally-tagged tracks prefer the SDH/hearing-impaired one -- it has the
+        # complete dialogue, so it translates more fully (and, later, is the best
+        # gender source); (3) then track order.
+        cand.sort(key=lambda t: (not t.get('lang_explicit', True),
+                                 _sdh_key(t), t['num']))
         if cand:
             return cand[0]
         # No language match. When the file carries exactly ONE non-forced text
@@ -1323,7 +1450,7 @@ def _pick_track(subs, track_num, lang):
                 return only
         return None
     cand = [t for t in subs if _is_text_codec(t['codec']) and not t['forced']]
-    cand.sort(key=lambda t: t['num'])
+    cand.sort(key=lambda t: (_sdh_key(t), t['num']))   # SDH first (if prefer_sdh), then order
     return cand[0] if cand else None
 
 

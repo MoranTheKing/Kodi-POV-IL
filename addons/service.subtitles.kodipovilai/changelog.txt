@@ -1,3 +1,19 @@
+v0.2.408
+- Cross-language embedded align now reads the video's head + Cues index ONCE and
+  slices the timing skeleton per track, instead of re-reading it per language on
+  the fallback -- fewer debrid requests when the picked language has no synced
+  external subtitle (safer on a strict token like TorBox).
+- SDH / hearing-impaired subtitles are now detected and preferred for AI
+  translation: they carry the COMPLETE dialogue (and speaker labels), so they are
+  the most complete source and the best for זכר/נקבה accuracy. Embedded: the
+  Matroska FlagHearingImpaired flag + track name are read from the head (free,
+  works on a strict token -- it is NOT the full extract), and an SDH track is
+  preferred when translating its own text (never as a mere timing skeleton, so
+  the alignment path is unchanged). External: an SDH sub (provider flag, or a
+  WHOLE-TOKEN "SDH"/"Hearing Impaired" release marker -- never a false match like
+  "Highlander"/"Chihuahua") sorts first within its language and is labelled
+  "תרגום AI לעברית · SDH (מדויק למגדר)".
+
 v0.2.407
 - Embedded (תרגום מובנה) translations are now tracked on the owner dashboard.
   They already run through the exact same AI + gender pipeline as every other
