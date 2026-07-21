@@ -907,6 +907,22 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
      behavior, never reaches canonical bytes). Content-hash unchanged (single
      `_prepare_source` on both live+backfill). Sonnet re-review: SHIP-READY, both
      blockers fixed, no new shipped-path defects. 38 speaker-prefix assertions.
+
+   **Hotfix: wizard notification crash + idanplus heal first (AI 0.2.410 /
+   quickfix 0.1.449; still notif #508):** the 0.2.409 quick_update.txt was
+   PREPENDED with a 2nd entry, but the wizard's `split_notify`
+   (window.py ~470) does `_id, msg = link.split('|||')` -- it expects EXACTLY
+   ONE `|||` in the whole file (the file is a SINGLE, replaced-each-release
+   entry, served live from raw main). Two entries -> `ValueError: too many
+   values to unpack` at `auto_quick_update()` every startup, which ALSO
+   suppressed the notification popup. LESSON: quick_update.txt is one entry,
+   REPLACE it, never prepend; verify against split_notify. Fixed by restoring a
+   single entry (verified against the exact parser transform). Also moved
+   `_maybe_patch_idanplus_channels` to the FRONT of `_run_build_startup_repairs`
+   so a corrupt displayChannels.json is healed before the user can open the
+   addon (was ~35 steps in). Only service.py + changelog changed in the addon;
+   idanplus_channels_patcher.py + srt.py + translate.py + pool.py +
+   embedded_extract.py inherited byte-identical (pool key 802ba87a preserved).
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
