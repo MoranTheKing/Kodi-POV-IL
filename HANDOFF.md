@@ -1062,6 +1062,55 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    real cause (the same session's log also showed heavy network contention: TorBox
    CDN streaming + 28 stuck pool uploads, which can starve the Gemini API calls).
    Sonnet: SHIP-READY (cascade correct, no regression, progressive re-enabled).
+
+   **Bisection milestone logging (AI 0.2.418 / quickfix 0.1.457; notif #516):** a
+   fresh report of the same embedded-SDH stall arrived with `whole_subtitle_request`
+   confirmed OFF by the reporter -- so 0.2.417's whole-request guard did NOT apply
+   and the real cause was still open. The log showed `Starting translation
+   src_len=152554` then silence, never reaching the 0.2.417 dispatch summary. Added
+   four INFO milestone logs across the *pre-dispatch* path in translate.py
+   (`resolving cast metadata`, `cast ready (N members); building prompt`, `N blocks
+   parsed, gender_ref=...`) to pin exactly which pre-dispatch step goes silent.
+   Diagnostic only, no behaviour change. Sonnet: SHIP-READY.
+
+   **False Hebrew-passthrough: English source shown untranslated in a loop (AI
+   0.2.419 / quickfix 0.1.458; notif #517):** the 0.2.418 milestones showed the
+   worker logging `Starting translation` then NONE of the milestones. The FIRST
+   hypothesis was a `notify()` stall on a GUI wedged by heavy extraction (the three
+   statements before the first milestone are `notify()` / `language_detect.detect()`
+   / `get_setting()`, and the decoder WAS starving). That was WRONG, and the reporter
+   supplied the disproof: the player stayed fully responsive (seek/pause/resume), the
+   screen showed the untranslated ENGLISH, and -- decisively -- on the SAME movie in
+   the SAME session the RUSSIAN embedded track translated perfectly (full milestones +
+   43-chunk dispatch + first-chunk-returned) while only the ENGLISH track died
+   silently. A responsive GUI + a peer translation succeeding rules out any hang; the
+   silence is a FAST silent RETURN, not a stall. Root cause: the "source already
+   Hebrew -> pass through" sanity check at translate.py used
+   `language_detect.detect(src_text[:8000]) == 'he'`, and `detect()` returns 'he' on
+   an ABSOLUTE count (`he_count > 30` anywhere in the first 8000 chars) -- so an
+   English/SDH sub carrying a little Hebrew (a "translated by..." credit line) was
+   judged "already Hebrew" and passed through UNtranslated. detect() checks `he`
+   BEFORE `cy`, which is why English (some Hebrew -> 'he') looped but Russian (-> 'ru')
+   translated. The passthrough writes `src_text` to the translation cache path UNGATED
+   (every real path is `_is_mostly_hebrew`-gated), so the untranslated English got
+   cached; the next attempt read it, judged it non-Hebrew (`Discarding non-Hebrew
+   cached translation (empty/echoed)`), and re-ran -- an endless no-op that reads as
+   "says it's translating but never does". Fix: the check now uses
+   `_is_mostly_hebrew(src_text, min_ratio=0.60)` over the WHOLE source (not a
+   head-sample, so a localized Hebrew credit/header block can't skew the ratio), only
+   passing through when Hebrew genuinely dominates; a mostly-English/mixed source
+   translates as expected. The passthrough is also no longer silent (INFO log).
+   Verified with a unit harness (English w/ Hebrew credit -> translate; real Hebrew ->
+   passthrough; even a 20x-inflated Hebrew header stays "translate"; whole-source scan
+   ~8ms/152KB). BUNDLED hardening (NOT the cause, but validated + kept as
+   defence-in-depth): `kodi_utils.notify()` now fires the GUI toast on a short-lived
+   `pov-notify` daemon thread with a bounded pending-count, so a genuinely wedged GUI
+   can never stall a caller; plus a `language ok, mode=...` milestone log. Sonnet:
+   passthrough-ratio + notify hardening both validated SHIP; the `_is_mostly_hebrew`
+   denominator widening (count letters of ANY script, not just ASCII, so a non-Latin
+   source + a Hebrew credit line can't read as "100% Hebrew") and the dead
+   `language_detect` import removal were the passthrough reviewer's own
+   recommendations, implemented and unit-tested across all three callers.
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
