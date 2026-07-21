@@ -227,7 +227,7 @@ def fix_rtl_punctuation(text, mode=None):
         if mode == 'legacy':
             out_lines.append(_fix_one_text_line(line))
         elif mode == 'rtl_base':
-            out_lines.append(_wrap_rtl_base_line(line))
+            out_lines.append(_wrap_rtl_base_line(line, cue_hebrew=cue_hebrew))
         else:
             # 'reverse' (default) or anything unrecognised
             out_lines.append(_reverse_fix_one_text_line(line, cue_hebrew=cue_hebrew))
@@ -342,7 +342,29 @@ def _reverse_fix_one_text_line(line, cue_hebrew=False):
         _reverse_dash_suffix(dash)
 
 
-def _wrap_rtl_base_line(line):
+def _is_wrappable_latin_tail(s):
+    """True for a Latin-only line that is a single token ending in sentence-punct
+    and NOT starting with one -- a username / handle that is the TAIL of a Hebrew
+    sentence wrapped onto its own line, e.g. 'Modelbehavior36.' or
+    'cutie-patotie87.'. Wrapping such a line in RTL base (non-mutating) lets the
+    renderer's BiDi put its trailing period on the RTL-correct (left) side.
+
+    Excluded on purpose:
+      - multi-word Latin ('50 miles.', 'Model behavior.') -- BiDi would REORDER
+        the words under RTL base ('.miles 50'), so leave them LTR;
+      - a line that STARTS with punct ('.NET', '.exe', '.Modelbehavior36') -- for
+        '.NET' the dot is genuine and already renders left; for a reverse-moved
+        '.Modelbehavior36' the dot is already on the correct (left) side unwrapped.
+        Either way, wrapping is unnecessary and could only hurt, so skip it.
+    A single token has no internal whitespace, so BiDi never reorders it."""
+    if not s or ' ' in s or '\t' in s:
+        return False
+    if s[0] in _TRAILING_PUNCT_CHARS or s[-1] not in _TRAILING_PUNCT_CHARS:
+        return False
+    return True
+
+
+def _wrap_rtl_base_line(line, cue_hebrew=False):
     """Wrap a Hebrew text line in an explicit RTL embedding (RLE .. PDF) so the
     subtitle renderer treats it with a right-to-left BASE direction. Used by the
     'rtl_base' rtl_punct_mode.
@@ -354,9 +376,13 @@ def _wrap_rtl_base_line(line):
     setups whose paragraph base defaults to LTR (which shoves that content to the
     wrong edge).
 
-    Only Hebrew-carrying lines are wrapped: a line deliberately left in English
-    (an on-screen caption / URL) is returned untouched so it stays LTR. Index /
-    timecode / blank lines never reach here (the caller skips them).
+    A Hebrew line is wrapped. A Latin-only line is normally left LTR (an on-screen
+    caption / URL stays as-is) -- EXCEPT a single-token username/handle that ends a
+    Hebrew sentence on its own line (see _is_wrappable_latin_tail): when it sits
+    inside a Hebrew cue (cue_hebrew) it is ALSO wrapped, so its trailing period
+    lands on the RTL-correct side. The wrap is non-mutating (marks only), so a
+    genuine '.NET' / '.exe' is never corrupted. Index / timecode / blank lines
+    never reach here (the caller skips them).
 
     Crucially, the line is first NORMALIZED back to pristine LOGICAL order before
     wrapping. Cached and pool-shared SRT text was post-processed once already, by
@@ -376,11 +402,15 @@ def _wrap_rtl_base_line(line):
     if not s.strip():
         return line
     if not _HEB_LETTER_RE.search(s):
-        # No Hebrew -> leave it LTR, unwrapped and UNMODIFIED. A pure-Latin line
-        # renders identically under 'reverse' and 'rtl_base' (no marks either way),
-        # so whatever shape it already carries is left exactly as-is -- we do NOT
-        # try to "undo" a possible reverse-mode move, because a leading '.' is
-        # indistinguishable from a genuine one (".NET", ".exe", ".22-caliber").
+        # No Hebrew. A single-token username/handle ending a Hebrew sentence on its
+        # own line ('Modelbehavior36.') is wrapped so BiDi moves its trailing period
+        # to the RTL-correct side; everything else Latin stays LTR, UNMODIFIED. The
+        # wrap is marks-only, so a genuine '.NET'/'.exe' can never be corrupted (and
+        # is excluded anyway -- it starts with the punct). We do NOT try to "undo" a
+        # possible reverse-mode move, because a leading '.' is indistinguishable
+        # from a genuine one.
+        if cue_hebrew and _is_wrappable_latin_tail(s):
+            return _RLE + s + _PDF
         # Return the cleaned form only if we removed stray edge marks; else verbatim.
         return s if s != line else line
     # Undo any 'reverse'/'legacy' mutation baked into cached/pool text: move a
