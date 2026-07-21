@@ -1,3 +1,13 @@
+v0.2.417
+- Fix: a very large subtitle (e.g. a long SDH / embedded track) could silently fail
+  to translate when "Translate whole subtitle in one request" was ON -- the single
+  request overflowed the model's output limit, got truncated, and the whole result
+  was discarded as empty, with no progress shown. Such large sources now
+  automatically fall back to chunked translation (with the normal progressive
+  display), so they translate reliably.
+- Added translation progress logging (chunk count + mode + first-chunk-returned) so
+  a stalled translation can be diagnosed from the log instead of being a black box.
+
 v0.2.416
 - "RTL base" is now the DEFAULT RTL rendering mode (was opt-in in 0.2.414-0.2.415,
   now verified on-device). Hebrew subtitles get correct placement of numbers,

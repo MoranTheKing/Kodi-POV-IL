@@ -2516,6 +2516,19 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         thinking_budget = None
     whole_subtitle_request = kodi_utils.get_bool(
         'whole_subtitle_request', False)
+    # Safety: a single 'whole subtitle' request can't fit a very large source --
+    # the Hebrew output overflows the 65535-token cap and Gemini truncates it, so
+    # the response fails the entry-count / is-Hebrew checks and the whole thing is
+    # discarded as empty (with NO progressive display to show partial progress).
+    # This bites SDH / embedded sources especially (dense, long). Above ~80K chars
+    # fall back to chunked so the user gets a real, progressive translation.
+    _WHOLE_REQUEST_MAX_CHARS = 80000
+    if whole_subtitle_request and len(src_text) > _WHOLE_REQUEST_MAX_CHARS:
+        kodi_utils.log(
+            'whole-subtitle request disabled for this source: {0} chars > {1} '
+            'cap -- a single request would truncate; using chunked mode'.format(
+                len(src_text), _WHOLE_REQUEST_MAX_CHARS), level='WARNING')
+        whole_subtitle_request = False
     max_output_tokens = 65535 if whole_subtitle_request else 16384
     gemini_timeout = 300 if whole_subtitle_request else None
     chunk_lines = kodi_utils.get_int('chunk_lines', 50)
@@ -3127,6 +3140,18 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     abort_reason = None
     abort_detail = ''
 
+    # Dispatch summary -- the ONLY window into an otherwise silent translation.
+    # If a run stalls (no Hebrew appears), this line + the first-chunk-done line
+    # below pin whether it's the mode (whole vs chunked), the chunk count, or the
+    # very first API call that hangs. src_len flags a source too large for a
+    # single 'whole' request (which truncates -> empty result -> discarded).
+    kodi_utils.log(
+        'translation dispatch: {0} chunk(s), mode={1}, parallel={2}, paid={3}, '
+        'model={4}, src_len={5}'.format(
+            len(chunks), 'whole' if whole_subtitle_request else 'chunked',
+            parallel, _paid_mode, model, len(src_text)),
+        level='INFO')
+
     try:
         from concurrent.futures import ThreadPoolExecutor, as_completed
         with ThreadPoolExecutor(max_workers=parallel) as executor:
@@ -3157,6 +3182,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     break
                 out_blocks_by_index[idx] = srt.parse_blocks(response)
                 completed += 1
+                if completed == 1:
+                    # First chunk back -> API path is alive. Its absence in a log
+                    # means every worker stalled BEFORE any response (network
+                    # contention / a hung first request), not a post-parse issue.
+                    kodi_utils.log(
+                        'translation: first chunk returned ({0} entries) -- '
+                        'API path working, {1} chunk(s) to go'.format(
+                            len(out_blocks_by_index[idx]), total - 1),
+                        level='INFO')
                 if progress_cb:
                     try:
                         progress_cb(completed, total)
