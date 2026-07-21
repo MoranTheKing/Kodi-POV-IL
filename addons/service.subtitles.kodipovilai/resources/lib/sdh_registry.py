@@ -8,9 +8,10 @@
 # _is_sdh_ext consults this registry and can prefer + label it -- without having
 # to download it first.
 #
-# This is a purely LOCAL, best-effort HINT: it is never authoritative (the
-# provider's is_hi flag and a whole-token release marker still win first in
-# _is_sdh_ext), it only ever records releases classified SDH (never a negative),
+# This is a purely LOCAL, best-effort HINT: it is never authoritative (a
+# whole-token release marker still wins first in _is_sdh_ext -- the provider's
+# is_hi flag is no longer trusted at all, it produced false SDH labels), it only
+# ever records releases classified SDH (never a negative),
 # it is capped, and every operation fails open. A future Phase 3b could share
 # this via a pool-backed registry so users benefit from each other's downloads.
 
