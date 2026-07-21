@@ -30,6 +30,15 @@ _BRACKET_RE = re.compile(
 _SPEAKER_RE = re.compile(
     r'^[A-Z][A-Z0-9 \'\.\-]{1,30}:\s*'
 )
+# Same ALL-CAPS Latin speaker prefix, matched per-LINE (MULTILINE) with an
+# optional leading dialogue dash preserved. Used to strip a prefix the model
+# LEAKED into its Hebrew output. It can only ever match an English "NAME:" at a
+# line start -- an index line (digits), a timecode line (digits), a Hebrew line,
+# and a blank line can none of them match -- so it's applied to the whole text
+# without classifying lines, preserving every newline exactly.
+_LEAKED_SPEAKER_RE = re.compile(
+    r'(?m)^(?P<pre>[ \t]*(?:-[ \t]+)?)[A-Z][A-Z0-9 \'\.\-]{1,30}:[ \t]*'
+)
 _INDEX_RE = re.compile(r'^\d+$')
 _TIMECODE_RE = re.compile(
     r'^\d{1,2}:\d{2}:\d{2}[,\.]\d{1,3}\s*-->\s*'
@@ -365,15 +374,23 @@ def untranslated_line_ratio(text, min_cues=10, min_len=8):
     return untranslated / float(substantial)
 
 
-def strip_hi_annotations(text):
+def strip_hi_annotations(text, keep_speaker_prefixes=False):
     """Remove hearing-impaired noise from an SRT body.
 
     Drops bracketed sound cues like [breathing], (music playing),
-    {chuckles}, and ALL-CAPS speaker prefixes like 'MABEL: '. If an
-    entry's text was nothing but annotations, the whole entry is
-    dropped (its timecode goes too -- there's literally no speech
-    in that span, so an empty subtitle would be a visual gap with
-    nothing useful).
+    {chuckles}. If an entry's text was nothing but annotations, the
+    whole entry is dropped (its timecode goes too -- there's literally
+    no speech in that span, so an empty subtitle would be a visual gap
+    with nothing useful).
+
+    ALL-CAPS speaker prefixes like 'MABEL: ' are dropped by default, BUT
+    kept when keep_speaker_prefixes=True. The AI translation path keeps
+    them on purpose: the model matches the name against the TMDB cast
+    block to pick the correct Hebrew gender per line (see prompt.py's
+    SPEAKER-PREFIX HINT), then drops the tag from its own Hebrew output
+    -- so stripping them here would throw away the best per-line gender
+    signal. Any prefix the model fails to drop is removed from the OUTPUT
+    by strip_leaked_speaker_prefix().
 
     Returns the cleaned SRT body. Block order and numbering are
     preserved for surviving entries (we keep the original index
@@ -395,9 +412,12 @@ def strip_hi_annotations(text):
             if _TIMECODE_RE.match(stripped):
                 kept_lines.append(line)
                 continue
-            # text line -- strip annotations
+            # text line -- strip bracketed sound cues. Speaker prefixes are
+            # KEPT when keep_speaker_prefixes (the AI uses them for gender and
+            # drops them from its output; see the docstring).
             cleaned = _BRACKET_RE.sub('', line)
-            cleaned = _SPEAKER_RE.sub('', cleaned)
+            if not keep_speaker_prefixes:
+                cleaned = _SPEAKER_RE.sub('', cleaned)
             # collapse whitespace runs that the strips may have
             # left behind
             cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip()
@@ -411,3 +431,20 @@ def strip_hi_annotations(text):
         if text_lines and len(kept_lines) >= 3:
             out_blocks.append('\n'.join(kept_lines))
     return '\r\n\r\n'.join(out_blocks) + '\r\n' if out_blocks else ''
+
+
+def strip_leaked_speaker_prefix(text):
+    """Remove any ALL-CAPS Latin speaker prefix (e.g. 'MABEL: ', '- DR. SMITH: ')
+    that LEAKED into the translated Hebrew OUTPUT. The prompt tells the model to
+    use such a prefix for gender then drop it, but model compliance isn't perfect.
+    A real Hebrew line can NEVER match (the pattern needs a leading A-Z Latin run),
+    and index/timecode/blank lines can't either, so this strips ONLY a genuinely-
+    leaked English prefix and never touches Hebrew dialogue -- while preserving the
+    exact line/newline structure (no entries dropped, cue timing intact). A leading
+    dialogue dash is kept. Idempotent; never raises into the caller."""
+    if not text:
+        return text
+    try:
+        return _LEAKED_SPEAKER_RE.sub(lambda m: m.group('pre'), text)
+    except Exception:
+        return text
