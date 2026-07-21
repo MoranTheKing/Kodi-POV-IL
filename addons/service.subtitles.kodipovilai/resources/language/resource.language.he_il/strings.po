@@ -291,24 +291,24 @@ msgid "RTL punctuation fix direction"
 msgstr "כיוון תיקון ניקוד RTL"
 
 msgctxt "#32223"
-msgid "How to handle Hebrew end-of-sentence punctuation. Default 'reverse' moves trailing punct to the line start -- correct for Kodi setups that render source order without BiDi reorder (the observed default behaviour across Windows / Android / FENtastic). 'legacy' is the previous default (move leading punct to end) -- only use it if 'reverse' produces wrong output on your particular setup. 'off' disables the post-processor entirely."
-msgstr "איך לטפל בניקוד סוף-משפט בעברית. 'reverse' (ברירת מחדל) מזיז ניקוד מהסוף להתחלה - נכון לרוב המכשירים (Windows / אנדרואיד / FENtastic) שלא עושים BiDi reorder. 'rtl_base' במקום זה עוטף כל שורה עברית בכיוון RTL מפורש, כך שה-BiDi של הנגן ממקם ניקוד, מספרים, שמות באנגלית וסוגריים נכון - תיקון-שורש, אבל תלוי בכך שהנגן שלך מכבד את הסימנים, אז נסה ותבדוק. 'legacy' היא ברירת המחדל הישנה (להזיז להפך). 'off' מבטל לגמרי."
+msgid "How to handle Hebrew right-to-left rendering. Default 'RTL base' wraps each Hebrew line in an explicit right-to-left embedding so the player's own BiDi places punctuation, numbers, English names and parentheses on the correct side -- the root-cause fix. If your player does not honour the marks, switch to 'Reverse', which only moves the end-of-sentence punctuation (the previous default). 'legacy' moves leading punct to the end. 'off' disables the post-processor entirely."
+msgstr "איך לטפל ברינדור ימין-לשמאל בעברית. 'RTL base' (ברירת מחדל) עוטף כל שורה עברית בכיוון RTL מפורש, כך שה-BiDi של הנגן ממקם ניקוד, מספרים, שמות באנגלית וסוגריים בצד הנכון - תיקון-שורש. אם הנגן שלך לא מכבד את הסימנים, עבור ל-'Reverse' שמזיז רק את נקודת סוף-המשפט (ברירת המחדל הקודמת). 'legacy' מזיז ניקוד מוביל לסוף. 'off' מבטל לגמרי."
 
 msgctxt "#32224"
 msgid "Legacy (move punct to end - old default, usually wrong)"
 msgstr "Legacy (להזיז לסוף - ברירת מחדל ישנה, לרוב לא נכון)"
 
 msgctxt "#32225"
-msgid "Reverse (move punct to start - default, correct on most setups)"
-msgstr "Reverse (להזיז להתחלה - ברירת מחדל, נכון לרוב המכשירים)"
+msgid "Reverse (move only end punctuation - use if RTL base looks wrong)"
+msgstr "Reverse (מזיז רק ניקוד סוף - השתמש אם RTL base נראה שגוי)"
 
 msgctxt "#32226"
 msgid "Off (no punctuation processing)"
 msgstr "Off (בלי תיקון ניקוד)"
 
 msgctxt "#32227"
-msgid "RTL base (wrap lines RTL - fixes numbers/English/parentheses too; try + verify)"
-msgstr "RTL base (עטיפת שורות ב-RTL - מתקן גם מספרים/אנגלית/סוגריים; נסה ותבדוק)"
+msgid "RTL base (default - fixes numbers/English/parentheses/period)"
+msgstr "RTL base (ברירת מחדל - מתקן מספרים/אנגלית/סוגריים/נקודה)"
 
 msgctxt "#32500"
 msgid "Community pool"
