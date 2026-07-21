@@ -1,3 +1,13 @@
+v0.2.416
+- "RTL base" is now the DEFAULT RTL rendering mode (was opt-in in 0.2.414-0.2.415,
+  now verified on-device). Hebrew subtitles get correct placement of numbers,
+  English names, quoted English, parentheses AND end punctuation out of the box --
+  no setting to change. If a player does not honour the directional marks, switch
+  "RTL punctuation fix direction" back to "Reverse" (the previous default, which
+  only fixes the sentence period). Purely a rendering change; nothing is sent to
+  the network and the community pool is unaffected (every mode adapts shared text
+  on read).
+
 v0.2.415
 - "RTL base" mode polish: a username / handle that ends a Hebrew sentence on its
   own wrapped line (e.g. "Modelbehavior36.") now shows its trailing period on the
