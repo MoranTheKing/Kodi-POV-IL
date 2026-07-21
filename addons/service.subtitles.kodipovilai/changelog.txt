@@ -1,3 +1,11 @@
+v0.2.412
+- SDH-aware AI translation, Phase 3b: content-detected SDH subtitles are now
+  shared through the community pool, so a subtitle one user found to be SDH is
+  preferred + labelled "SDH (מדויק למגדר)" at everyone else's pick list too --
+  even before they download it. Opt-in (rides the existing pool share/use
+  settings), cost-frugal (deduped, fetched at most once every 3 days), and it
+  reads a local cache on the pick path so it never slows subtitle search.
+
 v0.2.411
 - SDH-aware AI translation, Phase 3: an SDH (hearing-impaired) subtitle is now
   also recognised from its CONTENT -- a subtitle densely marked with bracketed
