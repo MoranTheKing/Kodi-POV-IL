@@ -39,6 +39,20 @@ _SPEAKER_RE = re.compile(
 _LEAKED_SPEAKER_RE = re.compile(
     r'(?m)^(?P<pre>[ \t]*(?:-[ \t]+)?)[A-Z][A-Z0-9 \'\.\-]{1,30}:[ \t]*'
 )
+# Same ALL-CAPS speaker tag, but Hebrew-GATED: strip it only when the rest of
+# that line contains a Hebrew character -- i.e. the model translated the line
+# to Hebrew and merely LEAKED the tag. Used on the shipped Hebrew OUTPUT so a
+# line the model deliberately left in English (an on-screen caption / news
+# chyron / URL like "WARNING: ...", "PART 2: THE RETURN", "HTTP://...") is
+# NEVER corrupted -- those have no Hebrew after the colon, so they don't match.
+# An optional leading inline wrapper (<i>/<b>/<font ...>) the tag can hide
+# behind is allowed and preserved (kept in the 'pre' group). The [^>\n]{1,40}
+# tag body is bounded and '>'-free, so there is no catastrophic backtracking.
+_LEAKED_SPEAKER_RE_HE = re.compile(
+    r'(?m)^(?P<pre>[ \t]*(?:<[^>\n]{1,40}>[ \t]*)?(?:-[ \t]+)?)'
+    r'[A-Z][A-Z0-9 \'\.\-]{1,30}:[ \t]*'
+    r'(?=[^\n]*[֐-׿])'
+)
 _INDEX_RE = re.compile(r'^\d+$')
 _TIMECODE_RE = re.compile(
     r'^\d{1,2}:\d{2}:\d{2}[,\.]\d{1,3}\s*-->\s*'
@@ -433,18 +447,25 @@ def strip_hi_annotations(text, keep_speaker_prefixes=False):
     return '\r\n\r\n'.join(out_blocks) + '\r\n' if out_blocks else ''
 
 
-def strip_leaked_speaker_prefix(text):
+def strip_leaked_speaker_prefix(text, hebrew_only=False):
     """Remove any ALL-CAPS Latin speaker prefix (e.g. 'MABEL: ', '- DR. SMITH: ')
-    that LEAKED into the translated Hebrew OUTPUT. The prompt tells the model to
-    use such a prefix for gender then drop it, but model compliance isn't perfect.
-    A real Hebrew line can NEVER match (the pattern needs a leading A-Z Latin run),
-    and index/timecode/blank lines can't either, so this strips ONLY a genuinely-
-    leaked English prefix and never touches Hebrew dialogue -- while preserving the
-    exact line/newline structure (no entries dropped, cue timing intact). A leading
-    dialogue dash is kept. Idempotent; never raises into the caller."""
+    that LEAKED into a line. The prompt tells the model to use such a prefix for
+    gender then drop it, but model compliance isn't perfect. Index/timecode/blank
+    lines can never match (the pattern needs a leading A-Z Latin run), and the
+    exact line/newline structure is preserved (no entries dropped, cue timing
+    intact). A leading dialogue dash is kept. Never raises into the caller.
+
+    hebrew_only=True (use on the shipped Hebrew OUTPUT) strips the tag ONLY when
+    the rest of that line contains a Hebrew character, so a line the model
+    deliberately left in English -- a caption/chyron/URL like 'WARNING: ...' or
+    'HTTP://...' -- is never corrupted. The default (un-gated) strips any leading
+    ALL-CAPS 'NAME:' and is used on transient ENGLISH placeholders (the interim
+    first-chunk fallback, the progressive stitch) and on the pre-Google source,
+    matching the historical source-side speaker-prefix stripping."""
     if not text:
         return text
     try:
-        return _LEAKED_SPEAKER_RE.sub(lambda m: m.group('pre'), text)
+        rx = _LEAKED_SPEAKER_RE_HE if hebrew_only else _LEAKED_SPEAKER_RE
+        return rx.sub(lambda m: m.group('pre'), text)
     except Exception:
         return text

@@ -2342,14 +2342,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
 
     # Fast-first-chunk hand-off: release the English fallback to the
     # caller (e.g. DarkSubs) so Kodi can start showing SOMETHING in
-    # seconds while we translate in the background. The bytes are
-    # the POST-strip src_text -- the same source we'll feed to
-    # Gemini -- so what the user sees onscreen matches what gets
-    # translated. A buggy callback must not abort us.
+    # seconds while we translate in the background. The bytes are the
+    # POST-strip src_text with any leading ALL-CAPS speaker prefix removed
+    # for display -- src_text itself keeps those prefixes (Gemini uses them
+    # for per-line gender), but the onscreen English placeholder must not
+    # show raw "MABEL:" tags. A buggy callback must not abort us.
     if progressive_cb is not None:
         try:
             progressive_cb('first_ready', {
-                'fallback_text': src_text,
+                'fallback_text': srt.strip_leaked_speaker_prefix(src_text),
                 'source_id': _progressive_source_id,
                 'release': _src_release,
             })
@@ -3228,10 +3229,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     final = srt.stitch_blocks(out_blocks)
     # Defensive backstop for the SPEAKER-PREFIX HINT: we now KEEP 'MABEL:' prefixes
     # in the source so the model can use them for per-line gender (prompt.py), and
-    # it's told to drop the tag from its Hebrew output. Strip any it failed to drop
-    # -- a leaked prefix is ALL-CAPS Latin, which a real Hebrew line never is, so
-    # this never touches genuine dialogue.
-    final = srt.strip_leaked_speaker_prefix(final)
+    # it's told to drop the tag from its Hebrew output. Strip any it failed to drop,
+    # but ONLY on a line that actually has Hebrew (hebrew_only) -- so a leaked tag on
+    # a translated line is removed while a caption/chyron/URL the model deliberately
+    # left in English ("WARNING: ...", "PART 2: ...", "HTTP://...") is never eaten.
+    final = srt.strip_leaked_speaker_prefix(final, hebrew_only=True)
     # Defensive backstop for RTL punctuation: Gemini sometimes puts
     # punctuation at the logical start of a Hebrew line ("?שלום")
     # when it belongs at the logical end ("שלום?"). The prompt
