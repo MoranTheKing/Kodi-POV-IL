@@ -157,6 +157,10 @@ def _run_build_startup_repairs():
         monitor = None
 
     steps = (
+        # FIRST: heal Idan Plus before the user can navigate to it (a corrupt
+        # displayChannels.json otherwise crashes every channel load). Cheap,
+        # self-contained, and independent of the POV/skin repairs below.
+        _maybe_patch_idanplus_channels,
         _maybe_patch_hebrew_build_ui,
         _maybe_patch_brand_assets,
         _maybe_install_build_icons,
@@ -192,7 +196,6 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_meta_blank,
         _maybe_patch_pov_build_content_logger,
         _maybe_patch_pov_debrid_status,
-        _maybe_patch_idanplus_channels,
         _maybe_show_af3_first_launch_dialog,
         _maybe_show_debrid_status,
         _maybe_reload_for_tiles,
