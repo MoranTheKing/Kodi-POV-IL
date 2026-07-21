@@ -469,3 +469,57 @@ def strip_leaked_speaker_prefix(text, hebrew_only=False):
         return rx.sub(lambda m: m.group('pre'), text)
     except Exception:
         return text
+
+
+# --- content-based SDH detection (Phase 3) -----------------------------------
+# Music glyphs an SDH sub uses to mark lyrics.
+_SDH_MUSIC_GLYPHS = '♪♫♬♩'
+# A bracketed cue that carries a real sound/action description -- REQUIRES two
+# consecutive letters inside, so a bare "[2020]" / "(?)" / "(!)" never counts
+# (those are not SDH markers). Classes are bracket-free so there is no
+# catastrophic backtracking on cue-sized text.
+_SDH_BRACKET_RE = re.compile(
+    r'[\[\(\{][^\[\]\(\){}]*[A-Za-z]{2,}[^\[\]\(\){}]*[\]\)\}]')
+
+
+def sdh_content_stats(text):
+    """Scan cue entries for hearing-impaired / SDH content markers: a bracketed
+    sound/action cue ("[door creaks]"), a leading ALL-CAPS speaker label
+    ("MABEL:"), or a music glyph. Returns (total_entries, annotated_entries,
+    ratio). A plain sub scores ~0; an SDH sub is heavily annotated. Only counts
+    entries that actually have dialogue text. Never raises."""
+    try:
+        blocks = parse_blocks(text)
+    except Exception:
+        return (0, 0, 0.0)
+    total = 0
+    annotated = 0
+    for b in blocks:
+        try:
+            t = block_text_only(b)
+        except Exception:
+            continue
+        if not t:
+            continue
+        total += 1
+        if (any(g in t for g in _SDH_MUSIC_GLYPHS)
+                or _SDH_BRACKET_RE.search(t)
+                or any(_SPEAKER_RE.match(ln.strip()) for ln in t.split('\n'))):
+            annotated += 1
+    ratio = (annotated / float(total)) if total else 0.0
+    return (total, annotated, ratio)
+
+
+def is_sdh_content(text, min_entries=20, min_annotated=12, min_ratio=0.12):
+    """Conservative content-based SDH classifier. HIGH precision is the explicit
+    design goal (zero false positives): it returns True ONLY when a substantial,
+    DENSE fraction of entries carry SDH markers -- a regular subtitle (whose
+    marker ratio sits well under a couple of percent) can never cross all three
+    thresholds, while a genuinely hearing-impaired sub clears them with margin.
+    Used AFTER download (the text isn't available when the list is built) to
+    learn a release's SDH-ness for future ranking. Never raises."""
+    try:
+        total, annotated, ratio = sdh_content_stats(text)
+    except Exception:
+        return False
+    return total >= min_entries and annotated >= min_annotated and ratio >= min_ratio
