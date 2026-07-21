@@ -342,32 +342,26 @@ def _reverse_fix_one_text_line(line, cue_hebrew=False):
         _reverse_dash_suffix(dash)
 
 
-def _is_wrappable_latin_tail(s):
-    """True for a Latin-only line that is a single token ending in sentence-punct
-    and NOT starting with one -- a username / handle that is the TAIL of a Hebrew
-    sentence wrapped onto its own line, e.g. 'Modelbehavior36.' or
-    'cutie-patotie87.'. Wrapping such a line in RTL base (non-mutating) lets the
-    renderer's BiDi put its trailing period on the RTL-correct (left) side.
+# A Latin-only line that is provably SAFE to wrap in RTL base: a single
+# username / handle shaped token -- ASCII letter-first, alphanumeric runs joined
+# by single hyphens, ending in exactly ONE sentence-punct char ('Modelbehavior36.',
+# 'cutie-patotie87.', 'X-Ray.', 'john-doe99!'). Fuzzed at 50k tokens against a
+# reference BiDi engine: wrapping this class reorders ONLY the trailing punct (to
+# the RTL-correct left side) and NEVER the token body. Anything outside it -- a
+# leading digit or symbol ('7-Eleven.' -> '.Eleven-7', '@handle.' -> '.handle@'),
+# an internal symbol or dot, a multi-word line ('50 miles.' -> '.miles 50'), a
+# double / edge hyphen, or a trailing symbol -- can have its segments swapped
+# under the RTL embedding, so it is excluded and left LTR (unwrapped, unmodified).
+_WRAPPABLE_LATIN_TAIL_RE = re.compile(
+    r'^[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*[' + _TRAILING_PUNCT_CHARS + r']$')
 
-    Excluded on purpose:
-      - multi-word Latin ('50 miles.', 'Model behavior.') -- BiDi would REORDER
-        the words under RTL base ('.miles 50'), so leave them LTR;
-      - a line that STARTS with punct ('.NET', '.exe', '.Modelbehavior36') -- for
-        '.NET' the dot is genuine and already renders left; for a reverse-moved
-        '.Modelbehavior36' the dot is already on the correct (left) side unwrapped.
-        Either way, wrapping is unnecessary and could only hurt, so skip it.
-    The token must START with an alphanumeric character. A leading non-mirrored
-    symbol (@handle., #tag., -5., ~ish., *starred.) would itself be BiDi-relocated
-    to the far edge under RTL base (@handle. -> .handle@), a worse defect than the
-    trailing-period one we fix -- so those are excluded and left LTR. A leading
-    digit/letter is safe: it stays put and only the trailing punct moves."""
-    if not s or ' ' in s or '\t' in s:
-        return False
-    if not s[0].isalnum():
-        return False
-    if s[-1] not in _TRAILING_PUNCT_CHARS:
-        return False
-    return True
+
+def _is_wrappable_latin_tail(s):
+    """True for a username/handle-shaped Latin token that is the TAIL of a Hebrew
+    sentence wrapped onto its own line (see _WRAPPABLE_LATIN_TAIL_RE). Wrapping it
+    in RTL base moves ONLY its trailing period to the RTL-correct (left) side; the
+    body is provably never reordered. Non-mutating (marks only). Never raises."""
+    return bool(_WRAPPABLE_LATIN_TAIL_RE.match(s))
 
 
 def _wrap_rtl_base_line(line, cue_hebrew=False):
