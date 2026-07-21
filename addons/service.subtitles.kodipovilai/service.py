@@ -192,6 +192,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_meta_blank,
         _maybe_patch_pov_build_content_logger,
         _maybe_patch_pov_debrid_status,
+        _maybe_patch_idanplus_channels,
         _maybe_show_af3_first_launch_dialog,
         _maybe_show_debrid_status,
         _maybe_reload_for_tiles,
@@ -447,6 +448,35 @@ def _maybe_unpatch_fentastic_notification():
         fentastic_patcher.ensure_unpatched()
     except Exception:
         pass
+
+
+def _maybe_patch_idanplus_channels():
+    """Heal + harden Idan Plus (plugin.video.idanplus) channel loading.
+
+    A corrupt/partial displayChannels.json makes idanplus read its channel
+    map as a list and crash ("'list' object has no attribute 'items'"), so
+    no channel loads or plays and the addon can't self-repair. We move a
+    corrupt file aside (idanplus then rebuilds it from the remote list) and,
+    best-effort, harden common.py so a future corruption degrades to a
+    rebuild instead of a crash. No-op when idanplus isn't installed;
+    idempotent + safe every startup."""
+    try:
+        from resources.lib import idanplus_channels_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = idanplus_channels_patcher.ensure_patched()
+        if status != 'no_target':
+            kodi_utils.log(
+                'idanplus_channels_patcher: {0}'.format(status),
+                level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'idanplus_channels_patcher run failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
 
 
 def _maybe_fix_pov_favourites_typo():
