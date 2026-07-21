@@ -1025,7 +1025,22 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
      (settings.xml default + srt.py three fallbacks reverse->rtl_base; labels/help
      reworded; `reverse` kept for players that ignore the marks). Purely a local
      rendering default -- no network/pool/worker impact. Maintainer-approved after
-     on-device verification.
+     on-device verification. Because this flip runs `rtl_base` over every existing
+     user's `reverse`-SHAPED cache (`_reapply_rtl_fix_in_place` reruns on every
+     cache hit), `_wrap_rtl_base_line` gained a cache-repair step: `reverse` had
+     relocated a leading dialogue dash "- " to a TRAILING " -" (and the punct to
+     the front), which the leading-only normalization couldn't undo -- so a
+     two-speaker cue rendered with the dash stranded. The Hebrew-line branch now
+     moves a trailing " -" back to a leading "- " when `_LEADING_PUNCT_RE` matches
+     `st[:-2]` (that regex skips a leading open-tag run, so `<i>`-wrapped cues are
+     handled too; a genuine trailing interruption dash "שלום -" has no leading
+     punct so it's left alone). Sonnet x2 (found+fixed a tag-blind SHIP-BLOCKER);
+     169 assertions + 3.7k-shape dash fuzz + 800k-token username-tail fuzz across
+     the series, all vs the python-bidi reference engine. Known residual (pre-
+     existing, out of scope, rare): a reverse-relocated trailing ELLIPSIS ends up
+     mid-line under `rtl_base` -- the dash is fixed but the "..." placement is the
+     same imperfection as 0.2.415, since `_ELLIPSIS_RE` can't tell a genuine
+     leading ellipsis from a relocated one.
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
