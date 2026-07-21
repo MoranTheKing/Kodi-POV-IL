@@ -37,9 +37,16 @@ except Exception:
 
 _CACHE = ('special://profile/addon_data/service.subtitles.kodipovilai/'
           'sdh_shared.json')
-_TTL = 86400.0            # refetch the shared set at most once/day
+# Pull the shared set at most once per 3 days (it grows slowly, and every fetch
+# is a worker request -- we are close to the free-tier cap, so keep it rare).
+_TTL = 259200.0
 _POST_TIMEOUT = 8
 _MAX_KEYS = 5000
+
+# Session-level dedup so we never POST the same release twice, and so a release
+# already in the shared set is never re-sent -- keeps added worker invocations
+# to (at most) the genuinely-new SDH releases this share-enabled user finds.
+_PUSHED = set()
 
 
 def _translate(p):
@@ -64,11 +71,17 @@ def contribute_sdh(release):
         rel = pool.worker_norm_release(release)
         if not rel or len(rel) > 200:
             return
+        if rel in _PUSHED:            # already sent this session -> skip
+            return
+        if is_shared_sdh(release):    # already in the shared set -> nothing to add
+            _PUSHED.add(rel)
+            return
         req = _urlreq.Request(
             pool.POOL_URL + '/sdh',
             data=json.dumps({'rel': rel}).encode('utf-8'),
             headers=pool._post_headers('/sdh'), method='POST')
         _urlreq.urlopen(req, timeout=_POST_TIMEOUT).read()
+        _PUSHED.add(rel)
     except Exception:
         pass
 
