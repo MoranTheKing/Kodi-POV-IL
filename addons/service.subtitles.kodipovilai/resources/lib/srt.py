@@ -356,9 +356,18 @@ def _wrap_rtl_base_line(line):
 
     Only Hebrew-carrying lines are wrapped: a line deliberately left in English
     (an on-screen caption / URL) is returned untouched so it stays LTR. Index /
-    timecode / blank lines never reach here (the caller skips them). Idempotent:
-    any existing edge BiDi marks (including a prior RLE/PDF) are stripped before
-    re-wrapping, so a benign re-run is a no-op."""
+    timecode / blank lines never reach here (the caller skips them).
+
+    Crucially, the line is first NORMALIZED back to pristine LOGICAL order before
+    wrapping. Cached and pool-shared SRT text was post-processed once already, by
+    whatever rtl_punct_mode was active at WRITE time -- and 'reverse' (the
+    long-standing default) MOVES end-of-sentence punct to the line START. RTL-base
+    rendering needs that punct at its logical END, so we run the inverse
+    ('legacy': move a leading sentence-punct back to the end, ellipsis-guarded)
+    first. That makes the wrap correct for fresh, reverse-cached AND pool content
+    alike -- pool items carry no mode metadata, so a puller must not assume the
+    contributor used the same mode. Idempotent: edge BiDi marks (including a prior
+    RLE/PDF) are stripped and the normalization converges, so a re-run is a no-op."""
     s = line
     while s and s[0] in _INVISIBLE_BIDI:
         s = s[1:]
@@ -370,7 +379,11 @@ def _wrap_rtl_base_line(line):
         # No Hebrew -> leave it LTR. Return the cleaned form only if we actually
         # removed stray edge marks; otherwise the original line verbatim.
         return s if s != line else line
-    return _RLE + s + _PDF
+    # Undo any 'reverse'/'legacy' mutation baked into cached/pool text: move a
+    # displaced leading sentence-punct back to the logical end. On pristine
+    # (fresh AI) text this is a no-op -- Hebrew never authors a leading . , ; : ! ?
+    normalized = _fix_one_text_line(s)
+    return _RLE + normalized + _PDF
 
 
 def parse_blocks(text):
