@@ -944,6 +944,32 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    registry assertions. Phase 3b (deferred): share this registry via a
    pool-backed SDH registry so users benefit from each other's downloads
    (heavier -- touches pool.py + the worker).
+
+   **SDH Phase 3b: pool-shared SDH registry + 2 dashboard fixes (AI 0.2.412 /
+   quickfix 0.1.451; notification #510; worker redeploy):**
+   - **Shared SDH (new `sdh_pool.py`; worker `/sdh` POST+GET):** a release one
+     user CONTENT-detected as SDH is shared so everyone's ranking prefers+labels
+     it. Reuses pool.py's SIGNED transport WITHOUT modifying pool.py (sign covers
+     method+path+anon, not the body) -- so the community key stays byte-identical.
+     `contribute_sdh` (share-gated, daemon-thread POST, session-dedup +
+     skip-if-already-shared), `refresh_shared_sdh` (use-gated, 3-day TTL, warmed
+     from the background service via `_maybe_refresh_shared_sdh`), `is_shared_sdh`
+     (reads a LOCAL cache only -- NEVER network on the ranking path; 5s memo gated
+     on use_enabled). translate.py `_is_sdh_ext` also consults the shared set.
+     Worker: dedicated `sdh_reg` D1 table (`INSERT OR IGNORE`, parameterized,
+     `idx_sdh_reg_ts` index, cron prune to newest 4000) -- no pool-`kv` pollution.
+     COST NOTE: the pool is ON by default for everyone (settings.xml default=true
+     + `_maybe_default_pool_on`/`_maybe_force_pool_share`), so 3b runs for all
+     users; kept minimal (once-per-3-day GET + rare deduped POST) since we're near
+     the CF free-tier cap. Sonnet: SHIP-READY x2 (design + NIT fixes). 30+19+22
+     assertions. Phase 3c (further): none planned.
+   - **Dashboard fixes (worker only, delivered out-of-band):** (1) Recent-activity
+     + failures now sort by `ts` (was `.reverse()` on id/insertion order, so
+     late/backfilled telemetry showed out of sequence). (2) A leaked Kodi infolabel
+     token ("VideoPlayer.Label") as a title is blanked via a WHOLE-STRING anchor
+     `/^(VideoPlayer|ListItem|Container|System|MusicPlayer|Player|Window|Skin)\.[A-Za-z]+$/i`
+     at both ingest points (foldEmbVariant + foldRow) -- a real multi-part release
+     (Container.2006, System.Crasher.2019) never matches.
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
