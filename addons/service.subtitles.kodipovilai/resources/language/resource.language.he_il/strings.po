@@ -292,7 +292,7 @@ msgstr "כיוון תיקון ניקוד RTL"
 
 msgctxt "#32223"
 msgid "How to handle Hebrew end-of-sentence punctuation. Default 'reverse' moves trailing punct to the line start -- correct for Kodi setups that render source order without BiDi reorder (the observed default behaviour across Windows / Android / FENtastic). 'legacy' is the previous default (move leading punct to end) -- only use it if 'reverse' produces wrong output on your particular setup. 'off' disables the post-processor entirely."
-msgstr "איך לטפל בניקוד סוף-משפט בעברית. 'reverse' (ברירת מחדל) מזיז ניקוד מהסוף להתחלה - נכון לרוב המכשירים (Windows / אנדרואיד / FENtastic) שלא עושים BiDi reorder. 'legacy' היא ברירת המחדל הישנה (להזיז להפך) - השתמש רק אם 'reverse' לא נראה נכון אצלך. 'off' מבטל לגמרי."
+msgstr "איך לטפל בניקוד סוף-משפט בעברית. 'reverse' (ברירת מחדל) מזיז ניקוד מהסוף להתחלה - נכון לרוב המכשירים (Windows / אנדרואיד / FENtastic) שלא עושים BiDi reorder. 'rtl_base' במקום זה עוטף כל שורה עברית בכיוון RTL מפורש, כך שה-BiDi של הנגן ממקם ניקוד, מספרים, שמות באנגלית וסוגריים נכון - תיקון-שורש, אבל תלוי בכך שהנגן שלך מכבד את הסימנים, אז נסה ותבדוק. 'legacy' היא ברירת המחדל הישנה (להזיז להפך). 'off' מבטל לגמרי."
 
 msgctxt "#32224"
 msgid "Legacy (move punct to end - old default, usually wrong)"
@@ -305,6 +305,10 @@ msgstr "Reverse (להזיז להתחלה - ברירת מחדל, נכון לרו�
 msgctxt "#32226"
 msgid "Off (no punctuation processing)"
 msgstr "Off (בלי תיקון ניקוד)"
+
+msgctxt "#32227"
+msgid "RTL base (wrap lines RTL - fixes numbers/English/parentheses too; try + verify)"
+msgstr "RTL base (עטיפת שורות ב-RTL - מתקן גם מספרים/אנגלית/סוגריים; נסה ותבדוק)"
 
 msgctxt "#32500"
 msgid "Community pool"
