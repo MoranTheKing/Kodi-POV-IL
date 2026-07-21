@@ -295,12 +295,14 @@ def _gender_src_rank(source_lang):
 
 def _is_sdh_ext(cand, release):
     """True when an EXTERNAL subtitle is hearing-impaired / SDH: the provider's
-    own flag, or a WHOLE-TOKEN 'sdh' / 'hearing impaired' marker in the release
-    name. NEVER a bare substring -- 'hi' inside 'Highlander' / 'cc' inside
-    'Soccer' must not match; bare 'hi'/'cc' are not markers at all (too
-    ambiguous). SDH subs carry the full dialogue + speaker labels, so they are
-    the most complete source and (with speaker-gender harvesting) the most
-    gender-accurate. Best-effort; never raises."""
+    own flag, a WHOLE-TOKEN 'sdh' / 'hearing impaired' marker in the release
+    name, or a release previously CONTENT-detected as SDH (Phase 3 local
+    registry -- learned from a past download's text). NEVER a bare substring --
+    'hi' inside 'Highlander' / 'cc' inside 'Soccer' must not match; bare
+    'hi'/'cc' are not markers at all (too ambiguous). SDH subs carry the full
+    dialogue + speaker labels, so they are the most complete source and (with
+    speaker-gender harvesting) the most gender-accurate. Best-effort; never
+    raises."""
     try:
         if cand and cand.get('is_hi'):
             return True
@@ -308,7 +310,8 @@ def _is_sdh_ext(cand, release):
         pass
     try:
         from . import release_match
-        toks = release_match.tokens(release or '')
+        _rel = release or ''
+        toks = release_match.tokens(_rel)
     except Exception:
         return False
     if 'sdh' in toks:
@@ -316,6 +319,12 @@ def _is_sdh_ext(cand, release):
     for i in range(len(toks) - 1):
         if toks[i] == 'hearing' and toks[i + 1] == 'impaired':
             return True
+    try:
+        from . import sdh_registry
+        if sdh_registry.is_known_sdh(release_match.normalize(_rel)):
+            return True
+    except Exception:
+        pass
     return False
 
 
@@ -2224,6 +2233,18 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             time_ms=5000,
         )
         return None
+
+    # Phase 3: learn SDH-ness from the RAW source text (BEFORE _prepare_source
+    # strips the HI annotations the classifier looks for), so a future ranking
+    # of the same release can prefer + label it -- the text isn't available when
+    # the subtitle list is built. Conservative (zero false positives) and fully
+    # best-effort: a miss just means no future hint.
+    try:
+        if _src_release and srt.is_sdh_content(src_text):
+            from . import sdh_registry, release_match
+            sdh_registry.record_sdh(release_match.normalize(_src_release))
+    except Exception:
+        pass
 
     # Strip hearing-impaired noise BEFORE translation. Source SRTs
     # often have things like "[breathing heavily]" / "(music plays)"
