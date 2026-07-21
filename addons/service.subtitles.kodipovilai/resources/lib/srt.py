@@ -227,7 +227,7 @@ def fix_rtl_punctuation(text, mode=None):
         if mode == 'legacy':
             out_lines.append(_fix_one_text_line(line))
         elif mode == 'rtl_base':
-            out_lines.append(_wrap_rtl_base_line(line))
+            out_lines.append(_wrap_rtl_base_line(line, cue_hebrew=cue_hebrew))
         else:
             # 'reverse' (default) or anything unrecognised
             out_lines.append(_reverse_fix_one_text_line(line, cue_hebrew=cue_hebrew))
@@ -271,6 +271,37 @@ _LATIN_TAIL_PUNCT_RE = re.compile(
     r'(?P<trailing>[' + _TRAILING_PUNCT_CHARS + r']+)'
     r'(?P<close_tags>(?:</[a-zA-Z][^>]*>)*)\s*$'
 )
+# INVERSE of _LATIN_TAIL_PUNCT_RE: matches a Latin-only line whose sentence-punct
+# is at the START (the shape 'reverse' mode leaves behind, e.g. '.Modelbehavior36'
+# or '.Modelbehavior36 -' or '<i>.Modelbehavior36</i>'). Used only by the
+# 'rtl_base' mode to UNDO that move on cached/pool text (move the punct back to the
+# logical end, restore a dialogue dash to the start) so it matches a fresh
+# rtl_base render. Guarded by cue_hebrew, so a standalone Latin line is untouched.
+_LATIN_LEADING_PUNCT_RE = re.compile(
+    r'^(?P<open_tags>(?:<[a-zA-Z!][^>]*>)*)'
+    r'(?P<leading>[' + _TRAILING_PUNCT_CHARS + r']+)'
+    r'(?P<pre>.*?[^' + _TRAILING_PUNCT_CHARS + r'\s])'
+    r'(?P<close_tags>(?:</[a-zA-Z][^>]*>)*)'
+    r'(?P<enddash>\s+-)?\s*$'
+)
+
+
+def _undo_latin_tail_move(stripped):
+    """Undo 'reverse' mode's Latin-continuation punct move on a Latin-only line:
+    a leading sentence-punct goes back to the end, and a trailing ' -' (a dialogue
+    dash reverse relocated) goes back to the start. Returns the line unchanged if
+    it doesn't look like a reverse-moved Latin line. Best-effort, never raises."""
+    lm = _LATIN_LEADING_PUNCT_RE.match(stripped)
+    if not lm:
+        return stripped
+    leading = lm.group('leading')
+    pre = lm.group('pre') or ''
+    if not pre or _ELLIPSIS_RE.match(leading):
+        return stripped
+    open_tags = lm.group('open_tags') or ''
+    close_tags = lm.group('close_tags') or ''
+    dash = '- ' if lm.group('enddash') else ''
+    return dash + open_tags + pre + leading + close_tags
 
 
 def _reverse_dash_suffix(dash):
@@ -342,10 +373,17 @@ def _reverse_fix_one_text_line(line, cue_hebrew=False):
         _reverse_dash_suffix(dash)
 
 
-def _wrap_rtl_base_line(line):
+def _wrap_rtl_base_line(line, cue_hebrew=False):
     """Wrap a Hebrew text line in an explicit RTL embedding (RLE .. PDF) so the
     subtitle renderer treats it with a right-to-left BASE direction. Used by the
     'rtl_base' rtl_punct_mode.
+
+    `cue_hebrew` is True when an EARLIER line of the same cue carried Hebrew. It
+    only matters for a Latin-ONLY line (a username / handle wrapped onto its own
+    line, e.g. 'Modelbehavior36.'): if that line sits inside a Hebrew cue and was
+    already moved to '.Modelbehavior36' by a previous 'reverse'-mode pass (cache /
+    pool), we undo that move so it matches a fresh rtl_base render. A genuinely
+    standalone Latin line (cue_hebrew False) is never touched.
 
     With a correct RTL base, the renderer's own BiDi places embedded LTR runs --
     numbers ('50'), usernames ('cutie-patotie87'), quoted English ('"Model
@@ -376,8 +414,15 @@ def _wrap_rtl_base_line(line):
     if not s.strip():
         return line
     if not _HEB_LETTER_RE.search(s):
-        # No Hebrew -> leave it LTR. Return the cleaned form only if we actually
-        # removed stray edge marks; otherwise the original line verbatim.
+        # No Hebrew -> leave it LTR (unwrapped). But if it is a Latin-only
+        # CONTINUATION line of a Hebrew cue whose punct a prior 'reverse' pass
+        # moved to the start (cache/pool), undo that so it matches fresh rtl_base.
+        if cue_hebrew:
+            undone = _undo_latin_tail_move(s)
+            if undone != s:
+                return undone
+        # Return the cleaned form only if we actually removed stray edge marks;
+        # otherwise the original line verbatim.
         return s if s != line else line
     # Undo any 'reverse'/'legacy' mutation baked into cached/pool text: move a
     # displaced leading sentence-punct back to the logical end. On pristine
