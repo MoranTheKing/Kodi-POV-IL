@@ -356,10 +356,16 @@ def _is_wrappable_latin_tail(s):
         '.NET' the dot is genuine and already renders left; for a reverse-moved
         '.Modelbehavior36' the dot is already on the correct (left) side unwrapped.
         Either way, wrapping is unnecessary and could only hurt, so skip it.
-    A single token has no internal whitespace, so BiDi never reorders it."""
+    The token must START with an alphanumeric character. A leading non-mirrored
+    symbol (@handle., #tag., -5., ~ish., *starred.) would itself be BiDi-relocated
+    to the far edge under RTL base (@handle. -> .handle@), a worse defect than the
+    trailing-period one we fix -- so those are excluded and left LTR. A leading
+    digit/letter is safe: it stays put and only the trailing punct moves."""
     if not s or ' ' in s or '\t' in s:
         return False
-    if s[0] in _TRAILING_PUNCT_CHARS or s[-1] not in _TRAILING_PUNCT_CHARS:
+    if not s[0].isalnum():
+        return False
+    if s[-1] not in _TRAILING_PUNCT_CHARS:
         return False
     return True
 
