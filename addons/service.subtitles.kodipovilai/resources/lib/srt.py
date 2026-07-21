@@ -417,12 +417,14 @@ def _wrap_rtl_base_line(line, cue_hebrew=False):
         return s if s != line else line
     # 'reverse' also relocates a leading dialogue dash "- " to a TRAILING " -"
     # suffix (and moves the sentence punct to the front) -- e.g. "- שלום?" was
-    # cached as "?שלום -". Move that dash back to the front so the normalization
-    # below (which only recognizes a LEADING dash) can restore the logical order,
-    # matching a fresh rtl_base render. Gate on a leading sentence-punct so a
-    # genuine trailing interruption dash ("שלום -", no leading punct) is untouched.
+    # cached as "?שלום -", and "- <i>שלום</i>." as "<i>.שלום</i> -". Move that dash
+    # back to the front so the normalization below (which only recognizes a LEADING
+    # dash) can restore the logical order, matching a fresh rtl_base render. The
+    # gate uses _LEADING_PUNCT_RE (which skips a leading open-tag run before the
+    # punct) so tag-wrapped cues match too; a genuine trailing interruption dash
+    # ("שלום -", no leading punct) fails the match and is left untouched.
     st = s.strip()
-    if st.endswith(' -') and st[0] in _TRAILING_PUNCT_CHARS:
+    if st.endswith(' -') and _LEADING_PUNCT_RE.match(st[:-2].rstrip()):
         s = '- ' + st[:-2].rstrip()
     # Undo any 'reverse'/'legacy' mutation baked into cached/pool text: move a
     # displaced leading sentence-punct back to the logical end. On pristine
