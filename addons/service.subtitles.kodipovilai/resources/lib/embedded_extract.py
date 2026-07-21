@@ -53,6 +53,8 @@ _CODEC_PRIVATE = 0x63A2
 _LANG = 0x22B59C
 _LANG_BCP47 = 0x22B59D
 _FORCED = 0x55AA
+_HEARING_IMPAIRED = 0x55AB     # FlagHearingImpaired (Matroska): 1 == SDH/CC track
+_TRACKNAME = 0x536E            # TrackName: human label, often "English (SDH)" etc.
 _CUES = 0x1C53BB6B
 _CUE_POINT = 0xBB
 _CUE_TIME = 0xB3
@@ -483,7 +485,7 @@ class _Source(object):
 
 def _parse_track_entry(data):
     t = {'num': None, 'type': None, 'codec': '', 'lang': '', 'forced': False,
-         'private': b''}
+         'private': b'', 'name': '', 'hearing_impaired': False}
     buf = _Buf(data, 0)
     for eid, size, start in _walk(buf, len(data)):
         if size is None:
@@ -500,6 +502,13 @@ def _parse_track_entry(data):
             t['private'] = payload
         elif eid == _FORCED:
             t['forced'] = bool(_read_uint(payload))
+        elif eid == _HEARING_IMPAIRED:
+            # Authoritative SDH flag -- no guessing. Read from the head bytes we
+            # ALREADY parse for lang/codec, so it's free and works on a strict
+            # debrid token (this is the cheap head read, not the full extract).
+            t['hearing_impaired'] = bool(_read_uint(payload))
+        elif eid == _TRACKNAME:
+            t['name'] = payload.decode('utf-8', 'replace').strip('\x00')
         elif eid in (_LANG, _LANG_BCP47):
             if not t['lang']:
                 t['lang'] = payload.decode('ascii', 'replace').strip('\x00')
@@ -1337,6 +1346,28 @@ def _lang_key(code):
     return _ISO639_CANON.get(c, c)
 
 
+def _name_is_sdh(name):
+    """True when a TrackName clearly marks a hearing-impaired / SDH track. Matches
+    ONLY whole tokens ("english (sdh)" -> ['english','sdh']) -- never a bare
+    substring, so "hi" inside "Highlander" can't match. Bare "hi"/"cc" are
+    deliberately NOT markers (too ambiguous); the authoritative FlagHearingImpaired
+    catches flag-tagged tracks regardless of name."""
+    toks = [t for t in re.split(r'[^a-z0-9]+', (name or '').lower()) if t]
+    if 'sdh' in toks:
+        return True
+    for i in range(len(toks) - 1):
+        if toks[i] == 'hearing' and toks[i + 1] == 'impaired':
+            return True
+    return False
+
+
+def _track_is_sdh(t):
+    """A subtitle track is SDH if the authoritative Matroska flag is set, or its
+    name says so. SDH tracks carry the FULL dialogue (nothing dropped for the
+    hearing), so they translate more completely -- preferred by _pick_track."""
+    return bool(t.get('hearing_impaired')) or _name_is_sdh(t.get('name'))
+
+
 def _pick_track(subs, track_num, lang):
     if track_num is not None:
         for t in subs:
@@ -1372,9 +1403,13 @@ def _pick_track(subs, track_num, lang):
         cand = [t for t in subs if _is_text_codec(t['codec'])
                 and not t['forced']
                 and _lang_match(t['lang'])]
-        # Explicitly-tagged match first, so a track that really carries 'eng'
-        # outranks one that only defaulted to it; then track order.
-        cand.sort(key=lambda t: (not t.get('lang_explicit', True), t['num']))
+        # Order among matched tracks: (1) an explicitly-tagged language beats one
+        # that only defaulted to 'eng' (stronger language-confidence); (2) among
+        # equally-tagged tracks prefer the SDH/hearing-impaired one -- it has the
+        # complete dialogue, so it translates more fully (and, later, is the best
+        # gender source); (3) then track order.
+        cand.sort(key=lambda t: (not t.get('lang_explicit', True),
+                                 not _track_is_sdh(t), t['num']))
         if cand:
             return cand[0]
         # No language match. When the file carries exactly ONE non-forced text
@@ -1404,7 +1439,7 @@ def _pick_track(subs, track_num, lang):
                 return only
         return None
     cand = [t for t in subs if _is_text_codec(t['codec']) and not t['forced']]
-    cand.sort(key=lambda t: t['num'])
+    cand.sort(key=lambda t: (not _track_is_sdh(t), t['num']))   # SDH first, then order
     return cand[0] if cand else None
 
 
