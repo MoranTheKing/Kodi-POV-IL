@@ -325,6 +325,14 @@ def _is_sdh_ext(cand, release):
             return True
     except Exception:
         pass
+    try:
+        # Phase 3b: the community-shared SDH set (reads a local cache only, no
+        # network on this ranking path).
+        from . import sdh_pool
+        if sdh_pool.is_shared_sdh(_rel):
+            return True
+    except Exception:
+        pass
     return False
 
 
@@ -2241,8 +2249,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # best-effort: a miss just means no future hint.
     try:
         if _src_release and srt.is_sdh_content(src_text):
-            from . import sdh_registry, release_match
+            from . import sdh_registry, release_match, sdh_pool
             sdh_registry.record_sdh(release_match.normalize(_src_release))
+            sdh_pool.contribute_sdh(_src_release)   # Phase 3b: share it (share-gated)
     except Exception:
         pass
 
