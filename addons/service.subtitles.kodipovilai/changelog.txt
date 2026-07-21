@@ -1,3 +1,12 @@
+v0.2.411
+- SDH-aware AI translation, Phase 3: an SDH (hearing-impaired) subtitle is now
+  also recognised from its CONTENT -- a subtitle densely marked with bracketed
+  sound cues, ALL-CAPS speaker labels and music glyphs -- even when the provider
+  didn't flag it and the release name doesn't say "SDH". The check is deliberately
+  conservative (a regular subtitle is never misclassified), runs after download,
+  and remembers the release locally so next time it's offered it sorts first and
+  is labelled as the gender-accurate pick.
+
 v0.2.410
 - Idan Plus self-heal now runs FIRST at startup (before any other build repair),
   so a corrupt channel file is healed before you can navigate to the addon.
