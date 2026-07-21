@@ -167,32 +167,32 @@ def fix_rtl_punctuation(text, mode=None):
 
     `mode` controls the direction of the correction. Pulled from
     the addon's `rtl_punct_mode` setting if not explicitly passed:
-      'reverse' (default) -- move END-of-sentence punct from line
-                             END to line START. Necessary because
-                             Kodi's subtitle renderer (across the
-                             observed setups -- Windows, Android,
-                             FENtastic skin) does NOT BiDi-reorder
-                             Hebrew lines, so a logical-START
-                             punct visually lands at the end of
-                             the Hebrew reader's reading flow.
+      'rtl_base' (default) -- wrap each Hebrew line in an explicit
+                             RTL embedding (RLE..PDF) so the
+                             renderer gives it a right-to-left BASE
+                             direction. Its own BiDi then places
+                             embedded LTR runs (numbers, English
+                             names, quoted English), parentheses
+                             AND end punctuation correctly -- the
+                             root-cause fix for setups whose base
+                             direction defaults to LTR. Became the
+                             default in v0.2.416 after on-device
+                             verification; falls back gracefully to
+                             logical order if a renderer ignores the
+                             marks.
+      'reverse'           -- move END-of-sentence punct from line
+                             END to line START only. The prior
+                             default (through v0.2.415): a lighter
+                             fix that corrects the sentence period
+                             but not embedded numbers / English /
+                             parentheses. Kept for renderers that do
+                             not honour the RTL-base marks.
       'legacy'            -- the inverse: move leading punct to
                              the logical end. Was the default in
                              v0.2.0-v0.2.6 under the (wrong)
                              assumption that Kodi reorders. Kept
                              around in case any setup actually
                              does reorder correctly.
-      'rtl_base'          -- do NOT move anything. Instead wrap
-                             each Hebrew line in an explicit RTL
-                             embedding (RLE..PDF) so the renderer
-                             gives it a right-to-left BASE
-                             direction. Its own BiDi then places
-                             embedded LTR runs (numbers, English
-                             names, quoted English), parentheses
-                             AND end punctuation correctly -- the
-                             root-cause fix for setups whose base
-                             direction defaults to LTR. Depends on
-                             the renderer honouring the marks, so
-                             it is opt-in (verify on-device).
       'off'               -- no processing.
 
     Idempotent. Skips index + timecode lines. Preserves trailing
@@ -202,10 +202,10 @@ def fix_rtl_punctuation(text, mode=None):
     if mode is None:
         try:
             from . import kodi_utils
-            mode = (kodi_utils.get_setting('rtl_punct_mode', 'reverse')
-                    or 'reverse').lower()
+            mode = (kodi_utils.get_setting('rtl_punct_mode', 'rtl_base')
+                    or 'rtl_base').lower()
         except Exception:
-            mode = 'reverse'
+            mode = 'rtl_base'
     # 'auto' was the v0.2.7 name for what is now 'legacy'. Map for
     # backwards compatibility with users who manually selected it.
     if mode == 'auto':
