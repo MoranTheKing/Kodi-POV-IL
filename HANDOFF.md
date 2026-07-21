@@ -970,6 +970,62 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
      `/^(VideoPlayer|ListItem|Container|System|MusicPlayer|Player|Window|Skin)\.[A-Za-z]+$/i`
      at both ingest points (foldEmbVariant + foldRow) -- a real multi-part release
      (Container.2006, System.Crasher.2019) never matches.
+
+   **SDH false-positive fix + RTL period on Latin tails (AI 0.2.413 / quickfix
+   0.1.452; notification #511):** two independent fixes.
+   - **`_is_sdh_ext` no longer trusts the provider `hearing_imp`/`is_hi` flag.**
+     Providers (OpenSubtitles/Subscene) set it to mean "has sound cues", which is
+     NOT "has speaker labels" (what the gender-accuracy claim needs), and they
+     mislabel -- the user saw plain subs tagged "SDH (מדויק למגדר)". Now ONLY two
+     reliable signals set the SDH label: a whole-token `sdh`/`hearing impaired`
+     release marker, or the content-detection registry (Phase 3a local + 3b
+     shared). IMPORTANT (answered a maintainer question): this is NOT retroactive
+     and did NOT poison the pool -- the flag only ever drove the picker LABEL+SORT
+     (`_is_sdh_ext`, ephemeral); the registries/pool are fed ONLY by
+     `srt.is_sdh_content` (translate.py:2253), never the flag.
+   - **`srt.py` reverse-mode Latin-continuation period:** when a Hebrew sentence's
+     final token is a Latin word wrapped onto its OWN line (a username like
+     "Modelbehavior36."), `_TRAILING_PUNCT_RE` (Hebrew-required) skipped it so the
+     period stayed wrong. Added `_LATIN_TAIL_PUNCT_RE` + cue-Hebrew tracking
+     (`cue_hebrew`, reset at cue boundaries) so such a line's trailing punct moves
+     to the start too, with dash+open/close-tag groups mirroring the Hebrew path.
+     Sonnet x2 (found+fixed 2 SHOULD-FIX: dash/tag mishandling). 23 assertions.
+
+   **RTL "BiDi base" mode -- root-cause RTL fix (AI 0.2.414-0.2.416):** the
+   `reverse` mode only moves the sentence period; embedded LTR runs (numbers like
+   "50 מייל", English names, quoted English, parentheses) still landed on the
+   wrong side because the observed players render Hebrew lines with an LTR BASE
+   direction. New `rtl_base` mode wraps each Hebrew line in an explicit RTL
+   embedding `RLE(U+202B) .. PDF(U+202C)` so the player's own BiDi gives it a
+   right-to-left base and places EVERYTHING correctly. Root cause + fix were proven
+   with the `python-bidi` reference engine (LTR-base reproduces the exact bugs;
+   the wrap == a true RTL-base render for all observed cases incl. the mixed
+   parenthetical). Non-mutating (marks only). Every mode NORMALIZES on read (strips
+   BiDi marks + re-derives its own shape), so cached/pool text -- which carries no
+   mode metadata -- renders correctly under any mode and switching modes is safe.
+   - **0.2.414 (quickfix 0.1.453; notif #512):** shipped as an OPT-IN mode
+     (`rtl_punct_mode=rtl_base`, settings option #32227). `_wrap_rtl_base_line`
+     wraps Hebrew lines and, crucially, first runs the legacy leading->trailing
+     normalization so `reverse`-shaped cache/pool text (period at the START) is
+     put back to logical order before wrapping (Sonnet caught this SHIP-BLOCKER:
+     otherwise it rendered mirror-backwards). Sonnet x3.
+   - **0.2.415 (quickfix 0.1.454; notif #513):** a single-token Latin username
+     TAIL of a Hebrew cue (e.g. "Modelbehavior36.") is now wrapped too so BiDi
+     moves its trailing period to the RTL-correct (left) side. The wrappable class
+     is `_WRAPPABLE_LATIN_TAIL_RE = ^[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*[.,;:!?]\Z`
+     -- ASCII letter-first, alnum runs joined by single hyphens, one trailing
+     punct. This exact class was PROVEN by an 800k-token adversarial fuzz vs
+     python-bidi to reorder ONLY the trailing punct, never the body; anything else
+     (leading digit/symbol `7-Eleven.`->`.Eleven-7`, `@handle.`->`.handle@`,
+     multi-word `50 miles.`->`.miles 50`, internal symbol/dot, edge/double hyphen)
+     is EXCLUDED and left LTR unchanged. Two earlier narrower guards (single-token,
+     then `isalnum`) each let a reorder class through -- the char-class regex is the
+     robust answer. Sonnet x4.
+   - **0.2.416 (quickfix 0.1.455; notif #514):** `rtl_base` is now the DEFAULT
+     (settings.xml default + srt.py three fallbacks reverse->rtl_base; labels/help
+     reworded; `reverse` kept for players that ignore the marks). Purely a local
+     rendering default -- no network/pool/worker impact. Maintainer-approved after
+     on-device verification.
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
