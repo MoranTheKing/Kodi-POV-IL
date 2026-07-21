@@ -294,20 +294,21 @@ def _gender_src_rank(source_lang):
 
 
 def _is_sdh_ext(cand, release):
-    """True when an EXTERNAL subtitle is hearing-impaired / SDH: the provider's
-    own flag, a WHOLE-TOKEN 'sdh' / 'hearing impaired' marker in the release
-    name, or a release previously CONTENT-detected as SDH (Phase 3 local
-    registry -- learned from a past download's text). NEVER a bare substring --
-    'hi' inside 'Highlander' / 'cc' inside 'Soccer' must not match; bare
-    'hi'/'cc' are not markers at all (too ambiguous). SDH subs carry the full
-    dialogue + speaker labels, so they are the most complete source and (with
-    speaker-gender harvesting) the most gender-accurate. Best-effort; never
-    raises."""
-    try:
-        if cand and cand.get('is_hi'):
-            return True
-    except Exception:
-        pass
+    """True when an EXTERNAL subtitle is SDH in the sense that MATTERS here --
+    it carries speaker labels, so it is genuinely the more gender-accurate
+    source. Two reliable signals only: a WHOLE-TOKEN 'sdh' / 'hearing impaired'
+    marker in the release name (curated by the release group), or a release
+    previously CONTENT-detected as SDH (Phase 3 local + shared registry, which
+    actually measures speaker-label / sound-cue density).
+
+    We deliberately do NOT trust the provider's own hearing-impaired flag: it
+    means "has sound cues", which is NOT the same as "has speaker labels", so it
+    mislabels ordinary subs as 'SDH (מדויק למגדר)' -- a false positive the user
+    saw in the field (a plain sub flagged HI by the provider but with no
+    character names). Zero false positives on this label matters more than
+    catching every SDH sub; the content-detection path recovers the genuine ones
+    after a first download. NEVER a bare substring -- 'hi' inside 'Highlander' /
+    'cc' inside 'Soccer' must not match. Best-effort; never raises."""
     try:
         from . import release_match
         _rel = release or ''
@@ -961,8 +962,9 @@ def list_candidates(info, modal_progress=True):
         for c in _emb_by_lang.get(code, []):
             results.append(_clean(c))
         # Then the foreign subs of this language. Annotate each with SDH-ness
-        # (provider hearing-impaired flag or a whole-token 'SDH' release marker),
-        # then order SDH FIRST -- an SDH sub has the complete dialogue + speaker
+        # (a whole-token 'SDH' release marker, or a content-detected release --
+        # NOT the provider's unreliable hearing-impaired flag), then order SDH
+        # FIRST -- an SDH sub has the complete dialogue + speaker
         # labels, the best source for AI gender accuracy -- and within that by
         # best match %. Decode the engine link ONCE here (reused below).
         _lang_cands = []
