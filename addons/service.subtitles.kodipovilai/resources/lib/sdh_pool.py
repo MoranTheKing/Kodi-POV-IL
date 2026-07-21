@@ -76,12 +76,23 @@ def contribute_sdh(release):
         if is_shared_sdh(release):    # already in the shared set -> nothing to add
             _PUSHED.add(rel)
             return
+        _PUSHED.add(rel)             # mark before firing so a retry can't double-send
+        # Fire on a daemon thread like every other pool push helper (contribute /
+        # report_sync / report_embedded): a degraded pool must NOT stall the
+        # translate path -- this is best-effort telemetry, not on the hot path.
+        import threading
+        threading.Thread(target=_post_sdh, args=(rel,), daemon=True).start()
+    except Exception:
+        pass
+
+
+def _post_sdh(rel):
+    try:
         req = _urlreq.Request(
             pool.POOL_URL + '/sdh',
             data=json.dumps({'rel': rel}).encode('utf-8'),
             headers=pool._post_headers('/sdh'), method='POST')
         _urlreq.urlopen(req, timeout=_POST_TIMEOUT).read()
-        _PUSHED.add(rel)
     except Exception:
         pass
 
@@ -164,8 +175,13 @@ def is_shared_sdh(key):
         k = pool.worker_norm_release(key)
         if not k:
             return False
+        # Refresh the memo at most every 5s (so a burst of _is_sdh_ext calls in
+        # one ranking pass reads the file once). Gate on use_enabled HERE, not
+        # per candidate: a user who turned pool-use OFF stops getting shared
+        # hints even though a stale cache file may still be on disk.
         if _MEM['keys'] is None or (_now() - _MEM['at']) > 5:
-            _MEM['keys'] = set(_load().get('keys') or [])
+            _MEM['keys'] = (set(_load().get('keys') or [])
+                            if pool.use_enabled() else set())
             _MEM['at'] = _now()
         return k in _MEM['keys']
     except Exception:
