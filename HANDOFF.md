@@ -829,6 +829,43 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    client-side TMDB-search dropdown builds `innerHTML` from TMDB-API titles
    (different threat model; not attacker `/contribute` data; doesn't touch
    STATS_TOKEN).
+
+   **Read-once embedded align + SDH-aware AI translation (AI 0.2.408 / quickfix
+   0.1.447; notification #507):** two changes in translate.py + embedded_extract.py
+   (pool.py INHERITED byte-identical; the worker is untouched -- no redeploy).
+   - **#37 read-once:** the cross-language embedded align used to call
+     `cue_reference_times(url, lang=X)` once PER language on the fallback, each
+     re-reading the head+Cues. `_read_cue_times` was generalized to a read-once
+     core `_read_cue_times_multi(want_tracks) -> {track: ticks}` (buckets each cue
+     under every track it indexes); new public `cue_reference_times_multi(langs)`
+     reads head+Cues+origin ONCE and slices per track. `_embedded_aligned_source_srt`
+     calls it once for `try_langs[:3]`. Happy path costs the same single read;
+     fallback no longer pays ~1 read/language. Byte-equivalence of the single-track
+     wrapper proven by test.
+   - **SDH-aware:** SDH/hearing-impaired subs carry the COMPLETE dialogue (+ speaker
+     labels), so they are the most complete AI source and best for gender. Embedded:
+     `_parse_track_entry` now reads `FlagHearingImpaired` (0x55AB) + `TrackName`
+     (0x536E) from the HEAD (free, TorBox-safe -- it's the cheap head read the align
+     already does, NOT the full extract). `_track_is_sdh` = flag OR whole-token name
+     ('sdh'/'hearing impaired'; NEVER a bare substring -- 'hi' in 'Highlander' can't
+     match; bare 'hi'/'cc' are not markers). `_pick_track(..., prefer_sdh=False)`
+     prefers SDH ONLY when translating the track's own TEXT (extract_srt); the two
+     `cue_reference_times*` timing-skeleton callers keep the DEFAULT (a Sonnet
+     BLOCKER: an SDH track's extra sound-cues would depress the external-sub align
+     overlap/vote and could unsync a previously-synced sub -- so the align path is
+     byte-identical to pre-SDH via a constant sort element). External: `_is_sdh_ext`
+     (provider `is_hi` flag or a whole-token release marker via `release_match.tokens`)
+     -> SDH subs sort FIRST in their language group + label "תרגום AI לעברית · SDH
+     (מדויק למגדר)". The delivered Hebrew keeps `is_hi=False` (its HI brackets are
+     stripped before translation, so Kodi's badge must not mislabel it -- the SDH
+     signal is the label text only). THREE Sonnet rounds (#37 SAFE; SDH round found
+     the align-path BLOCKER + the is_hi mislabel, both fixed; re-review SAFE). Tests:
+     31 SDH assertions (synthetic MKV TrackEntry parse, prefer_sdh on/off,
+     order-independence, language-confidence, forced-exclusion, false-positive
+     suite) + 16 cue-multi + 12 release-name cases. **Phase 2 (not done): harvest
+     speaker-label genders BEFORE strip_hi_annotations drops them -> the real gender
+     win.** Phase 3 (not done): content-based SDH classification, cached locally /
+     shared via a pool SDH registry.
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
