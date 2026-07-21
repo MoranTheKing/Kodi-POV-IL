@@ -1,3 +1,11 @@
+v0.2.415
+- "RTL base" mode polish: a username / handle that ends a Hebrew sentence on its
+  own wrapped line (e.g. "Modelbehavior36.") now shows its trailing period on the
+  correct side. Such single-token Latin tails are wrapped too so the player's BiDi
+  places the period correctly; multi-word English lines and names that genuinely
+  start with a dot (".NET", ".exe") are left untouched. Only affects the optional
+  "RTL base" mode; the default is unchanged.
+
 v0.2.414
 - New optional RTL rendering mode "RTL base" (Settings > RTL punctuation fix
   direction). It wraps each Hebrew subtitle line in an explicit right-to-left
