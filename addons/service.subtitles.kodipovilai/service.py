@@ -196,6 +196,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_meta_blank,
         _maybe_patch_pov_build_content_logger,
         _maybe_patch_pov_debrid_status,
+        _maybe_refresh_shared_sdh,
         _maybe_show_af3_first_launch_dialog,
         _maybe_show_debrid_status,
         _maybe_reload_for_tiles,
@@ -449,6 +450,18 @@ def _maybe_unpatch_fentastic_notification():
         return
     try:
         fentastic_patcher.ensure_unpatched()
+    except Exception:
+        pass
+
+
+def _maybe_refresh_shared_sdh():
+    """Warm the community-shared SDH set (Phase 3b) into the local cache from
+    this background service, so the subtitle-ranking path can read it without a
+    network call. use-gated + TTL-gated (at most once/day) inside refresh; a
+    no-op when the pool isn't in use. Best-effort."""
+    try:
+        from resources.lib import sdh_pool
+        sdh_pool.refresh_shared_sdh()
     except Exception:
         pass
 
