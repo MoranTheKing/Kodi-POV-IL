@@ -1,3 +1,22 @@
+v0.2.409
+- Idan Plus (עידן פלוס): fixed the failure where no channel loaded or played and
+  nothing was even shown. idanplus keeps its channel map in displayChannels.json
+  as a JSON object; if that file is ever corrupted (a partial/interrupted write),
+  its own reader falls back to an empty LIST and every channel lookup then dies
+  with "'list' object has no attribute 'items'" -- and the rebuild path crashes on
+  the same list, so it can never recover on its own. A startup self-heal now moves
+  a corrupt displayChannels.json aside so idanplus rebuilds a fresh list from its
+  server (its own reset does exactly this), and best-effort hardens idanplus so a
+  future corruption rebuilds instead of crashing. No-op if idanplus isn't
+  installed; a valid channel file (including your renames/reorder) is never touched.
+- SDH-aware AI translation, Phase 2: ALL-CAPS speaker labels (e.g. "MABEL:") in the
+  source are now kept through to the model, so it can match them to the TMDB cast
+  and choose the correct זכר/נקבה form per line, then drop the tag from its Hebrew
+  output. Any tag it fails to drop is now stripped ONLY from a line that actually
+  became Hebrew -- so an English caption/chyron/URL the model deliberately left in
+  place ("WARNING: ...", "PART 2: ...", "HTTP://...") is never eaten -- and the
+  interim English placeholder no longer shows raw speaker tags.
+
 v0.2.408
 - Cross-language embedded align now reads the video's head + Cues index ONCE and
   slices the timing skeleton per track, instead of re-reading it per language on
