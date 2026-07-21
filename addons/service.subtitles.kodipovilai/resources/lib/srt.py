@@ -109,6 +109,13 @@ _INVISIBLE_BIDI = (
     '﻿'  # BOM / ZWNBSP
 )
 
+# Explicit RTL embedding controls used by the 'rtl_base' rtl_punct_mode (see
+# fix_rtl_punctuation). RLE forces a right-to-left BASE direction for the wrapped
+# run regardless of the renderer's paragraph base; PDF ends it. Both are in
+# _INVISIBLE_BIDI above, so the wrap is idempotent (a re-run strips them first).
+_RLE = '‫'   # RIGHT-TO-LEFT EMBEDDING
+_PDF = '‬'   # POP DIRECTIONAL FORMATTING
+
 
 def _fix_one_text_line(line):
     """Apply the RTL punctuation correction to a single text line
@@ -174,6 +181,18 @@ def fix_rtl_punctuation(text, mode=None):
                              assumption that Kodi reorders. Kept
                              around in case any setup actually
                              does reorder correctly.
+      'rtl_base'          -- do NOT move anything. Instead wrap
+                             each Hebrew line in an explicit RTL
+                             embedding (RLE..PDF) so the renderer
+                             gives it a right-to-left BASE
+                             direction. Its own BiDi then places
+                             embedded LTR runs (numbers, English
+                             names, quoted English), parentheses
+                             AND end punctuation correctly -- the
+                             root-cause fix for setups whose base
+                             direction defaults to LTR. Depends on
+                             the renderer honouring the marks, so
+                             it is opt-in (verify on-device).
       'off'               -- no processing.
 
     Idempotent. Skips index + timecode lines. Preserves trailing
@@ -207,6 +226,8 @@ def fix_rtl_punctuation(text, mode=None):
             cue_hebrew = True
         if mode == 'legacy':
             out_lines.append(_fix_one_text_line(line))
+        elif mode == 'rtl_base':
+            out_lines.append(_wrap_rtl_base_line(line))
         else:
             # 'reverse' (default) or anything unrecognised
             out_lines.append(_reverse_fix_one_text_line(line, cue_hebrew=cue_hebrew))
@@ -319,6 +340,37 @@ def _reverse_fix_one_text_line(line, cue_hebrew=False):
         return open_tags + rest + close_tags + _reverse_dash_suffix(dash)
     return open_tags + trailing + rest + close_tags + \
         _reverse_dash_suffix(dash)
+
+
+def _wrap_rtl_base_line(line):
+    """Wrap a Hebrew text line in an explicit RTL embedding (RLE .. PDF) so the
+    subtitle renderer treats it with a right-to-left BASE direction. Used by the
+    'rtl_base' rtl_punct_mode.
+
+    With a correct RTL base, the renderer's own BiDi places embedded LTR runs --
+    numbers ('50'), usernames ('cutie-patotie87'), quoted English ('"Model
+    behavior"') -- plus parentheses and end-of-sentence punctuation on the
+    correct side, so NO manual surgery is needed. This is the root-cause fix for
+    setups whose paragraph base defaults to LTR (which shoves that content to the
+    wrong edge).
+
+    Only Hebrew-carrying lines are wrapped: a line deliberately left in English
+    (an on-screen caption / URL) is returned untouched so it stays LTR. Index /
+    timecode / blank lines never reach here (the caller skips them). Idempotent:
+    any existing edge BiDi marks (including a prior RLE/PDF) are stripped before
+    re-wrapping, so a benign re-run is a no-op."""
+    s = line
+    while s and s[0] in _INVISIBLE_BIDI:
+        s = s[1:]
+    while s and s[-1] in _INVISIBLE_BIDI:
+        s = s[:-1]
+    if not s.strip():
+        return line
+    if not _HEB_LETTER_RE.search(s):
+        # No Hebrew -> leave it LTR. Return the cleaned form only if we actually
+        # removed stray edge marks; otherwise the original line verbatim.
+        return s if s != line else line
+    return _RLE + s + _PDF
 
 
 def parse_blocks(text):
