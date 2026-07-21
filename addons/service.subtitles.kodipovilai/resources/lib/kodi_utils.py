@@ -4,6 +4,7 @@
 
 import os
 import sys
+import threading
 
 try:
     import xbmc
@@ -22,6 +23,18 @@ except ImportError:
 
 ADDON_ID = 'service.subtitles.kodipovilai'
 _ADDON = None
+
+# notify() fires each GUI toast on a short-lived daemon thread so a wedged GUI
+# can never stall the caller (see notify()). This bounds how many such threads
+# may be parked at once: under a *sustained* GUI wedge (and with
+# reuselanguageinvoker keeping this module warm across invocations) toast
+# threads that block inside Kodi's notification() don't get reaped until the
+# wedge clears, so without a cap they could accumulate over a session. Past the
+# cap we simply drop the toast -- notifications are decorative and nothing
+# depends on one landing.
+_NOTIFY_MAX_PENDING = 8
+_notify_lock = threading.Lock()
+_notify_pending = [0]
 
 
 def addon():
@@ -288,7 +301,42 @@ def notify(msg, title=None, icon=None, time_ms=4000):
             stripped = msg.lstrip('‏‪‫‬‭‮')
             stripped = stripped.rstrip('‬')
             msg = '‫' + stripped + '‬'
-        xbmcgui.Dialog().notification(title, msg, icon, time_ms)
+        # Fire the actual GUI toast on a short-lived daemon thread so a wedged
+        # GUI/render subsystem can NEVER stall the calling thread. Field case:
+        # during heavy debrid embedded-subtitle extraction the video decoder
+        # starves and the GUI message pump backs up; a translation-kickoff
+        # toast issued from the translate() worker blocked there and froze the
+        # whole translation before it could dispatch a single chunk (the user
+        # saw "AI is translating" but nothing ever happened). Dialog().
+        # notification() is meant to be async, but under that duress it did not
+        # return -- so we never issue it on a thread that has real work to do.
+        def _show(_title=title, _msg=msg, _icon=icon, _ms=time_ms):
+            try:
+                xbmcgui.Dialog().notification(_title, _msg, _icon, _ms)
+            except Exception:
+                pass
+            finally:
+                with _notify_lock:
+                    _notify_pending[0] -= 1
+        # Cap the number of toast threads that may be parked at once. Normally a
+        # toast returns in milliseconds so the count sits at 0-1; it only climbs
+        # when the GUI is wedged and notification() isn't returning -- exactly
+        # when we must NOT pile on more blocked threads.
+        with _notify_lock:
+            if _notify_pending[0] >= _NOTIFY_MAX_PENDING:
+                return
+            _notify_pending[0] += 1
+        try:
+            threading.Thread(target=_show, name='pov-notify',
+                             daemon=True).start()
+        except Exception:
+            # Couldn't spawn a thread (thread/memory exhaustion -- itself a sign
+            # of a wedged, resource-starved device). Do NOT fall back to an
+            # inline notification() call: on the caller's thread that would
+            # re-block it, the very stall this whole change exists to prevent.
+            # Drop the toast and release the slot we just reserved.
+            with _notify_lock:
+                _notify_pending[0] -= 1
     except Exception:
         pass
 
