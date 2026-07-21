@@ -415,6 +415,15 @@ def _wrap_rtl_base_line(line, cue_hebrew=False):
             return _RLE + s + _PDF
         # Return the cleaned form only if we removed stray edge marks; else verbatim.
         return s if s != line else line
+    # 'reverse' also relocates a leading dialogue dash "- " to a TRAILING " -"
+    # suffix (and moves the sentence punct to the front) -- e.g. "- שלום?" was
+    # cached as "?שלום -". Move that dash back to the front so the normalization
+    # below (which only recognizes a LEADING dash) can restore the logical order,
+    # matching a fresh rtl_base render. Gate on a leading sentence-punct so a
+    # genuine trailing interruption dash ("שלום -", no leading punct) is untouched.
+    st = s.strip()
+    if st.endswith(' -') and st[0] in _TRAILING_PUNCT_CHARS:
+        s = '- ' + st[:-2].rstrip()
     # Undo any 'reverse'/'legacy' mutation baked into cached/pool text: move a
     # displaced leading sentence-punct back to the logical end. On pristine
     # (fresh AI) text this is a no-op -- Hebrew never authors a leading . , ; : ! ?
