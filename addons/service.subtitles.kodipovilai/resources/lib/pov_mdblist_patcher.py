@@ -1,0 +1,166 @@
+# Self-healing patcher for plugin.video.pov's indexers/mdblist_api.py. Two
+# independent, marker-gated fixes for POV's MDBList watched/progress sync (only
+# reached when the user makes MDBList their Watched Status Provider):
+#
+#  A) API KEY LEAKED TO kodi.log:
+#     call_mdblist() logs `logger('mdblist error', str(e))`. For a requests
+#     HTTPError, str(e) is "... for url: https://api.mdblist.com/...?apikey=<KEY>"
+#     -- the user's full MDBList key lands in the log verbatim. Fix: scrub the
+#     apikey value out of the logged string with an inline regex. Substring
+#     replace on `'mdblist error', str(e)`, so it works whether POV calls
+#     `logger(...)` or `kodi_utils.logger(...)`.
+#
+#  B) "MARK AS WATCHED" DOESN'T CLEAR THE PAUSED STATE / DOESN'T COUNT:
+#     on mark-watched POV posts sync/watched (adds to the watched *list*) and
+#     then tries to clear the resume via `scrobble/clear` with {'id': resume_id}
+#     -- which 404s (stale/mismatched id), so the title stays PAUSED on MDBList
+#     and never shows in Watch Stats (those are scrobble-based). Fix: right after
+#     the sync/watched call, additionally POST `scrobble/stop` at progress 100 by
+#     tmdb id. Per MDBList's API, a stop at >=80% marks the item watched AND
+#     finalizes (clears) the active scrobble session -- so this both clears the
+#     paused state and registers the watch, using an id POV always has. Guarded
+#     to the tmdb pass and to movies/episodes; never touches the separate
+#     "remove from continue watching" (erase-bookmark) path, so nothing gets
+#     marked watched that the user only wanted un-resumed.
+#
+# NOTE: POV's mdblist_api.py changes heavily between POV versions. These anchors
+# match POV 6.x (which has the scrobble/clear path that produced the 404). On a
+# version whose anchors moved, the patch is a safe no-op (returns 'unmatched').
+# Marker-gated, compile()-checked before writing, atomic, .pyc invalidated.
+
+import os
+
+try:
+    import xbmcvfs
+except Exception:
+    xbmcvfs = None
+
+try:
+    from resources.lib import kodi_utils
+except Exception:
+    kodi_utils = None
+
+
+POV_ADDON_ID = 'plugin.video.pov'
+MDBLIST_API_REL = 'resources/lib/indexers/mdblist_api.py'
+
+REDACT_MARKER = '# AI_SUBS_MDBL_REDACT_v1'
+SCROBBLE_MARKER = '# AI_SUBS_MDBL_SCROBBLE_STOP_v1'
+
+# --- Fix A: redact the apikey in the error log ---------------------------
+_REDACT_ANCHOR = "'mdblist error', str(e)"
+_REDACT_REPLACEMENT = (
+    "'mdblist error', "
+    "__import__('re').sub(r'apikey=[^&\\s]+', 'apikey=***', str(e))")
+# Distinctive slice of the replacement -> idempotency check.
+_REDACT_DONE = "__import__('re').sub(r'apikey="
+
+# --- Fix B: scrobble/stop@100 on mark-watched ----------------------------
+# Anchor = the line immediately after the sync/watched POST (unique in the file;
+# `result = call_mdblist(...)` itself appears 3x, so we can't use that).
+_SCROBBLE_ANCHOR = '\tsuccess = result[result_key][success_key] > 0'
+_SCROBBLE_INJECT = (
+    '\t' + SCROBBLE_MARKER + '\n'
+    "\tif action == 'mark_as_watched' and key == 'tmdb' and media in ('movies', 'episode'):\n"
+    '\t\ttry:\n'
+    "\t\t\tif media == 'movies': _ai_sd = {'movie': {'ids': {'tmdb': media_id}}, 'progress': 100.0}\n"
+    "\t\t\telse: _ai_sd = {'show': {'ids': {'tmdb': media_id}, 'season': {'number': int(season), 'episode': {'number': int(episode)}}}, 'progress': 100.0}\n"
+    "\t\t\tcall_mdblist('scrobble/stop', json=_ai_sd, method='post')\n"
+    '\t\texcept Exception: pass\n'
+)
+
+
+def _log(msg, level='INFO'):
+    if kodi_utils is None:
+        return
+    try:
+        kodi_utils.log('pov_mdblist_patcher: ' + msg, level=level)
+    except Exception:
+        pass
+
+
+def _mdblist_api_path():
+    if xbmcvfs is None:
+        return ''
+    try:
+        base = xbmcvfs.translatePath(
+            'special://home/addons/' + POV_ADDON_ID + '/')
+    except Exception:
+        return ''
+    p = os.path.join(base, MDBLIST_API_REL)
+    return p if os.path.isfile(p) else ''
+
+
+def ensure_patched():
+    """Idempotent. Returns one of:
+    'no_pov' | 'no_file' | 'already_patched' | 'unmatched'
+    | 'read_failed' | 'compile_failed' | 'write_failed' | 'patched'."""
+    path = _mdblist_api_path()
+    if not path:
+        return 'no_pov' if xbmcvfs is None else 'no_file'
+
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            content = f.read()
+    except OSError as e:
+        _log('read failed for {0}: {1}'.format(path, e), level='WARNING')
+        return 'read_failed'
+
+    already_redact = _REDACT_DONE in content
+    already_scrobble = SCROBBLE_MARKER in content
+    if already_redact and already_scrobble:
+        return 'already_patched'
+
+    new_content = content
+    applied = []
+
+    # Fix A -- redact apikey in the error log.
+    if not already_redact and _REDACT_ANCHOR in new_content:
+        new_content = new_content.replace(
+            _REDACT_ANCHOR, _REDACT_REPLACEMENT, 1)
+        applied.append('redact')
+
+    # Fix B -- scrobble/stop@100 on mark-watched (insert before the anchor).
+    if not already_scrobble and _SCROBBLE_ANCHOR in new_content:
+        new_content = new_content.replace(
+            _SCROBBLE_ANCHOR, _SCROBBLE_INJECT + _SCROBBLE_ANCHOR, 1)
+        applied.append('scrobble')
+
+    if not applied:
+        _log('no mdblist_api anchors matched -- POV version differs; '
+             'leaving file alone', level='WARNING')
+        return 'unmatched'
+
+    # SAFETY: never write a file that doesn't compile.
+    try:
+        compile(new_content, path, 'exec')
+    except SyntaxError as e:
+        _log('patched content would not compile -- skipping ({0})'.format(e),
+             level='WARNING')
+        return 'compile_failed'
+
+    tmp_path = path + '.aitmp'
+    try:
+        with open(tmp_path, 'w', encoding='utf-8') as f:
+            f.write(new_content)
+        os.replace(tmp_path, path)
+    except OSError as e:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        _log('write failed for {0}: {1}'.format(path, e), level='WARNING')
+        return 'write_failed'
+
+    # Drop stale .pyc so Python recompiles on next import.
+    pycache_dir = os.path.join(os.path.dirname(path), '__pycache__')
+    if os.path.isdir(pycache_dir):
+        for fn in os.listdir(pycache_dir):
+            if fn.startswith('mdblist_api.') and fn.endswith('.pyc'):
+                try:
+                    os.remove(os.path.join(pycache_dir, fn))
+                except OSError:
+                    pass
+
+    _log('patched mdblist_api ({0})'.format(', '.join(applied)), level='INFO')
+    return 'patched'
