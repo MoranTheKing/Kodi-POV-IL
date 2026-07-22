@@ -37,7 +37,7 @@ ICON_SRC_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), 'icons')
 ICON_FILENAMES = ('gemini.png',)
 
-INJECT_VERSION = 8
+INJECT_VERSION = 9
 MARKER = '# AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
 END_MARKER = '# END AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
 TUPLE_MARKER = "# AI_SUBS_MYSERVICES_TUPLE_v{0}".format(INJECT_VERSION)
@@ -76,6 +76,8 @@ OLD_MARKERS = [
     '# AI_SUBS_MYSERVICES_INJECT_v4',
     '# AI_SUBS_MYSERVICES_INJECT_v5',
     '# AI_SUBS_MYSERVICES_INJECT_v6',
+    '# AI_SUBS_MYSERVICES_INJECT_v7',
+    '# AI_SUBS_MYSERVICES_INJECT_v8',
 ]
 
 # Two service classes plus a hook that monkey-patches authorize()
@@ -136,6 +138,33 @@ class Gemini:
         return True
 
 
+class _AiMDBList:
+    """Forwarder for MDBList. The pairing UX (QR / type, validation, and
+    saving into POV's own mdblist.token) lives in the addon's default.py
+    under the connect_mdblist action -- spawned via RunScript. This REPLACES
+    POV's native manual-key MDBList service so pairing gets a QR like the
+    others. Named _AiMDBList (not MDBList) so it never shadows POV's own
+    native MDBList class elsewhere in this module."""
+    icon = 'mdblist.png'  # POV's own MDBList icon (native service)
+
+    def __init__(self):
+        # This class runs INSIDE POV, so kodi_utils.get_setting reads POV's
+        # OWN settings -- where mdblist.token lives.
+        try:
+            self.token = (kodi_utils.get_setting('mdblist.token') or '').strip()
+        except Exception:
+            self.token = ''
+
+    def set(self):
+        try:
+            import xbmc as _aix
+            _aix.executebuiltin(
+                'RunScript(service.subtitles.kodipovilai,'
+                'action=connect_mdblist)')
+        except Exception as e:
+            notification('Failed to launch MDBList setup: %s' % str(e)[:60])
+        return True
+
 
 # Replace authorize() with a wrapper that adds our two services to
 # the menu. We can't reliably regex-edit the inline tuple because
@@ -166,7 +195,9 @@ def authorize():
     # not define are skipped.
     _ai_candidates = (
         ('trakt', ('Trakt',)),
-        ('mdblist', ('MDBList',)),
+        # 'mdblist' intentionally NOT resolved from POV here -- our
+        # _AiMDBList forwarder (QR pairing) is inserted right after Trakt
+        # below, replacing POV's native manual-key MDBList entry.
         ('tmdblist', ('TMDBList', 'TMDbList')),
         ('real-debrid', ('RealDebrid',)),
         ('premiumize.me', ('Premiumize',)),
@@ -183,6 +214,15 @@ def authorize():
             if _ai_cls in _ai_g:
                 _ai_services.append((_ai_name, _ai_g[_ai_cls]))
                 break
+    # Insert our MDBList forwarder in its original slot (right after Trakt),
+    # replacing POV's native manual-key MDBList entry so pairing uses our QR
+    # flow. If Trakt isn't present, it goes to the front of the list.
+    _ai_pos = 0
+    for _ai_i in range(len(_ai_services)):
+        if _ai_services[_ai_i][0] == 'trakt':
+            _ai_pos = _ai_i + 1
+            break
+    _ai_services.insert(_ai_pos, ('mdblist', _AiMDBList))
     services = tuple(_ai_services) + _ai_extra
     service = kodi_utils.dialog.select('My Services', list(_builder()), useDetails=True)
     if service < 0: return

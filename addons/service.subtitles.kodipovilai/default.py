@@ -1410,19 +1410,12 @@ class _PairWindow(xbmcgui.WindowDialog):
             self.close()
 
 
-def _gemini_pair_flow(kodi_utils, gemini, gemini_pair):
-    """Spin up the local pair server, show a scannable QR image in
-    a custom window, poll for the submitted key, validate."""
+def _run_pair_qr(ps):
+    """Show a scannable QR + URL fallback for an ALREADY-CREATED PairServer,
+    poll for the submitted key until it arrives / the user cancels / a 5-min
+    deadline, then shut the server down. Returns the submitted key (or '').
+    Shared verbatim by the Gemini and MDBList pair flows."""
     import time as _time
-    try:
-        ps = gemini_pair.PairServer()
-    except Exception as e:
-        xbmcgui.Dialog().ok(
-            'Kodi POV IL',
-            'נכשלה הפעלת שרת התאמה: {0}\n\n'
-            'אפשר לחזור לתפריט ולבחור "הזנה ידנית" במקום.'
-            .format(str(e)[:80]))
-        return
 
     # Primary URL: prefer LAN IP (works for other devices on the
     # same WiFi AND on the same device's browser via localhost
@@ -1504,7 +1497,22 @@ def _gemini_pair_flow(kodi_utils, gemini, gemini_pair):
             pass
         ps.shutdown()
 
-    key = ps.received_key()
+    return ps.received_key()
+
+
+def _gemini_pair_flow(kodi_utils, gemini, gemini_pair):
+    """Spin up the local pair server, show a scannable QR image in
+    a custom window, poll for the submitted key, validate."""
+    try:
+        ps = gemini_pair.PairServer()
+    except Exception as e:
+        xbmcgui.Dialog().ok(
+            'Kodi POV IL',
+            'נכשלה הפעלת שרת התאמה: {0}\n\n'
+            'אפשר לחזור לתפריט ולבחור "הזנה ידנית" במקום.'
+            .format(str(e)[:80]))
+        return
+    key = _run_pair_qr(ps)
     if not key:
         return  # user cancelled or timeout
     _test_save_or_retry(kodi_utils, gemini, key, retry_cb=None)
@@ -1532,6 +1540,283 @@ def _gemini_type_flow(kodi_utils, gemini):
                                   retry_cb='loop')
         if ok != 'retry':
             return
+
+
+# --- MDBList API-key pairing (mirror of the Gemini flow) --------------------
+# MDBList's key lives in POV's OWN `mdblist.token` setting (POV is the consumer),
+# so we read/write it cross-addon. The phone form validates against MDBList
+# before submit; _test_save_mdblist re-checks Kodi-side and stores it.
+def _mdblist_pov_addon():
+    try:
+        import xbmcaddon as _mx
+        return _mx.Addon('plugin.video.pov')
+    except Exception:
+        return None
+
+
+def _mdblist_get_token():
+    a = _mdblist_pov_addon()
+    if not a:
+        return ''
+    try:
+        return (a.getSetting('mdblist.token') or '').strip()
+    except Exception:
+        return ''
+
+
+def _mdblist_pov_set(a, setting_id, value):
+    """Best-effort cross-addon setSetting (no read-back). Used for POV's
+    auxiliary MDBList flags; the token itself is hard-verified separately."""
+    try:
+        a.setSetting(setting_id, value)
+        return True
+    except Exception:
+        return False
+
+
+def _mdblist_apply_connect(key, username):
+    """Replicate POV's native MDBList.set() connect side-effects cross-addon:
+    store the account name + token, activate the MDBList watched-indicator, and
+    make MDBList the watched-status/progress provider -- exactly the four
+    settings POV writes itself. Returns True iff the token stuck.
+
+    ORDER MATTERS: we write + hard-verify the token FIRST and gate the other
+    three writes on that success. If the token write fails, writing the aux
+    flags anyway would leave POV's watched-status pointing at MDBList
+    (watched_indicators='2', mdbl_indicators_active='true') with an empty token
+    -- an inconsistent state a Kodi restart would NOT undo, and the exact
+    'provider set, no key' breakage this whole change set out to prevent.
+    (The disconnect path can write its aux flags unconditionally because those
+    fail toward *deactivating* MDBList -- the safe direction; connect's fail
+    toward the unsafe one, so they must be gated.)
+
+    NB: POV's native set() also calls clear_cache('mdblist'). We deliberately do
+    NOT import POV's cache module cross-addon -- doing so would pull POV internals
+    into this add-on's interpreter and risk sys.modules bleed in the shared Kodi
+    process. The stale MDBList cache is inert once the indicator flags change and
+    POV refreshes it on its own schedule / next restart, so skipping it is safe.
+    POV still renders settings from an in-memory cache, so a live POV session may
+    need a restart before it reflects these writes (documented POV trap)."""
+    a = _mdblist_pov_addon()
+    if not a:
+        return False
+    try:
+        a.setSetting('mdblist.token', key or '')
+        ok = (a.getSetting('mdblist.token') or '').strip() == (key or '').strip()
+    except Exception:
+        ok = False
+    if not ok:
+        return False                       # leave every aux setting untouched
+    _mdblist_pov_set(a, 'mdblist_user', username or '')
+    _mdblist_pov_set(a, 'mdbl_indicators_active', 'true')
+    _mdblist_pov_set(a, 'watched_indicators', '2')
+    return True
+
+
+def _mdblist_apply_disconnect():
+    """Reverse of _mdblist_apply_connect -- mirror POV's native MDBList
+    disconnect: blank the account name + token, deactivate the MDBList
+    watched-indicator, and hand the watched-status provider back to POV (0).
+    Returns True iff the token was cleared (hard-verified); the rest best-effort.
+    This is the fix for the 'Remove leaves indicators pointing at MDBList with no
+    key' inconsistency."""
+    a = _mdblist_pov_addon()
+    if not a:
+        return False
+    _mdblist_pov_set(a, 'mdblist_user', '')
+    try:
+        a.setSetting('mdblist.token', '')
+        ok = (a.getSetting('mdblist.token') or '').strip() == ''
+    except Exception:
+        ok = False
+    _mdblist_pov_set(a, 'mdbl_indicators_active', 'false')
+    _mdblist_pov_set(a, 'watched_indicators', '0')
+    return ok
+
+
+def _handle_connect_mdblist(_params):
+    """MDBList API-key setup, from POV's My Services (injected forwarder) or
+    RunScript action=connect_mdblist. Pair from a phone (QR) or type the key;
+    validate against MDBList; store into POV's `mdblist.token`."""
+    try:
+        from resources.lib import kodi_utils, gemini_pair, mdblist_pair
+    except Exception as e:
+        try:
+            xbmcgui.Dialog().ok('Kodi POV IL', 'Internal error: {0}'.format(e))
+        except Exception:
+            pass
+        return
+    if _mdblist_get_token():
+        _mdblist_menu_existing(kodi_utils, gemini_pair, mdblist_pair)
+    else:
+        _mdblist_menu_new(kodi_utils, gemini_pair, mdblist_pair)
+
+
+def _mdblist_menu_existing(kodi_utils, gemini_pair, mdblist_pair):
+    options = [
+        '🔍 בדוק חיבור (Test connection)',
+        '🔄 החלף key (Replace)',
+        '❌ נתק (Remove)',
+    ]
+    try:
+        choice = xbmcgui.Dialog().select('MDBList - מה לעשות?', options)
+    except Exception:
+        choice = -1
+    if choice < 0:
+        return
+    if choice == 0:
+        _mdblist_test_show(mdblist_pair)
+        return
+    if choice == 1:
+        # Replace: like Gemini, don't clear the working key up front -- the new
+        # one only overwrites once it validates + saves in _test_save_mdblist.
+        _mdblist_menu_new(kodi_utils, gemini_pair, mdblist_pair)
+        return
+    if choice == 2:
+        if xbmcgui.Dialog().yesno('Kodi POV IL', 'לנתק את MDBList?'):
+            if _mdblist_apply_disconnect():
+                kodi_utils.notify('MDBList נותק', time_ms=3000)
+            else:
+                xbmcgui.Dialog().ok(
+                    'MDBList - ניתוק נכשל',
+                    'לא הצלחנו לעדכן את הגדרות POV.\n\n'
+                    'ודא שהתוסף POV (plugin.video.pov) מותקן, נסה לסגור את '
+                    'Kodi לחלוטין ולהפעיל מחדש, ואז לחזור לכאן.')
+
+
+def _mdblist_test_show(mdblist_pair):
+    ok = mdblist_pair.validate_key(_mdblist_get_token())
+    if ok is True:
+        body = '✓ החיבור תקין. MDBList מחובר.'
+    elif ok is False:
+        body = 'המפתח נדחה ע"י MDBList. כדאי להחליף אותו.'
+    else:
+        body = 'לא ניתן לאמת כרגע (בעיית רשת?). נסה שוב מאוחר יותר.'
+    try:
+        xbmcgui.Dialog().ok('MDBList - בדיקת חיבור', body)
+    except Exception:
+        pass
+
+
+def _mdblist_menu_new(kodi_utils, gemini_pair, mdblist_pair):
+    options = [
+        '📱 התאמה מטלפון / מכשיר אחר (QR + URL)',
+        '⌨️ הזנת ה-key ידנית כאן',
+    ]
+    try:
+        choice = xbmcgui.Dialog().select('MDBList - איך להתחבר?', options)
+    except Exception:
+        choice = -1
+    if choice < 0:
+        return
+    if choice == 0:
+        _mdblist_pair_flow(kodi_utils, gemini_pair, mdblist_pair)
+        return
+    if choice == 1:
+        _mdblist_type_flow(kodi_utils, mdblist_pair)
+
+
+def _mdblist_pair_flow(kodi_utils, gemini_pair, mdblist_pair):
+    """Shared pair server with the MDBList form: show the QR, poll, validate,
+    save."""
+    try:
+        ps = gemini_pair.PairServer(html_form=mdblist_pair.MDBLIST_FORM)
+    except Exception as e:
+        xbmcgui.Dialog().ok(
+            'Kodi POV IL',
+            'נכשלה הפעלת שרת התאמה: {0}\n\n'
+            'אפשר לחזור לתפריט ולבחור "הזנה ידנית" במקום.'
+            .format(str(e)[:80]))
+        return
+    key = _run_pair_qr(ps)
+    if not key:
+        return
+    _test_save_mdblist(kodi_utils, mdblist_pair, key)
+
+
+def _mdblist_type_flow(kodi_utils, mdblist_pair):
+    """Typed-input flow: like Gemini's, validate before save with a retry loop.
+    Manual entry has no phone-side pre-validation, so (unlike the QR flow) an
+    unverified key is never stored -- retry=True makes _test_save_mdblist offer
+    a retry instead of saving on a bad/ambiguous result."""
+    xbmcgui.Dialog().ok(
+        'MDBList - איך משיגים API key',
+        'פתח בדפדפן (במחשב/טלפון):\n'
+        '   https://mdblist.com/preferences\n\n'
+        'העתק את ה-API key והדבק במסך הבא.')
+    while True:
+        try:
+            key = (xbmcgui.Dialog().input('MDBList API Key:') or '').strip()
+        except Exception:
+            key = ''
+        if not key:
+            return
+        res = _test_save_mdblist(kodi_utils, mdblist_pair, key, retry=True)
+        if res != 'retry':
+            return
+
+
+def _mdblist_reject(reason, retry):
+    """Bad/unverifiable key: don't save. When retry is True (manual entry) offer
+    a retry loop and return 'retry'/'cancel'; otherwise just report and 'cancel'."""
+    if retry:
+        again = xbmcgui.Dialog().yesno(
+            'MDBList - בדיקה נכשלה',
+            reason + '\n\nלנסות שוב?',
+            nolabel='ביטול', yeslabel='נסה שוב')
+        return 'retry' if again else 'cancel'
+    xbmcgui.Dialog().ok(
+        'MDBList - בדיקה נכשלה',
+        reason + '\n\nהעתק אותו שוב במלואו מ-mdblist.com/preferences ונסה שוב.')
+    return 'cancel'
+
+
+def _test_save_mdblist(kodi_utils, mdblist_pair, key, retry=False):
+    """Validate the key against MDBList, then store it with the SAME side-effects
+    POV's native MDBList connect applies (account name, token, watched-indicator
+    active, watched-status provider). Returns 'ok' / 'cancel' / 'retry'.
+
+      status True  -> save + success                                   -> 'ok'
+      status False -> reject (never saved)                             -> retry/'cancel'
+      status None  -> transient. From the QR flow (retry=False) the phone
+                      already validated the key, so save anyway with a soft
+                      note ('ok'); from manual entry (retry=True) there was no
+                      pre-validation, so don't save -- offer a retry.
+    """
+    kodi_utils.notify('MDBList: בודק...', time_ms=2000)
+    status, username = mdblist_pair.validate_key_full(key)
+
+    if status is False:
+        return _mdblist_reject('המפתח נדחה ע"י MDBList.', retry)
+    if status is None and retry:
+        return _mdblist_reject(
+            'לא הצלחנו לאמת את המפתח מול MDBList (בעיית רשת?).', retry)
+
+    # status is True, or (status is None from the already-phone-validated QR
+    # flow) -> commit POV's native connect settings.
+    if not _mdblist_apply_connect(key, username):
+        xbmcgui.Dialog().ok(
+            'MDBList - שמירה נכשלה',
+            'המפתח אומת, אבל לא הצלחנו לשמור אותו בהגדרות POV.\n\n'
+            'ודא שהתוסף POV (plugin.video.pov) מותקן, נסה לסגור את Kodi '
+            'לחלוטין ולהפעיל מחדש, ואז לחזור לכאן.')
+        return 'cancel'
+
+    if status is None:
+        xbmcgui.Dialog().ok(
+            'MDBList',
+            'המפתח נשמר. לא הצלחנו לאמת אותו כרגע מול MDBList (רשת?), '
+            'אבל הוא ייבדק בשימוש.\n\n'
+            'סטטוס הצפייה וההמשך-צפייה יסופקו כעת ע"י MDBList '
+            '(ניתן לשנות ב-POV: Features / Watched Indicators).')
+    else:
+        xbmcgui.Dialog().ok(
+            'MDBList',
+            '✓ החיבור הצליח. MDBList מחובר.\n\n'
+            'סטטוס הצפייה וההמשך-צפייה יסופקו כעת ע"י MDBList '
+            '(ניתן לשנות ב-POV: Features / Watched Indicators).\n\n'
+            'אם הרשימות לא מופיעות מיד, ייתכן שיהיה צורך להפעיל מחדש את POV.')
+    return 'ok'
 
 
 def _test_save_or_retry(kodi_utils, gemini, api_key, retry_cb):
@@ -2974,6 +3259,8 @@ def main():
             _handle_test_connection(params)
         elif action == 'connect_gemini':
             _handle_connect_gemini(params)
+        elif action == 'connect_mdblist':
+            _handle_connect_mdblist(params)
         elif action == 'show_gemini_usage':
             _handle_show_gemini_usage(params)
         elif action == 'open_tmdb_notice':
