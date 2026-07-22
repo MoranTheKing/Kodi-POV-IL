@@ -1578,9 +1578,17 @@ def _mdblist_apply_connect(key, username):
     """Replicate POV's native MDBList.set() connect side-effects cross-addon:
     store the account name + token, activate the MDBList watched-indicator, and
     make MDBList the watched-status/progress provider -- exactly the four
-    settings POV writes itself. Returns True iff the token stuck (the one
-    setting we hard-verify via read-back; the rest are best-effort, as they are
-    simple bool/enum values POV's setSetting commits reliably).
+    settings POV writes itself. Returns True iff the token stuck.
+
+    ORDER MATTERS: we write + hard-verify the token FIRST and gate the other
+    three writes on that success. If the token write fails, writing the aux
+    flags anyway would leave POV's watched-status pointing at MDBList
+    (watched_indicators='2', mdbl_indicators_active='true') with an empty token
+    -- an inconsistent state a Kodi restart would NOT undo, and the exact
+    'provider set, no key' breakage this whole change set out to prevent.
+    (The disconnect path can write its aux flags unconditionally because those
+    fail toward *deactivating* MDBList -- the safe direction; connect's fail
+    toward the unsafe one, so they must be gated.)
 
     NB: POV's native set() also calls clear_cache('mdblist'). We deliberately do
     NOT import POV's cache module cross-addon -- doing so would pull POV internals
@@ -1592,15 +1600,17 @@ def _mdblist_apply_connect(key, username):
     a = _mdblist_pov_addon()
     if not a:
         return False
-    _mdblist_pov_set(a, 'mdblist_user', username or '')
     try:
         a.setSetting('mdblist.token', key or '')
         ok = (a.getSetting('mdblist.token') or '').strip() == (key or '').strip()
     except Exception:
         ok = False
+    if not ok:
+        return False                       # leave every aux setting untouched
+    _mdblist_pov_set(a, 'mdblist_user', username or '')
     _mdblist_pov_set(a, 'mdbl_indicators_active', 'true')
     _mdblist_pov_set(a, 'watched_indicators', '2')
-    return ok
+    return True
 
 
 def _mdblist_apply_disconnect():
