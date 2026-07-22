@@ -269,9 +269,12 @@ p{color:#b7c4cf}a{color:#ffd166}</style></head>
 '''
 
 
-def _make_handler(state):
+def _make_handler(state, html_form=_HTML_FORM):
     """Build a request-handler class that closes over `state`
-    (a dict the caller polls for the submitted key)."""
+    (a dict the caller polls for the submitted key) and serves
+    `html_form` (defaults to the Gemini form; a caller can pass a
+    different service's form -- e.g. MDBList -- to reuse this
+    transport verbatim)."""
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def _send(self, code, body, ctype='text/html; charset=utf-8'):
@@ -286,7 +289,7 @@ def _make_handler(state):
         def do_GET(self):
             path = (self.path or '/').split('?', 1)[0]
             if path == '/' or path == '/index.html':
-                self._send(200, _HTML_FORM)
+                self._send(200, html_form)
                 return
             self._send(404, '<h1>404</h1>')
 
@@ -514,12 +517,12 @@ class PairServer:
       ps.shutdown()     -- stops the server thread (idempotent)
     """
 
-    def __init__(self):
+    def __init__(self, html_form=_HTML_FORM):
         self._state = {'received_key': None}
         self.port = find_free_port()
         self.lan_ips = get_lan_ips()
         self.lan_ip = self.lan_ips[0] if self.lan_ips else None
-        handler = _make_handler(self._state)
+        handler = _make_handler(self._state, html_form)
         self._server = _ThreadingServer(('', self.port), handler)
         self._thread = threading.Thread(
             target=self._server.serve_forever, daemon=True)
