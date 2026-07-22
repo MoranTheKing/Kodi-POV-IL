@@ -52,16 +52,17 @@ _ENGINE_CACHE_FILE = (
     'special://profile/addon_data/service.subtitles.kodipovilai/'
     'he_avail_cache.json')
 _ENGINE_TTL = 7 * 24 * 3600.0   # 7 days; used once HUMAN Hebrew has been found
-# When NO human Hebrew exists yet (likely brand-new content), re-warm MUCH more
-# often so a sub that appears within hours shows up fast for everyone -- new
-# releases get human Hebrew within ~24h, and a 7-day cache would hide it.
-_AVAIL_TTL_NONE = 8 * 3600.0    # 8 hours
-# Cross-process memo for _pool_lookup: on a first entry BOTH release_names (the
-# source-window seed) and run_warm/availability (the background warm) hit the
-# Worker's /lookup for the SAME title within ~1s. Stashing the first successful
-# result here for a few seconds lets the second reuse it -- ONE Worker request
-# instead of two (the single biggest chunk of avoidable pool traffic). Both
-# processes share this file the same way they already share he_avail_cache.json.
+# When NO human Hebrew exists yet (likely brand-new content), re-warm more often
+# so a sub that appears shows up reasonably fast -- new releases get human Hebrew
+# within ~24h, and a 7-day cache would hide it. Balanced at ~daily (was 8h) to
+# cut repeat Worker /lookup traffic while still surfacing next-day Hebrew.
+_AVAIL_TTL_NONE = 24 * 3600.0   # 24 hours
+# Cross-process memo for _pool_lookup: coalesces repeated signed /lookup calls
+# for the SAME title within a few seconds into ONE Worker request. (The POV
+# source-window used to make its OWN unsigned peek here too, but that always
+# 426'd and was removed; the signed background warm in availability() is now the
+# only caller, and this memo still guards against it re-firing back-to-back.)
+# Shares this file the same way the processes already share he_avail_cache.json.
 _POOL_RAW_FILE = (
     'special://profile/addon_data/service.subtitles.kodipovilai/'
     'he_pool_raw.json')
@@ -143,22 +144,28 @@ def _media_key(p):
 WIZDOM_API_URL = 'https://wizdom.xyz/api/search?action=by_id'
 
 
-def _pool_lookup(p, timeout=None):
-    """One /lookup call -> dict with the pool's Hebrew data for this media:
+def _pool_lookup(p):
+    """One SIGNED /lookup call -> dict with the pool's Hebrew data for this media:
         {'names': [...],          pool-contributed Hebrew release names
          'embedded': [...],       releases flagged as carrying built-in Hebrew
          'ktuvit': [...],         Hebrew release names cached from Ktuvit
          'ktuvit_checked': <ts>}  when Ktuvit was last checked (0 = never)
-    All keyed by release name so they match across debrid providers. Networked.
-    `timeout` overrides the default (the source window uses a tight cap for its
-    one allowed synchronous first-entry call)."""
+    All keyed by release name so they match across debrid providers. Networked
+    via pool._get (which signs the request and uses pool's fixed GET timeout).
+    Runs only in MoranSubs's own service process (the signed background warm)."""
     out = {'names': [], 'embedded': [], 'ktuvit': [], 'sync_rel': [],
            'ktuvit_checked': 0.0, 'ktuvit_changed': 0.0, '_ok': False}
     try:
-        q = _parse.urlencode({k: v for k, v in p.items() if v})
-        req = _req.Request(POOL_URL + '/lookup?' + q,
-                           headers={'user-agent': _UA})
-        raw = _req.urlopen(req, timeout=(timeout or _TIMEOUT)).read().decode('utf-8')
+        # Sign the request through pool.py's helper. The Worker REJECTS an
+        # unsigned/unversioned /lookup with HTTP 426 -- poolAuth checks the
+        # x-pov-v header BEFORE the signature -- so the old bare urllib call
+        # here ALWAYS failed (426), returned no data, and still burned a Worker
+        # invocation (twice per title, since the _ok-gated memo never armed).
+        # This path runs ONLY in MoranSubs's own service process (the signed
+        # background warm; the POV-side peek that couldn't sign is now gone), so
+        # `pool` imports cleanly with the community key. Fail-open on any error.
+        from resources.lib import pool as _pool
+        raw = _pool._get('/lookup', p).decode('utf-8')
         data = json.loads(raw)
         if data.get('ok'):
             out['_ok'] = True   # a real, successful response (memoize-able)
@@ -217,12 +224,12 @@ def _pool_raw_path():
         return ''
 
 
-def _pool_lookup_memo(p, timeout=None):
-    """_pool_lookup() behind a short cross-process memo keyed by media, so the two
-    ~concurrent first-entry lookups (release_names seed + run_warm/availability
-    warm) cost ONE Worker /lookup, not two. Only a SUCCESSFUL response (_ok) is
-    stashed, so a transient failure is never cached; any error along the way falls
-    back to a direct _pool_lookup(). Same shared file model as he_avail_cache."""
+def _pool_lookup_memo(p):
+    """_pool_lookup() behind a short cross-process memo keyed by media, so a warm
+    that re-fires for the same title within a few seconds costs ONE Worker
+    /lookup, not several. Only a SUCCESSFUL response (_ok) is stashed, so a
+    transient failure is never cached; any error along the way falls back to a
+    direct _pool_lookup(). Same shared file model as he_avail_cache."""
     try:
         key = _media_key(p)
     except Exception:
@@ -241,7 +248,7 @@ def _pool_lookup_memo(p, timeout=None):
                         return d
         except Exception:
             pass
-    out = _pool_lookup(p, timeout)
+    out = _pool_lookup(p)
     if key and path and isinstance(out, dict) and out.get('_ok'):
         try:
             data = {}
@@ -735,15 +742,27 @@ def run_warm(info):
     if kt_fresh:
         _merge(names, seen, kt_pool_names)   # shared registry hit -- free, no call
 
-    _LOCAL_SHORT = 8 * 3600.0
-    _LOCAL_LONG = 7 * 24 * 3600.0
+    _LOCAL_SHORT = 24 * 3600.0        # no Hebrew yet -> re-check ~daily (was 8h)
+    _LOCAL_MED = 2 * 24 * 3600.0      # HAS names but Ktuvit still "active"
+    _LOCAL_LONG = 7 * 24 * 3600.0     # HAS names, Ktuvit stable
 
     def _pick_ttl(has_names):
+        # A known-good availability answer is cached for a good while REGARDLESS
+        # of Ktuvit-active state: the release names we already found don't vanish,
+        # and `kt_active` only governs the live-Ktuvit RE-POLL decision above
+        # (kt_fresh / _ktuvit_topup), NOT how long we may trust a positive result.
+        # The old code returned the SHORT ttl for has-names whenever kt_active
+        # (which defaults true for any recent title), so a popular title re-hit
+        # the Worker /lookup every 8h for no reason -- the big repeat-lookup lever.
+        # COUPLING (accepted): the live-Ktuvit top-up (_ktuvit_topup) only runs
+        # INSIDE run_warm, which only fires on a local-cache MISS -- so extending
+        # the has-names ttl also raises the floor on how often an "active" title
+        # re-polls live Ktuvit (~8h -> ~48h). Fine: the badge is advisory only,
+        # and the real fetch path (pool.lookup) keeps its own ~90s cache, so newly
+        # added Hebrew is still found the instant the user actually searches.
         if not has_names:
             return _LOCAL_SHORT
-        if ktuvit_ok and kt_active:
-            return _LOCAL_SHORT
-        return _LOCAL_LONG
+        return _LOCAL_MED if (ktuvit_ok and kt_active) else _LOCAL_LONG
 
     # Store the fast result NOW -- this is what the first-entry wait blocks for.
     _store_avail(mk, names, embedded, _pick_ttl(bool(names)), sync_rel)
@@ -875,24 +894,18 @@ def release_names(meta):
         names = _cached_names(key)
         if names is not None:
             return names
-        # Cache miss. Kick the full in-service warm (pool+Wizdom+OS+Ktuvit)...
+        # Cache miss. Kick the full in-service warm (pool+Wizdom+OS+Ktuvit),
+        # which runs in MoranSubs's OWN process where it can SIGN the pool
+        # /lookup. We no longer make a synchronous pool peek HERE: this POV
+        # interpreter can't sign the request (no pool key), so that peek always
+        # got HTTP 426 and returned nothing while still costing a Worker
+        # invocation. Instead we wait briefly for the signed warm to land its
+        # result (incl. pool names) in the shared cache -- identical first-entry
+        # UX, one fewer wasted request per title.
         _fire_engine_warm(key, p, meta)
         deadline = time.time() + _FIRST_ENTRY_WAIT
-        # ...and do ONE quick shared-pool lookup. Pool-HAVE titles answer here in
-        # well under a second, so they show their % with no perceptible wait.
-        seeded = []
-        try:
-            pl = _pool_lookup_memo(p, timeout=min(1.5, _FIRST_ENTRY_WAIT))
-            seeded = _seed_from_pool(key, pl)
-        except Exception:
-            seeded = []
-        if seeded:
-            return seeded
-        # Pool has nothing -> Hebrew (if any) lives on OpenSubtitles/Ktuvit, which
-        # only the background warm checks. WAIT briefly for that warm to land so
-        # the % still shows on the FIRST entry (the chosen short in-window wait).
-        # We poll the shared cache the in-service warm writes; 'warm' marks its
-        # full result so we don't return our own empty pool seed by mistake.
+        # Poll the shared cache the in-service warm writes; 'warm' marks its full
+        # result so we don't return a half-filled entry by mistake.
         while time.time() < deadline:
             time.sleep(0.12)
             ent = _cache_entry(key)
@@ -902,7 +915,7 @@ def release_names(meta):
                      + (' (%d names)' % len(n)))
                 return n
         _dbg('first-entry wait: timed out (~%.1fs) for %s' % (_FIRST_ENTRY_WAIT, key))
-        return seeded
+        return []
     except Exception:
         return []
 
