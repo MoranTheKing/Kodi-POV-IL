@@ -162,6 +162,51 @@ def _fix_one_text_line(line):
     return dash + open_tags + rest + leading + close_tags
 
 
+# --- encoding repair: SDH music glyphs mangled by a legacy cp1255 mis-decode ---
+# A downloaded UTF-8 subtitle whose only non-ASCII char is a music note (e.g.
+# U+266A, bytes E2 99 AA) was historically re-decoded as cp1255 by
+# subs_engine.extract_sub.convert_to_utf (now fixed at the root), turning
+# E2 99 AA into a 3-char garble ('gimel' + 'trademark' + 'multiplication').
+# That garble was translated-through and cached/shared to the community pool,
+# so we ALSO repair it on READ -- every cache/pool hit runs fix_rtl_punctuation
+# -- which fixes entries already in the pool for everyone who downloads them,
+# with no re-upload. An SDH music note is a standalone glyph at a line/word
+# boundary, never a real word's final letter, so the replacement is anchored to
+# a non-Hebrew-letter left boundary (below): it repairs the genuine garble but
+# refuses to eat the trailing 'gimel' of a word that merely happens to be
+# followed by stacked trademark-style symbols (e.g. "...gimel + TM + (R)").
+_MOJIBAKE_MUSIC = {
+    'ג™×': '♪',    # gimel ™ ×   -> eighth note
+    'ג™«': '♫',    # gimel ™ «   -> beamed eighth notes
+    'ג™¬': '♬',    # gimel ™ ¬   -> beamed sixteenth notes
+    'ג™©': '♩',    # gimel ™ ©   -> quarter note
+    'ג™­': '♭',    # gimel ™ soft-hyphen -> flat
+    'ג™®': '♮',    # gimel ™ ®   -> natural
+    'ג™¯': '♯',    # gimel ™ ¯   -> sharp
+}
+_MOJIBAKE_PREFIX = 'ג™'      # gimel + trademark: the shared 2-char signature
+# Match a mojibake note ONLY when its leading gimel (U+05D2) is not glued to a
+# real Hebrew word -- negative lookbehind on the Hebrew letter block
+# U+05D0-U+05EA. The tail class is the exact 3rd char of each of the 7 keys:
+# multiplication / << / not-sign / copyright / soft-hyphen / registered / macron.
+_MOJIBAKE_RE = re.compile(
+    '(?<![א-ת])ג™[×«¬©­®¯]')
+
+
+def repair_music_mojibake(text):
+    """Restore SDH music glyphs mangled to a 'gimel-trademark-x' style garble by
+    a legacy cp1255 mis-decode of a UTF-8 source. Surgical: only the exact
+    mojibake sequences are replaced, and only at a non-Hebrew-letter left
+    boundary, so genuine Hebrew text (even a gimel-final word followed by a
+    trademark sign) is never altered. Idempotent. Never raises."""
+    try:
+        if _MOJIBAKE_PREFIX not in text:   # cheap fast-out; every key has it
+            return text
+        return _MOJIBAKE_RE.sub(lambda m: _MOJIBAKE_MUSIC[m.group(0)], text)
+    except Exception:
+        return text
+
+
 def fix_rtl_punctuation(text, mode=None):
     """Normalize RTL punctuation placement in a Hebrew SRT body.
 
@@ -199,6 +244,10 @@ def fix_rtl_punctuation(text, mode=None):
     newline so a benign re-run doesn't flag the file as changed."""
     if not text:
         return text
+    # Encoding repair runs first and independent of RTL mode (even 'off'): a
+    # legacy cp1255 mis-decode turned SDH music notes into 'ג™×'-style garble
+    # that reached the cache/pool; restore it on every read.
+    text = repair_music_mojibake(text)
     if mode is None:
         try:
             from . import kodi_utils
