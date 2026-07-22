@@ -1,3 +1,13 @@
+v0.2.425
+- MDBList can now be paired by scanning a QR code from your phone, like the
+  other services -- until now it was the only one that required typing the API
+  key by hand into Kodi. In "My Services" pick MDBList and either scan the QR
+  and paste the key on your phone (the phone page verifies it against MDBList
+  first, with the same iOS/WebKit paste fix used for Gemini pairing) or type it
+  in Kodi. Connecting and disconnecting now mirror POV's own MDBList setup
+  exactly -- account name, token, and the watched-status provider -- and a
+  mistyped or unverifiable key is never saved.
+
 v0.2.424
 - iPhone Gemini pairing fix: the "pair from phone" page now works on iOS. iOS/
   WebKit was silently corrupting a pasted API key in the text field (smart-
