@@ -1234,7 +1234,74 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    scheduled invocations/day; the rollup also self-updates on /stats loads, so the
    cron is optional). No /backfill needed (ROLL_SCHEMA=6 rebuilds automatically;
    repair-on-store is automatic).
-15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
+15. **Fewer pool requests (Tier 2) + a regression guard, a "don't redo a pooled
+   embedded translation" UX fix, and an owner-dashboard embedded-titles pass —
+   SHIPPED (AI 0.2.422 / quickfix 0.1.461; notif #520, and AI 0.2.423 / quickfix
+   0.1.462; notif #521; + worker.js out-of-band).**
+   - **Tier 2 lookup-sharing (client; 0.2.422):** within one playback the badge
+     warm (he_sub_match `_pool_lookup`) and autosub's `pool.lookup` both hit
+     `/lookup` for the same title. `_pool_lookup` now routes through
+     `pool._lookup_raw`, so both SHARE pool.py's 90s in-process `_LOOKUP_CACHE` --
+     the second is a cache hit (no Worker request). One request per playback
+     instead of two in the common case (same tmdb key). Reviewer confirmed
+     cache-key parity + 426 signing preserved.
+   - **pool.py negative-cache guard (client; 0.2.422) — the reviewer's BLOCKER,
+     fixed before ship:** `_lookup_raw` cached `{}` for 90s on BOTH a reachable
+     "no results" answer AND any transient error (network/timeout/parse). Once the
+     warm shares that cache with autosub (Tier 2), a warm-side blip could poison it
+     and hide a real pool subtitle from autosub -> wasted retranslation. Fix: a
+     `cacheable` flag -- a transport failure is NOT cached (a genuine reachable
+     negative still is). Scoped entirely to pool.py; also fixes a latent bug that
+     already affected autosub. pool.py is KEY-BEARING: shipped via key-splice (repo
+     edited code + the base zip's real key block; proven to differ from the prior
+     release ONLY inside `_lookup_raw`; md5 802ba87a preserved). Sonnet SHIP.
+   - **Don't regenerate a pooled embedded translation (client; 0.2.423):**
+     `list_candidates` now SUPPRESSES the local "translate embedded -> Hebrew (AI)"
+     generator for a source language the pool already holds an embedded (`ai_emb`)
+     translation for THIS EXACT release (`_pool_has_emb`, gated on the same
+     `_emb_ok`/TIER_EXACT same-source predicate the pool listing uses). The instant
+     "· מאגר קהילתי · 100%" pool item already covers it, so the local extract+AI
+     pipeline isn't re-run for a one-click result. Same-source only (never
+     suppresses when the pool can't actually serve your release); no-op when the
+     pool is off; `have_hebrew` stays correct (the suppressing variant was already
+     listed by the pool loop). pool.py + he_sub_match INHERITED byte-identical this
+     round (0.2.423 swaps only translate.py). Sonnet SHIP (7 adversarial checks).
+   - **Worker owner-dashboard (worker.js, delivered out-of-band):** (a) EMBEDDED
+     titles -- "Top/Recent embedded" now LIST the actual source languages
+     ("English, Russian") instead of collapsing to "mixed" (a per-title `langs`
+     map, backward-compatible; old blobs still render, a `reset=1` backfill
+     repopulates), and resolve a HEBREW display title from each row's tmdb/imdb id
+     via TMDB (cached in D1 through the POOL shim; fixes the bare "#id" labels).
+     Owner-only + 15-min page cache, so it costs a handful of TMDB SUBrequests per
+     recompute (NOT Worker invocations) -- and the resolver caps uncached ids/render
+     and forces `tmdbFetch` to a SINGLE try there (default 3 elsewhere) so a 429
+     burst on the shared public key can't blow the 50-subrequest budget or starve
+     the live `/contribute` enrichment path. (b) Prior deferred dashboard NITs F/G/H
+     done (abuse-watch ranked by a direct D1 query with fail-open shim fallback;
+     season/episode digit-constrained at the /ev ingest; "no data" copy keyed on
+     attempted-not-delivered). (c) Recent activity is now TELEMETRY-ONLY: the
+     pool-embedded rows were briefly merged in (the deferred "safety net") but
+     rendered as blank no-version/method rows the maintainer found to be clutter, so
+     they were removed -- every embedded translation is already counted under
+     "Embedded translations" (the pool-derived view). Storage note: the live Worker
+     runs on D1 (`env.POOL` is a D1-backed KV shim, `makeD1Store`), so all of this
+     lands in D1, not KV. FIVE Sonnet validators across these worker changes, all
+     SHIP (one FIX applied: the tmdbFetch retry-budget). Requires at deploy:
+     redeploy worker.js + run `/backfill-emb?key=…&reset=1` once to populate the
+     new per-title langs/id/he-title fields for historical rows.
+   - **DEFERRED — per-track embedded translate actions (#4):** currently one
+     "translate embedded" action per source LANGUAGE (dedup by code in
+     `list_candidates`). Offering one per genuinely-distinct track (full vs forced
+     vs SDH) is blocked by three compounding obstacles found by reading the resolve
+     path: Kodi's `getAvailableSubtitleStreams()` usually returns just the language
+     (no forced/SDH flavor to tell two same-language tracks apart); the embedded_ai
+     resolve extracts by LANGUAGE, not by the picked track; and Kodi's subtitle
+     stream_index != the container's MKV track number. A correct implementation
+     needs flavor-parsing (subs_engine_bridge) + a stream-index->track mapping +
+     changes to BOTH the align and extract paths -- a real mini-project in the core
+     playback path, for a benefit that is inert whenever the container doesn't label
+     its tracks. Left as-is by maintainer decision.
+16. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
 ## Working style
