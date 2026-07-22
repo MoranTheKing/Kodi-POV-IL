@@ -205,6 +205,53 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
 (5 s grace), and a configurable addon exclusion list `autosub_excluded_addons`
 (default `plugin.video.idanplus`). All fail-open.
 
+## MDBList integration — status (0.2.425–0.2.428, all shipped + field-verified)
+
+The full chain works: QR pairing, watched/progress sync, list manager, account
+heal. Delivered across four releases:
+- **0.2.425 / qf 0.1.464** — QR pairing for MDBList (like the other services),
+  replacing manual key entry. Phone form reuses `gemini_pair` transport
+  (`mdblist_pair.py`); connect writes POV's `mdblist.token` + `mdblist_user` +
+  `mdbl_indicators_active` + `watched_indicators` via a forwarder injected into
+  POV's My Services (`pov_services_patcher._AiMDBList`, INJECT_VERSION 9);
+  `default.py` `connect_mdblist` flow. Connect aux-writes are gated on a verified
+  token; manual entry is binary-with-retry.
+- **0.2.426 / qf 0.1.465** — pair-window port was invisible: 6-digit
+  `[COLOR=ffd166]` = Kodi alpha 00 = fully transparent. All pair-window colours ->
+  8-digit opaque (also fixes the Gemini pair window). `_run_pair_qr`/`_PairWindow`.
+- **0.2.427 / qf 0.1.466** — `pov_mdblist_patcher.py` (boot patcher for POV 6.x
+  `indexers/mdblist_api.py`): (A) scrub apikey out of POV's error log; (B) on
+  mark-watched POST `scrobble/stop`@100 by tmdb id (POV's `scrobble/clear` 404s)
+  so the title clears PAUSED + counts in Watch Stats. Anchors on the `success =
+  result[...]` line inside `mdbl_watched_unwatched`; guarded to mark_as_watched +
+  key=='tmdb' + movies/episodes; the erase-bookmark path is untouched.
+- **0.2.428 / qf 0.1.467** — `heal_mdblist_account()`: POV keys the whole account
+  on `mdblist_user` (`mdblist_api.py:332` `if not get_setting('mdblist_user'):
+  return 'no account'`), NOT the token. A connect that stored an empty username
+  left the account "inactive" (manager "No results", sync monitor aborts) while
+  direct scrobbling still worked (token-based). Heal on boot: token set + user
+  empty -> fetch username from `/user` -> store it. POV's `onSettingsChanged`
+  invalidates its `pov_settings` cache so the write takes effect ~immediately.
+
+KEY MDBList API facts (probed with a dummy key: 401 = endpoint exists, 404 =
+missing): `scrobble/start|pause|stop`, `sync/watched`, `sync/collection`,
+`sync/playback` all exist; `scrobble/stop`@>=80% marks watched + finalizes
+(clears) the session; there is NO DELETE on `sync/playback` (405). Account
+activeness = `mdblist_user` non-empty. Username field is `username` (matches POV
+native `result['username']`).
+
+REMAINING (Phase B, the NEXT stage): MDBList **home tiles per skin** ("My Movies
+(MDBList)" / "My Series (MDBList)"), like the existing Trakt/TMDB/POV tiles, with
+baked images — per-skin mechanisms as in `scratchpad/MDBLIST_INTEGRATION_PLAN.md`.
+Manager-add + Continue-Watching/watched sync are DONE.
+
+MINOR / known: the manager's "Collection" toggle (`POST sync/collection` —
+endpoint exists) may be a MDBList BETA quirk; Watchlist works. Revisit if wanted.
+
+NOTIFICATION MISTAKE (now guarded): 0.2.426/427/428 first shipped reusing the same
+`quick_update` note_id (only footer bumped) -> no notification fired. Fixed at
+#525; step-6 build guard now fails a build unless note_id > `origin/main`'s.
+
 ## Open items (as of this handoff)
 
 1. **Trakt/TMDB add crash — RESOLVED (AI 0.2.377 / quickfix 0.1.416).** The
