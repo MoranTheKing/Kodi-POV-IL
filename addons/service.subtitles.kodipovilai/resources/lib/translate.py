@@ -927,6 +927,22 @@ def list_candidates(info, modal_progress=True):
     # path if a track turns out non-text (PGS/VOBSUB) or can't be read.
     if (ai_translation_on and embedded_foreign
             and kodi_utils.get_bool('embedded_translate', True)):
+        # Don't offer the LOCAL "translate embedded -> Hebrew" generator for a
+        # source language the community pool ALREADY holds an embedded (ai_emb)
+        # translation for THIS EXACT release: that pooled copy is surfaced above
+        # as an instant "תרגום מובנה AI · מאגר קהילתי · 100%" item, so re-running
+        # the local extract+AI pipeline would redo the whole thing for a result
+        # already one click away. Same-source only -- _emb_ok already hides an
+        # ai_emb from a different release, so it can never suppress the generator
+        # for a release the pool cannot actually serve. (_ai_variants is [] when
+        # the pool is disabled, so this never suppresses in that case.)
+        def _pool_has_emb(_sl):
+            _sl = (_sl or 'en').strip().lower()[:2]
+            for _v in _ai_variants:
+                if ((_v.get('kind') or '') == 'ai_emb' and _emb_ok(_v)
+                        and (_v.get('source_lang') or 'en').strip().lower()[:2] == _sl):
+                    return True
+            return False
         _emb_ai_seen = set()
         for c in sorted(embedded_foreign,
                         key=lambda x: (_lang_rank(x.get('language') or '?'),
@@ -936,6 +952,8 @@ def list_candidates(info, modal_progress=True):
                     or code in ('?', 'und', 'mis', 'zxx')):
                 continue
             _emb_ai_seen.add(code)
+            if _pool_has_emb(code):
+                continue   # instant same-release pool copy already listed above
             have_hebrew = True
             # The real Kodi stream index lives INSIDE this candidate's own
             # engine link payload (not a top-level key), so decode it out. Carry

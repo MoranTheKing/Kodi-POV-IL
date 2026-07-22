@@ -1,3 +1,10 @@
+v0.2.423
+- When the community pool already holds an embedded ("תרגום מובנה") translation for
+  YOUR exact release, the local "translate the embedded track" action is no longer
+  offered separately -- you get the instant pool copy (shown as "· מאגר קהילתי · 100%")
+  instead of re-running the whole extract + AI translate for a result that is already
+  one click away. No behaviour change when the pool does not have your release.
+
 v0.2.422
 - Further reduced background traffic to the community server: within a single playback,
   the availability check behind the sources-screen badge and the auto-subtitle search now
