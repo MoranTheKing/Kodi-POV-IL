@@ -1,12 +1,12 @@
-v0.2.426
-- Fixed the phone-pairing screen showing the address without its port. The
-  port was drawn in a colour Kodi treated as fully transparent, so an address
-  like http://192.168.1.42:8765 looked like http://192.168.1.42 and couldn't be
-  typed into a browser by hand. Scanning the QR always worked (it carries the
-  full address with the port); this only affected reading/typing the URL. The
-  port is now shown bold, and the rest of the pairing screen's text (title,
-  troubleshooting, countdown) renders correctly too. Applies to both the Gemini
-  and MDBList pairing screens.
+v0.2.427
+- MDBList watched-sync fixes (when MDBList is your Watched Status Provider):
+  (1) your MDBList API key is no longer written to kodi.log -- POV logged the
+  full request URL, apikey and all, on any MDBList error; it is now redacted.
+  (2) "Mark as watched" now clears the paused state on MDBList and counts the
+  title in your Watch Stats. POV was posting to a scrobble/clear endpoint that
+  returned 404, so the title stayed "paused" and never registered; we now send
+  a scrobble/stop at 100%, which MDBList treats as finished (marks watched and
+  clears the resume). Applies to POV 6.x; harmless no-op otherwise.
 
 v0.2.425
 - MDBList can now be paired by scanning a QR code from your phone, like the
