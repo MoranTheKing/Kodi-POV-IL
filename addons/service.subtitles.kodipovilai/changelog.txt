@@ -1,3 +1,13 @@
+v0.2.426
+- Fixed the phone-pairing screen showing the address without its port. The
+  port was drawn in a colour Kodi treated as fully transparent, so an address
+  like http://192.168.1.42:8765 looked like http://192.168.1.42 and couldn't be
+  typed into a browser by hand. Scanning the QR always worked (it carries the
+  full address with the port); this only affected reading/typing the URL. The
+  port is now shown bold, and the rest of the pairing screen's text (title,
+  troubleshooting, countdown) renders correctly too. Applies to both the Gemini
+  and MDBList pairing screens.
+
 v0.2.425
 - MDBList can now be paired by scanning a QR code from your phone, like the
   other services -- until now it was the only one that required typing the API

@@ -1338,7 +1338,7 @@ class _PairWindow(xbmcgui.WindowDialog):
         # Title bar
         title = xbmcgui.ControlLabel(
             340, 30, 600, 60,
-            '[B][COLOR=ffd166]Gemini AI - התאמה מטלפון[/COLOR][/B]',
+            '[B][COLOR=FFFFD166]Gemini AI - התאמה מטלפון[/COLOR][/B]',
             alignment=2 | 4, font='font30')
         self.addControl(title)
 
@@ -1366,17 +1366,17 @@ class _PairWindow(xbmcgui.WindowDialog):
         self.addControl(instr)
         text = '[B]סרוק את ה-QR עם המצלמה של הטלפון[/B] '
         text += '(אפליקציית מצלמה רגילה — לא צריך אפליקציה מיוחדת).\n\n'
-        text += ('[B][COLOR=bf7f7f]' + instructions_header
+        text += ('[B][COLOR=FFBF7F7F]' + instructions_header
                  + ':[/COLOR][/B]\n')
         for line in url_lines:
             text += '   • ' + line + '\n'
-        text += ('\n[B][COLOR=ffd166]ה-Chrome של אנדרואיד '
+        text += ('\n[B][COLOR=FFFFD166]ה-Chrome של אנדרואיד '
                  'לא נפתח?[/COLOR][/B] כבה ב-Chrome: '
                  'Settings → Privacy → "Always use secure '
                  'connections", או נסה דפדפן אחר (Firefox/Brave/'
                  'Samsung Internet). או חזור ל-Kodi ובחר "הזנה '
                  'ידנית".\n')
-        text += ('[B][COLOR=ffd166]באייפון קיבלת 400?[/COLOR][/B] '
+        text += ('[B][COLOR=FFFFD166]באייפון קיבלת 400?[/COLOR][/B] '
                  'הסתכל ב-fingerprint בעמוד "ה-key נשלח" וודא '
                  'שתואם בדיוק למפתח שהעתקת מ-AI Studio. אם תואם '
                  'אבל עדיין נדחה — המפתח עצמו לא תקין; צור חדש.')
@@ -1394,7 +1394,7 @@ class _PairWindow(xbmcgui.WindowDialog):
         try:
             mm, ss = divmod(int(max(0, seconds_left)), 60)
             self._countdown_lbl.setLabel(
-                '[COLOR=b7c4cf]ממתין לקבלת ה-key... '
+                '[COLOR=FFB7C4CF]ממתין לקבלת ה-key... '
                 '({0:02d}:{1:02d} עד פג תוקף)  •  '
                 'לביטול: Back[/COLOR]'.format(mm, ss))
         except Exception:
@@ -1440,7 +1440,11 @@ def _run_pair_qr(ps):
         if url.count(':') < 2:
             return url
         host_part, port_part = url.rsplit(':', 1)
-        return '{0}[COLOR=ffd166]:{1}[/COLOR]'.format(host_part, port_part)
+        # 8-digit AARRGGBB with FF alpha -- the old 6-digit form (ffd166) was
+        # parsed by Kodi as 0x00ffd166 (alpha 00 = fully TRANSPARENT), which
+        # made the port render invisible; the URL then looked portless. Bold
+        # too, so the port stays visible even if a skin mangles the colour.
+        return '{0}[B][COLOR=FFFFD166]:{1}[/COLOR][/B]'.format(host_part, port_part)
 
     # Show EVERY detected LAN IP. On devices with multiple network
     # interfaces (Android TV with WiFi+Ethernet, laptop with VPN+WiFi)
