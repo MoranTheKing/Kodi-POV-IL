@@ -1158,6 +1158,82 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    practice while the false-positive it guards against is real. Standalone repo
    bumped (repo/addons.xml + md5 + repo/zips + dist/-latest.zip). worker.js
    UNTOUCHED (no redeploy).
+
+   **Cloudflare invocation cut + telemetry ordering + dashboard-correctness +
+   music-note-on-store (AI 0.2.421 / quickfix 0.1.460; notif #519; + a worker.js
+   change delivered OUT-OF-BAND):** the Worker hit ~101k requests/day, just over
+   the 100k/day free tier. A comprehensive invocation audit (client + worker)
+   found the dominant, invisible cost driver:
+   - **THE 426 badge bug (client, he_sub_match.py):** the source-screen Hebrew-%
+     badge's pool `/lookup` was built with ONLY a User-Agent header -- no
+     x-pov-v/x-pov-sig -- so the Worker's poolAuth (which checks VERSION before
+     signature) rejected EVERY call with HTTP 426. Verified live (curl: 426 with
+     just UA; 401 with a version header + no sig). Effect: the badge never got
+     pool data (silently broken feature) AND it burned ~2 invocations/title (both
+     call sites; the _ok-gated 15s memo never armed), default-on for 100% of
+     installs, driven by the frequent BROWSE action (source-window open), not just
+     playback -- almost certainly the bulk of the 101k. Fix: `_pool_lookup` now
+     signs via `pool._get` (the service-process warm can import pool); the
+     POV-side synchronous peek in `release_names` (POV's restricted interpreter
+     can't sign, always 426'd) is DROPPED -- the signed warm fills the same disk
+     cache its poll-loop already reads, so first-entry UX is unchanged and pool
+     data returns to the badge. Positive side effect the reviewer found: the bug
+     kept `ktuvit_checked` stuck at 0 -> `kt_active` always true -> every warm
+     spawned the live-Ktuvit top-up; the fix restores that throttle too.
+   - **Badge cache TTL (client):** `_pick_ttl` returned the SHORT (8h) ttl for
+     has-names titles whenever `kt_active` (defaults true for any recent title),
+     so a popular title with Hebrew re-hit /lookup every 8h for nothing. Now
+     has-names is cached 48h (`_LOCAL_MED`) while Ktuvit-active / 7d when stable,
+     regardless of kt_active; no-names raised 8h->24h. Accepted coupling: the
+     live-Ktuvit re-poll floor rises 8h->48h (badge is advisory; the real fetch
+     path pool.lookup keeps its own 90s cache).
+   - **Telemetry ordering (client, translate.py):** `_emit(True)` ran AFTER
+     `pool.contribute_once`, so a fresh translation's telemetry was queued too
+     late to ride its OWN /contribute piggyback -- it waited for the NEXT
+     contribute or the periodic /ev flush, so the last/only translation of a
+     session reached the pool (Recent embedded) but never the telemetry-fed Recent
+     activity view (the user's "English מייקל missing from Recent activity"), and
+     it caused extra standalone /ev flushes. Fix: emit BEFORE the contribute so
+     every event rides its own upload (idempotent guard keeps it single) -- fixes
+     completeness AND cuts /ev invocations. Reviewer confirmed no race (the queue
+     write is synchronous and completes before the daemon thread is spawned).
+   - **Worker (worker.js, delivered out-of-band):** (a) MUSIC-NOTE REPAIR-ON-STORE
+     -- `repairMusicMojibake` (mirrors 0.2.420's client srt fix, boundary-anchored
+     regex `(?<![א-ת])ג™[×«¬©­®¯]`) runs on `body.srt` in contributeCore AND on the
+     lazy result-hash backfill's downloaded content, so old-client garbled uploads
+     are cleaned at the store and dedup stays consistent old-vs-new. (b) DASHBOARD
+     data-correctness (from a separate full section-by-section audit): version gate
+     `String(r.v) >= TELE_MIN_VER` -> numeric `verCmp` (a string >= wrongly folded
+     ancient "0.2.9" and, the real time-bomb, would silently DROP a future
+     "0.10.0"/"0.2.1000"); `ROLL_SCHEMA` 5->6 forces a clean rebuild that purges
+     the mis-folded rows; the d1/h1 trailing SQL drops its broken `v >= '...'`
+     filter (no-op on real data, removes the same time-bomb). Recent-embedded now
+     sorts by ts (was `.reverse()` on backfill-scan order) and its 40-cap evicts
+     the OLDEST-by-ts (was a blind shift() that could drop the newest live row).
+     Top-embedded-titles per-title `src` is no longer OVERWRITTEN (a title
+     translated from EN + RU -- e.g. "מייקל" -- showed one language beside a count
+     of 2; now marks 'mixed'). recTail/failTail retention evicts oldest-by-ts (was
+     FIFO). Disclaimers added clarifying the telemetry(Recent activity) vs
+     pool(Embedded) distinction. /stats self-reload 120s->600s.
+   TWO separate Sonnet validators (client + worker), BOTH SHIP. Each SHOULD-FIX
+   applied: client (stale _pool_lookup/_memo docstrings, dead `timeout` param, the
+   Ktuvit-coupling comment); worker (repair the backfill's `existing` before
+   hashing so old-garbled vs new-clean dedup; stale schema comment). Deferred (all
+   documented): the list_candidates autosub-vs-native double-lookup guard (#3 --
+   medium-confidence, playback-bounded, needs a sensitive pool.py cross-process
+   memo); the merge of pool-embedded into Recent activity (B fixes the root; a
+   merge mixes telemetry+pool data models); a music-note backfill of EXISTING
+   Telegram files (expensive re-upload changing file_ids; client read-repair
+   already fixes display); and dashboard NITs F (abuse-watch 1000-key cursor), G
+   (season/episode digit-constrain at the /ev ingest -- non-exploitable, render
+   esc()'d), H ("no data yet" copy keyed on delivered vs attempted). `_seed_from_pool`
+   is now dead (harmless) -- future cleanup. pool.py INHERITED byte-identical (key
+   802ba87a; standalone SWAPs only translate.py since he_sub_match is POV-only).
+   **CONFIG the maintainer applies at deploy:** redeploy worker.js to Cloudflare,
+   and change the cron in wrangler.toml `*/2 * * * *` -> `*/15 * * * *` (720->96
+   scheduled invocations/day; the rollup also self-updates on /stats loads, so the
+   cron is optional). No /backfill needed (ROLL_SCHEMA=6 rebuilds automatically;
+   repair-on-store is automatic).
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 

@@ -1,3 +1,13 @@
+v0.2.421
+- The Hebrew-availability badge on the sources screen now also reflects community-pool
+  translations. The lookup behind the badge was being rejected as unauthenticated, so the
+  badge only ever showed human-subtitle availability; it now includes the community AI
+  translations too. The add-on also makes far fewer background requests to the community
+  server for the same information -- it was querying twice per title and re-checking every
+  few hours, and now queries once and caches a known result for longer.
+- Fix: a completed AI translation is now recorded reliably in usage stats -- the last
+  translation of a viewing session could previously be missed. No user-visible change.
+
 v0.2.420
 - Fix: SDH song lines showed an ugly garble ("gimel-TM-x") at the start/end of a line
   instead of a music note. Downloaded subtitles were always decoded as legacy Hebrew
