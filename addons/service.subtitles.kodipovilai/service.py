@@ -1304,6 +1304,19 @@ def _maybe_patch_pov_mdblist_sync():
         else:
             kodi_utils.log(
                 'pov_mdblist_patcher: ' + status, level='WARNING')
+        # Repair 'No MDBList Account Active' (empty mdblist_user despite a set
+        # token) so the sync monitor + list manager stop failing.
+        try:
+            hstatus = pov_mdblist_patcher.heal_mdblist_account()
+            if hstatus == 'healed':
+                kodi_utils.log(
+                    'pov_mdblist_patcher: healed empty mdblist_user '
+                    '(account was inactive)', level='INFO')
+            elif hstatus not in ('ok', 'no_pov'):
+                kodi_utils.log(
+                    'pov_mdblist_patcher heal: ' + hstatus, level='WARNING')
+        except Exception:
+            pass
     except Exception as e:
         try:
             kodi_utils.log(
