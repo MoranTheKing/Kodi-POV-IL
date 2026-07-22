@@ -13,6 +13,7 @@
 #
 # stdlib only.
 
+import json
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -20,24 +21,42 @@ import urllib.request
 MDBLIST_USER_URL = 'https://api.mdblist.com/user'
 
 
-def validate_key(key, timeout=15):
-    """Kodi-side check: True if MDBList accepts the key, False if it rejects it,
-    None on a transient/network error (so the caller can decide). Mirrors the
-    phone-side classification."""
+def validate_key_full(key, timeout=15):
+    """Kodi-side check that also returns the MDBList account name.
+    Returns a (status, username) tuple:
+      status   True  -> MDBList accepts the key
+               False -> MDBList rejects it (genuinely bad)
+               None  -> transient/network error (caller decides)
+      username the account's 'username' on success, else '' (never None).
+    Mirrors the phone-side status classification; the username lets us
+    replicate POV's native connect, which stores it in `mdblist_user`."""
     k = (key or '').strip()
     if not k:
-        return False
+        return (False, '')
     url = MDBLIST_USER_URL + '?apikey=' + urllib.parse.quote(k, safe='')
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'kodi-pov-il'})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return getattr(resp, 'status', 200) == 200
+            if getattr(resp, 'status', 200) != 200:
+                return (None, '')
+            username = ''
+            try:
+                data = json.loads(resp.read().decode('utf-8', 'replace'))
+                username = str(data.get('username') or '')
+            except Exception:
+                username = ''      # valid key, unreadable body -> no name
+            return (True, username)
     except urllib.error.HTTPError as e:
         if e.code in (400, 401, 403):
-            return False          # genuinely bad key
-        return None               # 429 / 5xx -> ambiguous
+            return (False, '')     # genuinely bad key
+        return (None, '')          # 429 / 5xx -> ambiguous
     except Exception:
-        return None               # network / timeout -> ambiguous
+        return (None, '')          # network / timeout -> ambiguous
+
+
+def validate_key(key, timeout=15):
+    """Status-only wrapper over validate_key_full (True / False / None)."""
+    return validate_key_full(key, timeout)[0]
 
 
 # Form served on GET / by the shared PairServer. Same iOS/WebKit corruption
