@@ -202,6 +202,7 @@ def _lookup_raw(p):
     ent = _LOOKUP_CACHE.get(ck)
     if ent and (now - ent[0]) < _LOOKUP_TTL:
         return ent[1]
+    cacheable = True
     try:
         data = json.loads(_get('/lookup', p).decode('utf-8'))
         if not isinstance(data, dict) or not data.get('ok'):
@@ -209,14 +210,21 @@ def _lookup_raw(p):
     except Exception as e:
         kodi_utils.log('pool lookup failed: {0}'.format(e), level='DEBUG')
         data = {}
-    try:
-        _LOOKUP_CACHE[ck] = (now, data)
-        if len(_LOOKUP_CACHE) > _LOOKUP_CACHE_MAX:
-            for k, _v in sorted(_LOOKUP_CACHE.items(),
-                                key=lambda kv: kv[1][0])[:len(_LOOKUP_CACHE) - _LOOKUP_CACHE_MAX]:
-                _LOOKUP_CACHE.pop(k, None)
-    except Exception:
-        pass          # cache mgmt must never raise (concurrent-mutation safe)
+        cacheable = False   # transient/network/parse error -- a reachable "no
+        #                     results" answer is cached (below) as a genuine
+        #                     negative, but a transport failure must NOT poison
+        #                     this now-shared cache: autosub reuses the same
+        #                     _LOOKUP_CACHE, so a warm-side blip could otherwise
+        #                     hide a pool subtitle from autosub for up to the TTL.
+    if cacheable:
+        try:
+            _LOOKUP_CACHE[ck] = (now, data)
+            if len(_LOOKUP_CACHE) > _LOOKUP_CACHE_MAX:
+                for k, _v in sorted(_LOOKUP_CACHE.items(),
+                                    key=lambda kv: kv[1][0])[:len(_LOOKUP_CACHE) - _LOOKUP_CACHE_MAX]:
+                    _LOOKUP_CACHE.pop(k, None)
+        except Exception:
+            pass          # cache mgmt must never raise (concurrent-mutation safe)
     return data
 
 

@@ -156,17 +156,22 @@ def _pool_lookup(p):
     out = {'names': [], 'embedded': [], 'ktuvit': [], 'sync_rel': [],
            'ktuvit_checked': 0.0, 'ktuvit_changed': 0.0, '_ok': False}
     try:
-        # Sign the request through pool.py's helper. The Worker REJECTS an
-        # unsigned/unversioned /lookup with HTTP 426 -- poolAuth checks the
-        # x-pov-v header BEFORE the signature -- so the old bare urllib call
-        # here ALWAYS failed (426), returned no data, and still burned a Worker
-        # invocation (twice per title, since the _ok-gated memo never armed).
-        # This path runs ONLY in MoranSubs's own service process (the signed
-        # background warm; the POV-side peek that couldn't sign is now gone), so
-        # `pool` imports cleanly with the community key. Fail-open on any error.
+        # Route through pool._lookup_raw -- it SIGNS the request AND populates
+        # pool.py's 90s in-process _LOOKUP_CACHE. Two wins:
+        #  (1) SIGNED: the Worker REJECTS an unsigned/unversioned /lookup with
+        #      HTTP 426 (poolAuth checks x-pov-v BEFORE the signature), so the old
+        #      bare urllib call here always 426'd -- no data, wasted invocation.
+        #  (2) SHARED CACHE: this background warm and autosub's pool.lookup() run
+        #      in the SAME service process for one playback; going through
+        #      _lookup_raw lets whichever fires first satisfy the other from
+        #      pool.py's cache -- collapsing the near-guaranteed warm+autosub
+        #      /lookup DUPLICATE into ONE Worker request (the dominant avoidable
+        #      pool traffic per playback). _lookup_raw returns the FULL parsed
+        #      /lookup dict (or {} on miss/error), same shape this code parses.
+        # Runs ONLY in MoranSubs's own service process (the POV-side peek that
+        # couldn't sign is gone), so `pool` imports cleanly. Fail-open on error.
         from resources.lib import pool as _pool
-        raw = _pool._get('/lookup', p).decode('utf-8')
-        data = json.loads(raw)
+        data = _pool._lookup_raw(p) or {}
         if data.get('ok'):
             out['_ok'] = True   # a real, successful response (memoize-able)
             # Only HUMAN Hebrew counts as "there's a translation" here -- an AI
