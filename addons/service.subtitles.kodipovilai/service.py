@@ -193,6 +193,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_torbox_usage,
         _maybe_patch_pov_cache_empty,
         _maybe_patch_pov_trakt_cache_empty,
+        _maybe_patch_pov_mdblist_sync,
         _maybe_patch_pov_meta_blank,
         _maybe_patch_pov_build_content_logger,
         _maybe_patch_pov_debrid_status,
@@ -1275,6 +1276,38 @@ def _maybe_patch_pov_cache_empty():
             kodi_utils.log(
                 'pov_cache_empty_patcher failed: '
                 '{0}'.format(e), level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_mdblist_sync():
+    """Patch POV's indexers/mdblist_api.py (POV 6.x) for two MDBList
+    watched/progress-sync bugs that surface when MDBList is the Watched Status
+    Provider: (A) the user's full API key leaking into kodi.log via the error
+    logger, and (B) 'mark as watched' leaving the title PAUSED on MDBList (the
+    scrobble/clear resume-clear 404s) and not counting in Watch Stats. The patch
+    scrubs the key from the log and adds a scrobble/stop@100 on mark-watched.
+    Safe no-op without POV / on a POV version whose anchors moved."""
+    try:
+        from resources.lib import pov_mdblist_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_mdblist_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_mdblist_patcher: MDBList sync patched (apikey redacted '
+                'in logs; mark-watched now clears resume + counts)',
+                level='INFO')
+        elif status in ('no_pov', 'no_file', 'already_patched'):
+            pass  # quiet steady-state
+        else:
+            kodi_utils.log(
+                'pov_mdblist_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_mdblist_patcher failed: {0}'.format(e), level='WARNING')
         except Exception:
             pass
 
