@@ -112,14 +112,21 @@ _HTML_FORM = '''<!doctype html>
     h1 { margin: 0 0 8px 0; color: #ffd166; font-size: 1.4rem; }
     p { line-height: 1.6; color: #b7c4cf; font-size: 0.95rem; }
     label { display: block; margin-top: 16px; font-weight: bold; }
-    input[type=text] { width: 100%; box-sizing: border-box; margin-top: 8px;
+    input[type=password] { width: 100%; box-sizing: border-box; margin-top: 8px;
                        padding: 14px; font-size: 1.1rem; direction: ltr;
                        background: #0a0f15; color: #f6f1df;
                        border: 1px solid #34495e; border-radius: 8px; }
     button { width: 100%; margin-top: 20px; padding: 14px; font-size: 1.1rem;
              font-weight: bold; color: #101820; background: #ffd166;
              border: none; border-radius: 8px; cursor: pointer; }
+    button:disabled { opacity: .5; cursor: default; }
     button:active { background: #e0b54a; }
+    #fp { direction: ltr; text-align: center; margin-top: 10px; color: #f6f1df; }
+    #msg { margin-top: 14px; padding: 12px; border-radius: 8px; font-size: 0.95rem;
+           line-height: 1.5; display: none; }
+    .ok { background: #16351f; color: #a7e0b0; display: block !important; }
+    .err { background: #351a1a; color: #e6a6a6; display: block !important; }
+    .info { background: #14202c; color: #b7c4cf; display: block !important; }
     .small { font-size: 0.85rem; color: #b7c4cf; margin-top: 12px; }
     code { background: #0a0f15; padding: 2px 6px; border-radius: 4px;
            font-size: 0.9rem; direction: ltr; }
@@ -130,33 +137,103 @@ _HTML_FORM = '''<!doctype html>
     <h1>חיבור Gemini AI</h1>
     <p>
       הדבק כאן את ה-Gemini API key שיצרת ב-
-      <code>aistudio.google.com/apikey</code> ולחץ "שלח".
-      Kodi יבדוק את המפתח ויאמת מולך אם החיבור הצליח.
+      <code>aistudio.google.com/apikey</code>. נוודא מול Google
+      שהמפתח תקין, ורק אז נשלח אותו ל-Kodi.
     </p>
-    <form method="POST" action="/submit">
+    <form method="POST" action="/submit" id="f">
       <label for="key">Gemini API Key</label>
       <!--
-        iOS Safari note: in addition to the W3C attributes
-        (autocomplete, autocapitalize, spellcheck), iOS-only
-        autocorrect MUST be explicitly disabled. Without it,
-        Safari quietly modifies the pasted key (smart quotes,
-        non-breaking spaces, mid-word capitalization) and the
-        server receives a corrupted string that Google's API
-        rejects with a 400. inputmode=verbatim also helps disable
-        keyboard suggestions on iOS / Android.
+        iOS/WebKit note: type=password suppresses the smart-punctuation /
+        autocorrect that silently corrupt a pasted key on iOS (every iOS
+        browser is WebKit). We also read the RAW clipboard on paste (bypassing
+        field-level mangling) and validate the key against Google FROM THE PHONE
+        before submitting -- so a corrupted / bad key is caught here with a clear
+        message instead of a confusing 401 back in Kodi. The server still
+        sanitizes what it receives.
       -->
-      <input type="text" id="key" name="key"
+      <input type="password" id="key" name="key"
              autocomplete="off" autocapitalize="off"
              autocorrect="off" spellcheck="false"
              inputmode="verbatim"
              placeholder="AIza... או AQ.Ab8..." required>
-      <button type="submit">שלח ל-Kodi</button>
+      <div id="fp"></div>
+      <button type="submit" id="go">בדוק ושלח ל-Kodi</button>
     </form>
+    <div id="msg"></div>
     <p class="small">
       טיפ: בטלפון לחץ "Copy" ב-AI Studio, אז כאן בשדה למעלה
       לחץ פעם ארוכה והדבק.
     </p>
   </div>
+<script>
+"use strict";
+// sanitize() is byte-parity with the server-side _sanitize_key (proven).
+var DASH = /[‐‑‒–—―⁃−﹘﹣－]/g;
+function sanitize(raw) {
+  if (!raw) return '';
+  return raw.normalize('NFKC').replace(DASH, '-').replace(/[^A-Za-z0-9_.-]/g, '');
+}
+function fingerprint(k) {
+  var h = k.length >= 8 ? k.slice(0, 8) : k;
+  var t = k.length >= 16 ? k.slice(-8) : '';
+  return h + (t ? '…' + t : '') + '   (' + k.length + ' chars)';
+}
+var elKey = document.getElementById('key');
+var elFp = document.getElementById('fp');
+var elMsg = document.getElementById('msg');
+var form = document.getElementById('f');
+var btn = document.getElementById('go');
+function msg(t, c) { elMsg.textContent = t; elMsg.className = c; }
+// Read the RAW clipboard on paste, before iOS/WebKit can mangle it in the field.
+elKey.addEventListener('paste', function (e) {
+  try {
+    var raw = (e.clipboardData || window.clipboardData).getData('text/plain');
+    if (raw) { e.preventDefault(); elKey.value = sanitize(raw); elFp.textContent = fingerprint(elKey.value); }
+  } catch (err) { /* fall back to the field value */ }
+});
+elKey.addEventListener('input', function () { elFp.textContent = elKey.value ? fingerprint(sanitize(elKey.value)) : ''; });
+// Validate the key against Google FROM THE PHONE (x-goog-api-key header so AQ.
+// keys work). Classify by STATUS, not r.ok: 400/401/403 = truly bad key (false);
+// 429 / 5xx / network / timeout = ambiguous (null) -> submit anyway and let Kodi
+// decide. (Mirrors gemini.py's InvalidKey-vs-RateLimited/Overload distinction, so
+// a valid key hitting a transient rate limit is never mislabeled "bad key".)
+function validateKey(key) {
+  var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+  var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 9000) : null;
+  var opts = { method: 'GET', headers: { 'x-goog-api-key': key }, cache: 'no-store' };
+  if (ctrl) opts.signal = ctrl.signal;
+  return fetch('https://generativelanguage.googleapis.com/v1beta/models', opts)
+    .then(function (r) {
+      if (timer) clearTimeout(timer);
+      if (r.ok) return true;
+      if (r.status === 400 || r.status === 401 || r.status === 403) return false;
+      return null;
+    })
+    .catch(function () { if (timer) clearTimeout(timer); return null; });
+}
+form.addEventListener('submit', function (e) {
+  e.preventDefault();
+  var key = sanitize(elKey.value || '');
+  elKey.value = key;
+  elFp.textContent = key ? fingerprint(key) : '';
+  if (!key) { msg('הזן API key.', 'err'); return; }
+  if (typeof fetch !== 'function') { form.submit(); return; }   // ancient browser: let Kodi validate
+  btn.disabled = true;
+  elKey.readOnly = true;                                         // lock the field during the async check
+  msg('בודק את המפתח מול Google…', 'info');
+  validateKey(key).then(function (ok) {
+    if (ok === false) {
+      msg('Google דחה את המפתח הזה. העתק אותו שוב במלואו מ-AI Studio ונסה שוב ' +
+          '(ודא שאין רווח או תו חסר). אם הוא נכון אבל עדיין נדחה — צור מפתח חדש.', 'err');
+      btn.disabled = false; elKey.readOnly = false; return;
+    }
+    if (ok === null) { msg('לא הצלחנו לאמת מול Google (בעיית רשת?) — שולח בכל זאת, Kodi יבדוק.', 'info'); }
+    else { msg('המפתח תקין ✓  שולח ל-Kodi…', 'info'); }
+    elKey.value = key;                                           // re-assert the exact validated value
+    form.submit();   // readOnly fields ARE submitted; native POST, no submit-event re-fire
+  });
+});
+</script>
 </body>
 </html>
 '''
