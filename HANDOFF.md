@@ -1111,6 +1111,53 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    source + a Hebrew credit line can't read as "100% Hebrew") and the dead
    `language_detect` import removal were the passthrough reviewer's own
    recommendations, implemented and unit-tested across all three callers.
+
+   **SDH music-note garble: a cp1255 mis-decode of a UTF-8 source (AI 0.2.420 /
+   quickfix 0.1.459; notif #518):** users saw an ugly 3-char garble `ג™×`
+   (gimel + trademark + multiplication) at the start/end of SDH song lines
+   instead of a music note, and it was even translated-through into the shared
+   pool (field: an embedded/SDH translation of a Michael Jackson biopic).
+   ROOT CAUSE: `subs_engine/extract_sub.convert_to_utf()` blindly decoded EVERY
+   downloaded subtitle as cp1255 and rewrote it UTF-8. An English SDH sub is
+   pure ASCII except the note `♪` (U+266A, bytes E2 99 AA); ASCII is identical
+   in both encodings, so only the note was mangled -- cp1255 maps E2 99 AA to
+   `ג™×` -- and the AI faithfully preserved the non-word garble. (A file
+   carrying a byte UNdefined in cp1255 raised and was left as UTF-8, which is
+   why only some subs broke.) This affected EVERY downloaded sub, not just
+   embedded -- any UTF-8 source whose only non-ASCII bytes are cp1255-defined
+   (the note, and typographic `’ – — … •`). Two client-only fixes (translate.py
+   / pool.py / kodi_utils.py all INHERITED byte-identical; pool key 802ba87a
+   preserved): (a) ROOT -- `convert_to_utf` now decodes `utf-8-sig` FIRST and
+   falls back to cp1255 only when strict UTF-8 fails (a genuine cp1255 Hebrew
+   file's 0xE0-0xFA letter bytes are never valid UTF-8, so it still converts
+   correctly; a real UTF-8 file is preserved, note intact); leaves the file
+   untouched if both fail (the historical fail-open). (b) READ-REPAIR --
+   `srt.repair_music_mojibake()` restores `ג™×`-style garble to the note at the
+   top of `fix_rtl_punctuation` (the canonical read-normalizer run on every
+   cache hit AND the `kind=='pool'` download path via `_reapply_rtl_fix_in_place`)
+   -- so lines ALREADY cached/shared to the community pool are repaired on read
+   for everyone who downloads them, no re-upload/worker change. Covers the whole
+   note family ♪♫♬♩♭♮♯. SURGICAL: a compiled regex `(?<![א-ת])ג™[×«¬©­®¯]` --
+   anchored to a NON-Hebrew-letter left boundary because an SDH note is a
+   standalone glyph at a word/line boundary, never a word's final letter -- so
+   it repairs the genuine garble but never eats the trailing gimel of a real
+   word (e.g. a gimel-final brand name followed by stacked trademark symbols).
+   THREE things validated computationally over TWO Sonnet rounds: round 1 (full
+   diff) proved the root fix can't mishandle real cp1255 Hebrew (structural
+   UTF-8 impossibility) + the map is byte-exact (incl. the invisible U+00AD
+   flat-note tail) + BOM/empty/newline/idempotency, and found ONE NIT -- the
+   original blind `str.replace` could corrupt a contrived `"סמסונג™®"` ->
+   `"סמסונ♮"` and the "never in Hebrew" comment overclaimed; round 2 confirmed
+   the regex-anchoring closes that collision (50 gimel-final variants + all 5
+   Hebrew final forms) with ZERO regressions on 13+ genuine SDH boundary shapes
+   incl. the user's real cue, KeyError impossible by construction, linear perf.
+   Both rounds SHIP. ~44 local unit assertions also pass. Known accepted
+   trade-off: a note glued to a Hebrew word with NO separator (`"לאחורג™×"`) is
+   left unrepaired -- authored SDH always delimits the glyph with a space, and
+   byte-level corruption preserves the original spacing, so this never occurs in
+   practice while the false-positive it guards against is real. Standalone repo
+   bumped (repo/addons.xml + md5 + repo/zips + dist/-latest.zip). worker.js
+   UNTOUCHED (no redeploy).
 15. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 

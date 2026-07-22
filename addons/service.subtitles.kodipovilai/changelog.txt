@@ -1,3 +1,13 @@
+v0.2.420
+- Fix: SDH song lines showed an ugly garble ("gimel-TM-x") at the start/end of a line
+  instead of a music note. Downloaded subtitles were always decoded as legacy Hebrew
+  (cp1255), which corrupted the ONE non-ASCII character in an English caption -- the
+  music note -- while leaving the English text intact (so it slipped through and was
+  even translated-through into the shared pool). Subtitles are now decoded as UTF-8
+  first, falling back to cp1255 only for genuinely legacy files, so the music note
+  survives. Already-corrupted lines (including ones already in the community pool) are
+  also repaired on read, so the garble disappears for everyone who downloads them.
+
 v0.2.419
 - Fix: an English (or mixed) subtitle that merely CONTAINED a little Hebrew -- e.g. a
   Hebrew "translated by..." credit line -- was misdetected as "already Hebrew" and
