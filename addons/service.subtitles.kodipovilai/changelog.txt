@@ -1,3 +1,16 @@
+v0.2.419
+- Fix: an English (or mixed) subtitle that merely CONTAINED a little Hebrew -- e.g. a
+  Hebrew "translated by..." credit line -- was misdetected as "already Hebrew" and
+  passed through UNtranslated. It showed the source untranslated and silently cached
+  it, so every retry discarded that cache and did nothing (an endless no-op that read
+  as "said it's translating but never does"). Field case: on one movie the English
+  embedded track never translated while the Russian one did. The "already Hebrew"
+  check now measures the Hebrew share of the WHOLE source and only skips translation
+  when Hebrew clearly dominates -- so English/mixed sources translate as expected.
+- Hardening: notifications now fire on their own short-lived thread so a wedged GUI
+  (e.g. during heavy debrid extraction) can never stall a translation; the toast
+  count is bounded. Adds a "language ok, mode=..." diagnostic log.
+
 v0.2.418
 - More translation progress logging (cast / prompt / blocks milestones) to pin down
   a translation that stalls before it starts sending chunks. Diagnostic only -- no
