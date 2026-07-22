@@ -106,7 +106,27 @@ tools/publish_repo_channel.py           # publishes repo/addons.xml + zips
 4. Verify: same member set (plus intentionally added files), only intended
    CRC changes, `pool.py` untouched.
 5. Point `build.txt` `gui=` at the new zip.
-6. Bump the id in `quick_update.txt` + gentle Hebrew title/body.
+6. **ALWAYS bump the `note_id` in `quick_update.txt` (the `<id>` before `|||`),
+   not just the footer version.** The wizard live-fetches this file from `main`
+   and only shows a notification when the `note_id` CHANGES. Keeping the same id
+   and only editing the footer = the release ships but NO user ever gets notified
+   (this mistake has recurred — 0.2.426/0.2.427/0.2.428 all silently reused an id).
+   Every user-facing quickfix/AI release gets a fresh id + a gentle Hebrew
+   title/body. A notification-only fix (e.g. re-announcing) is just a new id +
+   push to `main`, no rebuild.
+   - **Build-time guard (include in every build script):** fail the build unless
+     the working-tree `note_id` is greater than what `origin/main` currently
+     serves (the wizard fetches from `main`; the LOCAL `main` ref is stale
+     because we push `HEAD:main` without moving it, so compare `origin/main`):
+     ```python
+     import subprocess
+     NF = 'wizard/assets/notification_files/quick_update.txt'
+     def _noteid(txt): return int(txt.split('|||',1)[0].split('\n')[-1].strip())
+     subprocess.run(['git','fetch','origin','main'], check=False)
+     new = _noteid(open(NF).read())
+     old = _noteid(subprocess.check_output(['git','show','origin/main:'+NF]).decode())
+     assert new > old, 'quick_update note_id NOT bumped (%d) -> no notification will fire' % new
+     ```
 7. Commit to the working branch, fast-forward `main`, push.
 
 ## Integrating third-party skin updates (playbook, learned the hard way)
