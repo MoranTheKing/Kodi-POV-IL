@@ -29,7 +29,6 @@ import urllib.parse
 from . import cache
 from . import gemini
 from . import kodi_utils
-from . import language_detect
 from . import local_subs
 from . import prompt
 from . import srt
@@ -1311,24 +1310,32 @@ _QUIET = False
 
 
 def _is_mostly_hebrew(text, min_ratio=0.30):
-    """True if the SRT text is a real Hebrew translation -- not empty, and a
-    meaningful share of its letters are Hebrew. Catches the two ways a weak
-    model (gemini-3.1-flash-lite) silently fails: (a) it returns EMPTY (blocked
-    / no content) and (b) it ECHOES the source untranslated (German/Spanish/
-    English). Both used to be cached and served as 'the Hebrew translation',
-    showing blank or foreign text. Numbers/names keep some Latin, so we only
+    """True if a meaningful share of TEXT's letters are Hebrew.
+
+    Two uses: (1) validating a TRANSLATION -- catches the two ways a weak model
+    (gemini-3.1-flash-lite) silently fails: it returns EMPTY, or it ECHOES the
+    source untranslated (German/Spanish/English/Russian/...); both used to be
+    cached and served as 'the Hebrew translation'. (2) a SOURCE-language sanity
+    check -- 'is this source already Hebrew, so translating it is pointless?'.
+
+    The denominator counts Hebrew letters against ALL OTHER letters of ANY
+    script (Latin, Cyrillic, Arabic, CJK, ...), not just ASCII. If it counted
+    only ASCII, a non-Latin body (e.g. a Russian subtitle) would be invisible to
+    the ratio and a single stray Hebrew credit line ('translated by...') would
+    read as '100% Hebrew' -- the exact false-'already Hebrew' misfire this guard
+    exists to avoid. Numbers/names keep some non-Hebrew letters, so we only
     require a fraction, not all."""
     if not text or not text.strip():
         return False
     he = 0
-    latin = 0
+    other = 0
     for ch in text:
         o = ord(ch)
         if 0x0590 <= o <= 0x05FF:
             he += 1
-        elif ch.isalpha() and o < 128:
-            latin += 1
-    letters = he + latin
+        elif ch.isalpha():
+            other += 1
+    letters = he + other
     if letters < 20:
         return False  # almost no text -> treat as failed
     return (he / letters) >= min_ratio
@@ -2415,9 +2422,28 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         time_ms=5000,
     )
 
-    # Sanity: if the source is actually Hebrew (mislabeled),
-    # don't translate -- pass through.
-    if language_detect.detect(src_text[:8000]) == 'he':
+    # Sanity: if the source is ALREADY predominantly Hebrew (an upstream
+    # mislabel handed us a Hebrew sub), translating it is pointless -- pass it
+    # through unchanged. Be CONSERVATIVE: a source that merely *contains* some
+    # Hebrew (an English SDH sub with a Hebrew sign/song line, a bilingual sub)
+    # must still be translated. The old test used language_detect.detect(),
+    # whose 'he' verdict fires on an ABSOLUTE count (>30 Hebrew chars anywhere
+    # in the first 8000) -- so a mostly-English source carrying a handful of
+    # Hebrew characters was silently passed through as "already Hebrew". It then
+    # showed the untranslated English and, because the passthrough writes to the
+    # translation cache UNGATED (unlike every real translation, which
+    # _is_mostly_hebrew-gates), every retry re-read it, judged it non-Hebrew, and
+    # discarded it as "empty/echoed" -- an endless no-op loop. (Field-confirmed:
+    # on the SAME movie, the English embedded source died silently here while the
+    # Russian one -- 'ru', never 'he' -- translated fine. The English sub carried
+    # enough Hebrew, e.g. a credit line, to trip the >30 absolute count.) Use a
+    # RATIO over the WHOLE source (not just the first 8000 chars, so a localized
+    # Hebrew credit/header block can't skew it) and only skip when Hebrew clearly
+    # dominates.
+    if _is_mostly_hebrew(src_text, min_ratio=0.60):
+        kodi_utils.log(
+            'translate step: source is already predominantly Hebrew -- '
+            'passing through without translation', level='INFO')
         cache.save_text(translated, src_text)
         return translated
 
@@ -2427,7 +2453,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # (default) falls through to the Gemini path below (which guides the user
     # to connect a key if none is set). translation_mode 'none' never reaches
     # here (list_candidates hands back raw foreign subs instead).
-    if (kodi_utils.get_setting('translation_mode', 'ai') or 'ai') == 'google':
+    _translation_mode = kodi_utils.get_setting('translation_mode', 'ai') or 'ai'
+    # Milestone (cheap, INFO): fires once we're past the language check and are
+    # committed to actually translating (as opposed to the Hebrew-passthrough
+    # above). Reports which translator we're about to use, so a future report of
+    # "said it was translating but nothing happened" is diagnosable from here on.
+    kodi_utils.log('translate step: language ok, mode={0}'.format(
+        _translation_mode), level='INFO')
+    if _translation_mode == 'google':
         return _google_translate_and_save(src_text, source_lang, translated,
                                           info)
 
