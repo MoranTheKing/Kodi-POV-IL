@@ -1,3 +1,13 @@
+v0.2.428
+- MDBList "No Account Active" repair: if you connected MDBList but it showed as
+  inactive -- the list manager said "No results", the sync monitor kept aborting
+  ("No MDBList Account Active"), and marking watched didn't sync back -- it is now
+  fixed automatically on the next start. POV keys the whole MDBList account on the
+  stored username, and a connect that couldn't capture it (a transient network
+  blip at pairing time) left the account looking empty. We re-fetch the username
+  from MDBList once and restore it. Direct scrobbling was never affected (that
+  only needs the key), which is why some titles still synced.
+
 v0.2.427
 - MDBList watched-sync fixes (when MDBList is your Watched Status Provider):
   (1) your MDBList API key is no longer written to kodi.log -- POV logged the
