@@ -1,3 +1,10 @@
+v0.2.422
+- Further reduced background traffic to the community server: within a single playback,
+  the availability check behind the sources-screen badge and the auto-subtitle search now
+  SHARE one pool lookup (they run in the same background process, so the first result
+  serves the second from a short in-memory cache) -- one request per playback instead of
+  two. No change to what you see; purely fewer redundant requests.
+
 v0.2.421
 - The Hebrew-availability badge on the sources screen now also reflects community-pool
   translations. The lookup behind the badge was being rejected as unauthenticated, so the
