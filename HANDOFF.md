@@ -229,9 +229,34 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
    identical), which is why it was never anime-specific. Do NOT change the
    shipped default view (it would affect TV/remote users too — the user
    explicitly declined that).
-3. **iPhone Gemini API-key pairing** — the local-HTTP QR pair server is blocked
-   by iOS (Local Network permission / Safari http), so users on iPhone can't
-   pair a key the way Android does. A server-assisted pairing path is planned.
+3. **iPhone Gemini API-key pairing — Phase 1 SHIPPED (AI 0.2.424 / quickfix
+   0.1.463 / notification #522).** The prior theory ("iOS blocks the local
+   server") was WRONG for the common case: field reports showed the local POST
+   *reached* Kodi and the key was 401-rejected — i.e. the TRANSPORT worked and
+   the KEY arrived CORRUPTED. Root cause: iOS/WebKit (every iOS browser is
+   WebKit) mangles the pasted key in the text field (smart-punctuation /
+   autocorrect / case) in ways `_sanitize_key` can't always reverse; the SAME
+   key pairs fine from Mac/Windows/Android. Phase 1 fixes the existing local-HTTP
+   page (`gemini_pair.py` `_HTML_FORM`, client-only, zero Cloudflare): `input
+   type=password` (suppresses the iOS mangling), a `paste` handler reading the
+   RAW `clipboardData` (bypasses field-level mangling), and ON-PHONE validation
+   against Google (`x-goog-api-key` header so `AQ.` keys work; classify by HTTP
+   status — 400/401/403 = bad key, 429/5xx/network = ambiguous → send anyway and
+   let Kodi's `test_key` decide) so a corrupted/bad key is caught on the phone
+   with a clear message instead of a confusing Kodi 401. This makes same-device
+   iPhone work (incl. cellular, via loopback). Two Sonnet rounds (round 1 caught
+   a real 429-as-bad-key misclassification + a TOCTOU field-swap race; round 2
+   SHIP after fixes, empirically driving every status/abort/no-fetch path).
+   pool.py untouched (key 802ba87a preserved). **Phase 2 (cross-device iPhone —
+   Kodi on a separate box + phone on the LAN, blocked by the iOS Local-Network
+   prompt) is DESIGNED, BUILT and locally PROVEN but NOT yet shipped:** an
+   opt-in "cloud pairing" fallback via a blind, E2E-encrypted rendezvous on the
+   community Worker (a fresh 32-byte secret rides in the QR URL FRAGMENT — never
+   sent to any server; the phone encrypts the key and POSTs only ciphertext; Kodi
+   polls with backoff, decrypts, HMAC-verifies). Kept as an on-demand fallback so
+   its polling costs ~0 Worker invocations in normal use. Full design +
+   byte-parity-tested crypto/Worker/Pages/client components live in the
+   maintainer's scratchpad (`GEMINI_PAIR_CLOUD_PLAN.md`), not committed (backend).
 4. **Community-pool request reduction — SHIPPED (AI 0.2.379 / quickfix 0.1.418).**
    Removed two redundant round-trips to the community-pool Worker. (a) On the
    first entry to a title the source-window Hebrew-% seed
