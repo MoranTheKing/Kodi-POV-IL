@@ -3393,6 +3393,18 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 'content-hash duplicate save failed: {0}'.format(e),
                 level='DEBUG')
 
+    # Queue the telemetry event BEFORE the pool contribute below, so it rides
+    # THIS translation's own /contribute piggyback (pool._post drains the pending
+    # telemetry batch onto the upload it is already sending). Emitting AFTER the
+    # contribute -- as this did before -- queued the event too late to ride its
+    # own upload, so it had to wait for the NEXT translation's contribute or the
+    # periodic /ev flush; the last/only translation of a session then reached the
+    # pool (Recent embedded) but never the telemetry-fed Recent activity view,
+    # and it caused extra standalone /ev flushes (Worker invocations). _emit is
+    # idempotent (_telemetry_done) and we're already on the guaranteed-success
+    # path (final is the delivered Hebrew), so this is the right, single emit.
+    _emit(True)
+
     # Share this fresh translation to the community pool (fire-and-forget on a
     # daemon thread -- never delays handing the subtitle to the player). Gated
     # by pool_share; only reached for a genuinely new translation (local cache
@@ -3439,5 +3451,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             kodi_utils.log(
                 'progressive_cb done(success) raised: ' + str(e),
                 level='WARNING')
-    _emit(True)
+    # (telemetry already emitted above, before the pool contribute, so it rides
+    # this translation's own upload; _emit's _telemetry_done guard makes a second
+    # call a no-op anyway.)
     return translated
