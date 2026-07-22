@@ -79,6 +79,66 @@ def _log(msg, level='INFO'):
         pass
 
 
+def heal_mdblist_account():
+    """Repair the 'No MDBList Account Active' state.
+
+    POV keys the ENTIRE MDBList account on `mdblist_user`, not on the token:
+    mdbl_sync_activities() bails with 'no account' when it's empty, the list
+    manager (setting_key='mdblist_user') shows "no results", and the sync
+    monitor aborts -- while direct scrobbling still works because that only
+    needs `mdblist.token`. A connect that couldn't capture the username (a
+    transient /user error at connect time, or the ambiguous save-anyway path)
+    leaves the token set but `mdblist_user` blank, silently disabling
+    everything account-scoped.
+
+    Heal: if the token is present but `mdblist_user` is empty, fetch the
+    username from MDBList's /user endpoint and store it (+ re-assert the
+    indicator flag). One HTTP call, only while actually broken; safe no-op once
+    healed or when nothing is connected. Returns a short status string."""
+    try:
+        import xbmcaddon
+        pov = xbmcaddon.Addon('plugin.video.pov')
+    except Exception:
+        return 'no_pov'
+    try:
+        token = (pov.getSetting('mdblist.token') or '').strip()
+        user = (pov.getSetting('mdblist_user') or '').strip()
+    except Exception:
+        return 'read_failed'
+    if not token or user:
+        return 'ok'                      # nothing connected, or already healthy
+    try:
+        import json
+        import urllib.parse
+        import urllib.request
+        url = ('https://api.mdblist.com/user?apikey='
+               + urllib.parse.quote(token, safe=''))
+        req = urllib.request.Request(url, headers={'User-Agent': 'kodi-pov-il'})
+        # Short timeout: this runs in the sequential boot-repair loop, so a
+        # hung api.mdblist.com must not stall startup (matches POV's own 5.05s).
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            if getattr(resp, 'status', 200) != 200:
+                return 'fetch_failed'
+            data = json.loads(resp.read().decode('utf-8', 'replace'))
+        username = str((data or {}).get('username') or '').strip()
+    except Exception:
+        return 'fetch_failed'            # transient -> retry next boot
+    if not username:
+        return 'no_username'
+    try:
+        # Write the gate value (mdblist_user) LAST: if the first write fails,
+        # mdblist_user stays empty so the next boot simply retries.
+        pov.setSetting('mdbl_indicators_active', 'true')
+        pov.setSetting('mdblist_user', username)
+        healed = (pov.getSetting('mdblist_user') or '').strip() == username
+    except Exception:
+        return 'write_failed'
+    if healed:
+        _log('healed empty mdblist_user -> account now active', level='INFO')
+        return 'healed'
+    return 'write_failed'
+
+
 def _mdblist_api_path():
     if xbmcvfs is None:
         return ''
