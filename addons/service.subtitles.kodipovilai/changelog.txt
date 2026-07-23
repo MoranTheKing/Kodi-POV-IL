@@ -1,3 +1,11 @@
+v0.2.429
+- MDBList "Collection" in the list manager no longer crashes on a Hebrew UI. POV
+  routes the Watchlist/Collection buttons by their English label text; our Hebrew
+  translation of "Collection" -> "קולקציה" made POV treat it as a user list by
+  that name, POST to a non-existent list (404), and crash on the empty result.
+  Fixed: POV now uses stable ids for those two buttons, and the add/remove calls
+  no longer crash on a failed request. Watchlist was unaffected.
+
 v0.2.428
 - MDBList "No Account Active" repair: if you connected MDBList but it showed as
   inactive -- the list manager said "No results", the sync monitor kept aborting
