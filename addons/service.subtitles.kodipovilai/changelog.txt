@@ -1,3 +1,12 @@
+v0.2.431
+- MDBList list manager is now Watchlist-only. The "Collection" button kept
+  crashing on some POV builds (a version-specific POV bug in its post-add sync
+  that we can't patch reliably across every build), and MDBList "Collection"
+  marks media you OWN -- which never applies to a streaming setup. We removed the
+  Collection button entirely: adding/removing to your MDBList Watchlist works as
+  before, and there's nothing left to crash. (Shows still get the "Dropped"
+  toggle POV adds; only Collection was removed.)
+
 v0.2.430
 - MDBList "Collection" no longer crashes on the post-add refresh. After the
   previous fix correctly routed the Collection button, POV's own activity-sync
