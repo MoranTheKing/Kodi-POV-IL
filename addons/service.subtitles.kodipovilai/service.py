@@ -1330,6 +1330,19 @@ def _maybe_patch_pov_mdblist_sync():
                     'pov_mdblist_patcher heal: ' + hstatus, level='WARNING')
         except Exception:
             pass
+        # One-time: default the personal-list sort (MDBList/Trakt/TMDB Watchlist +
+        # Collection) to 'recently added' so the newest title leads instead of A-Z.
+        try:
+            sstatus = pov_mdblist_patcher.ensure_lists_sort_recent()
+            if sstatus == 'set':
+                kodi_utils.log(
+                    'pov_mdblist_patcher: defaulted list sort to recently-added',
+                    level='INFO')
+            elif sstatus not in ('ok', 'already', 'no_pov'):
+                kodi_utils.log(
+                    'pov_mdblist_patcher sort: ' + sstatus, level='WARNING')
+        except Exception:
+            pass
     except Exception as e:
         try:
             kodi_utils.log(
