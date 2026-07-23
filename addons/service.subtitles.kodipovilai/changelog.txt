@@ -1,3 +1,11 @@
+v0.2.432
+- MDBList home tiles: "הסרטים שלי (MDBList)" and "הסדרות שלי (MDBList)" now appear
+  in your personal-tiles area (next to the TMDB/Trakt/POV "My Movies/My Series"
+  tiles), each opening your MDBList Watchlist filtered to movies / to series
+  respectively -- routed through POV's own cached watchlist read (no extra API
+  cost). They show up ONLY if you've connected MDBList; branded MDBList artwork
+  included. Add-only and one-time -- if you delete them, they stay deleted.
+
 v0.2.431
 - MDBList list manager is now Watchlist-only. The "Collection" button kept
   crashing on some POV builds (a version-specific POV bug in its post-add sync
