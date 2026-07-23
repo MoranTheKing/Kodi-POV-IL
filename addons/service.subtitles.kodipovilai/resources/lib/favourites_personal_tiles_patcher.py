@@ -67,6 +67,21 @@ PERSONAL_TILE_NAMES = (
 BUILD_SERVICE_TILE_NAMES = (
     '[B]סטטוס מנוי Premiumize[/B]',
 )
+
+# MDBList personal tiles ("My Movies / My Series (MDBList)"). Unlike the 6 core
+# personal tiles, these are OPT-IN: they only make sense once MDBList is connected
+# in POV (the plugin route errors without a key), so we insert them exactly once
+# and ONLY for installs that have an MDBList key set. Add-only + fire-once (json
+# sidecar), so a later user deletion sticks. New/clean installs get them from the
+# shipped canonical favourites.xml instead.
+MDBLIST_TILE_NAMES = (
+    '[B]הסדרות שלי (MDBList)[/B]',
+    '[B]הסרטים שלי (MDBList)[/B]',
+)
+MDBLIST_TILES_SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_MDBLIST_TILES_SEEN_v1 -->'
+# The POV movies personal tile: we splice the MDBList tiles right after it so they
+# land next to the existing "My Movies/My Series" group rather than at the bottom.
+_POV_MOVIES_TILE_NAME = '[B]הסרטים שלי (POV)[/B]'
 PREMIUMIZE_ACTION = 'premiumize.show_account_info'
 TORBOX_ACTION = 'torbox.show_account_info'
 TORBOX_STATUS_ACTION = (
@@ -343,6 +358,63 @@ def _insert_debrid_notice_tile(content, fixture_text):
     return new_content, True
 
 
+def _mdblist_connected():
+    """True only when POV has an MDBList API key stored. The MDBList tiles route
+    through POV's mdblist_watchlist action, which errors without a key -- so we
+    never surface them unless MDBList is actually connected."""
+    try:
+        import xbmcaddon
+        tok = xbmcaddon.Addon('plugin.video.pov').getSetting('mdblist.token') or ''
+        return bool(tok.strip())
+    except Exception:
+        return False
+
+
+def _insert_mdblist_tiles(content, fixture_text):
+    """One-time, opt-in restore of the two MDBList personal tiles for an existing
+    install that already has a favourites.xml (clean installs get them from the
+    shipped seed). Gated on MDBList being connected; add-only; fire-once via the
+    json sidecar so a later deletion sticks even after Kodi strips XML comments.
+    Returns (content, changed)."""
+    if not _mdblist_connected():
+        return content, False            # not connected -> never add, never stamp
+    seen = _load_seen_state()
+    already_present = _missing_tiles(content, MDBLIST_TILE_NAMES) == ()
+    if already_present:
+        # Tiles present -> persist "seen" so a LATER delete sticks.
+        if 'mdblist_tiles' not in seen:
+            seen.add('mdblist_tiles')
+            _save_seen_state(seen)
+        return content, False
+    # Absent: if we've ever inserted them, respect the deletion and never re-add.
+    if 'mdblist_tiles' in seen or _has_marker(content, MDBLIST_TILES_SEEN_MARKER):
+        return content, False
+    tiles = []
+    for name in MDBLIST_TILE_NAMES:
+        snippet = _extract_tile(fixture_text, name)
+        if snippet is None:
+            return content, False        # fixture incomplete -> safe no-op
+        tiles.append(snippet.encode('utf-8'))
+    pov_movies_pat = re.compile(
+        rb'([ \t]*<favourite\s[^>]*?name="'
+        + re.escape(_POV_MOVIES_TILE_NAME.encode('utf-8'))
+        + rb'"[^>]*>(?:(?!</favourite>).)*?</favourite>\s*\n)',
+        re.DOTALL,
+    )
+    m = pov_movies_pat.search(content)
+    if m is not None:
+        new_content = content[:m.end(1)] + b''.join(tiles) + content[m.end(1):]
+    else:
+        inserted = _insert_tiles_before_close(content, tiles)
+        if inserted is None:
+            return content, False
+        new_content = inserted
+    new_content, _ = _insert_marker(new_content, MDBLIST_TILES_SEEN_MARKER)
+    seen.add('mdblist_tiles')
+    _save_seen_state(seen)
+    return new_content, True
+
+
 def _fix_existing_debrid_notice_action(content):
     """Fix v0.2.106 installs where the tile existed but used a
     plugin:// URL against our subtitle/service addon, which Kodi does
@@ -520,6 +592,7 @@ def ensure_patched():
     content, fixed_torbox_status = _fix_existing_torbox_status_action(content)
     content, debrid_notice_restored = _insert_debrid_notice_tile(
         content, fixture_text)
+    content, mdblist_restored = _insert_mdblist_tiles(content, fixture_text)
     content, service_position_fixed = (
         _move_existing_service_tile_after_torbox(content))
 
@@ -585,7 +658,7 @@ def ensure_patched():
     if missing_personal:
         if (not fixed_existing and not fixed_torbox_status
                 and not service_position_fixed and not force_premiumize
-                and not force_personal
+                and not force_personal and not mdblist_restored
                 and (not missing_service or had_service_marker)
                 ):
             return 'user_removed_tiles'
@@ -649,7 +722,7 @@ def ensure_patched():
 
     if (not missing and not fixed_existing and not marker_added
             and not fixed_torbox_status and not service_marker_added
-            and not debrid_notice_restored
+            and not debrid_notice_restored and not mdblist_restored
             and not service_position_fixed and not full_marker_added
             and not reseed_marker_added and not personal_reseed_added
             and not full_reseed_added
@@ -733,6 +806,8 @@ def ensure_patched():
         _log('marked full build favourites tiles as seen', level='INFO')
     if debrid_notice_restored:
         _log('restored subscription notification settings tile', level='INFO')
+    if mdblist_restored:
+        _log('restored MDBList personal tiles (My Movies/My Series)', level='INFO')
     if service_position_fixed:
         _log('moved Premiumize status tile next to TorBox', level='INFO')
     if missing_full_tiles:
