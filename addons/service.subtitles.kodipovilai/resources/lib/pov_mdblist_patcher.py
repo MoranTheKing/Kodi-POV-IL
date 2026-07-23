@@ -44,6 +44,27 @@ except Exception:
 POV_ADDON_ID = 'plugin.video.pov'
 MDBLIST_API_REL = 'resources/lib/indexers/mdblist_api.py'
 MENUS_MDBLIST_REL = 'resources/lib/menus/mdblist.py'
+POV_SETTINGS_REL = 'resources/lib/modules/settings.py'
+
+# --- Fix G: default the Watchlist/Collection sort to "Date Added" -----------
+# POV reads the personal-list sort via lists_sort_order(setting) ->
+# int(get_setting('sort.%s' % setting, '0')); default 0 = Title (A-Z), 1 =
+# Date Added, 2 = Release Date. Writing sort.watchlist=1 cross-addon does NOT
+# stick (POV serves settings from a cached `pov_settings` window-property JSON
+# that our boot-time write never invalidates -- POV isn't even running then).
+# So we patch the READER instead: when the stored value is 0/empty (the default
+# nobody chose), return 1 (Date Added) for watchlist/collection only, leaving
+# progress/watched (which share this function) exactly as POV had them. A user
+# who deliberately picks Date Added(1)/Release(2) via POV's own sort menu keeps
+# it; only the never-chosen A-Z default flips to recency. Deterministic (code
+# patch), independent of any setting-write persistence.
+SORT_DEFAULT_MARKER = '# AI_SUBS_SORT_RECENT_DEFAULT_v1'
+_SORT_DEFAULT_ANCHOR = "\treturn int(get_setting('sort.%s' % setting, '0'))"
+_SORT_DEFAULT_REPLACEMENT = (
+    "\t_ai_v = get_setting('sort.%s' % setting, '0')  " + SORT_DEFAULT_MARKER + "\n"
+    "\ttry: _ai_v = int(_ai_v)\n"
+    "\texcept Exception: _ai_v = 0\n"
+    "\treturn (_ai_v or 1) if setting in ('watchlist', 'collection') else _ai_v")
 
 REDACT_MARKER = '# AI_SUBS_MDBL_REDACT_v1'
 SCROBBLE_MARKER = '# AI_SUBS_MDBL_SCROBBLE_STOP_v1'
@@ -397,6 +418,66 @@ def ensure_patched():
                     pass
 
     _log('patched mdblist_api ({0})'.format(', '.join(applied)), level='INFO')
+    return 'patched'
+
+
+def ensure_sort_default_patched():
+    """Fix G: default the Watchlist/Collection sort to Date Added (recency) by
+    patching POV's modules/settings.py lists_sort_order(). Same return codes as
+    ensure_patched. Skin-independent; deterministic (a code patch, so it doesn't
+    depend on any cross-addon setting write persisting)."""
+    if xbmcvfs is None:
+        return 'no_pov'
+    try:
+        base = xbmcvfs.translatePath(
+            'special://home/addons/' + POV_ADDON_ID + '/')
+    except Exception:
+        return 'no_pov'
+    path = os.path.join(base, POV_SETTINGS_REL)
+    if not os.path.isfile(path):
+        return 'no_file'
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            content = f.read()
+    except OSError as e:
+        _log('read failed for {0}: {1}'.format(path, e), level='WARNING')
+        return 'read_failed'
+    if SORT_DEFAULT_MARKER in content:
+        return 'already_patched'
+    if _SORT_DEFAULT_ANCHOR not in content:
+        _log('modules/settings lists_sort_order anchor not found -- POV version '
+             'differs; leaving file alone', level='WARNING')
+        return 'unmatched'
+    new_content = content.replace(
+        _SORT_DEFAULT_ANCHOR, _SORT_DEFAULT_REPLACEMENT, 1)
+    try:
+        compile(new_content, path, 'exec')
+    except SyntaxError as e:
+        _log('sort-default patch would not compile -- skipping ({0})'.format(e),
+             level='WARNING')
+        return 'compile_failed'
+    tmp_path = path + '.aitmp'
+    try:
+        with open(tmp_path, 'w', encoding='utf-8') as f:
+            f.write(new_content)
+        os.replace(tmp_path, path)
+    except OSError as e:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        _log('write failed for {0}: {1}'.format(path, e), level='WARNING')
+        return 'write_failed'
+    pycache_dir = os.path.join(os.path.dirname(path), '__pycache__')
+    if os.path.isdir(pycache_dir):
+        for fn in os.listdir(pycache_dir):
+            if fn.startswith('settings.') and fn.endswith('.pyc'):
+                try:
+                    os.remove(os.path.join(pycache_dir, fn))
+                except OSError:
+                    pass
+    _log('patched modules/settings (watchlist/collection sort -> recency default)',
+         level='INFO')
     return 'patched'
 
 
