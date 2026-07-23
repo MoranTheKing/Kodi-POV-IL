@@ -75,6 +75,24 @@ _MANAGER_REPLACEMENT = (
     "choices = [('watchlist', watchl_str, '', self.icon), "
     "('collection', coll_str, '', self.icon)]  " + MANAGER_MARKER)
 
+# --- Fix E: guard mdbl_sync_activities against a corrupt cached value -------
+# POV's reset_activity() returns the raw DB row (a tuple) instead of a dict when
+# the cached 'mdbl_get_activity' row can't be eval'd back to a dict -- and it
+# skips its own self-heal write in that case. mdbl_sync_activities then does
+# latest[key] / cached[key] -> "tuple indices must be integers, not str" and
+# crashes every caller (the periodic monitor, and add_to_collection's post-add
+# refresh -> the Collection button). Guard right after the assignment: if either
+# side isn't a dict, purge the mdbl cache (regenerates clean next time) and bail.
+# Uses clear_all_mdbl_cache_data, which the function already calls above.
+SYNC_GUARD_MARKER = '# AI_SUBS_MDBL_SYNC_GUARD_v1'
+_SYNC_ANCHOR = '\tcached = mdbl_cache.reset_activity(latest)'
+_SYNC_INJECT = (
+    '\n\t' + SYNC_GUARD_MARKER + '\n'
+    '\tif not isinstance(cached, dict) or not isinstance(latest, dict):\n'
+    '\t\ttry: mdbl_cache.clear_all_mdbl_cache_data(refresh=False)\n'
+    '\t\texcept Exception: pass\n'
+    "\t\treturn 'failed'")
+
 # --- Fix A: redact the apikey in the error log ---------------------------
 _REDACT_ANCHOR = "'mdblist error', str(e)"
 _REDACT_REPLACEMENT = (
@@ -197,7 +215,8 @@ def ensure_patched():
     already_redact = _REDACT_DONE in content
     already_scrobble = SCROBBLE_MARKER in content
     already_guard = NONE_GUARD_MARKER in content
-    if already_redact and already_scrobble and already_guard:
+    already_sync = SYNC_GUARD_MARKER in content
+    if already_redact and already_scrobble and already_guard and already_sync:
         return 'already_patched'
 
     new_content = content
@@ -223,6 +242,12 @@ def ensure_patched():
         if _ADDCOLL_ANCHOR in new_content:
             new_content = new_content.replace(_ADDCOLL_ANCHOR, _ADDCOLL_GUARDED, 1)
             applied.append('none_guard_coll')
+
+    # Fix E -- guard mdbl_sync_activities against a corrupt cached value.
+    if not already_sync and _SYNC_ANCHOR in new_content:
+        new_content = new_content.replace(
+            _SYNC_ANCHOR, _SYNC_ANCHOR + _SYNC_INJECT, 1)
+        applied.append('sync_guard')
 
     if not applied:
         _log('no mdblist_api anchors matched -- POV version differs; '

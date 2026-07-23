@@ -1,3 +1,14 @@
+v0.2.430
+- MDBList "Collection" no longer crashes on the post-add refresh. After the
+  previous fix correctly routed the Collection button, POV's own activity-sync
+  step could still crash: when POV's cached "last activity" row can't be read
+  back as a table, POV handed the raw database row (a tuple) to code expecting a
+  table -> "tuple indices must be integers" -> crash on every sync (the periodic
+  monitor and the Collection button alike). Fixed: we guard that step -- if the
+  cached value is malformed we clear POV's MDBList cache once (it rebuilds clean
+  on the next pass) and skip the bad run instead of crashing. Also covers the
+  case where MDBList briefly returns a non-JSON response. Watchlist unaffected.
+
 v0.2.429
 - MDBList "Collection" in the list manager no longer crashes on a Hebrew UI. POV
   routes the Watchlist/Collection buttons by their English label text; our Hebrew
