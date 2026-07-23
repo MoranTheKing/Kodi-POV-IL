@@ -220,7 +220,7 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
 (5 s grace), and a configurable addon exclusion list `autosub_excluded_addons`
 (default `plugin.video.idanplus`). All fail-open.
 
-## MDBList integration — status (0.2.425–0.2.435, all shipped)
+## MDBList integration — status (0.2.425–0.2.436, all shipped)
 
 The full chain works: QR pairing, watched/progress sync, list manager, account
 heal, Collection routing + crash-safe sync. Delivered across seven releases:
@@ -341,6 +341,21 @@ budget-safe on the 1000 req/day free key.
      the fn). Deterministic; marker `AI_SUBS_SORT_RECENT_DEFAULT_v1`. The
      setSetting migration is kept as best-effort so POV's sort menu also shows
      "Date Added" selected when the write does stick. Sonnet: SHIP.
+  1c. **The three "My Movies/My Series" tiles route through DIFFERENT code** --
+     this bit us: fixing one service doesn't fix the others.
+     - **MDBList** tile -> POV's `mdblist_watchlist` (Fix G handles it).
+     - **Trakt / TMDB** tiles (`trakt_my_movies` / `tmdb_my_movies`) -> OUR
+       injected `_BLOCK_TEMPLATE` in `pov_menus_patcher.py`, which MERGES
+       collection+watchlist+favorites. It was concatenating them (fresh watchlist
+       add landed after the whole collection). **0.2.436** fixes the Trakt branch:
+       append `(collected_at, media_ids)` and sort by date desc before unwrapping
+       (POV maps listed_at->collected_at for the watchlist; None->'' so the
+       all-string sort can't TypeError). Same template serves movies+tvshows.
+       TMDB branch left as-is (no per-item date; API returns created_at.desc).
+       Patcher is revert-then-reapply so no marker bump needed. Sonnet: SHIP.
+     - NOTE: `resources/lib/pov_overrides/menus/*` is DEAD (nothing deploys it;
+       pov_menus_patcher heals it away via STALE_OVERRIDE_MARK='_flex_call').
+       The live merge is `_BLOCK_TEMPLATE`, NOT pov_overrides.
   2. **Fix F** in `ensure_patched()`: patch POV `mdblist_watchlist()` to append
      the Collection ("Recently Added", where a Trakt import lands) to the
      Watchlist -- deduped by tmdb id, each collection row reshaped to watchlist
