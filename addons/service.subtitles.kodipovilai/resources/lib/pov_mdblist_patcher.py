@@ -48,7 +48,7 @@ MENUS_MDBLIST_REL = 'resources/lib/menus/mdblist.py'
 REDACT_MARKER = '# AI_SUBS_MDBL_REDACT_v1'
 SCROBBLE_MARKER = '# AI_SUBS_MDBL_SCROBBLE_STOP_v1'
 NONE_GUARD_MARKER = '# AI_SUBS_MDBL_NONE_GUARD_v1'
-MANAGER_MARKER = '# AI_SUBS_MDBL_STABLE_IDS_v1'
+MANAGER_MARKER = '# AI_SUBS_MDBL_WATCHLIST_ONLY_v2'
 
 # --- Fix C: don't crash the manager when an add/remove returns None ---------
 # call_mdblist() returns None on any error (e.g. a 404); POV then does
@@ -62,18 +62,32 @@ _ADDLIST_GUARDED = "if not result or result['added']['movies'] + result['added']
 _ADDCOLL_ANCHOR = "if result['updated']['movies'] + result['updated']['shows'] == 0: return kodi_utils.notification(32574)"
 _ADDCOLL_GUARDED = "if not result or result['updated']['movies'] + result['updated']['shows'] == 0: return kodi_utils.notification(32574)  " + NONE_GUARD_MARKER
 
-# --- Fix D: stable choice ids for Watchlist/Collection (menus/mdblist.py) ---
-# POV builds the choice id from the LOCALISED label: `(i.lower(), i, ...)` for i
-# in (watchl_str, coll_str). It then routes on `'collection' in choice[0]` /
-# `'watchlist' in choice[0]` -- English substrings. Our Hebrew build translates
-# the Collection label (string 32499) to "קולקציה", so the id becomes Hebrew, the
-# check fails, and POV treats it as a user list named "קולקציה" -> POSTs to
-# /lists/קולקציה/items -> 404 -> None -> crash. Fix: stable English ids; the
-# DISPLAY label (choice[1]) stays the Hebrew string.
-_MANAGER_ANCHOR = "choices = [(i.lower(), i, '', self.icon) for i in (watchl_str, coll_str)]"
+# --- Fix D: Watchlist-only list manager (menus/mdblist.py) ------------------
+# POV's list manager offers Watchlist + Collection. We drop Collection here for
+# two reasons:
+#   1) It's meaningless for a streaming build -- MDBList "Collection" marks media
+#      you OWN, which never applies here; Watchlist is the useful list.
+#   2) POV's post-add Collection sync (add_to_collection -> mdbl_sync_activities)
+#      crashes on some POV builds with "tuple indices must be integers" (a
+#      version-specific bug where reset_activity() hands a raw DB tuple to code
+#      expecting a dict). That crash path varies by POV version and can't be
+#      anchored reliably (Fix E guards the one layout we have cached, but not
+#      every build). Removing the Collection button removes the trigger for good.
+# POV builds the choice id from the LOCALISED label originally; a Hebrew UI also
+# broke routing (id became "קולקציה"). Both concerns vanish with a single stable
+# 'watchlist' choice whose DISPLAY label stays the Hebrew watchl_str. POV's
+# get_default_choices still appends its own 'dropped' toggle for tv shows, and
+# all downstream code routes by choice-id substring (never by position), so a
+# one-item list is safe.
 _MANAGER_REPLACEMENT = (
+    "choices = [('watchlist', watchl_str, '', self.icon)]  " + MANAGER_MARKER)
+# Two upgrade sources: a fresh POV (original localised-id anchor) and a device
+# already carrying the 0.2.429 two-choice stable-id patch.
+_MANAGER_ANCHOR_ORIG = (
+    "choices = [(i.lower(), i, '', self.icon) for i in (watchl_str, coll_str)]")
+_MANAGER_ANCHOR_V1 = (
     "choices = [('watchlist', watchl_str, '', self.icon), "
-    "('collection', coll_str, '', self.icon)]  " + MANAGER_MARKER)
+    "('collection', coll_str, '', self.icon)]  # AI_SUBS_MDBL_STABLE_IDS_v1")
 
 # --- Fix E: guard mdbl_sync_activities against a corrupt cached value -------
 # POV's reset_activity() returns the raw DB row (a tuple) instead of a dict when
@@ -310,11 +324,15 @@ def ensure_manager_patched():
         return 'read_failed'
     if MANAGER_MARKER in content:
         return 'already_patched'
-    if _MANAGER_ANCHOR not in content:
+    if _MANAGER_ANCHOR_ORIG in content:
+        anchor = _MANAGER_ANCHOR_ORIG
+    elif _MANAGER_ANCHOR_V1 in content:
+        anchor = _MANAGER_ANCHOR_V1            # upgrade a 0.2.429 two-choice patch
+    else:
         _log('menus/mdblist get_default_choices anchor not found -- POV version '
              'differs; leaving file alone', level='WARNING')
         return 'unmatched'
-    new_content = content.replace(_MANAGER_ANCHOR, _MANAGER_REPLACEMENT, 1)
+    new_content = content.replace(anchor, _MANAGER_REPLACEMENT, 1)
     try:
         compile(new_content, path, 'exec')
     except SyntaxError as e:
