@@ -3279,6 +3279,38 @@ def _maybe_tune_gemini3_defaults():
             pass
 
 
+def _maybe_bump_gemini_model():
+    """One-shot: move existing users off the superseded default Gemini models to
+    their newer, same-quota successors -- gemini-3.1-flash-lite -> 3.5-flash-lite
+    (the free 500/day default) and gemini-3.5-flash -> 3.6-flash (the paid
+    regular-Flash pick). Both are drop-in upgrades (identical free-tier quota,
+    better quality), so we rewrite the STORED model once. Only those two exact
+    old ids are bumped; any other deliberate choice (3.1-flash, 2.5-*) is left
+    alone, and an empty setting is left empty (translate falls back to the new
+    default). Marker-gated -> fires once; a later manual pick sticks."""
+    try:
+        from resources.lib import kodi_utils
+    except Exception:
+        return
+    try:
+        if kodi_utils.get_setting('_gemini_model_bump_v1', '') == '1':
+            return
+        cur = (kodi_utils.get_setting('model', '') or '').strip()
+        new = {'gemini-3.1-flash-lite': 'gemini-3.5-flash-lite',
+               'gemini-3.5-flash': 'gemini-3.6-flash'}.get(cur)
+        if new:
+            kodi_utils.set_setting('model', new)
+            kodi_utils.log('Gemini model bumped {0} -> {1} (migration v1)'.format(
+                cur, new), level='INFO')
+        kodi_utils.set_setting('_gemini_model_bump_v1', '1')
+    except Exception as e:
+        try:
+            kodi_utils.log('gemini model bump migration failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_lower_chunk_lines():
     """One-shot: move existing users to the smaller 50-line translation chunk.
     Live testing showed big chunks (100+) of graphically-explicit dialogue trip
@@ -4137,6 +4169,9 @@ def main():
     # settings (temperature 1.0 + thinking medium). Marker-gated; respects a
     # deliberate manual choice.
     _maybe_tune_gemini3_defaults()
+    # One-shot: bump the two superseded default models to their same-quota
+    # successors (3.1-flash-lite -> 3.5-flash-lite, 3.5-flash -> 3.6-flash).
+    _maybe_bump_gemini_model()
     # Lower chunk size to 50 (block-avoidance), one-shot for existing installs.
     _maybe_lower_chunk_lines()
 

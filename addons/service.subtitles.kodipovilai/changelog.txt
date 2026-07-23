@@ -1,3 +1,10 @@
+v0.2.434
+- Gemini models updated to the newer versions. The default free model moves from
+  3.1 Flash Lite to 3.5 Flash Lite (identical free daily quota, better quality),
+  and the paid "newest" option moves from 3.5 Flash to 3.6 Flash. Existing users
+  on those two are upgraded automatically on next start; if you deliberately chose
+  a different model, your choice is kept. No action needed.
+
 v0.2.433
 - Personal lists now sort by "recently added" (newest first) by default, instead
   of A-Z. Applies to the My Movies / My Series lists across MDBList, Trakt AND

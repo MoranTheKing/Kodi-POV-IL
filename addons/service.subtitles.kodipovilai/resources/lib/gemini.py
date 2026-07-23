@@ -94,7 +94,7 @@ def _classify_429(r):
     return RateLimited('Per-minute rate limit (HTTP 429)', retry_after=retry_after)
 
 
-def test_key(api_key, model='gemini-3.1-flash-lite'):
+def test_key(api_key, model='gemini-3.5-flash-lite'):
     """Cheap sanity check: list the user's available models and
     confirm the chosen one is in the set. Returns the model id we
     matched (so the caller can show "Connected: <model>")."""

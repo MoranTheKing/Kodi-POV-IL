@@ -1258,8 +1258,8 @@ def _show_gemini_usage():
         # doesn't apply (otherwise a paid user on regular Flash could see an
         # alarming "147/20" against a limit that isn't theirs).
         paid = kodi_utils.get_bool('ai_paid_mode', False)
-        model = (kodi_utils.get_setting('model', 'gemini-3.1-flash-lite')
-                 or 'gemini-3.1-flash-lite')
+        model = (kodi_utils.get_setting('model', 'gemini-3.5-flash-lite')
+                 or 'gemini-3.5-flash-lite')
         if paid:
             body = ('מצב מהיר (למשתמשי Gemini API בתשלום) פעיל.\n'
                     'הגבלות המכסה החינמית אינן חלות, ולכן אין ספירת ניצול יומי.\n\n'
@@ -1915,8 +1915,8 @@ def _handle_test_connection(_params):
         return
 
     api_key = kodi_utils.get_setting('api_key', '')
-    model   = kodi_utils.get_setting('model', 'gemini-3.1-flash-lite') \
-              or 'gemini-3.1-flash-lite'
+    model   = kodi_utils.get_setting('model', 'gemini-3.5-flash-lite') \
+              or 'gemini-3.5-flash-lite'
 
     if not api_key:
         xbmcgui.Dialog().ok('Kodi POV IL', kodi_utils.localised(33002))
