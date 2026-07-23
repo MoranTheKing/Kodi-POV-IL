@@ -1304,6 +1304,19 @@ def _maybe_patch_pov_mdblist_sync():
         else:
             kodi_utils.log(
                 'pov_mdblist_patcher: ' + status, level='WARNING')
+        # Stable Watchlist/Collection ids so the list manager doesn't crash
+        # under a Hebrew UI (POV routes on the English label otherwise).
+        try:
+            mstatus = pov_mdblist_patcher.ensure_manager_patched()
+            if mstatus == 'patched':
+                kodi_utils.log(
+                    'pov_mdblist_patcher: manager Watchlist/Collection ids '
+                    'stabilised', level='INFO')
+            elif mstatus not in ('no_pov', 'no_file', 'already_patched'):
+                kodi_utils.log(
+                    'pov_mdblist_patcher manager: ' + mstatus, level='WARNING')
+        except Exception:
+            pass
         # Repair 'No MDBList Account Active' (empty mdblist_user despite a set
         # token) so the sync monitor + list manager stop failing.
         try:
