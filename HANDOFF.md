@@ -205,7 +205,7 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
 (5 s grace), and a configurable addon exclusion list `autosub_excluded_addons`
 (default `plugin.video.idanplus`). All fail-open.
 
-## MDBList integration — status (0.2.425–0.2.431, all shipped + field-verified)
+## MDBList integration — status (0.2.425–0.2.432, all shipped)
 
 The full chain works: QR pairing, watched/progress sync, list manager, account
 heal, Collection routing + crash-safe sync. Delivered across seven releases:
@@ -275,6 +275,37 @@ Manager-add + Continue-Watching/watched sync are DONE.
 
 Net: Watchlist add/remove + watched/progress sync are the supported surface;
 Collection is intentionally gone. Watchlist unaffected throughout.
+
+### Phase B — home tiles (task #68). FIRST SLICE SHIPPED: 0.2.432 / qf 0.1.471.
+Decision (budget): tiles read the **MDBList Watchlist split by media type**, NOT
+separate auto-created lists — one cached POV watchlist read serves both, so it's
+budget-safe on the 1000 req/day free key.
+- **Exact POV routes (verified in pov607)**: `action=mdblist_watchlist` with
+  `mode=build_movie_list` (movies only) vs `mode=build_tvshow_list` (shows only).
+  POV returns the watchlist mixed and its movies/tvshows Menu picks the type — no
+  URL media-type param. Icon inside POV: `mdblist.png` (present in POV skin media).
+- **Tiles (all skins, via favourites)** — DONE:
+  - Branded PNGs `Twilight/{Movies/My_Movies_MDBList,Shows/My_Shows_MDBList}.png`
+    (512² RGBA). Generator: `scratchpad/gen_mdblist_tiles.py` — clones the POV
+    variant tile, swaps ONLY the top-right logo box (diff bbox 285,109-415,202)
+    with an MDBList wordmark badge (teal "MDB"/navy "List" on white panel).
+    Auto-install via build_icons_patcher (new files → no stale texture cache).
+  - Two `<favourite>` entries in `resources/fixtures/favourites_fentastic_canonical.xml`
+    (grouped with the POV personal tiles) → clean installs + skin seeds get them.
+  - `favourites_personal_tiles_patcher._insert_mdblist_tiles`: opt-in, GATED on
+    `_mdblist_connected()` (POV `mdblist.token` set), add-only, fire-once via the
+    json sidecar key `mdblist_tiles` (+ marker AI_SUBS_FAVOURITES_MDBLIST_TILES_SEEN_v1).
+    Non-MDBList users: byte-identical no-op. Deletions stick. Sonnet: SHIP.
+- **REMAINING tiles parity (next, per-skin native widgets)** — favourites already
+  cover every skin, but for full parity with how each skin shows OTHER services:
+  1. **FENtastic navigator.db native row** — `pov_navigator_patcher.py`
+     (MOVIES_PA_V5 / TVSHOWS_PA_V5): add `mdblist_my_movies`/`mdblist_my_tvshows`
+     rows pointing at the same two routes. Needs a version-constant bump per the
+     patcher's versioning (honors user deletions).
+  2. **Arctic Fuse 3 node** — `af3_home_patcher.py` (already writes "הסדרות שלי"/
+     "הסרטים שלי" skinvariables nodes): add MDBList nodes there.
+  Manager-add + watched/progress sync already done. Continue-Watching (Phase D)
+  still deferred (series via /upnext if POV scrobbles episodes; movies stay local).
 
 NOTIFICATION MISTAKE (now guarded): 0.2.426/427/428 first shipped reusing the same
 `quick_update` note_id (only footer bumped) -> no notification fired. Fixed at
