@@ -384,7 +384,7 @@ def _audio_probe_reference(info, playing, second_pass=False):
         api_failed = False
         if segs:
             model = (kodi_utils.get_setting('model', '') or
-                     'gemini-3.1-flash-lite')
+                     'gemini-3.5-flash-lite')
             for seg in segs[:3]:
                 try:
                     txt = gemini.generate_media(
