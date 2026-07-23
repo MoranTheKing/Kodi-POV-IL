@@ -198,6 +198,21 @@ fixing POV, remember:
 Calls use the `x-goog-api-key` HEADER, not `?key=` (newer `AQ.`-prefixed keys
 401 on the query param). One credential per request. `gemini.py` only.
 
+## Gemini model config (0.2.434)
+
+Default free model = **`gemini-3.5-flash-lite`** (500/day tier), paid "newest" =
+**`gemini-3.6-flash`** (20/day tier). Dropdown also keeps 3.1-flash, 2.5-flash-
+lite, 2.5-flash. To change models, touch ALL of: `settings.xml` (`<default>` +
+`<option>` values + the numeric labels 32230/32234), `language/*/strings.po`
+(label text), `gemini_quota.py` `MODEL_LIMITS` + `MODEL_TRACKED`, and the code
+fallbacks in `translate.py`, `subsync.py`, `default.py`, `gemini.py:test_key`.
+RPM cap (`translate._gemini_free_rpm_cap`) + flash-lite detection are SUBSTRING-
+based ('flash-lite'/'flash'), so new ids auto-tier. Existing users are migrated
+by `service._maybe_bump_gemini_model()` (marker `_gemini_model_bump_v1`, DECLARED
+in settings.xml) — rewrites only the two exact superseded ids, once. The model
+ids follow Google's `gemini-<ver>-flash[-lite]` pattern; NOT verified against the
+live API here — confirm a translation works on-device after any model change.
+
 ## autosub live/IPTV guard
 
 `autosub_service.py` skips the auto Hebrew search for live playback: PVR
