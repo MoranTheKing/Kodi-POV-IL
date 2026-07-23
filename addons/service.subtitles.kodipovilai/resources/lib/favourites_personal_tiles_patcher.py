@@ -70,11 +70,12 @@ BUILD_SERVICE_TILE_NAMES = (
 
 # MDBList personal tiles ("My Movies / My Series (MDBList)"). Unlike the 6 core
 # personal tiles, these are OPT-IN: they only make sense once MDBList is connected
-# in POV (the plugin route errors without a key), so we insert them exactly once
-# and ONLY for installs that have an MDBList key set. Add-only + fire-once (json
-# sidecar), so a later user deletion sticks. New/clean installs get them from the
-# shipped canonical favourites.xml instead.
-MDBLIST_TILE_NAMES = (
+# in POV, so we insert them exactly once and ONLY for installs that have an MDBList
+# key set. Add-only + fire-once (json sidecar), so a later user deletion sticks.
+# New/clean installs get them from the shipped canonical favourites.xml. The tiles
+# route to POV's mdblist_watchlist, which pov_mdblist_patcher patches to MERGE the
+# Collection ("Recently Added") in -- so one pair of tiles shows everything.
+MDBLIST_WATCHLIST_TILE_NAMES = (
     '[B]הסדרות שלי (MDBList)[/B]',
     '[B]הסרטים שלי (MDBList)[/B]',
 )
@@ -379,7 +380,7 @@ def _insert_mdblist_tiles(content, fixture_text):
     if not _mdblist_connected():
         return content, False            # not connected -> never add, never stamp
     seen = _load_seen_state()
-    already_present = _missing_tiles(content, MDBLIST_TILE_NAMES) == ()
+    already_present = _missing_tiles(content, MDBLIST_WATCHLIST_TILE_NAMES) == ()
     if already_present:
         # Tiles present -> persist "seen" so a LATER delete sticks.
         if 'mdblist_tiles' not in seen:
@@ -390,7 +391,9 @@ def _insert_mdblist_tiles(content, fixture_text):
     if 'mdblist_tiles' in seen or _has_marker(content, MDBLIST_TILES_SEEN_MARKER):
         return content, False
     tiles = []
-    for name in MDBLIST_TILE_NAMES:
+    # Insert only the ACTUALLY-missing tile(s): if the user deleted just one of the
+    # pair (and we never got to stamp 'seen'), never duplicate the survivor.
+    for name in _missing_tiles(content, MDBLIST_WATCHLIST_TILE_NAMES):
         snippet = _extract_tile(fixture_text, name)
         if snippet is None:
             return content, False        # fixture incomplete -> safe no-op
