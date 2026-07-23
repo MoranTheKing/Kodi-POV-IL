@@ -1331,7 +1331,7 @@ def _is_mostly_hebrew(text, min_ratio=0.30):
     """True if a meaningful share of TEXT's letters are Hebrew.
 
     Two uses: (1) validating a TRANSLATION -- catches the two ways a weak model
-    (gemini-3.1-flash-lite) silently fails: it returns EMPTY, or it ECHOES the
+    (e.g. a Flash-Lite) silently fails: it returns EMPTY, or it ECHOES the
     source untranslated (German/Spanish/English/Russian/...); both used to be
     cached and served as 'the Hebrew translation'. (2) a SOURCE-language sanity
     check -- 'is this source already Hebrew, so translating it is pointless?'.
@@ -2535,8 +2535,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     if not api_key:
         kodi_utils.notify(kodi_utils.localised(33002))
         return None
-    model = kodi_utils.get_setting('model', 'gemini-3.1-flash-lite') \
-            or 'gemini-3.1-flash-lite'
+    model = kodi_utils.get_setting('model', 'gemini-3.5-flash-lite') \
+            or 'gemini-3.5-flash-lite'
     # Gemini 3 tuning (validated A/B): keep temperature at Google's recommended
     # default 1.0 (lowering it degrades Gemini 3 reasoning), use thinking_level
     # MEDIUM (HIGH burns the output budget -> truncation + garbling and is no
