@@ -1330,8 +1330,23 @@ def _maybe_patch_pov_mdblist_sync():
                     'pov_mdblist_patcher heal: ' + hstatus, level='WARNING')
         except Exception:
             pass
-        # One-time: default the personal-list sort (MDBList/Trakt/TMDB Watchlist +
-        # Collection) to 'recently added' so the newest title leads instead of A-Z.
+        # Default the personal-list sort (MDBList/Trakt/TMDB Watchlist +
+        # Collection) to 'recently added' so the newest title leads instead of
+        # A-Z. Two layers: (1) a code patch of POV's lists_sort_order reader
+        # (deterministic -- the source of truth, since cross-addon setting writes
+        # don't reliably reach POV's cached settings); (2) the setting write, as a
+        # best-effort so POV's own sort menu also shows "Date Added" selected.
+        try:
+            gstatus = pov_mdblist_patcher.ensure_sort_default_patched()
+            if gstatus == 'patched':
+                kodi_utils.log(
+                    'pov_mdblist_patcher: patched list-sort default -> recency',
+                    level='INFO')
+            elif gstatus not in ('no_pov', 'no_file', 'already_patched'):
+                kodi_utils.log(
+                    'pov_mdblist_patcher sort-default: ' + gstatus, level='WARNING')
+        except Exception:
+            pass
         try:
             sstatus = pov_mdblist_patcher.ensure_lists_sort_recent()
             if sstatus == 'set':
