@@ -205,10 +205,10 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
 (5 s grace), and a configurable addon exclusion list `autosub_excluded_addons`
 (default `plugin.video.idanplus`). All fail-open.
 
-## MDBList integration — status (0.2.425–0.2.428, all shipped + field-verified)
+## MDBList integration — status (0.2.425–0.2.430, all shipped + field-verified)
 
 The full chain works: QR pairing, watched/progress sync, list manager, account
-heal. Delivered across four releases:
+heal, Collection routing + crash-safe sync. Delivered across six releases:
 - **0.2.425 / qf 0.1.464** — QR pairing for MDBList (like the other services),
   replacing manual key entry. Phone form reuses `gemini_pair` transport
   (`mdblist_pair.py`); connect writes POV's `mdblist.token` + `mdblist_user` +
@@ -232,6 +232,22 @@ heal. Delivered across four releases:
   direct scrobbling still worked (token-based). Heal on boot: token set + user
   empty -> fetch username from `/user` -> store it. POV's `onSettingsChanged`
   invalidates its `pov_settings` cache so the write takes effect ~immediately.
+- **0.2.429 / qf 0.1.468** — Collection button crash (Hebrew UI). POV routes the
+  Watchlist/Collection buttons by their English label text; our Hebrew translation
+  of "Collection" -> "קולקציה" made POV treat it as a user list by that name, POST
+  to a non-existent list (404) -> None -> crash. Fix D (`ensure_manager_patched`,
+  `menus/mdblist.py`): stable English ids `[('watchlist',...),('collection',...)]`,
+  Hebrew stays in the DISPLAY label. Fix C: None-guard the add/remove result.
+- **0.2.430 / qf 0.1.469** — Collection post-add sync crash (Fix E, `ensure_patched`
+  in `pov_mdblist_patcher.py`). After Fix D correctly routed to `add_to_collection`,
+  POV's post-add `mdbl_sync_activities()` still crashed: `reset_activity()` returns
+  the raw DB row (a TUPLE) instead of a dict when the cached `mdbl_get_activity`
+  row can't be eval'd back (and skips its self-heal write), so `cached['...']` ->
+  "tuple indices must be integers" on every sync (periodic monitor + Collection
+  button). Guard right after `cached = mdbl_cache.reset_activity(latest)`: if
+  cached/latest isn't a dict, `clear_all_mdbl_cache_data(refresh=False)` once
+  (rebuilds a clean dict next run) + `return 'failed'`. Also covers a non-JSON API
+  response (`latest` as str). Marker `AI_SUBS_MDBL_SYNC_GUARD_v1`. Sonnet: SHIP.
 
 KEY MDBList API facts (probed with a dummy key: 401 = endpoint exists, 404 =
 missing): `scrobble/start|pause|stop`, `sync/watched`, `sync/collection`,
@@ -245,8 +261,8 @@ REMAINING (Phase B, the NEXT stage): MDBList **home tiles per skin** ("My Movies
 baked images — per-skin mechanisms as in `scratchpad/MDBLIST_INTEGRATION_PLAN.md`.
 Manager-add + Continue-Watching/watched sync are DONE.
 
-MINOR / known: the manager's "Collection" toggle (`POST sync/collection` —
-endpoint exists) may be a MDBList BETA quirk; Watchlist works. Revisit if wanted.
+Collection now routes correctly (stable ids, 0.2.429) and the post-add refresh no
+longer crashes (0.2.430); the add itself succeeds. Watchlist unaffected throughout.
 
 NOTIFICATION MISTAKE (now guarded): 0.2.426/427/428 first shipped reusing the same
 `quick_update` note_id (only footer bumped) -> no notification fired. Fixed at
