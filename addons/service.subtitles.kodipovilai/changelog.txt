@@ -1,3 +1,11 @@
+v0.2.435
+- Fix: the "newest added first" sorting from 0.2.433 wasn't actually taking
+  effect (POV serves its sort setting from a cache our background write couldn't
+  refresh). Now handled directly in POV's sort logic, so the My Movies / My
+  Series lists (MDBList/Trakt/TMDB) really do lead with the most recently added
+  title. If you deliberately pick a different sort from POV's own sort menu, that
+  still wins. In-progress / watched lists are unchanged.
+
 v0.2.434
 - Gemini models updated to the newer versions. The default free model moves from
   3.1 Flash Lite to 3.5 Flash Lite (identical free daily quota, better quality),
