@@ -255,8 +255,8 @@ msgid "Optional. If you have DarkSubs installed, you do not need Wyzie at all --
 msgstr "אופציונלי - לא חובה. אם יש לך תוסף DarkSubs מותקן, אתה לא צריך את Wyzie בכלל. לחיצה על כל כתובית שאינה עברית מ-DarkSubs תפעיל אוטומטית את התרגום AI שלי. Wyzie נחוץ רק אם אין לך תוסף כתוביות אחר ואתה רוצה מקור אונליין בלחיצה אחת מתוך התוסף הזה. 1000 בקשות ליום חינמיות ב-store.wyzie.io/redeem."
 
 msgctxt "#32230"
-msgid "3.1 Flash Lite (recommended, 500/day)"
-msgstr "3.1 Flash Lite (מומלץ, 500 ביום)"
+msgid "3.5 Flash Lite (recommended, 500/day)"
+msgstr "3.5 Flash Lite (מומלץ, 500 ביום)"
 
 msgctxt "#32231"
 msgid "3.1 Flash (premium, 250/day)"
@@ -271,8 +271,8 @@ msgid "2.5 Flash (fallback)"
 msgstr "2.5 Flash (fallback)"
 
 msgctxt "#32234"
-msgid "3.5 Flash (newest, heavier quota use)"
-msgstr "3.5 Flash (החדש ביותר, צורך יותר מכסה)"
+msgid "3.6 Flash (newest, heavier quota use)"
+msgstr "3.6 Flash (החדש ביותר, צורך יותר מכסה)"
 
 msgctxt "#32254"
 msgid "Test Wyzie connection"

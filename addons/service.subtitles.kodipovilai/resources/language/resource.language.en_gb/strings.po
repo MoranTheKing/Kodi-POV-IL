@@ -267,8 +267,8 @@ msgid "Optional. If you have DarkSubs installed, you do not need Wyzie at all --
 msgstr "Optional. If you have DarkSubs installed, you do not need Wyzie at all -- clicking any non-Hebrew subtitle in DarkSubs will trigger AI translation automatically. Wyzie is only useful if you have NO other subtitle addon and want a one-click online source from inside this addon. 1000 requests/day on the free tier at store.wyzie.io/redeem."
 
 msgctxt "#32230"
-msgid "3.1 Flash Lite (recommended, 500/day)"
-msgstr "3.1 Flash Lite (recommended, 500/day)"
+msgid "3.5 Flash Lite (recommended, 500/day)"
+msgstr "3.5 Flash Lite (recommended, 500/day)"
 
 msgctxt "#32231"
 msgid "3.1 Flash (premium, 250/day)"
@@ -283,8 +283,8 @@ msgid "2.5 Flash (fallback)"
 msgstr "2.5 Flash (fallback)"
 
 msgctxt "#32234"
-msgid "3.5 Flash (newest, heavier quota use)"
-msgstr "3.5 Flash (newest, heavier quota use)"
+msgid "3.6 Flash (newest, heavier quota use)"
+msgstr "3.6 Flash (newest, heavier quota use)"
 
 msgctxt "#32254"
 msgid "Test Wyzie connection"
