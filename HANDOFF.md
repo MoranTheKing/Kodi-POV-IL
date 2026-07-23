@@ -205,7 +205,7 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
 (5 s grace), and a configurable addon exclusion list `autosub_excluded_addons`
 (default `plugin.video.idanplus`). All fail-open.
 
-## MDBList integration — status (0.2.425–0.2.432, all shipped)
+## MDBList integration — status (0.2.425–0.2.433, all shipped)
 
 The full chain works: QR pairing, watched/progress sync, list manager, account
 heal, Collection routing + crash-safe sync. Delivered across seven releases:
@@ -306,6 +306,25 @@ budget-safe on the 1000 req/day free key.
      "הסרטים שלי" skinvariables nodes): add MDBList nodes there.
   Manager-add + watched/progress sync already done. Continue-Watching (Phase D)
   still deferred (series via /upnext if POV scrobbles episodes; movies stay local).
+- **0.2.433 / qf 0.1.472 — recency: newest-first sort + Watchlist∪Collection merge.**
+  1. `pov_mdblist_patcher.ensure_lists_sort_recent()`: one-time flip of POV's
+     `sort.watchlist` + `sort.collection` from default 0 (A-Z) to 1 (date-added
+     desc), only when at default (respects a deliberate choice), gated by hidden
+     marker `_lists_sort_recent_v1` DECLARED in settings.xml (Sonnet caught that
+     an undeclared marker may not persist on Kodi 19+ schema settings). Governs
+     MDBList/Trakt/TMDB watchlist+collection views; skin-independent.
+  2. **Fix F** in `ensure_patched()`: patch POV `mdblist_watchlist()` to append
+     the Collection ("Recently Added", where a Trakt import lands) to the
+     Watchlist -- deduped by tmdb id, each collection row reshaped to watchlist
+     form (`release_date`='YYYY-01-01' from year for the unaired filter,
+     `watchlist_at`=collected_at for the recency sort). So the EXISTING "My
+     Movies/My Series (MDBList)" tiles show both lists merged, newest-first --
+     NO extra tiles/images (a draft's separate "Recently Added" tiles were
+     dropped as redundant per the user). Anchor: the unique
+     `if not settings.show_unaired_watchlist():` line. Reuses POV's cached
+     'mdbl_collection' object (no extra API). Fail-open. Global (POV's own
+     MDBList Watchlist nav row merges too -- intended; 'all' path early-returns
+     before the merge so only the movies/shows tiles merge). Sonnet: SHIP.
 
 NOTIFICATION MISTAKE (now guarded): 0.2.426/427/428 first shipped reusing the same
 `quick_update` note_id (only footer bumped) -> no notification fired. Fixed at
