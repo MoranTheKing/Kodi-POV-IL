@@ -205,10 +205,10 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
 (5 s grace), and a configurable addon exclusion list `autosub_excluded_addons`
 (default `plugin.video.idanplus`). All fail-open.
 
-## MDBList integration — status (0.2.425–0.2.430, all shipped + field-verified)
+## MDBList integration — status (0.2.425–0.2.431, all shipped + field-verified)
 
 The full chain works: QR pairing, watched/progress sync, list manager, account
-heal, Collection routing + crash-safe sync. Delivered across six releases:
+heal, Collection routing + crash-safe sync. Delivered across seven releases:
 - **0.2.425 / qf 0.1.464** — QR pairing for MDBList (like the other services),
   replacing manual key entry. Phone form reuses `gemini_pair` transport
   (`mdblist_pair.py`); connect writes POV's `mdblist.token` + `mdblist_user` +
@@ -261,8 +261,20 @@ REMAINING (Phase B, the NEXT stage): MDBList **home tiles per skin** ("My Movies
 baked images — per-skin mechanisms as in `scratchpad/MDBLIST_INTEGRATION_PLAN.md`.
 Manager-add + Continue-Watching/watched sync are DONE.
 
-Collection now routes correctly (stable ids, 0.2.429) and the post-add refresh no
-longer crashes (0.2.430); the add itself succeeds. Watchlist unaffected throughout.
+- **0.2.431 / qf 0.1.470** — Watchlist-only manager: DROP the Collection button.
+  The reporting device runs a POV build we don't have cached, whose
+  `mdbl_sync_activities` crashes in a `for key, args, func in (...)` loop at a
+  spot Fix E's anchor doesn't dominate (`tuple indices must be integers`). Rather
+  than chase a per-version anchor, we removed Collection from the manager
+  entirely (`ensure_manager_patched` now emits a single `('watchlist', ...)`
+  choice; marker bumped STABLE_IDS_v1 -> WATCHLIST_ONLY_v2 so v1 devices
+  re-patch; upgrades from either the original localised-id anchor or the 0.2.429
+  two-choice line). MDBList "Collection" marks OWNED media -> meaningless for a
+  streaming build, so nothing actionable is lost. POV still appends its own
+  'dropped' toggle for shows. Fix E retained as defense for the periodic monitor.
+
+Net: Watchlist add/remove + watched/progress sync are the supported surface;
+Collection is intentionally gone. Watchlist unaffected throughout.
 
 NOTIFICATION MISTAKE (now guarded): 0.2.426/427/428 first shipped reusing the same
 `quick_update` note_id (only footer bumped) -> no notification fired. Fixed at
