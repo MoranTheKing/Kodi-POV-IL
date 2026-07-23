@@ -43,9 +43,37 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 MDBLIST_API_REL = 'resources/lib/indexers/mdblist_api.py'
+MENUS_MDBLIST_REL = 'resources/lib/menus/mdblist.py'
 
 REDACT_MARKER = '# AI_SUBS_MDBL_REDACT_v1'
 SCROBBLE_MARKER = '# AI_SUBS_MDBL_SCROBBLE_STOP_v1'
+NONE_GUARD_MARKER = '# AI_SUBS_MDBL_NONE_GUARD_v1'
+MANAGER_MARKER = '# AI_SUBS_MDBL_STABLE_IDS_v1'
+
+# --- Fix C: don't crash the manager when an add/remove returns None ---------
+# call_mdblist() returns None on any error (e.g. a 404); POV then does
+# result['added']/result['updated'] -> TypeError: 'NoneType' object is not
+# subscriptable, which crashes the whole MdbListManager. Guard both add paths.
+# (Self-idempotent: the guarded line no longer contains the raw anchor.)
+# Match the FULL one-liner (incl. the inline `return`) so the marker lands at the
+# end of the line, not before the return (which would comment the return out).
+_ADDLIST_ANCHOR = "if result['added']['movies'] + result['added']['shows'] == 0: return kodi_utils.notification(32574)"
+_ADDLIST_GUARDED = "if not result or result['added']['movies'] + result['added']['shows'] == 0: return kodi_utils.notification(32574)  " + NONE_GUARD_MARKER
+_ADDCOLL_ANCHOR = "if result['updated']['movies'] + result['updated']['shows'] == 0: return kodi_utils.notification(32574)"
+_ADDCOLL_GUARDED = "if not result or result['updated']['movies'] + result['updated']['shows'] == 0: return kodi_utils.notification(32574)  " + NONE_GUARD_MARKER
+
+# --- Fix D: stable choice ids for Watchlist/Collection (menus/mdblist.py) ---
+# POV builds the choice id from the LOCALISED label: `(i.lower(), i, ...)` for i
+# in (watchl_str, coll_str). It then routes on `'collection' in choice[0]` /
+# `'watchlist' in choice[0]` -- English substrings. Our Hebrew build translates
+# the Collection label (string 32499) to "קולקציה", so the id becomes Hebrew, the
+# check fails, and POV treats it as a user list named "קולקציה" -> POSTs to
+# /lists/קולקציה/items -> 404 -> None -> crash. Fix: stable English ids; the
+# DISPLAY label (choice[1]) stays the Hebrew string.
+_MANAGER_ANCHOR = "choices = [(i.lower(), i, '', self.icon) for i in (watchl_str, coll_str)]"
+_MANAGER_REPLACEMENT = (
+    "choices = [('watchlist', watchl_str, '', self.icon), "
+    "('collection', coll_str, '', self.icon)]  " + MANAGER_MARKER)
 
 # --- Fix A: redact the apikey in the error log ---------------------------
 _REDACT_ANCHOR = "'mdblist error', str(e)"
@@ -168,7 +196,8 @@ def ensure_patched():
 
     already_redact = _REDACT_DONE in content
     already_scrobble = SCROBBLE_MARKER in content
-    if already_redact and already_scrobble:
+    already_guard = NONE_GUARD_MARKER in content
+    if already_redact and already_scrobble and already_guard:
         return 'already_patched'
 
     new_content = content
@@ -185,6 +214,15 @@ def ensure_patched():
         new_content = new_content.replace(
             _SCROBBLE_ANCHOR, _SCROBBLE_INJECT + _SCROBBLE_ANCHOR, 1)
         applied.append('scrobble')
+
+    # Fix C -- None-guard add_to_list / add_to_collection (no crash on a 404).
+    if not already_guard:
+        if _ADDLIST_ANCHOR in new_content:
+            new_content = new_content.replace(_ADDLIST_ANCHOR, _ADDLIST_GUARDED, 1)
+            applied.append('none_guard_list')
+        if _ADDCOLL_ANCHOR in new_content:
+            new_content = new_content.replace(_ADDCOLL_ANCHOR, _ADDCOLL_GUARDED, 1)
+            applied.append('none_guard_coll')
 
     if not applied:
         _log('no mdblist_api anchors matched -- POV version differs; '
@@ -223,4 +261,60 @@ def ensure_patched():
                     pass
 
     _log('patched mdblist_api ({0})'.format(', '.join(applied)), level='INFO')
+    return 'patched'
+
+
+def ensure_manager_patched():
+    """Stable-id fix for menus/mdblist.py get_default_choices (Watchlist /
+    Collection routing under a Hebrew UI). Same return codes as ensure_patched."""
+    if xbmcvfs is None:
+        return 'no_pov'
+    try:
+        base = xbmcvfs.translatePath(
+            'special://home/addons/' + POV_ADDON_ID + '/')
+    except Exception:
+        return 'no_pov'
+    path = os.path.join(base, MENUS_MDBLIST_REL)
+    if not os.path.isfile(path):
+        return 'no_file'
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            content = f.read()
+    except OSError as e:
+        _log('read failed for {0}: {1}'.format(path, e), level='WARNING')
+        return 'read_failed'
+    if MANAGER_MARKER in content:
+        return 'already_patched'
+    if _MANAGER_ANCHOR not in content:
+        _log('menus/mdblist get_default_choices anchor not found -- POV version '
+             'differs; leaving file alone', level='WARNING')
+        return 'unmatched'
+    new_content = content.replace(_MANAGER_ANCHOR, _MANAGER_REPLACEMENT, 1)
+    try:
+        compile(new_content, path, 'exec')
+    except SyntaxError as e:
+        _log('manager patch would not compile -- skipping ({0})'.format(e),
+             level='WARNING')
+        return 'compile_failed'
+    tmp_path = path + '.aitmp'
+    try:
+        with open(tmp_path, 'w', encoding='utf-8') as f:
+            f.write(new_content)
+        os.replace(tmp_path, path)
+    except OSError as e:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        _log('write failed for {0}: {1}'.format(path, e), level='WARNING')
+        return 'write_failed'
+    pycache_dir = os.path.join(os.path.dirname(path), '__pycache__')
+    if os.path.isdir(pycache_dir):
+        for fn in os.listdir(pycache_dir):
+            if fn.startswith('mdblist.') and fn.endswith('.pyc'):
+                try:
+                    os.remove(os.path.join(pycache_dir, fn))
+                except OSError:
+                    pass
+    _log('patched menus/mdblist (stable Watchlist/Collection ids)', level='INFO')
     return 'patched'
