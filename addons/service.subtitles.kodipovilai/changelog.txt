@@ -1,3 +1,16 @@
+v0.2.433
+- Personal lists now sort by "recently added" (newest first) by default, instead
+  of A-Z. Applies to the My Movies / My Series lists across MDBList, Trakt AND
+  TMDB (and the combined views) -- so a title you just added leads the list. One-
+  time default; if you later pick a different sort from POV's own "sort by" menu,
+  that choice is kept. Same on every skin.
+- "My Movies / My Series (MDBList)" now shows BOTH your Watchlist and your
+  Collection ("Recently Added" on mdblist.com, where a Trakt import lands) in one
+  list, newest first -- no extra tiles. Titles you add via the long-press manager
+  and titles synced from Trakt now appear together in the same place, most-
+  recently-added first. Reading only (no crash risk); MDBList's cached list is
+  reused so there's no extra API cost.
+
 v0.2.432
 - MDBList home tiles: "הסרטים שלי (MDBList)" and "הסדרות שלי (MDBList)" now appear
   in your personal-tiles area (next to the TMDB/Trakt/POV "My Movies/My Series"

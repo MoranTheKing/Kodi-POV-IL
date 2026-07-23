@@ -107,6 +107,40 @@ _SYNC_INJECT = (
     '\t\texcept Exception: pass\n'
     "\t\treturn 'failed'")
 
+# --- Fix F: merge the Collection into the Watchlist view --------------------
+# The user's MDBList content is split: titles added via the manager go to the
+# Watchlist, while a Trakt import lands in the Collection ("Recently Added" on
+# mdblist.com). They want ONE "My Movies / My Series (MDBList)" list showing both,
+# newest first -- not a second pair of tiles. So we patch mdblist_watchlist() to
+# append the Collection items (deduped by tmdb id) to the watchlist list, shaped
+# like watchlist rows (id/imdb_id/title + release_date from year for the unaired
+# filter + watchlist_at from collected_at for the recency sort). POV's existing
+# unaired-filter + sort then run over the merged list, so with the recently-added
+# sort (Fix in ensure_lists_sort_recent) the newest addition from EITHER list
+# leads. Reuses POV's cached 'mdbl_collection' object (no extra API cost). Fail-
+# open: any error leaves the watchlist exactly as POV built it. Injected before
+# the unique unaired-filter line so the merged rows are filtered+sorted too.
+MERGE_MARKER = '# AI_SUBS_MDBL_MERGE_COLLECTION_v1'
+_MERGE_ANCHOR = '\tif not settings.show_unaired_watchlist():'
+_MERGE_INJECT = (
+    '\t' + MERGE_MARKER + '\n'
+    '\ttry:\n'
+    "\t\t_ai_mk = 'movie' if mediatype in ('movie', 'movies') else 'show'\n"
+    '\t\t_ai_seen = set(i.get(\'id\') for i in original_list)\n'
+    "\t\t_ai_coll = mdbl_collection_watchlist_items('mdbl_collection', 'sync/collection')[mediatype]\n"
+    '\t\tfor _ai_ci in _ai_coll:\n'
+    '\t\t\t_ai_o = _ai_ci.get(_ai_mk) or {}\n'
+    "\t\t\t_ai_ids = _ai_o.get('ids') or {}\n"
+    "\t\t\t_ai_id = _ai_ids.get('tmdb')\n"
+    '\t\t\tif not _ai_id or _ai_id in _ai_seen: continue\n'
+    '\t\t\t_ai_seen.add(_ai_id)\n'
+    "\t\t\t_ai_yr = _ai_o.get('year')\n"
+    "\t\t\toriginal_list.append({'id': _ai_id, 'imdb_id': _ai_ids.get('imdb'), "
+    "'title': _ai_o.get('title'), 'release_date': "
+    "(('%d-01-01' % _ai_yr) if _ai_yr else '1900-01-01'), "
+    "'watchlist_at': _ai_ci.get('collected_at') or ''})\n"
+    '\texcept Exception: pass\n')
+
 # --- Fix A: redact the apikey in the error log ---------------------------
 _REDACT_ANCHOR = "'mdblist error', str(e)"
 _REDACT_REPLACEMENT = (
@@ -199,6 +233,61 @@ def heal_mdblist_account():
     return 'write_failed'
 
 
+# Our own addon setting that records the one-time list-sort migration ran, so we
+# never fight a user who later changes the sort via POV's in-list "sort by" menu.
+SORT_RECENT_MARKER = '_lists_sort_recent_v1'
+
+
+def ensure_lists_sort_recent():
+    """Default POV's personal-list sort to 'recently added' (newest first).
+
+    POV lists the Watchlist / Collection views (MDBList, Trakt AND TMDB, plus the
+    combined 'My Movies/My Series' rows that read them) via two settings:
+    `sort.watchlist` and `sort.collection`, each 0=title A-Z, 1=date-added desc,
+    2=release date. The default is 0 (alphabetical) -- which is why a title added
+    today can appear in the middle/end instead of first. We flip both to 1 ONCE
+    (guarded by our own addon marker) so the newest addition leads; a later manual
+    change through POV's own 'sort by' menu is then respected forever. Only
+    upgrades the default value (0/empty) -- never overrides a deliberate non-
+    default choice. Skin-independent (this is POV's data layer), so it applies on
+    every skin. Safe no-op without POV."""
+    if kodi_utils is None:
+        return 'no_kodi'
+    try:
+        if (kodi_utils.get_setting(SORT_RECENT_MARKER, '') or '') == 'done':
+            return 'already'
+    except Exception:
+        return 'read_failed'
+    try:
+        import xbmcaddon
+        pov = xbmcaddon.Addon('plugin.video.pov')
+    except Exception:
+        return 'no_pov'
+    changed = []
+    try:
+        for key in ('sort.watchlist', 'sort.collection'):
+            cur = (pov.getSetting(key) or '').strip()
+            # Only raise the DEFAULT (empty/'0' = alphabetical). Respect a user who
+            # deliberately picked release-date ('2') or already recently-added.
+            if cur in ('', '0'):
+                pov.setSetting(key, '1')
+                changed.append(key)
+    except Exception:
+        return 'write_failed'
+    # Stamp the marker so this runs exactly once. If the marker write can't persist
+    # we still return 'set' -- worst case it re-applies next boot, which is
+    # idempotent (cur becomes '1' -> skipped), never a fight.
+    try:
+        kodi_utils.set_setting(SORT_RECENT_MARKER, 'done')
+    except Exception:
+        pass
+    if changed:
+        _log('defaulted list sort to recently-added ({0})'.format(
+            ', '.join(changed)), level='INFO')
+        return 'set'
+    return 'ok'
+
+
 def _mdblist_api_path():
     if xbmcvfs is None:
         return ''
@@ -230,7 +319,9 @@ def ensure_patched():
     already_scrobble = SCROBBLE_MARKER in content
     already_guard = NONE_GUARD_MARKER in content
     already_sync = SYNC_GUARD_MARKER in content
-    if already_redact and already_scrobble and already_guard and already_sync:
+    already_merge = MERGE_MARKER in content
+    if (already_redact and already_scrobble and already_guard
+            and already_sync and already_merge):
         return 'already_patched'
 
     new_content = content
@@ -262,6 +353,12 @@ def ensure_patched():
         new_content = new_content.replace(
             _SYNC_ANCHOR, _SYNC_ANCHOR + _SYNC_INJECT, 1)
         applied.append('sync_guard')
+
+    # Fix F -- merge the Collection into the Watchlist view (insert before anchor).
+    if not already_merge and _MERGE_ANCHOR in new_content:
+        new_content = new_content.replace(
+            _MERGE_ANCHOR, _MERGE_INJECT + _MERGE_ANCHOR, 1)
+        applied.append('merge_collection')
 
     if not applied:
         _log('no mdblist_api anchors matched -- POV version differs; '

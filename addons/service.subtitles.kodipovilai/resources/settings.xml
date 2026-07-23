@@ -288,6 +288,12 @@
           <default></default>
           <control type="label" format="string"/>
         </setting>
+        <!-- Hidden marker: POV personal-list sort -> recently-added migration has run. -->
+        <setting id="_lists_sort_recent_v1" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default></default>
+          <control type="label" format="string"/>
+        </setting>
         <!-- Hidden marker: Gemini 3 temp/thinking tuning migration has run. -->
         <setting id="_gemini3_tune_v1" type="string" label="30000" visible="false">
           <level>3</level>
