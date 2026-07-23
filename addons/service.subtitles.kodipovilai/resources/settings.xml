@@ -58,7 +58,7 @@
       <group id="model">
         <setting id="model" type="string" label="32201"> <!-- Model -->
           <level>0</level>
-          <default>gemini-3.1-flash-lite</default>
+          <default>gemini-3.5-flash-lite</default>
           <constraints>
             <options>
               <!-- IMPORTANT: the `label` attribute MUST be a string
@@ -71,9 +71,9 @@
                       strings, so even a valid po entry there gets
                       ignored and Kodi falls back to the built-in
                       lookup (giving us the same Videos/Music bug). -->
-              <option label="32230">gemini-3.1-flash-lite</option>
+              <option label="32230">gemini-3.5-flash-lite</option>
               <option label="32231">gemini-3.1-flash</option>
-              <option label="32234">gemini-3.5-flash</option>
+              <option label="32234">gemini-3.6-flash</option>
               <option label="32232">gemini-2.5-flash-lite</option>
               <option label="32233">gemini-2.5-flash</option>
             </options>
@@ -290,6 +290,12 @@
         </setting>
         <!-- Hidden marker: POV personal-list sort -> recently-added migration has run. -->
         <setting id="_lists_sort_recent_v1" type="string" label="30000" visible="false">
+          <level>3</level>
+          <default></default>
+          <control type="label" format="string"/>
+        </setting>
+        <!-- Hidden marker: Gemini model bump (3.1->3.5 flash-lite, 3.5->3.6 flash) has run. -->
+        <setting id="_gemini_model_bump_v1" type="string" label="30000" visible="false">
           <level>3</level>
           <default></default>
           <control type="label" format="string"/>

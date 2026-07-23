@@ -2,8 +2,8 @@
 #
 # Free-tier daily request caps differ a lot by model family, so the
 # number we display has to follow the selected model:
-#   * gemini-3.1-flash-lite / 2.5-flash-lite -> ~500 requests/day
-#   * gemini-3.5-flash / 3.1-flash / 2.5-flash (regular Flash) -> only
+#   * gemini-3.5-flash-lite / 3.1-flash-lite / 2.5-flash-lite -> ~500 requests/day
+#   * gemini-3.6-flash / 3.5-flash / 3.1-flash / 2.5-flash (regular Flash) -> only
 #     ~20 requests/day (a very tight free cap; regular Flash on the free
 #     tier is really a paid-key model).
 # The count resets at UTC midnight. We persist it in hidden addon
@@ -39,8 +39,10 @@ except Exception:
 # blocks translation. Keep this in sync with the model dropdown in
 # settings.xml AND translate._gemini_free_rpm_cap() when adding a model.
 MODEL_LIMITS = {
+    'gemini-3.5-flash-lite': 500,
     'gemini-3.1-flash-lite': 500,
     'gemini-2.5-flash-lite': 500,
+    'gemini-3.6-flash':      20,
     'gemini-3.5-flash':      20,
     'gemini-3.1-flash':      20,
     'gemini-2.5-flash':      20,
@@ -48,7 +50,7 @@ MODEL_LIMITS = {
 # Fallback limit + legacy default model (used when no model was stored
 # yet, e.g. right after upgrading from the single-model version).
 DEFAULT_LIMIT = 500
-MODEL_TRACKED = 'gemini-3.1-flash-lite'
+MODEL_TRACKED = 'gemini-3.5-flash-lite'
 
 SETTING_COUNT = '_usage_count'
 SETTING_DATE  = '_usage_date_utc'
