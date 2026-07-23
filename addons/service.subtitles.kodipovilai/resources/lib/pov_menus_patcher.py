@@ -100,8 +100,9 @@ _BLOCK_TEMPLATE = (
     "\t\t\t\t\t\t\tfor _ai_i in _ai_fn('{trakt}', page_no)[0]:\n"
     "\t\t\t\t\t\t\t\t_ai_k = _ai_i['media_ids'].get('tmdb') or _ai_i['media_ids'].get('imdb') or repr(_ai_i['media_ids'])\n"
     '\t\t\t\t\t\t\t\tif _ai_k not in _ai_seen:\n'
-    "\t\t\t\t\t\t\t\t\t_ai_seen.add(_ai_k); _ai_list.append(_ai_i['media_ids'])\n"
-    '\t\t\t\t\t\tself.list = _ai_list\n'
+    "\t\t\t\t\t\t\t\t\t_ai_seen.add(_ai_k); _ai_list.append((_ai_i.get('collected_at') or '', _ai_i['media_ids']))\n"
+    '\t\t\t\t\t\t_ai_list.sort(key=lambda _ai_t: _ai_t[0], reverse=True)\n'
+    "\t\t\t\t\t\tself.list = [_ai_t[1] for _ai_t in _ai_list]\n"
     '\t\t\t\texcept Exception: pass\n'
     '\t\t\telif self.action in Menu.tmdb_main:'
 )
