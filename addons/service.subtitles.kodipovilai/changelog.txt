@@ -1,3 +1,11 @@
+v0.2.436
+- Fix: the "My Movies / My Series (Trakt)" home lists now also lead with the most
+  recently added title. Those lists merge your Trakt collection + watchlist +
+  favorites, and the merge was concatenating them (so a freshly-added watchlist
+  title landed after the whole collection). It now sorts the combined list by
+  date-added, newest first. (MDBList was already fixed in 0.2.435; TMDB has no
+  per-item date so it keeps its own newest-first order.)
+
 v0.2.435
 - Fix: the "newest added first" sorting from 0.2.433 wasn't actually taking
   effect (POV serves its sort setting from a cache our background write couldn't
