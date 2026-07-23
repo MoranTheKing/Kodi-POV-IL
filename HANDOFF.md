@@ -220,7 +220,7 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
 (5 s grace), and a configurable addon exclusion list `autosub_excluded_addons`
 (default `plugin.video.idanplus`). All fail-open.
 
-## MDBList integration — status (0.2.425–0.2.433, all shipped)
+## MDBList integration — status (0.2.425–0.2.435, all shipped)
 
 The full chain works: QR pairing, watched/progress sync, list manager, account
 heal, Collection routing + crash-safe sync. Delivered across seven releases:
@@ -328,6 +328,19 @@ budget-safe on the 1000 req/day free key.
      marker `_lists_sort_recent_v1` DECLARED in settings.xml (Sonnet caught that
      an undeclared marker may not persist on Kodi 19+ schema settings). Governs
      MDBList/Trakt/TMDB watchlist+collection views; skin-independent.
+  1b. **Fix G (0.2.435) — the sort actually working.** The 0.2.433 `sort.*`=1
+     write did NOT take: POV serves settings from a cached `pov_settings` window-
+     property JSON (`SettingsManager._sync`), and a boot-time cross-addon write
+     never invalidates it (POV isn't running then) -- so `lists_sort_order` kept
+     reading the old default 0 (Title) and a just-added title stayed at the
+     bottom. **Lesson: cross-addon setSetting to POV does NOT reliably reach POV's
+     running reads; patch the READER instead of writing the value.**
+     `ensure_sort_default_patched()` patches POV `modules/settings.py`
+     `lists_sort_order()` -> returns 1 (Date Added) when stored is 0/empty, for
+     `watchlist`/`collection` ONLY (progress/watched byte-unchanged; those share
+     the fn). Deterministic; marker `AI_SUBS_SORT_RECENT_DEFAULT_v1`. The
+     setSetting migration is kept as best-effort so POV's sort menu also shows
+     "Date Added" selected when the write does stick. Sonnet: SHIP.
   2. **Fix F** in `ensure_patched()`: patch POV `mdblist_watchlist()` to append
      the Collection ("Recently Added", where a Trakt import lands) to the
      Watchlist -- deduped by tmdb id, each collection row reshaped to watchlist
