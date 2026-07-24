@@ -387,6 +387,93 @@ NOTIFICATION MISTAKE (now guarded): 0.2.426/427/428 first shipped reusing the sa
 `quick_update` note_id (only footer bumped) -> no notification fired. Fixed at
 #525; step-6 build guard now fails a build unless note_id > `origin/main`'s.
 
+## Community-pool Worker — invocation & D1 cost control (free-tier survival)
+
+The pool Worker (`povil-subs-pool`, `pool/worker.js` in the repo is a SANITIZED
+public copy — the DEPLOYED worker is maintained privately and hand-deployed via
+`wrangler`; it is NOT in git, see the `9effa41` revert). Free-tier ceilings that
+bite: **100k Worker requests/day**, **D1 100k rows-written/day**, **D1 5M
+rows-read/day**. We have been living right under the request cap (~99k/day), so
+this is an ongoing discipline, not a one-off.
+
+### D1 read cost — maintained pool-size counters (deployed worker)
+The `/stats` dashboard used to size each prefix with `SELECT COUNT(*) FROM kv
+WHERE k>='kt:'...` — a range scan that reads EVERY matching row (~13k for `kt:`),
+~74% of all D1 reads and growing with the catalog. Replaced with O(1) integer
+counters `cnt:v1:/sync:/kt:/emb:` maintained by the D1-KV shim's put/delete
+(atomic upsert-increment via `meta.changes`; ai-safe torn-write fix: the else
+branch is an atomic upsert, never a bare `UPDATE ... WHERE k=?`), lazily seeded,
+and reseeded daily by the cron. Dashboard now reads one row per prefix. (This is
+the D1-counter worker the user deployed as version `f73057c6`.)
+
+### Worker-only invocation MEASUREMENT (no client/build change)
+To find WHICH routes drive the ~99k/day WITHOUT a build push, the deployed worker
+samples requests and reports a breakdown, readable by the owner:
+- **`cnt:rt:<path>`** — sampled 1/20 in `fetch()` via `ctx.waitUntil(bumpRoute)`.
+- **`cnt:cb:<outcome>`** — sampled 1/20 inside the `/contribute` pipeline
+  (`bumpContrib`): pre-decision `auth_reject` / `bad_json` / `quality`, and
+  post-decision `dedup_source` / `dedup_result` / `toomany` / `stored`.
+- **`GET /routes?key=<STATS_TOKEN>`** returns both, scaled ×20, with
+  `contrib_wasted_pct` and `est_per_day`; **`&reset=1`** clears the window.
+- Sampling keeps the extra D1 writes ~5k/day each (safe). `cnt:rt:`/`cnt:cb:` are
+  disjoint from the pool-size `cnt:v1:` etc. Bounded cardinality: unknown paths
+  bucket to `other`. **Key interpretive rule:** the `/contribute` ROUTE est counts
+  ALL POSTs; `contrib_est_total` counts only those reaching a dedup/store decision
+  — the GAP is the pre-decision (auth/quality/json) rejects.
+
+### The finding (measured 2026-07-24)
+`/contribute` ≈ **53%** of requests, `/lookup` ≈ 47%. Within `/contribute`:
+**`quality` (422) ≈ 76%**, `auth_reject` ≈ 13%, `toomany` (429) ≈ 11%, `stored`
+tiny (~2-3k/day genuine — matches the maintainer's own count). So ~95% of
+`/contribute` POSTs are wasted, dominated by the server's quality gate: the client
+was uploading partial/failed translations (stayed mostly English) the server only
+422s. Everything else (`/lookup` 90s client cache, `/ev` piggybacked on
+`/contribute`, `/sdh` throttled) was already optimized in earlier tasks.
+
+### Client fix — mirror the server's gates BEFORE the POST (0.2.438 / qf 0.1.477)
+`pool.py`:
+- **`_srt_quality_ok(srt)`** — a BYTE-EXACT mirror of worker.js `srtQualityOk`
+  (≥15 cues = count of `-->`; ≥200 Latin/Hebrew/Arabic letters; Hebrew ratio
+  ≥0.5; ranges `0x590-0x5FF` heb, `+0x600-0x6FF` Arabic + `A-Za-z`). **Fails OPEN**
+  (returns True on any error) so a genuine sub is NEVER withheld. Verified against
+  a Python port of the server gate over 400 fuzz cases + the exact 0.5 boundary.
+- **`_pool_at_capacity(body)`** — skips a contribute to an episode already at the
+  server's `MAX_VARIANTS` (25) — the 429/toomany case — using the request-cached
+  `_lookup_raw` (NO new request). Non-ai_emb only, so the ai_emb PROMOTION path is
+  untouched (a good ai_emb passes the mirror and still uploads).
+- Applied at the top of BOTH `_post` (async AI path) and `_post_sync` (durable
+  Ktuvit drainer). In the drainer, quality/capacity → `'drop'`, which also FIXES A
+  LATENT BUG: a real 422 there was previously misclassified `'retry'` and looped
+  for up to 14 days.
+- Why the cap stays at 25 (maintainer asked): it bounds the `/lookup` response
+  size, the result-hash dedup's per-variant Telegram downloads (O(variants)), and
+  the picker UX — NOT invocations. The client capacity-skip removes the wasted
+  429s without touching the cap. Direct Ktuvit search still covers anything not
+  pooled.
+- Non-blocking nit (Sonnet): `share_cache()` bulk-share with an at-capacity,
+  byte-identical-duplicate file won't write its `.shared` marker, so it re-checks
+  every bulk run — zero network cost (the capacity check is a cached read),
+  cosmetic only.
+- **Expected effect:** quality (~40% of all invocations) + toomany (~6%) stop
+  being sent → ~99k/day toward ~50k/day. This is the crack.
+
+### Remaining levers (ranked)
+1. **`auth_reject` (~7%) → Cloudflare WAF at the EDGE.** The fork / very-old
+   versions POST and get 401/403/426 — but the request ALREADY hit the Worker
+   (an invocation). A Cloudflare **Firewall/WAF rule** that blocks those (by the
+   known-fork signature / a missing-or-stale `x-pov-*` header / an old version
+   field) runs BEFORE the Worker, so it is **NOT counted as an invocation**. This
+   is the only way to cut auth waste; it can't be done in worker code. Pair with
+   pushing users to the latest version (the newest client also has the quality
+   gate, so upgrading fixes their quality waste too — the maintainer's combined
+   idea, which is correct).
+2. **`dedup_result` → expose `result_hash` in `/lookup`** so the client can skip a
+   POST whose Hebrew already exists under a different source hash (the one dedup
+   layer the client currently can't predict). Only worth it if measurement shows
+   it's material after the quality fix.
+3. **Adding Wizdom uploads** (maintainer wanted this): fine ONCE the waste above is
+   cut — until then every extra POST risks the cap.
+
 ## Open items (as of this handoff)
 
 1. **Trakt/TMDB add crash — RESOLVED (AI 0.2.377 / quickfix 0.1.416).** The
