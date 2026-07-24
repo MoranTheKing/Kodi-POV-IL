@@ -14,6 +14,9 @@ ROOT = Path(__file__).resolve().parents[1]
 ADDON_ROOT = ROOT / "addons" / "service.subtitles.kodipovilai"
 KODI_UTILS = ADDON_ROOT / "resources" / "lib" / "kodi_utils.py"
 ARABIC_GENDER = ADDON_ROOT / "resources" / "lib" / "arabic_gender.py"
+TRANSLATE = ADDON_ROOT / "resources" / "lib" / "translate.py"
+EMBEDDED_EXTRACT = ADDON_ROOT / "resources" / "lib" / "embedded_extract.py"
+MKV_PROBE = ADDON_ROOT / "resources" / "lib" / "mkv_probe.py"
 
 EXPECTED_CHAIN = (
     "he", "ar", "hi", "es", "ru", "pt", "pl", "uk", "fr", "it",
@@ -154,6 +157,47 @@ def test_embedded_mode_mapping():
     assert store["embedded_translation_mode"] == "local_only"
 
 
+def test_direct_embedded_feeds_common_gender_pipeline():
+    """Direct extraction is a source-acquisition step, not a translator.
+
+    Neither embedded_extract.py nor mkv_probe.py should import the gender
+    oracle. The contract is that resolve() turns the extracted SRT into a normal
+    AI payload and falls through to the one common pipeline that calls
+    arabic_gender.begin(). Keep that bridge explicit so a future refactor cannot
+    accidentally create a separate, English-only direct-extraction path.
+    """
+    assert "arabic_gender" not in EMBEDDED_EXTRACT.read_text(encoding="utf-8")
+    assert "arabic_gender" not in MKV_PROBE.read_text(encoding="utf-8")
+
+    source = TRANSLATE.read_text(encoding="utf-8")
+    embedded_start = source.index("    if kind == 'embedded_ai':")
+    engine_start = source.index("    if kind == 'engine_ai':", embedded_start)
+    embedded_branch = source[embedded_start:engine_start]
+
+    direct_pos = embedded_branch.index(
+        "elif _emb_policy['try_extract']:")
+    extract_pos = embedded_branch.index(
+        "_extract_embedded_srt(", direct_pos)
+    payload_pos = embedded_branch.index(
+        "payload = {'type': 'ai',", extract_pos)
+    ai_pos = embedded_branch.index("kind = 'ai'", payload_pos)
+
+    assert "'embedded': True" in embedded_branch[payload_pos:ai_pos]
+    assert "# fall through to the AI logic below" in embedded_branch[ai_pos:]
+
+    common_gate = source.index("    if kind != 'ai':", engine_start)
+    gender_begin = source.index(
+        "arabic_gender.begin(info, src_text)", common_gate)
+    direct_abs = embedded_start + direct_pos
+    extract_abs = embedded_start + extract_pos
+    payload_abs = embedded_start + payload_pos
+    ai_abs = embedded_start + ai_pos
+    assert (
+        embedded_start < direct_abs < extract_abs < payload_abs < ai_abs
+        < engine_start < common_gate < gender_begin
+    )
+
+
 def _candidate(lang, number):
     return {
         "language": lang,
@@ -250,16 +294,21 @@ def test_concurrent_fallback_pulls_are_serialized(module):
 
 
 def test_all_miss_is_globally_bounded(module):
-    ordered = (
-        [("he", _candidate("he", number)) for number in range(1, 11)]
-        + [("ar", _candidate("ar", number)) for number in range(1, 11)]
-    )
+    ordered = []
+    for lang in ("he", "ar", "hi", "es", "ru", "pt"):
+        ordered.extend(
+            (lang, _candidate(lang, number)) for number in range(1, 11)
+        )
     plan = module.ReferencePlan("src", ["block"], ordered, len(ordered))
     attempts = []
     module._download_candidate = lambda cand: (attempts.append(cand) or cand)
     module.align_one = lambda src, blocks, cand: (None, "miss")
     assert plan.next() == (None, None)
-    assert len(attempts) == module._TOTAL_DOWNLOAD_BUDGET == 15
+    assert len(attempts) == module._TOTAL_DOWNLOAD_BUDGET == 50
+    assert [cand["language"] for cand in attempts] == (
+        ["he"] * 10 + ["ar"] * 10 + ["hi"] * 10
+        + ["es"] * 10 + ["ru"] * 10
+    )
 
 
 def test_active_deadline_excludes_idle_time(module):
@@ -312,16 +361,20 @@ def main():
     module = _load_gender_module()
     assert module._REF_CHAIN == EXPECTED_CHAIN
     assert module._PER_LANG_LIMIT == 10
-    assert module._TOTAL_DOWNLOAD_BUDGET == 15
+    assert module._TOTAL_DOWNLOAD_BUDGET == 50
     assert module._REFERENCE_DEADLINE_S == 30.0
     test_embedded_mode_mapping()
+    test_direct_embedded_feeds_common_gender_pipeline()
     test_primary_chain_is_strict_and_deeper_than_three(module)
     test_next_language_only_after_ten_primary_misses(module)
     test_concurrent_fallback_pulls_are_serialized(module)
     test_all_miss_is_globally_bounded(module)
     test_active_deadline_excludes_idle_time(module)
     test_long_gemini_idle_does_not_expire_lazy_fallback(module)
-    print("PASS embedded mode mapping + strict serial gender-reference chain")
+    print(
+        "PASS embedded direct-to-gender bridge + mode mapping "
+        "+ strict serial gender-reference chain"
+    )
 
 
 if __name__ == "__main__":

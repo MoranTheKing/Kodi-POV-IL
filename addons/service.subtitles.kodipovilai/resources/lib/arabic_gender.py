@@ -283,10 +283,12 @@ _ALIAS_TO_CHAIN = {alias: code
 # candidate wins. Ten is deliberately bounded because OpenSubtitles can paginate
 # every result for a popular title; "all" could mean hundreds of downloads and
 # minutes of blocked playback. A language may receive up to ten attempts; the
-# fixed global download budget and active-work deadline prevent a pathological
-# title from stalling startup indefinitely.
+# global download budget lets the search fully examine the five strongest
+# saturated languages (he/ar/hi/es/ru), while the active-work deadline remains
+# the primary latency circuit-breaker. This still avoids the unbounded
+# 10-times-every-language worst case and provider request storms.
 _PER_LANG_LIMIT = 10
-_TOTAL_DOWNLOAD_BUDGET = 15
+_TOTAL_DOWNLOAD_BUDGET = 50
 _REFERENCE_DEADLINE_S = 30.0
 
 

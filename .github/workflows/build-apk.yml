@@ -34,6 +34,7 @@ env:
   OLD_PACKAGE_ID: 'org.xbmc.kodi'
   PACKAGE_ID: 'org.xbmc.povi'
   APP_NAME: 'Kodi POV IL'
+  WIZARD_VERSION: '0.1.33'
 
 jobs:
   build-and-release:
@@ -167,7 +168,7 @@ jobs:
                 exit 1
               fi
             done
-            unzip -o src/dist/plugin.program.kodipovilwizard-0.1.30.zip -d "$ASSETS/addons/" >/dev/null
+            unzip -o "src/dist/plugin.program.kodipovilwizard-${WIZARD_VERSION}.zip" -d "$ASSETS/addons/" >/dev/null
             # The wizard imports requests at startup; pull its pure-python
             # dependency stack (platform "all") out of the build zip.
             unzip -o src/dist/Kodi-POV-IL-FENtastic-test-0.1.101.zip \
@@ -270,7 +271,7 @@ jobs:
               exit 1
             fi
           done
-          unzip -o src/dist/plugin.program.kodipovilwizard-0.1.30.zip -d "$KODI_ROOT/addons/" >/dev/null
+          unzip -o "src/dist/plugin.program.kodipovilwizard-${WIZARD_VERSION}.zip" -d "$KODI_ROOT/addons/" >/dev/null
           unzip -o src/dist/Kodi-POV-IL-FENtastic-test-0.1.101.zip \
             'addons/script.module.requests/*' \
             'addons/script.module.six/*' \
@@ -317,7 +318,7 @@ jobs:
           mkdir -p $RUNNER_TEMP/win
           curl -fL --retry 3 -o $RUNNER_TEMP/win/kodi-setup.exe \
             "https://mirrors.kodi.tv/releases/windows/win64/kodi-${KODI_VERSION}-Omega-x64.exe"
-          cp src/dist/plugin.program.kodipovilwizard-0.1.30.zip $RUNNER_TEMP/win/wizard.zip
+          cp "src/dist/plugin.program.kodipovilwizard-${WIZARD_VERSION}.zip" $RUNNER_TEMP/win/wizard.zip
           cp src/dist/Kodi-POV-IL-FENtastic-test-0.1.101.zip     $RUNNER_TEMP/win/build.zip
           cp src/dist/installer/build-windows-installer.nsi     $RUNNER_TEMP/win/installer.nsi
           (cd $RUNNER_TEMP/win && makensis -V2 -DVERSION="$VERSION" installer.nsi)
