@@ -87,7 +87,7 @@ tools/publish_repo_channel.py           # publishes repo/addons.xml + zips
   block, reference-language gender blocks).
 - `resources/lib/arabic_gender.py` — the gender-reference oracle: fetches a
   human subtitle of the same title in a gender-marking language (priority:
-  out-of-sync human Hebrew, Arabic, then es/fr/ru/it/pt/pl/uk/hi/cs/ro/el/
+  out-of-sync human Hebrew, Arabic, then hi/es/ru/pt/pl/uk/fr/it/cs/ro/el/
   bg/sr/hr/sk/ur/nl), time-aligns it to the source, and feeds per-line
   gender hints to the prompt. Fully fail-open.
 - `resources/lib/autosub_service.py` — auto-on-play Hebrew search/apply
@@ -105,36 +105,47 @@ tools/publish_repo_channel.py           # publishes repo/addons.xml + zips
 1. Bump `addon.xml` version + add a `changelog.txt` entry.
 2. Sync-logic change? Bump `_VERDICT_VERSION`.
 3. Copy previous quickfix zip -> new name; `zip` in ONLY the changed files at
-   their in-zip paths (never `pool.py` unless its logic truly changed).
+   their in-zip paths (never `pool.py` unless its logic truly changed). On
+   Windows, take replacement text bytes from the intended canonical Git index
+   (`git show :path`), not raw worktree files that may contain CRLF; assert the
+   packaged member is byte-identical to that Git blob.
 4. Verify: same member set (plus intentionally added files) and only intended
    CRC changes. If `pool.py` did not change, it must be byte-identical. If it
    did change, prove separately that (a) the logic outside the protected key
    block is the intended new logic, (b) the protected block matches the last
    known-good release, and (c) a Kodi-context signed live `/lookup` returns
    HTTP 200. Never print the credential while testing.
-5. Point `build.txt` `gui=` at the new zip.
-6. **ALWAYS bump the `note_id` in `quick_update.txt` (the `<id>` before `|||`),
-   not just the footer version.** The wizard live-fetches this file from `main`
-   and only shows a notification when the `note_id` CHANGES. Keeping the same id
-   and only editing the footer = the release ships but NO user ever gets notified
-   (this mistake has recurred — 0.2.426/0.2.427/0.2.428 all silently reused an id).
-   Every user-facing quickfix/AI release gets a fresh id + a gentle Hebrew
-   title/body. A notification-only fix (e.g. re-announcing) is just a new id +
-   push to `main`, no rebuild.
-   - **Build-time guard (include in every build script):** fail the build unless
-     the working-tree `note_id` is greater than what `origin/main` currently
-     serves (the wizard fetches from `main`; the LOCAL `main` ref is stale
-     because we push `HEAD:main` without moving it, so compare `origin/main`):
-     ```python
-     import subprocess
-     NF = 'wizard/assets/notification_files/quick_update.txt'
-     def _noteid(txt): return int(txt.split('|||',1)[0].split('\n')[-1].strip())
-     subprocess.run(['git','fetch','origin','main'], check=False)
-     new = _noteid(open(NF).read())
-     old = _noteid(subprocess.check_output(['git','show','origin/main:'+NF]).decode())
-     assert new > old, 'quick_update note_id NOT bumped (%d) -> no notification will fire' % new
-     ```
-7. Commit to the working branch, fast-forward `main`, push.
+5. Get a separate read-only reviewer to inspect the source diff, ZIP member/CRC
+   diff, credential preservation and privacy boundary. Do not ship a blocker.
+6. Choose the next numeric note id `N`, but **do not edit `quick_update.txt`
+   yet**. Point mutable `build.txt` at the new quickfix and add
+   `wizard/assets/build_versions/N.txt`; its normalized Git blob must be
+   byte-identical to `build.txt`. Wizard 0.1.33+ resolves an automatic update by
+   this immutable per-note path and never falls back to mutable `build.txt`.
+7. **Phase 1 — artifacts only:** commit packages/repo metadata, `build.txt` and
+   `build_versions/N.txt` on the working branch, fast-forward `main`, and push.
+   Leave the live note on the previous id. Verify the public raw packages and
+   manifests against the exact Git blobs/hashes and require GitHub Pages success.
+   For the Kodi repository channel, fetch the live HTTP response bodies and require
+   `MD5(exact bytes returned by GET repo/addons.xml)` to equal the exact 32-character
+   lowercase-hex body returned by `GET repo/addons.xml.md5`. Never substitute a
+   Windows worktree copy whose line endings may have been converted to CRLF.
+8. Wait at least the full raw-GitHub cache window (currently 300 seconds) after
+   verified publication, then fetch and verify again. Query strings are **not**
+   cache-busters here: empirical testing showed raw.githubusercontent ignores
+   them for its cache key. Old Wizard <=0.1.32 clients still read mutable
+   `build.txt`, which is why this wait is mandatory.
+9. **Phase 2 — note only:** now bump `quick_update.txt` to `N` (the id before
+   `|||`) and update its footer. Every user-facing quickfix/AI release needs a
+   fresh id plus a gentle Hebrew title/body; changing only the footer never
+   triggers delivery. Have the separate reviewer approve this one-file diff,
+   commit/push it alone, and do not call the release live until the public raw
+   URL returns the exact new note. A notification-only re-announcement needs
+   only this phase because no artifact/manifest pairing changes.
+10. Wizard delivery invariant: never persist the new note id until
+    `quick_update()` succeeds, and success requires extraction `(100%, 0 errors)`.
+    False, exception, partial extraction, corrupt ZIP or a missing versioned
+    manifest must preserve the prior id so the next startup retries.
 
 ## Integrating third-party skin updates (playbook, learned the hard way)
 
@@ -392,7 +403,8 @@ budget-safe on the 1000 req/day free key.
 
 NOTIFICATION MISTAKE (now guarded): 0.2.426/427/428 first shipped reusing the same
 `quick_update` note_id (only footer bumped) -> no notification fired. Fixed at
-#525; step-6 build guard now fails a build unless note_id > `origin/main`'s.
+#525. The current two-phase checklist requires a fresh `N`, an immutable
+`build_versions/N.txt`, and an independently reviewed note-only phase.
 
 ## Community-pool Worker — invocation & D1 cost control (free-tier survival)
 
@@ -486,9 +498,92 @@ was uploading partial/failed translations (stayed mostly English) the server onl
   injected non-placeholder block is missing. Warning-only keyless builds are
   forbidden. The public source placeholder and public stale Worker reference
   remain unchanged; the current Worker is still private and was not redeployed.
-- Measurement must use the corrected cohort: allow at least 24 hours for
-  `0.2.439` / `0.1.478` adoption, then reset `/routes` once and measure a complete
-  fresh 24-hour window. The dashboard/rollup cadence is now 15 minutes.
+- The initial measurement clock for `0.2.439` / `0.1.478` was superseded by the
+  delivery recovery and follow-up release below. Do not reset `/routes` against
+  the incomplete notification-536 cohort.
+
+### Quick-update delivery recovery and settings follow-up (2026-07-24)
+
+- A maintainer-device screenshot showed Wizard state `quick_update_noteid=536`
+  even though neither the update nor its note had been delivered. Wizard 0.1.32
+  wrote the new id **before** download/extraction; a failed attempt then marked
+  the note dismissed, so every later startup treated 536 as handled.
+- Wizard `0.1.33` fixes the state machine: false/exception leaves the prior id,
+  and the id advances only after a verified extraction result of `100%` with
+  zero errors. Partial/corrupt/failed extraction returns false before DB,
+  version or notification state changes. `tools/test_quick_update_delivery.py`
+  covers failure, exception, success ordering, extraction results and manifest
+  routing.
+- `quick_update.txt` and mutable `build.txt` are independent raw-GitHub cache
+  objects (`max-age=300`), and query parameters were empirically ignored as
+  cache-busters. The automatic path now binds numeric note `N` to immutable
+  `wizard/assets/build_versions/N.txt`. Publication is permanently two-phase:
+  artifacts/manifests first, remote verification plus >300 seconds, then a
+  note-only commit.
+- Recovery shipped as Wizard `0.1.33` / quickfix `0.1.479` / AI `0.2.439`:
+  phase-1 commit `683c811`, notification `537` commit `81c369b`. This repairs
+  devices whose 0.1.32 state had already been poisoned at 536; old clients saw
+  the already-settled mutable manifest, and the installed 0.1.33 makes future
+  failures retry-safe.
+- A follow-up field screenshot exposed exactly three internal boolean settings
+  as blank Expert-mode toggles in both channels: `embedded_translate`,
+  `embedded_http_extract`, and `af3_first_launch_dialog_done`. The file uses
+  Kodi's version-1 settings schema, but those rows used legacy
+  `visible="false"` plus Expert level 3. AI `0.2.440` / quickfix `0.1.480`
+  changes only `addon.xml`, `changelog.txt` and `settings.xml`: the three ids,
+  types, defaults and controls are preserved, while they are now Internal level
+  4 with the proper `<visible>false</visible>` child.
+- The two embedded flags remain hidden compatibility state, and the AF3 flag
+  remains an internal one-shot marker. There was no prior decision to expose
+  those raw technical booleans. The later user decision shipped as one explained
+  Advanced selector instead (see the 0.2.441 follow-up below).
+- The follow-up used the same guarded two-phase flow: artifacts/manifest commit
+  `aade7db`, neutral maintenance note `538` commit `7e446f6`. Standalone
+  versioned/latest/repo ZIPs are byte-identical; quickfix member order/set is
+  unchanged; only the intended three members differ; `pool.py` is byte-identical
+  to the authenticated known-good release; all ZIP/XML/regression tests and two
+  independent review rounds passed. Public raw note 538 was verified live.
+- Final documentation review then caught that Windows CRLF conversion made the
+  declared repository checksum differ from the LF bytes served by Pages. Commit
+  `86848d1` pins both repository metadata files to LF, makes the publisher hash
+  the same LF bytes it writes, and adds
+  `tools/test_repo_channel_integrity.py`. After Pages completed, the exact live
+  `repo/addons.xml` response MD5 matched the exact live
+  `repo/addons.xml.md5` body (`f5dc039d42b7a606dc1d5d904aa89e62`).
+- The user-facing embedded-method decision and gender-reference audit shipped as
+  AI `0.2.441` / quickfix `0.1.481` / note `539`. Advanced now exposes exactly
+  one selector with five explained modes: `auto` (recommended: align, then direct
+  extraction), `align_only`, `direct`, `local_only` (zero embedded HTTP/debrid
+  reads), and `off`. A one-shot marker preserves the legacy disabled/local-only
+  choices; the hidden booleans are mirrored only for downgrade compatibility.
+  Every miss remains fail-open to the normal external-subtitle path.
+- Provider metadata collection is parallel, but reference downloads and
+  alignment are deliberately **strictly serial** under one plan lock: exhaust up
+  to 10 candidates in the current language before entering the next language;
+  first aligning candidate wins. Exact chain:
+  `he, ar, hi, es, ru, pt, pl, uk, fr, it, cs, ro, el, bg, sr, hr, sk, ur, nl`.
+  The hard-title safety envelope is 15 downloads total and 30 seconds of active
+  download/alignment work (Gemini idle time between lazy fallbacks is excluded).
+  Thus 10 Hebrew misses leave five total attempts for Arabic; the global guard
+  deliberately prevents a 10-times-every-language worst case.
+- Release `0.2.441` used the guarded two-phase flow: artifacts/manifests commit
+  `8f0c1d1`, then neutral note-only commit `1c19eb8` after Pages success, exact
+  public hash verification and a post-cache recheck beyond 300 seconds. Raw note
+  539 became live at **2026-07-24 21:32:34 Israel**. AI version/latest/repo ZIPs
+  are identical (SHA-256
+  `6e3b96584ed467b174eaa5ecdff653b4e5b9eab61d0765d6388f924595f33f2f`);
+  QF SHA-256 is
+  `4934916885cea74efe410e1619d63de63c48728977defb11902b0cafc71d0e1e`.
+  Both editions kept member set/order and changed exactly nine intended members;
+  `pool.py` is byte-identical to the authenticated 0.2.440/0.1.480 bases.
+  Independent review caught a Windows worktree CRLF/package-parity mismatch
+  before publication; the final ZIPs were rebuilt from canonical staged Git
+  blobs and re-reviewed SHIP. The public stale Worker reference was unchanged.
+- **Measurement clock now starts from successful note 539 delivery
+  (2026-07-24 21:32:34 Israel).** Allow at least 24 hours for `0.2.441` /
+  `0.1.481` adoption. The preferred low-traffic reset remains
+  **Monday 2026-07-27 at 03:00 Israel**; reset `/routes` once, then measure one
+  complete fresh 24-hour window. Dashboard/rollup cadence is 15 minutes.
 
 ### Remaining levers (ranked)
 1. **`auth_reject` (~7%) → Cloudflare WAF at the EDGE.** The fork / very-old
@@ -689,7 +784,9 @@ was uploading partial/failed translations (stayed mostly English) the server onl
    flagged one non-blocking latency note: on the rare title where *no* language
    aligns, the search now downloads more subtitles before falling back to "no
    reference" — a deeper-search follow-up left for later if it proves slow. Shipped
-   by key-preserving zip surgery.
+   by key-preserving zip surgery. **Current behavior supersedes this historical
+   full-chain worst case:** 0.2.441 uses the explicit 10-per-language, 15-total,
+   30-active-second envelope documented above.
 10. **Batched, piggybacked usage telemetry — SHIPPED (AI 0.2.385 / quickfix
    0.1.424).** The add-on's anonymous usage events used to be sent as one network
    request per AI translation. They're now collected into a small **durable queue**
