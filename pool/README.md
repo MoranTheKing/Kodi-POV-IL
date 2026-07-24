@@ -1,5 +1,11 @@
 # Kodi POV IL — community AI-subtitle pool
 
+> **Historical public reference only.** `pool/worker.js` is a frozen, sanitized,
+> stale snapshot. It is not the source of the deployed Worker and must not be
+> pasted or deployed. The current Worker, its configuration, and its deployment
+> workflow are maintained out-of-band in the maintainer's local-only handoff and
+> must never be committed here.
+
 A tiny Cloudflare Worker that lets the AI subtitle add-on **share** Hebrew AI
 translations and **pull** ones other users already made. A Telegram channel is
 the file store; Workers KV is a small index. No server to maintain; free tier.
@@ -20,21 +26,12 @@ Index key: `v1:<lang>:<tmdb-or-imdb>:s<season>:e<episode>` → list of variants,
 one per distinct **source-subtitle content hash** (so a different English source
 = a different sync = its own variant; nothing overwrites anything).
 
-## Deploy (Cloudflare dashboard, no CLI)
-1. **Workers & Pages → Create → Create Worker** → name e.g. `povil-subs-pool` → Deploy.
-2. **Edit code** → paste `worker.js` → **Deploy**.
-3. **KV:** Workers & Pages → **KV → Create namespace** named `POOL`. Then in the
-   Worker → **Settings → Bindings → add KV Namespace binding**: variable `POOL` → that namespace.
-4. **Secrets/vars** (Worker → Settings → Variables):
-   - `BOT_TOKEN`  = your BotFather token   *(mark as Secret/encrypt)*
-   - `CHANNEL_ID` = `-1004388223186`
-   - `API_KEY`    = the shared write key    *(mark as Secret/encrypt)*
-   - `UPLOAD_TOKEN` = a separate token for the manual web upload page
-     *(mark as Secret/encrypt; only needed if you use `/upload`)*
-5. Test: open `https://<worker-url>/health` → `{"ok":true}`.
+## Deployment
 
-The add-on is wired with the worker URL + `API_KEY` (read endpoints are open;
-only `/contribute` requires the key).
+There is deliberately no valid deployment procedure in the public repository.
+Do not infer the current bindings, storage layer, secrets, or routes from this
+historical snapshot. Use only the maintainer's local-only Worker source and
+handoff when operating the real service.
 
 ## Manual web upload (for subs made outside the add-on)
 `https://<worker-url>/upload` serves a small page where a trusted contributor
