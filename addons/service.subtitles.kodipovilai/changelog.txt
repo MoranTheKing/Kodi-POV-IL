@@ -1,3 +1,9 @@
+v0.2.439
+- Hotfix: restore the community-pool signing credential that was accidentally
+  omitted from the packaged 0.2.438 update. The request-saving quality and
+  capacity gates from 0.2.438 remain unchanged and now operate with authenticated
+  lookup/contribution requests again. No settings or user action are required.
+
 v0.2.438
 - Efficiency: the add-on no longer uploads a translation to the community pool
   when the server would only reject it -- a partial/low-quality result (fails the
