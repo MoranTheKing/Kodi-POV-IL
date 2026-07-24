@@ -67,6 +67,16 @@ def _version(addon_block: str) -> str:
     return m.group(1)
 
 
+def _lf_bytes(text: str) -> bytes:
+    """Bytes Git/Pages serve, independent of the maintainer's host OS.
+
+    Git normalizes these repository text files to LF.  Hashing a Windows CRLF
+    worktree copy produces a checksum that does not match the bytes Kodi later
+    downloads from GitHub Pages.
+    """
+    return text.replace("\r\n", "\n").replace("\r", "\n").encode("utf-8")
+
+
 def main() -> None:
     if not SRC_ADDON_XML.is_file():
         _die("missing " + str(SRC_ADDON_XML))
@@ -120,12 +130,13 @@ def main() -> None:
         _die('no <addon id="{0}"> block in {1}'.format(
             ADDON_ID, REPO_ADDONS_XML.relative_to(ROOT)))
     new_addons_text = block_re.sub(lambda _m: src_block, addons_text, count=1)
-    REPO_ADDONS_XML.write_text(new_addons_text, encoding="utf-8")
+    published_addons_bytes = _lf_bytes(new_addons_text)
+    REPO_ADDONS_XML.write_bytes(published_addons_bytes)
 
-    # 6) regenerate the md5 (32 hex chars, no trailing newline)
-    digest = hashlib.md5(
-        REPO_ADDONS_XML.read_bytes()).hexdigest()
-    REPO_MD5.write_text(digest, encoding="utf-8")
+    # 6) regenerate the md5 over the exact LF bytes GitHub Pages will serve
+    # (32 lowercase hex chars, no trailing newline).
+    digest = hashlib.md5(published_addons_bytes).hexdigest()
+    REPO_MD5.write_bytes(digest.encode("ascii"))
 
     print("published standalone {0} to the repo channel:".format(version))
     print("  + {0}".format(dst_zip.relative_to(ROOT)))
