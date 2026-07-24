@@ -220,7 +220,7 @@ protocol paths, a non-empty `VideoPlayer.ChannelName`, zero `getTotalTime()`
 (5 s grace), and a configurable addon exclusion list `autosub_excluded_addons`
 (default `plugin.video.idanplus`). All fail-open.
 
-## MDBList integration — status (0.2.425–0.2.436, all shipped)
+## MDBList integration — status (0.2.425–0.2.437, all shipped)
 
 The full chain works: QR pairing, watched/progress sync, list manager, account
 heal, Collection routing + crash-safe sync. Delivered across seven releases:
@@ -311,14 +311,28 @@ budget-safe on the 1000 req/day free key.
     `_mdblist_connected()` (POV `mdblist.token` set), add-only, fire-once via the
     json sidecar key `mdblist_tiles` (+ marker AI_SUBS_FAVOURITES_MDBLIST_TILES_SEEN_v1).
     Non-MDBList users: byte-identical no-op. Deletions stick. Sonnet: SHIP.
-- **REMAINING tiles parity (next, per-skin native widgets)** — favourites already
-  cover every skin, but for full parity with how each skin shows OTHER services:
-  1. **FENtastic navigator.db native row** — `pov_navigator_patcher.py`
-     (MOVIES_PA_V5 / TVSHOWS_PA_V5): add `mdblist_my_movies`/`mdblist_my_tvshows`
-     rows pointing at the same two routes. Needs a version-constant bump per the
-     patcher's versioning (honors user deletions).
-  2. **Arctic Fuse 3 node** — `af3_home_patcher.py` (already writes "הסדרות שלי"/
-     "הסרטים שלי" skinvariables nodes): add MDBList nodes there.
+- **tiles parity — DONE (0.2.437 / qf 0.1.476).** favourites already covered every
+  skin; the two skins that keep their OWN native home structure now show it there
+  too, routed to the SAME `mdblist_watchlist` action — so the newest-first sort
+  (Fix F/G) is INHERITED, never re-implemented in the skin layer:
+  1. **FENtastic navigator.db** — `pov_navigator_patcher.py`: `MOVIES_PA_V5` /
+     `TVSHOWS_PA_V5` = V4 + an appended `{'action':'mdblist_watchlist',
+     'iconImage':'mdblist', 'mode':'build_movie_list'|'build_tvshow_list', 'name':
+     '[B]…(MDBList)[/B]'}` row (LAST, matching favourites order). Target is
+     connection-aware: V5 (known_old V1..V4) when `_mdblist_connected()`, else V4
+     (known_old V1..V3). Byte-exact migration; add-only (disconnect keeps V5;
+     user-customized rows left alone). `iconImage:'mdblist'` short-name resolves to
+     POV's already-shipped `mdblist.png`.
+  2. **Arctic Fuse 3 skinvariables** — `af3_home_patcher.py`: 2 `HOME_WIDGETS`
+     entries (after Trakt in each group), `PATCH_VERSION` v20->v21 (forces the
+     rebuild so the merged node surfaces), gated in the FILES loop (canonical
+     filtered of any `mdblist_watchlist` path when not connected). The existing
+     3-way `_merge_widget_nodes` appends them brand-new to existing installs and
+     honors user deletions. Icons `My_{Movies,Shows}_MDBList.png` already ship and
+     deploy via `build_icons_patcher` (unfiltered os.walk). Sonnet: SHIP
+     (byte-exactness re-derived in a Python interpreter); 18/18 local behavioral
+     tests (navigator migration over real sqlite + AF3 merge over a mock FS,
+     covering connect/disconnect/reconnect/user-removed/customized).
   Manager-add + watched/progress sync already done. Continue-Watching (Phase D)
   still deferred (series via /upnext if POV scrobbles episodes; movies stay local).
 - **0.2.433 / qf 0.1.472 — recency: newest-first sort + Watchlist∪Collection merge.**
