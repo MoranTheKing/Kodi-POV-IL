@@ -443,7 +443,62 @@ def _pool_has_hash(body, source_hash):
         return False
 
 
+# Mirror the Worker's contribute-side gates so the client never spends a
+# /contribute request the server will only reject -- the dominant source of
+# wasted Worker invocations. Thresholds MUST match worker.js srtQualityOk /
+# MAX_VARIANTS exactly: a stricter client would withhold a sub the server would
+# have accepted; a looser one just fails to save the request it was meant to.
+_MIN_SRT_ENTRIES = 15
+_MIN_HE_RATIO = 0.5
+_MAX_VARIANTS = 25
+
+
+def _srt_quality_ok(srt):
+    """True if `srt` would pass the Worker's srtQualityOk(): >= 15 cues, >= 200
+    Latin/Hebrew/Arabic letters, and a majority-Hebrew letter ratio. Fail-OPEN
+    on any error (returns True) so a genuine translation is never withheld by a
+    bug here -- the server stays the real gate."""
+    try:
+        t = srt or ''
+        if t.count('-->') < _MIN_SRT_ENTRIES:
+            return False
+        heb = 0
+        letters = 0
+        for ch in t:
+            o = ord(ch)
+            if 0x590 <= o <= 0x5FF:                       # Hebrew block [֐-׿]
+                heb += 1
+                letters += 1
+            elif ('a' <= ch <= 'z') or ('A' <= ch <= 'Z') or (0x600 <= o <= 0x6FF):
+                letters += 1                              # Latin, or Arabic [؀-ۿ]
+        if letters < 200:
+            return False
+        return (heb / float(letters)) >= _MIN_HE_RATIO
+    except Exception:
+        return True
+
+
+def _pool_at_capacity(body):
+    """True if this episode already holds the Worker's MAX_VARIANTS cap, so a new
+    contribution would only be 429'd (toomany). Uses the request-cached /lookup
+    (no extra network). Best-effort: any error returns False so we just upload."""
+    try:
+        data = _lookup_raw(_lookup_params_from_body(body))
+        return len(data.get('variants') or []) >= _MAX_VARIANTS
+    except Exception:
+        return False
+
+
 def _post(body, marker_path=None):
+    # Client-side QUALITY gate: mirror the Worker's srtQualityOk() so we never
+    # spend a /contribute request on a translation the server will only 422 (a
+    # partial/failed translation that stayed mostly English). This is the single
+    # biggest source of wasted Worker invocations. Returns before the dedup/
+    # telemetry/upload, exactly like the dedup short-circuit below, so a skipped
+    # upload never eats the piggybacked events (they wait for the next contribute
+    # or telemetry's own /ev flush).
+    if not _srt_quality_ok(body.get('srt')):
+        return
     # Pre-check: if this exact source is already in the pool, skip the upload
     # entirely and just mark locally so we stop retrying. The server dedups by
     # source hash too, so this is purely to avoid sending an SRT that would be
@@ -462,6 +517,12 @@ def _post(body, marker_path=None):
                                    (body.get('source_hash') or '').strip())):
             if marker_path:
                 mark_contributed(marker_path)
+            return
+        # CAPACITY gate: the episode already holds the Worker's MAX_VARIANTS cap,
+        # so a new variant would only be 429'd (toomany). Skip the wasted upload
+        # (non-ai_emb, mirroring the dedup skip). No marker: a freed slot or a
+        # less-covered re-watch can still contribute later.
+        if body.get('kind') != 'ai_emb' and _pool_at_capacity(body):
             return
     except Exception:
         pass
@@ -1052,6 +1113,11 @@ def _post_sync(body):
       'drop'  -> permanent client error (bad/invalid/unauthorized): remove it.
       'retry' -> transient failure (network / 429 / 5xx): keep for next pass.
     Never raises."""
+    # QUALITY gate (mirrors the Worker's srtQualityOk): a sub the server would
+    # 422 is a permanent client error -> drop it, don't waste a request or keep
+    # retrying. Fail-open (helper True on error) so a good sub is never dropped.
+    if not _srt_quality_ok(body.get('srt')):
+        return 'drop'
     # Cheap pre-check: already in the pool -> done, no upload (= no TG message).
     # MIRRORS the bypass in _post(): ai_emb (embedded) contributions must reach
     # the Worker so it can PROMOTE a dedup-matched entry to 'ai_emb', so they skip
@@ -1059,10 +1125,14 @@ def _post_sync(body):
     # branch is defensive, but kept consistent with _post so a future author who
     # routes ai_emb through the queue doesn't silently re-break the promote.
     try:
-        if (body.get('kind') != 'ai_emb'
-                and _pool_has_hash(body,
-                                   (body.get('source_hash') or '').strip())):
-            return 'ok'
+        if body.get('kind') != 'ai_emb':
+            if _pool_has_hash(body, (body.get('source_hash') or '').strip()):
+                return 'ok'
+            # CAPACITY: episode already at MAX_VARIANTS -> a new variant is 429'd
+            # (toomany). Drop the queued job -- a well-covered episode doesn't
+            # need another variant, and retrying only wastes requests.
+            if _pool_at_capacity(body):
+                return 'drop'
     except Exception:
         pass
     try:

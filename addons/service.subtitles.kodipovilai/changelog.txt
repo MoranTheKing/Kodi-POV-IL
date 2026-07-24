@@ -1,3 +1,13 @@
+v0.2.438
+- Efficiency: the add-on no longer uploads a translation to the community pool
+  when the server would only reject it -- a partial/low-quality result (fails the
+  Hebrew-ratio / length gate) or an episode already holding the maximum number of
+  variants. It now runs the SAME checks the server does, BEFORE the upload, so
+  those wasted network requests are never sent (they were the dominant source of
+  requests against the pool's free-tier quota). Invisible to users: a genuine
+  Hebrew subtitle is never withheld -- the checks fail open, and you still get
+  every subtitle you did before.
+
 v0.2.437
 - New: the "My Movies / My Series (MDBList)" tile now also appears as a native row
   in the FENtastic personal area (navigator.db) and the Arctic Fuse 3 home layout
