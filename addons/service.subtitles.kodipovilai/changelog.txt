@@ -1,3 +1,13 @@
+v0.2.441
+- Embedded-subtitle translation now has one explained Advanced-mode selector:
+  Automatic (recommended), timing alignment only, direct text extraction only,
+  local files only, or disabled. Existing hidden choices migrate safely, and
+  every failed method still falls back to the normal external-subtitle path.
+- Gender-reference selection now follows the researched language priority and
+  tries up to 10 candidates inside a language before moving to the next one.
+  Downloads and alignment remain strictly serial and first-aligning-candidate
+  wins, with a 15-download / 30-active-second safety budget for hard titles.
+
 v0.2.440
 - Settings: hide three internal implementation toggles that Kodi exposed as
   blank rows in Expert mode. They were never user-facing controls, and their

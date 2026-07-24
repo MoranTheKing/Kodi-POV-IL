@@ -386,22 +386,16 @@
           <default></default>
           <control type="label" format="string"/>
         </setting>
-        <!-- Hidden kill-switch: translate the video's EMBEDDED foreign subtitle
-             (extract its text via embedded_extract, feed to the AI pipeline: a
-             perfectly-synced source, no re-sync). ON by default; flip to false
-             to disable the embedded path (auto-falls-back to external subs
-             either way). MUST be declared or set_setting silently no-ops. -->
+        <!-- Hidden legacy compatibility flag. The user-facing control is now
+             embedded_translation_mode in Advanced. Keep this declared so an
+             older settings profile remains readable during fallback. -->
         <setting id="embedded_translate" type="boolean" label="30000">
           <level>4</level>
           <visible>false</visible>
           <default>true</default>
           <control type="toggle"/>
         </setting>
-        <!-- Hidden kill-switch: allow embedded extraction over a live debrid/HTTP
-             stream. The extractor uses ONE keep-alive connection + coalesced
-             ranges + a 429 circuit-breaker so it can't starve the player, but
-             this is the instant manual escape hatch if a device/CDN misbehaves.
-             Flip to false to keep embedded extraction local-only. -->
+        <!-- Hidden legacy compatibility flag. See embedded_translation_mode. -->
         <setting id="embedded_http_extract" type="boolean" label="30000">
           <level>4</level>
           <visible>false</visible>
@@ -440,6 +434,13 @@
           <visible>false</visible>
           <default>false</default>
           <control type="toggle"/>
+        </setting>
+        <!-- Hidden one-shot migration marker for embedded_translation_mode. -->
+        <setting id="_embedded_mode_v1" type="string" label="30000">
+          <level>4</level>
+          <visible>false</visible>
+          <default></default>
+          <control type="label" format="string"/>
         </setting>
       </group>
     </category>
@@ -724,6 +725,23 @@
 
     <category id="advanced" label="32400"> <!-- Advanced -->
       <group id="experimental">
+        <setting id="embedded_translation_mode" type="string"
+                 label="32423" help="32424">
+          <level>0</level>
+          <default>auto</default>
+          <constraints>
+            <options>
+              <option label="32425">auto</option>
+              <option label="32426">align_only</option>
+              <option label="32427">direct</option>
+              <option label="32428">local_only</option>
+              <option label="32429">off</option>
+            </options>
+          </constraints>
+          <control type="list" format="string">
+            <heading>32423</heading>
+          </control>
+        </setting>
         <setting id="remember_source" type="boolean" label="32504"> <!-- Remember picked source -->
           <level>0</level>
           <default>true</default>
