@@ -24,6 +24,7 @@
 import os
 import re
 import threading
+import time
 
 try:
     from resources.lib import kodi_utils
@@ -243,7 +244,7 @@ def align_one(src_text, src_blocks, ar_text):
 # strongest possible reference (it IS the target language); Arabic is the gold
 # standard among foreign ones (Semitic, near-1:1 gender marking with Hebrew);
 # then languages ranked by gender-signal strength x real-world availability.
-_REF_CHAIN = ('he', 'ar', 'es', 'fr', 'ru', 'it', 'pt', 'pl', 'uk', 'hi',
+_REF_CHAIN = ('he', 'ar', 'hi', 'es', 'ru', 'pt', 'pl', 'uk', 'fr', 'it',
               'cs', 'ro', 'el', 'bg', 'sr', 'hr', 'sk', 'ur', 'nl')
 
 # Codes/names a provider might report for each chain language (lowercase).
@@ -276,19 +277,17 @@ _ALIAS_TO_CHAIN = {alias: code
                    for code, aliases in _REF_LANG_ALIASES.items()
                    for alias in aliases}
 
-# Try at most this many candidates per language. The total download budget now
-# covers the ENTIRE chain (every language, up to _PER_LANG_LIMIT each), so a
-# blocked/unaligned title keeps trying deeper languages instead of giving up at
-# an arbitrary cutoff -- the goal being the most accurate gender reference we can
-# find, even if it's the 15th language rather than the 3rd. This does NOT slow
-# the common case: the search STOPS at the first sub that aligns (usually he/ar/
-# es, a single download), and downloads are lazy. It only downloads more on the
-# HARD minority of titles where the earlier languages don't time-sync -- exactly
-# the titles that most need a deeper search. (If this ever proves too slow or
-# strains the subtitle-source rate limits on hard titles, lower the budget or add
-# a per-search time cap.)
-_PER_LANG_LIMIT = 3
-_TOTAL_DOWNLOAD_BUDGET = len(_REF_CHAIN) * _PER_LANG_LIMIT   # full chain (~57)
+# Try substantially deeper inside each higher-priority language before moving
+# to the next one. Provider metadata search is parallel, but the actual subtitle
+# downloads + alignment below are lazy, serial and chain-ordered: first aligning
+# candidate wins. Ten is deliberately bounded because OpenSubtitles can paginate
+# every result for a popular title; "all" could mean hundreds of downloads and
+# minutes of blocked playback. A language may receive up to ten attempts; the
+# fixed global download budget and active-work deadline prevent a pathological
+# title from stalling startup indefinitely.
+_PER_LANG_LIMIT = 10
+_TOTAL_DOWNLOAD_BUDGET = 15
+_REFERENCE_DEADLINE_S = 30.0
 
 
 def _chain_lang_of(cand):
@@ -406,6 +405,9 @@ class ReferencePlan(object):
         self.total = total
         self._pos = 0
         self._downloads = 0
+        # Count only time spent downloading/alignment. Long idle gaps between
+        # lazy .next() calls (while Gemini translates) must not expire fallbacks.
+        self._active_elapsed = 0.0
         self._used = set()           # chain langs already returned (one map each)
         self._lock = threading.Lock()
         self.last_diag = ''          # diag of the candidate examined last: the
@@ -422,29 +424,41 @@ class ReferencePlan(object):
                         _log('download budget ({0}) exhausted -- stopping the '
                              'chain'.format(_TOTAL_DOWNLOAD_BUDGET))
                         return None, None
+                    if self._active_elapsed >= _REFERENCE_DEADLINE_S:
+                        _log('reference work budget ({0:.0f}s active) reached -- '
+                             'stopping the chain'.format(_REFERENCE_DEADLINE_S))
+                        return None, None
                     lang, cand = self._ordered[self._pos]
                     self._pos += 1
                     if lang in self._used:
                         continue     # already yielded a map for this language
-                    ref_text = _download_candidate(cand)  # lazy fetch
-                    self._downloads += 1
-                    if not ref_text:
-                        continue
+                    attempt_started = time.monotonic()
                     try:
-                        mapping, diag = align_one(
-                            self._src_text, self._src_blocks, ref_text)
-                    except Exception as e:
-                        _log('align [{0}] crashed: {1}'.format(lang, e),
-                             level='WARNING')
-                        continue
-                    self.last_diag = diag   # winner (on return) or last rejection
-                    if mapping is not None:
-                        self._used.add(lang)
-                        _log('reference [{0}] {1} -> {2} entries hinted'.format(
-                            lang, diag, len(mapping)))
-                        return lang, mapping
-                    _log('candidate [{0}] rejected: {1} -- trying next'.format(
-                        lang, diag))
+                        ref_text = _download_candidate(cand)  # lazy fetch
+                        self._downloads += 1
+                        if not ref_text:
+                            continue
+                        try:
+                            mapping, diag = align_one(
+                                self._src_text, self._src_blocks, ref_text)
+                        except Exception as e:
+                            _log('align [{0}] crashed: {1}'.format(lang, e),
+                                 level='WARNING')
+                            continue
+                        # winner (on return) or last rejection once chain is dry
+                        self.last_diag = diag
+                        if mapping:
+                            self._used.add(lang)
+                            _log(
+                                'reference [{0}] {1} -> {2} entries hinted'
+                                .format(lang, diag, len(mapping)))
+                            return lang, mapping
+                        _log(
+                            'candidate [{0}] rejected: {1} -- trying next'
+                            .format(lang, diag))
+                    finally:
+                        self._active_elapsed += max(
+                            0.0, time.monotonic() - attempt_started)
                 return None, None
         except Exception as e:
             _log('ReferencePlan.next crashed: {0}'.format(e), level='WARNING')
