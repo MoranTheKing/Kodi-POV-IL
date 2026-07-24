@@ -1,3 +1,14 @@
+[COLOR yellow][B]v0.1.33[/B][/COLOR]
+* Quick-update delivery state is now committed only after the package finishes
+  successfully. A transient download/install failure therefore retries on the
+  next Kodi startup instead of permanently suppressing that release.
+* Automatic quick updates fetch an immutable notification-specific build
+  manifest path, preventing a fresh notification from being paired with a stale
+  quickfix URL at the raw.githubusercontent CDN (which ignores query strings in
+  its cache key).
+* A quick update is accepted only after extraction reaches 100% with zero
+  errors; corrupt or partially extracted packages now return failure and retry
+  instead of advancing the delivery id.
 [COLOR yellow][B]v0.1.32[/B][/COLOR]
 * Fixed the "Kodi POV IL" rebrand not sticking after an update. The update-
   notification frame and the bottom badge are now carried inside the FENtastic
