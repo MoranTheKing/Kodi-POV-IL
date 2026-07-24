@@ -1,3 +1,11 @@
+v0.2.437
+- New: the "My Movies / My Series (MDBList)" tile now also appears as a native row
+  in the FENtastic personal area (navigator.db) and the Arctic Fuse 3 home layout
+  (skinvariables), not just in the favourites shortcuts. It shows only when MDBList
+  is connected and -- like the TMDB/Trakt rows -- routes to the newest-first
+  mdblist_watchlist list, so it inherits that sort. Add-only: a tile you remove
+  stays removed, and existing personal-area customizations are left untouched.
+
 v0.2.436
 - Fix: the "My Movies / My Series (Trakt)" home lists now also lead with the most
   recently added title. Those lists merge your Trakt collection + watchlist +
