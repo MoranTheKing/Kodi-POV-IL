@@ -68,10 +68,21 @@ def check_paths():
         logging.log("[Path Check] Good!")
 
 
-def check_build(name, ret):
+def check_build(name, ret, release_id=None):
     from resources.libs.common import tools
 
-    response = tools.open_url(CONFIG.BUILDFILE)
+    buildfile = CONFIG.BUILDFILE
+    if release_id is not None:
+        token = str(release_id).strip()
+        if not re.match(r'^[0-9]{1,20}$', token):
+            return False
+        # raw.githubusercontent ignores query strings in its cache key. Use a
+        # genuinely distinct, release-specific path instead; publication puts
+        # this immutable manifest online before the matching notification.
+        base = buildfile.rsplit('/', 1)[0]
+        buildfile = '{0}/build_versions/{1}.txt'.format(base, token)
+
+    response = tools.open_url(buildfile)
 
     if not response:
         return False
