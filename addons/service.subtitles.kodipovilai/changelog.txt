@@ -1,3 +1,9 @@
+v0.2.442
+- Gender-reference search can now examine up to 50 subtitle candidates across
+  the researched language-priority chain, while still trying at most 10 inside
+  one language, stopping on the first aligned subtitle, and retaining the same
+  30-active-second latency guard.
+
 v0.2.441
 - Embedded-subtitle translation now has one explained Advanced-mode selector:
   Automatic (recommended), timing alignment only, direct text extraction only,
