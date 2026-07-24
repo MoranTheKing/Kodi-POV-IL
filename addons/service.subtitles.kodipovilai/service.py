@@ -3198,6 +3198,22 @@ def _maybe_default_fast_first_chunk():
             pass
 
 
+def _maybe_migrate_embedded_translation_mode():
+    """One-shot bridge from the two hidden booleans to the explained mode list."""
+    try:
+        from resources.lib import kodi_utils
+        mode = kodi_utils.embedded_translation_mode()
+        kodi_utils.log(
+            'embedded translation mode ready: {0}'.format(mode), level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'embedded mode migration failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_default_pool_on():
     """One-shot: turn the community pool ON (both pull and share) for existing
     users who are still on the old default-off. Gated by a marker so it fires
@@ -4169,6 +4185,10 @@ def main():
     # One-shot: flip `fast_first_chunk` default from off -> on for
     # existing users on the old default. Marker-gated.
     _maybe_default_fast_first_chunk()
+
+    # Preserve the legacy embedded toggles, then make the explained mode selector
+    # canonical. Runs for both build and standalone installations.
+    _maybe_migrate_embedded_translation_mode()
 
     # One-shot: turn the community pool ON (pull + share) for existing users
     # still on the old default-off. New installs get it via settings.xml

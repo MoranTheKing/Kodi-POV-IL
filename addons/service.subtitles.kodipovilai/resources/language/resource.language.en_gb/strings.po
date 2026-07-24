@@ -206,6 +206,34 @@ msgctxt "#32422"
 msgid "Budget 2048"
 msgstr "Budget 2048"
 
+msgctxt "#32423"
+msgid "Embedded-subtitle translation method"
+msgstr "Embedded-subtitle translation method"
+
+msgctxt "#32424"
+msgid "Choose how a foreign subtitle embedded in the video becomes Hebrew. Automatic first aligns an external subtitle to the embedded timings, then extracts the embedded text only if needed. Alignment only is gentler for debrid streams. Direct extraction uses the exact embedded text but can be slower or heavier while streaming. Local files only disables every embedded read over debrid/HTTP. Every failure falls back to the normal subtitle path."
+msgstr "Choose how a foreign subtitle embedded in the video becomes Hebrew. Automatic first aligns an external subtitle to the embedded timings, then extracts the embedded text only if needed. Alignment only is gentler for debrid streams. Direct extraction uses the exact embedded text but can be slower or heavier while streaming. Local files only disables every embedded read over debrid/HTTP. Every failure falls back to the normal subtitle path."
+
+msgctxt "#32425"
+msgid "Automatic (recommended)"
+msgstr "Automatic (recommended)"
+
+msgctxt "#32426"
+msgid "Timing alignment only (safer for streaming)"
+msgstr "Timing alignment only (safer for streaming)"
+
+msgctxt "#32427"
+msgid "Direct embedded-text extraction only"
+msgstr "Direct embedded-text extraction only"
+
+msgctxt "#32428"
+msgid "Local files only (no debrid/HTTP reads)"
+msgstr "Local files only (no debrid/HTTP reads)"
+
+msgctxt "#32429"
+msgid "Disabled"
+msgstr "Disabled"
+
 # Runtime messages
 msgctxt "#33000"
 msgid "AI Hebrew (translated from {0})"

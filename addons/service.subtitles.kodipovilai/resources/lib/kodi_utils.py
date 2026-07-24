@@ -35,6 +35,9 @@ _ADDON = None
 _NOTIFY_MAX_PENDING = 8
 _notify_lock = threading.Lock()
 _notify_pending = [0]
+_EMBEDDED_MODE_VALUES = (
+    'auto', 'align_only', 'direct', 'local_only', 'off')
+_embedded_mode_lock = threading.Lock()
 
 
 def addon():
@@ -183,6 +186,70 @@ def set_setting(key, value):
         return addon().getSetting(key) == str_value
     except Exception:
         return False
+
+
+def embedded_translation_mode():
+    """Return and maintain the canonical embedded-subtitle strategy.
+
+    Version 0.2.441 replaces two hidden booleans with one explained mode list.
+    On the first run, preserve the exact legacy on/off + HTTP boundary:
+    disabled -> ``off``; enabled but HTTP-disabled -> ``local_only``; otherwise
+    ``auto``.  Once migrated, the new selector is canonical and its closest
+    legacy representation is mirrored back for downgrade compatibility.
+    """
+    with _embedded_mode_lock:
+        marker = get_setting('_embedded_mode_v1', '') == '1'
+        raw = (get_setting('embedded_translation_mode', '') or '').strip().lower()
+
+        if not marker:
+            # A non-default mode can only have been explicitly selected in the
+            # new UI before the service migration ran, so honour it.
+            if raw in _EMBEDDED_MODE_VALUES and raw != 'auto':
+                mode = raw
+            elif not get_bool('embedded_translate', True):
+                mode = 'off'
+            elif not get_bool('embedded_http_extract', True):
+                mode = 'local_only'
+            else:
+                mode = 'auto'
+        else:
+            if raw in _EMBEDDED_MODE_VALUES:
+                mode = raw
+            elif not get_bool('embedded_translate', True):
+                mode = 'off'
+            elif not get_bool('embedded_http_extract', True):
+                mode = 'local_only'
+            else:
+                mode = 'auto'
+
+        enabled = mode != 'off'
+        allow_http = mode not in ('off', 'local_only')
+        writes_ok = True
+        if raw != mode:
+            writes_ok = set_setting('embedded_translation_mode', mode) and writes_ok
+        if get_bool('embedded_translate', True) != enabled:
+            writes_ok = set_setting(
+                'embedded_translate', 'true' if enabled else 'false') and writes_ok
+        if get_bool('embedded_http_extract', True) != allow_http:
+            writes_ok = set_setting(
+                'embedded_http_extract',
+                'true' if allow_http else 'false') and writes_ok
+        if not marker and writes_ok:
+            set_setting('_embedded_mode_v1', '1')
+        return mode
+
+
+def embedded_translation_policy(mode=None):
+    """Map one mode to the exact runtime paths it permits."""
+    if mode not in _EMBEDDED_MODE_VALUES:
+        mode = embedded_translation_mode()
+    return {
+        'mode': mode,
+        'enabled': mode != 'off',
+        'try_align': mode in ('auto', 'align_only', 'local_only'),
+        'try_extract': mode in ('auto', 'direct', 'local_only'),
+        'allow_http': mode not in ('off', 'local_only'),
+    }
 
 
 def localised(strid, *args):
