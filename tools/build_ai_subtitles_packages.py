@@ -863,29 +863,44 @@ def build_one(name: str, standalone: bool) -> Path:
 
 def inject_pool_secret(addon_dst: Path) -> None:
     """Set the build-time pool credential in the shipped pool.py from the
-    $POOL_SECRET env var, via the local packaging helper. Warns if unset/missing."""
+    $POOL_SECRET env var, via the local packaging helper. A distributable
+    package without this credential cannot use the community pool, so every
+    missing/placeholder case is a hard build failure."""
     secret = os.environ.get("POOL_SECRET", "").strip()
     pool_py = addon_dst / "resources" / "lib" / "pool.py"
     if not pool_py.is_file():
-        return
+        raise RuntimeError("pool.py missing from package staging tree")
     txt = pool_py.read_text(encoding="utf-8")
     if "__POOL_KEY_BEGIN__" not in txt:
-        return
+        raise RuntimeError("pool.py is missing the credential injection markers")
     if not secret:
-        print("  !! WARNING: $POOL_SECRET not set -- credential left unset; "
-              "this build CANNOT use the community pool.")
-        return
+        raise RuntimeError(
+            "$POOL_SECRET not set -- refusing to build a package with the "
+            "community-pool credential placeholder"
+        )
     import sys as _sys
     work = str(ROOT / "work")
     if work not in _sys.path:
         _sys.path.insert(0, work)
     try:
         import pkgkey
-    except Exception:
-        print("  !! WARNING: packaging helper missing -- credential NOT set; "
-              "this build CANNOT use the community pool.")
-        return
-    pool_py.write_text(pkgkey.inject(txt, secret), encoding="utf-8")
+    except Exception as exc:
+        raise RuntimeError(
+            "packaging helper missing -- refusing to build without the "
+            "community-pool credential"
+        ) from exc
+    injected = pkgkey.inject(txt, secret)
+    marker = re.search(
+        r"__POOL_KEY_BEGIN__(.*?)__POOL_KEY_END__", injected, re.S
+    )
+    if not marker or (
+        "return ''" in marker.group(1)
+        and "b64decode" not in marker.group(1)
+    ):
+        raise RuntimeError(
+            "pool credential injection left the placeholder in pool.py"
+        )
+    pool_py.write_text(injected, encoding="utf-8")
     print("  pool credential set")
 
 
