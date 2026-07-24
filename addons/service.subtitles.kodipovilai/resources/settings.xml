@@ -391,8 +391,9 @@
              perfectly-synced source, no re-sync). ON by default; flip to false
              to disable the embedded path (auto-falls-back to external subs
              either way). MUST be declared or set_setting silently no-ops. -->
-        <setting id="embedded_translate" type="boolean" label="30000" visible="false">
-          <level>3</level>
+        <setting id="embedded_translate" type="boolean" label="30000">
+          <level>4</level>
+          <visible>false</visible>
           <default>true</default>
           <control type="toggle"/>
         </setting>
@@ -401,8 +402,9 @@
              ranges + a 429 circuit-breaker so it can't starve the player, but
              this is the instant manual escape hatch if a device/CDN misbehaves.
              Flip to false to keep embedded extraction local-only. -->
-        <setting id="embedded_http_extract" type="boolean" label="30000" visible="false">
-          <level>3</level>
+        <setting id="embedded_http_extract" type="boolean" label="30000">
+          <level>4</level>
+          <visible>false</visible>
           <default>true</default>
           <control type="toggle"/>
         </setting>
@@ -433,8 +435,9 @@
         <!-- Hidden marker: AF3 first-launch dialog has been shown
              (and the user picked something other than 'remind me
              later' / ESC). Read by af3_first_launch.py. -->
-        <setting id="af3_first_launch_dialog_done" type="boolean" label="30000" visible="false">
-          <level>3</level>
+        <setting id="af3_first_launch_dialog_done" type="boolean" label="30000">
+          <level>4</level>
+          <visible>false</visible>
           <default>false</default>
           <control type="toggle"/>
         </setting>

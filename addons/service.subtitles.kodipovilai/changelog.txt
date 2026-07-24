@@ -1,3 +1,9 @@
+v0.2.440
+- Settings: hide three internal implementation toggles that Kodi exposed as
+  blank rows in Expert mode. They were never user-facing controls, and their
+  stored values and runtime behavior are unchanged. The fix applies to every
+  MoranSubs installation.
+
 v0.2.439
 - Hotfix: restore the community-pool signing credential that was accidentally
   omitted from the packaged 0.2.438 update. The request-saving quality and
