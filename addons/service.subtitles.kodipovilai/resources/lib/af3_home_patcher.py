@@ -30,7 +30,7 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-06-01-pov-home-v20'
+PATCH_VERSION = '2026-06-01-pov-home-v21'
 AF3_CE_VERSION = '6.3.2.9'
 # AF3's bundled TMDbHelper 6.15.6 imports jurialmunkey.ftools, which only
 # exists from script.module.jurialmunkey 0.2.35. Users who switched to AF3
@@ -135,6 +135,20 @@ def _pov(action='', mode='', name='', icon='', extra=''):
                 params.append((key, value))
     return 'plugin://plugin.video.pov/?' + '&'.join(
         '{0}={1}'.format(k, v) for k, v in params)
+
+
+def _mdblist_connected():
+    """True only when POV has an MDBList API key stored. The MDBList home
+    widgets route through POV's mdblist_watchlist action, which errors without a
+    key -- so we only surface them when MDBList is actually connected. Mirrors
+    favourites_personal_tiles_patcher._mdblist_connected()."""
+    try:
+        if xbmcaddon is None:
+            return False
+        tok = xbmcaddon.Addon('plugin.video.pov').getSetting('mdblist.token') or ''
+        return bool(tok.strip())
+    except Exception:
+        return False
 
 
 def _shortcut_folder(name, icon='folder.png'):
@@ -266,6 +280,19 @@ HOME_WIDGETS = [
         'widget_limit': '7',
     },
     {
+        # MDBList watchlist -- movies. Routes to POV's mdblist_watchlist, which
+        # merges Watchlist + Collection and sorts newest-first (inherited here).
+        # Gated on MDBList being connected (see ensure_patched's loop): the row
+        # is filtered out of the canonical when no key is stored.
+        'label': 'הסרטים שלי (MDBList)',
+        'icon': 'special://home/media/build_icons/Twilight/Movies/My_Movies_MDBList.png',
+        'path': _pov('mdblist_watchlist', 'build_movie_list', 'MDBList%20Watchlist',
+                     'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2fmdblist.png'),
+        'target': 'videos',
+        'widget_style': 'Poster',
+        'widget_limit': '7',
+    },
+    {
         # POV-LOCAL show favorites (watched.db -> favorites).
         'label': 'הסדרות שלי',
         'icon': 'special://home/media/build_icons/Twilight/Shows/My_Shows_TMDB.png',
@@ -291,6 +318,16 @@ HOME_WIDGETS = [
         'icon': 'special://home/media/build_icons/Twilight/Shows/My_Shows.png',
         'path': _pov('trakt_my_tvshows', 'build_tvshow_list', 'TV%20Shows',
                      'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftrakt.png'),
+        'target': 'videos',
+        'widget_style': 'Poster',
+        'widget_limit': '7',
+    },
+    {
+        # MDBList watchlist -- shows. Same routing/sort as the movie row above.
+        'label': 'הסדרות שלי (MDBList)',
+        'icon': 'special://home/media/build_icons/Twilight/Shows/My_Shows_MDBList.png',
+        'path': _pov('mdblist_watchlist', 'build_tvshow_list', 'MDBList%20Watchlist',
+                     'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2fmdblist.png'),
         'target': 'videos',
         'widget_style': 'Poster',
         'widget_limit': '7',
@@ -1200,7 +1237,16 @@ def ensure_patched():
 
     _mkdir(AF3_NODES)
     changed = False
+    mdblist_ok = _mdblist_connected()
     for filename, data in FILES.items():
+        # MDBList home widgets are opt-in: drop them from the canonical unless
+        # MDBList is connected, so the merge never seeds/appends an mdblist_
+        # watchlist row that would error without a key. A user who connects
+        # later gets it appended on the next boot (brand-new vs the baseline);
+        # the 3-way merge keeps it if they later disconnect (add-only), matching
+        # the favourites tiles.
+        if filename == 'skinvariables-shortcut-homewidgets.json' and not mdblist_ok:
+            data = [w for w in data if 'mdblist_watchlist' not in (w.get('path') or '')]
         if filename in _MERGE_FILES:
             changed = _merge_widget_nodes(filename, data) or changed
         else:
