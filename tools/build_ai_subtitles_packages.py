@@ -214,6 +214,15 @@ def _maybe_default_fast_first_chunk():
         pass
 
 
+def _maybe_migrate_embedded_translation_mode():
+    """Preserve legacy hidden toggles before the new mode list becomes canonical."""
+    try:
+        from resources.lib import kodi_utils
+        kodi_utils.embedded_translation_mode()
+    except Exception:
+        pass
+
+
 def _maybe_force_gender_ref_arabic():
     """One-shot: turn the Arabic gender reference ON for everyone (forced once,
     even if previously off; a later manual opt-out sticks). Marker-gated."""
@@ -629,6 +638,7 @@ def main():
 
     _maybe_repair_rtl_cache()
     _maybe_default_fast_first_chunk()
+    _maybe_migrate_embedded_translation_mode()
     _maybe_force_gender_ref_arabic()
     _maybe_tune_gemini3_defaults()
     _maybe_lower_chunk_lines()

@@ -202,6 +202,34 @@ msgctxt "#32422"
 msgid "Budget 2048"
 msgstr "תקציב 2048"
 
+msgctxt "#32423"
+msgid "Embedded-subtitle translation method"
+msgstr "שיטת תרגום כתובית מובנית"
+
+msgctxt "#32424"
+msgid "Choose how a foreign subtitle embedded in the video becomes Hebrew. Automatic first aligns an external subtitle to the embedded timings, then extracts the embedded text only if needed. Alignment only is gentler for debrid streams. Direct extraction uses the exact embedded text but can be slower or heavier while streaming. Local files only disables every embedded read over debrid/HTTP. Every failure falls back to the normal subtitle path."
+msgstr "בחרו כיצד כתובית זרה המובנית בווידאו תהפוך לעברית. אוטומטי מסנכרן תחילה כתובית חיצונית לפי זמני המובנית, ומחלץ את הטקסט המובנה רק אם צריך. סנכרון בלבד עדין יותר לזרמי debrid. חילוץ ישיר משתמש בטקסט המובנה המדויק, אך עלול להיות איטי או כבד יותר בזמן סטרימינג. קבצים מקומיים בלבד מבטל כל קריאה מובנית דרך debrid/HTTP. בכל כשל התוסף חוזר למסלול הכתוביות הרגיל."
+
+msgctxt "#32425"
+msgid "Automatic (recommended)"
+msgstr "אוטומטי (מומלץ)"
+
+msgctxt "#32426"
+msgid "Timing alignment only (safer for streaming)"
+msgstr "סנכרון זמנים בלבד (בטוח יותר לסטרימינג)"
+
+msgctxt "#32427"
+msgid "Direct embedded-text extraction only"
+msgstr "חילוץ ישיר של הטקסט המובנה בלבד"
+
+msgctxt "#32428"
+msgid "Local files only (no debrid/HTTP reads)"
+msgstr "קבצים מקומיים בלבד (ללא קריאות debrid/HTTP)"
+
+msgctxt "#32429"
+msgid "Disabled"
+msgstr "כבוי"
+
 msgctxt "#33000"
 msgid "AI Hebrew (translated from {0})"
 msgstr "עברית AI (מתורגם מ-{0})"
