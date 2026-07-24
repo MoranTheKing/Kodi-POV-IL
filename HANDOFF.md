@@ -65,10 +65,13 @@ tools/publish_repo_channel.py           # publishes repo/addons.xml + zips
 1. **Deploy = merge to `main`.** The wizard fetches raw files from `main`;
    GitHub Pages syncs from `main`.
 2. **Never overwrite a shipped `pool.py` with the git-source one** when
-   assembling zips, and never commit pool credentials to git. The community
-   pool client in shipped zips is provisioned at packaging time
-   (maintainer-only); the git source intentionally is not. When building a
-   quickfix from the previous zip, simply don't touch `pool.py`.
+   assembling zips, and never commit the plaintext pool credential, its local
+   packaging helper, or the current private Worker source. The community-pool
+   client in shipped zips is provisioned at packaging time (maintainer-only);
+   the git source intentionally is not. When `pool.py` logic did not change,
+   inherit it byte-for-byte from the previous good zip. When its logic did
+   change, use the credential-aware packaging flow; a missing secret/helper/
+   marker or a remaining placeholder MUST abort the build.
 3. **Bump `_VERDICT_VERSION` in `subsync.py`** whenever sync logic changes,
    so cached verdicts recompute on devices.
 4. **Notifications are deliberately quiet.** Rare, gentle, specific, Hebrew,
@@ -103,8 +106,12 @@ tools/publish_repo_channel.py           # publishes repo/addons.xml + zips
 2. Sync-logic change? Bump `_VERDICT_VERSION`.
 3. Copy previous quickfix zip -> new name; `zip` in ONLY the changed files at
    their in-zip paths (never `pool.py` unless its logic truly changed).
-4. Verify: same member set (plus intentionally added files), only intended
-   CRC changes, `pool.py` untouched.
+4. Verify: same member set (plus intentionally added files) and only intended
+   CRC changes. If `pool.py` did not change, it must be byte-identical. If it
+   did change, prove separately that (a) the logic outside the protected key
+   block is the intended new logic, (b) the protected block matches the last
+   known-good release, and (c) a Kodi-context signed live `/lookup` returns
+   HTTP 200. Never print the credential while testing.
 5. Point `build.txt` `gui=` at the new zip.
 6. **ALWAYS bump the `note_id` in `quick_update.txt` (the `<id>` before `|||`),
    not just the footer version.** The wizard live-fetches this file from `main`
@@ -430,7 +437,7 @@ was uploading partial/failed translations (stayed mostly English) the server onl
 422s. Everything else (`/lookup` 90s client cache, `/ev` piggybacked on
 `/contribute`, `/sdh` throttled) was already optimized in earlier tasks.
 
-### Client fix — mirror the server's gates BEFORE the POST (0.2.438 / qf 0.1.477)
+### Client fix — mirror the server's gates BEFORE the POST
 `pool.py`:
 - **`_srt_quality_ok(srt)`** — a BYTE-EXACT mirror of worker.js `srtQualityOk`
   (≥15 cues = count of `-->`; ≥200 Latin/Hebrew/Arabic letters; Hebrew ratio
@@ -454,8 +461,34 @@ was uploading partial/failed translations (stayed mostly English) the server onl
   byte-identical-duplicate file won't write its `.shared` marker, so it re-checks
   every bulk run — zero network cost (the capacity check is a cached read),
   cosmetic only.
-- **Expected effect:** quality (~40% of all invocations) + toomany (~6%) stop
-  being sent → ~99k/day toward ~50k/day. This is the crack.
+- **Expected effect after the corrected release propagates:** quality (~40% of
+  all invocations) + toomany (~6%) stop being sent → ~99k/day toward ~50k/day.
+  This is the crack.
+
+### Packaging regression and urgent correction (2026-07-24)
+
+- The optimization logic above was introduced in source for AI `0.2.438` /
+  quickfix `0.1.477`, but those two distributed artifacts are **known-bad for
+  community-pool authentication**: packaging left the public empty `_pool_key()`
+  placeholder in their `pool.py`. Consequently, once Kodi loaded either update,
+  authenticated `/lookup` and `/contribute` could not succeed. Do not use either
+  artifact as the credential source for a future release.
+- Corrected and shipped as AI `0.2.439` / quickfix `0.1.478` / notification
+  `536` (commit `0696389`). Both were built surgically from the bad release while
+  transplanting only the protected block from the last known-good `0.2.437` /
+  `0.1.476`; the new gate logic outside that block remains byte-equivalent to
+  `0.2.438`. Each zip retained the same member set/order and changed only
+  `addon.xml`, `changelog.txt`, and `pool.py`. The standalone dist/latest/repo
+  copies are byte-identical, and a signed live `/lookup` from the packaged client
+  returned HTTP 200.
+- `tools/build_ai_subtitles_packages.py` now fails hard when `pool.py`, its
+  injection markers, `$POOL_SECRET`, the local helper, or a successfully
+  injected non-placeholder block is missing. Warning-only keyless builds are
+  forbidden. The public source placeholder and public stale Worker reference
+  remain unchanged; the current Worker is still private and was not redeployed.
+- Measurement must use the corrected cohort: allow at least 24 hours for
+  `0.2.439` / `0.1.478` adoption, then reset `/routes` once and measure a complete
+  fresh 24-hour window. The dashboard/rollup cadence is now 15 minutes.
 
 ### Remaining levers (ranked)
 1. **`auth_reject` (~7%) → Cloudflare WAF at the EDGE.** The fork / very-old
