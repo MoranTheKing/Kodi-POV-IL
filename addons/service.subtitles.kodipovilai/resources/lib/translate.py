@@ -58,6 +58,52 @@ except Exception:
     pool = None
 
 
+_EMBEDDED_TRANSLATION_MODES = (
+    'auto', 'align_only', 'direct', 'local_only', 'off')
+
+
+def _embedded_translation_mode():
+    """Return the user-facing embedded-translation strategy.
+
+    New installs use the explicit mode selector.  The two old hidden booleans
+    remain declared for compatibility with an older settings.xml; if the mode is
+    absent or corrupt, derive the closest safe legacy behaviour instead of
+    silently enabling a path the user had disabled.
+    """
+    try:
+        return kodi_utils.embedded_translation_mode()
+    except Exception:
+        try:
+            mode = (kodi_utils.get_setting(
+                'embedded_translation_mode', '') or '').strip().lower()
+        except Exception:
+            mode = ''
+        if mode in _EMBEDDED_TRANSLATION_MODES:
+            return mode
+        try:
+            if not kodi_utils.get_bool('embedded_translate', True):
+                return 'off'
+            if not kodi_utils.get_bool('embedded_http_extract', True):
+                return 'local_only'
+        except Exception:
+            pass
+        return 'auto'
+
+
+def _embedded_translation_policy():
+    mode = _embedded_translation_mode()
+    try:
+        return kodi_utils.embedded_translation_policy(mode)
+    except Exception:
+        return {
+            'mode': mode,
+            'enabled': mode != 'off',
+            'try_align': mode in ('auto', 'align_only', 'local_only'),
+            'try_extract': mode in ('auto', 'direct', 'local_only'),
+            'allow_http': mode not in ('off', 'local_only'),
+        }
+
+
 def _pool_reuse_fetch(info, content_id, ar_on):
     """Whether the community pool already has a translation for THIS source hash;
     returns (path_or_None, is_ar). Consults the ALREADY-CACHED /lookup variant list
@@ -915,6 +961,13 @@ def list_candidates(info, modal_progress=True):
     _emb_by_lang = {}
     for c in embedded_foreign:
         _emb_by_lang.setdefault(c.get('language') or '?', []).append(c)
+    _emb_policy = _embedded_translation_policy()
+    _emb_mode_available = _emb_policy['enabled']
+    if _emb_policy['mode'] == 'local_only':
+        _emb_url = _playing_video_url(info)
+        _emb_mode_available = bool(
+            _emb_url
+            and not _emb_url.lower().startswith(('http://', 'https://')))
 
     # Embedded FOREIGN tracks as "translate the embedded (perfectly-synced)
     # track to Hebrew" actions. The embedded cue timings ARE the video's own, so
@@ -922,11 +975,11 @@ def list_candidates(info, modal_progress=True):
     # right after every Hebrew option and ABOVE all external subs. English first
     # (best AI source; gender still comes from the reference chain), then
     # es/de/fr/pt, then the rest. Only when AI translation is on (opt-out users
-    # keep the raw embedded stream in its language group below) and the hidden
-    # kill-switch is set. resolve() re-checks and fail-opens to the external
-    # path if a track turns out non-text (PGS/VOBSUB) or can't be read.
-    if (ai_translation_on and embedded_foreign
-            and kodi_utils.get_bool('embedded_translate', True)):
+    # keep the raw embedded stream in its language group below) and the chosen
+    # Advanced mode permits it. local_only deliberately hides this action for a
+    # live HTTP/debrid stream instead of presenting a row that cannot run.
+    # resolve() re-checks and fail-opens if a track is non-text or unreadable.
+    if ai_translation_on and embedded_foreign and _emb_mode_available:
         # Don't offer the LOCAL "translate embedded -> Hebrew" generator for a
         # source language the community pool ALREADY holds an embedded (ai_emb)
         # translation for THIS EXACT release: that pooled copy is surfaced above
@@ -1403,7 +1456,8 @@ def _playing_video_url(info):
     return ''
 
 
-def _embedded_aligned_source_srt(info, src_lang, progress_cb=None):
+def _embedded_aligned_source_srt(
+        info, src_lang, progress_cb=None, allow_http=True):
     """FAST, debrid-safe source SRT for the embedded-AI path.
 
     Instead of pulling the embedded track's ~1700 text blocks over the shared
@@ -1541,7 +1595,9 @@ def _embedded_aligned_source_srt(info, src_lang, progress_cb=None):
         _yield_exempt = {'en', try_langs[:3][-1]}
         _yield_after_s = max(1.0, _ALIGN_DEADLINE_S - _ALIGN_FALLBACK_RESERVE_S)
 
-        allow = kodi_utils.get_bool('embedded_http_extract', True)
+        # Automatic/align-only intentionally permit this small, debrid-safe Cues
+        # read. local_only passes False; direct mode skips this function.
+        allow = bool(allow_http)
         # Read the embedded head + Cues index ONCE for the <=3 try-languages and
         # slice each track's dense cue-time skeleton from it, instead of
         # re-reading the head+Cues per language on the cross-language fallback
@@ -1660,7 +1716,7 @@ def _embedded_aligned_source_srt(info, src_lang, progress_cb=None):
 
 
 def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
-                          progress_cb=None):
+                          progress_cb=None, allow_http=True):
     """Extract the playing file's embedded `src_lang` subtitle track to a temp
     SRT and return its path, or None. `deadline_s` bounds the extraction (default
     900s). Every current caller runs in the BACKGROUND -- the auto-on-play thread
@@ -1779,12 +1835,11 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
             except Exception:
                 return False
 
-        # Extract from a live debrid/HTTP stream ONLY when the user leaves the
-        # kill-switch on. Over HTTP the extractor uses ONE keep-alive connection,
-        # paced requests + 429 backoff, and the stall-abort above, so it yields to
-        # the player instead of starving it. A generous background deadline lets a
-        # long movie's subs finish.
-        _allow_http = kodi_utils.get_bool('embedded_http_extract', True)
+        # Automatic/direct modes may extract from a live debrid/HTTP stream.
+        # Over HTTP the extractor uses ONE keep-alive connection, paced requests
+        # + 429 backoff, and the stall-abort above, so it yields to the player
+        # instead of starving it. Align-only never calls this function.
+        _allow_http = bool(allow_http)
         try:
             srt_text = embedded_extract.extract_srt(
                 url, track_num=track_num, lang=src_lang,
@@ -1986,10 +2041,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         # Translate the video's EMBEDDED foreign subtitle. Extract its text
         # (which carries the video's OWN cue timestamps) and feed it to the AI
         # pipeline below, so the Hebrew is perfectly synced with NO re-sync step.
-        # Gated by a hidden kill-switch (default on). Fail-open: on any problem
-        # we return None and the caller falls through to the external-subtitle
-        # candidates (the same Hebrew, just sourced externally + re-timed).
-        if not kodi_utils.get_bool('embedded_translate', True):
+        # The Advanced mode selector controls which method is attempted. Every
+        # mode remains fail-open: on a miss we return None and the caller falls
+        # through to the normal external-subtitle path.
+        _emb_policy = _embedded_translation_policy()
+        _emb_mode = _emb_policy['mode']
+        if not _emb_policy['enabled']:
             return None
         _emb_lang = payload.get('src_lang') or 'en'
         # FAST PATH first (debrid-safe): re-sync an external source sub to the
@@ -1998,9 +2055,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         # 429s, starving the player. Only if that misses (no dense Cues index /
         # no external source / low-confidence alignment) do we fall back to the
         # full-text extract (perfect on a lenient provider like Real-Debrid).
-        _status('AI: מסנכרן לפי הכתובית המובנית...', time_ms=3000)
-        emb_path, _used_lang = _embedded_aligned_source_srt(
-            info, _emb_lang, progress_cb=extract_progress_cb)
+        emb_path, _used_lang = None, None
+        if _emb_policy['try_align']:
+            _status('AI: מסנכרן לפי הכתובית המובנית...', time_ms=3000)
+            emb_path, _used_lang = _embedded_aligned_source_srt(
+                info, _emb_lang, progress_cb=extract_progress_cb,
+                allow_http=_emb_policy['allow_http'])
         if emb_path and os.path.isfile(emb_path):
             # The cross-language fallback may have aligned a different language
             # than the picked track (e.g. picked Spanish, no external Spanish ->
@@ -2021,14 +2081,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 except Exception:
                     pass
             _emb_lang = _used_lang or _emb_lang
-        else:
+        elif _emb_policy['try_extract']:
             _status('AI: מחלץ תרגום מובנה...', time_ms=3000)
             emb_path = _extract_embedded_srt(
                 info, _emb_lang, payload.get('track_num'),
-                progress_cb=extract_progress_cb)
+                progress_cb=extract_progress_cb,
+                allow_http=_emb_policy['allow_http'])
         if not emb_path or not os.path.isfile(emb_path):
-            kodi_utils.log('embedded_ai: no synced source (align+extract both '
-                           'missed) -- deferring to the external path',
+            kodi_utils.log('embedded_ai: mode={0} produced no synced source -- '
+                           'deferring to the external path'.format(_emb_mode),
                            level='INFO')
             return None
         _status('AI: מתרגם תרגום מובנה לעברית...', time_ms=3000)
