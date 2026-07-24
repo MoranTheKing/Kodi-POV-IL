@@ -133,25 +133,80 @@ def show_notification():
 
 # xbmc.executebuiltin(f"RunPlugin(plugin://{CONFIG.ADDON_ID}/?mode=install&action=quick_update&name={quote_plus(CONFIG.BUILDNAME)}&auto_quick_update=true)")
 def auto_quick_update():
-        
+
     note_id, msg = window.split_notify(CONFIG.QUICK_UPDATE_NOTIFICATION_URL)
-    
-    if note_id:
-        logging.log(f'[QUICK-UPDATE] note_id={note_id} | CONFIG.QUICK_UPDATE_NOTEID={CONFIG.QUICK_UPDATE_NOTEID}')
-        if note_id == CONFIG.QUICK_UPDATE_NOTEID:
-            if CONFIG.QUICK_UPDATE_NOTEDISMISS == 'false':
-                window.show_notification(msg, source="quick_update_notification")
-        elif int(note_id) > int(CONFIG.QUICK_UPDATE_NOTEID):
-            logging.log('[QUICK-UPDATE] Starting quick update number {0}'
-                        .format(note_id))
-            CONFIG.set_setting('quick_update_noteid', note_id)
-            CONFIG.set_setting('quick_update_notedismiss', 'false')
-            from resources.libs.wizard import Wizard
-            quick_update_status = Wizard().quick_update(name=CONFIG.BUILDNAME, auto_quick_update="true")
-            if not quick_update_status:
-                CONFIG.set_setting('quick_update_notedismiss', 'true')
-                return
-            Wizard().force_close_kodi_in_5_seconds(dialog_header="עדכון מהיר הסתיים בהצלחה")
+
+    if not note_id:
+        return
+
+    note_id = str(note_id).strip()
+    current_note_id = str(CONFIG.QUICK_UPDATE_NOTEID or '0').strip()
+    logging.log(
+        '[QUICK-UPDATE] note_id={0} | CONFIG.QUICK_UPDATE_NOTEID={1}'.format(
+            note_id, current_note_id
+        )
+    )
+
+    try:
+        remote_number = int(note_id)
+        current_number = int(current_note_id)
+    except (TypeError, ValueError):
+        logging.log(
+            '[QUICK-UPDATE] Invalid note id (remote={0}, stored={1}); '
+            'leaving state unchanged.'.format(note_id, current_note_id),
+            level=xbmc.LOGERROR,
+        )
+        return
+
+    if remote_number == current_number:
+        if CONFIG.QUICK_UPDATE_NOTEDISMISS == 'false':
+            window.show_notification(msg, source="quick_update_notification")
+        return
+
+    if remote_number < current_number:
+        return
+
+    logging.log(
+        '[QUICK-UPDATE] Starting quick update number {0}'.format(note_id)
+    )
+    from resources.libs.wizard import Wizard
+    wizard = Wizard()
+    try:
+        quick_update_status = wizard.quick_update(
+            name=CONFIG.BUILDNAME,
+            auto_quick_update="true",
+            expected_note_id=note_id,
+        )
+    except Exception as update_err:
+        logging.log(
+            '[QUICK-UPDATE] Update {0} failed before completion; keeping '
+            'stored note id {1} so the next startup retries: {2}'.format(
+                note_id, current_note_id, update_err
+            ),
+            level=xbmc.LOGERROR,
+        )
+        return
+
+    if not quick_update_status:
+        logging.log(
+            '[QUICK-UPDATE] Update {0} did not complete; keeping stored '
+            'note id {1} so the next startup retries.'.format(
+                note_id, current_note_id
+            ),
+            level=xbmc.LOGERROR,
+        )
+        return
+
+    # Commit the delivery state only AFTER the package completed. The old
+    # order wrote the new id before download/extract; one transient failure
+    # permanently suppressed every retry for that release.
+    CONFIG.set_setting('quick_update_noteid', note_id)
+    CONFIG.set_setting('quick_update_notedismiss', 'false')
+    CONFIG.QUICK_UPDATE_NOTEID = note_id
+    CONFIG.QUICK_UPDATE_NOTEDISMISS = 'false'
+    wizard.force_close_kodi_in_5_seconds(
+        dialog_header="עדכון מהיר הסתיים בהצלחה"
+    )
 
 
 def sync_quickfix_build_version():

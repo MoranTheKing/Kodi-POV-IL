@@ -40,6 +40,15 @@ from resources.libs.common.config import CONFIG
 from resources.libs.downloader import Downloader
 
 
+def _quick_update_extract_ok(result):
+    """Only a complete, error-free extraction may advance the note id."""
+    try:
+        percent, errors, _error = result
+        return int(percent) == 100 and int(errors) == 0
+    except (TypeError, ValueError):
+        return False
+
+
 class Wizard:
 
     def __init__(self):
@@ -252,7 +261,8 @@ class Wizard:
                                
     #####################################################
     # KODI-RD-IL
-    def quick_update(self, name, auto_quick_update="false"):
+    def quick_update(self, name, auto_quick_update="false",
+                     expected_note_id=None):
 
         auto_quick_update = True if auto_quick_update=="true" else False
         
@@ -270,7 +280,13 @@ class Wizard:
                                nolabel='[B][COLOR red]ביטול[/COLOR][/B]',
                                yeslabel='[B][COLOR springgreen]המשך בכל זאת[/COLOR][/B]')
         if yes_pressed:
-            guizip = check.check_build(name, 'gui')
+            # Tie the manifest fetch to an immutable notification-specific path.
+            # raw.githubusercontent caches build.txt for several minutes and
+            # ignores query strings in its cache key; a distinct path prevents a
+            # fresh notification from being paired with the previous quickfix.
+            guizip = check.check_build(
+                name, 'gui', release_id=expected_note_id
+            )
             zipname = name.replace('\\', '').replace('/', '').replace(':', '').replace('*', '').replace('?', '').replace('"', '').replace('<', '').replace('>', '').replace('|', '')
 
             response = tools.open_url(guizip, check=True)
@@ -310,7 +326,24 @@ class Wizard:
             # the pre-update list, the addon DB lies about the version,
             # etc. The user-triggered manual install still has its own
             # safety prompt; this code path is the auto/manual quickfix.
-            extract.all(lib, CONFIG.HOME, ignore=True, title=title)
+            extract_result = extract.all(
+                lib, CONFIG.HOME, ignore=True, title=title
+            )
+            if not _quick_update_extract_ok(extract_result):
+                try:
+                    percent, errors, extraction_error = extract_result
+                except (TypeError, ValueError):
+                    percent, errors, extraction_error = 0, 1, repr(
+                        extract_result
+                    )
+                logging.log(
+                    '[QUICK-UPDATE] Extraction failed '
+                    '(percent={0}, errors={1}): {2}'.format(
+                        percent, errors, extraction_error
+                    ),
+                    level=xbmc.LOGERROR,
+                )
+                return False
             # skin.skin_to_default('Build Install')
             # skin.look_and_feel_data('save')
             installed = db.grab_addons(lib)
