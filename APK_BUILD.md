@@ -25,7 +25,9 @@ Neither workflow uses any third-party `actions/*` ג€” just system tools and
 4. **Build platform packages.** `Actions → "Build Android, Windows and webOS
    packages" → Run workflow`. Supply a release label such as
    `version=21.3-povil.48`, a strictly increasing Android `version_code` such as
-   `21348`, and `kodi_version=21.3`.
+   `2103048`, and `kodi_version=21.3`. Release `.47` inherited upstream
+   `versionCode=2103000`, so `.48` must stay above it; `21348` would be treated
+   by Android as a downgrade and cannot update an existing installation.
 
 5. **Verify before announcing.** A release appears with eight attachments:
    versioned and stable filenames for 32-bit Android, 64-bit Android, Windows
@@ -80,7 +82,9 @@ Never write a hyphenated POV label into `appinfo.json`.
 ## Bumping a release later
 
 - Bump the `version_code` integer (Android will refuse downgrade installs).
-- Choose a new `version` label (e.g. `21.3-povil.29`).
+- Keep it above the highest value already shipped. The `.48` baseline is
+  `2103048`, chosen to exceed the legacy `.47` value `2103000`.
+- Choose a new `version` label (e.g. `21.3-povil.49`).
 - Bump the workflow's guarded `EXPECTED_RELEASE`,
   `EXPECTED_VERSION_CODE` and `EXPECTED_KODI_VERSION` together with the input
   defaults. The job intentionally stops before downloading anything when an
@@ -114,6 +118,8 @@ The stable filenames let the download pages use `/releases/latest/download/<name
 
 The workflow fails before release creation unless:
 
+- final `aapt dump badging` metadata exactly matches the reviewed package id,
+  increasing versionCode, public versionName, app label and ABI;
 - all six Android launcher densities, both Android TV banner locations, every
   Kodi media icon, the launch splash and `povil-release.txt` match the canonical
   assets;

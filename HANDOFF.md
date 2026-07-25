@@ -170,7 +170,12 @@ older platform workflow.
 3. **Android update identity is permanent.** Keep package id `org.xbmc.povi`,
    the same encrypted keystore and an increasing `versionCode`. Existing users
    then install the new APK over the old one; uninstalling would erase their
-   profile. Official Kodi can remain installed alongside it.
+   profile. Official Kodi can remain installed alongside it. Release `.47`
+   actually reports the inherited upstream value `2103000`, so `.48` uses
+   `2103048`; never use the smaller shorthand `21348`, which Android rejects as
+   a downgrade. Patch apktool's `versionInfo` in `apktool.yml` (the decoded
+   manifest omits these fields) and verify the final signed APK with
+   `aapt dump badging`.
 4. **Android TV branding is more than `ic_launcher`.** Some launchers use
    `res/drawable-xhdpi/banner.png`; Kodi also carries upstream art in
    `assets/media/`. Generate the banner, media icons and launch splash from the
