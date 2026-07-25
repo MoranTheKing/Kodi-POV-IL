@@ -332,15 +332,30 @@ def test_phase_one_artifacts() -> None:
     build = (ROOT / "wizard/assets/build.txt").read_text(
         encoding="utf-8"
     ).replace("\r\n", "\n")
-    snapshot = (ROOT / "wizard/assets/build_versions/542.txt").read_text(
-        encoding="utf-8"
-    ).replace("\r\n", "\n")
-    assert build == snapshot
-    assert "quickfix-0.1.484.zip" in build
-    assert "kodipovilwizard-0.1.35.zip" in build
+    matching_snapshots = []
+    for path in (ROOT / "wizard/assets/build_versions").glob("*.txt"):
+        if path.read_text(encoding="utf-8").replace("\r\n", "\n") == build:
+            matching_snapshots.append(int(path.stem))
+    assert matching_snapshots, "build.txt has no immutable build_versions copy"
+    snapshot_id = max(matching_snapshots)
+
+    quickfix_match = re.search(r"quickfix-([0-9.]+)\.zip", build)
+    assert quickfix_match
     assert (
+        ROOT / "dist"
+        / ("Kodi-POV-IL-FENtastic-quickfix-%s.zip"
+           % quickfix_match.group(1))
+    ).is_file()
+    assert "kodipovilwizard-0.1.35.zip" in build
+
+    # Accept both legal publication states:
+    #   phase 1 -> artifacts/snapshot N are live while note N-1 remains live;
+    #   phase 2 -> the one-file note bump makes note N live.
+    note = (
         ROOT / "wizard/assets/notification_files/quick_update.txt"
-    ).read_text(encoding="utf-8").startswith("541|||")
+    ).read_text(encoding="utf-8")
+    note_id = int(note.split("|||", 1)[0])
+    assert note_id in (snapshot_id - 1, snapshot_id)
 
     old_wizard = ROOT / "dist/plugin.program.kodipovilwizard-0.1.34.zip"
     new_wizard = ROOT / "dist/plugin.program.kodipovilwizard-0.1.35.zip"

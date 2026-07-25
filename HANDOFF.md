@@ -1908,7 +1908,68 @@ was uploading partial/failed translations (stayed mostly English) the server onl
      changes to BOTH the align and extract paths -- a real mini-project in the core
      playback path, for a benefit that is inert whenever the container doesn't label
      its tracks. Left as-is by maintainer decision.
-16. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
+16. **Local RTL delivery repair + request-safe pooled sources + outline-only
+   subtitle defaults (AI 0.2.443 / quickfix 0.1.485 / notification #543).**
+   This release closes the known `rtl_base` legacy-cache punctuation gap without
+   rewriting the community pool.
+   - **Immutable source, disposable display copy:** `subs_engine_bridge.py`
+     keeps the canonical provider/pool SRT unchanged and returns a sibling
+     `.povil-rtl.srt` only for playback. Pool hashing, sharing and the `.shared`
+     marker always resolve back to the immutable source. New provider sources
+     receive a local `.logical-v1` marker; unmarked pre-migration v2 cache files
+     are treated as legacy. Display copies and sidecars are excluded from cache
+     source counts.
+   - **Punctuation compatibility:** `srt.fix_rtl_punctuation` now accepts an
+     explicit legacy-engine flag. For positively identified legacy content it
+     restores a dialogue dash stranded at the logical end after displaced
+     punctuation and restores legacy-relocated ASCII/Unicode ellipses to the
+     logical end before applying the RTL base wrap. Fresh logical/local/AI text
+     preserves a genuine leading ellipsis. This distinction cannot be inferred
+     losslessly from text alone: an old relocated trailing ellipsis and a genuine
+     authored leading ellipsis have identical bytes. The accepted compatibility
+     rule is therefore deliberately aggressive only for positively legacy-tagged
+     old Ktuvit/cache content.
+   - **No pool rewrite or provider storm:** pool rows carry source metadata into
+     resolution. A pooled source is fetched once through `/sub`, then cached
+     locally by its result hash; display repair never mutates or re-contributes
+     it. Harvest normalizes Ktuvit release names through the same Worker release
+     normalization (including removal of a trailing `.srt`) and both asynchronous
+     and durable synchronous contribution paths suppress `/contribute` when the
+     request-cached `/lookup` already contains that exact release. There is no
+     cache-version bump, purge, provider refetch, mass download, mass re-upload,
+     Worker deployment or pool backfill in this release.
+   - **No-box subtitle presentation:** `hebrew_build_ui_patcher.py` performs a
+     one-time, retry-safe JSON-RPC migration only when the complete 20-setting
+     subtitle-style fingerprint exactly matches build 0.1.101. It changes
+     `subtitles.backgroundtype` from box to outline and reduces the black border
+     from 41 to 25; every other style value remains fixed. The exact target is a
+     no-op and any customized profile is preserved wholesale. The migration
+     handles Kodi 21's boolean `result:true`, verifies readback and records
+     pending/applied/preserved in hidden schema-v1 state. This setting is global
+     to Kodi, not skin-specific. Authored ASS/SSA styles remain authoritative
+     while `subtitles.overridestyles=0`.
+   - **Packaging/privacy gate:** standalone/versioned/latest/repository packages
+     are byte-identical (SHA-256
+     `a211ec2ce995b5b31daa7b017ae78bea7968681c380932e881a993b4e83853f9`);
+     the repository metadata MD5 is
+     `9982625828a9febfa78960ed16eefb0d`. Quickfix 0.1.485 is a surgical copy of
+     0.1.484 with exactly eight intended MoranSubs members replaced (SHA-256
+     `add70dbedc8b2bcaa41ed5ca4f2b8964b32dc63e0d75f9cd02766fe59026923a`);
+     member order/metadata and all other 1,925 members are unchanged, no
+     `guisettings.xml` is carried, and the protected pool block is inherited
+     byte-for-byte. The local packaging helper remains ignored. `pool/worker.js`
+     is untouched and no streaming/private artifact is in scope.
+   - **Validation:** dedicated suites cover logical vs legacy dash/ellipsis
+     handling, Unicode ellipsis, interruption dashes, idempotence, python-bidi
+     visual positions, immutable delivery sources, one-fetch pool caching,
+     release dedup including a no-network synchronous guard, exact old/target/
+     customized subtitle fingerprints, boolean JSON-RPC success and retry after
+     failure. The normal embedded/gender, hidden-settings and platform-package
+     regressions also remain release gates. Two independent read-only reviews
+     returned SHIP; the leading-ellipsis ambiguity above is the explicit
+     maintainer trade-off.
+
+17. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
 ## Working style
