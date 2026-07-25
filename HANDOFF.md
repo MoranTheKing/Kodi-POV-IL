@@ -281,9 +281,20 @@ older platform workflow.
     `63b832ac192bac7148745e8f5fc0846c1647c74cf677c970de02aa161cf53dfe`)
     / quickfix 0.1.484 (SHA-256
     `1fa9e3ef7e995372a21ffebb81366271c7e9238f170c0e4c3d8f2b6c1b3feea8`).
-    Publish `build.txt` plus immutable `build_versions/542.txt` while note 541
-    remains live; only after the raw/Pages cache gate may note 542 announce the
-    maintenance. `pool.py` must remain byte-identical to 0.1.483.
+    The release followed the two-phase gate: PR #387 / merge
+    `3979e13380816a6939d134a414a0a4e9a43539b0` published the artifacts,
+    `build.txt` and immutable `build_versions/542.txt` while note 541 remained
+    live. Raw and Pages bytes were verified, Pages run `30146338621` succeeded,
+    and the artifacts were re-fetched after the full 300-second cache window.
+    PR #388 / merge `1acd25214f8201c5ee53772ceb5096011d502281`
+    then changed only `quick_update.txt`. Note 542 (SHA-256
+    `53476437396edb56ea7f35b11536e0d190a34d26a7592587912061da076cb0b3`)
+    became exact on raw and Pages at 2026-07-25 09:02:53 Israel; Pages run
+    `30146725554` succeeded. Existing note-541 users therefore receive the
+    corrective quickfix, whose successful same-boot path exits Kodi before old
+    startup code can continue to the package checker. Both independent reviews
+    returned SHIP. `pool.py` remained byte-identical to 0.1.483 and no private
+    Worker or streaming artifact entered the repository.
 
 ## Integrating third-party skin updates (playbook, learned the hard way)
 
