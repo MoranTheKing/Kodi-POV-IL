@@ -157,6 +157,41 @@ tools/build_wizard_quickfix.py          # replaces only the Wizard in a quickfix
 These rules encode the failures found in release `.47`; do not revert to the
 older platform workflow.
 
+### Verified `.48` release record (2026-07-25)
+
+- The implementation shipped through PR #380 (`81e7f2a`), followed by the
+  transparent-alpha artwork verifier correction in PR #381 (`198fdaa`) and the
+  Android package-metadata guard in PR #383 (`a29b591`). The final clean build
+  is workflow run `30137185730`; release:
+  `https://github.com/MoranTheKing/Kodi-POV-IL/releases/tag/v21.3-povil.48`.
+- An earlier `.48` attempt exposed that apktool's `versionInfo` still carried
+  upstream `versionCode=2103000`. That temporary release and tag were deleted,
+  its pointer PR #382 was closed unmerged, and the final release was rebuilt
+  with `versionCode=2103048`. Never restore the rejected shorthand `21348`.
+- Stable/versioned release assets were downloaded and proved byte-identical.
+  SHA-256: Android 32-bit
+  `29421caff3c1d75709c607845461e27484432124512c09ed1927798a525e8dc9`,
+  Android 64-bit
+  `553c7162f23cbafbd619e7183864a5f3662f01eef290dd7fe03028f0eb436748`,
+  Windows
+  `0d6e7f2d8ca227e248c6cef872f2689ba10adbfae62016c148a29087d3916721`,
+  and webOS
+  `f82ab46528450f5ade730604683985ab2fb0d8a726503a820d36d864cf7ee6c9`.
+- Both APKs passed package/version/ABI/artwork/marker/zipalign and v1/v2/v3
+  signature verification. Their signer certificate matches the downloaded
+  `.47` APK (`b69d63b652d991ca78bbbf8aca3f034491696a4c36d6468c3a5a4685a65b5417`).
+  The real webOS IPK passed the pinned-package structural and byte-preservation
+  verifier. The real Windows EXE contains the exact pinned Kodi installer,
+  build 0.1.101, Wizard 0.1.34 and canonical icon. The outer EXE remains
+  unsigned; do not describe it as Authenticode-signed, and retain a clean
+  standard-user Windows launch smoke test in future release gates.
+- Pointer PR #384 merged as `7b5a21a`; raw and Pages pointers both showed
+  `.48` after a 313-second cache gate. Quick-update note #541 was then reviewed
+  as a one-file change and merged separately in PR #385 (`a69391e`). Pages run
+  `30138021266` succeeded, and both raw and Pages returned the exact 541 note
+  after a 392-second post-merge cache gate. No private backend or
+  credential-bearing files entered either phase.
+
 1. **One application release label, platform-native encoding.** Public pointers
    and Android/Windows package markers use `21.3-povil.N`. webOS metadata accepts
    only `x.y.z`, so `build_webos_ipk.py` maps that to `21.3.N` and writes the
@@ -650,10 +685,12 @@ was uploading partial/failed translations (stayed mostly English) the server onl
   to 10 candidates in the current language before entering the next language;
   first aligning candidate wins. Exact chain:
   `he, ar, hi, es, ru, pt, pl, uk, fr, it, cs, ro, el, bg, sr, hr, sk, ur, nl`.
-  The hard-title safety envelope is 15 downloads total and 30 seconds of active
+  AI `0.2.441` initially used a 15-download global envelope. That value is
+  superseded by AI `0.2.442`: the hard-title envelope is now **50 downloads
+  total**, still at most 10 per language and still 30 seconds of active
   download/alignment work (Gemini idle time between lazy fallbacks is excluded).
-  Thus 10 Hebrew misses leave five total attempts for Arabic; the global guard
-  deliberately prevents a 10-times-every-language worst case.
+  This can fully examine the five strongest saturated languages
+  (he/ar/hi/es/ru), while the active-work deadline prevents a request storm.
 - Release `0.2.441` used the guarded two-phase flow: artifacts/manifests commit
   `8f0c1d1`, then neutral note-only commit `1c19eb8` after Pages success, exact
   public hash verification and a post-cache recheck beyond 300 seconds. Raw note
@@ -667,9 +704,21 @@ was uploading partial/failed translations (stayed mostly English) the server onl
   Independent review caught a Windows worktree CRLF/package-parity mismatch
   before publication; the final ZIPs were rebuilt from canonical staged Git
   blobs and re-reviewed SHIP. The public stale Worker reference was unchanged.
-- **Measurement clock now starts from successful note 539 delivery
-  (2026-07-24 21:32:34 Israel).** Allow at least 24 hours for `0.2.441` /
-  `0.1.481` adoption. The preferred low-traffic reset remains
+- The 50-download correction shipped as AI `0.2.442` / quickfix `0.1.482`
+  (artifact commit `73be591`) and notification `540` (`afac8ef`). The
+  standalone versioned/latest/repository ZIPs are byte-identical (SHA-256
+  `3a3f4df7125616be87cb5fad785bbfe03e1e5be338c7ede6a05785b106c1d854`);
+  quickfix SHA-256 is
+  `7f063e9c5457bdd7973a7679cdbb019d86210cb5945f0bd1994ae3f4fb2c54bf`.
+  Direct embedded extraction still becomes the ordinary AI payload and reaches
+  the one common `arabic_gender.begin(...)` gate; `mkv_probe.py` and
+  `embedded_extract.py` intentionally do not call the oracle themselves.
+- Wizard/package repair then produced quickfix `0.1.483` without changing the
+  AI add-on or its credential-bearing `pool.py`; notification `541` is the
+  separate platform-maintenance phase described in the package release record.
+- **Measurement clock now starts from successful note 540 delivery.** Allow at
+  least 24 hours for `0.2.442` / `0.1.482` adoption. The preferred low-traffic
+  reset remains
   **Monday 2026-07-27 at 03:00 Israel**; reset `/routes` once, then measure one
   complete fresh 24-hour window. Dashboard/rollup cadence is 15 minutes.
 
