@@ -47,3 +47,19 @@ can upload a Hebrew `.srt` from their computer:
 
 Endpoints added for this: `GET /upload` (page), `GET /tmdb-search` (token-gated
 TMDB proxy), `POST /web-upload` (token-gated, multipart).
+
+## Current client-side request safeguards
+
+The public Worker file above remains historical, but the current add-on client
+has request-safe behavior that is part of the public source:
+
+- A subtitle fetched from the pool is cached locally by its content hash after
+  the first `/sub` response. Display-only RTL repair is applied to a separate
+  local copy, so future playback neither re-fetches the provider source nor
+  rewrites the pooled object.
+- Existing pooled Ktuvit releases are checked through the already-cached
+  `/lookup` result before contribution. An exact release match suppresses the
+  redundant `/contribute` request.
+- Previously stored subtitles are not mass-downloaded or re-uploaded for
+  punctuation migrations. New pristine provider sources are tagged in the
+  client metadata so legacy display repair is used only where required.

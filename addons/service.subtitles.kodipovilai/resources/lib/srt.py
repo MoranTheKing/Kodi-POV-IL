@@ -64,7 +64,7 @@ _TIMECODE_RE = re.compile(
 _HEB_LETTER = r'֐-׿'
 # Punctuation that goes at the end of a Hebrew sentence but the AI
 # sometimes outputs at the start.
-_TRAILING_PUNCT_CHARS = '.,;:!?'
+_TRAILING_PUNCT_CHARS = '.,;:!?…'
 
 # Match a Hebrew text line that has a misplaced punctuation prefix.
 # Supports several common wrappers / decorations we need to ignore:
@@ -84,7 +84,7 @@ _LEADING_PUNCT_RE = re.compile(
 )
 # Detect a pure ellipsis (".." or "..." or more) -- legitimate
 # continuation marker, don't move it.
-_ELLIPSIS_RE = re.compile(r'^\.{2,}$')
+_ELLIPSIS_RE = re.compile(r'^(?:\.{2,}|…+)$')
 
 
 # Invisible BiDi / direction-control / BOM characters that Gemini
@@ -117,7 +117,7 @@ _RLE = '‫'   # RIGHT-TO-LEFT EMBEDDING
 _PDF = '‬'   # POP DIRECTIONAL FORMATTING
 
 
-def _fix_one_text_line(line):
+def _fix_one_text_line(line, move_ellipsis=False):
     """Apply the RTL punctuation correction to a single text line
     (not an index or timecode line). Returns the corrected line."""
     stripped = line.strip()
@@ -147,8 +147,11 @@ def _fix_one_text_line(line):
     leading    = m.group('leading')
     rest       = m.group('rest')        or ''
     close_tags = m.group('close_tags')  or ''
-    # Leave legitimate ellipsis alone.
-    if _ELLIPSIS_RE.match(leading):
+    # Leave legitimate leading ellipses alone in normal text. A caller that
+    # KNOWS this file was rewritten by the old built-in engine can opt into the
+    # inverse operation: that engine moved a logical trailing ellipsis to this
+    # physical leading position before rtl_base ever saw the line.
+    if _ELLIPSIS_RE.match(leading) and not move_ellipsis:
         return stripped if stripped != line.strip() else line
     if not rest:
         return stripped if stripped != line.strip() else line
@@ -207,7 +210,7 @@ def repair_music_mojibake(text):
         return text
 
 
-def fix_rtl_punctuation(text, mode=None):
+def fix_rtl_punctuation(text, mode=None, legacy_engine=False):
     """Normalize RTL punctuation placement in a Hebrew SRT body.
 
     `mode` controls the direction of the correction. Pulled from
@@ -240,6 +243,14 @@ def fix_rtl_punctuation(text, mode=None):
                              does reorder correctly.
       'off'               -- no processing.
 
+    `legacy_engine` is deliberately narrow compatibility metadata for Hebrew
+    files previously passed through the vendored sources engine. That engine
+    physically moved trailing ellipses to the start and leading dialogue dashes
+    to the end. True reverses those shapes before applying rtl_base; 'auto'
+    enables it only when another unambiguous legacy-engine signature exists in
+    the same file. Normal AI/local text must leave it False, so a genuine
+    authored leading ellipsis remains untouched.
+
     Idempotent. Skips index + timecode lines. Preserves trailing
     newline so a benign re-run doesn't flag the file as changed."""
     if not text:
@@ -261,6 +272,10 @@ def fix_rtl_punctuation(text, mode=None):
         mode = 'legacy'
     if mode == 'off':
         return text
+    if legacy_engine == 'auto':
+        legacy_engine = _looks_like_legacy_engine_text(text)
+    else:
+        legacy_engine = bool(legacy_engine)
     trailing_nl = '\n' if text.endswith(('\n', '\r')) else ''
     out_lines = []
     cue_hebrew = False   # did an earlier text line of THIS cue carry Hebrew?
@@ -276,7 +291,9 @@ def fix_rtl_punctuation(text, mode=None):
         if mode == 'legacy':
             out_lines.append(_fix_one_text_line(line))
         elif mode == 'rtl_base':
-            out_lines.append(_wrap_rtl_base_line(line, cue_hebrew=cue_hebrew))
+            out_lines.append(_wrap_rtl_base_line(
+                line, cue_hebrew=cue_hebrew,
+                legacy_engine=legacy_engine))
         else:
             # 'reverse' (default) or anything unrecognised
             out_lines.append(_reverse_fix_one_text_line(line, cue_hebrew=cue_hebrew))
@@ -415,7 +432,39 @@ def _is_wrappable_latin_tail(s):
     return bool(_WRAPPABLE_LATIN_TAIL_RE.match(s))
 
 
-def _wrap_rtl_base_line(line, cue_hebrew=False):
+def _looks_like_legacy_engine_text(text):
+    """Detect a file rewritten by subs_engine.engine's old punctuation fixer.
+
+    A pure leading ellipsis is ambiguous, so it is never evidence by itself.
+    A trailing *bare* dialogue dash after leading sentence punctuation is the
+    engine's unique ``- sentence?`` -> ``? sentence-`` shape. A displaced single
+    sentence mark is also strong file-level evidence: normal logical Hebrew
+    puts it at the end. This lets old pool rows self-identify without a network
+    refetch or mass re-upload, while new logical files keep genuine leading
+    ellipses intact.
+    """
+    try:
+        for line in (text or '').splitlines():
+            st = line.strip()
+            while st and st[0] in _INVISIBLE_BIDI:
+                st = st[1:]
+            while st and st[-1] in _INVISIBLE_BIDI:
+                st = st[:-1]
+            if not st or not _HEB_LETTER_RE.search(st):
+                continue
+            bare_body = st[:-1].rstrip() if st.endswith('-') \
+                and not st.endswith(' -') else ''
+            if bare_body and _LEADING_PUNCT_RE.match(bare_body):
+                return True
+            m = _LEADING_PUNCT_RE.match(st)
+            if m and not _ELLIPSIS_RE.match(m.group('leading') or ''):
+                return True
+    except Exception:
+        return False
+    return False
+
+
+def _wrap_rtl_base_line(line, cue_hebrew=False, legacy_engine=False):
     """Wrap a Hebrew text line in an explicit RTL embedding (RLE .. PDF) so the
     subtitle renderer treats it with a right-to-left BASE direction. Used by the
     'rtl_base' rtl_punct_mode.
@@ -475,10 +524,17 @@ def _wrap_rtl_base_line(line, cue_hebrew=False):
     st = s.strip()
     if st.endswith(' -') and _LEADING_PUNCT_RE.match(st[:-2].rstrip()):
         s = '- ' + st[:-2].rstrip()
+    # The vendored engine used lstrip('-') and appended a BARE dash, producing
+    # "? sentence-" (no separating space). Only undo it when the remaining line
+    # starts with displaced punctuation; a genuine interruption "sentence-" has
+    # no such prefix and is preserved.
+    elif legacy_engine and st.endswith('-') and not st.endswith(' -') \
+            and _LEADING_PUNCT_RE.match(st[:-1].rstrip()):
+        s = '- ' + st[:-1].rstrip()
     # Undo any 'reverse'/'legacy' mutation baked into cached/pool text: move a
     # displaced leading sentence-punct back to the logical end. On pristine
     # (fresh AI) text this is a no-op -- Hebrew never authors a leading . , ; : ! ?
-    normalized = _fix_one_text_line(s)
+    normalized = _fix_one_text_line(s, move_ellipsis=legacy_engine)
     return _RLE + normalized + _PDF
 
 

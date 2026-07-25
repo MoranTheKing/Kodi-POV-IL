@@ -406,7 +406,7 @@ def _source_id_for_ai(payload):
     return ''
 
 
-def _reapply_rtl_fix_in_place(path):
+def _reapply_rtl_fix_in_place(path, legacy_engine=False):
     """Re-run srt.fix_rtl_punctuation() on a cached translation
     file. Catches up files that were cached before the current
     version's regex coverage was wired in. Idempotent: if the
@@ -420,7 +420,8 @@ def _reapply_rtl_fix_in_place(path):
             content = f.read()
     except OSError:
         return
-    fixed = srt.fix_rtl_punctuation(content)
+    fixed = srt.fix_rtl_punctuation(
+        content, legacy_engine=legacy_engine)
     if fixed == content:
         return
     tmp = path + '.aitmp'
@@ -434,6 +435,79 @@ def _reapply_rtl_fix_in_place(path):
     except OSError:
         try: os.remove(tmp)
         except OSError: pass
+
+
+def _rtl_delivery_copy(path, legacy_engine=False):
+    """Render a Hebrew local-file candidate without touching its source bytes."""
+    try:
+        with open(path, 'rb') as f:
+            raw = f.read()
+        content = raw.decode('utf-8-sig')
+        fixed = srt.fix_rtl_punctuation(
+            content, legacy_engine=legacy_engine)
+        if fixed == content:
+            return path
+        import hashlib as _hrtl
+        sid = _hrtl.sha1(
+            (os.path.abspath(path) + '\0').encode('utf-8', 'replace')
+            + raw).hexdigest()[:16]
+        out = os.path.join(
+            kodi_utils.cache_dir(), 'local_{0}.he.srt'.format(sid))
+        tmp = out + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            f.write(fixed)
+        os.replace(tmp, out)
+        return out
+    except Exception as e:
+        kodi_utils.log(
+            'RTL local delivery copy skipped: {0}'.format(e), level='DEBUG')
+        return path
+
+
+def _pool_source_text(info, source_hash):
+    """Read a pool SRT from the local immutable cache, fetching it only once.
+
+    The hash-named source is never passed through RTL rendering in place. A
+    repeat pick therefore costs zero `/sub` Worker requests and can rebuild the
+    display copy under newer client-side RTL rules without changing pool bytes.
+    Returns ``(text, stable_id)`` or ``('', '')``.
+    """
+    import hashlib as _hpool
+    import re as _re_pool
+    raw_hash = (source_hash or '').strip().lower()
+    safe_hash = (
+        raw_hash if _re_pool.match(r'^[a-f0-9]{8,64}$', raw_hash) else '')
+    if safe_hash:
+        source_path = os.path.join(
+            kodi_utils.cache_dir(),
+            'pool_{0}.source.srt'.format(safe_hash))
+        try:
+            with open(source_path, 'r', encoding='utf-8') as f:
+                cached = f.read()
+            if cached:
+                return cached, safe_hash
+        except OSError:
+            pass
+
+    text = pool.fetch(info, raw_hash or None) if pool is not None else None
+    if not text:
+        return '', ''
+    stable_id = safe_hash or _hpool.sha1(
+        text.encode('utf-8', 'replace')).hexdigest()[:16]
+    source_path = os.path.join(
+        kodi_utils.cache_dir(),
+        'pool_{0}.source.srt'.format(stable_id))
+    tmp = source_path + '.tmp'
+    try:
+        with open(tmp, 'w', encoding='utf-8') as f:
+            f.write(text)
+        os.replace(tmp, source_path)
+    except OSError:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+    return text, stable_id
 
 
 # ---- search ----------------------------------------------------------
@@ -515,10 +589,11 @@ def process_harvest_queue(should_cancel=None):
     except Exception:
         return 0
 
-    import re as _re
-
     def _norm(s):
-        return _re.sub(r'[^a-z0-9]', '', (s or '').lower())
+        # Exact parity with the Worker's release normalization: notably strips
+        # a trailing .srt, so an already-pooled "GROUP" row matches the queued
+        # provider filename "GROUP.srt" and avoids both refetch and re-upload.
+        return _ktuvit_release_key(s)
 
     pooled_cache = {}
 
@@ -557,7 +632,11 @@ def process_harvest_queue(should_cancel=None):
             pool.remove_harvest_job(fp)
             continue
         try:
-            path = subs_engine_bridge.download(payload)
+            # Harvest/share the immutable provider/cache source, never the
+            # playback-only RTL copy. This preserves existing hashes and avoids
+            # any re-upload caused solely by display punctuation.
+            path = subs_engine_bridge.download(
+                payload, for_delivery=False)
         except Exception as e:
             kodi_utils.log('ktuvit harvest: download failed "{0}": {1}'.format(
                 rel, str(e)[:120]), level='INFO')
@@ -582,7 +661,10 @@ def process_harvest_queue(should_cancel=None):
         if text:
             try:
                 pool.contribute_ktuvit(info, text, release=rel,
-                                       marker_path=path)
+                                       marker_path=path,
+                                       logical_source=(
+                                           subs_engine_bridge
+                                           .is_logical_source(path)))
                 fed += 1
             except Exception:
                 pass
@@ -593,6 +675,13 @@ def process_harvest_queue(should_cancel=None):
                        '({1} left)'.format(fed, pool.harvest_queue_len()),
                        level='INFO')
     return fed
+
+
+def _ktuvit_release_key(value):
+    """Canonical Ktuvit release key shared by harvest and pool de-dup."""
+    if pool is None:
+        return ''
+    return pool.worker_norm_release(value)
 
 
 def _sleep_harvest(should_cancel):
@@ -835,8 +924,12 @@ def list_candidates(info, modal_progress=True):
             'filename': label, 'language': 'he',
             # 'release' rides in the link so resolve() can tier-check the
             # pool sub against the playing release (SubSync S2 verify/fix).
-            'link': _encode_link({'type': 'pool', 'hash': v.get('hash'),
-                                  'release': release or ''}),
+            'link': _encode_link({
+                'type': 'pool', 'hash': v.get('hash'),
+                'release': release or '',
+                'pool_kind': v.get('kind') or 'ai',
+                'source_lang': v.get('source_lang') or '',
+            }),
             'sync': 'false', 'rating': '5', 'is_hi': False, 'is_hd': False,
         }
 
@@ -930,8 +1023,12 @@ def list_candidates(info, modal_progress=True):
         results.append({
             'filename': label,
             'language': 'he',
-            'link': _encode_link({'type': 'pool', 'hash': v.get('hash'),
-                                  'release': release or ''}),
+            'link': _encode_link({
+                'type': 'pool', 'hash': v.get('hash'),
+                'release': release or '',
+                'pool_kind': v.get('kind') or 'ai',
+                'source_lang': v.get('source_lang') or '',
+            }),
             'sync': 'false', 'rating': '5',
             'is_hi': False, 'is_hd': False,
         })
@@ -1913,7 +2010,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 os.path.basename(path) if path else '?'),
             time_ms=4000)
         if path and os.path.isfile(path):
-            return path
+            return _rtl_delivery_copy(path)
         return None
 
     if kind == 'pool':
@@ -1921,18 +2018,25 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         # exact shared Hebrew SRT (by source hash) and hand it to Kodi.
         if pool is None:
             return None
-        text = pool.fetch(info, payload.get('hash'))
+        text, sid = _pool_source_text(info, payload.get('hash'))
         if not text:
             _status('AI: לא נמצאה כתובית במאגר', time_ms=4000)
             return None
-        import hashlib as _hpool
-        sid = (payload.get('hash')
-               or _hpool.sha1(text.encode('utf-8', 'replace')).hexdigest()[:16])
         out = os.path.join(kodi_utils.cache_dir(), 'pool_{0}.he.srt'.format(sid))
         try:
             with open(out, 'w', encoding='utf-8') as f:
                 f.write(text)
-            _reapply_rtl_fix_in_place(out)
+            # Old Ktuvit pool rows were stored after the vendored engine had
+            # physically moved trailing punctuation. Repair them locally on
+            # this fetched copy only. New logical rows carry a private format
+            # tag in source_lang; AI rows were never owned by that engine.
+            _pkind = payload.get('pool_kind') or 'ai'
+            _psrc = payload.get('source_lang') or ''
+            _legacy_ktuvit = (
+                _pkind == 'ktuvit'
+                and _psrc != pool.KTUVIT_LOGICAL_SOURCE_TAG)
+            _reapply_rtl_fix_in_place(
+                out, legacy_engine=_legacy_ktuvit)
             # SubSync S2: pool variants carry the release of their SOURCE sub;
             # if that doesn't match the playing release, verify/fix timing
             # against a release-matched oracle. Fail-open.
@@ -1987,13 +2091,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             try:
                 _src = (payload.get('source') or '').strip().lower()
                 _lang = payload.get('language') or ''
+                _pool_source_path = (
+                    subs_engine_bridge.source_path_for_delivery(path))
                 if (pool is not None and pool.share_enabled()
                         and _src == 'ktuvit' and 'Hebrew' in _lang
                         and 'MachineTranslated' not in _lang
-                        and not pool.was_contributed(path)):
+                        and not pool.was_contributed(_pool_source_path)):
                     _ktext = ''
                     try:
-                        with open(path, 'r', encoding='utf-8',
+                        with open(_pool_source_path, 'r', encoding='utf-8',
                                   errors='replace') as _kf:
                             _ktext = _kf.read()
                     except OSError:
@@ -2002,7 +2108,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         pool.contribute_ktuvit(
                             info, _ktext,
                             release=(payload.get('filename') or ''),
-                            marker_path=path)
+                            marker_path=_pool_source_path,
+                            logical_source=(
+                                subs_engine_bridge.is_logical_source(
+                                    _pool_source_path)))
                         kodi_utils.log(
                             'ktuvit pool mirror: enqueued "{0}"'.format(
                                 payload.get('filename') or ''), level='INFO')
@@ -2011,7 +2120,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         'ktuvit pool mirror: not enqueued (share={0}, '
                         'src={1}, lang={2}, already_shared={3})'.format(
                             (pool.share_enabled() if pool else False),
-                            _src, _lang, (pool.was_contributed(path)
+                            _src, _lang, (pool.was_contributed(
+                                _pool_source_path)
                                           if pool else False)),
                         level='INFO')
             except Exception as e:

@@ -887,9 +887,11 @@ _SUB_EXTS = ('.srt', '.ssa', '.ass', '.sub', '.smi', '.vtt', '.txt')
 # reads it to show "(נטענה מהקאש)", exactly like DarkSubs's cache note.
 LAST_DOWNLOAD_FROM_CACHE = False
 
-_CACHED_SUBS_DIRNAME = 'Cached_subs_v2'   # bumped: flush pre-fix (possibly
-#   poisoned) cache -- see _cached_subs_dir. The old shared-folder extraction bug
-#   could pin a WRONG-title / English-as-Hebrew file to a title's cache stem.
+_CACHED_SUBS_DIRNAME = 'Cached_subs_v2'
+# Do NOT bump/delete this cache for the RTL compatibility repair. Existing
+# Ktuvit files may already carry a ".shared" marker, and throwing them away
+# would cause needless provider fetches plus pool de-dup lookups. Old v2 bytes
+# stay immutable; playback gets a separate locally-rendered copy instead.
 # DarkSubs caches every download keyed {source}_{language}_{filename}{ext} and
 # wipes the whole folder once it exceeds this many files (its
 # "subtitle_trans_cache" setting). We keep the same count-based prune.
@@ -907,16 +909,6 @@ def _cached_subs_dir():
         d = os.path.join(base, _CACHED_SUBS_DIRNAME)
         if not os.path.isdir(d):
             os.makedirs(d)
-            # One-time flush of the pre-fix cache on first use of the bumped dir:
-            # the old shared-folder extraction bug could pin a wrong-title /
-            # English-as-Hebrew file to a title's cache stem, which the lookup
-            # would then serve forever. Drop the old dir once; entries simply
-            # re-download (now correctly).
-            try:
-                import shutil as _sh
-                _sh.rmtree(os.path.join(base, 'Cached_subs'), ignore_errors=True)
-            except Exception:
-                pass
         return d
     except Exception:
         return None
@@ -971,7 +963,12 @@ def _cached_subs_prune(cache_dir):
         names = os.listdir(cache_dir)
     except Exception:
         return
-    if len(names) <= _cached_subs_max():
+    source_names = [
+        n for n in names
+        if os.path.splitext(n)[1].lower() in _CACHED_SUBS_EXTS
+        and '.povil-rtl.' not in n
+    ]
+    if len(source_names) <= _cached_subs_max():
         return
     for n in names:
         try:
@@ -994,6 +991,106 @@ def _cached_subs_store(keybase, sub_file):
         kodi_utils.log('subs_engine_bridge: cache store skipped: {0}'
                        .format(e), level='DEBUG')
         return None
+
+
+# Only plain timed-text formats can be passed through srt.fix_rtl_punctuation
+# line-by-line. ASS/SSA and MicroDVD SUB carry timing/style fields on the SAME
+# line as the dialogue; wrapping the full line would corrupt their syntax.
+_RTL_PLAIN_TEXT_EXTS = ('.srt', '.vtt')
+_RTL_DISPLAY_TOKEN = '.povil-rtl'
+_LOGICAL_SOURCE_MARKER = '.logical-v1'
+
+
+def source_path_for_delivery(path):
+    """Map our private display-copy path back to the immutable source file.
+
+    Pool hashing/sharing must always read and mark the source, never the copy
+    carrying playback-only BiDi controls. Falls back to the input path.
+    """
+    try:
+        root, ext = os.path.splitext(path or '')
+        if root.endswith(_RTL_DISPLAY_TOKEN):
+            source = root[:-len(_RTL_DISPLAY_TOKEN)] + ext
+            if os.path.isfile(source):
+                return source
+    except Exception:
+        pass
+    return path
+
+
+def is_logical_source(path):
+    try:
+        return os.path.isfile(path + _LOGICAL_SOURCE_MARKER)
+    except Exception:
+        return False
+
+
+def _mark_logical_source(path):
+    """Mark a freshly downloaded file as pristine logical-order text.
+
+    Existing unmarked v2 entries are known to predate this change and may carry
+    the vendored engine's physical punctuation reversal. The tiny local marker
+    prevents that compatibility inverse from being applied to new downloads.
+    It causes no network traffic and is never uploaded.
+    """
+    try:
+        marker = path + _LOGICAL_SOURCE_MARKER
+        if not os.path.exists(marker):
+            with open(marker, 'w', encoding='ascii') as f:
+                f.write('1')
+    except Exception:
+        pass
+
+
+def _render_hebrew_rtl_copy(sub_file, legacy_engine=False):
+    """Return a playback-only RTL copy while leaving ``sub_file`` untouched.
+
+    The source bytes, source hash and ".shared" marker remain stable, so this
+    repair cannot re-upload existing pool subtitles. Unsupported structured
+    formats are deliberately returned verbatim rather than risking their
+    timing/style syntax. Fail-open on every error.
+
+    ``legacy_engine`` reverses only the old engine's known punctuation shapes;
+    fresh logical downloads pass False.
+    """
+    try:
+        if os.path.splitext(sub_file or '')[1].lower() \
+                not in _RTL_PLAIN_TEXT_EXTS:
+            return sub_file
+        with open(sub_file, 'rb') as f:
+            raw = f.read()
+        # extract_sub.convert_to_utf normalizes engine downloads first. Decode
+        # strictly here so an unexpected binary/legacy file is never rewritten
+        # with replacement characters.
+        text = raw.decode('utf-8-sig')
+        from resources.lib import srt
+        fixed = srt.fix_rtl_punctuation(
+            text, legacy_engine=legacy_engine)
+        if fixed == text:
+            return sub_file
+        root, ext = os.path.splitext(sub_file)
+        out = root + _RTL_DISPLAY_TOKEN + ext
+        tmp = out + '.tmp'
+        try:
+            with open(tmp, 'w', encoding='utf-8', newline='') as f:
+                f.write(fixed)
+                f.flush()
+                try:
+                    os.fsync(f.fileno())
+                except OSError:
+                    pass
+            os.replace(tmp, out)
+        except Exception:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            raise
+        return out
+    except Exception as e:
+        kodi_utils.log('subs_engine_bridge: RTL display copy skipped: {0}'
+                       .format(e), level='DEBUG')
+        return sub_file
 
 
 def _looks_like_subtitle(path):
@@ -1058,13 +1155,19 @@ def select_embedded(stream_index, lang=None):
         return False
 
 
-def download(payload):
+def download(payload, for_delivery=True):
     """Resolve an 'engine' link to a Hebrew SRT path on disk. Returns
-    the path or None. Called from translate.resolve()."""
+    the path or None. Called from translate.resolve().
+
+    ``for_delivery=False`` returns the immutable canonical/cache source for
+    hashing, pool sharing and language/timing analysis. The default returns a
+    separate RTL-rendered copy for a Hebrew SRT/VTT. Neither path performs any
+    Worker request by itself.
+    """
     if not enabled():
         return None
     try:
-        return _download_inner(payload)
+        return _download_inner(payload, for_delivery=for_delivery)
     except Exception as e:
         kodi_utils.log('subs_engine_bridge.download failed ({0}): {1}'.format(
             (payload.get('source') or '?'), e), level='ERROR')
@@ -1076,7 +1179,7 @@ def download(payload):
         return None
 
 
-def _download_inner(payload):
+def _download_inner(payload, for_delivery=True):
     global LAST_DOWNLOAD_FROM_CACHE
     LAST_DOWNLOAD_FROM_CACHE = False
     source = payload.get('source') or ''
@@ -1152,6 +1255,16 @@ def _download_inner(payload):
                 # (LAST_DOWNLOAD_FROM_CACHE is already declared global at the
                 # top of this function -- re-declaring it here is a SyntaxError.)
                 LAST_DOWNLOAD_FROM_CACHE = True
+                if (for_delivery
+                        and kodi_utils.get_bool(
+                            'auto_fix_sub_punctuation', True)
+                        and 'Hebrew' in language):
+                    # Every shipped v2 entry without the local format marker
+                    # predates the single RTL owner and may carry the old
+                    # engine's reversed dash/ellipsis shapes. Render a copy;
+                    # never mutate/delete the cache source or its share marker.
+                    return _render_hebrew_rtl_copy(
+                        hit, legacy_engine=not is_logical_source(hit))
                 return hit
         except Exception as e:
             kodi_utils.log('subs_engine_bridge: cache lookup skipped: {0}'
@@ -1180,21 +1293,19 @@ def _download_inner(payload):
         # actual subtitle still loads, so the repeated popup was pure noise.
         return None
 
-    # Optional Hebrew punctuation fix, mirroring engine.download_sub.
-    try:
-        if kodi_utils.get_bool('auto_fix_sub_punctuation', True) \
-                and 'Hebrew' in language:
-            from resources.lib.subs_engine import engine as _eng
-            fixed = _eng.fix_sub_punctuation_and_write(sub_file)
-            if fixed:
-                sub_file = fixed
-    except Exception as e:
-        kodi_utils.log('subs_engine_bridge: punct fix skipped: {0}'
-                       .format(e), level='DEBUG')
-
-    # Store the validated, punctuation-fixed file in the persistent cache so
-    # the next pick of the same subtitle is served from disk (see above).
+    # Store the validated PRISTINE provider file before any playback rendering.
+    # This preserves one stable source hash for pool de-dup and sharing.
+    source_file = sub_file
     if keybase:
-        _cached_subs_store(keybase, sub_file)
+        cached = _cached_subs_store(keybase, sub_file)
+        if cached:
+            source_file = cached
+    _mark_logical_source(source_file)
 
-    return sub_file
+    # The old vendored fixer is intentionally gone. One canonical MoranSubs
+    # processor owns Hebrew playback, on a disposable local copy only.
+    if (for_delivery
+            and kodi_utils.get_bool('auto_fix_sub_punctuation', True)
+            and 'Hebrew' in language):
+        return _render_hebrew_rtl_copy(source_file, legacy_engine=False)
+    return source_file

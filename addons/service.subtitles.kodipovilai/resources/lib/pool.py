@@ -32,6 +32,11 @@ _EV_REQUEUE_CODES = (401, 403, 426, 500, 503)
 
 POOL_URL = 'https://povil-subs-pool.moran200333.workers.dev'
 POOL_API_KEY = 'povil_x8FayxrUOAS9Qew1sFWzO6UgAnEAgJAG'
+# Non-secret client format tag. Old Ktuvit rows were stored after the vendored
+# engine physically reversed punctuation; new rows store logical source bytes.
+# The picker carries this returned source_lang into its local display repair so
+# it never has to refetch/re-upload the old pool.
+KTUVIT_LOGICAL_SOURCE_TAG = 'he-logical-v1'
 
 import hmac as _hmac
 import hashlib as _hashlib
@@ -443,6 +448,31 @@ def _pool_has_hash(body, source_hash):
         return False
 
 
+def _pool_has_ktuvit_release(body):
+    """True when this exact Ktuvit release name is already represented.
+
+    The RTL repair deliberately changes only local delivery bytes, but future
+    pristine source text can still hash differently from an old physically
+    reordered row. Release-level de-dup uses the SAME request-cached /lookup as
+    the hash/capacity checks, so it adds no Worker request and prevents a second
+    /contribute for subtitles the pool already owns.
+    """
+    try:
+        if body.get('kind') != 'ktuvit':
+            return False
+        wanted = worker_norm_release(body.get('release') or '')
+        if not wanted:
+            return False
+        data = _lookup_raw(_lookup_params_from_body(body))
+        for v in data.get('variants') or []:
+            if ((v.get('kind') or 'ai') == 'ktuvit'
+                    and worker_norm_release(v.get('release') or '') == wanted):
+                return True
+    except Exception:
+        return False
+    return False
+
+
 # Mirror the Worker's contribute-side gates so the client never spends a
 # /contribute request the server will only reject -- the dominant source of
 # wasted Worker invocations. Thresholds MUST match worker.js srtQualityOk /
@@ -513,8 +543,9 @@ def _post(body, marker_path=None):
         # still makes this one-shot, and the Worker dedups by hash -- so no
         # duplicate row is created, only the kind is upgraded.
         if (body.get('kind') != 'ai_emb'
-                and _pool_has_hash(body,
-                                   (body.get('source_hash') or '').strip())):
+                and (_pool_has_hash(
+                        body, (body.get('source_hash') or '').strip())
+                     or _pool_has_ktuvit_release(body))):
             if marker_path:
                 mark_contributed(marker_path)
             return
@@ -963,7 +994,8 @@ def contribute_once(info, source_hash, source_lang, srt_text, marker_path=None,
                release_override=release_override)
 
 
-def contribute_ktuvit(info, srt_text, release='', marker_path=None):
+def contribute_ktuvit(info, srt_text, release='', marker_path=None,
+                      logical_source=False):
     """Mirror a human Ktuvit Hebrew subtitle into the pool (kind='ktuvit').
 
     This is the Ktuvit backup channel: every Ktuvit sub a user downloads is
@@ -971,6 +1003,11 @@ def contribute_ktuvit(info, srt_text, release='', marker_path=None):
     offline and loads instantly from the channel afterwards. The content hash
     of the Hebrew SRT is the source hash, so the same release is never stored
     twice (server dedups by hash AND by result).
+
+    ``logical_source`` tags only newly downloaded pristine provider bytes.
+    Existing unmarked v2 cache entries keep the old ``he`` tag, so pool readers
+    still apply the compatibility inverse; no old file is rewritten/re-uploaded
+    merely to migrate its format.
 
     Unlike the AI share (a fire-and-forget thread), this ENQUEUES the upload to
     a small on-disk queue and lets the long-lived service drain it (see
@@ -990,7 +1027,9 @@ def contribute_ktuvit(info, srt_text, release='', marker_path=None):
             srt_text.encode('utf-8', 'replace')).hexdigest()[:16]
     except Exception:
         sh = ''
-    body = _build_body(info, sh, 'he', srt_text, kind='ktuvit',
+    source_tag = KTUVIT_LOGICAL_SOURCE_TAG if logical_source else 'he'
+    body = _build_body(info, sh, source_tag, srt_text,
+                       kind='ktuvit',
                        release_override=(release or None))
     if body is None:
         return
@@ -1126,7 +1165,9 @@ def _post_sync(body):
     # routes ai_emb through the queue doesn't silently re-break the promote.
     try:
         if body.get('kind') != 'ai_emb':
-            if _pool_has_hash(body, (body.get('source_hash') or '').strip()):
+            if (_pool_has_hash(
+                    body, (body.get('source_hash') or '').strip())
+                    or _pool_has_ktuvit_release(body)):
                 return 'ok'
             # CAPACITY: episode already at MAX_VARIANTS -> a new variant is 429'd
             # (toomany). Drop the queued job -- a well-covered episode doesn't

@@ -1,7 +1,10 @@
 # MoranSubs — unifying DarkSubs + the AI addon into one addon
 
-> Status: **PLAN / design — not started.** This document is the agreed design we
-> iterate on before any code is written. Nothing here is implemented yet.
+> Status: **HISTORICAL DESIGN RECORD.** The original “not started” label is no
+> longer accurate: the unified MoranSubs sources engine, embedded-subtitle
+> handling, pool integration and translation paths have since shipped. Keep
+> this file for design rationale; use `HANDOFF.md` and the current source/tests
+> as the authoritative implementation and release state.
 
 ## 1. Goal (from the maintainer)
 

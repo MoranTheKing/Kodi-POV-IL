@@ -1,3 +1,18 @@
+v0.2.443
+- Fixed Hebrew RTL display for human subtitles previously processed by the
+  built-in sources engine: dialogue dashes and trailing ellipses now render on
+  the correct visual edge. Existing cache and community-pool source files stay
+  immutable; the correction is applied to a local display copy, so it causes
+  no cache purge, provider refetch, or pool re-upload.
+- Community-pool subtitles are cached locally by hash after their first fetch,
+  and Ktuvit release-name de-dup now protects both the immediate and durable
+  upload paths. Re-picking the same pool subtitle does not spend another /sub
+  request, while future Ktuvit rows retain pristine logical punctuation.
+- Kodi POV IL profiles still using the exact shipped subtitle appearance now
+  use white text with a black glyph outline and no rectangular background.
+  The migration is retry-safe and preserves the entire style when the user has
+  customized any visual subtitle setting.
+
 v0.2.442
 - Gender-reference search can now examine up to 50 subtitle candidates across
   the researched language-priority chain, while still trying at most 10 inside
