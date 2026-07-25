@@ -17,7 +17,7 @@ on:
       version_code:
         description: 'Android versionCode (integer, must increase each release)'
         required: true
-        default: '21348'
+        default: '2103048'
       kodi_version:
         description: 'Upstream Kodi version to rebrand (e.g., 21.3)'
         required: true
@@ -37,7 +37,7 @@ env:
   APP_NAME: 'Kodi POV IL'
   WIZARD_VERSION: '0.1.34'
   EXPECTED_RELEASE: '21.3-povil.48'
-  EXPECTED_VERSION_CODE: '21348'
+  EXPECTED_VERSION_CODE: '2103048'
   EXPECTED_KODI_VERSION: '21.3'
 
 jobs:
@@ -64,6 +64,7 @@ jobs:
           sudo apt-get update -y
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             openjdk-17-jdk-headless \
+            aapt \
             zipalign \
             apksigner \
             nsis \
@@ -148,11 +149,13 @@ jobs:
               echo "::error::OLD_PACKAGE_ID and PACKAGE_ID must be the same length for binary patching"
               exit 1
             fi
-            MANIFEST="$WORK/decoded/AndroidManifest.xml"
             python3 src/.github/scripts/patch_apk_package_binary.py \
               "$WORK/decoded" "$OLD_PACKAGE_ID" "$PACKAGE_ID"
-            sed -i 's/android:versionCode="[0-9]*"/android:versionCode="'"$VERSION_CODE"'"/' "$MANIFEST"
-            sed -i 's/android:versionName="[^"]*"/android:versionName="'"$VERSION"'"/' "$MANIFEST"
+            # Apktool stores versionCode/versionName in apktool.yml and writes
+            # those values back during build. Its decoded manifest intentionally
+            # omits both attributes, so editing AndroidManifest.xml is a no-op.
+            python3 src/.github/scripts/patch_apktool_metadata.py \
+              "$WORK/decoded/apktool.yml" "$VERSION_CODE" "$VERSION"
             for f in "$WORK/decoded/res/values/strings.xml" "$WORK/decoded"/res/values-*/strings.xml; do
               [ -f "$f" ] || continue
               sed -i 's|<string name="app_name">[^<]*</string>|<string name="app_name">'"$APP_NAME"'</string>|' "$f" || true
@@ -288,6 +291,14 @@ jobs:
               --out "$OUT_APK" \
               "$WORK/aligned.apk"
             apksigner verify --print-certs "$OUT_APK" | head -10
+            python3 src/.github/scripts/verify_android_apk_metadata.py \
+              --aapt aapt \
+              --apk "$OUT_APK" \
+              --package-id "$PACKAGE_ID" \
+              --version-code "$VERSION_CODE" \
+              --version-name "$VERSION" \
+              --app-name "$APP_NAME" \
+              --native-code "$arch"
             python3 src/.github/scripts/platform_branding.py verify-apk \
               --apk "$OUT_APK" \
               --launcher-dir src/.github/assets/ic_launcher \
