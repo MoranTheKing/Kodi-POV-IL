@@ -269,6 +269,21 @@ older platform workflow.
     under both `dist/` and `wizard/` must be byte-identical, and every ZIP linked
     by `wizard/index.html` must exist. Newly added ZIP members use fixed
     metadata. Do not add a Wizard index link or update `latest` by hand.
+12. **Legacy automatic package checks are marker-gated from Wizard 0.1.35.**
+    Wizard 0.1.34 ran `kodi_version_update_check()` on every Android/Windows
+    startup. Its missing-marker bridge classified a pre-marker package as `.47`,
+    so quick maintenance could be followed by a full `.48` APK/EXE replacement
+    dialog. Keep the startup hook, but an automatic check must return quietly
+    when `povil-release.txt` is absent or invalid. A user-initiated manual check
+    may still use the `.47` bridge, and marked `.48+` packages remain eligible
+    for important future automatic package releases. The correction is Wizard
+    0.1.35 (SHA-256
+    `63b832ac192bac7148745e8f5fc0846c1647c74cf677c970de02aa161cf53dfe`)
+    / quickfix 0.1.484 (SHA-256
+    `1fa9e3ef7e995372a21ffebb81366271c7e9238f170c0e4c3d8f2b6c1b3feea8`).
+    Publish `build.txt` plus immutable `build_versions/542.txt` while note 541
+    remains live; only after the raw/Pages cache gate may note 542 announce the
+    maintenance. `pool.py` must remain byte-identical to 0.1.483.
 
 ## Integrating third-party skin updates (playbook, learned the hard way)
 
