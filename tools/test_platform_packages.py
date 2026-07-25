@@ -39,6 +39,29 @@ def _load_platform_branding():
     return module
 
 
+def _load_apktool_metadata():
+    path = ROOT / ".github/scripts/patch_apktool_metadata.py"
+    spec = importlib.util.spec_from_file_location("patch_apktool_metadata", path)
+    if spec is None or spec.loader is None:
+        raise AssertionError("cannot load patch_apktool_metadata.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_android_apk_metadata():
+    path = ROOT / ".github/scripts/verify_android_apk_metadata.py"
+    spec = importlib.util.spec_from_file_location(
+        "verify_android_apk_metadata",
+        path,
+    )
+    if spec is None or spec.loader is None:
+        raise AssertionError("cannot load verify_android_apk_metadata.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_android_transparent_pixel_normalization() -> None:
     platform_branding = _load_platform_branding()
     image_type = platform_branding.Image
@@ -64,6 +87,60 @@ def test_android_transparent_pixel_normalization() -> None:
         platform_branding._pixel_digest(source)
         != platform_branding._pixel_digest(partial_alpha_change)
     )
+
+
+def test_android_version_metadata_helpers() -> None:
+    patcher = _load_apktool_metadata()
+    verifier = _load_android_apk_metadata()
+
+    with tempfile.TemporaryDirectory(prefix="povil-apktool-metadata-") as temp:
+        apktool_yml = Path(temp) / "apktool.yml"
+        apktool_yml.write_text(
+            "version: 2.9.3\n"
+            "versionInfo:\n"
+            "  versionCode: 2103000\n"
+            "  versionName: 21.3\n"
+            "doNotCompress:\n"
+            "- png\n",
+            encoding="utf-8",
+        )
+        patcher.patch_apktool_metadata(
+            apktool_yml,
+            "2103048",
+            "21.3-povil.48",
+        )
+        patched = apktool_yml.read_text(encoding="utf-8")
+        assert "  versionCode: 2103048\n" in patched
+        assert "  versionName: 21.3-povil.48\n" in patched
+        assert "  versionCode: 2103000\n" not in patched
+
+    actual = verifier.parse_badging(
+        "package: name='org.xbmc.povi' versionCode='2103048' "
+        "versionName='21.3-povil.48' compileSdkVersion='34'\n"
+        "application-label:'Kodi POV IL'\n"
+        "native-code: 'arm64-v8a'\n"
+    )
+    verifier.verify_metadata(
+        actual,
+        package_id="org.xbmc.povi",
+        version_code="2103048",
+        version_name="21.3-povil.48",
+        app_name="Kodi POV IL",
+        native_code="arm64-v8a",
+    )
+    try:
+        verifier.verify_metadata(
+            actual,
+            package_id="org.xbmc.povi",
+            version_code="2103000",
+            version_name="21.3-povil.48",
+            app_name="Kodi POV IL",
+            native_code="arm64-v8a",
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("wrong Android versionCode passed final verifier")
 
 
 def test_release_version_rules() -> None:
@@ -138,11 +215,15 @@ def test_workflow_package_guards() -> None:
     )
     assert "WIZARD_VERSION: '0.1.34'" in workflow
     assert "default: '21.3-povil.48'" in workflow
-    assert "default: '21348'" in workflow
+    assert "default: '2103048'" in workflow
     assert "EXPECTED_RELEASE: '21.3-povil.48'" in workflow
-    assert "EXPECTED_VERSION_CODE: '21348'" in workflow
+    assert "EXPECTED_VERSION_CODE: '2103048'" in workflow
     assert "Validate release inputs" in workflow
+    assert "            aapt \\" in workflow
     assert "python3-pil" in workflow
+    assert "patch_apktool_metadata.py" in workflow
+    assert "verify_android_apk_metadata.py" in workflow
+    assert 'sed -i \'s/android:versionCode=' not in workflow
     assert "platform_branding.py generate" in workflow
     assert "platform_branding.py verify-apk" in workflow
     assert "build_webos_ipk.py build" in workflow
@@ -321,6 +402,7 @@ def test_phase_one_artifacts() -> None:
 
 def main() -> int:
     test_android_transparent_pixel_normalization()
+    test_android_version_metadata_helpers()
     test_release_version_rules()
     test_windows_installer_guards()
     test_update_checker_guards()
