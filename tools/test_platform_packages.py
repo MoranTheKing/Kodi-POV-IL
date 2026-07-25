@@ -29,6 +29,43 @@ def _load_release_version():
     return module
 
 
+def _load_platform_branding():
+    path = ROOT / ".github/scripts/platform_branding.py"
+    spec = importlib.util.spec_from_file_location("platform_branding", path)
+    if spec is None or spec.loader is None:
+        raise AssertionError("cannot load platform_branding.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_android_transparent_pixel_normalization() -> None:
+    platform_branding = _load_platform_branding()
+    image_type = platform_branding.Image
+
+    source = image_type.new("RGBA", (2, 1))
+    source.putdata(((3, 2, 1, 0), (20, 40, 60, 255)))
+    aapt_roundtrip = image_type.new("RGBA", (2, 1))
+    aapt_roundtrip.putdata(((0, 0, 0, 0), (20, 40, 60, 255)))
+    visible_change = image_type.new("RGBA", (2, 1))
+    visible_change.putdata(((0, 0, 0, 0), (21, 40, 60, 255)))
+    partial_alpha_change = image_type.new("RGBA", (2, 1))
+    partial_alpha_change.putdata(((0, 0, 0, 0), (20, 40, 60, 254)))
+
+    assert (
+        platform_branding._pixel_digest(source)
+        == platform_branding._pixel_digest(aapt_roundtrip)
+    )
+    assert (
+        platform_branding._pixel_digest(source)
+        != platform_branding._pixel_digest(visible_change)
+    )
+    assert (
+        platform_branding._pixel_digest(source)
+        != platform_branding._pixel_digest(partial_alpha_change)
+    )
+
+
 def test_release_version_rules() -> None:
     release_version = _load_release_version()
     assert release_version.parse_release_label("21.3-povil.48\n") == (21, 3, 48)
@@ -283,6 +320,7 @@ def test_phase_one_artifacts() -> None:
 
 
 def main() -> int:
+    test_android_transparent_pixel_normalization()
     test_release_version_rules()
     test_windows_installer_guards()
     test_update_checker_guards()
