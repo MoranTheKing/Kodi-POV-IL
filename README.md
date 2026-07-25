@@ -99,4 +99,7 @@ See `SECURITY.md` for the GitHub settings that should be enabled to prevent acci
 
 ## APK Downloads
 
-The download pages are ready, but signed APK/Windows installer files are not published yet. See `APK_RELEASE.md`.
+The current Android, Windows and LG webOS packages are published as
+[`21.3-povil.48`](https://github.com/MoranTheKing/Kodi-POV-IL/releases/tag/v21.3-povil.48).
+Use the platform download pages under `downloads/`; see `APK_RELEASE.md` for
+update behavior, verified package identities and release evidence.
