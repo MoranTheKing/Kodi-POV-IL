@@ -388,13 +388,13 @@
         <ul>
           <li>לחץ פעמיים על הקובץ שהורדת</li>
           <li>אם Windows Defender יזהיר → לחץ "More info" → "Run anyway"</li>
-          <li>עקוב אחרי המתקין: Next → Next → Install → Finish</li>
+          <li>המתן להודעת הסיום. המתקין שומר פרופיל קיים ומתקן את הרשאות <code>portable_data</code> כך שהאפליקציה תיפתח כמשתמש רגיל.</li>
         </ul>
       </div>
 
       <div class="step">
         <h4>שלב ג' — פתח</h4>
-        <p><strong>"Kodi POV IL"</strong> יופיע בתפריט התחל. בפעם הראשונה הוויזרד יותקן ויחל הבילד אוטומטית.</p>
+        <p><strong>Kodi POV IL</strong> יופיע בתפריט התחל ובשולחן העבודה עם אייקון ממותג. פתח מהקיצור הזה בלבד; אין צורך ב"הפעל כמנהל". בעדכון מעל גרסה קיימת ההגדרות נשמרות.</p>
       </div>
     </section>
 
@@ -404,7 +404,8 @@
       <ul>
         <li>הורד <a href="https://github.com/MoranTheKing/Kodi-POV-IL/releases/latest/download/Kodi-POV-IL-webos.ipk" target="_blank"><code>Kodi-POV-IL-webos.ipk</code></a> (הורדה ישירה — תמיד הגרסה האחרונה)</li>
         <li>הפעל Developer Mode על הטלוויזיה: <a href="https://webostv.developer.lge.com/develop/getting-started/developer-mode-app" target="_blank">webostv.developer.lge.com/develop/getting-started/developer-mode-app</a></li>
-        <li>השתמש ב-<code>ares-install</code> כדי להתקין את ה-IPK</li>
+        <li>הדרך הפשוטה היא DevMode Manager; לחלופין התקן <code>@webos-tools/cli</code>, קבל מפתח עם <code>ares-novacom --device MyTV --getkey</code>, ואז התקן עם <code>ares-install --device MyTV Kodi-POV-IL-webos.ipk</code></li>
+        <li>נתמך ב-webOS 4 ומעלה למעט דגמי K5LP. אפשר להתקין את החבילה החדשה מעל גרסת Kodi POV IL קודמת.</li>
       </ul>
     </section>
 
@@ -723,7 +724,13 @@
       <p>אלה מורידים את ה-APK ישירות (~75MB) בשלב אחד. ראה <a href="#downloader">שיטה 1</a>.</p>
 
       <h3>"ההתקנה נכשלה" באנדרואיד</h3>
-      <p>ייתכן שיש לך גרסה קודמת מותקנת עם חתימה שונה → הסר את האפליקציה הקיימת → התקן מחדש. בדוק שבחרת את הגרסה הנכונה (32-bit לרוב הסטרימרים, 64-bit לטלפונים / טאבלטים / Shield Pro 2019) — ראה <a href="#bits">סעיף 32/64-bit</a>.</p>
+      <p>אל תסיר מיד את האפליקציה: גרסה רשמית קודמת של Kodi POV IL אמורה להתעדכן מעל הקיים ולשמור את הפרופיל. הורד שוב ובדוק שבחרת את הארכיטקטורה הנכונה (32-bit לרוב הסטרימרים, 64-bit לטלפונים / טאבלטים / Shield Pro 2019). רק אם Android מציג במפורש שגיאת חתימה עבור עותק ישן ולא רשמי, גבה את ההגדרות ורק אז הסר והתקן מחדש.</p>
+
+      <h3>Kodi POV IL ב-Windows נפתח רק כמנהל או לא נפתח</h3>
+      <p>הורד והריץ את מתקין Windows האחרון פעם אחת מעל ההתקנה הקיימת. הוא שומר את <code>portable_data</code>, מתקן את הרשאות הכתיבה ומרענן את קיצור הדרך. לאחר הסיום פתח מהקיצור <strong>Kodi POV IL</strong> בלי "הפעל כמנהל".</p>
+
+      <h3>קובץ webOS לא מתקין או האפליקציה לא נפתחת</h3>
+      <p>הורד את ה-IPK למחשב, ודא ש-Developer Mode ו-Key Server פעילים, הארך את זמן הסשן והתקן דרך DevMode Manager או <code>ares-install</code>. אין לפתוח את ה-IPK בדפדפן הטלוויזיה. נתמך ב-webOS 4 ומעלה, למעט K5LP.</p>
 
       <h3>"נכשל בהתקנת הרחבה מקובץ" בתוך Kodi 21 (התקנת zip)</h3>
       <p>זה Kodi 21 שחוסם <strong>Install from zip file</strong> כברירת מחדל לאבטחה. הפתרון:</p>
