@@ -1968,6 +1968,19 @@ was uploading partial/failed translations (stayed mostly English) the server onl
      regressions also remain release gates. Two independent read-only reviews
      returned SHIP; the leading-ellipsis ambiguity above is the explicit
      maintainer trade-off.
+   - **Verified publication record (2026-07-25):** Phase 1 shipped through PR
+     #390 / merge `1a84b887e741f78eacbe92381744cdc66e4eedf8`; Pages run
+     `30159954536` succeeded. Raw and Pages artifacts, repository metadata,
+     mutable `build.txt` and immutable `build_versions/543.txt` were exact at
+     16:38:09 Israel and remained exact after the full cache gate at 16:43:44,
+     while notification 542 stayed live. Phase 2 changed only
+     `quick_update.txt` in PR #391 / merge
+     `9e0d3fb7784524cd81f5a02197d2067259f0446d`; Pages run `30160446230`
+     succeeded. Notification 543 (SHA-256
+     `293b67d72e535574b0ce5e136048ae16a0e92368f09d36abdd139aca550cb629`)
+     was byte-exact on Raw and Pages at 16:52:39 and again after a 334-second
+     cache gate at 16:58:13. No Worker, credential, streaming payload or local
+     packaging helper entered either release phase.
 
 17. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
