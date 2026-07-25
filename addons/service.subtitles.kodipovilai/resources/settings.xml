@@ -442,6 +442,13 @@
           <default></default>
           <control type="label" format="string"/>
         </setting>
+        <!-- Hidden, retry-safe one-shot migration: subtitle box -> outline. -->
+        <setting id="_subtitle_outline_migration_v1" type="string" label="30000">
+          <level>4</level>
+          <visible>false</visible>
+          <default></default>
+          <control type="label" format="string"/>
+        </setting>
       </group>
     </category>
 

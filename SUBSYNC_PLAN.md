@@ -1,9 +1,9 @@
 # SubSync — the "find a SYNCED subtitle" scan feature
 
-> Status: **PLAN / design — not started.** Companion to `MORANSUBS_PLAN.md`
-> (which covers merging DarkSubs into MoranSubs; Phase B of that plan is
-> already largely shipped — the vendored `subs_engine` + bridge exist and
-> `use_builtin_engine` defaults to true).
+> Status: **HISTORICAL DESIGN RECORD / IMPLEMENTED.** SubSync has shipped and
+> evolved beyond this original plan. Keep this file for design rationale; use
+> `HANDOFF.md`, the current `subsync.py`/alignment source and their tests as the
+> authoritative implementation and release state.
 
 ## 1. Goal (from the maintainer)
 
