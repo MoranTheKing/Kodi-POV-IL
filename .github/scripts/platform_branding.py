@@ -62,9 +62,18 @@ def _save_png(image: Image.Image, path: Path) -> None:
 
 def _pixel_digest(image: Image.Image) -> str:
     rgba = image.convert("RGBA")
+    pixels = bytearray(rgba.tobytes())
+    # Android's aapt resource cruncher is allowed to discard RGB values from
+    # fully transparent pixels.  Those hidden channels do not affect rendered
+    # artwork, but hashing them made a byte-for-byte source image fail after a
+    # normal apktool/aapt round trip.  Normalize only alpha-zero pixels; every
+    # visible or partially visible pixel remains an exact comparison.
+    for offset in range(0, len(pixels), 4):
+        if pixels[offset + 3] == 0:
+            pixels[offset : offset + 3] = b"\0\0\0"
     payload = (
         ("%dx%d:" % rgba.size).encode("ascii")
-        + rgba.tobytes()
+        + pixels
     )
     return hashlib.sha256(payload).hexdigest()
 
