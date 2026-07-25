@@ -1182,15 +1182,8 @@ def check_if_running_custom_kodi(kodi_custom_path):
     return str(kodi_custom_path).lower() in str(kodi_root_path).lower()
 
 
-def _installed_platform_release():
-    """Read the package marker, with a one-release bridge for existing users.
-
-    Releases through .47 did not carry a POV-specific version marker.  Wizard
-    .34 is delivered to those installations through the quick update, so a
-    missing marker must be treated as .47 exactly once.  Package .48 and later
-    always carry the marker and no longer need to infer from Kodi's core 21.3
-    version.
-    """
+def _marked_platform_release():
+    """Return the explicit POV package release marker, or None when absent."""
     import xbmcvfs
 
     marker = xbmcvfs.translatePath(
@@ -1201,13 +1194,25 @@ def _installed_platform_release():
         value = handle.read()
         return release_version.canonical_release_label(value)
     except Exception:
-        return _LEGACY_PLATFORM_RELEASE
+        return None
     finally:
         try:
             if handle:
                 handle.close()
         except Exception:
             pass
+
+
+def _installed_platform_release():
+    """Return a package release for a user-initiated compatibility check.
+
+    Releases through .47 did not carry a POV-specific marker.  The legacy
+    fallback is intentionally retained for manual checks only; automatic
+    startup checks skip pre-marker installations in
+    ``kodi_version_update_check``.  Package .48 and later always carry the
+    marker and remain eligible for future automatic package updates.
+    """
+    return _marked_platform_release() or _LEGACY_PLATFORM_RELEASE
 
 
 def _latest_platform_release(pointer_url):
@@ -1422,6 +1427,20 @@ def kodi_version_update_check(kodi_version_update_check_manual="false"):
     kodi_version_update_check_manual = True if kodi_version_update_check_manual=="true" else False
     os_type_label = tools.platform().capitalize()
     dialog = xbmcgui.Dialog()
+
+    # Existing packages through .47 have no POV release marker.  A quick update
+    # must not reinterpret those installs as an invitation to replace the full
+    # application.  Manual checks may still use the .47 bridge, while packages
+    # carrying the .48+ marker keep normal automatic update eligibility.
+    if (
+        not kodi_version_update_check_manual
+        and _marked_platform_release() is None
+    ):
+        logging.log(
+            '[Application Update Check] Skipping automatic package check for '
+            'a legacy pre-marker installation.',
+            level=xbmc.LOGINFO)
+        return
         
     # Android APK
     if tools.platform() == 'android':
