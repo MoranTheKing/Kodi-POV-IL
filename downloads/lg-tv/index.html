@@ -18,32 +18,37 @@
 <body>
   <main class="card">
     <h1>Kodi POV IL — LG TV (webOS)</h1>
-    <p>קובץ IPK ל־LG smart TVs עם webOS 5+ ‏(2019 והלאה). מבוסס על Kodi 21.0 הרשמי ל־webOS עם ה־wizard וה־FENtastic build כבר מוטמעים.</p>
+    <p>קובץ IPK ל-LG smart TV עם webOS 4 ומעלה (למעט דגמי K5LP). מבוסס על Kodi 21.0 הרשמי ל-webOS, כולל מיתוג POV IL ו-Wizard מובנה שמשלים את הבילד בהפעלה הראשונה.</p>
 
     <a class="primary" href="https://github.com/MoranTheKing/Kodi-POV-IL/releases/latest/download/Kodi-POV-IL-webos.ipk">הורד IPK — גרסה אחרונה</a>
 
     <div class="warn">
-      <strong>⚠️ דורש developer mode על ה־TV.</strong> LG חוסמת התקנה ישירה ב־TVs רגילים. צריך לפתוח חשבון מפתח אצל LG, להפעיל developer mode על הטלוויזיה, ולהשתמש ב־<code>ares-cli</code> מהמחשב כדי להעלות את ה־IPK. תהליך חד־פעמי של ~15 דקות.
+      <strong>⚠️ דורש Developer Mode על הטלוויזיה.</strong> את קובץ ה-IPK מורידים למחשב ומתקינים ממנו; אין לנסות לפתוח אותו בדפדפן של הטלוויזיה.
     </div>
 
-    <h2>איך מתקינים</h2>
+    <h2>הדרך המומלצת</h2>
+    <p class="step">1. הורד את קובץ ה-IPK למחשב.</p>
+    <p class="step">2. הפעל Developer Mode בטלוויזיה והשתמש ב-DevMode Manager for webOS כדי לבחור ולהתקין את הקובץ. המדריך המעודכן נמצא ב-<a href="https://kodi.wiki/view/HOW-TO:Install_Kodi_for_webOS" target="_blank">Kodi Wiki</a>.</p>
+    <p class="step">3. אם מותקנת גרסה קודמת של Kodi POV IL, התקן את ה-IPK החדש מעליה. מזהה האפליקציה נשמר ולכן זהו עדכון במקום.</p>
+
+    <h2>חלופה דרך שורת הפקודה</h2>
     <p class="step">1. פתח חשבון מפתח חינמי ב־<a href="https://webostv.developer.lge.com/" target="_blank">webostv.developer.lge.com</a>.</p>
     <p class="step">2. ב־TV: התקן את ה־app <strong>"Developer Mode"</strong> מה־LG Content Store, פתח, התחבר עם החשבון, והפעל <code>Dev Mode Status: ON</code>. רשום את ה־IP שמוצג.</p>
     <p class="step">3. במחשב (Linux / macOS / Windows עם Node.js): התקן את ה־CLI:
-      <br><code>npm install -g @webosose/ares-cli</code></p>
+      <br><code>npm install -g @webos-tools/cli</code></p>
     <p class="step">4. הגדר את ה־TV ב־CLI:
       <br><code>ares-setup-device</code>
-      <br>(בחר Add, שם <code>MyTV</code>, IP מהשלב הקודם, פורט <code>9922</code>, password <code>alpine</code>).</p>
-    <p class="step">5. הורד את ה־IPK מהקישור הצהוב למעלה, ואז:
-      <br><code>ares-install -d MyTV Kodi-POV-IL-webos.ipk</code></p>
-    <p class="step">6. אחרי ההתקנה האפליקציה <strong>"Kodi POV IL"</strong> תופיע במגירת האפליקציות של ה־TV.</p>
-    <p class="step">7. בהפעלה הראשונה Kodi עולה → ה־wizard מתחיל אוטומטית להוריד ולהתקין את הבילד (~דקה־שתיים) → Kodi נסגר ונפתח עם POV+FENtastic.</p>
+      <br>(בחר Add, שם <code>MyTV</code>, ה-IP של הטלוויזיה, פורט <code>9922</code> ומשתמש <code>prisoner</code>).</p>
+    <p class="step">5. פתח בטלוויזיה את <strong>Key Server</strong>, ואז במחשב הרץ <code>ares-novacom --device MyTV --getkey</code> והזן את ה-passphrase שמופיע בטלוויזיה.</p>
+    <p class="step">6. התקן:
+      <br><code>ares-install --device MyTV Kodi-POV-IL-webos.ipk</code></p>
+    <p class="step">7. האפליקציה <strong>Kodi POV IL</strong> תופיע במגירת האפליקציות. בהפעלה הראשונה ה-Wizard משלים את הבילד; לאחר ש-Kodi נסגר יש לפתוח אותו שוב.</p>
 
     <h2>הערות חשובות</h2>
-    <p class="muted">• Developer mode פוקע אחרי 50 שעות עד שתאריך אותו דרך ה־app — לא נורא, רק לחיצה אחת.</p>
+    <p class="muted">• יש להאריך את זמן ה-Developer Mode דרך האפליקציה לפני שהוא פוקע, אחרת אפליקציות sideload עלולות להפסיק להיפתח.</p>
     <p class="muted">• אין אפשרות להפיץ דרך ה־LG Content Store הרשמי בלי תהליך publishing יקר. הזרימה הזו (sideload דרך dev mode) היא הדרך הסטנדרטית של קהילת ה־homebrew של webOS.</p>
-    <p class="muted">• TVs ישנים יותר מ־2019 (webOS 3-4) לא נתמכים על־ידי Kodi 21 בכלל — אין IPK ל־webOS הישן.</p>
-    <p class="muted">• מדריך מפורט יותר ב־<a href="https://kodi.wiki/view/HOW-TO:Install_Kodi_on_LG_webOS" target="_blank">Kodi Wiki</a>.</p>
+    <p class="muted">• לפי מדריך Kodi, התמיכה היא ב-webOS 4 ומעלה, למעט טלוויזיות המבוססות K5LP.</p>
+    <p class="muted">• מדריך מפורט יותר ב-<a href="https://kodi.wiki/view/HOW-TO:Install_Kodi_for_webOS" target="_blank">Kodi Wiki</a>.</p>
   </main>
 </body>
 </html>
