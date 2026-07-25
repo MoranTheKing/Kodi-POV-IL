@@ -47,8 +47,8 @@ QUICK_UPDATE_NOTIFICATION_URL = 'https://raw.githubusercontent.com/MoranTheKing/
 # KODI-RD-IL - AUTO ANDROID/WINDOWS UPDATE
 # WINDOWS SOFTWARE
 LATEST_WINDOWS_VERSION_TEXT_FILE = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/kodi_version_auto_update/windows/latest_windows_version.txt'
-WINDOWS_DOWNLOAD_URL = "https://morantheking.github.io/Kodi-POV-IL/downloads/windows/"
-WINDOWS_INSTALLATION_PATH = "C:\\Program Files\\Kodi"
+WINDOWS_DOWNLOAD_URL = 'https://github.com/MoranTheKing/Kodi-POV-IL/releases/latest/download/Kodi-POV-IL-Setup.exe'
+WINDOWS_INSTALLATION_PATH = "C:\\Program Files\\Kodi POV IL"
 # ANDROID APK
 LATEST_APK_VERSION_TEXT_FILE = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/kodi_version_auto_update/apk/latest_apk_version.txt'
 APK_DOWNLOAD_URL = 'https://morantheking.github.io/Kodi-POV-IL/downloads/'

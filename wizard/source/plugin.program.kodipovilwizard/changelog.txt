@@ -1,3 +1,13 @@
+[COLOR yellow][B]v0.1.34[/B][/COLOR]
+* Android and Windows application updates now compare the complete POV IL
+  package release (for example 21.3-povil.48), instead of trying to parse that
+  value as Kodi's 21.3 core version.
+* Windows update detection now recognizes the actual Kodi POV IL installation
+  folder, downloads the stable current installer filename, and stages it
+  outside portable_data so the repair setup can safely protect that profile.
+* Existing pre-marker installations are bridged from .47 once, so they receive
+  the repaired .48 package and then use the embedded release marker normally.
+
 [COLOR yellow][B]v0.1.33[/B][/COLOR]
 * Quick-update delivery state is now committed only after the package finishes
   successfully. A transient download/install failure therefore retries on the

@@ -35,6 +35,11 @@ wizard/assets/build.txt                 # channel manifest the wizard reads
 wizard/assets/notification_files/quick_update.txt  # quick-update trigger+text
 tools/build_ai_subtitles_packages.py    # builds standalone + build-edition zips
 tools/publish_repo_channel.py           # publishes repo/addons.xml + zips
+.github/scripts/platform_branding.py    # derives/verifies shared package artwork
+.github/scripts/build_webos_ipk.py      # metadata-preserving webOS IPK builder
+dist/installer/build-windows-installer.nsi  # isolated Windows portable installer
+tools/build_wizard_package.py           # deterministic Wizard ZIP builder
+tools/build_wizard_quickfix.py          # replaces only the Wizard in a quickfix
 ```
 
 ## The two distribution channels
@@ -146,6 +151,84 @@ tools/publish_repo_channel.py           # publishes repo/addons.xml + zips
     `quick_update()` succeeds, and success requires extraction `(100%, 0 errors)`.
     False, exception, partial extraction, corrupt ZIP or a missing versioned
     manifest must preserve the prior id so the next startup retries.
+
+## Android / Windows / webOS package release (21.3-povil.48 baseline)
+
+These rules encode the failures found in release `.47`; do not revert to the
+older platform workflow.
+
+1. **One application release label, platform-native encoding.** Public pointers
+   and Android/Windows package markers use `21.3-povil.N`. webOS metadata accepts
+   only `x.y.z`, so `build_webos_ipk.py` maps that to `21.3.N` and writes the
+   same value to `control`, `appinfo.json` and `packageinfo.json`.
+2. **Wizard compares the POV package release, not Kodi core.** Wizard 0.1.34+
+   reads `special://xbmc/system/povil-release.txt` and uses
+   `resources/libs/common/release_version.py`. Never restore the old
+   `float(pointer) > CONFIG.KODIV` code: every POV package is still Kodi 21.3,
+   and hyphenated pointer labels cannot be floats. A missing marker is treated
+   as `.47` only to bridge already-installed legacy packages to `.48`.
+3. **Android update identity is permanent.** Keep package id `org.xbmc.povi`,
+   the same encrypted keystore and an increasing `versionCode`. Existing users
+   then install the new APK over the old one; uninstalling would erase their
+   profile. Official Kodi can remain installed alongside it.
+4. **Android TV branding is more than `ic_launcher`.** Some launchers use
+   `res/drawable-xhdpi/banner.png`; Kodi also carries upstream art in
+   `assets/media/`. Generate the banner, media icons and launch splash from the
+   canonical logo/splash and run `platform_branding.py verify-apk` on the final
+   signed APK. A build with even one upstream Kodi image must fail.
+5. **Windows portable mode must be writable without elevating Kodi.** The
+   runtime stays in `C:\Program Files\Kodi POV IL`, while Builtin Users SID
+   `S-1-5-32-545` receives recursive Modify permission on `portable_data` only.
+   Before invoking the upstream installer, move an existing full profile to
+   the sibling recovery directory; restore it before any overlay. Abort without
+   deleting either copy on a conflict. The Wizard must download the setup to
+   `%TEMP%\Kodi-POV-IL-Updates`, never inside `portable_data` (a running EXE in
+   that tree prevents the protective rename). Never auto-launch Kodi from the
+   elevated installer. Treat any existing `portable_data` directory as a user
+   profile, including empty/partial layouts, and check every recovery rename.
+   Build a fresh profile in the installer-owned `portable_data-new` sibling and
+   publish it by rename only after both build and Wizard extractions validate;
+   this prevents a partial first install from being mistaken for a valid update
+   on retry. Build `addon-manifest.xml` beside the original, require
+   exactly one closing `</addons>` tag and successful writes/closes, then swap
+   it only after protecting the original; restore the backup automatically if
+   the second rename fails.
+6. **Windows shortcuts are the launcher contract.** Create/refresh current-user
+   and all-users `Kodi POV IL` shortcuts to `kodi.exe -p` with `povil.ico`.
+   Do not patch the signed upstream `kodi.exe` icon resource; that invalidates
+   its signature and increases AV/SmartScreen risk. The outer setup remains
+   unsigned until a trusted Authenticode certificate is provisioned.
+7. **webOS update identity is permanent.** Keep app/package id
+   `org.xbmc.kodi`; changing it creates a second app and loses the in-place
+   update path. Rebuild from the pinned official IPK with
+   `build_webos_ipk.py`, not extract/re-tar shell commands. Preserve ar member
+   order and original TarInfo metadata/untouched payload bytes, executable mode
+   and `kodi-webos` bytes. Bundle only the Wizard and allowed pure-Python
+   dependencies.
+8. **Real artifacts are the gate.** The Action compiling successfully is not
+   enough. Download both APKs, the EXE and IPK from the release; verify stable
+   aliases, Android signature/package/version/artwork/marker, webOS numeric
+   versions/id/native executable/artwork/marker, and the Windows embedded
+   Wizard/build/icon plus standard-user ACL behavior on a clean VM.
+9. **Publication is still two-phase.** First publish Wizard 0.1.34, quickfix
+   0.1.483, mutable `build.txt`, immutable `build_versions/541.txt`, package
+   workflow/docs and keep live note 540. Build and verify `.48`, merge the
+   generated pointer PR, wait for raw/Pages caches, and only then publish note
+   541. Existing `.47` users receive Wizard .34 through that quickfix and see
+   the `.48` app update on the following startup.
+10. **Repository scope is unchanged.** Platform packaging uses only the
+    repository's public source and release artifacts. `pool/worker.js` remains
+    the intentionally stale public copy unless a separately authorized Worker
+    task says otherwise.
+11. **Wizard ZIP publication has four synchronized targets.** Build with
+    `tools/build_wizard_package.py --previous <old.zip> --manifest
+    wizard/release_manifests/<release>.json --version <version>`. The versioned
+    manifest explicitly lists replaced/added members and locks both input and
+    output SHA-256, so it remains reproducible in a clean post-commit checkout
+    without absorbing unrelated source drift. The versioned and `latest` ZIPs
+    under both `dist/` and `wizard/` must be byte-identical, and every ZIP linked
+    by `wizard/index.html` must exist. Newly added ZIP members use fixed
+    metadata. Do not add a Wizard index link or update `latest` by hand.
 
 ## Integrating third-party skin updates (playbook, learned the hard way)
 
