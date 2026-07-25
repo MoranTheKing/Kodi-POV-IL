@@ -87,6 +87,21 @@ Quick updates are controlled by:
 
 When the quick update number increases, installed builds receive the `gui` package automatically on next Kodi startup.
 
+## Subtitle display and community-pool behavior
+
+From MoranSubs `0.2.443` / quickfix `0.1.485`:
+
+- Hebrew subtitle punctuation is repaired on a local playback copy. The
+  downloaded or pooled source file remains unchanged.
+- Existing pooled subtitles are not downloaded from providers again and are
+  not uploaded again just to repair their display. After the first pool fetch,
+  the source is cached locally by its content hash.
+- The managed-build default is white subtitle text with a black outline around
+  the letters, without a black rectangle. Existing users who customized their
+  subtitle style keep their settings.
+- The correction is global Kodi subtitle presentation, so it is not tied to a
+  particular skin or player.
+
 ## Upstream POV Watch
 
 `.github/workflows/check-upstream-pov.yml` checks the original kodi7rd build metadata every 6 hours and opens an issue if upstream POV changes.

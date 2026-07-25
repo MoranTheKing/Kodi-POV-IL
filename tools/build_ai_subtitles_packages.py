@@ -16,6 +16,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 import zipfile
 from pathlib import Path
@@ -866,9 +867,59 @@ def build_one(name: str, standalone: bool) -> Path:
         tmp_path = Path(tmp)
         addon_dst = tmp_path / ADDON_ID
         copy_common(addon_dst, standalone=standalone)
+        normalize_staged_text(addon_dst)
         inject_pool_secret(addon_dst)
         make_zip(addon_dst, out)
     return out
+
+
+_TEXT_SUFFIXES = {
+    ".cfg", ".conf", ".css", ".html", ".ini", ".js", ".json", ".md",
+    ".po", ".py", ".txt", ".xml",
+}
+_EOL_STYLE_CACHE: dict[str, bytes] = {}
+
+
+def repository_eol_for(rel: Path) -> bytes:
+    """Return the newline style of the tracked source blob, defaulting to LF."""
+    git_path = (Path("addons") / ADDON_ID / rel).as_posix()
+    cached = _EOL_STYLE_CACHE.get(git_path)
+    if cached is not None:
+        return cached
+    try:
+        blob = subprocess.check_output(
+            ["git", "show", "HEAD:" + git_path],
+            cwd=ROOT,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        style = b"\n"
+    else:
+        style = b"\r\n" if b"\r\n" in blob else b"\n"
+    _EOL_STYLE_CACHE[git_path] = style
+    return style
+
+
+def normalize_staged_text(addon_dst: Path) -> None:
+    """Match project-source canonical text bytes even when built on Windows.
+
+    The worktree may use CRLF because of core.autocrlf, while most POV IL
+    repository blobs use LF. A few vendored files intentionally use CRLF, so
+    use each tracked source blob's newline style instead of globally forcing
+    one convention and creating unrelated package churn.
+    """
+    for path in addon_dst.rglob("*"):
+        if not path.is_file() or path.suffix.lower() not in _TEXT_SUFFIXES:
+            continue
+        raw = path.read_bytes()
+        if b"\0" in raw:
+            continue
+        rel = path.relative_to(addon_dst)
+        canonical = raw.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+        if repository_eol_for(rel) == b"\r\n":
+            canonical = canonical.replace(b"\n", b"\r\n")
+        if canonical != raw:
+            path.write_bytes(canonical)
 
 
 def inject_pool_secret(addon_dst: Path) -> None:
@@ -910,7 +961,10 @@ def inject_pool_secret(addon_dst: Path) -> None:
         raise RuntimeError(
             "pool credential injection left the placeholder in pool.py"
         )
-    pool_py.write_text(injected, encoding="utf-8")
+    # newline='' is unavailable on Path.write_text; write canonical LF bytes
+    # explicitly so Windows cannot reintroduce CRLF after staging normalization.
+    pool_py.write_bytes(
+        injected.replace("\r\n", "\n").replace("\r", "\n").encode("utf-8"))
     print("  pool credential set")
 
 
