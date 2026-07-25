@@ -28,7 +28,10 @@ INTERNAL_BOOLEAN_IDS = {
     "embedded_http_extract",
     "af3_first_launch_dialog_done",
 }
-INTERNAL_SCHEMA_V1_MARKERS = {"_embedded_mode_v1"}
+INTERNAL_SCHEMA_V1_MARKERS = {
+    "_embedded_mode_v1",
+    "_subtitle_outline_migration_v1",
+}
 EMBEDDED_MODE_ID = "embedded_translation_mode"
 EMBEDDED_MODE_LABELS = {
     "32423",
