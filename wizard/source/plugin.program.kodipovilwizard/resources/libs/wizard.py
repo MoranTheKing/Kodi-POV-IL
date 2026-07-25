@@ -35,6 +35,7 @@ from resources.libs import extract
 from resources.libs import install
 from resources.libs import skin
 from resources.libs.common import logging
+from resources.libs.common import release_version
 from resources.libs.common import tools
 from resources.libs.common.config import CONFIG
 from resources.libs.downloader import Downloader
@@ -1172,12 +1173,48 @@ def build_switch_skin():
             
 ##########################################
 # KODI-RD-IL - WINDOWS + ANDROID
+_LEGACY_PLATFORM_RELEASE = '21.3-povil.47'
+
+
 def check_if_running_custom_kodi(kodi_custom_path):
     import xbmcvfs
     kodi_root_path = xbmcvfs.translatePath('special://xbmc/')
-    if kodi_custom_path in kodi_root_path:
-        return True
-    return False
+    return str(kodi_custom_path).lower() in str(kodi_root_path).lower()
+
+
+def _installed_platform_release():
+    """Read the package marker, with a one-release bridge for existing users.
+
+    Releases through .47 did not carry a POV-specific version marker.  Wizard
+    .34 is delivered to those installations through the quick update, so a
+    missing marker must be treated as .47 exactly once.  Package .48 and later
+    always carry the marker and no longer need to infer from Kodi's core 21.3
+    version.
+    """
+    import xbmcvfs
+
+    marker = xbmcvfs.translatePath(
+        'special://xbmc/system/povil-release.txt')
+    handle = None
+    try:
+        handle = xbmcvfs.File(marker)
+        value = handle.read()
+        return release_version.canonical_release_label(value)
+    except Exception:
+        return _LEGACY_PLATFORM_RELEASE
+    finally:
+        try:
+            if handle:
+                handle.close()
+        except Exception:
+            pass
+
+
+def _latest_platform_release(pointer_url):
+    response = tools.open_url(pointer_url)
+    if not response:
+        raise ValueError('release pointer is unavailable')
+    return release_version.canonical_release_label(response.text)
     
 # KODI-RD-IL - ANDROID
 def check_if_app_installed(app_package_id):
@@ -1196,14 +1233,16 @@ def open_google_play_store_on_specific_app(app_package_id):
 def kodi_apk_update_check(kodi_version_update_check_manual, os_type_label):
     dialog = xbmcgui.Dialog()
     try:
-
-        LATEST_APK_VERSION_TEXT_FILE = float(tools.open_url(CONFIG.LATEST_APK_VERSION_TEXT_FILE).text)
-        is_new_version_available = LATEST_APK_VERSION_TEXT_FILE > CONFIG.KODIV
+        latest_release = _latest_platform_release(
+            CONFIG.LATEST_APK_VERSION_TEXT_FILE)
+        installed_release = _installed_platform_release()
+        is_new_version_available = release_version.is_newer_release(
+            latest_release, installed_release)
         
         if is_new_version_available:
 
             yes_pressed = dialog.yesno(f"{CONFIG.ADDONTITLE} ({os_type_label})",
-                               f'[COLOR yellow][B]קיים עדכון גרסה לאפליקציה שלנו![/B][/COLOR]\nגרסת קודי נוכחית: [B][COLOR red]{CONFIG.KODIV}[/COLOR][/B]\nגרסת קודי מעודכנת: [B][COLOR limegreen]{LATEST_APK_VERSION_TEXT_FILE}[/COLOR][/B]\nהאם ברצונך לעדכן את האפליקציה?',
+                               f'[COLOR yellow][B]קיים עדכון גרסה לאפליקציה שלנו![/B][/COLOR]\nגרסת האפליקציה הנוכחית: [B][COLOR red]{installed_release}[/COLOR][/B]\nגרסת האפליקציה המעודכנת: [B][COLOR limegreen]{latest_release}[/COLOR][/B]\nהאם ברצונך לעדכן את האפליקציה?',
                                nolabel='[B][COLOR red]מאוחר יותר[/COLOR][/B]',
                                yeslabel='[B][COLOR springgreen]עדכן[/COLOR][/B]')
                                
@@ -1265,7 +1304,7 @@ def kodi_apk_update_check(kodi_version_update_check_manual, os_type_label):
                 return
                     
         elif kodi_version_update_check_manual:
-            dialog.ok(f"{CONFIG.ADDONTITLE} ({os_type_label})", f'[COLOR yellow][B]לא קיים עדכון לאפליקציה![/B][/COLOR]\nגרסת קודי נוכחית: [B][COLOR limegreen]{CONFIG.KODIV}[/COLOR][/B]\nגרסת קודי מעודכנת: [B][COLOR limegreen]{LATEST_APK_VERSION_TEXT_FILE}[/COLOR][/B]')
+            dialog.ok(f"{CONFIG.ADDONTITLE} ({os_type_label})", f'[COLOR yellow][B]לא קיים עדכון לאפליקציה![/B][/COLOR]\nגרסת האפליקציה הנוכחית: [B][COLOR limegreen]{installed_release}[/COLOR][/B]\nגרסת האפליקציה המעודכנת: [B][COLOR limegreen]{latest_release}[/COLOR][/B]')
                          
     except Exception as e:
         logging.log(f'[kodi_version_update_check] Exception: {str(e)}')
@@ -1275,19 +1314,30 @@ def kodi_apk_update_check(kodi_version_update_check_manual, os_type_label):
 
 # KODI-RD-IL - WINDOWS
 def kill_kodi_and_install_exe(exe_full_path):
-    
     import xbmcvfs
     if not xbmcvfs.exists(exe_full_path):
         logging.log_notify(CONFIG.ADDONTITLE,
                             '[COLOR {0}]הקובץ לא נמצא![/COLOR]'.format(CONFIG.COLOR2))
+        return False
     
     def kill_kodi():
-        subprocess.call('taskkill /f /im kodi.exe', shell=True)
+        subprocess.call(
+            ['taskkill', '/f', '/im', 'kodi.exe'],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL)
     
-    import threading,subprocess
+    import subprocess
+    import threading
+
+    # os.startfile uses ShellExecute on Windows, so an installer carrying an
+    # elevation manifest gets the normal UAC prompt.  Start it first; only once
+    # Windows accepted the launch do we close Kodi so the setup can replace the
+    # runtime files without requiring the user to kill it manually.
+    os.startfile(exe_full_path)
     kodi_killer = threading.Timer(1.0, kill_kodi)
+    kodi_killer.daemon = True
     kodi_killer.start()
-    subprocess.call(exe_full_path, shell=True)
+    return True
 
 
 # KODI-RD-IL - WINDOWS
@@ -1295,13 +1345,16 @@ def kodi_windows_update_check(kodi_version_update_check_manual, os_type_label):
     dialog = xbmcgui.Dialog()
     
     try:
-        LATEST_WINDOWS_VERSION_NUMBER = float(tools.open_url(CONFIG.LATEST_WINDOWS_VERSION_TEXT_FILE).text)
-        is_new_version_available = LATEST_WINDOWS_VERSION_NUMBER > CONFIG.KODIV
+        latest_release = _latest_platform_release(
+            CONFIG.LATEST_WINDOWS_VERSION_TEXT_FILE)
+        installed_release = _installed_platform_release()
+        is_new_version_available = release_version.is_newer_release(
+            latest_release, installed_release)
             
         if is_new_version_available:
             
             yes = dialog.yesno(f"{CONFIG.ADDONTITLE} ({os_type_label})",
-                               f'[COLOR yellow][B]קיים עדכון גרסה לאפליקציה שלנו![/B][/COLOR]\nגרסת קודי נוכחית: [B][COLOR red]{CONFIG.KODIV}[/COLOR][/B]\nגרסת קודי מעודכנת: [B][COLOR limegreen]{LATEST_WINDOWS_VERSION_NUMBER}[/COLOR][/B]\nהאם ברצונך לעדכן את האפליקציה?',
+                               f'[COLOR yellow][B]קיים עדכון גרסה לאפליקציה שלנו![/B][/COLOR]\nגרסת האפליקציה הנוכחית: [B][COLOR red]{installed_release}[/COLOR][/B]\nגרסת האפליקציה המעודכנת: [B][COLOR limegreen]{latest_release}[/COLOR][/B]\nהאם ברצונך לעדכן את האפליקציה?',
                                nolabel='[B][COLOR red]מאוחר יותר[/COLOR][/B]',
                                yeslabel='[B][COLOR springgreen]עדכן[/COLOR][/B]')
                                        
@@ -1309,18 +1362,24 @@ def kodi_windows_update_check(kodi_version_update_check_manual, os_type_label):
                 return
             
             if yes:
-                ######## BUILD DIRECT EXE WINDOWS INSTALER URL ########
-                DIRECT_WINDOWS_DOWNLOAD_URL = f"{CONFIG.WINDOWS_DOWNLOAD_URL}/Kodi + Real Debrid Israel {LATEST_WINDOWS_VERSION_NUMBER} Setup.exe"
-                #######################################################
+                direct_windows_download_url = CONFIG.WINDOWS_DOWNLOAD_URL
                 
-                response = tools.open_url(DIRECT_WINDOWS_DOWNLOAD_URL, check=True)
+                response = tools.open_url(
+                    direct_windows_download_url, check=True)
                 if not response:
                     logging.log_notify(f"{CONFIG.ADDONTITLE} ({os_type_label})",
                                         '[COLOR {0}]קישור ההורדה אינו תקין![/COLOR]'.format(CONFIG.COLOR2))
                     return
                     
-                destination_path = CONFIG.PACKAGES
-                exe_file_name = os.path.basename(DIRECT_WINDOWS_DOWNLOAD_URL)
+                # Never download the updater inside portable_data. The NSIS
+                # repair installer temporarily moves that whole profile out of
+                # the upstream runtime tree; Windows cannot rename a directory
+                # that contains the currently-running setup executable.
+                import tempfile
+                destination_path = os.path.join(
+                    tempfile.gettempdir(), 'Kodi-POV-IL-Updates')
+                exe_file_name = os.path.basename(
+                    direct_windows_download_url)
                 exe_full_path = os.path.join(destination_path, exe_file_name)
                    
                 progress_dialog = xbmcgui.DialogProgress() 
@@ -1333,15 +1392,23 @@ def kodi_windows_update_check(kodi_version_update_check_manual, os_type_label):
                     os.remove(exe_full_path)
                 except:
                     pass
-                Downloader().download(DIRECT_WINDOWS_DOWNLOAD_URL, exe_full_path)
+                Downloader().download(
+                    direct_windows_download_url, exe_full_path)
                 xbmc.sleep(100)
                 progress_dialog.close()
+
+                if (
+                    not os.path.isfile(exe_full_path)
+                    or os.path.getsize(exe_full_path) < 10 * 1024 * 1024
+                ):
+                    raise ValueError(
+                        'Windows installer download is incomplete')
                     
                 dialog.ok(f"{CONFIG.ADDONTITLE} ({os_type_label})", f"[B]ההורדה הסתיימה בהצלחה.\nלחץ אישור כדי לסגור את קודי ולהתחיל את ההתקנה.[/B]")
                 kill_kodi_and_install_exe(exe_full_path)
                         
         elif kodi_version_update_check_manual:
-            dialog.ok(f"{CONFIG.ADDONTITLE} ({os_type_label})", f'[COLOR yellow][B]לא קיים עדכון לאפליקציה![/B][/COLOR]\nגרסת קודי נוכחית: [B][COLOR limegreen]{CONFIG.KODIV}[/COLOR][/B]\nגרסת קודי מעודכנת: [B][COLOR limegreen]{LATEST_WINDOWS_VERSION_NUMBER}[/COLOR][/B]')
+            dialog.ok(f"{CONFIG.ADDONTITLE} ({os_type_label})", f'[COLOR yellow][B]לא קיים עדכון לאפליקציה![/B][/COLOR]\nגרסת האפליקציה הנוכחית: [B][COLOR limegreen]{installed_release}[/COLOR][/B]\nגרסת האפליקציה המעודכנת: [B][COLOR limegreen]{latest_release}[/COLOR][/B]')
                          
     except Exception as e:
         logging.log(f'[kodi_version_update_check] Exception: {str(e)}')
