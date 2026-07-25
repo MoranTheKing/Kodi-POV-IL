@@ -195,7 +195,12 @@ def test_update_checker_guards() -> None:
     wizard = (WIZARD_ROOT / "resources/libs/wizard.py").read_text(
         encoding="utf-8"
     )
+    startup = (WIZARD_ROOT / "startup.py").read_text(encoding="utf-8")
+    router = (WIZARD_ROOT / "resources/libs/common/router.py").read_text(
+        encoding="utf-8"
+    )
     uservar = (WIZARD_ROOT / "uservar.py").read_text(encoding="utf-8")
+    assert "_marked_platform_release" in wizard
     assert "_installed_platform_release" in wizard
     assert "release_version.is_newer_release" in wizard
     assert "float(tools.open_url(CONFIG.LATEST_APK_VERSION_TEXT_FILE)" not in wizard
@@ -207,13 +212,18 @@ def test_update_checker_guards() -> None:
     assert (
         "releases/latest/download/Kodi-POV-IL-Setup.exe" in uservar
     )
+    assert "kodi_version_update_check()" in startup
+    assert "not kodi_version_update_check_manual" in wizard
+    assert "_marked_platform_release() is None" in wizard
+    assert "action == 'kodi_version_update_check'" in router
+    assert "kodi_version_update_check(kodi_version_update_check_manual)" in router
 
 
 def test_workflow_package_guards() -> None:
     workflow = (ROOT / ".github/workflows/build-apk.yml").read_text(
         encoding="utf-8"
     )
-    assert "WIZARD_VERSION: '0.1.34'" in workflow
+    assert "WIZARD_VERSION: '0.1.35'" in workflow
     assert "default: '21.3-povil.48'" in workflow
     assert "default: '2103048'" in workflow
     assert "EXPECTED_RELEASE: '21.3-povil.48'" in workflow
@@ -237,18 +247,15 @@ def test_wizard_rebuild_from_clean_checkout() -> None:
     """The surgical Wizard release must rebuild after its source is committed."""
     manifest_path = (
         ROOT
-        / "wizard/release_manifests/plugin.program.kodipovilwizard-0.1.34.json"
+        / "wizard/release_manifests/plugin.program.kodipovilwizard-0.1.35.json"
     )
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert set(manifest["replace"]) == {
         "plugin.program.kodipovilwizard/addon.xml",
         "plugin.program.kodipovilwizard/changelog.txt",
         "plugin.program.kodipovilwizard/resources/libs/wizard.py",
-        "plugin.program.kodipovilwizard/uservar.py",
     }
-    assert set(manifest["add"]) == {
-        "plugin.program.kodipovilwizard/resources/libs/common/release_version.py"
-    }
+    assert manifest["add"] == []
     builder_source = (ROOT / "tools/build_wizard_package.py").read_text(
         encoding="utf-8"
     )
@@ -265,8 +272,8 @@ def test_wizard_rebuild_from_clean_checkout() -> None:
             clean / "tools/build_wizard_package.py",
         )
         shutil.copy2(
-            ROOT / "dist/plugin.program.kodipovilwizard-0.1.33.zip",
-            clean / "dist/plugin.program.kodipovilwizard-0.1.33.zip",
+            ROOT / "dist/plugin.program.kodipovilwizard-0.1.34.zip",
+            clean / "dist/plugin.program.kodipovilwizard-0.1.34.zip",
         )
         shutil.copy2(
             manifest_path,
@@ -308,14 +315,14 @@ def test_wizard_rebuild_from_clean_checkout() -> None:
             sys.executable,
             "tools/build_wizard_package.py",
             "--previous",
-            "dist/plugin.program.kodipovilwizard-0.1.33.zip",
+            "dist/plugin.program.kodipovilwizard-0.1.34.zip",
             "--manifest",
             "wizard/release_manifests/"
-            "plugin.program.kodipovilwizard-0.1.34.json",
+            "plugin.program.kodipovilwizard-0.1.35.json",
             "--version",
-            "0.1.34",
+            "0.1.35",
         )
-        rebuilt = clean / "dist/plugin.program.kodipovilwizard-0.1.34.zip"
+        rebuilt = clean / "dist/plugin.program.kodipovilwizard-0.1.35.zip"
         assert hashlib.sha256(rebuilt.read_bytes()).hexdigest() == (
             manifest["output_sha256"]
         )
@@ -325,21 +332,21 @@ def test_phase_one_artifacts() -> None:
     build = (ROOT / "wizard/assets/build.txt").read_text(
         encoding="utf-8"
     ).replace("\r\n", "\n")
-    snapshot = (ROOT / "wizard/assets/build_versions/541.txt").read_text(
+    snapshot = (ROOT / "wizard/assets/build_versions/542.txt").read_text(
         encoding="utf-8"
     ).replace("\r\n", "\n")
     assert build == snapshot
-    assert "quickfix-0.1.483.zip" in build
-    assert "kodipovilwizard-0.1.34.zip" in build
+    assert "quickfix-0.1.484.zip" in build
+    assert "kodipovilwizard-0.1.35.zip" in build
     assert (
         ROOT / "wizard/assets/notification_files/quick_update.txt"
     ).read_text(encoding="utf-8").startswith("541|||")
 
-    old_wizard = ROOT / "dist/plugin.program.kodipovilwizard-0.1.33.zip"
-    new_wizard = ROOT / "dist/plugin.program.kodipovilwizard-0.1.34.zip"
+    old_wizard = ROOT / "dist/plugin.program.kodipovilwizard-0.1.34.zip"
+    new_wizard = ROOT / "dist/plugin.program.kodipovilwizard-0.1.35.zip"
     latest_wizard = ROOT / "dist/plugin.program.kodipovilwizard-latest.zip"
     assert new_wizard.read_bytes() == latest_wizard.read_bytes()
-    page_wizard = ROOT / "wizard/plugin.program.kodipovilwizard-0.1.34.zip"
+    page_wizard = ROOT / "wizard/plugin.program.kodipovilwizard-0.1.35.zip"
     page_latest = ROOT / "wizard/plugin.program.kodipovilwizard-latest.zip"
     assert new_wizard.read_bytes() == page_wizard.read_bytes()
     assert new_wizard.read_bytes() == page_latest.read_bytes()
@@ -360,18 +367,15 @@ def test_phase_one_artifacts() -> None:
             "plugin.program.kodipovilwizard/addon.xml",
             "plugin.program.kodipovilwizard/changelog.txt",
             "plugin.program.kodipovilwizard/resources/libs/wizard.py",
-            "plugin.program.kodipovilwizard/uservar.py",
         }
-        assert set(new_crc) - set(old_crc) == {
-            "plugin.program.kodipovilwizard/resources/libs/common/release_version.py"
-        }
+        assert not (set(new_crc) - set(old_crc))
         assert not (set(old_crc) - set(new_crc))
 
     old_quickfix = (
-        ROOT / "dist/Kodi-POV-IL-FENtastic-quickfix-0.1.482.zip"
+        ROOT / "dist/Kodi-POV-IL-FENtastic-quickfix-0.1.483.zip"
     )
     new_quickfix = (
-        ROOT / "dist/Kodi-POV-IL-FENtastic-quickfix-0.1.483.zip"
+        ROOT / "dist/Kodi-POV-IL-FENtastic-quickfix-0.1.484.zip"
     )
     wizard_prefix = "addons/plugin.program.kodipovilwizard/"
     pool = "addons/service.subtitles.kodipovilai/resources/lib/pool.py"
@@ -392,11 +396,8 @@ def test_phase_one_artifacts() -> None:
             wizard_prefix + "addon.xml",
             wizard_prefix + "changelog.txt",
             wizard_prefix + "resources/libs/wizard.py",
-            wizard_prefix + "uservar.py",
         }
-        assert set(new_by) - set(old_by) == {
-            wizard_prefix + "resources/libs/common/release_version.py"
-        }
+        assert not (set(new_by) - set(old_by))
         assert not (set(old_by) - set(new_by))
 
 
