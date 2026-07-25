@@ -284,6 +284,106 @@ def test_wizard_forwards_expected_note_id():
     assert len(guard_calls) == 1
 
 
+def test_application_package_update_marker_gate():
+    """Legacy auto checks stay quiet; manual and marked checks remain active."""
+    startup_source = STARTUP.read_text(encoding="utf-8")
+    startup_tree = ast.parse(startup_source, filename=str(STARTUP))
+    startup_calls = [
+        node
+        for node in ast.walk(startup_tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "kodi_version_update_check"
+    ]
+    assert len(startup_calls) == 1
+
+    router = (
+        ROOT
+        / "wizard/source/plugin.program.kodipovilwizard/"
+        "resources/libs/common/router.py"
+    )
+    router_source = router.read_text(encoding="utf-8")
+    assert "action == 'kodi_version_update_check'" in router_source
+    assert "kodi_version_update_check(kodi_version_update_check_manual)" in (
+        router_source
+    )
+
+    wizard_tree = ast.parse(
+        WIZARD.read_text(encoding="utf-8"),
+        filename=str(WIZARD),
+    )
+    functions = {
+        node.name
+        for node in ast.walk(wizard_tree)
+        if isinstance(node, ast.FunctionDef)
+    }
+    assert {
+        "kodi_version_update_check",
+        "kodi_apk_update_check",
+        "kodi_windows_update_check",
+    } <= functions
+
+    class Config:
+        ADDONTITLE = "Kodi POV IL"
+        APK_PACKAGE_IDS = ("il.co.povil",)
+        WINDOWS_INSTALLATION_PATH = r"C:\Program Files\Kodi POV IL"
+
+    class Tools:
+        @staticmethod
+        def platform():
+            return "android"
+
+    class XbmcGui:
+        class Dialog:
+            def ok(self, *_args, **_kwargs):
+                raise AssertionError("unexpected dialog")
+
+    class Xbmc:
+        LOGINFO = 1
+
+    def run_case(manual, marker):
+        events = []
+
+        def marked_release():
+            events.append(("marker", marker))
+            return marker
+
+        def custom_check(package):
+            events.append(("custom", package))
+            return True
+
+        def apk_check(is_manual, label):
+            events.append(("apk", is_manual, label))
+
+        function = _function_from_file(
+            WIZARD,
+            "kodi_version_update_check",
+            {
+                "CONFIG": Config,
+                "tools": Tools,
+                "xbmcgui": XbmcGui,
+                "xbmc": Xbmc,
+                "logging": FakeLogging(),
+                "_marked_platform_release": marked_release,
+                "check_if_running_custom_kodi": custom_check,
+                "kodi_apk_update_check": apk_check,
+            },
+        )
+        function(manual)
+        return events
+
+    assert run_case("false", None) == [("marker", None)]
+    assert run_case("true", None) == [
+        ("custom", "il.co.povil"),
+        ("apk", True, "Android"),
+    ]
+    assert run_case("false", "21.3-povil.48") == [
+        ("marker", "21.3-povil.48"),
+        ("custom", "il.co.povil"),
+        ("apk", False, "Android"),
+    ]
+
+
 if __name__ == "__main__":
     tests = [
         value

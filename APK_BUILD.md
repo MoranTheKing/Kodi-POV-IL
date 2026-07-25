@@ -74,6 +74,13 @@ requires a trusted Windows code-signing certificate. This is separate from the
 fixed runtime-permission bug: after setup, Kodi POV IL must open as a standard
 user and must not need "Run as administrator".
 
+Wizard 0.1.35+ suppresses automatic package checks only for legacy Android/
+Windows installations that predate `povil-release.txt`. A manual check still
+uses the `.47` compatibility bridge, and marked `.48+` packages retain
+automatic eligibility for important future full-application releases. This
+prevents ordinary quick-update maintenance from immediately showing an
+unrequested APK/EXE replacement dialog to a legacy installation.
+
 LG webOS keeps the official `org.xbmc.kodi` app id so a newer IPK upgrades the
 existing app. The public POV label is converted to a valid numeric webOS
 version (`21.3-povil.48` → `21.3.48`) in all three package metadata files.
