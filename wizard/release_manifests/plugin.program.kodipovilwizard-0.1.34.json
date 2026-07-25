@@ -1,0 +1,15 @@
+{
+  "version": "0.1.34",
+  "previous_version": "0.1.33",
+  "previous_sha256": "4223dd978d4190dd1b6fd32e6e7dee6d5982633d68f273c39ba99bdcd1bae4e7",
+  "output_sha256": "2674b7d729179ae48f5d0f91ead4d5e1e59fae91db6aa0ad393fe85e76e5e299",
+  "replace": [
+    "plugin.program.kodipovilwizard/addon.xml",
+    "plugin.program.kodipovilwizard/changelog.txt",
+    "plugin.program.kodipovilwizard/resources/libs/wizard.py",
+    "plugin.program.kodipovilwizard/uservar.py"
+  ],
+  "add": [
+    "plugin.program.kodipovilwizard/resources/libs/common/release_version.py"
+  ]
+}
