@@ -333,7 +333,7 @@ def test_phase_one_artifacts() -> None:
     assert "kodipovilwizard-0.1.34.zip" in build
     assert (
         ROOT / "wizard/assets/notification_files/quick_update.txt"
-    ).read_text(encoding="utf-8").startswith("540|||")
+    ).read_text(encoding="utf-8").startswith("541|||")
 
     old_wizard = ROOT / "dist/plugin.program.kodipovilwizard-0.1.33.zip"
     new_wizard = ROOT / "dist/plugin.program.kodipovilwizard-0.1.34.zip"
