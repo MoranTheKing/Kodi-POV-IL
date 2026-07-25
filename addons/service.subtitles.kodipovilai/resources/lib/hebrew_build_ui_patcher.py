@@ -326,11 +326,158 @@ def _set_kodi_setting(setting, value):
             'method': 'Settings.SetSettingValue',
             'params': {'setting': setting, 'value': value},
         }
-        result = xbmc.executeJSONRPC(json.dumps(payload))
-        return '"OK"' in result or '"result":"OK"' in result
+        raw = xbmc.executeJSONRPC(json.dumps(payload))
+        data = json.loads(raw)
+        result = data.get('result')
+        # Kodi 21's Settings.SetSettingValue returns JSON boolean true. Keep
+        # "OK" compatibility for older/fake runtimes, but never infer success
+        # from an arbitrary substring.
+        return result is True or result == 'OK'
     except Exception as exc:
         kodi_utils.log('hebrew_build_ui_patcher JSON setting failed: {0}: {1}'.format(setting, exc), level='WARNING')
         return False
+
+
+def _get_kodi_setting(setting):
+    if xbmc is None:
+        return None
+    try:
+        payload = {
+            'jsonrpc': '2.0',
+            'id': 1,
+            'method': 'Settings.GetSettingValue',
+            'params': {'setting': setting},
+        }
+        raw = xbmc.executeJSONRPC(json.dumps(payload))
+        data = json.loads(raw)
+        return (data.get('result') or {}).get('value')
+    except Exception as exc:
+        kodi_utils.log(
+            'hebrew_build_ui_patcher JSON setting read failed: {0}: {1}'
+            .format(setting, exc), level='WARNING')
+        return None
+
+
+# Exact subtitle-presentation fingerprint shipped in full build 0.1.101.
+# Existing users get the new no-box outline ONLY when every value still matches
+# this untouched baseline. One customized value preserves the entire style.
+_SUBTITLE_STYLE_OLD = {
+    'subtitles.align': 2,
+    'subtitles.fontname': 'Arial',
+    'subtitles.fontsize': 52,
+    'subtitles.style': 1,
+    'subtitles.colorpick': 'FFFFFFFF',
+    'subtitles.opacity': 90,
+    'subtitles.bordersize': 41,
+    'subtitles.bordercolorpick': 'FF000000',
+    'subtitles.blur': 0,
+    'subtitles.backgroundtype': 2,
+    'subtitles.bgcolorpick': 'FF000000',
+    'subtitles.bgopacity': 35,
+    'subtitles.shadowcolor': 'FF000000',
+    'subtitles.shadowopacity': 35,
+    'subtitles.shadowsize': 5,
+    'subtitles.marginvertical': 3.3,
+    'subtitles.overridefonts': False,
+    'subtitles.overridestyles': 0,
+    'subtitles.stereoscopicdepth': 0,
+    'subtitles.captionsalign': 0,
+}
+_SUBTITLE_STYLE_TARGET = dict(_SUBTITLE_STYLE_OLD)
+_SUBTITLE_STYLE_TARGET.update({
+    # Kodi 21: 0 = no background; border settings remain active, yielding a
+    # black outline around each glyph instead of a rectangular line box.
+    'subtitles.backgroundtype': 0,
+    'subtitles.bordersize': 25,
+})
+_SUBTITLE_OUTLINE_FLAG = '_subtitle_outline_migration_v1'
+
+
+def _subtitle_value_matches(actual, expected):
+    try:
+        if isinstance(expected, bool):
+            if isinstance(actual, str):
+                return actual.strip().lower() == (
+                    'true' if expected else 'false')
+            return bool(actual) is expected
+        if isinstance(expected, int):
+            return int(actual) == expected
+        return str(actual or '').upper() == str(expected).upper()
+    except Exception:
+        return False
+
+
+def _subtitle_style_snapshot():
+    values = {}
+    for setting_id in _SUBTITLE_STYLE_OLD:
+        value = _get_kodi_setting(setting_id)
+        if value is None:
+            return None
+        values[setting_id] = value
+    return values
+
+
+def _subtitle_style_is(values, expected):
+    return bool(values is not None) and all(
+        _subtitle_value_matches(values.get(setting_id), wanted)
+        for setting_id, wanted in expected.items())
+
+
+def _ensure_subtitle_outline_style():
+    """One-shot, retry-safe migration from the shipped box to black outline.
+
+    State is marked ``pending`` BEFORE the first Kodi setting mutation. A crash
+    can therefore resume only the old-or-target values. Profiles with any
+    user-customized style value are marked ``preserved`` and never touched.
+    """
+    try:
+        state = kodi_utils.get_setting(_SUBTITLE_OUTLINE_FLAG, '') or ''
+    except Exception:
+        state = ''
+    if state in ('applied', 'preserved'):
+        return False
+
+    current = _subtitle_style_snapshot()
+    if current is None:
+        return False
+    if _subtitle_style_is(current, _SUBTITLE_STYLE_TARGET):
+        kodi_utils.set_setting(_SUBTITLE_OUTLINE_FLAG, 'applied')
+        return False
+
+    if state != 'pending':
+        if not _subtitle_style_is(current, _SUBTITLE_STYLE_OLD):
+            kodi_utils.set_setting(_SUBTITLE_OUTLINE_FLAG, 'preserved')
+            return False
+        # Persist intent first: if Kodi/box loses power between the two changes,
+        # the next start can safely finish instead of treating our partial state
+        # as a user's customization.
+        kodi_utils.set_setting(_SUBTITLE_OUTLINE_FLAG, 'pending')
+        if kodi_utils.get_setting(_SUBTITLE_OUTLINE_FLAG, '') != 'pending':
+            return False
+    else:
+        # Pending permits only values from the old or target fingerprint. Any
+        # third value means the user changed it while we were pending: preserve.
+        for setting_id, old_value in _SUBTITLE_STYLE_OLD.items():
+            actual = current.get(setting_id)
+            target_value = _SUBTITLE_STYLE_TARGET[setting_id]
+            if (not _subtitle_value_matches(actual, old_value)
+                    and not _subtitle_value_matches(actual, target_value)):
+                kodi_utils.set_setting(
+                    _SUBTITLE_OUTLINE_FLAG, 'preserved')
+                return False
+
+    changed = False
+    for setting_id in ('subtitles.backgroundtype', 'subtitles.bordersize'):
+        wanted = _SUBTITLE_STYLE_TARGET[setting_id]
+        if not _subtitle_value_matches(current.get(setting_id), wanted):
+            if not _set_kodi_setting(setting_id, wanted):
+                return changed
+            changed = True
+
+    verified = _subtitle_style_snapshot()
+    if _subtitle_style_is(verified, _SUBTITLE_STYLE_TARGET):
+        kodi_utils.set_setting(_SUBTITLE_OUTLINE_FLAG, 'applied')
+    return changed
 
 
 def _ensure_runtime_keyboard_layout():
@@ -422,6 +569,10 @@ def ensure_patched():
         changed.append('home_label')
     if _patch_hebrew_skin_strings():
         changed.append('he_strings')
+    # Global Kodi subtitle presentation (all skins/players). The helper updates
+    # only the exact untouched build fingerprint; custom profiles are preserved.
+    if _ensure_subtitle_outline_style():
+        changed.append('subtitle_outline')
     # USER-PREFERENCE seeds: once per device, then hands-off (see marker note).
     if not _prefs_already_seeded():
         if _clear_skin_bool('HomeMenuNoFavButton'):
