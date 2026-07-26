@@ -102,6 +102,27 @@ From MoranSubs `0.2.443` / quickfix `0.1.485`:
 - The correction is global Kodi subtitle presentation, so it is not tied to a
   particular skin or player.
 
+## Subtitle timing integrity
+
+From MoranSubs `0.2.444` / quickfix `0.1.486`:
+
+- Translated subtitles keep the timings of the subtitle they were translated
+  from. The AI is sent whole entries including their timecodes and is asked to
+  copy them unchanged; it is no longer trusted to do so, because a single
+  mistyped digit could leave one line frozen on screen for the rest of the
+  scene.
+- A conservative safety bound also limits how long any entry may stay on
+  screen. It is tuned not to touch correctly authored subtitles: long holds
+  such as a credits card, and deliberate overlap such as a sign displayed
+  across several lines of dialogue, are left exactly as authored.
+- Subtitles that were already translated and shared with a stuck line are
+  repaired on your device as they are delivered — from the community pool,
+  from the local cache, and from a file saved next to the video. Shared and
+  cached source files stay unchanged, so nothing is re-uploaded and no cache
+  is purged.
+- The repair only rewrites timecodes. Entry count, text and language are
+  unchanged, so no subtitle that is accepted today starts being rejected.
+
 ## Upstream POV Watch
 
 `.github/workflows/check-upstream-pov.yml` checks the original kodi7rd build metadata every 6 hours and opens an issue if upstream POV changes.
