@@ -104,7 +104,9 @@ ADDON_ID = 'service.subtitles.kodipovilai'
 FIRST_RUN_MARKER = '.disable_on_first_run'
 _subs_filename_publisher = None
 TEMP_PURGE_VERSION = '2'
-CACHE_RTL_FIX_VERSION = '4'
+# Keep in step with addons/.../service.py. Bump whenever a new repair is added
+# below, or every existing install skips the backfill forever.
+CACHE_RTL_FIX_VERSION = '5'
 
 
 def _check_first_run_marker():
@@ -190,7 +192,8 @@ def _maybe_repair_rtl_cache():
                 try:
                     with open(p, 'r', encoding='utf-8', errors='replace') as f:
                         content = f.read()
-                    fixed = srt.fix_rtl_punctuation(content)
+                    fixed = srt.clamp_cue_durations(
+                        srt.fix_rtl_punctuation(content))
                     if fixed != content:
                         tmp = p + '.aitmp'
                         with open(tmp, 'w', encoding='utf-8') as f:

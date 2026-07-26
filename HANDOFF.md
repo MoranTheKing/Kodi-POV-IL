@@ -1982,7 +1982,111 @@ was uploading partial/failed translations (stayed mostly English) the server onl
      cache gate at 16:58:13. No Worker, credential, streaming payload or local
      packaging helper entered either release phase.
 
-17. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
+17. **A translated line frozen on screen — SHIPPED (AI 0.2.444 / quickfix
+   0.1.486 / notification 544).** Two users reported one Hebrew line welded to
+   the screen while the rest of the dialogue came and went underneath it; a
+   different line each re-translation, and clearing the add-on cache did not
+   help.
+   - **Root cause:** the translator hands the model whole SRT entries
+     *including their timecode lines* and stitches the reply back verbatim. The
+     only validation on that reply is an ENTRY-COUNT check, so a single mistyped
+     digit in a timestamp the model was merely asked to copy ships straight to
+     the player. One hour digit is enough: `00:41:22 --> 01:41:24` is a
+     60-minute cue. Re-translating produced a *different* frozen line because the
+     model mistyped a different entry, which is why a cache clear appeared to do
+     nothing.
+   - **Primary fix — the model is never trusted with timing.**
+     `srt.restore_block_timings()` gives every translated entry its SOURCE index
+     and timecode back. Pairing is positional but *verified* before it is
+     trusted: TOTAL start-timestamp agreement is required, because equal entry
+     counts are necessary and not sufficient (a stray blank line can split one
+     cue and drop another, keeping the count intact while shifting everything
+     after it). On any disagreement it falls back to matching each output entry
+     to the source entry with the same start; duplicate starts are ambiguous and
+     are left untouched on both paths rather than risk swapping text.
+   - **Backstop — deliberately conservative.** `srt.clamp_cue_durations()`
+     bounds each cue's end for what pairing cannot cover (an entry count that
+     legitimately differs, or a pathological cue in the SOURCE subtitle). The
+     ceiling is 3 minutes absolute, or the next later-starting cue plus 10
+     seconds of overlap grace. That is tuned to never damage a correctly
+     authored subtitle at the price of leaving a corrupt cue a few seconds long:
+     real subtitles contain 90-second credit cards, long title cards over silent
+     scenes, and intentional overlap (a location sign held across several
+     dialogue lines, ASS-converted dual-speaker tracks). An earlier 25-second
+     ceiling truncated all four and was rejected. Starts are never moved.
+   - **Nothing already accepted becomes rejected.** The clamp rewrites timecode
+     lines only. Over 400 randomised subtitles including degenerate ones, entry
+     count, text bytes and Hebrew ratio are invariant — and those are the only
+     three things any gate in the pipeline inspects. No subtitle that passes
+     today can start failing.
+   - **Subtitles already translated and shared are repaired on delivery.** Pool
+     dedup is by source hash, so a poisoned variant is never re-translated and a
+     server-side rewrite would not reach anyone; the repair therefore lives at
+     every point where bytes are handed to the player. Three separate delivery
+     bypasses were found one at a time across four review rounds — the cache-hit
+     path and the progressive path in `default.py`, the pool path
+     (`_reapply_rtl_fix_in_place`), and finally `_rtl_delivery_copy`, which
+     serves `resolve()`'s `passthrough` branch for a subtitle saved ALONGSIDE
+     THE VIDEO. That last one matters disproportionately: it is a common Kodi
+     configuration and the one place the startup migration cannot reach, since
+     that walks `cache/translated/` only. Its "nothing changed" shortcut had to
+     move too, or a clamp-only repair would have returned the original path.
+     `CACHE_RTL_FIX_VERSION` is bumped 4 -> 5 so the one-shot backfill re-runs
+     for every existing install.
+   - **The standalone edition nearly shipped without half of it.** The packager
+     does not ship `service.py` in the standalone package; `copy_common()`
+     overwrites it from `SLIM_SERVICE`, a separate embedded copy inside
+     `tools/build_ai_subtitles_packages.py`. That copy still carried the old
+     marker version and the unclamped repair, so the repository-channel add-on —
+     what most users install — would have received the forward fix and the
+     delivery repairs but not the retroactive backfill. Caught during packaging,
+     mirrored, and now covered by a static guard.
+   - **Deliberately NOT clamped:** `subs_engine_bridge._render_hebrew_rtl_copy`,
+     which renders third-party engine downloads. Those bytes never pass through
+     the model, so this failure cannot arise there; the add-on already treats
+     third-party timing as more trustworthy elsewhere (subsync uses a
+     foreign-language human subtitle as the oracle it corrects AI timing
+     against), and third-party SRT formatting is far more varied. The reasoning
+     is recorded in that function's own docstring so a future stuck-cue report
+     against an engine download starts from the decision rather than from
+     scratch.
+   - **Packaging/privacy gate:** standalone versioned/latest/repository packages
+     are byte-identical (SHA-256
+     `b4622c8e388ee5ad30b947f318ccb4a51a1084f1e4ebdd75530b9c73ae9a4b50`); the
+     build edition versioned/latest are byte-identical (SHA-256
+     `31ca4de60c56bfb38925fb7a0331258b4003f9544981a89cf1fd48c105a6443a`); the
+     repository metadata MD5 is `a9f174e85be04986850d154842868d7e`. Against
+     0.2.443 no package gains or loses a single member and exactly seven differ.
+     Quickfix 0.1.486 is a surgical copy of 0.1.485 with the MoranSubs subtree
+     replaced (SHA-256
+     `e7ef583dcec199a4e4cbf418f9497108dfefba8c5dd64445074523d56f284e0b`); member
+     order and metadata are preserved and all other 1,926 members are unchanged.
+     The protected pool block is inherited byte-for-byte and was cross-checked
+     identical across every shipped version from 0.2.363 on before it was
+     carried forward; the build refuses to proceed if those disagree. The local
+     packaging helper remains absent and ignored, no credential enters tracked
+     source, `pool/worker.js` is untouched and no streaming or private artifact
+     is in scope.
+   - **Update reachability.** Build-edition users do not have the repository
+     add-on installed, so Kodi never auto-updates MoranSubs for them and the
+     quickfix is their only route — which is why every subtitles release ships a
+     matching quickfix (0.2.441/0.1.481, 0.2.442/0.1.482, 0.2.443/0.1.485). All
+     five routes were resolved to the concrete bytes a client fetches and
+     asserted to contain the fix: repository channel, both direct-install links,
+     `build.txt`, and the immutable `build_versions/544.txt`.
+   - **Validation:** 76 checks over the real functions and real files — the
+     reported failure reproduced then fixed, positional pairing defeated by a
+     6.7% tail shift, duplicate starts, rapid exchanges where a minimum duration
+     must not re-create overlap, CRLF preservation, out-of-order neighbours,
+     fail-open on junk, and every delivery path driven end to end. Plus a static
+     guard, swept over the whole add-on with two reasoned exemptions, asserting
+     no function applies the RTL fix without also bounding cue durations; proven
+     non-vacuous by re-introducing each bypass. The suite was re-run against the
+     bytes extracted from the shipped zip, not the source tree. Four independent
+     read-only review rounds; the last returned SHIP with no blocking findings.
+
+
+18. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
 ## Working style
