@@ -1039,9 +1039,15 @@ def _clean_arabic_from_line(body):
     # which are not whitespace -- so .strip() cannot reach a space stranded
     # between the text and the closing control. That is exactly the shape of a
     # CACHED subtitle being repaired after the fact, so handle it explicitly.
-    _bidi = ''.join(_INVISIBLE_BIDI)
-    cleaned = re.sub(r'[ \t]+([' + _bidi + r'])', r'\1', cleaned)
-    cleaned = re.sub(r'([' + _bidi + r'])[ \t]+', r'\1', cleaned)
+    #
+    # ANCHORED to the two ends, and to RLE/PDF only -- the controls WE insert.
+    # An unanchored version of this collapsed blanks around ANY invisible
+    # control anywhere in the line, which glued words together across a
+    # legitimate space-padded RLM or BOM ("יש 50<RLM> דולר" -> "יש 50<RLM>דולר").
+    # Those are zero-width, so the damage is visible in the rendered subtitle.
+    _wrap = _RLE + _PDF
+    cleaned = re.sub(r'^([' + _wrap + r']*)[ \t]+', r'\1', cleaned)
+    cleaned = re.sub(r'[ \t]+([' + _wrap + r']*)$', r'\1', cleaned)
     cleaned = cleaned.strip()
     if body.lstrip().startswith('-') and cleaned and not cleaned.startswith('-'):
         cleaned = '- ' + cleaned
