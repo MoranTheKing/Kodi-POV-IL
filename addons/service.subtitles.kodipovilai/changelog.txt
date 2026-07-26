@@ -1,3 +1,21 @@
+v0.2.444
+- Fixed a translated Hebrew line staying frozen on screen while the rest of the
+  dialogue came and went underneath it. The AI is handed whole subtitle entries
+  including their timecodes and is asked to copy the timings verbatim; when it
+  mistyped one digit, a single entry could last an hour. Every translated entry
+  now gets its ORIGINAL timecode back, so the AI is never trusted with timing.
+- Added a conservative safety bound on how long any subtitle entry may stay on
+  screen, as a second line of defence for the cases the first cannot cover. It
+  is deliberately gentle: long holds and deliberate overlap that real subtitles
+  legitimately contain are left exactly as authored, and a correct subtitle is
+  never altered.
+- Subtitles that were already translated and shared with a frozen line are
+  repaired on this device as they are delivered -- from the community pool,
+  from the local cache, and from a file saved next to the video. Shared and
+  cached source files stay immutable, so nothing is re-uploaded and no cache is
+  purged. Entry count, text and language are provably untouched, so no subtitle
+  becomes newly rejected.
+
 v0.2.443
 - Fixed Hebrew RTL display for human subtitles previously processed by the
   built-in sources engine: dialogue dashes and trailing ellipses now render on
