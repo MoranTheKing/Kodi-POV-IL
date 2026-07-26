@@ -2084,6 +2084,26 @@ was uploading partial/failed translations (stayed mostly English) the server onl
      non-vacuous by re-introducing each bypass. The suite was re-run against the
      bytes extracted from the shipped zip, not the source tree. Four independent
      read-only review rounds; the last returned SHIP with no blocking findings.
+   - **Verified publication record (2026-07-26):** Phase 1 shipped as
+     `c15dd3c` (add-on 0.2.444, quickfix 0.1.486, `build.txt` and the immutable
+     `build_versions/544.txt`), fast-forwarded onto main from
+     `0b4d139878d6dda72a1d43c6aae7ccd21461cc42`. Pages served the new repository
+     metadata 100 seconds after the push. Every artifact a client actually
+     fetches was downloaded in full and compared byte-for-byte, not merely
+     probed for a status code: Pages `repo/addons.xml`, its MD5 and the
+     advertised zip; Raw `build.txt`, `build_versions/544.txt`, both direct
+     install zips and the 33 MB quickfix. All exact at 17:10:27 Israel and still
+     exact at 17:16:12 after a 345-second cache gate, with notification 543
+     deliberately left live throughout. Phase 2 changed only
+     `quick_update.txt` in `f373944`; notification 544 (SHA-256
+     `3ba4ae961231fff7c313240ac0d6be1eb8a09d2ec1a5ac13ed903975abc5ae9f`) was
+     live on Raw 120 seconds later and byte-exact on both Raw and Pages at
+     17:27:09 after a 348-second gate, alongside a full re-verification of the
+     phase-1 surface. Every component version named in the note was cross-checked
+     against what is actually published rather than carried over from the
+     previous note -- which is how a draft still reading `quickfix 0.1.485` was
+     caught before it went out. No Worker, credential, streaming payload or local
+     packaging helper entered either release phase.
 
 
 18. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
