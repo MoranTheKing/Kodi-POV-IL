@@ -1011,6 +1011,14 @@ _ARABIC_CH = (u'\u0600-\u065f\u066a-\u06ff'      # Arabic (no Arabic-Indic digit
               u'\ufb50-\ufdff'                    # Presentation Forms-A
               u'\ufe70-\ufefc')                   # Presentation Forms-B (no BOM)
 _HEBREW_CH = u'\u0590-\u05ff\ufb1d-\ufb4f'
+# INVARIANT, and the thing that actually makes strip_leaked_arabic safe:
+# these two classes are DISJOINT, and _ARABIC_RUN_RE's continuation class is
+# built only from _ARABIC_CH plus blanks/tatweel/Arabic diacritics/Arabic
+# punctuation. The regex therefore CANNOT consume a Hebrew character, whatever
+# surrounds it -- so a line can never lose part of its Hebrew sentence. The
+# 'did the Hebrew survive' check in strip_leaked_arabic is a net under that,
+# not the guarantee itself, and it only notices the loss of the LAST Hebrew
+# character. Anyone widening either class must keep them disjoint.
 # A run of Arabic plus ONLY what belongs to it: surrounding blanks, Arabic
 # diacritics/tatweel, and ARABIC punctuation. Latin/Hebrew punctuation is
 # deliberately excluded -- the '.' in "קארל מת. ـكِ" and the '?' in
