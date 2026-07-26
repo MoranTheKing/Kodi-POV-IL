@@ -98,6 +98,23 @@ _HTTP_REQ_PACE_MAX = 2.0         # ceiling: every 429 widens the gap toward this
 #                                  (AIMD-style back-pressure -- we can't know a
 #                                  provider's exact limit, so let the CDN's own
 #                                  429s tune us down to a rate it tolerates)
+# ...and the other half of AIMD, which was missing: the gap only ever GREW. One
+# 429 near the start left every remaining request paying for it, and a burst of
+# them pinned the pace at the 2.0s ceiling for the rest of the extraction -- ~28
+# minutes of pure sleeping over 850 cues, on a provider that may well have
+# recovered seconds later. So decay the gap back down after a clean run of
+# requests.
+# The floor is the STARTING pace, deliberately -- this recovers from back-
+# pressure, it does NOT probe for the provider's real limit. 0.2s was chosen
+# from a field incident where our request rate 429'd the PLAYER's own stream and
+# CLOSED the movie; going below it to shave minutes off a lenient provider would
+# risk exactly that on a strict one, and "works on every provider" is the point.
+# So the pace stays inside [start, max] just as before -- it can simply come
+# back now. Recovery is slower than back-off on purpose (0.9x per 25 clean
+# requests vs 1.5x per 429): pacing too slow costs time, pacing too fast costs
+# the movie.
+_HTTP_PACE_DECAY = 0.9            # multiplier applied after a clean run
+_HTTP_PACE_DECAY_AFTER = 25       # ...that many consecutive clean requests
 # Fail-fast on a token the provider rate-limits HARD (TorBox): if this many
 # fetches IN A ROW each need a 429 backoff, the token is saturated and a
 # ~1700-request extraction is hopeless -- crawling on keeps the token hot for
@@ -141,6 +158,34 @@ _HTTP_TOTAL_CAP = 700 * 1024 * 1024       # give up (defer) past this many bytes
 # just falls through to the window-scan for that one cue.
 _CLUSTER_HDR_READ = 8 * 1024              # header read to resolve prefix + ts
 _BLOCK_READ_HTTP = 32 * 1024              # window fetched AT a targeted block
+# ONE-SHOT ceiling. When a header read IS needed, size it to swallow the first
+# block too if that is cheap -- one request instead of two. Only bites on files
+# whose subtitle block precedes the cluster's video keyframe; measured on a
+# realistic remux the relpos is ~0.4-1.5MB, so this rarely fires and the header
+# elimination below is what actually removes the second request.
+_ONE_SHOT_MAX = 128 * 1024
+# HEADER ELIMINATION. Measured (synthetic remux, 40 clusters x 1-3 subtitle
+# cues): 2.03-2.10 range requests PER CUE, because each cue paid an 8KB read at
+# the cluster start purely to learn two things -- the cluster PREFIX (Cluster-ID
+# length + size-VINT length, the origin CueRelativePosition is measured from)
+# and the cluster TIMESTAMP. Neither has to be re-read:
+#   * the prefix is a property of the MUXER, not of the cluster -- one file's
+#     clusters are all within one size-VINT width of each other, so it is
+#     learned once and reused;
+#   * the absolute timestamp is ALREADY in the Cues index, as CueTime.
+# Both are assumptions about a third party's file, so neither is trusted on
+# faith: the first cluster is still read the old way and the two answers are
+# CHECKED against it, and any later block that fails to parse falls back to a
+# header read for that cluster (and re-learns) before the cue is handed to the
+# window-scan net. Worst case is today's cost; typical case is half of it.
+_PREFIX_MIN = 5                 # 4-byte Cluster ID + 1-byte size VINT
+_PREFIX_MAX = 12                # 4-byte Cluster ID + 8-byte size VINT
+# Two subtitle blocks in ONE cluster share a read when they sit this close. Kept
+# deliberately small: a muxer interleaves by timestamp, so a cluster's subtitle
+# blocks are typically HUNDREDS of KB apart, and pulling the video between them
+# to save one request would trade a round-trip for bandwidth the player needs
+# (field 2026-07-19 was a pure bandwidth-contention stall, no 429 at all).
+_CLUSTER_BATCH_MAX = 96 * 1024
 _UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
        '(KHTML, like Gecko) Chrome/120.0 Safari/537.36')
 
@@ -237,8 +282,28 @@ def _new_session():
     try:
         import requests
         s = requests.Session()
+        # Retry TRANSPORT errors, never STATUS ones. urllib3's Retry honours
+        # Retry-After for 413/429/503 by default, so a plain `max_retries=1`
+        # made it swallow the CDN's 429 -- sleep for the header's duration and
+        # replay the request -- BEFORE our code ever saw the status. Measured on
+        # the local CDN stand-in: 15 server-side 429s, `_429_total` still 0. That
+        # silently bypassed all of the 429 handling below it: the pace never
+        # widened, the streak counter never tripped the breaker, nothing was
+        # logged (which is why a field log could read "no 429s" while the token
+        # was in fact being limited), and worst of all urllib3's sleep is NOT
+        # abort-aware, so a starving player waited behind it. Let every 429 reach
+        # our own loop, which honours Retry-After with a cap, polls the abort
+        # callback while it waits, and feeds the back-pressure logic.
+        try:
+            _R = requests.adapters.Retry
+            retries = _R(total=None, connect=1, read=1, status=0, redirect=0,
+                         status_forcelist=frozenset(),
+                         respect_retry_after_header=False,
+                         raise_on_status=False)
+        except Exception:
+            retries = 0     # no Retry class -> no retries at all beats hidden ones
         a = requests.adapters.HTTPAdapter(
-            pool_connections=1, pool_maxsize=1, max_retries=1)
+            pool_connections=1, pool_maxsize=1, max_retries=retries)
         s.mount('https://', a)
         s.mount('http://', a)
         return s
@@ -259,8 +324,16 @@ class _Source(object):
         self.fetched = 0
         self.reqs = 0
         self.tripped = False          # circuit-breaker: set on a 429/5xx
-        self._pace = _HTTP_REQ_PACE_S  # adaptive inter-request gap (grows on 429)
+        self._pace = _HTTP_REQ_PACE_S  # adaptive inter-request gap (AIMD)
+        self._pace_floor = _HTTP_REQ_PACE_S   # ...never decays below the start
         self._429_streak = 0          # consecutive 429-needing fetches (fail-fast)
+        self._clean_streak = 0        # consecutive fetches that needed no backoff
+        self._429_total = 0           # how many fetches needed a backoff at all
+        self._one_shot = 0            # cues resolved in ONE request, not two
+        self._log = None              # set by extract_srt so pacing is visible
+        self._prefix = None           # learned cluster prefix len (see below)
+        self._cue_time_ok = None      # None=untested, True=CueTime verified
+        self._hdr_reads = 0           # cluster-header reads we still had to pay
         self._abort_cb = None         # set by extract_srt; polled DURING sleeps
         self.total = 0
         self._sess = _new_session() if self.is_http else None
@@ -389,8 +462,22 @@ class _Source(object):
                     # token (protects the player, converges toward a rate the CDN
                     # tolerates). Persists for the rest of this extraction.
                     try:
-                        self._pace = min(getattr(self, '_pace', _HTTP_REQ_PACE_S)
-                                         * 1.5, _HTTP_REQ_PACE_MAX)
+                        _was = getattr(self, '_pace', _HTTP_REQ_PACE_S)
+                        self._pace = min(_was * 1.5, _HTTP_REQ_PACE_MAX)
+                        self._429_total += 1
+                        # Report the first one and then each doubling: the pace
+                        # creeping 0.2s -> 2.0s is what turns a 3-minute extract
+                        # into an 18-minute one, and it used to leave no trace
+                        # at all in the log.
+                        if self._log and (self._429_total == 1
+                                          or self._pace >= _was * 2
+                                          or self._pace >= _HTTP_REQ_PACE_MAX
+                                          > _was):
+                            self._log(
+                                'CDN pushed back (%d so far, HTTP %s) -- pace '
+                                '%.2fs -> %.2fs after %d request(s)'
+                                % (self._429_total, code, _was, self._pace,
+                                   self.reqs))
                     except Exception:
                         pass
                     ra = r.headers.get('Retry-After')
@@ -440,10 +527,27 @@ class _Source(object):
                 # defers (a partial extract is never delivered anyway).
                 if saw_429:
                     self._429_streak = getattr(self, '_429_streak', 0) + 1
+                    self._clean_streak = 0
                     if self._429_streak >= _HTTP_429_STREAK_MAX:
                         self.tripped = True
                 else:
                     self._429_streak = 0
+                    # Additive-increase half of AIMD: a long clean run is
+                    # evidence the widened pace is now costing time for nothing,
+                    # so give some of it back. Never below the floor, and never
+                    # below where we started.
+                    self._clean_streak = getattr(self, '_clean_streak', 0) + 1
+                    if (self._clean_streak >= _HTTP_PACE_DECAY_AFTER
+                            and self._pace > self._pace_floor):
+                        self._clean_streak = 0
+                        _was = self._pace
+                        self._pace = max(self._pace * _HTTP_PACE_DECAY,
+                                         self._pace_floor)
+                        if self._log:
+                            self._log('CDN quiet for %d request(s) -- pace '
+                                      '%.2fs -> %.2fs'
+                                      % (_HTTP_PACE_DECAY_AFTER, _was,
+                                         self._pace))
                 return data
             except Exception:
                 return b''
@@ -641,6 +745,10 @@ def _sub_tracks(tracks):
 # ---- Cues -------------------------------------------------------------------
 def _read_cues(src, seeks, seg_start, want_track, log):
     """Absolute cluster positions from the Cues index, as (positions, is_sub).
+    Each position is (cluster_pos, relative_pos_or_None, cue_time_or_None) --
+    CueTime is the cue's ABSOLUTE timestamp in TimestampScale units, which is
+    exactly what a cluster-header read would otherwise be spent computing (see
+    _fetch_cluster_blocks).
     Prefers cue points that reference `want_track` (per-track subtitle cues,
     which point straight at subtitle-bearing clusters); falls back to all cue
     positions when the file has none. ([], False) when there's no usable Cues.
@@ -679,6 +787,17 @@ def _read_cues(src, seeks, seg_start, want_track, log):
         if eid2 != _CUE_POINT:
             continue
         cp = data[start2:start2 + size2]
+        # CueTime is the CuePoint's own first child, a sibling of every
+        # CueTrackPositions under it -- so read it before walking them.
+        ctime = None
+        tb = _Buf(cp, 0)
+        for peid, psize, pstart in _walk(tb, len(cp)):
+            if psize is None:
+                break
+            tb.p = pstart + psize
+            if peid == _CUE_TIME:
+                ctime = _read_uint(cp[pstart:pstart + psize])
+                break
         pbuf = _Buf(cp, 0)
         for peid, psize, pstart in _walk(pbuf, len(cp)):
             if psize is None:
@@ -701,9 +820,9 @@ def _read_cues(src, seeks, seg_start, want_track, log):
                 elif teid == _CUE_RELATIVE_POS:
                     crel = _read_uint(tp)
             if cpos is not None:
-                any_pos.append((cpos, crel))
+                any_pos.append((cpos, crel, ctime))
                 if ctrack == want_track:
-                    want_pos.append((cpos, crel))
+                    want_pos.append((cpos, crel, ctime))
     is_sub = bool(want_pos)
     # Keep EVERY distinct (cluster, relpos) pair. A single cluster routinely
     # holds >1 subtitle cue (two lines a couple seconds apart in fast dialogue),
@@ -713,23 +832,24 @@ def _read_cues(src, seeks, seg_start, want_track, log):
     # in it), so it subsumes and REPLACES any relpos entries for the same cluster
     # (avoids fetching the same cluster twice).
     scan_only = set()          # clusters that carry a relpos-less cue
-    rel_by_cpos = {}           # cpos -> set of distinct relpos values
-    for cpos, crel in (want_pos if is_sub else any_pos):
+    rel_by_cpos = {}           # cpos -> {relpos: cue_time_or_None}
+    for cpos, crel, ctime in (want_pos if is_sub else any_pos):
         if crel is None:
             scan_only.add(cpos)
         else:
-            rel_by_cpos.setdefault(cpos, set()).add(crel)
+            rel_by_cpos.setdefault(cpos, {})[crel] = ctime
     out = []
     for cpos in sorted(scan_only | set(rel_by_cpos)):
         if cpos in scan_only:
-            out.append((cpos, None))
+            out.append((cpos, None, None))
         else:
             for relpos in sorted(rel_by_cpos[cpos]):
-                out.append((cpos, relpos))
-    nrel = sum(1 for _c, r in out if r is not None)
-    log('cues: %d cue(s) / %d cluster(s) (%s, %d with relpos)'
+                out.append((cpos, relpos, rel_by_cpos[cpos][relpos]))
+    nrel = sum(1 for _c, r, _t in out if r is not None)
+    ntime = sum(1 for _c, r, t in out if r is not None and t is not None)
+    log('cues: %d cue(s) / %d cluster(s) (%s, %d with relpos, %d with cuetime)'
         % (len(out), len(scan_only | set(rel_by_cpos)),
-           'sub-track' if is_sub else 'whole-file', nrel))
+           'sub-track' if is_sub else 'whole-file', nrel, ntime))
     return out, is_sub
 
 
@@ -1229,6 +1349,7 @@ def extract_srt(url_or_path, track_num=None, lang=None,
     try:
         src = _Source(url_or_path)
         src._abort_cb = abort_cb   # polled DURING pace/backoff sleeps too
+        src._log = _log            # so pacing/back-pressure is visible in a log
         if not src.total:
             return None
         seg_start, ts_scale, tracks, seeks = _parse_head(src, head_bytes, _log)
@@ -1540,7 +1661,7 @@ def _extract_cues(src, seeks, seg_start, want, entries,
         # positions can now list a cluster more than once (one entry per relpos);
         # a local full-cluster parse recovers every block, so visit each cpos ONCE.
         seen_local = set()
-        for cpos, _rel in positions:
+        for cpos, _rel, _ctime in positions:
             if cpos in seen_local:
                 continue
             seen_local.add(cpos)
@@ -1634,51 +1755,186 @@ def _collect_one_block(window, want_track, cluster_ts, out):
     return False
 
 
-def _fetch_targeted_block(src, cpos, relpos, want, entries, log):
-    """CueRelativePosition FAST PATH: fetch just the subtitle block. A tiny
-    header read resolves the cluster prefix + Timestamp; the block then sits at
-    cpos + prefix + relpos, so we fetch a small window THERE (reusing header
-    bytes if the block already fell inside them). ~18x less data than pulling
-    the whole ~1.5MB cluster. Returns True when the block was located & parsed,
-    False when the cue couldn't be resolved (caller window-scans it as a net)."""
-    header = src.read(cpos, _CLUSTER_HDR_READ)
+def _batch_relposes(items):
+    """Group ONE cluster's [(relpos, cue_time), ...] (sorted) into read batches.
+    Blocks within _CLUSTER_BATCH_MAX of each other share a single range request;
+    anything further apart gets its own, because the bytes in between are video
+    the player needs and are not worth a saved round-trip."""
+    batches = []
+    cur = [items[0]]
+    for it in items[1:]:
+        if (it[0] - cur[0][0]) + _BLOCK_READ_HTTP <= _CLUSTER_BATCH_MAX:
+            cur.append(it)
+        else:
+            batches.append(cur)
+            cur = [it]
+    batches.append(cur)
+    return batches
+
+
+def _read_cluster_header(src, cpos, first_relpos):
+    """(prefix, cluster_ts, header_bytes) for the cluster at `cpos`, or
+    (None, None, b''). Sized to swallow the first block too when that block sits
+    close enough that one request beats two."""
+    need = first_relpos + _PREFIX_MAX + _BLOCK_READ_HTTP
+    one_shot = 0 <= first_relpos and need <= _ONE_SHOT_MAX
+    header = src.read(cpos, need if one_shot else _CLUSTER_HDR_READ)
+    src._hdr_reads += 1
     if src.tripped or not header:
-        return False
+        return None, None, b''
     prefix, cluster_ts = _cluster_prefix_and_ts(header)
     if prefix is None:
-        return False
-    target = cpos + prefix + relpos
-    if cpos <= target < cpos + len(header):
-        if _collect_one_block(header[target - cpos:], want, cluster_ts, entries):
-            return True   # block already inside the header read
-    if src.fetched >= _HTTP_TOTAL_CAP:
-        return False
-    blk = src.read(target, min(_BLOCK_READ_HTTP, _HTTP_TOTAL_CAP - src.fetched))
-    if src.tripped or not blk:
-        return False
-    return _collect_one_block(blk, want, cluster_ts, entries)
+        return None, None, b''
+    return prefix, cluster_ts, header
+
+
+def _fetch_cluster_blocks(src, cpos, items, want, entries, log):
+    """CueRelativePosition FAST PATH for ONE cluster. `items` is that cluster's
+    [(relpos, cue_time), ...], sorted by relpos. Returns how many of them were
+    resolved; the caller window-scans the whole cluster whenever that is short of
+    len(items), so a miss can never silently drop a line.
+
+    A block sits at cpos + prefix + relpos, and its absolute timestamp is
+    cluster_ts + the block's own 16-bit offset. Both `prefix` and `cluster_ts`
+    used to come from an 8KB read at the cluster start, spent AGAIN for every
+    single cue -- which is where 2.03-2.10 requests per cue came from. Here the
+    prefix is learned once per file and CueTime supplies the timestamp, so the
+    steady state is ONE request per block (or per nearby group of them). The
+    first cluster still pays the header read, and its answers are used to VERIFY
+    both shortcuts before any later cluster relies on them."""
+    resolved = 0
+    prefix, cluster_ts, header = src._prefix, None, b''
+    # Take the header when we have not learned the prefix yet, when CueTime has
+    # not been proven to agree with it, or when any cue in THIS cluster has no
+    # CueTime to stand in for the cluster timestamp. (`_cue_time_ok is False`
+    # means the file's CueTimes were wrong, so every cluster keeps paying for a
+    # header -- correct, just not fast.)
+    if (prefix is None or src._cue_time_ok is not True
+            or any(t is None for _r, t in items)):
+        prefix, cluster_ts, header = _read_cluster_header(src, cpos, items[0][0])
+        if prefix is None:
+            return 0
+        src._prefix = prefix
+
+    def _place(buf, base, relpos, cue_time):
+        """Parse the block at `relpos` out of `buf`, which starts at file offset
+        `base`. Appends to `entries` on success. Returns True/False."""
+        off = (cpos + prefix + relpos) - base
+        if not (0 <= off < len(buf)):
+            return False
+        got = []
+        if not _collect_one_block(buf[off:], want, cluster_ts or 0, got):
+            return False
+        ticks, dur, frame = got[0]
+        if cluster_ts is None:
+            # No header this time: `ticks` is the block's own 16-bit offset and
+            # CueTime is the absolute time. (Only reachable once _cue_time_ok is
+            # True, i.e. after this identity was checked against a real header.)
+            entries.append((cue_time, dur, frame))
+        else:
+            entries.append((ticks, dur, frame))
+            if cue_time is not None and src._cue_time_ok is None:
+                # THE CHECK. Does this file's CueTime really equal the timestamp
+                # the header math produces? Only if it does may later clusters
+                # skip their header read.
+                src._cue_time_ok = (ticks == cue_time)
+                if not src._cue_time_ok and src._log:
+                    src._log('CueTime disagrees with the cluster timestamp '
+                             '(%s vs %s) -- keeping the per-cluster header read'
+                             % (cue_time, ticks))
+        return True
+
+    for batch in _batch_relposes(items):
+        # Anything the header read already covers costs no extra request.
+        pending = []
+        for (relpos, cue_time) in batch:
+            if header and _place(header, cpos, relpos, cue_time):
+                src._one_shot += 1
+                resolved += 1
+            else:
+                pending.append((relpos, cue_time))
+        if not pending:
+            continue
+        if src.fetched >= _HTTP_TOTAL_CAP:
+            return resolved
+        lo = pending[0][0]
+        span = (pending[-1][0] - lo) + _BLOCK_READ_HTTP
+        base = cpos + prefix + lo
+        buf = src.read(base, min(span, _HTTP_TOTAL_CAP - src.fetched))
+        if src.tripped or not buf:
+            return resolved
+        for (relpos, cue_time) in pending:
+            if _place(buf, base, relpos, cue_time):
+                resolved += 1
+                continue
+            if cluster_ts is not None:
+                continue   # header path already; nothing left to try
+            # The learned prefix did not resolve this block. Before writing the
+            # cue off to the (expensive) window scan, pay for one header read: a
+            # muxer CAN change its size-VINT width mid-file, and re-learning
+            # here keeps every later cluster on the fast path.
+            prefix, cluster_ts, header = _read_cluster_header(src, cpos, relpos)
+            if prefix is None:
+                return resolved
+            src._prefix = prefix
+            if _place(header, cpos, relpos, cue_time):
+                resolved += 1
+            else:
+                base2 = cpos + prefix + relpos
+                if src.fetched < _HTTP_TOTAL_CAP and _place(
+                        src.read(base2, min(_BLOCK_READ_HTTP,
+                                            _HTTP_TOTAL_CAP - src.fetched)),
+                        base2, relpos, cue_time):
+                    resolved += 1
+            # Back to the fast path for the rest of this cluster: `buf`/`base`
+            # were read against the OLD prefix, and _place's offset math already
+            # accounts for the shift, so the remaining blocks still resolve.
+            cluster_ts, header = None, b''
+    return resolved
 
 
 def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                        log, progress_cb=None):
     """HTTP/debrid: ONE keep-alive connection, single-range serial. Per cue,
     two strategies chosen by whether the Cues carried a CueRelativePosition:
-      * relpos present -> TARGETED: tiny header read + a small window AT the
-        subtitle block. ~18x less data than a full cluster -- gentle on the
-        player's bandwidth over a scattered remux (the debrid case).
+      * relpos present -> TARGETED: a small window AT the subtitle block, one
+        request per block (see _fetch_cluster_blocks -- the cluster prefix is
+        learned once for the file and CueTime supplies the timestamp, so the
+        per-cue header read is gone). ~18x less data than a full cluster --
+        gentle on the player's bandwidth over a scattered remux (the debrid
+        case). Cues are walked CLUSTER at a time so a cluster is only ever
+        window-scanned once.
       * relpos absent  -> WINDOW SCAN: fetch a ~1.79MB window at the cluster
         start and parse forward (his proven fallback), topping up the rare
         cluster bigger than the window.
     Player-safe by construction (single serial connection, byte/time caps, 429
     circuit-breaker). Returns True on a COMPLETE pass, False to defer."""
     budget = max(deadline_s, 90.0)
-    rel_cues = [(c, r) for (c, r) in positions if r is not None]
-    scan_cues = [c for (c, r) in positions if r is None]
+    rel_by_cpos = {}
+    scan_cues = []
+    for (c, r, t) in positions:
+        if r is None:
+            scan_cues.append(c)
+        else:
+            rel_by_cpos.setdefault(c, []).append((r, t))
+    rel_clusters = [(c, sorted(rel_by_cpos[c])) for c in sorted(rel_by_cpos)]
+    n_rel = sum(len(v) for _c, v in rel_clusters)
     total = len(positions)
-    log('%d sub-cue cluster(s): %d targeted (relpos) + %d window-scan; '
-        'caps %dMB / %.0fs'
-        % (total, len(rel_cues), len(scan_cues),
+    log('%d sub-cue cluster(s): %d targeted (relpos) in %d cluster(s) + %d '
+        'window-scan; caps %dMB / %.0fs'
+        % (total, n_rel, len(rel_clusters), len(scan_cues),
            _HTTP_TOTAL_CAP // (1 << 20), budget))
+
+    def _cost():
+        """What this attempt actually spent -- the numbers that were missing
+        from every abort message, so a field log can say WHY it was slow."""
+        el = max(time.time() - t0, 0.001)
+        return ('%d/%d cue(s), %d req (%d hdr, %d free), %.1fMB, %.0fs, '
+                'pace %.2fs, %d backoff(s), %.2f cue/s'
+                % (done, total, src.reqs, getattr(src, '_hdr_reads', 0),
+                   getattr(src, '_one_shot', 0), src.fetched / 1e6, el,
+                   getattr(src, '_pace', 0.0), getattr(src, '_429_total', 0),
+                   done / el))
 
     def _defer():
         """Return a reason string when we must stop, else None."""
@@ -1701,25 +1957,28 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                 pass
 
     done = 0
-    # 1) targeted relpos fetches
-    for (cpos, relpos) in rel_cues:
+    # 1) targeted relpos fetches, ONE CLUSTER at a time
+    for (cpos, items) in rel_clusters:
         reason = _defer()
         if reason:
-            log(reason + ' -- deferring')
+            log(reason + ' -- deferring [' + _cost() + ']')
             return False
-        if not _fetch_targeted_block(src, cpos, relpos, want, entries, log):
+        got = _fetch_cluster_blocks(src, cpos, items, want, entries, log)
+        if got < len(items):
             if src.tripped:
-                log('circuit-breaker tripped mid-fetch -- deferring')
+                log('circuit-breaker tripped mid-fetch -- deferring ['
+                    + _cost() + ']')
                 return False
-            # Couldn't resolve the block from relpos (odd prefix / short read /
-            # wrong track) -> window-scan THIS cue so we never drop a line.
+            # Couldn't resolve every block from relpos (odd prefix / short read
+            # / wrong track) -> window-scan THIS cluster so we never drop a line.
+            # Duplicates are dropped in _entries_to_srt, so re-finding the ones
+            # we already have is harmless.
             scan_cues.append(cpos)
-        done += 1
-        if done % 100 == 0:
-            log('extract progress: %d/%d cue(s), %.0fMB'
-                % (done, total, src.fetched / 1e6))
-        if done % 10 == 0:
-            _tick(done)
+        done += len(items)
+        if done % 100 < len(items):
+            log('extract progress: %d/%d cue(s), %d req, %.0fMB'
+                % (done, total, src.reqs, src.fetched / 1e6))
+        _tick(done)
 
     # 2) window-scan the remainder (no-relpos cues + any relpos misses)
     if scan_cues:
