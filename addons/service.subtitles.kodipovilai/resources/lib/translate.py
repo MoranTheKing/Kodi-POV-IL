@@ -439,7 +439,7 @@ def _reapply_rtl_fix_in_place(path, legacy_engine=False, ai_output=None):
     # forget. Only the pool path passes an explicit value, because provenance
     # there comes from the row's pool_kind rather than from a sidecar.
     if ai_output is None:
-        ai_output = not _is_google_translated(path)
+        ai_output = srt.may_carry_arabic_leak(path)
     body = srt.strip_leaked_arabic(content) if ai_output else content
     fixed = srt.clamp_cue_durations(
         srt.fix_rtl_punctuation(body, legacy_engine=legacy_engine))
@@ -2082,7 +2082,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 and _psrc != pool.KTUVIT_LOGICAL_SOURCE_TAG)
             _reapply_rtl_fix_in_place(
                 out, legacy_engine=_legacy_ktuvit,
-                ai_output=(_pkind != 'ktuvit'))
+                ai_output=srt.may_carry_arabic_leak(pool_kind=_pkind))
             # SubSync S2: pool variants carry the release of their SOURCE sub;
             # if that doesn't match the playing release, verify/fix timing
             # against a release-matched oracle. Fail-open.
@@ -3500,6 +3500,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         # runaway cue would sit frozen on screen for the rest of
                         # the job -- the exact symptom, during the feature built
                         # to show progress early.
+                        # arabic-strip: our-own-output -- this is the model's
+                        # reply to OUR prompt, so provenance is not in question
+                        # and may_carry_arabic_leak has nothing to add.
                         _merged_text = srt.clamp_cue_durations(
                             srt.fix_rtl_punctuation(
                                 srt.strip_leaked_arabic(
@@ -3611,6 +3614,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # There is no way to tell the two apart from the text, so this line records
     # how often it fires and on how many entries; a jump means the question is
     # worth revisiting with real data instead of reasoning.
+    # arabic-strip: our-own-output -- `final` is this run's Gemini output, so
+    # there is no provenance question here; may_carry_arabic_leak exists for the
+    # repair paths that meet files of unknown origin.
     _pre_ar = final
     final = srt.strip_leaked_arabic(final)
     if final != _pre_ar:

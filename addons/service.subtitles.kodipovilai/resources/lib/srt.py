@@ -11,6 +11,7 @@
 # The model returns the same block shape with the text translated;
 # we re-stitch the blocks back into a single SRT body.
 
+import os
 import re
 
 BLOCK_SEPARATOR = re.compile(r'\r?\n\r?\n')
@@ -1052,6 +1053,39 @@ def _clean_arabic_from_line(body):
     if body.lstrip().startswith('-') and cleaned and not cleaned.startswith('-'):
         cleaned = '- ' + cleaned
     return cleaned
+
+
+def may_carry_arabic_leak(path=None, pool_kind=None):
+    """Whether these bytes could contain a leak from the AI's gender reference.
+
+    The ONE place that rule lives. strip_leaked_arabic() repairs a defect only
+    the gender-reference prompt can produce, so it must not run on anything that
+    prompt never touched -- and there turned out to be three such sources, each
+    found separately, each after the previous fix had been declared complete:
+
+      * a Ktuvit row mirrored into the community pool -- a HUMAN Hebrew subtitle
+        (identified by pool_kind, which is why that argument exists);
+      * a Google Translate fallback -- no cast/gender mechanism at all, and it
+        writes into cache/translated/ alongside real AI output, so only the
+        '.google' sidecar tells them apart;
+      * a file of unknown origin sitting next to the video, which is exempted at
+        its call site because nothing here can identify it.
+
+    Any of them may legitimately quote Arabic ('הוא אמר "אינשאללה" (إن شاء الله)')
+    and would come back with the quote deleted and empty brackets left behind.
+
+    It is a shared function rather than a check at each call site because the
+    check WAS at each call site, and the fourth, fifth and sixth repair paths
+    silently did not get it. A rule with more than one home has no home.
+    """
+    try:
+        if pool_kind is not None and str(pool_kind).strip().lower() == 'ktuvit':
+            return False
+        if path and os.path.exists(path + '.google'):
+            return False
+    except Exception:
+        pass
+    return True
 
 
 def strip_leaked_arabic(text):

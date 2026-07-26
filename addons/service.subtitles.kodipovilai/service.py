@@ -383,8 +383,9 @@ TEMP_PURGE_VERSION = '2'
 #         rest of the episode; this walk is the only mechanism that repairs an
 #         ALREADY-cached translation without the user replaying that title.
 #   v6: strip Arabic the AI leaked from the gender reference into a Hebrew
-#       line -- see srt.strip_leaked_arabic. Only OUR OWN translations are
-#       walked here (cache/translated/), so the AI-only repair is safe.
+#       line -- see srt.strip_leaked_arabic. NOT every file here is ours: the
+#       Google Translate fallback saves into this directory too, so the repair
+#       is gated per file by srt.may_carry_arabic_leak.
 CACHE_RTL_FIX_VERSION = '6'
 
 
@@ -418,9 +419,14 @@ def _maybe_repair_rtl_cache():
                         content = f.read()
                 except OSError:
                     continue
+                # cache/translated/ is NOT all our own output: the Google
+                # Translate fallback saves here too, marked by a '.google'
+                # sidecar. srt.may_carry_arabic_leak is the one place that rule
+                # lives -- see it before adding a repair path.
+                body = (srt.strip_leaked_arabic(content)
+                        if srt.may_carry_arabic_leak(p) else content)
                 fixed = srt.clamp_cue_durations(
-                    srt.fix_rtl_punctuation(
-                        srt.strip_leaked_arabic(content)))
+                    srt.fix_rtl_punctuation(body))
                 if fixed == content:
                     continue
                 tmp = p + '.aitmp'
