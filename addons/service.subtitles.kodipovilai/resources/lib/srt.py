@@ -1035,6 +1035,13 @@ def _clean_arabic_from_line(body):
     cleaned = _ARABIC_RUN_RE.sub(' ', body)
     cleaned = re.sub(r'[ \t]{2,}', ' ', cleaned)
     cleaned = re.sub(r'[ \t]+(</)', r'\1', cleaned)   # no gap before a closing tag
+    # A file that already went through fix_rtl_punctuation is wrapped in RLE/PDF,
+    # which are not whitespace -- so .strip() cannot reach a space stranded
+    # between the text and the closing control. That is exactly the shape of a
+    # CACHED subtitle being repaired after the fact, so handle it explicitly.
+    _bidi = ''.join(_INVISIBLE_BIDI)
+    cleaned = re.sub(r'[ \t]+([' + _bidi + r'])', r'\1', cleaned)
+    cleaned = re.sub(r'([' + _bidi + r'])[ \t]+', r'\1', cleaned)
     cleaned = cleaned.strip()
     if body.lstrip().startswith('-') and cleaned and not cleaned.startswith('-'):
         cleaned = '- ' + cleaned

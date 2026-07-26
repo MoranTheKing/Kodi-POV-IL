@@ -106,7 +106,7 @@ _subs_filename_publisher = None
 TEMP_PURGE_VERSION = '2'
 # Keep in step with addons/.../service.py. Bump whenever a new repair is added
 # below, or every existing install skips the backfill forever.
-CACHE_RTL_FIX_VERSION = '5'
+CACHE_RTL_FIX_VERSION = '6'
 
 
 def _check_first_run_marker():
@@ -193,7 +193,8 @@ def _maybe_repair_rtl_cache():
                     with open(p, 'r', encoding='utf-8', errors='replace') as f:
                         content = f.read()
                     fixed = srt.clamp_cue_durations(
-                        srt.fix_rtl_punctuation(content))
+                        srt.fix_rtl_punctuation(
+                            srt.strip_leaked_arabic(content)))
                     if fixed != content:
                         tmp = p + '.aitmp'
                         with open(tmp, 'w', encoding='utf-8') as f:

@@ -428,7 +428,8 @@ def _reapply_rtl_fix_in_place(path, legacy_engine=False):
     except OSError:
         return
     fixed = srt.clamp_cue_durations(
-        srt.fix_rtl_punctuation(content, legacy_engine=legacy_engine))
+        srt.fix_rtl_punctuation(
+            srt.strip_leaked_arabic(content), legacy_engine=legacy_engine))
     if fixed == content:
         return
     tmp = path + '.aitmp'
@@ -458,7 +459,7 @@ def _rtl_delivery_copy(path, legacy_engine=False):
             raw = f.read()
         content = raw.decode('utf-8-sig')
         fixed = srt.clamp_cue_durations(srt.fix_rtl_punctuation(
-            content, legacy_engine=legacy_engine))
+            srt.strip_leaked_arabic(content), legacy_engine=legacy_engine))
         if fixed == content:
             return path
         import hashlib as _hrtl
