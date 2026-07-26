@@ -1,3 +1,28 @@
+v0.2.445
+- Fixed embedded subtitles disappearing from the subtitle list for anyone who
+  turned OFF automatic Hebrew search on playback. The two were wired together by
+  mistake: the list of a file's built-in subtitle tracks was only ever recorded
+  as part of the automatic search, so switching that off silently removed every
+  built-in entry as well, including "built-in translated to Hebrew (AI)". They
+  are separate now. With automatic search off you still get the entries and can
+  pick them yourself; you just do not get an automatic search.
+- Fixed stray Arabic words and fragments appearing inside translated Hebrew
+  lines. Hebrew and Arabic both mark gender, so a human Arabic translation of
+  the same scene is given to the AI purely as a gender reference, and it
+  sometimes copied a word out of it. Such a word is now removed on delivery.
+  This is deliberately cautious: it only removes Arabic from a line that also
+  has Hebrew, never removes a line, never removes a subtitle entry, and never
+  touches a line that is entirely Arabic -- so nothing can fall silent while
+  people are talking. Subtitles already translated and stored with the problem
+  are cleaned on this device as they are delivered.
+- The "searching for subtitles" banner no longer flashes on live TV channels.
+  The check that recognises a live stream ran after the banner was already
+  drawn, so a channel briefly showed a search that had in fact been cancelled.
+- Built-in subtitle tracks tagged with a three-letter language code -- Spanish,
+  German, Dutch, Japanese, Swedish, Czech and about fifteen more -- are matched
+  correctly again, so translating them works instead of reporting that no track
+  was found.
+
 v0.2.444
 - Fixed a translated Hebrew line staying frozen on screen while the rest of the
   dialogue came and went underneath it. The AI is handed whole subtitle entries
