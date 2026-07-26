@@ -1,3 +1,41 @@
+v0.2.446
+- Reading a video's embedded subtitle track over a debrid link now costs about
+  half the network requests it used to. Every subtitle line was paying for two
+  separate range requests: one at the start of its cluster, purely to work out
+  where the line sits and what time it begins, and one for the line itself.
+  Neither of those two facts has to be re-read for every line -- the first is a
+  property of how the file was muxed, the second is already recorded in the
+  file's own index. Both are checked against the old method before they are
+  relied on, and anything that does not check out falls back to it, so a file
+  can only be read faster, never less accurately.
+- A short buffering hiccup no longer cancels an extraction in progress. Kodi
+  reports a buffering stall and a seek exactly the way it reports a pause, and a
+  single momentary one was enough to cancel -- which is why extraction could run
+  for minutes and finish nothing while the movie was simply playing. A pause now
+  has to be held for a few seconds to count. Pausing deliberately and then
+  resuming still hands the connection straight back to the player, as before.
+- An interrupted extraction keeps what it collected, and the next attempt
+  continues from there. On a provider that limits requests aggressively an
+  extraction can only ever be cut short, so it previously never finished at all,
+  no matter how many times the file was played. A partial result is still never
+  used as a subtitle; this only decides what survives an interruption.
+- When a provider pushes back, extraction slows down as before -- and now speeds
+  back up once the provider stops. It used to stay slow for the rest of the run.
+  It never goes faster than its normal starting rate.
+- Extracting from a file stored on the device is no longer refused because
+  another extraction appeared to be running. That guard protects a shared debrid
+  connection and has no purpose for a local file.
+- A translated line whose start time the AI mistyped is now given its correct
+  start back, in the cases where the surrounding lines make its position certain.
+  Such a line appeared several cues early, sat on screen over unrelated dialogue,
+  and vanished at the moment it was actually spoken. Only the timing is touched;
+  text, entry count and order are never changed, and anything less than certain
+  is left exactly as it is.
+- Stray Arabic letters are now also removed when they appear glued inside a
+  Hebrew word rather than as a separate word, and one Arabic character block that
+  was missing from the check is covered. Subtitles already stored on your device
+  are cleaned again on this update.
+
 v0.2.445
 - Fixed embedded subtitles disappearing from the subtitle list for anyone who
   turned OFF automatic Hebrew search on playback. The two were wired together by
