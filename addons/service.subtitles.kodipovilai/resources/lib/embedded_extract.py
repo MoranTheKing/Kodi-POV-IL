@@ -1682,54 +1682,56 @@ def _resume_identity(src, want, codec, positions):
 
 
 def _resume_load(path, identity, log):
-    """(entries, finished_cluster_positions) from an earlier pass over this
-    exact file, or ([], set()). Never raises: any doubt returns nothing, and the
-    extraction simply starts over."""
+    """(entries, finished_clusters, scan_pending_clusters) from an earlier pass
+    over this exact file, or ([], set(), set()). Never raises: any doubt returns
+    nothing, and the extraction simply starts over."""
     try:
         if not path or not os.path.exists(path):
-            return [], set()
+            return [], set(), set()
         if os.path.getsize(path) > _RESUME_MAX:
-            return [], set()
+            return [], set(), set()
         with open(path, 'rb') as f:
             blob = f.read()
         head, _sep, body = blob.partition(b'\n')
         parts = head.split(b' ')
         if len(parts) != 2 or parts[0] != _RESUME_MAGIC:
-            return [], set()
+            return [], set(), set()
         if parts[1].decode('ascii', 'replace') != identity:
             log('resume: saved work belongs to a different file -- ignoring it')
-            return [], set()
-        entries, done = [], set()
+            return [], set(), set()
+        entries, done, scan = [], set(), set()
         p, n = 0, len(body)
         while p < n:
             tag = body[p:p + 1]
             p += 1
             if tag == b'E':
                 if p + 20 > n:
-                    return [], set()
+                    return [], set(), set()
                 ticks, dur, ln = struct.unpack('<qqI', body[p:p + 20])
                 p += 20
                 frame = body[p:p + ln]
                 p += ln
                 if len(frame) != ln:
-                    return [], set()      # truncated -> trust none of it
+                    return [], set(), set()   # truncated -> trust none of it
                 entries.append((ticks, None if dur < 0 else dur, frame))
-            elif tag == b'K':
+            elif tag in (b'K', b'S'):
                 if p + 8 > n:
-                    return [], set()
-                done.add(struct.unpack('<Q', body[p:p + 8])[0])
+                    return [], set(), set()
+                (cpos,) = struct.unpack('<Q', body[p:p + 8])
+                (done if tag == b'K' else scan).add(cpos)
                 p += 8
             else:
-                return [], set()
-        if entries or done:
-            log('resume: %d cue(s) and %d finished cluster(s) recovered from an '
-                'earlier pass' % (len(entries), len(done)))
-        return entries, done
+                return [], set(), set()
+        if entries or done or scan:
+            log('resume: %d cue(s), %d finished cluster(s) and %d awaiting a '
+                'scan, recovered from an earlier pass'
+                % (len(entries), len(done), len(scan)))
+        return entries, done, scan
     except Exception:
-        return [], set()
+        return [], set(), set()
 
 
-def _resume_save(path, identity, entries, done, log):
+def _resume_save(path, identity, entries, done, scan, log):
     """Persist an interrupted pass. Never raises; a failure only means the next
     attempt starts over, which is exactly today's behaviour."""
     if not path:
@@ -1750,12 +1752,15 @@ def _resume_save(path, identity, entries, done, log):
             out.append(rec)
         for cpos in done:
             out.append(b'K' + struct.pack('<Q', int(cpos)))
+        for cpos in scan:
+            out.append(b'S' + struct.pack('<Q', int(cpos)))
         tmp = path + '.part'
         with open(tmp, 'wb') as f:
             f.write(b''.join(out))
         os.replace(tmp, path)
-        log('resume: saved %d cue(s) / %d finished cluster(s) for the next '
-            'attempt' % (len(entries), len(done)))
+        log('resume: saved %d cue(s) / %d finished cluster(s) / %d awaiting a '
+            'scan, for the next attempt'
+            % (len(entries), len(done), len(scan)))
     except Exception:
         try:
             if os.path.exists(path + '.part'):
@@ -1804,14 +1809,14 @@ def _extract_cues(src, seeks, seg_start, want, entries,
     # HTTP only: a local pass is one cheap sequential walk, so there is nothing
     # worth carrying between attempts.
     identity = _resume_identity(src, want, codec, positions)
-    prior, done = _resume_load(resume_path, identity, log)
+    prior, done, scan = _resume_load(resume_path, identity, log)
     entries.extend(prior)
     ok = _extract_cues_http(src, positions, entries, want, deadline_s, t0,
-                            abort_cb, log, progress_cb, done)
+                            abort_cb, log, progress_cb, done, scan)
     if ok:
         _resume_clear(resume_path)
     else:
-        _resume_save(resume_path, identity, entries, done, log)
+        _resume_save(resume_path, identity, entries, done, scan, log)
     return ok
 
 
@@ -2045,7 +2050,8 @@ def _fetch_cluster_blocks(src, cpos, items, want, entries, log):
 
 
 def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
-                       log, progress_cb=None, done_clusters=None):
+                       log, progress_cb=None, done_clusters=None,
+                       scan_pending=None):
     """HTTP/debrid: ONE keep-alive connection, single-range serial. Per cue,
     two strategies chosen by whether the Cues carried a CueRelativePosition:
       * relpos present -> TARGETED: a small window AT the subtitle block, one
@@ -2062,6 +2068,11 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
     circuit-breaker). Returns True on a COMPLETE pass, False to defer."""
     budget = max(deadline_s, 90.0)
     finished = done_clusters if done_clusters is not None else set()
+    # Clusters a previous pass already PROVED the targeted path cannot resolve.
+    # Without carrying these, every attempt re-ran their (hopeless) targeted
+    # fetches before reaching the scan phase -- so on a file with unresolvable
+    # cues the scan was never reached and resume could not converge at all.
+    needs_scan = scan_pending if scan_pending is not None else set()
     rel_by_cpos = {}
     scan_cues = []
     for (c, r, t) in positions:
@@ -2074,8 +2085,9 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
     carried = sum(len(v) for c, v in rel_by_cpos.items() if c in finished)
     carried += sum(1 for c in scan_cues if c in finished)
     rel_clusters = [(c, sorted(rel_by_cpos[c])) for c in sorted(rel_by_cpos)
-                    if c not in finished]
+                    if c not in finished and c not in needs_scan]
     scan_cues = [c for c in scan_cues if c not in finished]
+    scan_cues.extend(c for c in sorted(needs_scan) if c not in finished)
     n_rel = sum(len(v) for _c, v in rel_clusters)
     log('%d sub-cue cluster(s): %d targeted (relpos) in %d cluster(s) + %d '
         'window-scan%s; caps %dMB / %.0fs'
@@ -2130,9 +2142,12 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
             # Couldn't resolve every block from relpos (odd prefix / short read
             # / wrong track) -> window-scan THIS cluster so we never drop a line.
             # Duplicates are dropped in _entries_to_srt, so re-finding the ones
-            # we already have is harmless. NOT marked finished: the scan below
-            # is what completes it.
+            # we already have is harmless. NOT marked finished -- the scan below
+            # is what completes it -- but remembered as scan-pending, so a later
+            # attempt goes straight to the scan instead of paying for the
+            # targeted fetches all over again.
             scan_cues.append(cpos)
+            needs_scan.add(cpos)
         else:
             finished.add(cpos)
         done += len(items)
@@ -2166,6 +2181,7 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                 _end, truncated = _collect_one_cluster(window[off:], want, entries)
                 if not truncated:
                     finished.add(cpos)   # covered cleanly -- never redo it
+                    needs_scan.discard(cpos)
                     continue
                 # Window too small for this cluster (a big co-located video/audio
                 # block sits around the subtitle one) -> a LATER subtitle block
@@ -2186,6 +2202,7 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                         'a partial subtitle' % (_CLUSTER_TOPUP_MAX >> 20))
                     return False
                 finished.add(cpos)       # the top-up completed it
+                needs_scan.discard(cpos)
             done += len(cposes)
             _tick(done)
 
