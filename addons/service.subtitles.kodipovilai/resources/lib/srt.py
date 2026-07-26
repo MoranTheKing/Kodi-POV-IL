@@ -577,12 +577,19 @@ def parse_blocks(text):
 # of those, which is a worse outcome than the bug it is guarding against.
 _MAX_CUE_MS = 180000       # 3 min: longer than any authored hold, far under an
 #                            hour-digit slip. Absolute sanity bound.
-_OVERLAP_GRACE_MS = 10000  # how far a cue may legitimately outlive the next cue's
-#                            start (signs over dialogue, dual-speaker overlap)
+_OVERLAP_GRACE_MS = 10000  # how far a cue may outlive the NEXT cue's start before
+#                            it is treated as runaway. Covers dual-speaker
+#                            overlap and a sign held over roughly one dialogue
+#                            turn -- NOT a sign held across many turns, which is
+#                            still clipped. Raising it protects more authoring at
+#                            the cost of leaving a corrupt cue on screen longer.
 _MIN_CUE_MS = 400
 _DEFAULT_CUE_MS = 2000
-_START_MATCH_MIN_RATIO = 0.9   # positional pairing must look this right to trust
 _NEXT_SCAN_MAX = 200           # bound the search for the next later-starting cue
+# INVARIANT: _OVERLAP_GRACE_MS and _MAX_CUE_MS must both exceed _MIN_CUE_MS.
+# The ceiling is always start+_MAX_CUE_MS or start+_OVERLAP_GRACE_MS(+gap), so
+# this is what guarantees the minimum-duration floor can never be pushed past
+# the ceiling and re-create the overlap the ceiling exists to prevent.
 
 _TIME_PAIR_RE = re.compile(
     r'^(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*'
@@ -648,23 +655,38 @@ def restore_block_timings(src_blocks, out_blocks):
     Pairing is positional, but positional pairing is VERIFIED before it is
     trusted: equal block counts are necessary and not sufficient (a stray blank
     line inside the model's reply can split one cue into two while another is
-    dropped, keeping the count intact but shifting everything after it). So the
-    start timestamps of each pair are compared, and positional pairing is used
-    only when they agree for nearly every block -- the remaining disagreements
-    are exactly the corrupted timestamps we are here to repair.
+    dropped, keeping the count intact but shifting everything after it). Every
+    pair's start timestamps must agree -- not most of them, ALL of them. A
+    tolerance is tempting, since a corrupted START would then also be repairable,
+    but any tolerance is a window a shift can hide in: transposing the last two
+    entries of a 30-entry chunk disagrees on only 6.7% of blocks and would sail
+    through a 10% gate, silently swapping two lines' text. A wrong line at the
+    right time is a worse defect than a right line at a wrong time, so the strict
+    rule wins and a corrupted start is left to the clamp instead.
 
-    When the counts differ, or positional pairing does not look right, each
-    output block is instead matched to the source block with the SAME START
-    (forward-scanning, so duplicate starts still consume in order). That covers
-    the common "Gemini silently dropped an entry" case, which the caller accepts
-    without retrying at up to 15% loss, and which a positional pass would
-    otherwise mis-pair into corrupting every following cue.
+    When the counts differ, or any pair disagrees, each output block is instead
+    matched to the source block with the SAME START. That covers the common
+    "Gemini silently dropped an entry" case, which the caller accepts without
+    retrying at up to 15% loss, and which a positional pass would otherwise
+    mis-pair into corrupting every following cue.
+
+    Blocks whose source start is AMBIGUOUS -- the same start appears more than
+    once in the source, as genuinely simultaneous dialogue does -- are left
+    untouched on both paths. Neither position nor start can tell such a pair
+    apart, so repairing them means guessing, and a wrong guess swaps two lines
+    while doing nothing beats leaving the model's own self-consistent timing.
 
     Fully fail-open: any surprise returns the input unchanged.
     """
     try:
         if not out_blocks or not src_blocks:
             return out_blocks
+        by_start = {}
+        for i, src in enumerate(src_blocks):
+            st = _block_start(src)
+            if st is not None:
+                by_start.setdefault(st, []).append(i)
+        ambiguous = set(st for st, idxs in by_start.items() if len(idxs) > 1)
         if len(src_blocks) == len(out_blocks):
             pairs = list(zip(src_blocks, out_blocks))
             comparable = agree = 0
@@ -675,20 +697,17 @@ def restore_block_timings(src_blocks, out_blocks):
                 comparable += 1
                 if ss == os_:
                     agree += 1
-            if comparable and (agree / float(comparable)) >= _START_MATCH_MIN_RATIO:
-                return [(_rebuild_block(src, out) or out) for src, out in pairs]
-        # Counts differ, or the positional alignment looked wrong: repair only
-        # what can be identified positively, and leave the rest to the clamp.
-        by_start = {}
-        for i, src in enumerate(src_blocks):
-            st = _block_start(src)
-            if st is not None:
-                by_start.setdefault(st, []).append(i)
+            if comparable and agree == comparable:
+                return [out if _block_start(src) in ambiguous
+                        else (_rebuild_block(src, out) or out)
+                        for src, out in pairs]
+        # Counts differ, or a pair disagreed: repair only what can be identified
+        # positively, and leave the rest to the clamp.
         used = set()
         fixed = []
         for out in out_blocks:
             st = _block_start(out)
-            idxs = by_start.get(st) if st is not None else None
+            idxs = by_start.get(st) if st is not None and st not in ambiguous else None
             pick = None
             if idxs:
                 for i in idxs:
