@@ -1893,15 +1893,22 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                            level='WARNING')
             return None
 
-        # ONE extraction at a time. Two concurrent runs (e.g. the user picking
-        # "embedded" twice) DOUBLE the range-request load on the shared debrid
-        # TOKEN and can push the CDN over its per-token rate limit -- which then
-        # 429s the PLAYER's own video stream and CLOSES the movie (field crash on
-        # TorBox). A cross-process flag (Window prop -- RunScript runs in its own
-        # process) refuses a second run.
+        # Is this a REMOTE source? Everything below that throttles, locks or
+        # defers exists to protect a shared debrid token. A local file has no
+        # token, no CDN and no rate limit -- reading it twice costs nothing but
+        # disk -- so those guards are pure loss there, and one of them (the
+        # single-extraction lock) actively refuses work a local user asked for.
+        _remote = '://' in (url or '')
+
+        # ONE extraction at a time, REMOTE ONLY. Two concurrent runs (e.g. the
+        # user picking "embedded" twice) DOUBLE the range-request load on the
+        # shared debrid TOKEN and can push the CDN over its per-token rate limit
+        # -- which then 429s the PLAYER's own video stream and CLOSES the movie
+        # (field crash on TorBox). A cross-process flag (Window prop -- RunScript
+        # runs in its own process) refuses a second run.
         try:
             import xbmcgui as _xg
-            _win = _xg.Window(10000)
+            _win = _xg.Window(10000) if _remote else None
         except Exception:
             _win = None
         _ACTIVE = 'povil.embedded_extract_active'
@@ -1939,7 +1946,18 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         # contending for the token -- so ABORT at once to hand the bandwidth and
         # request budget back and KEEP THE MOVIE ALIVE. A pause is not a stall.
         _STALL_ABORT_S = 8
-        _stall = {'t': None, 'since': None, 'saw_pause': False}
+        # How long Player.Paused must hold before it counts as a real PAUSE.
+        # Kodi reports Paused during a seek and during a buffering hiccup too --
+        # the resume-abort below says so itself -- and `saw_pause` LATCHED on a
+        # single observation, so one sub-second blip anywhere in the run armed an
+        # abort that fired on the very next poll. That is what a field log
+        # (0.2.445) shows: five attempts, lifetimes 31.5s / 49.0s / 0.0s /
+        # 156.1s / 16.3s, every one of them ending in "playback resumed after a
+        # pause", none completing -- while the user was simply watching the
+        # movie. A deliberate pause lasts; a blip does not.
+        _PAUSE_ARM_S = 3.0
+        _stall = {'t': None, 'since': None, 'saw_pause': False,
+                  'paused_at': None}
 
         def _should_abort():
             try:
@@ -1950,8 +1968,15 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                     return True
                 if _x.getCondVisibility('Player.Paused'):
                     _stall['t'] = None
-                    _stall['saw_pause'] = True
+                    _pnow = _tt.time()
+                    if _stall['paused_at'] is None:
+                        _stall['paused_at'] = _pnow
+                    elif (_pnow - _stall['paused_at']) >= _PAUSE_ARM_S:
+                        _stall['saw_pause'] = True
                     return False
+                # Not paused: any blip that was in progress ends here without
+                # arming anything.
+                _stall['paused_at'] = None
                 # Playing (not paused). If the user PAUSED to let extraction run
                 # and has now RESUMED, hand the debrid token back INSTANTLY: on a
                 # strict provider our crawl leaves the token rate-limited, and the
@@ -1960,15 +1985,17 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                 # Aborting on resume keeps the movie alive; extraction defers to
                 # the external path. (A never-paused, Real-Debrid-style extract
                 # during playback never sets saw_pause, so it is unaffected.)
-                # NOTE: Player.Paused can also read True during a seek or a
-                # buffering hiccup, so this may abort on those too -- that's
-                # acceptable (a seek is likewise a moment of extra contention for
-                # the same rate-limited token; the cost of over-aborting is only
-                # a clean defer to the external path).
+                # NOTE: Player.Paused ALSO reads True during a seek and during a
+                # buffering hiccup, which is why arming it needs _PAUSE_ARM_S of
+                # continuously-held pause above: those are momentary, a real
+                # pause is not. A seek is still a moment of extra contention for
+                # the same token, so a long one is deliberately treated as a
+                # pause; the cost of over-aborting is only a clean defer.
                 if _stall['saw_pause']:
-                    kodi_utils.log('embedded: playback resumed after a pause -- '
-                                   'aborting extraction to free the debrid token '
-                                   'for the player', level='INFO')
+                    kodi_utils.log('embedded: playback resumed after a pause of '
+                                   '>{0:.0f}s -- aborting extraction to free the '
+                                   'debrid token for the player'
+                                   .format(_PAUSE_ARM_S), level='INFO')
                     return True
                 now = _tt.time()
                 try:
@@ -1993,11 +2020,30 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         # + 429 backoff, and the stall-abort above, so it yields to the player
         # instead of starving it. Align-only never calls this function.
         _allow_http = bool(allow_http)
+        # Carry an interrupted pass forward. On a provider that rate-limits
+        # hard, a remote extraction can only ever END interrupted -- and every
+        # one of those endings used to discard the whole pass, so the file never
+        # finished no matter how many times it was played. With a scratch file
+        # each attempt continues where the last stopped. Deliberately ONE file
+        # per source language, not per title: it is bounded, and the extractor's
+        # own fingerprint (byte length + track + codec + Cues layout) refuses
+        # work saved from any other file, so the worst a collision can do is
+        # start over -- exactly today's behaviour. Local files skip it; a local
+        # pass is a single cheap sequential walk with nothing to carry.
+        _resume = None
+        if _remote:
+            try:
+                _resume = os.path.join(
+                    kodi_utils.cache_dir(),
+                    'embedded_resume_{0}.bin'.format(src_lang or 'src'))
+            except Exception:
+                _resume = None
         try:
             srt_text = embedded_extract.extract_srt(
                 url, track_num=track_num, lang=src_lang,
                 allow_http=_allow_http, deadline_s=deadline_s,
                 abort_cb=_should_abort, progress_cb=progress_cb,
+                resume_path=_resume,
                 log=lambda m: kodi_utils.log('embedded_extract: ' + m,
                                              level='INFO'))
         finally:
