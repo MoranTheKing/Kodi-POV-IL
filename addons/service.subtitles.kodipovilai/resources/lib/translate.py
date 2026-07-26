@@ -3470,8 +3470,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         # to show progress early.
                         _merged_text = srt.clamp_cue_durations(
                             srt.fix_rtl_punctuation(
-                                srt.strip_leaked_speaker_prefix(
-                                    srt.stitch_blocks(_merged_blocks))))
+                                srt.strip_leaked_arabic(
+                                    srt.strip_leaked_speaker_prefix(
+                                        srt.stitch_blocks(_merged_blocks)))))
                         progressive_cb('chunk_ready', {
                             'completed': completed,
                             'total': total,
@@ -3563,6 +3564,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # a translated line is removed while a caption/chyron/URL the model deliberately
     # left in English ("WARNING: ...", "PART 2: ...", "HTTP://...") is never eaten.
     final = srt.strip_leaked_speaker_prefix(final, hebrew_only=True)
+    # Same class of defect, different source: when the Arabic gender
+    # reference is on, the prompt carries real Arabic lines and the model
+    # sometimes copies a word or a suffix of one into the Hebrew. Only a
+    # line that has BOTH scripts is touched, so an all-Arabic line stays.
+    final = srt.strip_leaked_arabic(final)
     # Defensive backstop for RTL punctuation: Gemini sometimes puts
     # punctuation at the logical start of a Hebrew line ("?שלום")
     # when it belongs at the logical end ("שלום?"). The prompt

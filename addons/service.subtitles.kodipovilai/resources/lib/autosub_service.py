@@ -18,7 +18,7 @@ except ImportError:
     xbmc = None
 
 
-STATE = {'last_file': None, 'busy': False, 'player': None}
+STATE = {'last_file': None, 'busy': False, 'player': None, 'snap_file': None}
 
 
 def autosub_on_play():
@@ -58,8 +58,10 @@ def autosub_on_play():
     # a PVR/streaming-protocol path, a PVR channel name, and a per-addon
     # exclusion list (comma-separated plugin ids, configurable) matched
     # against both the playing plugin:// path and the window the playback
-    # was started from. The zero-duration live check runs later, after the
-    # player has settled (see below). All guarded: on any doubt, autosub runs.
+    # was started from. A fourth catches what these three miss -- an IPTV plugin
+    # that resolves to a plain http:// URL -- by testing for zero duration once
+    # the player has settled; it runs below, but BEFORE anything is drawn.
+    # All guarded: on any doubt, autosub runs.
     try:
         _pf = (xbmc.Player().getPlayingFile() or '')
     except Exception:
@@ -100,10 +102,35 @@ def autosub_on_play():
     STATE['busy'] = True
     _eng_general = None
     try:
-        # Show the DarkSubs-style top overlay IMMEDIATELY (with live per-source
-        # counts the engine fills into general.show_msg as it searches), so the
-        # user sees the same "loading subtitles" screen the moment playback
-        # starts -- not after the metadata wait below.
+        # LIVE / IPTV check FIRST, before anything is drawn. A zero-duration
+        # stream is live, and live has no release to search for. This used to
+        # run further down, AFTER the overlay was already on screen, so an Idan
+        # Plus channel flashed "MoranSubs — מחפש כתוביות עברית" and then
+        # silently gave up: the exact field report of "the search was cancelled
+        # but the message still pops up". The per-addon exclusion above misses
+        # this case because an IPTV plugin resolves to a direct http:// URL, so
+        # the playing file is not a plugin:// path any more.
+        #
+        # Costs nothing on normal playback: getTotalTime() is already non-zero
+        # by onAVStarted for a VOD file, so the loop exits on its first test and
+        # the overlay still appears immediately. Only a genuinely zero-duration
+        # stream pays the grace period -- and that one gets no overlay at all.
+        try:
+            _pl_live = xbmc.Player()
+            _dur_waited = 0.0
+            while (_pl_live.isPlayingVideo()
+                   and _pl_live.getTotalTime() <= 0 and _dur_waited < 5.0):
+                xbmc.sleep(250)
+                _dur_waited += 0.25
+            if _pl_live.isPlayingVideo() and _pl_live.getTotalTime() <= 0:
+                return  # no duration after the grace period -> live stream
+        except Exception:
+            pass
+
+        # Show the DarkSubs-style top overlay (with live per-source counts the
+        # engine fills into general.show_msg as it searches), so the user sees
+        # the same "loading subtitles" screen from the start of the search --
+        # not after the metadata wait below.
         try:
             subs_engine_bridge.ensure_engine_settings()
             from resources.lib.subs_engine import general as _eng_general
@@ -183,18 +210,6 @@ def autosub_on_play():
         # see it) reports NO total duration; VOD always has one. Duration can
         # lag a moment at start even for VOD, so give it a bounded grace
         # period before concluding "live". Fail-open: any doubt -> autosub.
-        try:
-            _pl_live = xbmc.Player()
-            _dur_waited = 0.0
-            while (_pl_live.isPlayingVideo()
-                   and _pl_live.getTotalTime() <= 0 and _dur_waited < 5.0):
-                xbmc.sleep(250)
-                _dur_waited += 0.25
-            if _pl_live.isPlayingVideo() and _pl_live.getTotalTime() <= 0:
-                return  # no duration after the grace period -> live stream
-        except Exception:
-            pass
-
         # Embedded Hebrew is the best, perfectly-synced subtitle -- apply it
         # FIRST whenever the file has one. The demuxer often hasn't exposed the
         # embedded streams yet this early after play, so poll while the stream
@@ -416,6 +431,15 @@ def snapshot_on_play():
         return
     try:
         player = xbmc.Player()
+        # Kodi can fire onAVStarted more than once for one file, and each firing
+        # would otherwise spawn another poller that may live for 30s. Skip when
+        # this file ALREADY has a real snapshot -- deliberately keyed on the
+        # snapshot rather than on "have we run before", so a previous attempt
+        # that captured nothing (demuxer still catching up) is retried instead
+        # of being locked out. Same rule as note_playback_streams: only a
+        # non-empty capture counts as done.
+        if subs_engine_bridge.have_playback_snapshot():
+            return
         # Live/PVR has no embedded subtitle picking to do; skip the poll.
         try:
             if (player.getPlayingFile() or '').startswith(
