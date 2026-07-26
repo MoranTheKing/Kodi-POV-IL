@@ -385,9 +385,89 @@ def autosub_on_play():
                 pass
 
 
+def snapshot_on_play():
+    """Record the file's subtitle streams at play start. NOTHING ELSE.
+
+    This is the only producer of the play-start snapshot that
+    subs_engine_bridge.embedded_candidates() needs, and the picker shows NO
+    embedded row without it -- neither "[מובנה] XX" nor
+    "תרגום מובנה → עברית (AI)". It used to live inside autosub_on_play, behind
+    that function's engine_autosub / hebrew_subtitle_wanted / skip_autosub /
+    live-stream guards, so a user who turned OFF "auto-search and apply Hebrew
+    on play" silently lost every embedded row as well -- two features that have
+    nothing to do with each other (field report: a user disabled autosub to stop
+    a duplicate extraction and the embedded AI rows disappeared with it).
+
+    Snapshotting is cheap and side-effect-free for playback: it polls Kodi's own
+    stream list and stores it on a window property. It must therefore run
+    whenever the engine is on, independent of the autosub setting.
+
+    Kept SEPARATE from autosub_on_play rather than hoisted out of it, so the
+    autosub path is untouched. note_playback_streams() is idempotent per file,
+    so when both run whichever arrives first wins and the other returns.
+    """
+    if xbmc is None:
+        return
+    try:
+        from resources.lib import kodi_utils, subs_engine_bridge
+        if not kodi_utils.get_bool('use_builtin_engine', False):
+            return          # embedded_candidates() is inert anyway
+    except Exception:
+        return
+    try:
+        player = xbmc.Player()
+        # Live/PVR has no embedded subtitle picking to do; skip the poll.
+        try:
+            if (player.getPlayingFile() or '').startswith(
+                    ('pvr://', 'udp://', 'rtp://', 'rtsp://')):
+                return
+        except Exception:
+            pass
+        # The demuxer often has not exposed the streams this early, so poll
+        # while the list is still empty -- same wait autosub_on_play uses.
+        streams = []
+        for _ in range(80):            # up to ~8s
+            try:
+                streams = player.getAvailableSubtitleStreams() or []
+            except Exception:
+                streams = []
+            if streams:
+                break
+            if not player.isPlayingVideo():
+                return
+            xbmc.sleep(100)
+        # Pass the real info dict: note_playback_streams reads ids off it to
+        # flag a built-in Hebrew track for the community pool, and its
+        # embedded-report diagnostic reads several fields. Falling back to {}
+        # (never None) keeps the .get() calls in there safe.
+        try:
+            info = kodi_utils.current_video_info() or {}
+        except Exception:
+            info = {}
+        subs_engine_bridge.note_playback_streams(info, streams)
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log('snapshot_on_play failed: {0}'.format(e),
+                           level='DEBUG')
+        except Exception:
+            pass
+
+
 if xbmc is not None:
     class AutoSubPlayer(xbmc.Player):
         def onAVStarted(self):
+            # Always snapshot; auto-search only when the user asked for it.
+            try:
+                threading.Thread(target=snapshot_on_play, daemon=True).start()
+            except Exception:
+                pass
+            try:
+                from resources.lib import kodi_utils
+                if not kodi_utils.get_bool('engine_autosub', True):
+                    return
+            except Exception:
+                pass
             try:
                 threading.Thread(target=autosub_on_play, daemon=True).start()
             except Exception:
@@ -395,18 +475,19 @@ if xbmc is not None:
 
 
 def start_if_enabled():
-    """Register a Player listener so we can auto-search + auto-apply Hebrew on
-    play, but ONLY when the engine is on and autosub is enabled. The service's
-    existing prune loop keeps the process alive, so the Player callbacks fire;
-    we just hold a reference. When off, does nothing (behavior unchanged)."""
+    """Register the play-start Player listener whenever the built-in engine is
+    on. The listener always snapshots the embedded streams (so the picker can
+    offer embedded + embedded-AI rows) and additionally runs the Hebrew
+    auto-search when `engine_autosub` is on -- that setting gates the SEARCH,
+    not the snapshot. The service's existing prune loop keeps the process alive,
+    so the Player callbacks fire; we just hold a reference."""
     if xbmc is None:
         return
     try:
         from resources.lib import kodi_utils
         if not kodi_utils.get_bool('use_builtin_engine', False):
             return
-        if not kodi_utils.get_bool('engine_autosub', True):
-            return
+        autosub = kodi_utils.get_bool('engine_autosub', True)
     except Exception:
         return
     try:
@@ -414,7 +495,10 @@ def start_if_enabled():
         # If a video is already playing when the service starts, kick once.
         try:
             if xbmc.Player().isPlayingVideo():
-                threading.Thread(target=autosub_on_play, daemon=True).start()
+                threading.Thread(target=snapshot_on_play, daemon=True).start()
+                if autosub:
+                    threading.Thread(target=autosub_on_play,
+                                     daemon=True).start()
         except Exception:
             pass
     except Exception:
