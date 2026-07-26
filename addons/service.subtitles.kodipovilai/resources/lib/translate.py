@@ -1466,11 +1466,22 @@ def _backfill_pool_async(info, translated_path, local_source, source_lang,
 def _is_google_translated(path):
     """True if this cached translation was produced by Google Translate (a
     sidecar '<path>.google' marker is written next to it). Such machine
-    translations must NEVER be shared to the community pool."""
+    translations must NEVER be shared to the community pool.
+
+    Delegates to srt.is_google_translated so the sidecar is read in exactly one
+    place -- srt.may_carry_arabic_leak needs the same signal, and two copies of
+    a detector drift apart the same way two copies of a rule do.
+
+    Fails to True, the OPPOSITE of may_carry_arabic_leak: if we cannot tell,
+    the safe answer for POOL SHARING is "assume Google, do not share", whereas
+    the safe answer for a text-deleting repair is "assume unknown, do not
+    touch". Same signal, opposite safe failures -- which is why the detector
+    itself does not choose one.
+    """
     try:
-        return bool(path) and os.path.exists(path + '.google')
+        return srt.is_google_translated(path)
     except Exception:
-        return False
+        return True
 
 
 def _google_translate_and_save(src_text, source_lang, translated, info,
@@ -3500,9 +3511,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         # runaway cue would sit frozen on screen for the rest of
                         # the job -- the exact symptom, during the feature built
                         # to show progress early.
-                        # arabic-strip: our-own-output -- this is the model's
-                        # reply to OUR prompt, so provenance is not in question
-                        # and may_carry_arabic_leak has nothing to add.
+                        # arabic-strip: our-own-output -- every Hebrew line here
+                        # is the model's reply to OUR prompt (pending chunks are
+                        # still untranslated source, which carries no leak), so
+                        # provenance is not in question. This is a transient
+                        # progress preview; it is never the cached file.
                         _merged_text = srt.clamp_cue_durations(
                             srt.fix_rtl_punctuation(
                                 srt.strip_leaked_arabic(

@@ -1081,11 +1081,31 @@ def may_carry_arabic_leak(path=None, pool_kind=None):
     try:
         if pool_kind is not None and str(pool_kind).strip().lower() == 'ktuvit':
             return False
-        if path and os.path.exists(path + '.google'):
+        if is_google_translated(path):
             return False
     except Exception:
-        pass
+        # Provenance UNKNOWN. Answer no: stripping deletes text, and this
+        # module's stated preference throughout is a visible defect over a
+        # silent one. Leaving a stray Arabic word on screen is reportable;
+        # deleting a quote out of someone's subtitle is not.
+        return False
     return True
+
+
+def is_google_translated(path):
+    """True when a '<path>.google' sidecar marks this file as a Google Translate
+    fallback. Lives here, next to the rule that consumes it, so there is exactly
+    ONE implementation -- translate.py calls this rather than keeping its own
+    copy. A signal with two readers drifts the same way a rule with two homes.
+
+    Deliberately does NOT swallow errors, because its two callers want OPPOSITE
+    answers when the signal cannot be read: refusing to strip is the safe
+    failure for a repair that deletes text, while refusing to SHARE is the safe
+    failure for pool contribution. A single fail direction here would be wrong
+    for one of them, so each catches and decides. (os.path.exists already
+    absorbs ordinary filesystem errors; this is about a malformed path.)
+    """
+    return bool(path) and os.path.exists(path + '.google')
 
 
 def strip_leaked_arabic(text):
