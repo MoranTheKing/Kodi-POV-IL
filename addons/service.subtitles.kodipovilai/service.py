@@ -2256,8 +2256,12 @@ def _start_subsync_delay_watch(monitor):
 
 
 def _maybe_start_autosub_player():
-    """Register the auto-on-play Hebrew listener (autosub_service holds the
-    Player reference in its module STATE, which outlives this call)."""
+    """Register the play-start listener (autosub_service holds the Player
+    reference in its module STATE, which outlives this call).
+
+    It always snapshots the file's embedded subtitle streams -- the picker's
+    "[מובנה] XX" and "תרגום מובנה → עברית (AI)" rows are built from that
+    snapshot -- and auto-searches Hebrew only when engine_autosub is on."""
     try:
         from resources.lib import autosub_service
         autosub_service.start_if_enabled()

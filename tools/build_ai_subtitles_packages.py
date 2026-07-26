@@ -654,8 +654,12 @@ def main():
     except Exception:
         pass
 
-    # Auto-on-play Hebrew (Phase C): the same listener the full build runs.
-    # Gated inside on use_builtin_engine + engine_autosub, both default ON.
+    # Play-start listener (Phase C): the same one the full build runs. It
+    # ALWAYS snapshots the embedded subtitle streams (the picker's embedded
+    # and embedded-AI rows are built from that snapshot) whenever
+    # use_builtin_engine is on, and additionally auto-searches Hebrew when
+    # engine_autosub is on. Both default ON; engine_autosub gates only the
+    # search, never the snapshot.
     _run('autosub player', _maybe_start_autosub_player)
 
     monitor = xbmc.Monitor()
