@@ -18,7 +18,7 @@ except ImportError:
     xbmc = None
 
 
-STATE = {'last_file': None, 'busy': False, 'player': None}
+STATE = {'last_file': None, 'busy': False, 'player': None, 'snap_file': None}
 
 
 def autosub_on_play():
@@ -58,8 +58,10 @@ def autosub_on_play():
     # a PVR/streaming-protocol path, a PVR channel name, and a per-addon
     # exclusion list (comma-separated plugin ids, configurable) matched
     # against both the playing plugin:// path and the window the playback
-    # was started from. The zero-duration live check runs later, after the
-    # player has settled (see below). All guarded: on any doubt, autosub runs.
+    # was started from. A fourth catches what these three miss -- an IPTV plugin
+    # that resolves to a plain http:// URL -- by testing for zero duration once
+    # the player has settled; it runs below, but BEFORE anything is drawn.
+    # All guarded: on any doubt, autosub runs.
     try:
         _pf = (xbmc.Player().getPlayingFile() or '')
     except Exception:
@@ -95,15 +97,52 @@ def autosub_on_play():
         if _src_ids & _excluded:
             return
 
+    # LIVE / IPTV before the busy flag is taken. This wait can run for
+    # 13 seconds, and STATE['busy'] is a single global: holding it here
+    # would make a live channel block autosub for whatever the user plays
+    # NEXT -- onAVStarted fires once, so that item would lose autosub
+    # silently and permanently. Review caught this. Nothing below needs
+    # the flag, so the check runs outside it.
+    # Zero duration == live. This used to run further down, AFTER the overlay
+    # was already on screen, so an Idan Plus channel flashed
+    # "MoranSubs — מחפש כתוביות עברית" and then silently gave up: the exact
+    # field report of "the search was cancelled but the message still pops up".
+    # The three guards above miss it because an IPTV plugin resolves to a plain
+    # http:// URL, so the playing file is no longer a plugin:// path.
+    #
+    # Costs nothing on normal playback: getTotalTime() is already non-zero by
+    # onAVStarted for a VOD file, so the loop exits on its first test and the
+    # overlay still appears immediately.
+    #
+    # The grace period is 13s, not the 5s this loop used to have, and that is
+    # deliberate. Sitting where it did -- below the overlay and below the
+    # up-to-8s metadata wait -- a slow VOD effectively had ~13s of wall clock
+    # to expose a duration before being judged live. Moving the check up
+    # without widening it would have cut that to 5s and started silently
+    # SKIPPING autosub on slow sources (debrid, 4K remux) to fix a cosmetic
+    # flash: a bad trade, and one review caught.
+    try:
+        _pl_live = xbmc.Player()
+        _dur_waited = 0.0
+        while (_pl_live.isPlayingVideo()
+               and _pl_live.getTotalTime() <= 0 and _dur_waited < 13.0):
+            xbmc.sleep(250)
+            _dur_waited += 0.25
+        if _pl_live.isPlayingVideo() and _pl_live.getTotalTime() <= 0:
+            return  # no duration after the grace period -> live stream
+    except Exception:
+        pass
+
+
     if STATE['busy']:
         return
     STATE['busy'] = True
     _eng_general = None
     try:
-        # Show the DarkSubs-style top overlay IMMEDIATELY (with live per-source
-        # counts the engine fills into general.show_msg as it searches), so the
-        # user sees the same "loading subtitles" screen the moment playback
-        # starts -- not after the metadata wait below.
+        # Show the DarkSubs-style top overlay (with live per-source counts the
+        # engine fills into general.show_msg as it searches), so the user sees
+        # the same "loading subtitles" screen from the start of the search --
+        # not after the metadata wait below.
         try:
             subs_engine_bridge.ensure_engine_settings()
             from resources.lib.subs_engine import general as _eng_general
@@ -183,18 +222,6 @@ def autosub_on_play():
         # see it) reports NO total duration; VOD always has one. Duration can
         # lag a moment at start even for VOD, so give it a bounded grace
         # period before concluding "live". Fail-open: any doubt -> autosub.
-        try:
-            _pl_live = xbmc.Player()
-            _dur_waited = 0.0
-            while (_pl_live.isPlayingVideo()
-                   and _pl_live.getTotalTime() <= 0 and _dur_waited < 5.0):
-                xbmc.sleep(250)
-                _dur_waited += 0.25
-            if _pl_live.isPlayingVideo() and _pl_live.getTotalTime() <= 0:
-                return  # no duration after the grace period -> live stream
-        except Exception:
-            pass
-
         # Embedded Hebrew is the best, perfectly-synced subtitle -- apply it
         # FIRST whenever the file has one. The demuxer often hasn't exposed the
         # embedded streams yet this early after play, so poll while the stream
@@ -385,9 +412,105 @@ def autosub_on_play():
                 pass
 
 
+def snapshot_on_play():
+    """Record the file's subtitle streams at play start. NOTHING ELSE.
+
+    This is the only producer of the play-start snapshot that
+    subs_engine_bridge.embedded_candidates() needs, and the picker shows NO
+    embedded row without it -- neither "[מובנה] XX" nor
+    "תרגום מובנה → עברית (AI)". It used to live inside autosub_on_play, behind
+    that function's engine_autosub / hebrew_subtitle_wanted / skip_autosub /
+    live-stream guards, so a user who turned OFF "auto-search and apply Hebrew
+    on play" silently lost every embedded row as well -- two features that have
+    nothing to do with each other (field report: a user disabled autosub to stop
+    a duplicate extraction and the embedded AI rows disappeared with it).
+
+    Snapshotting is cheap and side-effect-free for playback: it polls Kodi's own
+    stream list and stores it on a window property. It must therefore run
+    whenever the engine is on, independent of the autosub setting.
+
+    Kept SEPARATE from autosub_on_play rather than hoisted out of it, so the
+    autosub path is untouched. note_playback_streams() is idempotent per file,
+    so when both run whichever arrives first wins and the other returns.
+    """
+    if xbmc is None:
+        return
+    try:
+        from resources.lib import kodi_utils, subs_engine_bridge
+        if not kodi_utils.get_bool('use_builtin_engine', False):
+            return          # embedded_candidates() is inert anyway
+    except Exception:
+        return
+    try:
+        player = xbmc.Player()
+        # Kodi can fire onAVStarted more than once for one file, and each firing
+        # would otherwise spawn another poller that may live for 30s. Skip when
+        # this file ALREADY has a real snapshot -- deliberately keyed on the
+        # snapshot rather than on "have we run before", so a previous attempt
+        # that captured nothing (demuxer still catching up) is retried instead
+        # of being locked out. Same rule as note_playback_streams: only a
+        # non-empty capture counts as done.
+        if subs_engine_bridge.have_playback_snapshot():
+            return
+        # Live/PVR has no embedded subtitle picking to do; skip the poll.
+        try:
+            if (player.getPlayingFile() or '').startswith(
+                    ('pvr://', 'udp://', 'rtp://', 'rtsp://')):
+                return
+        except Exception:
+            pass
+        # The demuxer often has not exposed the streams this early, so poll
+        # while the list is still empty. Longer than autosub_on_play's own 8s
+        # wait ON PURPOSE: with autosub off this is the ONLY writer, and it
+        # starts at t=0 with no preamble, whereas autosub does not begin its
+        # poll until after its metadata and live-duration waits. Giving up at 8s
+        # would leave a slow-to-enumerate file (4K remux over debrid) with no
+        # embedded rows at all. The poll itself is a local call and exits the
+        # moment streams appear or playback stops, so the ceiling costs nothing
+        # on a normal file.
+        streams = []
+        for _ in range(300):           # up to ~30s
+            try:
+                streams = player.getAvailableSubtitleStreams() or []
+            except Exception:
+                streams = []
+            if streams:
+                break
+            if not player.isPlayingVideo():
+                return
+            xbmc.sleep(100)
+        # Pass the real info dict: note_playback_streams reads ids off it to
+        # flag a built-in Hebrew track for the community pool, and its
+        # embedded-report diagnostic reads several fields. Falling back to {}
+        # (never None) keeps the .get() calls in there safe.
+        try:
+            info = kodi_utils.current_video_info() or {}
+        except Exception:
+            info = {}
+        subs_engine_bridge.note_playback_streams(info, streams)
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log('snapshot_on_play failed: {0}'.format(e),
+                           level='DEBUG')
+        except Exception:
+            pass
+
+
 if xbmc is not None:
     class AutoSubPlayer(xbmc.Player):
         def onAVStarted(self):
+            # Always snapshot; auto-search only when the user asked for it.
+            try:
+                threading.Thread(target=snapshot_on_play, daemon=True).start()
+            except Exception:
+                pass
+            try:
+                from resources.lib import kodi_utils
+                if not kodi_utils.get_bool('engine_autosub', True):
+                    return
+            except Exception:
+                pass
             try:
                 threading.Thread(target=autosub_on_play, daemon=True).start()
             except Exception:
@@ -395,18 +518,19 @@ if xbmc is not None:
 
 
 def start_if_enabled():
-    """Register a Player listener so we can auto-search + auto-apply Hebrew on
-    play, but ONLY when the engine is on and autosub is enabled. The service's
-    existing prune loop keeps the process alive, so the Player callbacks fire;
-    we just hold a reference. When off, does nothing (behavior unchanged)."""
+    """Register the play-start Player listener whenever the built-in engine is
+    on. The listener always snapshots the embedded streams (so the picker can
+    offer embedded + embedded-AI rows) and additionally runs the Hebrew
+    auto-search when `engine_autosub` is on -- that setting gates the SEARCH,
+    not the snapshot. The service's existing prune loop keeps the process alive,
+    so the Player callbacks fire; we just hold a reference."""
     if xbmc is None:
         return
     try:
         from resources.lib import kodi_utils
         if not kodi_utils.get_bool('use_builtin_engine', False):
             return
-        if not kodi_utils.get_bool('engine_autosub', True):
-            return
+        autosub = kodi_utils.get_bool('engine_autosub', True)
     except Exception:
         return
     try:
@@ -414,7 +538,10 @@ def start_if_enabled():
         # If a video is already playing when the service starts, kick once.
         try:
             if xbmc.Player().isPlayingVideo():
-                threading.Thread(target=autosub_on_play, daemon=True).start()
+                threading.Thread(target=snapshot_on_play, daemon=True).start()
+                if autosub:
+                    threading.Thread(target=autosub_on_play,
+                                     daemon=True).start()
         except Exception:
             pass
     except Exception:

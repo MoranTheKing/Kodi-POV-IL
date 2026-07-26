@@ -406,7 +406,7 @@ def _source_id_for_ai(payload):
     return ''
 
 
-def _reapply_rtl_fix_in_place(path, legacy_engine=False):
+def _reapply_rtl_fix_in_place(path, legacy_engine=False, ai_output=None):
     """Repair a cached translation in place: RTL punctuation AND cue timings.
     Catches up files that were cached before the current version's fixes were
     wired in. Idempotent: if the file is already clean, no write happens.
@@ -427,8 +427,22 @@ def _reapply_rtl_fix_in_place(path, legacy_engine=False):
             content = f.read()
     except OSError:
         return
+    # The Arabic strip repairs a leak from the AI's gender-reference prompt, so
+    # it runs ONLY on bytes that prompt could have produced. Two kinds of file
+    # here cannot have: a Ktuvit row mirrored into the pool (a HUMAN Hebrew
+    # subtitle) and a Google Translate fallback (no cast/gender mechanism at
+    # all). Either one quoting Arabic -- 'הוא אמר "אינשאללה" (إن شاء الله)' --
+    # would come back with the quote deleted and empty brackets left behind.
+    #
+    # ai_output=None means "work it out": the '.google' sidecar already marks a
+    # Google translation, so the DEFAULT is self-gating and a caller cannot
+    # forget. Only the pool path passes an explicit value, because provenance
+    # there comes from the row's pool_kind rather than from a sidecar.
+    if ai_output is None:
+        ai_output = srt.may_carry_arabic_leak(path)
+    body = srt.strip_leaked_arabic(content) if ai_output else content
     fixed = srt.clamp_cue_durations(
-        srt.fix_rtl_punctuation(content, legacy_engine=legacy_engine))
+        srt.fix_rtl_punctuation(body, legacy_engine=legacy_engine))
     if fixed == content:
         return
     tmp = path + '.aitmp'
@@ -457,6 +471,23 @@ def _rtl_delivery_copy(path, legacy_engine=False):
         with open(path, 'rb') as f:
             raw = f.read()
         content = raw.decode('utf-8-sig')
+        # arabic-strip: not-our-bytes -- a file sitting next to the video may be
+        # an earlier AI translation of ours OR a human subtitle the user
+        # downloaded themselves, and nothing here tells them apart: no pool_kind,
+        # no '.google' sidecar, nothing. The cue clamp is a bound that never
+        # deletes anything, so it still runs; the Arabic strip DELETES text, so
+        # it does not.
+        #
+        # ACCEPTED RESIDUAL, stated plainly because it is not free: this
+        # function's own docstring says the population INCLUDES our own AI
+        # translations saved beside the video, precisely the ones the cache
+        # migration can never reach. Such a file carrying the leak is now
+        # unfixable by any path. That is a worse outcome than the engine-download
+        # exemption, where the content can never be AI output by construction --
+        # here the false-negative cost is real. It is still the right trade while
+        # the alternative is deleting Arabic out of a human subtitle the user
+        # chose; a signal that identifies our own output would let this be
+        # revisited.
         fixed = srt.clamp_cue_durations(srt.fix_rtl_punctuation(
             content, legacy_engine=legacy_engine))
         if fixed == content:
@@ -1435,11 +1466,22 @@ def _backfill_pool_async(info, translated_path, local_source, source_lang,
 def _is_google_translated(path):
     """True if this cached translation was produced by Google Translate (a
     sidecar '<path>.google' marker is written next to it). Such machine
-    translations must NEVER be shared to the community pool."""
+    translations must NEVER be shared to the community pool.
+
+    Delegates to srt.is_google_translated so the sidecar is read in exactly one
+    place -- srt.may_carry_arabic_leak needs the same signal, and two copies of
+    a detector drift apart the same way two copies of a rule do.
+
+    Fails to True, the OPPOSITE of may_carry_arabic_leak: if we cannot tell,
+    the safe answer for POOL SHARING is "assume Google, do not share", whereas
+    the safe answer for a text-deleting repair is "assume unknown, do not
+    touch". Same signal, opposite safe failures -- which is why the detector
+    itself does not choose one.
+    """
     try:
-        return bool(path) and os.path.exists(path + '.google')
+        return srt.is_google_translated(path)
     except Exception:
-        return False
+        return True
 
 
 def _google_translate_and_save(src_text, source_lang, translated, info,
@@ -2050,7 +2092,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 _pkind == 'ktuvit'
                 and _psrc != pool.KTUVIT_LOGICAL_SOURCE_TAG)
             _reapply_rtl_fix_in_place(
-                out, legacy_engine=_legacy_ktuvit)
+                out, legacy_engine=_legacy_ktuvit,
+                ai_output=srt.may_carry_arabic_leak(pool_kind=_pkind))
             # SubSync S2: pool variants carry the release of their SOURCE sub;
             # if that doesn't match the playing release, verify/fix timing
             # against a release-matched oracle. Fail-open.
@@ -3468,10 +3511,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         # runaway cue would sit frozen on screen for the rest of
                         # the job -- the exact symptom, during the feature built
                         # to show progress early.
+                        # arabic-strip: our-own-output -- every Hebrew line here
+                        # is the model's reply to OUR prompt (pending chunks are
+                        # still untranslated source, which carries no leak), so
+                        # provenance is not in question. This is a transient
+                        # progress preview; it is never the cached file.
                         _merged_text = srt.clamp_cue_durations(
                             srt.fix_rtl_punctuation(
-                                srt.strip_leaked_speaker_prefix(
-                                    srt.stitch_blocks(_merged_blocks))))
+                                srt.strip_leaked_arabic(
+                                    srt.strip_leaked_speaker_prefix(
+                                        srt.stitch_blocks(_merged_blocks)))))
                         progressive_cb('chunk_ready', {
                             'completed': completed,
                             'total': total,
@@ -3563,6 +3612,35 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # a translated line is removed while a caption/chyron/URL the model deliberately
     # left in English ("WARNING: ...", "PART 2: ...", "HTTP://...") is never eaten.
     final = srt.strip_leaked_speaker_prefix(final, hebrew_only=True)
+    # Same class of defect, different source: when the Arabic gender
+    # reference is on, the prompt carries real Arabic lines and the model
+    # sometimes copies a word or a suffix of one into the Hebrew. Only a
+    # line that has BOTH scripts is touched, so an all-Arabic line stays.
+    #
+    # Logged, not silent. What the reference feeds the model is a HUMAN
+    # translation OF THE SAME ENTRY (prompt.build_gender_block: "the
+    # time-aligned line from a HUMAN translation of the same scene"), so a leak
+    # is a DUPLICATE of the meaning the Hebrew already carries, and removing it
+    # loses nothing. What that reasoning cannot rule out is the model
+    # code-switching mid-sentence -- rendering half the line in Hebrew and
+    # continuing in Arabic -- where the Hebrew left behind would be incomplete.
+    # There is no way to tell the two apart from the text, so this line records
+    # how often it fires and on how many entries; a jump means the question is
+    # worth revisiting with real data instead of reasoning.
+    # arabic-strip: our-own-output -- `final` is this run's Gemini output, so
+    # there is no provenance question here; may_carry_arabic_leak exists for the
+    # repair paths that meet files of unknown origin.
+    _pre_ar = final
+    final = srt.strip_leaked_arabic(final)
+    if final != _pre_ar:
+        try:
+            _n = sum(1 for a, b in zip(_pre_ar.split('\n'), final.split('\n'))
+                     if a != b)
+            kodi_utils.log(
+                'leaked Arabic stripped from {0} line(s) -- gender reference '
+                'echoed into the Hebrew'.format(_n), level='WARNING')
+        except Exception:
+            pass
     # Defensive backstop for RTL punctuation: Gemini sometimes puts
     # punctuation at the logical start of a Hebrew line ("?שלום")
     # when it belongs at the logical end ("שלום?"). The prompt

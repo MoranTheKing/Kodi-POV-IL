@@ -106,7 +106,7 @@ _subs_filename_publisher = None
 TEMP_PURGE_VERSION = '2'
 # Keep in step with addons/.../service.py. Bump whenever a new repair is added
 # below, or every existing install skips the backfill forever.
-CACHE_RTL_FIX_VERSION = '5'
+CACHE_RTL_FIX_VERSION = '6'
 
 
 def _check_first_run_marker():
@@ -192,8 +192,12 @@ def _maybe_repair_rtl_cache():
                 try:
                     with open(p, 'r', encoding='utf-8', errors='replace') as f:
                         content = f.read()
+                    # Gated per file: the Google Translate fallback writes
+                    # here too. srt.may_carry_arabic_leak owns that rule.
+                    body = (srt.strip_leaked_arabic(content)
+                            if srt.may_carry_arabic_leak(p) else content)
                     fixed = srt.clamp_cue_durations(
-                        srt.fix_rtl_punctuation(content))
+                        srt.fix_rtl_punctuation(body))
                     if fixed != content:
                         tmp = p + '.aitmp'
                         with open(tmp, 'w', encoding='utf-8') as f:
@@ -654,8 +658,12 @@ def main():
     except Exception:
         pass
 
-    # Auto-on-play Hebrew (Phase C): the same listener the full build runs.
-    # Gated inside on use_builtin_engine + engine_autosub, both default ON.
+    # Play-start listener (Phase C): the same one the full build runs. It
+    # ALWAYS snapshots the embedded subtitle streams (the picker's embedded
+    # and embedded-AI rows are built from that snapshot) whenever
+    # use_builtin_engine is on, and additionally auto-searches Hebrew when
+    # engine_autosub is on. Both default ON; engine_autosub gates only the
+    # search, never the snapshot.
     _run('autosub player', _maybe_start_autosub_player)
 
     monitor = xbmc.Monitor()

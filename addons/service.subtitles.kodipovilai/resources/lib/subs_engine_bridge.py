@@ -641,6 +641,19 @@ def _stream_key(info):
     return f or ((info or {}).get('filepath') or (info or {}).get('title') or '')
 
 
+def have_playback_snapshot(info=None):
+    """True when the file playing RIGHT NOW already has a real (non-empty)
+    play-start snapshot. Lets a caller skip an expensive stream poll it does not
+    need. An EMPTY snapshot deliberately reads as False -- it means "captured
+    nothing yet", so a retry is still wanted (see note_playback_streams)."""
+    try:
+        snap = _snap_get()
+        return bool(snap and snap.get('key') == _stream_key(info)
+                    and snap.get('streams'))
+    except Exception:
+        return False
+
+
 def note_playback_streams(info, streams=None):
     """Snapshot the embedded/local subtitle streams at PLAY START, before any
     external sub is loaded. Call ONCE per file, as early as possible. `streams`
@@ -653,7 +666,14 @@ def note_playback_streams(info, streams=None):
             return
         key = _stream_key(info)
         cur = _snap_get()
-        if cur and cur.get('key') == key and cur.get('streams') is not None:
+        # Only a NON-EMPTY snapshot is final. An empty one is provisional: the
+        # demuxer may simply not have enumerated the tracks yet, and a caller
+        # whose poll timed out first must not be able to latch [] and discard a
+        # real list that arrives afterwards -- that would silently reproduce the
+        # "no embedded rows" bug through a different door. A file that genuinely
+        # has no subtitle streams just gets rewritten as [] each time, which
+        # costs one window-property write and changes nothing downstream.
+        if cur and cur.get('key') == key and cur.get('streams'):
             return  # already captured for this file
         if streams is None:
             streams = _wait_for_subtitle_streams(player)
@@ -725,17 +745,24 @@ def _wait_for_snapshot(key, timeout=3.0):
         player = xbmc.Player()
         monitor = xbmc.Monitor()
         elapsed = 0.0
+        provisional = None
         while elapsed < timeout:
             if not player.isPlayingVideo():
-                return None
+                return provisional
             snap = _snap_get()
-            if (snap and snap.get('key') == key
-                    and snap.get('streams') is not None):
-                return snap
+            if snap and snap.get('key') == key:
+                if snap.get('streams'):
+                    return snap
+                # Empty means "captured nothing YET" (see note_playback_streams):
+                # keep waiting for a real list rather than accepting it, but
+                # remember it so a file that truly has no streams still resolves
+                # instead of blocking the dialog for the full timeout twice.
+                if snap.get('streams') is not None:
+                    provisional = snap
             if monitor.waitForAbort(0.2):
-                return None
+                return provisional
             elapsed += 0.2
-        return None
+        return provisional
     except Exception:
         return None
 

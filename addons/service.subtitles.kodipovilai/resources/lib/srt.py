@@ -11,6 +11,7 @@
 # The model returns the same block shape with the text translated;
 # we re-stitch the blocks back into a single SRT body.
 
+import os
 import re
 
 BLOCK_SEPARATOR = re.compile(r'\r?\n\r?\n')
@@ -982,6 +983,175 @@ def strip_leaked_speaker_prefix(text, hebrew_only=False):
     try:
         rx = _LEAKED_SPEAKER_RE_HE if hebrew_only else _LEAKED_SPEAKER_RE
         return rx.sub(lambda m: m.group('pre'), text)
+    except Exception:
+        return text
+
+
+# --- leaked Arabic gender-reference text -------------------------------------
+# When the Arabic gender reference is on (forced on for everyone), the prompt
+# carries REAL Arabic lines from a human translation of the same scene, as a
+# gender oracle. prompt.py tells the model in capitals to take "the gender and
+# NOTHING else", but a prompt is an instruction, not a guarantee: field report
+# of "Arabic word completions / half words" turning up inside otherwise-correct
+# Hebrew lines. The speaker-prefix leak already has a post-processor; this one
+# had none, so a leak shipped straight to the player.
+#
+# Deliberately narrow. It strips Arabic ONLY from a line that also carries
+# Hebrew -- i.e. a contaminated translation, which is the reported shape. A line
+# that is entirely Arabic is left alone: that is what an on-screen sign or a
+# deliberately untranslated line looks like, and destroying it would be worse
+# than the leak. Same reasoning as strip_leaked_speaker_prefix(hebrew_only=True).
+# Arabic script, EXCLUDING two things that live inside the same Unicode blocks
+# and are not leaks: Arabic-Indic DIGITS (U+0660-0669 -- "השעה ١٢:٣٠" is a time,
+# not a leaked word) and U+FEFF, the byte-order mark, which is the last
+# codepoint of Presentation Forms-B and would otherwise make a stray BOM between
+# two Hebrew words look like Arabic. Both were found by review.
+_ARABIC_CH = (u'\u0600-\u065f\u066a-\u06ff'      # Arabic (no Arabic-Indic digits)
+              u'\u0750-\u077f'                    # Arabic Supplement
+              u'\u08a0-\u08ff'                    # Arabic Extended-A
+              u'\ufb50-\ufdff'                    # Presentation Forms-A
+              u'\ufe70-\ufefc')                   # Presentation Forms-B (no BOM)
+_HEBREW_CH = u'\u0590-\u05ff\ufb1d-\ufb4f'
+# INVARIANT, and the thing that actually makes strip_leaked_arabic safe:
+# these two classes are DISJOINT, and _ARABIC_RUN_RE's continuation class is
+# built only from _ARABIC_CH plus blanks/tatweel/Arabic diacritics/Arabic
+# punctuation. The regex therefore CANNOT consume a Hebrew character, whatever
+# surrounds it -- so a line can never lose part of its Hebrew sentence. The
+# 'did the Hebrew survive' check in strip_leaked_arabic is a net under that,
+# not the guarantee itself, and it only notices the loss of the LAST Hebrew
+# character. Anyone widening either class must keep them disjoint.
+# A run of Arabic plus ONLY what belongs to it: surrounding blanks, Arabic
+# diacritics/tatweel, and ARABIC punctuation. Latin/Hebrew punctuation is
+# deliberately excluded -- the '.' in "קארל מת. ـكِ" and the '?' in
+# "מה קורה? ماذا" end the HEBREW sentence, and an earlier version that swallowed
+# them turned a leak into a second defect.
+_ARABIC_RUN_RE = re.compile(
+    u'[ \t]*[' + _ARABIC_CH + u'][' + _ARABIC_CH + u' \t\u0640\u064b-\u0652\u060c\u061b\u061f]*')
+_HAS_HEBREW_RE = re.compile(u'[' + _HEBREW_CH + u']')
+_HAS_ARABIC_RE = re.compile(u'[' + _ARABIC_CH + u']')
+
+
+def _clean_arabic_from_line(body):
+    """Arabic runs removed from one text line, tidied."""
+    cleaned = _ARABIC_RUN_RE.sub(' ', body)
+    cleaned = re.sub(r'[ \t]{2,}', ' ', cleaned)
+    cleaned = re.sub(r'[ \t]+(</)', r'\1', cleaned)   # no gap before a closing tag
+    # A file that already went through fix_rtl_punctuation is wrapped in RLE/PDF,
+    # which are not whitespace -- so .strip() cannot reach a space stranded
+    # between the text and the closing control. That is exactly the shape of a
+    # CACHED subtitle being repaired after the fact, so handle it explicitly.
+    #
+    # ANCHORED to the two ends, and to RLE/PDF only -- the controls WE insert.
+    # An unanchored version of this collapsed blanks around ANY invisible
+    # control anywhere in the line, which glued words together across a
+    # legitimate space-padded RLM or BOM ("יש 50<RLM> דולר" -> "יש 50<RLM>דולר").
+    # Those are zero-width, so the damage is visible in the rendered subtitle.
+    _wrap = _RLE + _PDF
+    cleaned = re.sub(r'^([' + _wrap + r']*)[ \t]+', r'\1', cleaned)
+    cleaned = re.sub(r'[ \t]+([' + _wrap + r']*)$', r'\1', cleaned)
+    cleaned = cleaned.strip()
+    if body.lstrip().startswith('-') and cleaned and not cleaned.startswith('-'):
+        cleaned = '- ' + cleaned
+    return cleaned
+
+
+def may_carry_arabic_leak(path=None, pool_kind=None):
+    """Whether these bytes could contain a leak from the AI's gender reference.
+
+    The ONE place that rule lives. strip_leaked_arabic() repairs a defect only
+    the gender-reference prompt can produce, so it must not run on anything that
+    prompt never touched -- and there turned out to be three such sources, each
+    found separately, each after the previous fix had been declared complete:
+
+      * a Ktuvit row mirrored into the community pool -- a HUMAN Hebrew subtitle
+        (identified by pool_kind, which is why that argument exists);
+      * a Google Translate fallback -- no cast/gender mechanism at all, and it
+        writes into cache/translated/ alongside real AI output, so only the
+        '.google' sidecar tells them apart;
+      * a file of unknown origin sitting next to the video, which is exempted at
+        its call site because nothing here can identify it.
+
+    Any of them may legitimately quote Arabic ('הוא אמר "אינשאללה" (إن شاء الله)')
+    and would come back with the quote deleted and empty brackets left behind.
+
+    It is a shared function rather than a check at each call site because the
+    check WAS at each call site, and the fourth, fifth and sixth repair paths
+    silently did not get it. A rule with more than one home has no home.
+    """
+    try:
+        if pool_kind is not None and str(pool_kind).strip().lower() == 'ktuvit':
+            return False
+        if is_google_translated(path):
+            return False
+    except Exception:
+        # Provenance UNKNOWN. Answer no: stripping deletes text, and this
+        # module's stated preference throughout is a visible defect over a
+        # silent one. Leaving a stray Arabic word on screen is reportable;
+        # deleting a quote out of someone's subtitle is not.
+        return False
+    return True
+
+
+def is_google_translated(path):
+    """True when a '<path>.google' sidecar marks this file as a Google Translate
+    fallback. Lives here, next to the rule that consumes it, so there is exactly
+    ONE implementation -- translate.py calls this rather than keeping its own
+    copy. A signal with two readers drifts the same way a rule with two homes.
+
+    Deliberately does NOT swallow errors, because its two callers want OPPOSITE
+    answers when the signal cannot be read: refusing to strip is the safe
+    failure for a repair that deletes text, while refusing to SHARE is the safe
+    failure for pool contribution. A single fail direction here would be wrong
+    for one of them, so each catches and decides. (os.path.exists already
+    absorbs ordinary filesystem errors; this is about a malformed path.)
+    """
+    return bool(path) and os.path.exists(path + '.google')
+
+
+def strip_leaked_arabic(text):
+    """Remove Arabic that leaked from the gender reference into a Hebrew line.
+
+    HARD GUARANTEE, and the reason this is written the narrow way it is: no cue
+    is ever removed, no LINE is ever removed, and no line ever loses its Hebrew.
+    All this does is delete Arabic characters from a line that ALSO contains
+    Hebrew -- i.e. a contaminated translation, which is the shape that was
+    actually reported ("Arabic word completions / half words" inside otherwise
+    correct lines). The Hebrew on that line always survives, so a cue can never
+    turn into silence while people are talking.
+
+    A line that is ENTIRELY Arabic is deliberately left alone. Structurally it
+    is indistinguishable from a leaked reference line that happened to land on
+    its own wrapped line, and there is no way to tell the two apart from the
+    text: one is an on-screen sign or a deliberately untranslated line, the
+    other is a leak. Dropping it would fix the leak at the cost of silently
+    deleting real content -- and a stray visible line is a defect a user can see
+    and report, whereas missing dialogue is one they cannot. An earlier revision
+    dropped such lines; review found it destroying a genuine Arabic sign that
+    shared a cue with a contaminated line, and it was reverted for this reason.
+    That residual is accepted, and it is the ONLY case this does not cover.
+
+    Index and timecode lines have no Hebrew, so they can never match. Never
+    raises into the caller.
+    """
+    if not text:
+        return text
+    try:
+        if not _HAS_ARABIC_RE.search(text):
+            return text            # overwhelmingly the common case: no-op
+        out = []
+        for line in text.split('\n'):
+            cr = '\r' if line.endswith('\r') else ''
+            body = line[:-1] if cr else line
+            if (_HAS_ARABIC_RE.search(body)
+                    and _HAS_HEBREW_RE.search(body)):
+                cleaned = _clean_arabic_from_line(body)
+                # Only accept the rewrite if the Hebrew came through it. Any
+                # other outcome means the cleanup misread the line, and the
+                # original is always the safer answer.
+                if cleaned and _HAS_HEBREW_RE.search(cleaned):
+                    body = cleaned
+            out.append(body + cr)
+        return '\n'.join(out)
     except Exception:
         return text
 
