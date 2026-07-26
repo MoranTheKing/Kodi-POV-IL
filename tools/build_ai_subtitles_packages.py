@@ -106,7 +106,7 @@ _subs_filename_publisher = None
 TEMP_PURGE_VERSION = '2'
 # Keep in step with addons/.../service.py. Bump whenever a new repair is added
 # below, or every existing install skips the backfill forever.
-CACHE_RTL_FIX_VERSION = '6'
+CACHE_RTL_FIX_VERSION = '7'
 
 
 def _check_first_run_marker():
