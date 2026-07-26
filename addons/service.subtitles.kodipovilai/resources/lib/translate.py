@@ -1946,7 +1946,18 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         # contending for the token -- so ABORT at once to hand the bandwidth and
         # request budget back and KEEP THE MOVIE ALIVE. A pause is not a stall.
         _STALL_ABORT_S = 8
-        _stall = {'t': None, 'since': None, 'saw_pause': False}
+        # How long Player.Paused must hold before it counts as a real PAUSE.
+        # Kodi reports Paused during a seek and during a buffering hiccup too --
+        # the resume-abort below says so itself -- and `saw_pause` LATCHED on a
+        # single observation, so one sub-second blip anywhere in the run armed an
+        # abort that fired on the very next poll. That is what a field log
+        # (0.2.445) shows: five attempts, lifetimes 31.5s / 49.0s / 0.0s /
+        # 156.1s / 16.3s, every one of them ending in "playback resumed after a
+        # pause", none completing -- while the user was simply watching the
+        # movie. A deliberate pause lasts; a blip does not.
+        _PAUSE_ARM_S = 3.0
+        _stall = {'t': None, 'since': None, 'saw_pause': False,
+                  'paused_at': None}
 
         def _should_abort():
             try:
@@ -1957,8 +1968,15 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                     return True
                 if _x.getCondVisibility('Player.Paused'):
                     _stall['t'] = None
-                    _stall['saw_pause'] = True
+                    _pnow = _tt.time()
+                    if _stall['paused_at'] is None:
+                        _stall['paused_at'] = _pnow
+                    elif (_pnow - _stall['paused_at']) >= _PAUSE_ARM_S:
+                        _stall['saw_pause'] = True
                     return False
+                # Not paused: any blip that was in progress ends here without
+                # arming anything.
+                _stall['paused_at'] = None
                 # Playing (not paused). If the user PAUSED to let extraction run
                 # and has now RESUMED, hand the debrid token back INSTANTLY: on a
                 # strict provider our crawl leaves the token rate-limited, and the
@@ -1967,15 +1985,17 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                 # Aborting on resume keeps the movie alive; extraction defers to
                 # the external path. (A never-paused, Real-Debrid-style extract
                 # during playback never sets saw_pause, so it is unaffected.)
-                # NOTE: Player.Paused can also read True during a seek or a
-                # buffering hiccup, so this may abort on those too -- that's
-                # acceptable (a seek is likewise a moment of extra contention for
-                # the same rate-limited token; the cost of over-aborting is only
-                # a clean defer to the external path).
+                # NOTE: Player.Paused ALSO reads True during a seek and during a
+                # buffering hiccup, which is why arming it needs _PAUSE_ARM_S of
+                # continuously-held pause above: those are momentary, a real
+                # pause is not. A seek is still a moment of extra contention for
+                # the same token, so a long one is deliberately treated as a
+                # pause; the cost of over-aborting is only a clean defer.
                 if _stall['saw_pause']:
-                    kodi_utils.log('embedded: playback resumed after a pause -- '
-                                   'aborting extraction to free the debrid token '
-                                   'for the player', level='INFO')
+                    kodi_utils.log('embedded: playback resumed after a pause of '
+                                   '>{0:.0f}s -- aborting extraction to free the '
+                                   'debrid token for the player'
+                                   .format(_PAUSE_ARM_S), level='INFO')
                     return True
                 now = _tt.time()
                 try:
