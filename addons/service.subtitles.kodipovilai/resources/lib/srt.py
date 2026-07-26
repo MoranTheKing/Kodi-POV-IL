@@ -1023,74 +1023,60 @@ _HAS_ARABIC_RE = re.compile(u'[' + _ARABIC_CH + u']')
 
 
 def _clean_arabic_from_line(body):
-    """Arabic runs removed from one text line, tidied. '' when nothing is left."""
+    """Arabic runs removed from one text line, tidied."""
     cleaned = _ARABIC_RUN_RE.sub(' ', body)
     cleaned = re.sub(r'[ \t]{2,}', ' ', cleaned)
     cleaned = re.sub(r'[ \t]+(</)', r'\1', cleaned)   # no gap before a closing tag
     cleaned = cleaned.strip()
     if body.lstrip().startswith('-') and cleaned and not cleaned.startswith('-'):
         cleaned = '- ' + cleaned
-    # Nothing but leftover punctuation/markup is not a line worth keeping.
-    if not re.search(r'[^\s\-–—.,:;!?"\'()\[\]<>/ib]', cleaned):
-        return ''
     return cleaned
 
 
 def strip_leaked_arabic(text):
-    """Remove Arabic that leaked from the gender reference into a Hebrew cue.
+    """Remove Arabic that leaked from the gender reference into a Hebrew line.
 
-    The gate is per-CUE, not per-line. A leaked reference line very often lands
-    as its OWN line inside a two-line cue -- the ordinary shape of a wrapped
-    subtitle -- and a per-line rule cannot see that, because that line has no
-    Hebrew of its own to compare against. So: if the cue has Hebrew ANYWHERE,
-    Arabic inside it is a leak, whichever line it sits on.
+    HARD GUARANTEE, and the reason this is written the narrow way it is: no cue
+    is ever removed, no LINE is ever removed, and no line ever loses its Hebrew.
+    All this does is delete Arabic characters from a line that ALSO contains
+    Hebrew -- i.e. a contaminated translation, which is the shape that was
+    actually reported ("Arabic word completions / half words" inside otherwise
+    correct lines). The Hebrew on that line always survives, so a cue can never
+    turn into silence while people are talking.
 
-    A cue with no Hebrew at all is left completely alone. That is what an
-    on-screen sign, or a line deliberately left untranslated, looks like, and
-    destroying it would be worse than the leak this guards against. A cue is
-    never emptied: if every line would go, the cue is kept as it was.
+    A line that is ENTIRELY Arabic is deliberately left alone. Structurally it
+    is indistinguishable from a leaked reference line that happened to land on
+    its own wrapped line, and there is no way to tell the two apart from the
+    text: one is an on-screen sign or a deliberately untranslated line, the
+    other is a leak. Dropping it would fix the leak at the cost of silently
+    deleting real content -- and a stray visible line is a defect a user can see
+    and report, whereas missing dialogue is one they cannot. An earlier revision
+    dropped such lines; review found it destroying a genuine Arabic sign that
+    shared a cue with a contaminated line, and it was reverted for this reason.
+    That residual is accepted, and it is the ONLY case this does not cover.
 
-    Index and timecode lines are never touched -- only the text lines below the
-    timecode are considered. Never raises into the caller.
+    Index and timecode lines have no Hebrew, so they can never match. Never
+    raises into the caller.
     """
     if not text:
         return text
     try:
         if not _HAS_ARABIC_RE.search(text):
             return text            # overwhelmingly the common case: no-op
-        out_blocks = []
-        changed = False
-        for block in parse_blocks(text):
-            lines = block.split('\n')
-            ti = _block_timecode_index(lines)
-            if ti < 0:
-                out_blocks.append(block)
-                continue
-            head, body = lines[:ti + 1], lines[ti + 1:]
-            joined = '\n'.join(body)
-            if not (_HAS_ARABIC_RE.search(joined)
-                    and _HAS_HEBREW_RE.search(joined)):
-                out_blocks.append(block)      # no leak, or an all-Arabic cue
-                continue
-            kept = []
-            for ln in body:
-                cr = '\r' if ln.endswith('\r') else ''
-                raw = ln[:-1] if cr else ln
-                if not _HAS_ARABIC_RE.search(raw):
-                    kept.append(ln)
-                    continue
-                cleaned = _clean_arabic_from_line(raw)
-                if cleaned:
-                    kept.append(cleaned + cr)
-                # else: the whole line was the leak -- drop it
-            if not kept:
-                out_blocks.append(block)      # never empty a cue
-                continue
-            changed = True
-            out_blocks.append('\n'.join(head + kept))
-        if not changed:
-            return text
-        return stitch_blocks(out_blocks)
+        out = []
+        for line in text.split('\n'):
+            cr = '\r' if line.endswith('\r') else ''
+            body = line[:-1] if cr else line
+            if (_HAS_ARABIC_RE.search(body)
+                    and _HAS_HEBREW_RE.search(body)):
+                cleaned = _clean_arabic_from_line(body)
+                # Only accept the rewrite if the Hebrew came through it. Any
+                # other outcome means the cleanup misread the line, and the
+                # original is always the safer answer.
+                if cleaned and _HAS_HEBREW_RE.search(cleaned):
+                    body = cleaned
+            out.append(body + cr)
+        return '\n'.join(out)
     except Exception:
         return text
 
