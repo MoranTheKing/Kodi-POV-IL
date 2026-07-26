@@ -1052,6 +1052,17 @@ def _render_hebrew_rtl_copy(sub_file, legacy_engine=False):
 
     ``legacy_engine`` reverses only the old engine's known punctuation shapes;
     fresh logical downloads pass False.
+
+    Deliberately does NOT run srt.clamp_cue_durations, unlike every other place
+    the RTL fix is applied. That clamp exists for a failure this path cannot
+    have: our own model mistyping a timecode it was told to copy verbatim.
+    These bytes come from Ktuvit / OpenSubtitles / Wizdom and never touch
+    Gemini, their timing is treated as MORE trustworthy elsewhere in the add-on
+    (subsync uses a foreign-language human sub as the oracle it corrects AI
+    timing against), and real-world third-party SRT formatting is far more
+    varied than Gemini's output -- so silently re-timing it is a risk taken for
+    no matching benefit. If a stuck-cue report ever arrives against an engine
+    download, this is the considered decision to revisit, not an oversight.
     """
     try:
         if os.path.splitext(sub_file or '')[1].lower() \

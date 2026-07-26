@@ -2351,14 +2351,17 @@ def _handle_translate_file(params):
             with open(translated_path, 'r', encoding='utf-8',
                       errors='replace') as f:
                 hebrew = f.read()
-            # Belt-and-suspenders: re-apply the RTL punctuation fix
-            # right before delivery. resolve() does this on cache hits
-            # too, but applying it again here catches the case where
-            # the cache file slipped through (e.g., a write race or a
-            # file the migration hasn't reached yet).
+            # Belt-and-suspenders: re-apply the display AND timing repairs
+            # right before delivery. resolve() does this on cache hits too, but
+            # applying it again here catches the case where the cache file
+            # slipped through (e.g., a write race or a file the migration hasn't
+            # reached yet) -- which is precisely when an unrepaired runaway cue
+            # would reach the player, so the timing bound belongs here as much
+            # as the punctuation one.
             try:
                 from resources.lib import srt as _srt
-                hebrew = _srt.fix_rtl_punctuation(hebrew)
+                hebrew = _srt.clamp_cue_durations(
+                    _srt.fix_rtl_punctuation(hebrew))
             except Exception:
                 pass
             # Write atomically: temp file in same dir, then rename. This
@@ -2647,7 +2650,8 @@ def _handle_translate_file(params):
                         _content = _f.read()
                     try:
                         from resources.lib import srt as _srt
-                        _content = _srt.fix_rtl_punctuation(_content)
+                        _content = _srt.clamp_cue_durations(
+                            _srt.fix_rtl_punctuation(_content))
                     except Exception:
                         pass
                     _tmp_out = out_path + '.aitmp'
