@@ -445,13 +445,20 @@ def _reapply_rtl_fix_in_place(path, legacy_engine=False):
 
 
 def _rtl_delivery_copy(path, legacy_engine=False):
-    """Render a Hebrew local-file candidate without touching its source bytes."""
+    """Render a Hebrew local-file candidate without touching its source bytes.
+
+    A file sitting next to the video is not necessarily healthy: it may be an
+    earlier AI translation of ours, saved alongside the video rather than in
+    the add-on cache, and therefore out of reach of the cache migration. So the
+    cue clamp runs here too, and the "nothing changed" shortcut has to consider
+    BOTH passes -- a clamp-only repair still needs a delivery copy written.
+    """
     try:
         with open(path, 'rb') as f:
             raw = f.read()
         content = raw.decode('utf-8-sig')
-        fixed = srt.fix_rtl_punctuation(
-            content, legacy_engine=legacy_engine)
+        fixed = srt.clamp_cue_durations(srt.fix_rtl_punctuation(
+            content, legacy_engine=legacy_engine))
         if fixed == content:
             return path
         import hashlib as _hrtl
