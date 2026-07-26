@@ -407,21 +407,28 @@ def _source_id_for_ai(payload):
 
 
 def _reapply_rtl_fix_in_place(path, legacy_engine=False):
-    """Re-run srt.fix_rtl_punctuation() on a cached translation
-    file. Catches up files that were cached before the current
-    version's regex coverage was wired in. Idempotent: if the
-    file is already clean, no write happens.
+    """Repair a cached translation in place: RTL punctuation AND cue timings.
+    Catches up files that were cached before the current version's fixes were
+    wired in. Idempotent: if the file is already clean, no write happens.
 
-    Called on every cache hit in resolve() so a returning user
-    benefits from the latest fix without having to clear cache or
-    wait for the next service.py startup migration."""
+    Called on every cache hit and every pool-reuse in resolve(), so a returning
+    user benefits from the latest fix without clearing cache or waiting for the
+    next service.py startup migration.
+
+    The TIMING repair matters most for content that is ALREADY out there. A
+    translation whose cue was welded to the screen by a mistyped timestamp is
+    cached locally and, worse, may have been contributed to the community pool
+    -- where dedup by source hash means it will never be re-translated, so every
+    future viewer of that title gets the frozen line. Repairing on the way IN
+    fixes the whole existing backlog for anyone who updates, without rewriting a
+    single pooled file, touching Telegram, or spending one extra request."""
     try:
         with open(path, 'r', encoding='utf-8', errors='replace') as f:
             content = f.read()
     except OSError:
         return
-    fixed = srt.fix_rtl_punctuation(
-        content, legacy_engine=legacy_engine)
+    fixed = srt.clamp_cue_durations(
+        srt.fix_rtl_punctuation(content, legacy_engine=legacy_engine))
     if fixed == content:
         return
     tmp = path + '.aitmp'
@@ -430,7 +437,7 @@ def _reapply_rtl_fix_in_place(path, legacy_engine=False):
             f.write(fixed)
         os.replace(tmp, path)
         kodi_utils.log(
-            'RTL fix reapplied on cache hit: ' + path,
+            'cached subtitle repaired in place (RTL / cue timings): ' + path,
             level='INFO')
     except OSError:
         try: os.remove(tmp)
@@ -3449,9 +3456,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                                     out_blocks_by_index[_key])
                             else:
                                 _merged_blocks.extend(_ch)
-                        _merged_text = srt.fix_rtl_punctuation(
-                            srt.strip_leaked_speaker_prefix(
-                                srt.stitch_blocks(_merged_blocks)))
+                        # Bound the cues here too: this text is written to a
+                        # file and handed to the player LIVE, so an unrepaired
+                        # runaway cue would sit frozen on screen for the rest of
+                        # the job -- the exact symptom, during the feature built
+                        # to show progress early.
+                        _merged_text = srt.clamp_cue_durations(
+                            srt.fix_rtl_punctuation(
+                                srt.strip_leaked_speaker_prefix(
+                                    srt.stitch_blocks(_merged_blocks))))
                         progressive_cb('chunk_ready', {
                             'completed': completed,
                             'total': total,

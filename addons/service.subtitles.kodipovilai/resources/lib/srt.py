@@ -565,12 +565,24 @@ def parse_blocks(text):
 # Two defences, deliberately layered:
 #   restore_block_timings() -- the real fix. The model is never trusted with
 #     timing: each translated block gets the SOURCE block's index + timecode back.
-#   clamp_cue_durations()   -- a backstop for everything the pairing cannot cover
+#   clamp_cue_durations()   -- a backstop for what the pairing cannot cover
 #     (entry counts that legitimately differ, and a pathological SOURCE cue).
-_MAX_CUE_MS = 25000        # a dialogue cue longer than this is a slip, not content
+#
+# The backstop is deliberately CONSERVATIVE. It is not the primary fix, so it is
+# tuned to never damage a correctly-authored subtitle, at the price of leaving a
+# corrupt cue a few seconds too long. Real subtitles legitimately contain long
+# holds (a 90s ending-credits card, a title card over a silent scene) and
+# intentional overlap (a location sign displayed across several dialogue lines,
+# ASS-converted dual-speaker tracks) -- an aggressive clamp silently mangles all
+# of those, which is a worse outcome than the bug it is guarding against.
+_MAX_CUE_MS = 180000       # 3 min: longer than any authored hold, far under an
+#                            hour-digit slip. Absolute sanity bound.
+_OVERLAP_GRACE_MS = 10000  # how far a cue may legitimately outlive the next cue's
+#                            start (signs over dialogue, dual-speaker overlap)
 _MIN_CUE_MS = 400
 _DEFAULT_CUE_MS = 2000
-_GAP_MS = 1                # keep a clamped cue clear of the next one
+_START_MATCH_MIN_RATIO = 0.9   # positional pairing must look this right to trust
+_NEXT_SCAN_MAX = 200           # bound the search for the next later-starting cue
 
 _TIME_PAIR_RE = re.compile(
     r'^(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*'
@@ -609,6 +621,23 @@ def _block_times(block):
     return None
 
 
+def _block_start(block):
+    t = _block_times(block)
+    return None if t is None else t[0]
+
+
+def _rebuild_block(src_block, out_block):
+    """out_block's text under src_block's index + timecode. None if either
+    block isn't SRT-shaped (caller keeps the original)."""
+    src_lines = src_block.split('\n')
+    out_lines = out_block.split('\n')
+    si = _block_timecode_index(src_lines)
+    oi = _block_timecode_index(out_lines)
+    if si < 0 or oi < 0:
+        return None
+    return '\n'.join(src_lines[:si + 1] + out_lines[oi + 1:])
+
+
 def restore_block_timings(src_blocks, out_blocks):
     """Give every translated block its SOURCE index + timecode line back.
 
@@ -616,30 +645,61 @@ def restore_block_timings(src_blocks, out_blocks):
     does this is a no-op. When it does not, this is the difference between a
     correct subtitle and one with a line welded to the screen.
 
-    Pairing is positional and applied ONLY when the two lists are the same
-    length -- that is the overwhelmingly common case (the caller bisects and
-    retries a chunk whose yield drops below 85%). On any length mismatch we do
-    NOT guess an alignment, because mis-paired timings would corrupt every
-    following cue instead of one; the caller's clamp_cue_durations() backstop
-    covers that case. Fully fail-open: any surprise returns the input unchanged.
+    Pairing is positional, but positional pairing is VERIFIED before it is
+    trusted: equal block counts are necessary and not sufficient (a stray blank
+    line inside the model's reply can split one cue into two while another is
+    dropped, keeping the count intact but shifting everything after it). So the
+    start timestamps of each pair are compared, and positional pairing is used
+    only when they agree for nearly every block -- the remaining disagreements
+    are exactly the corrupted timestamps we are here to repair.
+
+    When the counts differ, or positional pairing does not look right, each
+    output block is instead matched to the source block with the SAME START
+    (forward-scanning, so duplicate starts still consume in order). That covers
+    the common "Gemini silently dropped an entry" case, which the caller accepts
+    without retrying at up to 15% loss, and which a positional pass would
+    otherwise mis-pair into corrupting every following cue.
+
+    Fully fail-open: any surprise returns the input unchanged.
     """
     try:
         if not out_blocks or not src_blocks:
             return out_blocks
-        if len(src_blocks) != len(out_blocks):
-            return out_blocks
+        if len(src_blocks) == len(out_blocks):
+            pairs = list(zip(src_blocks, out_blocks))
+            comparable = agree = 0
+            for src, out in pairs:
+                ss, os_ = _block_start(src), _block_start(out)
+                if ss is None or os_ is None:
+                    continue
+                comparable += 1
+                if ss == os_:
+                    agree += 1
+            if comparable and (agree / float(comparable)) >= _START_MATCH_MIN_RATIO:
+                return [(_rebuild_block(src, out) or out) for src, out in pairs]
+        # Counts differ, or the positional alignment looked wrong: repair only
+        # what can be identified positively, and leave the rest to the clamp.
+        by_start = {}
+        for i, src in enumerate(src_blocks):
+            st = _block_start(src)
+            if st is not None:
+                by_start.setdefault(st, []).append(i)
+        used = set()
         fixed = []
-        for src, out in zip(src_blocks, out_blocks):
-            src_lines = src.split('\n')
-            out_lines = out.split('\n')
-            si = _block_timecode_index(src_lines)
-            oi = _block_timecode_index(out_lines)
-            if si < 0 or oi < 0:
-                fixed.append(out)          # not SRT-shaped -- leave it alone
+        for out in out_blocks:
+            st = _block_start(out)
+            idxs = by_start.get(st) if st is not None else None
+            pick = None
+            if idxs:
+                for i in idxs:
+                    if i not in used:
+                        pick = i
+                        break
+            if pick is None:
+                fixed.append(out)
                 continue
-            head = src_lines[:si + 1]      # source index line(s) + source timecode
-            body = out_lines[oi + 1:]      # the model's translated text
-            fixed.append('\n'.join(head + body))
+            used.add(pick)
+            fixed.append(_rebuild_block(src_blocks[pick], out) or out)
         return fixed
     except Exception:
         return out_blocks
@@ -648,10 +708,15 @@ def restore_block_timings(src_blocks, out_blocks):
 def clamp_cue_durations(text, max_ms=None):
     """Bound every cue's END so one bad timestamp cannot pin a line on screen.
 
-    A cue is shortened when it runs past the next cue's start, when it is longer
-    than any real dialogue cue, or when its end is not after its start. Starts
-    are never touched -- an early line is a far smaller defect than a permanent
-    one, and moving starts would desynchronise content that is otherwise fine.
+    Conservative by design (see the note above): a cue is shortened only when it
+    outlives the next cue's start by more than _OVERLAP_GRACE_MS, or exceeds the
+    absolute _MAX_CUE_MS sanity bound, or does not end after it starts. That
+    leaves authored long holds and intentional overlap alone, while an hour-long
+    cue -- the failure this exists for -- is still cut back to a few seconds.
+
+    Starts are never touched: a line that appears early is a far smaller defect
+    than a permanent one, and moving starts would desynchronise content that is
+    otherwise fine.
     """
     try:
         if not text or '-->' not in text:
@@ -659,6 +724,25 @@ def clamp_cue_durations(text, max_ms=None):
         limit = _MAX_CUE_MS if max_ms is None else max_ms
         blocks = parse_blocks(text)
         times = [_block_times(b) for b in blocks]
+        # The next start strictly LATER than this cue's own start. A suffix
+        # minimum cannot express that (the smallest following start may be
+        # EARLIER than ours in an out-of-order file), so this is a forward scan
+        # -- but a HARD-BOUNDED one. In a well-formed subtitle the answer is the
+        # very next cue; the bound only matters for a degenerate file, which is
+        # exactly where an unbounded rescan-per-cue would go quadratic. Past the
+        # bound we simply decline to bound that cue by a neighbour and let the
+        # absolute ceiling stand.
+        n = len(blocks)
+        next_later = [None] * n
+        for i in range(n):
+            ti = times[i]
+            if ti is None:
+                continue
+            for j in range(i + 1, min(n, i + 1 + _NEXT_SCAN_MAX)):
+                tj = times[j]
+                if tj is not None and tj[0] > ti[0]:
+                    next_later[i] = tj[0]
+                    break
         out = []
         changed = 0
         for i, block in enumerate(blocks):
@@ -668,18 +752,18 @@ def clamp_cue_durations(text, max_ms=None):
                 continue
             start, end, trail = t
             ceiling = start + limit
-            # Never run into the next cue that actually starts later.
-            for nxt in times[i + 1:]:
-                if nxt and nxt[0] > start:
-                    ceiling = min(ceiling, nxt[0] - _GAP_MS)
-                    break
+            nxt = next_later[i]
+            if nxt is not None and nxt > start:
+                ceiling = min(ceiling, nxt + _OVERLAP_GRACE_MS)
             new_end = end
             if new_end <= start:
                 new_end = start + _DEFAULT_CUE_MS
-            if new_end > ceiling:
-                new_end = ceiling
-            if new_end < start + _MIN_CUE_MS:
-                new_end = start + _MIN_CUE_MS
+            # Order matters: the minimum duration must never push the end back
+            # past the ceiling, or the "cannot outlive the next cue" guarantee
+            # is silently broken for rapid exchanges.
+            new_end = min(max(new_end, start + _MIN_CUE_MS), ceiling)
+            if new_end <= start:
+                new_end = start + 1
             if new_end == end:
                 out.append(block)
                 continue
@@ -689,7 +773,10 @@ def clamp_cue_durations(text, max_ms=None):
             if ti < 0:
                 out.append(block)
                 continue
-            lines[ti] = '{0} --> {1}{2}'.format(_fmt_tc(start), _fmt_tc(new_end), trail)
+            # Preserve the line's own EOL so a CRLF file stays a CRLF file.
+            cr = '\r' if lines[ti].endswith('\r') else ''
+            lines[ti] = '{0} --> {1}{2}{3}'.format(
+                _fmt_tc(start), _fmt_tc(new_end), trail.rstrip('\r'), cr)
             out.append('\n'.join(lines))
         if not changed:
             return text
