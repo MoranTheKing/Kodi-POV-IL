@@ -646,6 +646,60 @@ def _rebuild_block(src_block, out_block):
     return '\n'.join(src_lines[:si + 1] + out_lines[oi + 1:])
 
 
+def _repair_pinned_starts(src_blocks, out_blocks, fixed, ambiguous):
+    """Give back the source timecode to a block whose START the model corrupted,
+    but ONLY where its position is pinned by agreeing neighbours on both sides.
+
+    `fixed` is the by-start repair pass's result (same length as out_blocks);
+    blocks it already repaired are left exactly as they are. Fail-open: any
+    surprise returns `fixed` untouched.
+
+    The safety argument, in full, because the strictness is the whole point:
+      * counts are equal, so index i in the reply corresponds to index i in the
+        source UNLESS something shifted;
+      * a shift (dropped or inserted entry) misaligns every block from the shift
+        point onward, so a shifted block can never have an agreeing successor;
+      * an adjacent transposition makes both members disagree, so neither has an
+        agreeing neighbour on the swapped side;
+      * therefore a block that disagrees while BOTH neighbours agree can only be
+        an isolated mistyped timestamp, and src_blocks[i] is its source.
+    A block at either end is pinned by its single existing neighbour, since there
+    is no room on the other side for a block to have come from.
+    """
+    try:
+        n = len(out_blocks)
+        if n != len(src_blocks) or len(fixed) != n:
+            return fixed
+        agrees = []
+        for i in range(n):
+            ss, os_ = _block_start(src_blocks[i]), _block_start(out_blocks[i])
+            agrees.append(ss is not None and os_ is not None and ss == os_)
+        out = list(fixed)
+        for i in range(n):
+            if agrees[i]:
+                continue
+            if fixed[i] is not out_blocks[i]:
+                continue          # the by-start pass already identified it
+            src_start = _block_start(src_blocks[i])
+            if src_start is None or src_start in ambiguous:
+                continue
+            # None means "no neighbour on that side", which happens only at the
+            # ends -- and an end has no room on the far side for a block to have
+            # come from, so it is pinned by its one existing neighbour. (Both
+            # None means n == 1, where equal counts pin the single block on
+            # their own.)
+            left = agrees[i - 1] if i > 0 else None
+            right = agrees[i + 1] if i + 1 < n else None
+            if left is False or right is False:
+                continue          # a neighbour disagrees -> a shift or a swap
+            rebuilt = _rebuild_block(src_blocks[i], out_blocks[i])
+            if rebuilt:
+                out[i] = rebuilt
+        return out
+    except Exception:
+        return fixed
+
+
 def restore_block_timings(src_blocks, out_blocks):
     """Give every translated block its SOURCE index + timecode line back.
 
@@ -703,7 +757,7 @@ def restore_block_timings(src_blocks, out_blocks):
                         else (_rebuild_block(src, out) or out)
                         for src, out in pairs]
         # Counts differ, or a pair disagreed: repair only what can be identified
-        # positively, and leave the rest to the clamp.
+        # positively.
         used = set()
         fixed = []
         for out in out_blocks:
@@ -720,7 +774,21 @@ def restore_block_timings(src_blocks, out_blocks):
                 continue
             used.add(pick)
             fixed.append(_rebuild_block(src_blocks[pick], out) or out)
-        return fixed
+        # A block whose START the model corrupted matches nothing above, so it
+        # kept the corrupted start -- and the clamp deliberately never moves a
+        # start, so nothing downstream fixes it either. That is the "line appears
+        # several cues early, then vanishes exactly when it is spoken" defect
+        # (field report, 0.2.445): the END was repaired, the START never was.
+        #
+        # It IS recoverable, in the one case where position cannot be in doubt:
+        # equal counts, and the block's IMMEDIATE NEIGHBOURS both agree with the
+        # source positionally. A shift cannot hide there -- a shift misaligns
+        # every block after it, so no shifted block has two agreeing neighbours.
+        # Nor can an adjacent transposition, which makes BOTH members disagree.
+        # Only an isolated mistyped timestamp fits, and for that one src_blocks[i]
+        # is pinned on both sides. Anything less certain is still left alone.
+        # (The equal-counts precondition is enforced inside, in one place.)
+        return _repair_pinned_starts(src_blocks, out_blocks, fixed, ambiguous)
     except Exception:
         return out_blocks
 
