@@ -144,6 +144,39 @@ From MoranSubs `0.2.445` / quickfix `0.1.487`:
   downloads from the subtitle sites are all left exactly as they are.
 - The "searching for subtitles" banner no longer flashes on live TV channels.
 
+## Embedded-subtitle extraction speed
+
+From MoranSubs `0.2.446` / quickfix `0.1.488`:
+
+- Reading a video's embedded subtitle track over a debrid link now costs about
+  half the network requests it used to. Each subtitle line used to pay for two
+  separate range requests: one at the start of its cluster, purely to work out
+  where the line sits and what time it starts at, and one for the line itself.
+  Neither of those two facts has to be re-read for every line — the first is a
+  property of how the file was muxed, and the second is already recorded in the
+  file's own index. Both are verified against the old method before they are
+  relied upon, and anything that does not check out falls back to it, so a file
+  can only be extracted faster, never less accurately.
+- A short buffering hiccup no longer cancels the extraction. Kodi reports a
+  buffering stall and a seek the same way it reports a pause, and a single
+  momentary one was enough to cancel — which is why extraction could run for
+  minutes and finish nothing while the movie was simply playing. A pause now has
+  to be held for a few seconds to count. Pausing deliberately and then resuming
+  still hands the connection straight back to the player, as before.
+- An interrupted extraction keeps what it collected. On a provider that limits
+  requests aggressively the extraction can only ever be cut short, and every
+  attempt used to start again from nothing — so on such a provider it never
+  finished at all. Each attempt now continues where the last one stopped. A
+  partial result is still never used as a subtitle; this only decides what
+  survives an interruption.
+- When the provider pushes back, the extraction slows down as before, and now
+  speeds back up once the provider stops pushing back — it previously stayed
+  slow for the rest of the run. It never goes faster than its normal starting
+  rate.
+- Extracting from a file stored on the device is no longer refused because
+  another extraction appeared to be running. That guard protects a shared debrid
+  connection and has no purpose for a local file.
+
 ## Upstream POV Watch
 
 `.github/workflows/check-upstream-pov.yml` checks the original kodi7rd build metadata every 6 hours and opens an issue if upstream POV changes.

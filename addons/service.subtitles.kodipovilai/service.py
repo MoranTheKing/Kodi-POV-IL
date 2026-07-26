@@ -386,7 +386,7 @@ TEMP_PURGE_VERSION = '2'
 #       line -- see srt.strip_leaked_arabic. NOT every file here is ours: the
 #       Google Translate fallback saves into this directory too, so the repair
 #       is gated per file by srt.may_carry_arabic_leak.
-CACHE_RTL_FIX_VERSION = '6'
+CACHE_RTL_FIX_VERSION = '7'
 
 
 def _maybe_repair_rtl_cache():

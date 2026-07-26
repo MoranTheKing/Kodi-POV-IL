@@ -646,6 +646,60 @@ def _rebuild_block(src_block, out_block):
     return '\n'.join(src_lines[:si + 1] + out_lines[oi + 1:])
 
 
+def _repair_pinned_starts(src_blocks, out_blocks, fixed, ambiguous):
+    """Give back the source timecode to a block whose START the model corrupted,
+    but ONLY where its position is pinned by agreeing neighbours on both sides.
+
+    `fixed` is the by-start repair pass's result (same length as out_blocks);
+    blocks it already repaired are left exactly as they are. Fail-open: any
+    surprise returns `fixed` untouched.
+
+    The safety argument, in full, because the strictness is the whole point:
+      * counts are equal, so index i in the reply corresponds to index i in the
+        source UNLESS something shifted;
+      * a shift (dropped or inserted entry) misaligns every block from the shift
+        point onward, so a shifted block can never have an agreeing successor;
+      * an adjacent transposition makes both members disagree, so neither has an
+        agreeing neighbour on the swapped side;
+      * therefore a block that disagrees while BOTH neighbours agree can only be
+        an isolated mistyped timestamp, and src_blocks[i] is its source.
+    A block at either end is pinned by its single existing neighbour, since there
+    is no room on the other side for a block to have come from.
+    """
+    try:
+        n = len(out_blocks)
+        if n != len(src_blocks) or len(fixed) != n:
+            return fixed
+        agrees = []
+        for i in range(n):
+            ss, os_ = _block_start(src_blocks[i]), _block_start(out_blocks[i])
+            agrees.append(ss is not None and os_ is not None and ss == os_)
+        out = list(fixed)
+        for i in range(n):
+            if agrees[i]:
+                continue
+            if fixed[i] is not out_blocks[i]:
+                continue          # the by-start pass already identified it
+            src_start = _block_start(src_blocks[i])
+            if src_start is None or src_start in ambiguous:
+                continue
+            # None means "no neighbour on that side", which happens only at the
+            # ends -- and an end has no room on the far side for a block to have
+            # come from, so it is pinned by its one existing neighbour. (Both
+            # None means n == 1, where equal counts pin the single block on
+            # their own.)
+            left = agrees[i - 1] if i > 0 else None
+            right = agrees[i + 1] if i + 1 < n else None
+            if left is False or right is False:
+                continue          # a neighbour disagrees -> a shift or a swap
+            rebuilt = _rebuild_block(src_blocks[i], out_blocks[i])
+            if rebuilt:
+                out[i] = rebuilt
+        return out
+    except Exception:
+        return fixed
+
+
 def restore_block_timings(src_blocks, out_blocks):
     """Give every translated block its SOURCE index + timecode line back.
 
@@ -703,7 +757,7 @@ def restore_block_timings(src_blocks, out_blocks):
                         else (_rebuild_block(src, out) or out)
                         for src, out in pairs]
         # Counts differ, or a pair disagreed: repair only what can be identified
-        # positively, and leave the rest to the clamp.
+        # positively.
         used = set()
         fixed = []
         for out in out_blocks:
@@ -720,7 +774,21 @@ def restore_block_timings(src_blocks, out_blocks):
                 continue
             used.add(pick)
             fixed.append(_rebuild_block(src_blocks[pick], out) or out)
-        return fixed
+        # A block whose START the model corrupted matches nothing above, so it
+        # kept the corrupted start -- and the clamp deliberately never moves a
+        # start, so nothing downstream fixes it either. That is the "line appears
+        # several cues early, then vanishes exactly when it is spoken" defect
+        # (field report, 0.2.445): the END was repaired, the START never was.
+        #
+        # It IS recoverable, in the one case where position cannot be in doubt:
+        # equal counts, and the block's IMMEDIATE NEIGHBOURS both agree with the
+        # source positionally. A shift cannot hide there -- a shift misaligns
+        # every block after it, so no shifted block has two agreeing neighbours.
+        # Nor can an adjacent transposition, which makes BOTH members disagree.
+        # Only an isolated mistyped timestamp fits, and for that one src_blocks[i]
+        # is pinned on both sides. Anything less certain is still left alone.
+        # (The equal-counts precondition is enforced inside, in one place.)
+        return _repair_pinned_starts(src_blocks, out_blocks, fixed, ambiguous)
     except Exception:
         return out_blocks
 
@@ -1008,9 +1076,16 @@ def strip_leaked_speaker_prefix(text, hebrew_only=False):
 # two Hebrew words look like Arabic. Both were found by review.
 _ARABIC_CH = (u'\u0600-\u065f\u066a-\u06ff'      # Arabic (no Arabic-Indic digits)
               u'\u0750-\u077f'                    # Arabic Supplement
+              u'\u0870-\u089f'                    # Arabic Extended-B
               u'\u08a0-\u08ff'                    # Arabic Extended-A
               u'\ufb50-\ufdff'                    # Presentation Forms-A
               u'\ufe70-\ufefc')                   # Presentation Forms-B (no BOM)
+# Deliberately NOT included: U+1EE00-1EEFF (Arabic Mathematical Alphabetic
+# Symbols) -- notation, not text, and outside the BMP; and U+206C/206D, two
+# deprecated formatting controls. Everything else Unicode names ARABIC is
+# covered; a field report of a stray letter INSIDE a Hebrew word is what turned
+# up the Extended-B hole, so this list is now verified against the full
+# character database rather than assembled by hand.
 _HEBREW_CH = u'\u0590-\u05ff\ufb1d-\ufb4f'
 # INVARIANT, and the thing that actually makes strip_leaked_arabic safe:
 # these two classes are DISJOINT, and _ARABIC_RUN_RE's continuation class is
@@ -1033,7 +1108,20 @@ _HAS_ARABIC_RE = re.compile(u'[' + _ARABIC_CH + u']')
 
 def _clean_arabic_from_line(body):
     """Arabic runs removed from one text line, tidied."""
-    cleaned = _ARABIC_RUN_RE.sub(' ', body)
+    # Replace a run with a SPACE when it stood between words, but with NOTHING
+    # when it sat INSIDE one. A field report showed a single Arabic letter glued
+    # into the middle of a Hebrew word ("להא<lam>ל"); substituting a space there
+    # splits the word in two, which is a second defect rather than a repair.
+    def _sub(m):
+        start, end = m.start(), m.end()
+        ate_space = m.group(0)[:1] in (' ', '\t')
+        after = body[end:end + 1]
+        before = body[start - 1:start] if start else ''
+        tight = (not ate_space and after and not after.isspace()
+                 and before and not before.isspace())
+        return '' if tight else ' '
+
+    cleaned = _ARABIC_RUN_RE.sub(_sub, body)
     cleaned = re.sub(r'[ \t]{2,}', ' ', cleaned)
     cleaned = re.sub(r'[ \t]+(</)', r'\1', cleaned)   # no gap before a closing tag
     # A file that already went through fix_rtl_punctuation is wrapped in RLE/PDF,
