@@ -1332,7 +1332,7 @@ def cue_reference_times_multi(url_or_path, langs, track_num=None,
 def extract_srt(url_or_path, track_num=None, lang=None,
                 head_bytes=DEFAULT_HEAD_BYTES, max_bytes=DEFAULT_MAX_BYTES,
                 deadline_s=DEFAULT_DEADLINE_S, allow_http=False,
-                abort_cb=None, log=None, progress_cb=None):
+                abort_cb=None, log=None, progress_cb=None, resume_path=None):
     """Extract an embedded TEXT subtitle track as an SRT string.
 
     Pick the track by `track_num`, else by `lang` (BCP-47 prefix, e.g. 'en'
@@ -1343,7 +1343,11 @@ def extract_srt(url_or_path, track_num=None, lang=None,
     clusters; when it returns True (e.g. playback ended) extraction stops.
     `allow_http` must be True to extract from a debrid/HTTP stream (default
     False -- local-only); HTTP extraction then uses ONE keep-alive connection
-    with coalesced ranges + a 429 circuit-breaker so it can't starve playback."""
+    with coalesced ranges + a 429 circuit-breaker so it can't starve playback.
+    `resume_path`, if given, is a scratch file where an INTERRUPTED HTTP pass
+    leaves what it collected, so the next attempt continues instead of starting
+    over. It never changes what is delivered -- a partial extract still returns
+    None -- only what survives a deferral."""
     _log = log or _noop
     t0 = time.time()
     try:
@@ -1390,7 +1394,7 @@ def extract_srt(url_or_path, track_num=None, lang=None,
         # extract is NEVER delivered -- we return None so the caller falls back.
         if not _extract_cues(src, seeks, seg_start, want, entries,
                              max_bytes, deadline_s, t0, abort_cb, _log,
-                             progress_cb):
+                             progress_cb, resume_path, codec):
             entries = []
             if src.is_http:
                 return None
@@ -1642,8 +1646,135 @@ def _coalesce_ranges(positions, window, gap, max_range, total):
     return ranges
 
 
+# ---- resume ------------------------------------------------------------------
+# A deferral used to throw the whole pass away. On a provider that rate-limits
+# hard, an HTTP extraction can ONLY ever be interrupted -- circuit-breaker, byte
+# cap, time budget, or the user resuming after a pause -- so it never completed
+# at all, no matter how many times the file was played. Persisting what a pass
+# collected turns that dead end into progress: the next attempt starts where the
+# last one stopped, and the extraction finishes across a few plays with the user
+# doing nothing.
+#
+# Only whole CLUSTERS are recorded as finished -- one whose every targeted cue
+# resolved, or that a window scan covered cleanly. A partially-resolved cluster
+# is simply redone; _entries_to_srt already de-duplicates on (start, text), so
+# redoing one costs a request, never a duplicated line.
+#
+# A partial extract is still NEVER delivered. This changes only what survives an
+# interruption, not what counts as a finished subtitle.
+_RESUME_MAGIC = b'KPIEMB1'
+_RESUME_MAX = 16 * 1024 * 1024     # ~200x a feature film's worth of cues
+
+
+def _resume_identity(src, want, codec, positions):
+    """Fingerprint of THIS file and track. A debrid URL is per-session and is
+    regenerated between plays, so it is deliberately NOT part of the identity --
+    what makes reusing saved work safe is that the byte length, the track, the
+    codec and the Cues layout all still match. Any mismatch discards it."""
+    import hashlib
+    h = hashlib.sha1()
+    h.update(('%d|%s|%s|%d|%d|%d|%d' % (
+        src.total, want, codec or '', len(positions),
+        positions[0][0] if positions else 0,
+        positions[-1][0] if positions else 0,
+        sum(p[1] or 0 for p in positions[:64]))).encode('utf-8'))
+    return h.hexdigest()
+
+
+def _resume_load(path, identity, log):
+    """(entries, finished_cluster_positions) from an earlier pass over this
+    exact file, or ([], set()). Never raises: any doubt returns nothing, and the
+    extraction simply starts over."""
+    try:
+        if not path or not os.path.exists(path):
+            return [], set()
+        if os.path.getsize(path) > _RESUME_MAX:
+            return [], set()
+        with open(path, 'rb') as f:
+            blob = f.read()
+        head, _sep, body = blob.partition(b'\n')
+        parts = head.split(b' ')
+        if len(parts) != 2 or parts[0] != _RESUME_MAGIC:
+            return [], set()
+        if parts[1].decode('ascii', 'replace') != identity:
+            log('resume: saved work belongs to a different file -- ignoring it')
+            return [], set()
+        entries, done = [], set()
+        p, n = 0, len(body)
+        while p < n:
+            tag = body[p:p + 1]
+            p += 1
+            if tag == b'E':
+                if p + 20 > n:
+                    return [], set()
+                ticks, dur, ln = struct.unpack('<qqI', body[p:p + 20])
+                p += 20
+                frame = body[p:p + ln]
+                p += ln
+                if len(frame) != ln:
+                    return [], set()      # truncated -> trust none of it
+                entries.append((ticks, None if dur < 0 else dur, frame))
+            elif tag == b'K':
+                if p + 8 > n:
+                    return [], set()
+                done.add(struct.unpack('<Q', body[p:p + 8])[0])
+                p += 8
+            else:
+                return [], set()
+        if entries or done:
+            log('resume: %d cue(s) and %d finished cluster(s) recovered from an '
+                'earlier pass' % (len(entries), len(done)))
+        return entries, done
+    except Exception:
+        return [], set()
+
+
+def _resume_save(path, identity, entries, done, log):
+    """Persist an interrupted pass. Never raises; a failure only means the next
+    attempt starts over, which is exactly today's behaviour."""
+    if not path:
+        return
+    try:
+        out = [_RESUME_MAGIC + b' ' + identity.encode('ascii') + b'\n']
+        size = len(out[0])
+        for ticks, dur, frame in entries:
+            rec = b'E' + struct.pack('<qqI', int(ticks),
+                                     -1 if dur is None else int(dur),
+                                     len(frame)) + frame
+            size += len(rec)
+            if size > _RESUME_MAX:
+                # Save nothing rather than a subset: dropping entries while
+                # keeping their cluster marked finished would lose lines
+                # permanently.
+                return
+            out.append(rec)
+        for cpos in done:
+            out.append(b'K' + struct.pack('<Q', int(cpos)))
+        tmp = path + '.part'
+        with open(tmp, 'wb') as f:
+            f.write(b''.join(out))
+        os.replace(tmp, path)
+        log('resume: saved %d cue(s) / %d finished cluster(s) for the next '
+            'attempt' % (len(entries), len(done)))
+    except Exception:
+        try:
+            if os.path.exists(path + '.part'):
+                os.remove(path + '.part')
+        except Exception:
+            pass
+
+
+def _resume_clear(path):
+    try:
+        if path and os.path.exists(path):
+            os.remove(path)
+    except Exception:
+        pass
+
+
 def _extract_cues(src, seeks, seg_start, want, entries,
-                  max_bytes, deadline_s, t0, abort_cb, log, progress_cb=None):
+                  max_bytes, deadline_s, t0, abort_cb, log, progress_cb=None,
+                  resume_path=None, codec=''):
     """Cues-guided extraction from per-track SUBTITLE cues. Local visits each
     cluster directly; HTTP uses coalesced sweep-ranges over the single keep-alive
     connection with a 429 circuit-breaker. Returns True only on a COMPLETE pass;
@@ -1670,8 +1801,18 @@ def _extract_cues(src, seeks, seg_start, want, entries,
             _read_and_collect_cluster(
                 src, cpos, want, entries, _CLUSTER_CAP_LOCAL, log)
         return True
-    return _extract_cues_http(src, positions, entries, want, deadline_s, t0,
-                              abort_cb, log, progress_cb)
+    # HTTP only: a local pass is one cheap sequential walk, so there is nothing
+    # worth carrying between attempts.
+    identity = _resume_identity(src, want, codec, positions)
+    prior, done = _resume_load(resume_path, identity, log)
+    entries.extend(prior)
+    ok = _extract_cues_http(src, positions, entries, want, deadline_s, t0,
+                            abort_cb, log, progress_cb, done)
+    if ok:
+        _resume_clear(resume_path)
+    else:
+        _resume_save(resume_path, identity, entries, done, log)
+    return ok
 
 
 def _cluster_prefix_and_ts(header):
@@ -1837,11 +1978,21 @@ def _fetch_cluster_blocks(src, cpos, items, want, entries, log):
                 # THE CHECK. Does this file's CueTime really equal the timestamp
                 # the header math produces? Only if it does may later clusters
                 # skip their header read.
-                src._cue_time_ok = (ticks == cue_time)
-                if not src._cue_time_ok and src._log:
-                    src._log('CueTime disagrees with the cluster timestamp '
-                             '(%s vs %s) -- keeping the per-cluster header read'
-                             % (cue_time, ticks))
+                if ticks != cue_time:
+                    src._cue_time_ok = False
+                    if src._log:
+                        src._log('CueTime disagrees with the cluster timestamp '
+                                 '(%s vs %s) -- keeping the per-cluster header '
+                                 'read' % (cue_time, ticks))
+                elif cluster_ts:
+                    # Agreement only PROVES anything at a non-zero cluster
+                    # timestamp. The first cluster of every file is at 0, where
+                    # cluster_ts + rel_ts == rel_ts -- so a muxer that wrote
+                    # CueTime RELATIVE to its cluster instead of absolute would
+                    # pass there and be wrong everywhere after it. Stay
+                    # undecided (and keep paying for headers) until a cluster
+                    # with a real timestamp settles it.
+                    src._cue_time_ok = True
         return True
 
     for batch in _batch_relposes(items):
@@ -1894,7 +2045,7 @@ def _fetch_cluster_blocks(src, cpos, items, want, entries, log):
 
 
 def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
-                       log, progress_cb=None):
+                       log, progress_cb=None, done_clusters=None):
     """HTTP/debrid: ONE keep-alive connection, single-range serial. Per cue,
     two strategies chosen by whether the Cues carried a CueRelativePosition:
       * relpos present -> TARGETED: a small window AT the subtitle block, one
@@ -1910,6 +2061,7 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
     Player-safe by construction (single serial connection, byte/time caps, 429
     circuit-breaker). Returns True on a COMPLETE pass, False to defer."""
     budget = max(deadline_s, 90.0)
+    finished = done_clusters if done_clusters is not None else set()
     rel_by_cpos = {}
     scan_cues = []
     for (c, r, t) in positions:
@@ -1917,12 +2069,18 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
             scan_cues.append(c)
         else:
             rel_by_cpos.setdefault(c, []).append((r, t))
-    rel_clusters = [(c, sorted(rel_by_cpos[c])) for c in sorted(rel_by_cpos)]
-    n_rel = sum(len(v) for _c, v in rel_clusters)
     total = len(positions)
+    # Whatever an earlier attempt finished is already in `entries` -- skip it.
+    carried = sum(len(v) for c, v in rel_by_cpos.items() if c in finished)
+    carried += sum(1 for c in scan_cues if c in finished)
+    rel_clusters = [(c, sorted(rel_by_cpos[c])) for c in sorted(rel_by_cpos)
+                    if c not in finished]
+    scan_cues = [c for c in scan_cues if c not in finished]
+    n_rel = sum(len(v) for _c, v in rel_clusters)
     log('%d sub-cue cluster(s): %d targeted (relpos) in %d cluster(s) + %d '
-        'window-scan; caps %dMB / %.0fs'
+        'window-scan%s; caps %dMB / %.0fs'
         % (total, n_rel, len(rel_clusters), len(scan_cues),
+           (' (%d already done)' % carried) if carried else '',
            _HTTP_TOTAL_CAP // (1 << 20), budget))
 
     def _cost():
@@ -1956,7 +2114,7 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
             except Exception:
                 pass
 
-    done = 0
+    done = carried
     # 1) targeted relpos fetches, ONE CLUSTER at a time
     for (cpos, items) in rel_clusters:
         reason = _defer()
@@ -1972,8 +2130,11 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
             # Couldn't resolve every block from relpos (odd prefix / short read
             # / wrong track) -> window-scan THIS cluster so we never drop a line.
             # Duplicates are dropped in _entries_to_srt, so re-finding the ones
-            # we already have is harmless.
+            # we already have is harmless. NOT marked finished: the scan below
+            # is what completes it.
             scan_cues.append(cpos)
+        else:
+            finished.add(cpos)
         done += len(items)
         if done % 100 < len(items):
             log('extract progress: %d/%d cue(s), %d req, %.0fMB'
@@ -2004,6 +2165,7 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                     continue
                 _end, truncated = _collect_one_cluster(window[off:], want, entries)
                 if not truncated:
+                    finished.add(cpos)   # covered cleanly -- never redo it
                     continue
                 # Window too small for this cluster (a big co-located video/audio
                 # block sits around the subtitle one) -> a LATER subtitle block
@@ -2023,6 +2185,7 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                     log('cluster exceeds top-up cap (%dMB) -- deferring to avoid '
                         'a partial subtitle' % (_CLUSTER_TOPUP_MAX >> 20))
                     return False
+                finished.add(cpos)       # the top-up completed it
             done += len(cposes)
             _tick(done)
 

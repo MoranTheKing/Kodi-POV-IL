@@ -2020,11 +2020,30 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         # + 429 backoff, and the stall-abort above, so it yields to the player
         # instead of starving it. Align-only never calls this function.
         _allow_http = bool(allow_http)
+        # Carry an interrupted pass forward. On a provider that rate-limits
+        # hard, a remote extraction can only ever END interrupted -- and every
+        # one of those endings used to discard the whole pass, so the file never
+        # finished no matter how many times it was played. With a scratch file
+        # each attempt continues where the last stopped. Deliberately ONE file
+        # per source language, not per title: it is bounded, and the extractor's
+        # own fingerprint (byte length + track + codec + Cues layout) refuses
+        # work saved from any other file, so the worst a collision can do is
+        # start over -- exactly today's behaviour. Local files skip it; a local
+        # pass is a single cheap sequential walk with nothing to carry.
+        _resume = None
+        if _remote:
+            try:
+                _resume = os.path.join(
+                    kodi_utils.cache_dir(),
+                    'embedded_resume_{0}.bin'.format(src_lang or 'src'))
+            except Exception:
+                _resume = None
         try:
             srt_text = embedded_extract.extract_srt(
                 url, track_num=track_num, lang=src_lang,
                 allow_http=_allow_http, deadline_s=deadline_s,
                 abort_cb=_should_abort, progress_cb=progress_cb,
+                resume_path=_resume,
                 log=lambda m: kodi_utils.log('embedded_extract: ' + m,
                                              level='INFO'))
         finally:
