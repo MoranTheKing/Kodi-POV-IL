@@ -2360,9 +2360,11 @@ def _handle_translate_file(params):
             # as the punctuation one.
             try:
                 from resources.lib import srt as _srt
+                _hb = (_srt.strip_leaked_arabic(hebrew)
+                       if _srt.may_carry_arabic_leak(translated_path)
+                       else hebrew)
                 hebrew = _srt.clamp_cue_durations(
-                    _srt.fix_rtl_punctuation(
-                        _srt.strip_leaked_arabic(hebrew)))
+                    _srt.fix_rtl_punctuation(_hb))
             except Exception:
                 pass
             # Write atomically: temp file in same dir, then rename. This
@@ -2651,9 +2653,11 @@ def _handle_translate_file(params):
                         _content = _f.read()
                     try:
                         from resources.lib import srt as _srt
+                        _cb = (_srt.strip_leaked_arabic(_content)
+                               if _srt.may_carry_arabic_leak(translated_path)
+                               else _content)
                         _content = _srt.clamp_cue_durations(
-                            _srt.fix_rtl_punctuation(
-                                _srt.strip_leaked_arabic(_content)))
+                            _srt.fix_rtl_punctuation(_cb))
                     except Exception:
                         pass
                     _tmp_out = out_path + '.aitmp'
