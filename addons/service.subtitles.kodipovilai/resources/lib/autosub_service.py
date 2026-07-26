@@ -113,13 +113,22 @@ def autosub_on_play():
         #
         # Costs nothing on normal playback: getTotalTime() is already non-zero
         # by onAVStarted for a VOD file, so the loop exits on its first test and
-        # the overlay still appears immediately. Only a genuinely zero-duration
-        # stream pays the grace period -- and that one gets no overlay at all.
+        # the overlay still appears immediately.
+        #
+        # The grace period is 13s, not the 5s this loop used to have, and that
+        # is deliberate. Sitting where it did -- BELOW the overlay and below the
+        # up-to-8s metadata wait -- a slow VOD effectively had ~13s of wall
+        # clock to expose a duration before being judged live. Moving the check
+        # to the top without widening it would have cut that to 5s and started
+        # silently SKIPPING autosub on slow sources (debrid, 4K remux) to fix a
+        # cosmetic flash: a bad trade, and one review caught. A live stream now
+        # spends 13s in a background thread deciding, which costs the user
+        # nothing because nothing is drawn and nothing else waits on it.
         try:
             _pl_live = xbmc.Player()
             _dur_waited = 0.0
             while (_pl_live.isPlayingVideo()
-                   and _pl_live.getTotalTime() <= 0 and _dur_waited < 5.0):
+                   and _pl_live.getTotalTime() <= 0 and _dur_waited < 13.0):
                 xbmc.sleep(250)
                 _dur_waited += 0.25
             if _pl_live.isPlayingVideo() and _pl_live.getTotalTime() <= 0:
