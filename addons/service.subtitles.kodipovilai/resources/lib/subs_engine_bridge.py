@@ -653,7 +653,14 @@ def note_playback_streams(info, streams=None):
             return
         key = _stream_key(info)
         cur = _snap_get()
-        if cur and cur.get('key') == key and cur.get('streams') is not None:
+        # Only a NON-EMPTY snapshot is final. An empty one is provisional: the
+        # demuxer may simply not have enumerated the tracks yet, and a caller
+        # whose poll timed out first must not be able to latch [] and discard a
+        # real list that arrives afterwards -- that would silently reproduce the
+        # "no embedded rows" bug through a different door. A file that genuinely
+        # has no subtitle streams just gets rewritten as [] each time, which
+        # costs one window-property write and changes nothing downstream.
+        if cur and cur.get('key') == key and cur.get('streams'):
             return  # already captured for this file
         if streams is None:
             streams = _wait_for_subtitle_streams(player)
@@ -725,17 +732,24 @@ def _wait_for_snapshot(key, timeout=3.0):
         player = xbmc.Player()
         monitor = xbmc.Monitor()
         elapsed = 0.0
+        provisional = None
         while elapsed < timeout:
             if not player.isPlayingVideo():
-                return None
+                return provisional
             snap = _snap_get()
-            if (snap and snap.get('key') == key
-                    and snap.get('streams') is not None):
-                return snap
+            if snap and snap.get('key') == key:
+                if snap.get('streams'):
+                    return snap
+                # Empty means "captured nothing YET" (see note_playback_streams):
+                # keep waiting for a real list rather than accepting it, but
+                # remember it so a file that truly has no streams still resolves
+                # instead of blocking the dialog for the full timeout twice.
+                if snap.get('streams') is not None:
+                    provisional = snap
             if monitor.waitForAbort(0.2):
-                return None
+                return provisional
             elapsed += 0.2
-        return None
+        return provisional
     except Exception:
         return None
 

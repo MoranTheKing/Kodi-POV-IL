@@ -424,9 +424,16 @@ def snapshot_on_play():
         except Exception:
             pass
         # The demuxer often has not exposed the streams this early, so poll
-        # while the list is still empty -- same wait autosub_on_play uses.
+        # while the list is still empty. Longer than autosub_on_play's own 8s
+        # wait ON PURPOSE: with autosub off this is the ONLY writer, and it
+        # starts at t=0 with no preamble, whereas autosub does not begin its
+        # poll until after its metadata and live-duration waits. Giving up at 8s
+        # would leave a slow-to-enumerate file (4K remux over debrid) with no
+        # embedded rows at all. The poll itself is a local call and exits the
+        # moment streams appear or playback stops, so the ceiling costs nothing
+        # on a normal file.
         streams = []
-        for _ in range(80):            # up to ~8s
+        for _ in range(300):           # up to ~30s
             try:
                 streams = player.getAvailableSubtitleStreams() or []
             except Exception:
