@@ -3410,7 +3410,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     for f in future_to_idx:
                         f.cancel()
                     break
-                out_blocks_by_index[idx] = srt.parse_blocks(response)
+                # The model is handed each block INCLUDING its timecode line and
+                # asked to copy it verbatim. It almost always does -- but a single
+                # mistyped digit welds a line to the screen for the rest of the
+                # episode (field reports; 00:41:22 --> 01:41:24 is a 60-minute
+                # cue), and the only check on the reply is its ENTRY COUNT. Give
+                # every block its SOURCE timecode back so timing can never be a
+                # translation artefact. No-op when the model copied correctly.
+                out_blocks_by_index[idx] = srt.restore_block_timings(
+                    chunks[idx - 1], srt.parse_blocks(response))
                 completed += 1
                 if completed == 1:
                     # First chunk back -> API path is alive. Its absence in a log
@@ -3523,6 +3531,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         out_blocks.extend(out_blocks_by_index[i])
 
     final = srt.stitch_blocks(out_blocks)
+    # Timing backstop. restore_block_timings above pairs positionally and so
+    # cannot act when a chunk legitimately came back with a different entry
+    # count; this also catches a pathological cue in the SOURCE subtitle itself.
+    # Bounds each cue's end by the next cue's start -- a no-op on a healthy file.
+    final = srt.clamp_cue_durations(final)
     # Defensive backstop for the SPEAKER-PREFIX HINT: we now KEEP 'MABEL:' prefixes
     # in the source so the model can use them for per-line gender (prompt.py), and
     # it's told to drop the tag from its Hebrew output. Strip any it failed to drop,
