@@ -407,21 +407,28 @@ def _source_id_for_ai(payload):
 
 
 def _reapply_rtl_fix_in_place(path, legacy_engine=False):
-    """Re-run srt.fix_rtl_punctuation() on a cached translation
-    file. Catches up files that were cached before the current
-    version's regex coverage was wired in. Idempotent: if the
-    file is already clean, no write happens.
+    """Repair a cached translation in place: RTL punctuation AND cue timings.
+    Catches up files that were cached before the current version's fixes were
+    wired in. Idempotent: if the file is already clean, no write happens.
 
-    Called on every cache hit in resolve() so a returning user
-    benefits from the latest fix without having to clear cache or
-    wait for the next service.py startup migration."""
+    Called on every cache hit and every pool-reuse in resolve(), so a returning
+    user benefits from the latest fix without clearing cache or waiting for the
+    next service.py startup migration.
+
+    The TIMING repair matters most for content that is ALREADY out there. A
+    translation whose cue was welded to the screen by a mistyped timestamp is
+    cached locally and, worse, may have been contributed to the community pool
+    -- where dedup by source hash means it will never be re-translated, so every
+    future viewer of that title gets the frozen line. Repairing on the way IN
+    fixes the whole existing backlog for anyone who updates, without rewriting a
+    single pooled file, touching Telegram, or spending one extra request."""
     try:
         with open(path, 'r', encoding='utf-8', errors='replace') as f:
             content = f.read()
     except OSError:
         return
-    fixed = srt.fix_rtl_punctuation(
-        content, legacy_engine=legacy_engine)
+    fixed = srt.clamp_cue_durations(
+        srt.fix_rtl_punctuation(content, legacy_engine=legacy_engine))
     if fixed == content:
         return
     tmp = path + '.aitmp'
@@ -430,7 +437,7 @@ def _reapply_rtl_fix_in_place(path, legacy_engine=False):
             f.write(fixed)
         os.replace(tmp, path)
         kodi_utils.log(
-            'RTL fix reapplied on cache hit: ' + path,
+            'cached subtitle repaired in place (RTL / cue timings): ' + path,
             level='INFO')
     except OSError:
         try: os.remove(tmp)
@@ -438,13 +445,20 @@ def _reapply_rtl_fix_in_place(path, legacy_engine=False):
 
 
 def _rtl_delivery_copy(path, legacy_engine=False):
-    """Render a Hebrew local-file candidate without touching its source bytes."""
+    """Render a Hebrew local-file candidate without touching its source bytes.
+
+    A file sitting next to the video is not necessarily healthy: it may be an
+    earlier AI translation of ours, saved alongside the video rather than in
+    the add-on cache, and therefore out of reach of the cache migration. So the
+    cue clamp runs here too, and the "nothing changed" shortcut has to consider
+    BOTH passes -- a clamp-only repair still needs a delivery copy written.
+    """
     try:
         with open(path, 'rb') as f:
             raw = f.read()
         content = raw.decode('utf-8-sig')
-        fixed = srt.fix_rtl_punctuation(
-            content, legacy_engine=legacy_engine)
+        fixed = srt.clamp_cue_durations(srt.fix_rtl_punctuation(
+            content, legacy_engine=legacy_engine))
         if fixed == content:
             return path
         import hashlib as _hrtl
@@ -3410,7 +3424,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     for f in future_to_idx:
                         f.cancel()
                     break
-                out_blocks_by_index[idx] = srt.parse_blocks(response)
+                # The model is handed each block INCLUDING its timecode line and
+                # asked to copy it verbatim. It almost always does -- but a single
+                # mistyped digit welds a line to the screen for the rest of the
+                # episode (field reports; 00:41:22 --> 01:41:24 is a 60-minute
+                # cue), and the only check on the reply is its ENTRY COUNT. Give
+                # every block its SOURCE timecode back so timing can never be a
+                # translation artefact. No-op when the model copied correctly.
+                out_blocks_by_index[idx] = srt.restore_block_timings(
+                    chunks[idx - 1], srt.parse_blocks(response))
                 completed += 1
                 if completed == 1:
                     # First chunk back -> API path is alive. Its absence in a log
@@ -3441,9 +3463,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                                     out_blocks_by_index[_key])
                             else:
                                 _merged_blocks.extend(_ch)
-                        _merged_text = srt.fix_rtl_punctuation(
-                            srt.strip_leaked_speaker_prefix(
-                                srt.stitch_blocks(_merged_blocks)))
+                        # Bound the cues here too: this text is written to a
+                        # file and handed to the player LIVE, so an unrepaired
+                        # runaway cue would sit frozen on screen for the rest of
+                        # the job -- the exact symptom, during the feature built
+                        # to show progress early.
+                        _merged_text = srt.clamp_cue_durations(
+                            srt.fix_rtl_punctuation(
+                                srt.strip_leaked_speaker_prefix(
+                                    srt.stitch_blocks(_merged_blocks))))
                         progressive_cb('chunk_ready', {
                             'completed': completed,
                             'total': total,
@@ -3523,6 +3551,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         out_blocks.extend(out_blocks_by_index[i])
 
     final = srt.stitch_blocks(out_blocks)
+    # Timing backstop. restore_block_timings above pairs positionally and so
+    # cannot act when a chunk legitimately came back with a different entry
+    # count; this also catches a pathological cue in the SOURCE subtitle itself.
+    # Bounds each cue's end by the next cue's start -- a no-op on a healthy file.
+    final = srt.clamp_cue_durations(final)
     # Defensive backstop for the SPEAKER-PREFIX HINT: we now KEEP 'MABEL:' prefixes
     # in the source so the model can use them for per-line gender (prompt.py), and
     # it's told to drop the tag from its Hebrew output. Strip any it failed to drop,

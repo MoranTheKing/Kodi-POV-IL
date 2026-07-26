@@ -378,15 +378,20 @@ TEMP_PURGE_VERSION = '2'
 #         based on a wrong assumption about Kodi's BiDi behaviour
 #   v4 -- reverse-mode dialogue dash fix: move leading "- " to the
 #         logical line end so Kodi renders it on the right side.
-CACHE_RTL_FIX_VERSION = '4'
+#   v5 -- cue-timing repair: bound runaway cue durations. A mistyped timestamp
+#         in an AI translation could leave one line frozen on screen for the
+#         rest of the episode; this walk is the only mechanism that repairs an
+#         ALREADY-cached translation without the user replaying that title.
+CACHE_RTL_FIX_VERSION = '5'
 
 
 def _maybe_repair_rtl_cache():
-    """One-shot walk of cache/translated/, re-applying the current
-    fix_rtl_punctuation() to each file. Catches up translations
-    that got cached before the post-processor was in place or before
-    it handled a specific edge case. Marker-gated so it only runs
-    once per CACHE_RTL_FIX_VERSION bump."""
+    """One-shot walk of cache/translated/, re-applying the current display and
+    TIMING repairs to each file. Catches up translations that got cached before
+    a post-processor was in place or before it handled a specific edge case.
+    Marker-gated so it only runs once per CACHE_RTL_FIX_VERSION bump -- which is
+    why the constant must be bumped whenever a new repair is added here, or
+    every existing install skips the backfill forever."""
     try:
         from resources.lib import kodi_utils, srt
     except Exception:
@@ -410,7 +415,8 @@ def _maybe_repair_rtl_cache():
                         content = f.read()
                 except OSError:
                     continue
-                fixed = srt.fix_rtl_punctuation(content)
+                fixed = srt.clamp_cue_durations(
+                    srt.fix_rtl_punctuation(content))
                 if fixed == content:
                     continue
                 tmp = p + '.aitmp'
