@@ -382,6 +382,9 @@ TEMP_PURGE_VERSION = '2'
 #         in an AI translation could leave one line frozen on screen for the
 #         rest of the episode; this walk is the only mechanism that repairs an
 #         ALREADY-cached translation without the user replaying that title.
+#   v6: strip Arabic the AI leaked from the gender reference into a Hebrew
+#       line -- see srt.strip_leaked_arabic. Only OUR OWN translations are
+#       walked here (cache/translated/), so the AI-only repair is safe.
 CACHE_RTL_FIX_VERSION = '6'
 
 
