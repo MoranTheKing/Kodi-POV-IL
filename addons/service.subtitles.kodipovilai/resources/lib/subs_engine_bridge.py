@@ -641,6 +641,19 @@ def _stream_key(info):
     return f or ((info or {}).get('filepath') or (info or {}).get('title') or '')
 
 
+def have_playback_snapshot(info=None):
+    """True when the file playing RIGHT NOW already has a real (non-empty)
+    play-start snapshot. Lets a caller skip an expensive stream poll it does not
+    need. An EMPTY snapshot deliberately reads as False -- it means "captured
+    nothing yet", so a retry is still wanted (see note_playback_streams)."""
+    try:
+        snap = _snap_get()
+        return bool(snap and snap.get('key') == _stream_key(info)
+                    and snap.get('streams'))
+    except Exception:
+        return False
+
+
 def note_playback_streams(info, streams=None):
     """Snapshot the embedded/local subtitle streams at PLAY START, before any
     external sub is loaded. Call ONCE per file, as early as possible. `streams`

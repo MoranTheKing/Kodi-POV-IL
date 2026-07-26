@@ -986,6 +986,67 @@ def strip_leaked_speaker_prefix(text, hebrew_only=False):
         return text
 
 
+# --- leaked Arabic gender-reference text -------------------------------------
+# When the Arabic gender reference is on (forced on for everyone), the prompt
+# carries REAL Arabic lines from a human translation of the same scene, as a
+# gender oracle. prompt.py tells the model in capitals to take "the gender and
+# NOTHING else", but a prompt is an instruction, not a guarantee: field report
+# of "Arabic word completions / half words" turning up inside otherwise-correct
+# Hebrew lines. The speaker-prefix leak already has a post-processor; this one
+# had none, so a leak shipped straight to the player.
+#
+# Deliberately narrow. It strips Arabic ONLY from a line that also carries
+# Hebrew -- i.e. a contaminated translation, which is the reported shape. A line
+# that is entirely Arabic is left alone: that is what an on-screen sign or a
+# deliberately untranslated line looks like, and destroying it would be worse
+# than the leak. Same reasoning as strip_leaked_speaker_prefix(hebrew_only=True).
+_ARABIC_CH = r'؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿'
+_HEBREW_CH = r'֐-׿יִ-ﭏ'
+# A run of Arabic plus ONLY what belongs to it: surrounding blanks, Arabic
+# diacritics/tatweel, and ARABIC punctuation. Latin/Hebrew punctuation is
+# deliberately excluded -- the '.' in "קארל מת. ـكِ" and the '?' in
+# "מה קורה? ماذا" end the HEBREW sentence, and an earlier version that swallowed
+# them turned a leak into a second defect.
+_ARABIC_RUN_RE = re.compile(
+    r'[ \t]*'
+    r'[' + _ARABIC_CH + r'][' + _ARABIC_CH + r' \tـً-ْ،؛؟]*')
+_HAS_HEBREW_RE = re.compile('[' + _HEBREW_CH + ']')
+_HAS_ARABIC_RE = re.compile('[' + _ARABIC_CH + ']')
+
+
+def strip_leaked_arabic(text):
+    """Remove Arabic that leaked from the gender reference into a Hebrew line.
+
+    Only touches a line containing BOTH Hebrew and Arabic. Index and timecode
+    lines can never match (they have no Hebrew). If removing the Arabic would
+    leave the line empty, the line is left untouched -- an empty cue is a worse
+    artefact than a stray word, and an all-Arabic line is not a leak we can
+    safely judge. Never raises into the caller.
+    """
+    if not text:
+        return text
+    try:
+        if not _HAS_ARABIC_RE.search(text):
+            return text            # overwhelmingly the common case: no-op
+        out = []
+        for line in text.split('\n'):
+            cr = '\r' if line.endswith('\r') else ''
+            body = line[:-1] if cr else line
+            if (_HAS_ARABIC_RE.search(body)
+                    and _HAS_HEBREW_RE.search(body)):
+                cleaned = _ARABIC_RUN_RE.sub(' ', body)
+                cleaned = re.sub(r'[ \t]{2,}', ' ', cleaned).strip()
+                # Keep a leading dialogue dash the cleanup may have eaten.
+                if body.lstrip().startswith('-') and not cleaned.startswith('-'):
+                    cleaned = '- ' + cleaned
+                if cleaned and _HAS_HEBREW_RE.search(cleaned):
+                    body = cleaned
+            out.append(body + cr)
+        return '\n'.join(out)
+    except Exception:
+        return text
+
+
 # --- content-based SDH detection (Phase 3) -----------------------------------
 # Music glyphs an SDH sub uses to mark lyrics.
 _SDH_MUSIC_GLYPHS = '♪♫♬♩'
