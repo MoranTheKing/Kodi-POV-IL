@@ -552,6 +552,152 @@ def parse_blocks(text):
     return [b for b in BLOCK_SEPARATOR.split(text) if b.strip()]
 
 
+# --- Cue-timing integrity ---------------------------------------------------
+# The translator hands Gemini whole SRT blocks -- INCLUDING their timecode lines
+# -- and stitches the reply back verbatim. The only validation on the reply is an
+# ENTRY COUNT check, so a single mistyped digit in a timestamp the model was only
+# supposed to copy ships straight to the player. Field reports: one Hebrew line
+# frozen on screen while the rest of the dialogue came and went underneath it,
+# a DIFFERENT line each re-translation, and clearing the add-on cache did not
+# help (a fresh translation just mistypes a different entry). A single hour digit
+# is enough: 00:41:22 --> 01:41:24 is a 60-minute cue.
+#
+# Two defences, deliberately layered:
+#   restore_block_timings() -- the real fix. The model is never trusted with
+#     timing: each translated block gets the SOURCE block's index + timecode back.
+#   clamp_cue_durations()   -- a backstop for everything the pairing cannot cover
+#     (entry counts that legitimately differ, and a pathological SOURCE cue).
+_MAX_CUE_MS = 25000        # a dialogue cue longer than this is a slip, not content
+_MIN_CUE_MS = 400
+_DEFAULT_CUE_MS = 2000
+_GAP_MS = 1                # keep a clamped cue clear of the next one
+
+_TIME_PAIR_RE = re.compile(
+    r'^(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*'
+    r'(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})(.*)$')
+
+
+def _tc_ms(h, m, sec, ms):
+    return h * 3600000 + m * 60000 + sec * 1000 + ms
+
+
+def _fmt_tc(ms):
+    if ms < 0:
+        ms = 0
+    h, rem = divmod(int(ms), 3600000)
+    m, rem = divmod(rem, 60000)
+    s, msec = divmod(rem, 1000)
+    return '{0:02d}:{1:02d}:{2:02d},{3:03d}'.format(h, m, s, msec)
+
+
+def _block_timecode_index(lines):
+    """Index of the timecode line inside a block's lines, or -1."""
+    for i, ln in enumerate(lines[:3]):
+        if _TIMECODE_RE.match(ln.strip()):
+            return i
+    return -1
+
+
+def _block_times(block):
+    """(start_ms, end_ms, trailing) for a block, or None when it has no
+    parsable timecode line."""
+    for ln in block.split('\n')[:3]:
+        m = _TIME_PAIR_RE.match(ln.strip())
+        if m:
+            g = [int(x) for x in m.groups()[:8]]
+            return (_tc_ms(*g[:4]), _tc_ms(*g[4:]), m.group(9) or '')
+    return None
+
+
+def restore_block_timings(src_blocks, out_blocks):
+    """Give every translated block its SOURCE index + timecode line back.
+
+    The model is asked to copy timings verbatim; it usually does, and when it
+    does this is a no-op. When it does not, this is the difference between a
+    correct subtitle and one with a line welded to the screen.
+
+    Pairing is positional and applied ONLY when the two lists are the same
+    length -- that is the overwhelmingly common case (the caller bisects and
+    retries a chunk whose yield drops below 85%). On any length mismatch we do
+    NOT guess an alignment, because mis-paired timings would corrupt every
+    following cue instead of one; the caller's clamp_cue_durations() backstop
+    covers that case. Fully fail-open: any surprise returns the input unchanged.
+    """
+    try:
+        if not out_blocks or not src_blocks:
+            return out_blocks
+        if len(src_blocks) != len(out_blocks):
+            return out_blocks
+        fixed = []
+        for src, out in zip(src_blocks, out_blocks):
+            src_lines = src.split('\n')
+            out_lines = out.split('\n')
+            si = _block_timecode_index(src_lines)
+            oi = _block_timecode_index(out_lines)
+            if si < 0 or oi < 0:
+                fixed.append(out)          # not SRT-shaped -- leave it alone
+                continue
+            head = src_lines[:si + 1]      # source index line(s) + source timecode
+            body = out_lines[oi + 1:]      # the model's translated text
+            fixed.append('\n'.join(head + body))
+        return fixed
+    except Exception:
+        return out_blocks
+
+
+def clamp_cue_durations(text, max_ms=None):
+    """Bound every cue's END so one bad timestamp cannot pin a line on screen.
+
+    A cue is shortened when it runs past the next cue's start, when it is longer
+    than any real dialogue cue, or when its end is not after its start. Starts
+    are never touched -- an early line is a far smaller defect than a permanent
+    one, and moving starts would desynchronise content that is otherwise fine.
+    """
+    try:
+        if not text or '-->' not in text:
+            return text
+        limit = _MAX_CUE_MS if max_ms is None else max_ms
+        blocks = parse_blocks(text)
+        times = [_block_times(b) for b in blocks]
+        out = []
+        changed = 0
+        for i, block in enumerate(blocks):
+            t = times[i]
+            if t is None:
+                out.append(block)
+                continue
+            start, end, trail = t
+            ceiling = start + limit
+            # Never run into the next cue that actually starts later.
+            for nxt in times[i + 1:]:
+                if nxt and nxt[0] > start:
+                    ceiling = min(ceiling, nxt[0] - _GAP_MS)
+                    break
+            new_end = end
+            if new_end <= start:
+                new_end = start + _DEFAULT_CUE_MS
+            if new_end > ceiling:
+                new_end = ceiling
+            if new_end < start + _MIN_CUE_MS:
+                new_end = start + _MIN_CUE_MS
+            if new_end == end:
+                out.append(block)
+                continue
+            changed += 1
+            lines = block.split('\n')
+            ti = _block_timecode_index(lines)
+            if ti < 0:
+                out.append(block)
+                continue
+            lines[ti] = '{0} --> {1}{2}'.format(_fmt_tc(start), _fmt_tc(new_end), trail)
+            out.append('\n'.join(lines))
+        if not changed:
+            return text
+        return stitch_blocks(out)
+    except Exception:
+        return text
+
+
 def chunk_blocks(blocks, per_chunk=250):
     """Yield groups of `per_chunk` blocks. Last group may be smaller."""
     if per_chunk < 1:
