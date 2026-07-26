@@ -2106,7 +2106,122 @@ was uploading partial/failed translations (stayed mostly English) the server onl
      packaging helper entered either release phase.
 
 
-18. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
+18. **Embedded rows lost with autosub off, leaked Arabic, and a banner on live TV
+   — SHIPPED (AI 0.2.445 / quickfix 0.1.487 / notification 545).** Three field
+   reports, three unrelated causes, plus a fourth answered by an upgrade.
+   - **One switch governed two features.** The picker's embedded rows -- both
+     "[מובנה] XX" and "תרגום מובנה → עברית (AI)" -- are built from a snapshot of
+     the file's subtitle streams taken at play start, before any external
+     subtitle is loaded; that timing is what lets the picker tell an embedded
+     track from an AI translation we loaded ourselves. The only producer of that
+     snapshot sat inside `autosub_on_play`, behind its `engine_autosub` gate, so
+     a user who turned OFF "auto-search and apply Hebrew on play" silently lost
+     every embedded row as well. Split: `snapshot_on_play()` does nothing but
+     poll and store, and runs whenever the engine is on; the search still obeys
+     its setting. Verified against the field log -- zero `embedded baseline`
+     lines across 10,103 lines, where the same user's earlier log has one per
+     playback. The pick path never depended on that setting.
+   - **The gender reference leaked into the output.** `prompt.py` gives the
+     model real Arabic lines from a human translation OF THE SAME ENTRY as a
+     gender oracle, and a one-shot migration forces that feature on for
+     everyone. The prompt says in capitals to take "the gender and NOTHING
+     else"; there was no post-processor behind that instruction, unlike the
+     analogous speaker-prefix leak. `srt.strip_leaked_arabic()` closes it.
+   - **HARD GUARANTEE, and the reason the function is written narrowly:** no cue
+     is removed, no LINE is removed, and no line loses its Hebrew -- only Arabic
+     characters are deleted from a line that also has Hebrew. The character
+     classes are disjoint by construction, so the regex cannot consume a Hebrew
+     character; the "did the Hebrew survive" check is a net under that, not the
+     guarantee. A leak occupying a WHOLE line is deliberately left: structurally
+     it is indistinguishable from an on-screen sign, and a stray visible line is
+     a defect a user can report where missing dialogue is not. An earlier
+     revision dropped such lines and was reverted after review found it deleting
+     a genuine Arabic sign.
+   - **Provenance is now a single rule.** The repair deletes text, so it must
+     not run on bytes the AI never wrote -- and that was found missing THREE
+     times in a row, each time after the previous fix was declared complete:
+     Ktuvit rows mirrored into the pool, the Google Translate fallback (which
+     writes into `cache/translated/` beside real AI output), and files of
+     unknown origin saved next to the video. The cause was structural: a check
+     written at a call site protects that call site. `srt.may_carry_arabic_leak`
+     is now the only home of the rule and all six repair paths route through it;
+     the two translator sites carry an explicit `our-own-output` marker rather
+     than being exempt by assumption. Applied retroactively --
+     `CACHE_RTL_FIX_VERSION` 5 -> 6 re-runs the backfill -- so subtitles already
+     stored with the leak are cleaned on delivery.
+   - **Nothing is re-uploaded.** Verified by AST, not by grep: no repair
+     function calls `contribute`. The pool key is `sha1(source_text)`, so
+     repairing the Hebrew cannot change it; the `.shared` sidecar survives the
+     walk (which touches `*.srt` only); `contribute_once` returns early on that
+     marker; and the Worker dedups by source hash regardless. Telegram receives
+     only what `contribute` sends.
+   - **A banner flashed on live TV.** The zero-duration check that recognises a
+     live stream ran AFTER the overlay was drawn, so an Idan Plus channel showed
+     a search that had already been cancelled -- the report was exactly "the
+     search was cancelled but the message still pops up". The three existing
+     live guards miss it because an IPTV plugin resolves to a plain http:// URL.
+     Moved ahead of the overlay, and out of `STATE['busy']` so a live channel
+     cannot block autosub for the next item played. Its grace period was widened
+     5s -> 13s to match what the old ordering effectively gave, after review
+     showed the move had silently narrowed it.
+   - **Three-letter language tags** (spa, ger, dut, jpn, swe, cze and ~15 more)
+     have matched since 0.2.402; the reporting users were on 0.2.397, so their
+     upgrade is the fix. Confirmed by diffing the shipped zips: the relevant
+     files are byte-identical between 0.2.397 and 0.2.444, so no coupling was
+     introduced after 0.2.397 -- that recollection could not be reproduced.
+   - **Packaging/privacy gate:** standalone versioned/latest/repository
+     byte-identical (SHA-256
+     `1fbd312e7bf062da9cfc2c977592334d447484b5c5957f06a995b2edc6535ab8`); build
+     edition versioned/latest byte-identical (SHA-256
+     `7721976793ed6a0715728c19d2acadff006e5a2d86074c6952ec13f1604c10be`);
+     repository metadata MD5 `e7281281e47686ea9cb4683c9e39c738`. Against 0.2.444
+     no package gains or loses a member and exactly eight differ. Quickfix
+     0.1.487 (SHA-256
+     `fbd4c9e45d773ea30068ca39f5fc1868fc3f2e2dc7211cb59fb5f76e727c8e9c`) is a
+     surgical copy of 0.1.486: member order and metadata preserved, 8 of 1,933
+     members differ and all 8 are inside the add-on, no new compile failures.
+     The protected pool block is inherited byte-for-byte and was cross-checked
+     identical across 64 shipped versions before being carried forward. No
+     credential enters tracked source, `pool/worker.js` is untouched, and no
+     streaming or private artifact is in scope.
+   - **Validation:** 132 cue-timing and 41 snapshot checks, a 110-check release
+     gate and a 19-check update-path audit that resolves every install route to
+     the concrete bytes a client fetches. Five independent review rounds, one of
+     which BLOCKED the release. Two lessons are now enforced mechanically: a
+     function may not apply the RTL fix without also bounding cue durations and
+     consulting the provenance rule, or it must carry a marker naming whose
+     bytes it holds; and the pool branch's provenance argument is checked by
+     EVALUATING it, after review defeated a source-text check with
+     `True or <expr>` -- a regex over source can always be out-manoeuvred by
+     phrasing, an assertion over a value cannot.
+   - **Verified publication record (2026-07-26):** Phase 1 shipped as `861ec6b`,
+     fast-forwarded onto main from `5bec4af`. Pages served the new repository
+     metadata 160 seconds after the push. Every artifact a client fetches was
+     downloaded IN FULL and compared byte-for-byte -- Pages `repo/addons.xml`,
+     its MD5 and the advertised zip; Raw `build.txt`, `build_versions/545.txt`,
+     the direct-install zip and the 33 MB quickfix. All exact at 22:15:02 Israel
+     and still exact at 22:21:05 after a 363-second cache gate, with
+     notification 544 deliberately live throughout. Phase 2 changed only
+     `quick_update.txt` in `2f0ccb0`; notification 545 (SHA-256
+     `4e160e5a8b8e96788fcf4a776e42840deaaf48b0ffe545d7a7df5bd44653f02e`) was
+     live on Raw 255 seconds later and byte-exact on both Raw and Pages at
+     22:31:51 after a 340-second gate, alongside a full re-verification of the
+     phase-1 surface. Every component version in the note was cross-checked
+     against what is actually published rather than carried over from 544. No
+     Worker, credential, streaming payload or local packaging helper entered
+     either release phase.
+   - **Follow-ups deliberately NOT taken, recorded so they are not lost:** the
+     `.google` sidecar can be evicted by `cache.prune()` independently of its
+     `.srt` sibling (its mtime is set once at creation while the subtitle's is
+     refreshed on every cache hit), so provenance can silently lapse for titles
+     still being watched -- the fix touches cache eviction and does not belong
+     inside a release. An AI translation the user saved NEXT to the video is now
+     unreachable by any Arabic repair, since nothing there identifies it. And a
+     line beginning with a non-RLE/PDF bidi control can strand a space inside
+     the wrapper -- pre-existing in `_wrap_rtl_base_line`, unrelated to this
+     release.
+
+19. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
 ## Working style

@@ -123,6 +123,27 @@ From MoranSubs `0.2.444` / quickfix `0.1.486`:
 - The repair only rewrites timecodes. Entry count, text and language are
   unchanged, so no subtitle that is accepted today starts being rejected.
 
+## Embedded subtitles and translation repairs
+
+From MoranSubs `0.2.445` / quickfix `0.1.487`:
+
+- Turning off "auto-search and apply Hebrew on play" no longer removes the
+  built-in subtitle entries from the list. Those entries, including "built-in
+  translated to Hebrew (AI)", are shown either way; the setting now only
+  controls whether a search runs automatically.
+- Stray Arabic words that occasionally appeared inside translated Hebrew lines
+  are removed on delivery. Hebrew and Arabic both mark gender, so a human
+  Arabic translation of the same scene is given to the AI purely as a gender
+  reference, and it sometimes copied a word out of it. The removal is
+  deliberately cautious: it only takes Arabic out of a line that also has
+  Hebrew, never removes a line or an entry, and never touches a line that is
+  entirely Arabic — so a subtitle cannot fall silent while people are talking.
+  Subtitles already stored with the problem are cleaned as they are delivered.
+- It never runs on subtitles the AI did not produce — human subtitles mirrored
+  from Ktuvit, Google Translate fallbacks, files you saved yourself, and
+  downloads from the subtitle sites are all left exactly as they are.
+- The "searching for subtitles" banner no longer flashes on live TV channels.
+
 ## Upstream POV Watch
 
 `.github/workflows/check-upstream-pov.yml` checks the original kodi7rd build metadata every 6 hours and opens an issue if upstream POV changes.
