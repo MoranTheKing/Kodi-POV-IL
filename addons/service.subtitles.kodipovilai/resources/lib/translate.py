@@ -1893,15 +1893,22 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                            level='WARNING')
             return None
 
-        # ONE extraction at a time. Two concurrent runs (e.g. the user picking
-        # "embedded" twice) DOUBLE the range-request load on the shared debrid
-        # TOKEN and can push the CDN over its per-token rate limit -- which then
-        # 429s the PLAYER's own video stream and CLOSES the movie (field crash on
-        # TorBox). A cross-process flag (Window prop -- RunScript runs in its own
-        # process) refuses a second run.
+        # Is this a REMOTE source? Everything below that throttles, locks or
+        # defers exists to protect a shared debrid token. A local file has no
+        # token, no CDN and no rate limit -- reading it twice costs nothing but
+        # disk -- so those guards are pure loss there, and one of them (the
+        # single-extraction lock) actively refuses work a local user asked for.
+        _remote = '://' in (url or '')
+
+        # ONE extraction at a time, REMOTE ONLY. Two concurrent runs (e.g. the
+        # user picking "embedded" twice) DOUBLE the range-request load on the
+        # shared debrid TOKEN and can push the CDN over its per-token rate limit
+        # -- which then 429s the PLAYER's own video stream and CLOSES the movie
+        # (field crash on TorBox). A cross-process flag (Window prop -- RunScript
+        # runs in its own process) refuses a second run.
         try:
             import xbmcgui as _xg
-            _win = _xg.Window(10000)
+            _win = _xg.Window(10000) if _remote else None
         except Exception:
             _win = None
         _ACTIVE = 'povil.embedded_extract_active'
