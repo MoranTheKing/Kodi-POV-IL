@@ -406,7 +406,7 @@ def _source_id_for_ai(payload):
     return ''
 
 
-def _reapply_rtl_fix_in_place(path, legacy_engine=False, ai_output=True):
+def _reapply_rtl_fix_in_place(path, legacy_engine=False, ai_output=None):
     """Repair a cached translation in place: RTL punctuation AND cue timings.
     Catches up files that were cached before the current version's fixes were
     wired in. Idempotent: if the file is already clean, no write happens.
@@ -427,12 +427,19 @@ def _reapply_rtl_fix_in_place(path, legacy_engine=False, ai_output=True):
             content = f.read()
     except OSError:
         return
-    # The Arabic strip repairs an AI leak, so it runs ONLY on bytes the AI
-    # produced. A Ktuvit row mirrored into the pool is a HUMAN Hebrew subtitle
-    # that never met the gender-reference prompt, and one quoting Arabic
-    # ('הוא אמר "אינשאללה" (إن شاء الله)') would come back with the quote
-    # deleted and empty brackets left behind. Same rule the engine-download
-    # renderer already follows: an AI repair does not touch foreign bytes.
+    # The Arabic strip repairs a leak from the AI's gender-reference prompt, so
+    # it runs ONLY on bytes that prompt could have produced. Two kinds of file
+    # here cannot have: a Ktuvit row mirrored into the pool (a HUMAN Hebrew
+    # subtitle) and a Google Translate fallback (no cast/gender mechanism at
+    # all). Either one quoting Arabic -- 'הוא אמר "אינשאללה" (إن شاء الله)' --
+    # would come back with the quote deleted and empty brackets left behind.
+    #
+    # ai_output=None means "work it out": the '.google' sidecar already marks a
+    # Google translation, so the DEFAULT is self-gating and a caller cannot
+    # forget. Only the pool path passes an explicit value, because provenance
+    # there comes from the row's pool_kind rather than from a sidecar.
+    if ai_output is None:
+        ai_output = not _is_google_translated(path)
     body = srt.strip_leaked_arabic(content) if ai_output else content
     fixed = srt.clamp_cue_durations(
         srt.fix_rtl_punctuation(body, legacy_engine=legacy_engine))
@@ -466,9 +473,21 @@ def _rtl_delivery_copy(path, legacy_engine=False):
         content = raw.decode('utf-8-sig')
         # arabic-strip: not-our-bytes -- a file sitting next to the video may be
         # an earlier AI translation of ours OR a human subtitle the user
-        # downloaded themselves, and nothing here tells them apart. The cue
-        # clamp is a bound that never deletes anything, so it still runs; the
-        # Arabic strip DELETES text, so it does not.
+        # downloaded themselves, and nothing here tells them apart: no pool_kind,
+        # no '.google' sidecar, nothing. The cue clamp is a bound that never
+        # deletes anything, so it still runs; the Arabic strip DELETES text, so
+        # it does not.
+        #
+        # ACCEPTED RESIDUAL, stated plainly because it is not free: this
+        # function's own docstring says the population INCLUDES our own AI
+        # translations saved beside the video, precisely the ones the cache
+        # migration can never reach. Such a file carrying the leak is now
+        # unfixable by any path. That is a worse outcome than the engine-download
+        # exemption, where the content can never be AI output by construction --
+        # here the false-negative cost is real. It is still the right trade while
+        # the alternative is deleting Arabic out of a human subtitle the user
+        # chose; a signal that identifies our own output would let this be
+        # revisited.
         fixed = srt.clamp_cue_durations(srt.fix_rtl_punctuation(
             content, legacy_engine=legacy_engine))
         if fixed == content:
