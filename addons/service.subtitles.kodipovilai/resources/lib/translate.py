@@ -3568,7 +3568,28 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # reference is on, the prompt carries real Arabic lines and the model
     # sometimes copies a word or a suffix of one into the Hebrew. Only a
     # line that has BOTH scripts is touched, so an all-Arabic line stays.
+    #
+    # Logged, not silent. What the reference feeds the model is a HUMAN
+    # translation OF THE SAME ENTRY (prompt.build_gender_block: "the
+    # time-aligned line from a HUMAN translation of the same scene"), so a leak
+    # is a DUPLICATE of the meaning the Hebrew already carries, and removing it
+    # loses nothing. What that reasoning cannot rule out is the model
+    # code-switching mid-sentence -- rendering half the line in Hebrew and
+    # continuing in Arabic -- where the Hebrew left behind would be incomplete.
+    # There is no way to tell the two apart from the text, so this line records
+    # how often it fires and on how many entries; a jump means the question is
+    # worth revisiting with real data instead of reasoning.
+    _pre_ar = final
     final = srt.strip_leaked_arabic(final)
+    if final != _pre_ar:
+        try:
+            _n = sum(1 for a, b in zip(_pre_ar.split('\n'), final.split('\n'))
+                     if a != b)
+            kodi_utils.log(
+                'leaked Arabic stripped from {0} line(s) -- gender reference '
+                'echoed into the Hebrew'.format(_n), level='WARNING')
+        except Exception:
+            pass
     # Defensive backstop for RTL punctuation: Gemini sometimes puts
     # punctuation at the logical start of a Hebrew line ("?שלום")
     # when it belongs at the logical end ("שלום?"). The prompt
