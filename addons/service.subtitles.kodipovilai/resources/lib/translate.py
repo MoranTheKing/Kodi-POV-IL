@@ -1701,7 +1701,15 @@ def _embedded_aligned_source_srt(
         # of getting it wrong is worst HERE -- this is the cheap path (a handful
         # of requests), so discarding it drops the user onto the expensive one,
         # on exactly the providers where that struggles.
+        # NOTE the shape of this window: the extractor is called ONCE, at the
+        # start, and everything after it is provider downloads and matching that
+        # never touch the debrid link again. So `backoffs` is a snapshot from
+        # t=0, not a live pressure reading -- one transient blip during that
+        # read would otherwise arm the resume-abort for the whole 45s window,
+        # long after we stopped using the connection at all. Track whether we
+        # are STILL holding it, and only yield it while that is true.
         _alstats = {'backoffs': 0, 'pace': 0.0}
+        _holding = {'link': True}
 
         def _abort():
             try:
@@ -1719,12 +1727,14 @@ def _embedded_aligned_source_srt(
                         _al['saw_pause'] = True
                     return False
                 _al['paused_at'] = None
-                if _al['saw_pause'] and _alstats.get('backoffs'):
+                if (_al['saw_pause'] and _holding['link']
+                        and _alstats.get('backoffs')):
                     kodi_utils.log(
                         'embedded-align: playback resumed after a pause and the '
-                        'CDN has pushed back {0} time(s) -- yielding the token '
-                        'to the player'.format(_alstats.get('backoffs')),
-                        level='INFO')
+                        'CDN has pushed back {0} time(s) (pace {1:.2f}s) -- '
+                        'yielding the connection to the player'.format(
+                            _alstats.get('backoffs'),
+                            _alstats.get('pace') or 0.0), level='INFO')
                     return True
                 return False
             except Exception:
@@ -1791,9 +1801,15 @@ def _embedded_aligned_source_srt(
         if _abort():
             return None, None
         _p(30, 100, 'קורא תזמון מובנה...')
-        times_by_lang = embedded_extract.cue_reference_times_multi(
-            url, try_set, allow_http=allow, abort_cb=_abort, stats=_alstats,
-            log=lambda m: kodi_utils.log('embedded-align: ' + m, level='INFO'))
+        try:
+            times_by_lang = embedded_extract.cue_reference_times_multi(
+                url, try_set, allow_http=allow, abort_cb=_abort, stats=_alstats,
+                log=lambda m: kodi_utils.log('embedded-align: ' + m,
+                                             level='INFO'))
+        finally:
+            # Done with the debrid link. From here on there is nothing to hand
+            # back, so a pause and resume must not discard the work.
+            _holding['link'] = False
         for lang in try_set:
             if _abort():
                 break
