@@ -1710,9 +1710,16 @@ def _embedded_aligned_source_srt(
         # are STILL holding it, and only yield it while that is true.
         _alstats = {'backoffs': 0, 'pace': 0.0}
         _holding = {'link': True}
+        _alhot = {'at': 0.0}
 
         def _abort():
             try:
+                # Same throttle memory as the full-text path: the pace decays
+                # after a clean run, so reading it live lets the guard disarm
+                # itself while the token is still hot. Note it before any early
+                # return can skip it.
+                if (_alstats.get('pace') or 0.0) >= 1.0:
+                    _alhot['at'] = _time.time()
                 if _time.time() - _t0 > _ALIGN_DEADLINE_S:
                     return True
                 import xbmc as _x
@@ -1733,8 +1740,8 @@ def _embedded_aligned_source_srt(
                 # itself put the player into. Only a pace that has actually been
                 # throttled down counts -- and the cost of getting this wrong is
                 # worst here, on the cheap path that some providers depend on.
-                if (_al['saw_pause'] and _holding['link']
-                        and (_alstats.get('pace') or 0.0) >= 1.0):
+                if (_al['saw_pause'] and _holding['link'] and _alhot['at']
+                        and (_time.time() - _alhot['at']) <= 60.0):
                     kodi_utils.log(
                         'embedded-align: playback resumed after a pause and the '
                         'CDN has throttled us to {1:.2f}s/request ({0} '
@@ -2009,6 +2016,21 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         # 1.5 per refusal, so 1.0s is about four of them -- the point where the
         # provider has demonstrably clamped down rather than blinked once.
         _RESUME_ABORT_PACE_S = 1.0
+        # ...and for how long after that it still counts. The pace does not only
+        # climb: it decays back down after a run of clean requests, so reading it
+        # live would let the guard disarm itself. Measured on the real AIMD code:
+        # once throttled to 1.01s, twenty-five clean fetches -- half a minute of
+        # crawling, which carries on happily while the film is paused -- bring it
+        # to 0.91s, and the guard silently switches off although nothing has
+        # changed about the token. What that decay actually proves is that our
+        # own slow trickle is being tolerated, which is not the question: the
+        # question is whether the PLAYER's burst on resume will be. So remember
+        # when we were last throttled and treat the token as hot for a while
+        # afterwards. Long enough to cover a decay, short enough that a provider
+        # which pushed back once early and has been quiet for minutes is
+        # forgiven.
+        _TOKEN_HOT_S = 60.0
+        _hot = {'at': 0.0}
         _stall = {'t': None, 'since': None, 'saw_pause': False,
                   'paused_at': None}
         # What the extractor is actually experiencing, filled in as it runs:
@@ -2020,6 +2042,13 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
             try:
                 import xbmc as _x
                 import time as _tt
+                # Note the throttle BEFORE anything can return early: this is
+                # polled on every request and every second of every backoff, so
+                # it is what keeps the reading from being a snapshot -- and it
+                # has to keep running while the film is paused, because that is
+                # exactly when the crawl continues and the pace decays.
+                if (_xstats.get('pace') or 0.0) >= _RESUME_ABORT_PACE_S:
+                    _hot['at'] = _tt.time()
                 p = _x.Player()
                 if not p.isPlayingVideo():
                     return True
@@ -2082,17 +2111,18 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                 # token -- which is exactly the state where the player's first
                 # read on resume is at risk. Below that, keep working; the stall
                 # guard below still covers actual bandwidth contention.
-                if (_stall['saw_pause']
-                        and (_xstats.get('pace') or 0.0) >= _RESUME_ABORT_PACE_S):
+                now = _tt.time()
+                if (_stall['saw_pause'] and _hot['at']
+                        and (now - _hot['at']) <= _TOKEN_HOT_S):
                     kodi_utils.log(
                         'embedded: playback resumed after a pause and the CDN '
-                        'has throttled us to {1:.2f}s/request ({0} push-back(s)) '
-                        '-- aborting extraction to free the debrid token for '
-                        'the player'
+                        'throttled us to {1:.2f}s/request {2:.0f}s ago ({0} '
+                        'push-back(s)) -- aborting extraction to free the '
+                        'debrid token for the player'
                         .format(_xstats.get('backoffs'),
-                                _xstats.get('pace') or 0.0), level='INFO')
+                                _xstats.get('pace') or 0.0,
+                                now - _hot['at']), level='INFO')
                     return True
-                now = _tt.time()
                 try:
                     cur = p.getTime()
                 except Exception:
