@@ -2074,7 +2074,10 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         _TOAST_MIN_S = 30.0
         _toast = {'pct': -1, 'at': 0.0}
 
-        def _progress(done, total, label=None):
+        def _progress(done, total):
+            # _status, NOT kodi_utils.notify: auto-on-play runs this whole path
+            # in quiet mode precisely so it stays silent, and a raw notify()
+            # bypasses that and pops toasts for something the user never picked.
             try:
                 if total:
                     import time as _tt
@@ -2084,15 +2087,13 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                     if (step > _toast['pct'] and step > 0
                             and (now - _toast['at']) >= _TOAST_MIN_S):
                         _toast['pct'], _toast['at'] = step, now
-                        kodi_utils.notify(
-                            'AI: מחלץ תרגום מובנה — {0}% ({1}/{2})'.format(
-                                step, done, total), time_ms=2500)
+                        _status('AI: מחלץ תרגום מובנה — {0}% ({1}/{2})'.format(
+                            step, done, total), time_ms=2500)
             except Exception:
                 pass
             if progress_cb:
                 try:
-                    progress_cb(done, total) if label is None \
-                        else progress_cb(done, total, label)
+                    progress_cb(done, total)
                 except Exception:
                     pass
 
@@ -2122,21 +2123,32 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                     'embedded: stopped at {0}/{1} cue(s) for {2} -- progress '
                     'saved, the next attempt continues from there'.format(
                         _done, _total, src_lang), level='INFO')
-                kodi_utils.notify(
-                    'AI: החילוץ נעצר ב-{0}% — ההתקדמות נשמרה, בחרו שוב '
-                    'כדי להמשיך'.format(int(_done * 100 / _total)),
-                    time_ms=6000)
+                _status('AI: החילוץ נעצר ב-{0}% — ההתקדמות נשמרה, בחרו שוב '
+                        'כדי להמשיך'.format(int(_done * 100 / _total)),
+                        time_ms=6000)
                 # Tell the caller this was a PAUSE, not a dead end, so it does
                 # not follow up with "try another subtitle" -- which would
                 # contradict the message above and send the user away from a
                 # job that is most of the way done.
-                try:
-                    import xbmcgui as _g
-                    _g.Window(10000).setProperty(
-                        'povil.embedded_partial',
-                        '{0}/{1}'.format(_done, _total))
-                except Exception:
-                    pass
+                #
+                # ONLY for a pick the user actually made. The auto-on-play
+                # thread reaches this same function in quiet mode and has no
+                # picker to inform; the flag it set there would simply sit on
+                # the window until some LATER, unrelated failure read it and
+                # swallowed the toast that failure needed to show. Tying the
+                # flag to the same condition as the message keeps the two
+                # honest, and the timestamp bounds anything that still slips
+                # through -- a picker consumes it within seconds, never later.
+                if not _QUIET:
+                    try:
+                        import time as _tt
+                        import xbmcgui as _g
+                        _g.Window(10000).setProperty(
+                            'povil.embedded_partial',
+                            '{0}/{1}@{2:.0f}'.format(_done, _total,
+                                                     _tt.time()))
+                    except Exception:
+                        pass
                 return None
             kodi_utils.log(
                 'embedded: no usable text track for {0}'.format(src_lang),
@@ -3243,8 +3255,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     'reply -- keeping their source text'.format(idx, len(_gap)),
                     level='WARNING')
                 _count('src', len(_gap))
-                return srt.stitch_blocks(srt.merge_blocks_by_start(
-                    srt.parse_blocks(resp), _gap))
+                _count('noar', len(ch) - len(_gap))
+                return srt.stitch_blocks(srt.align_blocks(
+                    ch, srt.parse_blocks(resp), _gap))
         _count('noar', len(ch))
         return resp
 
@@ -3286,34 +3299,49 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     # single-entry path below has the full ladder for the rest.
                     try:
                         fill = _call_gemini(idx, missing, NO_REF)
+                    except _AbortTranslation:
+                        raise
                     except (gemini.FilteredResponse, gemini.TruncatedResponse):
                         break
                 except gemini.TruncatedResponse as e:
                     fill = e.partial_text or ''
+                except _AbortTranslation:
+                    # Quota exhausted / invalid key / retries spent. The
+                    # executor loop catches this to cancel every OTHER chunk and
+                    # tell the user why. Absorbing it here would return a
+                    # normal-looking chunk, leave the job "successful", and let
+                    # the remaining chunks keep hammering a key that is already
+                    # known to be dead.
+                    raise
                 except Exception:
                     break
                 fill_blocks = srt.parse_blocks(fill)
                 if not fill_blocks:
                     break
                 before = len(blocks)
-                blocks = srt.merge_blocks_by_start(blocks, fill_blocks)
+                # Take from the fill ONLY what answers an entry we asked for --
+                # a corrupted timestamp in the reply must not become a new cue.
+                blocks = srt.align_blocks(ch, blocks, fill_blocks)
                 if len(blocks) <= before:
                     break          # the reply added nothing -> stop, don't loop
             still = srt.missing_blocks(ch, blocks)
+            kept_src = len(still)
             if still:
                 # Keep the SOURCE for whatever never came back, so the entry
                 # count matches the chunk and every later stage (positional
                 # timing restore, the merge into the final file) stays aligned.
-                blocks = srt.merge_blocks_by_start(blocks, still)
+                blocks = srt.align_blocks(ch, blocks, still)
                 kodi_utils.log(
                     'Chunk {0}: {1} entr(ies) kept as source after top-up'
-                    .format(idx, len(still)), level='WARNING')
-                _count('src', len(still))
-            return srt.stitch_blocks(blocks)
+                    .format(idx, kept_src), level='WARNING')
+                _count('src', kept_src)
+            return srt.stitch_blocks(blocks), kept_src
+        except _AbortTranslation:
+            raise
         except Exception as e:
             kodi_utils.log('Chunk {0} top-up failed: {1}'.format(idx, e),
                            level='WARNING')
-            return response
+            return response, 0
 
     def _translate_one(idx, ch, deadline=None, try_alts=True):
         # Recursive bisection on TruncatedResponse OR low-yield response (Gemini
@@ -3413,8 +3441,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # So ask WHICH entries came back, and top up exactly the ones that
             # did not. A top-up is ONE call; bisecting a 50-line chunk to corner
             # a single dropped line costs ~6, on a shared quota.
-            response = _top_up_missing(idx, ch, response, deadline)
-            _count('ar', len(ch))
+            response, _kept_src = _top_up_missing(idx, ch, response, deadline)
+            # Entries the top-up had to keep as source were already tallied
+            # there; counting them again here would put the same entry in two
+            # telemetry buckets and make the per-chunk totals exceed the chunk.
+            _count('ar', len(ch) - _kept_src)
             return response
         # ---- single-entry chunk ----
         try:

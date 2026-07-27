@@ -682,29 +682,51 @@ def missing_blocks(src_blocks, out_blocks):
         return []
 
 
-def merge_blocks_by_start(*block_lists):
-    """One list of blocks, ordered by start time, de-duplicated on start.
+def align_blocks(src_blocks, *candidate_lists):
+    """Blocks drawn from `candidate_lists` to match `src_blocks` exactly: the
+    same start timestamps, with the same MULTIPLICITY, in timeline order.
+    Earlier lists win; a start is filled from later lists only while the source
+    still calls for more at that start.
 
-    Used to splice a top-up reply back into the reply it completes. Ordering
-    matters downstream: restore_block_timings pairs POSITIONALLY when the counts
-    match, and a merged chunk only regains that property if it is back in
-    timeline order. Fail-open: returns the inputs concatenated on any problem."""
-    merged = []
-    for lst in block_lists:
-        merged.extend(lst or ())
+    Both halves of that rule are load-bearing, and getting either wrong loses
+    subtitle content:
+
+      * Multiplicity, not presence. Two source entries may legitimately share a
+        start -- simultaneous dialogue -- and de-duplicating on start alone
+        drops the second one PERMANENTLY. Not "left untranslated": gone from the
+        subtitle. (Reproduced: a 3-entry chunk with two entries at one start
+        came back with 2, while the caller's own bookkeeping reported success.)
+
+      * Only what was asked for. A block whose start the model corrupted --
+        a documented, already-observed failure of this model -- answers nothing
+        that was requested. Adding it inserts a line at a fabricated time while
+        the real slot is ALSO filled from the source, shipping the same dialogue
+        twice. (Reproduced: 20 entries in, 21 out, one line at two timestamps.)
+
+    Ordering matters downstream too: restore_block_timings pairs POSITIONALLY
+    when the counts match, which only holds if the result is back in timeline
+    order. The sort is stable, so entries sharing a start keep the order the
+    candidates supplied them in. Fail-open: returns the first list on any
+    problem."""
     try:
-        seen = set()
-        keyed = []
-        for b in merged:
+        wanted = {}
+        for b in src_blocks or ():
             st = _block_start(b)
-            if st is None or st in seen:
-                continue
-            seen.add(st)
-            keyed.append((st, b))
+            if st is not None:
+                wanted[st] = wanted.get(st, 0) + 1
+        taken = {}
+        keyed = []
+        for lst in candidate_lists:
+            for b in lst or ():
+                st = _block_start(b)
+                if st is None or taken.get(st, 0) >= wanted.get(st, 0):
+                    continue
+                taken[st] = taken.get(st, 0) + 1
+                keyed.append((st, b))
         keyed.sort(key=lambda p: p[0])
         return [b for _st, b in keyed]
     except Exception:
-        return merged
+        return list(candidate_lists[0]) if candidate_lists else []
 
 
 def _repair_pinned_starts(src_blocks, out_blocks, fixed, ambiguous):
