@@ -324,6 +324,17 @@ def _new_session():
         return None
 
 
+def _complete_length(content_range):
+    """The file's real length as stated in a Content-Range, or None.
+
+    Both forms carry it: 'bytes 0-15/525000' on a normal partial answer, and
+    'bytes */525000' on a 416. The length after the slash is the whole file, not
+    the part being sent, so it is authoritative even when the range itself was
+    refused. '*' (unknown length) yields None, as it should."""
+    m = re.search(r'/\s*(\d+)\s*$', content_range or '')
+    return int(m.group(1)) if m else None
+
+
 class _Source(object):
     """Byte source with .read(offset, size) -- local file or HTTP Range. HTTP
     reads go over ONE reused keep-alive connection (see _new_session); a 429/5xx
@@ -423,6 +434,116 @@ class _Source(object):
         if self._sess is not None:
             return self._read_session(offset, size)
         return self._read_urllib(offset, size)
+
+    def probe_beyond(self, offset):
+        """Does the provider say there is anything AT `offset`? Returns 'more',
+        'eof', or 'unknown' -- and only ever says 'eof' when the provider states
+        it.
+
+        `read()` cannot answer this question. It collapses every outcome that is
+        not a successful fetch into the same b'': a tripped breaker, any
+        exception, and a server that ignores the Range header and answers 200
+        (which this file already documents happening in the field) all look
+        exactly like a genuine end of file. So an empty read is NOT evidence of
+        EOF, and treating it as such lets a real truncation -- one that happened
+        to land on a clean element boundary, where parsing cannot see it either
+        -- be certified as a complete subtitle with lines missing.
+
+        A positive statement is required instead:
+          * HTTP 416 -- the canonical "your range starts past the end", which is
+            exactly this question, and what a compliant server answers.
+          * a Content-Range complete-length, from any status. A server that
+            ignores Range and streams the whole file from 0 still declares its
+            real length in Content-Length, so even that case gives a definitive
+            answer -- and it is free, because the body is never read.
+          * for a local file, the size on disk.
+        Anything else is 'unknown', and the caller must treat that as truncation.
+        """
+        if not self.is_http:
+            try:
+                sz = os.path.getsize(self.url)
+            except Exception:
+                return 'unknown'
+            return 'eof' if offset >= sz else 'more'
+        if self.tripped:
+            return 'unknown'
+        try:
+            if self._sess is not None:
+                r = self._sess.get(self.url, headers={
+                    'Range': 'bytes={0}-{1}'.format(offset, offset + 15),
+                    'User-Agent': _UA}, timeout=_HTTP_TIMEOUT, stream=True)
+                try:
+                    self.http_reqs += 1
+                    return self._classify_probe(
+                        r.status_code, r.headers.get('Content-Range'),
+                        r.headers.get('Content-Length'), offset,
+                        lambda: r.raw.read(16))
+                finally:
+                    try:
+                        r.close()     # never drain the body -- it may be 77GB
+                    except Exception:
+                        pass
+            if _urlreq is None:
+                return 'unknown'
+            req = _urlreq.Request(self.url, headers={
+                'Range': 'bytes={0}-{1}'.format(offset, offset + 15),
+                'User-Agent': _UA})
+            try:
+                resp = _urlreq.urlopen(req, timeout=_HTTP_TIMEOUT)
+            except Exception as e:
+                # urllib raises on 416 instead of returning it, and the error
+                # object still carries the headers -- which is where the answer
+                # is. Anything without a status is simply unknown.
+                code = getattr(e, 'code', None)
+                hdrs = getattr(e, 'headers', None)
+                if code is None:
+                    return 'unknown'
+                return self._classify_probe(
+                    code,
+                    hdrs.get('Content-Range') if hdrs else None,
+                    None, offset, lambda: b'')
+            try:
+                self.http_reqs += 1
+                code = getattr(resp, 'status', None) or resp.getcode()
+                return self._classify_probe(
+                    code, resp.headers.get('Content-Range'),
+                    resp.headers.get('Content-Length'), offset,
+                    lambda: resp.read(16))
+            finally:
+                try:
+                    resp.close()
+                except Exception:
+                    pass
+        except Exception:
+            return 'unknown'
+
+    @staticmethod
+    def _classify_probe(code, content_range, content_length, offset, body):
+        """Shared verdict for both HTTP paths. `body` is called at most once,
+        and only when the headers did not already settle the question."""
+        if code == 416:
+            return 'eof'
+        end = _complete_length(content_range)
+        if end is not None and end > 0:
+            return 'eof' if offset >= end else 'more'
+        if code == 200 and offset > 0:
+            # Range ignored -- the body is the whole file from 0, so its
+            # declared length is the file's length. Take it as evidence that
+            # there is MORE, never as a confirmation of EOF: a 200 whose
+            # Content-Length is shorter than the bytes we have already read
+            # contradicts them, and a contradiction confirms nothing.
+            try:
+                if int(content_length) > offset:
+                    return 'more'
+            except (TypeError, ValueError):
+                pass
+            return 'unknown'
+        if code >= 300:
+            return 'unknown'
+        try:
+            return 'more' if body() else 'unknown'
+        except Exception:
+            return 'unknown'
 
     def _making_progress(self):
         """Are we still actually collecting cues, despite the back-pressure?
@@ -2205,28 +2326,33 @@ def _short_read(src, offset, asked, got):
     # total inflated by 5000 bytes on a 525KB file froze the extraction at the
     # same cluster across eight attempts, banking nothing new.)
     #
-    # One tiny probe tells the two apart. Ask for a few bytes just past what we
-    # got: real data means the response really was cut short, and nothing means
-    # we are at the true end of the file. Correct `total` down when that
-    # happens, so this costs one request per file, not one per read.
+    # One tiny probe tells the two apart -- but ONLY if it can distinguish "the
+    # provider says there is nothing there" from "the read failed". src.read()
+    # cannot: it returns b'' for a tripped breaker, for any exception, and for a
+    # server that ignores Range and answers 200, all of which are real behaviours
+    # this file already handles elsewhere. Believing an empty read means EOF
+    # would shrink `total` on a genuine truncation that landed on a clean element
+    # boundary -- the one case parsing cannot catch either -- and hand back a
+    # subtitle with lines silently missing. So ask probe_beyond(), which says
+    # 'eof' only when the provider states it (a 416, or a Content-Range length),
+    # and treat anything it cannot establish as truncation.
     probe_at = offset + len(got)
-    if probe_at >= src.total:
-        return False
     try:
-        if src.read(probe_at, 16):
-            return True                   # there IS more -- genuinely truncated
-        if src._log:
-            src._log('file ends at %d though the provider reported %d -- '
-                     'trusting the bytes, not the header'
-                     % (probe_at, src.total))
-        src.total = probe_at
-        return False
+        verdict = src.probe_beyond(probe_at)
     except Exception:
-        # The probe is an optimisation for one specific misreport. If it cannot
-        # be made, fall back to the safe answer: call it truncation and defer.
-        # Deferring costs an attempt; the alternative is delivering a subtitle
-        # with lines missing.
+        verdict = 'unknown'
+    if verdict == 'more':
+        return True                       # there IS more -- genuinely truncated
+    if verdict != 'eof':
+        # Unknown. Deferring costs an attempt; the alternative is delivering a
+        # subtitle with lines missing.
         return True
+    if src._log:
+        src._log('file ends at %d though the provider reported %d -- '
+                 'trusting the bytes, not the header'
+                 % (probe_at, src.total))
+    src.total = probe_at
+    return False
 
 
 def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
