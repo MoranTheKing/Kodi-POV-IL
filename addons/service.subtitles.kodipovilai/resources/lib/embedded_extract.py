@@ -85,6 +85,13 @@ _HTTP_TIMEOUT = 15
 # (the field 429 fired at ~35 req/s). Sleeping is safe -- extraction runs in a
 # background thread, never the player's callback.
 _HTTP_429_RETRIES = 5
+# NOT reduced under sustained pressure, though it is tempting: retrying a read
+# in place costs a fresh GET each time, so a run against a pushing-back CDN
+# sends far more requests than it appears to (a field log's "60 req" was nearer
+# 110 as far as the CDN was concerned -- hence the http_reqs counter). But
+# exhausting these retries is exactly what trips the breaker, and that trip is
+# what keeps a partial extract from being delivered. Measured: cutting them to 2
+# sent 84% fewer requests and returned 0 of 50 cues.
 _HTTP_429_MAX_WAIT = 30.0          # cap on one backoff sleep (seconds)
 # A 429 means the shared token is at its limit and the PLAYER needs that
 # headroom, so back off substantially (not just enough for our own retry).
@@ -542,6 +549,13 @@ class _Source(object):
                         pass
                     r = None
                     if _attempt >= _HTTP_429_RETRIES - 1:
+                        # UNCONDITIONAL, deliberately. This is what guarantees a
+                        # partial extract is never delivered: without `tripped`
+                        # the pass can run to completion with reads that returned
+                        # nothing and hand back a short subtitle as if it were
+                        # whole. (Tried gating it on progress, the way the streak
+                        # breaker is gated -- a fully-refusing provider then
+                        # produced an SRT instead of deferring.)
                         self.tripped = True   # limiter not recovering -> give up
                         return b''
                     try:
@@ -1322,7 +1336,7 @@ def cue_reference_times(url_or_path, track_num=None, lang=None,
 
 def cue_reference_times_multi(url_or_path, langs, track_num=None,
                               head_bytes=DEFAULT_HEAD_BYTES, allow_http=False,
-                              abort_cb=None, log=None):
+                              abort_cb=None, log=None, stats=None):
     """Dense cue START times for SEVERAL languages in ONE head+Cues read.
 
     Returns {lang: sorted_times_ms} -- the same per-language skeleton
@@ -1333,7 +1347,9 @@ def cue_reference_times_multi(url_or_path, langs, track_num=None,
     costs ONE read, not one per language. `langs` is normalised to 2-letter
     codes; several may resolve to the same track. A language whose track has no
     per-cue index is omitted from the result. `allow_http` must be True for an
-    HTTP/debrid source. Never raises."""
+    HTTP/debrid source. `stats`, if given, is filled in the same way extract_srt
+    fills it -- above all 'backoffs', so the caller can tell provider pressure
+    from an ordinary pause instead of guessing. Never raises."""
     _log = log or _noop
     try:
         seen = list(dict.fromkeys(
@@ -1342,6 +1358,11 @@ def cue_reference_times_multi(url_or_path, langs, track_num=None,
             return {}
         src = _Source(url_or_path)
         src._abort_cb = abort_cb
+        src._log = _log
+        src._stats = stats if stats is not None else None
+        if src._stats is not None:
+            src._stats['backoffs'] = 0
+            src._stats['pace'] = src._pace
         if not src.total:
             return {}
         if src.is_http and not allow_http:
