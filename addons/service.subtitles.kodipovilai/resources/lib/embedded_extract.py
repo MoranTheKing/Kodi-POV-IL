@@ -77,6 +77,18 @@ DEFAULT_HEAD_BYTES = 2 * 1024 * 1024
 DEFAULT_MAX_BYTES = 80 * 1024 * 1024      # surgical Cues fetch stays well under
 DEFAULT_DEADLINE_S = 30.0
 _HTTP_TIMEOUT = 15
+# The EOF probe reads only the first few bytes of its answer, but leaving the
+# rest unread forces the shared keep-alive connection to be thrown away and
+# rebuilt on the next read -- and storming a debrid CDN with fresh connections
+# is what 429s the token. So finish a body that is small enough to finish, and
+# only abandon one too big to bother with (a provider that ignores Range answers
+# with the whole file, which can be tens of gigabytes).
+_PROBE_DRAIN_MAX = 64 * 1024
+# How many already-read bytes the probe re-reads to prove the connection is
+# still delivering the right data at the right offsets. Long enough that a
+# provider serving the wrong region cannot match it by chance, short enough to
+# be free.
+_PROBE_CONTROL = 64
 # A debrid CDN token rate-limits by request COUNT and recovers after a short
 # cooldown, so a transient 429 is EXPECTED (the relpos fast path issues many
 # small requests). Back off (honor Retry-After) and retry rather than tripping
@@ -435,10 +447,77 @@ class _Source(object):
             return self._read_session(offset, size)
         return self._read_urllib(offset, size)
 
-    def probe_beyond(self, offset):
+    def _probe_fetch(self, offset, size):
+        """One tiny Range GET for the EOF probe: (code, Content-Range,
+        Content-Length, body) or None if the request could not be made.
+
+        Deliberately NOT routed through _read_session: this asks a question
+        about the file rather than fetching data, and it must see the status and
+        the headers, which _read_session collapses into bytes. It reads at most
+        `size` bytes and NEVER drains a body it did not ask for -- a provider
+        that ignores Range answers with the whole file, which can be 77GB. When
+        the body is small enough to finish, it IS finished, so the shared
+        keep-alive connection goes back to the pool instead of being discarded
+        and reconnected on the next read."""
+        hdrs = {'Range': 'bytes={0}-{1}'.format(offset, offset + size - 1),
+                'User-Agent': _UA}
+        if self._sess is not None:
+            r = self._sess.get(self.url, headers=hdrs, timeout=_HTTP_TIMEOUT,
+                               stream=True)
+            self.http_reqs += 1
+            cl = r.headers.get('Content-Length')
+            try:
+                body = r.raw.read(size) or b''
+            except Exception:
+                body = b''
+            try:
+                small = 0 <= int(cl) <= _PROBE_DRAIN_MAX
+            except (TypeError, ValueError):
+                small = False
+            try:
+                if small:
+                    r.raw.read()          # finish it -> connection is reusable
+            except Exception:
+                pass
+            try:
+                r.close()
+            except Exception:
+                pass
+            return r.status_code, r.headers.get('Content-Range'), cl, body
+        if _urlreq is None:
+            return None
+        req = _urlreq.Request(self.url, headers=hdrs)
+        try:
+            resp = _urlreq.urlopen(req, timeout=_HTTP_TIMEOUT)
+        except Exception as e:
+            # urllib RAISES on a 416 rather than returning it, and the error
+            # object still carries the status and the headers -- which is where
+            # the answer is. Anything without a status is not an answer.
+            code = getattr(e, 'code', None)
+            if code is None:
+                return None
+            self.http_reqs += 1
+            eh = getattr(e, 'headers', None)
+            return (code, eh.get('Content-Range') if eh else None,
+                    eh.get('Content-Length') if eh else None, b'')
+        self.http_reqs += 1
+        try:
+            code = getattr(resp, 'status', None) or resp.getcode()
+            try:
+                body = resp.read(size) or b''
+            except Exception:
+                body = b''
+            return (code, resp.headers.get('Content-Range'),
+                    resp.headers.get('Content-Length'), body)
+        finally:
+            try:
+                resp.close()
+            except Exception:
+                pass
+
+    def probe_beyond(self, offset, known=None):
         """Does the provider say there is anything AT `offset`? Returns 'more',
-        'eof', or 'unknown' -- and only ever says 'eof' when the provider states
-        it.
+        'eof', or 'unknown' -- and only ever says 'eof' on evidence.
 
         `read()` cannot answer this question. It collapses every outcome that is
         not a successful fetch into the same b'': a tripped breaker, any
@@ -449,14 +528,24 @@ class _Source(object):
         to land on a clean element boundary, where parsing cannot see it either
         -- be certified as a complete subtitle with lines missing.
 
-        A positive statement is required instead:
+        What counts as evidence:
           * HTTP 416 -- the canonical "your range starts past the end", which is
             exactly this question, and what a compliant server answers.
           * a Content-Range complete-length, from any status. A server that
             ignores Range and streams the whole file from 0 still declares its
-            real length in Content-Length, so even that case gives a definitive
-            answer -- and it is free, because the body is never read.
+            real length, so even that case answers definitively.
           * for a local file, the size on disk.
+          * failing all of those: an answer that came back clean but empty, IF a
+            second read of bytes we ALREADY HAVE comes back correct. Not every
+            provider implements 416; without this, one that merely overstates
+            the file's size and answers a past-the-end range with an empty 200
+            or 206 could never finish the file at all, at any number of attempts
+            -- the other failure this probe exists to prevent. `known` is
+            (offset, bytes) the caller has already read, so a match proves the
+            connection is delivering the right data at the right offsets right
+            now, which is what makes "nothing there" mean the end rather than a
+            failure. A provider that is ignoring offsets fails it and stays
+            unknown.
         Anything else is 'unknown', and the caller must treat that as truncation.
         """
         if not self.is_http:
@@ -468,82 +557,50 @@ class _Source(object):
         if self.tripped:
             return 'unknown'
         try:
-            if self._sess is not None:
-                r = self._sess.get(self.url, headers={
-                    'Range': 'bytes={0}-{1}'.format(offset, offset + 15),
-                    'User-Agent': _UA}, timeout=_HTTP_TIMEOUT, stream=True)
-                try:
-                    self.http_reqs += 1
-                    return self._classify_probe(
-                        r.status_code, r.headers.get('Content-Range'),
-                        r.headers.get('Content-Length'), offset,
-                        lambda: r.raw.read(16))
-                finally:
-                    try:
-                        r.close()     # never drain the body -- it may be 77GB
-                    except Exception:
-                        pass
-            if _urlreq is None:
+            got = self._probe_fetch(offset, 16)
+            if got is None:
                 return 'unknown'
-            req = _urlreq.Request(self.url, headers={
-                'Range': 'bytes={0}-{1}'.format(offset, offset + 15),
-                'User-Agent': _UA})
-            try:
-                resp = _urlreq.urlopen(req, timeout=_HTTP_TIMEOUT)
-            except Exception as e:
-                # urllib raises on 416 instead of returning it, and the error
-                # object still carries the headers -- which is where the answer
-                # is. Anything without a status is simply unknown.
-                code = getattr(e, 'code', None)
-                hdrs = getattr(e, 'headers', None)
-                if code is None:
-                    return 'unknown'
-                return self._classify_probe(
-                    code,
-                    hdrs.get('Content-Range') if hdrs else None,
-                    None, offset, lambda: b'')
-            try:
-                self.http_reqs += 1
-                code = getattr(resp, 'status', None) or resp.getcode()
-                return self._classify_probe(
-                    code, resp.headers.get('Content-Range'),
-                    resp.headers.get('Content-Length'), offset,
-                    lambda: resp.read(16))
-            finally:
-                try:
-                    resp.close()
-                except Exception:
-                    pass
+            verdict = self._classify_probe(got[0], got[1], got[2], offset,
+                                           got[3])
+            if verdict != 'silent' or not known:
+                return 'unknown' if verdict == 'silent' else verdict
+            c_off, c_want = known
+            ctl = self._probe_fetch(c_off, len(c_want))
+            if ctl is None or ctl[3] != c_want:
+                return 'unknown'
+            return 'eof'
         except Exception:
             return 'unknown'
 
     @staticmethod
     def _classify_probe(code, content_range, content_length, offset, body):
-        """Shared verdict for both HTTP paths. `body` is called at most once,
-        and only when the headers did not already settle the question."""
+        """The verdict for one probe response. 'silent' means the provider
+        raised no objection and sent nothing -- which is what the end of a file
+        looks like, and also what a broken transport looks like, so it needs
+        corroborating before it can be believed."""
         if code == 416:
             return 'eof'
         end = _complete_length(content_range)
         if end is not None and end > 0:
             return 'eof' if offset >= end else 'more'
-        if code == 200 and offset > 0:
-            # Range ignored -- the body is the whole file from 0, so its
-            # declared length is the file's length. Take it as evidence that
-            # there is MORE, never as a confirmation of EOF: a 200 whose
-            # Content-Length is shorter than the bytes we have already read
-            # contradicts them, and a contradiction confirms nothing.
-            try:
-                if int(content_length) > offset:
-                    return 'more'
-            except (TypeError, ValueError):
-                pass
-            return 'unknown'
+        if body:
+            return 'more'
         if code >= 300:
-            return 'unknown'
-        try:
-            return 'more' if body() else 'unknown'
-        except Exception:
-            return 'unknown'
+            return 'unknown'          # refused / errored -- says nothing at all
+        if code == 200 and offset > 0:
+            # Range ignored, so Content-Length describes the WHOLE file. A
+            # length beyond our offset proves there is more there. Never read
+            # the reverse as a confirmation of EOF: a declared length shorter
+            # than the bytes we have already read contradicts them, and a
+            # contradiction confirms nothing.
+            try:
+                cl = int(content_length)
+            except (TypeError, ValueError):
+                return 'unknown'
+            if cl > offset:
+                return 'more'
+            return 'silent' if cl == 0 else 'unknown'
+        return 'silent'
 
     def _making_progress(self):
         """Are we still actually collecting cues, despite the back-pressure?
@@ -2337,8 +2394,14 @@ def _short_read(src, offset, asked, got):
     # 'eof' only when the provider states it (a 416, or a Content-Range length),
     # and treat anything it cannot establish as truncation.
     probe_at = offset + len(got)
+    # Hand the probe a stretch of the file we already hold, immediately before
+    # the point in question. If a provider answers "nothing here" without saying
+    # 416, re-reading those known bytes is what separates a real end of file
+    # from a transport that has simply stopped delivering.
+    _n = min(_PROBE_CONTROL, len(got))
+    _known = (probe_at - _n, bytes(got[-_n:])) if _n >= 4 else None
     try:
-        verdict = src.probe_beyond(probe_at)
+        verdict = src.probe_beyond(probe_at, _known)
     except Exception:
         verdict = 'unknown'
     if verdict == 'more':
