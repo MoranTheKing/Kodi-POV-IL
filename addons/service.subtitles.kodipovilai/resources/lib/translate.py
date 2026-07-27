@@ -1727,14 +1727,20 @@ def _embedded_aligned_source_srt(
                         _al['saw_pause'] = True
                     return False
                 _al['paused_at'] = None
+                # Same bar as the full-text path (_RESUME_ABORT_PACE_S there):
+                # a single refusal is CDN noise, not a saturated token, and the
+                # pause being resumed is usually the one the subtitle list
+                # itself put the player into. Only a pace that has actually been
+                # throttled down counts -- and the cost of getting this wrong is
+                # worst here, on the cheap path that some providers depend on.
                 if (_al['saw_pause'] and _holding['link']
-                        and _alstats.get('backoffs')):
+                        and (_alstats.get('pace') or 0.0) >= 1.0):
                     kodi_utils.log(
                         'embedded-align: playback resumed after a pause and the '
-                        'CDN has pushed back {0} time(s) (pace {1:.2f}s) -- '
-                        'yielding the connection to the player'.format(
-                            _alstats.get('backoffs'),
-                            _alstats.get('pace') or 0.0), level='INFO')
+                        'CDN has throttled us to {1:.2f}s/request ({0} '
+                        'push-back(s)) -- yielding the connection to the player'
+                        .format(_alstats.get('backoffs'),
+                                _alstats.get('pace') or 0.0), level='INFO')
                     return True
                 return False
             except Exception:
@@ -1998,6 +2004,11 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         # pause", none completing -- while the user was simply watching the
         # movie. A deliberate pause lasts; a blip does not.
         _PAUSE_ARM_S = 3.0
+        # How throttled our crawl must already be before resuming playback is
+        # worth cancelling it over. The pace starts at 0.20s and multiplies by
+        # 1.5 per refusal, so 1.0s is about four of them -- the point where the
+        # provider has demonstrably clamped down rather than blinked once.
+        _RESUME_ABORT_PACE_S = 1.0
         _stall = {'t': None, 'since': None, 'saw_pause': False,
                   'paused_at': None}
         # What the extractor is actually experiencing, filled in as it runs:
@@ -2051,11 +2062,33 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                 # 0.20s, 0 backoff(s)" -- the provider had not complained once.
                 # The stall guard below still covers the other failure mode
                 # (bandwidth contention, which shows up as a frozen clock).
-                if _stall['saw_pause'] and _xstats.get('backoffs'):
+                #
+                # ...and "pushed back at all" is far too low a bar for that.
+                # The premise is a SATURATED token, and one refusal in fifty-odd
+                # requests is not saturation -- it is the ordinary noise of a
+                # busy CDN. Worse, the pause being resumed is usually one WE
+                # caused: opening the subtitle list pauses playback, so every
+                # manually-picked extraction starts paused and the user pressing
+                # play to carry on watching is the NORMAL course of events, not
+                # a signal about the provider. Field log 37c47bda: killed at
+                # "51/321 cue(s), 57 read, 1 backoff(s), pace 0.30s" the instant
+                # play was pressed, then again on the next attempt -- the user
+                # never got past 18% of a file that was extracting fine.
+                #
+                # Saturation has a much better marker than a count: the pace
+                # itself. It only climbs on refusals (x1.5 each), so reaching
+                # _RESUME_ABORT_PACE_S means roughly four of them have landed
+                # and the crawl really has been throttled down to protect the
+                # token -- which is exactly the state where the player's first
+                # read on resume is at risk. Below that, keep working; the stall
+                # guard below still covers actual bandwidth contention.
+                if (_stall['saw_pause']
+                        and (_xstats.get('pace') or 0.0) >= _RESUME_ABORT_PACE_S):
                     kodi_utils.log(
                         'embedded: playback resumed after a pause and the CDN '
-                        'has pushed back {0} time(s) (pace {1:.2f}s) -- aborting '
-                        'extraction to free the debrid token for the player'
+                        'has throttled us to {1:.2f}s/request ({0} push-back(s)) '
+                        '-- aborting extraction to free the debrid token for '
+                        'the player'
                         .format(_xstats.get('backoffs'),
                                 _xstats.get('pace') or 0.0), level='INFO')
                     return True
@@ -2112,25 +2145,45 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         # precisely that ("the movie plays but nothing happens"). A toast DOES
         # draw over video, so send one every _TOAST_STEP percent, and never
         # closer together than _TOAST_MIN_S so it cannot become a nuisance.
-        _TOAST_STEP = 20
-        _TOAST_MIN_S = 30.0
-        _toast = {'pct': -1, 'at': 0.0}
+        # Percentage steps alone are not enough to be VISIBLE. Waiting for the
+        # first whole step means the user still watches nothing happen for as
+        # long as that step takes, and on a distant provider that is minutes:
+        # field log 37c47bda reached 15.9% and 18.4% on its two attempts and so
+        # never crossed a single 20% mark -- the only thing that user ever saw
+        # was the message saying it had stopped. So: say so as soon as the first
+        # line comes out (that is the "it is working" signal, and it is the one
+        # that was missing), then every _TOAST_STEP percent, and in any case
+        # never let more than _TOAST_MAX_GAP_S pass in silence while lines are
+        # still arriving -- which is what covers a provider slow enough that a
+        # whole step takes minutes. _TOAST_MIN_S keeps a fast provider from
+        # turning all of that into a nuisance.
+        _TOAST_STEP = 10
+        _TOAST_MIN_S = 20.0
+        _TOAST_MAX_GAP_S = 45.0
+        _toast = {'pct': -1, 'at': 0.0, 'started': False}
 
         def _progress(done, total):
             # _status, NOT kodi_utils.notify: auto-on-play runs this whole path
             # in quiet mode precisely so it stays silent, and a raw notify()
             # bypasses that and pops toasts for something the user never picked.
             try:
-                if total:
+                if total and done > 0:
                     import time as _tt
+                    now = _tt.time()
+                    gap = now - _toast['at']
                     pct = int(done * 100 / total)
                     step = pct - (pct % _TOAST_STEP)
-                    now = _tt.time()
-                    if (step > _toast['pct'] and step > 0
-                            and (now - _toast['at']) >= _TOAST_MIN_S):
-                        _toast['pct'], _toast['at'] = step, now
+                    if not _toast['started']:
+                        _toast['started'], _toast['at'] = True, now
+                        _status('AI: מחלץ תרגום מובנה מהסרטון — {0} שורות'
+                                .format(total), time_ms=2500)
+                    elif ((step > _toast['pct'] and step > 0
+                           and gap >= _TOAST_MIN_S)
+                          or gap >= _TOAST_MAX_GAP_S):
+                        _toast['pct'] = max(step, _toast['pct'])
+                        _toast['at'] = now
                         _status('AI: מחלץ תרגום מובנה — {0}% ({1}/{2})'.format(
-                            step, done, total), time_ms=2500)
+                            pct, done, total), time_ms=2500)
             except Exception:
                 pass
             if progress_cb:
