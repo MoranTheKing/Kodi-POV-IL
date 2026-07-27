@@ -2150,6 +2150,27 @@ def _fetch_cluster_blocks(src, cpos, items, want, entries, log):
     return resolved
 
 
+def _short_read(src, offset, asked, got):
+    """Did the provider return FEWER bytes than a compliant server owes us?
+
+    This is the only reliable truncation signal available. Everything else in
+    this file watches HTTP status, and a capped Range response or a connection
+    that dropped mid-stream carries none -- no 429, no 5xx, nothing to retry or
+    trip on. Parsing cannot see it either: when the bytes happen to run out
+    exactly at a Matroska child-element boundary, the cluster walk finishes
+    normally and reports `truncated=False`, indistinguishable from a genuine
+    complete parse. Three independent reproductions delivered a "complete" SRT
+    missing cues that way, including on an ordinary bounded cluster.
+
+    Byte count, by contrast, cannot be fooled. `src.total` is always known and
+    accurate here (extract_srt refuses to proceed without it), so for any range
+    inside the file a compliant server owes exactly what was asked, and anything
+    less is truncation -- whatever the bytes happen to look like."""
+    if not src.total or offset >= src.total:
+        return False
+    return len(got) < min(asked, src.total - offset)
+
+
 def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                        log, progress_cb=None, done_clusters=None,
                        scan_pending=None):
@@ -2270,8 +2291,13 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
             if reason:
                 log(reason + ' -- deferring')
                 return False
-            window = src.read(rstart,
-                              min(rend - rstart, _HTTP_TOTAL_CAP - src.fetched))
+            _want_n = min(rend - rstart, _HTTP_TOTAL_CAP - src.fetched)
+            window = src.read(rstart, _want_n)
+            if _short_read(src, rstart, _want_n, window):
+                log('provider returned %d of %d bytes at %d (no 429) -- '
+                    'deferring rather than trusting a truncated window'
+                    % (len(window), _want_n, rstart))
+                return False
             if src.tripped:
                 log('circuit-breaker tripped mid-fetch -- deferring')
                 return False
@@ -2320,8 +2346,13 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                 if src.fetched >= _HTTP_TOTAL_CAP:
                     log('byte cap reached at top-up -- deferring')
                     return False
-                tup = src.read(cpos, min(_CLUSTER_TOPUP_MAX,
-                                         _HTTP_TOTAL_CAP - src.fetched))
+                _want_t = min(_CLUSTER_TOPUP_MAX,
+                              _HTTP_TOTAL_CAP - src.fetched)
+                tup = src.read(cpos, _want_t)
+                if _short_read(src, cpos, _want_t, tup):
+                    log('provider returned %d of %d bytes at the top-up for %d '
+                        '(no 429) -- deferring' % (len(tup), _want_t, cpos))
+                    return False
                 if src.tripped:
                     log('circuit-breaker tripped during top-up -- deferring')
                     return False
