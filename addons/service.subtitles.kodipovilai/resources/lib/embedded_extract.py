@@ -350,6 +350,17 @@ def _complete_length(content_range):
     return int(m.group(1)) if m else None
 
 
+def _range_start(content_range):
+    """Where a Content-Range says its bytes came FROM, or None.
+
+    'bytes 1000-1015/2000' -> 1000. A server that echoes back the offset we
+    asked for is a server that honoured the range, which is what makes the
+    bytes in that response evidence about the region we asked about rather than
+    about wherever it decided to serve from instead."""
+    m = re.match(r'\s*bytes\s+(\d+)\s*-', content_range or '')
+    return int(m.group(1)) if m else None
+
+
 class _Source(object):
     """Byte source with .read(offset, size) -- local file or HTTP Range. HTTP
     reads go over ONE reused keep-alive connection (see _new_session); a 429/5xx
@@ -577,7 +588,13 @@ class _Source(object):
             if got is None:
                 return 'unknown'
             body = got[3]
-            if n and body[:n] == c_want and len(body) > span:
+            # Did this response really come from where we asked? Either the
+            # bytes we already had come back identical, or the provider itself
+            # says so in the Content-Range -- the latter being the only handle
+            # available when the caller had nothing to hand us.
+            honoured = ((n and body[:n] == c_want)
+                        or _range_start(got[1]) == c_off)
+            if honoured and len(body) > span:
                 # Bytes past the point, from a provider demonstrably serving the
                 # right region: the earlier response really was cut short. This
                 # takes precedence over any length the same response states,
