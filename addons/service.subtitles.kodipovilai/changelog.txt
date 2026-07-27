@@ -1,3 +1,35 @@
+v0.2.447
+- An extraction in progress is no longer cancelled by pausing the film and
+  resuming it. Handing the connection back to the player is only worth doing
+  when the provider is actually pushing back on the extra requests; when it is
+  not, the extraction simply carries on and the player is unaffected. Before
+  this, a single pause part-way through threw away minutes of work.
+- Extraction now shows how far along it is. It reports its progress as it goes,
+  including over a full-screen picture, where previously nothing at all appeared
+  for several minutes. An extraction that is cut short says how much of the file
+  it managed to read; that much is kept, and choosing the subtitle again picks up
+  from there instead of starting over.
+- A provider that starts refusing requests part-way through no longer ends the
+  extraction. It is now crawled through at whatever rate the provider will
+  tolerate, and the rate is raised again once the refusals stop. On a provider
+  that refused two out of every three requests, this is the difference between
+  no subtitle at all and a complete one.
+- A subtitle can no longer come out with only part of its lines because a
+  provider quietly returned a short answer. A capped or cut-off response carries
+  no error of any kind, and when the bytes happened to run out on an internal
+  boundary even reading them back looked normal. The amount of data returned is
+  now checked against the amount owed, both for the file's index and for the
+  subtitle data itself, and anything short defers the extraction rather than
+  handing over a subtitle that is missing lines without saying so. A file whose
+  provider merely reports its size a little wrong still finishes, because that
+  case is settled by asking the provider how long the file actually is, rather
+  than by guessing from an answer that did not arrive.
+- Lines the AI leaves out of its reply are asked for again instead of being left
+  in the original language. A reply that came back missing a hundred lines used
+  to leave a hundred lines untranslated in the middle of the film; the missing
+  ones are now re-requested on their own, in smaller pieces, and only what still
+  does not come back stays as it was.
+
 v0.2.446
 - Reading a video's embedded subtitle track over a debrid link now costs about
   half the network requests it used to. Every subtitle line was paying for two
