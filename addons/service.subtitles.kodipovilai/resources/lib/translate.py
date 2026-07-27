@@ -3230,8 +3230,90 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 mid = len(ch) // 2
                 return (_english_only_safe(idx, ch[:mid]) + '\n\n'
                         + _english_only_safe(idx, ch[mid:]))
+            # ...and the same silent-drop hole the counting guard cannot see.
+            # This is the circuit-breaker path, reached only once the block
+            # budget is already spent, so it does NOT spend another call: any
+            # entry the reply omitted keeps its source text. Visibly
+            # untranslated beats silently absent, and it keeps the entry count
+            # aligned for everything downstream.
+            _gap = srt.missing_blocks(ch, srt.parse_blocks(resp))
+            if _gap:
+                kodi_utils.log(
+                    'Chunk {0} English-only: {1} entr(ies) missing from the '
+                    'reply -- keeping their source text'.format(idx, len(_gap)),
+                    level='WARNING')
+                _count('src', len(_gap))
+                return srt.stitch_blocks(srt.merge_blocks_by_start(
+                    srt.parse_blocks(resp), _gap))
         _count('noar', len(ch))
         return resp
+
+    # How many top-up rounds one chunk may spend chasing entries the model keeps
+    # dropping. Each round asks only for what is still missing, so the set
+    # shrinks fast; three rounds is generous and bounds the cost on a shared
+    # quota. Anything still missing after that keeps its source text -- visibly
+    # untranslated, which is the honest outcome and is what happens today for
+    # every one of them.
+    _TOPUP_ROUNDS = 3
+
+    def _top_up_missing(idx, ch, response, deadline):
+        """Re-request only the entries the model silently dropped, and splice
+        them back in. Returns the completed reply text (or the original when
+        nothing is missing / nothing can be recovered). Never raises: a top-up
+        is an improvement on the reply we already have, so any failure just
+        returns that reply."""
+        try:
+            blocks = srt.parse_blocks(response)
+            for _round in range(_TOPUP_ROUNDS):
+                missing = srt.missing_blocks(ch, blocks)
+                if not missing:
+                    break
+                if deadline is not None and time.monotonic() > deadline:
+                    kodi_utils.log(
+                        'Chunk {0}: {1} entr(ies) still missing but the block '
+                        'budget is spent -- leaving them as source'.format(
+                            idx, len(missing)), level='WARNING')
+                    break
+                kodi_utils.log(
+                    'Chunk {0}: {1}/{2} entr(ies) missing from the reply -- '
+                    'requesting just those (round {3})'.format(
+                        idx, len(missing), len(ch), _round + 1), level='INFO')
+                try:
+                    fill = _call_gemini(idx, missing, 0)
+                except gemini.FilteredResponse:
+                    # These specific lines are what the filter objects to. Drop
+                    # the gender reference for them and try once more; the
+                    # single-entry path below has the full ladder for the rest.
+                    try:
+                        fill = _call_gemini(idx, missing, NO_REF)
+                    except (gemini.FilteredResponse, gemini.TruncatedResponse):
+                        break
+                except gemini.TruncatedResponse as e:
+                    fill = e.partial_text or ''
+                except Exception:
+                    break
+                fill_blocks = srt.parse_blocks(fill)
+                if not fill_blocks:
+                    break
+                before = len(blocks)
+                blocks = srt.merge_blocks_by_start(blocks, fill_blocks)
+                if len(blocks) <= before:
+                    break          # the reply added nothing -> stop, don't loop
+            still = srt.missing_blocks(ch, blocks)
+            if still:
+                # Keep the SOURCE for whatever never came back, so the entry
+                # count matches the chunk and every later stage (positional
+                # timing restore, the merge into the final file) stays aligned.
+                blocks = srt.merge_blocks_by_start(blocks, still)
+                kodi_utils.log(
+                    'Chunk {0}: {1} entr(ies) kept as source after top-up'
+                    .format(idx, len(still)), level='WARNING')
+                _count('src', len(still))
+            return srt.stitch_blocks(blocks)
+        except Exception as e:
+            kodi_utils.log('Chunk {0} top-up failed: {1}'.format(idx, e),
+                           level='WARNING')
+            return response
 
     def _translate_one(idx, ch, deadline=None, try_alts=True):
         # Recursive bisection on TruncatedResponse OR low-yield response (Gemini
@@ -3324,6 +3406,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 return (_translate_one(idx, ch[:mid], deadline, try_alts) + '\n\n'
                         + _translate_one(idx, ch[mid:], deadline, try_alts))
 
+            # The yield check above only COUNTS, and 85% of a 50-line chunk means
+            # up to 7 lines may be dropped per chunk while it reports success --
+            # ~16% of a feature film, silently left in the source language. That
+            # is the "about a hundred lines were not translated" field report.
+            # So ask WHICH entries came back, and top up exactly the ones that
+            # did not. A top-up is ONE call; bisecting a 50-line chunk to corner
+            # a single dropped line costs ~6, on a shared quota.
+            response = _top_up_missing(idx, ch, response, deadline)
             _count('ar', len(ch))
             return response
         # ---- single-entry chunk ----
