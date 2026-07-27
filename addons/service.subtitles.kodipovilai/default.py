@@ -1142,9 +1142,17 @@ def _handle_bg_translate_picker(params):
             # that is most of the way done (field report, 0.2.446).
             _partial = ''
             try:
-                _partial = xbmcgui.Window(10000).getProperty(
+                _raw = xbmcgui.Window(10000).getProperty(
                     'povil.embedded_partial') or ''
                 xbmcgui.Window(10000).clearProperty('povil.embedded_partial')
+                # Honour it only if it belongs to THIS attempt. The flag is a
+                # window property, so a value left behind by an earlier run
+                # would otherwise suppress a genuine failure toast much later,
+                # for an unrelated video. A real one is written seconds ago.
+                if '@' in _raw:
+                    import time as _t
+                    if _t.time() - float(_raw.rsplit('@', 1)[1]) <= 120:
+                        _partial = _raw
             except Exception:
                 _partial = ''
             if not _partial:
