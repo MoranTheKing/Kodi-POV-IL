@@ -206,6 +206,24 @@ From MoranSubs `0.2.447` / quickfix `0.1.489`:
 - Lines the AI leaves out of its reply are asked for again instead of being left
   in the original language.
 
+From MoranSubs `0.2.448` / quickfix `0.1.490`:
+
+- Pressing play no longer cancels an extraction in progress. Resuming the film
+  used to matter if the provider had refused even one request, and one refusal
+  in fifty-seven is ordinary busy-CDN noise, not a provider in trouble. The
+  pause being resumed is usually one the add-on itself caused, too, because
+  opening the subtitle list pauses playback — so every subtitle picked by hand
+  began paused, and pressing play to carry on watching was being read as a
+  signal about the provider. Cancelling now requires the provider to have
+  actually throttled the extraction down, and to have done so recently rather
+  than at some point earlier in the run. The separate guard that watches for the
+  picture freezing is unchanged.
+- The extraction says that it is working from the first line it reads, then
+  every ten per cent, and never goes more than three quarters of a minute in
+  silence while lines are still arriving. It used to wait for the first whole
+  twenty per cent, which on a distant provider is minutes — long enough that a
+  working extraction was indistinguishable from nothing happening at all.
+
 ## Upstream POV Watch
 
 `.github/workflows/check-upstream-pov.yml` checks the original kodi7rd build metadata every 6 hours and opens an issue if upstream POV changes.
