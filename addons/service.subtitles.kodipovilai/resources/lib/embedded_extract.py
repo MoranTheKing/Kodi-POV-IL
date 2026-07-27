@@ -77,6 +77,21 @@ DEFAULT_HEAD_BYTES = 2 * 1024 * 1024
 DEFAULT_MAX_BYTES = 80 * 1024 * 1024      # surgical Cues fetch stays well under
 DEFAULT_DEADLINE_S = 30.0
 _HTTP_TIMEOUT = 15
+# The EOF probe reads only the first few bytes of its answer, but leaving the
+# rest unread forces the shared keep-alive connection to be thrown away and
+# rebuilt on the next read -- and storming a debrid CDN with fresh connections
+# is what 429s the token. So finish a body that is small enough to finish, and
+# only abandon one too big to bother with (a provider that ignores Range answers
+# with the whole file, which can be tens of gigabytes).
+_PROBE_DRAIN_MAX = 64 * 1024
+# The probe asks for a range STARTING at bytes we already hold and running past
+# the point in question, so the provider has to answer a satisfiable range --
+# the one form of the question it is obliged to answer precisely. _PROBE_CONTROL
+# is how much known data it starts from (long enough that a provider serving the
+# wrong region cannot match it by chance, short enough to be free) and
+# _PROBE_AHEAD is how far past the point it reaches.
+_PROBE_CONTROL = 64
+_PROBE_AHEAD = 16
 # A debrid CDN token rate-limits by request COUNT and recovers after a short
 # cooldown, so a transient 429 is EXPECTED (the relpos fast path issues many
 # small requests). Back off (honor Retry-After) and retry rather than tripping
@@ -85,6 +100,13 @@ _HTTP_TIMEOUT = 15
 # (the field 429 fired at ~35 req/s). Sleeping is safe -- extraction runs in a
 # background thread, never the player's callback.
 _HTTP_429_RETRIES = 5
+# NOT reduced under sustained pressure, though it is tempting: retrying a read
+# in place costs a fresh GET each time, so a run against a pushing-back CDN
+# sends far more requests than it appears to (a field log's "60 req" was nearer
+# 110 as far as the CDN was concerned -- hence the http_reqs counter). But
+# exhausting these retries is exactly what trips the breaker, and that trip is
+# what keeps a partial extract from being delivered. Measured: cutting them to 2
+# sent 84% fewer requests and returned 0 of 50 cues.
 _HTTP_429_MAX_WAIT = 30.0          # cap on one backoff sleep (seconds)
 # A 429 means the shared token is at its limit and the PLAYER needs that
 # headroom, so back off substantially (not just enough for our own retry).
@@ -122,6 +144,12 @@ _HTTP_PACE_DECAY_AFTER = 25       # ...that many consecutive clean requests
 # early (~20s) with a clean deferral instead. A healthy provider (Real-Debrid)
 # lands clean fetches that reset the streak, so it never trips there.
 _HTTP_429_STREAK_MAX = 6
+# ...and, with that streak reached, how long we must have collected NOTHING
+# NEW before giving up. Back-pressure alone is not saturation: a provider can
+# refuse half our reads while the player runs perfectly and cues keep landing,
+# and abandoning there costs the user a whole play session for nothing now that
+# progress is banked. Genuine saturation stops the cues, and this notices.
+_STALLED_PROGRESS_S = 45.0
 _CLUSTER_CAP_LOCAL = 32 * 1024 * 1024     # local: effectively read whole clusters
 _CUES_CAP = 24 * 1024 * 1024              # hard ceiling on the Cues element read
 
@@ -311,6 +339,17 @@ def _new_session():
         return None
 
 
+def _complete_length(content_range):
+    """The file's real length as stated in a Content-Range, or None.
+
+    Both forms carry it: 'bytes 0-15/525000' on a normal partial answer, and
+    'bytes */525000' on a 416. The length after the slash is the whole file, not
+    the part being sent, so it is authoritative even when the range itself was
+    refused. '*' (unknown length) yields None, as it should."""
+    m = re.search(r'/\s*(\d+)\s*$', content_range or '')
+    return int(m.group(1)) if m else None
+
+
 class _Source(object):
     """Byte source with .read(offset, size) -- local file or HTTP Range. HTTP
     reads go over ONE reused keep-alive connection (see _new_session); a 429/5xx
@@ -334,6 +373,10 @@ class _Source(object):
         self._prefix = None           # learned cluster prefix len (see below)
         self._cue_time_ok = None      # None=untested, True=CueTime verified
         self._hdr_reads = 0           # cluster-header reads we still had to pay
+        self.http_reqs = 0            # ACTUAL GETs, retries included (see below)
+        self._progress_mark = 0       # cues collected when we last moved
+        self._progress_at = 0.0       # ...and when that was
+        self._stats = None            # caller-visible progress/pressure dict
         self._abort_cb = None         # set by extract_srt; polled DURING sleeps
         self.total = 0
         self._sess = _new_session() if self.is_http else None
@@ -407,6 +450,220 @@ class _Source(object):
             return self._read_session(offset, size)
         return self._read_urllib(offset, size)
 
+    def _probe_fetch(self, offset, size):
+        """One tiny Range GET for the EOF probe: (code, Content-Range,
+        Content-Length, body) or None if the request could not be made.
+
+        Deliberately NOT routed through _read_session: this asks a question
+        about the file rather than fetching data, and it must see the status and
+        the headers, which _read_session collapses into bytes. It reads at most
+        `size` bytes and NEVER drains a body it did not ask for -- a provider
+        that ignores Range answers with the whole file, which can be 77GB. When
+        the body is small enough to finish, it IS finished, so the shared
+        keep-alive connection goes back to the pool instead of being discarded
+        and reconnected on the next read."""
+        hdrs = {'Range': 'bytes={0}-{1}'.format(offset, offset + size - 1),
+                'User-Agent': _UA}
+        if self._sess is not None:
+            r = self._sess.get(self.url, headers=hdrs, timeout=_HTTP_TIMEOUT,
+                               stream=True)
+            self.http_reqs += 1
+            cl = r.headers.get('Content-Length')
+            try:
+                body = r.raw.read(size) or b''
+            except Exception:
+                body = b''
+            try:
+                small = 0 <= int(cl) <= _PROBE_DRAIN_MAX
+            except (TypeError, ValueError):
+                small = False
+            try:
+                if small:
+                    r.raw.read()          # finish it -> connection is reusable
+            except Exception:
+                pass
+            try:
+                r.close()
+            except Exception:
+                pass
+            return r.status_code, r.headers.get('Content-Range'), cl, body
+        if _urlreq is None:
+            return None
+        req = _urlreq.Request(self.url, headers=hdrs)
+        try:
+            resp = _urlreq.urlopen(req, timeout=_HTTP_TIMEOUT)
+        except Exception as e:
+            # urllib RAISES on a 416 rather than returning it, and the error
+            # object still carries the status and the headers -- which is where
+            # the answer is. Anything without a status is not an answer.
+            code = getattr(e, 'code', None)
+            if code is None:
+                return None
+            self.http_reqs += 1
+            eh = getattr(e, 'headers', None)
+            return (code, eh.get('Content-Range') if eh else None,
+                    eh.get('Content-Length') if eh else None, b'')
+        self.http_reqs += 1
+        try:
+            code = getattr(resp, 'status', None) or resp.getcode()
+            try:
+                body = resp.read(size) or b''
+            except Exception:
+                body = b''
+            return (code, resp.headers.get('Content-Range'),
+                    resp.headers.get('Content-Length'), body)
+        finally:
+            try:
+                resp.close()
+            except Exception:
+                pass
+
+    def probe_beyond(self, offset, known=None):
+        """Is there anything in this file AT `offset`? Returns 'more', 'eof' or
+        'unknown', and only ever says 'eof' on evidence about `offset` itself.
+
+        Reading at `offset` and looking at what comes back cannot answer this.
+        `read()` collapses every outcome that is not a successful fetch into the
+        same b'': a tripped breaker, any exception, and a server that ignores
+        the Range header and answers 200 (which this file already documents
+        happening in the field) all look exactly like a genuine end of file. So
+        an empty read is NOT evidence of EOF, and treating it as such lets a
+        real truncation -- one that happened to land on a clean element
+        boundary, where parsing cannot see it either -- be certified as a
+        complete subtitle with lines missing.
+
+        Nor is it enough to check that the connection is healthy by re-reading
+        bytes from BEFORE `offset`. That proves the provider can still serve a
+        region we already have; it establishes nothing about the region in
+        question, and a provider inconsistent exactly at the frontier of what
+        has been fetched satisfies it while data is still there. (Measured: a
+        subtitle delivered as complete, missing half its lines.)
+
+        So the question is asked in the one form a provider is obliged to answer
+        precisely: a range that STARTS INSIDE the file -- at bytes the caller
+        already read, passed in as `known` -- and runs past `offset`. Being
+        satisfiable, it cannot be answered with a 416 or with whatever a
+        provider does to an out-of-range ask, and a compliant partial response
+        must carry a Content-Range stating the file's true length. That length
+        settles it outright. Failing that, the answer is measured rather than
+        inferred: the known bytes must come back exactly, and then whether
+        anything follows them is the answer -- data past `offset` means the
+        earlier response really was cut short, and data that stops dead at
+        `offset` means the file does. A provider serving the wrong region, or
+        cut short itself, matches nothing and stays unknown.
+
+        For a local file the size on disk answers directly.
+        """
+        if not self.is_http:
+            try:
+                sz = os.path.getsize(self.url)
+            except Exception:
+                return 'unknown'
+            return 'eof' if offset >= sz else 'more'
+        if self.tripped:
+            return 'unknown'
+        try:
+            c_off, c_want = known if known else (0, b'')
+            if not (c_want and 0 <= c_off < offset):
+                # Nothing to check the answer against. Still ask from inside the
+                # file rather than at the point itself -- a satisfiable range is
+                # what obliges a provider to state the real length, and asking
+                # at the point is the form that several of them answer in ways
+                # nothing can interpret.
+                c_off, c_want = max(0, offset - _PROBE_CONTROL), b''
+            n = len(c_want)
+            span = offset - c_off
+            got = self._probe_fetch(c_off, span + _PROBE_AHEAD)
+            if got is None:
+                return 'unknown'
+            body = got[3]
+            past = len(body) > span
+            if n and body[:n] == c_want and past:
+                # Bytes past the point, from a provider demonstrably serving the
+                # right region: the earlier response really was cut short. This
+                # takes precedence over any length the same response states,
+                # because a response contradicting itself is not evidence of an
+                # end of file -- and erring towards "truncated" only ever costs
+                # an attempt. The reverse -- a body that stops dead at the point
+                # -- is NOT taken as proof of the end: a response that was itself
+                # capped there looks identical, and only a provider already
+                # violating the spec (a partial answer with no Content-Range)
+                # can leave the question in that state.
+                return 'more'
+            verdict = self._classify_probe(got[0], got[1], got[2], offset)
+            if verdict == 'eof' and past:
+                # A stated end, with bytes past it in the same breath, and no
+                # way to tell which is true -- the known bytes did not come back
+                # (so nothing in this response is evidence about our region) or
+                # there were none to check against. A header alone is trivial to
+                # produce from the request without ever seeking there, which is
+                # what a templated caching layer does, so it does not get to
+                # settle a question its own body disputes. Defer.
+                return 'unknown'
+            return verdict if verdict != 'silent' else 'unknown'
+        except Exception:
+            return 'unknown'
+
+    @staticmethod
+    def _classify_probe(code, content_range, content_length, offset):
+        """What one probe response's STATUS AND HEADERS establish about
+        `offset`. 'silent' means they establish nothing, and the body has to be
+        measured instead."""
+        if code == 416:
+            return 'eof'
+        end = _complete_length(content_range)
+        if end is not None and end > 0:
+            return 'eof' if offset >= end else 'more'
+        if code >= 300:
+            return 'unknown'          # refused / errored -- says nothing at all
+        if code == 200 and offset > 0:
+            # Range ignored, so Content-Length describes the WHOLE file. A
+            # length beyond our offset proves there is more there. Never read
+            # the reverse as a confirmation of EOF: a declared length shorter
+            # than the bytes we have already read contradicts them, and a
+            # contradiction confirms nothing.
+            try:
+                cl = int(content_length)
+            except (TypeError, ValueError):
+                return 'unknown'
+            return 'more' if cl > offset else 'unknown'
+        return 'silent'
+
+    def _making_progress(self):
+        """Are we still actually collecting cues, despite the back-pressure?
+
+        The 429 streak-breaker exists to protect the PLAYER: the reasoning is
+        that a saturated token means the movie dies. But a 429 streak is only a
+        PROXY for that, and a poor one -- a provider can push back on half our
+        reads while the player is completely healthy, which is exactly what a
+        field log shows (TorBox: 31 backoffs in 60 reads, the player fine
+        throughout, extraction abandoned at 75 of 555 cues after 225s).
+
+        There is a DIRECT guard for player harm already, and it is the one that
+        matters: the caller's abort callback watches the playback clock and stops
+        us within 8s if it ever freezes. And since an interrupted pass now banks
+        its progress, crawling on is strictly better than giving up -- the same
+        run would have reached ~300 cues in its remaining budget instead of
+        stopping at 75, turning eight play sessions into two.
+
+        So the breaker now fires only when back-pressure has ALSO stalled us: no
+        new cues for a while. Real saturation looks like that; a slow provider
+        does not."""
+        try:
+            n = (self._stats or {}).get('done') or 0
+        except Exception:
+            n = 0
+        import time as _t
+        now = _t.time()
+        if n > self._progress_mark:
+            self._progress_mark = n
+            self._progress_at = now
+            return True
+        if not self._progress_at:
+            self._progress_at = now
+            return True
+        return (now - self._progress_at) < _STALLED_PROGRESS_S
+
     def _sleep_or_abort(self, secs):
         """Sleep up to `secs`, in <=1s slices, polling the abort callback between
         them. Returns True the moment we're asked to stop (playback ended / the
@@ -436,6 +693,12 @@ class _Source(object):
         per-request pace and the backoff are abort-aware, so a stalled player is
         noticed within ~1s instead of behind a 2-minute retry storm."""
         _pace = getattr(self, '_pace', _HTTP_REQ_PACE_S)
+        # `reqs` counts LOGICAL reads; one of them can cost several GETs, because
+        # a 429 is retried in place. On a provider that pushes back on half our
+        # reads that is a large, invisible multiplier -- the field log's "60 req"
+        # was really closer to 110 as far as the CDN was concerned, which both
+        # understated the load and hid it from anyone reading the log. Count the
+        # GETs separately and report both.
         self.reqs += 1
         saw_429 = False               # did THIS fetch need a 429 backoff?
         if self.reqs > 1 and _pace > 0:
@@ -452,6 +715,7 @@ class _Source(object):
                     pass
             r = None
             try:
+                self.http_reqs += 1
                 r = self._sess.get(self.url, headers={
                     'Range': 'bytes={0}-{1}'.format(offset, offset + size - 1),
                     'User-Agent': _UA}, timeout=_HTTP_TIMEOUT, stream=True)
@@ -465,6 +729,9 @@ class _Source(object):
                         _was = getattr(self, '_pace', _HTTP_REQ_PACE_S)
                         self._pace = min(_was * 1.5, _HTTP_REQ_PACE_MAX)
                         self._429_total += 1
+                        if self._stats is not None:
+                            self._stats['backoffs'] = self._429_total
+                            self._stats['pace'] = self._pace
                         # Report the first one and then each doubling: the pace
                         # creeping 0.2s -> 2.0s is what turns a 3-minute extract
                         # into an 18-minute one, and it used to leave no trace
@@ -487,6 +754,13 @@ class _Source(object):
                         pass
                     r = None
                     if _attempt >= _HTTP_429_RETRIES - 1:
+                        # UNCONDITIONAL, deliberately. This is what guarantees a
+                        # partial extract is never delivered: without `tripped`
+                        # the pass can run to completion with reads that returned
+                        # nothing and hand back a short subtitle as if it were
+                        # whole. (Tried gating it on progress, the way the streak
+                        # breaker is gated -- a fully-refusing provider then
+                        # produced an SRT instead of deferring.)
                         self.tripped = True   # limiter not recovering -> give up
                         return b''
                     try:
@@ -528,7 +802,8 @@ class _Source(object):
                 if saw_429:
                     self._429_streak = getattr(self, '_429_streak', 0) + 1
                     self._clean_streak = 0
-                    if self._429_streak >= _HTTP_429_STREAK_MAX:
+                    if (self._429_streak >= _HTTP_429_STREAK_MAX
+                            and not self._making_progress()):
                         self.tripped = True
                 else:
                     self._429_streak = 0
@@ -543,11 +818,23 @@ class _Source(object):
                         _was = self._pace
                         self._pace = max(self._pace * _HTTP_PACE_DECAY,
                                          self._pace_floor)
-                        if self._log:
-                            self._log('CDN quiet for %d request(s) -- pace '
-                                      '%.2fs -> %.2fs'
-                                      % (_HTTP_PACE_DECAY_AFTER, _was,
-                                         self._pace))
+                        # Own try/except, like its sibling above. This sits
+                        # inside the method's broad `except Exception: return
+                        # b''`, so a log callable that raises here would DISCARD
+                        # a read that already succeeded -- and report it as a
+                        # network failure, without setting `tripped`, so the
+                        # caller could not tell the loss had nothing to do with
+                        # the CDN.
+                        try:
+                            if self._stats is not None:
+                                self._stats['pace'] = self._pace
+                            if self._log:
+                                self._log('CDN quiet for %d request(s) -- pace '
+                                          '%.2fs -> %.2fs'
+                                          % (_HTTP_PACE_DECAY_AFTER, _was,
+                                             self._pace))
+                        except Exception:
+                            pass
                 return data
             except Exception:
                 return b''
@@ -774,6 +1061,19 @@ def _read_cues(src, seeks, seg_start, want_track, log):
         if not more:
             break
         raw += more
+    if len(raw) < need:
+        # The Cues element declares its own size, and we did not get all of it.
+        # This is the SAME truncation the cluster reads now guard against (a
+        # capped response or a dropped connection, no 429 anywhere), reached
+        # through a different door -- and it is worse here, because a short Cues
+        # index simply yields FEWER cue positions. Every one of them is then
+        # fetched successfully, the pass reports a complete success, and a
+        # subtitle missing every line past the cut is delivered as if it were
+        # whole. Measured: 30 of 60 cues, with nothing in the log to suggest it.
+        # An empty return makes the caller defer.
+        log('cues element truncated (%d of %d bytes, no 429) -- deferring '
+            'rather than indexing half the file' % (len(raw), need))
+        return [], False
     b = _Buf(raw, pos)
     _read_vint(b, True)
     _read_vint(b, False)
@@ -886,6 +1186,19 @@ def _read_cue_times_multi(src, seeks, seg_start, want_tracks, log):
         if not more:
             break
         raw += more
+    if len(raw) < need:
+        # The Cues element declares its own size, and we did not get all of it.
+        # This is the SAME truncation the cluster reads now guard against (a
+        # capped response or a dropped connection, no 429 anywhere), reached
+        # through a different door -- and it is worse here, because a short Cues
+        # index simply yields FEWER cue positions. Every one of them is then
+        # fetched successfully, the pass reports a complete success, and a
+        # subtitle missing every line past the cut is delivered as if it were
+        # whole. Measured: 30 of 60 cues, with nothing in the log to suggest it.
+        # An empty return makes the caller defer.
+        log('cues element truncated (%d of %d bytes, no 429) -- deferring '
+            'rather than indexing half the file' % (len(raw), need))
+        return {}
     b = _Buf(raw, pos)
     _read_vint(b, True)
     _read_vint(b, False)
@@ -1264,7 +1577,7 @@ def cue_reference_times(url_or_path, track_num=None, lang=None,
 
 def cue_reference_times_multi(url_or_path, langs, track_num=None,
                               head_bytes=DEFAULT_HEAD_BYTES, allow_http=False,
-                              abort_cb=None, log=None):
+                              abort_cb=None, log=None, stats=None):
     """Dense cue START times for SEVERAL languages in ONE head+Cues read.
 
     Returns {lang: sorted_times_ms} -- the same per-language skeleton
@@ -1275,7 +1588,9 @@ def cue_reference_times_multi(url_or_path, langs, track_num=None,
     costs ONE read, not one per language. `langs` is normalised to 2-letter
     codes; several may resolve to the same track. A language whose track has no
     per-cue index is omitted from the result. `allow_http` must be True for an
-    HTTP/debrid source. Never raises."""
+    HTTP/debrid source. `stats`, if given, is filled in the same way extract_srt
+    fills it -- above all 'backoffs', so the caller can tell provider pressure
+    from an ordinary pause instead of guessing. Never raises."""
     _log = log or _noop
     try:
         seen = list(dict.fromkeys(
@@ -1284,6 +1599,11 @@ def cue_reference_times_multi(url_or_path, langs, track_num=None,
             return {}
         src = _Source(url_or_path)
         src._abort_cb = abort_cb
+        src._log = _log
+        src._stats = stats if stats is not None else None
+        if src._stats is not None:
+            src._stats['backoffs'] = 0
+            src._stats['pace'] = src._pace
         if not src.total:
             return {}
         if src.is_http and not allow_http:
@@ -1332,7 +1652,8 @@ def cue_reference_times_multi(url_or_path, langs, track_num=None,
 def extract_srt(url_or_path, track_num=None, lang=None,
                 head_bytes=DEFAULT_HEAD_BYTES, max_bytes=DEFAULT_MAX_BYTES,
                 deadline_s=DEFAULT_DEADLINE_S, allow_http=False,
-                abort_cb=None, log=None, progress_cb=None, resume_path=None):
+                abort_cb=None, log=None, progress_cb=None, resume_path=None,
+                stats=None):
     """Extract an embedded TEXT subtitle track as an SRT string.
 
     Pick the track by `track_num`, else by `lang` (BCP-47 prefix, e.g. 'en'
@@ -1347,13 +1668,24 @@ def extract_srt(url_or_path, track_num=None, lang=None,
     `resume_path`, if given, is a scratch file where an INTERRUPTED HTTP pass
     leaves what it collected, so the next attempt continues instead of starting
     over. It never changes what is delivered -- a partial extract still returns
-    None -- only what survives a deferral."""
+    None -- only what survives a deferral.
+    `stats`, if given, is a dict this fills in as it goes: 'done'/'total' cues,
+    'backoffs' (how many times the CDN pushed back) and 'pace'. The caller needs
+    those to decide things it otherwise has to GUESS at -- above all whether the
+    provider is actually under pressure, which is the difference between handing
+    the connection back to the player and cancelling useful work for nothing."""
     _log = log or _noop
     t0 = time.time()
     try:
         src = _Source(url_or_path)
         src._abort_cb = abort_cb   # polled DURING pace/backoff sleeps too
         src._log = _log            # so pacing/back-pressure is visible in a log
+        src._stats = stats if stats is not None else None
+        if src._stats is not None:
+            src._stats.setdefault('done', 0)
+            src._stats.setdefault('total', 0)
+            src._stats['backoffs'] = 0
+            src._stats['pace'] = src._pace
         if not src.total:
             return None
         seg_start, ts_scale, tracks, seeks = _parse_head(src, head_bytes, _log)
@@ -2049,6 +2381,70 @@ def _fetch_cluster_blocks(src, cpos, items, want, entries, log):
     return resolved
 
 
+def _short_read(src, offset, asked, got):
+    """Did the provider return FEWER bytes than a compliant server owes us?
+
+    This is the only reliable truncation signal available. Everything else in
+    this file watches HTTP status, and a capped Range response or a connection
+    that dropped mid-stream carries none -- no 429, no 5xx, nothing to retry or
+    trip on. Parsing cannot see it either: when the bytes happen to run out
+    exactly at a Matroska child-element boundary, the cluster walk finishes
+    normally and reports `truncated=False`, indistinguishable from a genuine
+    complete parse. Three independent reproductions delivered a "complete" SRT
+    missing cues that way, including on an ordinary bounded cluster.
+
+    Byte count, by contrast, cannot be fooled. `src.total` is always known and
+    accurate here (extract_srt refuses to proceed without it), so for any range
+    inside the file a compliant server owes exactly what was asked, and anything
+    less is truncation -- whatever the bytes happen to look like."""
+    if not src.total or offset >= src.total:
+        return False
+    if len(got) >= min(asked, src.total - offset):
+        return False
+    # Short. That is USUALLY truncation -- but not if the file simply ends here
+    # and the size probe was optimistic. `total` comes from a Content-Range or
+    # Content-Length on a one-byte probe; a server that reports slightly more
+    # than it will serve would otherwise make every read near the tail look
+    # truncated, forever, at the same offset, on every attempt -- a file that
+    # can never complete no matter how many times it is played. (Reproduced: a
+    # total inflated by 5000 bytes on a 525KB file froze the extraction at the
+    # same cluster across eight attempts, banking nothing new.)
+    #
+    # One tiny probe tells the two apart -- but ONLY if it can distinguish "the
+    # provider says there is nothing there" from "the read failed". src.read()
+    # cannot: it returns b'' for a tripped breaker, for any exception, and for a
+    # server that ignores Range and answers 200, all of which are real behaviours
+    # this file already handles elsewhere. Believing an empty read means EOF
+    # would shrink `total` on a genuine truncation that landed on a clean element
+    # boundary -- the one case parsing cannot catch either -- and hand back a
+    # subtitle with lines silently missing. So ask probe_beyond(), which says
+    # 'eof' only when the provider states it (a 416, or a Content-Range length),
+    # and treat anything it cannot establish as truncation.
+    probe_at = offset + len(got)
+    # Hand the probe a stretch of the file we already hold, immediately before
+    # the point in question. If a provider answers "nothing here" without saying
+    # 416, re-reading those known bytes is what separates a real end of file
+    # from a transport that has simply stopped delivering.
+    _n = min(_PROBE_CONTROL, len(got))
+    _known = (probe_at - _n, bytes(got[-_n:])) if _n >= 4 else None
+    try:
+        verdict = src.probe_beyond(probe_at, _known)
+    except Exception:
+        verdict = 'unknown'
+    if verdict == 'more':
+        return True                       # there IS more -- genuinely truncated
+    if verdict != 'eof':
+        # Unknown. Deferring costs an attempt; the alternative is delivering a
+        # subtitle with lines missing.
+        return True
+    if src._log:
+        src._log('file ends at %d though the provider reported %d -- '
+                 'trusting the bytes, not the header'
+                 % (probe_at, src.total))
+    src.total = probe_at
+    return False
+
+
 def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                        log, progress_cb=None, done_clusters=None,
                        scan_pending=None):
@@ -2099,9 +2495,10 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
         """What this attempt actually spent -- the numbers that were missing
         from every abort message, so a field log can say WHY it was slow."""
         el = max(time.time() - t0, 0.001)
-        return ('%d/%d cue(s), %d req (%d hdr, %d free), %.1fMB, %.0fs, '
-                'pace %.2fs, %d backoff(s), %.2f cue/s'
-                % (done, total, src.reqs, getattr(src, '_hdr_reads', 0),
+        return ('%d/%d cue(s), %d read (%d GET, %d hdr, %d free), %.1fMB, '
+                '%.0fs, pace %.2fs, %d backoff(s), %.2f cue/s'
+                % (done, total, src.reqs, getattr(src, 'http_reqs', 0),
+                   getattr(src, '_hdr_reads', 0),
                    getattr(src, '_one_shot', 0), src.fetched / 1e6, el,
                    getattr(src, '_pace', 0.0), getattr(src, '_429_total', 0),
                    done / el))
@@ -2120,6 +2517,9 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
 
     def _tick(n):
         """Report progress to the UI (throttled). Never fatal."""
+        if src._stats is not None:
+            src._stats['done'] = min(n, total)
+            src._stats['total'] = total
         if progress_cb:
             try:
                 progress_cb(min(n, total), total)
@@ -2165,20 +2565,49 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
             if reason:
                 log(reason + ' -- deferring')
                 return False
-            window = src.read(rstart,
-                              min(rend - rstart, _HTTP_TOTAL_CAP - src.fetched))
+            _want_n = min(rend - rstart, _HTTP_TOTAL_CAP - src.fetched)
+            window = src.read(rstart, _want_n)
+            if _short_read(src, rstart, _want_n, window):
+                log('provider returned %d of %d bytes at %d (no 429) -- '
+                    'deferring rather than trusting a truncated window'
+                    % (len(window), _want_n, rstart))
+                return False
             if src.tripped:
                 log('circuit-breaker tripped mid-fetch -- deferring')
                 return False
+            # A SHORT BODY IS A FAILURE, not an empty region. A CDN may answer a
+            # large Range with 200/206 and fewer bytes than asked -- a capped
+            # response, or a connection that dropped mid-stream -- and no 429 is
+            # ever involved, so the circuit-breaker, the backoff counter and the
+            # retry loop are all blind to it. Skipping the clusters it failed to
+            # cover let the pass finish and report success while their lines were
+            # simply absent: 10 cues of 24 delivered as a whole subtitle. That is
+            # precisely the outcome this function exists to prevent, so treat
+            # every uncovered cluster as a reason to defer -- the resume file
+            # keeps what was collected and the next attempt retries them.
             if not window:
-                continue
+                log('empty window for %d cluster(s) at %d (short body, no 429) '
+                    '-- deferring rather than dropping them' % (len(cposes),
+                                                                rstart))
+                return False
             for cpos in cposes:
                 if src.tripped:
                     break
                 off = cpos - rstart
                 if not (0 <= off < len(window)):
-                    continue
+                    log('cluster at %d not covered by a %d-byte window (short '
+                        'body, no 429) -- deferring' % (cpos, len(window)))
+                    return False
                 _end, truncated = _collect_one_cluster(window[off:], want, entries)
+                if not _end:
+                    # Nothing parsed at all: the bytes at this offset do not
+                    # begin a Cluster. `truncated` is False here, which reads
+                    # identically to "clean end of a cluster with nothing left"
+                    # -- so without this the cue is marked finished and its lines
+                    # are lost for good.
+                    log('no cluster found at %d in the window (short/misaligned '
+                        'body) -- deferring' % cpos)
+                    return False
                 if not truncated:
                     finished.add(cpos)   # covered cleanly -- never redo it
                     needs_scan.discard(cpos)
@@ -2191,12 +2620,21 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                 if src.fetched >= _HTTP_TOTAL_CAP:
                     log('byte cap reached at top-up -- deferring')
                     return False
-                tup = src.read(cpos, min(_CLUSTER_TOPUP_MAX,
-                                         _HTTP_TOTAL_CAP - src.fetched))
+                _want_t = min(_CLUSTER_TOPUP_MAX,
+                              _HTTP_TOTAL_CAP - src.fetched)
+                tup = src.read(cpos, _want_t)
+                if _short_read(src, cpos, _want_t, tup):
+                    log('provider returned %d of %d bytes at the top-up for %d '
+                        '(no 429) -- deferring' % (len(tup), _want_t, cpos))
+                    return False
                 if src.tripped:
                     log('circuit-breaker tripped during top-up -- deferring')
                     return False
                 _tend, tup_trunc = _collect_one_cluster(tup, want, entries)
+                if not _tend:
+                    log('top-up at %d returned nothing parseable (short body) '
+                        '-- deferring' % cpos)
+                    return False
                 if tup_trunc:
                     log('cluster exceeds top-up cap (%dMB) -- deferring to avoid '
                         'a partial subtitle' % (_CLUSTER_TOPUP_MAX >> 20))
