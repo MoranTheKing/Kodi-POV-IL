@@ -177,6 +177,35 @@ From MoranSubs `0.2.446` / quickfix `0.1.488`:
   another extraction appeared to be running. That guard protects a shared debrid
   connection and has no purpose for a local file.
 
+From MoranSubs `0.2.447` / quickfix `0.1.489`:
+
+- Pausing the film and resuming it no longer cancels an extraction in progress.
+  Handing the connection back to the player is only worth doing when the
+  provider is actually pushing back on the extra requests; when it is not, the
+  extraction carries on and the player is unaffected.
+- The extraction reports how far along it is, including over a full-screen
+  picture, where nothing at all used to appear for several minutes. One that is
+  cut short says how much of the file it managed to read — that much is kept,
+  and choosing the subtitle again continues from there.
+- A provider that starts refusing requests part-way through no longer ends the
+  extraction. It is crawled through at whatever rate the provider tolerates, and
+  the rate is raised again once the refusals stop. Against a provider refusing
+  two requests in every three, that is the difference between no subtitle and a
+  complete one.
+- A subtitle can no longer come out with only part of its lines because a
+  provider quietly returned a short answer. A capped or cut-off response carries
+  no error of any kind, and when the bytes happen to run out on an internal
+  boundary, reading them back looks normal too. The amount of data returned is
+  now checked against the amount owed — for the file's index as well as for the
+  subtitle data — and anything short defers the extraction instead of handing
+  over a subtitle that is missing lines without saying so. A file whose provider
+  merely reports its size a little wrong still finishes: that case is settled by
+  asking the provider how long the file actually is, in the one form every
+  provider answers precisely, rather than by reading anything into an answer
+  that did not arrive.
+- Lines the AI leaves out of its reply are asked for again instead of being left
+  in the original language.
+
 ## Upstream POV Watch
 
 `.github/workflows/check-upstream-pov.yml` checks the original kodi7rd build metadata every 6 hours and opens an issue if upstream POV changes.

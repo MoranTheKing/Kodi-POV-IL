@@ -646,6 +646,89 @@ def _rebuild_block(src_block, out_block):
     return '\n'.join(src_lines[:si + 1] + out_lines[oi + 1:])
 
 
+def missing_blocks(src_blocks, out_blocks):
+    """Source blocks the model's reply does NOT account for.
+
+    Identity is the START TIMESTAMP, matched as a MULTISET, because that is the
+    only field the model is asked to copy verbatim and the only one that
+    survives a renumbered reply. Genuinely simultaneous dialogue (two entries at
+    the same start) is handled by the multiset: two wanted and one returned
+    leaves one missing.
+
+    Counting alone -- "did we get back roughly as many entries as we asked
+    for?" -- cannot see this. A reply that drops ten lines and invents ten
+    others has the right count and the wrong content, and at an 85% yield
+    threshold a chunk of 50 may quietly lose 7 lines and still be accepted.
+    Fully fail-open: anything unparseable returns [] (caller keeps the reply)."""
+    try:
+        if not src_blocks:
+            return []
+        have = {}
+        for b in out_blocks or ():
+            st = _block_start(b)
+            if st is not None:
+                have[st] = have.get(st, 0) + 1
+        out = []
+        for b in src_blocks:
+            st = _block_start(b)
+            if st is None:
+                continue
+            if have.get(st, 0) > 0:
+                have[st] -= 1
+            else:
+                out.append(b)
+        return out
+    except Exception:
+        return []
+
+
+def align_blocks(src_blocks, *candidate_lists):
+    """Blocks drawn from `candidate_lists` to match `src_blocks` exactly: the
+    same start timestamps, with the same MULTIPLICITY, in timeline order.
+    Earlier lists win; a start is filled from later lists only while the source
+    still calls for more at that start.
+
+    Both halves of that rule are load-bearing, and getting either wrong loses
+    subtitle content:
+
+      * Multiplicity, not presence. Two source entries may legitimately share a
+        start -- simultaneous dialogue -- and de-duplicating on start alone
+        drops the second one PERMANENTLY. Not "left untranslated": gone from the
+        subtitle. (Reproduced: a 3-entry chunk with two entries at one start
+        came back with 2, while the caller's own bookkeeping reported success.)
+
+      * Only what was asked for. A block whose start the model corrupted --
+        a documented, already-observed failure of this model -- answers nothing
+        that was requested. Adding it inserts a line at a fabricated time while
+        the real slot is ALSO filled from the source, shipping the same dialogue
+        twice. (Reproduced: 20 entries in, 21 out, one line at two timestamps.)
+
+    Ordering matters downstream too: restore_block_timings pairs POSITIONALLY
+    when the counts match, which only holds if the result is back in timeline
+    order. The sort is stable, so entries sharing a start keep the order the
+    candidates supplied them in. Fail-open: returns the first list on any
+    problem."""
+    try:
+        wanted = {}
+        for b in src_blocks or ():
+            st = _block_start(b)
+            if st is not None:
+                wanted[st] = wanted.get(st, 0) + 1
+        taken = {}
+        keyed = []
+        for lst in candidate_lists:
+            for b in lst or ():
+                st = _block_start(b)
+                if st is None or taken.get(st, 0) >= wanted.get(st, 0):
+                    continue
+                taken[st] = taken.get(st, 0) + 1
+                keyed.append((st, b))
+        keyed.sort(key=lambda p: p[0])
+        return [b for _st, b in keyed]
+    except Exception:
+        return list(candidate_lists[0]) if candidate_lists else []
+
+
 def _repair_pinned_starts(src_blocks, out_blocks, fixed, ambiguous):
     """Give back the source timecode to a block whose START the model corrupted,
     but ONLY where its position is pinned by agreeing neighbours on both sides.
