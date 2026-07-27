@@ -1,3 +1,24 @@
+v0.2.448
+- Pressing play no longer cancels an extraction in progress. The rule was that
+  resuming the film mattered if the provider had refused even one request -- and
+  one refusal in fifty-seven is ordinary busy-CDN noise, not a provider in
+  trouble. Worse, the pause being resumed is usually one the add-on itself
+  caused, because opening the subtitle list pauses playback: every subtitle
+  picked by hand therefore began paused, and pressing play to carry on watching
+  was being read as a signal about the provider. A field log shows an extraction
+  killed at 51 lines of 321 the instant play was pressed, and again on the next
+  attempt, so that file never got past 18 per cent. Cancelling now requires the
+  provider to have actually throttled the extraction down, and to have done so
+  recently rather than at some point earlier in the run. The separate guard that
+  watches for the picture freezing is unchanged.
+- Extraction says that it is working, from the first line it reads. It used to
+  wait for the first whole twenty per cent, which on a distant provider is
+  minutes, and the run above never reached twenty per cent at all -- so the only
+  thing that user ever saw was the message saying it had stopped. It now reports
+  as soon as the first line comes out, then every ten per cent, and never goes
+  more than three quarters of a minute without saying something while lines are
+  still arriving. On a fast provider it is still only a handful of messages.
+
 v0.2.447
 - An extraction in progress is no longer cancelled by pausing the film and
   resuming it. Handing the connection back to the player is only worth doing
