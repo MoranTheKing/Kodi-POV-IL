@@ -122,6 +122,12 @@ _HTTP_PACE_DECAY_AFTER = 25       # ...that many consecutive clean requests
 # early (~20s) with a clean deferral instead. A healthy provider (Real-Debrid)
 # lands clean fetches that reset the streak, so it never trips there.
 _HTTP_429_STREAK_MAX = 6
+# ...and, with that streak reached, how long we must have collected NOTHING
+# NEW before giving up. Back-pressure alone is not saturation: a provider can
+# refuse half our reads while the player runs perfectly and cues keep landing,
+# and abandoning there costs the user a whole play session for nothing now that
+# progress is banked. Genuine saturation stops the cues, and this notices.
+_STALLED_PROGRESS_S = 45.0
 _CLUSTER_CAP_LOCAL = 32 * 1024 * 1024     # local: effectively read whole clusters
 _CUES_CAP = 24 * 1024 * 1024              # hard ceiling on the Cues element read
 
@@ -334,6 +340,9 @@ class _Source(object):
         self._prefix = None           # learned cluster prefix len (see below)
         self._cue_time_ok = None      # None=untested, True=CueTime verified
         self._hdr_reads = 0           # cluster-header reads we still had to pay
+        self.http_reqs = 0            # ACTUAL GETs, retries included (see below)
+        self._progress_mark = 0       # cues collected when we last moved
+        self._progress_at = 0.0       # ...and when that was
         self._stats = None            # caller-visible progress/pressure dict
         self._abort_cb = None         # set by extract_srt; polled DURING sleeps
         self.total = 0
@@ -408,6 +417,41 @@ class _Source(object):
             return self._read_session(offset, size)
         return self._read_urllib(offset, size)
 
+    def _making_progress(self):
+        """Are we still actually collecting cues, despite the back-pressure?
+
+        The 429 streak-breaker exists to protect the PLAYER: the reasoning is
+        that a saturated token means the movie dies. But a 429 streak is only a
+        PROXY for that, and a poor one -- a provider can push back on half our
+        reads while the player is completely healthy, which is exactly what a
+        field log shows (TorBox: 31 backoffs in 60 reads, the player fine
+        throughout, extraction abandoned at 75 of 555 cues after 225s).
+
+        There is a DIRECT guard for player harm already, and it is the one that
+        matters: the caller's abort callback watches the playback clock and stops
+        us within 8s if it ever freezes. And since an interrupted pass now banks
+        its progress, crawling on is strictly better than giving up -- the same
+        run would have reached ~300 cues in its remaining budget instead of
+        stopping at 75, turning eight play sessions into two.
+
+        So the breaker now fires only when back-pressure has ALSO stalled us: no
+        new cues for a while. Real saturation looks like that; a slow provider
+        does not."""
+        try:
+            n = (self._stats or {}).get('done') or 0
+        except Exception:
+            n = 0
+        import time as _t
+        now = _t.time()
+        if n > self._progress_mark:
+            self._progress_mark = n
+            self._progress_at = now
+            return True
+        if not self._progress_at:
+            self._progress_at = now
+            return True
+        return (now - self._progress_at) < _STALLED_PROGRESS_S
+
     def _sleep_or_abort(self, secs):
         """Sleep up to `secs`, in <=1s slices, polling the abort callback between
         them. Returns True the moment we're asked to stop (playback ended / the
@@ -437,6 +481,12 @@ class _Source(object):
         per-request pace and the backoff are abort-aware, so a stalled player is
         noticed within ~1s instead of behind a 2-minute retry storm."""
         _pace = getattr(self, '_pace', _HTTP_REQ_PACE_S)
+        # `reqs` counts LOGICAL reads; one of them can cost several GETs, because
+        # a 429 is retried in place. On a provider that pushes back on half our
+        # reads that is a large, invisible multiplier -- the field log's "60 req"
+        # was really closer to 110 as far as the CDN was concerned, which both
+        # understated the load and hid it from anyone reading the log. Count the
+        # GETs separately and report both.
         self.reqs += 1
         saw_429 = False               # did THIS fetch need a 429 backoff?
         if self.reqs > 1 and _pace > 0:
@@ -453,6 +503,7 @@ class _Source(object):
                     pass
             r = None
             try:
+                self.http_reqs += 1
                 r = self._sess.get(self.url, headers={
                     'Range': 'bytes={0}-{1}'.format(offset, offset + size - 1),
                     'User-Agent': _UA}, timeout=_HTTP_TIMEOUT, stream=True)
@@ -532,7 +583,8 @@ class _Source(object):
                 if saw_429:
                     self._429_streak = getattr(self, '_429_streak', 0) + 1
                     self._clean_streak = 0
-                    if self._429_streak >= _HTTP_429_STREAK_MAX:
+                    if (self._429_streak >= _HTTP_429_STREAK_MAX
+                            and not self._making_progress()):
                         self.tripped = True
                 else:
                     self._429_streak = 0
@@ -2117,9 +2169,10 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
         """What this attempt actually spent -- the numbers that were missing
         from every abort message, so a field log can say WHY it was slow."""
         el = max(time.time() - t0, 0.001)
-        return ('%d/%d cue(s), %d req (%d hdr, %d free), %.1fMB, %.0fs, '
-                'pace %.2fs, %d backoff(s), %.2f cue/s'
-                % (done, total, src.reqs, getattr(src, '_hdr_reads', 0),
+        return ('%d/%d cue(s), %d read (%d GET, %d hdr, %d free), %.1fMB, '
+                '%.0fs, pace %.2fs, %d backoff(s), %.2f cue/s'
+                % (done, total, src.reqs, getattr(src, 'http_reqs', 0),
+                   getattr(src, '_hdr_reads', 0),
                    getattr(src, '_one_shot', 0), src.fetched / 1e6, el,
                    getattr(src, '_pace', 0.0), getattr(src, '_429_total', 0),
                    done / el))

@@ -1685,7 +1685,16 @@ def _embedded_aligned_source_srt(
         # path is only a handful of requests, but the resume-into-a-hot-token
         # window is real, so guard it the same way. (A never-paused run is
         # unaffected: saw_pause stays False and only playback ending aborts.)
-        _al = {'saw_pause': False}
+        # Player.Paused reads True during a SEEK and during a buffering hiccup,
+        # not only during a pause -- so arming this needs the pause to be HELD,
+        # exactly as the full-text path does. Latching on a single observation
+        # is what made five consecutive field attempts die on the other path
+        # while the user was simply watching; this copy had the same defect and
+        # would have killed the CHEAP path the same way, which matters most on
+        # precisely the providers where the cheap path is the only one that
+        # works.
+        _ALIGN_PAUSE_ARM_S = 3.0
+        _al = {'saw_pause': False, 'paused_at': None}
 
         def _abort():
             try:
@@ -1696,8 +1705,13 @@ def _embedded_aligned_source_srt(
                 if not p.isPlayingVideo():
                     return True
                 if _x.getCondVisibility('Player.Paused'):
-                    _al['saw_pause'] = True
+                    _now = _time.time()
+                    if _al['paused_at'] is None:
+                        _al['paused_at'] = _now
+                    elif (_now - _al['paused_at']) >= _ALIGN_PAUSE_ARM_S:
+                        _al['saw_pause'] = True
                     return False
+                _al['paused_at'] = None
                 if _al['saw_pause']:
                     return True
                 return False
