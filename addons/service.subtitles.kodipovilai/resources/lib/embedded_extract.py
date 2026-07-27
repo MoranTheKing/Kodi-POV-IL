@@ -334,6 +334,7 @@ class _Source(object):
         self._prefix = None           # learned cluster prefix len (see below)
         self._cue_time_ok = None      # None=untested, True=CueTime verified
         self._hdr_reads = 0           # cluster-header reads we still had to pay
+        self._stats = None            # caller-visible progress/pressure dict
         self._abort_cb = None         # set by extract_srt; polled DURING sleeps
         self.total = 0
         self._sess = _new_session() if self.is_http else None
@@ -465,6 +466,9 @@ class _Source(object):
                         _was = getattr(self, '_pace', _HTTP_REQ_PACE_S)
                         self._pace = min(_was * 1.5, _HTTP_REQ_PACE_MAX)
                         self._429_total += 1
+                        if self._stats is not None:
+                            self._stats['backoffs'] = self._429_total
+                            self._stats['pace'] = self._pace
                         # Report the first one and then each doubling: the pace
                         # creeping 0.2s -> 2.0s is what turns a 3-minute extract
                         # into an 18-minute one, and it used to leave no trace
@@ -543,6 +547,8 @@ class _Source(object):
                         _was = self._pace
                         self._pace = max(self._pace * _HTTP_PACE_DECAY,
                                          self._pace_floor)
+                        if self._stats is not None:
+                            self._stats['pace'] = self._pace
                         if self._log:
                             self._log('CDN quiet for %d request(s) -- pace '
                                       '%.2fs -> %.2fs'
@@ -1332,7 +1338,8 @@ def cue_reference_times_multi(url_or_path, langs, track_num=None,
 def extract_srt(url_or_path, track_num=None, lang=None,
                 head_bytes=DEFAULT_HEAD_BYTES, max_bytes=DEFAULT_MAX_BYTES,
                 deadline_s=DEFAULT_DEADLINE_S, allow_http=False,
-                abort_cb=None, log=None, progress_cb=None, resume_path=None):
+                abort_cb=None, log=None, progress_cb=None, resume_path=None,
+                stats=None):
     """Extract an embedded TEXT subtitle track as an SRT string.
 
     Pick the track by `track_num`, else by `lang` (BCP-47 prefix, e.g. 'en'
@@ -1347,13 +1354,24 @@ def extract_srt(url_or_path, track_num=None, lang=None,
     `resume_path`, if given, is a scratch file where an INTERRUPTED HTTP pass
     leaves what it collected, so the next attempt continues instead of starting
     over. It never changes what is delivered -- a partial extract still returns
-    None -- only what survives a deferral."""
+    None -- only what survives a deferral.
+    `stats`, if given, is a dict this fills in as it goes: 'done'/'total' cues,
+    'backoffs' (how many times the CDN pushed back) and 'pace'. The caller needs
+    those to decide things it otherwise has to GUESS at -- above all whether the
+    provider is actually under pressure, which is the difference between handing
+    the connection back to the player and cancelling useful work for nothing."""
     _log = log or _noop
     t0 = time.time()
     try:
         src = _Source(url_or_path)
         src._abort_cb = abort_cb   # polled DURING pace/backoff sleeps too
         src._log = _log            # so pacing/back-pressure is visible in a log
+        src._stats = stats if stats is not None else None
+        if src._stats is not None:
+            src._stats.setdefault('done', 0)
+            src._stats.setdefault('total', 0)
+            src._stats['backoffs'] = 0
+            src._stats['pace'] = src._pace
         if not src.total:
             return None
         seg_start, ts_scale, tracks, seeks = _parse_head(src, head_bytes, _log)
@@ -2120,6 +2138,9 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
 
     def _tick(n):
         """Report progress to the UI (throttled). Never fatal."""
+        if src._stats is not None:
+            src._stats['done'] = min(n, total)
+            src._stats['total'] = total
         if progress_cb:
             try:
                 progress_cb(min(n, total), total)

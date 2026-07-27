@@ -1958,6 +1958,10 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         _PAUSE_ARM_S = 3.0
         _stall = {'t': None, 'since': None, 'saw_pause': False,
                   'paused_at': None}
+        # What the extractor is actually experiencing, filled in as it runs:
+        # cues done/total, how many times the CDN pushed back, current pace.
+        # The resume guard below used to GUESS at this; now it can read it.
+        _xstats = {'done': 0, 'total': 0, 'backoffs': 0, 'pace': 0.0}
 
         def _should_abort():
             try:
@@ -1991,11 +1995,27 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                 # pause is not. A seek is still a moment of extra contention for
                 # the same token, so a long one is deliberately treated as a
                 # pause; the cost of over-aborting is only a clean defer.
-                if _stall['saw_pause']:
-                    kodi_utils.log('embedded: playback resumed after a pause of '
-                                   '>{0:.0f}s -- aborting extraction to free the '
-                                   'debrid token for the player'
-                                   .format(_PAUSE_ARM_S), level='INFO')
+                #
+                # ...but only when there is something to hand back. The whole
+                # premise is that OUR crawl has left the token rate-limited, so
+                # the player's first read on resume 429s and the movie closes.
+                # That premise is now MEASURED rather than assumed: if the CDN
+                # has not pushed back even once, the token demonstrably has
+                # headroom and cancelling costs the user real work for nothing.
+                #
+                # This is not a hypothetical. In a field log (0.2.446) the user
+                # paused precisely to let the extraction run, and it was killed
+                # twice at "57 req, pace 0.20s, 0 backoff(s)" and "86 req, pace
+                # 0.20s, 0 backoff(s)" -- the provider had not complained once.
+                # The stall guard below still covers the other failure mode
+                # (bandwidth contention, which shows up as a frozen clock).
+                if _stall['saw_pause'] and _xstats.get('backoffs'):
+                    kodi_utils.log(
+                        'embedded: playback resumed after a pause and the CDN '
+                        'has pushed back {0} time(s) (pace {1:.2f}s) -- aborting '
+                        'extraction to free the debrid token for the player'
+                        .format(_xstats.get('backoffs'),
+                                _xstats.get('pace') or 0.0), level='INFO')
                     return True
                 now = _tt.time()
                 try:
@@ -2030,6 +2050,11 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         # work saved from any other file, so the worst a collision can do is
         # start over -- exactly today's behaviour. Local files skip it; a local
         # pass is a single cheap sequential walk with nothing to carry.
+        try:
+            import xbmcgui as _g0
+            _g0.Window(10000).clearProperty('povil.embedded_partial')
+        except Exception:
+            pass
         _resume = None
         if _remote:
             try:
@@ -2038,12 +2063,45 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                     'embedded_resume_{0}.bin'.format(src_lang or 'src'))
             except Exception:
                 _resume = None
+        # Visible progress. The corner DialogProgressBG the caller supplies is
+        # not drawn over FULLSCREEN VIDEO, which is exactly where the user is
+        # while this runs -- so from their seat a 5-minute extraction looks
+        # identical to nothing happening at all, and the field report was
+        # precisely that ("the movie plays but nothing happens"). A toast DOES
+        # draw over video, so send one every _TOAST_STEP percent, and never
+        # closer together than _TOAST_MIN_S so it cannot become a nuisance.
+        _TOAST_STEP = 20
+        _TOAST_MIN_S = 30.0
+        _toast = {'pct': -1, 'at': 0.0}
+
+        def _progress(done, total, label=None):
+            try:
+                if total:
+                    import time as _tt
+                    pct = int(done * 100 / total)
+                    step = pct - (pct % _TOAST_STEP)
+                    now = _tt.time()
+                    if (step > _toast['pct'] and step > 0
+                            and (now - _toast['at']) >= _TOAST_MIN_S):
+                        _toast['pct'], _toast['at'] = step, now
+                        kodi_utils.notify(
+                            'AI: מחלץ תרגום מובנה — {0}% ({1}/{2})'.format(
+                                step, done, total), time_ms=2500)
+            except Exception:
+                pass
+            if progress_cb:
+                try:
+                    progress_cb(done, total) if label is None \
+                        else progress_cb(done, total, label)
+                except Exception:
+                    pass
+
         try:
             srt_text = embedded_extract.extract_srt(
                 url, track_num=track_num, lang=src_lang,
                 allow_http=_allow_http, deadline_s=deadline_s,
-                abort_cb=_should_abort, progress_cb=progress_cb,
-                resume_path=_resume,
+                abort_cb=_should_abort, progress_cb=_progress,
+                resume_path=_resume, stats=_xstats,
                 log=lambda m: kodi_utils.log('embedded_extract: ' + m,
                                              level='INFO'))
         finally:
@@ -2053,6 +2111,33 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                 except Exception:
                     pass
         if not srt_text or srt_text.count('-->') < 3:
+            # Say WHICH of the two this was. "Could not extract -- try another
+            # subtitle" is wrong and actively harmful when the pass actually
+            # banked progress that the next attempt will continue from: the user
+            # in the field read it as a dead end and gave up on a job that was
+            # 23% done and would have finished.
+            _done, _total = _xstats.get('done') or 0, _xstats.get('total') or 0
+            if _remote and _done and _total and _done < _total:
+                kodi_utils.log(
+                    'embedded: stopped at {0}/{1} cue(s) for {2} -- progress '
+                    'saved, the next attempt continues from there'.format(
+                        _done, _total, src_lang), level='INFO')
+                kodi_utils.notify(
+                    'AI: החילוץ נעצר ב-{0}% — ההתקדמות נשמרה, בחרו שוב '
+                    'כדי להמשיך'.format(int(_done * 100 / _total)),
+                    time_ms=6000)
+                # Tell the caller this was a PAUSE, not a dead end, so it does
+                # not follow up with "try another subtitle" -- which would
+                # contradict the message above and send the user away from a
+                # job that is most of the way done.
+                try:
+                    import xbmcgui as _g
+                    _g.Window(10000).setProperty(
+                        'povil.embedded_partial',
+                        '{0}/{1}'.format(_done, _total))
+                except Exception:
+                    pass
+                return None
             kodi_utils.log(
                 'embedded: no usable text track for {0}'.format(src_lang),
                 level='INFO')
