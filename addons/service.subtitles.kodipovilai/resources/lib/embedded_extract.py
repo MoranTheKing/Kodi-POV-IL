@@ -84,11 +84,14 @@ _HTTP_TIMEOUT = 15
 # only abandon one too big to bother with (a provider that ignores Range answers
 # with the whole file, which can be tens of gigabytes).
 _PROBE_DRAIN_MAX = 64 * 1024
-# How many already-read bytes the probe re-reads to prove the connection is
-# still delivering the right data at the right offsets. Long enough that a
-# provider serving the wrong region cannot match it by chance, short enough to
-# be free.
+# The probe asks for a range STARTING at bytes we already hold and running past
+# the point in question, so the provider has to answer a satisfiable range --
+# the one form of the question it is obliged to answer precisely. _PROBE_CONTROL
+# is how much known data it starts from (long enough that a provider serving the
+# wrong region cannot match it by chance, short enough to be free) and
+# _PROBE_AHEAD is how far past the point it reaches.
 _PROBE_CONTROL = 64
+_PROBE_AHEAD = 16
 # A debrid CDN token rate-limits by request COUNT and recovers after a short
 # cooldown, so a transient 429 is EXPECTED (the relpos fast path issues many
 # small requests). Back off (honor Retry-After) and retry rather than tripping
@@ -516,37 +519,40 @@ class _Source(object):
                 pass
 
     def probe_beyond(self, offset, known=None):
-        """Does the provider say there is anything AT `offset`? Returns 'more',
-        'eof', or 'unknown' -- and only ever says 'eof' on evidence.
+        """Is there anything in this file AT `offset`? Returns 'more', 'eof' or
+        'unknown', and only ever says 'eof' on evidence about `offset` itself.
 
-        `read()` cannot answer this question. It collapses every outcome that is
-        not a successful fetch into the same b'': a tripped breaker, any
-        exception, and a server that ignores the Range header and answers 200
-        (which this file already documents happening in the field) all look
-        exactly like a genuine end of file. So an empty read is NOT evidence of
-        EOF, and treating it as such lets a real truncation -- one that happened
-        to land on a clean element boundary, where parsing cannot see it either
-        -- be certified as a complete subtitle with lines missing.
+        Reading at `offset` and looking at what comes back cannot answer this.
+        `read()` collapses every outcome that is not a successful fetch into the
+        same b'': a tripped breaker, any exception, and a server that ignores
+        the Range header and answers 200 (which this file already documents
+        happening in the field) all look exactly like a genuine end of file. So
+        an empty read is NOT evidence of EOF, and treating it as such lets a
+        real truncation -- one that happened to land on a clean element
+        boundary, where parsing cannot see it either -- be certified as a
+        complete subtitle with lines missing.
 
-        What counts as evidence:
-          * HTTP 416 -- the canonical "your range starts past the end", which is
-            exactly this question, and what a compliant server answers.
-          * a Content-Range complete-length, from any status. A server that
-            ignores Range and streams the whole file from 0 still declares its
-            real length, so even that case answers definitively.
-          * for a local file, the size on disk.
-          * failing all of those: an answer that came back clean but empty, IF a
-            second read of bytes we ALREADY HAVE comes back correct. Not every
-            provider implements 416; without this, one that merely overstates
-            the file's size and answers a past-the-end range with an empty 200
-            or 206 could never finish the file at all, at any number of attempts
-            -- the other failure this probe exists to prevent. `known` is
-            (offset, bytes) the caller has already read, so a match proves the
-            connection is delivering the right data at the right offsets right
-            now, which is what makes "nothing there" mean the end rather than a
-            failure. A provider that is ignoring offsets fails it and stays
-            unknown.
-        Anything else is 'unknown', and the caller must treat that as truncation.
+        Nor is it enough to check that the connection is healthy by re-reading
+        bytes from BEFORE `offset`. That proves the provider can still serve a
+        region we already have; it establishes nothing about the region in
+        question, and a provider inconsistent exactly at the frontier of what
+        has been fetched satisfies it while data is still there. (Measured: a
+        subtitle delivered as complete, missing half its lines.)
+
+        So the question is asked in the one form a provider is obliged to answer
+        precisely: a range that STARTS INSIDE the file -- at bytes the caller
+        already read, passed in as `known` -- and runs past `offset`. Being
+        satisfiable, it cannot be answered with a 416 or with whatever a
+        provider does to an out-of-range ask, and a compliant partial response
+        must carry a Content-Range stating the file's true length. That length
+        settles it outright. Failing that, the answer is measured rather than
+        inferred: the known bytes must come back exactly, and then whether
+        anything follows them is the answer -- data past `offset` means the
+        earlier response really was cut short, and data that stops dead at
+        `offset` means the file does. A provider serving the wrong region, or
+        cut short itself, matches nothing and stays unknown.
+
+        For a local file the size on disk answers directly.
         """
         if not self.is_http:
             try:
@@ -557,34 +563,49 @@ class _Source(object):
         if self.tripped:
             return 'unknown'
         try:
-            got = self._probe_fetch(offset, 16)
+            c_off, c_want = known if known else (0, b'')
+            if c_want and 0 <= c_off < offset:
+                n = len(c_want)
+                span = offset - c_off
+                got = self._probe_fetch(c_off, span + _PROBE_AHEAD)
+                if got is None:
+                    return 'unknown'
+                verdict = self._classify_probe(got[0], got[1], got[2], offset)
+                if verdict != 'silent':
+                    return verdict
+                body = got[3]
+                if body[:n] == c_want and len(body) > span:
+                    # Bytes past the point, from a provider demonstrably serving
+                    # the right region: the earlier response really was cut
+                    # short. This is the only thing measured bytes are allowed
+                    # to establish. The reverse -- a body that stops dead at the
+                    # point -- is NOT taken as proof of the end: a response that
+                    # was itself capped there looks identical, and only a
+                    # provider already violating the spec (a partial answer with
+                    # no Content-Range) can leave the question in that state.
+                    return 'more'
+                return 'unknown'
+            got = self._probe_fetch(offset, _PROBE_AHEAD)
             if got is None:
                 return 'unknown'
-            verdict = self._classify_probe(got[0], got[1], got[2], offset,
-                                           got[3])
-            if verdict != 'silent' or not known:
-                return 'unknown' if verdict == 'silent' else verdict
-            c_off, c_want = known
-            ctl = self._probe_fetch(c_off, len(c_want))
-            if ctl is None or ctl[3] != c_want:
-                return 'unknown'
-            return 'eof'
+            verdict = self._classify_probe(got[0], got[1], got[2], offset)
+            if verdict != 'silent':
+                return verdict
+            # Nothing to measure against -- an empty answer alone proves nothing.
+            return 'more' if got[3] else 'unknown'
         except Exception:
             return 'unknown'
 
     @staticmethod
-    def _classify_probe(code, content_range, content_length, offset, body):
-        """The verdict for one probe response. 'silent' means the provider
-        raised no objection and sent nothing -- which is what the end of a file
-        looks like, and also what a broken transport looks like, so it needs
-        corroborating before it can be believed."""
+    def _classify_probe(code, content_range, content_length, offset):
+        """What one probe response's STATUS AND HEADERS establish about
+        `offset`. 'silent' means they establish nothing, and the body has to be
+        measured instead."""
         if code == 416:
             return 'eof'
         end = _complete_length(content_range)
         if end is not None and end > 0:
             return 'eof' if offset >= end else 'more'
-        if body:
-            return 'more'
         if code >= 300:
             return 'unknown'          # refused / errored -- says nothing at all
         if code == 200 and offset > 0:
@@ -597,9 +618,7 @@ class _Source(object):
                 cl = int(content_length)
             except (TypeError, ValueError):
                 return 'unknown'
-            if cl > offset:
-                return 'more'
-            return 'silent' if cl == 0 else 'unknown'
+            return 'more' if cl > offset else 'unknown'
         return 'silent'
 
     def _making_progress(self):
