@@ -1685,7 +1685,31 @@ def _embedded_aligned_source_srt(
         # path is only a handful of requests, but the resume-into-a-hot-token
         # window is real, so guard it the same way. (A never-paused run is
         # unaffected: saw_pause stays False and only playback ending aborts.)
-        _al = {'saw_pause': False}
+        # Player.Paused reads True during a SEEK and during a buffering hiccup,
+        # not only during a pause -- so arming this needs the pause to be HELD,
+        # exactly as the full-text path does. Latching on a single observation
+        # is what made five consecutive field attempts die on the other path
+        # while the user was simply watching; this copy had the same defect and
+        # would have killed the CHEAP path the same way, which matters most on
+        # precisely the providers where the cheap path is the only one that
+        # works.
+        _ALIGN_PAUSE_ARM_S = 3.0
+        _al = {'saw_pause': False, 'paused_at': None}
+        # ...and the SAME evidence test the full-text path uses. Cancelling on
+        # resume is only justified when our own reads have left the provider
+        # refusing; with a quiet CDN there is nothing to hand back, and the cost
+        # of getting it wrong is worst HERE -- this is the cheap path (a handful
+        # of requests), so discarding it drops the user onto the expensive one,
+        # on exactly the providers where that struggles.
+        # NOTE the shape of this window: the extractor is called ONCE, at the
+        # start, and everything after it is provider downloads and matching that
+        # never touch the debrid link again. So `backoffs` is a snapshot from
+        # t=0, not a live pressure reading -- one transient blip during that
+        # read would otherwise arm the resume-abort for the whole 45s window,
+        # long after we stopped using the connection at all. Track whether we
+        # are STILL holding it, and only yield it while that is true.
+        _alstats = {'backoffs': 0, 'pace': 0.0}
+        _holding = {'link': True}
 
         def _abort():
             try:
@@ -1696,9 +1720,21 @@ def _embedded_aligned_source_srt(
                 if not p.isPlayingVideo():
                     return True
                 if _x.getCondVisibility('Player.Paused'):
-                    _al['saw_pause'] = True
+                    _now = _time.time()
+                    if _al['paused_at'] is None:
+                        _al['paused_at'] = _now
+                    elif (_now - _al['paused_at']) >= _ALIGN_PAUSE_ARM_S:
+                        _al['saw_pause'] = True
                     return False
-                if _al['saw_pause']:
+                _al['paused_at'] = None
+                if (_al['saw_pause'] and _holding['link']
+                        and _alstats.get('backoffs')):
+                    kodi_utils.log(
+                        'embedded-align: playback resumed after a pause and the '
+                        'CDN has pushed back {0} time(s) (pace {1:.2f}s) -- '
+                        'yielding the connection to the player'.format(
+                            _alstats.get('backoffs'),
+                            _alstats.get('pace') or 0.0), level='INFO')
                     return True
                 return False
             except Exception:
@@ -1765,9 +1801,15 @@ def _embedded_aligned_source_srt(
         if _abort():
             return None, None
         _p(30, 100, 'קורא תזמון מובנה...')
-        times_by_lang = embedded_extract.cue_reference_times_multi(
-            url, try_set, allow_http=allow, abort_cb=_abort,
-            log=lambda m: kodi_utils.log('embedded-align: ' + m, level='INFO'))
+        try:
+            times_by_lang = embedded_extract.cue_reference_times_multi(
+                url, try_set, allow_http=allow, abort_cb=_abort, stats=_alstats,
+                log=lambda m: kodi_utils.log('embedded-align: ' + m,
+                                             level='INFO'))
+        finally:
+            # Done with the debrid link. From here on there is nothing to hand
+            # back, so a pause and resume must not discard the work.
+            _holding['link'] = False
         for lang in try_set:
             if _abort():
                 break
@@ -1958,6 +2000,10 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         _PAUSE_ARM_S = 3.0
         _stall = {'t': None, 'since': None, 'saw_pause': False,
                   'paused_at': None}
+        # What the extractor is actually experiencing, filled in as it runs:
+        # cues done/total, how many times the CDN pushed back, current pace.
+        # The resume guard below used to GUESS at this; now it can read it.
+        _xstats = {'done': 0, 'total': 0, 'backoffs': 0, 'pace': 0.0}
 
         def _should_abort():
             try:
@@ -1991,11 +2037,27 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                 # pause is not. A seek is still a moment of extra contention for
                 # the same token, so a long one is deliberately treated as a
                 # pause; the cost of over-aborting is only a clean defer.
-                if _stall['saw_pause']:
-                    kodi_utils.log('embedded: playback resumed after a pause of '
-                                   '>{0:.0f}s -- aborting extraction to free the '
-                                   'debrid token for the player'
-                                   .format(_PAUSE_ARM_S), level='INFO')
+                #
+                # ...but only when there is something to hand back. The whole
+                # premise is that OUR crawl has left the token rate-limited, so
+                # the player's first read on resume 429s and the movie closes.
+                # That premise is now MEASURED rather than assumed: if the CDN
+                # has not pushed back even once, the token demonstrably has
+                # headroom and cancelling costs the user real work for nothing.
+                #
+                # This is not a hypothetical. In a field log (0.2.446) the user
+                # paused precisely to let the extraction run, and it was killed
+                # twice at "57 req, pace 0.20s, 0 backoff(s)" and "86 req, pace
+                # 0.20s, 0 backoff(s)" -- the provider had not complained once.
+                # The stall guard below still covers the other failure mode
+                # (bandwidth contention, which shows up as a frozen clock).
+                if _stall['saw_pause'] and _xstats.get('backoffs'):
+                    kodi_utils.log(
+                        'embedded: playback resumed after a pause and the CDN '
+                        'has pushed back {0} time(s) (pace {1:.2f}s) -- aborting '
+                        'extraction to free the debrid token for the player'
+                        .format(_xstats.get('backoffs'),
+                                _xstats.get('pace') or 0.0), level='INFO')
                     return True
                 now = _tt.time()
                 try:
@@ -2030,6 +2092,11 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         # work saved from any other file, so the worst a collision can do is
         # start over -- exactly today's behaviour. Local files skip it; a local
         # pass is a single cheap sequential walk with nothing to carry.
+        try:
+            import xbmcgui as _g0
+            _g0.Window(10000).clearProperty('povil.embedded_partial')
+        except Exception:
+            pass
         _resume = None
         if _remote:
             try:
@@ -2038,12 +2105,46 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                     'embedded_resume_{0}.bin'.format(src_lang or 'src'))
             except Exception:
                 _resume = None
+        # Visible progress. The corner DialogProgressBG the caller supplies is
+        # not drawn over FULLSCREEN VIDEO, which is exactly where the user is
+        # while this runs -- so from their seat a 5-minute extraction looks
+        # identical to nothing happening at all, and the field report was
+        # precisely that ("the movie plays but nothing happens"). A toast DOES
+        # draw over video, so send one every _TOAST_STEP percent, and never
+        # closer together than _TOAST_MIN_S so it cannot become a nuisance.
+        _TOAST_STEP = 20
+        _TOAST_MIN_S = 30.0
+        _toast = {'pct': -1, 'at': 0.0}
+
+        def _progress(done, total):
+            # _status, NOT kodi_utils.notify: auto-on-play runs this whole path
+            # in quiet mode precisely so it stays silent, and a raw notify()
+            # bypasses that and pops toasts for something the user never picked.
+            try:
+                if total:
+                    import time as _tt
+                    pct = int(done * 100 / total)
+                    step = pct - (pct % _TOAST_STEP)
+                    now = _tt.time()
+                    if (step > _toast['pct'] and step > 0
+                            and (now - _toast['at']) >= _TOAST_MIN_S):
+                        _toast['pct'], _toast['at'] = step, now
+                        _status('AI: מחלץ תרגום מובנה — {0}% ({1}/{2})'.format(
+                            step, done, total), time_ms=2500)
+            except Exception:
+                pass
+            if progress_cb:
+                try:
+                    progress_cb(done, total)
+                except Exception:
+                    pass
+
         try:
             srt_text = embedded_extract.extract_srt(
                 url, track_num=track_num, lang=src_lang,
                 allow_http=_allow_http, deadline_s=deadline_s,
-                abort_cb=_should_abort, progress_cb=progress_cb,
-                resume_path=_resume,
+                abort_cb=_should_abort, progress_cb=_progress,
+                resume_path=_resume, stats=_xstats,
                 log=lambda m: kodi_utils.log('embedded_extract: ' + m,
                                              level='INFO'))
         finally:
@@ -2053,6 +2154,44 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                 except Exception:
                     pass
         if not srt_text or srt_text.count('-->') < 3:
+            # Say WHICH of the two this was. "Could not extract -- try another
+            # subtitle" is wrong and actively harmful when the pass actually
+            # banked progress that the next attempt will continue from: the user
+            # in the field read it as a dead end and gave up on a job that was
+            # 23% done and would have finished.
+            _done, _total = _xstats.get('done') or 0, _xstats.get('total') or 0
+            if _remote and _done and _total and _done < _total:
+                kodi_utils.log(
+                    'embedded: stopped at {0}/{1} cue(s) for {2} -- progress '
+                    'saved, the next attempt continues from there'.format(
+                        _done, _total, src_lang), level='INFO')
+                _status('AI: החילוץ נעצר ב-{0}% — ההתקדמות נשמרה, בחרו שוב '
+                        'כדי להמשיך'.format(int(_done * 100 / _total)),
+                        time_ms=6000)
+                # Tell the caller this was a PAUSE, not a dead end, so it does
+                # not follow up with "try another subtitle" -- which would
+                # contradict the message above and send the user away from a
+                # job that is most of the way done.
+                #
+                # ONLY for a pick the user actually made. The auto-on-play
+                # thread reaches this same function in quiet mode and has no
+                # picker to inform; the flag it set there would simply sit on
+                # the window until some LATER, unrelated failure read it and
+                # swallowed the toast that failure needed to show. Tying the
+                # flag to the same condition as the message keeps the two
+                # honest, and the timestamp bounds anything that still slips
+                # through -- a picker consumes it within seconds, never later.
+                if not _QUIET:
+                    try:
+                        import time as _tt
+                        import xbmcgui as _g
+                        _g.Window(10000).setProperty(
+                            'povil.embedded_partial',
+                            '{0}/{1}@{2:.0f}'.format(_done, _total,
+                                                     _tt.time()))
+                    except Exception:
+                        pass
+                return None
             kodi_utils.log(
                 'embedded: no usable text track for {0}'.format(src_lang),
                 level='INFO')
@@ -3145,8 +3284,106 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 mid = len(ch) // 2
                 return (_english_only_safe(idx, ch[:mid]) + '\n\n'
                         + _english_only_safe(idx, ch[mid:]))
+            # ...and the same silent-drop hole the counting guard cannot see.
+            # This is the circuit-breaker path, reached only once the block
+            # budget is already spent, so it does NOT spend another call: any
+            # entry the reply omitted keeps its source text. Visibly
+            # untranslated beats silently absent, and it keeps the entry count
+            # aligned for everything downstream.
+            _gap = srt.missing_blocks(ch, srt.parse_blocks(resp))
+            if _gap:
+                kodi_utils.log(
+                    'Chunk {0} English-only: {1} entr(ies) missing from the '
+                    'reply -- keeping their source text'.format(idx, len(_gap)),
+                    level='WARNING')
+                _count('src', len(_gap))
+                _count('noar', len(ch) - len(_gap))
+                return srt.stitch_blocks(srt.align_blocks(
+                    ch, srt.parse_blocks(resp), _gap))
         _count('noar', len(ch))
         return resp
+
+    # How many top-up rounds one chunk may spend chasing entries the model keeps
+    # dropping. Each round asks only for what is still missing, so the set
+    # shrinks fast; three rounds is generous and bounds the cost on a shared
+    # quota. Anything still missing after that keeps its source text -- visibly
+    # untranslated, which is the honest outcome and is what happens today for
+    # every one of them.
+    _TOPUP_ROUNDS = 3
+
+    def _top_up_missing(idx, ch, response, deadline):
+        """Re-request only the entries the model silently dropped, and splice
+        them back in. Returns the completed reply text (or the original when
+        nothing is missing / nothing can be recovered). Never raises: a top-up
+        is an improvement on the reply we already have, so any failure just
+        returns that reply."""
+        try:
+            blocks = srt.parse_blocks(response)
+            for _round in range(_TOPUP_ROUNDS):
+                missing = srt.missing_blocks(ch, blocks)
+                if not missing:
+                    break
+                if deadline is not None and time.monotonic() > deadline:
+                    kodi_utils.log(
+                        'Chunk {0}: {1} entr(ies) still missing but the block '
+                        'budget is spent -- leaving them as source'.format(
+                            idx, len(missing)), level='WARNING')
+                    break
+                kodi_utils.log(
+                    'Chunk {0}: {1}/{2} entr(ies) missing from the reply -- '
+                    'requesting just those (round {3})'.format(
+                        idx, len(missing), len(ch), _round + 1), level='INFO')
+                try:
+                    fill = _call_gemini(idx, missing, 0)
+                except gemini.FilteredResponse:
+                    # These specific lines are what the filter objects to. Drop
+                    # the gender reference for them and try once more; the
+                    # single-entry path below has the full ladder for the rest.
+                    try:
+                        fill = _call_gemini(idx, missing, NO_REF)
+                    except _AbortTranslation:
+                        raise
+                    except (gemini.FilteredResponse, gemini.TruncatedResponse):
+                        break
+                except gemini.TruncatedResponse as e:
+                    fill = e.partial_text or ''
+                except _AbortTranslation:
+                    # Quota exhausted / invalid key / retries spent. The
+                    # executor loop catches this to cancel every OTHER chunk and
+                    # tell the user why. Absorbing it here would return a
+                    # normal-looking chunk, leave the job "successful", and let
+                    # the remaining chunks keep hammering a key that is already
+                    # known to be dead.
+                    raise
+                except Exception:
+                    break
+                fill_blocks = srt.parse_blocks(fill)
+                if not fill_blocks:
+                    break
+                before = len(blocks)
+                # Take from the fill ONLY what answers an entry we asked for --
+                # a corrupted timestamp in the reply must not become a new cue.
+                blocks = srt.align_blocks(ch, blocks, fill_blocks)
+                if len(blocks) <= before:
+                    break          # the reply added nothing -> stop, don't loop
+            still = srt.missing_blocks(ch, blocks)
+            kept_src = len(still)
+            if still:
+                # Keep the SOURCE for whatever never came back, so the entry
+                # count matches the chunk and every later stage (positional
+                # timing restore, the merge into the final file) stays aligned.
+                blocks = srt.align_blocks(ch, blocks, still)
+                kodi_utils.log(
+                    'Chunk {0}: {1} entr(ies) kept as source after top-up'
+                    .format(idx, kept_src), level='WARNING')
+                _count('src', kept_src)
+            return srt.stitch_blocks(blocks), kept_src
+        except _AbortTranslation:
+            raise
+        except Exception as e:
+            kodi_utils.log('Chunk {0} top-up failed: {1}'.format(idx, e),
+                           level='WARNING')
+            return response, 0
 
     def _translate_one(idx, ch, deadline=None, try_alts=True):
         # Recursive bisection on TruncatedResponse OR low-yield response (Gemini
@@ -3239,7 +3476,18 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 return (_translate_one(idx, ch[:mid], deadline, try_alts) + '\n\n'
                         + _translate_one(idx, ch[mid:], deadline, try_alts))
 
-            _count('ar', len(ch))
+            # The yield check above only COUNTS, and 85% of a 50-line chunk means
+            # up to 7 lines may be dropped per chunk while it reports success --
+            # ~16% of a feature film, silently left in the source language. That
+            # is the "about a hundred lines were not translated" field report.
+            # So ask WHICH entries came back, and top up exactly the ones that
+            # did not. A top-up is ONE call; bisecting a 50-line chunk to corner
+            # a single dropped line costs ~6, on a shared quota.
+            response, _kept_src = _top_up_missing(idx, ch, response, deadline)
+            # Entries the top-up had to keep as source were already tallied
+            # there; counting them again here would put the same entry in two
+            # telemetry buckets and make the per-chunk totals exceed the chunk.
+            _count('ar', len(ch) - _kept_src)
             return response
         # ---- single-entry chunk ----
         try:
