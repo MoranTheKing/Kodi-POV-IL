@@ -564,35 +564,33 @@ class _Source(object):
             return 'unknown'
         try:
             c_off, c_want = known if known else (0, b'')
-            if c_want and 0 <= c_off < offset:
-                n = len(c_want)
-                span = offset - c_off
-                got = self._probe_fetch(c_off, span + _PROBE_AHEAD)
-                if got is None:
-                    return 'unknown'
-                verdict = self._classify_probe(got[0], got[1], got[2], offset)
-                if verdict != 'silent':
-                    return verdict
-                body = got[3]
-                if body[:n] == c_want and len(body) > span:
-                    # Bytes past the point, from a provider demonstrably serving
-                    # the right region: the earlier response really was cut
-                    # short. This is the only thing measured bytes are allowed
-                    # to establish. The reverse -- a body that stops dead at the
-                    # point -- is NOT taken as proof of the end: a response that
-                    # was itself capped there looks identical, and only a
-                    # provider already violating the spec (a partial answer with
-                    # no Content-Range) can leave the question in that state.
-                    return 'more'
-                return 'unknown'
-            got = self._probe_fetch(offset, _PROBE_AHEAD)
+            if not (c_want and 0 <= c_off < offset):
+                # Nothing to check the answer against. Still ask from inside the
+                # file rather than at the point itself -- a satisfiable range is
+                # what obliges a provider to state the real length, and asking
+                # at the point is the form that several of them answer in ways
+                # nothing can interpret.
+                c_off, c_want = max(0, offset - _PROBE_CONTROL), b''
+            n = len(c_want)
+            span = offset - c_off
+            got = self._probe_fetch(c_off, span + _PROBE_AHEAD)
             if got is None:
                 return 'unknown'
+            body = got[3]
+            if n and body[:n] == c_want and len(body) > span:
+                # Bytes past the point, from a provider demonstrably serving the
+                # right region: the earlier response really was cut short. This
+                # takes precedence over any length the same response states,
+                # because a response contradicting itself is not evidence of an
+                # end of file -- and erring towards "truncated" only ever costs
+                # an attempt. The reverse -- a body that stops dead at the point
+                # -- is NOT taken as proof of the end: a response that was itself
+                # capped there looks identical, and only a provider already
+                # violating the spec (a partial answer with no Content-Range)
+                # can leave the question in that state.
+                return 'more'
             verdict = self._classify_probe(got[0], got[1], got[2], offset)
-            if verdict != 'silent':
-                return verdict
-            # Nothing to measure against -- an empty answer alone proves nothing.
-            return 'more' if got[3] else 'unknown'
+            return verdict if verdict != 'silent' else 'unknown'
         except Exception:
             return 'unknown'
 
