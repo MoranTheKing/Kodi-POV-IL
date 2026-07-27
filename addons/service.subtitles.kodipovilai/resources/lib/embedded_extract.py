@@ -350,17 +350,6 @@ def _complete_length(content_range):
     return int(m.group(1)) if m else None
 
 
-def _range_start(content_range):
-    """Where a Content-Range says its bytes came FROM, or None.
-
-    'bytes 1000-1015/2000' -> 1000. A server that echoes back the offset we
-    asked for is a server that honoured the range, which is what makes the
-    bytes in that response evidence about the region we asked about rather than
-    about wherever it decided to serve from instead."""
-    m = re.match(r'\s*bytes\s+(\d+)\s*-', content_range or '')
-    return int(m.group(1)) if m else None
-
-
 class _Source(object):
     """Byte source with .read(offset, size) -- local file or HTTP Range. HTTP
     reads go over ONE reused keep-alive connection (see _new_session); a 429/5xx
@@ -588,13 +577,8 @@ class _Source(object):
             if got is None:
                 return 'unknown'
             body = got[3]
-            # Did this response really come from where we asked? Either the
-            # bytes we already had come back identical, or the provider itself
-            # says so in the Content-Range -- the latter being the only handle
-            # available when the caller had nothing to hand us.
-            honoured = ((n and body[:n] == c_want)
-                        or _range_start(got[1]) == c_off)
-            if honoured and len(body) > span:
+            past = len(body) > span
+            if n and body[:n] == c_want and past:
                 # Bytes past the point, from a provider demonstrably serving the
                 # right region: the earlier response really was cut short. This
                 # takes precedence over any length the same response states,
@@ -607,6 +591,15 @@ class _Source(object):
                 # can leave the question in that state.
                 return 'more'
             verdict = self._classify_probe(got[0], got[1], got[2], offset)
+            if verdict == 'eof' and past:
+                # A stated end, with bytes past it in the same breath, and no
+                # way to tell which is true -- the known bytes did not come back
+                # (so nothing in this response is evidence about our region) or
+                # there were none to check against. A header alone is trivial to
+                # produce from the request without ever seeking there, which is
+                # what a templated caching layer does, so it does not get to
+                # settle a question its own body disputes. Defer.
+                return 'unknown'
             return verdict if verdict != 'silent' else 'unknown'
         except Exception:
             return 'unknown'
