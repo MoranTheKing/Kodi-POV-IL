@@ -1695,6 +1695,13 @@ def _embedded_aligned_source_srt(
         # works.
         _ALIGN_PAUSE_ARM_S = 3.0
         _al = {'saw_pause': False, 'paused_at': None}
+        # ...and the SAME evidence test the full-text path uses. Cancelling on
+        # resume is only justified when our own reads have left the provider
+        # refusing; with a quiet CDN there is nothing to hand back, and the cost
+        # of getting it wrong is worst HERE -- this is the cheap path (a handful
+        # of requests), so discarding it drops the user onto the expensive one,
+        # on exactly the providers where that struggles.
+        _alstats = {'backoffs': 0, 'pace': 0.0}
 
         def _abort():
             try:
@@ -1712,7 +1719,12 @@ def _embedded_aligned_source_srt(
                         _al['saw_pause'] = True
                     return False
                 _al['paused_at'] = None
-                if _al['saw_pause']:
+                if _al['saw_pause'] and _alstats.get('backoffs'):
+                    kodi_utils.log(
+                        'embedded-align: playback resumed after a pause and the '
+                        'CDN has pushed back {0} time(s) -- yielding the token '
+                        'to the player'.format(_alstats.get('backoffs')),
+                        level='INFO')
                     return True
                 return False
             except Exception:
@@ -1780,7 +1792,7 @@ def _embedded_aligned_source_srt(
             return None, None
         _p(30, 100, 'קורא תזמון מובנה...')
         times_by_lang = embedded_extract.cue_reference_times_multi(
-            url, try_set, allow_http=allow, abort_cb=_abort,
+            url, try_set, allow_http=allow, abort_cb=_abort, stats=_alstats,
             log=lambda m: kodi_utils.log('embedded-align: ' + m, level='INFO'))
         for lang in try_set:
             if _abort():
