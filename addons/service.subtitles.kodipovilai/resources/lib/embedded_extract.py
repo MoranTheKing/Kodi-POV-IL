@@ -613,13 +613,23 @@ class _Source(object):
                         _was = self._pace
                         self._pace = max(self._pace * _HTTP_PACE_DECAY,
                                          self._pace_floor)
-                        if self._stats is not None:
-                            self._stats['pace'] = self._pace
-                        if self._log:
-                            self._log('CDN quiet for %d request(s) -- pace '
-                                      '%.2fs -> %.2fs'
-                                      % (_HTTP_PACE_DECAY_AFTER, _was,
-                                         self._pace))
+                        # Own try/except, like its sibling above. This sits
+                        # inside the method's broad `except Exception: return
+                        # b''`, so a log callable that raises here would DISCARD
+                        # a read that already succeeded -- and report it as a
+                        # network failure, without setting `tripped`, so the
+                        # caller could not tell the loss had nothing to do with
+                        # the CDN.
+                        try:
+                            if self._stats is not None:
+                                self._stats['pace'] = self._pace
+                            if self._log:
+                                self._log('CDN quiet for %d request(s) -- pace '
+                                          '%.2fs -> %.2fs'
+                                          % (_HTTP_PACE_DECAY_AFTER, _was,
+                                             self._pace))
+                        except Exception:
+                            pass
                 return data
             except Exception:
                 return b''
@@ -2265,15 +2275,39 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
             if src.tripped:
                 log('circuit-breaker tripped mid-fetch -- deferring')
                 return False
+            # A SHORT BODY IS A FAILURE, not an empty region. A CDN may answer a
+            # large Range with 200/206 and fewer bytes than asked -- a capped
+            # response, or a connection that dropped mid-stream -- and no 429 is
+            # ever involved, so the circuit-breaker, the backoff counter and the
+            # retry loop are all blind to it. Skipping the clusters it failed to
+            # cover let the pass finish and report success while their lines were
+            # simply absent: 10 cues of 24 delivered as a whole subtitle. That is
+            # precisely the outcome this function exists to prevent, so treat
+            # every uncovered cluster as a reason to defer -- the resume file
+            # keeps what was collected and the next attempt retries them.
             if not window:
-                continue
+                log('empty window for %d cluster(s) at %d (short body, no 429) '
+                    '-- deferring rather than dropping them' % (len(cposes),
+                                                                rstart))
+                return False
             for cpos in cposes:
                 if src.tripped:
                     break
                 off = cpos - rstart
                 if not (0 <= off < len(window)):
-                    continue
+                    log('cluster at %d not covered by a %d-byte window (short '
+                        'body, no 429) -- deferring' % (cpos, len(window)))
+                    return False
                 _end, truncated = _collect_one_cluster(window[off:], want, entries)
+                if not _end:
+                    # Nothing parsed at all: the bytes at this offset do not
+                    # begin a Cluster. `truncated` is False here, which reads
+                    # identically to "clean end of a cluster with nothing left"
+                    # -- so without this the cue is marked finished and its lines
+                    # are lost for good.
+                    log('no cluster found at %d in the window (short/misaligned '
+                        'body) -- deferring' % cpos)
+                    return False
                 if not truncated:
                     finished.add(cpos)   # covered cleanly -- never redo it
                     needs_scan.discard(cpos)
@@ -2292,6 +2326,10 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                     log('circuit-breaker tripped during top-up -- deferring')
                     return False
                 _tend, tup_trunc = _collect_one_cluster(tup, want, entries)
+                if not _tend:
+                    log('top-up at %d returned nothing parseable (short body) '
+                        '-- deferring' % cpos)
+                    return False
                 if tup_trunc:
                     log('cluster exceeds top-up cap (%dMB) -- deferring to avoid '
                         'a partial subtitle' % (_CLUSTER_TOPUP_MAX >> 20))
