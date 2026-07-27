@@ -856,6 +856,19 @@ def _read_cues(src, seeks, seg_start, want_track, log):
         if not more:
             break
         raw += more
+    if len(raw) < need:
+        # The Cues element declares its own size, and we did not get all of it.
+        # This is the SAME truncation the cluster reads now guard against (a
+        # capped response or a dropped connection, no 429 anywhere), reached
+        # through a different door -- and it is worse here, because a short Cues
+        # index simply yields FEWER cue positions. Every one of them is then
+        # fetched successfully, the pass reports a complete success, and a
+        # subtitle missing every line past the cut is delivered as if it were
+        # whole. Measured: 30 of 60 cues, with nothing in the log to suggest it.
+        # An empty return makes the caller defer.
+        log('cues element truncated (%d of %d bytes, no 429) -- deferring '
+            'rather than indexing half the file' % (len(raw), need))
+        return [], False
     b = _Buf(raw, pos)
     _read_vint(b, True)
     _read_vint(b, False)
@@ -968,6 +981,19 @@ def _read_cue_times_multi(src, seeks, seg_start, want_tracks, log):
         if not more:
             break
         raw += more
+    if len(raw) < need:
+        # The Cues element declares its own size, and we did not get all of it.
+        # This is the SAME truncation the cluster reads now guard against (a
+        # capped response or a dropped connection, no 429 anywhere), reached
+        # through a different door -- and it is worse here, because a short Cues
+        # index simply yields FEWER cue positions. Every one of them is then
+        # fetched successfully, the pass reports a complete success, and a
+        # subtitle missing every line past the cut is delivered as if it were
+        # whole. Measured: 30 of 60 cues, with nothing in the log to suggest it.
+        # An empty return makes the caller defer.
+        log('cues element truncated (%d of %d bytes, no 429) -- deferring '
+            'rather than indexing half the file' % (len(raw), need))
+        return {}
     b = _Buf(raw, pos)
     _read_vint(b, True)
     _read_vint(b, False)
@@ -2168,7 +2194,39 @@ def _short_read(src, offset, asked, got):
     less is truncation -- whatever the bytes happen to look like."""
     if not src.total or offset >= src.total:
         return False
-    return len(got) < min(asked, src.total - offset)
+    if len(got) >= min(asked, src.total - offset):
+        return False
+    # Short. That is USUALLY truncation -- but not if the file simply ends here
+    # and the size probe was optimistic. `total` comes from a Content-Range or
+    # Content-Length on a one-byte probe; a server that reports slightly more
+    # than it will serve would otherwise make every read near the tail look
+    # truncated, forever, at the same offset, on every attempt -- a file that
+    # can never complete no matter how many times it is played. (Reproduced: a
+    # total inflated by 5000 bytes on a 525KB file froze the extraction at the
+    # same cluster across eight attempts, banking nothing new.)
+    #
+    # One tiny probe tells the two apart. Ask for a few bytes just past what we
+    # got: real data means the response really was cut short, and nothing means
+    # we are at the true end of the file. Correct `total` down when that
+    # happens, so this costs one request per file, not one per read.
+    probe_at = offset + len(got)
+    if probe_at >= src.total:
+        return False
+    try:
+        if src.read(probe_at, 16):
+            return True                   # there IS more -- genuinely truncated
+        if src._log:
+            src._log('file ends at %d though the provider reported %d -- '
+                     'trusting the bytes, not the header'
+                     % (probe_at, src.total))
+        src.total = probe_at
+        return False
+    except Exception:
+        # The probe is an optimisation for one specific misreport. If it cannot
+        # be made, fall back to the safe answer: call it truncation and defer.
+        # Deferring costs an attempt; the alternative is delivering a subtitle
+        # with lines missing.
+        return True
 
 
 def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
