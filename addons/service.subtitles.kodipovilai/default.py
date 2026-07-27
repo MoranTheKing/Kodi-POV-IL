@@ -1135,11 +1135,24 @@ def _handle_bg_translate_picker(params):
     # a falsy result means extraction/translation deferred or failed.
     if not _resolved:
         try:
-            _pl = translate._decode_link(link) or {}
-            _msg = ('AI: לא ניתן היה לחלץ תרגום מובנה — נסו כתובית אחרת'
-                    if _pl.get('type') == 'embedded_ai'
-                    else 'AI: לא ניתן היה לתרגם — נסו כתובית אחרת')
-            kodi_utils.notify(_msg, time_ms=4500)
+            # An extraction that STOPPED PART-WAY is not a failure -- it banked
+            # its progress and the next pick continues from there, and it has
+            # already told the user exactly that. Following it with "try another
+            # subtitle" would contradict it and send the user away from a job
+            # that is most of the way done (field report, 0.2.446).
+            _partial = ''
+            try:
+                _partial = xbmcgui.Window(10000).getProperty(
+                    'povil.embedded_partial') or ''
+                xbmcgui.Window(10000).clearProperty('povil.embedded_partial')
+            except Exception:
+                _partial = ''
+            if not _partial:
+                _pl = translate._decode_link(link) or {}
+                _msg = ('AI: לא ניתן היה לחלץ תרגום מובנה — נסו כתובית אחרת'
+                        if _pl.get('type') == 'embedded_ai'
+                        else 'AI: לא ניתן היה לתרגם — נסו כתובית אחרת')
+                kodi_utils.notify(_msg, time_ms=4500)
         except Exception:
             pass
 
