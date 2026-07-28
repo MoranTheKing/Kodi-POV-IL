@@ -1557,7 +1557,10 @@ def _maybe_patch_pov_torbox_usage():
         if status.startswith('patched'):
             kodi_utils.log(
                 'pov_torbox_usage_patcher: ' + status, level='INFO')
-        elif status in ('already_complete', 'no_kodi'):
+        elif status in ('already_complete', 'no_kodi', 'not_applicable'):
+            # 'not_applicable' is POV having removed the screen this decorates.
+            # That is POV's business, not a fault of ours to warn about on
+            # every startup.
             pass
         else:
             kodi_utils.log(
