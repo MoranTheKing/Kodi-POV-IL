@@ -176,6 +176,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_view_mode,
         _maybe_patch_pov_resume_cancel,
         _maybe_patch_pov_scraper_settings,
+        _maybe_patch_pov_aiostreams,
         _maybe_patch_af3_home,
         _maybe_cleanup_wizard,
         _maybe_patch_pov_repeat_timer,
@@ -1160,6 +1161,58 @@ def _maybe_patch_pov_scraper_settings():
         try:
             kodi_utils.log(
                 'pov_scraper_settings_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_aiostreams():
+    """Stop an AIOStreams that is switched on but has no credentials from
+    being the ONLY scraper POV asks.
+
+    POV's active_internal_scrapers() opens with
+    "if provider.aiostreams == 'true': return ['aiostreams']" -- a takeover,
+    not a filter -- and the aiostreams scraper returns nothing instantly when
+    aio.username/aio.password are empty. Result: "No Results" on every movie
+    and episode, with no network request made. POV dropped aiostreams in 6.04
+    and brought it back in 6.07; a 'true' left in the profile from the 6.03
+    era got its meaning back with it.
+
+    Both halves only ever fire when the credentials are empty, so a user who
+    actually uses AIOStreams is untouched."""
+    if _skip_pov_patchers():
+        return
+    try:
+        from resources.lib import pov_aiostreams_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_aiostreams_patcher.disarm_setting()
+        if status not in ('off', 'configured', 'no_pov', 'disarmed'):
+            kodi_utils.log(
+                'pov_aiostreams_patcher: disarm ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_aiostreams_patcher disarm failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+    try:
+        status = pov_aiostreams_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_aiostreams_patcher: guarded POV\'s aiostreams takeover',
+                level='INFO')
+        elif status in ('already_patched', 'no_pov', 'no_file'):
+            pass
+        else:
+            kodi_utils.log(
+                'pov_aiostreams_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_aiostreams_patcher failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass

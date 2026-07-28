@@ -1,3 +1,27 @@
+v0.2.450
+- "No results" on every movie and every episode is fixed. POV's own scraper
+  list starts with a line that is a takeover rather than a filter: if the
+  AIOStreams provider is switched on, AIOStreams becomes the ONLY scraper POV
+  will ask, and every other one -- external, the debrid cloud scrapers,
+  easynews -- is dropped before it is ever consulted. The AIOStreams scraper in
+  turn returns an empty list immediately, without a single network request,
+  when its username and password are blank. The two together are exactly what
+  users saw: POV's progress window flashing open and shut in a twentieth of a
+  second, then "no results", on every title, forever. POV removed AIOStreams in
+  6.04 and brought it back in 6.07, and Kodi keeps a setting's stored value even
+  while an add-on stops declaring it -- so a switch left on years ago got its
+  meaning back with the update, without anyone touching it. That takeover now
+  also requires the credentials to be present, and a switched-on AIOStreams with
+  no credentials is switched back off. Both only ever act when the credentials
+  are empty, so anyone actually using AIOStreams is left exactly as they were.
+- Added a switch that stops this add-on touching POV at all. It rewrites about
+  twenty of POV's own source files on every startup, and POV updates itself
+  whenever its author publishes, so any of those rewrites can stop being right
+  at a moment nobody chooses. Turning the switch on makes every one of them
+  return before doing anything; reinstall POV from its repository and it stays
+  as its author shipped it. It exists so "is it the add-on?" can be answered by
+  trying it instead of by guesswork.
+
 v0.2.449
 - Sources are found again. POV updated itself and every title began answering
   "no results", which is what POV shows when its result list comes back empty.
