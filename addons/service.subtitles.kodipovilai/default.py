@@ -1796,6 +1796,36 @@ def _mdblist_reject(reason, retry):
     return 'cancel'
 
 
+def _mdblist_surface_lists():
+    """Add the MDBList "My Movies / My Series" home tiles and POV personal-area
+    rows the moment MDBList is connected, instead of on some later boot.
+
+    Both patchers are gated on POV holding an mdblist.token, so until now the
+    earliest they could fire was the next Kodi start -- and because Kodi caches
+    favourites.xml in memory at profile load and never re-reads it, that start
+    only wrote the tiles; a SECOND one was needed to show them. Users reported
+    exactly that as "I connected MDBList, ran a quick update, and the lists
+    still aren't on the home screen". Running them here, with the key already
+    stored, collapses that to zero restarts: the tile patcher pushes the new
+    tiles into the running favourites list itself.
+
+    Entirely best-effort -- a failure just restores the old behaviour of the
+    tiles arriving on a later boot, so nothing here may raise into the connect
+    flow that has already succeeded."""
+    try:
+        from resources.lib import favourites_personal_tiles_patcher
+        favourites_personal_tiles_patcher.ensure_patched()
+    except Exception as e:
+        _safe_log('mdblist tiles after connect failed: {0}'.format(e),
+                  level='WARNING')
+    try:
+        from resources.lib import pov_navigator_patcher
+        pov_navigator_patcher.maybe_fix_personal_area_lists()
+    except Exception as e:
+        _safe_log('mdblist personal-area row after connect failed: '
+                  '{0}'.format(e), level='WARNING')
+
+
 def _test_save_mdblist(kodi_utils, mdblist_pair, key, retry=False):
     """Validate the key against MDBList, then store it with the SAME side-effects
     POV's native MDBList connect applies (account name, token, watched-indicator
@@ -1826,6 +1856,15 @@ def _test_save_mdblist(kodi_utils, mdblist_pair, key, retry=False):
             'ודא שהתוסף POV (plugin.video.pov) מותקן, נסה לסגור את Kodi '
             'לחלוטין ולהפעיל מחדש, ואז לחזור לכאן.')
         return 'cancel'
+
+    # Belt and braces: the connect has already succeeded and been persisted at
+    # this point, so nothing cosmetic below it may be able to turn that into a
+    # failure the user sees.
+    try:
+        _mdblist_surface_lists()
+    except Exception as e:
+        _safe_log('mdblist surfacing after connect failed: {0}'.format(e),
+                  level='WARNING')
 
     if status is None:
         xbmcgui.Dialog().ok(

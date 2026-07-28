@@ -44,6 +44,11 @@ except Exception:
     xbmcvfs = None
 
 try:
+    import xbmc
+except Exception:
+    xbmc = None
+
+try:
     from resources.lib import kodi_utils
 except Exception:
     kodi_utils = None
@@ -371,6 +376,130 @@ def _mdblist_connected():
         return False
 
 
+def _xml_unescape(s):
+    """The five predefined XML entities, &amp; LAST so an escaped entity like
+    &amp;lt; survives one round trip instead of collapsing to '<'."""
+    for ent, ch in (('&lt;', '<'), ('&gt;', '>'), ('&quot;', '"'),
+                    ('&apos;', "'"), ('&amp;', '&')):
+        s = s.replace(ent, ch)
+    return s
+
+
+_ACTIVATE_RE = re.compile(
+    r'ActivateWindow\(\s*([^,()"]+?)\s*,\s*"(.*)"\s*,\s*return\s*\)\s*$',
+    re.DOTALL)
+
+
+def _tile_to_jsonrpc(tile_text):
+    """Translate one canonical <favourite> element into the arguments Kodi's
+    Favourites.AddFavourite takes. Returns None for any tile shape we don't
+    fully understand -- a partial translation would create a BROKEN favourite,
+    which is worse than the tile simply appearing one restart later."""
+    name = re.search(r'name="([^"]*)"', tile_text)
+    body = re.search(r'>((?:(?!</favourite>).)*)</favourite>', tile_text,
+                     re.DOTALL)
+    if not name or not body:
+        return None
+    act = _ACTIVATE_RE.search(_xml_unescape(body.group(1).strip()))
+    if not act:
+        return None
+    thumb = re.search(r'thumb="([^"]*)"', tile_text)
+    params = {
+        'title': _xml_unescape(name.group(1)),
+        'type': 'window',
+        'window': act.group(1),
+        'windowparameter': act.group(2),
+    }
+    if thumb:
+        params['thumbnail'] = _xml_unescape(thumb.group(1))
+    return params
+
+
+def _jsonrpc(method, params):
+    if xbmc is None:
+        return None
+    try:
+        raw = xbmc.executeJSONRPC(json.dumps(
+            {'jsonrpc': '2.0', 'id': 1, 'method': method, 'params': params}))
+        resp = json.loads(raw)
+    except Exception:
+        return None
+    if not isinstance(resp, dict) or 'result' not in resp:
+        return None
+    return resp['result']
+
+
+def _live_favourite_keys():
+    """Everything that identifies a favourite Kodi is holding IN MEMORY right
+    now -- its title AND its target -- or None if we can't ask.
+
+    Both, because AddOrRemove decides "already there?" by the favourite's URL,
+    not by its title. Matching on the title alone would let a tile that Kodi has
+    under any other label slip through the guard and be TOGGLED OFF, deleting a
+    tile the user still has. Collecting the targets too means the guard errs the
+    only safe way: a false match just leaves the tile to appear next restart.
+
+    None is deliberately different from the empty set: 'we don't know' must not
+    be read as 'Kodi has nothing'."""
+    result = _jsonrpc('Favourites.GetFavourites',
+                      {'properties': ['window', 'windowparameter', 'path']})
+    if not isinstance(result, dict):
+        return None
+    favs = result.get('favourites')
+    if favs is None:            # Kodi may omit/null the key when there are 0
+        return set() if result.get('limits') is not None else None
+    if not isinstance(favs, list):
+        return None
+    keys = set()
+    for f in favs:
+        if not isinstance(f, dict):
+            continue
+        for field in ('title', 'windowparameter', 'path'):
+            val = f.get(field)
+            if isinstance(val, str) and val:
+                keys.add(val)
+    return keys
+
+
+def _live_add_tiles(tiles):
+    """Push freshly-inserted tiles into Kodi's LIVE favourites list.
+
+    Kodi reads favourites.xml exactly once, when the profile loads, and serves
+    every later query from that in-memory copy -- CFavouritesService::ReInit()
+    fills m_favourites, GetAll() copies out of it, and nothing watches the file.
+    The home screen's <content>favourites://</content> therefore cannot see a
+    tile we appended to the file behind Kodi's back: it shows up only after the
+    NEXT restart. That is the whole bug behind "I connected MDBList, ran a quick
+    update, and the tiles still aren't on the home screen" -- one restart writes
+    them, and a second, unprompted one is what finally reveals them.
+
+    Favourites.AddFavourite adds to the in-memory list, so the tile appears at
+    once. Two things make that safe:
+      * It TOGGLES (AddOrRemove): asking for a tile Kodi already has would
+        DELETE it. So we ask Kodi what it has first -- by title AND by target,
+        since the toggle keys on the target -- skip anything that matches, and
+        do nothing at all when the query fails.
+      * It persists the in-memory list over favourites.xml, dropping our markers
+        and tile positioning. So this runs BEFORE our own atomic write, never
+        after -- ours is the copy that survives on disk, Kodi's is the copy that
+        renders this session, and the next restart makes them one.
+    Best-effort throughout: any failure just means the old one-restart delay.
+    """
+    live = _live_favourite_keys()
+    if live is None:
+        return 0
+    added = 0
+    for tile_text in tiles:
+        params = _tile_to_jsonrpc(tile_text)
+        if not params:
+            continue
+        if params['title'] in live or params['windowparameter'] in live:
+            continue
+        if _jsonrpc('Favourites.AddFavourite', params) == 'OK':
+            added += 1
+    return added
+
+
 def _insert_mdblist_tiles(content, fixture_text):
     """One-time, opt-in restore of the two MDBList personal tiles for an existing
     install that already has a favourites.xml (clean installs get them from the
@@ -391,6 +520,7 @@ def _insert_mdblist_tiles(content, fixture_text):
     if 'mdblist_tiles' in seen or _has_marker(content, MDBLIST_TILES_SEEN_MARKER):
         return content, False
     tiles = []
+    tile_texts = []
     # Insert only the ACTUALLY-missing tile(s): if the user deleted just one of the
     # pair (and we never got to stamp 'seen'), never duplicate the survivor.
     for name in _missing_tiles(content, MDBLIST_WATCHLIST_TILE_NAMES):
@@ -398,6 +528,7 @@ def _insert_mdblist_tiles(content, fixture_text):
         if snippet is None:
             return content, False        # fixture incomplete -> safe no-op
         tiles.append(snippet.encode('utf-8'))
+        tile_texts.append(snippet)
     pov_movies_pat = re.compile(
         rb'([ \t]*<favourite\s[^>]*?name="'
         + re.escape(_POV_MOVIES_TILE_NAME.encode('utf-8'))
@@ -413,8 +544,17 @@ def _insert_mdblist_tiles(content, fixture_text):
             return content, False
         new_content = inserted
     new_content, _ = _insert_marker(new_content, MDBLIST_TILES_SEEN_MARKER)
-    seen.add('mdblist_tiles')
-    _save_seen_state(seen)
+    # NOT stamping the sidecar here, deliberately. 'mdblist_tiles' means "we
+    # have inserted these once, so a later deletion is the user's and must be
+    # respected" -- and only a successful write earns that. Stamping here would
+    # make a failed write (disk full, permissions) permanent: the tiles would
+    # never reach the file, and every future boot would skip re-inserting them
+    # because the sidecar said the job was done. ensure_patched() stamps it
+    # after os.replace() has actually landed.
+    live = _live_add_tiles(tile_texts)
+    if live:
+        _log('added {0} MDBList tile(s) to the running Kodi favourites list '
+             '-- no restart needed'.format(live), level='INFO')
     return new_content, True
 
 
@@ -793,6 +933,18 @@ def ensure_patched():
         _log('write failed for {0}: {1}'.format(fav_path, e),
              level='WARNING')
         return 'write_failed'
+
+    if mdblist_restored:
+        # Only now, with the file actually on disk, does "we have inserted these
+        # once" become true -- and only then may a future deletion be treated as
+        # the user's and left alone. See _insert_mdblist_tiles.
+        try:
+            _s = _load_seen_state()
+            if 'mdblist_tiles' not in _s:
+                _s.add('mdblist_tiles')
+                _save_seen_state(_s)
+        except Exception:
+            pass
 
     if missing:
         _log('restored {0} missing personal tile(s): {1}'.format(
