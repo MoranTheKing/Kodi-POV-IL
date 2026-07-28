@@ -18,6 +18,7 @@
 # installed or the anchor changed upstream.
 
 import os
+import re
 
 try:
     import xbmcvfs
@@ -32,7 +33,7 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 SOURCES_REL = 'resources/lib/modules/sources.py'
-MARKER = '# AI_SUBS_POV_PREWARM_v1'
+MARKER = '# AI_SUBS_POV_PREWARM_v2'
 
 # The scrape call inside source_select(); we inject right before it (2 tabs).
 _ANCHOR = '\t\tresults = self.get_sources()'
@@ -40,10 +41,23 @@ _INJECT = (
     '\t\ttry:\n'
     '\t\t\timport sys as _pw_s, xbmcvfs as _pw_v  ' + MARKER + '\n'
     "\t\t\t_pw_p = _pw_v.translatePath('special://home/addons/service.subtitles.kodipovilai/resources/lib')\n"
-    '\t\t\tif _pw_p not in _pw_s.path: _pw_s.path.insert(0, _pw_p)\n'
+    '\t\t\tif _pw_p not in _pw_s.path: _pw_s.path.append(_pw_p)\n'
     '\t\t\timport he_sub_match as _pw_m; _pw_m.prewarm(self.meta)\n'
     '\t\texcept Exception: pass\n'
     '\t\tresults = self.get_sources()'
+)
+
+# Strip ANY previously-injected version of this block before injecting the
+# current one. Without this, bumping the marker leaves the older block in place
+# and POV ends up running both -- which is how a superseded form (this one used
+# to put our folder at the FRONT of POV's import path, where it could shadow a
+# module POV or a scraper imports later) survives the fix meant to replace it.
+_REVERT_RE = re.compile(
+    r"[ \t]*try:[ \t]*\r?\n"
+    r"[ \t]*import sys as _pw_s, xbmcvfs as _pw_v[ \t]*#[ \t]*"
+    r"AI_SUBS_POV_PREWARM_v\d+.*?"
+    r"[ \t]*except Exception: pass[ \t]*\r?\n",
+    re.DOTALL,
 )
 
 
@@ -82,6 +96,7 @@ def ensure_patched():
 
     if MARKER in content:
         return 'already_patched'
+    content = _REVERT_RE.sub('', content)
     anchor = _ANCHOR
     inject = _INJECT
     if '\r\n' in content[:4096]:

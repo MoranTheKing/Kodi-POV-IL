@@ -1,3 +1,30 @@
+v0.2.449
+- Sources are found again. POV updated itself and every title began answering
+  "no results", which is what POV shows when its result list comes back empty.
+  This add-on corrects rows POV labels SD whose own release name says 1080p --
+  and, having corrected one, it also re-applied the user's resolution filter and
+  removed the row if the corrected quality was not in it. That read a POV
+  setting by name and split its value on commas, both of which are POV's to
+  change; a value in any other shape produces a filter that matches nothing and
+  removes every row it touches. It now corrects the label and never removes a
+  row: POV has already applied the filter itself, so a row that reached the list
+  is one POV chose to show.
+- Kodi no longer updates, closes itself, and then does it again on every launch.
+  The update recorded that it had run through a store that silently discards
+  errors, at the moment the package it had just unpacked replaced the wizard's
+  own files, and then force-closed Kodi in a way that deliberately skips saving.
+  Lose that write and the next launch finds the same update waiting. The record
+  now goes to a second place as well, is read back to confirm it survived, and
+  Kodi is not closed unless it did -- the update is installed either way and
+  simply takes effect the next time Kodi starts on its own. Repeated attempts
+  are also counted and capped, so nothing can retry without end.
+- Pressing play during a subtitle extraction no longer risks closing the film.
+  Resuming after a pause used to cancel the extraction; not cancelling it left
+  the player's first read of the film competing with it for the same debrid
+  connection, which could be refused and end playback. Neither was necessary:
+  the extraction now stands aside for a few seconds so the player can get ahead,
+  then carries on from where it was.
+
 v0.2.448
 - Pressing play no longer cancels an extraction in progress. The rule was that
   resuming the film mattered if the provider had refused even one request -- and
