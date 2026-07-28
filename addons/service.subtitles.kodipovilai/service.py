@@ -177,6 +177,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_resume_cancel,
         _maybe_patch_pov_scraper_settings,
         _maybe_patch_pov_aiostreams,
+        _maybe_restore_pov_torbox,
         _maybe_patch_af3_home,
         _maybe_cleanup_wizard,
         _maybe_patch_pov_repeat_timer,
@@ -1213,6 +1214,38 @@ def _maybe_patch_pov_aiostreams():
         try:
             kodi_utils.log(
                 'pov_aiostreams_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_restore_pov_torbox():
+    """Undo damage the build's own quick-update package did to POV.
+
+    Every quickfix zip up to 0.1.492 carried two of POV's files -- an old
+    debrids/torbox_api.py and a debrids/torbox.py that POV no longer has -- and
+    Kodi extracts a quickfix straight over the add-ons folder, so each update
+    replaced POV's TorBox client with the June copy. Harmless until POV 6.07.92
+    began reading api.defaults_to_cloud, which that copy does not define: the
+    source resolves, the URL is thrown away by the AttributeError, and POV walks
+    the rest of the list to the same end. Restores POV's own file where that
+    signature is present, and nowhere else."""
+    if _skip_pov_patchers():
+        return
+    try:
+        from resources.lib import pov_torbox_restore_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_torbox_restore_patcher.ensure_patched()
+        if status in ('restored', 'not_damaged', 'no_pov'):
+            return
+        kodi_utils.log(
+            'pov_torbox_restore_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_torbox_restore_patcher failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
