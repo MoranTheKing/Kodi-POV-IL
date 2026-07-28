@@ -28,6 +28,7 @@
 import os
 import re
 import struct
+import threading as _threading
 import time
 
 try:
@@ -137,6 +138,32 @@ _HTTP_REQ_PACE_MAX = 2.0         # ceiling: every 429 widens the gap toward this
 # the movie.
 _HTTP_PACE_DECAY = 0.9            # multiplier applied after a clean run
 _HTTP_PACE_DECAY_AFTER = 25       # ...that many consecutive clean requests
+
+# How many keep-alive connections the targeted (relpos) fetches may use at once.
+#
+# The extraction was never bandwidth-bound -- it was LATENCY-bound. One
+# connection, one request at a time: pace (0.2s) + a debrid round trip (~0.35s)
+# = ~0.55s per cue, and an episode's ~450 cues took about four minutes with the
+# link sitting idle for most of it.
+#
+# The important part is what this does NOT change: the request RATE. The pace
+# gate below is now shared by every connection, so the CDN still sees at most
+# one request per `_pace` seconds no matter how many are in flight -- exactly
+# the rate the AIMD controller converged on when it was serial. Concurrency
+# only stops us paying the round trip on top of the gap we were already
+# waiting. A 429 still widens the pace for everyone at once, and the
+# circuit-breaker is still shared, so pushback stops all of them together.
+#
+# Three, not more: it is the point where the round trip is fully hidden behind
+# the pace at the pace values we actually see, and every extra connection past
+# that buys nothing while adding one more socket the player has to share the
+# line with.
+_HTTP_CONNS = 3
+
+# Clusters fetched one at a time before the concurrent phase may start (see
+# _healthy). Two is the normal cost; the third is slack for a file that needs
+# one more before its CueTime can be proven.
+_CONC_SEED_MAX = 3
 # Fail-fast on a token the provider rate-limits HARD (TorBox): if this many
 # fetches IN A ROW each need a 429 backoff, the token is saturated and a
 # ~1700-request extraction is hopeless -- crawling on keeps the token hot for
@@ -373,13 +400,32 @@ class _Source(object):
         self._prefix = None           # learned cluster prefix len (see below)
         self._cue_time_ok = None      # None=untested, True=CueTime verified
         self._hdr_reads = 0           # cluster-header reads we still had to pay
+        self._prefix_relearn = 0      # times the learned prefix went stale
         self.http_reqs = 0            # ACTUAL GETs, retries included (see below)
         self._progress_mark = 0       # cues collected when we last moved
         self._progress_at = 0.0       # ...and when that was
         self._stats = None            # caller-visible progress/pressure dict
         self._abort_cb = None         # set by extract_srt; polled DURING sleeps
         self.total = 0
+        # Every counter above is now touched by several fetch threads, and the
+        # pace gate below decides ONE schedule for all of them, so both live
+        # under this lock. It is held only around arithmetic -- never across a
+        # network call or a sleep -- so it can never serialise the thing it
+        # exists to make concurrent.
+        self._lock = _threading.RLock()
+        self._gate_at = 0.0           # earliest wall-clock time for the next GET
         self._sess = _new_session() if self.is_http else None
+        # Spare connections for the targeted fetches. The first is `_sess`, so a
+        # serial caller behaves exactly as before and nothing extra is opened
+        # unless the concurrent path actually runs.
+        self._spare = []
+        if self._sess is not None:
+            for _ in range(max(0, _HTTP_CONNS - 1)):
+                s = _new_session()
+                if s is None:
+                    break
+                self._spare.append(s)
+        self._free = None             # session pool, built on first concurrent use
         if not self.is_http:
             try:
                 self.total = os.path.getsize(self.url)
@@ -684,6 +730,81 @@ class _Source(object):
             remaining -= step
         return False
 
+    def fetched_now(self):
+        """Bytes fetched so far, read under the lock. The byte cap is what keeps
+        an extraction from competing with the player for the line, so with
+        several fetches in flight it must not be decided on a torn read."""
+        with self._lock:
+            return self.fetched
+
+    def _gate_wait(self, pace):
+        """Wait for this request's slot in the ONE shared schedule. Returns True
+        if the wait was aborted (player needs the line).
+
+        Claiming the slot is arithmetic under the lock; the waiting happens
+        outside it, so several connections can be mid-flight while the next slot
+        is already reserved. That is the whole trick: the CDN's view (one
+        request per `pace`) is unchanged, and only our idle time between them
+        disappears."""
+        now = time.time()
+        with self._lock:
+            start = self._gate_at if self._gate_at > now else now
+            self._gate_at = start + pace
+        wait = start - now
+        if wait <= 0:
+            return False
+        return self._sleep_or_abort(wait)
+
+    def _take_session(self):
+        """Borrow a connection. Serial callers always get the original one, so
+        nothing about the single-connection path changes; the spares are handed
+        out only when something is already using it."""
+        free = self._free
+        if free is None:
+            return self._sess
+        try:
+            return free.get(timeout=_HTTP_TIMEOUT)
+        except Exception:
+            return self._sess
+
+    def _give_session(self, sess):
+        free = self._free
+        if free is None or sess is None:
+            return
+        try:
+            free.put_nowait(sess)
+        except Exception:
+            pass
+
+    def open_pool(self):
+        """Arm the connection pool. Returns how many connections are available
+        (1 = nothing to parallelise, so callers stay serial)."""
+        if self._free is not None:
+            return self._free.qsize()
+        if self._sess is None or not self._spare:
+            return 1
+        try:
+            import queue as _q
+        except Exception:
+            return 1
+        free = _q.Queue()
+        free.put(self._sess)
+        for s in self._spare:
+            free.put(s)
+        self._free = free
+        return free.qsize()
+
+    def close_pool(self):
+        """Give the spare connections back to the OS as soon as the concurrent
+        phase is over -- the player keeps the line for the rest of playback."""
+        self._free = None
+        for s in self._spare:
+            try:
+                s.close()
+            except Exception:
+                pass
+        self._spare = []
+
     def _read_session(self, offset, size):
         """One Range GET over the SHARED keep-alive connection. Single-range,
         never multipart (a fat multi-range body starves the hardware decoder). On
@@ -692,19 +813,33 @@ class _Source(object):
         cooldown -- and only trip the breaker after exhausting retries. Both the
         per-request pace and the backoff are abort-aware, so a stalled player is
         noticed within ~1s instead of behind a 2-minute retry storm."""
-        _pace = getattr(self, '_pace', _HTTP_REQ_PACE_S)
         # `reqs` counts LOGICAL reads; one of them can cost several GETs, because
         # a 429 is retried in place. On a provider that pushes back on half our
         # reads that is a large, invisible multiplier -- the field log's "60 req"
         # was really closer to 110 as far as the CDN was concerned, which both
         # understated the load and hid it from anyone reading the log. Count the
         # GETs separately and report both.
-        self.reqs += 1
+        with self._lock:
+            self.reqs += 1
+            n = self.reqs
+            _pace = getattr(self, '_pace', _HTTP_REQ_PACE_S)
         saw_429 = False               # did THIS fetch need a 429 backoff?
-        if self.reqs > 1 and _pace > 0:
-            if self._sleep_or_abort(_pace):
+        if n > 1 and _pace > 0:
+            # THE rate limiter, and the reason concurrency does not multiply the
+            # load: every connection takes its slot from one shared schedule, so
+            # the CDN sees at most one request per `_pace` seconds in total --
+            # the same rate as when this was serial. What concurrency removes is
+            # only the round trip we used to pay AFTER the gap, in series.
+            if self._gate_wait(_pace):
                 self.tripped = True
                 return b''
+        sess = self._take_session()
+        try:
+            return self._read_session_inner(sess, offset, size, saw_429)
+        finally:
+            self._give_session(sess)
+
+    def _read_session_inner(self, sess, offset, size, saw_429):
         for _attempt in range(_HTTP_429_RETRIES):
             if getattr(self, '_abort_cb', None) is not None:
                 try:
@@ -715,8 +850,9 @@ class _Source(object):
                     pass
             r = None
             try:
-                self.http_reqs += 1
-                r = self._sess.get(self.url, headers={
+                with self._lock:
+                    self.http_reqs += 1
+                r = sess.get(self.url, headers={
                     'Range': 'bytes={0}-{1}'.format(offset, offset + size - 1),
                     'User-Agent': _UA}, timeout=_HTTP_TIMEOUT, stream=True)
                 code = r.status_code
@@ -726,9 +862,10 @@ class _Source(object):
                     # token (protects the player, converges toward a rate the CDN
                     # tolerates). Persists for the rest of this extraction.
                     try:
-                        _was = getattr(self, '_pace', _HTTP_REQ_PACE_S)
-                        self._pace = min(_was * 1.5, _HTTP_REQ_PACE_MAX)
-                        self._429_total += 1
+                        with self._lock:
+                            _was = getattr(self, '_pace', _HTTP_REQ_PACE_S)
+                            self._pace = min(_was * 1.5, _HTTP_REQ_PACE_MAX)
+                            self._429_total += 1
                         if self._stats is not None:
                             self._stats['backoffs'] = self._429_total
                             self._stats['pace'] = self._pace
@@ -779,6 +916,16 @@ class _Source(object):
                     if self._sleep_or_abort(wait):
                         self.tripped = True   # player needs the token -- stop now
                         return b''
+                    # The retry is another GET, so it takes another slot in the
+                    # shared schedule. Without this a refused fetch could replay
+                    # on its own clock while other connections were dispatching,
+                    # which is the one way concurrency could have pushed the rate
+                    # the CDN sees above the paced one.
+                    with self._lock:
+                        _p = getattr(self, '_pace', _HTTP_REQ_PACE_S)
+                    if _p > 0 and self._gate_wait(_p):
+                        self.tripped = True
+                        return b''
                     continue
                 if code == 200 and offset > 0:
                     return b''
@@ -792,49 +939,56 @@ class _Source(object):
                         break
                     buf += chunk
                 data = bytes(buf)
-                self.fetched += len(data)
                 # Fail-fast bookkeeping: a clean fetch resets the streak; a fetch
                 # that only succeeded after 429 backoff extends it. Too many in a
                 # row => the token is saturated (TorBox), so trip the breaker now
                 # rather than crawl for minutes with the token held hot. This
                 # cue's data is still returned; the caller sees `tripped` next and
                 # defers (a partial extract is never delivered anyway).
-                if saw_429:
-                    self._429_streak = getattr(self, '_429_streak', 0) + 1
-                    self._clean_streak = 0
-                    if (self._429_streak >= _HTTP_429_STREAK_MAX
-                            and not self._making_progress()):
-                        self.tripped = True
-                else:
-                    self._429_streak = 0
-                    # Additive-increase half of AIMD: a long clean run is
-                    # evidence the widened pace is now costing time for nothing,
-                    # so give some of it back. Never below the floor, and never
-                    # below where we started.
-                    self._clean_streak = getattr(self, '_clean_streak', 0) + 1
-                    if (self._clean_streak >= _HTTP_PACE_DECAY_AFTER
-                            and self._pace > self._pace_floor):
+                #
+                # All of it under the lock: with several connections these are
+                # read-modify-write on shared state, and a lost increment here
+                # would mean a byte cap that never trips or a pace that decays
+                # while the CDN is still pushing back.
+                _decayed = None
+                with self._lock:
+                    self.fetched += len(data)
+                    if saw_429:
+                        self._429_streak = getattr(self, '_429_streak', 0) + 1
                         self._clean_streak = 0
-                        _was = self._pace
-                        self._pace = max(self._pace * _HTTP_PACE_DECAY,
-                                         self._pace_floor)
-                        # Own try/except, like its sibling above. This sits
-                        # inside the method's broad `except Exception: return
-                        # b''`, so a log callable that raises here would DISCARD
-                        # a read that already succeeded -- and report it as a
-                        # network failure, without setting `tripped`, so the
-                        # caller could not tell the loss had nothing to do with
-                        # the CDN.
-                        try:
-                            if self._stats is not None:
-                                self._stats['pace'] = self._pace
-                            if self._log:
-                                self._log('CDN quiet for %d request(s) -- pace '
-                                          '%.2fs -> %.2fs'
-                                          % (_HTTP_PACE_DECAY_AFTER, _was,
-                                             self._pace))
-                        except Exception:
-                            pass
+                        if (self._429_streak >= _HTTP_429_STREAK_MAX
+                                and not self._making_progress()):
+                            self.tripped = True
+                    else:
+                        self._429_streak = 0
+                        # Additive-increase half of AIMD: a long clean run is
+                        # evidence the widened pace is now costing time for
+                        # nothing, so give some of it back. Never below the
+                        # floor, and never below where we started.
+                        self._clean_streak = getattr(self, '_clean_streak', 0) + 1
+                        if (self._clean_streak >= _HTTP_PACE_DECAY_AFTER
+                                and self._pace > self._pace_floor):
+                            self._clean_streak = 0
+                            _decayed = self._pace
+                            self._pace = max(self._pace * _HTTP_PACE_DECAY,
+                                             self._pace_floor)
+                if _decayed is not None:
+                    # Own try/except, like its sibling above. This sits inside
+                    # the method's broad `except Exception: return b''`, so a log
+                    # callable that raises here would DISCARD a read that already
+                    # succeeded -- and report it as a network failure, without
+                    # setting `tripped`, so the caller could not tell the loss had
+                    # nothing to do with the CDN.
+                    try:
+                        if self._stats is not None:
+                            self._stats['pace'] = self._pace
+                        if self._log:
+                            self._log('CDN quiet for %d request(s) -- pace '
+                                      '%.2fs -> %.2fs'
+                                      % (_HTTP_PACE_DECAY_AFTER, _decayed,
+                                         self._pace))
+                    except Exception:
+                        pass
                 return data
             except Exception:
                 return b''
@@ -2256,8 +2410,9 @@ def _read_cluster_header(src, cpos, first_relpos):
     close enough that one request beats two."""
     need = first_relpos + _PREFIX_MAX + _BLOCK_READ_HTTP
     one_shot = 0 <= first_relpos and need <= _ONE_SHOT_MAX
+    with src._lock:
+        src._hdr_reads += 1
     header = src.read(cpos, need if one_shot else _CLUSTER_HDR_READ)
-    src._hdr_reads += 1
     if src.tripped or not header:
         return None, None, b''
     prefix, cluster_ts = _cluster_prefix_and_ts(header)
@@ -2292,7 +2447,8 @@ def _fetch_cluster_blocks(src, cpos, items, want, entries, log):
         prefix, cluster_ts, header = _read_cluster_header(src, cpos, items[0][0])
         if prefix is None:
             return 0
-        src._prefix = prefix
+        with src._lock:
+            src._prefix = prefix
 
     def _place(buf, base, relpos, cue_time):
         """Parse the block at `relpos` out of `buf`, which starts at file offset
@@ -2343,12 +2499,12 @@ def _fetch_cluster_blocks(src, cpos, items, want, entries, log):
                 pending.append((relpos, cue_time))
         if not pending:
             continue
-        if src.fetched >= _HTTP_TOTAL_CAP:
+        if src.fetched_now() >= _HTTP_TOTAL_CAP:
             return resolved
         lo = pending[0][0]
         span = (pending[-1][0] - lo) + _BLOCK_READ_HTTP
         base = cpos + prefix + lo
-        buf = src.read(base, min(span, _HTTP_TOTAL_CAP - src.fetched))
+        buf = src.read(base, min(span, _HTTP_TOTAL_CAP - src.fetched_now()))
         if src.tripped or not buf:
             return resolved
         for (relpos, cue_time) in pending:
@@ -2361,17 +2517,25 @@ def _fetch_cluster_blocks(src, cpos, items, want, entries, log):
             # cue off to the (expensive) window scan, pay for one header read: a
             # muxer CAN change its size-VINT width mid-file, and re-learning
             # here keeps every later cluster on the fast path.
+            #
+            # This is also the one place that PROVES the width is not stable for
+            # this file, which is why the concurrent phase watches the counter:
+            # three threads sharing one prefix value while it is being re-learned
+            # is neither faster nor sound (see _healthy).
+            with src._lock:
+                src._prefix_relearn += 1
             prefix, cluster_ts, header = _read_cluster_header(src, cpos, relpos)
             if prefix is None:
                 return resolved
-            src._prefix = prefix
+            with src._lock:
+                src._prefix = prefix
             if _place(header, cpos, relpos, cue_time):
                 resolved += 1
             else:
                 base2 = cpos + prefix + relpos
-                if src.fetched < _HTTP_TOTAL_CAP and _place(
+                if src.fetched_now() < _HTTP_TOTAL_CAP and _place(
                         src.read(base2, min(_BLOCK_READ_HTTP,
-                                            _HTTP_TOTAL_CAP - src.fetched)),
+                                            _HTTP_TOTAL_CAP - src.fetched_now())),
                         base2, relpos, cue_time):
                     resolved += 1
             # Back to the fast path for the rest of this cluster: `buf`/`base`
@@ -2445,6 +2609,55 @@ def _short_read(src, offset, asked, got):
     return False
 
 
+def _run_concurrently(fn, work, workers, should_stop):
+    """Run fn(*item) over `work` with `workers` threads, stopping early when
+    `should_stop()` says so. Plain threads and an index counter -- no executor,
+    because Kodi's Python has been known to leave one alive after an addon is
+    torn down, and this must not outlive the extraction that started it.
+
+    Every worker is a daemon and the caller joins them all, so an abort ends the
+    phase as soon as the in-flight reads return rather than at the end of the
+    list."""
+    nxt = [0]
+    lock = _threading.Lock()
+    done = set()
+
+    def _worker():
+        while True:
+            if should_stop():
+                return
+            with lock:
+                i = nxt[0]
+                if i >= len(work):
+                    return
+                nxt[0] += 1
+            try:
+                fn(*work[i])
+            except Exception:
+                # Do NOT record it as done. The caller re-runs everything this
+                # returns short of, so an item that faulted is retried on one
+                # connection instead of disappearing -- the difference between
+                # deferring and handing back a subtitle with a hole in it.
+                return
+            with lock:
+                done.add(i)
+
+    threads = [_threading.Thread(target=_worker) for _ in range(workers)]
+    for t in threads:
+        t.daemon = True
+        t.start()
+    for t in threads:
+        t.join()
+    # The COMPLETED prefix, never the dispatched count: an item is only left
+    # behind if every item before it also finished. Anything at or after this
+    # index the caller runs itself, and re-running one that did finish is
+    # harmless (duplicate cues are dropped when the SRT is built).
+    n = 0
+    while n < len(work) and n in done:
+        n += 1
+    return n
+
+
 def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                        log, progress_cb=None, done_clusters=None,
                        scan_pending=None):
@@ -2507,8 +2720,9 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
         """Return a reason string when we must stop, else None."""
         if src.tripped:
             return 'circuit-breaker tripped (CDN 429/5xx)'
-        if src.fetched >= _HTTP_TOTAL_CAP:
-            return 'http byte cap reached (%.0fMB)' % (src.fetched / 1e6)
+        _got = src.fetched_now()
+        if _got >= _HTTP_TOTAL_CAP:
+            return 'http byte cap reached (%.0fMB)' % (_got / 1e6)
         if (time.time() - t0) > budget:
             return 'http time budget reached (%.0fs)' % (time.time() - t0)
         if _aborted(abort_cb):
@@ -2527,34 +2741,136 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                 pass
 
     done = carried
-    # 1) targeted relpos fetches, ONE CLUSTER at a time
-    for (cpos, items) in rel_clusters:
+    state = {'done': carried, 'stop': None}
+    state_lock = _threading.Lock()
+
+    def _one_cluster(cpos, items):
+        """Fetch ONE cluster's blocks and record the outcome. Safe to run from
+        several threads: the only shared things it touches are `entries` and the
+        two cluster sets, all under `state_lock`."""
+        if state['stop'] is not None:
+            return
         reason = _defer()
         if reason:
-            log(reason + ' -- deferring [' + _cost() + ']')
-            return False
-        got = _fetch_cluster_blocks(src, cpos, items, want, entries, log)
-        if got < len(items):
-            if src.tripped:
-                log('circuit-breaker tripped mid-fetch -- deferring ['
-                    + _cost() + ']')
-                return False
-            # Couldn't resolve every block from relpos (odd prefix / short read
-            # / wrong track) -> window-scan THIS cluster so we never drop a line.
-            # Duplicates are dropped in _entries_to_srt, so re-finding the ones
-            # we already have is harmless. NOT marked finished -- the scan below
-            # is what completes it -- but remembered as scan-pending, so a later
-            # attempt goes straight to the scan instead of paying for the
-            # targeted fetches all over again.
-            scan_cues.append(cpos)
-            needs_scan.add(cpos)
-        else:
-            finished.add(cpos)
-        done += len(items)
-        if done % 100 < len(items):
-            log('extract progress: %d/%d cue(s), %d req, %.0fMB'
-                % (done, total, src.reqs, src.fetched / 1e6))
-        _tick(done)
+            with state_lock:
+                if state['stop'] is None:
+                    state['stop'] = reason
+            return
+        local = []
+        try:
+            got = _fetch_cluster_blocks(src, cpos, items, want, local, log)
+        except Exception as e:
+            # An unexpected fault here must NEVER end as a quiet success. Left
+            # to escape, this cluster's blocks land in none of `entries`,
+            # `finished` or `needs_scan`, the pass still reports COMPLETE, and
+            # the resume file -- the one thing that could have recovered the
+            # gap on a later attempt -- is cleared. That is a subtitle silently
+            # missing lines, which is the exact outcome this whole function is
+            # built to prevent. Treat it as "could not resolve these blocks" and
+            # let the window scan below cover the cluster, the same path a short
+            # read or an odd prefix already takes.
+            log('cluster at %d failed unexpectedly (%r) -- window-scanning it'
+                % (cpos, e))
+            got = 0
+        with state_lock:
+            entries.extend(local)
+            if got < len(items):
+                if src.tripped:
+                    if state['stop'] is None:
+                        state['stop'] = 'circuit-breaker tripped mid-fetch'
+                    return
+                # Couldn't resolve every block from relpos (odd prefix / short
+                # read / wrong track) -> window-scan THIS cluster so we never
+                # drop a line. Duplicates are dropped in _entries_to_srt, so
+                # re-finding the ones we already have is harmless. NOT marked
+                # finished -- the scan below is what completes it -- but
+                # remembered as scan-pending, so a later attempt goes straight
+                # to the scan instead of paying for the targeted fetches all
+                # over again.
+                scan_cues.append(cpos)
+                needs_scan.add(cpos)
+            else:
+                finished.add(cpos)
+            state['done'] += len(items)
+            n = state['done']
+            if n % 100 < len(items):
+                log('extract progress: %d/%d cue(s), %d req, %.0fMB'
+                    % (n, total, src.reqs, src.fetched / 1e6))
+            _tick(n)
+
+    # 1) targeted relpos fetches.
+    #
+    # The FIRST cluster is deliberately alone: it is the one that learns the
+    # file's cluster prefix and proves CueTime agrees with it, and every later
+    # cluster is fast only because it can rely on both. Starting three at once
+    # would have three of them pay that header read and verify the same thing
+    # three times.
+    if rel_clusters:
+        def _healthy():
+            """Concurrency is for the HEALTHY path only, and this is the whole
+            safety argument for it.
+
+            It needs the two shortcuts already proven on the first cluster (the
+            prefix learned and CueTime agreeing), because a file whose prefix
+            width changes mid-run has clusters re-learning it and three of them
+            racing on that one value is neither faster nor sound. And it needs a
+            provider that has not pushed back: back-pressure is measured in
+            consecutive refusals against progress, and three connections
+            accumulate refusals three times faster against the same progress --
+            which would trip the breaker on exactly the flaky-but-usable
+            provider the serial code was carefully taught to crawl through
+            instead of abandoning.
+
+            So the moment either stops being true we finish serially, in the
+            exact code path all of that behaviour was tuned on."""
+            return (src._prefix is not None and src._cue_time_ok is True
+                    and getattr(src, '_429_total', 0) == 0
+                    and getattr(src, '_prefix_relearn', 0) == 0
+                    and not needs_scan)
+
+        # Seed serially until both shortcuts are settled. It takes two clusters,
+        # not one: the first learns the prefix, and CueTime can only be PROVEN
+        # against a cluster with a non-zero timestamp -- the first cluster of
+        # every file sits at 0, where the check would pass for a muxer that
+        # wrote CueTime relative to its cluster and be wrong everywhere after.
+        # If a file has not settled after a few clusters it never will (no
+        # CueTime at all, say), so stop seeding and let it run serially.
+        seed = 0
+        while seed < len(rel_clusters) and state['stop'] is None:
+            _one_cluster(*rel_clusters[seed])
+            seed += 1
+            if _healthy() or seed >= _CONC_SEED_MAX:
+                break
+        rest = rel_clusters[seed:]
+
+        i = 0
+        conns = (src.open_pool() if (src.is_http and rest and _healthy())
+                 else 1)
+        try:
+            if conns > 1:
+                log('%d connections for the remaining %d cluster(s), on one '
+                    'shared %.2fs request schedule -- the CDN sees the same '
+                    'rate, we just stop waiting out the round trip'
+                    % (conns, len(rest), getattr(src, '_pace', 0.0)))
+                i = _run_concurrently(
+                    _one_cluster, rest, conns,
+                    lambda: state['stop'] is not None or src.tripped
+                    or _aborted(abort_cb) or not _healthy())
+                if i < len(rest):
+                    log('finishing the last %d cluster(s) on one connection '
+                        '(%d backoff(s), %d cluster(s) needing a scan)'
+                        % (len(rest) - i, getattr(src, '_429_total', 0),
+                           len(needs_scan)))
+        finally:
+            src.close_pool()
+        for (cpos, items) in rest[i:]:
+            if state['stop'] is not None:
+                break
+            _one_cluster(cpos, items)
+    done = state['done']
+    if state['stop'] is not None:
+        log(state['stop'] + ' -- deferring [' + _cost() + ']')
+        return False
 
     # 2) window-scan the remainder (no-relpos cues + any relpos misses)
     if scan_cues:

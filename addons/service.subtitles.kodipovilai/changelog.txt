@@ -1,3 +1,27 @@
+v0.2.454
+- Extracting a built-in subtitle is about twice as fast. It was never limited by
+  bandwidth -- it was waiting: one connection, one request at a time, so every
+  line cost the gap we deliberately leave between requests AND a round trip to
+  the debrid server on top of it, and the link sat idle for most of the four
+  minutes an episode took. It now uses three connections while the provider is
+  behaving, and -- this is the part that matters -- they all take their turn from
+  ONE shared schedule, so the server is still asked at exactly the same rate as
+  before. Only our own waiting disappears. Measured at the real settings against
+  a typical debrid round trip: an episode goes from about three minutes to about
+  one and a half, for exactly the same number of requests.
+- It stands down at the first sign of trouble. The moment the provider pushes
+  back even once, or the file turns out to be one whose structure has to be
+  re-learned as it goes, everything hands back to the single connection and
+  finishes the way it always did. That is deliberate: pushback is judged by how
+  many refusals pile up against progress, and three connections pile them up
+  three times faster -- which would make the add-on give up on exactly the
+  awkward-but-usable provider it was taught to patiently crawl through.
+- And a fault while fetching can no longer end as a quiet success. If anything
+  unexpected goes wrong on one part of the file, that part is now re-read the
+  slow, thorough way instead of vanishing from a subtitle that still reports
+  itself complete -- which would also have thrown away the saved progress that
+  exists to recover it next time.
+
 v0.2.453
 - Ktuvit subtitles that arrive unzipped now reach the community pool, and their
   timing can be checked again. The engine converts a downloaded subtitle to
