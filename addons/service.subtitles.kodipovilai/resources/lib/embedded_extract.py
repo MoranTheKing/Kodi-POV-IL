@@ -730,6 +730,13 @@ class _Source(object):
             remaining -= step
         return False
 
+    def fetched_now(self):
+        """Bytes fetched so far, read under the lock. The byte cap is what keeps
+        an extraction from competing with the player for the line, so with
+        several fetches in flight it must not be decided on a torn read."""
+        with self._lock:
+            return self.fetched
+
     def _gate_wait(self, pace):
         """Wait for this request's slot in the ONE shared schedule. Returns True
         if the wait was aborted (player needs the line).
@@ -908,6 +915,16 @@ class _Source(object):
                         wait = min(_HTTP_429_BASE_WAIT * (2 ** _attempt), _HTTP_429_MAX_WAIT)
                     if self._sleep_or_abort(wait):
                         self.tripped = True   # player needs the token -- stop now
+                        return b''
+                    # The retry is another GET, so it takes another slot in the
+                    # shared schedule. Without this a refused fetch could replay
+                    # on its own clock while other connections were dispatching,
+                    # which is the one way concurrency could have pushed the rate
+                    # the CDN sees above the paced one.
+                    with self._lock:
+                        _p = getattr(self, '_pace', _HTTP_REQ_PACE_S)
+                    if _p > 0 and self._gate_wait(_p):
+                        self.tripped = True
                         return b''
                     continue
                 if code == 200 and offset > 0:
@@ -2430,7 +2447,8 @@ def _fetch_cluster_blocks(src, cpos, items, want, entries, log):
         prefix, cluster_ts, header = _read_cluster_header(src, cpos, items[0][0])
         if prefix is None:
             return 0
-        src._prefix = prefix
+        with src._lock:
+            src._prefix = prefix
 
     def _place(buf, base, relpos, cue_time):
         """Parse the block at `relpos` out of `buf`, which starts at file offset
@@ -2481,12 +2499,12 @@ def _fetch_cluster_blocks(src, cpos, items, want, entries, log):
                 pending.append((relpos, cue_time))
         if not pending:
             continue
-        if src.fetched >= _HTTP_TOTAL_CAP:
+        if src.fetched_now() >= _HTTP_TOTAL_CAP:
             return resolved
         lo = pending[0][0]
         span = (pending[-1][0] - lo) + _BLOCK_READ_HTTP
         base = cpos + prefix + lo
-        buf = src.read(base, min(span, _HTTP_TOTAL_CAP - src.fetched))
+        buf = src.read(base, min(span, _HTTP_TOTAL_CAP - src.fetched_now()))
         if src.tripped or not buf:
             return resolved
         for (relpos, cue_time) in pending:
@@ -2515,9 +2533,9 @@ def _fetch_cluster_blocks(src, cpos, items, want, entries, log):
                 resolved += 1
             else:
                 base2 = cpos + prefix + relpos
-                if src.fetched < _HTTP_TOTAL_CAP and _place(
+                if src.fetched_now() < _HTTP_TOTAL_CAP and _place(
                         src.read(base2, min(_BLOCK_READ_HTTP,
-                                            _HTTP_TOTAL_CAP - src.fetched)),
+                                            _HTTP_TOTAL_CAP - src.fetched_now())),
                         base2, relpos, cue_time):
                     resolved += 1
             # Back to the fast path for the rest of this cluster: `buf`/`base`
@@ -2601,8 +2619,8 @@ def _run_concurrently(fn, work, workers, should_stop):
     phase as soon as the in-flight reads return rather than at the end of the
     list."""
     nxt = [0]
-    taken = [0]
     lock = _threading.Lock()
+    done = set()
 
     def _worker():
         while True:
@@ -2613,11 +2631,16 @@ def _run_concurrently(fn, work, workers, should_stop):
                 if i >= len(work):
                     return
                 nxt[0] += 1
-                taken[0] = nxt[0]
             try:
                 fn(*work[i])
             except Exception:
+                # Do NOT record it as done. The caller re-runs everything this
+                # returns short of, so an item that faulted is retried on one
+                # connection instead of disappearing -- the difference between
+                # deferring and handing back a subtitle with a hole in it.
                 return
+            with lock:
+                done.add(i)
 
     threads = [_threading.Thread(target=_worker) for _ in range(workers)]
     for t in threads:
@@ -2625,7 +2648,14 @@ def _run_concurrently(fn, work, workers, should_stop):
         t.start()
     for t in threads:
         t.join()
-    return min(taken[0], len(work))
+    # The COMPLETED prefix, never the dispatched count: an item is only left
+    # behind if every item before it also finished. Anything at or after this
+    # index the caller runs itself, and re-running one that did finish is
+    # harmless (duplicate cues are dropped when the SRT is built).
+    n = 0
+    while n < len(work) and n in done:
+        n += 1
+    return n
 
 
 def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
@@ -2690,8 +2720,9 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
         """Return a reason string when we must stop, else None."""
         if src.tripped:
             return 'circuit-breaker tripped (CDN 429/5xx)'
-        if src.fetched >= _HTTP_TOTAL_CAP:
-            return 'http byte cap reached (%.0fMB)' % (src.fetched / 1e6)
+        _got = src.fetched_now()
+        if _got >= _HTTP_TOTAL_CAP:
+            return 'http byte cap reached (%.0fMB)' % (_got / 1e6)
         if (time.time() - t0) > budget:
             return 'http time budget reached (%.0fs)' % (time.time() - t0)
         if _aborted(abort_cb):
@@ -2726,7 +2757,21 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                     state['stop'] = reason
             return
         local = []
-        got = _fetch_cluster_blocks(src, cpos, items, want, local, log)
+        try:
+            got = _fetch_cluster_blocks(src, cpos, items, want, local, log)
+        except Exception as e:
+            # An unexpected fault here must NEVER end as a quiet success. Left
+            # to escape, this cluster's blocks land in none of `entries`,
+            # `finished` or `needs_scan`, the pass still reports COMPLETE, and
+            # the resume file -- the one thing that could have recovered the
+            # gap on a later attempt -- is cleared. That is a subtitle silently
+            # missing lines, which is the exact outcome this whole function is
+            # built to prevent. Treat it as "could not resolve these blocks" and
+            # let the window scan below cover the cluster, the same path a short
+            # read or an odd prefix already takes.
+            log('cluster at %d failed unexpectedly (%r) -- window-scanning it'
+                % (cpos, e))
+            got = 0
         with state_lock:
             entries.extend(local)
             if got < len(items):
