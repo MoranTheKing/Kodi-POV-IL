@@ -176,6 +176,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_view_mode,
         _maybe_patch_pov_resume_cancel,
         _maybe_patch_pov_scraper_settings,
+        _maybe_patch_pov_aiostreams,
         _maybe_patch_af3_home,
         _maybe_cleanup_wizard,
         _maybe_patch_pov_repeat_timer,
@@ -547,6 +548,53 @@ def _maybe_fix_pov_favourites_typo():
             pass
 
 
+# ---------------------------------------------------------------------------
+# One switch that stops this add-on touching plugin.video.pov at all.
+#
+# We rewrite about twenty of POV's own source files on every startup. That is a
+# standing bet that POV's internals still look the way they did when each patch
+# was written, and POV updates itself from its own repository whenever its
+# author publishes -- so the bet can be lost at any time, on the user's device,
+# with no warning and no error: the patch still applies, and something
+# downstream quietly stops working. When that happens the first thing anyone
+# needs is a way to find out whether it was us, in one step, without a rebuild
+# and without guesswork.
+#
+# Turning this on makes every POV patcher a no-op from the next start. It does
+# not undo edits already on disk -- but POV rewrites its own files whenever it
+# updates, so reinstalling POV from its repository restores a clean copy
+# immediately, and with this on it stays clean.
+# ---------------------------------------------------------------------------
+POV_PATCHING_OFF_SETTING = '_pov_patching_off'
+_POV_SKIP_LOGGED = False
+
+
+def _skip_pov_patchers():
+    """True when POV patching is switched off. Says so once per start, so the
+    reason a device is behaving differently is in its log."""
+    try:
+        from resources.lib import kodi_utils
+        off = (kodi_utils.get_setting(POV_PATCHING_OFF_SETTING, '')
+               or '').strip().lower() == 'true'
+    except Exception:
+        return False
+    if not off:
+        return False
+    global _POV_SKIP_LOGGED
+    if not _POV_SKIP_LOGGED:
+        _POV_SKIP_LOGGED = True
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'POV patching is switched OFF in settings -- leaving '
+                'plugin.video.pov exactly as its own author shipped it. '
+                'Reinstall POV from its repository to drop any edits already '
+                'on disk.', level='WARNING')
+        except Exception:
+            pass
+    return True
+
+
 def _maybe_patch_pov_menus():
     """Force-sync POV's three context-menu builders (movies.py,
     tvshows.py, episodes.py) to the canonical versions bundled in
@@ -554,6 +602,8 @@ def _maybe_patch_pov_menus():
     but using a whole-file copy instead of marker-inject, since
     PR #98 replaces an existing block rather than appending one.
     """
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_menus_patcher, kodi_utils
     except Exception:
@@ -625,6 +675,8 @@ def _maybe_patch_pov_personal_area():
     that match the shipped baseline byte-for-byte (any user
     customization aborts the rewrite cleanly).
     """
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_navigator_patcher, kodi_utils
     except Exception:
@@ -900,6 +952,8 @@ def _maybe_patch_hebrew_build_ui():
 def _maybe_patch_pov_genre_icons():
     """Re-icon POV's genre navigator rows to the stable
     media/build_icons/Genres/ set we ship (AF3 cached shortcut rows)."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import af3_home_patcher, kodi_utils
     except Exception:
@@ -925,6 +979,8 @@ def _maybe_patch_pov_genre_menu_icons():
     FENtastic and AF3 open genres via mode=navigator.genres, so this one
     change gives every genre a distinct icon everywhere. Also installs our
     line-art genre PNGs into POV's media/genres/."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_genre_icons_patcher, kodi_utils
     except Exception:
@@ -955,6 +1011,8 @@ def _maybe_patch_pov_hebrew_genres():
     reverted them to English everywhere. This rewrites each key to Hebrew
     while keeping the [tmdb_id, icon] value, so genres show in Hebrew again
     without changing what each genre loads. Compile-checked, idempotent."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_hebrew_genres_patcher, kodi_utils
     except Exception:
@@ -984,6 +1042,8 @@ def _maybe_patch_pov_movie_networks():
     watch-provider rewrite made that tile hang on real devices, so this reverts
     it to stock (returns a result instead of spinning forever). Idempotent,
     compile-checked."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_movie_networks_patcher, kodi_utils
     except Exception:
@@ -1014,6 +1074,8 @@ def _maybe_patch_pov_view_mode():
     page's content didn't settle within 3s, leaving the skin default (a
     no-poster list on Estuary). Widens the wait and always re-applies the view.
     Idempotent, compile-checked."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_view_mode_patcher, kodi_utils
     except Exception:
@@ -1045,6 +1107,8 @@ def _maybe_patch_pov_resume_cancel():
     'cancel' and run() returned WITHOUT closing that window -> UI stuck until a
     full Kodi restart. The cancel path now closes the dialog(s) first.
     Idempotent, compile-checked, revertible."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_resume_cancel_patcher, kodi_utils
     except Exception:
@@ -1076,6 +1140,8 @@ def _maybe_patch_pov_scraper_settings():
     reducing source counts). Applied once per marker version, only where the
     value still differs, so a user who later changes any of these keeps their
     choice."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_scraper_settings_patcher, kodi_utils
     except Exception:
@@ -1100,11 +1166,65 @@ def _maybe_patch_pov_scraper_settings():
             pass
 
 
+def _maybe_patch_pov_aiostreams():
+    """Stop an AIOStreams that is switched on but has no credentials from
+    being the ONLY scraper POV asks.
+
+    POV's active_internal_scrapers() opens with
+    "if provider.aiostreams == 'true': return ['aiostreams']" -- a takeover,
+    not a filter -- and the aiostreams scraper returns nothing instantly when
+    aio.username/aio.password are empty. Result: "No Results" on every movie
+    and episode, with no network request made. POV dropped aiostreams in 6.04
+    and brought it back in 6.07; a 'true' left in the profile from the 6.03
+    era got its meaning back with it.
+
+    Both halves only ever fire when the credentials are empty, so a user who
+    actually uses AIOStreams is untouched."""
+    if _skip_pov_patchers():
+        return
+    try:
+        from resources.lib import pov_aiostreams_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_aiostreams_patcher.disarm_setting()
+        if status not in ('off', 'configured', 'no_pov', 'disarmed'):
+            kodi_utils.log(
+                'pov_aiostreams_patcher: disarm ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_aiostreams_patcher disarm failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+    try:
+        status = pov_aiostreams_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_aiostreams_patcher: guarded POV\'s aiostreams takeover',
+                level='INFO')
+        elif status in ('already_patched', 'no_pov', 'no_file'):
+            pass
+        else:
+            kodi_utils.log(
+                'pov_aiostreams_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_aiostreams_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_anime_hebrew():
     """Hebrew-ise POV's Anime section: the anime menu names in
     menu_lists.py are hardcoded English (unlike the id-based Movies/TV
     menus), as are the anime breadcrumb titles in navigator.py.
     Idempotent, compile-checked, self-healing."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_anime_hebrew_patcher, kodi_utils
     except Exception:
@@ -1142,6 +1262,8 @@ def _maybe_patch_pov_hebrew_ui():
     """Hebrew-ise POV's own in-app UI strings (resume dialog + search hub),
     which are English because POV ships only en_gb. Sets the Hebrew msgstr on
     the relevant ids in POV's strings.po. Idempotent, self-healing."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_hebrew_ui_patcher, kodi_utils
     except Exception:
@@ -1172,6 +1294,8 @@ def _maybe_patch_pov_combined_discover():
     can show movies AND tv together, ranked by popularity. Reuses POV's
     existing mixed-media merge/sort/render path. Marker-gated, idempotent,
     re-applied each boot."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_combined_discover_patcher, kodi_utils
     except Exception:
@@ -1269,6 +1393,8 @@ def _maybe_patch_pov_cache_empty():
     (TMDB)" tile keeps showing "No results" until the cache row
     naturally expires. Also one-shot-clears any tmdblist_* /
     trakt_* rows already sitting empty in maincache.db."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import (
             pov_cache_empty_patcher, kodi_utils)
@@ -1304,6 +1430,8 @@ def _maybe_patch_pov_mdblist_sync():
     scrobble/clear resume-clear 404s) and not counting in Watch Stats. The patch
     scrubs the key from the log and adds a scrobble/stop@100 on mark-watched.
     Safe no-op without POV / on a POV version whose anchors moved."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_mdblist_patcher, kodi_utils
     except Exception:
@@ -1384,6 +1512,8 @@ def _maybe_patch_pov_mdblist_sync():
 
 def _maybe_patch_pov_torbox_usage():
     """Build-only patch: add TorBox 30-day usage to POV account status."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import (
             pov_torbox_usage_patcher, kodi_utils)
@@ -1417,6 +1547,8 @@ def _maybe_patch_pov_trakt_cache_empty():
     explicit clear. Fixes the "My Movies (Trakt) tile shows empty
     even though trakt.tv has the items" symptom that survived the
     first PR's main_cache patch."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import (
             pov_trakt_cache_empty_patcher, kodi_utils)
@@ -1451,6 +1583,8 @@ def _maybe_patch_pov_build_content_logger():
     renders empty in ~218ms -- meaning build_movie_content raises in the
     live Kodi context and its bare `except: pass` eats it. This turns
     that into a POV_BUILD_ITEM_ERROR log line with the real exception."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import (
             pov_build_content_logger_patcher, kodi_utils)
@@ -1488,6 +1622,8 @@ def _maybe_patch_pov_meta_blank():
     show 0 in BOTH skins because the items' metadata is cached blank.
     Also one-shot-clears already-poisoned blank_entry rows so existing
     favorites recover immediately."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import (
             pov_meta_blank_patcher, kodi_utils)
@@ -1521,6 +1657,8 @@ def _maybe_patch_pov_repeat_timer():
     kill the polling thread silently and the user's auth dialog
     for Trakt / RD / TorBox / PM / AD hangs forever after they
     authorize on the website."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_repeat_timer_patcher, kodi_utils
     except Exception:
@@ -1611,6 +1749,8 @@ def _maybe_patch_pov_widget_crash_guard():
     Confirmed from a field crash log. We force that single setting OFF (only
     when it is actually on); widgets then refresh on the next navigation
     instead of in a crash-inducing burst. No source files touched."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_widget_crash_guard, kodi_utils
     except Exception:
@@ -1642,6 +1782,8 @@ def _maybe_patch_pov_favorites_refresh():
     appears after navigating away and back -- removing already refreshes
     instantly. Self-healing: re-applies every startup if POV wiped the
     marker; skips silently if the upstream shape changed."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_favorites_refresh_patcher, kodi_utils
     except Exception:
@@ -1671,6 +1813,8 @@ def _maybe_patch_pov_services():
     has a hardcoded tuple of services with no extension point, so
     we patch the source file on disk and re-inject on every Kodi
     startup if the marker is missing."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_services_patcher, kodi_utils
     except Exception:
@@ -1951,6 +2095,8 @@ def _maybe_patch_pov_debrid_resolve():
     leaves the user with NO playable source / no source dialog ("no results"),
     even though sources were found. Always applied (not gated): it only makes
     POV's existing error path safe, helping both auto-pick and manual picks."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_debrid_resolve_patcher, kodi_utils
     except Exception:
@@ -1983,6 +2129,8 @@ def _maybe_patch_pov_remember_source():
     POV's sources.py to record the chosen source per media (gated by our
     `remember_source` setting, OFF by default). The patcher compile-checks the
     result before writing, so it can never break POV playback."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_remember_source_patcher, kodi_utils
     except Exception:
@@ -2292,6 +2440,8 @@ def _maybe_patch_pov_prewarm():
     source_select, before get_sources) instead of when the dialog builds -- so
     the OS/Wizdom/Ktuvit warm runs concurrently with the scrape and the % is
     ready on the FIRST entry. Idempotent, compile-checked."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_prewarm_patcher, kodi_utils
     except Exception:
@@ -2324,6 +2474,8 @@ def _maybe_patch_pov_subtitle_match():
     size_label -- a property rendered first in the info line of every layout, so
     it shows on every skin with no skin-XML changes. The patcher compile-checks
     before writing, so it can never break the source window / playback."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_subtitle_match_patcher, kodi_utils
     except Exception:
@@ -2360,6 +2512,8 @@ def _maybe_patch_pov_source_quality():
     name via POV's own get_release_quality (upgrade-only, to real resolutions)
     and re-orders the results by quality high->low then size high->low.
     Compile-checked and revertible."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_source_quality_patcher, kodi_utils
     except Exception:
@@ -2400,6 +2554,8 @@ def _maybe_patch_pov_source_name():
     can't even visually compare it to subtitle release names to pick
     one manually. With this, the dialog title shows the real release
     name and the percentages reflect actual sync quality."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_source_name_patcher, kodi_utils
     except Exception:
@@ -3170,6 +3326,8 @@ def _maybe_patch_pov_debrid_status():
     """Build-only: make POV's premium-expiry settings suitable for
     our Hebrew/icon-aware startup toasts and prevent duplicate generic
     POV expiry notifications."""
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_debrid_status_patcher, kodi_utils
     except Exception:
