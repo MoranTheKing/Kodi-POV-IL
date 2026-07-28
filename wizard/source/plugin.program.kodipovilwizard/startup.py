@@ -131,6 +131,137 @@ def show_notification():
                     level=xbmc.LOGINFO)
 
 
+# How many times one quick update may be attempted before the wizard stops
+# trying it on its own. This is the backstop that makes an update loop
+# impossible: an update that cannot record having run would otherwise run
+# again on the next startup, force Kodi closed again, and repeat forever.
+QUICK_UPDATE_MAX_TRIES = 2
+
+
+def _quick_update_state_path():
+    """Where the applied-quick-update record lives, beside the wizard's own
+    add-on data."""
+    import xbmcvfs
+    return os.path.join(
+        xbmcvfs.translatePath(
+            'special://profile/addon_data/{0}/'.format(CONFIG.ADDON_ID)),
+        'quick_update_state.json')
+
+
+def _quick_update_state():
+    """{'applied': int, 'tries': {note_id: int}} -- never raises."""
+    state = {'applied': 0, 'tries': {}}
+    try:
+        import json
+        with open(_quick_update_state_path(), 'r') as fh:
+            raw = json.load(fh) or {}
+        state['applied'] = int(raw.get('applied') or 0)
+        tries = raw.get('tries') or {}
+        state['tries'] = {str(k): int(v) for k, v in tries.items()}
+    except Exception:
+        pass
+    return state
+
+
+def _write_quick_update_state(state):
+    """Write the record and flush it all the way to disk. Returns True only if
+    it reads back, because the whole point is to know rather than to assume.
+
+    A plain file, and not only the add-on setting, because the setting is
+    written through an add-on handle at the exact moment the package we just
+    extracted has replaced the wizard's own files underneath it -- and
+    CONFIG.set_setting swallows every error and returns a False nobody checks.
+    The write is then followed by a hard kill that deliberately skips Kodi's
+    shutdown save. Lose it and the next startup sees the same number, updates
+    again and kills Kodi again, which is the loop users hit."""
+    try:
+        import json
+        path = _quick_update_state_path()
+        folder = os.path.dirname(path)
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+        with open(path, 'w') as fh:
+            json.dump(state, fh)
+            fh.flush()
+            os.fsync(fh.fileno())
+        return _quick_update_state().get('applied') == state.get('applied')
+    except Exception as state_err:
+        logging.log(
+            '[QUICK-UPDATE] Could not record update state: {0}'.format(
+                state_err), level=xbmc.LOGERROR)
+        return False
+
+
+def quick_update_applied_id():
+    """The highest quick-update number we can PROVE was applied, from either
+    store. Taking the higher of the two means a working setting still counts if
+    the file is missing, and vice versa."""
+    best = 0
+    try:
+        best = max(best, int(str(CONFIG.QUICK_UPDATE_NOTEID or '0').strip() or 0))
+    except (TypeError, ValueError):
+        pass
+    try:
+        best = max(best, int(_quick_update_state().get('applied') or 0))
+    except (TypeError, ValueError):
+        pass
+    return best
+
+
+def record_quick_update_applied(note_id):
+    """Record `note_id` as applied in BOTH stores. Returns True only when it can
+    be read back afterwards."""
+    stored = False
+    try:
+        CONFIG.set_setting('quick_update_noteid', str(note_id))
+        CONFIG.set_setting('quick_update_notedismiss', 'false')
+        CONFIG.QUICK_UPDATE_NOTEID = str(note_id)
+        CONFIG.QUICK_UPDATE_NOTEDISMISS = 'false'
+        stored = str(CONFIG.get_setting('quick_update_noteid') or '').strip() \
+            == str(note_id)
+    except Exception:
+        stored = False
+    state = _quick_update_state()
+    state['applied'] = max(int(state.get('applied') or 0), int(note_id))
+    state['tries'] = {}          # a recorded update closes the book on retries
+    filed = _write_quick_update_state(state)
+    if not (stored or filed):
+        logging.log(
+            '[QUICK-UPDATE] Update {0} ran but could NOT be recorded in either '
+            'the add-on setting or {1}. Not restarting: a restart that cannot '
+            'remember it happened is what turns an update into a loop.'.format(
+                note_id, _quick_update_state_path()), level=xbmc.LOGERROR)
+    return stored or filed
+
+
+def _count_quick_update_try(note_id):
+    """Count an attempt BEFORE making it, so that an attempt which never
+    returns -- Kodi force-closed mid-update, or killed by the system -- is
+    counted all the same. Returns (attempts_so_far, can_remember), where the
+    second is False when nothing we write survives at all: with no memory there
+    is no counter either, and an update that cannot be remembered is one that
+    would be repeated on every single startup."""
+    state = _quick_update_state()
+    key = str(note_id)
+    tries = int(state['tries'].get(key) or 0) + 1
+    state['tries'] = {key: tries}
+    filed = _write_quick_update_state(state)
+    if filed:
+        return tries, True
+    # The file is unusable. The add-on setting is the only thing left, so find
+    # out now whether IT can hold anything, rather than after downloading and
+    # extracting a package we would then be unable to record.
+    probe = 'try{0}'.format(tries)
+    try:
+        CONFIG.set_setting('quick_update_notedismiss', 'false')
+        can_set = str(CONFIG.get_setting('quick_update_notedismiss') or '') \
+            == 'false'
+    except Exception:
+        can_set = False
+    del probe
+    return tries, can_set
+
+
 # xbmc.executebuiltin(f"RunPlugin(plugin://{CONFIG.ADDON_ID}/?mode=install&action=quick_update&name={quote_plus(CONFIG.BUILDNAME)}&auto_quick_update=true)")
 def auto_quick_update():
 
@@ -140,16 +271,17 @@ def auto_quick_update():
         return
 
     note_id = str(note_id).strip()
-    current_note_id = str(CONFIG.QUICK_UPDATE_NOTEID or '0').strip()
+    current_number = quick_update_applied_id()
+    current_note_id = str(current_number)
     logging.log(
-        '[QUICK-UPDATE] note_id={0} | CONFIG.QUICK_UPDATE_NOTEID={1}'.format(
-            note_id, current_note_id
+        '[QUICK-UPDATE] note_id={0} | applied={1} (setting={2}, file={3})'.format(
+            note_id, current_number, CONFIG.QUICK_UPDATE_NOTEID,
+            _quick_update_state().get('applied')
         )
     )
 
     try:
         remote_number = int(note_id)
-        current_number = int(current_note_id)
     except (TypeError, ValueError):
         logging.log(
             '[QUICK-UPDATE] Invalid note id (remote={0}, stored={1}); '
@@ -166,8 +298,33 @@ def auto_quick_update():
     if remote_number < current_number:
         return
 
+    # Count the attempt BEFORE making it. An update that force-closes Kodi and
+    # then cannot record that it ran would otherwise be attempted again on the
+    # next startup, and again after that, with no end -- the loop users hit. A
+    # counter written up front is counted even when the attempt never returns,
+    # so after a couple of goes the wizard stops driving it and simply says so.
+    tries, can_remember = _count_quick_update_try(remote_number)
+    if not can_remember:
+        logging.log(
+            '[QUICK-UPDATE] Neither the add-on setting nor {0} can be written, '
+            'so this update could not be recorded as done and would be run '
+            'again on every startup. Not running it -- showing the '
+            'notification instead.'.format(_quick_update_state_path()),
+            level=xbmc.LOGERROR)
+        window.show_notification(msg, source="quick_update_notification")
+        return
+    if tries > QUICK_UPDATE_MAX_TRIES:
+        logging.log(
+            '[QUICK-UPDATE] Update {0} has already been attempted {1} time(s) '
+            'without being recorded as done. Not attempting it again '
+            'automatically -- showing the notification instead.'.format(
+                note_id, tries - 1), level=xbmc.LOGERROR)
+        window.show_notification(msg, source="quick_update_notification")
+        return
+
     logging.log(
-        '[QUICK-UPDATE] Starting quick update number {0}'.format(note_id)
+        '[QUICK-UPDATE] Starting quick update number {0} (attempt {1})'.format(
+            note_id, tries)
     )
     from resources.libs.wizard import Wizard
     wizard = Wizard()
@@ -200,10 +357,14 @@ def auto_quick_update():
     # Commit the delivery state only AFTER the package completed. The old
     # order wrote the new id before download/extract; one transient failure
     # permanently suppressed every retry for that release.
-    CONFIG.set_setting('quick_update_noteid', note_id)
-    CONFIG.set_setting('quick_update_notedismiss', 'false')
-    CONFIG.QUICK_UPDATE_NOTEID = note_id
-    CONFIG.QUICK_UPDATE_NOTEDISMISS = 'false'
+    #
+    # ...and only restart once that record is PROVEN to have stuck. Restarting
+    # without it is precisely what makes a loop: the files are in place, Kodi is
+    # force-closed, and the next startup finds the same number waiting and does
+    # it all again. If it cannot be recorded, the update is still installed --
+    # it simply takes effect the next time Kodi starts on its own.
+    if not record_quick_update_applied(note_id):
+        return
     wizard.force_close_kodi_in_5_seconds(
         dialog_header="עדכון מהיר הסתיים בהצלחה"
     )
@@ -340,8 +501,15 @@ def fresh_build_auto_install_if_needed():
         from resources.libs.gui import window as _window
         note_id, _msg = _window.split_notify(CONFIG.QUICK_UPDATE_NOTIFICATION_URL)
         if note_id:
-            CONFIG.set_setting('quick_update_noteid', note_id)
+            # A fresh install already carries the current package, so stamp the
+            # number down as applied -- otherwise the very first startup after
+            # it quick-updates to what it just installed. Through the same
+            # durable record as the quick-update path: this write is followed by
+            # the same hard kill, and losing it here is how a brand new install
+            # ends up updating and restarting on every launch.
+            record_quick_update_applied(str(note_id).strip())
             CONFIG.set_setting('quick_update_notedismiss', 'true')
+            CONFIG.QUICK_UPDATE_NOTEDISMISS = 'true'
 
         from resources.libs.wizard import Wizard
         Wizard().force_close_kodi_in_5_seconds(
