@@ -1,3 +1,17 @@
+v0.2.451
+- Picking a source plays it again. Since 6.07.92 POV reads a property on its
+  TorBox client one line AFTER the source has already resolved and the playable
+  link is in hand -- and on this build that property was missing, so the link
+  was thrown away and POV moved on to the next source, and the next, until the
+  list ran out and it said "no results". The property was missing because of
+  us: the build's quick-update package had been carrying a copy of POV's own
+  TorBox file from June, and Kodi lays a quick update straight over the add-ons
+  folder, so every update quietly put that older copy back over POV's. It did
+  no harm for weeks, until POV started needing something only its own newer
+  copy has. The package no longer carries any POV file at all, and this version
+  puts POV's own file back where an earlier package overwrote it. Nothing is
+  touched on a device that was not affected.
+
 v0.2.450
 - "No results" on every movie and every episode is fixed. POV's own scraper
   list starts with a line that is a takeover rather than a filter: if the
