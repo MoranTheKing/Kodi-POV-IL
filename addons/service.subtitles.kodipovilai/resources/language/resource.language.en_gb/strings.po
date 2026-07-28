@@ -549,3 +549,11 @@ msgstr "Fast mode (paid Gemini API tier)"
 msgctxt "#32551"
 msgid "Turn ON only if you are on a PAID Gemini plan (billing enabled on your API key). The add-on normally paces requests and limits parallel chunks to stay under the free tier's ~15 requests/minute limit; a paid key has thousands, so this lifts those limits for much faster translation. Leave OFF for a free key (ON would just cause rate-limit errors and retries). Does not change translation quality -- that is set by the Model option."
 msgstr "Turn ON only if you are on a PAID Gemini plan (billing enabled on your API key). The add-on normally paces requests and limits parallel chunks to stay under the free tier's ~15 requests/minute limit; a paid key has thousands, so this lifts those limits for much faster translation. Leave OFF for a free key (ON would just cause rate-limit errors and retries). Does not change translation quality -- that is set by the Model option."
+
+msgctxt "#32552"
+msgid "Leave POV exactly as its author shipped it"
+msgstr "Leave POV exactly as its author shipped it"
+
+msgctxt "#32553"
+msgid "Turn ON to stop this add-on making any change to plugin.video.pov. It normally adjusts about twenty of POV's own files on every start (Hebrew menus, genre icons, source-quality labels, and more), and POV updates itself whenever its author publishes -- so if POV ever starts behaving oddly, turning this ON and reinstalling POV from its repository tells you in one step whether the cause was here. Leave OFF for normal use."
+msgstr "Turn ON to stop this add-on making any change to plugin.video.pov. It normally adjusts about twenty of POV's own files on every start (Hebrew menus, genre icons, source-quality labels, and more), and POV updates itself whenever its author publishes -- so if POV ever starts behaving oddly, turning this ON and reinstalling POV from its repository tells you in one step whether the cause was here. Leave OFF for normal use."

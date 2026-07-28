@@ -426,6 +426,17 @@
           <default></default>
           <control type="label" format="string"/>
         </setting>
+        <!-- Escape hatch: stop this add-on rewriting plugin.video.pov's
+             own source files. POV updates itself whenever its author
+             publishes, and every one of those rewrites assumes POV's
+             internals still look the way they did when it was written.
+             Turning this on leaves POV exactly as shipped, so anyone can
+             tell in one step whether a POV problem came from here. -->
+        <setting id="_pov_patching_off" type="boolean" label="32552" help="32553">
+          <level>3</level>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
         <!-- Hidden marker: AF3 first-launch dialog has been shown
              (and the user picked something other than 'remind me
              later' / ESC). Read by af3_first_launch.py. -->
