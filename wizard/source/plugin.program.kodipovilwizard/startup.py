@@ -223,7 +223,6 @@ def record_quick_update_applied(note_id):
         stored = False
     state = _quick_update_state()
     state['applied'] = max(int(state.get('applied') or 0), int(note_id))
-    state['tries'] = {}          # a recorded update closes the book on retries
     filed = _write_quick_update_state(state)
     if not (stored or filed):
         logging.log(
@@ -231,35 +230,62 @@ def record_quick_update_applied(note_id):
             'the add-on setting or {1}. Not restarting: a restart that cannot '
             'remember it happened is what turns an update into a loop.'.format(
                 note_id, _quick_update_state_path()), level=xbmc.LOGERROR)
-    return stored or filed
+        return False
+    # Only now, with the update provably recorded, does the attempt counter stop
+    # mattering. Clearing it any earlier hands back the one thing that bounds a
+    # run of failures: a record that did not stick, followed by a counter reset,
+    # is a fresh first attempt on every startup for ever.
+    state['tries'] = {}
+    _write_quick_update_state(state)
+    try:
+        CONFIG.set_setting('quick_update_tries', '')
+    except Exception:
+        pass
+    return True
+
+
+def _quick_update_tries_stored(note_id):
+    """Attempts recorded in the add-on setting, as '<note id>:<count>'. Scoped
+    to the id so a new release starts from zero rather than inheriting the last
+    one's count."""
+    raw = str(CONFIG.get_setting('quick_update_tries') or '').strip()
+    key, _sep, value = raw.partition(':')
+    if key.strip() != str(note_id):
+        return 0
+    try:
+        return int(value.strip() or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _count_quick_update_try(note_id):
     """Count an attempt BEFORE making it, so that an attempt which never
     returns -- Kodi force-closed mid-update, or killed by the system -- is
-    counted all the same. Returns (attempts_so_far, can_remember), where the
-    second is False when nothing we write survives at all: with no memory there
-    is no counter either, and an update that cannot be remembered is one that
-    would be repeated on every single startup."""
-    state = _quick_update_state()
+    counted all the same. Returns (attempts_so_far, can_remember).
+
+    The counter is kept in BOTH stores, for the same reason the applied number
+    is: a counter held only in the file this mechanism exists to work around
+    cannot advance when that file is the thing that is broken, and a cap that
+    cannot advance is not a cap. With the update then running on every startup,
+    that is a package downloaded and extracted every launch -- no force-close,
+    but not something to leave running either.
+
+    `can_remember` is a read-back of THIS counter, not of some other value that
+    happens to be writable. Checking a different key was the flaw here: the one
+    used was already at the value being written for anyone with a past update
+    behind them, so it read as success while the counter itself went nowhere."""
     key = str(note_id)
-    tries = int(state['tries'].get(key) or 0) + 1
+    state = _quick_update_state()
+    tries = max(int(state['tries'].get(key) or 0),
+                _quick_update_tries_stored(note_id)) + 1
     state['tries'] = {key: tries}
     filed = _write_quick_update_state(state)
-    if filed:
-        return tries, True
-    # The file is unusable. The add-on setting is the only thing left, so find
-    # out now whether IT can hold anything, rather than after downloading and
-    # extracting a package we would then be unable to record.
-    probe = 'try{0}'.format(tries)
     try:
-        CONFIG.set_setting('quick_update_notedismiss', 'false')
-        can_set = str(CONFIG.get_setting('quick_update_notedismiss') or '') \
-            == 'false'
+        CONFIG.set_setting('quick_update_tries', '{0}:{1}'.format(key, tries))
+        stamped = _quick_update_tries_stored(note_id) == tries
     except Exception:
-        can_set = False
-    del probe
-    return tries, can_set
+        stamped = False
+    return tries, (filed or stamped)
 
 
 # xbmc.executebuiltin(f"RunPlugin(plugin://{CONFIG.ADDON_ID}/?mode=install&action=quick_update&name={quote_plus(CONFIG.BUILDNAME)}&auto_quick_update=true)")
