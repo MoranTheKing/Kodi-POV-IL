@@ -154,11 +154,31 @@ _HTTP_PACE_DECAY_AFTER = 25       # ...that many consecutive clean requests
 # waiting. A 429 still widens the pace for everyone at once, and the
 # circuit-breaker is still shared, so pushback stops all of them together.
 #
-# Three, not more: it is the point where the round trip is fully hidden behind
-# the pace at the pace values we actually see, and every extra connection past
-# that buys nothing while adding one more socket the player has to share the
-# line with.
-_HTTP_CONNS = 3
+# DEFAULT 1 -- OFF. The field settled this, and it settled it against me.
+#
+# The reasoning above has a hole, and TorBox found it in under thirty seconds.
+# Keeping the same PACED SCHEDULE is not the same as keeping the same request
+# RATE. Serially we asked once every pace + round trip (0.2 + 0.35 = ~1.8/s);
+# with three connections the round trip stops counting and we ask once every
+# pace (5/s). That IS the speedup -- a latency-bound loop cannot be made faster
+# without asking more often -- and it is also three times the load, which is
+# exactly what a debrid token rate-limits.
+#
+# What the field log showed (Rick and Morty S03E05, 572 cues): concurrency ran
+# for 29 seconds, collected 5 backoffs, stood down as designed -- and by then the
+# AIMD controller had ratcheted the pace from 0.20s to its 2.00s ceiling. The
+# pace decays only after 25 consecutive clean requests, so recovering from that
+# takes hundreds of them. The extraction was left crawling at ten times its
+# normal gap: about nineteen minutes for an episode that used to take four. The
+# safety machinery all worked; it just could not undo the damage the burst had
+# already done.
+#
+# So concurrency is off until there is a provider it can be shown to help on,
+# measured against that provider rather than against a stand-in. Everything it
+# needs is still here and still tested -- set this to 3 to run it -- and the
+# stand-down now also puts the pace back where it found it (see below), so a
+# burst can no longer poison the rest of the run.
+_HTTP_CONNS = 1
 
 # Clusters fetched one at a time before the concurrent phase may start (see
 # _healthy). Two is the normal cost; the third is slack for a file that needs
@@ -754,6 +774,27 @@ class _Source(object):
         if wait <= 0:
             return False
         return self._sleep_or_abort(wait)
+
+    def restore_pace(self, was):
+        """Put the pace back to `was` after a burst we CHOSE to make provoked
+        pushback. Without this the AIMD ratchet keeps the penalty for the rest
+        of the extraction -- 0.20s to 2.00s in the field, and a decay that needs
+        25 clean requests per step to walk it back -- so a 29-second experiment
+        cost fifteen extra minutes. Only ever lowers the pace back toward where
+        it started; a provider that is genuinely slow keeps its own widening,
+        because that widening was not our doing."""
+        with self._lock:
+            if was is None or self._pace <= was:
+                return False
+            had, self._pace = self._pace, max(was, self._pace_floor)
+            self._429_streak = 0
+            self._clean_streak = 0
+            if self._stats is not None:
+                self._stats['pace'] = self._pace
+        if self._log:
+            self._log('pushback came from our own burst -- pace back to %.2fs '
+                      'from %.2fs' % (self._pace, had))
+        return True
 
     def _take_session(self):
         """Borrow a connection. Serial callers always get the original one, so
@@ -2848,10 +2889,15 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                  else 1)
         try:
             if conns > 1:
-                log('%d connections for the remaining %d cluster(s), on one '
-                    'shared %.2fs request schedule -- the CDN sees the same '
-                    'rate, we just stop waiting out the round trip'
-                    % (conns, len(rest), getattr(src, '_pace', 0.0)))
+                # Remember the pace we are starting from. Asking more often is
+                # what makes this faster, so if the provider refuses, the
+                # refusals are OURS -- and their cost must not outlive the
+                # experiment (see restore_pace).
+                pace_before = getattr(src, '_pace', None)
+                log('%d connections for the remaining %d cluster(s): the pace '
+                    'stays %.2fs but the round trip stops counting, so we ask '
+                    'about %d times as often'
+                    % (conns, len(rest), pace_before or 0.0, conns))
                 i = _run_concurrently(
                     _one_cluster, rest, conns,
                     lambda: state['stop'] is not None or src.tripped
@@ -2861,6 +2907,7 @@ def _extract_cues_http(src, positions, entries, want, deadline_s, t0, abort_cb,
                         '(%d backoff(s), %d cluster(s) needing a scan)'
                         % (len(rest) - i, getattr(src, '_429_total', 0),
                            len(needs_scan)))
+                    src.restore_pace(pace_before)
         finally:
             src.close_pool()
         for (cpos, items) in rest[i:]:

@@ -1,3 +1,23 @@
+v0.2.455
+- The three-connection extraction from the last version is switched back off,
+  and the harm it did is undone. It was wrong, and the reasoning was wrong in a
+  way worth writing down: keeping the same gap between requests is not the same
+  as keeping the same request RATE. Serially each line cost the gap AND a round
+  trip to the provider; with three connections the round trip stops counting and
+  only the gap remains, so we asked about three times as often. That IS the
+  speedup -- waiting less means asking more -- and it is also three times the
+  load, which is exactly what a debrid account limits. TorBox refused within
+  thirty seconds, and by the time the add-on had backed off to one connection
+  the automatic slow-down had already widened the gap tenfold, where it stays
+  until hundreds of clean requests walk it back. An episode that used to take
+  four minutes was left crawling for nineteen.
+- So: back to one connection, and a slow-down caused by our own burst is now
+  undone when the burst stops, instead of being carried for the rest of the
+  extraction. Anyone who saw an extraction crawling after the last update gets
+  the old speed back. The faster path is kept and still tested, switched off,
+  until there is a provider it can be shown to help on -- measured against that
+  provider rather than against a stand-in.
+
 v0.2.454
 - Extracting a built-in subtitle is about twice as fast. It was never limited by
   bandwidth -- it was waiting: one connection, one request at a time, so every
