@@ -208,6 +208,14 @@ def _patch_file(rel_path, patcher):
 def ensure_patched():
     if xbmcvfs is None or kodi_utils is None:
         return 'no_kodi'
+    # POV moved the account-status screen this patch decorates out of
+    # debrids/torbox.py and deleted the file (6.07 era). Where the file is
+    # gone there is nothing here to do and nothing wrong -- say so once,
+    # quietly, instead of warning about it on every single startup for ever.
+    # (Until 0.1.493 our own update package kept planting an old copy of that
+    # file back, which is the only reason this patch appeared to still apply.)
+    if _path(TORBOX_REL) and not os.path.isfile(_path(TORBOX_REL)):
+        return 'not_applicable'
     api_status = _patch_file(TORBOX_API_REL, _patch_api)
     torbox_status = _patch_file(TORBOX_REL, _patch_torbox)
     if api_status in ('missing', 'unmatched') or torbox_status in ('missing', 'unmatched'):

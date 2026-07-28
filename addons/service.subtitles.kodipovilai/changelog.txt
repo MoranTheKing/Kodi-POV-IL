@@ -1,3 +1,18 @@
+v0.2.452
+- Hardening on yesterday's TorBox repair, from a review of it. The repair now
+  refuses to install its copy of POV's file unless that copy compiles: POV
+  imports the TorBox client the moment anything debrid-related loads, so a file
+  that will not parse would take down every debrid path rather than just the
+  one line being fixed. It also no longer accepts the mere mention of the
+  missing property as proof a device is healthy -- only an actual assignment
+  counts -- and it clears up the stray file our old packages planted even on
+  devices where POV had already replaced the client on its own.
+- The log stops repeating a warning it cannot act on. A patch that adds TorBox
+  30-day usage to POV's account screen has been aiming at a file POV deleted;
+  it only appeared to still apply because our own package kept putting an old
+  copy of that file back. It now recognises that POV moved on and says nothing
+  further, so the log keeps meaning something when the next problem arrives.
+
 v0.2.451
 - Picking a source plays it again. Since 6.07.92 POV reads a property on its
   TorBox client one line AFTER the source has already resolved and the playable
