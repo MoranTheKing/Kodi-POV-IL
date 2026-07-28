@@ -36,6 +36,97 @@ try:
 except Exception:  # pragma: no cover - urllib always present on CPython 3
     _urlreq = None
 
+import json as _json
+
+
+def _pace_memory_path():
+    """Where the per-provider pace memory lives, or '' when there is no Kodi to
+    ask (tests, tooling). Never raises."""
+    try:
+        import xbmcaddon
+        import xbmcvfs
+        prof = xbmcvfs.translatePath(
+            xbmcaddon.Addon().getAddonInfo('profile')) or ''
+    except Exception:
+        return ''
+    if not prof:
+        return ''
+    try:
+        if not os.path.isdir(prof):
+            os.makedirs(prof)
+    except OSError:
+        return ''
+    return os.path.join(prof, _PACE_MEMORY_FILE)
+
+
+def _provider_key(url):
+    """The last two labels of the host: one debrid provider hands out many
+    per-store hostnames (store-033.wnam.tb-cdn.io, store-027.wnam.tb-cdn.io) and
+    they all draw on the SAME token bucket, so they must share one memory."""
+    m = re.match(r'^https?://([^/:?#]+)', url or '', re.I)
+    if not m:
+        return ''
+    labels = [p for p in m.group(1).lower().split('.') if p]
+    return '.'.join(labels[-2:]) if len(labels) >= 2 else ''
+
+
+def _pace_memory_load(url):
+    """The pace to START this run at: last run's, probed 25% faster, clamped so
+    it can never be below the normal starting pace. None when we know nothing."""
+    key = _provider_key(url)
+    path = _pace_memory_path()
+    if not key or not path or not os.path.isfile(path):
+        return None
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            data = _json.loads(f.read()) or {}
+        saved = float((data.get('hosts') or {}).get(key))
+    except (IOError, OSError, ValueError, TypeError):
+        return None
+    if not (saved == saved) or saved <= 0:      # NaN / nonsense -> know nothing
+        return None
+    probe = saved * _PACE_MEMORY_PROBE
+    if probe <= _HTTP_REQ_PACE_S:
+        return None                              # nothing to remember: start normal
+    return min(probe, _HTTP_REQ_PACE_MAX)
+
+
+def _pace_memory_save(url, pace, reqs):
+    """Record the pace this run ended on. Best-effort and silent."""
+    key = _provider_key(url)
+    path = _pace_memory_path()
+    if not key or not path or reqs < _PACE_MEMORY_MIN_REQS:
+        return
+    try:
+        pace = float(pace)
+    except (TypeError, ValueError):
+        return
+    if not (pace == pace) or pace <= 0:
+        return
+    pace = max(_HTTP_REQ_PACE_S, min(pace, _HTTP_REQ_PACE_MAX))
+    try:
+        data = {}
+        if os.path.isfile(path):
+            with open(path, 'r', encoding='utf-8') as f:
+                data = _json.loads(f.read()) or {}
+        hosts = data.get('hosts')
+        if not isinstance(hosts, dict):
+            hosts = {}
+        order = [h for h in (data.get('order') or []) if h in hosts]
+        hosts[key] = round(pace, 3)
+        order = [h for h in order if h != key] + [key]
+        while len(order) > _PACE_MEMORY_MAX_HOSTS:
+            hosts.pop(order.pop(0), None)
+        tmp = path + '.aitmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            f.write(_json.dumps({'hosts': hosts, 'order': order}))
+        os.replace(tmp, path)
+    except (IOError, OSError, ValueError, TypeError):
+        try:
+            os.remove(path + '.aitmp')
+        except OSError:
+            pass
+
 # ---- EBML / Matroska element IDs (raw, incl. length-descriptor bits) --------
 _EBML = 0x1A45DFA3
 _SEGMENT = 0x18538067
@@ -136,8 +227,61 @@ _HTTP_REQ_PACE_MAX = 2.0         # ceiling: every 429 widens the gap toward this
 # back now. Recovery is slower than back-off on purpose (0.9x per 25 clean
 # requests vs 1.5x per 429): pacing too slow costs time, pacing too fast costs
 # the movie.
-_HTTP_PACE_DECAY = 0.9            # multiplier applied after a clean run
-_HTTP_PACE_DECAY_AFTER = 25       # ...that many consecutive clean requests
+_HTTP_PACE_DECAY = 0.85           # multiplier applied after a clean run
+_HTTP_PACE_DECAY_AFTER = 12       # ...that many consecutive clean requests
+
+# ONE congestion event must widen the pace ONCE.
+#
+# This is the bug that made every TorBox extraction crawl, and it is a textbook
+# one. AIMD's multiplicative decrease belongs to a congestion EPOCH -- TCP halves
+# the window once per round trip and deliberately ignores every further loss in
+# that window, because those losses are the same event, reported again. We were
+# multiplying per 429 RESPONSE. Since a single fetch retries up to
+# _HTTP_429_RETRIES times and each retry that answers 429 backed off again, one
+# unlucky cluster could multiply the pace by 1.5^5 = 7.6x on its own.
+#
+# Field log 63addde9 (Rick and Morty S06E07, BluRay REMUX, 364 cues):
+#     18:16:16  first 429 after 68 requests   pace 0.20s -> 0.30s
+#     18:16:49  SIXTH 429, 27 requests later  pace 1.52s -> 2.00s  (the ceiling)
+# Thirty-three seconds of one congestion event, counted six times, and the run
+# spent the next four minutes at the 2.00s ceiling doing 143 of 364 cues. The
+# proof it was overshoot and not a genuinely slow provider is in the same log:
+#     18:20:02  CDN quiet for 25 request(s) -- pace 2.00s -> 1.80s
+# Twenty-five consecutive CLEAN requests at 2.00s. The tolerated pace was far
+# below the ceiling we pinned ourselves to.
+#
+# So: after widening, refuse to widen again until we have actually MEASURED the
+# new pace -- both a minimum number of completed requests and a minimum elapsed
+# time at it. 429s inside that window are still honoured (Retry-After, backoff,
+# retry, the streak breaker); they simply do not re-punish a pace whose effect
+# is not known yet. If the new pace is genuinely still too fast, the next 429
+# after the window widens it again -- which is the controller doing its job
+# instead of free-falling to the ceiling on the first burst.
+_HTTP_PACE_EPOCH_REQS = 8         # requests to complete before widening again
+_HTTP_PACE_EPOCH_S = 5.0          # ...and seconds to elapse, whichever is later
+
+# Remember what each provider tolerated, so we stop rediscovering it every time.
+#
+# The epoch fix above stops one congestion event from being punished six times,
+# but every extraction still STARTS at 0.20s -- ~5 requests a second, above any
+# plausible debrid sustained rate. A token bucket hides that: field log 63addde9
+# shows 68 requests sailing through before the first refusal. So each run spends
+# its burst allowance, hits the wall, and pays the whole climb again. That is why
+# this has needed fixing over and over: the controller had no memory, so every
+# episode re-learned the same lesson from zero.
+#
+# Now the pace a run converged on is written per provider (the last two labels of
+# the host, so store-033.wnam.tb-cdn.io and store-027.wnam.tb-cdn.io are the same
+# provider) and the next run starts there -- but 25% faster, so it keeps probing
+# and a single bad night decays away over a few runs instead of pinning us slow
+# forever. It can only ever start at or ABOVE _HTTP_REQ_PACE_S, never below, so
+# no remembered value can make us hit a provider harder than a fresh install
+# would; the worst case is starting slower than necessary and letting the normal
+# decay walk it back.
+_PACE_MEMORY_FILE = 'embedded_pace.json'
+_PACE_MEMORY_PROBE = 0.75         # start this fraction of last time's pace
+_PACE_MEMORY_MAX_HOSTS = 16       # keep the file small; drop the oldest
+_PACE_MEMORY_MIN_REQS = 20        # too short a run tells us nothing -- don't save
 
 # How many keep-alive connections the targeted (relpos) fetches may use at once.
 #
@@ -415,6 +559,10 @@ class _Source(object):
         self._429_streak = 0          # consecutive 429-needing fetches (fail-fast)
         self._clean_streak = 0        # consecutive fetches that needed no backoff
         self._429_total = 0           # how many fetches needed a backoff at all
+        self._epoch_reqs = None       # requests done when the pace last widened
+        self._epoch_at = 0.0          # ...and when, so one event widens it once
+        self._epoch_until = 0.0       # Retry-After can make the window longer
+        self._429_absorbed = 0        # 429s inside a window we're still measuring
         self._one_shot = 0            # cues resolved in ONE request, not two
         self._log = None              # set by extract_srt so pacing is visible
         self._prefix = None           # learned cluster prefix len (see below)
@@ -899,14 +1047,48 @@ class _Source(object):
                 code = r.status_code
                 if code == 429 or code >= 500:
                     saw_429 = True
+                    ra = r.headers.get('Retry-After')
                     # Back-pressure: widen the pace so we ease off the contended
                     # token (protects the player, converges toward a rate the CDN
                     # tolerates). Persists for the rest of this extraction.
+                    #
+                    # ONCE per congestion event, though -- see _HTTP_PACE_EPOCH_*.
+                    # Until the pace we just set has been measured, further 429s
+                    # are the same event arriving again (very often literally the
+                    # retries of this same fetch) and must not compound.
                     try:
+                        _now = time.time()
                         with self._lock:
                             _was = getattr(self, '_pace', _HTTP_REQ_PACE_S)
-                            self._pace = min(_was * 1.5, _HTTP_REQ_PACE_MAX)
                             self._429_total += 1
+                            _measuring = (
+                                self._epoch_reqs is not None
+                                and (self.http_reqs - self._epoch_reqs
+                                     < _HTTP_PACE_EPOCH_REQS
+                                     or _now < self._epoch_at
+                                     + _HTTP_PACE_EPOCH_S
+                                     or _now < self._epoch_until))
+                            if _measuring:
+                                self._429_absorbed += 1
+                            else:
+                                self._pace = min(_was * 1.5,
+                                                 _HTTP_REQ_PACE_MAX)
+                                self._clean_streak = 0
+                                self._epoch_reqs = self.http_reqs
+                                self._epoch_at = _now
+                                # The CDN told us how long it wants: that IS the
+                                # window, so never re-widen inside it. Anything
+                                # unparseable or non-finite just leaves the
+                                # request/seconds window above to decide.
+                                self._epoch_until = 0.0
+                                if ra:
+                                    try:
+                                        _ra = float(ra)
+                                    except (TypeError, ValueError):
+                                        _ra = 0.0
+                                    if 0.0 < _ra < 1e6:
+                                        self._epoch_until = _now + min(
+                                            _ra, _HTTP_429_MAX_WAIT)
                         if self._stats is not None:
                             self._stats['backoffs'] = self._429_total
                             self._stats['pace'] = self._pace
@@ -914,18 +1096,18 @@ class _Source(object):
                         # creeping 0.2s -> 2.0s is what turns a 3-minute extract
                         # into an 18-minute one, and it used to leave no trace
                         # at all in the log.
-                        if self._log and (self._429_total == 1
-                                          or self._pace >= _was * 2
-                                          or self._pace >= _HTTP_REQ_PACE_MAX
-                                          > _was):
+                        if self._log and not _measuring and (
+                                self._429_total == 1
+                                or self._pace >= _was * 2
+                                or self._pace >= _HTTP_REQ_PACE_MAX > _was):
                             self._log(
-                                'CDN pushed back (%d so far, HTTP %s) -- pace '
-                                '%.2fs -> %.2fs after %d request(s)'
-                                % (self._429_total, code, _was, self._pace,
-                                   self.reqs))
+                                'CDN pushed back (%d so far, %d absorbed as the '
+                                'same event, HTTP %s) -- pace %.2fs -> %.2fs '
+                                'after %d request(s)'
+                                % (self._429_total, self._429_absorbed, code,
+                                   _was, self._pace, self.reqs))
                     except Exception:
                         pass
-                    ra = r.headers.get('Retry-After')
                     try:
                         r.close()
                     except Exception:
@@ -1871,10 +2053,19 @@ def extract_srt(url_or_path, track_num=None, lang=None,
     the connection back to the player and cancelling useful work for nothing."""
     _log = log or _noop
     t0 = time.time()
+    src = None
     try:
         src = _Source(url_or_path)
         src._abort_cb = abort_cb   # polled DURING pace/backoff sleeps too
         src._log = _log            # so pacing/back-pressure is visible in a log
+        # Start where this provider left off last time (see _PACE_MEMORY_*),
+        # rather than spending the burst allowance re-learning it every episode.
+        _remembered = _pace_memory_load(url_or_path)
+        if _remembered:
+            src._pace = _remembered
+            _log('starting at %.2fs -- the pace this provider tolerated last '
+                 'time, probed %d%% faster' % (
+                     _remembered, int(round((1 - _PACE_MEMORY_PROBE) * 100))))
         src._stats = stats if stats is not None else None
         if src._stats is not None:
             src._stats.setdefault('done', 0)
@@ -1941,6 +2132,15 @@ def extract_srt(url_or_path, track_num=None, lang=None,
     except Exception as e:
         _log('extract_srt failed: %s' % e)
         return None
+    finally:
+        # On EVERY exit, including the ones that gave up. A run the provider
+        # throttled into deferring is precisely the run whose lesson the next
+        # one needs; saving only on success would keep re-learning it.
+        try:
+            if src is not None and src.is_http:
+                _pace_memory_save(url_or_path, src._pace, src.http_reqs)
+        except Exception:
+            pass
 
 
 # ISO 639 language-code equivalences. Kodi and the subtitle providers hand us a
