@@ -28,8 +28,8 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 SOURCES_REL_PATH = 'resources/lib/modules/sources.py'
-CAP_MARKER = 'AI_SUBS_REMEMBER_SOURCE_v6'
-PICK_MARKER = 'AI_SUBS_AUTOPICK_v6'
+CAP_MARKER = 'AI_SUBS_REMEMBER_SOURCE_v7'
+PICK_MARKER = 'AI_SUBS_AUTOPICK_v7'
 
 # Unique yield site (optional inline `if ...:` prefix, any indent).
 _YIELD_RE = re.compile(
@@ -92,7 +92,7 @@ def _capture_lines(body_indent, eol):
         "\tif (_rs_a.Addon('service.subtitles.kodipovilai').getSetting('remember_source') or '').strip().lower() == 'true':",
         '\t\timport sys as _rs_s, xbmcvfs as _rs_v',
         "\t\t_rs_p = _rs_v.translatePath('special://home/addons/service.subtitles.kodipovilai/resources/lib')",
-        '\t\tif _rs_p not in _rs_s.path: _rs_s.path.insert(0, _rs_p)',
+        '\t\tif _rs_p not in _rs_s.path: _rs_s.path.append(_rs_p)',
         '\t\timport source_capture as _rs_c',
         '\t\t_rs_c.capture(self, item)',
         'except Exception: pass',
@@ -108,7 +108,7 @@ def _autopick_lines(body_indent, eol):
         "\tif (_ap_a.Addon('service.subtitles.kodipovilai').getSetting('remember_source') or '').strip().lower() == 'true':",
         '\t\timport sys as _ap_s, xbmcvfs as _ap_v',
         "\t\t_ap_p = _ap_v.translatePath('special://home/addons/service.subtitles.kodipovilai/resources/lib')",
-        '\t\tif _ap_p not in _ap_s.path: _ap_s.path.insert(0, _ap_p)',
+        '\t\tif _ap_p not in _ap_s.path: _ap_s.path.append(_ap_p)',
         '\t\timport source_capture as _ap_c',
         '\t\t_ap_c.reorder(self, results)',
         'except Exception: pass',

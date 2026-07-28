@@ -29,7 +29,7 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 SOURCES_REL_PATH = 'resources/lib/windows/sources.py'
-MARKER = 'AI_SUBS_MATCH_v5'
+MARKER = 'AI_SUBS_MATCH_v6'
 
 # The for-loop that builds each source row (insert SETUP just before it).
 _LOOP_RE = re.compile(
@@ -82,7 +82,7 @@ def _setup_lines(indent, eol):
         'try:',
         '\timport sys as _sm_s, xbmcvfs as _sm_v',
         "\t_sm_p = _sm_v.translatePath('special://home/addons/service.subtitles.kodipovilai/resources/lib')",
-        '\tif _sm_p not in _sm_s.path: _sm_s.path.insert(0, _sm_p)',
+        '\tif _sm_p not in _sm_s.path: _sm_s.path.append(_sm_p)',
         '\timport he_sub_match as _sm_m',
         '\t_sm_names = _sm_m.release_names(self.meta)',
         '\t_sm_emb = _sm_m.embedded_names(self.meta)',
