@@ -1,3 +1,26 @@
+v0.2.453
+- Ktuvit subtitles that arrive unzipped now reach the community pool, and their
+  timing can be checked again. The engine converts a downloaded subtitle to
+  UTF-8 only when it has just unpacked it from an archive; Ktuvit sometimes
+  hands over the .srt on its own, and those files were used exactly as they
+  arrived -- in the older Hebrew encoding. Everything that reads a subtitle
+  afterwards reads it as UTF-8, so every Hebrew letter turned into a
+  replacement character: the pool's own quality check then saw a subtitle with
+  no Hebrew in it and refused to upload it (which is why it never appeared in
+  the channel), and the timing check saw one line of dialogue instead of
+  hundreds and gave up. A downloaded subtitle is now converted whichever way it
+  arrived, including one already sitting in the local cache from before. A file
+  that is already UTF-8 is not touched at all, so nothing already shared is
+  re-uploaded.
+- ...and the conversion can no longer damage a file it was not meant to touch.
+  "Not valid UTF-8" is not the same as "the old Hebrew encoding": it also
+  describes a perfectly good file with one damaged byte, and the old encoding
+  accepts almost any bytes. Reading such a file the wrong way turned every
+  curly quote and dash in it into gibberish -- a glitch nobody would notice
+  made into a ruined subtitle. The conversion is now accepted only when it
+  actually produces Hebrew, in the engine's own converter as well as the new
+  one, so an English subtitle with a single bad byte keeps the single bad byte.
+
 v0.2.452
 - Hardening on yesterday's TorBox repair, from a review of it. The repair now
   refuses to install its copy of POV's file unless that copy compiles: POV
