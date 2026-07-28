@@ -4,6 +4,22 @@ import xbmcvfs
 import os,gzip,shutil
 from resources.lib.subs_engine import log
 exts = [".idx", ".sup", ".srt", ".sub", ".str", ".ass"]
+def _plausible_hebrew(text):
+    """True if `text` reads as Hebrew rather than noise -- the majority-Hebrew
+    test the pool applies to a contribution, on a smaller sample."""
+    heb = letters = 0
+    for ch in text:
+        o = ord(ch)
+        if 0x590 <= o <= 0x5FF:
+            heb += 1
+            letters += 1
+        elif ('a' <= ch <= 'z') or ('A' <= ch <= 'Z'):
+            letters += 1
+    if letters < 40:
+        return False
+    return (heb / float(letters)) >= 0.5
+
+
 def convert_to_utf(file):
     """Normalize a downloaded subtitle file to UTF-8 on disk.
 
@@ -37,8 +53,18 @@ def convert_to_utf(file):
             break
         except (UnicodeDecodeError, LookupError):
             continue
+    else:
+        enc = None
     if text is None:
         return                       # unknown encoding -> leave file untouched
+    if enc == 'cp1255' and not _plausible_hebrew(text):
+        # "Not valid UTF-8" is not the same as "cp1255 Hebrew": it also
+        # describes a good UTF-8 file with ONE damaged byte, and cp1255 decodes
+        # almost any byte sequence. Without this, such a file is re-read as
+        # cp1255 end to end and every curly quote and em-dash in it becomes
+        # mojibake -- a near-invisible glitch turned into a ruined file. Only
+        # accept the fallback when it actually produced Hebrew.
+        return
     try:
         with codecs.open(file, 'w', 'utf-8') as output:
             output.write(text)
@@ -80,7 +106,13 @@ def extract(archive_file,MySubFolder):
 
                     return file_
     except Exception as e:
+        # Not an archive at all (Ktuvit sometimes serves the .srt directly, so
+        # ZipFile raises here) -- every other exit of this function normalises
+        # first, and this one skipping it is what sent cp1255 bytes downstream
+        # to be read as UTF-8: no Hebrew survived, the pool refused to upload
+        # the subtitle and the timing check saw one cue instead of hundreds.
         log.warning('Error Extract:'+str(e))
+        convert_to_utf(archive_file)
         return archive_file
     return '0'
 def g_extract(archive_file,dest,MySubFolder):
