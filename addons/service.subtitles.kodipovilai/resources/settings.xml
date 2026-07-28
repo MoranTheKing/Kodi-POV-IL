@@ -432,7 +432,7 @@
              internals still look the way they did when it was written.
              Turning this on leaves POV exactly as shipped, so anyone can
              tell in one step whether a POV problem came from here. -->
-        <setting id="_pov_patching_off" type="boolean" label="30000">
+        <setting id="_pov_patching_off" type="boolean" label="32552" help="32553">
           <level>3</level>
           <default>false</default>
           <control type="toggle"/>
