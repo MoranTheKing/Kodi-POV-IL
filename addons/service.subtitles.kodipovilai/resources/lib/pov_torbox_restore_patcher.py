@@ -41,6 +41,7 @@
 
 import hashlib
 import os
+import re
 
 try:
     import xbmcvfs
@@ -61,7 +62,11 @@ TORBOX_ORPHAN_REL = 'resources/lib/debrids/torbox.py'
 # lookup itself, not the bare word, so a POV that merely mentions it somewhere
 # else is not mistaken for one that depends on it.
 DEBRID_USE = 'api.defaults_to_cloud'
-API_DEFINES = 'defaults_to_cloud'
+# And what the client must actually DO to satisfy it -- an assignment, not the
+# word appearing somewhere. A file that only mentions defaults_to_cloud in a
+# comment still raises AttributeError, and reading it as "fine" would leave a
+# genuinely broken device unrepaired and told it was healthy.
+API_DEFINES_RE = re.compile(rb'^\s*defaults_to_cloud\s*=', re.M)
 
 # POV 6.07.92's own file, kept verbatim beside this module.
 GOOD_ASSET = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -131,13 +136,16 @@ def _remove_orphan():
         _log('could not remove the orphan torbox.py: {0}'.format(e),
              level='WARNING')
         return 'remove_failed'
-    _drop_pyc(path, 'torbox')
+    try:
+        _drop_pyc(path, 'torbox')
+    except Exception:
+        pass
     return 'removed'
 
 
 def ensure_patched():
-    """Returns 'no_pov' | 'not_damaged' | 'no_asset' | 'restored'
-    | 'read_failed' | 'write_failed'."""
+    """Returns 'no_pov' | 'not_damaged' | 'no_asset' | 'bad_asset'
+    | 'restored' | 'read_failed' | 'write_failed'."""
     api_path = _pov_path(TORBOX_API_REL)
     debrid_path = _pov_path(DEBRID_REL)
     if not api_path or not os.path.isfile(api_path) \
@@ -149,11 +157,20 @@ def ensure_patched():
     if debrid_src is None or api_src is None:
         return 'read_failed'
 
+    # The torbox.py we planted is ours to clear up whether or not the client
+    # still needs restoring -- POV's own next update fixes torbox_api.py
+    # without deleting a file it no longer ships, and the orphan would
+    # otherwise sit there for good.
+    try:
+        orphan = _remove_orphan()
+    except Exception:
+        orphan = 'error'
+
     if DEBRID_USE.encode('ascii') not in debrid_src:
         # This POV does not read the attribute, so whatever TorBox client is on
         # disk is not causing this failure. Leave it alone.
         return 'not_damaged'
-    if API_DEFINES.encode('ascii') in api_src:
+    if API_DEFINES_RE.search(api_src):
         return 'not_damaged'
 
     good = _read_bytes(GOOD_ASSET)
@@ -161,6 +178,17 @@ def ensure_patched():
         _log('POV needs a TorBox client we do not have a copy of -- skipping',
              level='WARNING')
         return 'no_asset'
+    try:
+        # Never hand POV a file that will not import. modules/debrid.py imports
+        # debrids.torbox_api at module scope, so a truncated or corrupted asset
+        # would not merely leave TorBox broken -- it would take down every
+        # debrid path that reaches modules.debrid, which is worse than the bug
+        # being fixed here.
+        compile(good, api_path, 'exec')
+    except (SyntaxError, ValueError) as e:
+        _log('our copy of POV\'s TorBox client will not compile -- refusing '
+             'to install it ({0})'.format(e), level='WARNING')
+        return 'bad_asset'
 
     tmp = api_path + '.aitmp'
     try:
@@ -175,9 +203,13 @@ def ensure_patched():
         _log('could not restore torbox_api.py: {0}'.format(e), level='WARNING')
         return 'write_failed'
 
-    _drop_pyc(api_path, 'torbox_api')
+    # The repair is on disk from here on. Nothing below may turn a completed
+    # restore into a reported failure, so the tidying is guarded on its own.
+    try:
+        _drop_pyc(api_path, 'torbox_api')
+    except Exception:
+        pass
     was_ours = hashlib.md5(api_src).hexdigest() == STALE_API_MD5
-    orphan = _remove_orphan()
     _log('POV\'s TorBox client was an old copy that our own update package '
          'had written over it{0}; every TorBox source resolved and was then '
          'thrown away on api.defaults_to_cloud, which is why picking a source '
