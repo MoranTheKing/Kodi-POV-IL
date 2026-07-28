@@ -1131,6 +1131,102 @@ def _render_hebrew_rtl_copy(sub_file, legacy_engine=False):
         return sub_file
 
 
+def _is_plausible_hebrew(text):
+    """True if `text` reads as Hebrew subtitle text rather than noise.
+
+    This is the guard that stops the cp1255 fallback below from being a blunt
+    instrument. "Not valid UTF-8" does not mean "cp1255 Hebrew" -- it also
+    describes a perfectly good UTF-8 file with ONE damaged byte, and cp1255
+    happily decodes almost any byte sequence, so without this an English
+    subtitle whose only flaw was a single bad byte would be re-read as cp1255
+    from end to end and every curly quote and em-dash in it turned into
+    mojibake. A near-invisible glitch would become a ruined file.
+
+    So the conversion is only accepted when it produces what it claims to have
+    found. Same majority-Hebrew test the pool applies to a contribution, on a
+    smaller sample."""
+    heb = letters = 0
+    for ch in text:
+        o = ord(ch)
+        if 0x590 <= o <= 0x5FF:
+            heb += 1
+            letters += 1
+        elif ('a' <= ch <= 'z') or ('A' <= ch <= 'Z'):
+            letters += 1
+    if letters < 40:
+        return False
+    return (heb / float(letters)) >= 0.5
+
+
+def _ensure_utf8(path):
+    """Rewrite `path` as UTF-8 if it is not already valid UTF-8. Returns True
+    when the file was converted.
+
+    The engine normalises encodings in extract_sub.convert_to_utf -- but ONLY
+    for files it pulled out of an archive. Ktuvit sometimes serves the .srt
+    directly rather than zipped; ZipFile() then raises, extract() falls back to
+    `return archive_file`, and the RAW bytes (cp1255, the legacy Israeli Hebrew
+    encoding) are used as-is.
+
+    Nothing downstream survives that. Every consumer reads the file as UTF-8
+    with errors='replace', so each Hebrew letter becomes U+FFFD -- which is in
+    none of the letter ranges the code counts. The pool's quality gate sees a
+    subtitle with no Hebrew and drops it before uploading (a Ktuvit sub that
+    should have been mirrored for everyone silently never arrives), and subsync
+    sees one dialogue cue instead of hundreds and cannot verify the timing.
+    Both were observed in the field on Rick and Morty S01E09, where the pool
+    ended up with nothing while the same flow had mirrored four variants of
+    S01E01 -- the difference being that those came zipped.
+
+    Deliberately conservative: a file that already decodes as UTF-8 is not
+    touched at all, so its bytes, its source hash and its ".shared" marker stay
+    exactly as they were and this can never trigger a re-upload of anything
+    already in the pool. Fail-open on every error."""
+    try:
+        with open(path, 'rb') as f:
+            raw = f.read()
+    except OSError:
+        return False
+    try:
+        raw.decode('utf-8-sig')
+        return False                 # already UTF-8 -- leave it completely alone
+    except (UnicodeDecodeError, LookupError):
+        pass
+    try:
+        text = raw.decode('cp1255')  # also decodes iso-8859-8 Hebrew correctly
+    except (UnicodeDecodeError, LookupError):
+        kodi_utils.log('subs_engine_bridge: {0} is neither UTF-8 nor cp1255 -- '
+                       'left as-is'.format(os.path.basename(path)),
+                       level='WARNING')
+        return False
+    if not _is_plausible_hebrew(text):
+        # Reading it as cp1255 does not produce Hebrew, so cp1255 is not what
+        # this file is -- most likely a UTF-8 file with a damaged byte. Leaving
+        # it alone keeps that damage to the one byte it already was.
+        kodi_utils.log('subs_engine_bridge: {0} is not valid UTF-8, but '
+                       'reading it as cp1255 does not give Hebrew -- left '
+                       'as-is'.format(os.path.basename(path)), level='WARNING')
+        return False
+    tmp = path + '.utf8tmp'
+    try:
+        with open(tmp, 'w', encoding='utf-8', newline='') as f:
+            f.write(text)
+        os.replace(tmp, path)
+    except OSError as e:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        kodi_utils.log('subs_engine_bridge: UTF-8 rewrite failed for {0}: {1}'
+                       .format(os.path.basename(path), e), level='WARNING')
+        return False
+    kodi_utils.log('subs_engine_bridge: converted {0} from cp1255 to UTF-8 '
+                   '(a provider served it unzipped, so the engine never '
+                   'normalised it)'.format(os.path.basename(path)),
+                   level='INFO')
+    return True
+
+
 def _looks_like_subtitle(path):
     """True if the file is a plausible subtitle: not an HTML/zip blob (some
     providers hand back the error page or un-extracted archive when a download
@@ -1293,6 +1389,11 @@ def _download_inner(payload, for_delivery=True):
                 # (LAST_DOWNLOAD_FROM_CACHE is already declared global at the
                 # top of this function -- re-declaring it here is a SyntaxError.)
                 LAST_DOWNLOAD_FROM_CACHE = True
+                # A cache entry stored before this normalisation existed can
+                # still be cp1255. Heal it in place, or the same device keeps
+                # serving the same unreadable copy for as long as the entry
+                # lives -- and keeps failing to mirror it to the pool.
+                _ensure_utf8(hit)
                 if (for_delivery
                         and kodi_utils.get_bool(
                             'auto_fix_sub_punctuation', True)
@@ -1330,6 +1431,11 @@ def _download_inner(payload, for_delivery=True):
         # occasionally hands back an HTML/empty blob for ONE result; the user's
         # actual subtitle still loads, so the repeated popup was pure noise.
         return None
+
+    # Normalise the encoding BEFORE the pristine copy is taken, so the stored
+    # source -- the one the pool hashes, uploads and marks as shared, and the
+    # one subsync reads -- is the UTF-8 text everything downstream assumes.
+    _ensure_utf8(sub_file)
 
     # Store the validated PRISTINE provider file before any playback rendering.
     # This preserves one stable source hash for pool de-dup and sharing.
