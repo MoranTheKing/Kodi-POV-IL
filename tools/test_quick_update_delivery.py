@@ -5,8 +5,11 @@ only the real auto_quick_update() function from its AST and supply small fakes.
 """
 
 import ast
+import os
 import re
+import shutil
 import sys
+import tempfile
 import types
 from pathlib import Path
 
@@ -23,32 +26,65 @@ WIZARD = (
 )
 
 
-def _function_from_file(path, name, globals_dict):
+def _namespace_from_file(path, names, globals_dict, assignments=()):
+    """Compile the named module-level functions (and any named module-level
+    assignments) from `path` into ONE shared namespace, so they call each other
+    exactly as they do in the real module.
+
+    Pulling out a single function used to be enough. It stopped being enough
+    when auto_quick_update() grew helpers: extracting only the entry point left
+    every helper undefined, and the test failed for a reason that had nothing to
+    do with the behaviour it was guarding. Worse, the alternative -- passing
+    stubs for the helpers -- would have made the test pass while exercising none
+    of the record-keeping the loop fix lives in."""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    node = next(
-        item
-        for item in tree.body
-        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and item.name == name
-    )
-    module = ast.Module(body=[node], type_ignores=[])
+    wanted = set(names)
+    wanted_names = set(assignments)
+    body = []
+    for item in tree.body:
+        if (isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and item.name in wanted):
+            body.append(item)
+        elif isinstance(item, ast.Assign) and wanted_names:
+            targets = {t.id for t in item.targets if isinstance(t, ast.Name)}
+            if targets & wanted_names:
+                body.append(item)
+    missing = wanted - {n.name for n in body
+                        if isinstance(n, (ast.FunctionDef,
+                                          ast.AsyncFunctionDef))}
+    if missing:
+        raise AssertionError(
+            "{0} does not define {1}".format(path, sorted(missing)))
+    module = ast.Module(body=body, type_ignores=[])
     ast.fix_missing_locations(module)
     namespace = dict(globals_dict)
     exec(compile(module, str(path), "exec"), namespace)
-    return namespace[name]
+    return namespace
+
+
+def _function_from_file(path, name, globals_dict):
+    return _namespace_from_file(path, [name], globals_dict)[name]
 
 
 class FakeConfig:
     BUILDNAME = "Kodi POV IL - FENtastic"
+    ADDON_ID = "plugin.program.kodipovilwizard"
 
     def __init__(self, note_id="536", dismissed="true"):
         self.QUICK_UPDATE_NOTIFICATION_URL = "https://example.invalid/note"
         self.QUICK_UPDATE_NOTEID = note_id
         self.QUICK_UPDATE_NOTEDISMISS = dismissed
         self.settings = []
+        self.stored = {"quick_update_noteid": note_id}
+        self.writable = True
 
     def set_setting(self, key, value):
         self.settings.append((key, value))
+        if self.writable:
+            self.stored[key] = value
+
+    def get_setting(self, key):
+        return self.stored.get(key, "")
 
 
 class FakeWindow:
@@ -75,12 +111,29 @@ class FakeXbmc:
     LOGERROR = 4
 
 
+# The functions auto_quick_update() actually calls. They are compiled from the
+# real startup.py alongside it -- see _namespace_from_file.
+QUICK_UPDATE_HELPERS = [
+    "auto_quick_update",
+    "quick_update_applied_id",
+    "record_quick_update_applied",
+    "_quick_update_state",
+    "_quick_update_state_path",
+    "_write_quick_update_state",
+    "_quick_update_tries_stored",
+    "_count_quick_update_try",
+]
+
+
 def _run_startup_case(install_result=True, install_error=None,
-                      stored="536", remote="537", dismissed="true"):
-    config = FakeConfig(stored, dismissed)
+                      stored="536", remote="537", dismissed="true",
+                      profile=None, config=None):
+    config = config if config is not None else FakeConfig(stored, dismissed)
     window = FakeWindow(remote)
     logging = FakeLogging()
     events = []
+    own_profile = profile is None
+    profile = profile or tempfile.mkdtemp(prefix="qu-state-")
 
     class FakeWizard:
         def quick_update(self, **kwargs):
@@ -96,39 +149,65 @@ def _run_startup_case(install_result=True, install_error=None,
     libs = types.ModuleType("resources.libs")
     wizard_module = types.ModuleType("resources.libs.wizard")
     wizard_module.Wizard = FakeWizard
+    xbmcvfs_module = types.ModuleType("xbmcvfs")
+
+    def translate_path(path):
+        # The record lives under the wizard's own addon_data; point that at a
+        # throwaway directory so the test writes a REAL file and the read-back
+        # the fix depends on is a real read-back.
+        prefix = "special://profile/"
+        return os.path.join(profile, path[len(prefix):]) \
+            if path.startswith(prefix) else path
+
+    xbmcvfs_module.translatePath = translate_path
     previous = {
         name: sys.modules.get(name)
-        for name in ("resources", "resources.libs", "resources.libs.wizard")
+        for name in ("resources", "resources.libs", "resources.libs.wizard",
+                     "xbmcvfs")
     }
     sys.modules["resources"] = resources
     sys.modules["resources.libs"] = libs
     sys.modules["resources.libs.wizard"] = wizard_module
+    sys.modules["xbmcvfs"] = xbmcvfs_module
     try:
-        function = _function_from_file(
+        namespace = _namespace_from_file(
             STARTUP,
-            "auto_quick_update",
+            QUICK_UPDATE_HELPERS,
             {
                 "CONFIG": config,
                 "window": window,
                 "logging": logging,
                 "xbmc": FakeXbmc,
+                "os": os,
             },
+            assignments=("QUICK_UPDATE_MAX_TRIES",),
         )
-        function()
+        assert "QUICK_UPDATE_MAX_TRIES" in namespace, (
+            "startup.py no longer caps quick-update attempts")
+        namespace["auto_quick_update"]()
     finally:
         for name, old in previous.items():
             if old is None:
                 sys.modules.pop(name, None)
             else:
                 sys.modules[name] = old
+        if own_profile:
+            shutil.rmtree(profile, ignore_errors=True)
     return config, window, logging, events
+
+
+def _applied_settings(config):
+    """Just the delivery-state writes -- the attempt counter is bookkeeping and
+    is asserted on separately."""
+    return [pair for pair in config.settings
+            if pair[0] != "quick_update_tries"]
 
 
 def test_failed_install_does_not_advance():
     config, _window, _logging, events = _run_startup_case(
         install_result=False
     )
-    assert config.settings == []
+    assert _applied_settings(config) == []
     assert [event[0] for event in events] == ["install"]
     assert events[0][1]["expected_note_id"] == "537"
 
@@ -137,22 +216,25 @@ def test_install_exception_does_not_advance():
     config, _window, _logging, events = _run_startup_case(
         install_error=RuntimeError("network")
     )
-    assert config.settings == []
+    assert _applied_settings(config) == []
     assert [event[0] for event in events] == ["install"]
 
 
 def test_success_advances_after_install_then_closes():
     config, _window, _logging, events = _run_startup_case()
     assert events[0][0] == "install"
-    assert events[0][2] == []
-    assert config.settings == [
+    assert _applied_settings(config) == [
         ("quick_update_noteid", "537"),
         ("quick_update_notedismiss", "false"),
     ]
     assert events[1][0] == "close"
-    assert events[1][2] == config.settings
     assert config.QUICK_UPDATE_NOTEID == "537"
     assert config.QUICK_UPDATE_NOTEDISMISS == "false"
+    # The attempt counter is only cleared once the record is proven to have
+    # stuck -- clearing it earlier is a fresh first attempt on every startup.
+    assert ("quick_update_tries", "") in config.settings
+    assert config.settings.index(("quick_update_tries", "")) > \
+        config.settings.index(("quick_update_noteid", "537"))
 
 
 def test_equal_undismissed_note_only_shows_message():
@@ -164,6 +246,68 @@ def test_equal_undismissed_note_only_shows_message():
     assert window.shown == [
         ("maintenance", "quick_update_notification")
     ]
+
+
+def test_repeated_failure_stops_driving_the_update():
+    """The loop users hit: an update that installs, force-closes Kodi, and is
+    never recorded as done gets attempted again on the next startup, for ever.
+    After the cap it must stop attempting and just show the notification."""
+    profile = tempfile.mkdtemp(prefix="qu-state-")
+    try:
+        config = FakeConfig("536", "true")
+        attempts = []
+        for _ in range(4):
+            config.settings = []
+            # Nothing is ever recorded: the install "succeeds" but the process
+            # is killed before record_quick_update_applied() -- modelled here as
+            # an install that reports failure, which leaves the state untouched
+            # in exactly the same way.
+            _cfg, window, _logging, events = _run_startup_case(
+                install_result=False, profile=profile, config=config)
+            attempts.append([event[0] for event in events])
+        assert attempts[0] == ["install"], attempts
+        assert attempts[1] == ["install"], attempts
+        assert attempts[2] == [], attempts
+        assert attempts[3] == [], attempts
+        assert window.shown == [("maintenance", "quick_update_notification")]
+    finally:
+        shutil.rmtree(profile, ignore_errors=True)
+
+
+def test_unrecordable_state_never_starts_the_update():
+    """If neither store can be written, the update must not run at all: it
+    would install, force-close Kodi, and be found waiting again next start."""
+    profile = os.path.join(tempfile.mkdtemp(prefix="qu-state-"), "nope")
+    config = FakeConfig("536", "true")
+    config.writable = False          # setting writes are silently dropped
+    open(profile, "w").close()       # a FILE where the folder must go
+    try:
+        _cfg, window, _logging, events = _run_startup_case(
+            profile=profile, config=config)
+        assert events == [], events
+        assert window.shown == [("maintenance", "quick_update_notification")]
+    finally:
+        shutil.rmtree(os.path.dirname(profile), ignore_errors=True)
+
+
+def test_file_record_alone_is_enough_to_advance():
+    """The setting store is the one that gets lost when the update replaces the
+    wizard's own files mid-run. The file record must carry it on its own."""
+    profile = tempfile.mkdtemp(prefix="qu-state-")
+    try:
+        config = FakeConfig("536", "true")
+        config.writable = False
+        _cfg, _window, _logging, events = _run_startup_case(
+            profile=profile, config=config)
+        assert [event[0] for event in events] == ["install", "close"], events
+        # ...and the next startup must NOT run it again.
+        config2 = FakeConfig("536", "true")
+        config2.writable = False
+        _cfg, window2, _logging, events2 = _run_startup_case(
+            profile=profile, config=config2)
+        assert events2 == [], events2
+    finally:
+        shutil.rmtree(profile, ignore_errors=True)
 
 
 def test_versioned_manifest_path():
