@@ -1131,6 +1131,67 @@ def _render_hebrew_rtl_copy(sub_file, legacy_engine=False):
         return sub_file
 
 
+def _ensure_utf8(path):
+    """Rewrite `path` as UTF-8 if it is not already valid UTF-8. Returns True
+    when the file was converted.
+
+    The engine normalises encodings in extract_sub.convert_to_utf -- but ONLY
+    for files it pulled out of an archive. Ktuvit sometimes serves the .srt
+    directly rather than zipped; ZipFile() then raises, extract() falls back to
+    `return archive_file`, and the RAW bytes (cp1255, the legacy Israeli Hebrew
+    encoding) are used as-is.
+
+    Nothing downstream survives that. Every consumer reads the file as UTF-8
+    with errors='replace', so each Hebrew letter becomes U+FFFD -- which is in
+    none of the letter ranges the code counts. The pool's quality gate sees a
+    subtitle with no Hebrew and drops it before uploading (a Ktuvit sub that
+    should have been mirrored for everyone silently never arrives), and subsync
+    sees one dialogue cue instead of hundreds and cannot verify the timing.
+    Both were observed in the field on Rick and Morty S01E09, where the pool
+    ended up with nothing while the same flow had mirrored four variants of
+    S01E01 -- the difference being that those came zipped.
+
+    Deliberately conservative: a file that already decodes as UTF-8 is not
+    touched at all, so its bytes, its source hash and its ".shared" marker stay
+    exactly as they were and this can never trigger a re-upload of anything
+    already in the pool. Fail-open on every error."""
+    try:
+        with open(path, 'rb') as f:
+            raw = f.read()
+    except OSError:
+        return False
+    try:
+        raw.decode('utf-8-sig')
+        return False                 # already UTF-8 -- leave it completely alone
+    except (UnicodeDecodeError, LookupError):
+        pass
+    try:
+        text = raw.decode('cp1255')  # also decodes iso-8859-8 Hebrew correctly
+    except (UnicodeDecodeError, LookupError):
+        kodi_utils.log('subs_engine_bridge: {0} is neither UTF-8 nor cp1255 -- '
+                       'left as-is'.format(os.path.basename(path)),
+                       level='WARNING')
+        return False
+    tmp = path + '.utf8tmp'
+    try:
+        with open(tmp, 'w', encoding='utf-8', newline='') as f:
+            f.write(text)
+        os.replace(tmp, path)
+    except OSError as e:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        kodi_utils.log('subs_engine_bridge: UTF-8 rewrite failed for {0}: {1}'
+                       .format(os.path.basename(path), e), level='WARNING')
+        return False
+    kodi_utils.log('subs_engine_bridge: converted {0} from cp1255 to UTF-8 '
+                   '(a provider served it unzipped, so the engine never '
+                   'normalised it)'.format(os.path.basename(path)),
+                   level='INFO')
+    return True
+
+
 def _looks_like_subtitle(path):
     """True if the file is a plausible subtitle: not an HTML/zip blob (some
     providers hand back the error page or un-extracted archive when a download
@@ -1293,6 +1354,11 @@ def _download_inner(payload, for_delivery=True):
                 # (LAST_DOWNLOAD_FROM_CACHE is already declared global at the
                 # top of this function -- re-declaring it here is a SyntaxError.)
                 LAST_DOWNLOAD_FROM_CACHE = True
+                # A cache entry stored before this normalisation existed can
+                # still be cp1255. Heal it in place, or the same device keeps
+                # serving the same unreadable copy for as long as the entry
+                # lives -- and keeps failing to mirror it to the pool.
+                _ensure_utf8(hit)
                 if (for_delivery
                         and kodi_utils.get_bool(
                             'auto_fix_sub_punctuation', True)
@@ -1330,6 +1396,11 @@ def _download_inner(payload, for_delivery=True):
         # occasionally hands back an HTML/empty blob for ONE result; the user's
         # actual subtitle still loads, so the repeated popup was pure noise.
         return None
+
+    # Normalise the encoding BEFORE the pristine copy is taken, so the stored
+    # source -- the one the pool hashes, uploads and marks as shared, and the
+    # one subsync reads -- is the UTF-8 text everything downstream assumes.
+    _ensure_utf8(sub_file)
 
     # Store the validated PRISTINE provider file before any playback rendering.
     # This preserves one stable source hash for pool de-dup and sharing.
