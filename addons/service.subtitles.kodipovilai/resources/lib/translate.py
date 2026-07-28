@@ -2031,6 +2031,14 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         # forgiven.
         _TOKEN_HOT_S = 60.0
         _hot = {'at': 0.0}
+        # How long to stop touching the connection when playback resumes, so
+        # the player has the debrid token to itself while it refills. Enough for
+        # Kodi's cache to get ahead of the picture, and longer when the provider
+        # has been throttling us, because that token needs more room. The cost
+        # is these seconds once per resume; the alternative, measured, is either
+        # the film closing or the whole extraction being thrown away.
+        _YIELD_RESUME_S = 15.0
+        _YIELD_HOT_S = 30.0
         _stall = {'t': None, 'since': None, 'saw_pause': False,
                   'paused_at': None}
         # What the extractor is actually experiencing, filled in as it runs:
@@ -2104,25 +2112,51 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
                 # play was pressed, then again on the next attempt -- the user
                 # never got past 18% of a file that was extracting fine.
                 #
-                # Saturation has a much better marker than a count: the pace
-                # itself. It only climbs on refusals (x1.5 each), so reaching
-                # _RESUME_ABORT_PACE_S means roughly four of them have landed
-                # and the crawl really has been throttled down to protect the
-                # token -- which is exactly the state where the player's first
-                # read on resume is at risk. Below that, keep working; the stall
-                # guard below still covers actual bandwidth contention.
+                # ...and raising that bar was wrong too, in the other
+                # direction. A field log (601c14f5) shows the player's very
+                # first read after a 28-second pause answered 429, Kodi read
+                # that as the end of the file, and the episode closed back to
+                # the season list -- with the crawl at 1 push-back and a pace of
+                # 0.30s, comfortably under any threshold. So there is no level
+                # of pressure below which resuming is safe while we hold the
+                # token: at the moment of resume the player needs it, and a
+                # count or a pace cannot tell us otherwise.
+                #
+                # But the choice was never really between cancelling and
+                # carrying on. Both answers throw away something the user wants
+                # -- one the film, the other minutes of extraction that would
+                # have finished. What the player actually needs is the token to
+                # itself while it refills its buffer, which is seconds, not the
+                # rest of the run. So STAND ASIDE instead of giving up: stop
+                # touching the connection, let the player have it, then pick up
+                # exactly where we left off. Longer if the provider had already
+                # throttled us, since that token needs more room to recover.
                 now = _tt.time()
-                if (_stall['saw_pause'] and _hot['at']
-                        and (now - _hot['at']) <= _TOKEN_HOT_S):
+                if _stall['saw_pause']:
+                    _stall['saw_pause'] = False
+                    _hot_now = bool(_hot['at']
+                                    and (now - _hot['at']) <= _TOKEN_HOT_S)
+                    _hold = _YIELD_HOT_S if _hot_now else _YIELD_RESUME_S
                     kodi_utils.log(
-                        'embedded: playback resumed after a pause and the CDN '
-                        'throttled us to {1:.2f}s/request {2:.0f}s ago ({0} '
-                        'push-back(s)) -- aborting extraction to free the '
-                        'debrid token for the player'
-                        .format(_xstats.get('backoffs'),
-                                _xstats.get('pace') or 0.0,
-                                now - _hot['at']), level='INFO')
-                    return True
+                        'embedded: playback resumed -- standing aside for {0:.0f}s '
+                        'so the player can refill from the debrid token{1}, then '
+                        'continuing from {2}/{3} cue(s)'.format(
+                            _hold, ' (it has been throttling us)' if _hot_now
+                            else '', _xstats.get('done') or 0,
+                            _xstats.get('total') or 0), level='INFO')
+                    _until = now + _hold
+                    while _tt.time() < _until:
+                        try:
+                            if not p.isPlayingVideo():
+                                return True
+                        except Exception:
+                            return True
+                        _tt.sleep(1.0)
+                    # Not an abort: the pass carries on with everything it has
+                    # already banked, and the stall guard below still watches
+                    # the picture for the contention this cannot prevent.
+                    _stall['t'] = None
+                    return False
                 try:
                     cur = p.getTime()
                 except Exception:
