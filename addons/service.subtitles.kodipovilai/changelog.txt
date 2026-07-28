@@ -1,3 +1,37 @@
+v0.2.456
+- Embedded subtitle extraction stops punishing one congestion event six times.
+  The pace controller backed off per 429 RESPONSE rather than per congestion
+  EPOCH: a single cluster fetch retries up to five times, and every retry that
+  answered 429 widened the gap again, so one unlucky cluster could multiply it
+  by 1.5^5 on its own. A field log shows the whole failure in thirty-three
+  seconds -- first refusal after 68 requests, sixth refusal 27 requests later,
+  and the pace at its 2.00s ceiling for the rest of the run. It was overshoot,
+  not a slow provider: the same log then records 25 consecutive CLEAN requests
+  at that ceiling. Now, after widening, the controller refuses to widen again
+  until the new pace has actually been measured, so repeat refusals from the
+  same event are honoured and retried without compounding.
+- Recovery could not keep up with the back-off either. 0.9x per 25 clean
+  requests is one 10% step per fifty seconds at a 2.00s pace, and that run
+  managed exactly one such step in its lifetime. Now 0.85x per 12 -- still far
+  more cautious than the 1.5x back-off, so it errs slow rather than fast, but
+  no longer permanently.
+- And it no longer relearns the same lesson every episode. Every extraction
+  started at the same optimistic pace, spent the provider's burst allowance
+  discovering it was too fast, and paid the climb again. The pace a run settles
+  on is now remembered per provider and the next run starts there, 25% quicker
+  so it keeps probing and one bad night fades over a few runs. It can never
+  start faster than a fresh install would, only slower.
+  Measured against the real debrid link from the field log: a 2.79GB BluRay
+  REMUX that had reached 143 of 364 cues in four minutes now returns all 364 in
+  just over two, with the subtitle complete and no errors.
+- The MDBList "My Movies / My Series" home tiles appear as soon as MDBList is
+  connected, instead of needing two restarts. Kodi reads favourites.xml exactly
+  once, when the profile loads, and answers everything afterwards from memory --
+  so the tiles our startup repair appended were on disk but not on screen, and
+  the restart that wrote them could never be the one that revealed them. They
+  are now also handed to the running Kodi through its own API, and connecting
+  MDBList runs the repair there and then. Tiles you deleted stay deleted.
+
 v0.2.455
 - The three-connection extraction from the last version is switched back off,
   and the harm it did is undone. It was wrong, and the reasoning was wrong in a
