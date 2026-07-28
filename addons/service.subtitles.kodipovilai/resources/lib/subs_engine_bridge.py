@@ -1131,6 +1131,33 @@ def _render_hebrew_rtl_copy(sub_file, legacy_engine=False):
         return sub_file
 
 
+def _is_plausible_hebrew(text):
+    """True if `text` reads as Hebrew subtitle text rather than noise.
+
+    This is the guard that stops the cp1255 fallback below from being a blunt
+    instrument. "Not valid UTF-8" does not mean "cp1255 Hebrew" -- it also
+    describes a perfectly good UTF-8 file with ONE damaged byte, and cp1255
+    happily decodes almost any byte sequence, so without this an English
+    subtitle whose only flaw was a single bad byte would be re-read as cp1255
+    from end to end and every curly quote and em-dash in it turned into
+    mojibake. A near-invisible glitch would become a ruined file.
+
+    So the conversion is only accepted when it produces what it claims to have
+    found. Same majority-Hebrew test the pool applies to a contribution, on a
+    smaller sample."""
+    heb = letters = 0
+    for ch in text:
+        o = ord(ch)
+        if 0x590 <= o <= 0x5FF:
+            heb += 1
+            letters += 1
+        elif ('a' <= ch <= 'z') or ('A' <= ch <= 'Z'):
+            letters += 1
+    if letters < 40:
+        return False
+    return (heb / float(letters)) >= 0.5
+
+
 def _ensure_utf8(path):
     """Rewrite `path` as UTF-8 if it is not already valid UTF-8. Returns True
     when the file was converted.
@@ -1171,6 +1198,14 @@ def _ensure_utf8(path):
         kodi_utils.log('subs_engine_bridge: {0} is neither UTF-8 nor cp1255 -- '
                        'left as-is'.format(os.path.basename(path)),
                        level='WARNING')
+        return False
+    if not _is_plausible_hebrew(text):
+        # Reading it as cp1255 does not produce Hebrew, so cp1255 is not what
+        # this file is -- most likely a UTF-8 file with a damaged byte. Leaving
+        # it alone keeps that damage to the one byte it already was.
+        kodi_utils.log('subs_engine_bridge: {0} is not valid UTF-8, but '
+                       'reading it as cp1255 does not give Hebrew -- left '
+                       'as-is'.format(os.path.basename(path)), level='WARNING')
         return False
     tmp = path + '.utf8tmp'
     try:
