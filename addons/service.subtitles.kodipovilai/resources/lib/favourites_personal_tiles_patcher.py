@@ -544,11 +544,13 @@ def _insert_mdblist_tiles(content, fixture_text):
             return content, False
         new_content = inserted
     new_content, _ = _insert_marker(new_content, MDBLIST_TILES_SEEN_MARKER)
-    seen.add('mdblist_tiles')
-    _save_seen_state(seen)
-    # The splice succeeded, so the tiles are certain to reach disk -- now make
-    # them visible in THIS session too. Deliberately BEFORE our caller's write
-    # (see _live_add_tiles: Kodi persists on add, and our copy must land last).
+    # NOT stamping the sidecar here, deliberately. 'mdblist_tiles' means "we
+    # have inserted these once, so a later deletion is the user's and must be
+    # respected" -- and only a successful write earns that. Stamping here would
+    # make a failed write (disk full, permissions) permanent: the tiles would
+    # never reach the file, and every future boot would skip re-inserting them
+    # because the sidecar said the job was done. ensure_patched() stamps it
+    # after os.replace() has actually landed.
     live = _live_add_tiles(tile_texts)
     if live:
         _log('added {0} MDBList tile(s) to the running Kodi favourites list '
@@ -931,6 +933,18 @@ def ensure_patched():
         _log('write failed for {0}: {1}'.format(fav_path, e),
              level='WARNING')
         return 'write_failed'
+
+    if mdblist_restored:
+        # Only now, with the file actually on disk, does "we have inserted these
+        # once" become true -- and only then may a future deletion be treated as
+        # the user's and left alone. See _insert_mdblist_tiles.
+        try:
+            _s = _load_seen_state()
+            if 'mdblist_tiles' not in _s:
+                _s.add('mdblist_tiles')
+                _save_seen_state(_s)
+        except Exception:
+            pass
 
     if missing:
         _log('restored {0} missing personal tile(s): {1}'.format(
