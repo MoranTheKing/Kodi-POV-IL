@@ -537,3 +537,11 @@ msgstr "מצב מהיר (למשתמשי Gemini API בתשלום)"
 msgctxt "#32551"
 msgid "Turn ON only if you are on a PAID Gemini plan (billing enabled on your API key). The add-on normally paces requests and limits parallel chunks to stay under the free tier's ~15 requests/minute limit; a paid key has thousands, so this lifts those limits for much faster translation. Leave OFF for a free key (ON would just cause rate-limit errors and retries). Does not change translation quality -- that is set by the Model option."
 msgstr "הפעילו רק אם אתם על תוכנית Gemini בתשלום (חיוב מופעל על מפתח ה-API). התוסף בדרך כלל מווסת את קצב הבקשות ומגביל את מספר המקטעים המקבילים כדי להישאר מתחת למגבלת ~15 בקשות לדקה של התוכנית החינמית; למפתח בתשלום יש אלפים, כך שאפשרות זו מסירה את ההגבלות לתרגום מהיר בהרבה. השאירו כבוי עם מפתח חינמי (הפעלה רק תגרום לשגיאות מגבלת-קצב ולניסיונות חוזרים). לא משנה את איכות התרגום — היא נקבעת באפשרות 'מודל'."
+
+msgctxt "#32552"
+msgid "Leave POV exactly as its author shipped it"
+msgstr "להשאיר את POV בדיוק כפי שהיוצר שלו פרסם"
+
+msgctxt "#32553"
+msgid "Turn ON to stop this add-on making any change to plugin.video.pov. It normally adjusts about twenty of POV's own files on every start (Hebrew menus, genre icons, source-quality labels, and more), and POV updates itself whenever its author publishes -- so if POV ever starts behaving oddly, turning this ON and reinstalling POV from its repository tells you in one step whether the cause was here. Leave OFF for normal use."
+msgstr "הפעילו כדי שהתוסף הזה לא יבצע שום שינוי ב-plugin.video.pov. בדרך כלל הוא מתאים כעשרים מהקבצים של POV בכל הפעלה (תפריטים בעברית, אייקוני ז'אנרים, תוויות איכות למקורות ועוד), ו-POV מתעדכן בעצמו בכל פעם שהיוצר שלו מפרסם - כך שאם POV מתחיל להתנהג מוזר, הפעלה של האפשרות הזו והתקנה מחדש של POV מהמאגר שלו מראה בצעד אחד אם המקור לתקלה כאן. לשימוש רגיל השאירו כבוי."
