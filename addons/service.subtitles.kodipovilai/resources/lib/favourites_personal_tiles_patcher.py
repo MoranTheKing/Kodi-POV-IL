@@ -85,6 +85,18 @@ MDBLIST_WATCHLIST_TILE_NAMES = (
     '[B]הסרטים שלי (MDBList)[/B]',
 )
 MDBLIST_TILES_SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_MDBLIST_TILES_SEEN_v1 -->'
+# ONE forced restore of the MDBList pair, for everyone still connected.
+#
+# The add-only + fire-once rule above is right in the steady state, but it has
+# no way to tell "the user deleted these" from "something else wiped them" --
+# a skin switch, a favourites reseed, a home-widget edit that rewrites the file.
+# Installs that lost the tiles that way were then refused forever, because the
+# sidecar already said 'mdblist_tiles'. Field reports of exactly that are what
+# this is for: put them back once, for anyone who still has MDBList connected,
+# then hand control back to the normal rule -- so a deletion made AFTER this
+# fires is respected permanently, like any other.
+MDBLIST_RESEED_MARKER = '<!-- AI_SUBS_FAVOURITES_MDBLIST_RESEED_v1 -->'
+MDBLIST_RESEED_KEY = 'mdblist_reseed_v1'
 # The POV movies personal tile: we splice the MDBList tiles right after it so they
 # land next to the existing "My Movies/My Series" group rather than at the bottom.
 _POV_MOVIES_TILE_NAME = '[B]הסרטים שלי (POV)[/B]'
@@ -510,14 +522,25 @@ def _insert_mdblist_tiles(content, fixture_text):
         return content, False            # not connected -> never add, never stamp
     seen = _load_seen_state()
     already_present = _missing_tiles(content, MDBLIST_WATCHLIST_TILE_NAMES) == ()
+    # The one-time forced restore (see MDBLIST_RESEED_MARKER). Claimed BEFORE
+    # the checks below so it is spent exactly once whether or not it ends up
+    # inserting anything -- an install that already has the tiles must not keep
+    # the credit and spend it after a genuine deletion later.
+    forced = (not _has_marker(content, MDBLIST_RESEED_MARKER)
+              and MDBLIST_RESEED_KEY not in seen)
+    if forced:
+        seen.add(MDBLIST_RESEED_KEY)
+        _save_seen_state(seen)
     if already_present:
         # Tiles present -> persist "seen" so a LATER delete sticks.
         if 'mdblist_tiles' not in seen:
             seen.add('mdblist_tiles')
             _save_seen_state(seen)
         return content, False
-    # Absent: if we've ever inserted them, respect the deletion and never re-add.
-    if 'mdblist_tiles' in seen or _has_marker(content, MDBLIST_TILES_SEEN_MARKER):
+    # Absent: if we've ever inserted them, respect the deletion and never re-add
+    # -- unless this is the single forced restore, which overrides exactly once.
+    if not forced and ('mdblist_tiles' in seen
+                       or _has_marker(content, MDBLIST_TILES_SEEN_MARKER)):
         return content, False
     tiles = []
     tile_texts = []
@@ -544,6 +567,7 @@ def _insert_mdblist_tiles(content, fixture_text):
             return content, False
         new_content = inserted
     new_content, _ = _insert_marker(new_content, MDBLIST_TILES_SEEN_MARKER)
+    new_content, _ = _insert_marker(new_content, MDBLIST_RESEED_MARKER)
     # NOT stamping the sidecar here, deliberately. 'mdblist_tiles' means "we
     # have inserted these once, so a later deletion is the user's and must be
     # respected" -- and only a successful write earns that. Stamping here would
@@ -659,16 +683,33 @@ def _favourite_count(content):
     return len(re.findall(rb'<favourite\b', content))
 
 
-def _should_restore_full_build_tiles(_content, _missing_full_tiles):
-    """Never rebuild the home screen from startup patching.
+# A home screen this bare is damage, not a preference.
+#
+# The rule below stays "never rebuild from startup patching", because a missing
+# tile on a working install really is more likely to be the user's own doing --
+# that lesson was expensive and it stands. But it was applied to EVERY state,
+# including one that cannot possibly be a preference: a favourites.xml with
+# almost nothing in it.
+#
+# Fresh installs keep landing on an empty FENtastic home. The build zip ships a
+# 36-tile userdata/favourites.xml, so something between the zip and the first
+# boot is losing it -- and whatever that something is, we could always have
+# repaired it: the canonical fixture is bundled in this add-on, and this
+# function was the one thing refusing to use it. Users work around it by
+# switching skin to NOX and back, which makes the wizard copy a favourites seed
+# over the file, which is exactly the repair we declined to do.
+#
+# So: below this many favourites, restore the canonical surface once. Nobody
+# curates their home down to three tiles; a build install that ends up there is
+# broken. Above it, nothing changes -- deletions stay respected permanently,
+# which is what the retired forced reseeds got wrong.
+_EMPTY_HOME_MAX_FAVOURITES = 6
 
-    The full build zip already ships the canonical favourites.xml for
-    clean installs. On existing installs, missing favourites are more
-    likely intentional user customisation than a broken seed. Returning
-    False keeps quick updates from re-adding tiles that users deleted,
-    including after app-cache or POV-cache cleanup followed by restart.
-    """
-    return False
+
+def _should_restore_full_build_tiles(content, _missing_full_tiles):
+    """False for anything that could be a preference; True only for a home
+    screen so bare that it can only be a broken install (see above)."""
+    return _favourite_count(content) <= _EMPTY_HOME_MAX_FAVOURITES
 
 
 def _insert_tiles_before_close(content, tiles):
@@ -681,6 +722,66 @@ def _insert_tiles_before_close(content, tiles):
     return content[:close_idx] + b''.join(tiles) + content[close_idx:]
 
 
+def _install_canonical_home(fav_path, content):
+    """Lay down the canonical favourites.xml for a home screen that has
+    effectively nothing on it, keeping anything the user does have.
+
+    Only ever called for a file with at most _EMPTY_HOME_MAX_FAVOURITES entries
+    (or none at all), so "keeping what they have" is a handful of tiles at most:
+    every favourite whose name the fixture does not already provide is appended,
+    so a custom shortcut added before the repair survives it.
+
+    Returns a status string; never raises."""
+    fixture_path = _fixture_path()
+    try:
+        with open(fixture_path, 'r', encoding='utf-8') as f:
+            fixture_text = f.read()
+    except OSError as e:
+        _log('cannot rescue an empty home, fixture unreadable: {0}'.format(e),
+             level='WARNING')
+        return 'no_fixture'
+    new_content = fixture_text.encode('utf-8')
+    keep = []
+    for tile_text in _extract_fixture_tiles(content.decode('utf-8', 'replace')):
+        name, _action = _tile_identity(tile_text)
+        if not name:
+            continue
+        # Compare the whole name="..." attribute, not the bare name. A bare
+        # substring test says a tile called "a" is already present because the
+        # letter appears somewhere in the canonical file, and silently drops it.
+        probe = ('name="%s"' % name).encode('utf-8')
+        if probe not in new_content:
+            keep.append(tile_text.encode('utf-8'))
+    if keep:
+        merged = _insert_tiles_before_close(new_content, keep)
+        if merged is not None:
+            new_content = merged
+    tmp_path = fav_path + '.aitmp'
+    try:
+        d = os.path.dirname(fav_path)
+        if d and not os.path.isdir(d):
+            os.makedirs(d)
+        with open(tmp_path, 'wb') as f:
+            f.write(new_content)
+        os.replace(tmp_path, fav_path)
+    except OSError as e:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        _log('empty-home rescue could not write {0}: {1}'.format(fav_path, e),
+             level='WARNING')
+        return 'write_failed'
+    _log('the home screen had {0} favourite(s) -- restored the {1} canonical '
+         'build tiles{2}. A build install that lands here is broken, not '
+         'customised.'.format(
+             _favourite_count(content), _favourite_count(fixture_text.encode(
+                 'utf-8')),
+             ' (kept %d of your own)' % len(keep) if keep else ''),
+         level='INFO')
+    return 'restored_empty_home'
+
+
 def ensure_patched():
     """Returns one of:
     'no_kodi' | 'no_favourites' | 'no_fixture' | 'fixture_unreadable'
@@ -689,11 +790,15 @@ def ensure_patched():
     if xbmcvfs is None:
         return 'no_kodi'
     fav_path = _favourites_path()
-    if not fav_path or not os.path.isfile(fav_path):
-        # No favourites.xml at all. Could happen on a completely
-        # empty userdata. Don't auto-create -- that's the wizard's
-        # job. Just no-op.
+    if not fav_path:
         return 'no_favourites'
+    if not os.path.isfile(fav_path):
+        # No favourites.xml at all -- a completely empty userdata. This used to
+        # no-op ("that's the wizard's job"), which is the same refusal that left
+        # fresh installs staring at an empty home. It is the wizard's job, but
+        # when the wizard has not done it there is nobody else, and we are
+        # holding the canonical file.
+        return _install_canonical_home(fav_path, b'')
     fixture_path = _fixture_path()
     if not os.path.isfile(fixture_path):
         _log('bundled fixture missing at {0}'.format(fixture_path),
@@ -714,6 +819,12 @@ def ensure_patched():
     except OSError as e:
         _log('fixture read failed: {0}'.format(e), level='WARNING')
         return 'fixture_unreadable'
+
+    # An all-but-empty home, before anything else. Splicing tiles into it is not
+    # enough -- a truncated or tagless file has nowhere to splice them, which is
+    # precisely the shape a fresh install shows up with.
+    if _should_restore_full_build_tiles(content, None):
+        return _install_canonical_home(fav_path, content)
 
     had_restore_marker = _has_restore_marker(content)
     had_service_marker = _has_marker(content, SERVICE_SEEN_MARKER)
