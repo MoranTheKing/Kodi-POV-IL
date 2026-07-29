@@ -1,3 +1,21 @@
+v0.2.457
+- A fresh install that lands on an EMPTY FENtastic home screen now repairs
+  itself. The build ships a 36-tile favourites.xml, something between the zip
+  and the first boot was losing it, and the workaround people found -- switch
+  the skin to NOX and back -- says what was missing: that path makes the wizard
+  copy a favourites seed over the file. We were holding the same canonical file
+  all along and refusing to use it, because the repair was disabled outright
+  after an older version of it resurrected tiles users had deliberately deleted.
+  That refusal still stands for any home with tiles on it; it no longer applies
+  to one with almost nothing, which cannot be a preference. Tiles you added
+  yourself are kept, and a missing or truncated file is covered too.
+- The MDBList "My Movies / My Series" tiles get one way back. Insert-once was
+  unable to tell a deletion from a wipe -- a skin switch, a favourites reseed, a
+  home-widget edit -- so installs that lost them the second way were refused
+  forever. They are restored once for anyone who still has MDBList connected,
+  and the credit is not spent on anyone who has not connected yet. After that
+  the normal rule resumes: delete them and they stay deleted.
+
 v0.2.456
 - Embedded subtitle extraction stops punishing one congestion event six times.
   The pace controller backed off per 429 RESPONSE rather than per congestion
