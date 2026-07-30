@@ -1379,3 +1379,132 @@ def is_sdh_content(text, min_entries=20, min_annotated=12, min_ratio=0.12):
     except Exception:
         return False
     return total >= min_entries and annotated >= min_annotated and ratio >= min_ratio
+
+
+# --- AI output hygiene ------------------------------------------------------
+# Two defects reported from the field, both from the same gap: nothing cleans
+# the text the model returns before it is written and handed to the player.
+
+_HEB_RE = re.compile(r'[֐-׿יִ-ﭏ]')
+# Zero-width and bidi controls. They are invisible, they survive every existing
+# repair, and a player that lacks a glyph draws them as a box.
+#
+# Built from _INVISIBLE_BIDI rather than from a second hand-rolled range. That
+# list is this module's existing answer to the same question, _fix_one_text_line
+# already strips exactly it, and two character lists that are meant to agree
+# will eventually stop agreeing. The zero-width three are the only additions:
+# they are not direction controls, so _INVISIBLE_BIDI never needed them, but
+# they are invisible and a font without them draws a box just the same.
+_ZERO_WIDTH = '​‌‍'   # ZWSP, ZWNJ, ZWJ
+_INVISIBLE_RE = re.compile('[' + re.escape(_INVISIBLE_BIDI + _ZERO_WIDTH) + ']')
+
+
+def normalize_glyphs(text):
+    """Fold the text to characters the build's fonts can actually draw.
+
+    Reported as "a square instead of one letter, mid-word" -- a box is the
+    player saying it has no glyph for that codepoint. The usual culprit is a
+    Hebrew PRESENTATION FORM: U+FB1D-U+FB4F holds precomposed letter+niqqud and
+    ligature variants (U+FB1D is yod-with-hiriq, which looks like a plain yod
+    and is not one), and the fonts shipped here do not cover that block. NFC
+    normalisation decomposes those back to ordinary letters, so the same word
+    renders with the ordinary glyph the font does have.
+
+    Also drops zero-width and bidi-control characters. They are invisible by
+    definition, so removing them cannot change what a correct line looks like,
+    and they are the other thing that shows up as a box.
+
+    Applies to ANY subtitle, whatever produced it: it only ever replaces a
+    character with the canonical spelling of that same character. Never raises.
+
+    ORDER MATTERS. The invisible set includes RLE/PDF, which is deliberate --
+    _fix_one_text_line strips them too, and that is what makes the rtl_base wrap
+    idempotent. But it means this must run BEFORE fix_rtl_punctuation, never
+    after: run it after and it removes the very wrap that call just added,
+    silently undoing the RTL fix for every line. Both callers order it that way
+    and test_wiring pins it.
+    """
+    if not text:
+        return text
+    try:
+        import unicodedata
+        out = unicodedata.normalize('NFC', text)
+        out = _INVISIBLE_RE.sub('', out)
+        return out
+    except Exception:
+        return text
+
+
+def strip_source_echo(text):
+    """Drop source-language lines the model emitted above its own translation.
+
+    Reported as three English lines followed by three Hebrew ones inside a
+    single cue. The model occasionally answers with the original AND the
+    translation stacked; it is not deterministic, which is why the same title
+    can come back clean on a second run and why a copy fetched from the pool
+    (a different run, by a different user) can be clean while a local one is
+    not. Nothing on either side removed it.
+
+    Narrow on purpose, in the same spirit as strip_leaked_arabic: a cue is only
+    touched when its leading lines carry NO Hebrew at all and a later line
+    DOES. That is the echo shape and nothing else -- the Hebrew is always the
+    part that survives, so a cue can never become empty, and a subtitle with no
+    Hebrew in it (a foreign cue, a sign, a song credit) is never altered
+    because there is no Hebrew line for the non-Hebrew ones to be an echo OF.
+
+    Never raises into the caller.
+
+    Cues are separated by scanning for blank lines rather than by splitting on
+    '\\n\\n', because SRT is conventionally a CRLF format and in a CRLF file the
+    cue separator is '\\r\\n\\r\\n' -- which contains no '\\n\\n' at all. Splitting
+    on the literal would hand the whole file back as ONE cue, and the fix would
+    then apply to the first cue only and silently skip every echo after it. The
+    only caller today reads in text mode, so it never sees a '\\r'; this does not
+    depend on that staying true. A line keeps whatever '\\r' it arrived with, so
+    the file's line endings come back exactly as they went in.
+    """
+    if not text:
+        return text
+    try:
+        if not _HEB_RE.search(text):
+            return text
+        lines = text.split('\n')
+        out, cue, changed = [], [], False
+
+        def _flush(cue):
+            # Keep the index + timecode lines exactly as they are; the cue body
+            # is whatever follows the '-->' line.
+            head = 0
+            for i, ln in enumerate(cue):
+                if '-->' in ln:
+                    head = i + 1
+                    break
+            body = cue[head:]
+            if len(body) < 2 or not any(_HEB_RE.search(l) for l in body):
+                return cue, False
+            first_heb = next(i for i, l in enumerate(body)
+                             if _HEB_RE.search(l))
+            # Only a LEADING run of non-Hebrew lines counts as an echo. There is
+            # no blank-line check here because a blank line cannot reach this
+            # point: blanks delimit cues in the loop below, so every line in
+            # `cue` is real text. Layout is preserved by never entering a cue
+            # that a blank line already ended.
+            lead = body[:first_heb]
+            if lead:
+                return cue[:head] + body[first_heb:], True
+            return cue, False
+
+        for ln in lines:
+            if ln.strip():
+                cue.append(ln)
+                continue
+            kept, hit = _flush(cue)
+            out.extend(kept)
+            out.append(ln)          # the separator, '\r' and all
+            cue, changed = [], changed or hit
+        kept, hit = _flush(cue)
+        out.extend(kept)
+        changed = changed or hit
+        return '\n'.join(out) if changed else text
+    except Exception:
+        return text
