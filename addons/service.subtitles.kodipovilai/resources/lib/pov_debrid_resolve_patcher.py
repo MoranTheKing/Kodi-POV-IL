@@ -21,6 +21,7 @@
 # guard is unneeded (signature not found / already guarded) and skip.
 
 import os
+import re
 
 try:
     import xbmcvfs
@@ -37,11 +38,25 @@ POV_ADDON_ID = 'plugin.video.pov'
 DEBRID_REL_PATH = 'resources/lib/modules/debrid.py'
 MARKER = 'AI_SUBS_DEBRID_RESOLVE_GUARD_v1'
 
-# The exact signature line of the function we harden.
-_SIG = 'def resolve_external_sources(source, store_to_cloud, title, season, episode):'
-# The guard we inject right after it (POV's bodies are tab-indented).
-_GUARD = ('\tfiles = None; torrent_id = None  # ' + MARKER
-          + ' -- guard except handler against unbound locals')
+# The signature line of the function we harden.
+#
+# This used to be one exact string, matching the free function POV had when the
+# guard was written:
+#     def resolve_external_sources(source, store_to_cloud, title, season, episode):
+# POV has since made it a METHOD -- 6.07.9x reads
+#     def resolve_external_sources(self, title, season, episode):
+# -- so the literal stopped matching and this patcher has been quietly reporting
+# 'unmatched' on every recent POV, taking its guard with it. A field log
+# (2026-07-30, POV 6.07.93) shows exactly that line, which is how it surfaced.
+#
+# So match the NAME and take the parameters as they come, and derive the body
+# indentation from the signature's own instead of assuming one tab: a method is
+# one level deeper than a free function, and a guard at the wrong depth either
+# fails to compile or lands outside the function.
+_SIG_RE = re.compile(
+    r'^([ \t]*)def\s+resolve_external_sources\s*\([^)]*\)\s*:[ \t]*$', re.M)
+_GUARD_BODY = ('files = None; torrent_id = None  # ' + MARKER
+               + ' -- guard except handler against unbound locals')
 
 
 def _log(msg, level='INFO'):
@@ -80,13 +95,18 @@ def ensure_patched():
 
     if MARKER in content:
         return 'already'
-    if _SIG not in content:
+    m = _SIG_RE.search(content)
+    if m is None:
         _log('resolve_external_sources signature not found -- skipping',
              level='WARNING')
         return 'unmatched'
 
-    # Insert the guard line immediately after the signature line.
-    patched = content.replace(_SIG, _SIG + '\n' + _GUARD, 1)
+    # Insert the guard immediately after the signature, one level deeper than
+    # the signature itself, matching whatever POV indents with (tabs today).
+    outer = m.group(1)
+    unit = '\t' if '\t' in outer or not outer else outer[:1] * 4
+    guard = outer + unit + _GUARD_BODY
+    patched = content[:m.end()] + '\n' + guard + content[m.end():]
     if patched == content:
         return 'unmatched'
 
