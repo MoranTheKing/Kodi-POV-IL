@@ -177,6 +177,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_resume_cancel,
         _maybe_patch_pov_scraper_settings,
         _maybe_patch_pov_aiostreams,
+        _maybe_patch_pov_resolve_diag,
         _maybe_restore_pov_torbox,
         _maybe_patch_af3_home,
         _maybe_cleanup_wizard,
@@ -1163,6 +1164,33 @@ def _maybe_patch_pov_scraper_settings():
             kodi_utils.log(
                 'pov_scraper_settings_patcher failed: {0}'.format(e),
                 level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_resolve_diag():
+    """Make POV's opaque 'selected_files failed' say how many files the debrid
+    actually returned. Diagnostic only -- it changes no behaviour, and it is the
+    difference between fixing the right thing and guessing."""
+    if _skip_pov_patchers():
+        return
+    try:
+        from resources.lib import pov_resolve_diag_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_resolve_diag_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_resolve_diag_patcher: resolve failures now report the '
+                'debrid file count', level='INFO')
+        elif status not in ('already', 'no_file'):
+            kodi_utils.log(
+                'pov_resolve_diag_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log('pov_resolve_diag_patcher failed: {0}'.format(e),
+                           level='WARNING')
         except Exception:
             pass
 
