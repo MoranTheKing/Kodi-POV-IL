@@ -1379,3 +1379,182 @@ def is_sdh_content(text, min_entries=20, min_annotated=12, min_ratio=0.12):
     except Exception:
         return False
     return total >= min_entries and annotated >= min_annotated and ratio >= min_ratio
+
+
+# --- AI output hygiene ------------------------------------------------------
+# Two defects reported from the field, both from the same gap: nothing cleans
+# the text the model returns before it is written and handed to the player.
+
+# Written with \u escapes ONLY, never with the characters themselves. A
+# literal U+FB1D pasted into source is one editor-normalisation away from
+# becoming the yod+hiriq PAIR it decomposes to, which silently turns the
+# class into a range STARTING AT U+05B4 -- one that swallows Arabic, CJK and
+# the Latin ligatures. That exact mistake was made in this file and caught by
+# a test. Do not replace these with the characters they stand for.
+_HEB_RE = re.compile('[\u0590-\u05FF\uFB1D-\uFB4F]')
+# Zero-width and bidi controls. They are invisible, they survive every existing
+# repair, and a player that lacks a glyph draws them as a box.
+#
+# Built from _INVISIBLE_BIDI rather than from a second hand-rolled range. That
+# list is this module's existing answer to the same question, _fix_one_text_line
+# already strips exactly it, and two character lists that are meant to agree
+# will eventually stop agreeing. The zero-width three are the only additions:
+# they are not direction controls, so _INVISIBLE_BIDI never needed them, but
+# they are invisible and a font without them draws a box just the same.
+_ZERO_WIDTH = '\u200B\u200C\u200D'   # ZWSP, ZWNJ, ZWJ
+# The Hebrew presentation-form block. NFC handles most of it; the compatibility
+# forms in it need NFKC, which is why this range is picked out by itself.
+_HEB_PRESENTATION_RE = re.compile('[\uFB1D-\uFB4F]')
+# SRT styling tags ('<i>', '</font>') and ASS-style overrides ('{\\an8}'), used
+# only to ask whether a line carries any real text of its own.
+_MARKUP_RE = re.compile(r'<[^>]*>|\{[^}]*\}')
+_INVISIBLE_RE = re.compile('[' + re.escape(_INVISIBLE_BIDI + _ZERO_WIDTH) + ']')
+
+
+def normalize_glyphs(text):
+    """Fold the text to characters the build's fonts can actually draw.
+
+    Reported as "a square instead of one letter, mid-word" -- a box is the
+    player saying it has no glyph for that codepoint. The usual culprit is a
+    Hebrew PRESENTATION FORM: U+FB1D-U+FB4F holds precomposed letter+niqqud and
+    ligature variants (U+FB1D is yod-with-hiriq, which looks like a plain yod
+    and is not one), and the fonts shipped here do not cover that block. NFC
+    normalisation decomposes those back to ordinary letters, so the same word
+    renders with the ordinary glyph the font does have.
+
+    NFC alone is not enough for all of them. It leaves the WIDE letters
+    (U+FB21-FB28), ALTERNATIVE AYIN (U+FB20), ALTERNATIVE PLUS (U+FB29) and
+    LIGATURE ALEF LAMED (U+FB4F) exactly as they are -- those are compatibility
+    forms, not canonical ones, so only NFKC folds them. NFKC is applied to that
+    block ALONE and nothing else: run over the whole text it would also rewrite
+    unrelated characters a subtitle may legitimately contain (the fi ligature,
+    fullwidth forms, superscripts, '½' into '1/2'), which is a different and
+    unwanted change. Per-character on U+FB1D-FB4F it can only ever turn a
+    Hebrew presentation form into the ordinary Hebrew letters it stands for.
+
+    Also drops zero-width and bidi-control characters. They are invisible by
+    definition, so removing them cannot change what a correct line looks like,
+    and they are the other thing that shows up as a box.
+
+    Applies to ANY subtitle, whatever produced it: it only ever replaces a
+    character with the canonical spelling of that same character. Never raises.
+
+    ORDER MATTERS. The invisible set includes RLE/PDF, which is deliberate --
+    _fix_one_text_line strips them too, and that is what makes the rtl_base wrap
+    idempotent. But it means this must run BEFORE fix_rtl_punctuation, never
+    after: run it after and it removes the very wrap that call just added,
+    silently undoing the RTL fix for every line. Both callers order it that way
+    and test_wiring pins it.
+    """
+    if not text:
+        return text
+    try:
+        import unicodedata
+        out = unicodedata.normalize('NFC', text)
+        if _HEB_PRESENTATION_RE.search(out):
+            out = _HEB_PRESENTATION_RE.sub(
+                lambda m: unicodedata.normalize('NFKC', m.group(0)), out)
+        out = _INVISIBLE_RE.sub('', out)
+        return out
+    except Exception:
+        return text
+
+
+def strip_source_echo(text):
+    """Drop source-language lines the model emitted above its own translation.
+
+    Reported as three English lines followed by three Hebrew ones inside a
+    single cue. The model occasionally answers with the original AND the
+    translation stacked; it is not deterministic, which is why the same title
+    can come back clean on a second run and why a copy fetched from the pool
+    (a different run, by a different user) can be clean while a local one is
+    not. Nothing on either side removed it.
+
+    Narrow on purpose, in the same spirit as strip_leaked_arabic: a cue is only
+    touched when its leading lines carry NO Hebrew at all and a later line
+    DOES. That is the echo shape and nothing else -- the Hebrew is always the
+    part that survives, so a cue can never become empty, and a subtitle with no
+    Hebrew in it (a foreign cue, a sign, a song credit, a line the model
+    declined to translate) is never altered, because there is no Hebrew line
+    for the non-Hebrew ones to be an echo OF. A line with any Hebrew in it
+    counts as Hebrew, so 'נולדתי בChina' is never a candidate either.
+
+    WHAT THIS CAN COST, stated plainly rather than left to be discovered. The
+    shape is a heuristic, and these are indistinguishable from an echo:
+
+      * a cue the model translated only PARTLY -- one line rendered, one left
+        in the source language;
+      * a leading line that is legitimately not Hebrew and not a duplicate --
+        a brand name ('STARBUCKS'), an on-screen clock ('12:00 PM'), a chyron.
+
+    In those the leading line is deleted and only the Hebrew is kept. The bet
+    is that inside OUR OWN model's output -- which is all this ever sees, via
+    the ai_output gate -- a non-Hebrew line sitting directly above a Hebrew one
+    is overwhelmingly the echo defect rather than any of the above. Cues with
+    no Hebrew, the far more common way untranslated text survives, are exempt
+    entirely. Two things are refused outright because the damage would exceed
+    the defect: emptying a cue, and orphaning a styling tag.
+
+    Never raises into the caller.
+
+    Cues are separated by scanning for blank lines rather than by splitting on
+    '\\n\\n', because SRT is conventionally a CRLF format and in a CRLF file the
+    cue separator is '\\r\\n\\r\\n' -- which contains no '\\n\\n' at all. Splitting
+    on the literal would hand the whole file back as ONE cue, and the fix would
+    then apply to the first cue only and silently skip every echo after it. The
+    only caller today reads in text mode, so it never sees a '\\r'; this does not
+    depend on that staying true. A line keeps whatever '\\r' it arrived with, so
+    the file's line endings come back exactly as they went in.
+    """
+    if not text:
+        return text
+    try:
+        if not _HEB_RE.search(text):
+            return text
+        lines = text.split('\n')
+        out, cue, changed = [], [], False
+
+        def _flush(cue):
+            # Keep the index + timecode lines exactly as they are; the cue body
+            # is whatever follows the '-->' line.
+            head = 0
+            for i, ln in enumerate(cue):
+                if '-->' in ln:
+                    head = i + 1
+                    break
+            body = cue[head:]
+            if len(body) < 2 or not any(_HEB_RE.search(l) for l in body):
+                return cue, False
+            first_heb = next(i for i, l in enumerate(body)
+                             if _HEB_RE.search(l))
+            # Only a LEADING run of non-Hebrew lines counts as an echo. There is
+            # no blank-line check here because a blank line cannot reach this
+            # point: blanks delimit cues in the loop below, so every line in
+            # `cue` is real text. Layout is preserved by never entering a cue
+            # that a blank line already ended.
+            #
+            # A lead line that is PURE MARKUP is not an echo and must not go.
+            # '<i>' on its own line above a Hebrew line is formatting, and
+            # dropping it strands the matching '</i>' below -- which does not
+            # merely lose a line, it corrupts the styling of everything after
+            # it. Anything with real text left after tags are removed is still
+            # a candidate; only the empty ones veto the cue.
+            lead = body[:first_heb]
+            if lead and all(_MARKUP_RE.sub('', l).strip() for l in lead):
+                return cue[:head] + body[first_heb:], True
+            return cue, False
+
+        for ln in lines:
+            if ln.strip():
+                cue.append(ln)
+                continue
+            kept, hit = _flush(cue)
+            out.extend(kept)
+            out.append(ln)          # the separator, '\r' and all
+            cue, changed = [], changed or hit
+        kept, hit = _flush(cue)
+        out.extend(kept)
+        changed = changed or hit
+        return '\n'.join(out) if changed else text
+    except Exception:
+        return text
