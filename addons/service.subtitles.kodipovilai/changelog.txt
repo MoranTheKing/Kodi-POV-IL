@@ -1,3 +1,22 @@
+v0.2.459
+- Two text defects in AI translations, and the repair now runs where the text is
+  MADE rather than only on a later pass over it. A cue sometimes came back
+  holding the source-language lines above the Hebrew ones; only the Hebrew is
+  kept now. A single letter sometimes drew as a square, which is the player
+  saying it has no glyph for that codepoint -- Hebrew presentation forms
+  (U+FB1D-FB4F) are folded to the ordinary letters the shipped fonts do have,
+  and invisible zero-width and bidi controls are dropped.
+- Both repairs previously ran only on the RE-repair paths, so the FIRST watch of
+  a new translation still showed the defect, cached it, and contributed it to the
+  community pool -- where it could never be fixed afterwards, because pool entries
+  are written once and only repaired on read. They now run in the fresh-
+  translation path before the file is cached or contributed, in the live preview
+  shown during translation, and on both delivery repairs.
+- The echo strip only ever touches OUR OWN output, only removes leading lines
+  with no Hebrew in them, and never empties a cue or orphans a styling tag. A cue
+  the model left untranslated has no Hebrew in it and is exempt in full; a line
+  with Hebrew in it, like "נולדתי בChina", is never a candidate.
+
 v0.2.458
 - POV now says WHY a debrid source refused to play. Its one message,
   "selected_files failed", covered two opposite failures: the debrid returned no
