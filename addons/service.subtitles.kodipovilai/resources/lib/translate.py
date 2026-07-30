@@ -441,6 +441,15 @@ def _reapply_rtl_fix_in_place(path, legacy_engine=False, ai_output=None):
     if ai_output is None:
         ai_output = srt.may_carry_arabic_leak(path)
     body = srt.strip_leaked_arabic(content) if ai_output else content
+    # Same provenance gate as the Arabic strip, for the same reason: dropping a
+    # cue's leading non-Hebrew lines is only ever right for OUR model's output.
+    # A human subtitle that deliberately shows an original line above its
+    # translation must keep it.
+    if ai_output:
+        body = srt.strip_source_echo(body)
+    # Unconditional: this only rewrites a character as the canonical spelling of
+    # that same character, so it is safe on any subtitle, whatever made it.
+    body = srt.normalize_glyphs(body)
     fixed = srt.clamp_cue_durations(
         srt.fix_rtl_punctuation(body, legacy_engine=legacy_engine))
     if fixed == content:
@@ -488,8 +497,13 @@ def _rtl_delivery_copy(path, legacy_engine=False):
         # the alternative is deleting Arabic out of a human subtitle the user
         # chose; a signal that identifies our own output would let this be
         # revisited.
+        # normalize_glyphs only, deliberately. The echo strip stays out for the
+        # same reason the Arabic strip does: nothing here identifies the file as
+        # ours, and a human subtitle that shows the original above its
+        # translation is a legitimate thing to leave alone. Glyph folding is
+        # not a judgement call -- it rewrites a character as itself.
         fixed = srt.clamp_cue_durations(srt.fix_rtl_punctuation(
-            content, legacy_engine=legacy_engine))
+            srt.normalize_glyphs(content), legacy_engine=legacy_engine))
         if fixed == content:
             return path
         import hashlib as _hrtl
@@ -3927,11 +3941,20 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         # still untranslated source, which carries no leak), so
                         # provenance is not in question. This is a transient
                         # progress preview; it is never the cached file.
+                        # echo-strip + glyph-fold for the same reason, and safe
+                        # against the pending half: a not-yet-translated chunk is
+                        # a whole cue of source with no Hebrew in it, and a cue
+                        # with no Hebrew is exempt by construction. The fold sits
+                        # inside fix_rtl_punctuation's argument because it strips
+                        # the RLE/PDF that call adds.
                         _merged_text = srt.clamp_cue_durations(
                             srt.fix_rtl_punctuation(
-                                srt.strip_leaked_arabic(
-                                    srt.strip_leaked_speaker_prefix(
-                                        srt.stitch_blocks(_merged_blocks)))))
+                                srt.normalize_glyphs(
+                                    srt.strip_source_echo(
+                                        srt.strip_leaked_arabic(
+                                            srt.strip_leaked_speaker_prefix(
+                                                srt.stitch_blocks(
+                                                    _merged_blocks)))))))
                         progressive_cb('chunk_ready', {
                             'completed': completed,
                             'total': total,
@@ -4052,6 +4075,22 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 'echoed into the Hebrew'.format(_n), level='WARNING')
         except Exception:
             pass
+    # Same class again, one step out: the model sometimes returns the SOURCE
+    # lines AND its Hebrew stacked inside one cue. Provenance is not in question
+    # here either -- `final` is this run's own output -- so the strip applies
+    # directly, with no ai_output gate to consult.
+    #
+    # This is the path that PRODUCES both defects, and it is the one that must
+    # carry the repair. The re-repair paths (_reapply_rtl_fix_in_place,
+    # _rtl_delivery_copy) only ever catch them on a LATER pass, by which time
+    # this file has already been served to the viewer once and contributed to
+    # the community pool -- where the flaw then outlives every local fix,
+    # because the pool is written once and only ever repaired on read.
+    final = srt.strip_source_echo(final)
+    # Fold what the shipped fonts cannot draw. Must come BEFORE the RTL wrap
+    # below: it strips RLE/PDF, which is exactly what fix_rtl_punctuation adds.
+    # See normalize_glyphs' docstring -- that ordering is load-bearing.
+    final = srt.normalize_glyphs(final)
     # Defensive backstop for RTL punctuation: Gemini sometimes puts
     # punctuation at the logical start of a Hebrew line ("?שלום")
     # when it belongs at the logical end ("שלום?"). The prompt
