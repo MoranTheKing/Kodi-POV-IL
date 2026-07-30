@@ -2420,11 +2420,17 @@ def _handle_translate_file(params):
             # as the punctuation one.
             try:
                 from resources.lib import srt as _srt
-                _hb = (_srt.strip_leaked_arabic(hebrew)
-                       if _srt.may_carry_arabic_leak(translated_path)
-                       else hebrew)
+                # One provenance answer, used by both text-DELETING repairs:
+                # the Arabic strip and the source-echo strip. The glyph fold is
+                # not gated -- it rewrites a character as itself -- but it must
+                # run before fix_rtl_punctuation, which re-adds the RLE/PDF it
+                # removes.
+                _ai = _srt.may_carry_arabic_leak(translated_path)
+                _hb = _srt.strip_leaked_arabic(hebrew) if _ai else hebrew
+                if _ai:
+                    _hb = _srt.strip_source_echo(_hb)
                 hebrew = _srt.clamp_cue_durations(
-                    _srt.fix_rtl_punctuation(_hb))
+                    _srt.fix_rtl_punctuation(_srt.normalize_glyphs(_hb)))
             except Exception:
                 pass
             # Write atomically: temp file in same dir, then rename. This
@@ -2713,11 +2719,15 @@ def _handle_translate_file(params):
                         _content = _f.read()
                     try:
                         from resources.lib import srt as _srt
+                        # Same shape as the delivery repair above, same reasons.
+                        _ai = _srt.may_carry_arabic_leak(translated_path)
                         _cb = (_srt.strip_leaked_arabic(_content)
-                               if _srt.may_carry_arabic_leak(translated_path)
-                               else _content)
+                               if _ai else _content)
+                        if _ai:
+                            _cb = _srt.strip_source_echo(_cb)
                         _content = _srt.clamp_cue_durations(
-                            _srt.fix_rtl_punctuation(_cb))
+                            _srt.fix_rtl_punctuation(
+                                _srt.normalize_glyphs(_cb)))
                     except Exception:
                         pass
                     _tmp_out = out_path + '.aitmp'

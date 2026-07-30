@@ -1385,7 +1385,13 @@ def is_sdh_content(text, min_entries=20, min_annotated=12, min_ratio=0.12):
 # Two defects reported from the field, both from the same gap: nothing cleans
 # the text the model returns before it is written and handed to the player.
 
-_HEB_RE = re.compile(r'[֐-׿יִ-ﭏ]')
+# Written with \u escapes ONLY, never with the characters themselves. A
+# literal U+FB1D pasted into source is one editor-normalisation away from
+# becoming the yod+hiriq PAIR it decomposes to, which silently turns the
+# class into a range STARTING AT U+05B4 -- one that swallows Arabic, CJK and
+# the Latin ligatures. That exact mistake was made in this file and caught by
+# a test. Do not replace these with the characters they stand for.
+_HEB_RE = re.compile('[\u0590-\u05FF\uFB1D-\uFB4F]')
 # Zero-width and bidi controls. They are invisible, they survive every existing
 # repair, and a player that lacks a glyph draws them as a box.
 #
@@ -1395,7 +1401,13 @@ _HEB_RE = re.compile(r'[֐-׿יִ-ﭏ]')
 # will eventually stop agreeing. The zero-width three are the only additions:
 # they are not direction controls, so _INVISIBLE_BIDI never needed them, but
 # they are invisible and a font without them draws a box just the same.
-_ZERO_WIDTH = '​‌‍'   # ZWSP, ZWNJ, ZWJ
+_ZERO_WIDTH = '\u200B\u200C\u200D'   # ZWSP, ZWNJ, ZWJ
+# The Hebrew presentation-form block. NFC handles most of it; the compatibility
+# forms in it need NFKC, which is why this range is picked out by itself.
+_HEB_PRESENTATION_RE = re.compile('[\uFB1D-\uFB4F]')
+# SRT styling tags ('<i>', '</font>') and ASS-style overrides ('{\\an8}'), used
+# only to ask whether a line carries any real text of its own.
+_MARKUP_RE = re.compile(r'<[^>]*>|\{[^}]*\}')
 _INVISIBLE_RE = re.compile('[' + re.escape(_INVISIBLE_BIDI + _ZERO_WIDTH) + ']')
 
 
@@ -1409,6 +1421,16 @@ def normalize_glyphs(text):
     and is not one), and the fonts shipped here do not cover that block. NFC
     normalisation decomposes those back to ordinary letters, so the same word
     renders with the ordinary glyph the font does have.
+
+    NFC alone is not enough for all of them. It leaves the WIDE letters
+    (U+FB21-FB28), ALTERNATIVE AYIN (U+FB20), ALTERNATIVE PLUS (U+FB29) and
+    LIGATURE ALEF LAMED (U+FB4F) exactly as they are -- those are compatibility
+    forms, not canonical ones, so only NFKC folds them. NFKC is applied to that
+    block ALONE and nothing else: run over the whole text it would also rewrite
+    unrelated characters a subtitle may legitimately contain (the fi ligature,
+    fullwidth forms, superscripts, '½' into '1/2'), which is a different and
+    unwanted change. Per-character on U+FB1D-FB4F it can only ever turn a
+    Hebrew presentation form into the ordinary Hebrew letters it stands for.
 
     Also drops zero-width and bidi-control characters. They are invisible by
     definition, so removing them cannot change what a correct line looks like,
@@ -1429,6 +1451,9 @@ def normalize_glyphs(text):
     try:
         import unicodedata
         out = unicodedata.normalize('NFC', text)
+        if _HEB_PRESENTATION_RE.search(out):
+            out = _HEB_PRESENTATION_RE.sub(
+                lambda m: unicodedata.normalize('NFKC', m.group(0)), out)
         out = _INVISIBLE_RE.sub('', out)
         return out
     except Exception:
@@ -1449,8 +1474,26 @@ def strip_source_echo(text):
     touched when its leading lines carry NO Hebrew at all and a later line
     DOES. That is the echo shape and nothing else -- the Hebrew is always the
     part that survives, so a cue can never become empty, and a subtitle with no
-    Hebrew in it (a foreign cue, a sign, a song credit) is never altered
-    because there is no Hebrew line for the non-Hebrew ones to be an echo OF.
+    Hebrew in it (a foreign cue, a sign, a song credit, a line the model
+    declined to translate) is never altered, because there is no Hebrew line
+    for the non-Hebrew ones to be an echo OF. A line with any Hebrew in it
+    counts as Hebrew, so 'נולדתי בChina' is never a candidate either.
+
+    WHAT THIS CAN COST, stated plainly rather than left to be discovered. The
+    shape is a heuristic, and these are indistinguishable from an echo:
+
+      * a cue the model translated only PARTLY -- one line rendered, one left
+        in the source language;
+      * a leading line that is legitimately not Hebrew and not a duplicate --
+        a brand name ('STARBUCKS'), an on-screen clock ('12:00 PM'), a chyron.
+
+    In those the leading line is deleted and only the Hebrew is kept. The bet
+    is that inside OUR OWN model's output -- which is all this ever sees, via
+    the ai_output gate -- a non-Hebrew line sitting directly above a Hebrew one
+    is overwhelmingly the echo defect rather than any of the above. Cues with
+    no Hebrew, the far more common way untranslated text survives, are exempt
+    entirely. Two things are refused outright because the damage would exceed
+    the defect: emptying a cue, and orphaning a styling tag.
 
     Never raises into the caller.
 
@@ -1489,8 +1532,15 @@ def strip_source_echo(text):
             # point: blanks delimit cues in the loop below, so every line in
             # `cue` is real text. Layout is preserved by never entering a cue
             # that a blank line already ended.
+            #
+            # A lead line that is PURE MARKUP is not an echo and must not go.
+            # '<i>' on its own line above a Hebrew line is formatting, and
+            # dropping it strands the matching '</i>' below -- which does not
+            # merely lose a line, it corrupts the styling of everything after
+            # it. Anything with real text left after tags are removed is still
+            # a candidate; only the empty ones veto the cue.
             lead = body[:first_heb]
-            if lead:
+            if lead and all(_MARKUP_RE.sub('', l).strip() for l in lead):
                 return cue[:head] + body[first_heb:], True
             return cue, False
 
