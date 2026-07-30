@@ -441,6 +441,15 @@ def _reapply_rtl_fix_in_place(path, legacy_engine=False, ai_output=None):
     if ai_output is None:
         ai_output = srt.may_carry_arabic_leak(path)
     body = srt.strip_leaked_arabic(content) if ai_output else content
+    # Same provenance gate as the Arabic strip, for the same reason: dropping a
+    # cue's leading non-Hebrew lines is only ever right for OUR model's output.
+    # A human subtitle that deliberately shows an original line above its
+    # translation must keep it.
+    if ai_output:
+        body = srt.strip_source_echo(body)
+    # Unconditional: this only rewrites a character as the canonical spelling of
+    # that same character, so it is safe on any subtitle, whatever made it.
+    body = srt.normalize_glyphs(body)
     fixed = srt.clamp_cue_durations(
         srt.fix_rtl_punctuation(body, legacy_engine=legacy_engine))
     if fixed == content:
@@ -488,8 +497,13 @@ def _rtl_delivery_copy(path, legacy_engine=False):
         # the alternative is deleting Arabic out of a human subtitle the user
         # chose; a signal that identifies our own output would let this be
         # revisited.
+        # normalize_glyphs only, deliberately. The echo strip stays out for the
+        # same reason the Arabic strip does: nothing here identifies the file as
+        # ours, and a human subtitle that shows the original above its
+        # translation is a legitimate thing to leave alone. Glyph folding is
+        # not a judgement call -- it rewrites a character as itself.
         fixed = srt.clamp_cue_durations(srt.fix_rtl_punctuation(
-            content, legacy_engine=legacy_engine))
+            srt.normalize_glyphs(content), legacy_engine=legacy_engine))
         if fixed == content:
             return path
         import hashlib as _hrtl
