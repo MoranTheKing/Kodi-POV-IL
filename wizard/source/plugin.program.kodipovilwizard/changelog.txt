@@ -1,3 +1,9 @@
+[COLOR yellow][B]v0.1.36[/B][/COLOR]
+* A new installation no longer skips the five FENtastic home-widget files, so
+  Movies, TV shows and Idan+ come up with their content instead of empty.
+* A home layout you customised is still kept on a quick update; only files that
+  are missing get written.
+
 [COLOR yellow][B]v0.1.35[/B][/COLOR]
 * Legacy Android and Windows installations without a POV package marker no
   longer receive an automatic full-application dialog after quick maintenance.

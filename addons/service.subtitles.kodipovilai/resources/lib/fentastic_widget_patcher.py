@@ -13,8 +13,10 @@ import os
 import re
 
 try:
+    import xbmc
     import xbmcvfs
 except Exception:
+    xbmc = None
     xbmcvfs = None
 
 try:
@@ -270,12 +272,152 @@ def _patch_one(filename, allow_insert=True):
         return 'write_failed'
 
 
+# The five files FENtastic loads as includes from Includes.xml. They define
+# MovieWidgets, TVShowWidgets and Custom1Widgets -- the widget rows behind the
+# Movies, TV Shows and IdanPlus menu entries.
+RESTORE_FILES = (
+    'script-fentastic-widget_movies.xml',
+    'script-fentastic-widget_tvshows.xml',
+    'script-fentastic-widget_custom1.xml',
+    'script-fentastic-widget_custom2.xml',
+    'script-fentastic-widget_custom3.xml',
+    # Not a widget file, but the same repair with the same evidence. The
+    # shipped DialogSeekBar.xml is missing one </control> for the group opened
+    # at line 11, so Kodi logs
+    #     Unable to load window XML: .../DialogSeekBar.xml. Line 287
+    #     Error reading end tag.
+    # on every single start and the playback seek bar never loads. The bundled
+    # copy is that same file with the one closing tag put back.
+    'DialogSeekBar.xml',
+)
+
+_XML_REPAIR_DIR = os.path.join(
+    os.path.dirname(__file__), '..', 'skin_repair', 'fentastic_xml')
+
+
+_SKIN_RELOADED = [False]
+
+
+def _reload_skin_if_fentastic():
+    """A restored include only takes effect once the skin re-reads it.
+
+    Kodi resolves includes when the skin loads, so a file put back afterwards
+    is invisible until the next load -- which is exactly why "switch to another
+    skin and back" was the only thing that ever appeared to help. Do the reload
+    here instead of leaving the user to discover it.
+
+    Guarded three ways: only when FENtastic is the active skin, never during
+    playback, and at most once per service run.
+    """
+    if _SKIN_RELOADED[0] or xbmc is None:
+        return
+    try:
+        if xbmc.getCondVisibility('Player.HasMedia'):
+            return
+        if xbmc.getSkinDir() != SKIN_ADDON_ID:
+            return
+        _SKIN_RELOADED[0] = True
+        _log('reloading the skin so the restored widget includes take effect '
+             'now, instead of at the next skin change', level='WARNING')
+        xbmc.executebuiltin('ReloadSkin()')
+    except Exception as e:
+        _log('skin reload failed: {0}'.format(e), level='WARNING')
+
+
+def _is_unparseable(path):
+    """True only when the file is definitely not XML Kodi can load.
+
+    Errs towards leaving the file alone: any trouble reading it, or any doubt,
+    reads as fine. Only a hard parse failure counts as broken.
+    """
+    try:
+        import xml.etree.ElementTree as _ET
+        with open(path, 'rb') as f:
+            _ET.fromstring(f.read())
+        return False
+    except Exception as e:
+        if e.__class__.__name__ == 'ParseError':
+            return True
+        return False
+
+
+def _restore_missing_widget_files():
+    """Put back the widget include files when the skin is missing them.
+
+    They ship inside the build and are absent on real devices anyway, on fresh
+    installs and after quick updates alike. Two independent sources say so on
+    the same boot -- Kodi logs
+
+        Error loading include file .../script-fentastic-widget_movies.xml:
+        Failed to open file (row: 0, col: 0)
+
+    and this patcher logs 'file not found' for the same path. The consequence
+    is not subtle: Includes.xml pulls these in at its top, so without them
+    MovieWidgets, TVShowWidgets and Custom1Widgets are never defined, Kodi
+    reports "Skin has invalid include" for all three, and the Movies, TV Shows
+    and IdanPlus screens come up completely empty. That is the "FENtastic has
+    no content" report, and it explains why nothing helped: switching skins,
+    quick-updating and restarting all assume the file is there to be read.
+
+    Writes a file only when it is MISSING, or when it is present and does not
+    parse as XML at all. The second case is not a judgement call: Kodi refuses
+    such a file itself and says so in the log, so there is nothing working to
+    preserve. Anything that parses is left exactly as it is, whatever it
+    contains, so a widget layout the user or the skin's own editor wrote is
+    never replaced by ours.
+    """
+    if xbmcvfs is None:
+        return []
+    try:
+        base = xbmcvfs.translatePath(
+            'special://home/addons/' + SKIN_ADDON_ID + '/xml/')
+    except Exception:
+        return []
+    if not os.path.isdir(base):
+        return []          # skin not installed -- nothing to repair, retry later
+    restored = []
+    for name in RESTORE_FILES:
+        live = os.path.join(base, name)
+        if os.path.exists(live) and not _is_unparseable(live):
+            continue
+        src = os.path.join(_XML_REPAIR_DIR, name)
+        if not os.path.isfile(src):
+            continue
+        try:
+            with open(src, 'rb') as f:
+                body = f.read()
+            tmp = live + '.kpovtmp'
+            with open(tmp, 'wb') as f:
+                f.write(body)
+                f.flush()
+                try:
+                    os.fsync(f.fileno())
+                except OSError:
+                    pass
+            os.replace(tmp, live)
+            restored.append(name)
+        except OSError as e:
+            _log('could not restore {0}: {1}'.format(name, e), level='WARNING')
+    return restored
+
+
 def ensure_patched():
     """Apply the header rewrite to both widget XML files. Returns a
     {filename: status} dict. Add-if-absent widget blocks are seeded once per
     device (see _WIDGET_SEED_FLAG); the marker is only written once BOTH files
     were actually seen, so a not-yet-installed skin retries next start.
+
+    Missing include files are put back FIRST, so the rewrite below has
+    something to rewrite instead of reporting 'no_file' forever.
     """
+    restored = _restore_missing_widget_files()
+    if restored:
+        _log('restored {0} missing widget include file(s): {1} -- these define '
+             'MovieWidgets/TVShowWidgets/Custom1Widgets, so Movies, TV Shows '
+             'and IdanPlus were empty without them'
+             .format(len(restored), ', '.join(restored)), level='WARNING')
+        _reload_skin_if_fentastic()
+
     allow_insert = not _widgets_already_seeded()
     results = {name: _patch_one(name, allow_insert=allow_insert)
                for name in WIDGET_FILES}
