@@ -30,9 +30,31 @@ FENTASTIC_EN_STRINGS = (
 # add-on (so they ride along in every quick update). Used to self-heal a
 # corrupt/truncated strings.po. Keyed: live skin path -> bundled pristine file.
 _SKIN_REPAIR_DIR = os.path.join(os.path.dirname(__file__), '..', 'skin_repair')
+
+# Kodi's OWN Hebrew strings, not a skin's. Everything outside a skin's own
+# labels comes from here: "מועדפים" (#1036), "יציאה" (#13012), the power menu,
+# every built-in dialog.
+#
+# It is in this table because a partially-readable copy has a signature that is
+# easy to misread as something else entirely. Kodi falls back to English for an
+# id it cannot find in the active language, and shows nothing at all for an id
+# that is in neither -- so a file cut part-way through produces a screen where
+# the skin's own text is fine, some Kodi labels are suddenly English, and a few
+# are blank. That was reported as three separate faults.
+#
+# Unlike the skin files, repairing this one does NOT take effect immediately:
+# Kodi loads the core strings once at startup, and no reload short of
+# restarting Kodi re-reads them. The repair still belongs here -- it makes the
+# NEXT start correct instead of leaving the device wrong forever -- but the log
+# line says so, rather than implying the screen will fix itself.
+KODI_HE_STRINGS = (
+    'special://home/addons/resource.language.he_il/resources/strings.po'
+)
+
 SKIN_STRINGS_REPAIR = {
     FENTASTIC_HE_STRINGS: os.path.join(_SKIN_REPAIR_DIR, 'fentastic_he_il_strings.po'),
     FENTASTIC_EN_STRINGS: os.path.join(_SKIN_REPAIR_DIR, 'fentastic_en_gb_strings.po'),
+    KODI_HE_STRINGS: os.path.join(_SKIN_REPAIR_DIR, 'kodi_he_il_strings.po'),
 }
 GUISETTINGS = 'special://profile/guisettings.xml'
 FENTASTIC_DEFAULT_PLAYER_SETTING = 'chooseosdplayer'
@@ -231,6 +253,7 @@ def _restore_corrupt_skin_strings():
     startup, independent of the quick-update extractor. Healthy files (incl. a
     legitimately newer/larger skin translation) are left untouched."""
     restored = []
+    _core_restored = _skin_restored = False
     for live_special, pristine_path in SKIN_STRINGS_REPAIR.items():
         try:
             if not os.path.exists(pristine_path):
@@ -261,13 +284,27 @@ def _restore_corrupt_skin_strings():
             if not good.strip():
                 continue
             _atomic_write(live_path, good)
-            restored.append(os.path.basename(os.path.dirname(live_path)))
+            if live_special == KODI_HE_STRINGS:
+                _core_restored = True
+                restored.append('kodi-core-he')
+            else:
+                _skin_restored = True
+                restored.append(os.path.basename(os.path.dirname(live_path)))
         except Exception as exc:
             kodi_utils.log('hebrew_build_ui_patcher restore failed: {0}'.format(exc), level='WARNING')
     if restored:
-        kodi_utils.log('hebrew_build_ui_patcher: restored corrupt skin strings.po for {0}'.format(
+        kodi_utils.log('hebrew_build_ui_patcher: restored corrupt strings.po for {0}'.format(
             ','.join(restored)), level='WARNING')
-        _reload_skin_if_active()
+        if _core_restored:
+            # Say it plainly rather than let the next log reader assume the
+            # screen went back to Hebrew the moment this ran. It did not.
+            kodi_utils.log(
+                'hebrew_build_ui_patcher: that included KODI\'S OWN Hebrew '
+                'strings -- those are read once at startup, so Kodi labels '
+                'stay English/blank until the next restart',
+                level='WARNING')
+        if _skin_restored:
+            _reload_skin_if_active()
     return bool(restored)
 
 
