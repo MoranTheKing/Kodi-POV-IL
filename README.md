@@ -38,7 +38,7 @@
 
 - עץ קבצים מסודר של המיגרציה.
 - מסמך diff של `Twilight -> POV`.
-- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.101.zip`.
+- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.105.zip`.
 - הוראות התקנה ובדיקת smoke test לטלפון: `ANDROID_TESTING.md`.
 
 ## חבילת בדיקה (גרסה נוכחית)
@@ -223,6 +223,75 @@ From MoranSubs `0.2.448` / quickfix `0.1.490`:
   silence while lines are still arriving. It used to wait for the first whole
   twenty per cent, which on a distant provider is minutes — long enough that a
   working extraction was indistinguishable from nothing happening at all.
+
+From MoranSubs `0.2.449`–`0.2.455` / quickfixes `0.1.491`–`0.1.497`:
+
+- One switch turns off every change this add-on makes to POV, for anyone who
+  would rather run POV exactly as upstream ships it.
+- An AIOStreams provider that cannot answer no longer swallows the whole
+  scrape, and our own additions can no longer empty POV's source list.
+- The update package stopped shipping POV's own files, so a quick update can
+  no longer overwrite a newer POV with an older copy.
+- A downloaded subtitle is converted to UTF-8 however it arrived, not only
+  when it came out of a zip, and the cp1255 fallback is accepted only when it
+  actually produces Hebrew.
+- One congestion event is no longer punished six times over.
+
+From MoranSubs `0.2.456` / quickfix `0.1.498` / build `0.1.103`:
+
+- MDBList home tiles appear on the first restart instead of the second.
+
+From MoranSubs `0.2.457` / quickfix `0.1.499` / build `0.1.104`:
+
+- A fresh install no longer starts with the AIOStreams takeover armed, which
+  used to plant "No Results" on every title until the add-on disarmed it.
+
+From MoranSubs `0.2.458` / quickfix `0.1.500`:
+
+- When POV cannot resolve a source it now says which one failed and why,
+  instead of returning silently.
+
+From MoranSubs `0.2.459` / quickfix `0.1.501`:
+
+- AI-translated subtitles are cleaned where they are made rather than only on
+  the way to the player, so the pool never learns the defect. Two faults are
+  removed: the source language echoed above its own translation, and letters
+  that arrived in a presentation form the subtitle font has no glyph for and
+  drew as a hollow box.
+
+From MoranSubs `0.2.460` / quickfix `0.1.502`:
+
+- POV 6.08 changed what its scraper timeout covers — it now has to pay for the
+  debrid cache check out of the same budget — so a value that used to be
+  generous became too small and produced "no results" on the first attempt and
+  sources on the second. The floor is raised for anyone still on the old value;
+  a value you chose yourself is left alone.
+
+From MoranSubs `0.2.461` / quickfix `0.1.503`:
+
+- Kodi's own Hebrew strings now repair themselves, not just the skin's. One
+  half-written translation file looked like three separate faults: "Favourites"
+  and "Exit" back in English, power-menu entries with no caption at all, and a
+  FENtastic screen that read as empty because on that skin the labels are the
+  content.
+- Forty-three internal settings Kodi was dropping on every startup are fixed,
+  two POV repairs are back after POV's update moved what they matched, and the
+  MDBList QR screen no longer carries Gemini's title.
+
+From MoranSubs `0.2.462` / Wizard `0.1.36` / quickfix `0.1.504` / build
+`0.1.105`:
+
+- A new installation no longer skips the five FENtastic home-widget files, so
+  Movies, TV shows and Idan+ come up with their content instead of empty. A
+  home layout you customized is still kept on a quick update; only files that
+  are missing get written, and a deliberate reinstall still lays down defaults.
+  A device that already lost those files repairs itself at startup.
+- The seek bar Kodi refused to load on every start is fixed — the shipped file
+  was missing one closing tag, so Kodi rejected the whole window.
+- POV can now read the shortcut folders the build ships. They are stored in one
+  spelling and were read in another, so POV saw them all as empty and never
+  said so; the same mismatch also made POV quietly replace the build's menus
+  with its own defaults. Nothing in the database changes.
 
 ## Upstream POV Watch
 
