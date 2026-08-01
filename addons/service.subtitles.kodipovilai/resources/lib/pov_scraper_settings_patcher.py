@@ -75,9 +75,29 @@ DESIRED = (
 # label changed from "Scraper Timeout" to "Scraper/Debrid Timeout (secs)",
 # which is upstream saying the same thing: one number now has two jobs. Our
 # build's userdata pins it at 10, so our users kept half the budget POV now
-# expects. This adopts POV's own new default rather than inventing a number.
+# expects.
+#
+# 30 rather than POV's 20, and the reported log says why. Timing the two phases
+# in the failing run, against a budget of timeout+1 = 11s:
+#
+#     phase 1, providers :  7.36s   finished on its own, never touched the cap
+#     phase 2, debrid    : 10.83s   cut off ON the cap, at 11s
+#
+# So the provider phase was never the problem; the debrid check spent one
+# hundred percent of the budget and still had not answered. 20 would give it
+# 21s, which may or may not be enough -- TorBox posts every hash in a single
+# un-chunked request, so the call grows with the size of the result set. 30
+# gives it 31s.
+#
+# Raising this costs nothing when things are healthy: thread_monitor stops the
+# moment the last thread finishes, so a fast scrape is just as fast at 30 as at
+# 10. It only widens the ceiling for the case that is currently failing. What
+# it does cost is the genuinely-dead scrape, which now takes longer to give up.
+# That is the right side to err on: waiting longer is visible and
+# self-explanatory, whereas "no results" on a title that has hundreds of
+# sources is neither.
 MINIMUMS = (
-    ('scrapers.timeout.1', 20),
+    ('scrapers.timeout.1', 30),
 )
 
 
