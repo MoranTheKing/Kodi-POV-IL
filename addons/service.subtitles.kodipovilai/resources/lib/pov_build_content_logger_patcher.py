@@ -177,6 +177,30 @@ def _patch_file(base, rel, pyc_prefix, item_anchor):
         new_content = (new_content[:outer_start] + outer_repl
                        + new_content[outer_end:])
 
+    # Two guards this file never had, added when it was retired so that
+    # re-arming it later cannot brick POV.
+    #
+    # 1. The splices below compute both offsets against the ORIGINAL content
+    #    and then apply them one after the other, so they are only safe while
+    #    the two matches are far apart. In 6.08.01 they are hundreds of lines
+    #    apart in both files -- but a POV refactor that brings them together,
+    #    or makes the per-item except the same one that guards set_category,
+    #    would splice one replacement into the middle of the other.
+    if not (item_end <= outer_start or outer_end <= item_start):
+        _log('the per-item and outer excepts overlap in {0} -- refusing to '
+             'splice'.format(rel), level='WARNING')
+        return 'unmatched'
+
+    # 2. Every other patcher here compile()-checks before writing; this one
+    #    never did, so a bad splice would have gone straight to disk and taken
+    #    POV down with it.
+    try:
+        compile(new_content, path, 'exec')
+    except SyntaxError as e:
+        _log('compile check failed for {0}, not writing: {1}'.format(rel, e),
+             level='WARNING')
+        return 'compile_failed'
+
     tmp_path = path + '.aitmp'
     try:
         with open(tmp_path, 'wb') as f:
