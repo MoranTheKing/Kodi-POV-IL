@@ -1340,7 +1340,8 @@ class _PairWindow(xbmcgui.WindowDialog):
         self.cancelled = False
         self._countdown_lbl = None
 
-    def setup(self, qr_url, url_lines, instructions_header):
+    def setup(self, qr_url, url_lines, instructions_header,
+              title_text='Gemini AI - התאמה מטלפון'):
         # WindowDialog coordinate space is 1280x720 by default.
         # Layout:
         #   y=0-720    full-screen semi-opaque dark background
@@ -1356,10 +1357,13 @@ class _PairWindow(xbmcgui.WindowDialog):
                                   colorDiffuse='EE000000', aspectRatio=2)
         self.addControl(bg)
 
-        # Title bar
+        # Title bar. Passed in, because this window is shared by the Gemini and
+        # MDBList pair flows and used to say "Gemini AI" in both -- so someone
+        # connecting MDBList scanned a QR headed Gemini, opened a page headed
+        # MDBList, and reasonably concluded one of the two was wrong.
         title = xbmcgui.ControlLabel(
             340, 30, 600, 60,
-            '[B][COLOR=FFFFD166]Gemini AI - התאמה מטלפון[/COLOR][/B]',
+            '[B][COLOR=FFFFD166]' + title_text + '[/COLOR][/B]',
             alignment=2 | 4, font='font30')
         self.addControl(title)
 
@@ -1431,7 +1435,7 @@ class _PairWindow(xbmcgui.WindowDialog):
             self.close()
 
 
-def _run_pair_qr(ps):
+def _run_pair_qr(ps, title_text='Gemini AI - התאמה מטלפון'):
     """Show a scannable QR + URL fallback for an ALREADY-CREATED PairServer,
     poll for the submitted key until it arrives / the user cancels / a 5-min
     deadline, then shut the server down. Returns the submitted key (or '').
@@ -1502,7 +1506,7 @@ def _run_pair_qr(ps):
     window = None
     try:
         window = _PairWindow()
-        window.setup(qr_url, url_lines, instructions_header)
+        window.setup(qr_url, url_lines, instructions_header, title_text)
         window.show()
 
         while _time.time() < deadline:
@@ -1753,7 +1757,7 @@ def _mdblist_pair_flow(kodi_utils, gemini_pair, mdblist_pair):
             'אפשר לחזור לתפריט ולבחור "הזנה ידנית" במקום.'
             .format(str(e)[:80]))
         return
-    key = _run_pair_qr(ps)
+    key = _run_pair_qr(ps, 'MDBList - התאמה מטלפון')
     if not key:
         return
     _test_save_mdblist(kodi_utils, mdblist_pair, key)
