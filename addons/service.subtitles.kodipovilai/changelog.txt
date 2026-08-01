@@ -1,3 +1,24 @@
+v0.2.462
+- Fresh installs came up with empty Movies, TV shows and Idan+ screens. The
+  five FENtastic widget files those screens are built from were being skipped
+  during installation: the wizard skips them on purpose so a quick update
+  never overwrites a home layout you customised, but the check it used also
+  matched a brand new install, where there was no layout to keep and the files
+  simply never arrived. The skin then failed every widget include and drew
+  nothing. The check now keeps a file you actually have and writes one you are
+  missing, and the add-on also puts any missing widget file back at startup, so
+  a device that already lost them repairs itself.
+- The seek bar Kodi refused to load on every single start is fixed. The shipped
+  file was missing one closing tag, so Kodi rejected the whole window and fell
+  back to the plain one.
+- "חיבור שירותים", "חיפוש לפי שנה", "לפי רשתות" and both personal areas opened
+  onto nothing. Every folder POV ships is stored in one spelling and read in
+  another, so POV read them all as empty and never said so. POV now reads them
+  the way they are written. Nothing in the database is touched, so anything you
+  have set up stays exactly as it is.
+- The same mismatch also made POV quietly replace the build's menus with its
+  own defaults. That stops too.
+
 v0.2.461
 - Kodi's own Hebrew strings now self-heal, not just the skin's. A strings.po
   that stops part-way through leaves Kodi falling back to English for the ids
