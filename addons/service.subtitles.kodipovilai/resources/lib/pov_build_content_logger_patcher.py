@@ -54,17 +54,11 @@ TARGETS = (
 
 # v2: also instrument run()'s OUTER `except: pass` -- the one that wraps
 # the whole method (import of the read function, the function() call, the
-# list comprehension, AND build_*_results incl. the .sort() at
-# movies.py:189). favorites lists come back empty in ~213ms with NO
-# POV_BUILD_ITEM_ERROR, which means the failure is OUTSIDE
-# build_*_content -- caught here. This except sits immediately BEFORE the
-# `kodi_utils.set_category(...)` line, so we locate it by that follower.
-OUTER_TARGETS = (
-    ('resources/lib/menus/movies.py', 'movies',
-     'kodi_utils.set_category(__handle__, ls(params_get('),
-    ('resources/lib/menus/tvshows.py', 'tvshows',
-     'kodi_utils.set_category(__handle__, ls(params_get('),
-)
+# list comprehension, AND build_*_results incl. the .sort()). favorites
+# lists come back empty in ~213ms with NO POV_BUILD_ITEM_ERROR, which means
+# the failure is OUTSIDE build_*_content -- caught here. It sits immediately
+# BEFORE the `kodi_utils.set_category(...)` line, and _patch_file now finds
+# it by that adjacency rather than by the text of the set_category call.
 
 MARKER = '# AI_SUBS_POV_BUILD_LOGGER_v2'
 
@@ -102,10 +96,11 @@ def _make_replacement(indent, label, ctx_expr):
     )
 
 
-def _patch_file(base, rel, pyc_prefix, item_anchor, outer_anchor):
-    """Instrument BOTH the per-item build except (after item_anchor) and
-    run()'s outer except (the bare `except: pass` immediately BEFORE
-    outer_anchor) in one read/write. Returns a status string."""
+def _patch_file(base, rel, pyc_prefix, item_anchor):
+    """Instrument BOTH the per-item build except (the first bare
+    `except: pass` after item_anchor) and run()'s outer except (the bare
+    `except: pass` directly above the set_category call) in one read/write.
+    Returns a status string."""
     path = os.path.join(base, rel)
     if not os.path.isfile(path):
         return 'no_file'
@@ -132,19 +127,30 @@ def _patch_file(base, rel, pyc_prefix, item_anchor, outer_anchor):
     item_end = ia + m_item.end()
     item_indent = m_item.group('indent').decode('utf-8')
 
-    # --- (2) outer except: the bare `except: pass` immediately BEFORE
-    # outer_anchor (set_category line). Search the region preceding it.
-    oa = content.find(outer_anchor.encode('utf-8'))
-    if oa == -1:
-        _log('outer anchor not found in {0}'.format(rel), level='WARNING')
+    # --- (2) outer except: the bare `except: pass` sitting immediately BEFORE
+    # the set_category call.
+    #
+    # Matched by that ADJACENCY rather than by the text of the set_category
+    # call. The previous version searched for the literal
+    # 'kodi_utils.set_category(__handle__, ls(params_get(' and then took the
+    # last `except: pass` before it; POV 6.08 simplified the argument to
+    # 'kodi_utils.set_category(__handle__, category)', the literal stopped
+    # matching, and this patcher reported 'unmatched' and did nothing -- in both
+    # files, silently, for however long it took someone to run every patcher
+    # against a fresh POV and look.
+    #
+    # The adjacency is what the comment above always described and is the part
+    # POV did not change: the run() method's outer handler is the bare
+    # `except: pass` directly above the set_category line. Keying on it also
+    # removes the fragile "last one before offset X" scan -- the match IS the
+    # pair, so there is no way to land on some unrelated except.
+    m_outer = re.search(
+        rb'\n(?P<indent>[ \t]+)except:\s*pass'
+        rb'(?=\n[ \t]*kodi_utils\.set_category\()', content)
+    if not m_outer:
+        _log('no `except: pass` directly above set_category in {0}'.format(rel),
+             level='WARNING')
         return 'unmatched'
-    # last `except: pass` before oa
-    outer_matches = list(re.finditer(
-        rb'\n(?P<indent>[ \t]+)except:\s*pass', content[:oa]))
-    if not outer_matches:
-        _log('no outer `except: pass` in {0}'.format(rel), level='WARNING')
-        return 'unmatched'
-    m_outer = outer_matches[-1]
     outer_start = m_outer.start()
     outer_end = m_outer.end()
     outer_indent = m_outer.group('indent').decode('utf-8')
@@ -202,13 +208,12 @@ def ensure_patched():
     if not base or not os.path.isdir(base):
         return 'no_pov'
     item_map = {t[1]: t[2] for t in TARGETS}
-    outer_map = {t[1]: t[2] for t in OUTER_TARGETS}
     rel_map = {t[1]: t[0] for t in TARGETS}
     results = []
     for pyc_prefix in ('movies', 'tvshows'):
         try:
             st = _patch_file(base, rel_map[pyc_prefix], pyc_prefix,
-                             item_map[pyc_prefix], outer_map[pyc_prefix])
+                             item_map[pyc_prefix])
         except Exception as e:
             st = 'error:%r' % e
         results.append('%s=%s' % (pyc_prefix, st))
