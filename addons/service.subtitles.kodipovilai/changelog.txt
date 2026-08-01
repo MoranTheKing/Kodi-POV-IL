@@ -1,3 +1,25 @@
+v0.2.460
+- Fixes "no results" on the first attempt at a movie or episode, with sources
+  appearing on the second. POV 6.08 spends one setting, the scraper/debrid
+  timeout, on two phases that run back to back: finding torrents, then asking
+  the debrid which of them it already holds. After each phase it keeps only the
+  threads that finished, and the final source list is built exclusively from the
+  debrid phase -- so with a single debrid configured, one slow answer discards
+  every source that was found. The torrents are not lost: each provider caches
+  its own results as it finishes, which is why the next attempt is instant and
+  works.
+- POV shipped 6.08.01 with this setting's default raised from 10 to 20 and
+  renamed from "Scraper Timeout" to "Scraper/Debrid Timeout (secs)". Our build
+  pinned 10 in userdata, and a stored value beats a schema default forever --
+  an add-on update replaces the add-on folder and never touches userdata, so
+  the new default could not reach anyone. It is now raised to POV's own 20,
+  only upwards: anyone who set it higher keeps their number, and anyone who
+  lowers it afterwards keeps that too.
+- The write also drops POV's cached settings snapshot, without which the value
+  would be correct on disk while POV's running process kept using the old one,
+  and it is verified by reading it back, so a write Kodi silently swallows is
+  retried instead of being recorded as done.
+
 v0.2.459
 - Two text defects in AI translations, and the repair now runs where the text is
   MADE rather than only on a later pass over it. A cue sometimes came back
