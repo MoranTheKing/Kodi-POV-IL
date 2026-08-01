@@ -198,7 +198,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_trakt_cache_empty,
         _maybe_patch_pov_mdblist_sync,
         _maybe_patch_pov_meta_blank,
-        _maybe_patch_pov_build_content_logger,
+        # _maybe_patch_pov_build_content_logger -- RETIRED, see the function.
         _maybe_patch_pov_debrid_status,
         _maybe_refresh_shared_sdh,
         _maybe_show_af3_first_launch_dialog,
@@ -1642,12 +1642,29 @@ def _maybe_patch_pov_trakt_cache_empty():
 
 
 def _maybe_patch_pov_build_content_logger():
-    """Instrument POV's per-item list builders (menus/movies.py +
-    tvshows.py) so the SWALLOWED exception that empties favorites lists
-    is logged. We proved auth/fetch/db/meta are all fine yet the list
-    renders empty in ~218ms -- meaning build_movie_content raises in the
-    live Kodi context and its bare `except: pass` eats it. This turns
-    that into a POV_BUILD_ITEM_ERROR log line with the real exception."""
+    """RETIRED -- no longer called from the startup steps.
+
+    This was instrumentation, not a fix: it rewrote the bare `except: pass`
+    in menus/movies.py and tvshows.py so the exception that emptied favorites
+    lists would reach the log. It worked. v0.2.80 records the answer it
+    produced on-device --
+
+        POV_RUN_ERROR: tmdb_favorites() takes 2 positional arguments but 3
+          were given
+
+    -- and shipped the fix in the same release. Neither POV_RUN_ERROR nor
+    POV_BUILD_ITEM_ERROR appears anywhere in the ~380 releases since.
+
+    It kept running anyway, editing two POV files on every device at every
+    boot to answer a question that was answered years of releases ago. POV
+    6.08 then changed the anchor and it went quiet, which is how it got
+    noticed at all -- and reviving it would have re-armed a real hazard:
+    unlike the other patchers here it has no compile() gate, and its
+    two-step splice assumes the per-item and outer excepts are far apart.
+
+    Kept rather than deleted because the technique is sound and the next
+    swallowed-exception hunt will want it. To re-arm: put it back in the
+    steps tuple above, and fix the compile gate first."""
     if _skip_pov_patchers():
         return
     try:

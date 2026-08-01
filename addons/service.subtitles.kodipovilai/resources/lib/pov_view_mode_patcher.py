@@ -23,6 +23,7 @@
 # isn't installed or the function changed upstream.
 
 import os
+import re
 
 try:
     import xbmcvfs
@@ -37,7 +38,7 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 KODI_UTILS_REL = 'resources/lib/modules/kodi_utils.py'
-MARKER = '# AI_SUBS_POV_VIEWMODE_v3'
+MARKER = '# AI_SUBS_POV_VIEWMODE_v4'
 
 # v3: waiting-then-setting-once (v1/v2) still lost a race -- POV applies the
 # view right after the directory loads, but Kodi re-applies the path's DEFAULT
@@ -48,6 +49,15 @@ MARKER = '# AI_SUBS_POV_VIEWMODE_v3'
 # overridden. Fast pages still get the view on the first tick; the loop stops
 # ~1s after the content matched. If the content never settles (e.g. a genuinely
 # empty/failed list) it just times out without forcing a view, as before.
+# The `else: settled = -1` is load-bearing. Without it the window is anchored
+# to the FIRST match ever seen, and this loop checks BEFORE its first sleep --
+# so on a page-forward, where the outgoing and incoming containers share the
+# same content type, a match on tick 0 (before Kodi has begun the transition)
+# pins `settled` there. The counter then runs out against the old page and the
+# loop breaks around the moment the new one settles, collapsing "re-apply for a
+# second" into a single apply -- in exactly the scenario the re-applying exists
+# for. Resetting whenever the content stops matching means the window always
+# measures from the last real settle.
 _NEW = (
     "\t\tsettled = -1\n"
     "\t\tfor _n in range(200):\n"
@@ -55,6 +65,7 @@ _NEW = (
     "\t\t\t\tif settled < 0: settled = _n\n"
     "\t\t\t\texecute_builtin('Container.SetViewMode(%s)' % view_id)\n"
     "\t\t\t\tif _n - settled >= 20: break\n"
+    "\t\t\telse: settled = -1\n"
     "\t\t\tsleep(50)"
 )
 
@@ -78,7 +89,46 @@ _OLD_V2 = (
     "\t\t\tsleep(50)\n"
     "\t\texecute_builtin('Container.SetViewMode(%s)' % view_id)"
 )
-_OLDS = (_OLD_STOCK, _OLD_V1, _OLD_V2)
+# POV 6.08.01 rewrote the loop: it sleeps FIRST, skips the tick with `continue`
+# while the content has not settled, and returns the moment it applies the view.
+# The old `else: return` give-up is gone, so the specific bug the first version
+# of this patcher chased no longer exists upstream.
+#
+# What DOES survive is the reason for v3, and it is the one that actually
+# matches the field report: POV still applies the view exactly once and returns
+# immediately, so a default view that Kodi applies a moment later -- as the
+# items finish rendering -- still wins. Re-applying for ~1s after the content
+# settles is still the fix.
+#
+# This shape has to be listed explicitly rather than matched loosely. An earlier
+# patcher in this build pinned an exact line, POV reformatted it, and the
+# patcher went quiet for months without anyone noticing; the lesson taken there
+# was to match by shape. Here the whole body is the thing being replaced, so
+# there is nothing looser to key on -- instead ensure_patched() reports
+# 'unmatched' loudly, and run_patchers.py in the scratchpad re-checks every
+# patcher against a fresh POV whenever POV ships a new version.
+_OLD_STOCK_608 = (
+    "\t\tfor _ in range(60):\n"
+    "\t\t\tsleep(50)\n"
+    "\t\t\tif container_content() != content: continue\n"
+    "\t\t\treturn execute_builtin('Container.SetViewMode(%s)' % view_id)"
+)
+
+# Our own v3 output. It is listed so a device already carrying it upgrades to
+# v4 (which adds the `else: settled = -1` reset) instead of stopping at the
+# marker check. Without this the fix would only ever reach devices that had not
+# been patched yet -- i.e. nobody who already had the feature.
+_OLD_V3 = (
+    "\t\tsettled = -1\n"
+    "\t\tfor _n in range(200):\n"
+    "\t\t\tif container_content() == content:\n"
+    "\t\t\t\tif settled < 0: settled = _n\n"
+    "\t\t\t\texecute_builtin('Container.SetViewMode(%s)' % view_id)\n"
+    "\t\t\t\tif _n - settled >= 20: break\n"
+    "\t\t\tsleep(50)"
+)
+
+_OLDS = (_OLD_STOCK, _OLD_V1, _OLD_V2, _OLD_STOCK_608, _OLD_V3)
 
 
 def _log(msg, level='INFO'):
@@ -124,9 +174,13 @@ def ensure_patched():
         return 'unmatched'
 
     new_content = content.replace(anchor, _NEW, 1)
-    # Drop any superseded version marker lines (v1 -> / v2 -> v3 upgrade).
-    new_content = new_content.replace('# AI_SUBS_POV_VIEWMODE_v1\n', '')
-    new_content = new_content.replace('# AI_SUBS_POV_VIEWMODE_v2\n', '')
+    # Drop any superseded version marker line, so an upgraded file carries
+    # exactly one. Listing them individually has already been forgotten once --
+    # v3 was added without its predecessor being retired here -- so this is
+    # derived from the marker's own prefix instead of enumerated by hand.
+    _prefix = MARKER.rsplit('_v', 1)[0]
+    new_content = re.sub(r'[ \t]*' + re.escape(_prefix) + r'_v\d+\n', '',
+                         new_content)
     # Stamp the marker on its own line right after the first newline.
     new_content = new_content.replace('\n', '\n' + MARKER + '\n', 1)
 
