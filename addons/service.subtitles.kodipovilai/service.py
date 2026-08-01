@@ -1153,7 +1153,8 @@ def _maybe_patch_pov_scraper_settings():
         if status == 'patched':
             kodi_utils.log(
                 'pov_scraper_settings_patcher: restored pre-release/3D on and '
-                'piratebay on', level='INFO')
+                'piratebay on, and raised the scraper/debrid timeout to POV '
+                "6.08's own default", level='INFO')
         elif status in ('already', 'no_pov', 'unchanged'):
             pass
         else:
