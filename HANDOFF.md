@@ -2224,6 +2224,128 @@ was uploading partial/failed translations (stayed mostly English) the server onl
 19. **Backend/infra follow-ups** are tracked in the maintainer's private notes,
    not here (this file is public and carries no backend or pool internals).
 
+## What shipped 2026-07-26 → 2026-08-01 (notifications 546–563)
+
+The numbered "Open items" list above stops at notification 545. This section
+carries the record forward. Versions are add-on / quickfix / build.
+
+### POV started fighting back (549–556)
+
+POV self-updates independently of this build, and 6.07→6.08 moved several
+things this add-on had been patching. The lessons, in order:
+
+- **A kill switch first.** `_pov_patching_off` turns off every change this
+  add-on makes to POV. It exists so a POV-side breakage is one setting away
+  from being ruled out, instead of a support conversation.
+- **Never ship POV's own files.** A quickfix was overwriting a newer POV with
+  the copy frozen inside our package. The quickfix builder now refuses to
+  include any `plugin.video.pov` member, and `tools/test_quickfix_package_scope.py`
+  asserts it.
+- **Our additions must never empty POV's source list.** An AIOStreams provider
+  that cannot answer used to swallow the entire scrape. `provider.aiostreams`
+  is a takeover in POV (`active_internal_scrapers()` returns early on it), not
+  a filter, so shipping it `true` with no credentials plants "No Results" on
+  every title. The full build now ships it `false`.
+
+### The two-phase gated release (used for every notification since)
+
+1. Commit and push the artifacts and `wizard/assets/build_versions/<N>.txt`,
+   leaving `quick_update.txt` at the PREVIOUS number.
+2. Fetch every URL a real Kodi client would fetch — Raw and Pages both — and
+   compare **byte for byte** with what was built. Confirm the live note still
+   reads the previous number.
+3. Only then commit the notification bump.
+
+Gate scripts live in the maintainer's scratchpad, one per release. Pages lags
+Raw by a few minutes; poll rather than assume.
+
+### Releases
+
+| Version | What it fixed |
+| --- | --- |
+| 0.2.449–0.2.455 / qf 0.1.491–0.1.497 | POV kill switch; AIOStreams no longer swallows the scrape; quickfix stops shipping POV's files; subtitle encoding converted to UTF-8 however it arrived; cp1255 fallback accepted only when it yields Hebrew; one congestion event no longer punished six times |
+| 0.2.456 / qf 0.1.498 / build 0.1.103 | MDBList home tiles appear on the first restart |
+| 0.2.457 / qf 0.1.499 / build 0.1.104 | `provider.aiostreams` shipped `false`, so a fresh install no longer starts with the takeover armed |
+| 0.2.458 / qf 0.1.500 | POV names the source it could not resolve instead of failing silently |
+| 0.2.459 / qf 0.1.501 | AI subtitle text cleaned where it is CREATED, not only on delivery |
+| 0.2.460 / qf 0.1.502 | POV 6.08 scraper/debrid timeout floor |
+| 0.2.461 / qf 0.1.503 | Kodi's own Hebrew strings self-heal; 43 dropped settings; two revived POV patchers; MDBList QR title |
+| 0.2.462 / wizard 0.1.36 / qf 0.1.504 / build 0.1.105 | FENtastic widget includes; DialogSeekBar; POV reads the shortcut folders the build ships |
+
+### Things worth not rediscovering
+
+- **`<control>` and add-on settings.** `AddonSettings.cpp` registers exactly
+  nine control types (`toggle spinner edit button list slider range title
+  colorbutton`). `label` is NOT among them for add-on settings, so
+  `CreateControl("label")` returns nullptr and `Setting.cpp:156` drops the
+  whole setting. `visible="false"` is only read by the version-0 parser. The
+  correct way to declare a hidden marker setting in a `version="1"` file is
+  `<level>4</level>` with no `<control>` — `SettingLevel::Internal`, which is
+  Kodi's own idiom. Level never gates get/set from Python. This is what the 43
+  dropped settings were.
+- **POV serves settings from a cached blob.** Every read goes through the
+  `pov_settings` window property. A cross-add-on write is invisible until that
+  property is cleared — `xbmcgui.Window(10000).clearProperty('pov_settings')`.
+  Any patcher that writes a POV setting must clear it and read back.
+- **POV 6.08's `ExternalManager.results()`** spends `scrapers.timeout.1` on TWO
+  sequential phases (providers, then debrid cache checks), and `final_sources`
+  is populated only inside the loop over COMPLETED debrid threads. One slow
+  debrid therefore discards every torrent found. `tpe.shutdown(False)` is
+  non-blocking, so the late threads still write to the providers cache — which
+  is why the second attempt is instant and successful. Three debrid backends
+  also read the same setting as their per-request HTTP timeout.
+- **Patchers go stale silently.** Several matched an exact shape POV later
+  reformatted; they reported `unmatched` and did nothing for months. There is a
+  sweep script in the scratchpad that runs every patcher against a fresh POV
+  and prints a STALE count; run it whenever POV ships a new version. Anchor on
+  shape or adjacency rather than a pinned line where possible.
+- **Kodi tolerates a raw `&` in skin XML.** It does not tolerate a missing
+  closing tag — that rejects the whole window.
+- **`navigator.db` is stored as Python repr, and POV reads it with
+  `json.loads`.** Both readers swallow the failure: shortcut folders render
+  empty and `get_list` returns None, which makes `get_main_lists` rebuild the
+  menu from POV's defaults over the build's. Neither logs anything.
+  **Do not convert the database.** Six patchers in this add-on match on the
+  repr spelling, and one of them rewrites its row back to repr on the next step
+  of the same startup, undoing the conversion permanently. The fix belongs on
+  POV's read path — `pov_navigator_read_patcher` adds an `ast.literal_eval`
+  fallback to both readers and writes nothing.
+- **POV source patches do not take effect in the session that applies them.**
+  POV declares `<reuselanguageinvoker>true</reuselanguageinvoker>` and has
+  already imported its modules by the time the repairs run. `pov_reload`
+  exists for this, but `reload_if_patched()` is called earlier in `main()` than
+  `_run_build_startup_repairs()`, which is where every `note_patched()` lives —
+  so it has never fired. In practice this costs nothing, because the quick
+  update that delivers the patch restarts Kodi anyway. Left alone deliberately;
+  changing it would start cycling POV mid-session for every patcher at once.
+- **The Wizard's extractor and "fresh install".** `extract.all(..., ignore=...)`
+  — `ignore is not None` does NOT mean "quick update". `startup.py`'s
+  fresh-build auto-install passes `ignore=True` as well, to bypass the skip of
+  the Wizard's own files. A preserve rule keyed only on `ignore` therefore
+  fires on a brand-new install, where there is nothing to preserve. Preserve
+  rules must ALSO require the file to already exist on disk.
+- **A Wizard fix does not apply on the quick update that delivers it.** Python
+  does not reload a module because its bytes changed on disk, so the run that
+  writes the new `extract.py` still uses the old one. Anything that must repair
+  an already-broken device needs a second mechanism — here, the add-on
+  restoring the files at service startup.
+- **Package releases: re-run Deploy GitHub Pages LAST.** The APK download links
+  are served from the `gh-pages` branch, not from the release. See
+  `APK_RELEASE.md`.
+
+### Known, deliberately not fixed
+
+- POV's `menu_editor.shortcut_folder_add_item` does
+  `list_items = json.loads(choice_list)` with no `try/except`, on the raw text
+  from `get_shortcut_folders()`. Every shortcut folder the build ships is repr,
+  so "Add to a Shortcut Folder" from any Trakt/TMDB/MDBList/Discover context
+  menu raises. POV is inconsistent with itself here — `navigator.py`'s folder
+  list uses `eval()` on the same text and works. Pre-existing, unreported by
+  users, and out of scope for the release it was found in.
+- The `.google` provenance sidecar can be evicted by `cache.prune()`
+  independently of its `.srt` sibling, so provenance can lapse for titles still
+  being watched. The fix touches cache eviction.
+
 ## Working style
 
 - Be certain before shipping: read the code, reproduce with a unit test.
