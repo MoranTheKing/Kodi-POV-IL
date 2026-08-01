@@ -1,0 +1,12 @@
+{
+  "version": "0.1.36",
+  "previous_version": "0.1.35",
+  "previous_sha256": "63b832ac192bac7148745e8f5fc0846c1647c74cf677c970de02aa161cf53dfe",
+  "output_sha256": "e6cd9c20c56cff2fe7e07c276299f0b1f04dce00d445e183fc22b73bb2f00b3f",
+  "replace": [
+    "plugin.program.kodipovilwizard/addon.xml",
+    "plugin.program.kodipovilwizard/changelog.txt",
+    "plugin.program.kodipovilwizard/resources/libs/extract.py"
+  ],
+  "add": []
+}

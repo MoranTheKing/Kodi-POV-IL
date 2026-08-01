@@ -185,6 +185,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_widget_crash_guard,
         _maybe_patch_pov_favorites_refresh,
         _maybe_run_fav_diagnostic,
+        _maybe_patch_pov_navigator_read,
         _maybe_fix_pov_favourites_typo,
         _maybe_patch_pov_menus,
         _maybe_patch_pov_personal_area,
@@ -511,6 +512,39 @@ def _maybe_patch_idanplus_channels():
             kodi_utils.log(
                 'idanplus_channels_patcher run failed: {0}'.format(e),
                 level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_navigator_read():
+    """Let POV read the navigator rows it ships.
+
+    Every row in navigator.db is stored as a Python repr, and POV reads them
+    all with json.loads. Shortcut folders therefore render empty ("חיבור
+    שירותים" opening onto nothing), and the main menus come back None, which
+    makes POV rebuild them from its own defaults over the build's. Nothing is
+    logged either way.
+
+    The fix is on POV's read path, not in the database: converting the rows to
+    JSON would break six other patchers here that match on the repr spelling.
+    See pov_navigator_read_patcher for the full reasoning."""
+    try:
+        from resources.lib import pov_navigator_read_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_navigator_read_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log('pov_navigator_read_patcher: patched',
+                           level='WARNING')
+        elif status in ('unmatched', 'compile_failed', 'write_failed',
+                        'read_failed'):
+            kodi_utils.log('pov_navigator_read_patcher: ' + status,
+                           level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log('pov_navigator_read_patcher run failed: '
+                           '{0}'.format(e), level='WARNING')
         except Exception:
             pass
 
