@@ -185,6 +185,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_widget_crash_guard,
         _maybe_patch_pov_favorites_refresh,
         _maybe_run_fav_diagnostic,
+        _maybe_convert_pov_navigator_json,
         _maybe_fix_pov_favourites_typo,
         _maybe_patch_pov_menus,
         _maybe_patch_pov_personal_area,
@@ -511,6 +512,38 @@ def _maybe_patch_idanplus_channels():
             kodi_utils.log(
                 'idanplus_channels_patcher run failed: {0}'.format(e),
                 level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_convert_pov_navigator_json():
+    """Rewrite POV's navigator rows from Python repr into real JSON.
+
+    POV reads every menu and shortcut folder with json.loads. The build's
+    navigator.db stores them as Python repr -- single quotes -- so json.loads
+    raises on all 11 rows, POV's bare `except: contents = []` swallows it, and
+    the menus fall back to defaults while every shortcut folder renders empty.
+    That is the "FENtastic home has 4 entries instead of 11" and the "connect
+    services button opens nothing" reports, and nothing was ever logged.
+
+    Must run BEFORE the other navigator patchers, so they read and rewrite rows
+    POV can actually parse."""
+    try:
+        from resources.lib import pov_navigator_json_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_navigator_json_patcher.ensure_patched()
+        if status.startswith('converted'):
+            kodi_utils.log('pov_navigator_json_patcher: ' + status,
+                           level='WARNING')
+        elif status == 'failed':
+            kodi_utils.log('pov_navigator_json_patcher: failed',
+                           level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log('pov_navigator_json_patcher run failed: '
+                           '{0}'.format(e), level='WARNING')
         except Exception:
             pass
 
