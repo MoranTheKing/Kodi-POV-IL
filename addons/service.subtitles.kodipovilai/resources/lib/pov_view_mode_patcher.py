@@ -78,7 +78,32 @@ _OLD_V2 = (
     "\t\t\tsleep(50)\n"
     "\t\texecute_builtin('Container.SetViewMode(%s)' % view_id)"
 )
-_OLDS = (_OLD_STOCK, _OLD_V1, _OLD_V2)
+# POV 6.08.01 rewrote the loop: it sleeps FIRST, skips the tick with `continue`
+# while the content has not settled, and returns the moment it applies the view.
+# The old `else: return` give-up is gone, so the specific bug the first version
+# of this patcher chased no longer exists upstream.
+#
+# What DOES survive is the reason for v3, and it is the one that actually
+# matches the field report: POV still applies the view exactly once and returns
+# immediately, so a default view that Kodi applies a moment later -- as the
+# items finish rendering -- still wins. Re-applying for ~1s after the content
+# settles is still the fix.
+#
+# This shape has to be listed explicitly rather than matched loosely. An earlier
+# patcher in this build pinned an exact line, POV reformatted it, and the
+# patcher went quiet for months without anyone noticing; the lesson taken there
+# was to match by shape. Here the whole body is the thing being replaced, so
+# there is nothing looser to key on -- instead ensure_patched() reports
+# 'unmatched' loudly, and run_patchers.py in the scratchpad re-checks every
+# patcher against a fresh POV whenever POV ships a new version.
+_OLD_STOCK_608 = (
+    "\t\tfor _ in range(60):\n"
+    "\t\t\tsleep(50)\n"
+    "\t\t\tif container_content() != content: continue\n"
+    "\t\t\treturn execute_builtin('Container.SetViewMode(%s)' % view_id)"
+)
+
+_OLDS = (_OLD_STOCK, _OLD_V1, _OLD_V2, _OLD_STOCK_608)
 
 
 def _log(msg, level='INFO'):
