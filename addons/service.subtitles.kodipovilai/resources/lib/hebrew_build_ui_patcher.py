@@ -5,6 +5,7 @@
 # rest of the Hebrew build sidemenu.
 
 import os
+import re
 import json
 import xml.etree.ElementTree as ET
 
@@ -193,11 +194,18 @@ def _po_is_broken(live_path, pristine_path):
     """Whether a strings.po is damaged in a way the size check cannot see.
 
     The size rule only catches a file cut to under 60%. A write killed in the
-    last third leaves a file that passes it and is still fatal: Kodi's PO
-    reader stops at the first malformed entry, so every $LOCALIZE after the cut
-    resolves to nothing. On FENtastic, whose menus and widget headings are all
-    localised, that reads as "there is content but no text anywhere" -- and, on
-    a first boot where the labels ARE the content, as "no content at all".
+    last third leaves a file that passes it and is still damaging: every entry
+    from the cut onwards was simply never written, so those ids are missing.
+    On FENtastic, whose menus and widget headings are all localised, that reads
+    as "there is content but no text anywhere" -- and, on a first boot where
+    the labels ARE the content, as "no content at all".
+
+    (An earlier version of this comment said Kodi's PO reader aborts at the
+    first malformed entry. It does not: CPODocument::GetNextEntry skips a chunk
+    it cannot use and carries on to EOF. The entries after a truncation are
+    lost because they are absent, not because the parser gave up. The
+    behaviour being guarded against is the same either way; the explanation
+    was wrong and is worth not repeating.)
 
     Two checks, both cheap and both about damage rather than about being
     different from ours:
@@ -233,7 +241,13 @@ def _po_is_broken(live_path, pristine_path):
             line = line.strip()
             if not line or line.startswith('#'):
                 continue
-            if line.count('"') % 2 == 1:
+            # Escapes first. A translation may legitimately contain \" -- and
+            # counting raw quotes on `msgstr "השלט אמר \"וואו"` gives three,
+            # reads as unterminated, and overwrites a complete healthy file
+            # with ours. Dropping every backslash-escaped pair leaves only the
+            # structural quotes, which is what the parity test is about.
+            bare = re.sub(r'\\.', '', line)
+            if bare.count('"') % 2 == 1:
                 return True                      # stopped mid-string
             return not (line.startswith('msgstr') or line.startswith('"'))
         return True   # nothing but comments/blanks left
