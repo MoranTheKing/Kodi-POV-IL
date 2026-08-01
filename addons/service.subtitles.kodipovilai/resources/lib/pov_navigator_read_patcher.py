@@ -218,7 +218,15 @@ def ensure_patched():
                 except OSError:
                     pass
 
-    _log('POV now reads the navigator rows it ships -- shortcut folders stop '
-         'rendering empty and menus stop being replaced by POV defaults',
-         level='INFO')
+    # Deliberately future tense. POV declares reuselanguageinvoker, so it has
+    # already imported navigator_cache into a warm interpreter by the time this
+    # runs, and nothing here cycles it: pov_reload.reload_if_patched() is called
+    # earlier in main() than the repairs that arm it, so no POV source patch in
+    # this add-on has ever taken effect in the session that applied it. That is
+    # long-standing and left alone here rather than changed under a release --
+    # and it costs nothing in practice, because the quick update that delivers
+    # this restarts Kodi anyway.
+    _log('POV will read the navigator rows it ships from the next start -- '
+         'shortcut folders stop rendering empty and menus stop being replaced '
+         'by POV defaults', level='INFO')
     return 'patched'
