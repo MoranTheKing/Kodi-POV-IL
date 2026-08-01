@@ -281,6 +281,14 @@ RESTORE_FILES = (
     'script-fentastic-widget_custom1.xml',
     'script-fentastic-widget_custom2.xml',
     'script-fentastic-widget_custom3.xml',
+    # Not a widget file, but the same repair with the same evidence. The
+    # shipped DialogSeekBar.xml is missing one </control> for the group opened
+    # at line 11, so Kodi logs
+    #     Unable to load window XML: .../DialogSeekBar.xml. Line 287
+    #     Error reading end tag.
+    # on every single start and the playback seek bar never loads. The bundled
+    # copy is that same file with the one closing tag put back.
+    'DialogSeekBar.xml',
 )
 
 _XML_REPAIR_DIR = os.path.join(
@@ -316,6 +324,23 @@ def _reload_skin_if_fentastic():
         _log('skin reload failed: {0}'.format(e), level='WARNING')
 
 
+def _is_unparseable(path):
+    """True only when the file is definitely not XML Kodi can load.
+
+    Errs towards leaving the file alone: any trouble reading it, or any doubt,
+    reads as fine. Only a hard parse failure counts as broken.
+    """
+    try:
+        import xml.etree.ElementTree as _ET
+        with open(path, 'rb') as f:
+            _ET.fromstring(f.read())
+        return False
+    except Exception as e:
+        if e.__class__.__name__ == 'ParseError':
+            return True
+        return False
+
+
 def _restore_missing_widget_files():
     """Put back the widget include files when the skin is missing them.
 
@@ -334,9 +359,12 @@ def _restore_missing_widget_files():
     no content" report, and it explains why nothing helped: switching skins,
     quick-updating and restarting all assume the file is there to be read.
 
-    Only ever writes a file that is MISSING. An existing one is left alone,
-    whatever it contains, so a user's or upstream's own widget layout is never
-    replaced by ours.
+    Writes a file only when it is MISSING, or when it is present and does not
+    parse as XML at all. The second case is not a judgement call: Kodi refuses
+    such a file itself and says so in the log, so there is nothing working to
+    preserve. Anything that parses is left exactly as it is, whatever it
+    contains, so a widget layout the user or the skin's own editor wrote is
+    never replaced by ours.
     """
     if xbmcvfs is None:
         return []
@@ -350,7 +378,7 @@ def _restore_missing_widget_files():
     restored = []
     for name in RESTORE_FILES:
         live = os.path.join(base, name)
-        if os.path.exists(live):
+        if os.path.exists(live) and not _is_unparseable(live):
             continue
         src = os.path.join(_XML_REPAIR_DIR, name)
         if not os.path.isfile(src):
