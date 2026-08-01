@@ -1,3 +1,27 @@
+v0.2.461
+- Kodi's own Hebrew strings now self-heal, not just the skin's. A strings.po
+  that stops part-way through leaves Kodi falling back to English for the ids
+  it cannot find and showing nothing at all for ids missing everywhere, so one
+  damaged file looked like three faults: "Favourites" and "Exit" suddenly in
+  English, two power-menu entries with no caption, and a FENtastic home that
+  reads as empty because on that skin the labels ARE the content. A pristine
+  copy of Kodi's Hebrew file now ships inside this add-on and is restored when
+  the live one is damaged. Kodi reads those strings once at startup, so that
+  repair shows up on the NEXT start; the skin's own files take effect at once,
+  because the skin is reloaded for them.
+- Damage detection no longer trusts file size alone -- a write killed in the
+  last third passed that check and still lost every label after the cut. It now
+  also looks for far fewer entries than the shipped copy, or a final entry that
+  never finished. A cut landing exactly between two entries is deliberately
+  left alone, and so is a translation that merely differs from ours.
+- 43 settings Kodi dropped on every startup are fixed. They used a control type
+  that does not exist for add-on settings, so Kodi logged an error and threw
+  each one away -- and they are the markers that record which one-time
+  migrations have already run.
+- Restored two repairs POV 6.08 had quietly outgrown, retired a diagnostic that
+  answered its question years of releases ago, and the MDBList pairing QR no
+  longer calls itself Gemini.
+
 v0.2.460
 - Fixes "no results" on the first attempt at a movie or episode, with sources
   appearing on the second. POV 6.08 spends one setting, the scraper/debrid
