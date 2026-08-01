@@ -33,13 +33,51 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 TUNE_FLAG = '_pov_scraper_tune'
-TUNE_VERSION = 'v2'
+TUNE_VERSION = 'v3'
 
 # id -> desired value ('true'/'false' as POV stores bools).
 DESIRED = (
     ('include_prerelease_results', 'true'),
     ('include_3d_results', 'true'),
     ('provider.piratebay', 'true'),
+)
+
+# id -> the LOWEST value we are willing to leave in place. Unlike DESIRED these
+# are only ever raised, never lowered: a user who wants to wait longer keeps
+# their number.
+#
+# scrapers.timeout.1 is the reason this exists. In POV 6.08.x that one number
+# is spent TWICE, on two phases that run one after the other in
+# ExternalSources.results():
+#
+#   1. thread_monitor over the provider threads      -- find torrents
+#   2. thread_monitor over the debrid cache-checks   -- ask the debrid which of
+#                                                       those it already holds
+#
+# and after each one POV keeps ONLY the threads that finished:
+#
+#     threads = [i for i in threads if i.done() and not i.exception()]
+#
+# For phase 2 that is unforgiving, because final_sources is built exclusively
+# inside the loop over the debrid threads that came back. With a single debrid
+# configured -- which is the normal setup here -- that is ONE thread, and if it
+# does not answer in time the entire result set is dropped and POV reports "no
+# results" even though phase 1 found hundreds of torrents.
+#
+# Those torrents are not lost, though: each provider writes its own results
+# into POV's providers cache as soon as it finishes, whether or not anyone was
+# still waiting for it. So the NEXT attempt at the same title serves phase 1
+# from cache in a fraction of a second, which leaves the whole budget to the
+# debrid check, and it succeeds. That is exactly the reported shape -- "first
+# time no results, second time it finds sources, seemingly at random".
+#
+# POV shipped 6.08.01 with this setting's default raised from 10 to 20 and its
+# label changed from "Scraper Timeout" to "Scraper/Debrid Timeout (secs)",
+# which is upstream saying the same thing: one number now has two jobs. Our
+# build's userdata pins it at 10, so our users kept half the budget POV now
+# expects. This adopts POV's own new default rather than inventing a number.
+MINIMUMS = (
+    ('scrapers.timeout.1', 20),
 )
 
 
@@ -144,6 +182,37 @@ def ensure_patched():
             changed.append('{0}={1}'.format(key, want))
         except Exception as e:
             _log('failed to set {0}: {1}'.format(key, e), level='WARNING')
+
+    for key, floor in MINIMUMS:
+        try:
+            cur = addon.getSetting(key)
+        except Exception:
+            cur = None
+        if cur is None:
+            continue  # key absent in this POV schema -- leave it alone
+        raw = (cur or '').strip()
+        try:
+            cur_val = int(float(raw)) if raw else None
+        except ValueError:
+            _log('leaving {0} alone: {1!r} is not a number'.format(key, cur),
+                 level='WARNING')
+            continue
+        if cur_val is not None and cur_val >= floor:
+            # Already at or above the floor -- including a user who raised it
+            # further. Record it so a later bump can still tell ours from
+            # theirs, and do not touch the value.
+            state[key] = str(cur_val)
+            continue
+        if key in state and raw != (state.get(key) or '').strip():
+            _log('skipping {0}: user-changed since last tune '
+                 '(now {1!r})'.format(key, cur), level='INFO')
+            continue
+        try:
+            addon.setSetting(key, str(floor))
+            state[key] = str(floor)
+            changed.append('{0}={1} (was {2!r})'.format(key, floor, raw))
+        except Exception as e:
+            _log('failed to raise {0}: {1}'.format(key, e), level='WARNING')
 
     _save_state(state)
     _mark_done()
