@@ -5,6 +5,7 @@
 # rest of the Hebrew build sidemenu.
 
 import os
+import re
 import json
 import xml.etree.ElementTree as ET
 
@@ -30,12 +31,39 @@ FENTASTIC_EN_STRINGS = (
 # add-on (so they ride along in every quick update). Used to self-heal a
 # corrupt/truncated strings.po. Keyed: live skin path -> bundled pristine file.
 _SKIN_REPAIR_DIR = os.path.join(os.path.dirname(__file__), '..', 'skin_repair')
+
+# Kodi's OWN Hebrew strings, not a skin's. Everything outside a skin's own
+# labels comes from here: "מועדפים" (#1036), "יציאה" (#13012), the power menu,
+# every built-in dialog.
+#
+# It is in this table because a partially-readable copy has a signature that is
+# easy to misread as something else entirely. Kodi falls back to English for an
+# id it cannot find in the active language, and shows nothing at all for an id
+# that is in neither -- so a file cut part-way through produces a screen where
+# the skin's own text is fine, some Kodi labels are suddenly English, and a few
+# are blank. That was reported as three separate faults.
+#
+# Unlike the skin files, repairing this one does NOT take effect immediately:
+# Kodi loads the core strings once at startup, and no reload short of
+# restarting Kodi re-reads them. The repair still belongs here -- it makes the
+# NEXT start correct instead of leaving the device wrong forever -- but the log
+# line says so, rather than implying the screen will fix itself.
+KODI_HE_STRINGS = (
+    'special://home/addons/resource.language.he_il/resources/strings.po'
+)
+
 SKIN_STRINGS_REPAIR = {
     FENTASTIC_HE_STRINGS: os.path.join(_SKIN_REPAIR_DIR, 'fentastic_he_il_strings.po'),
     FENTASTIC_EN_STRINGS: os.path.join(_SKIN_REPAIR_DIR, 'fentastic_en_gb_strings.po'),
+    KODI_HE_STRINGS: os.path.join(_SKIN_REPAIR_DIR, 'kodi_he_il_strings.po'),
 }
 GUISETTINGS = 'special://profile/guisettings.xml'
 FENTASTIC_DEFAULT_PLAYER_SETTING = 'chooseosdplayer'
+FENTASTIC_SKIN_ID = 'skin.fentastic'
+# One reload per service lifetime. ReloadSkin() rebuilds every window, so even
+# in the impossible case of the repair somehow firing repeatedly, the user
+# cannot end up in a reload loop.
+_SKIN_RELOADED = False
 
 HE_STRINGS = {
     '#31072': ('Power Options', 'אפשרויות כיבוי'),
@@ -162,6 +190,71 @@ def _patch_fentastic_home_label():
         return False
 
 
+def _po_is_broken(live_path, pristine_path):
+    """Whether a strings.po is damaged in a way the size check cannot see.
+
+    The size rule only catches a file cut to under 60%. A write killed in the
+    last third leaves a file that passes it and is still damaging: every entry
+    from the cut onwards was simply never written, so those ids are missing.
+    On FENtastic, whose menus and widget headings are all localised, that reads
+    as "there is content but no text anywhere" -- and, on a first boot where
+    the labels ARE the content, as "no content at all".
+
+    (An earlier version of this comment said Kodi's PO reader aborts at the
+    first malformed entry. It does not: CPODocument::GetNextEntry skips a chunk
+    it cannot use and carries on to EOF. The entries after a truncation are
+    lost because they are absent, not because the parser gave up. The
+    behaviour being guarded against is the same either way; the explanation
+    was wrong and is worth not repeating.)
+
+    Two checks, both cheap and both about damage rather than about being
+    different from ours:
+
+      * far fewer entries than the copy we shipped alongside this skin. A
+        translation that legitimately moved on stays close; a truncated one
+        does not.
+      * a final entry that is not finished. Two ways that shows up, because a
+        killed write stops at a buffer boundary, which is almost never a clean
+        line boundary but sometimes is: an odd number of quotes on the last
+        line (stopped mid-string), or a last line that is a msgctxt/msgid with
+        no msgstr under it (stopped between the key and its translation).
+
+    A clean cut that happens to land exactly between two entries is NOT
+    reported: that file is still valid PO, Kodi reads everything before the cut
+    and only the tail labels go missing. Worth knowing, and deliberately not
+    treated as corruption -- overwriting on a partial-match heuristic risks
+    replacing a translation that legitimately differs from ours, which is the
+    worse failure of the two.
+
+    Returns False on any error: a check that cannot run must never be the
+    reason a healthy file is overwritten.
+    """
+    try:
+        with open(live_path, 'r', encoding='utf-8', errors='ignore') as f:
+            live = f.read()
+        with open(pristine_path, 'r', encoding='utf-8', errors='ignore') as f:
+            good = f.read()
+        n_live, n_good = live.count('msgctxt "#'), good.count('msgctxt "#')
+        if n_good > 0 and n_live < n_good * 0.6:
+            return True
+        for line in reversed(live.splitlines()):
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            # Escapes first. A translation may legitimately contain \" -- and
+            # counting raw quotes on `msgstr "השלט אמר \"וואו"` gives three,
+            # reads as unterminated, and overwrites a complete healthy file
+            # with ours. Dropping every backslash-escaped pair leaves only the
+            # structural quotes, which is what the parity test is about.
+            bare = re.sub(r'\\.', '', line)
+            if bare.count('"') % 2 == 1:
+                return True                      # stopped mid-string
+            return not (line.startswith('msgstr') or line.startswith('"'))
+        return True   # nothing but comments/blanks left
+    except Exception:
+        return False
+
+
 def _restore_corrupt_skin_strings():
     """Self-heal the "FENtastic loads but ALL text is blank" bug.
 
@@ -174,6 +267,7 @@ def _restore_corrupt_skin_strings():
     startup, independent of the quick-update extractor. Healthy files (incl. a
     legitimately newer/larger skin translation) are left untouched."""
     restored = []
+    _core_restored = _skin_restored = False
     for live_special, pristine_path in SKIN_STRINGS_REPAIR.items():
         try:
             if not os.path.exists(pristine_path):
@@ -195,6 +289,8 @@ def _restore_corrupt_skin_strings():
                 # file (even an updated one) is never this much smaller.
                 if live_size <= 0 or live_size < pristine_size * 0.6:
                     corrupt = True
+                elif _po_is_broken(live_path, pristine_path):
+                    corrupt = True
             if not corrupt:
                 continue
             with open(pristine_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -202,13 +298,62 @@ def _restore_corrupt_skin_strings():
             if not good.strip():
                 continue
             _atomic_write(live_path, good)
-            restored.append(os.path.basename(os.path.dirname(live_path)))
+            if live_special == KODI_HE_STRINGS:
+                _core_restored = True
+                restored.append('kodi-core-he')
+            else:
+                _skin_restored = True
+                restored.append(os.path.basename(os.path.dirname(live_path)))
         except Exception as exc:
             kodi_utils.log('hebrew_build_ui_patcher restore failed: {0}'.format(exc), level='WARNING')
     if restored:
-        kodi_utils.log('hebrew_build_ui_patcher: restored corrupt skin strings.po for {0}'.format(
+        kodi_utils.log('hebrew_build_ui_patcher: restored corrupt strings.po for {0}'.format(
             ','.join(restored)), level='WARNING')
+        if _core_restored:
+            # Say it plainly rather than let the next log reader assume the
+            # screen went back to Hebrew the moment this ran. It did not.
+            kodi_utils.log(
+                'hebrew_build_ui_patcher: that included KODI\'S OWN Hebrew '
+                'strings -- those are read once at startup, so Kodi labels '
+                'stay English/blank until the next restart',
+                level='WARNING')
+        if _skin_restored:
+            _reload_skin_if_active()
     return bool(restored)
+
+
+def _reload_skin_if_active():
+    """Make a just-restored strings.po actually take effect.
+
+    Kodi reads a skin's PO files once, when the skin loads, and serves every
+    $LOCALIZE from that copy for the rest of the session. Repairing the file on
+    disk therefore fixed nothing the user could see: the screen stayed blank
+    until the skin was reloaded, which is exactly why the workaround people
+    found was "switch to another skin and switch back". That is a skin reload,
+    and this does the same thing without making them find it.
+
+    Guarded three ways, because ReloadSkin() tears down and rebuilds every
+    window: only when the active skin is the one we repaired, never during
+    playback, and never twice in a session.
+    """
+    global _SKIN_RELOADED
+    if _SKIN_RELOADED:
+        return
+    try:
+        import xbmc
+        if xbmc.getCondVisibility('Player.HasMedia'):
+            return
+        if xbmc.getSkinDir() != FENTASTIC_SKIN_ID:
+            return
+        _SKIN_RELOADED = True
+        kodi_utils.log(
+            'hebrew_build_ui_patcher: reloading the skin so the restored '
+            'strings take effect now, instead of at the next skin change',
+            level='WARNING')
+        xbmc.executebuiltin('ReloadSkin()')
+    except Exception as exc:
+        kodi_utils.log('hebrew_build_ui_patcher: skin reload failed: {0}'
+                       .format(exc), level='WARNING')
 
 
 def _patch_hebrew_skin_strings():
