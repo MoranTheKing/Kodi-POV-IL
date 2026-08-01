@@ -20,6 +20,7 @@
 import xbmc
 import xbmcgui
 
+import os
 import sys
 try:  # Python 3
     import zipfile
@@ -198,16 +199,31 @@ def all_with_progress(_in, _out, dp, ignore, title, progress_dialog_bg):
             skip = True
         elif file[0] == 'userdata' and file[1] == 'addon_data' and file[2] in excludes:
             skip = True
-        # Preserve the user's FENtastic home-widget layout across QUICK
-        # UPDATES only (ignore is not None == the quick_update path). The
-        # home widgets are rendered from these script-fentastic-widget_*.xml
-        # files, which FENtastic's widget editor rewrites from the user's
-        # saved skin settings. Overwriting them on every quickfix reverted
-        # the home to our default until the user re-touched a widget. A full
-        # / deliberate (re)install (ignore is None) still lays down defaults.
-        elif (ignore is not None and file[0] == 'addons' and len(file) >= 4
+        # Preserve the user's FENtastic home-widget layout -- but only a
+        # layout that actually exists. The home widgets are rendered from
+        # these script-fentastic-widget_*.xml files, which FENtastic's widget
+        # editor rewrites from the user's saved skin settings, so overwriting
+        # them on every quickfix reverted the home to our default until the
+        # user re-touched a widget.
+        #
+        # The `ignore is not None` this used to key on does NOT mean "quick
+        # update". The fresh-build auto-install (startup.py, the path a
+        # brand-new APK install takes) passes ignore=True as well, to bypass
+        # the self-skip of the wizard's own files. So a fresh install skipped
+        # these five files too -- and they were not there to be preserved.
+        # The skin then failed every widget include ("Skin has invalid
+        # include: MovieWidgets"), and Movies / TV shows / Idan+ came up with
+        # nothing on them. A quick update could not repair it either, because
+        # it skipped them for the same reason.
+        #
+        # Keying on the file being present on disk says what was always meant:
+        # a layout the user has is kept, and a layout that is missing is laid
+        # down. Nothing can be preserved by refusing to write a file that
+        # isn't there.
+        elif (file[0] == 'addons' and len(file) >= 4
               and file[1] == 'skin.fentastic' and file[2] == 'xml'
-              and file[-1].startswith('script-fentastic-widget_')):
+              and file[-1].startswith('script-fentastic-widget_')
+              and os.path.isfile(os.path.join(_out, *file))):
             skip = True
         elif file[-1] in CONFIG.LOGFILES:
             skip = True
