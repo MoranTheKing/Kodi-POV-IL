@@ -35,6 +35,16 @@ def autosub_on_play():
         if not kodi_utils.get_bool('engine_autosub', True):
             return
         if not kodi_utils.hebrew_subtitle_wanted():
+            # Correct to skip here -- this is the AUTOMATIC on-play search, and
+            # fetching Hebrew for someone who asked for English would be
+            # presumptuous. But it used to return in total silence, which is
+            # how "auto-subs stopped working" became unexplainable: nothing in
+            # the log said why. Say it once per playback.
+            kodi_utils.log(
+                'autosub: skipped -- Kodi\'s subtitle language preference does '
+                'not name Hebrew. Add Hebrew under Settings > Player > '
+                'Language > "languages to download subtitles for" to get '
+                'automatic Hebrew subs.', level='INFO')
             return
     except Exception:
         return

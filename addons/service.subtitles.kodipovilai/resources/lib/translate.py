@@ -756,56 +756,6 @@ def _sleep_harvest(should_cancel):
         waited += 0.5
 
 
-def _heal_hebrew_language_pref():
-    """Add Hebrew to Kodi's subtitle-download languages. Returns True if the
-    setting now names Hebrew.
-
-    This is the one-line change a user has to make by hand today for the
-    add-on to work at all, buried in Settings > Player > Language. It only
-    ADDS Hebrew and keeps every language already listed, so nobody loses the
-    English/Arabic subs they asked for. Safe to call repeatedly: if Hebrew is
-    already there it does nothing.
-    """
-    try:
-        import json as _json
-        import xbmc as _xbmc
-
-        def _get(sid):
-            q = _json.dumps({'jsonrpc': '2.0', 'id': 1,
-                             'method': 'Settings.GetSettingValue',
-                             'params': {'setting': sid}})
-            return (_json.loads(_xbmc.executeJSONRPC(q) or '{}')
-                    .get('result') or {}).get('value')
-
-        def _set(sid, value):
-            q = _json.dumps({'jsonrpc': '2.0', 'id': 1,
-                             'method': 'Settings.SetSettingValue',
-                             'params': {'setting': sid, 'value': value}})
-            _json.loads(_xbmc.executeJSONRPC(q) or '{}')
-
-        def _is_he(v):
-            return str(v).strip().lower() in ('he', 'iw', 'heb', 'hebrew',
-                                              'עברית')
-
-        dl = _get('subtitles.languages')
-        if isinstance(dl, str):
-            parts = [p.strip() for p in dl.replace(';', ',').split(',')
-                     if p.strip()]
-            if not any(_is_he(x) for x in parts):
-                _set('subtitles.languages',
-                     ','.join(parts + ['Hebrew']) if parts else 'Hebrew')
-        elif isinstance(dl, list):
-            if not any(_is_he(x) for x in dl):
-                _set('subtitles.languages', list(dl) + ['Hebrew'])
-        elif dl is None:
-            # JSON-RPC gave us nothing; don't guess, and don't claim a heal.
-            return False
-        return True
-    except Exception as e:
-        kodi_utils.log('could not add Hebrew to the subtitle languages: '
-                       '{0!r}'.format(e), level='WARNING')
-        return False
-
 
 def list_candidates(info, modal_progress=True):
     """Build the list Kodi's subtitle dialog will render.
@@ -826,17 +776,12 @@ def list_candidates(info, modal_progress=True):
     # does not take, carry on anyway. Offering entries the user can ignore is a
     # far smaller harm than showing them an empty dialog.
     if not kodi_utils.hebrew_subtitle_wanted():
-        healed = _heal_hebrew_language_pref()
-        if healed and kodi_utils.hebrew_subtitle_wanted():
-            kodi_utils.log(
-                'list_candidates: Hebrew was missing from Kodi\'s subtitle '
-                'languages -- added it, continuing normally', level='INFO')
-        else:
-            kodi_utils.log(
-                'list_candidates: Kodi\'s preferred subtitle language is not '
-                'Hebrew and could not be healed -- listing anyway (this add-on '
-                'only serves Hebrew, so an empty list would be a dead end)',
-                level='INFO')
+        kodi_utils.log(
+            'list_candidates: Kodi\'s subtitle language preference does not '
+            'name Hebrew -- listing anyway. Opening a Hebrew subtitle add-on '
+            'IS the request for Hebrew, and an empty dialog is a dead end. '
+            'Add Hebrew to Settings > Player > Language > "languages to '
+            'download subtitles for" to silence this.', level='INFO')
 
     filepath = info.get('filepath') or ''
     imdb_id = (info.get('imdb_id') or '').strip()
@@ -2802,11 +2747,6 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # we never serve a previously-cached Hebrew file either. This is an
     # extra gate only; it can't re-enable translation that auto_translate /
     # force_ai_when_auto_translate_off already disabled.
-    if not payload.get('force_ai') and not kodi_utils.hebrew_subtitle_wanted():
-        # Same heal as list_candidates: the usual cause is Hebrew simply not
-        # being in Kodi's download-languages list, which is not a decision the
-        # user consciously made against this add-on.
-        _heal_hebrew_language_pref()
     if not payload.get('force_ai') and not kodi_utils.hebrew_subtitle_wanted():
         kodi_utils.log(
             'resolve: preferred subtitle language is not Hebrew; returning '
