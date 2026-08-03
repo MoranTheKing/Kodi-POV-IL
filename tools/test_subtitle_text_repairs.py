@@ -289,6 +289,83 @@ for fn_name in ('strip_hebrew_speaker_prefix', 'strip_niqqud',
             break
     ok('%s survives malformed input' % fn_name, bad is None)
 
+# ---------------------------------------------------------------------------
+print('== the Google rung: rescues, or leaves the English line whole ==')
+
+# translate.py cannot be imported (it needs a live Kodi), which is why the rest
+# of the suite around it reads it as source. _google_rescue is self-contained,
+# so lift just that function out and run it against a stubbed engine -- the
+# real code, not a copy of it.
+import ast                                                     # noqa: E402
+import types                                                   # noqa: E402
+
+_tsrc = open(os.path.join(LIB, 'translate.py'), encoding='utf-8').read()
+_fn = next(n for n in ast.parse(_tsrc).body
+           if isinstance(n, ast.FunctionDef) and n.name == '_google_rescue')
+_pkg = types.ModuleType('_povil_stub')
+_pkg.__path__ = []
+_engine = types.ModuleType('_povil_stub.google_translate')
+sys.modules['_povil_stub'] = _pkg
+sys.modules['_povil_stub.google_translate'] = _engine
+_log = types.ModuleType('_povil_stub.kodi_utils')
+_log.log = lambda *a, **k: None
+_ns = {'srt': srt, 'kodi_utils': _log,
+       '__package__': '_povil_stub', '__name__': '_povil_stub.t'}
+exec(compile(ast.Module(body=[_fn], type_ignores=[]), '<rescue>', 'exec'), _ns)
+rescue = _ns['_google_rescue']
+
+BLOCK = ['5\n00:00:09,000 --> 00:00:10,500\n- No, no.\n- Stop it.']
+
+_engine.translate_lines = lambda lines, lang: [u'- לא, לא.',
+                                               u'- תפסיק.']
+got = rescue(BLOCK, 'en')
+check('rescued block keeps its index and timecode',
+      got[0].split('\n')[:2], ['5', '00:00:09,000 --> 00:00:10,500'])
+check('rescued block is Hebrew', got[0].split('\n')[2:],
+      [u'- לא, לא.', u'- תפסיק.'])
+check('block count unchanged', len(got), len(BLOCK))
+
+_engine.translate_lines = lambda lines, lang: None
+ok('engine failure -> None, so the caller keeps the English',
+   rescue(BLOCK, 'en') is None)
+
+_engine.translate_lines = lambda lines, lang: [u'- לא, לא.']
+ok('a reply with FEWER lines than the cue is refused',
+   rescue(BLOCK, 'en') is None)
+
+_engine.translate_lines = lambda lines, lang: [u'א', u'ב', u'ג']
+ok('a reply with MORE lines than the cue is refused',
+   rescue(BLOCK, 'en') is None)
+
+_engine.translate_lines = lambda lines, lang: ['- No, no.', '- Stop it.']
+ok('a reply that is still English is refused',
+   rescue(BLOCK, 'en') is None)
+
+_engine.translate_lines = lambda lines, lang: ['   ', '  ']
+ok('a blank reply is refused (never blank out a cue)',
+   rescue(BLOCK, 'en') is None)
+
+_engine.translate_lines = lambda lines, lang: ['...', '???']
+ok('a punctuation-only reply is refused',
+   rescue(BLOCK, 'en') is None)
+
+
+def _boom(lines, lang):
+    raise RuntimeError('network down')
+
+
+_engine.translate_lines = _boom
+try:
+    ok('D: an engine that RAISES does not take the English line down with it',
+       rescue(BLOCK, 'en') is None)
+except Exception as exc:                                        # noqa: BLE001
+    ok('D: an engine that RAISES does not take the English line down with it',
+       False)
+    print('        raised: %s' % exc)
+
+ok('a malformed block (no text lines) is refused',
+   rescue(['5\n00:00:09,000 --> 00:00:10,500'], 'en') is None)
+
 print()
 if FAILED:
     print('FAILED (%d): %s' % (len(FAILED), ', '.join(FAILED)))

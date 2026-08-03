@@ -1340,6 +1340,61 @@ def list_candidates(info, modal_progress=True):
 
 # ---- download / translate -------------------------------------------
 
+def _google_rescue(blocks, source_lang):
+    """The rung between "Gemini refuses this text" and "ship it in English".
+
+    Every stage above this one is still Gemini, and a safety block is
+    Gemini's judgement of the CONTENT -- so a chunk that blocked with the
+    Arabic reference, with five alternate references, bisected down to one
+    entry, and again with no reference at all, is not going to come back
+    translated on a sixth Gemini call. It is exactly then that the ladder
+    used to fall to "keep the source", which is the one outcome the whole
+    feature exists to avoid: an English line on screen.
+
+    Google Translate is a different engine with a different policy, and it
+    is already shipped here as the whole-file fallback. It gives no gender
+    nuance and no cast context -- this is machine Hebrew -- but machine
+    Hebrew is a translation, and English is not.
+
+    Returns the blocks with their TEXT lines in Hebrew and their index and
+    timecode untouched, or None. On None the caller keeps the source, so
+    the English line is never lost to a failure here. Never raises.
+    """
+    # The WHOLE body is guarded, not just the import. This is the last rung
+    # before the ladder keeps the English line, and it is reached from inside
+    # an except handler: an exception escaping here would propagate past the
+    # chunk translator and cost the entire chunk, not the one line it was
+    # called to save. Any failure has exactly one meaning -- no rescue -- and
+    # the caller then keeps the source block whole.
+    try:
+        from . import google_translate
+        out = []
+        for block in blocks:
+            lines = block.split('\n')
+            if len(lines) < 3:
+                return None
+            heb = google_translate.translate_lines(lines[2:], source_lang)
+            if not heb or len(heb) != len(lines) - 2:
+                return None
+            out.append('\n'.join(lines[:2] + heb))
+        # A rescue that produced no Hebrew is a failed rescue, and returning
+        # it would REPLACE the English line with something worse. Two separate
+        # checks on purpose: looks_hebrew answers True on thin evidence (by
+        # design -- it is a "don't block on too little text" gate), so it can
+        # pass a blank or punctuation-only reply. The explicit character test
+        # is what actually guarantees there is Hebrew here to ship.
+        joined = '\n'.join(out)
+        if not any(u'֐' <= c <= u'׿' for c in joined):
+            return None
+        if not srt.looks_hebrew(joined, min_alpha=1):
+            return None
+        return out
+    except Exception as e:
+        kodi_utils.log('Google rescue failed ({0}) -- keeping the source '
+                       'text for this chunk'.format(e), level='WARNING')
+        return None
+
+
 def _prepare_source(raw_src):
     """Strip hearing-impaired SOUND cues from a source SRT (but KEEP ALL-CAPS
     speaker prefixes like 'MABEL:' -- the AI uses them to look up the character's
@@ -3414,52 +3469,6 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             self.user_msg = user_msg
             self.detail = detail
 
-    def _google_rescue(ch):
-        """The rung between "Gemini refuses this text" and "ship it in English".
-
-        Every stage above this one is still Gemini, and a safety block is
-        Gemini's judgement of the CONTENT -- so a chunk that blocked with the
-        Arabic reference, with five alternate references, bisected down to one
-        entry, and again with no reference at all, is not going to come back
-        translated on a sixth Gemini call. It is exactly then that the ladder
-        used to fall to "keep the source", which is the one outcome the whole
-        feature exists to avoid: an English line on screen.
-
-        Google Translate is a different engine with a different policy, and it
-        is already shipped here as the whole-file fallback. It gives no gender
-        nuance and no cast context -- this is machine Hebrew -- but machine
-        Hebrew is a translation, and English is not.
-
-        Returns the blocks with their TEXT lines in Hebrew and their index and
-        timecode untouched, or None. On None the caller keeps the source, so
-        the English line is never lost to a failure here. Never raises.
-        """
-        try:
-            from . import google_translate
-        except Exception:
-            return None
-        out = []
-        for block in ch:
-            lines = block.split('\n')
-            if len(lines) < 3:
-                return None
-            heb = google_translate.translate_lines(lines[2:], source_lang)
-            if not heb or len(heb) != len(lines) - 2:
-                return None
-            out.append('\n'.join(lines[:2] + heb))
-        # A rescue that produced no Hebrew is a failed rescue, and returning it
-        # would REPLACE the English line with something worse. Two separate
-        # checks on purpose: looks_hebrew answers True on thin evidence (by
-        # design -- it is a "don't block on too little text" gate), so it can
-        # pass a blank or punctuation-only reply. The explicit character test
-        # is what actually guarantees there is Hebrew here to ship.
-        joined = '\n'.join(out)
-        if not any(u'֐' <= c <= u'׿' for c in joined):
-            return None
-        if not srt.looks_hebrew(joined, min_alpha=1):
-            return None
-        return out
-
     def _english_only_safe(idx, ch):
         """Translate `ch` with NO gender reference (English only), splitting on
         truncation / residual blocks so a large remainder still completes, and
@@ -3478,7 +3487,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         + _english_only_safe(idx, ch[mid:]))
             # One entry, English-only, and still refused. Same reasoning as the
             # main ladder: try a different engine before shipping English.
-            _resc = _google_rescue(ch)
+            _resc = _google_rescue(ch, source_lang)
             if _resc:
                 kodi_utils.log(
                     'Chunk {0} English-only blocked at size 1 -- rescued with '
@@ -3744,7 +3753,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # bisect have all been refused by the same safety policy, so the
             # next Gemini call would be refused too. A different engine is the
             # only thing left that can still produce Hebrew here.
-            _resc = _google_rescue(ch)
+            _resc = _google_rescue(ch, source_lang)
             if _resc:
                 kodi_utils.log(
                     'Chunk {0} blocked by every Gemini stage -- rescued with '
