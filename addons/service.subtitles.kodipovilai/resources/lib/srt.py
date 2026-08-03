@@ -54,6 +54,13 @@ _LEAKED_SPEAKER_RE_HE = re.compile(
     r'[A-Z][A-Z0-9 \'\.\-]{1,30}:[ \t]*'
     r'(?=[^\n]*[֐-׿])'
 )
+# A line that is nothing but dialogue dashes / whitespace. What is left of
+# "- (door creaking)" once the bracketed cue is gone.
+_DASH_ONLY_RE = re.compile(r'^[-‐-―\s]+$')
+# Hebrew combining points + cantillation. U+05BE (MAQAF), U+05C0 (PASEQ),
+# U+05C3 (SOF PASUQ), U+05C6 (NUN HAFUKHA), U+05F3/U+05F4 (geresh, gershayim)
+# are punctuation, not points, and are deliberately NOT in this class.
+_NIQQUD_RE = re.compile('[' + ''.join(chr(c) for c in list(range(0x0591, 0x05BE)) + [0x05BD, 0x05BF, 0x05C1, 0x05C2, 0x05C4, 0x05C5, 0x05C7]) + ']')
 _INDEX_RE = re.compile(r'^\d+$')
 _TIMECODE_RE = re.compile(
     r'^\d{1,2}:\d{2}:\d{2}[,\.]\d{1,3}\s*-->\s*'
@@ -1102,6 +1109,15 @@ def strip_hi_annotations(text, keep_speaker_prefixes=False):
             # collapse whitespace runs that the strips may have
             # left behind
             cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip()
+            # A line that was ONLY a sound cue behind a dialogue dash
+            # ("- (door creaking)") reduces to a bare "-". That dash belongs
+            # to the line we just removed, so keeping it ships a visible "-"
+            # cue -- 76 of them in one reported file, and the model dutifully
+            # copies each one into the Hebrew. Drop the residue, but ONLY when
+            # the strip is what emptied the line, so a dash a source
+            # deliberately wrote on its own is left exactly as it was.
+            if cleaned != line.strip() and _DASH_ONLY_RE.match(cleaned):
+                cleaned = ''
             if cleaned:
                 kept_lines.append(cleaned)
         # only keep the block if there's actual dialogue text left
@@ -1134,6 +1150,136 @@ def strip_leaked_speaker_prefix(text, hebrew_only=False):
     try:
         rx = _LEAKED_SPEAKER_RE_HE if hebrew_only else _LEAKED_SPEAKER_RE
         return rx.sub(lambda m: m.group('pre'), text)
+    except Exception:
+        return text
+
+
+# --- the speaker tag the model TRANSLATED instead of dropping ----------------
+# strip_leaked_speaker_prefix covers the tag the model COPIED ("IAN: לא, לא.").
+# It cannot see the far more common outcome, because that pattern needs an
+# ALL-CAPS LATIN name: the model translates the tag along with the line, and
+# "IAN: No, no." comes back as "איאן: לא, לא.". Measured on a file a user
+# reported: 60 leaked tags, every one of them Hebrew, zero Latin -- the Latin
+# stripper works, the model just rarely gives it anything to do.
+#
+# Stripping a "word:" prefix from Hebrew on its own evidence would be reckless:
+# real dialogue says "תראה: אני לא יודע" and "האמת: לא אכפת לי". So this is
+# ANCHORED TO THE SOURCE. An entry's Hebrew may lose a prefix only when the
+# SAME entry's source carried an ALL-CAPS speaker tag, and never more of them
+# than the source had. Genuine dialogue has no ALL-CAPS tag in the source, so
+# it can never match, whatever it does with colons.
+# The leading run allows the invisible bidi controls fix_rtl_punctuation adds
+# (RLE ... PDF), so this still works on a file that has already been through
+# the RTL pass -- the live path runs before it, the repair paths do not.
+_HE_TAG_RE = re.compile(
+    u'^(?P<pre>[ \t' + _INVISIBLE_BIDI + u']*'
+    u'(?:<[^>\n]{1,40}>[ \t]*)?(?:-[ \t]*)?)'
+    u'[\u05d0-\u05ea][\u0590-\u05f4 \t\'"]{0,20}?'
+    u'[ \t]*:[ \t]*(?=\\S)')
+_HE_TAG_WORDS = 2
+
+
+def strip_hebrew_speaker_prefix(text, source_text):
+    """Remove a speaker tag the model rendered in Hebrew ("איאן: לא, לא.").
+
+    `source_text` is the SRT the translation was made from, and it is what
+    licenses each removal (see the note above) -- without it nothing is
+    touched. Line and newline structure is preserved exactly: only characters
+    inside a line are removed, so no cue, line or timing can change. Never
+    raises into the caller.
+    """
+    if not text or not source_text:
+        return text
+    try:
+        # Per source entry: which TEXT-LINE POSITIONS carried an ALL-CAPS
+        # speaker tag, and how many text lines that entry had. The positions
+        # are what make this precise -- with them, a source entry whose first
+        # line is "IAN: No." and whose second is "Look: I don't know." can
+        # only ever license a removal on the FIRST Hebrew line.
+        src_tags = {}
+        for blk in parse_blocks(source_text):
+            lines = blk.split('\n')
+            if len(lines) < 3 or not _INDEX_RE.match(lines[0].strip()):
+                continue
+            at = set()
+            for i, ln in enumerate(lines[2:]):
+                s = ln.strip()
+                if s.startswith('-'):
+                    s = s[1:].lstrip()
+                if _SPEAKER_RE.match(s):
+                    at.add(i)
+            if at:
+                src_tags[int(lines[0].strip())] = (at, len(lines) - 2)
+        if not src_tags:
+            return text
+
+        # How many text lines each entry of the TRANSLATION has, so positions
+        # are only trusted when the two sides agree on the shape of the entry.
+        lines_all = text.split('\n')
+        he_count = {}
+        cur = None
+        for line in lines_all:
+            s = line.strip()
+            if _INDEX_RE.match(s):
+                cur = int(s)
+                he_count[cur] = 0
+            elif cur is not None and s and not _TIMECODE_RE.match(s):
+                he_count[cur] += 1
+
+        out = []
+        tags_at, span, pos, budget = set(), 0, -1, 0
+        for line in lines_all:
+            cr = '\r' if line.endswith('\r') else ''
+            body = line[:-1] if cr else line
+            s = body.strip()
+            if _INDEX_RE.match(s):
+                n = int(s)
+                tags_at, span = src_tags.get(n, (set(), 0))
+                # positions only count when both sides split the entry the
+                # same way; otherwise fall back to "at most this many"
+                budget = 0 if he_count.get(n) == span else len(tags_at)
+                pos = -1
+            elif s and not _TIMECODE_RE.match(s):
+                pos += 1
+                allowed = (pos in tags_at) if not budget else budget > 0
+                if allowed and _HAS_HEBREW_RE.search(body):
+                    m = _HE_TAG_RE.match(body)
+                    # a tag is a NAME, not a sentence: at most two words, and
+                    # the line must still have Hebrew left once it is gone
+                    # (otherwise the "tag" was the whole line, and removing it
+                    # would empty a cue -- never allowed)
+                    if m and len(m.group(0).split(':')[0].split()) <= (
+                            _HE_TAG_WORDS
+                            + (1 if m.group('pre').strip() else 0)):
+                        rest = body[m.end():]
+                        if _HAS_HEBREW_RE.search(rest):
+                            body = m.group('pre') + rest
+                            if budget:
+                                budget -= 1
+            out.append(body + cr)
+        return '\n'.join(out)
+    except Exception:
+        return text
+
+
+def strip_niqqud(text):
+    """Remove Hebrew points and cantillation marks.
+
+    Hebrew subtitles are written unpointed; the model sometimes vocalises a
+    word anyway ("בְּסֵדֶר", "מַה?", "דוֹב."), which a user reported as "a lot of
+    niqqud that isn't really needed". Every occurrence measured in real output
+    was an ordinary word carrying no information the consonants don't already
+    have -- no gendered form depended on a point -- so this is a pure display
+    cleanup.
+
+    Combining marks ONLY: MAQAF, PASEQ, SOF PASUQ, geresh and gershayim are
+    real punctuation and are deliberately outside the class, so a word like
+    צה"ל and a hyphenated בֵּית-הַסֵּפֶר keep their spelling. Never raises.
+    """
+    if not text:
+        return text
+    try:
+        return _NIQQUD_RE.sub('', text)
     except Exception:
         return text
 
@@ -1189,6 +1335,100 @@ _HAS_HEBREW_RE = re.compile(u'[' + _HEBREW_CH + u']')
 _HAS_ARABIC_RE = re.compile(u'[' + _ARABIC_CH + u']')
 
 
+# --- the leak that is a SCRIPT SWAP, not a foreign word ----------------------
+# Deleting the Arabic is right when the model pasted a foreign WORD in. It is
+# wrong for the commonest shape by far, which measurement on a reported file
+# turned up: the model typed the correct HEBREW WORD but rendered part of it in
+# Arabic letters. Deletion then mutilates the word --
+#     לעצمي     -> לעצ         (wanted: לעצמי)
+#     רוمانטיקה -> רוטיקה      (wanted: רומאנטיקה)
+#     קريستل    -> ק           (wanted: קריסתל)
+# -- which is how a "letters in the middle of a Hebrew word" report becomes a
+# "half a word is missing" one. Hebrew and Arabic are cognate alphabets, so the
+# fragment can simply be spelled back into Hebrew letters instead.
+#
+# Restricted to exactly the swap shape, because that is the only shape where
+# transliteration is meaningful:
+#   * the run must TOUCH a Hebrew letter with no space in between (a run behind
+#     a space is a separate token -- a real Arabic word -- and is deleted as
+#     before),
+#   * and it must be a short, punctuation-free, space-free letter run. A phrase
+#     ("وه، لا، يا لقد...") is a genuine pasted sentence; spelling it in Hebrew
+#     letters would produce gibberish, so it stays on the deletion path.
+# Nothing here can remove Hebrew -- it only ever ADDS Hebrew letters -- so the
+# module-level guarantee that a line never loses its Hebrew holds a fortiori.
+_AR2HE = {
+    u'ا': u'א', u'أ': u'א', u'إ': u'א',
+    u'آ': u'א', u'ء': u'א',
+    u'ب': u'ב', u'ت': u'ת', u'ث': u'ת',
+    u'ة': u'ה',
+    u'ج': u'ג', u'ح': u'ח', u'خ': u'ח',
+    u'د': u'ד', u'ذ': u'ד',
+    u'ر': u'ר', u'ز': u'ז',
+    u'س': u'ס', u'ش': u'ש',
+    u'ص': u'צ', u'ض': u'צ',
+    u'ط': u'ט', u'ظ': u'ט',
+    u'ع': u'ע', u'غ': u'ע',
+    u'ف': u'פ', u'ق': u'ק', u'ك': u'כ',
+    u'ل': u'ל', u'م': u'מ', u'ن': u'נ',
+    u'ه': u'ה', u'و': u'ו',
+    u'ي': u'י', u'ى': u'י', u'ئ': u'י',
+    u'ؤ': u'ו',
+}
+# Harakat / tatweel carry no consonant, so they simply drop. Built from the
+# codepoints _ARABIC_RUN_RE itself allows inside a run (U+064B-U+0652 plus
+# tatweel), plus the Quranic marks, so the two cannot drift apart.
+_AR_MARKS = frozenset([chr(0x0640)]
+                      + [chr(c) for c in range(0x064B, 0x0653)]
+                      + [chr(c) for c in range(0x0610, 0x061B)]
+                      + [chr(c) for c in range(0x0653, 0x0656)]
+                      + [chr(0x0670)])
+# Hebrew letters that take a different shape at the end of a word.
+_HE_FINAL = {u'כ': u'ך', u'מ': u'ם', u'נ': u'ן',
+             u'פ': u'ף', u'צ': u'ץ'}
+_MAX_GLUED_RUN = 8
+
+
+def _transliterate_glued_run(run, before, after, ate_space):
+    """Hebrew spelling of an Arabic run that is part of a Hebrew word, or None
+    when this run is not that shape and the caller should fall through to the
+    existing deletion path. Never raises."""
+    try:
+        if ate_space:
+            return None          # behind a space: a separate token, not a swap
+        # _ARABIC_RUN_RE's continuation class includes blanks, so a run can
+        # carry the space that FOLLOWS it ("זוכرة כשהיית" matches "رة "). That
+        # space belongs to the Hebrew sentence -- keep it, or the two words
+        # weld together, which is how one defect used to become another.
+        core = run.rstrip(' \t')
+        tail = run[len(core):]
+        if not core or len(core) > _MAX_GLUED_RUN:
+            return None
+        # must be glued to Hebrew on at least one side
+        ends_word = bool(tail) or not (after and _HAS_HEBREW_RE.match(after))
+        touches = ((before and _HAS_HEBREW_RE.match(before))
+                   or (not tail and after and _HAS_HEBREW_RE.match(after)))
+        if not touches:
+            return None
+        out = []
+        for ch in core:
+            if ch in _AR_MARKS:
+                continue
+            he = _AR2HE.get(ch)
+            if he is None:
+                return None          # punctuation / anything unmapped: not a swap
+            out.append(he)
+        if not out:
+            return None
+        # word-final letters take their sofit form, but only when the word
+        # really ends here (the next character is not more of the same word).
+        if ends_word:
+            out[-1] = _HE_FINAL.get(out[-1], out[-1])
+        return u''.join(out) + tail
+    except Exception:
+        return None
+
+
 def _clean_arabic_from_line(body):
     """Arabic runs removed from one text line, tidied."""
     # Replace a run with a SPACE when it stood between words, but with NOTHING
@@ -1200,6 +1440,9 @@ def _clean_arabic_from_line(body):
         ate_space = m.group(0)[:1] in (' ', '\t')
         after = body[end:end + 1]
         before = body[start - 1:start] if start else ''
+        glued = _transliterate_glued_run(m.group(0), before, after, ate_space)
+        if glued is not None:
+            return glued
         tight = (not ate_space and after and not after.isspace()
                  and before and not before.isspace())
         return '' if tight else ' '
@@ -1224,6 +1467,73 @@ def _clean_arabic_from_line(body):
     if body.lstrip().startswith('-') and cleaned and not cleaned.startswith('-'):
         cleaned = '- ' + cleaned
     return cleaned
+
+
+# --- the same swap, in a script with no reference block behind it -----------
+# The Arabic leak has an obvious source (the gender-reference block in the
+# prompt). This one does not: the model simply reaches for a letter from
+# another alphabet mid-word -- "\u05d0\u05de\u043c" for \u05d0\u05de\u05de, "\u05de\u057a\u0430\u05e6\u05d7\u05ea". It is the same defect the
+# user described as "English letters in the middle of a Hebrew word", and the
+# same repair applies: the letter stands for a sound, so spell it in Hebrew.
+#
+# Narrower than the Arabic path in two deliberate ways. Only a run GLUED to a
+# Hebrew letter is touched, and a standalone foreign word is NEVER touched --
+# there is no reference block here that could have leaked one, so a Cyrillic or
+# Greek word standing on its own is far more likely to be a deliberate quote
+# than a mistake. And the run is capped at 3 characters: this defect is a
+# letter or two, and a longer run is a word, not a slip.
+_FOREIGN2HE = {}
+for _s, _d in (
+        (u'\u0430\u0431\u0432\u0433\u0434\u0435\u0436\u0437\u0438\u0439\u043a\u043b\u043c\u043d\u043e\u043f\u0440\u0441\u0442\u0443\u0444\u0445\u0446\u0447\u0448\u0449\u044b\u044d\u044e\u044f',
+         u'\u05d0\u05d1\u05d5\u05d2\u05d3\u05d0\u05d6\u05d6\u05d9\u05d9\u05e7\u05dc\u05de\u05e0\u05d5\u05e4\u05e8\u05e1\u05ea\u05d5\u05e4\u05d7\u05e6\u05e6\u05e9\u05e9\u05d9\u05d0\u05d5\u05d0'),
+        (u'\u03b1\u03b2\u03b3\u03b4\u03b5\u03b6\u03b7\u03b8\u03b9\u03ba\u03bb\u03bc\u03bd\u03be\u03bf\u03c0\u03c1\u03c2\u03c3\u03c4\u03c5\u03c6\u03c7\u03c8\u03c9',
+         u'\u05d0\u05d1\u05d2\u05d3\u05d0\u05d6\u05d0\u05ea\u05d9\u05e7\u05dc\u05de\u05e0\u05e1\u05d5\u05e4\u05e8\u05e1\u05e1\u05ea\u05d5\u05e4\u05d7\u05e4\u05d5'),
+        (u'\u0561\u0562\u0563\u0564\u0565\u0566\u0567\u0568\u0569\u056a\u056b\u056c\u056d\u056e\u056f\u0570\u0571\u0572\u0573\u0574\u0575\u0576\u0577\u0578\u0579\u057a\u057b\u057c\u057d\u057e\u057f\u0580\u0581\u0582\u0583\u0584\u0585\u0586',
+         u'\u05d0\u05d1\u05d2\u05d3\u05d0\u05d6\u05d0\u05d0\u05ea\u05d6\u05d9\u05dc\u05d7\u05e6\u05e7\u05d4\u05d6\u05e2\u05e6\u05de\u05d9\u05e0\u05e9\u05d5\u05e6\u05e4\u05d2\u05e8\u05e1\u05d5\u05ea\u05e8\u05e6\u05d5\u05e4\u05e7\u05d5\u05e4')):
+    for _a, _b in zip(_s, _d):
+        _FOREIGN2HE[_a] = _b
+        _FOREIGN2HE[_a.upper()] = _b
+_FOREIGN_RUN_RE = re.compile(u'[' + u''.join(sorted(_FOREIGN2HE)) + u']{1,3}')
+_MAX_FOREIGN_RUN = 3
+
+
+def fold_foreign_in_hebrew_word(text):
+    """Spell a foreign-alphabet run that sits INSIDE a Hebrew word back into
+    Hebrew letters (Cyrillic, Greek, Armenian).
+
+    Only ever touches a run with a Hebrew letter directly against it on at
+    least one side, so a foreign word standing on its own -- a quote, a name,
+    a title -- is left exactly as written. Adds Hebrew and removes nothing
+    else, so no cue, line or Hebrew character can be lost. Never raises.
+    """
+    if not text:
+        return text
+    try:
+        if not _FOREIGN_RUN_RE.search(text):
+            return text
+        out = []
+        for line in text.split('\n'):
+            cr = '\r' if line.endswith('\r') else ''
+            body = line[:-1] if cr else line
+            if _HAS_HEBREW_RE.search(body):
+                def _sub(m, _b=body):
+                    run = m.group(0)
+                    if len(run) > _MAX_FOREIGN_RUN:
+                        return run
+                    before = _b[m.start() - 1:m.start()] if m.start() else ''
+                    after = _b[m.end():m.end() + 1]
+                    if not ((before and _HAS_HEBREW_RE.match(before))
+                            or (after and _HAS_HEBREW_RE.match(after))):
+                        return run
+                    he = [_FOREIGN2HE[c] for c in run]
+                    if not (after and _HAS_HEBREW_RE.match(after)):
+                        he[-1] = _HE_FINAL.get(he[-1], he[-1])
+                    return u''.join(he)
+                body = _FOREIGN_RUN_RE.sub(_sub, body)
+            out.append(body + cr)
+        return '\n'.join(out)
+    except Exception:
+        return text
 
 
 def may_carry_arabic_leak(path=None, pool_kind=None):
@@ -1284,11 +1594,17 @@ def strip_leaked_arabic(text):
 
     HARD GUARANTEE, and the reason this is written the narrow way it is: no cue
     is ever removed, no LINE is ever removed, and no line ever loses its Hebrew.
-    All this does is delete Arabic characters from a line that ALSO contains
+    All this does is rewrite Arabic characters on a line that ALSO contains
     Hebrew -- i.e. a contaminated translation, which is the shape that was
     actually reported ("Arabic word completions / half words" inside otherwise
     correct lines). The Hebrew on that line always survives, so a cue can never
     turn into silence while people are talking.
+
+    Two different rewrites, because there are two different leaks. A run GLUED
+    to a Hebrew letter is the model spelling a Hebrew word in the wrong script,
+    and is transliterated back into Hebrew letters (see _transliterate_glued_run
+    -- that path only adds Hebrew, so it cannot touch the guarantee above). A
+    run standing on its own is a pasted Arabic word and is deleted, as before.
 
     A line that is ENTIRELY Arabic is deliberately left alone. Structurally it
     is indistinguishable from a leaked reference line that happened to land on
