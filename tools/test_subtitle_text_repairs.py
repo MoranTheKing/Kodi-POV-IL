@@ -119,6 +119,54 @@ ok('source with no tags at all -> identity',
 ok('garbage input does not raise',
    isinstance(srt.strip_hebrew_speaker_prefix('not an srt', 'neither'), str))
 
+# --- the three ways an anchor can point at the wrong line -------------------
+# Each of these shipped once. They are here because the positional anchor is
+# the ONLY thing standing between this function and real dialogue, and each
+# one was a different way of losing track of which line a position names.
+
+# 1. The model merges two source lines into one. Positions then mean
+#    different things on the two sides, so NOTHING may be licensed.
+MERGE_SRC = ("1\n00:00:01,000 --> 00:00:02,000\nLook, I don't know.\n"
+             "IAN: Stop it, now.\n")
+MERGE_HE = (u"1\n00:00:01,000 --> 00:00:02,000\nתראה: "
+            u"אני לא יודע, תפסיק עכשיו.\n")
+check('merged lines license NOTHING (real dialogue survives)',
+      srt.strip_hebrew_speaker_prefix(MERGE_HE, MERGE_SRC), MERGE_HE)
+
+# ...including when it is a blank line mid-entry that makes the counts differ
+BLANK_SRC = ("1\n00:00:01,000 --> 00:00:02,000\nLook, I don't know.\n\n\n"
+             "IAN: Stop.\n")
+BLANK_HE = (u"1\n00:00:01,000 --> 00:00:02,000\nתראה: "
+            u"אני לא יודע.\n")
+check('a blank line mid-entry licenses nothing either',
+      srt.strip_hebrew_speaker_prefix(BLANK_HE, BLANK_SRC), BLANK_HE)
+
+# 2. Two blocks share an index number: the untagged one must not spend the
+#    tagged one's licence.
+DUP_SRC = ("1\n00:00:01,000 --> 00:00:02,000\nIAN: Hello there.\n\n"
+           "1\n00:00:05,000 --> 00:00:06,000\nLook, I don't know.\n")
+DUP_HE = (u"1\n00:00:01,000 --> 00:00:02,000\nאיאן: "
+          u"שלום.\n\n"
+          u"1\n00:00:05,000 --> 00:00:06,000\nתראה: "
+          u"אני לא יודע.\n")
+check('a duplicated index number licenses nothing at all',
+      srt.strip_hebrew_speaker_prefix(DUP_HE, DUP_SRC), DUP_HE)
+
+# 3. A line of dialogue that is only digits is NOT an entry boundary. Every
+#    index from 1 upward is in use in a real file, so a "2024" or a score
+#    would otherwise inherit some unrelated entry's licence.
+NUM_SRC = ("1\n00:00:01,000 --> 00:00:02,000\nIAN: Hello there, friend.\n\n"
+           "5\n00:00:10,000 --> 00:00:12,000\nOne.\nLook, I don't know.\n")
+NUM_HE = (u"1\n00:00:01,000 --> 00:00:02,000\nאיאן: "
+          u"שלום, ידיד.\n\n"
+          u"5\n00:00:10,000 --> 00:00:12,000\n1\nתראה: "
+          u"אני לא יודע.\n")
+res_num = srt.strip_hebrew_speaker_prefix(NUM_HE, NUM_SRC)
+check('a digits-only DIALOGUE line is not an entry boundary',
+      entries(res_num)[1][2], [u'1', u'תראה: אני לא יודע.'])
+check('...and the real tag on entry 1 is still removed',
+      entries(res_num)[0][2], [u'שלום, ידיד.'])
+
 # ---------------------------------------------------------------------------
 print('== wrong-alphabet slip: spelled back, not deleted ==')
 
@@ -170,6 +218,20 @@ ok('a standalone Cyrillic phrase is NEVER touched',
                                    u'мир')
    == u'הוא קרא Война '
       u'и мир')
+# The cap has to hold on the RUN, not on each regex match. A '{1,3}' pattern
+# caps the match, so a six-letter word glued to Hebrew came back split in two
+# and half-transliterated -- one word in two scripts, worse than either
+# leaving it or converting it whole.
+_RU = u'Привет'                       # a real 6-letter Russian word
+check('a long run glued on BOTH sides is left alone',
+      srt.fold_foreign_in_hebrew_word(u'שלום' + _RU + u'שלום'),
+      u'שלום' + _RU + u'שלום')
+check('a long run glued on ONE side is left alone (no half-conversion)',
+      srt.fold_foreign_in_hebrew_word(u'שלום' + _RU + u' שלום'),
+      u'שלום' + _RU + u' שלום')
+ok('a run of exactly the cap length is still repaired',
+   srt.fold_foreign_in_hebrew_word(u'א' + u'мир')
+   == u'אמיר')
 ok('Latin is not folded (English in a Hebrew subtitle is legitimate)',
    srt.fold_foreign_in_hebrew_word(u'שלום Hello')
    == u'שלום Hello')
@@ -231,6 +293,25 @@ def chain(text, source):
     text = srt.strip_hebrew_speaker_prefix(text, source)
     text = srt.strip_leaked_arabic(text)
     text = srt.strip_source_echo(text)
+    text = srt.fold_foreign_in_hebrew_word(text)
+    text = srt.strip_niqqud(text)
+    return srt.normalize_glyphs(text)
+
+
+def chain_lossless(text, source):
+    """The same chain WITHOUT strip_source_echo.
+
+    Every other stage promises to preserve the line structure exactly, and
+    that promise is what the fuzz below checks. strip_source_echo does not
+    make it and must not: its whole job is to DROP a cue's leading non-Hebrew
+    lines, which is how the model stacking the English above its Hebrew gets
+    repaired. Including it here would mean asserting an invariant one member
+    of the chain is designed to break, which tests the assertion rather than
+    the code. It has its own coverage elsewhere.
+    """
+    text = srt.strip_leaked_speaker_prefix(text, hebrew_only=True)
+    text = srt.strip_hebrew_speaker_prefix(text, source)
+    text = srt.strip_leaked_arabic(text)
     text = srt.fold_foreign_in_hebrew_word(text)
     text = srt.strip_niqqud(text)
     return srt.normalize_glyphs(text)
@@ -365,6 +446,59 @@ except Exception as exc:                                        # noqa: BLE001
 
 ok('a malformed block (no text lines) is refused',
    rescue(['5\n00:00:09,000 --> 00:00:10,500'], 'en') is None)
+
+# ---------------------------------------------------------------------------
+print('== seeded fuzz: the invariants hold on shapes nobody thought of ==')
+
+import random                                                   # noqa: E402
+
+_rng = random.Random(20260803)          # fixed: a failure here reproduces
+_PIECES = [u'שלום', u'לא, לא.', u'- כן.', u'אמм', u'לעצمي',
+           u'בְּסֵדֶר', u'איאן: לא', u'תראה: אני לא יודע', u'♪♪',
+           u'مرحبا', u'Привет', u'<i>כן</i>', u'- (laughs)', u'-',
+           u'12', u'2024', u'א' * 40, u'', u'טוב.  טוב', u'שלום Hello']
+_SPIECES = ['Hello.', '- IAN: No.', 'Look: I do not know.', '[cough]',
+            '- (door creaking)', 'MABEL: Hi.', 'One.', '2024', 'x' * 40, '']
+
+_bad = []
+for _trial in range(400):
+    _n = _rng.randint(1, 6)
+    _he, _sr = [], []
+    for _k in range(1, _n + 1):
+        _tc = '00:00:%02d,000 --> 00:00:%02d,000' % (_k, _k + 1)
+        _idx = str(_k if _rng.random() > 0.12 else _rng.randint(1, _n))
+        _he.append('\n'.join([_idx, _tc] + [_rng.choice(_PIECES)
+                                            for _ in range(_rng.randint(1, 3))]))
+        _sr.append('\n'.join([_idx, _tc] + [_rng.choice(_SPIECES)
+                                            for _ in range(_rng.randint(1, 3))]))
+    _htext, _stext = '\n\n'.join(_he), '\n\n'.join(_sr)
+    if _rng.random() > 0.7:
+        _htext = _htext.replace('\n', '\r\n')
+    try:
+        _got = chain_lossless(_htext, _stext)
+    except Exception as _exc:                                   # noqa: BLE001
+        _bad.append(('raised', _exc, _htext))
+        continue
+    _a, _b = entries(_htext), entries(_got)
+    if len(_a) != len(_b):
+        _bad.append(('cue count', len(_a), len(_b), _htext))
+    elif [x[1] for x in _a] != [x[1] for x in _b]:
+        _bad.append(('timecode moved', _htext))
+    elif [len(x[2]) for x in _a] != [len(x[2]) for x in _b]:
+        _bad.append(('line count', _htext))
+    else:
+        for _x, _y in zip(_a, _b):
+            if has_hebrew(''.join(_x[2])) and not has_hebrew(''.join(_y[2])):
+                _bad.append(('lost all Hebrew', _x, _y))
+                break
+    if _got != chain_lossless(_got, _stext):
+        _bad.append(('not idempotent', _htext))
+
+ok('400 randomised SRTs: no cue, line, timecode or Hebrew lost, all '
+   'idempotent', not _bad)
+if _bad:
+    for _b1 in _bad[:3]:
+        print('        %r' % (_b1,))
 
 print()
 if FAILED:

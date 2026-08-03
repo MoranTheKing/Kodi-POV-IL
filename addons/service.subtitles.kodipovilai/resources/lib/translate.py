@@ -1376,17 +1376,22 @@ def _google_rescue(blocks, source_lang):
             heb = google_translate.translate_lines(lines[2:], source_lang)
             if not heb or len(heb) != len(lines) - 2:
                 return None
+            # A rescue that produced no Hebrew is a failed rescue, and
+            # returning it would REPLACE the English line with something
+            # worse. Checked PER BLOCK, not over the joined result: one block
+            # coming back blank would otherwise hide behind another block's
+            # real Hebrew and ship as a rescued but textless cue. Today every
+            # caller passes a single block, so this only matters if a third
+            # one is ever added -- which is exactly when it would be missed.
+            if not any(u'֐' <= c <= u'׿' for c in ''.join(heb)):
+                return None
             out.append('\n'.join(lines[:2] + heb))
-        # A rescue that produced no Hebrew is a failed rescue, and returning
-        # it would REPLACE the English line with something worse. Two separate
-        # checks on purpose: looks_hebrew answers True on thin evidence (by
-        # design -- it is a "don't block on too little text" gate), so it can
-        # pass a blank or punctuation-only reply. The explicit character test
-        # is what actually guarantees there is Hebrew here to ship.
-        joined = '\n'.join(out)
-        if not any(u'֐' <= c <= u'׿' for c in joined):
-            return None
-        if not srt.looks_hebrew(joined, min_alpha=1):
+        # looks_hebrew on top, as a second opinion over the whole reply. It
+        # answers True on thin evidence by design -- it is a "don't block on
+        # too little text" gate -- so it can pass a blank or punctuation-only
+        # reply, which is why the explicit character test above is the one
+        # that actually guarantees there is Hebrew here to ship.
+        if not srt.looks_hebrew('\n'.join(out), min_alpha=1):
             return None
         return out
     except Exception as e:
@@ -4062,13 +4067,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                             srt.fix_rtl_punctuation(
                                 srt.normalize_glyphs(
                                     srt.strip_niqqud(
-                                        srt.strip_source_echo(
-                                            srt.strip_leaked_arabic(
-                                                srt.strip_hebrew_speaker_prefix(
-                                                    srt.strip_leaked_speaker_prefix(
-                                                        srt.stitch_blocks(
-                                                            _merged_blocks)),
-                                                    src_text)))))))
+                                        srt.fold_foreign_in_hebrew_word(
+                                            srt.strip_source_echo(
+                                                srt.strip_leaked_arabic(
+                                                    srt.strip_hebrew_speaker_prefix(
+                                                        srt.strip_leaked_speaker_prefix(
+                                                            srt.stitch_blocks(
+                                                                _merged_blocks)),
+                                                        src_text))))))))
                         progressive_cb('chunk_ready', {
                             'completed': completed,
                             'total': total,
