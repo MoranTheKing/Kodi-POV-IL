@@ -60,7 +60,9 @@ _DASH_ONLY_RE = re.compile(r'^[-‐-―\s]+$')
 # Hebrew combining points + cantillation. U+05BE (MAQAF), U+05C0 (PASEQ),
 # U+05C3 (SOF PASUQ), U+05C6 (NUN HAFUKHA), U+05F3/U+05F4 (geresh, gershayim)
 # are punctuation, not points, and are deliberately NOT in this class.
-_NIQQUD_RE = re.compile('[' + ''.join(chr(c) for c in list(range(0x0591, 0x05BE)) + [0x05BD, 0x05BF, 0x05C1, 0x05C2, 0x05C4, 0x05C5, 0x05C7]) + ']')
+_NIQQUD_RE = re.compile('[' + ''.join(
+    chr(c) for c in list(range(0x0591, 0x05BE))
+    + [0x05BD, 0x05BF, 0x05C1, 0x05C2, 0x05C4, 0x05C5, 0x05C7]) + ']')
 _INDEX_RE = re.compile(r'^\d+$')
 _TIMECODE_RE = re.compile(
     r'^\d{1,2}:\d{2}:\d{2}[,\.]\d{1,3}\s*-->\s*'
@@ -1247,10 +1249,11 @@ def strip_hebrew_speaker_prefix(text, source_text):
                     # a tag is a NAME, not a sentence: at most two words, and
                     # the line must still have Hebrew left once it is gone
                     # (otherwise the "tag" was the whole line, and removing it
-                    # would empty a cue -- never allowed)
-                    if m and len(m.group(0).split(':')[0].split()) <= (
-                            _HE_TAG_WORDS
-                            + (1 if m.group('pre').strip() else 0)):
+                    # would empty a cue -- never allowed). Counted on the tag
+                    # ALONE, with the dash and any bidi control excluded, so
+                    # the limit means the same thing on every line shape.
+                    tag = m.group(0)[len(m.group('pre')):] if m else ''
+                    if m and len(tag.split(':')[0].split()) <= _HE_TAG_WORDS:
                         rest = body[m.end():]
                         if _HAS_HEBREW_RE.search(rest):
                             body = m.group('pre') + rest
