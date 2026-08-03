@@ -1198,11 +1198,21 @@ def strip_hebrew_speaker_prefix(text, source_text):
         # are what make this precise -- with them, a source entry whose first
         # line is "IAN: No." and whose second is "Look: I don't know." can
         # only ever license a removal on the FIRST Hebrew line.
-        src_tags = {}
+        #
+        # An index number that appears TWICE is dropped rather than merged.
+        # The number is the only key there is, so two blocks sharing one would
+        # share a licence, and the untagged one would spend the tagged one's.
+        src_tags, seen = {}, set()
         for blk in parse_blocks(source_text):
             lines = blk.split('\n')
-            if len(lines) < 3 or not _INDEX_RE.match(lines[0].strip()):
+            if (len(lines) < 3 or not _INDEX_RE.match(lines[0].strip())
+                    or not _TIMECODE_RE.match(lines[1].strip())):
                 continue
+            n = int(lines[0].strip())
+            if n in seen:
+                src_tags.pop(n, None)
+                continue
+            seen.add(n)
             at = set()
             for i, ln in enumerate(lines[2:]):
                 s = ln.strip()
@@ -1211,40 +1221,74 @@ def strip_hebrew_speaker_prefix(text, source_text):
                 if _SPEAKER_RE.match(s):
                     at.add(i)
             if at:
-                src_tags[int(lines[0].strip())] = (at, len(lines) - 2)
+                src_tags[n] = (at, len(lines) - 2)
         if not src_tags:
             return text
 
-        # How many text lines each entry of the TRANSLATION has, so positions
-        # are only trusted when the two sides agree on the shape of the entry.
+        # Which lines of the TRANSLATION are really entry indices: a
+        # digits-only line whose next non-empty line is a timecode. Without
+        # that second condition a digits-only line of DIALOGUE -- a year, a
+        # score, a countdown, and there are plenty in a 2,000-cue file --
+        # reads as an entry boundary, and hands the rest of its cue the tag
+        # licence belonging to whichever entry happens to share the number.
         lines_all = text.split('\n')
-        he_count = {}
-        cur = None
-        for line in lines_all:
+        idx_at, dup = {}, set()
+        for i, line in enumerate(lines_all):
             s = line.strip()
-            if _INDEX_RE.match(s):
-                cur = int(s)
+            if not _INDEX_RE.match(s):
+                continue
+            j = i + 1
+            while j < len(lines_all) and not lines_all[j].strip():
+                j += 1
+            if j < len(lines_all) and _TIMECODE_RE.match(lines_all[j].strip()):
+                n = int(s)
+                if n in idx_at.values():
+                    dup.add(n)
+                idx_at[i] = n
+
+        # How many text lines each entry of the TRANSLATION has. Positions
+        # only mean the same thing on both sides when these agree.
+        he_count = {}
+        cur, expect_tc = None, False
+        for i, line in enumerate(lines_all):
+            if i in idx_at:
+                cur = idx_at[i]
                 he_count[cur] = 0
-            elif cur is not None and s and not _TIMECODE_RE.match(s):
+                expect_tc = True
+            elif not line.strip():
+                continue
+            elif expect_tc:
+                expect_tc = False
+            elif cur is not None:
                 he_count[cur] += 1
 
         out = []
-        tags_at, span, pos, budget = set(), 0, -1, 0
-        for line in lines_all:
+        tags_at, pos, licensed, expect_tc = set(), -1, False, False
+        for i, line in enumerate(lines_all):
             cr = '\r' if line.endswith('\r') else ''
             body = line[:-1] if cr else line
-            s = body.strip()
-            if _INDEX_RE.match(s):
-                n = int(s)
+            if i in idx_at:
+                n = idx_at[i]
                 tags_at, span = src_tags.get(n, (set(), 0))
-                # positions only count when both sides split the entry the
-                # same way; otherwise fall back to "at most this many"
-                budget = 0 if he_count.get(n) == span else len(tags_at)
+                # POSITIONAL ONLY. When the two sides split the entry
+                # differently -- the model merges two source lines into one
+                # often enough -- position 0 of the Hebrew is not position 0
+                # of the source, so nothing about the source's positions
+                # applies and NOTHING is licensed. Counting instead ("at most
+                # this many tags somewhere in the entry") is what would let a
+                # merged cue's genuine "תראה:" be read as the tag the source
+                # carried on its other line.
+                licensed = (bool(tags_at) and n not in dup
+                            and he_count.get(n) == span)
                 pos = -1
-            elif s and not _TIMECODE_RE.match(s):
+                expect_tc = True
+            elif not body.strip():
+                pass
+            elif expect_tc:
+                expect_tc = False
+            else:
                 pos += 1
-                allowed = (pos in tags_at) if not budget else budget > 0
-                if allowed and _HAS_HEBREW_RE.search(body):
+                if licensed and pos in tags_at and _HAS_HEBREW_RE.search(body):
                     m = _HE_TAG_RE.match(body)
                     # a tag is a NAME, not a sentence: at most two words, and
                     # the line must still have Hebrew left once it is gone
@@ -1257,8 +1301,6 @@ def strip_hebrew_speaker_prefix(text, source_text):
                         rest = body[m.end():]
                         if _HAS_HEBREW_RE.search(rest):
                             body = m.group('pre') + rest
-                            if budget:
-                                budget -= 1
             out.append(body + cr)
         return '\n'.join(out)
     except Exception:
@@ -1496,7 +1538,12 @@ for _s, _d in (
     for _a, _b in zip(_s, _d):
         _FOREIGN2HE[_a] = _b
         _FOREIGN2HE[_a.upper()] = _b
-_FOREIGN_RUN_RE = re.compile(u'[' + u''.join(sorted(_FOREIGN2HE)) + u']{1,3}')
+# UNBOUNDED, like _ARABIC_RUN_RE, and the length check lives inside the
+# substitution. A '{1,3}' regex does not cap the run -- it caps each MATCH,
+# so a six-letter Cyrillic word glued to Hebrew came back as two matches and
+# was transliterated in pieces, half in each script. Matching the whole run
+# and rejecting it by length is what actually enforces the cap.
+_FOREIGN_RUN_RE = re.compile(u'[' + u''.join(sorted(_FOREIGN2HE)) + u']+')
 _MAX_FOREIGN_RUN = 3
 
 
