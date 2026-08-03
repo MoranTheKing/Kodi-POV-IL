@@ -447,6 +447,18 @@ def _reapply_rtl_fix_in_place(path, legacy_engine=False, ai_output=None):
     # translation must keep it.
     if ai_output:
         body = srt.strip_source_echo(body)
+        # Same provenance gate again, and the payoff is the same as the timing
+        # repair's: the wrong-alphabet slip and the stray niqqud are already in
+        # cached files and in the pool, where dedup by source hash means those
+        # entries will never be re-translated. Repairing them on the way IN
+        # clears the whole existing backlog for anyone who updates, without a
+        # single re-translation. Only our model's output can carry either --
+        # a human Hebrew subtitle may use niqqud deliberately, and it is not
+        # ours to take out. The translated speaker tag cannot be repaired here:
+        # deciding one is a tag needs the SOURCE entry, which a cached file no
+        # longer has.
+        body = srt.fold_foreign_in_hebrew_word(body)
+        body = srt.strip_niqqud(body)
     # Unconditional: this only rewrites a character as the canonical spelling of
     # that same character, so it is safe on any subtitle, whatever made it.
     body = srt.normalize_glyphs(body)
@@ -3402,6 +3414,52 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             self.user_msg = user_msg
             self.detail = detail
 
+    def _google_rescue(ch):
+        """The rung between "Gemini refuses this text" and "ship it in English".
+
+        Every stage above this one is still Gemini, and a safety block is
+        Gemini's judgement of the CONTENT -- so a chunk that blocked with the
+        Arabic reference, with five alternate references, bisected down to one
+        entry, and again with no reference at all, is not going to come back
+        translated on a sixth Gemini call. It is exactly then that the ladder
+        used to fall to "keep the source", which is the one outcome the whole
+        feature exists to avoid: an English line on screen.
+
+        Google Translate is a different engine with a different policy, and it
+        is already shipped here as the whole-file fallback. It gives no gender
+        nuance and no cast context -- this is machine Hebrew -- but machine
+        Hebrew is a translation, and English is not.
+
+        Returns the blocks with their TEXT lines in Hebrew and their index and
+        timecode untouched, or None. On None the caller keeps the source, so
+        the English line is never lost to a failure here. Never raises.
+        """
+        try:
+            from . import google_translate
+        except Exception:
+            return None
+        out = []
+        for block in ch:
+            lines = block.split('\n')
+            if len(lines) < 3:
+                return None
+            heb = google_translate.translate_lines(lines[2:], source_lang)
+            if not heb or len(heb) != len(lines) - 2:
+                return None
+            out.append('\n'.join(lines[:2] + heb))
+        # A rescue that produced no Hebrew is a failed rescue, and returning it
+        # would REPLACE the English line with something worse. Two separate
+        # checks on purpose: looks_hebrew answers True on thin evidence (by
+        # design -- it is a "don't block on too little text" gate), so it can
+        # pass a blank or punctuation-only reply. The explicit character test
+        # is what actually guarantees there is Hebrew here to ship.
+        joined = '\n'.join(out)
+        if not any(u'֐' <= c <= u'׿' for c in joined):
+            return None
+        if not srt.looks_hebrew(joined, min_alpha=1):
+            return None
+        return out
+
     def _english_only_safe(idx, ch):
         """Translate `ch` with NO gender reference (English only), splitting on
         truncation / residual blocks so a large remainder still completes, and
@@ -3418,6 +3476,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 mid = len(ch) // 2
                 return (_english_only_safe(idx, ch[:mid]) + '\n\n'
                         + _english_only_safe(idx, ch[mid:]))
+            # One entry, English-only, and still refused. Same reasoning as the
+            # main ladder: try a different engine before shipping English.
+            _resc = _google_rescue(ch)
+            if _resc:
+                kodi_utils.log(
+                    'Chunk {0} English-only blocked at size 1 -- rescued with '
+                    'Google Translate'.format(idx), level='WARNING')
+                _count('noar', len(ch))
+                return '\n\n'.join(_resc)
             _count('src', len(ch))
             return '\n\n'.join(ch)
         # Low-yield guard: Gemini silently dropped entries -> bisect and re-do.
@@ -3673,11 +3740,27 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     return _resp
                 except (gemini.FilteredResponse, gemini.TruncatedResponse):
                     pass
+            # ...then off Gemini entirely. Five references, no reference and a
+            # bisect have all been refused by the same safety policy, so the
+            # next Gemini call would be refused too. A different engine is the
+            # only thing left that can still produce Hebrew here.
+            _resc = _google_rescue(ch)
+            if _resc:
+                kodi_utils.log(
+                    'Chunk {0} blocked by every Gemini stage -- rescued with '
+                    'Google Translate ({1} entr(ies)); machine Hebrew, no '
+                    'gender'.format(idx, len(ch)), level='WARNING')
+                _count('noar', len(ch))
+                return '\n\n'.join(_resc)
             # ...and only as an ABSOLUTE LAST RESORT keep the source for this ONE
-            # line, so the rest of the subtitle still translates.
+            # line, so the rest of the subtitle still translates. The source
+            # block is returned WHOLE and untouched -- an English line on screen
+            # is the worst outcome this function has, and losing the line
+            # entirely would be worse still.
             kodi_utils.log(
-                'Chunk {0} blocked even English-only at size 1 -- keeping '
-                'source text (last resort)'.format(idx), level='WARNING')
+                'Chunk {0} blocked even English-only at size 1, and Google '
+                'Translate could not rescue it -- keeping source text (last '
+                'resort)'.format(idx), level='WARNING')
             _count('src', len(ch))
             return '\n\n'.join(ch)
 
@@ -3959,14 +4042,24 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         # with no Hebrew is exempt by construction. The fold sits
                         # inside fix_rtl_punctuation's argument because it strips
                         # the RLE/PDF that call adds.
+                        # The Hebrew-tag strip and the niqqud strip join the
+                        # chain here for the same reason as the rest of it: the
+                        # preview is what the viewer watches while the job runs,
+                        # so a defect the final file will not have should not
+                        # show up in it either. Both are safe over the half that
+                        # is still untranslated source -- one needs Hebrew on
+                        # the line, the other needs Hebrew points.
                         _merged_text = srt.clamp_cue_durations(
                             srt.fix_rtl_punctuation(
                                 srt.normalize_glyphs(
-                                    srt.strip_source_echo(
-                                        srt.strip_leaked_arabic(
-                                            srt.strip_leaked_speaker_prefix(
-                                                srt.stitch_blocks(
-                                                    _merged_blocks)))))))
+                                    srt.strip_niqqud(
+                                        srt.strip_source_echo(
+                                            srt.strip_leaked_arabic(
+                                                srt.strip_hebrew_speaker_prefix(
+                                                    srt.strip_leaked_speaker_prefix(
+                                                        srt.stitch_blocks(
+                                                            _merged_blocks)),
+                                                    src_text)))))))
                         progressive_cb('chunk_ready', {
                             'completed': completed,
                             'total': total,
@@ -4058,6 +4151,23 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # a translated line is removed while a caption/chyron/URL the model deliberately
     # left in English ("WARNING: ...", "PART 2: ...", "HTTP://...") is never eaten.
     final = srt.strip_leaked_speaker_prefix(final, hebrew_only=True)
+    # ...and the same tag when the model TRANSLATED it instead of copying it
+    # ("IAN: No, no." -> "איאן: לא, לא."). The stripper above cannot see that
+    # one -- it matches an ALL-CAPS LATIN name -- and measuring a file a user
+    # reported found 60 leaked tags, every one of them Hebrew. Anchored to
+    # src_text: an entry's Hebrew may lose a prefix only where the SAME entry's
+    # source carried a speaker tag, so ordinary dialogue with a colon is safe.
+    _pre_tag = final
+    final = srt.strip_hebrew_speaker_prefix(final, src_text)
+    if final != _pre_tag:
+        try:
+            kodi_utils.log(
+                'translated speaker tags stripped from {0} line(s)'.format(
+                    sum(1 for a, b in zip(_pre_tag.split('\n'),
+                                          final.split('\n')) if a != b)),
+                level='INFO')
+        except Exception:
+            pass
     # Same class of defect, different source: when the Arabic gender
     # reference is on, the prompt carries real Arabic lines and the model
     # sometimes copies a word or a suffix of one into the Hebrew. Only a
@@ -4099,6 +4209,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # the community pool -- where the flaw then outlives every local fix,
     # because the pool is written once and only ever repaired on read.
     final = srt.strip_source_echo(final)
+    # The same wrong-alphabet slip in a script with no reference block behind
+    # it -- a Cyrillic or Greek letter dropped into the middle of a Hebrew word
+    # ("אמм"). Only a run glued to Hebrew is folded; a foreign word standing on
+    # its own is left as written.
+    final = srt.fold_foreign_in_hebrew_word(final)
+    # Hebrew subtitles are written unpointed. The model vocalises a word now and
+    # then ("בְּסֵדֶר", "מַה?"), reported as "a lot of niqqud that isn't really
+    # needed"; every instance measured in real output was an ordinary word whose
+    # consonants already carried the meaning, so this only affects display.
+    final = srt.strip_niqqud(final)
     # Fold what the shipped fonts cannot draw. Must come BEFORE the RTL wrap
     # below: it strips RLE/PDF, which is exactly what fix_rtl_punctuation adds.
     # See normalize_glyphs' docstring -- that ordering is load-bearing.
