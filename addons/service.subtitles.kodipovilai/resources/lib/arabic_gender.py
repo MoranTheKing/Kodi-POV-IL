@@ -289,7 +289,21 @@ _ALIAS_TO_CHAIN = {alias: code
 # 10-times-every-language worst case and provider request storms.
 _PER_LANG_LIMIT = 10
 _TOTAL_DOWNLOAD_BUDGET = 50
-_REFERENCE_DEADLINE_S = 30.0
+# The chain is walked round-robin (see begin()), so a usable oracle is
+# reached early. The deadline is what decides how much DEPTH is left
+# afterwards -- how many candidates per language get a turn once every
+# language has had its first. At 30s it was one or two rounds, so the
+# fifth Hebrew subtitle, which may well be a different release that
+# aligns where the first four did not, was rarely reached at all.
+#
+# 60s buys full depth on the languages that are actually present
+# (~30 downloads) and costs nothing in the common case: next() returns
+# the moment something aligns, so a job whose first candidate works
+# still pays for one download. Only a job where NOTHING aligns spends
+# the ceiling, and it spends it inside a translation that already runs
+# for minutes behind a progress bar (a film is ~36 requests paced at 14
+# per minute), not in front of playback.
+_REFERENCE_DEADLINE_S = 60.0
 
 
 def _chain_lang_of(cand):
@@ -494,7 +508,61 @@ _AR_MASC = tuple(re.compile(p) for p in (
 ))
 # Hebrew reference: read the pronoun straight off it.
 _HE_REF_FEM = re.compile(u'(?<![\u05d0-\u05ea])\u05d0\u05ea(?![\u05d0-\u05ea])(?!\\s*\u05d4)')
-_HE_MASC = re.compile(u'(?<![\u05d0-\u05ea])\u05d0\u05ea\u05d4(?![\u05d0-\u05ea])')
+# The proclitics Hebrew glues straight onto a pronoun: ו (and), ש (that),
+# כש (when) and their combinations. Without them "ואתה", "שאתה" and
+# "כשאתה" -- ordinary, high-frequency Hebrew -- read as no pronoun at all,
+# which both hides real errors from the check and lets a "repair" that is
+# still masculine pass as fixed. The set is deliberately just these: allowing
+# ANY preceding letter would match the אתה inside ראתה ("she saw").
+_HE_MASC = re.compile(
+    u'(?<![\u05d0-\u05ea])(?:\u05d5|\u05e9|\u05db\u05e9|\u05d5\u05e9|\u05d5\u05db\u05e9)?\u05d0\u05ea\u05d4(?![\u05d0-\u05ea])')
+
+
+# The rest of the chain. Arabic and Hebrew are read above; these are the
+# languages whose ADDRESSEE marking can be read without parsing, because the
+# marker is a VERB ending tied to the second person -- there is no other thing
+# in the language it could be.
+#
+# Deliberately NOT here, and this is the whole design: es, it, pt, fr, ro and
+# el mark gender on ADJECTIVES, and an adjective ending is not distinguishable
+# from a feminine noun's ending without knowing which word is which ("eres una
+# estrella" ends in -a and says nothing about who is being addressed). nl marks
+# only referent gender, never the addressee. ur is written in Arabic script but
+# marks gender through Indic verb morphology, not the Arabic diacritics above,
+# so the patterns there do not transfer. For all of those this returns None and
+# the verification pass simply does not fire -- which is exactly today's
+# behaviour, and far better than rewriting a line that was already right.
+#
+# Every pattern below is validated in tools/test_gender_verification.py against
+# both genders and against a first/third-person sentence that must NOT match.
+def _rx(*pats):
+    return tuple(re.compile(p, re.I | re.U) for p in pats)
+
+
+_ADDRESSEE_MARKERS = {
+    # Slavic past tense: the second-person pronoun plus a gendered participle.
+    'ru': (_rx(r'(?<![\u0430-\u044f\u0451])\u0442\u044b\b[^.!?]{0,40}?\b\w+\u043b\u0430\b'),
+           _rx(r'(?<![\u0430-\u044f\u0451])\u0442\u044b\b[^.!?]{0,40}?\b\w+\u043b\b')),
+    'uk': (_rx(r'(?<![\u0430-\u044f\u0456\u0457])\u0442\u0438\b[^.!?]{0,40}?\b\w+\u043b\u0430\b'),
+           _rx(r'(?<![\u0430-\u044f\u0456\u0457])\u0442\u0438\b[^.!?]{0,40}?\b\w+(\u0432|\u0438\u0439)\b')),
+    'bg': (_rx(r'(?<![\u0430-\u044f])\u0442\u0438\b[^.!?]{0,40}?\b\w+(\u043b\u0430|\u043d\u0430)\b'),
+           _rx(r'(?<![\u0430-\u044f])\u0442\u0438\b[^.!?]{0,40}?\b\w+(\u0435\u043d|\u043b)\b')),
+    # Polish encodes person AND gender in the ending itself.
+    'pl': (_rx(r'\w+\u0142a\u015b\b'), _rx(r'\w+\u0142e\u015b\b')),
+    # Czech / Slovak / Serbian / Croatian: participle + the 2sg auxiliary.
+    # sr/hr take -ao/-io rather than a bare -o: ordinary words end in -o
+    # ('tamo'), so a bare -o matched alongside the feminine -la and every
+    # line came back ambiguous.
+    'cs': (_rx(r'\w+la\s+jsi\b'), _rx(r'\w+l\s+jsi\b')),
+    'sk': (_rx(r'\w+la\s+si\b'), _rx(r'\w+l\s+si\b')),
+    'sr': (_rx(r'\bti\s+si\b[^.!?]{0,30}?\b\w+la\b'),
+           _rx(r'\bti\s+si\b[^.!?]{0,30}?\b\w+(ao|io)\b')),
+    'hr': (_rx(r'\bti\s+si\b[^.!?]{0,30}?\b\w+la\b'),
+           _rx(r'\bti\s+si\b[^.!?]{0,30}?\b\w+(ao|io)\b')),
+    # Hindi: the second-person copula with a feminine/masculine participle.
+    'hi': (_rx(r'(\u0924\u0941\u092e|\u0906\u092a)[^\u0964?!]{0,30}?\u0940\s+(\u0939\u094b|\u0939\u0948\u0902)'),
+           _rx(r'(\u0924\u0941\u092e|\u0906\u092a)[^\u0964?!]{0,30}?\u0947\s+(\u0939\u094b|\u0939\u0948\u0902)')),
+}
 
 
 def reference_addressee_gender(ref_text, lang):
@@ -514,6 +582,10 @@ def reference_addressee_gender(ref_text, lang):
         elif lang == 'ar':
             f = any(p.search(ref_text) for p in _AR_FEM)
             m = any(p.search(ref_text) for p in _AR_MASC)
+        elif lang in _ADDRESSEE_MARKERS:
+            fem_pats, masc_pats = _ADDRESSEE_MARKERS[lang]
+            f = any(p.search(ref_text) for p in fem_pats)
+            m = any(p.search(ref_text) for p in masc_pats)
         else:
             return None
         if f and not m:
