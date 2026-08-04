@@ -4148,10 +4148,120 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         _emit(False, 'partial')
         return None
 
+    def _regender_blocks(blocks, wanted):
+        """Ask once for the entries in `wanted` to be rewritten addressing a
+        woman, and splice back only the ones that came back actually fixed.
+
+        Conservative by construction. A replacement is taken only when it is
+        an entry we asked about, is Hebrew, and no longer addresses a man --
+        so a reply that ignored the instruction, answered about the wrong
+        entry, or came back empty leaves the original line exactly as it was.
+        Index and timecode are restored from the source block, so this can
+        never move a cue. Never raises; on any failure the blocks are returned
+        untouched, which is simply today's behaviour.
+        """
+        by_num = {}
+        for b in blocks:
+            head = b.split('\n', 1)[0].strip()
+            if head.isdigit():
+                by_num[int(head)] = b
+        ask = [by_num[n] for n in wanted if n in by_num]
+        if not ask:
+            return blocks
+        prompt_text = (
+            'The Hebrew subtitle entries below address a FEMALE listener, but '
+            'they were written addressing a male. Rewrite the Hebrew so it '
+            'addresses a woman throughout: the second-person pronoun (את, '
+            'never אתה), and every verb, adjective, participle and suffix '
+            'that has to agree with it.\n\n'
+            'Rules:\n'
+            '- Reproduce each entry\'s index line and timecode line EXACTLY.\n'
+            '- Keep the same number of text lines in each entry.\n'
+            '- Change nothing except what gender agreement requires. Do not '
+            'retranslate, reword, shorten or add anything.\n'
+            '- Output ONLY the SRT entries, with no commentary.\n\n'
+            + '\n\n'.join(ask) + '\n')
+        try:
+            _gemini_rate_gate(_rpm_interval)
+            reply = gemini.generate(
+                api_key=api_key, model=model, prompt=prompt_text,
+                temperature=0.0, max_output_tokens=max_output_tokens,
+                top_p=top_p, thinking_budget=thinking_budget,
+                thinking_level=thinking_level,
+                timeout=gemini_timeout or gemini.REQUEST_TIMEOUT)
+        except Exception as e:
+            kodi_utils.log('gender repair request failed ({0}) -- keeping the '
+                           'lines as they are'.format(e), level='WARNING')
+            return blocks
+        fixed = 0
+        want = set(wanted)
+        for nb in srt.parse_blocks(reply or ''):
+            head = nb.split('\n', 1)[0].strip()
+            if not head.isdigit():
+                continue
+            num = int(head)
+            if num not in want or num not in by_num:
+                continue
+            new_lines = [l for l in nb.split('\n')[2:] if l.strip()]
+            body = '\n'.join(new_lines).strip()
+            if not body or arabic_gender.addresses_male(body):
+                continue          # ignored the instruction -> keep the original
+            if not srt.looks_hebrew(body, min_alpha=1):
+                continue
+            src_lines = by_num[num].split('\n')
+            old_lines = [l for l in src_lines[2:] if l.strip()]
+            if len(new_lines) != len(old_lines):
+                continue          # a gender rewrite does not change the shape
+            # The index and timecode are taken from the SOURCE block, never
+            # from the reply -- a rewrite may not move a cue, and this is one
+            # pair, so there is no positional pairing to verify.
+            by_num[num] = '\n'.join(src_lines[:2] + new_lines)
+            fixed += 1
+        kodi_utils.log(
+            'gender repair: {0}/{1} entr(ies) rewritten for a female '
+            'addressee'.format(fixed, len(ask)), level='INFO')
+        out = []
+        for b in blocks:
+            head = b.split('\n', 1)[0].strip()
+            out.append(by_num[int(head)] if head.isdigit() else b)
+        return out
+
     # Stitch in original order.
     out_blocks = []
     for i in sorted(out_blocks_by_index.keys()):
         out_blocks.extend(out_blocks_by_index[i])
+
+    # ---- gender verification -------------------------------------------
+    # The reference is a hint in a prompt, and a prompt is an instruction, not
+    # a guarantee. With a perfectly aligned Arabic oracle a full film came back
+    # 51 of 52 right, and the one that did not had an unambiguous feminine
+    # "أنتِ" sitting in its own prompt. The last points are compliance, so they
+    # are closed by CHECKING the output instead of asking more loudly.
+    #
+    # Only the direction that can be checked without guessing is checked --
+    # see arabic_gender.wrong_gender_entries. One extra request, only when
+    # something is actually wrong, and every replacement has to prove it fixed
+    # the error before it is accepted.
+    if _ar_map and out_blocks:
+        try:
+            # Imported explicitly rather than relying on the conditional
+            # import further up: that one binds the name only on the path
+            # that runs it, and this block must not depend on which.
+            from . import arabic_gender
+            _wrong = arabic_gender.wrong_gender_entries(
+                out_blocks, _ar_map, _ref_lang)
+            if _wrong:
+                kodi_utils.log(
+                    'gender check: {0} entr(ies) address a man where the {1} '
+                    'reference says the addressee is a woman -- asking for '
+                    'those lines again'.format(len(_wrong), _ref_lang),
+                    level='INFO')
+                out_blocks = _regender_blocks(out_blocks, _wrong)
+            else:
+                kodi_utils.log('gender check: clean', level='INFO')
+        except Exception as e:
+            kodi_utils.log('gender check skipped: {0}'.format(e),
+                           level='WARNING')
 
     final = srt.stitch_blocks(out_blocks)
     # Timing backstop. restore_block_timings above pairs positionally and so

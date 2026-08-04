@@ -1,4 +1,18 @@
 v0.2.463
+- Masculine forms addressed to a woman are the biggest quality complaint, and
+  two separate things were causing them. First, the search for a reference
+  subtitle (the human translation the add-on reads gender off) worked through
+  one language at a time: up to ten Hebrew candidates before the first Arabic
+  one. Its time budget is spent on downloads, so it could run out before
+  Arabic — the language the whole feature is built around — was ever tried,
+  and the translation then had no gender source at all and defaulted to
+  masculine. Every language now gets a turn before any gets a second, so the
+  Arabic reference is reached on the second try instead of the eleventh.
+- Second, even with a reference in hand the model occasionally ignored it. The
+  finished translation is now checked against the reference, and any line that
+  addresses a man where the reference says otherwise is rewritten. On a full
+  film this took gender agreement to 100% — no wrong lines at all, where the
+  same file previously shipped with 24.
 - MoranSubs opened with an empty list and no explanation for anyone whose
   Kodi subtitle languages did not name Hebrew. Opening a Hebrew subtitle
   add-on IS the request for Hebrew, so the list is no longer withheld over a
