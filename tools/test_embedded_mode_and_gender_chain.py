@@ -207,7 +207,22 @@ def _candidate(lang, number):
     }
 
 
-def test_primary_chain_is_strict_and_deeper_than_three(module):
+def test_primary_chain_is_round_robin_and_deeper_than_three(module):
+    """Round-robin WITHIN a quality tier; tier 1 exhausted before tier 2.
+
+    This used to pin all ten Hebrew candidates before the first Arabic one.
+    That spent the search on one language: the active-work deadline is
+    dominated by downloads, so ten Hebrew misses could exhaust it before
+    Arabic -- the oracle the prompt is built around -- was tried at all, and
+    the job then translated with no oracle and defaulted to masculine.
+
+    A flat round-robin fixed that and broke something else: it takes whatever
+    aligns FIRST, so a weak language's opening candidate could beat a strong
+    language's third. Tiers keep both properties. Hebrew and Arabic alternate,
+    so Arabic is attempt 2; and every Hebrew and Arabic candidate is tried
+    before any other language, so no weaker oracle can take a job away from an
+    Arabic one that would have aligned.
+    """
     candidates = (
         [_candidate("he", number) for number in range(1, 13)]
         + [_candidate("ar", 1), _candidate("hi", 1)]
@@ -218,8 +233,9 @@ def test_primary_chain_is_strict_and_deeper_than_three(module):
     )
     assert plan is not None
     assert diag["cands"] == 12  # top ten Hebrew + Arabic + Hindi
+    # tier 1 alternates and is exhausted first; hi (tier 2) comes last.
     assert [lang for lang, _ in plan._ordered] == (
-        ["he"] * 10 + ["ar", "hi"]
+        ["he", "ar"] + ["he"] * 9 + ["hi"]
     )
 
     attempts = []
@@ -233,10 +249,17 @@ def test_primary_chain_is_strict_and_deeper_than_three(module):
     )
     lang, mapping = plan.next()
     assert lang == "he" and mapping == {1: "reference"}
-    assert attempts == [("he", number) for number in range(1, 10)]
+    assert attempts == (
+        [("he", 1), ("ar", 1)]
+        + [("he", number) for number in range(2, 10)]
+    )
 
 
-def test_next_language_only_after_ten_primary_misses(module):
+def test_next_walks_the_given_order_faithfully(module):
+    # Constructs `ordered` by hand, so this pins ReferencePlan.next()'s
+    # traversal rather than begin()'s ordering (which is round-robin now, see
+    # above): whatever order it is handed, it tries every candidate in it,
+    # in that order, until one aligns.
     ordered = (
         [("he", _candidate("he", number)) for number in range(1, 11)]
         + [("ar", _candidate("ar", 1))]
@@ -312,9 +335,15 @@ def test_all_miss_is_globally_bounded(module):
 
 
 def test_active_deadline_excludes_idle_time(module):
+    # Derived from the constant rather than hardcoded, so raising the deadline
+    # (30s -> 60s, to leave room for depth once round-robin has covered the
+    # languages) does not silently invalidate what this is checking: that only
+    # ACTIVE download/align time counts, and that the ceiling stops the chain.
+    per_attempt = 11.0
+    expected = int(module._REFERENCE_DEADLINE_S // per_attempt) + 1
     ordered = [
         ("he", _candidate("he", number))
-        for number in range(1, 11)
+        for number in range(1, expected + 5)
     ]
     plan = module.ReferencePlan("src", ["block"], ordered, len(ordered))
     attempts = []
@@ -322,7 +351,7 @@ def test_active_deadline_excludes_idle_time(module):
 
     def download(cand):
         attempts.append(cand)
-        now[0] += 11.0
+        now[0] += per_attempt
         return cand
 
     original_monotonic = module.time.monotonic
@@ -333,8 +362,10 @@ def test_active_deadline_excludes_idle_time(module):
         assert plan.next() == (None, None)
     finally:
         module.time.monotonic = original_monotonic
-    assert len(attempts) == 3
-    assert plan._active_elapsed == 33.0
+    assert len(attempts) == expected
+    assert plan._active_elapsed == expected * per_attempt
+    # ...and it really did stop on the deadline, not on running out of input.
+    assert len(attempts) < len(ordered)
 
 
 def test_long_gemini_idle_does_not_expire_lazy_fallback(module):
@@ -362,11 +393,11 @@ def main():
     assert module._REF_CHAIN == EXPECTED_CHAIN
     assert module._PER_LANG_LIMIT == 10
     assert module._TOTAL_DOWNLOAD_BUDGET == 50
-    assert module._REFERENCE_DEADLINE_S == 30.0
+    assert module._REFERENCE_DEADLINE_S == 60.0
     test_embedded_mode_mapping()
     test_direct_embedded_feeds_common_gender_pipeline()
-    test_primary_chain_is_strict_and_deeper_than_three(module)
-    test_next_language_only_after_ten_primary_misses(module)
+    test_primary_chain_is_round_robin_and_deeper_than_three(module)
+    test_next_walks_the_given_order_faithfully(module)
     test_concurrent_fallback_pulls_are_serialized(module)
     test_all_miss_is_globally_bounded(module)
     test_active_deadline_excludes_idle_time(module)
