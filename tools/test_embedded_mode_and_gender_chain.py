@@ -208,16 +208,20 @@ def _candidate(lang, number):
 
 
 def test_primary_chain_is_round_robin_and_deeper_than_three(module):
-    """Chain order still decides who goes first; DEPTH now waits its turn.
+    """Round-robin WITHIN a quality tier; tier 1 exhausted before tier 2.
 
-    This used to pin the opposite -- all ten Hebrew candidates before the
-    first Arabic one. That order spent the search on one language: the
-    active-work deadline is dominated by downloads, so ten Hebrew misses could
-    exhaust it before Arabic, the oracle the prompt is actually built around,
-    was ever tried, and the job then translated with no oracle at all. Within
-    one language the candidates also fail together (same release lineage, same
-    timing), so depth bought little. Round-robin keeps Hebrew first and gives
-    every language a turn before any language gets a second.
+    This used to pin all ten Hebrew candidates before the first Arabic one.
+    That spent the search on one language: the active-work deadline is
+    dominated by downloads, so ten Hebrew misses could exhaust it before
+    Arabic -- the oracle the prompt is built around -- was tried at all, and
+    the job then translated with no oracle and defaulted to masculine.
+
+    A flat round-robin fixed that and broke something else: it takes whatever
+    aligns FIRST, so a weak language's opening candidate could beat a strong
+    language's third. Tiers keep both properties. Hebrew and Arabic alternate,
+    so Arabic is attempt 2; and every Hebrew and Arabic candidate is tried
+    before any other language, so no weaker oracle can take a job away from an
+    Arabic one that would have aligned.
     """
     candidates = (
         [_candidate("he", number) for number in range(1, 13)]
@@ -229,8 +233,9 @@ def test_primary_chain_is_round_robin_and_deeper_than_three(module):
     )
     assert plan is not None
     assert diag["cands"] == 12  # top ten Hebrew + Arabic + Hindi
+    # tier 1 alternates and is exhausted first; hi (tier 2) comes last.
     assert [lang for lang, _ in plan._ordered] == (
-        ["he", "ar", "hi"] + ["he"] * 9
+        ["he", "ar"] + ["he"] * 9 + ["hi"]
     )
 
     attempts = []
@@ -245,7 +250,7 @@ def test_primary_chain_is_round_robin_and_deeper_than_three(module):
     lang, mapping = plan.next()
     assert lang == "he" and mapping == {1: "reference"}
     assert attempts == (
-        [("he", 1), ("ar", 1), ("hi", 1)]
+        [("he", 1), ("ar", 1)]
         + [("he", number) for number in range(2, 10)]
     )
 
