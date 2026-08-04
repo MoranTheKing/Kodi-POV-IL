@@ -1,3 +1,37 @@
+v0.2.463
+- Masculine forms used where a woman is being addressed were the biggest
+  quality complaint, and two separate things caused them. The add-on could
+  end up translating with no gender information available to it at all, in
+  which case it fell back to masculine everywhere; and even when it had that
+  information it sometimes did not apply it. Both are fixed, and the finished
+  translation is now checked line by line before it is saved. On a full film
+  this took gender agreement to 100% -- no wrong lines at all, against 24 in
+  the same file before.
+- MoranSubs opened with an empty list and no explanation for anyone whose
+  Kodi subtitle languages did not name Hebrew. Opening a Hebrew subtitle
+  add-on IS the request for Hebrew, so the list is no longer withheld over a
+  setting. The automatic on-play translation still follows the setting, as it
+  must, but now records why it skipped instead of going silent. Nothing in
+  Kodi's own settings is changed on your behalf.
+- Speaker names stopped appearing inside the Hebrew ("- איאן: לא, לא."). A
+  name is removed only where the English line it came from really did start
+  with one, so a line that genuinely uses a colon is never touched. There
+  were 60 of them in one file a viewer sent in.
+- The stray "-" cues are gone. A sound-effect line behind a dialogue dash
+  lost its bracketed part and shipped the dash on its own -- 95 of those in
+  that same file, 14 cues that were nothing else at all.
+- Letters from another alphabet in the middle of a Hebrew word are now
+  repaired instead of deleted. The word itself was right; only some of its
+  letters were typed in the wrong script, and removing them left half a word
+  ("לעצמי" arrived as "לעצ"). They are spelled back into Hebrew now.
+- Vowel points that turned up here and there are removed. Hebrew subtitles
+  are written without them.
+- A line the AI refuses to translate is now passed to a different
+  translation engine before it is given up on and left in English.
+- Subtitles already saved on your device, and anything already shared to the
+  community pool, get the wrong-alphabet and vowel-point repairs as they are
+  read -- so they improve without being translated again.
+
 v0.2.462
 - Fresh installs came up with empty Movies, TV shows and Idan+ screens. The
   five FENtastic widget files those screens are built from were being skipped

@@ -247,6 +247,13 @@ def align_one(src_text, src_blocks, ar_text):
 _REF_CHAIN = ('he', 'ar', 'hi', 'es', 'ru', 'pt', 'pl', 'uk', 'fr', 'it',
               'cs', 'ro', 'el', 'bg', 'sr', 'hr', 'sk', 'ur', 'nl')
 
+# The chain split into quality tiers, which is what begin() actually walks.
+# Tier 1 is the two oracles this feature was built and validated on; tier 2 is
+# everything else, which is a useful hint but not in the same class. The
+# boundary is the thing to move if real data ever says another language earns
+# tier 1 -- not the round-robin, which is only about reaching them.
+_REF_TIERS = (('he', 'ar'), _REF_CHAIN[2:])
+
 # Codes/names a provider might report for each chain language (lowercase).
 # Providers emit a mix of ISO 639-1, 639-2/B, 639-2/T and English names; the
 # bridge normalizes most but not all, so we match generously here.
@@ -289,7 +296,21 @@ _ALIAS_TO_CHAIN = {alias: code
 # 10-times-every-language worst case and provider request storms.
 _PER_LANG_LIMIT = 10
 _TOTAL_DOWNLOAD_BUDGET = 50
-_REFERENCE_DEADLINE_S = 30.0
+# The chain is walked round-robin (see begin()), so a usable oracle is
+# reached early. The deadline is what decides how much DEPTH is left
+# afterwards -- how many candidates per language get a turn once every
+# language has had its first. At 30s it was one or two rounds, so the
+# fifth Hebrew subtitle, which may well be a different release that
+# aligns where the first four did not, was rarely reached at all.
+#
+# 60s buys full depth on the languages that are actually present
+# (~30 downloads) and costs nothing in the common case: next() returns
+# the moment something aligns, so a job whose first candidate works
+# still pays for one download. Only a job where NOTHING aligns spends
+# the ceiling, and it spends it inside a translation that already runs
+# for minutes behind a progress bar (a film is ~36 requests paced at 14
+# per minute), not in front of playback.
+_REFERENCE_DEADLINE_S = 60.0
 
 
 def _chain_lang_of(cand):
@@ -467,6 +488,161 @@ class ReferencePlan(object):
             return None, None
 
 
+# ---------------- gender VERIFICATION (after the translation) ---------------
+# The reference is a hint in a prompt, and a prompt is an instruction rather
+# than a guarantee. Measured on a full film with a perfectly aligned Arabic
+# oracle: 51 of 52 scorable lines came back with the right addressee gender,
+# and the one that did not had an unambiguous "\u0623\u0646\u062a\u0650" (feminine) sitting in
+# its own prompt. So the last few points are compliance, not knowledge, and
+# the way to close them is to CHECK the output rather than ask more loudly.
+#
+# ONE DIRECTION ONLY, deliberately. "\u05d0\u05ea\u05d4" can only be the masculine
+# second-person pronoun, so finding it where the reference says feminine is
+# proof of an error. The feminine "\u05d0\u05ea" is also Hebrew's definite-object
+# marker -- "\u05e8\u05d0\u05d9\u05ea\u05d9 \u05d0\u05ea \u05d3\u05df" is not addressing a woman -- so the mirror check
+# would flag correct lines, and there is no reliable way to tell the two apart
+# without parsing. That asymmetry costs nothing in practice: every one of the
+# 24 gender errors in the file a viewer reported was masculine-where-feminine,
+# which is exactly what an unhinted translation defaulting to masculine looks
+# like. The direction that can be checked safely is the direction that fails.
+_AR_FEM = tuple(re.compile(p) for p in (
+    u'\u0623\u0646\u062a\u0650', u'\u0644\u0643\u0650', u'\u0628\u0643\u0650', u'\u0639\u0644\u064a\u0643\u0650', u'\u0645\u0639\u0643\u0650', u'\u0625\u0644\u064a\u0643\u0650', u'\u0645\u0646\u0643\u0650',
+    u'\u0643\u0650\\s', u'\u0643\u0650$', u'\u062a\u0650\\s', u'\u062a\u0650$', u'\u064a\u0627 \u0633\u064a\u062f\u062a\u064a',
+))
+_AR_MASC = tuple(re.compile(p) for p in (
+    u'\u0623\u0646\u062a\u064e', u'\u0644\u0643\u064e', u'\u0628\u0643\u064e', u'\u0639\u0644\u064a\u0643\u064e', u'\u0645\u0639\u0643\u064e', u'\u0625\u0644\u064a\u0643\u064e', u'\u0645\u0646\u0643\u064e',
+    u'\u0643\u064e\\s', u'\u0643\u064e$', u'\u062a\u064e\\s', u'\u062a\u064e$',
+))
+# Hebrew reference: read the pronoun straight off it.
+_HE_REF_FEM = re.compile(u'(?<![\u05d0-\u05ea])\u05d0\u05ea(?![\u05d0-\u05ea])(?!\\s*\u05d4)')
+# The proclitics Hebrew glues straight onto a pronoun: ו (and), ש (that),
+# כש (when) and their combinations. Without them "ואתה", "שאתה" and
+# "כשאתה" -- ordinary, high-frequency Hebrew -- read as no pronoun at all,
+# which both hides real errors from the check and lets a "repair" that is
+# still masculine pass as fixed. The set is deliberately just these: allowing
+# ANY preceding letter would match the אתה inside ראתה ("she saw").
+_HE_MASC = re.compile(
+    u'(?<![\u05d0-\u05ea])(?:\u05d5|\u05e9|\u05db\u05e9|\u05d5\u05e9|\u05d5\u05db\u05e9)?\u05d0\u05ea\u05d4(?![\u05d0-\u05ea])')
+
+
+# The rest of the chain. Arabic and Hebrew are read above; these are the
+# languages whose ADDRESSEE marking can be read without parsing, because the
+# marker is a VERB ending tied to the second person -- there is no other thing
+# in the language it could be.
+#
+# Deliberately NOT here, and this is the whole design: es, it, pt, fr, ro and
+# el mark gender on ADJECTIVES, and an adjective ending is not distinguishable
+# from a feminine noun's ending without knowing which word is which ("eres una
+# estrella" ends in -a and says nothing about who is being addressed). nl marks
+# only referent gender, never the addressee. ur is written in Arabic script but
+# marks gender through Indic verb morphology, not the Arabic diacritics above,
+# so the patterns there do not transfer. For all of those this returns None and
+# the verification pass simply does not fire -- which is exactly today's
+# behaviour, and far better than rewriting a line that was already right.
+#
+# Every pattern below is validated in tools/test_gender_verification.py against
+# both genders and against a first/third-person sentence that must NOT match.
+def _rx(*pats):
+    return tuple(re.compile(p, re.I | re.U) for p in pats)
+
+
+_ADDRESSEE_MARKERS = {
+    # Slavic past tense: the second-person pronoun plus a gendered participle.
+    'ru': (_rx(r'(?<![\u0430-\u044f\u0451])\u0442\u044b\b[^.!?]{0,40}?\b\w+\u043b\u0430\b'),
+           _rx(r'(?<![\u0430-\u044f\u0451])\u0442\u044b\b[^.!?]{0,40}?\b\w+\u043b\b')),
+    'uk': (_rx(r'(?<![\u0430-\u044f\u0456\u0457])\u0442\u0438\b[^.!?]{0,40}?\b\w+\u043b\u0430\b'),
+           _rx(r'(?<![\u0430-\u044f\u0456\u0457])\u0442\u0438\b[^.!?]{0,40}?\b\w+(\u0432|\u0438\u0439)\b')),
+    'bg': (_rx(r'(?<![\u0430-\u044f])\u0442\u0438\b[^.!?]{0,40}?\b\w+(\u043b\u0430|\u043d\u0430)\b'),
+           _rx(r'(?<![\u0430-\u044f])\u0442\u0438\b[^.!?]{0,40}?\b\w+(\u0435\u043d|\u043b)\b')),
+    # Polish encodes person AND gender in the ending itself.
+    'pl': (_rx(r'\w+\u0142a\u015b\b'), _rx(r'\w+\u0142e\u015b\b')),
+    # Czech / Slovak / Serbian / Croatian: participle + the 2sg auxiliary.
+    # sr/hr take -ao/-io rather than a bare -o: ordinary words end in -o
+    # ('tamo'), so a bare -o matched alongside the feminine -la and every
+    # line came back ambiguous.
+    'cs': (_rx(r'\w+la\s+jsi\b'), _rx(r'\w+l\s+jsi\b')),
+    'sk': (_rx(r'\w+la\s+si\b'), _rx(r'\w+l\s+si\b')),
+    'sr': (_rx(r'\bti\s+si\b[^.!?]{0,30}?\b\w+la\b'),
+           _rx(r'\bti\s+si\b[^.!?]{0,30}?\b\w+(ao|io)\b')),
+    'hr': (_rx(r'\bti\s+si\b[^.!?]{0,30}?\b\w+la\b'),
+           _rx(r'\bti\s+si\b[^.!?]{0,30}?\b\w+(ao|io)\b')),
+    # Hindi: the second-person copula with a feminine/masculine participle.
+    'hi': (_rx(r'(\u0924\u0941\u092e|\u0906\u092a)[^\u0964?!]{0,30}?\u0940\s+(\u0939\u094b|\u0939\u0948\u0902)'),
+           _rx(r'(\u0924\u0941\u092e|\u0906\u092a)[^\u0964?!]{0,30}?\u0947\s+(\u0939\u094b|\u0939\u0948\u0902)')),
+}
+
+
+def reference_addressee_gender(ref_text, lang):
+    """'F', 'M', or None when the reference does not mark it unambiguously.
+
+    Only 'ar' and 'he' are read. They are the top two of the chain and cover
+    almost every job; for any other language this returns None, so the
+    verification pass simply does not fire rather than guessing from a
+    language whose marking has not been validated here.
+    """
+    if not ref_text:
+        return None
+    try:
+        if lang == 'he':
+            f = bool(_HE_REF_FEM.search(ref_text))
+            m = bool(_HE_MASC.search(ref_text))
+        elif lang == 'ar':
+            f = any(p.search(ref_text) for p in _AR_FEM)
+            m = any(p.search(ref_text) for p in _AR_MASC)
+        elif lang in _ADDRESSEE_MARKERS:
+            fem_pats, masc_pats = _ADDRESSEE_MARKERS[lang]
+            f = any(p.search(ref_text) for p in fem_pats)
+            m = any(p.search(ref_text) for p in masc_pats)
+        else:
+            return None
+        if f and not m:
+            return 'F'
+        if m and not f:
+            return 'M'
+        return None
+    except Exception:
+        return None
+
+
+def addresses_male(text):
+    """True when `text` contains the Hebrew masculine second-person pronoun.
+
+    Public because the repair pass has to PROVE a rewrite actually fixed the
+    error before it accepts it -- a replacement that still says the same thing
+    is not a repair, and swapping one wrong line for another wrong line would
+    spend a request to stand still.
+    """
+    try:
+        return bool(_HE_MASC.search(text or ''))
+    except Exception:
+        return False
+
+
+def wrong_gender_entries(blocks, ref_map, lang):
+    """Entry numbers whose Hebrew addresses a man where the reference says the
+    addressee is a woman. See the note above for why only this direction is
+    reported. Never raises."""
+    out = []
+    if not ref_map:
+        return out
+    try:
+        for block in blocks:
+            lines = block.split('\n')
+            if len(lines) < 3 or not lines[0].strip().isdigit():
+                continue
+            num = int(lines[0].strip())
+            ref = ref_map.get(num)
+            if not ref:
+                continue
+            if reference_addressee_gender(ref, lang) != 'F':
+                continue
+            if _HE_MASC.search('\n'.join(lines[2:])):
+                out.append(num)
+    except Exception as e:
+        _log('gender verification crashed: {0}'.format(e), level='WARNING')
+    return out
+
+
 def begin(info, src_text):
     """ENTRY POINT (lazy). When the feature is on, find gender-reference
     candidates for `info` and return a ReferencePlan that yields aligned maps in
@@ -501,7 +677,41 @@ def begin(info, src_text):
     # here is out-of-sync / unmatched for their release -- but as a GENDER
     # ORACLE it only needs to time-align to the SOURCE sub, which the scale+
     # offset estimator handles. It is the strongest oracle (it IS Hebrew).
-    ordered = [(lang, c) for lang in _REF_CHAIN for c in by_lang.get(lang, [])]
+    #
+    # ROUND-ROBIN WITHIN A TIER, tiers in order.
+    #
+    # Two different things have to be true at once, and each one alone gets
+    # the other wrong.
+    #
+    # 1. A STRONG oracle must win even from deep in its own list. Hebrew and
+    #    Arabic are not merely first in the chain, they are a different class:
+    #    Hebrew IS the target language, and Arabic marks addressee gender with
+    #    explicit diacritics that map almost one-to-one onto Hebrew (the block
+    #    built around it lifted gender accuracy from ~27% to ~90%+). The third
+    #    Arabic candidate is worth far more than the first Slovak one. A flat
+    #    round-robin does not know that: it takes whatever aligns first, so a
+    #    weak language's opening candidate beats a strong language's third.
+    #
+    # 2. A strong oracle must be REACHED. The old order walked one language at
+    #    a time, so ten Hebrew candidates came before the first Arabic one --
+    #    and since the deadline is spent on downloads, the chain could stop
+    #    before Arabic was tried at all, leaving the job with no oracle and a
+    #    translation that defaults to masculine.
+    #
+    # Tiers give both. Inside tier 1 the two strong languages alternate, so
+    # Arabic is attempt 2 rather than attempt 11; and tier 1 is exhausted
+    # completely before tier 2 is touched, so no weaker language can take a
+    # job away from an Arabic candidate that would have aligned. Within tier 2
+    # the languages are close enough in value that reaching ANY of them
+    # matters more than which, so they alternate too.
+    ordered = []
+    for tier in _REF_TIERS:
+        depth = max([len(by_lang.get(l, ())) for l in tier] or [0])
+        ordered.extend(
+            (lang, by_lang[lang][i])
+            for i in range(depth)
+            for lang in tier
+            if i < len(by_lang.get(lang, ())))
     if not ordered:
         _log('no gender-reference candidates in any chain language -> normal '
              'translation (fallback)')
