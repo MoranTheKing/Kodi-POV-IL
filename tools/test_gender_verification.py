@@ -98,9 +98,57 @@ check('Hebrew reference, masculine', ag.reference_addressee_gender(
     u'אתה טוב מאוד', 'he'), 'M')
 check('Hebrew object marker is NOT an addressee',
       ag.reference_addressee_gender(u'ראיתי את הספר', 'he'), None)
-ok('a language whose marking was not validated here returns None',
-   ag.reference_addressee_gender(u'tú eres', 'es') is None
-   and ag.reference_addressee_gender(u'ты хорошая', 'ru') is None)
+
+# Every other chain language whose ADDRESSEE marking is a verb ending. Each
+# is checked against BOTH genders and against a first/third-person sentence
+# that must not match -- a wrong 'F' here rewrites a line that was correct.
+for _lang, _text, _want in (
+        ('ru', u'ты была права', 'F'),
+        ('ru', u'ты был прав', 'M'),
+        ('ru', u'она сказала это', None),
+        ('ru', u'ты знаешь', None),
+        ('uk', u'ти була права', 'F'),
+        ('uk', u'ти був правий', 'M'),
+        ('uk', u'вона сказала', None),
+        ('bg', u'ти беше уморена', 'F'),
+        ('bg', u'ти беше уморен', 'M'),
+        ('bg', u'той каза', None),
+        ('pl', u'zrobiłaś to', 'F'),
+        ('pl', u'zrobiłeś to', 'M'),
+        ('pl', u'zrobiłem to', None),
+        ('cs', u'byla jsi tam', 'F'),
+        ('cs', u'byl jsi tam', 'M'),
+        ('cs', u'byl jsem tam', None),
+        ('sk', u'bola si tam', 'F'),
+        ('sk', u'bol si tam', 'M'),
+        ('sk', u'bol som tam', None),
+        ('sr', u'ti si bila tamo', 'F'),
+        ('sr', u'ti si bio tamo', 'M'),
+        ('sr', u'ti si rekla to', 'F'),
+        ('sr', u'ti si rekao to', 'M'),
+        ('sr', u'ona je bila tamo', None),
+        ('hr', u'ti si bila tamo', 'F'),
+        ('hr', u'ti si bio tamo', 'M'),
+        ('hi', u'तुम अच्छी हो', 'F'),
+        ('hi', u'तुम अच्छे हो', 'M'),
+        ('hi', u'मैं अच्छा हूँ', None),
+):
+    check('%s: %s' % (_lang, _text),
+          ag.reference_addressee_gender(_text, _lang), _want)
+
+# The languages left out on purpose. Adjective agreement is not separable from
+# a feminine noun's ending without parsing ("eres una estrella"), Dutch marks
+# only referent gender, and Urdu uses Indic morphology rather than the Arabic
+# diacritics -- so each returns None and the verification simply does not fire.
+for _lang, _text in (('es', u'estás cansada'), ('it', u'sei stanca'),
+                     ('pt', u'estás cansada'), ('fr', u'tu es fatiguée'),
+                     ('ro', u'ești obosită'), ('el', u'είσαι κουρασμένη'),
+                     ('nl', u'zij is moe'), ('ur', u'تم اچھی ہو')):
+    ok('%s is deliberately not verified' % _lang,
+       ag.reference_addressee_gender(_text, _lang) is None)
+
+ok('an unknown language code returns None',
+   ag.reference_addressee_gender(u'whatever', 'zz') is None)
 ok('empty / None never raise',
    ag.reference_addressee_gender('', 'ar') is None
    and ag.reference_addressee_gender(None, 'he') is None)
@@ -178,6 +226,127 @@ ok('a reply that is not Hebrew is refused',
    not accepts('You are freaking me out.', OLD))
 ok('a reply that changed the line count is refused',
    not accepts(u'את ממש\nמבהילה אותי.', OLD))
+
+# ---------------------------------------------------------------------------
+print('== the repair pass, run for real against a stubbed engine ==')
+
+# translate.py cannot be imported (it needs a live Kodi), so lift the two
+# functions out with ast and run them -- the real code, not a copy.
+import ast                                                      # noqa: E402
+import types                                                     # noqa: E402
+
+TSRC = open(os.path.join(ADDON, 'resources', 'lib', 'translate.py'),
+            encoding='utf-8').read()
+_tree = ast.parse(TSRC)
+_wanted_fns = ('_regender_blocks', '_regender_unguarded')
+_defs = [n for n in ast.walk(_tree)
+         if isinstance(n, ast.FunctionDef) and n.name in _wanted_fns]
+assert len(_defs) == 2, 'expected both repair functions in translate.py'
+
+_engine = types.SimpleNamespace(REQUEST_TIMEOUT=60, calls=[])
+_log = types.SimpleNamespace(log=lambda *a, **k: None)
+_ns = {'gemini': _engine, 'srt': None, 'kodi_utils': _log,
+       'arabic_gender': ag, 'api_key': 'k', 'model': 'm',
+       'max_output_tokens': 1024, 'top_p': 1.0, 'thinking_budget': None,
+       'thinking_level': None, 'gemini_timeout': None, '_rpm_interval': 0.0,
+       '_gemini_rate_gate': lambda _i: None}
+
+_sspec = importlib.util.spec_from_file_location(
+    'srt_for_gender', os.path.join(ADDON, 'resources', 'lib', 'srt.py'))
+_srt = importlib.util.module_from_spec(_sspec)
+_sspec.loader.exec_module(_srt)
+_ns['srt'] = _srt
+
+for _d in sorted(_defs, key=lambda n: n.name):
+    _d.col_offset = 0
+    exec(compile(ast.Module(body=[_d], type_ignores=[]), '<x>', 'exec'), _ns)
+regender = _ns['_regender_blocks']
+
+
+def reply_with(text):
+    _engine.calls = []
+
+    def generate(**kw):
+        _engine.calls.append(kw)
+        return text
+    _engine.generate = generate
+
+
+ONE = [u'1\n00:00:01,000 --> 00:00:02,000\nאתה ממש מבהיל אותי.']
+
+reply_with(u'1\n00:00:01,000 --> 00:00:02,000\nאת ממש מבהילה אותי.')
+check('a correct rewrite is spliced in', regender(ONE, [1]),
+      [u'1\n00:00:01,000 --> 00:00:02,000\nאת ממש מבהילה אותי.'])
+check('exactly one request, however many entries', len(_engine.calls), 1)
+
+# BLOCKER 1: a duplicate index number must not let one cue overwrite another.
+DUP = [u'1\n00:00:01,000 --> 00:00:02,000\nאתה יפה מאוד.',
+       u'5\n00:00:10,000 --> 00:00:11,000\nAAAA first five.',
+       u'3\n00:00:05,000 --> 00:00:06,000\nמשהו אחר.',
+       u'5\n00:00:20,000 --> 00:00:21,000\nBBBB second five.']
+reply_with(u'1\n00:00:01,000 --> 00:00:02,000\nאת יפה מאוד.')
+got = regender(DUP, [1])
+check('the flagged entry is still repaired', got[0],
+      u'1\n00:00:01,000 --> 00:00:02,000\nאת יפה מאוד.')
+check('the duplicated index is left completely alone',
+      [got[1], got[3]], [DUP[1], DUP[3]])
+check('no cue is lost or duplicated', len(got), len(DUP))
+# ...and a repair asked for ON a duplicated index is refused outright
+reply_with(u'5\n00:00:20,000 --> 00:00:21,000\nשונה לגמרי.')
+check('a duplicated index is not eligible for repair',
+      regender(DUP, [5]), DUP)
+
+# BLOCKER 2: a reply in another script, or with no letters, must be refused.
+for label, bad in (
+        ('Arabic', u'1\n00:00:01,000 --> 00:00:02,000\nأنتِ تخيفينني حقاً.'),
+        ('punctuation only', u'1\n00:00:01,000 --> 00:00:02,000\n...'),
+        ('English', '1\n00:00:01,000 --> 00:00:02,000\nYou scare me.'),
+        ('empty text', u'1\n00:00:01,000 --> 00:00:02,000\n'),
+        ('nothing at all', ''),
+):
+    reply_with(bad)
+    check('a reply that is %s is refused' % label, regender(ONE, [1]), ONE)
+
+# BLOCKER 3: a "repair" that still addresses a man, via a glued prefix.
+reply_with(u'1\n00:00:01,000 --> 00:00:02,000\nואתה ממש מבהיל אותי.')
+check('a still-masculine rewrite behind a glued ו is refused',
+      regender(ONE, [1]), ONE)
+reply_with(u'1\n00:00:01,000 --> 00:00:02,000\nכשאתה מבהיל אותי.')
+check('...and behind a glued כש', regender(ONE, [1]), ONE)
+
+# the rest of the acceptance rules
+reply_with(u'9\n00:00:01,000 --> 00:00:02,000\nאת ממש מבהילה אותי.')
+check('a reply about an entry we did not ask about is ignored',
+      regender(ONE, [1]), ONE)
+reply_with(u'1\n00:00:01,000 --> 00:00:02,000\nאת ממש\nמבהילה אותי.')
+check('a reply that changed the line count is refused',
+      regender(ONE, [1]), ONE)
+reply_with(u'1\n99:99:99,999 --> 88:88:88,888\nאת ממש מבהילה אותי.')
+check('a reply that moved the cue keeps the SOURCE timecode',
+      regender(ONE, [1])[0].split('\n')[1], '00:00:01,000 --> 00:00:02,000')
+reply_with(u'1\n00:00:01,000 --> 00:00:02,000\nאת ממש מבהילה אותי.\n\n'
+           u'1\n00:00:01,000 --> 00:00:02,000\nאת נורא מבהילה אותי.')
+check('a repeated entry in the reply takes the first, not the last',
+      regender(ONE, [1])[0].split('\n')[2], u'את ממש מבהילה אותי.')
+
+
+def _boom(**kw):
+    raise RuntimeError('network down')
+
+
+_engine.generate = _boom
+check('an engine that raises leaves every line alone', regender(ONE, [1]), ONE)
+reply_with(u'1\n00:00:01,000 --> 00:00:02,000\nאת ממש מבהילה אותי.')
+ok('hostile input does not raise into the caller',
+   regender(None, [1]) is None and regender([], [1]) == []
+   and regender(['x', '', '1\n'], [1]) == ['x', '', '1\n'])
+reply_with(u'1\n00:00:01,000 --> 00:00:02,000\nאת ממש מבהילה אותי.')
+check('nothing flagged -> no request at all', regender(ONE, []), ONE)
+check('...and no request was made', len(_engine.calls), 0)
+reply_with(u'1\n00:00:01,000 --> 00:00:02,000\nאת ממש מבהילה אותי.')
+check('a malformed block costs no request either',
+      regender(['1\n'], [1]), ['1\n'])
+check('...confirmed', len(_engine.calls), 0)
 
 print()
 if FAILED:

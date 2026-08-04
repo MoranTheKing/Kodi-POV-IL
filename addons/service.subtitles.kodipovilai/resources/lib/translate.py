@@ -4149,6 +4149,21 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         return None
 
     def _regender_blocks(blocks, wanted):
+        """Guarded entry point -- see _regender_unguarded for what it does.
+
+        The guard is here rather than only at the call site because this
+        function's contract is that it never raises, and a contract that
+        depends on every caller remembering to wrap it is not a contract. A
+        crash means exactly one thing: no repair, keep every line as it is.
+        """
+        try:
+            return _regender_unguarded(blocks, wanted)
+        except Exception as e:
+            kodi_utils.log('gender repair crashed ({0}) -- keeping every line '
+                           'as it is'.format(e), level='WARNING')
+            return blocks
+
+    def _regender_unguarded(blocks, wanted):
         """Ask once for the entries in `wanted` to be rewritten addressing a
         woman, and splice back only the ones that came back actually fixed.
 
@@ -4159,13 +4174,39 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         Index and timecode are restored from the source block, so this can
         never move a cue. Never raises; on any failure the blocks are returned
         untouched, which is simply today's behaviour.
+
+        Everything here is keyed by POSITION, not by entry number. An index
+        that appears twice -- which nothing upstream forbids: parse_blocks
+        neither dedupes nor renumbers, and a hand-edited source or a reply
+        that repeats an index both survive intact -- would otherwise collapse
+        two blocks into one in a number-keyed dict, and the rebuild would then
+        overwrite BOTH occurrences with whichever survived. That destroys an
+        unrelated cue's text and timecode while leaving the entry count
+        unchanged, so a count check would not notice. A repeated index is
+        simply not eligible for repair.
         """
-        by_num = {}
-        for b in blocks:
-            head = b.split('\n', 1)[0].strip()
-            if head.isdigit():
-                by_num[int(head)] = b
-        ask = [by_num[n] for n in wanted if n in by_num]
+        pos_of = {}
+        dup = set()
+        for i, b in enumerate(blocks):
+            lines = b.split('\n')
+            # index + timecode + at least one line of text. A malformed block
+            # can never be repaired -- the line-count check below would reject
+            # anything that came back for it -- so letting it through would
+            # only spend a request to achieve nothing.
+            if len(lines) < 3 or not lines[0].strip().isdigit():
+                continue
+            n = int(lines[0].strip())
+            if n in pos_of:
+                dup.add(n)
+            else:
+                pos_of[n] = i
+        for n in dup:
+            pos_of.pop(n, None)
+        if dup:
+            kodi_utils.log(
+                'gender repair: {0} entry number(s) appear more than once -- '
+                'not eligible'.format(len(dup)), level='WARNING')
+        ask = [blocks[pos_of[n]] for n in wanted if n in pos_of]
         if not ask:
             return blocks
         prompt_text = (
@@ -4193,37 +4234,46 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             kodi_utils.log('gender repair request failed ({0}) -- keeping the '
                            'lines as they are'.format(e), level='WARNING')
             return blocks
-        fixed = 0
+        out = list(blocks)
+        done = set()
         want = set(wanted)
         for nb in srt.parse_blocks(reply or ''):
             head = nb.split('\n', 1)[0].strip()
             if not head.isdigit():
                 continue
             num = int(head)
-            if num not in want or num not in by_num:
+            # `done` makes a reply that repeats an entry a no-op the second
+            # time, instead of "last one wins" with a count that can exceed
+            # what was asked for.
+            if num not in want or num not in pos_of or num in done:
                 continue
             new_lines = [l for l in nb.split('\n')[2:] if l.strip()]
             body = '\n'.join(new_lines).strip()
             if not body or arabic_gender.addresses_male(body):
                 continue          # ignored the instruction -> keep the original
+            # Explicit Hebrew characters, NOT looks_hebrew alone. looks_hebrew
+            # counts only Hebrew and Latin as alphabetic, so a reply in Arabic
+            # script -- or one that is nothing but punctuation -- has zero
+            # "alphabetic" characters and falls into its deliberate "too little
+            # text to judge, do not block" branch. That branch is right for a
+            # whole-document quality gate and wrong here: it would let a full
+            # Hebrew sentence be replaced by Arabic, or by "...".
+            if not any(u'֐' <= c <= u'׿' for c in body):
+                continue
             if not srt.looks_hebrew(body, min_alpha=1):
                 continue
-            src_lines = by_num[num].split('\n')
+            src_lines = blocks[pos_of[num]].split('\n')
             old_lines = [l for l in src_lines[2:] if l.strip()]
             if len(new_lines) != len(old_lines):
                 continue          # a gender rewrite does not change the shape
             # The index and timecode are taken from the SOURCE block, never
             # from the reply -- a rewrite may not move a cue, and this is one
             # pair, so there is no positional pairing to verify.
-            by_num[num] = '\n'.join(src_lines[:2] + new_lines)
-            fixed += 1
+            out[pos_of[num]] = '\n'.join(src_lines[:2] + new_lines)
+            done.add(num)
         kodi_utils.log(
             'gender repair: {0}/{1} entr(ies) rewritten for a female '
-            'addressee'.format(fixed, len(ask)), level='INFO')
-        out = []
-        for b in blocks:
-            head = b.split('\n', 1)[0].strip()
-            out.append(by_num[int(head)] if head.isdigit() else b)
+            'addressee'.format(len(done), len(ask)), level='INFO')
         return out
 
     # Stitch in original order.
