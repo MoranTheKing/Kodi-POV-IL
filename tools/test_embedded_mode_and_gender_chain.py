@@ -330,9 +330,15 @@ def test_all_miss_is_globally_bounded(module):
 
 
 def test_active_deadline_excludes_idle_time(module):
+    # Derived from the constant rather than hardcoded, so raising the deadline
+    # (30s -> 60s, to leave room for depth once round-robin has covered the
+    # languages) does not silently invalidate what this is checking: that only
+    # ACTIVE download/align time counts, and that the ceiling stops the chain.
+    per_attempt = 11.0
+    expected = int(module._REFERENCE_DEADLINE_S // per_attempt) + 1
     ordered = [
         ("he", _candidate("he", number))
-        for number in range(1, 11)
+        for number in range(1, expected + 5)
     ]
     plan = module.ReferencePlan("src", ["block"], ordered, len(ordered))
     attempts = []
@@ -340,7 +346,7 @@ def test_active_deadline_excludes_idle_time(module):
 
     def download(cand):
         attempts.append(cand)
-        now[0] += 11.0
+        now[0] += per_attempt
         return cand
 
     original_monotonic = module.time.monotonic
@@ -351,8 +357,10 @@ def test_active_deadline_excludes_idle_time(module):
         assert plan.next() == (None, None)
     finally:
         module.time.monotonic = original_monotonic
-    assert len(attempts) == 3
-    assert plan._active_elapsed == 33.0
+    assert len(attempts) == expected
+    assert plan._active_elapsed == expected * per_attempt
+    # ...and it really did stop on the deadline, not on running out of input.
+    assert len(attempts) < len(ordered)
 
 
 def test_long_gemini_idle_does_not_expire_lazy_fallback(module):
@@ -380,7 +388,7 @@ def main():
     assert module._REF_CHAIN == EXPECTED_CHAIN
     assert module._PER_LANG_LIMIT == 10
     assert module._TOTAL_DOWNLOAD_BUDGET == 50
-    assert module._REFERENCE_DEADLINE_S == 30.0
+    assert module._REFERENCE_DEADLINE_S == 60.0
     test_embedded_mode_mapping()
     test_direct_embedded_feeds_common_gender_pipeline()
     test_primary_chain_is_round_robin_and_deeper_than_three(module)
