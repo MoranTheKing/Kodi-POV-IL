@@ -247,6 +247,13 @@ def align_one(src_text, src_blocks, ar_text):
 _REF_CHAIN = ('he', 'ar', 'hi', 'es', 'ru', 'pt', 'pl', 'uk', 'fr', 'it',
               'cs', 'ro', 'el', 'bg', 'sr', 'hr', 'sk', 'ur', 'nl')
 
+# The chain split into quality tiers, which is what begin() actually walks.
+# Tier 1 is the two oracles this feature was built and validated on; tier 2 is
+# everything else, which is a useful hint but not in the same class. The
+# boundary is the thing to move if real data ever says another language earns
+# tier 1 -- not the round-robin, which is only about reaching them.
+_REF_TIERS = (('he', 'ar'), _REF_CHAIN[2:])
+
 # Codes/names a provider might report for each chain language (lowercase).
 # Providers emit a mix of ISO 639-1, 639-2/B, 639-2/T and English names; the
 # bridge normalizes most but not all, so we match generously here.
@@ -671,31 +678,40 @@ def begin(info, src_text):
     # ORACLE it only needs to time-align to the SOURCE sub, which the scale+
     # offset estimator handles. It is the strongest oracle (it IS Hebrew).
     #
-    # ROUND-ROBIN, not language-by-language. The chain order still decides who
-    # goes first -- round 0 is the best Hebrew candidate, then the best Arabic,
-    # then the best Hindi -- but the SECOND Hebrew candidate now waits until
-    # every language has had its first.
+    # ROUND-ROBIN WITHIN A TIER, tiers in order.
     #
-    # Depth-first was the wrong shape for what actually limits this search.
-    # Alignment is cheap (measured at ~0.25s on a 1,957-cue film); the budget
-    # is spent almost entirely on DOWNLOADS, and _PER_LANG_LIMIT is 10. So ten
-    # Hebrew candidates could consume the whole 30s deadline and the chain
-    # would stop before Arabic -- the gold-standard oracle, and the one whose
-    # explicit gender diacritics the prompt is actually built around -- was
-    # ever tried. That failure is silent: the job simply translates with no
-    # oracle, and an unhinted translation defaults to masculine.
+    # Two different things have to be true at once, and each one alone gets
+    # the other wrong.
     #
-    # It is also the wrong shape statistically. Candidates within ONE language
-    # fail together: they are typically the same release lineage with the same
-    # timing, so if the first Hebrew sub will not align, the second usually
-    # will not either. A different language is a genuinely independent draw.
-    # Round-robin therefore reaches a usable oracle no later than depth-first
-    # in every case, and much sooner in the common one.
-    _depth = max([len(v) for v in by_lang.values()] or [0])
-    ordered = [(lang, by_lang[lang][i])
-               for i in range(_depth)
-               for lang in _REF_CHAIN
-               if i < len(by_lang.get(lang, ()))]
+    # 1. A STRONG oracle must win even from deep in its own list. Hebrew and
+    #    Arabic are not merely first in the chain, they are a different class:
+    #    Hebrew IS the target language, and Arabic marks addressee gender with
+    #    explicit diacritics that map almost one-to-one onto Hebrew (the block
+    #    built around it lifted gender accuracy from ~27% to ~90%+). The third
+    #    Arabic candidate is worth far more than the first Slovak one. A flat
+    #    round-robin does not know that: it takes whatever aligns first, so a
+    #    weak language's opening candidate beats a strong language's third.
+    #
+    # 2. A strong oracle must be REACHED. The old order walked one language at
+    #    a time, so ten Hebrew candidates came before the first Arabic one --
+    #    and since the deadline is spent on downloads, the chain could stop
+    #    before Arabic was tried at all, leaving the job with no oracle and a
+    #    translation that defaults to masculine.
+    #
+    # Tiers give both. Inside tier 1 the two strong languages alternate, so
+    # Arabic is attempt 2 rather than attempt 11; and tier 1 is exhausted
+    # completely before tier 2 is touched, so no weaker language can take a
+    # job away from an Arabic candidate that would have aligned. Within tier 2
+    # the languages are close enough in value that reaching ANY of them
+    # matters more than which, so they alternate too.
+    ordered = []
+    for tier in _REF_TIERS:
+        depth = max([len(by_lang.get(l, ())) for l in tier] or [0])
+        ordered.extend(
+            (lang, by_lang[lang][i])
+            for i in range(depth)
+            for lang in tier
+            if i < len(by_lang.get(lang, ())))
     if not ordered:
         _log('no gender-reference candidates in any chain language -> normal '
              'translation (fallback)')
