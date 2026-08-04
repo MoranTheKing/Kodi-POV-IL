@@ -60,6 +60,33 @@ def _chunk_srt(text, limit=3000):
     return chunks
 
 
+def translate_lines(lines, src_lang='auto'):
+    """Translate plain text lines (no SRT scaffolding) to Hebrew.
+
+    One request per line, deliberately: the caller reassembles the cue by
+    position, and batching would let a merged or dropped segment shift every
+    line after it onto the wrong timecode. Entries reaching this path are
+    single cues -- one to three short lines -- so the cost is bounded.
+
+    Returns a list the same length as `lines`, or None if ANY line fails. A
+    partial result would put two languages inside one cue, which is worse than
+    the English the caller already has in hand.
+    """
+    try:
+        out = []
+        for line in lines:
+            if not line.strip():
+                out.append(line)
+                continue
+            heb = _translate_chunk(line, src_lang)
+            if not heb or not heb.strip():
+                return None
+            out.append(heb.strip())
+        return out or None
+    except Exception:
+        return None
+
+
 def translate_srt(text, src_lang='auto'):
     """Translate an SRT to Hebrew via Google. Returns the Hebrew SRT text, or
     None on any failure (the caller then keeps the source / aborts)."""
