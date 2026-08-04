@@ -43,15 +43,18 @@ def ok(name, cond):
 
 def order(by_lang):
     """The ordering begin() builds, extracted so it can be checked directly."""
-    depth = max([len(v) for v in by_lang.values()] or [0])
-    return [(lang, by_lang[lang][i])
-            for i in range(depth)
-            for lang in ag._REF_CHAIN
-            if i < len(by_lang.get(lang, ()))]
+    out = []
+    for tier in ag._REF_TIERS:
+        depth = max([len(by_lang.get(l, ())) for l in tier] or [0])
+        out.extend((lang, by_lang[lang][i])
+                   for i in range(depth)
+                   for lang in tier
+                   if i < len(by_lang.get(lang, ())))
+    return out
 
 
 # ---------------------------------------------------------------------------
-print('== candidate order: every language gets a turn before any gets two ==')
+print("== candidate order: strong oracles first, and reached early ==")
 
 FULL = {'he': ['he%d' % i for i in range(1, 11)],
         'ar': ['ar%d' % i for i in range(1, 11)],
@@ -61,10 +64,25 @@ o = order(FULL)
 check('the best Hebrew candidate is still first', o[0], ('he', 'he1'))
 check('Arabic is reached on the SECOND attempt, not the eleventh',
       next(i for i, (l, _c) in enumerate(o) if l == 'ar') + 1, 2)
-check('round 0 is the best of each language, in chain order',
-      [c for _l, c in o[:4]], ['he1', 'ar1', 'es1', 'ru1'])
-check('round 1 follows, same order', [c for _l, c in o[4:7]],
-      ['he2', 'ar2', 'es2'])
+check('the two strong oracles alternate', [c for _l, c in o[:6]],
+      ['he1', 'ar1', 'he2', 'ar2', 'he3', 'ar3'])
+check('tier 1 is exhausted before tier 2 is touched',
+      [l for l, _c in o[:20]], ['he', 'ar'] * 10)
+check('...and only then the rest, alternating', [c for _l, c in o[20:23]],
+      ['es1', 'ru1', 'es2'])
+
+# The property the tiers exist for: a STRONG oracle deep in its own list must
+# beat a WEAK oracle's first candidate. Under a flat round-robin the Slovak
+# candidate aligned at attempt 4 and won, while the third Arabic -- a far
+# better gender oracle -- sat unreached at attempt 9.
+SCENARIO = {'he': ['he%d' % i for i in range(1, 11)],
+            'ar': ['ar%d' % i for i in range(1, 11)],
+            'es': ['es1', 'es2'], 'sk': ['sk1']}
+_seq = [c for _l, c in order(SCENARIO)]
+check('the third Arabic beats the first Slovak',
+      next(c for c in _seq if c in ('ar3', 'sk1')), 'ar3')
+ok('every Arabic candidate is tried before any tier-2 language',
+   _seq.index('ar10') < _seq.index('sk1'))
 # Nothing may be lost or duplicated by the reordering -- it is a permutation.
 flat = [(l, c) for l in ag._REF_CHAIN for c in FULL.get(l, [])]
 check('same candidates, nothing dropped or repeated',
