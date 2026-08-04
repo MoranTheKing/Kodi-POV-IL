@@ -933,11 +933,85 @@ def normalize_staged_text(addon_dst: Path) -> None:
             path.write_bytes(canonical)
 
 
+_KEY_BLOCK_RE = re.compile(
+    r"(__POOL_KEY_BEGIN__).*?(__POOL_KEY_END__)", re.S
+)
+
+
+def _pool_py_outside_key_block(text: str) -> str:
+    """`text` with the credential block emptied -- i.e. pool.py's LOGIC alone.
+
+    Two pool.py files that agree here differ only in the provisioned key, which
+    is exactly the condition HANDOFF.md's hard rule attaches to inheriting one.
+    """
+    return _KEY_BLOCK_RE.sub(r"\1\2", text.replace("\r\n", "\n"))
+
+
+def _key_block_is_provisioned(text: str) -> bool:
+    m = _KEY_BLOCK_RE.search(text)
+    if not m:
+        return False
+    body = m.group(0)
+    return not ("return ''" in body and "b64decode" not in body)
+
+
+def inherit_pool_credential(addon_dst: Path, previous_zip: Path) -> bool:
+    """Take pool.py verbatim from a previously shipped, known-good zip.
+
+    HANDOFF.md's hard rule: "When pool.py logic did not change, inherit it
+    byte-for-byte from the previous good zip. When its logic did change, use
+    the credential-aware packaging flow." This is the first half, and it means
+    a release whose diff does not touch pool.py needs neither the secret nor
+    the maintainer's local packaging helper -- so it can be cut anywhere,
+    instead of the alternative that keeps presenting itself under time
+    pressure, which is shipping the placeholder and silently breaking the
+    community pool for everyone who takes the update (that is what happened in
+    0.2.438 / quickfix 0.1.477).
+
+    "Did not change" is decided mechanically, not by assertion: the staged
+    pool.py and the previous zip's must be byte-identical everywhere OUTSIDE
+    the credential block. Edit one line of pool.py's logic and this refuses,
+    which is the case the credential-aware flow exists for. Returns False when
+    no usable previous zip was given, so the caller can fall through to it.
+    """
+    if not previous_zip or not previous_zip.is_file():
+        return False
+    pool_py = addon_dst / "resources" / "lib" / "pool.py"
+    staged = pool_py.read_text(encoding="utf-8")
+    member = f"{ADDON_ID}/resources/lib/pool.py"
+    with zipfile.ZipFile(previous_zip) as zf:
+        if member not in zf.namelist():
+            raise RuntimeError(
+                f"{previous_zip.name} has no {member} to inherit"
+            )
+        shipped_bytes = zf.read(member)
+    shipped = shipped_bytes.decode("utf-8")
+    if not _key_block_is_provisioned(shipped):
+        raise RuntimeError(
+            f"{previous_zip.name} carries the credential PLACEHOLDER -- it is "
+            "not a good zip to inherit from"
+        )
+    if _pool_py_outside_key_block(staged) != _pool_py_outside_key_block(shipped):
+        raise RuntimeError(
+            "pool.py's logic changed since " + previous_zip.name + " -- it "
+            "cannot be inherited. Rebuild with $POOL_SECRET and the packaging "
+            "helper, which is the flow that exists for exactly this case."
+        )
+    pool_py.write_bytes(shipped_bytes)
+    print(f"  pool credential inherited from {previous_zip.name} "
+          "(pool.py logic unchanged)")
+    return True
+
+
 def inject_pool_secret(addon_dst: Path) -> None:
     """Set the build-time pool credential in the shipped pool.py from the
     $POOL_SECRET env var, via the local packaging helper. A distributable
     package without this credential cannot use the community pool, so every
-    missing/placeholder case is a hard build failure."""
+    missing/placeholder case is a hard build failure.
+
+    When $POOL_SECRET is absent, $POOL_INHERIT_FROM may name a previously
+    shipped zip to take pool.py from instead -- allowed only when pool.py's
+    logic is unchanged. See inherit_pool_credential."""
     secret = os.environ.get("POOL_SECRET", "").strip()
     pool_py = addon_dst / "resources" / "lib" / "pool.py"
     if not pool_py.is_file():
@@ -946,9 +1020,14 @@ def inject_pool_secret(addon_dst: Path) -> None:
     if "__POOL_KEY_BEGIN__" not in txt:
         raise RuntimeError("pool.py is missing the credential injection markers")
     if not secret:
+        inherit = os.environ.get("POOL_INHERIT_FROM", "").strip()
+        if inherit and inherit_pool_credential(addon_dst, Path(inherit)):
+            return
         raise RuntimeError(
             "$POOL_SECRET not set -- refusing to build a package with the "
-            "community-pool credential placeholder"
+            "community-pool credential placeholder. If pool.py's logic is "
+            "unchanged, set $POOL_INHERIT_FROM to the previous shipped zip "
+            "instead."
         )
     import sys as _sys
     work = str(ROOT / "work")
