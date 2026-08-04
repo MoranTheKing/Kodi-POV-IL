@@ -207,7 +207,18 @@ def _candidate(lang, number):
     }
 
 
-def test_primary_chain_is_strict_and_deeper_than_three(module):
+def test_primary_chain_is_round_robin_and_deeper_than_three(module):
+    """Chain order still decides who goes first; DEPTH now waits its turn.
+
+    This used to pin the opposite -- all ten Hebrew candidates before the
+    first Arabic one. That order spent the search on one language: the
+    active-work deadline is dominated by downloads, so ten Hebrew misses could
+    exhaust it before Arabic, the oracle the prompt is actually built around,
+    was ever tried, and the job then translated with no oracle at all. Within
+    one language the candidates also fail together (same release lineage, same
+    timing), so depth bought little. Round-robin keeps Hebrew first and gives
+    every language a turn before any language gets a second.
+    """
     candidates = (
         [_candidate("he", number) for number in range(1, 13)]
         + [_candidate("ar", 1), _candidate("hi", 1)]
@@ -219,7 +230,7 @@ def test_primary_chain_is_strict_and_deeper_than_three(module):
     assert plan is not None
     assert diag["cands"] == 12  # top ten Hebrew + Arabic + Hindi
     assert [lang for lang, _ in plan._ordered] == (
-        ["he"] * 10 + ["ar", "hi"]
+        ["he", "ar", "hi"] + ["he"] * 9
     )
 
     attempts = []
@@ -233,10 +244,17 @@ def test_primary_chain_is_strict_and_deeper_than_three(module):
     )
     lang, mapping = plan.next()
     assert lang == "he" and mapping == {1: "reference"}
-    assert attempts == [("he", number) for number in range(1, 10)]
+    assert attempts == (
+        [("he", 1), ("ar", 1), ("hi", 1)]
+        + [("he", number) for number in range(2, 10)]
+    )
 
 
-def test_next_language_only_after_ten_primary_misses(module):
+def test_next_walks_the_given_order_faithfully(module):
+    # Constructs `ordered` by hand, so this pins ReferencePlan.next()'s
+    # traversal rather than begin()'s ordering (which is round-robin now, see
+    # above): whatever order it is handed, it tries every candidate in it,
+    # in that order, until one aligns.
     ordered = (
         [("he", _candidate("he", number)) for number in range(1, 11)]
         + [("ar", _candidate("ar", 1))]
@@ -365,8 +383,8 @@ def main():
     assert module._REFERENCE_DEADLINE_S == 30.0
     test_embedded_mode_mapping()
     test_direct_embedded_feeds_common_gender_pipeline()
-    test_primary_chain_is_strict_and_deeper_than_three(module)
-    test_next_language_only_after_ten_primary_misses(module)
+    test_primary_chain_is_round_robin_and_deeper_than_three(module)
+    test_next_walks_the_given_order_faithfully(module)
     test_concurrent_fallback_pulls_are_serialized(module)
     test_all_miss_is_globally_bounded(module)
     test_active_deadline_excludes_idle_time(module)

@@ -467,6 +467,103 @@ class ReferencePlan(object):
             return None, None
 
 
+# ---------------- gender VERIFICATION (after the translation) ---------------
+# The reference is a hint in a prompt, and a prompt is an instruction rather
+# than a guarantee. Measured on a full film with a perfectly aligned Arabic
+# oracle: 51 of 52 scorable lines came back with the right addressee gender,
+# and the one that did not had an unambiguous "\u0623\u0646\u062a\u0650" (feminine) sitting in
+# its own prompt. So the last few points are compliance, not knowledge, and
+# the way to close them is to CHECK the output rather than ask more loudly.
+#
+# ONE DIRECTION ONLY, deliberately. "\u05d0\u05ea\u05d4" can only be the masculine
+# second-person pronoun, so finding it where the reference says feminine is
+# proof of an error. The feminine "\u05d0\u05ea" is also Hebrew's definite-object
+# marker -- "\u05e8\u05d0\u05d9\u05ea\u05d9 \u05d0\u05ea \u05d3\u05df" is not addressing a woman -- so the mirror check
+# would flag correct lines, and there is no reliable way to tell the two apart
+# without parsing. That asymmetry costs nothing in practice: every one of the
+# 24 gender errors in the file a viewer reported was masculine-where-feminine,
+# which is exactly what an unhinted translation defaulting to masculine looks
+# like. The direction that can be checked safely is the direction that fails.
+_AR_FEM = tuple(re.compile(p) for p in (
+    u'\u0623\u0646\u062a\u0650', u'\u0644\u0643\u0650', u'\u0628\u0643\u0650', u'\u0639\u0644\u064a\u0643\u0650', u'\u0645\u0639\u0643\u0650', u'\u0625\u0644\u064a\u0643\u0650', u'\u0645\u0646\u0643\u0650',
+    u'\u0643\u0650\\s', u'\u0643\u0650$', u'\u062a\u0650\\s', u'\u062a\u0650$', u'\u064a\u0627 \u0633\u064a\u062f\u062a\u064a',
+))
+_AR_MASC = tuple(re.compile(p) for p in (
+    u'\u0623\u0646\u062a\u064e', u'\u0644\u0643\u064e', u'\u0628\u0643\u064e', u'\u0639\u0644\u064a\u0643\u064e', u'\u0645\u0639\u0643\u064e', u'\u0625\u0644\u064a\u0643\u064e', u'\u0645\u0646\u0643\u064e',
+    u'\u0643\u064e\\s', u'\u0643\u064e$', u'\u062a\u064e\\s', u'\u062a\u064e$',
+))
+# Hebrew reference: read the pronoun straight off it.
+_HE_REF_FEM = re.compile(u'(?<![\u05d0-\u05ea])\u05d0\u05ea(?![\u05d0-\u05ea])(?!\\s*\u05d4)')
+_HE_MASC = re.compile(u'(?<![\u05d0-\u05ea])\u05d0\u05ea\u05d4(?![\u05d0-\u05ea])')
+
+
+def reference_addressee_gender(ref_text, lang):
+    """'F', 'M', or None when the reference does not mark it unambiguously.
+
+    Only 'ar' and 'he' are read. They are the top two of the chain and cover
+    almost every job; for any other language this returns None, so the
+    verification pass simply does not fire rather than guessing from a
+    language whose marking has not been validated here.
+    """
+    if not ref_text:
+        return None
+    try:
+        if lang == 'he':
+            f = bool(_HE_REF_FEM.search(ref_text))
+            m = bool(_HE_MASC.search(ref_text))
+        elif lang == 'ar':
+            f = any(p.search(ref_text) for p in _AR_FEM)
+            m = any(p.search(ref_text) for p in _AR_MASC)
+        else:
+            return None
+        if f and not m:
+            return 'F'
+        if m and not f:
+            return 'M'
+        return None
+    except Exception:
+        return None
+
+
+def addresses_male(text):
+    """True when `text` contains the Hebrew masculine second-person pronoun.
+
+    Public because the repair pass has to PROVE a rewrite actually fixed the
+    error before it accepts it -- a replacement that still says the same thing
+    is not a repair, and swapping one wrong line for another wrong line would
+    spend a request to stand still.
+    """
+    try:
+        return bool(_HE_MASC.search(text or ''))
+    except Exception:
+        return False
+
+
+def wrong_gender_entries(blocks, ref_map, lang):
+    """Entry numbers whose Hebrew addresses a man where the reference says the
+    addressee is a woman. See the note above for why only this direction is
+    reported. Never raises."""
+    out = []
+    if not ref_map:
+        return out
+    try:
+        for block in blocks:
+            lines = block.split('\n')
+            if len(lines) < 3 or not lines[0].strip().isdigit():
+                continue
+            num = int(lines[0].strip())
+            ref = ref_map.get(num)
+            if not ref:
+                continue
+            if reference_addressee_gender(ref, lang) != 'F':
+                continue
+            if _HE_MASC.search('\n'.join(lines[2:])):
+                out.append(num)
+    except Exception as e:
+        _log('gender verification crashed: {0}'.format(e), level='WARNING')
+    return out
+
+
 def begin(info, src_text):
     """ENTRY POINT (lazy). When the feature is on, find gender-reference
     candidates for `info` and return a ReferencePlan that yields aligned maps in
@@ -501,7 +598,32 @@ def begin(info, src_text):
     # here is out-of-sync / unmatched for their release -- but as a GENDER
     # ORACLE it only needs to time-align to the SOURCE sub, which the scale+
     # offset estimator handles. It is the strongest oracle (it IS Hebrew).
-    ordered = [(lang, c) for lang in _REF_CHAIN for c in by_lang.get(lang, [])]
+    #
+    # ROUND-ROBIN, not language-by-language. The chain order still decides who
+    # goes first -- round 0 is the best Hebrew candidate, then the best Arabic,
+    # then the best Hindi -- but the SECOND Hebrew candidate now waits until
+    # every language has had its first.
+    #
+    # Depth-first was the wrong shape for what actually limits this search.
+    # Alignment is cheap (measured at ~0.25s on a 1,957-cue film); the budget
+    # is spent almost entirely on DOWNLOADS, and _PER_LANG_LIMIT is 10. So ten
+    # Hebrew candidates could consume the whole 30s deadline and the chain
+    # would stop before Arabic -- the gold-standard oracle, and the one whose
+    # explicit gender diacritics the prompt is actually built around -- was
+    # ever tried. That failure is silent: the job simply translates with no
+    # oracle, and an unhinted translation defaults to masculine.
+    #
+    # It is also the wrong shape statistically. Candidates within ONE language
+    # fail together: they are typically the same release lineage with the same
+    # timing, so if the first Hebrew sub will not align, the second usually
+    # will not either. A different language is a genuinely independent draw.
+    # Round-robin therefore reaches a usable oracle no later than depth-first
+    # in every case, and much sooner in the common one.
+    _depth = max([len(v) for v in by_lang.values()] or [0])
+    ordered = [(lang, by_lang[lang][i])
+               for i in range(_depth)
+               for lang in _REF_CHAIN
+               if i < len(by_lang.get(lang, ()))]
     if not ordered:
         _log('no gender-reference candidates in any chain language -> normal '
              'translation (fallback)')
