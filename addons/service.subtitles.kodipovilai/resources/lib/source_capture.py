@@ -159,17 +159,25 @@ def reorder(sources_self, results):
             _log('reorder: no confident match in current results')
             return False
         item = results.pop(idx)
-        # Mark the displayed name (POV shows item['URLName'] as tikiskins.name).
-        # The stored record reads item['name'], not URLName, so the marker never
-        # pollutes the remembered record on a re-pick.
+        # Mark the displayed name. POV 6 renders item['display_name'] in the
+        # sources window (windows/sources.py: name = get('display_name'));
+        # POV 5 rendered item['URLName']. Writing only URLName on a v6 install
+        # put the badge in a field nothing reads -- captured fine, marked
+        # nothing (the "remember-source stopped working" regression). Badge
+        # whichever field this install actually displays, URLName as the v5
+        # fallback. The stored record reads item['name'], so the marker never
+        # pollutes the remembered record on a re-pick. upper() is applied by
+        # the v6 window AFTER this -- the markup survives it (tag letters and
+        # the colour hex are already uppercase, Hebrew has no case).
         try:
-            nm = item.get('URLName') or ''
+            fld = 'display_name' if item.get('display_name') else 'URLName'
+            nm = item.get(fld) or ''
             # Strip any prior marker (old emoji or this one) so we never stack.
             for _m in (_MARK,) + _OLD_MARKS:
                 if nm.startswith(_m):
                     nm = nm[len(_m):]
             if nm:
-                item['URLName'] = _MARK + nm
+                item[fld] = _MARK + nm
         except Exception:
             pass
         # Pin it: make_items' quality/size re-sort (pov_source_quality_patcher)
