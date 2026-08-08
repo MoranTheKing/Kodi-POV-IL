@@ -3474,7 +3474,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             self.user_msg = user_msg
             self.detail = detail
 
-    def _english_only_safe(idx, ch):
+    # How long _english_only_safe may keep paying for Gemini calls PAST the
+    # chunk's block budget. The breaker only fires once that budget is spent,
+    # and finalizing the remainder needs SOME spend -- but its bisection used
+    # to run with no clock at all, and a persistently-filtered chunk costs
+    # O(2n) calls each dragging a real 4s filtered-backoff sleep: minutes past
+    # the budget for one pathological chunk. Past this grace, the remainder
+    # keeps its source per-line with zero further calls.
+    _EO_GRACE = 90.0
+
+    def _english_only_safe(idx, ch, deadline=None):
         """Translate `ch` with NO gender reference (English only), splitting on
         truncation / residual blocks so a large remainder still completes, and
         keeping source only for an individual entry that stays blocked or
@@ -3482,14 +3491,23 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         path so silently-dropped entries are re-done, not shipped. This is the
         circuit-breaker's finalization guarantee -- it never propagates a
         content/format error; a genuine quota/overload abort (_AbortTranslation)
-        still propagates, as it must."""
+        still propagates, as it must. `deadline` + _EO_GRACE caps its OWN spend
+        so the guarantee cannot itself run without a clock."""
+        if (deadline is not None
+                and time.monotonic() > deadline + _EO_GRACE):
+            kodi_utils.log(
+                'Chunk {0}: English-only grace budget spent too -- keeping '
+                'source for {1} entr(ies) without further calls'.format(
+                    idx, len(ch)), level='WARNING')
+            _count('src', len(ch))
+            return '\n\n'.join(ch)
         try:
             resp = _call_gemini(idx, ch, NO_REF)
         except (gemini.FilteredResponse, gemini.TruncatedResponse):
             if len(ch) > 1:
                 mid = len(ch) // 2
-                return (_english_only_safe(idx, ch[:mid]) + '\n\n'
-                        + _english_only_safe(idx, ch[mid:]))
+                return (_english_only_safe(idx, ch[:mid], deadline) + '\n\n'
+                        + _english_only_safe(idx, ch[mid:], deadline))
             # One entry, English-only, and still refused. Same reasoning as the
             # main ladder: try a different engine before shipping English.
             _resc = _google_rescue(ch, source_lang)
@@ -3506,8 +3524,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             got = len(srt.parse_blocks(resp))
             if got < max(1, int(len(ch) * 0.85)):
                 mid = len(ch) // 2
-                return (_english_only_safe(idx, ch[:mid]) + '\n\n'
-                        + _english_only_safe(idx, ch[mid:]))
+                return (_english_only_safe(idx, ch[:mid], deadline) + '\n\n'
+                        + _english_only_safe(idx, ch[mid:], deadline))
             # ...and the same silent-drop hole the counting guard cannot see.
             # This is the circuit-breaker path, reached only once the block
             # budget is already spent, so it does NOT spend another call: any
@@ -3669,7 +3687,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 'Chunk {0} over block-budget ({1:.0f}s) -- translating the '
                 'remainder English-only'.format(idx, _CHUNK_BLOCK_BUDGET),
                 level='WARNING')
-            return _english_only_safe(idx, ch)
+            return _english_only_safe(idx, ch, deadline)
         if len(ch) > 1:
             try:
                 response = _call_gemini(idx, ch, 0)      # primary reference
