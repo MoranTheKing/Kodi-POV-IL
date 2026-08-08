@@ -1,3 +1,11 @@
+[COLOR yellow][B]v0.1.37[/B][/COLOR]
+* Arctic Fuse 3 skin updated to the current upstream release (6.3.2.14),
+  keeping the mod layer, the Hebrew localisation and all build integrations.
+* A device already ON Arctic Fuse 3 now refreshes the skin pack automatically
+  on quick update, same as NOX -- no need to switch skins back and forth.
+* Re-extracting the AF3 skin now clears the old skin folder first, so files
+  the skin author removed can no longer linger and load as zombie windows.
+
 [COLOR yellow][B]v0.1.36[/B][/COLOR]
 * A new installation no longer skips the five FENtastic home-widget files, so
   Movies, TV shows and Idan+ come up with their content instead of empty.
