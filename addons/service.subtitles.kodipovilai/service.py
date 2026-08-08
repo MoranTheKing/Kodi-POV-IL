@@ -1928,6 +1928,29 @@ def _maybe_patch_umbrella_language():
                 level='WARNING')
         except Exception:
             pass
+    # Wiring + subtitle-matching hook for the same optional add-on.
+    try:
+        from resources.lib import umbrella_setup_patcher
+        prov = umbrella_setup_patcher.ensure_external_provider()
+        if prov == 'patched':
+            kodi_utils.log(
+                'umbrella_setup_patcher: CocoScrapers wired as the external '
+                'provider', level='INFO')
+        hook = umbrella_setup_patcher.ensure_source_name_published()
+        if hook == 'patched':
+            kodi_utils.log(
+                'umbrella_setup_patcher: picked-source release name is now '
+                'published for subtitle matching', level='INFO')
+        elif hook in ('unmatched', 'compile_failed', 'write_failed'):
+            kodi_utils.log(
+                'umbrella_setup_patcher: ' + hook, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'umbrella_setup_patcher run failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
 
 
 def _maybe_patch_pov_bookmark_refresh():
