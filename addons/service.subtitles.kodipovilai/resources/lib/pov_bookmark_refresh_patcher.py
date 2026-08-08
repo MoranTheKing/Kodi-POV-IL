@@ -25,6 +25,13 @@
 # progress-write condition. The user keeps a live, navigable list while
 # the sync runs, and the one refresh lands when the data is ready.
 #
+# Known tradeoff (accepted): the refresh now lands only after the Trakt
+# round-trip (~10s timeout per attempt), so a user who navigates into a
+# DIFFERENT list meanwhile gets that container refreshed once instead --
+# cosmetic, with valid data. This is exactly POV 5's shipped behavior and
+# the dominant pattern elsewhere in v6 (mark_as_watched_unwatched_tvshow/
+# _season already refresh last); the alternative was the empty-'..' race.
+#
 # POV 5.x installs (bundled full-build copy before POV self-updates) do not
 # carry the v6 anchor and already refresh last -- the patcher no-ops there
 # by design. Self-healing: ensure_patched() runs every Kodi startup, is
