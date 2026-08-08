@@ -1,3 +1,9 @@
+v0.2.466
+- The "last watched" gold badge on the source you picked last time is back:
+  it was being written to a field the current player version no longer
+  displays, so it silently vanished. It now marks the field that is
+  actually shown, with the old field kept as a fallback.
+
 v0.2.465
 - Lines the AI silently skipped (usually strong language) are no longer left
   in English as a group: each one is now isolated and translated on its own,
