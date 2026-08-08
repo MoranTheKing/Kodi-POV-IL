@@ -48,6 +48,14 @@ TRAKT_DATA_SCHEMA = (
 
 MARKER_TABLE = '# AI_SUBS_POV_TRAKT_TABLE_v1'
 MARKER_EMPTY = '# AI_SUBS_POV_TRAKT_CACHE_EMPTY_v1'
+# Second, INDEPENDENT table guard, for clear_all_trakt_cache_data(). That
+# function deletes from ('trakt_data', 'progress', 'watched_status') in one
+# loop under a single bare `except: return False` -- so a missing trakt_data
+# raises on the FIRST iteration and the other two tables are never cleared,
+# silently and without a crash. It has its own marker so a device already
+# carrying MARKER_TABLE alone still receives this one.
+MARKER_TABLE_CLEAR = '# AI_SUBS_POV_TRAKT_TABLE_CLEAR_v1'
+CLEAR_FUNC = 'clear_all_trakt_cache_data'
 
 # Bug A anchor: the line that gets the cursor at the top of cache_trakt_object.
 #   <indent>dbcur = TraktCache().dbcur
@@ -104,7 +112,8 @@ def ensure_patched():
         _log('read failed for {0}: {1}'.format(path, e), level='WARNING')
         return 'read_failed'
 
-    if MARKER_TABLE in content and MARKER_EMPTY in content:
+    if (MARKER_TABLE in content and MARKER_EMPTY in content
+            and MARKER_TABLE_CLEAR in content):
         # Table healer still runs even when the file is fully patched: the DB
         # can be wiped after POV's process started this session.
         _ensure_trakt_data_table()
@@ -113,16 +122,17 @@ def ensure_patched():
     lines = content.splitlines(keepends=True)
     out = []
     applied = []
+    current_def = ''
     for line in lines:
         stripped = line.strip()
-        # Bug A: create the table right after the cursor is obtained -- ONCE.
-        # POV 6.08 acquires the same cursor in eight functions, and the
-        # original condition (which only tested the untouched `content`)
-        # injected a CREATE TABLE after every one of them: eight redundant
+        if stripped.startswith('def ') and not line[:1].isspace():
+            current_def = stripped[4:].split('(')[0].strip()
+        # Bug A: create the table right after the cursor is obtained -- in the
+        # two functions that need it, not in all NINE that take that cursor.
+        # The original condition only ever tested the untouched `content`, so
+        # it injected a CREATE TABLE after every one of them: nine redundant
         # statements on every trakt cache read. The first occurrence is inside
-        # cache_trakt_object, which is where the crash was reported and which
-        # every other path reaches first anyway, so guarding it once is both
-        # the fix and the cheap version of it.
+        # cache_trakt_object, where the crash was reported.
         if (stripped == _CURSOR_ANCHOR and MARKER_TABLE not in content
                 and 'table' not in applied):
             ind = _indent_of(line)
@@ -130,6 +140,20 @@ def ensure_patched():
             out.append(ind + MARKER_TABLE + '\n')
             out.append(ind + "dbcur.execute('" + TRAKT_DATA_SCHEMA + "')\n")
             applied.append('table')
+            continue
+        # ...and clear_all_trakt_cache_data, which is the other one that needs
+        # it: it deletes trakt_data FIRST inside a loop wrapped in one bare
+        # `except: return False`, so a missing table means progress and
+        # watched_status are never cleared either -- no crash, no message, just
+        # a wipe that silently did nothing. The eight remaining cursor sites
+        # are each already wrapped in POV's own try/except and lose nothing.
+        if (stripped == _CURSOR_ANCHOR and current_def == CLEAR_FUNC
+                and MARKER_TABLE_CLEAR not in content):
+            ind = _indent_of(line)
+            out.append(line)
+            out.append(ind + MARKER_TABLE_CLEAR + '\n')
+            out.append(ind + "dbcur.execute('" + TRAKT_DATA_SCHEMA + "')\n")
+            applied.append('table_clear')
             continue
         # Bug B: don't persist empty results (inject before the INSERT).
         if stripped in _SET_ANCHORS and MARKER_EMPTY not in content:
