@@ -1,3 +1,11 @@
+v0.2.468
+- Three long-standing POV fixes started silently missing their target after
+  POV's latest rewrite and now apply again: sources coming back empty for
+  some setups, a Trakt cache crash, and lists that would not clear.
+- Umbrella (optional): the lists no longer come up empty when its language
+  is set to Hebrew, CocoScrapers is set up automatically on install, and
+  subtitle matching now works for sources whose link hides the file name.
+
 v0.2.467
 - Umbrella (the optional pilot addon) showed blank labels throughout its
   settings on a Hebrew-language Kodi: it ships its texts only in the legacy
