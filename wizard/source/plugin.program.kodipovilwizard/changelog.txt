@@ -1,3 +1,9 @@
+[COLOR yellow][B]v0.1.39[/B][/COLOR]
+* New opt-in pilot: "Install Umbrella (experimental)" in the wizard menu
+  installs the Umbrella addon + CocoScrapers alongside POV, with both of
+  their official repositories so they update straight from their developers.
+  Nothing changes for anyone who does not pick it.
+
 [COLOR yellow][B]v0.1.38[/B][/COLOR]
 * NOX skin updated to 1.0.11: the seek bar now slides away on its own after
   five seconds of pause, matching FENtastic, and returns on any key press.
