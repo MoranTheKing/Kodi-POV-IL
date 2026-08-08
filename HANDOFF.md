@@ -326,6 +326,60 @@ zips. NEVER copy the folder wholesale; integrate file-by-file:
 7. Re-encode oversized preview PNGs to the display size before shipping.
 8. Independent validation on every integration, and again on every fix.
 
+## Arctic Fuse 3: what the shipped skin actually IS (learned 2026-08)
+
+The AF3 in `dist/Kodi-POV-IL-AF3-skin-pack.zip` is **"Arctic Fuse 3 (Mod)"**
+(provider "jurialmunkey, jamal2362") — upstream `jurialmunkey/skin.arctic.fuse.3`
+plus a mod layer whose source repo is no longer public. The mod layer, extracted
+by diffing against pristine upstream, is: `1080i/Includes_u3k.xml` +
+`media/u3k/` + a DialogCustom u3k settings section, an extra OSD `button_9`
+slot in `Includes_OSD.xml`, `left=120` in `Includes_Hubs.xml`, mod strings
+`#31985-#31999` in en_gb/de_de po files, `language/resource.language.he_il/`,
+`fonts/NotoSans-Regular.ttf`, `extras/icons/ppi.png`, and our 3 shortcuts
+JSONs (homesubmenu / homewidgets / powermenu). The addon version carries a
+**deliberate `6.` prefix** (upstream `3.2.14` ships as `6.3.2.14`) so no
+external repo can ever auto-downgrade it; keep the prefix on every update.
+
+**Updating AF3** (done for 6.3.2.9 → 6.3.2.14, upstream v3.2.9 → v3.2.14):
+clone upstream, `git archive` the new tag, re-apply the mod layer (files
+upstream didn't touch: copy ours verbatim; overlap files: 3-way merge with
+`git merge-file`, unions resolved by keeping both sides), keep the Mod
+identity line with the new `6.`-prefixed version, then rebuild the pack zip
+(`addons/*` + `media/`). Gates: every XML parses, no duplicate msgctxt ids,
+af3_*_patcher anchors still present, upstream-deleted files really absent.
+v3.2.14 dropped `Custom_1192_HolidayTheme.xml` — Kodi loads any Custom_*.xml
+that merely exists, so the wizard got `purge_before_extract` on the AF3 skin
+pack (deletes the old skin folder after a successful download, before
+extract). Upstream bumped `script.skinvariables` to 2.2.2 minimum, so the
+pack's bundled copy was updated in the same release (deps still satisfied by
+the deps-pack's jurialmunkey 0.2.35 / infotagger 0.0.8).
+
+**How AF3 updates reach users:** the pack URL is FIXED (`AF3_PACK_BASE_URL`),
+so fresh AF3 installs always get the current pack. Existing AF3 users update
+via wizard `auto_update_active_skin_pack()` (extended in 0.1.37 to cover AF3,
+not just NOX) gated by `AF3_CE_SKIN_VERSION` in `wizard.py` — bump that
+constant on every pack update or nobody already on the skin re-downloads.
+
+The crash "stop playback on AF3 → back to Home → force-close" is a KNOWN
+upstream issue (jurialmunkey/skin.arctic.fuse.3 #230), reproduced on the
+latest skin and closed "not planned" — a skin update does not fix it; the
+honest user guidance is to use another skin if it bites.
+
+## Wizard release gotcha: two artifact chains, one source of truth
+
+The bundled-wizard quickfix chain and the standalone wizard ZIP chain both
+claim to ship "the wizard", but `build_wizard_quickfix.py` replaces the WHOLE
+wizard subtree from the standalone ZIP. Any source improvement that reaches
+the quickfix chain but is never listed in a wizard release manifest gets
+SILENTLY REVERTED by the next quickfix built from that ZIP -- this actually
+happened in 0.1.506's first build: `startup.py`/`resources/settings.xml`
+(quick-update retry-safety, `QUICK_UPDATE_MAX_TRIES`) had lived only in the
+quickfix chain since 0.1.500, and the freshly-built quickfix downgraded them.
+Caught by the release validator; fixed by adding both files to the 0.1.37
+manifest, which realigned the ZIP chain with source. RULE: when building a
+quickfix, diff the wizard subtree against the PREVIOUS quickfix and account
+for every changed member -- an unexplained change is a regression, not noise.
+
 ## Resolved questions (so they don't resurface)
 
 - **FENtastic DialogSubtitles "row height" marker (investigated 2026-07):**

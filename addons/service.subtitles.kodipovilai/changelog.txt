@@ -1,3 +1,8 @@
+v0.2.464
+- Stopping an episode part-way no longer leaves the screen on a spinner (or
+  a bare ".." listing) while the episode list rebuilds: the list now stays
+  live and refreshes once, after the progress sync finishes.
+
 v0.2.463
 - Masculine forms used where a woman is being addressed were the biggest
   quality complaint, and two separate things caused them. The add-on could
