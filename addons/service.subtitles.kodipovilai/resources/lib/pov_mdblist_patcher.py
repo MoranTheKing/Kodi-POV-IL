@@ -64,8 +64,11 @@ SORT_DEFAULT_MARKER = '# AI_SUBS_SORT_RECENT_DEFAULT_v1'
 # Collection to date-added-desc when the user never chose a sort), so it now
 # reads whichever of the three settings applies and post-processes ONE value.
 # Older POV's single-line shape stays listed so a device behind on POV is still
-# patched. Order matters: the 6.08 block is tried first, because its own first
-# line ENDS with the legacy line's text and a legacy match would corrupt it.
+# patched. The 6.08 block is tried first as a hedge: on today's 6.08.05 bytes
+# the legacy anchor cannot match at all (its leading tab is followed by `if
+# mediatype is None: `, never by `return`), but a future shape that reintroduces
+# a bare-tab return alongside the fork would let the legacy anchor bite into it,
+# and specific-before-general is the ordering that stays right either way.
 _SORT_DEFAULT_ANCHOR_V608 = (
     "\tif mediatype is None: return int(get_setting('sort.%s' % setting, '0'))\n"
     "\tif mediatype in ('movie', 'movies'): return int(get_setting('sort.%s_movies' % setting, '0'))\n"
