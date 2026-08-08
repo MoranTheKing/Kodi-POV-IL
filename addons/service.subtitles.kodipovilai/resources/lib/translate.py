@@ -3590,8 +3590,41 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 blocks = srt.align_blocks(ch, blocks, fill_blocks)
                 if len(blocks) <= before:
                     break          # the reply added nothing -> stop, don't loop
+            tallied = 0
             still = srt.missing_blocks(ch, blocks)
-            kept_src = len(still)
+            if still and len(still) < len(ch) and (
+                    deadline is None or time.monotonic() < deadline):
+                # The top-up requests the missing entries TOGETHER -- which
+                # CONCENTRATES exactly the content the filter objected to, so
+                # the refill is MORE likely to block than the chunk that
+                # dropped the lines in the first place (field report: a run
+                # of profane lines came back as a whole English segment).
+                # Route the leftovers through the main ladder instead: it
+                # bisects to isolate the poison line, gives the isolated
+                # entry the alternate references / English-only / Google
+                # rungs, and keeps source per-line only as the true last
+                # resort. `still` is strictly smaller than `ch` (the reply
+                # already yielded >=85%), so the recursion shrinks, and the
+                # shared block budget bounds the spend.
+                kodi_utils.log(
+                    'Chunk {0}: {1} entr(ies) still missing after top-up -- '
+                    'isolating them through the bisection ladder'.format(
+                        idx, len(still)), level='WARNING')
+                try:
+                    rescued = _translate_one(idx, still, deadline, False)
+                    blocks = srt.align_blocks(
+                        ch, blocks, srt.parse_blocks(rescued))
+                    # every leftover was tallied inside the ladder (ar/alt/
+                    # noar/src) -- the caller must not count them again
+                    tallied = len(still)
+                    still = srt.missing_blocks(ch, blocks)
+                except _AbortTranslation:
+                    raise
+                except Exception as e:
+                    kodi_utils.log(
+                        'Chunk {0}: bisection rescue failed ({1}) -- keeping '
+                        'source for the leftovers'.format(idx, e),
+                        level='WARNING')
             if still:
                 # Keep the SOURCE for whatever never came back, so the entry
                 # count matches the chunk and every later stage (positional
@@ -3599,9 +3632,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 blocks = srt.align_blocks(ch, blocks, still)
                 kodi_utils.log(
                     'Chunk {0}: {1} entr(ies) kept as source after top-up'
-                    .format(idx, kept_src), level='WARNING')
-                _count('src', kept_src)
-            return srt.stitch_blocks(blocks), kept_src
+                    .format(idx, len(still)), level='WARNING')
+                if tallied == 0:
+                    # counted here only when the rescue never ran/tallied them
+                    _count('src', len(still))
+                    tallied = len(still)
+            return srt.stitch_blocks(blocks), tallied
         except _AbortTranslation:
             raise
         except Exception as e:
