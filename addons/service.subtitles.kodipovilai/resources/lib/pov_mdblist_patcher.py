@@ -59,12 +59,37 @@ POV_SETTINGS_REL = 'resources/lib/modules/settings.py'
 # it; only the never-chosen A-Z default flips to recency. Deterministic (code
 # patch), independent of any setting-write persistence.
 SORT_DEFAULT_MARKER = '# AI_SUBS_SORT_RECENT_DEFAULT_v1'
-_SORT_DEFAULT_ANCHOR = "\treturn int(get_setting('sort.%s' % setting, '0'))"
-_SORT_DEFAULT_REPLACEMENT = (
+# POV 6.08 gave lists_sort_order a per-mediatype fork: the single return line
+# became three, one per media type. The fix is the same (default Watchlist /
+# Collection to date-added-desc when the user never chose a sort), so it now
+# reads whichever of the three settings applies and post-processes ONE value.
+# Older POV's single-line shape stays listed so a device behind on POV is still
+# patched. Order matters: the 6.08 block is tried first, because its own first
+# line ENDS with the legacy line's text and a legacy match would corrupt it.
+_SORT_DEFAULT_ANCHOR_V608 = (
+    "\tif mediatype is None: return int(get_setting('sort.%s' % setting, '0'))\n"
+    "\tif mediatype in ('movie', 'movies'): return int(get_setting('sort.%s_movies' % setting, '0'))\n"
+    "\treturn int(get_setting('sort.%s_shows' % setting, '0'))")
+_SORT_DEFAULT_REPLACEMENT_V608 = (
+    "\tif mediatype is None: _ai_v = get_setting('sort.%s' % setting, '0')  "
+    + SORT_DEFAULT_MARKER + "\n"
+    "\telif mediatype in ('movie', 'movies'): _ai_v = get_setting('sort.%s_movies' % setting, '0')\n"
+    "\telse: _ai_v = get_setting('sort.%s_shows' % setting, '0')\n"
+    "\ttry: _ai_v = int(_ai_v)\n"
+    "\texcept Exception: _ai_v = 0\n"
+    "\treturn (_ai_v or 1) if setting in ('watchlist', 'collection') else _ai_v")
+
+_SORT_DEFAULT_ANCHOR_LEGACY = "\treturn int(get_setting('sort.%s' % setting, '0'))"
+_SORT_DEFAULT_REPLACEMENT_LEGACY = (
     "\t_ai_v = get_setting('sort.%s' % setting, '0')  " + SORT_DEFAULT_MARKER + "\n"
     "\ttry: _ai_v = int(_ai_v)\n"
     "\texcept Exception: _ai_v = 0\n"
     "\treturn (_ai_v or 1) if setting in ('watchlist', 'collection') else _ai_v")
+
+_SORT_DEFAULT_PAIRS = (
+    (_SORT_DEFAULT_ANCHOR_V608, _SORT_DEFAULT_REPLACEMENT_V608),
+    (_SORT_DEFAULT_ANCHOR_LEGACY, _SORT_DEFAULT_REPLACEMENT_LEGACY),
+)
 
 REDACT_MARKER = '# AI_SUBS_MDBL_REDACT_v1'
 SCROBBLE_MARKER = '# AI_SUBS_MDBL_SCROBBLE_STOP_v1'
@@ -444,12 +469,16 @@ def ensure_sort_default_patched():
         return 'read_failed'
     if SORT_DEFAULT_MARKER in content:
         return 'already_patched'
-    if _SORT_DEFAULT_ANCHOR not in content:
+    anchor = replacement = None
+    for _anchor, _replacement in _SORT_DEFAULT_PAIRS:
+        if _anchor in content:
+            anchor, replacement = _anchor, _replacement
+            break
+    if anchor is None:
         _log('modules/settings lists_sort_order anchor not found -- POV version '
              'differs; leaving file alone', level='WARNING')
         return 'unmatched'
-    new_content = content.replace(
-        _SORT_DEFAULT_ANCHOR, _SORT_DEFAULT_REPLACEMENT, 1)
+    new_content = content.replace(anchor, replacement, 1)
     try:
         compile(new_content, path, 'exec')
     except SyntaxError as e:

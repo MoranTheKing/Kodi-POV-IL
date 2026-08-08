@@ -52,8 +52,15 @@ MARKER_EMPTY = '# AI_SUBS_POV_TRAKT_CACHE_EMPTY_v1'
 # Bug A anchor: the line that gets the cursor at the top of cache_trakt_object.
 #   <indent>dbcur = TraktCache().dbcur
 _CURSOR_ANCHOR = 'dbcur = TraktCache().dbcur'
-# Bug B anchor: the INSERT (write) line.
-_SET_ANCHOR = 'dbcur.execute(TC_BASE_SET, (string, repr(result)))'
+# Bug B anchor: the INSERT (write) line. POV 6.08 changed how it serialises
+# the value (repr -> json.dumps) while keeping the bug: a failed call returns
+# an empty result and POV persists it, so the list stays empty from cache long
+# after the network recovered. Both spellings are listed -- what we inject is
+# the same guard either way, placed BEFORE the write.
+_SET_ANCHORS = (
+    'dbcur.execute(TC_BASE_SET, (string, repr(result)))',        # POV <= 6.07
+    'dbcur.execute(TC_BASE_SET, (string, json.dumps(result)))',  # POV 6.08+
+)
 
 
 def _log(msg, level='INFO'):
@@ -108,8 +115,16 @@ def ensure_patched():
     applied = []
     for line in lines:
         stripped = line.strip()
-        # Bug A: create the table right after the cursor is obtained.
-        if stripped == _CURSOR_ANCHOR and MARKER_TABLE not in content:
+        # Bug A: create the table right after the cursor is obtained -- ONCE.
+        # POV 6.08 acquires the same cursor in eight functions, and the
+        # original condition (which only tested the untouched `content`)
+        # injected a CREATE TABLE after every one of them: eight redundant
+        # statements on every trakt cache read. The first occurrence is inside
+        # cache_trakt_object, which is where the crash was reported and which
+        # every other path reaches first anyway, so guarding it once is both
+        # the fix and the cheap version of it.
+        if (stripped == _CURSOR_ANCHOR and MARKER_TABLE not in content
+                and 'table' not in applied):
             ind = _indent_of(line)
             out.append(line)
             out.append(ind + MARKER_TABLE + '\n')
@@ -117,7 +132,7 @@ def ensure_patched():
             applied.append('table')
             continue
         # Bug B: don't persist empty results (inject before the INSERT).
-        if stripped == _SET_ANCHOR and MARKER_EMPTY not in content:
+        if stripped in _SET_ANCHORS and MARKER_EMPTY not in content:
             ind = _indent_of(line)
             out.append(ind + MARKER_EMPTY + '\n')
             out.append(ind + 'if not result: return result\n')
