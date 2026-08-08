@@ -1,3 +1,9 @@
+v0.2.465
+- Lines the AI silently skipped (usually strong language) are no longer left
+  in English as a group: each one is now isolated and translated on its own,
+  through every fallback engine, before English is ever accepted -- and only
+  ever for a single line, never a whole stretch.
+
 v0.2.464
 - Stopping an episode part-way no longer leaves the screen on a spinner (or
   a bare ".." listing) while the episode list rebuilds: the list now stays
