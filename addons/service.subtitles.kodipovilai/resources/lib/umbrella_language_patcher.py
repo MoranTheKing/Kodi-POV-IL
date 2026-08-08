@@ -40,6 +40,27 @@ UMBRELLA_ADDON_ID = 'plugin.video.umbrella'
 LEGACY_REL = 'resources/language/English/strings.po'
 MODERN_REL = 'resources/language/resource.language.en_gb/strings.po'
 
+# --- second half: the empty-lists-in-Hebrew fix -----------------------------
+# Field report: setting Umbrella's API language to Hebrew empties the lists.
+# The cause is two Umbrella settings that are CONTENT FILTERS, not display
+# language, and read the same api.language value:
+#   useLanguageforOriginal (default TRUE!) -> TMDb discover gets
+#       &with_original_language=he, i.e. "only films originally made in
+#       Hebrew" -- next to nothing exists, so genre/year lists come back empty.
+#   trakt.useLanguage (default false)      -> Trakt lists get &languages=he,
+#       the same filter on the Trakt side.
+# Nothing is wrong with api.language itself: TMDb still returns Hebrew titles
+# and overviews where they exist (Umbrella already falls back to the English
+# plot when a translation is missing). So the fix is to leave the language
+# alone and switch OFF the two FILTERS -- exactly what the user meant to ask
+# for. Settings-level, so we never touch Umbrella's code for this.
+#
+# Applied once per language value (the marker records which language it was
+# resolved for): a user who deliberately turns a filter back on keeps it, and
+# switching languages later re-evaluates.
+FILTER_SETTINGS = ('useLanguageforOriginal', 'trakt.useLanguage')
+FILTER_DONE_SETTING = '_umbrella_lang_filters_v1'
+
 
 def _log(msg, level='INFO'):
     if kodi_utils is None:
@@ -59,6 +80,75 @@ def _addon_path():
     except Exception:
         return ''
     return base if os.path.isdir(base) else ''
+
+
+def _umbrella_addon():
+    try:
+        import xbmcaddon
+        return xbmcaddon.Addon(UMBRELLA_ADDON_ID)
+    except Exception:
+        return None
+
+
+def _resolved_is_english(addon):
+    """True when Umbrella's api.language resolves to English -- i.e. the two
+    content filters are harmless and must be left exactly as the user set
+    them. Mirrors Umbrella's own resolution: an all-caps value (its 'AUTO')
+    means 'follow Kodi's interface language'."""
+    try:
+        name = (addon.getSetting('api.language') or '').strip()
+    except Exception:
+        return True          # cannot read it -> assume English, change nothing
+    if not name or name.upper() == 'AUTO' or name[-1:].isupper():
+        try:
+            import xbmc
+            name = (xbmc.getLanguage(xbmc.ENGLISH_NAME) or '').split(' ')[0]
+        except Exception:
+            return True
+    return name.strip().lower() in ('', 'english')
+
+
+def ensure_content_filters_sane():
+    """Turn OFF Umbrella's language CONTENT FILTERS while its API language is
+    not English, so the lists stop coming back empty. Returns a short status.
+    Never raises; does nothing at all when Umbrella is not installed."""
+    addon = _umbrella_addon()
+    if addon is None:
+        return 'not_installed'
+    if _resolved_is_english(addon):
+        return 'english'
+    try:
+        lang = (addon.getSetting('api.language') or 'AUTO').strip()
+    except Exception:
+        return 'read_failed'
+    try:
+        from resources.lib import kodi_utils as _ku
+        done_for = _ku.get_setting(FILTER_DONE_SETTING, '') or ''
+    except Exception:
+        done_for = ''
+    if done_for == lang:
+        # already handled for THIS language -- a filter the user has since
+        # switched back on is their call, not ours to keep overriding
+        return 'unchanged'
+    turned_off = []
+    for key in FILTER_SETTINGS:
+        try:
+            if (addon.getSetting(key) or '').strip().lower() == 'true':
+                addon.setSetting(key, 'false')
+                turned_off.append(key)
+        except Exception as e:
+            _log('could not read/clear {0}: {1}'.format(key, e), 'WARNING')
+    try:
+        from resources.lib import kodi_utils as _ku
+        _ku.set_setting(FILTER_DONE_SETTING, lang)
+    except Exception:
+        pass
+    if turned_off:
+        _log('api.language is {0}; turned OFF the content filter(s) {1} so '
+             'the lists are not restricted to Hebrew-only titles'.format(
+                 lang, ', '.join(turned_off)))
+        return 'patched'
+    return 'unchanged'
 
 
 def ensure_patched():
