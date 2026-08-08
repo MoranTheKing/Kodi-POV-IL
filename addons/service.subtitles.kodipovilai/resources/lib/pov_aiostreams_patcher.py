@@ -67,28 +67,40 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 SETTINGS_REL = 'resources/lib/modules/settings.py'
-MARKER = '# AI_SUBS_POV_AIOSTREAMS_v1'
+MARKER = '# AI_SUBS_POV_AIOSTREAMS_v2'
 
 ENABLE_SETTING = 'provider.aiostreams'
 CRED_SETTINGS = ('aio.username', 'aio.password')
 
 # POV's takeover line, verbatim (one tab of indent, inside
-# active_internal_scrapers()).
-_ANCHOR = (
-    "\tif get_setting('provider.aiostreams') == 'true': return ['aiostreams']"
+# active_internal_scrapers()). POV 6.08 kept the takeover but changed what it
+# assigns -- `return ['aiostreams']` became `settings = ['provider.aiostreams']`
+# feeding the same function's filter. The BUG is unchanged (aiostreams becomes
+# the only scraper POV asks, and with no credentials it answers nothing), so
+# the fix follows the new shape instead of going quiet: the takeover is allowed
+# only when both credentials exist. Both shapes stay listed so a device on an
+# older POV is still patched. Everything after the colon is the ORIGINAL body,
+# copied verbatim -- we gate the condition, we never rewrite POV's action.
+_BODIES = (
+    "return ['aiostreams']",              # POV <= 6.07
+    "settings = ['provider.aiostreams']",  # POV 6.08+
 )
-_INJECT = (
-    "\tif get_setting('provider.aiostreams') == 'true' and all("
-    "(get_setting('aio.username'), get_setting('aio.password'))): "
-    "return ['aiostreams']  " + MARKER
+_COND_OLD = "if get_setting('provider.aiostreams') == 'true': "
+_COND_NEW = ("if get_setting('provider.aiostreams') == 'true' and all("
+             "(get_setting('aio.username'), get_setting('aio.password'))): ")
+_PAIRS = tuple(
+    ("\t" + _COND_OLD + body, "\t" + _COND_NEW + body + "  " + MARKER)
+    for body in _BODIES
 )
 
 # Put ANY earlier version of our line back to POV's own before injecting the
 # current one, so bumping the marker replaces the edit instead of leaving a
-# stale form of it behind.
+# stale form of it behind. The body is CAPTURED and restored, so the revert
+# works for whichever POV shape the line was injected over.
 _REVERT_RE = re.compile(
-    r"[ \t]*if get_setting\('provider\.aiostreams'\)[^\r\n]*"
-    r"#[ \t]*AI_SUBS_POV_AIOSTREAMS_v\d+[^\r\n]*"
+    r"(?P<ind>[ \t]*)if get_setting\('provider\.aiostreams'\) == 'true' and all\("
+    r"\(get_setting\('aio\.username'\), get_setting\('aio\.password'\)\)\): "
+    r"(?P<body>[^\r\n#]*?)[ \t]*#[ \t]*AI_SUBS_POV_AIOSTREAMS_v\d+[^\r\n]*"
 )
 
 
@@ -194,14 +206,18 @@ def ensure_patched():
     # Both the anchor and the replacement are a SINGLE line with no line
     # terminator of their own, so this works unchanged on CRLF files -- there
     # is no newline in either string to translate.
-    anchor = _ANCHOR
-    inject = _INJECT
+    # Restore POV's own line (whichever shape it was) before re-injecting, via
+    # a function rather than a template: a plain string replacement would have
+    # re interpret any backslash escape in it.
+    content = _REVERT_RE.sub(
+        lambda m: m.group('ind') + _COND_OLD + m.group('body'), content)
 
-    # Replace via a function, not a template: a plain string replacement would
-    # have re interpret any backslash escape in it. There is none today, but a
-    # later edit to the anchor should not be able to introduce one silently.
-    content = _REVERT_RE.sub(lambda _m: anchor, content)
-    if anchor not in content:
+    anchor = inject = None
+    for _anchor, _inject in _PAIRS:
+        if _anchor in content:
+            anchor, inject = _anchor, _inject
+            break
+    if anchor is None:
         _log('active_internal_scrapers aiostreams line not found -- leaving '
              'alone', level='WARNING')
         return 'unmatched'
