@@ -570,7 +570,7 @@ def update_favourites_xml_file(gotoskin):
 # inside the pack that proves the pack was extracted.
 # If the sentinel exists, we skip the download.
 AF3_PACK_BASE_URL = "https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/dist"
-AF3_CE_SKIN_VERSION = '6.3.2.9'
+AF3_CE_SKIN_VERSION = '6.3.2.14'
 # 'addon_ids' lists every addon folder the pack ships. We register
 # these in Kodi's Addons DB (enabled) whether the pack is freshly
 # extracted OR already on disk from a previous switch attempt --
@@ -619,6 +619,15 @@ AF3_PACKS = [
         'filename': 'af3_skin_pack.zip',
         'sentinel': 'special://home/addons/skin.arctic.fuse.3/addon.xml',
         'expected_version': AF3_CE_SKIN_VERSION,
+        # When the version gate forces a re-extract, remove the OLD skin
+        # folder first: upstream deletes/renames files between releases
+        # (v3.2.14 dropped Custom_1192_HolidayTheme.xml), and Kodi loads
+        # every Custom_*.xml that merely EXISTS in 1080i/ -- an overlay
+        # extract would leave that zombie window (and its dead texture
+        # references) alive forever. Purged AFTER the new pack downloads
+        # successfully, and ONLY the addon folder -- the user's skin
+        # settings live in userdata/addon_data and are never touched.
+        'purge_before_extract': ['special://home/addons/skin.arctic.fuse.3/'],
         'addon_ids': [
             'skin.arctic.fuse.3',
             'script.skinvariables',
@@ -766,28 +775,40 @@ def ensure_nox_installed():
 
 
 def auto_update_active_skin_pack():
-    """Refresh an on-demand skin pack (currently NOX) when the user is already
+    """Refresh an on-demand skin pack (NOX or AF3) when the user is already
     ON that skin and a newer version has been published. The pack is otherwise
     only (re)installed when picked from Switch Skin, so without this an existing
-    NOX user never gets skin updates from a normal quick_update -- they had to
+    user never gets skin updates from a normal quick_update -- they had to
     switch away and back. Idempotent: the version gate (_af3_pack_current) means
     we only re-download when the on-disk skin is actually OLDER than what we now
     ship, so it does NOT re-download every boot, and it does NOT re-download when
     the user merely toggles skins. Re-extracting overwrites only the skin's addon
-    files under addons/skin.povil.nox -- never userdata/addon_data skin settings,
+    files under addons/<skin id> -- never userdata/addon_data skin settings,
     so the user's favourites order and skin tweaks are preserved."""
     try:
         active = CONFIG.SKIN or ''
-        if 'skin.povil.nox' not in active:
+        if 'skin.povil.nox' in active:
+            pack, ensure, label = NOX_PACKS[0], ensure_nox_installed, 'NOX'
+        elif 'skin.arctic.fuse.3' in active:
+            # The AF3 SKIN pack specifically (the one whose sentinel is the
+            # skin's addon.xml) -- found by sentinel, not by list position,
+            # so reordering AF3_PACKS can never silently break this.
+            pack = next((p for p in AF3_PACKS
+                         if 'skin.arctic.fuse.3' in p.get('sentinel', '')),
+                        None)
+            ensure, label = ensure_arctic_fuse_3_installed, 'AF3'
+            if pack is None:
+                return
+        else:
             return
-        pack = NOX_PACKS[0]
         if _af3_pack_current(pack):
             return  # on-disk version already current; no re-download
         logging.log(
-            '[Skin Auto Update] NOX is active and the installed pack is behind '
-            '{0}; refreshing it now.'.format(pack.get('expected_version')),
+            '[Skin Auto Update] {0} is active and the installed pack is behind '
+            '{1}; refreshing it now.'.format(
+                label, pack.get('expected_version')),
             level=xbmc.LOGINFO)
-        if ensure_nox_installed():
+        if ensure():
             xbmc.sleep(800)
             try:
                 xbmc.executebuiltin('ReloadSkin()')
@@ -881,6 +902,26 @@ def _ensure_packs_installed(packs, downloading_label, ready_label):
                     '[COLOR {0}]חבילת AF3 ריקה: {1}[/COLOR]'.format(
                         CONFIG.COLOR2, pack['name']))
                 return False
+
+            # Purge listed folders only now, AFTER the new pack downloaded
+            # and passed the size check -- so a failed download can never
+            # leave the user with a deleted skin and nothing to replace it.
+            for purge in pack.get('purge_before_extract', []):
+                try:
+                    import shutil
+                    import xbmcvfs
+                    purge_path = xbmcvfs.translatePath(purge)
+                    if os.path.isdir(purge_path):
+                        shutil.rmtree(purge_path, ignore_errors=True)
+                        logging.log(
+                            'DEBUG | ensure_arctic_fuse_3_installed | '
+                            'purged stale folder before extract: '
+                            '{0}'.format(purge))
+                except Exception as e:
+                    logging.log(
+                        'DEBUG | ensure_arctic_fuse_3_installed | '
+                        'purge failed (continuing, overlay extract): '
+                        '{0}: {1}'.format(purge, str(e)))
 
             extract_title = (
                 '[COLOR {0}][B]מתקין:[/B][/COLOR] [COLOR {1}]{2}[/COLOR]'
