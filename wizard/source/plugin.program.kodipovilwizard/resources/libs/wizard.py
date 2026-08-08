@@ -672,6 +672,68 @@ NOX_PACKS = [
 ]
 
 
+# KODI-POV-IL - UMBRELLA PILOT (opt-in, on-demand). Umbrella + CocoScrapers
+# plus BOTH of their official repository addons, so once installed they keep
+# updating straight from their developers -- the same trust model POV has via
+# repository.kodifitzwell. Nothing here runs unless the user explicitly picks
+# the wizard menu entry; no tile, no search wiring, no change for anyone else.
+UMBRELLA_PACK_VERSION = '6.7.81'
+UMBRELLA_PACKS = [
+    {
+        'name': 'Umbrella + CocoScrapers',
+        'url': '{0}/Kodi-POV-IL-Umbrella-pack.zip'.format(AF3_PACK_BASE_URL),
+        'filename': 'umbrella_pack.zip',
+        'sentinel': 'special://home/addons/plugin.video.umbrella/addon.xml',
+        'expected_version': UMBRELLA_PACK_VERSION,
+        'addon_ids': [
+            'plugin.video.umbrella',
+            'script.module.cocoscrapers',
+            'repository.umbrella',
+            'repository.cocoscrapers',
+        ],
+    },
+]
+
+
+def ensure_umbrella_installed():
+    """Download + extract the Umbrella pilot pack on demand (same
+    battle-tested path as the AF3/NOX packs, including the Addons-DB
+    registration that makes Kodi actually see the new addons)."""
+    return _ensure_packs_installed(
+        UMBRELLA_PACKS,
+        '[COLOR {0}][B]מוריד את Umbrella ותלויות[/B][/COLOR]'.format(
+            CONFIG.COLOR2),
+        '[COLOR {0}][B]Umbrella מוכן לשימוש[/B][/COLOR]'.format(
+            CONFIG.COLOR1))
+
+
+def install_umbrella_pilot():
+    """Opt-in flow behind the wizard menu entry: confirm, install, and tell
+    the user where to find it. Deliberately does NOT touch the home screen,
+    the search wiring or any default -- the pilot's whole point is zero
+    impact on anyone who didn't ask for it."""
+    dialog = xbmcgui.Dialog()
+    yes_pressed = dialog.yesno(
+        CONFIG.ADDONTITLE,
+        '[B]להתקין את [COLOR gold]Umbrella[/COLOR] (ניסיוני)?[/B]\n'
+        'תוסף תוכן נוסף שפועל לצד POV, עם חיפוש ומקורות משלו, '
+        'ומתעדכן ישירות מהמפתחים שלו. לא משנה שום דבר קיים בבילד.',
+        nolabel='[B][COLOR red]ביטול[/COLOR][/B]',
+        yeslabel='[B][COLOR springgreen]התקן[/COLOR][/B]')
+    if not yes_pressed:
+        return
+    if ensure_umbrella_installed():
+        xbmc.sleep(500)
+        try:
+            xbmc.executebuiltin('UpdateLocalAddons')
+        except Exception:
+            pass
+        logging.log_notify(
+            CONFIG.ADDONTITLE,
+            '[COLOR {0}]Umbrella הותקן! זמין תחת תוספים -> הרחבות וידאו'
+            '[/COLOR]'.format(CONFIG.COLOR1))
+
+
 def _af3_register_pack_in_db(pack):
     """Register + enable a pack's addons in Kodi's Addons DB. Safe to
     call repeatedly (INSERT OR IGNORE + UPDATE enabled). This is the
