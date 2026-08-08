@@ -1914,10 +1914,40 @@ def _maybe_patch_umbrella_language():
         elif status in ('read_failed', 'write_failed'):
             kodi_utils.log(
                 'umbrella_language_patcher: ' + status, level='WARNING')
+        # Second, unrelated half: Umbrella's two language CONTENT FILTERS
+        # empty every list when its API language is not English.
+        filt = umbrella_language_patcher.ensure_content_filters_sane()
+        if filt == 'patched':
+            kodi_utils.log(
+                'umbrella_language_patcher: language content filters cleared',
+                level='INFO')
     except Exception as e:
         try:
             kodi_utils.log(
                 'umbrella_language_patcher run failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+    # Wiring + subtitle-matching hook for the same optional add-on.
+    try:
+        from resources.lib import umbrella_setup_patcher
+        prov = umbrella_setup_patcher.ensure_external_provider()
+        if prov == 'patched':
+            kodi_utils.log(
+                'umbrella_setup_patcher: CocoScrapers wired as the external '
+                'provider', level='INFO')
+        hook = umbrella_setup_patcher.ensure_source_name_published()
+        if hook == 'patched':
+            kodi_utils.log(
+                'umbrella_setup_patcher: picked-source release name is now '
+                'published for subtitle matching', level='INFO')
+        elif hook in ('unmatched', 'compile_failed', 'write_failed'):
+            kodi_utils.log(
+                'umbrella_setup_patcher: ' + hook, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'umbrella_setup_patcher run failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
