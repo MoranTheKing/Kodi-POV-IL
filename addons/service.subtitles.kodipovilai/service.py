@@ -185,6 +185,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_widget_crash_guard,
         _maybe_patch_pov_favorites_refresh,
         _maybe_patch_pov_bookmark_refresh,
+        _maybe_patch_umbrella_language,
         _maybe_run_fav_diagnostic,
         _maybe_patch_pov_navigator_read,
         _maybe_fix_pov_favourites_typo,
@@ -1886,6 +1887,37 @@ def _maybe_patch_pov_widget_crash_guard():
         try:
             kodi_utils.log(
                 'pov_widget_crash_guard run failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_umbrella_language():
+    """Umbrella (the opt-in pilot addon) ships its strings only in the
+    LEGACY language layout (resources/language/English/), so on a
+    Hebrew-interface Kodi every settings label resolves to an empty
+    string -- blank categories, blank labels. Mirror the English po into
+    the modern resource.language.en_gb folder Kodi actually looks for.
+    Additive-only and self-healing: an Umbrella self-update replaces the
+    addon folder, and this re-applies on the next startup. Instant no-op
+    for everyone who never installed the pilot."""
+    try:
+        from resources.lib import umbrella_language_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = umbrella_language_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'umbrella_language_patcher: modern en_gb strings installed',
+                level='INFO')
+        elif status in ('read_failed', 'write_failed'):
+            kodi_utils.log(
+                'umbrella_language_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'umbrella_language_patcher run failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
