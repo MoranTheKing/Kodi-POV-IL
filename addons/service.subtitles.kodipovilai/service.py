@@ -1914,6 +1914,13 @@ def _maybe_patch_umbrella_language():
         elif status in ('read_failed', 'write_failed'):
             kodi_utils.log(
                 'umbrella_language_patcher: ' + status, level='WARNING')
+        # Second, unrelated half: Umbrella's two language CONTENT FILTERS
+        # empty every list when its API language is not English.
+        filt = umbrella_language_patcher.ensure_content_filters_sane()
+        if filt == 'patched':
+            kodi_utils.log(
+                'umbrella_language_patcher: language content filters cleared',
+                level='INFO')
     except Exception as e:
         try:
             kodi_utils.log(
