@@ -1,3 +1,9 @@
+v0.2.467
+- Umbrella (the optional pilot addon) showed blank labels throughout its
+  settings on a Hebrew-language Kodi: it ships its texts only in the legacy
+  language layout. The texts are now mirrored into the modern layout Kodi
+  looks for, self-healing after every Umbrella update.
+
 v0.2.466
 - The "last watched" gold badge on the source you picked last time is back:
   it was being written to a field the current player version no longer
