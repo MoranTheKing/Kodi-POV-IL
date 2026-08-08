@@ -103,6 +103,9 @@ class Router:
             elif action == 'install_af3_ce':
                 from resources.libs.wizard import ensure_arctic_fuse_3_installed
                 ensure_arctic_fuse_3_installed()
+            elif action == 'install_umbrella':
+                from resources.libs.wizard import install_umbrella_pilot
+                install_umbrella_pilot()
             elif action == 'af3_tools':
                 from resources.libs.wizard import af3_tools_menu
                 af3_tools_menu()

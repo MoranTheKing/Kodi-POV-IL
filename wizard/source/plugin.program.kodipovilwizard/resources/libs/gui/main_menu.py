@@ -70,6 +70,9 @@ class MainMenu:
                 # KODI-RD-IL BUILD SWITCH SKIN
                 directory.add_dir('החלף סקין בבילד', {'mode': 'install', 'action': 'build_switch_skin'}, icon=CONFIG.ICONBUILDS, themeit=CONFIG.THEME1)
                 ##############################################################################################
+                # KODI-POV-IL UMBRELLA PILOT (opt-in; see wizard.install_umbrella_pilot)
+                directory.add_dir('התקן Umbrella (ניסיוני)', {'mode': 'install', 'action': 'install_umbrella'}, icon=CONFIG.ICONBUILDS, themeit=CONFIG.THEME1)
+                ##############################################################################################
                 
             from resources.libs.gui.build_menu import BuildMenu
             themefile = BuildMenu().theme_count(CONFIG.BUILDNAME)
