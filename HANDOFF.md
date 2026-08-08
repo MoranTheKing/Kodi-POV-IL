@@ -365,6 +365,21 @@ upstream issue (jurialmunkey/skin.arctic.fuse.3 #230), reproduced on the
 latest skin and closed "not planned" — a skin update does not fix it; the
 honest user guidance is to use another skin if it bites.
 
+## Wizard release gotcha: two artifact chains, one source of truth
+
+The bundled-wizard quickfix chain and the standalone wizard ZIP chain both
+claim to ship "the wizard", but `build_wizard_quickfix.py` replaces the WHOLE
+wizard subtree from the standalone ZIP. Any source improvement that reaches
+the quickfix chain but is never listed in a wizard release manifest gets
+SILENTLY REVERTED by the next quickfix built from that ZIP -- this actually
+happened in 0.1.506's first build: `startup.py`/`resources/settings.xml`
+(quick-update retry-safety, `QUICK_UPDATE_MAX_TRIES`) had lived only in the
+quickfix chain since 0.1.500, and the freshly-built quickfix downgraded them.
+Caught by the release validator; fixed by adding both files to the 0.1.37
+manifest, which realigned the ZIP chain with source. RULE: when building a
+quickfix, diff the wizard subtree against the PREVIOUS quickfix and account
+for every changed member -- an unexplained change is a regression, not noise.
+
 ## Resolved questions (so they don't resurface)
 
 - **FENtastic DialogSubtitles "row height" marker (investigated 2026-07):**
