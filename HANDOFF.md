@@ -380,6 +380,26 @@ manifest, which realigned the ZIP chain with source. RULE: when building a
 quickfix, diff the wizard subtree against the PREVIOUS quickfix and account
 for every changed member -- an unexplained change is a regression, not noise.
 
+## Umbrella pilot (opt-in, shipped 2026-08-08, note 569)
+
+`dist/Kodi-POV-IL-Umbrella-pack.zip` = Umbrella 6.7.81 + CocoScrapers 1.0.39
++ BOTH official repository addons (assembled byte-identical from
+umbrellaplug/umbrellaplug.github.io and not-coco-joe/repository.cocoscrapers;
+validator re-verified every file). The umbrella repo addon folder is renamed
+to `repository.umbrella` to match its addon id -- Kodi ignores a repo whose
+folder differs from the id, and the official zip ships it mismatched.
+Installed ONLY via the wizard menu entry "התקן Umbrella (ניסיוני)"
+(main_menu.py -> router action install_umbrella -> wizard.install_umbrella_pilot
+-> the shared _ensure_packs_installed machinery, gate UMBRELLA_PACK_VERSION).
+After install both update straight from their developers' repos -- we are NOT
+their update channel, same trust model as POV via repository.kodifitzwell.
+Deliberately NO home tile, NO search wiring, NO defaults change. Known gap:
+the MoranSubs release-name-matching niceties are POV-aware and run "blind" on
+Umbrella playback -- the first hook to port if the pilot graduates. Phase 2
+if adopted: per-play engine chooser (TMDbHelper player on AF3 is the cheap
+first step); merging both engines' source lists into one dialog is NOT
+feasible and should not be attempted.
+
 ## Resolved questions (so they don't resurface)
 
 - **FENtastic DialogSubtitles "row height" marker (investigated 2026-07):**
