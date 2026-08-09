@@ -176,12 +176,18 @@ def ensure_external_provider():
         return 'write_failed'
     # enabled LAST: Umbrella's checkModules() blanks both names whenever it
     # sees the toggle off, so writing the toggle first could wipe them.
-    changed, _ = addon_settings_safe.apply(
+    changed, _, failed = addon_settings_safe.apply(
         UMBRELLA_ADDON_ID,
         (('external_provider.module', COCO_MODULE),
          ('external_provider.name', COCO_NAME),
          ('provider.external.enabled', 'true')),
         guard_property=UMBRELLA_GUARD_PROPERTY)
+    if failed:
+        # Half-wired is worse than unwired, and marking it done would make
+        # that permanent. Leave the marker off so the next startup retries.
+        _log('CocoScrapers not fully wired ({0}) -- will retry next startup'
+             .format(', '.join(failed)), 'WARNING')
+        return 'write_failed'
     # Marker goes down even when there was nothing to change: having looked
     # once is the point. Without it, a user who later turns External Providers
     # back off would find us turning it on again at the next startup.
@@ -240,9 +246,13 @@ def ensure_coco_providers():
     todo = [k for k in COCO_PROVIDERS if k not in done]
     if not todo:
         return 'unchanged'
-    changed, _ = addon_settings_safe.apply(
+    changed, _, failed = addon_settings_safe.apply(
         COCO_MODULE, tuple((k, 'true') for k in todo))
-    _record_done(COCO_PROVIDERS_DONE_SETTING, done | set(todo))
+    # Only what really landed is recorded as done -- a provider whose write
+    # failed stays on the list and is tried again at the next startup, instead
+    # of being written off forever on one bad boot.
+    _record_done(COCO_PROVIDERS_DONE_SETTING,
+                 done | set(k for k in todo if k not in failed))
     if changed:
         _log('CocoScrapers providers enabled: '
              + ', '.join(k.split('.', 1)[-1] for k in changed))
@@ -275,13 +285,19 @@ def ensure_umbrella_defaults():
                 continue
         wanted.append((key, value))
     if not wanted:
+        # Nothing to write, but we did look -- and a key whose guard said
+        # "the user has moved this, leave it" is settled for good. Recording
+        # it is what stops us revisiting the decision if they later happen to
+        # put the slider back where Umbrella shipped it.
+        _record_done(UMBRELLA_DEFAULTS_DONE_SETTING, done | seen)
         return 'unchanged'
-    changed, _ = addon_settings_safe.apply(
+    changed, _, failed = addon_settings_safe.apply(
         UMBRELLA_ADDON_ID, tuple(wanted),
         guard_property=UMBRELLA_GUARD_PROPERTY)
-    # Every key we considered is marked, including the ones whose guard said
-    # "leave it" -- we looked once, and that is the whole contract.
-    _record_done(UMBRELLA_DEFAULTS_DONE_SETTING, done | seen)
+    # Everything we settled is marked -- what we wrote, and what the guard
+    # told us to leave alone. Not what we tried and failed to write.
+    _record_done(UMBRELLA_DEFAULTS_DONE_SETTING,
+                 done | set(k for k in seen if k not in failed))
     if changed:
         _log('Umbrella defaults applied: ' + ', '.join(changed))
         return 'patched'
