@@ -39,6 +39,17 @@ except Exception:
 LEGACY_REL = 'resources/language/English/strings.po'
 MODERN_REL = 'resources/language/resource.language.en_gb/strings.po'
 
+# Written as the first line of every copy WE create, so a later run can tell
+# our mirror apart from a real en_gb the add-on may start shipping itself.
+# Migrating to the modern layout while the legacy folder is still there is
+# the normal way an add-on does it -- and at that moment upstream's own file
+# is sitting exactly where we want to write. Without this marker we would
+# overwrite their translation with our copy of the English one, at every
+# startup, forever. A leading '#' line is an ordinary gettext comment, so
+# nothing downstream cares that it is there.
+MARKER = '# mirrored from the legacy English folder by MoranSubs -- delete '\
+         'this line and the file becomes untouchable\n'
+
 
 def _log(msg, level='INFO'):
     if kodi_utils is None:
@@ -52,11 +63,30 @@ def _log(msg, level='INFO'):
 def _addon_path(addon_id):
     if xbmcvfs is None:
         return ''
+    # An add-on id is a dotted name, never a path. Refusing anything else
+    # keeps a caller from steering this at some other part of the disk --
+    # this module is deliberately generic now, so the next caller is one we
+    # have not seen.
+    if not addon_id or '/' in addon_id or '\\' in addon_id or addon_id == '..':
+        return ''
     try:
         base = xbmcvfs.translatePath('special://home/addons/' + addon_id + '/')
     except Exception:
         return ''
     return base if os.path.isdir(base) else ''
+
+
+def _inside(base, path):
+    """True only when `path` really lands inside `base`. Guards the two
+    relative paths as well as the id: they are constants at both call sites
+    today, and constants are exactly what stops being constant later."""
+    try:
+        base_real = os.path.realpath(base)
+        path_real = os.path.realpath(path)
+    except Exception:
+        return False
+    return (path_real == base_real
+            or path_real.startswith(base_real.rstrip(os.sep) + os.sep))
 
 
 def mirror(addon_id, legacy_rel=LEGACY_REL, modern_rel=MODERN_REL):
@@ -68,9 +98,15 @@ def mirror(addon_id, legacy_rel=LEGACY_REL, modern_rel=MODERN_REL):
         return 'not_installed'
     src = os.path.join(base, *legacy_rel.split('/'))
     dst = os.path.join(base, *modern_rel.split('/'))
+    if not (_inside(base, src) and _inside(base, dst)):
+        _log('{0}: refusing to work outside the add-on folder'.format(
+            addon_id), 'WARNING')
+        return 'outside'
     if not os.path.isfile(src):
         # Upstream moved to the modern layout themselves, or a broken
         # install -- either way there is nothing safe to copy.
+        _log('{0}: legacy English strings.po not found -- skipping'.format(
+            addon_id), 'WARNING')
         return 'no_source'
     try:
         with open(src, 'rb') as f:
@@ -80,15 +116,28 @@ def mirror(addon_id, legacy_rel=LEGACY_REL, modern_rel=MODERN_REL):
         return 'read_failed'
     if not payload:
         return 'no_source'
+    marker = MARKER.encode('utf-8')
     try:
         if os.path.isfile(dst):
             with open(dst, 'rb') as f:
-                if f.read() == payload:
+                existing = f.read()
+            if existing.startswith(marker):
+                # Ours. Refresh it if upstream's English strings moved.
+                if existing == marker + payload:
                     return 'unchanged'
+            elif existing == payload:
+                # Ours too -- written before this file carried a marker.
+                # Rewriting it once stamps the marker for good.
+                pass
+            else:
+                # Somebody else's file. That is upstream finally shipping a
+                # real en_gb, which is the outcome we wanted all along, so
+                # the only correct move is to stop.
+                return 'upstream'
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         tmp = dst + '.aitmp'
         with open(tmp, 'wb') as f:
-            f.write(payload)
+            f.write(marker + payload)
         os.replace(tmp, dst)
         _log('{0}: installed modern en_gb strings ({1} bytes) -- labels will '
              'render'.format(addon_id, len(payload)))
