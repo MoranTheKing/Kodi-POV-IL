@@ -695,6 +695,71 @@ UMBRELLA_PACKS = [
 ]
 
 
+# KODI-POV-IL - ACCOUNT MANAGER LITE PILOT (opt-in, on-demand). One place to
+# authorise Real-Debrid / Premiumize / AllDebrid / TorBox / OffCloud /
+# EasyDebrid / Easynews / Trakt / MDBList, which it then pushes into every
+# supported add-on it finds installed -- POV and Umbrella both among them, and
+# re-pushed at every Kodi startup, so an add-on installed LATER picks the
+# accounts up on the next boot. Ships with script.module.acctvwr (a hard
+# dependency of acctmgr, in no repo the build already carries) and with the
+# developer's own repository, so from here on he is its update channel, not us.
+ACCTMGR_PACK_VERSION = '1.1.5a'
+ACCTMGR_PACKS = [
+    {
+        'name': 'Account Manager Lite',
+        'url': '{0}/Kodi-POV-IL-AcctMgr-pack.zip'.format(AF3_PACK_BASE_URL),
+        'filename': 'acctmgr_pack.zip',
+        'sentinel': 'special://home/addons/script.module.acctmgr/addon.xml',
+        'expected_version': ACCTMGR_PACK_VERSION,
+        'addon_ids': [
+            'script.module.acctmgr',
+            'script.module.acctvwr',
+            'repository.709',
+        ],
+    },
+]
+
+
+def ensure_acctmgr_installed():
+    """Download + extract the Account Manager pack on demand (same
+    battle-tested path as the AF3/NOX/Umbrella packs, including the Addons-DB
+    registration that makes Kodi actually see the new addons)."""
+    return _ensure_packs_installed(
+        ACCTMGR_PACKS,
+        '[COLOR {0}][B]מוריד את Account Manager[/B][/COLOR]'.format(
+            CONFIG.COLOR2),
+        '[COLOR {0}][B]Account Manager מוכן לשימוש[/B][/COLOR]'.format(
+            CONFIG.COLOR1))
+
+
+def install_acctmgr_pilot():
+    """Opt-in flow behind the wizard menu entry. Like the Umbrella pilot it
+    changes nothing by itself: installing it does not touch a single existing
+    setting, because it only writes an account into an add-on once the user
+    has actually authorised that account inside it."""
+    dialog = xbmcgui.Dialog()
+    yes_pressed = dialog.yesno(
+        CONFIG.ADDONTITLE,
+        '[B]להתקין את [COLOR gold]Account Manager[/COLOR] (ניסיוני)?[/B]\n'
+        'מחברים את חשבונות הדבריד פעם אחת במקום אחד, והוא מעביר אותם '
+        'לכל התוספים המותקנים - גם POV וגם Umbrella. עד שתחברו חשבון, '
+        'שום הגדרה קיימת לא משתנה.',
+        nolabel='[B][COLOR red]ביטול[/COLOR][/B]',
+        yeslabel='[B][COLOR springgreen]התקן[/COLOR][/B]')
+    if not yes_pressed:
+        return
+    if ensure_acctmgr_installed():
+        xbmc.sleep(500)
+        try:
+            xbmc.executebuiltin('UpdateLocalAddons')
+        except Exception:
+            pass
+        logging.log_notify(
+            CONFIG.ADDONTITLE,
+            '[COLOR {0}]הותקן! זמין תחת תוספים -> תוכניות -> '
+            'Account Manager[/COLOR]'.format(CONFIG.COLOR1))
+
+
 def ensure_umbrella_installed():
     """Download + extract the Umbrella pilot pack on demand (same
     battle-tested path as the AF3/NOX packs, including the Addons-DB

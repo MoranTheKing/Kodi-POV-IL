@@ -1,0 +1,14 @@
+{
+  "version": "0.1.40",
+  "previous_version": "0.1.39",
+  "previous_sha256": "7facb5e12020f4653d3a0f1cba93b30cacc33dd79f6bbc04fc9976d9f2e0b1cf",
+  "output_sha256": "6c80562ef3ff9571c267ccbc56089135fa07bfd8b83dcdddaa23d7802792e97c",
+  "replace": [
+    "plugin.program.kodipovilwizard/addon.xml",
+    "plugin.program.kodipovilwizard/changelog.txt",
+    "plugin.program.kodipovilwizard/resources/libs/common/router.py",
+    "plugin.program.kodipovilwizard/resources/libs/gui/main_menu.py",
+    "plugin.program.kodipovilwizard/resources/libs/wizard.py"
+  ],
+  "add": []
+}
