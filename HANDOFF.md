@@ -400,6 +400,42 @@ if adopted: per-play engine chooser (TMDbHelper player on AF3 is the cheap
 first step); merging both engines' source lists into one dialog is NOT
 feasible and should not be attempted.
 
+### NEVER bare-setSetting another add-on (0.2.470, note 573)
+
+`xbmcaddon.Addon(other_id).setSetting(k, v)` is not a targeted write. Kodi
+loads that add-on's ENTIRE settings.xml into memory, changes one value and
+re-serialises the whole file (`Addon.cpp`: UpdateSetting -> SaveSettings ->
+SettingsToXML). On the load leg `CAddonSettings::Load` only WARNS and keeps the
+DEFAULT when a stored value fails the definition's current constraints, and the
+save leg then writes that default to disk. One key of ours can therefore reset
+a setting we never named. Every settings write into a foreign add-on goes
+through `resources/lib/addon_settings_safe.py`: snapshot the stored values,
+write only the named keys that really differ, read back, restore anything
+foreign that moved, and return `failed` for anything that did not land.
+
+Two rules that came out of it and apply to every future patcher:
+
+- **A "done" marker records what LANDED, not what was attempted.** Marking a
+  key done after a failed write disables the retry forever, and the only trace
+  is a WARNING nobody reads. Read `failed` and withhold the marker.
+- **A mute you set, you unmute unconditionally.** Umbrella mutes its own
+  settings monitor via home-window `umbrella.updateSettings`; leaving it at
+  `'false'` silently stops the add-on reacting to the USER's next settings
+  change for the rest of the session.
+
+Also settled while chasing a "the update reset my resolution" report, so it
+does not get re-investigated: **Umbrella has no setting that filters 720p.**
+The `remove.*` block (`sources.py:1011+`) removes codecs, audio, HDR, Dolby
+Vision, CAM, SD, 3D and AI-Upscaled -- `remove.sd.sources` tests
+`quality != 'SD'` and nothing more. `hosts.quality` ("Max Quality", filed under
+Sorting and Filters -> Source Filtering Options, which is why users read it as
+a filter) only picks a sort rank; with `'1'` it puts 1080p first, **720p
+second**, and pushes 4K to the bottom. External-provider (CocoScrapers) results
+are not exempt from anything: they land in `self.sourceDict`, flow into
+`self.scraper_sources`, and are merged into `self.sources` at line 817, i.e.
+BEFORE the filter block. More 720p after an update means more providers, not a
+lost setting.
+
 ## Resolved questions (so they don't resurface)
 
 - **FENtastic DialogSubtitles "row height" marker (investigated 2026-07):**
