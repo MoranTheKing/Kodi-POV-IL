@@ -1,3 +1,8 @@
+v0.2.469
+- Umbrella (optional): two extra search providers are now switched on in the
+  search engine it uses, so a search reaches sources it previously missed.
+  Anyone who prefers otherwise can turn them off and the choice is kept.
+
 v0.2.468
 - Three long-standing POV fixes started silently missing their target after
   POV's latest rewrite and now apply again: sources coming back empty for
