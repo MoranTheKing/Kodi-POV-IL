@@ -1936,6 +1936,11 @@ def _maybe_patch_umbrella_language():
             kodi_utils.log(
                 'umbrella_setup_patcher: CocoScrapers wired as the external '
                 'provider', level='INFO')
+        cps = umbrella_setup_patcher.ensure_coco_providers()
+        if cps == 'patched':
+            kodi_utils.log(
+                'umbrella_setup_patcher: extra CocoScrapers providers enabled',
+                level='INFO')
         hook = umbrella_setup_patcher.ensure_source_name_published()
         if hook == 'patched':
             kodi_utils.log(
