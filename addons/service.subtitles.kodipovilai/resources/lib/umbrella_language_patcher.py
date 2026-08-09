@@ -173,42 +173,15 @@ def ensure_content_filters_sane():
 def ensure_patched():
     """Mirror Umbrella's legacy English strings into the modern en_gb
     resource folder Kodi actually looks for. Idempotent, additive-only,
-    never raises. Returns a short status string."""
-    base = _addon_path()
-    if not base:
+    never raises. Returns a short status string.
+
+    The mechanism turned out not to be Umbrella-specific -- Account Manager
+    Lite is hit by exactly the same locale-folder fallback -- so the work
+    itself lives in legacy_lang_mirror; this stays as Umbrella's entry point
+    because the second half of this module (the content filters) is
+    Umbrella's alone."""
+    try:
+        from resources.lib import legacy_lang_mirror
+    except Exception:
         return 'not_installed'
-    src = os.path.join(base, *LEGACY_REL.split('/'))
-    dst = os.path.join(base, *MODERN_REL.split('/'))
-    if not os.path.isfile(src):
-        # upstream moved to the modern layout themselves, or a broken
-        # install -- either way there is nothing safe to copy
-        _log('legacy English strings.po not found -- skipping', 'WARNING')
-        return 'no_source'
-    try:
-        with open(src, 'rb') as f:
-            payload = f.read()
-    except OSError as e:
-        _log('read failed: {0}'.format(e), 'WARNING')
-        return 'read_failed'
-    if not payload:
-        return 'no_source'
-    try:
-        if os.path.isfile(dst):
-            with open(dst, 'rb') as f:
-                if f.read() == payload:
-                    return 'unchanged'
-        os.makedirs(os.path.dirname(dst), exist_ok=True)
-        tmp = dst + '.aitmp'
-        with open(tmp, 'wb') as f:
-            f.write(payload)
-        os.replace(tmp, dst)
-        _log('installed modern en_gb strings for Umbrella '
-             '({0} bytes) -- settings labels will render'.format(len(payload)))
-        return 'patched'
-    except OSError as e:
-        try:
-            os.remove(dst + '.aitmp')
-        except OSError:
-            pass
-        _log('write failed: {0}'.format(e), 'WARNING')
-        return 'write_failed'
+    return legacy_lang_mirror.mirror(UMBRELLA_ADDON_ID, LEGACY_REL, MODERN_REL)

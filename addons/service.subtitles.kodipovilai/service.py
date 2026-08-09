@@ -1928,6 +1928,18 @@ def _maybe_patch_umbrella_language():
                 level='WARNING')
         except Exception:
             pass
+    # Account Manager Lite (the other opt-in pilot) trips over the same
+    # locale-folder fallback, and the labels it loses are Authorize,
+    # Username, Password and API Key -- the controls a user has to press to
+    # connect an account. No-op for anyone who never installed it.
+    try:
+        from resources.lib import legacy_lang_mirror
+        if legacy_lang_mirror.mirror('script.module.acctmgr') == 'patched':
+            kodi_utils.log(
+                'legacy_lang_mirror: Account Manager Lite labels will render',
+                level='INFO')
+    except Exception:
+        pass
     # Wiring + subtitle-matching hook for the same optional add-on.
     try:
         from resources.lib import umbrella_setup_patcher
