@@ -1,3 +1,11 @@
+[COLOR yellow][B]v0.1.40[/B][/COLOR]
+* New opt-in pilot: "Install Account Manager (experimental)" in the wizard
+  menu. Connect your debrid accounts once in one place and it fills them
+  into every add-on you have installed, POV and Umbrella included, and into
+  anything you install later. Ships with its developer's own repository so
+  it updates straight from him. Nothing changes for anyone who does not
+  pick it.
+
 [COLOR yellow][B]v0.1.39[/B][/COLOR]
 * New opt-in pilot: "Install Umbrella (experimental)" in the wizard menu
   installs the Umbrella addon + CocoScrapers alongside POV, with both of
