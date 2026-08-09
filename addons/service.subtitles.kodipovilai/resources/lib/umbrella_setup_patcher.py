@@ -55,6 +55,19 @@ COCO_MODULE = 'script.module.cocoscrapers'
 COCO_NAME = 'cocoscrapers'
 PROVIDER_DONE_SETTING = '_umbrella_coco_wired_v1'
 
+# CocoScrapers ships with 4 of its 14 providers on (torrentio, bitsearch,
+# eztv, torrentdownload) -- the other ten sit unused unless the user goes
+# hunting through its settings. These two are aggregators that pull from
+# indexers the shipped four do not reach, and neither needs any credential
+# or URL of its own, so they are the two that pay off with nothing to
+# configure. Deliberately just these two for now: providers run in parallel,
+# but adding them is still the one change in flight, so any change in how
+# long a search takes can be attributed to them and to nothing else.
+# Turned on ONCE, behind our own marker -- a user who switches either back
+# off keeps that choice, and every other provider is left exactly as it is.
+COCO_PROVIDERS = ('provider.comet', 'provider.mediafusion')
+COCO_PROVIDERS_DONE_SETTING = '_umbrella_coco_providers_v1'
+
 MARKER = '# AI_SUBS_UMBRELLA_SOURCE_NAME_v1'
 
 # The single line in playItem() that means "this picked source resolved".
@@ -121,6 +134,39 @@ def ensure_external_provider():
         pass
     _log('CocoScrapers wired as Umbrella\'s external provider')
     return 'patched'
+
+
+def ensure_coco_providers():
+    """Switch on the two extra CocoScrapers providers, once. Returns a short
+    status string; never raises."""
+    try:
+        import xbmcaddon
+        coco = xbmcaddon.Addon(COCO_MODULE)
+    except Exception:
+        return 'not_installed'
+    try:
+        from resources.lib import kodi_utils as _ku
+        if (_ku.get_setting(COCO_PROVIDERS_DONE_SETTING, '') or '') == 'done':
+            return 'unchanged'
+    except Exception:
+        pass
+    turned_on = []
+    for key in COCO_PROVIDERS:
+        try:
+            if (coco.getSetting(key) or '').strip().lower() != 'true':
+                coco.setSetting(key, 'true')
+                turned_on.append(key.split('.', 1)[-1])
+        except Exception as e:
+            _log('could not enable {0}: {1}'.format(key, e), 'WARNING')
+    try:
+        from resources.lib import kodi_utils as _ku
+        _ku.set_setting(COCO_PROVIDERS_DONE_SETTING, 'done')
+    except Exception:
+        pass
+    if turned_on:
+        _log('CocoScrapers providers enabled: ' + ', '.join(turned_on))
+        return 'patched'
+    return 'unchanged'
 
 
 def _sources_path():
