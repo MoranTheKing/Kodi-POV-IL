@@ -73,6 +73,9 @@ class MainMenu:
                 # KODI-POV-IL UMBRELLA PILOT (opt-in; see wizard.install_umbrella_pilot)
                 directory.add_dir('התקן Umbrella (ניסיוני)', {'mode': 'install', 'action': 'install_umbrella'}, icon=CONFIG.ICONBUILDS, themeit=CONFIG.THEME1)
                 ##############################################################################################
+                # KODI-POV-IL ACCOUNT MANAGER PILOT (opt-in; see wizard.install_acctmgr_pilot)
+                directory.add_dir('התקן Account Manager (ניסיוני)', {'mode': 'install', 'action': 'install_acctmgr'}, icon=CONFIG.ICONBUILDS, themeit=CONFIG.THEME1)
+                ##############################################################################################
                 
             from resources.libs.gui.build_menu import BuildMenu
             themefile = BuildMenu().theme_count(CONFIG.BUILDNAME)
