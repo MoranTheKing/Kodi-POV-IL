@@ -400,6 +400,52 @@ if adopted: per-play engine chooser (TMDbHelper player on AF3 is the cheap
 first step); merging both engines' source lists into one dialog is NOT
 feasible and should not be attempted.
 
+## Account Manager Lite pilot (opt-in)
+
+`dist/Kodi-POV-IL-AcctMgr-pack.zip` = `script.module.acctmgr` 1.1.5a +
+`script.module.acctvwr` 1.1.4 (a HARD dependency of acctmgr, in no repo the
+build already carries) + `repository.709` 1.0.2, all taken verbatim from
+github.com/Zaxxon709/zaxxon and assembled by `tools/build_acctmgr_pack.py`,
+which refuses to build unless each zip's top-level folder equals the add-on id
+inside it. Shipping the developer's repo means he is the update channel from
+then on -- same trust model as Umbrella and as POV via repository.kodifitzwell.
+Installed ONLY from the wizard menu entry "התקן Account Manager (ניסיוני)"
+(main_menu.py -> router action `install_acctmgr` -> `install_acctmgr_pilot`).
+
+What it is: one place to authorise Real-Debrid, Premiumize, AllDebrid, TorBox,
+OffCloud, EasyDebrid, Easynews, Trakt and MDBList, which it then writes into
+every supported add-on it finds installed (~25, POV and Umbrella among them).
+Its `SyncManager()` re-pushes at EVERY Kodi startup, so an add-on installed
+later picks the accounts up on the next boot without the user doing anything.
+
+Note the source of the repo link: `Zaxxon709/repo` is only the repository
+installer and has not been touched since 2024-04. The add-ons live in
+`Zaxxon709/zaxxon`, which is actively maintained.
+
+Four things established by reading 1.1.5a, so they are not re-derived:
+
+- **Upstream bug, reported.** `am_masters()` returns `(... offcloud, torbox
+  ...)`; `SyncManager()` unpacks `(... torbox, offcloud ...)`. So TorBox's
+  startup sync is gated on the OffCloud token, and the OffCloud branch tests
+  `oc_master_token` which that function never assigns -> `NameError` swallowed
+  by the enclosing `except`, logged only as "Startup OffCloud Startup Sync
+  FAILED". Manual sync from its settings screen is unaffected.
+- **It patches other add-ons' source**, injecting a marker-gated, compile-
+  validated Trakt-ordering snippet into `plugin.video.pov/resources/lib/
+  service.py` and `plugin.video.umbrella/service.py`. Same discipline as ours
+  and NO collision: our patchers touch POV's `modules/settings.py`,
+  `caches/trakt_cache.py`, `modules/sources.py` and Umbrella's
+  `resources/lib/modules/sources.py`. Keep it that way.
+- **It flips Kodi's global `general.addonupdates` to 0** (install updates
+  automatically) via JSON-RPC, but only for users who authorise Trakt through
+  it. Not ours to prevent; worth knowing before blaming the build for an
+  unexpected add-on update.
+- **Uninstalling it without "revoke" first** leaves the add-ons carrying
+  whatever it wrote. Its own string 40088 says so.
+
+Privacy check: outbound hosts are the services' own APIs, raw.githubusercontent
+for its self-update check, and paste.kodi.tv for log upload. No telemetry.
+
 ### NEVER bare-setSetting another add-on (0.2.470, note 573)
 
 `xbmcaddon.Addon(other_id).setSetting(k, v)` is not a targeted write. Kodi

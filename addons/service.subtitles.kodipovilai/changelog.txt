@@ -1,3 +1,9 @@
+v0.2.471
+- New optional add-on in the wizard menu: Account Manager. Connect your
+  debrid accounts once in one place and it fills them into every add-on you
+  have installed, POV and Umbrella included - and into anything you install
+  later, by itself. Nothing installs or changes unless you pick it.
+
 v0.2.470
 - Umbrella (optional): three more search providers are switched on in the
   search engine it uses, a source that fails to play now moves on to the next
