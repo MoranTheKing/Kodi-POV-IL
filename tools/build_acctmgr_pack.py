@@ -39,6 +39,16 @@ from zipfile import ZIP_DEFLATED, ZipFile
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "dist" / "Kodi-POV-IL-AcctMgr-pack.zip"
 
+# Build artefacts and OS litter that upstream happens to have zipped up. The
+# "verbatim" rule is about SOURCE bytes -- we neither fork nor edit a single
+# line of the developer's code -- and stale bytecode is not source. Upstream
+# ships ~90 .pyc files compiled for two interpreter versions; none of them is
+# anything Kodi needs, and an unfiltered pack is how a .git or a .DS_Store
+# ends up shipped the next time an upstream zip is a little untidy.
+EXCLUDE_DIRS = ('__pycache__', '.git', '.github', '.svn')
+EXCLUDE_NAMES = ('.DS_Store', 'Thumbs.db', 'desktop.ini')
+EXCLUDE_SUFFIXES = ('.pyc', '.pyo')
+
 # (add-on id, filename glob in the source dir)
 MEMBERS = (
     ("script.module.acctmgr", "script.module.acctmgr-*.zip"),
@@ -90,9 +100,17 @@ def build(source_dir: Path, output: Path) -> None:
 
         output.parent.mkdir(parents=True, exist_ok=True)
         paths = []
+        skipped = 0
         for dirpath, dirnames, filenames in os.walk(staging):
-            dirnames.sort()
+            pruned = [d for d in dirnames if d in EXCLUDE_DIRS]
+            for d in pruned:
+                skipped += sum(len(f) for _, _, f in os.walk(
+                    Path(dirpath) / d))
+            dirnames[:] = sorted(d for d in dirnames if d not in EXCLUDE_DIRS)
             for name in sorted(filenames):
+                if name in EXCLUDE_NAMES or name.endswith(EXCLUDE_SUFFIXES):
+                    skipped += 1
+                    continue
                 paths.append(Path(dirpath) / name)
         with ZipFile(output, "w", ZIP_DEFLATED) as out:
             for p in paths:
@@ -102,7 +120,7 @@ def build(source_dir: Path, output: Path) -> None:
             print(f"  {addon_id} {version}  <- {src_name}")
             print(f"      source sha256 {digest}")
         print(f"built {output} ({output.stat().st_size} bytes, "
-              f"{len(paths)} files)")
+              f"{len(paths)} files, {skipped} build artefact(s) left out)")
     finally:
         shutil.rmtree(staging, ignore_errors=True)
 
@@ -112,7 +130,8 @@ def main() -> None:
     ap.add_argument("--source-dir", required=True, type=Path,
                     help="directory holding the three upstream zips")
     ap.add_argument("--output", type=Path, default=OUTPUT)
-    build(ap.parse_args().source_dir, ap.parse_args().output)
+    args = ap.parse_args()
+    build(args.source_dir, args.output)
 
 
 if __name__ == "__main__":
