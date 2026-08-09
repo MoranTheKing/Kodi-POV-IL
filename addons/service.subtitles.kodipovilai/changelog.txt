@@ -1,3 +1,9 @@
+v0.2.470
+- Umbrella (optional): three more search providers are switched on in the
+  search engine it uses, a source that fails to play now moves on to the next
+  one instead of stopping, and a search that gets stuck gives up sooner.
+  Anything you changed yourself is left exactly as you set it.
+
 v0.2.469
 - Umbrella (optional): two extra search providers are now switched on in the
   search engine it uses, so a search reaches sources it previously missed.
