@@ -106,6 +106,9 @@ class Router:
             elif action == 'install_umbrella':
                 from resources.libs.wizard import install_umbrella_pilot
                 install_umbrella_pilot()
+            elif action == 'install_acctmgr':
+                from resources.libs.wizard import install_acctmgr_pilot
+                install_acctmgr_pilot()
             elif action == 'af3_tools':
                 from resources.libs.wizard import af3_tools_menu
                 af3_tools_menu()
