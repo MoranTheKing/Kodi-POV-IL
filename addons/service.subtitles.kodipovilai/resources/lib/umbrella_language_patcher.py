@@ -138,6 +138,7 @@ def ensure_content_filters_sane():
         except Exception as e:
             _log('could not read {0}: {1}'.format(key, e), 'WARNING')
     turned_off = []
+    failed = []
     if wanted:
         # Never a bare setSetting on somebody else's add-on: Kodi rewrites the
         # whole of Umbrella's settings.xml around every one of them. See
@@ -146,11 +147,16 @@ def ensure_content_filters_sane():
             from resources.lib import addon_settings_safe
             from resources.lib.umbrella_setup_patcher import (
                 UMBRELLA_GUARD_PROPERTY)
-            turned_off, _ = addon_settings_safe.apply(
+            turned_off, _, failed = addon_settings_safe.apply(
                 UMBRELLA_ADDON_ID, tuple(wanted),
                 guard_property=UMBRELLA_GUARD_PROPERTY)
         except Exception as e:
+            failed = [k for k, _v in wanted]
             _log('could not clear content filters: {0}'.format(e), 'WARNING')
+    if failed:
+        # Marker withheld: the lists are still empty, so the next startup has
+        # to try again rather than record the job as done.
+        return 'write_failed'
     try:
         from resources.lib import kodi_utils as _ku
         _ku.set_setting(FILTER_DONE_SETTING, lang)

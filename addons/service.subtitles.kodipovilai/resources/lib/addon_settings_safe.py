@@ -112,28 +112,38 @@ def apply(addon_id, wanted, guard_property=None):
     given we drive it the way the add-on does, so our writes do not make it
     run its change handler once per key.
 
-    Returns (changed, restored): the keys we set, and the foreign keys we had
-    to put back. Never raises."""
+    Returns (changed, restored, failed):
+      changed -- the keys we actually wrote,
+      restored -- the foreign keys we had to put back,
+      failed  -- the keys we meant to write that did NOT end up at the wanted
+                 value, whether the call raised or the value simply did not
+                 stick.
+    `failed` is the one callers must look at: a caller that records "already
+    applied" for a key we never managed to write would never try again.
+    Never raises."""
     if xbmcaddon is None:
-        return [], []
+        return [], [], [k for k, _ in wanted]
     try:
         addon = xbmcaddon.Addon(addon_id)
     except Exception:
-        return [], []
+        return [], [], [k for k, _ in wanted]
 
     path = _values_path(addon_id)
     before = _read_values(path)
 
     pending = []
+    unreadable = []
     for key, value in wanted:
         try:
             current = addon.getSetting(key)
         except Exception:
+            # Cannot even read it -> cannot claim it is where we want it.
+            unreadable.append(key)
             continue
         if (current or '') != value:
             pending.append((key, value))
     if not pending:
-        return [], []
+        return [], [], unreadable
 
     win = None
     if guard_property and xbmcgui is not None:
@@ -160,6 +170,30 @@ def apply(addon_id, wanted, guard_property=None):
         except Exception as e:
             _log('{0}: could not set {1}: {2}'.format(addon_id, key, e),
                  'WARNING')
+
+    if win is not None:
+        # Belt and braces: whatever happened in the loop, the target's monitor
+        # must not be left muted. Leaving this at 'false' would silently stop
+        # it reacting to the USER's next settings change, for the rest of the
+        # session, which is a far worse bug than the one the mute avoids.
+        try:
+            win.setProperty(guard_property, 'true')
+        except Exception:
+            pass
+
+    # A write that raised is a failure; so is a write that returned quietly
+    # and did not stick (the target add-on can react to a setting by putting
+    # it back). Read our own keys again and believe the file, not the call.
+    failed = list(unreadable)
+    for key, value in pending:
+        try:
+            if (addon.getSetting(key) or '') != value:
+                failed.append(key)
+        except Exception:
+            failed.append(key)
+    if failed:
+        _log('{0}: {1} did not end up at the value we asked for'.format(
+            addon_id, ', '.join(failed)), 'WARNING')
 
     restored = []
     if before is not None and changed:
@@ -195,4 +229,4 @@ def apply(addon_id, wanted, guard_property=None):
                                  ', '.join(str(final.get(k)) for k in stuck),
                                  ', '.join(str(before.get(k)) for k in stuck)),
                              'WARNING')
-    return changed, restored
+    return changed, restored, failed
