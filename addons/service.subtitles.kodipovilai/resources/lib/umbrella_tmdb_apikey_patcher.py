@@ -68,7 +68,16 @@ HELPER_NAME = '_ai_apikey'
 
 # The helper goes in at module level, immediately before the first class that
 # uses it. `class TMDb:` is the base of every indexer class in the file.
-_HELPER_ANCHOR_RE = re.compile(r'^class TMDb:[ \t]*$', re.MULTILINE)
+#
+# The `\r?` is not decoration. Upstream Umbrella ships this file LF, but the
+# Umbrella pack THIS BUILD installs ships it CRLF -- and `$` in MULTILINE
+# matches before a `\n`, not before a `\r`. Without the `\r?` the anchor
+# matches the copy you download from GitHub and misses the copy that is
+# actually on the user's device, which is exactly how the first attempt at
+# this fix shipped doing nothing. Both spellings have to work here, because
+# the same device flips from one to the other the moment Umbrella updates
+# itself from its own repository.
+_HELPER_ANCHOR_RE = re.compile(r'^class TMDb:[ \t]*(?P<cr>\r?)$', re.MULTILINE)
 
 _HELPER_LINES = (
     '# ' + MARKER,
@@ -85,10 +94,14 @@ _HELPER_LINES = (
     '# END ' + MARKER,
 )
 
+# The trailing run is `(?:\r?\n)+`, not `\r?\n+`: the second spelling eats one
+# CRLF and then stalls, because `\n+` cannot cross the next `\r`. That left the
+# two blank lines behind on a CRLF file, so revert() was not byte-identical and
+# every boot stacked another copy of the helper on top of the last.
 _HELPER_REVERT_RE = re.compile(
     r'^#[ \t]*' + MARKER + r'[ \t]*\r?\n'
     r'(?:(?!#[ \t]*(?:END[ \t]+)?' + MARKER + r')[\s\S])*?'
-    r'^#[ \t]*END[ \t]+' + MARKER + r'[ \t]*\r?\n+',
+    r'^#[ \t]*END[ \t]+' + MARKER + r'[ \t]*(?:\r?\n)+',
     re.MULTILINE,
 )
 
@@ -172,7 +185,10 @@ def ensure_patched():
              'skipping', level='WARNING')
         return 'unmatched'
 
-    eol = '\r\n' if '\r\n' in content[:4096] else '\n'
+    # Newline style from the anchor line itself, not from a sample of the
+    # head: a file whose head and body disagree would otherwise get the wrong
+    # one spliced in at exactly the point that matters.
+    eol = '\r\n' if m.group('cr') else '\n'
     helper = ''.join(ln + eol for ln in _HELPER_LINES) + eol + eol
     content = content[:m.start()] + helper + content[m.start():]
 
