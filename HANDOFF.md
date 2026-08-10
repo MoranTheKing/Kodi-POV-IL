@@ -2621,6 +2621,19 @@ Things worth not rediscovering from this batch:
 - **A "seen" sidecar key means the tile reached the DISK.** Stamping it inside
   the inserter, before `ensure_patched()` writes the file, turns a failed
   write into a permanent skip. Same rule as the "done marker" one above.
+- **A gated tile has TWO ways into favourites, and both need the gate.** The
+  per-tile inserters check `_umbrella_installed()`, but
+  `_install_canonical_home()` — the near-empty-home rescue — writes the whole
+  fixture VERBATIM, so it shipped the Umbrella tile to devices with no
+  Umbrella. Anything conditional added to the fixture must also be dropped in
+  `_drop_umbrella_tiles()`'s equivalent for that condition. The rescue path is
+  easy to forget because it only fires on a broken install.
+- **An auto-install marker records "we did this once", not a version.** Keying
+  `acctmgr_auto` on `ACCTMGR_PACK_VERSION` looks tidier and is wrong: the next
+  version bump stops matching on every device and forces a reinstall,
+  including on somebody who removed the add-on on purpose — the one thing the
+  marker promises not to do. Keeping the pack current is not that function's
+  job; Account Manager updates itself from its developer's repo.
 
 ### Known, deliberately not fixed
 
