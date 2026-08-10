@@ -385,6 +385,25 @@ HOME_SUBMENU = [
         'path': 'RunScript(service.subtitles.kodipovilai,action=debrid_notice_settings)',
         'target': '',
     },
+    # The two Umbrella-era entries. AF3 does not use Kodi's favourites for its
+    # home, so the favourites tiles that carry these on the other three skins
+    # never appear here -- these are AF3's copy of the same two buttons, which
+    # is what keeps all four skins at the same place. Both are dropped from the
+    # canonical unless Umbrella is actually installed (see _UMBRELLA_MENU_PATHS
+    # and the filter in ensure_patched), so nobody gets a dead row.
+    {
+        'label': 'מנוע החיפוש - POV / Umbrella',
+        'icon': ('special://home/addons/plugin.video.pov/resources/skins/'
+                 'Default/media/search.png'),
+        'path': 'RunScript(service.subtitles.kodipovilai,action=search_provider)',
+        'target': '',
+    },
+    {
+        'label': 'Umbrella',
+        'icon': 'special://home/addons/plugin.video.umbrella/icon.png',
+        'path': 'RunAddon("plugin.video.umbrella")',
+        'target': '',
+    },
     {
         'label': 'תרגום AI',
         'icon': 'special://home/addons/service.subtitles.kodipovilai/icon.png',
@@ -417,6 +436,25 @@ POWER_MENU = [
         'label': 'הגדרת התראות מנוי',
         'icon': 'special://home/media/build_icons/POV/Connect_Services.png',
         'path': 'RunScript(service.subtitles.kodipovilai,action=debrid_notice_settings)',
+        'target': '',
+    },
+    # The two Umbrella-era entries. AF3 does not use Kodi's favourites for its
+    # home, so the favourites tiles that carry these on the other three skins
+    # never appear here -- these are AF3's copy of the same two buttons, which
+    # is what keeps all four skins at the same place. Both are dropped from the
+    # canonical unless Umbrella is actually installed (see _UMBRELLA_MENU_PATHS
+    # and the filter in ensure_patched), so nobody gets a dead row.
+    {
+        'label': 'מנוע החיפוש - POV / Umbrella',
+        'icon': ('special://home/addons/plugin.video.pov/resources/skins/'
+                 'Default/media/search.png'),
+        'path': 'RunScript(service.subtitles.kodipovilai,action=search_provider)',
+        'target': '',
+    },
+    {
+        'label': 'Umbrella',
+        'icon': 'special://home/addons/plugin.video.umbrella/icon.png',
+        'path': 'RunAddon("plugin.video.umbrella")',
         'target': '',
     },
     {
@@ -676,6 +714,27 @@ _MERGE_FILES = (
     'skinvariables-shortcut-searchwidgets.json',
     'skinvariables-shortcut-powermenu.json',
 )
+
+# The two Umbrella-era rows, by the same 'path' key the merge uses as identity.
+# Kept next to _MERGE_FILES because the filter that drops them and the merge
+# that delivers them have to agree on what a row IS.
+_UMBRELLA_MENU_PATHS = (
+    'RunScript(service.subtitles.kodipovilai,action=search_provider)',
+    'RunAddon("plugin.video.umbrella")',
+)
+_UMBRELLA_MENU_FILES = (
+    'skinvariables-shortcut-homesubmenu.json',
+    'skinvariables-shortcut-powermenu.json',
+)
+
+
+def _umbrella_installed():
+    try:
+        import xbmcaddon
+        xbmcaddon.Addon('plugin.video.umbrella')
+        return True
+    except Exception:
+        return False
 
 
 def _item_key(item):
@@ -1238,7 +1297,18 @@ def ensure_patched():
     _mkdir(AF3_NODES)
     changed = False
     mdblist_ok = _mdblist_connected()
+    umbrella_ok = _umbrella_installed()
     for filename, data in FILES.items():
+        # The Umbrella + search-engine rows are opt-in the same way: without
+        # Umbrella the search switch has nothing to switch to and the Umbrella
+        # row opens an add-on that is not there, so both are dropped from the
+        # canonical. Installing Umbrella later appends them on the next boot
+        # (brand-new against the baseline); removing Umbrella leaves them,
+        # because the 3-way merge is add-only and a row the user has since
+        # curated is theirs.
+        if not umbrella_ok and filename in _UMBRELLA_MENU_FILES:
+            data = [w for w in data
+                    if (w.get('path') or '') not in _UMBRELLA_MENU_PATHS]
         # MDBList home widgets are opt-in: drop them from the canonical unless
         # MDBList is connected, so the merge never seeds/appends an mdblist_
         # watchlist row that would error without a key. A user who connects
