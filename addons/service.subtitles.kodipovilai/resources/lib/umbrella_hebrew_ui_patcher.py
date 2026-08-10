@@ -18,9 +18,11 @@
 # a string with no entry here simply is not in the file, Kodi falls back to
 # en_gb, and it renders in English exactly as it does today. Nothing breaks,
 # nothing goes blank. That lets us translate the surface a user actually
-# touches -- the 169 strings the menus, dialogs and context menu are built
-# from -- and leave the 533 settings labels in English, where the terms are
-# technical and a translation would more often confuse than help.
+# touches -- the menus, dialogs and context actions are built from 169 ids, of
+# which 157 carry text worth translating (the rest are brand names, bare
+# punctuation, or pure format strings) -- and leave the 533 settings labels in
+# English, where the terms are technical and a translation would more often
+# confuse than help.
 #
 # The .po is BUILT at install time by pairing each id below with the English
 # msgid read out of Umbrella's own strings.po. That way the msgid always
@@ -292,13 +294,23 @@ def _po_escape(text):
 
 def _english_msgids(path):
     """{id: english msgid} straight out of Umbrella's own strings.po, so our
-    msgids always match what they currently ship."""
+    msgids always match what they currently ship.
+
+    The captured text is the SOURCE's own PO-escaped form and is copied
+    through verbatim -- escaping it again would turn an upstream \\n into
+    \\\\n and quietly stop the msgid matching theirs.
+
+    An empty capture is dropped rather than used. That is how a multi-line
+    gettext entry (`msgid ""` with continuation lines) looks to a single-line
+    regex, and emitting it would put a second empty msgid in the file -- a
+    duplicate of the PO header, which is a hard error for stricter parsers."""
     try:
         with open(path, 'r', encoding='utf-8') as f:
             src = f.read()
     except OSError:
         return {}
-    return dict(re.findall(r'msgctxt "#(\d+)"\s*\nmsgid "(.*?)"\s*\n', src))
+    found = re.findall(r'msgctxt "#(\d+)"\s*\nmsgid "(.*?)"\s*\n', src)
+    return dict((k, v) for k, v in found if v)
 
 
 def build_po(english):
@@ -308,7 +320,8 @@ def build_po(english):
         if key not in english:
             continue
         out.append('msgctxt "#%s"\n' % key)
-        out.append('msgid "%s"\n' % _po_escape(english[key]))
+        # Already escaped by upstream -- pass it through untouched.
+        out.append('msgid "%s"\n' % english[key])
         out.append('msgstr "%s"\n\n' % _po_escape(HE[key]))
     return ''.join(out).encode('utf-8')
 

@@ -125,6 +125,16 @@ def ensure_api_language():
         # Leaving the marker off is the whole point: a half-applied language
         # with the filters about to be re-evaluated is the empty-lists bug.
         return 'write_failed'
+    # THE FILTERS COME DOWN HERE, not at the call site. Leaving that to the
+    # caller's statement order meant a single log call between the two could
+    # raise and strand Hebrew with the filters still on -- lists empty for the
+    # rest of the session. The two are one operation, so they live together:
+    # whoever moves the language clears the filters, in the same breath.
+    try:
+        ensure_content_filters_sane()
+    except Exception as e:
+        _log('language moved but the content filters did not clear: {0}'
+             .format(e), 'WARNING')
     try:
         from resources.lib import kodi_utils as _ku
         _ku.set_setting(API_LANGUAGE_DONE_SETTING, 'done')
