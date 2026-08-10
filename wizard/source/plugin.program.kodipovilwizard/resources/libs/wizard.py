@@ -733,6 +733,16 @@ def ensure_acctmgr_installed():
 
 
 ACCTMGR_AUTO_SETTING = 'acctmgr_auto'
+# What the marker records: "this device has had Account Manager put on it by
+# us, once". Deliberately NOT the pack version. Keying it on the version looks
+# tidier and is wrong: the next time ACCTMGR_PACK_VERSION is bumped, every
+# device whose marker holds the old version stops matching and gets a forced
+# reinstall -- INCLUDING somebody who removed Account Manager on purpose in
+# the meantime, which is the one thing this promises not to do. Keeping it
+# current is not this function's job anyway: Account Manager updates itself
+# from its developer's own repository, and the wizard menu still has a manual
+# reinstall for anyone who wants one.
+ACCTMGR_AUTO_DONE = 'installed'
 
 
 def ensure_acctmgr_for_everyone():
@@ -755,7 +765,7 @@ def ensure_acctmgr_for_everyone():
     file check, not a 8 MB download. Never raises; the caller runs at startup
     and a failure here must not stop the rest of it."""
     try:
-        if CONFIG.get_setting(ACCTMGR_AUTO_SETTING) == ACCTMGR_PACK_VERSION:
+        if CONFIG.get_setting(ACCTMGR_AUTO_SETTING) == ACCTMGR_AUTO_DONE:
             return False
         if not CONFIG.get_setting('buildname'):
             return False            # build not installed yet -- too early
@@ -767,7 +777,7 @@ def ensure_acctmgr_for_everyone():
                 '[Account Manager] auto-install did not complete; will retry '
                 'on the next startup', level=xbmc.LOGINFO)
             return False
-        CONFIG.set_setting(ACCTMGR_AUTO_SETTING, ACCTMGR_PACK_VERSION)
+        CONFIG.set_setting(ACCTMGR_AUTO_SETTING, ACCTMGR_AUTO_DONE)
         xbmc.sleep(500)
         try:
             xbmc.executebuiltin('UpdateLocalAddons')
