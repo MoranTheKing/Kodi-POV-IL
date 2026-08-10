@@ -1,3 +1,8 @@
+v0.2.473
+- Umbrella (optional): the rest of the menus are now in Hebrew too - the main
+  menu, the Discover lists and the personal lists. A few rows stay in English
+  because their names are fixed in the add-on and cannot be translated.
+
 v0.2.472
 - Umbrella (optional): its menus are now in Hebrew, and it asks for titles,
   plot summaries and artwork in Hebrew too. Anything with no Hebrew
