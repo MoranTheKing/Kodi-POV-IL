@@ -341,7 +341,13 @@ def ensure_source_name_published():
     if not path:
         return 'not_installed'
     try:
-        with open(path, 'r', encoding='utf-8') as f:
+        # newline='' or Python's universal-newline translation strips every
+        # \r on the way in, while the write below is raw -- so patching a
+        # CRLF copy of this file would rewrite the WHOLE file as LF, not just
+        # the inserted lines. sources.py ships LF today, but the Umbrella pack
+        # this build installs already ships two of its siblings as CRLF, and
+        # an Umbrella self-update can flip it either way.
+        with open(path, 'r', encoding='utf-8', newline='') as f:
             original = f.read()
     except OSError as e:
         _log('read failed: {0}'.format(e), 'WARNING')
