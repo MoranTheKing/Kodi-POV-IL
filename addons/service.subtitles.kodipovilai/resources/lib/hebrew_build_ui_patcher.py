@@ -644,32 +644,45 @@ def _ensure_hebrew_layout_available():
         the user simply cannot type Hebrew -- and, seeded once and never
         re-checked, it could never come back on its own.
 
-    Additive on purpose: read the current list, append Hebrew only if it is
-    absent, and write back the same order otherwise. It never removes a layout
-    the user added, never reorders, and never touches the active layout. The
-    old version wrote a fixed two-item list, which silently dropped any third
-    layout a user had chosen."""
+    Additive on purpose: read the current list, append only what is missing,
+    and leave everything else exactly as it was. It never removes a layout the
+    user added, never reorders, and never touches the active layout.
+
+    It ensures ENGLISH as well as Hebrew, for a reason worth stating: a list
+    that reads back empty would otherwise be written as Hebrew-only, leaving
+    the device with no English fallback -- and since this function goes quiet
+    the moment Hebrew is present, that state would then be permanent."""
     current = _get_kodi_setting('locale.keyboardlayouts')
     if isinstance(current, str):
         current = [p.strip() for p in current.split('|') if p.strip()]
     if not isinstance(current, list):
         return False                 # cannot read it -> do not guess
-    if HEBREW_LAYOUT in current:
+    missing = [n for n in (ENGLISH_LAYOUT, HEBREW_LAYOUT) if n not in current]
+    if not missing:
         return False
-    wanted = list(current) + [HEBREW_LAYOUT]
+    wanted = list(current) + missing
     ok = _set_kodi_setting('locale.keyboardlayouts', wanted)
     # READ IT BACK. Kodi validates a settings value against the options that
     # exist RIGHT NOW and silently keeps the old one when the value is not
-    # among them -- the same trap as CAddonSettings::Load, one level up. If
-    # 'Hebrew QWERTY' is not an offered layout on this device (a language
-    # resource that never shipped it, or an app build without it), the write
-    # returns success and changes nothing, and we would report a repair that
-    # did not happen. That distinction is the whole diagnosis: setting reset
-    # vs layout genuinely unavailable.
+    # among them -- the same trap as CAddonSettings::Load, one level up. So a
+    # write can "succeed" and change nothing, and we would report a repair
+    # that did not happen. That distinction is the whole diagnosis: setting
+    # reset vs layout genuinely unavailable.
     after = _get_kodi_setting('locale.keyboardlayouts')
     if isinstance(after, str):
         after = [p.strip() for p in after.split('|') if p.strip()]
-    if not (ok and isinstance(after, list) and HEBREW_LAYOUT in after):
+    if not isinstance(after, list):
+        # The READ failed, not the write. Saying "this device does not offer
+        # the layout" here would be a diagnosis of the wrong thing entirely
+        # and would send whoever reads the log next to the app build instead
+        # of to a transient RPC glitch. Next startup re-checks and settles it.
+        kodi_utils.log(
+            'hebrew_build_ui_patcher: could not read locale.keyboardlayouts '
+            'back after writing it, so whether the restore landed is unknown '
+            '(write reported {0}). Re-checked on the next startup.'
+            .format('OK' if ok else 'failure'), level='WARNING')
+        return False
+    if not (ok and HEBREW_LAYOUT in after):
         kodi_utils.log(
             'hebrew_build_ui_patcher: tried to restore the Hebrew keyboard '
             'layout and it did NOT stick (list still reads: {0}). Kodi is '
@@ -678,25 +691,24 @@ def _ensure_hebrew_layout_available():
             'settings one.'.format(after, HEBREW_LAYOUT), level='WARNING')
         return False
     kodi_utils.log(
-        'hebrew_build_ui_patcher: the Hebrew keyboard layout was missing from '
-        'locale.keyboardlayouts and has been restored (now: {0})'
-        .format(', '.join(after)), level='INFO')
+        'hebrew_build_ui_patcher: restored the missing keyboard layout(s) {0} '
+        '(list is now: {1})'.format(', '.join(missing), ', '.join(after)),
+        level='INFO')
     return True
 
 
 def _ensure_runtime_keyboard_layout():
-    """The once-per-device seed: both layouts present, English active.
-    Availability is kept honest afterwards by _ensure_hebrew_layout_available;
-    the ACTIVE layout is never touched again after this."""
-    changed = False
-    if _set_kodi_setting('locale.keyboardlayouts',
-                         [ENGLISH_LAYOUT, HEBREW_LAYOUT]):
-        changed = True
+    """The once-per-device seed of the ACTIVE layout, and nothing else.
+
+    It used to also write `locale.keyboardlayouts` as a fixed
+    [English, Hebrew] pair. That was left in place when availability was split
+    out above -- and it is the very pattern the split was meant to remove: on
+    a fresh install, or any future `_PREFS_SEED_VERSION` bump, it runs right
+    AFTER the additive repair and overwrites its result, silently dropping any
+    third layout the user had. Availability now has exactly one owner."""
     # Keep the active layout English so existing users do not unexpectedly
     # switch; the keyboard button can then cycle to Hebrew.
-    if _set_kodi_setting('locale.activekeyboardlayout', ENGLISH_LAYOUT):
-        changed = True
-    return changed
+    return _set_kodi_setting('locale.activekeyboardlayout', ENGLISH_LAYOUT)
 
 
 def _ensure_english_audio_preference_file():
