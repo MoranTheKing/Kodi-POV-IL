@@ -1583,6 +1583,143 @@ def _mdblist_pov_addon():
         return None
 
 
+def _handle_search_provider(_params):
+    """RunScript action=search_provider -- pick which add-on the home search
+    button searches, POV or Umbrella, on every skin the build ships.
+
+    One screen, two rows, the current one ticked. Choosing rewrites all four
+    skins' search wiring and reloads the skin the user is looking at, so the
+    change is visible immediately rather than after a restart."""
+    try:
+        from resources.lib import search_provider
+    except Exception as e:
+        try:
+            xbmcgui.Dialog().ok('Kodi POV IL', 'Internal error: {0}'.format(e))
+        except Exception:
+            pass
+        return
+
+    now = search_provider.current()
+    have_umbrella = search_provider.umbrella_available()
+    if not have_umbrella:
+        xbmcgui.Dialog().ok(
+            'מנוע החיפוש',
+            'החיפוש עובד כרגע דרך POV.\n\n'
+            'כדי לחפש דרך Umbrella צריך קודם להתקין אותו: '
+            'תוספים ← Kodi POV IL Wizard ← התקן Umbrella.')
+        return
+
+    options = []
+    order = (search_provider.POV, search_provider.UMBRELLA)
+    for key in order:
+        mark = '✓ ' if key == now else '   '
+        options.append('{0}{1}'.format(mark, search_provider.DISPLAY[key]))
+    try:
+        choice = xbmcgui.Dialog().select(
+            'מנוע החיפוש - במה לחפש?', options)
+    except Exception:
+        choice = -1
+    if choice < 0:
+        return
+    picked = order[choice]
+    if picked == now:
+        return
+
+    search_provider.set_provider(picked)
+    _statuses, reloaded = search_provider.apply_to_skins()
+    name = search_provider.DISPLAY[picked]
+    if reloaded:
+        # The skin reload already IS the feedback; a dialog on top of it would
+        # land on a screen that is still rebuilding.
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.notify('החיפוש עובר ל-{0}'.format(name), time_ms=4000)
+        except Exception:
+            pass
+        return
+    xbmcgui.Dialog().ok(
+        'מנוע החיפוש',
+        'החיפוש יעבוד מעכשיו דרך {0}.\n\n'
+        'בסקין שאתם נמצאים בו כרגע השינוי ייכנס לתוקף לאחר הפעלה מחדש '
+        'של Kodi.'.format(name))
+
+
+ACCTMGR_ADDON_ID = 'script.module.acctmgr'
+
+
+def _mdblist_push_to_acctmgr(key, username):
+    """Hand a freshly paired MDBList key to Account Manager so it lands in
+    every add-on AM supports (Umbrella, Coalition, TMDb Helper, POV...) rather
+    than in POV alone.
+
+    We keep our own QR pairing rather than AM's -- AM's MDBList authorisation
+    is a bare keyboard prompt for the API key, with no phone pairing at all --
+    and only hand it the finished, validated key afterwards.
+
+    Best-effort by design: a failure here costs the user nothing they had
+    before, so it must never turn a successful POV connect into a visible
+    error. Returns True only when AM was updated AND its sync was started.
+
+    Deliberately NOT mirrored on disconnect: AM's mdblist_auth() pushes
+    whatever key it holds and, for POV, also sets watched_indicators=2 with
+    mdbl_indicators_active=true. Running it with a BLANK key would point POV's
+    watched-status provider at MDBList with no key -- precisely the
+    inconsistent state _mdblist_apply_connect goes out of its way to prevent.
+    So disconnect clears AM's own two settings and stops there; the other
+    add-ons keep their key until an explicit revoke inside Account Manager."""
+    if not (key or '').strip():
+        return False
+    try:
+        import xbmcaddon as _mx
+        _mx.Addon(ACCTMGR_ADDON_ID)
+    except Exception:
+        return False                      # AM not installed -- nothing to do
+    try:
+        from resources.lib import addon_settings_safe
+        _changed, _restored, failed = addon_settings_safe.apply(
+            ACCTMGR_ADDON_ID,
+            (('mdblist.apikey', key.strip()),
+             ('mdblist.username', username or '')))
+    except Exception as e:
+        _safe_log('mdblist -> acctmgr write failed: {0}'.format(e),
+                  level='WARNING')
+        return False
+    if failed:
+        _safe_log('mdblist -> acctmgr did not stick: {0}'.format(failed),
+                  level='WARNING')
+        return False
+    try:
+        import xbmc as _mxbmc
+        _mxbmc.executebuiltin(
+            'RunScript({0},action=mdblistReSync)'.format(ACCTMGR_ADDON_ID))
+    except Exception as e:
+        _safe_log('mdblist acctmgr resync failed to start: {0}'.format(e),
+                  level='WARNING')
+        return False
+    return True
+
+
+def _mdblist_clear_acctmgr():
+    """Blank Account Manager's own MDBList settings on disconnect, so AM stops
+    reporting a connection it no longer has. See the note in
+    _mdblist_push_to_acctmgr for why no AM sync is run here."""
+    try:
+        import xbmcaddon as _mx
+        _mx.Addon(ACCTMGR_ADDON_ID)
+    except Exception:
+        return False
+    try:
+        from resources.lib import addon_settings_safe
+        _changed, _restored, failed = addon_settings_safe.apply(
+            ACCTMGR_ADDON_ID,
+            (('mdblist.apikey', ''), ('mdblist.username', '')))
+        return not failed
+    except Exception as e:
+        _safe_log('mdblist acctmgr clear failed: {0}'.format(e),
+                  level='WARNING')
+        return False
+
+
 def _mdblist_get_token():
     a = _mdblist_pov_addon()
     if not a:
@@ -1704,6 +1841,11 @@ def _mdblist_menu_existing(kodi_utils, gemini_pair, mdblist_pair):
     if choice == 2:
         if xbmcgui.Dialog().yesno('Kodi POV IL', 'לנתק את MDBList?'):
             if _mdblist_apply_disconnect():
+                try:
+                    _mdblist_clear_acctmgr()
+                except Exception as e:
+                    _safe_log('mdblist acctmgr clear failed: {0}'.format(e),
+                              level='WARNING')
                 kodi_utils.notify('MDBList נותק', time_ms=3000)
             else:
                 xbmcgui.Dialog().ok(
@@ -1869,6 +2011,12 @@ def _test_save_mdblist(kodi_utils, mdblist_pair, key, retry=False):
     except Exception as e:
         _safe_log('mdblist surfacing after connect failed: {0}'.format(e),
                   level='WARNING')
+    spread = False
+    try:
+        spread = _mdblist_push_to_acctmgr(key, username)
+    except Exception as e:
+        _safe_log('mdblist -> acctmgr push failed: {0}'.format(e),
+                  level='WARNING')
 
     if status is None:
         xbmcgui.Dialog().ok(
@@ -1882,8 +2030,10 @@ def _test_save_mdblist(kodi_utils, mdblist_pair, key, retry=False):
             'MDBList',
             '✓ החיבור הצליח. MDBList מחובר.\n\n'
             'סטטוס הצפייה וההמשך-צפייה יסופקו כעת ע"י MDBList '
-            '(ניתן לשנות ב-POV: Features / Watched Indicators).\n\n'
-            'אם הרשימות לא מופיעות מיד, ייתכן שיהיה צורך להפעיל מחדש את POV.')
+            '(ניתן לשנות ב-POV: Features / Watched Indicators).'
+            + ('\n\nהמפתח מסונכרן כעת גם לשאר התוספים.' if spread else '')
+            + '\n\nאם הרשימות לא מופיעות מיד, ייתכן שיהיה צורך להפעיל מחדש '
+              'את POV.')
     return 'ok'
 
 
@@ -3349,6 +3499,8 @@ def main():
             _handle_connect_gemini(params)
         elif action == 'connect_mdblist':
             _handle_connect_mdblist(params)
+        elif action == 'search_provider':
+            _handle_search_provider(params)
         elif action == 'show_gemini_usage':
             _handle_show_gemini_usage(params)
         elif action == 'open_tmdb_notice':

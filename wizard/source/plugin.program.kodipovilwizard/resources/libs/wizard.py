@@ -732,15 +732,77 @@ def ensure_acctmgr_installed():
             CONFIG.COLOR1))
 
 
+ACCTMGR_AUTO_SETTING = 'acctmgr_auto'
+# What the marker records: "this device has had Account Manager put on it by
+# us, once". Deliberately NOT the pack version. Keying it on the version looks
+# tidier and is wrong: the next time ACCTMGR_PACK_VERSION is bumped, every
+# device whose marker holds the old version stops matching and gets a forced
+# reinstall -- INCLUDING somebody who removed Account Manager on purpose in
+# the meantime, which is the one thing this promises not to do. Keeping it
+# current is not this function's job anyway: Account Manager updates itself
+# from its developer's own repository, and the wizard menu still has a manual
+# reinstall for anyone who wants one.
+ACCTMGR_AUTO_DONE = 'installed'
+
+
+def ensure_acctmgr_for_everyone():
+    """Put Account Manager on every device -- existing installs included --
+    exactly once.
+
+    Why it stopped being opt-in: the build's "חיבור שירותים" screen now routes
+    its debrid and Trakt rows through Account Manager, so one authorisation
+    reaches every add-on instead of POV alone. On a device without it those
+    same rows quietly fall back to authorising POV only. The screen looks
+    identical either way, which is precisely why the difference must not be
+    left to chance.
+
+    ONCE per device, recorded in a wizard setting. A user who then uninstalls
+    Account Manager on purpose is not fought with at every boot -- that is
+    their call, and the screen still works without it.
+
+    Silent when there is nothing to do: the pack's own sentinel + version gate
+    inside _ensure_packs_installed means an already-current install costs a
+    file check, not a 8 MB download. Never raises; the caller runs at startup
+    and a failure here must not stop the rest of it."""
+    try:
+        if CONFIG.get_setting(ACCTMGR_AUTO_SETTING) == ACCTMGR_AUTO_DONE:
+            return False
+        if not CONFIG.get_setting('buildname'):
+            return False            # build not installed yet -- too early
+        ok = ensure_acctmgr_installed()
+        if not ok:
+            # No marker: a device that was offline (or where the pack host was
+            # down) tries again on the next boot instead of never again.
+            logging.log(
+                '[Account Manager] auto-install did not complete; will retry '
+                'on the next startup', level=xbmc.LOGINFO)
+            return False
+        CONFIG.set_setting(ACCTMGR_AUTO_SETTING, ACCTMGR_AUTO_DONE)
+        xbmc.sleep(500)
+        try:
+            xbmc.executebuiltin('UpdateLocalAddons')
+        except Exception:
+            pass
+        logging.log('[Account Manager] auto-installed {0}'.format(
+            ACCTMGR_PACK_VERSION), level=xbmc.LOGINFO)
+        return True
+    except Exception as e:
+        logging.log('[Account Manager] auto-install failed: {0}'.format(e),
+                    level=xbmc.LOGERROR)
+        return False
+
+
 def install_acctmgr_pilot():
-    """Opt-in flow behind the wizard menu entry. Like the Umbrella pilot it
-    changes nothing by itself: installing it does not touch a single existing
-    setting, because it only writes an account into an add-on once the user
-    has actually authorised that account inside it."""
+    """Manual (re)install behind the wizard menu entry. Account Manager now
+    arrives by itself on every device (ensure_acctmgr_for_everyone), so this
+    is the repair path for somebody who removed it or whose auto-install never
+    completed. It changes nothing by itself: installing it does not touch a
+    single existing setting, because it only writes an account into an add-on
+    once the user has actually authorised that account inside it."""
     dialog = xbmcgui.Dialog()
     yes_pressed = dialog.yesno(
         CONFIG.ADDONTITLE,
-        '[B]להתקין את [COLOR gold]Account Manager[/COLOR] (ניסיוני)?[/B]\n'
+        '[B]להתקין מחדש את [COLOR gold]Account Manager[/COLOR]?[/B]\n'
         'מחברים את חשבונות הדבריד פעם אחת במקום אחד, והוא מעביר אותם '
         'לכל התוספים המותקנים - גם POV וגם Umbrella. עד שתחברו חשבון, '
         'שום הגדרה קיימת לא משתנה.',
