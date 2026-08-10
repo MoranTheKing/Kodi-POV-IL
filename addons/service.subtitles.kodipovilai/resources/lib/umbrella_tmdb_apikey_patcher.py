@@ -77,7 +77,7 @@ HELPER_NAME = '_ai_apikey'
 # this fix shipped doing nothing. Both spellings have to work here, because
 # the same device flips from one to the other the moment Umbrella updates
 # itself from its own repository.
-_HELPER_ANCHOR_RE = re.compile(r'^class TMDb:[ \t]*\r?$', re.MULTILINE)
+_HELPER_ANCHOR_RE = re.compile(r'^class TMDb:[ \t]*(?P<cr>\r?)$', re.MULTILINE)
 
 _HELPER_LINES = (
     '# ' + MARKER,
@@ -185,7 +185,10 @@ def ensure_patched():
              'skipping', level='WARNING')
         return 'unmatched'
 
-    eol = '\r\n' if '\r\n' in content[:4096] else '\n'
+    # Newline style from the anchor line itself, not from a sample of the
+    # head: a file whose head and body disagree would otherwise get the wrong
+    # one spliced in at exactly the point that matters.
+    eol = '\r\n' if m.group('cr') else '\n'
     helper = ''.join(ln + eol for ln in _HELPER_LINES) + eol + eol
     content = content[:m.start()] + helper + content[m.start():]
 
