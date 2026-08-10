@@ -1,3 +1,12 @@
+v0.2.479
+- The Hebrew search fix in 0.2.478 never actually reached your device. It
+  looked for a line ending that the copy of Umbrella this build installs
+  does not use, so it reported that it could not apply and changed nothing.
+  Searching in Hebrew now works.
+- "Playback failed" no longer appears when you back out of the source list
+  without picking anything. It was Kodi's own message, raised on a timer
+  after 20 seconds of browsing rather than by any real failure.
+
 v0.2.478
 - Searching Umbrella in Hebrew now finds what you are looking for. Typing a
   title in Hebrew returned "no results" while the same title in English
