@@ -71,7 +71,6 @@ MARKER = 'AI_SUBS_PLAYLIST_TIMEOUT_v1'
 SETTING = 'playlisttimeout'
 
 _ROOT_OPEN_RE = re.compile(r'<advancedsettings[^>]*>')
-_SETTING_RE = re.compile(r'<' + SETTING + r'\s*>')
 _REVERT_RE = re.compile(
     r'[ \t]*<!--[ \t]*' + MARKER + r'[ \t]*-->[ \t]*\r?\n'
     r'[ \t]*<' + SETTING + r'>[^<]*</' + SETTING + r'>[ \t]*\r?\n')
@@ -104,13 +103,34 @@ def _path():
     return os.path.join(base, 'advancedsettings.xml')
 
 
-def _valid_xml(text):
+def _root(text):
+    """The parsed <advancedsettings> root, or None if this is not one."""
     try:
         from xml.etree import ElementTree
-        ElementTree.fromstring(text)
-        return True
+        r = ElementTree.fromstring(text)
     except Exception:
-        return False
+        return None
+    return r if r.tag == 'advancedsettings' else None
+
+
+def _valid_xml(text):
+    return _root(text) is not None
+
+
+def _already_declared(root):
+    """Whether the file already states a <playlisttimeout>.
+
+    Asked of the PARSED tree, never of the raw text. advancedsettings.xml is
+    conventionally full of commented-out examples, and a substring scan reads
+    `<!-- <playlisttimeout>20</playlisttimeout> -->` as a setting -- which
+    would make this patcher answer 'already_set' on every boot forever and
+    never apply the fix. That is the same "reports success, changes nothing"
+    failure this whole change exists to close. Parsing also gets the cases a
+    `<tag\\s*>` regex misses for the opposite reason: `<playlisttimeout />`
+    and `<playlisttimeout unit="s">10</playlisttimeout>` are real settings,
+    and injecting a second one ahead of them would silently override a value
+    this module promises to leave alone."""
+    return root.find(SETTING) is not None
 
 
 def revert(content):
@@ -138,9 +158,15 @@ def ensure_patched():
 
     content = revert(original)
 
+    root = _root(content)
+    if root is None:
+        _log('not a parseable <advancedsettings> file -- leaving it alone',
+             level='WARNING')
+        return 'unmatched'
+
     # Someone -- the base build, the user, another tool -- has already stated
     # a value. Theirs wins; we are not here to overrule a deliberate choice.
-    if _SETTING_RE.search(content):
+    if _already_declared(root):
         return 'already_set'
 
     m = _ROOT_OPEN_RE.search(content)
@@ -149,7 +175,10 @@ def ensure_patched():
              level='WARNING')
         return 'unmatched'
 
-    eol = '\r\n' if '\r\n' in content[:4096] else '\n'
+    # Take the newline style from the break right after the root tag, not
+    # from a sample of the head: that is the exact spot being spliced.
+    em = re.search(r'\r?\n', content[m.end():])
+    eol = em.group(0) if em else '\n'
     # Match the indentation the file already uses for its own children.
     indent = '  '
     im = re.search(r'\r?\n([ \t]+)<', content[m.end():])
