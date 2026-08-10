@@ -58,7 +58,7 @@ CANCEL_MARKER = 'AI_SUBS_UMB_QUIETCANCEL_v1'
 _DIALOG_RE = re.compile(
     r'^(?P<indent>[ \t]*)def getSources_dialog\(self, title, year, imdb, '
     r'tvdb, season, episode, tvshowtitle, premiered, timeout=90\):'
-    r'[ \t]*(?P<cr>\r?)$\n(?P<try_indent>[ \t]*)try:[ \t]*\r?$',
+    r'[ \t]*(?P<cr>\r?)$\n(?P<try_indent>[ \t]*)try:[ \t]*(?=\r?$)',
     re.MULTILINE,
 )
 _PREWARM_REVERT_RE = re.compile(
@@ -71,11 +71,11 @@ _PREWARM_REVERT_RE = re.compile(
 # enable_playnext block, via the line that is unique to it.
 _CANCEL_RE = re.compile(
     r'^(?P<indent>[ \t]*)else:[ \t]*\r?\n'
-    r'(?P<bind>[ \t]*)control\.cancelPlayback\(\)[ \t]*(?P<cr>\r?)$',
+    r'(?P<bind>[ \t]*)control\.cancelPlayback\(\)[ \t]*(?=(?P<cr>\r?)$)',
     re.MULTILINE,
 )
 _CANCEL_REVERT_RE = re.compile(
-    r'^(?P<indent>[ \t]*)else:[ \t]*\r?\n'
+    r'^(?P<indent>[ \t]*)else:[ \t]*(?P<eol>\r?\n)'
     r'[ \t]*#[ \t]*AI_SUBS_UMB_QUIETCANCEL_v\d+[ \t]*\r?\n'
     r'(?:(?!#[ \t]*AI_SUBS_UMB_QUIETCANCEL_v)[\s\S])*?'
     r'[ \t]*#[ \t]*END[ \t]+AI_SUBS_UMB_QUIETCANCEL_v\d+[ \t]*\r?\n',
@@ -145,8 +145,8 @@ def revert(content):
     """`content` with both edits removed, restoring upstream byte for byte."""
     out = _PREWARM_REVERT_RE.sub('', content)
     return _CANCEL_REVERT_RE.sub(
-        lambda m: m.group('indent') + 'else:' + '\n'
-        + m.group('indent') + '\tcontrol.cancelPlayback()' + '\n',
+        lambda m: m.group('indent') + 'else:' + m.group('eol')
+        + m.group('indent') + '\tcontrol.cancelPlayback()' + m.group('eol'),
         out)
 
 
