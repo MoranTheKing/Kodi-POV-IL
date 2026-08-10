@@ -1993,6 +1993,29 @@ def _maybe_patch_umbrella_language():
                 level='WARNING')
         except Exception:
             pass
+    # The Hebrew-subtitle match badge in Umbrella's OWN source window -- the
+    # same brain (he_sub_match) that already feeds POV's, so a title warmed
+    # from one add-on shows its badge immediately in the other. Separate from
+    # the block above because it patches a different Umbrella file and must
+    # not be lost if the wiring above raises.
+    try:
+        from resources.lib import umbrella_subtitle_match_patcher
+        st = umbrella_subtitle_match_patcher.ensure_patched()
+        if st == 'patched':
+            kodi_utils.log(
+                'umbrella_subtitle_match_patcher: Hebrew match % added to '
+                "Umbrella's source window", level='INFO')
+        elif st in ('unmatched', 'compile_failed', 'write_failed',
+                    'read_failed'):
+            kodi_utils.log(
+                'umbrella_subtitle_match_patcher: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'umbrella_subtitle_match_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
 
 
 def _maybe_patch_pov_bookmark_refresh():
