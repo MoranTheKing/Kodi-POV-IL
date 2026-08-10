@@ -657,12 +657,30 @@ def _ensure_hebrew_layout_available():
     if HEBREW_LAYOUT in current:
         return False
     wanted = list(current) + [HEBREW_LAYOUT]
-    if not _set_kodi_setting('locale.keyboardlayouts', wanted):
+    ok = _set_kodi_setting('locale.keyboardlayouts', wanted)
+    # READ IT BACK. Kodi validates a settings value against the options that
+    # exist RIGHT NOW and silently keeps the old one when the value is not
+    # among them -- the same trap as CAddonSettings::Load, one level up. If
+    # 'Hebrew QWERTY' is not an offered layout on this device (a language
+    # resource that never shipped it, or an app build without it), the write
+    # returns success and changes nothing, and we would report a repair that
+    # did not happen. That distinction is the whole diagnosis: setting reset
+    # vs layout genuinely unavailable.
+    after = _get_kodi_setting('locale.keyboardlayouts')
+    if isinstance(after, str):
+        after = [p.strip() for p in after.split('|') if p.strip()]
+    if not (ok and isinstance(after, list) and HEBREW_LAYOUT in after):
+        kodi_utils.log(
+            'hebrew_build_ui_patcher: tried to restore the Hebrew keyboard '
+            'layout and it did NOT stick (list still reads: {0}). Kodi is '
+            'most likely not offering "{1}" as an available layout on this '
+            'device at all -- that is an app/language-resource problem, not a '
+            'settings one.'.format(after, HEBREW_LAYOUT), level='WARNING')
         return False
     kodi_utils.log(
         'hebrew_build_ui_patcher: the Hebrew keyboard layout was missing from '
         'locale.keyboardlayouts and has been restored (now: {0})'
-        .format(', '.join(wanted)), level='INFO')
+        .format(', '.join(after)), level='INFO')
     return True
 
 
