@@ -1914,6 +1914,26 @@ def _maybe_patch_umbrella_language():
         elif status in ('read_failed', 'write_failed'):
             kodi_utils.log(
                 'umbrella_language_patcher: ' + status, level='WARNING')
+        # Hebrew for the menus themselves. Additive: we create the he_il
+        # folder Umbrella does not ship, so their updates keep applying and a
+        # string we did not translate simply falls back to English.
+        try:
+            from resources.lib import umbrella_hebrew_ui_patcher
+            if umbrella_hebrew_ui_patcher.ensure_patched() == 'patched':
+                kodi_utils.log(
+                    'umbrella_hebrew_ui_patcher: Hebrew menu strings '
+                    'installed', level='INFO')
+        except Exception:
+            pass
+        # ORDER IS LOAD-BEARING: the metadata language must move BEFORE the
+        # content filters are re-evaluated. api.language drives both, and
+        # Hebrew with the filters still on asks for titles ORIGINALLY MADE in
+        # Hebrew -- which empties every list.
+        lang = umbrella_language_patcher.ensure_api_language()
+        if lang == 'patched':
+            kodi_utils.log(
+                'umbrella_language_patcher: metadata language set to Hebrew',
+                level='INFO')
         # Second, unrelated half: Umbrella's two language CONTENT FILTERS
         # empty every list when its API language is not English.
         filt = umbrella_language_patcher.ensure_content_filters_sane()
