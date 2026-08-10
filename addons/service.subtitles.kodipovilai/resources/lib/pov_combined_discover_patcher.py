@@ -74,9 +74,13 @@ MARKER = '# AI_SUBS_POV_COMBINED_DISCOVER_v1'
 #     PREFIX for our own two functions is read out of POV's own search line
 #     rather than hard-coded. Whichever side of the '/3' move POV is on, we
 #     build our URLs the same way it builds its own.
+#     A blank line is allowed INSIDE the body: a top-level `def` always sits
+#     at column 0, so the body run still cannot cross into the next function,
+#     but a docstring with a paragraph break in it no longer cuts the match
+#     short before the url line we need to read.
 _API_ANCHOR_RE = re.compile(
     r"^def tmdb_movies_search\(query, page_no\):[ \t]*\n"
-    r"(?:[ \t]+.*\n)+", re.MULTILINE)
+    r"(?:[ \t]+.*\n|[ \t]*\n(?=[ \t]+\S))+", re.MULTILINE)
 # The path between base_url and the endpoint, as POV currently writes it:
 # '' on POV <= 6.07, '/3' from 6.08 on.
 _API_PREFIX_RE = re.compile(
@@ -109,14 +113,25 @@ _API_ADDITION = (
 
 def _api_patch(text):
     """Insert the two data functions straight after tmdb_movies_search,
-    using the same base_url/version convention that function uses. Returns
-    the new text, or the text unchanged if anything does not line up."""
+    using the same base_url/version convention that function uses.
+
+    Returns the new text, or None when it cannot match -- having already
+    logged WHICH of the two matches failed. The distinction is the whole
+    point: "the function is gone" and "the function is there but its url
+    line reads differently now" call for completely different repairs, and
+    the last time this patcher went quiet a single generic message is what
+    made it look like the first when it was really the second."""
     m = _API_ANCHOR_RE.search(text)
     if not m:
-        return text
+        _log('tmdb_api.py: tmdb_movies_search not found -- POV may have '
+             'renamed or removed it; skipping', level='WARNING')
+        return None
     p = _API_PREFIX_RE.search(m.group(0))
     if not p:
-        return text
+        _log('tmdb_api.py: tmdb_movies_search found but its url line has '
+             'changed shape -- cannot tell which base_url convention POV '
+             'is on, so not guessing; skipping', level='WARNING')
+        return None
     addition = _API_ADDITION.replace('{pfx}', p.group('pfx'))
     return text[:m.end()] + addition + text[m.end():]
 
@@ -184,11 +199,12 @@ def _invalidate_pyc(py_path):
 
 
 def _patch_one(path, anchor, make_new, label, marker=MARKER):
-    """Apply one edit. make_new(text)->new_text, returning the text
-    unchanged when it cannot find its anchor. `anchor` is an optional
-    exact-string pre-check; pass None when make_new does its own matching.
-    Returns 'patched' | 'already_patched' | 'unmatched' | 'read_failed' |
-    'write_failed'."""
+    """Apply one edit. make_new(text) returns the new text, or the text
+    unchanged / None when it cannot find its anchor -- None meaning it has
+    already logged a more specific reason than we could give here. `anchor`
+    is an optional exact-string pre-check; pass None when make_new does its
+    own matching. Returns 'patched' | 'already_patched' | 'unmatched' |
+    'compile_failed' | 'read_failed' | 'write_failed'."""
     try:
         with open(path, 'r', encoding='utf-8') as f:
             text = f.read()
@@ -204,6 +220,8 @@ def _patch_one(path, anchor, make_new, label, marker=MARKER):
         return 'unmatched'
 
     new_text = make_new(text)
+    if new_text is None:
+        return 'unmatched'  # make_new said exactly why
     if new_text == text:
         _log('{0}: anchor not found -- POV may have changed; skipping'
              .format(label), level='WARNING')
