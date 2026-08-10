@@ -537,6 +537,17 @@ def _umbrella_installed():
         return False
 
 
+def _drop_umbrella_tiles(fixture_text):
+    """The fixture minus the two Umbrella-gated tiles. For the one caller that
+    writes the fixture WHOLE rather than tile by tile."""
+    out = fixture_text
+    for name in UMBRELLA_TILE_NAMES:
+        snippet = _extract_tile(out, name)
+        if snippet is not None:
+            out = out.replace(snippet, '', 1)
+    return out
+
+
 def _insert_umbrella_tiles(content, fixture_text):
     """One-time, opt-in insert of the Umbrella + search-engine-switch tiles for
     an existing install (clean installs get them from the shipped fixture).
@@ -877,6 +888,13 @@ def _install_canonical_home(fav_path, content):
         _log('cannot rescue an empty home, fixture unreadable: {0}'.format(e),
              level='WARNING')
         return 'no_fixture'
+    # The fixture is the WHOLE canonical home, so it also carries the tiles
+    # that are only meant for installs with Umbrella. Everywhere else that
+    # gate is applied per tile; here the file goes down verbatim, which would
+    # hand a device with no Umbrella a tile that opens an add-on it does not
+    # have. Drop them, exactly as _insert_umbrella_tiles would have.
+    if not _umbrella_installed():
+        fixture_text = _drop_umbrella_tiles(fixture_text)
     new_content = fixture_text.encode('utf-8')
     keep = []
     for tile_text in _extract_fixture_tiles(content.decode('utf-8', 'replace')):
