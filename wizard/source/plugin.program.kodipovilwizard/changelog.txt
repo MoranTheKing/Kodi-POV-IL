@@ -1,3 +1,10 @@
+[COLOR yellow][B]v0.1.41[/B][/COLOR]
+* Account Manager is no longer opt-in: it installs by itself, once, on every
+  device including ones that already have the build. It is what lets
+  "Connect Services" fill a debrid account into every add-on at once instead
+  of into POV alone. Nothing you have already connected changes, and if you
+  uninstall it we do not put it back.
+
 [COLOR yellow][B]v0.1.40[/B][/COLOR]
 * New opt-in pilot: "Install Account Manager (experimental)" in the wizard
   menu. Connect your debrid accounts once in one place and it fills them

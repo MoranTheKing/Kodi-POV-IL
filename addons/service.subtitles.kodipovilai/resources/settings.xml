@@ -408,6 +408,17 @@
           <default>true</default>
           <control type="toggle"/>
         </setting>
+        <!-- Which add-on the home SEARCH button searches: 'pov' (default) or
+             'umbrella'. Not a marker but a user choice, made from the
+             "מנוע החיפוש" tile / RunScript action=search_provider, and read
+             by search_provider.py when it wires up every skin. Hidden here
+             because the tile is the place to change it; a second copy in
+             the settings dialog could disagree with the skins until the
+             next startup. -->
+        <setting id="search_provider" type="string" label="30000">
+          <level>4</level>
+          <default>pov</default>
+        </setting>
         <!-- Hidden marker: one-time restore of the NOX "series by
              networks" home row has been applied. Read/written by
              pov_series_networks_reseed_patcher.py. -->

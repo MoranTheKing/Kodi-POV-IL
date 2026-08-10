@@ -393,14 +393,66 @@ Installed ONLY via the wizard menu entry "התקן Umbrella (ניסיוני)"
 -> the shared _ensure_packs_installed machinery, gate UMBRELLA_PACK_VERSION).
 After install both update straight from their developers' repos -- we are NOT
 their update channel, same trust model as POV via repository.kodifitzwell.
-Deliberately NO home tile, NO search wiring, NO defaults change. Known gap:
-the MoranSubs release-name-matching niceties are POV-aware and run "blind" on
-Umbrella playback -- the first hook to port if the pilot graduates. Phase 2
-if adopted: per-play engine chooser (TMDbHelper player on AF3 is the cheap
-first step); merging both engines' source lists into one dialog is NOT
-feasible and should not be attempted.
+Known gap: the MoranSubs release-name-matching niceties are POV-aware and run
+"blind" on Umbrella playback -- the first hook to port if the pilot graduates.
+Merging both engines' source lists into one dialog is NOT feasible and should
+not be attempted.
 
-## Account Manager Lite pilot (opt-in)
+The pilot's original "NO home tile, NO search wiring, NO defaults change" rule
+ended with 0.2.474: Umbrella now has a home tile, a search switch and Hebrew
+menus (below). The rule it was protecting still stands in its stronger form --
+**nothing Umbrella-related exists on a device that has not installed
+Umbrella**. Every one of those surfaces is gated on `xbmcaddon.Addon(
+'plugin.video.umbrella')` succeeding, and the gate is checked at the moment
+the surface is built, not stamped once.
+
+## The search-engine switch: POV or Umbrella, all four skins (0.2.474)
+
+One setting, `search_provider` (`pov` default / `umbrella`), hidden in
+MoranSubs' settings.xml and owned by `resources/lib/search_provider.py`. The
+user changes it from the "מנוע החיפוש - POV / Umbrella" home tile (FENtastic /
+Estuary / NOX) or the matching AF3 submenu + power-menu row -- both of which
+run `RunScript(service.subtitles.kodipovilai,action=search_provider)`.
+
+**The provider is baked into the skin files, not resolved at click time.** A
+RunScript forwarder on the search button would make switching instant, but it
+puts a Python process launch in front of the most-used button in the build and
+gives it a way to fail that it does not have today. Switching is rare;
+searching is nightly. So the switch rewrites files and pays a `ReloadSkin()`.
+
+Two shapes, because the skins genuinely differ:
+
+- **FENtastic / Estuary / NOX** activate a HUB and the add-on takes over. One
+  onclick per skin, written by `fentastic_search_patcher`. POV's hub is
+  `navigator.search`; Umbrella's is `tools_searchNavigator`. NOX also has a
+  main-menu search item carrying the bare path -- it now recognises whichever
+  provider's path is in the file today, not just the one the skin shipped
+  with, or the second switch would be a no-op.
+- **Arctic Fuse 3** types the query IN THE SKIN and builds four result rows
+  from `search_path.xml`, so switching means swapping four path prefixes
+  (`af3_search_pov_patcher`). Umbrella has a term-driven action for all four
+  (`movieSearchterm`, `tvSearchterm`, `actorSearchMovies`,
+  `collections_Searchterm`), so AF3 keeps all four rows on either provider.
+  The `DefaultSearch-POV*` TOKEN names are unchanged on purpose -- they are
+  opaque keys shared with the searchwidgets node, and renaming them would
+  break every row.
+
+Two things that are easy to get wrong here:
+
+- **The AF3 marker carries the provider** (`_marker(provider)`). A marker that
+  ignored it would leave AF3 searching whatever it was first patched with, for
+  ever, because `already_patched` would keep matching.
+- **`current()` falls back to POV whenever Umbrella is not installed**, even
+  when the stored choice says otherwise. A search button that opens a missing
+  add-on is worse than one that searches the other one.
+
+Both patchers already run at every startup, so the choice survives a skin
+update that ships a fresh file and applies to a skin the user has not switched
+to yet. `apply_to_skins()` reloads ONLY when the user is on a skin that was
+actually rewritten (AF3 goes through `af3_home_patcher._rebuild_af3_shortcuts`,
+which regenerates the includes first).
+
+## Account Manager Lite (installed for everyone since 0.2.474)
 
 `dist/Kodi-POV-IL-AcctMgr-pack.zip` = `script.module.acctmgr` 1.1.5a +
 `script.module.acctvwr` 1.1.4 (a HARD dependency of acctmgr, in no repo the
@@ -409,8 +461,54 @@ github.com/Zaxxon709/zaxxon and assembled by `tools/build_acctmgr_pack.py`,
 which refuses to build unless each zip's top-level folder equals the add-on id
 inside it. Shipping the developer's repo means he is the update channel from
 then on -- same trust model as Umbrella and as POV via repository.kodifitzwell.
-Installed ONLY from the wizard menu entry "התקן Account Manager (ניסיוני)"
-(main_menu.py -> router action `install_acctmgr` -> `install_acctmgr_pilot`).
+Installed **automatically for every device** since 0.2.474, by
+`wizard.ensure_acctmgr_for_everyone()` from `startup.py` -- once per device,
+recorded in the wizard setting `acctmgr_auto`, gated on the build already
+being installed, and NOT re-attempted if the download fails silently (no
+marker, so the next boot retries). A user who uninstalls it afterwards is not
+fought with. The manual entry "התקן Account Manager (ניסיוני)" (main_menu.py ->
+router action `install_acctmgr` -> `install_acctmgr_pilot`) still exists.
+
+Why it stopped being opt-in: POV's "חיבור שירותים" screen now authorises the
+debrid accounts THROUGH Account Manager, so one connect reaches every add-on
+instead of POV alone. Without it installed the same rows silently fall back to
+POV-only. The screen looks identical either way, which is exactly why the
+difference must not be left to chance.
+
+### The services screen (`pov_services_patcher` v10)
+
+Each AM-backed row REPLACES the POV-native one it covers rather than sitting
+beside it -- two rows both labelled "real-debrid" is the confusion this set out
+to avoid. POV's own class stays as the fallback wherever AM is missing, and one
+clearly marked row at the bottom ("חיבור ל-POV בלבד (מתקדם)") still reaches the
+untouched POV menu, so no failure inside AM can leave anybody unable to connect
+POV at all.
+
+THREE rows stay POV-only, each for a reason worth not rediscovering:
+
+- **trakt** — AM 1.1.5a's `traktAuth` AND `traktReSync` both end in
+  `os._exit(1)`: they FORCE-CLOSE KODI after a 3-second "Force Closing Kodi!"
+  toast. `traktAuth` additionally calls `control.updates_off()`, silently
+  turning Kodi's global add-on auto-updates off, and answering "no" to its
+  "create your sync list now?" question falls off the end of the branch so the
+  click does nothing at all. No other AM service does any of this. Report
+  upstream alongside the SyncManager bug.
+- **easydebrid** — AM writes `easydebrid.token` but never DECLARES it in its
+  settings.xml, so the write is a silent no-op and its EasyDebrid rows are
+  absent from its own settings screen. Routing it through AM connects nothing.
+- **tmdblist** — AM has no TMDb service at all.
+
+MDBList keeps OUR QR pairing (AM's is a bare keyboard prompt for the API key)
+and hands AM the finished, validated key afterwards, then fires
+`mdblistReSync`. Deliberately NOT mirrored on disconnect: AM's
+`mdblist_auth()` pushes whatever key it holds and, for POV, also sets
+`watched_indicators=2` with `mdbl_indicators_active=true` -- running it with a
+BLANK key would point POV's watched-status provider at MDBList with no key.
+Disconnect clears AM's own two settings and stops there.
+
+AM's `<service>Auth` actions ALREADY run the sync themselves (auth -> push to
+every installed add-on -> enable the startup re-sync). Never chain a `ReSync`
+after an `Auth`: it syncs the same account twice and shows two progress runs.
 
 What it is: one place to authorise Real-Debrid, Premiumize, AllDebrid, TorBox,
 OffCloud, EasyDebrid, Easynews, Trakt and MDBList, which it then writes into
@@ -2488,6 +2586,41 @@ Raw by a few minutes; poll rather than assume.
 - **Package releases: re-run Deploy GitHub Pages LAST.** The APK download links
   are served from the `gh-pages` branch, not from the release. See
   `APK_RELEASE.md`.
+
+### What shipped 0.2.474 / wizard 0.1.41 (Account Manager + the search switch)
+
+Four changes that only make sense together, which is why they went out in one
+release rather than one skin at a time:
+
+1. POV's "חיבור שירותים" screen authorises the debrid accounts through Account
+   Manager, so one connect reaches every add-on. See the Account Manager
+   section above for the three rows that deliberately stay POV-native and why.
+2. Account Manager installs itself once on every device, existing installs
+   included, because (1) silently degrades without it.
+3. A POV/Umbrella search switch on all four skins at once. See the
+   search-engine switch section above.
+4. Two home tiles ("מנוע החיפוש", "Umbrella") on FENtastic/Estuary/NOX and the
+   matching two rows in AF3's submenu + power menu, all gated on Umbrella
+   being installed.
+
+Things worth not rediscovering from this batch:
+
+- **A favourites tile that exists only in the user's file is lost on the first
+  skin switch.** `update_favourites_xml_file()` copies
+  `media/builds_favourites_xml/<skin>/favourites.xml` OVER
+  `userdata/favourites.xml`, and the sidecar then reads the loss as a
+  deletion and never restores it. The quickfix builder cannot reach `media/`
+  (it only replaces members under `addons/service.subtitles.kodipovilai/`), so
+  `_seed_umbrella_tiles()` writes the tiles into the SEEDS from the add-on
+  instead. Any future tile needs the same treatment.
+- **AF3 does not use Kodi favourites for its home**, so a favourites tile is
+  invisible there. AF3's equivalent is a row in
+  `skinvariables-shortcut-homesubmenu.json` / `-powermenu.json`, delivered by
+  the 3-way merge in `af3_home_patcher` (new canonical rows are appended for
+  existing devices; user deletions are never resurrected).
+- **A "seen" sidecar key means the tile reached the DISK.** Stamping it inside
+  the inserter, before `ensure_patched()` writes the file, turns a failed
+  write into a permanent skip. Same rule as the "done marker" one above.
 
 ### Known, deliberately not fixed
 
