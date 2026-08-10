@@ -52,7 +52,11 @@ except Exception:
 
 UMBRELLA_ADDON_ID = 'plugin.video.umbrella'
 SOURCES_REL_PATH = 'resources/lib/windows/source_results.py'
-MARKER = 'AI_SUBS_UMB_MATCH_v1'
+MARKER = 'AI_SUBS_UMB_MATCH_v2'
+END_MARKER = 'END ' + MARKER
+# v1 -> v2: the badge call got its own try/except (see _setup_lines), and the
+# SETUP block gained an END marker so the revert stops depending on the text
+# of its own body.
 
 # The for-loop that builds each source row (insert SETUP just before it).
 #
@@ -64,7 +68,7 @@ MARKER = 'AI_SUBS_UMB_MATCH_v1'
 # silent no-op plus a WARNING nobody reads.
 _LOOP_RE = re.compile(
     r'^(?P<indent>[ \t]*)for count, item in enumerate\(self\.results, 1\):'
-    r'[ \t]*\r?$',
+    r'[ \t]*(?P<cr>\r?)$',
     re.MULTILINE,
 )
 # The size_label property set (wrap it to prepend the match prefix). The
@@ -76,21 +80,38 @@ _SIZE_RE = re.compile(
     r"size_label\)[ \t]*(?P<cr>\r?)$",
     re.MULTILINE,
 )
-# Revert: SETUP block (marker comment .. its `except` fallback line).
+# Revert: the SETUP block, START marker through END marker.
+#
+# It used to run from the marker to the literal text of the `except` fallback
+# line, which is wrong twice over. (1) A block whose body is malformed -- hand
+# edited, half-written, or simply from a future version that changed the
+# fallback text -- would not match, and `.*?` would then run on to the NEXT
+# block's fallback and delete every line in between, INCLUDING upstream code.
+# (2) Anchoring on the body means changing the body breaks the revert, so an
+# old block survives, `_LOOP_RE` still finds the untouched loop line, and a
+# second SETUP gets stacked in front of it.
+#
+# Both go away with an END marker: the revert now depends only on markers we
+# control, and the middle is written so it cannot cross another marker of
+# ours, so even a block with no END of its own cannot swallow the next block.
 _REVERT_SETUP_RE = re.compile(
-    r"[ \t]*#[ \t]*AI_SUBS_UMB_MATCH_v\d+.*?"
-    r"_sm_m = None; _sm_names = \[\]; _sm_emb = \[\]; _sm_syncrel = set\(\)"
-    r"[ \t]*\r?\n",
-    re.DOTALL,
+    r"[ \t]*#[ \t]*AI_SUBS_UMB_MATCH_v\d+[ \t]*\r?\n"
+    r"(?:(?!#[ \t]*(?:END[ \t]+)?AI_SUBS_UMB_MATCH_v)[\s\S])*?"
+    r"[ \t]*#[ \t]*END[ \t]+AI_SUBS_UMB_MATCH_v\d+[ \t]*\r?\n"
 )
 # Revert: wrapped size_label line -> plain. The trailing `\r` is CAPTURED and
 # re-emitted, not just matched: consuming it and writing the plain line back
 # without it left exactly one LF line in an otherwise CRLF file. Python does
 # not care, but silently changing a third-party file's line endings is not
 # ours to do, and it makes "revert == upstream, byte for byte" untestable.
+#
+# Matches BOTH spellings on purpose: v1 inlined `_sm_m.label_prefix(...)`,
+# v2 calls the guarded `_sm_pfx(...)`. A device that already has v1 has to be
+# revertible by the code that ships v2.
 _REVERT_SIZE_RE = re.compile(
     r"^(?P<indent>[ \t]*)listitem\.setProperty\('umbrella\.size_label', "
-    r"\(_sm_m\.label_prefix.*?\) \+ size_label\)[ \t]*(?P<cr>\r?)$",
+    r"(?:\(_sm_m\.label_prefix|_sm_pfx\().*?\+ size_label\)"
+    r"[ \t]*(?P<cr>\r?)$",
     re.MULTILINE,
 )
 
@@ -117,6 +138,23 @@ def _sources_path():
 
 
 def _setup_lines(indent, eol):
+    """The once-per-window SETUP, plus `_sm_pfx` -- the per-row entry point.
+
+    WHY THE BADGE GETS ITS OWN try/except, and why the comment that used to
+    say Umbrella's row try/except was a sufficient backstop was wrong.
+    Umbrella wraps each row build in `try: ... except: log_utils.error()`, so
+    an exception there does not crash the window -- it DROPS THE ROW. The
+    badge call runs identically for every row, so anything that makes it raise
+    for one row makes it raise for all of them, and the source list comes back
+    EMPTY. Reproduced: a `label_prefix` that gained a required argument turned
+    two sources into zero rows. For a build whose whole job is playing
+    something, "no sources" is the worst failure there is, and it would look
+    like Umbrella's scrapers had broken rather than like our badge had.
+
+    So the badge is computed inside its own guard: if anything at all goes
+    wrong, the row loses its badge and keeps everything else. The fallback
+    branch defines `_sm_pfx` too, so the per-row line can call it
+    unconditionally and never needs to know whether the import worked."""
     raw = [
         '# ' + MARKER,
         'try:',
@@ -127,8 +165,15 @@ def _setup_lines(indent, eol):
         '\t_sm_names = _sm_m.release_names(self.meta)',
         '\t_sm_emb = _sm_m.embedded_names(self.meta)',
         '\t_sm_syncrel = _sm_m.confirmed_releases(self.meta)',
+        '\tdef _sm_pfx(_n):',
+        '\t\ttry:',
+        '\t\t\treturn _sm_m.label_prefix(_n, _sm_names, _sm_emb, _n, _sm_syncrel)',
+        '\t\texcept Exception:',
+        "\t\t\treturn ''",
         'except Exception:',
         '\t_sm_m = None; _sm_names = []; _sm_emb = []; _sm_syncrel = set()',
+        "\tdef _sm_pfx(_n): return ''",
+        '# ' + END_MARKER,
     ]
     return ''.join(indent + ln + eol for ln in raw)
 
@@ -181,7 +226,6 @@ def ensure_patched():
         _log('read failed: {0}'.format(e), level='WARNING')
         return 'read_failed'
 
-    eol = '\r\n' if '\r\n' in original[:4096] else '\n'
     already = MARKER in original
 
     # Revert any prior version so we re-apply cleanly (idempotent).
@@ -193,6 +237,11 @@ def ensure_patched():
         _log('row loop not found -- skipping', level='WARNING')
         return 'unmatched'
     indent = m.group('indent')
+    # The line ending is taken from the line we are inserting in FRONT of, not
+    # sampled from the first 4 KB of the file. A file whose head disagrees with
+    # its body -- a stray LF line, a BOM'd first line -- would otherwise get the
+    # wrong ending injected at exactly the point that matters.
+    eol = '\r\n' if m.group('cr') else '\n'
     content = content[:m.start()] + _setup_lines(indent, eol) + content[m.start():]
 
     # 2) wrap the size_label set to prepend the match prefix. Umbrella's row has
@@ -204,9 +253,8 @@ def ensure_patched():
         return 'unmatched'
     si = s.group('indent')
     wrapped = (si + "listitem.setProperty('umbrella.size_label', "
-               "(_sm_m.label_prefix((item.get('name') or ''), "
-               "_sm_names, _sm_emb, (item.get('name') or ''), _sm_syncrel) "
-               "if _sm_m else '') + size_label)" + s.group('cr'))
+               "_sm_pfx(item.get('name') or '') + size_label)"
+               + s.group('cr'))
     content = content[:s.start()] + wrapped + content[s.end():]
 
     # SAFETY: never write a file that doesn't compile.
