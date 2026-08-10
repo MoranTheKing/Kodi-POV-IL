@@ -1730,14 +1730,32 @@ def _mdblist_get_token():
         return ''
 
 
-def _mdblist_pov_set(a, setting_id, value):
-    """Best-effort cross-addon setSetting (no read-back). Used for POV's
-    auxiliary MDBList flags; the token itself is hard-verified separately."""
+POV_ADDON_ID = 'plugin.video.pov'
+
+
+def _mdblist_pov_write(pairs):
+    """Write (key, value) pairs into POV's settings THROUGH addon_settings_safe.
+
+    These four writes are the last bare `xbmcaddon.Addon(other).setSetting()`
+    calls left in the add-on, and they predate the wrapper. Kodi's setSetting
+    is not a targeted write: it re-serialises the WHOLE of POV's settings.xml
+    around every call, and any stored value that no longer satisfies its
+    definition's constraints comes back as the DEFAULT. So connecting MDBList
+    could silently reset a POV setting nobody named -- which is the same class
+    of bug as the "the update reset my settings" report that produced the
+    wrapper in the first place. Rare (it only fires on connect/disconnect) and
+    silent, which is exactly why it is worth closing rather than leaving.
+
+    Returns the list of keys that did NOT land, so callers can gate on it the
+    way they gated on the old hard read-back."""
     try:
-        a.setSetting(setting_id, value)
-        return True
-    except Exception:
-        return False
+        from resources.lib import addon_settings_safe
+        _changed, _restored, failed = addon_settings_safe.apply(
+            POV_ADDON_ID, tuple(pairs))
+        return list(failed)
+    except Exception as e:
+        _safe_log('mdblist POV write failed: {0}'.format(e), level='WARNING')
+        return [k for k, _v in pairs]
 
 
 def _mdblist_apply_connect(key, username):
@@ -1762,20 +1780,20 @@ def _mdblist_apply_connect(key, username):
     process. The stale MDBList cache is inert once the indicator flags change and
     POV refreshes it on its own schedule / next restart, so skipping it is safe.
     POV still renders settings from an in-memory cache, so a live POV session may
-    need a restart before it reflects these writes (documented POV trap)."""
-    a = _mdblist_pov_addon()
-    if not a:
+    need a restart before it reflects these writes (documented POV trap).
+
+    TWO calls into addon_settings_safe rather than one, precisely to keep the
+    gating above: a single apply() would write all four keys before telling us
+    the token had failed, which is the inconsistent state this docstring is
+    about. The wrapper already reads each key back, so its `failed` list is the
+    same hard verification the old code did by hand."""
+    if _mdblist_pov_addon() is None:
         return False
-    try:
-        a.setSetting('mdblist.token', key or '')
-        ok = (a.getSetting('mdblist.token') or '').strip() == (key or '').strip()
-    except Exception:
-        ok = False
-    if not ok:
+    if _mdblist_pov_write((('mdblist.token', (key or '').strip()),)):
         return False                       # leave every aux setting untouched
-    _mdblist_pov_set(a, 'mdblist_user', username or '')
-    _mdblist_pov_set(a, 'mdbl_indicators_active', 'true')
-    _mdblist_pov_set(a, 'watched_indicators', '2')
+    _mdblist_pov_write((('mdblist_user', username or ''),
+                        ('mdbl_indicators_active', 'true'),
+                        ('watched_indicators', '2')))
     return True
 
 
@@ -1785,19 +1803,18 @@ def _mdblist_apply_disconnect():
     watched-indicator, and hand the watched-status provider back to POV (0).
     Returns True iff the token was cleared (hard-verified); the rest best-effort.
     This is the fix for the 'Remove leaves indicators pointing at MDBList with no
-    key' inconsistency."""
-    a = _mdblist_pov_addon()
-    if not a:
+    key' inconsistency.
+
+    ONE call here, unlike connect: every one of these four writes fails toward
+    DEACTIVATING MDBList, which is the safe direction, so there is nothing to
+    gate and no reason to pay for two settings round trips."""
+    if _mdblist_pov_addon() is None:
         return False
-    _mdblist_pov_set(a, 'mdblist_user', '')
-    try:
-        a.setSetting('mdblist.token', '')
-        ok = (a.getSetting('mdblist.token') or '').strip() == ''
-    except Exception:
-        ok = False
-    _mdblist_pov_set(a, 'mdbl_indicators_active', 'false')
-    _mdblist_pov_set(a, 'watched_indicators', '0')
-    return ok
+    failed = _mdblist_pov_write((('mdblist_user', ''),
+                                 ('mdblist.token', ''),
+                                 ('mdbl_indicators_active', 'false'),
+                                 ('watched_indicators', '0')))
+    return 'mdblist.token' not in failed
 
 
 def _handle_connect_mdblist(_params):
