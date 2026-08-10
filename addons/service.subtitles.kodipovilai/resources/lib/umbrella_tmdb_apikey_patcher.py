@@ -68,7 +68,16 @@ HELPER_NAME = '_ai_apikey'
 
 # The helper goes in at module level, immediately before the first class that
 # uses it. `class TMDb:` is the base of every indexer class in the file.
-_HELPER_ANCHOR_RE = re.compile(r'^class TMDb:[ \t]*$', re.MULTILINE)
+#
+# The `\r?` is not decoration. Upstream Umbrella ships this file LF, but the
+# Umbrella pack THIS BUILD installs ships it CRLF -- and `$` in MULTILINE
+# matches before a `\n`, not before a `\r`. Without the `\r?` the anchor
+# matches the copy you download from GitHub and misses the copy that is
+# actually on the user's device, which is exactly how the first attempt at
+# this fix shipped doing nothing. Both spellings have to work here, because
+# the same device flips from one to the other the moment Umbrella updates
+# itself from its own repository.
+_HELPER_ANCHOR_RE = re.compile(r'^class TMDb:[ \t]*\r?$', re.MULTILINE)
 
 _HELPER_LINES = (
     '# ' + MARKER,
@@ -85,10 +94,14 @@ _HELPER_LINES = (
     '# END ' + MARKER,
 )
 
+# The trailing run is `(?:\r?\n)+`, not `\r?\n+`: the second spelling eats one
+# CRLF and then stalls, because `\n+` cannot cross the next `\r`. That left the
+# two blank lines behind on a CRLF file, so revert() was not byte-identical and
+# every boot stacked another copy of the helper on top of the last.
 _HELPER_REVERT_RE = re.compile(
     r'^#[ \t]*' + MARKER + r'[ \t]*\r?\n'
     r'(?:(?!#[ \t]*(?:END[ \t]+)?' + MARKER + r')[\s\S])*?'
-    r'^#[ \t]*END[ \t]+' + MARKER + r'[ \t]*\r?\n+',
+    r'^#[ \t]*END[ \t]+' + MARKER + r'[ \t]*(?:\r?\n)+',
     re.MULTILINE,
 )
 
