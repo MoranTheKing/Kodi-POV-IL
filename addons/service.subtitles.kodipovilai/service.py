@@ -2016,6 +2016,27 @@ def _maybe_patch_umbrella_language():
                 level='WARNING')
         except Exception:
             pass
+    # Searching Umbrella in Hebrew found nothing: the percent-encoded query
+    # made Umbrella's own api_key substitution raise, so the request was
+    # never sent. See umbrella_tmdb_apikey_patcher for the full account.
+    try:
+        from resources.lib import umbrella_tmdb_apikey_patcher
+        st = umbrella_tmdb_apikey_patcher.ensure_patched()
+        if st == 'patched':
+            kodi_utils.log(
+                'umbrella_tmdb_apikey_patcher: non-ASCII search repaired',
+                level='INFO')
+        elif st in ('unmatched', 'compile_failed', 'write_failed',
+                    'read_failed'):
+            kodi_utils.log(
+                'umbrella_tmdb_apikey_patcher: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'umbrella_tmdb_apikey_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
     # Two source-flow repairs: fire the Hebrew-availability warm at the START
     # of the scrape so the badge is there on the FIRST entry rather than the
     # second, and stop Kodi announcing "playback failed" when the user simply
