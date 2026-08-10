@@ -18,11 +18,22 @@
 # a string with no entry here simply is not in the file, Kodi falls back to
 # en_gb, and it renders in English exactly as it does today. Nothing breaks,
 # nothing goes blank. That lets us translate the surface a user actually
-# touches -- the menus, dialogs and context actions are built from 169 ids, of
-# which 157 carry text worth translating (the rest are brand names, bare
-# punctuation, or pure format strings) -- and leave the 533 settings labels in
-# English, where the terms are technical and a translation would more often
-# confuse than help.
+# touches -- 273 ids covering the menus, the Discover and My-Lists rows, the
+# dialogs and the context actions -- and leave the settings labels in English,
+# where the terms are technical and a translation would more often confuse
+# than help.
+#
+# TWO SEPARATE SOURCES feed those menus, and missing the second one is what
+# left the first pass looking half-done. navigator.py does NOT build the menu
+# in code: it reads menu.db, seeded from the MENU_DEFAULTS tables in
+# resources/lib/database/menu.py, where a row's label is EITHER a numeric
+# string id (resolved through getLS, so translatable here) or a literal
+# English string. Scanning the code for getLS() calls finds the first source
+# and none of the second. Eleven rows carry literal English -- Anime,
+# YouTube Videos, Premium Services, the Simkl and TMDb list rows -- and no
+# translation file can reach them; changing those means writing to the user's
+# own menu.db, which the in-app Main Menu Editor also owns, so they stay in
+# English for now.
 #
 # The .po is BUILT at install time by pairing each id below with the English
 # msgid read out of Umbrella's own strings.po. That way the msgid always
@@ -265,6 +276,132 @@ HE = {
     # --- misc ------------------------------------------------------------
     '40179': 'כיבוי reuselanguageinvoker',
     '40180': 'הפעלת reuselanguageinvoker',
+    # --- menu-table labels ----------------------------------------------
+    # Umbrella's menus are not built in code: navigator.py reads them from
+    # menu.db, seeded from the MENU_DEFAULTS tables in
+    # resources/lib/database/menu.py, where each row's label is EITHER a
+    # numeric string id (resolved through getLS, so translatable here) or a
+    # literal English string (not translatable at all). Scanning the code for
+    # getLS() calls missed every one of these, which is exactly why the main
+    # menu and the Discover lists stayed English after the first pass.
+    # Many rows also carry an alt_label -- the shorter form Umbrella shows
+    # when "index labels" is off -- so both are translated.
+    '32000': 'אוספים',
+    '32003': 'הסרטים שלי',
+    '32004': 'הסדרות שלי',
+    '32009': 'הורדות',
+    '32014': 'יומן שינויים!!',
+    '32019': 'פרקים קרובים בהמשכים',
+    '32027': 'לוח שידורים',
+    '32031': 'גילוי',
+    '32032': 'אוסף',
+    '32036': 'היסטוריה',
+    '32037': 'פרקים בהמשך צפייה',
+    '32039': 'רשימות סרטים',
+    '32040': 'רשימות סדרות',
+    '32202': 'פרקים אחרונים',
+    '32203': 'פרקים קרובים',
+    '32204': 'פתיחות עונה',
+    '32422': 'עכשיו בקולנוע',
+    '32423': 'עכשיו בקולנוע (TMDb)',
+    '32424': 'הכי מצופים',
+    '32425': 'הכי מצופים (Trakt)',
+    '32426': 'בקרוב',
+    '32427': 'בקרוב (TMDb)',
+    '32430': 'פופולריים',
+    '32431': 'פופולריים (TMDb)',
+    '32433': 'פופולריים (Trakt)',
+    '32434': 'קופות',
+    '32436': 'קופות (TMDb)',
+    '32437': 'קופות (Trakt)',
+    '32440': 'המדורגים ביותר',
+    '32441': 'המדורגים ביותר (TMDb)',
+    '32442': 'חמים עכשיו',
+    '32443': 'חמים עכשיו (Trakt)',
+    '32444': 'מומלצים',
+    '32445': 'מומלצים (Trakt)',
+    '32450': 'לוח שידורים (TVMaze)',
+    '32451': 'זוכי פרס האוסקר',
+    '32452': 'זוכי פרס האוסקר (Trakt)',
+    '32455': "ז'אנרים",
+    '32457': 'שנה',
+    '32463': 'דירוג צפייה',
+    '32465': 'משודר היום',
+    '32467': 'משודר היום (TMDb)',
+    '32468': 'רשתות (TMDb)',
+    '32469': 'רשתות',
+    '32471': 'בטלוויזיה',
+    '32472': 'בטלוויזיה (TMDb)',
+    '32475': 'סדרות חדשות',
+    '32485': 'שנה (TMDb)',
+    '32486': "ז'אנרים (TMDb)",
+    '32487': 'דירוג צפייה (TMDb)',
+    '33046': 'גילוי סרטים',
+    '33047': 'גילוי סדרות',
+    '35308': 'סיים לצפות',
+    '40070': 'הפקות מקור',
+    '40077': 'הפקות מקור (TMDb)',
+    '40084': 'רשימות מובילות (MDBList)',
+    '40255': 'על סמך צפייה אחרונה (Trakt)',
+    '40256': 'על סמך צפייה אחרונה',
+    '40260': 'דומה לצפייה האחרונה (Trakt)',
+    '40261': 'דומה לצפייה האחרונה',
+    '40268': 'יצאו לאחרונה (TMDb)',
+    '40269': 'יצאו לאחרונה',
+    '40330': 'חמים היום (TMDb)',
+    '40331': 'חמים השבוע (TMDb)',
+    '40350': 'חמים היום (Simkl)',
+    '40351': 'חמים היום',
+    '40352': 'חמים השבוע (Simkl)',
+    '40353': 'חמים השבוע',
+    '40354': 'חמים החודש (Simkl)',
+    '40355': 'חמים החודש',
+    '40388': 'חמים מבין החדשים (Trakt)',
+    '40389': 'חמים מבין החדשים',
+    '40392': 'דומה לצפייה האחרונה (ספרייה)',
+    '40393': 'מומלצים (ספרייה)',
+    '40401': 'סדרות בהמשך צפייה',
+    '40410': 'יצאו החודש (TMDb)',
+    '40411': 'יצאו החודש',
+    '40412': 'יצאו החודש (דיגיטלי ו-DVD) (TMDb)',
+    '40413': 'יצאו החודש (דיגיטלי ו-DVD)',
+    '40433': 'סדרות שנצפו',
+    '40464': 'המועדפים של Umbrella',
+    '40474': 'יציאות דיגיטליות (DVDReleaseDates)',
+    '40475': 'יציאות דיגיטליות',
+    '40493': "ז'אנרים (Trakt)",
+    '40548': 'הושלמו (Simkl)',
+    '40550': 'מתוכננים לצפייה (Simkl)',
+    '40589': 'יומן שינויים מלא!!',
+    '40612': 'רשימת הצפייה ב-TMDb',
+    '40658': 'מקומי: סדרות בהמשך צפייה',
+    '40659': 'מקומי: פרקים בהמשך צפייה',
+    '40661': 'סדרות חדשות (TMDb)',
+    '40681': 'רשימות משתמש (MDBList)',
+    '40682': 'רשימת צפייה (MDBList)',
+    '40683': 'רשימות אהובות (MDBList)',
+    '40684': 'סדרות בהמשך צפייה (MDBList)',
+    '40685': 'פרקים בהמשך צפייה (MDBList)',
+    '40686': 'סיים לצפות (MDBList)',
+    '40687': 'סיים לצפות (Trakt)',
+    '40688': 'פרקים בהמשך צפייה (Trakt)',
+    '40689': 'סדרות בהמשך צפייה (Trakt)',
+    '40690': 'סדרות שנצפו (Trakt)',
+    '40691': 'פרקים קרובים בהמשכים (Trakt)',
+    '40692': 'פרקים אחרונים (Trakt)',
+    '40693': 'פרקים קרובים (Trakt)',
+    '40694': 'פתיחות עונה (Trakt)',
+    '40695': 'היסטוריה (Trakt)',
+    '40696': 'רשימת צפייה (Trakt)',
+    '40697': 'אוסף (Trakt)',
+    '40698': 'הרשימות האהובות שלי (Trakt)',
+    '40699': 'רשימות משתמש',
+    '40700': 'רשימת צפייה',
+    '40701': 'רשימות אהובות',
+    '40702': 'חמים היום',
+    '40703': 'חמים השבוע',
+    '40706': 'אוסף (MDBList)',
+    '40711': 'רשימות רשמיות (MDBList)',
 }
 
 
