@@ -2637,6 +2637,48 @@ Things worth not rediscovering from this batch:
   marker promises not to do. Keeping the pack current is not that function's
   job; Account Manager updates itself from its developer's repo.
 
+### What shipped 0.2.475 (the Hebrew match badge in Umbrella, and two guards)
+
+`umbrella_subtitle_match_patcher` is the port of `pov_subtitle_match_patcher`
+to Umbrella's own source window, sharing `he_sub_match` so a title warmed from
+either add-on shows its badge in both. It ports almost line for line because
+Umbrella's window has the same shape as POV's down to the loop signature, and
+`umbrella.size_label` is the first token of the info line in all twelve layout
+variants of `source_results.xml` -- so one property carries the badge on every
+layout, with no skin XML touched.
+
+Three lessons, all of which cost a round of rework and none of which are
+Umbrella-specific:
+
+- **A per-row try/except in the host add-on is NOT a backstop for injected
+  code.** It drops the ROW. Our badge call is identical for every row, so
+  anything that makes it raise once makes it raise for all of them and the
+  source list comes back EMPTY -- which reads as "the scrapers broke". POV's
+  wrapper is `except: pass`, so it does not even log. Both patchers now
+  compute the badge inside a guarded `_sm_pfx`, and the four failure modes
+  (label_prefix arity change, label_prefix raising, module missing, import
+  failing) all yield an empty badge instead. Any future injection into a
+  third-party loop needs its own guard, not the host's.
+- **Anchor a revert on MARKERS you control, never on the text of the block's
+  own body.** The old body-anchored regex could not match a malformed block,
+  and `.*?` then ran to the NEXT block's body text and deleted the upstream
+  code in between. It also meant changing the body silently broke the revert,
+  leaving the old block in place while the loop anchor cheerfully inserted a
+  second one. Both patchers now use START/END markers with a middle that
+  cannot cross another marker of ours.
+- **Migrating a shipped patcher means the OLD form has to stay
+  removable.** Every device carries a v6 block, and v6 has no END marker, so
+  the legacy body-anchored regex is kept purely to remove it. v7's fallback
+  line deliberately continues past `set()` so the legacy pattern is
+  structurally unable to match a v7 block and half-remove it.
+
+Also in this release: the four MDBList writes into POV's settings -- the last
+bare cross-add-on `setSetting` calls in the add-on -- now go through
+`addon_settings_safe`. Connect keeps two calls on purpose, because one call
+would write all four keys before reporting that the token failed, which is the
+"watched-status points at MDBList with no key" state the gating exists to
+prevent.
+
 ### Known, deliberately not fixed
 
 - POV's `menu_editor.shortcut_folder_add_item` does
@@ -2649,6 +2691,21 @@ Things worth not rediscovering from this batch:
 - The `.google` provenance sidecar can be evicted by `cache.prune()`
   independently of its `.srt` sibling, so provenance can lapse for titles still
   being watched. The fix touches cache eviction.
+- **A subtitle-match SETUP block whose END-marker LINE is lost, while its start
+  marker and body survive, cannot be removed by either revert.** The
+  END-anchored form has nothing to anchor on, and the legacy form is
+  structurally unable to match a v7 block -- which is the same property that
+  keeps it from half-removing a healthy one. `ensure_patched()` then inserts a
+  second SETUP in front of the orphan. Left alone on purpose: it needs damage
+  from OUTSIDE this code (our own write is atomic, proven by failure
+  injection), the result compiles and works, and it stabilises at two blocks
+  rather than growing -- the cost is the setup running twice per window open.
+  The fix would be a third regex bounded by the loop line, which is more risk
+  on a migration path than the defect it removes. What WAS fixed is the
+  reporting: that run used to return `'unchanged'` because `MARKER in original`
+  is a substring test rather than a statement about what happened, so a real
+  write was invisible in the log and POV's reload was skipped. A status has to
+  describe what the run did.
 
 ## Working style
 

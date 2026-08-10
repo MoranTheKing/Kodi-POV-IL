@@ -113,8 +113,17 @@ def _enabled():
 
 
 def _media_params(meta):
-    """Pull {tmdb,imdb,type,season,episode} out of POV's meta dict, defensively
-    (only imdb_id/media_type/season/episode are guaranteed present)."""
+    """Pull {tmdb,imdb,type,season,episode} out of the player add-on's meta
+    dict, defensively (only imdb_id/media_type/season/episode are guaranteed
+    present).
+
+    Serves POV *and* Umbrella. Umbrella's meta spells the same three fields
+    `imdb`, `tmdb` and `mediatype` (no underscore) -- the first two were
+    already covered by the alternates below, and `mediatype` is read here so
+    Umbrella's type is taken from the field that states it rather than
+    inferred from whether season/episode happen to be set. The inference still
+    stands behind it and still gets the answer right, but a movie whose meta
+    carries a stray season would have fooled it."""
     if not meta:
         return None
     g = meta.get
@@ -124,7 +133,7 @@ def _media_params(meta):
         return None
     season = str(g('season') or g('custom_season') or '0').strip() or '0'
     episode = str(g('episode') or g('custom_episode') or '0').strip() or '0'
-    mt = str(g('media_type') or '').strip().lower()
+    mt = str(g('media_type') or g('mediatype') or '').strip().lower()
     is_ep = mt in ('episode', 'tvshow', 'tv', 'season') or (
         season not in ('', '0') and episode not in ('', '0'))
     return {
