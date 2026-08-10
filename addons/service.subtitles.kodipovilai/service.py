@@ -2016,6 +2016,25 @@ def _maybe_patch_umbrella_language():
                 level='WARNING')
         except Exception:
             pass
+    # Kodi's own "playback failed" after a deliberate back-out of the source
+    # list. It is a 20-second timer on consecutive unresolved plays, not a
+    # report about this playback -- see kodi_playlist_timeout_patcher.
+    try:
+        from resources.lib import kodi_playlist_timeout_patcher
+        st = kodi_playlist_timeout_patcher.ensure_patched()
+        if st in ('patched', 'created'):
+            kodi_utils.log(
+                'kodi_playlist_timeout_patcher: ' + st, level='INFO')
+        elif st in ('unmatched', 'bad_xml', 'write_failed', 'read_failed'):
+            kodi_utils.log(
+                'kodi_playlist_timeout_patcher: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'kodi_playlist_timeout_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
     # Searching Umbrella in Hebrew found nothing: the percent-encoded query
     # made Umbrella's own api_key substitution raise, so the request was
     # never sent. See umbrella_tmdb_apikey_patcher for the full account.
