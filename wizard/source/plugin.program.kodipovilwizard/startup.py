@@ -971,6 +971,20 @@ except Exception as _skin_upd_err:
     logging.log("[Skin Auto Update] startup hook failed: {0}".format(_skin_upd_err),
                 level=xbmc.LOGERROR)
 
+# KODI-POV-IL - Account Manager for everyone, once per device. The build's
+# "חיבור שירותים" screen now authorises the debrid and Trakt accounts through
+# it, so one connect reaches every add-on instead of POV alone; without it
+# installed those rows silently fall back to POV-only. Existing users get it
+# on their next startup, fresh installs on their first. Guarded by its own
+# marker setting, so it never runs twice and never fights a user who removed
+# it on purpose.
+try:
+    from resources.libs import wizard as _wiz_am
+    _wiz_am.ensure_acctmgr_for_everyone()
+except Exception as _am_err:
+    logging.log("[Account Manager] startup hook failed: {0}".format(_am_err),
+                level=xbmc.LOGERROR)
+
 # SAVE TRAKT
 if CONFIG.get_setting('keeptrakt') == 'true':
     logging.log("[Trakt Data] Started", level=xbmc.LOGINFO)

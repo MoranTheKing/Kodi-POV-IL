@@ -512,6 +512,143 @@ def _live_add_tiles(tiles):
     return added
 
 
+# The two Umbrella-era tiles: the search-engine switch and Umbrella itself.
+# Both are meaningless without Umbrella, so they are inserted ONLY on installs
+# that have it -- exactly the rule the MDBList pair follows. Add-only and
+# fire-once through the json sidecar, so deleting one makes it stay deleted.
+UMBRELLA_TILE_NAMES = (
+    '[B][COLOR orange]מנוע החיפוש - POV / Umbrella[/COLOR][/B]',
+    '[B][COLOR orange]Umbrella[/COLOR][/B]',
+)
+UMBRELLA_TILES_SEEN_KEY = 'umbrella_tiles'
+UMBRELLA_ADDON_ID = 'plugin.video.umbrella'
+# Anchor: the subscription-notification tile, itself anchored to the
+# "חיבור שירותים" tile. That puts the pair with the other build-service tiles
+# at the top of the home row instead of at the very bottom past the content.
+_DEBRID_NOTICE_TILE_NAME = '[B][COLOR orange]הגדרת התראות מנוי[/COLOR][/B]'
+
+
+def _umbrella_installed():
+    try:
+        import xbmcaddon
+        xbmcaddon.Addon(UMBRELLA_ADDON_ID)
+        return True
+    except Exception:
+        return False
+
+
+def _insert_umbrella_tiles(content, fixture_text):
+    """One-time, opt-in insert of the Umbrella + search-engine-switch tiles for
+    an existing install (clean installs get them from the shipped fixture).
+    Gated on Umbrella being installed; add-only; fire-once via the json sidecar
+    so a later deletion sticks even after Kodi strips XML comments.
+    Returns (content, changed)."""
+    if not _umbrella_installed():
+        # Not installed -> never add, and never stamp: installing Umbrella
+        # later must still get the tiles.
+        return content, False
+    seen = _load_seen_state()
+    missing = _missing_tiles(content, UMBRELLA_TILE_NAMES)
+    if not missing:
+        # Present -> persist "seen" so a LATER delete sticks.
+        if UMBRELLA_TILES_SEEN_KEY not in seen:
+            seen.add(UMBRELLA_TILES_SEEN_KEY)
+            _save_seen_state(seen)
+        return content, False
+    if UMBRELLA_TILES_SEEN_KEY in seen:
+        return content, False            # deleted on purpose -- leave it
+    tiles = []
+    for name in missing:
+        snippet = _extract_tile(fixture_text, name)
+        if snippet is None:
+            return content, False        # fixture incomplete -> safe no-op
+        tiles.append(snippet.encode('utf-8'))
+    anchor = re.compile(
+        rb'([ \t]*<favourite\s[^>]*?name="'
+        + re.escape(_DEBRID_NOTICE_TILE_NAME.encode('utf-8'))
+        + rb'"[^>]*>(?:(?!</favourite>).)*?</favourite>\s*\n)',
+        re.DOTALL,
+    ).search(content)
+    if anchor is not None:
+        new_content = (content[:anchor.end(1)] + b''.join(tiles)
+                       + content[anchor.end(1):])
+    else:
+        new_content = _insert_tiles_before_close(content, tiles)
+        if new_content is None:
+            return content, False
+    # NOT stamped here. "Seen" means the tiles reached the disk, and this file
+    # has not been written yet -- stamping now would treat a failed write as a
+    # completed insert and never try again. ensure_patched() stamps it after
+    # the write succeeds, exactly as the MDBList pair does.
+    _log('adding the Umbrella / search-engine home tiles ({0})'.format(
+        len(tiles)))
+    return new_content, True
+
+
+# The per-skin favourites SEEDS the wizard copies over userdata/favourites.xml
+# on every skin switch (update_favourites_xml_file). A tile that exists only in
+# the user's file is lost the first time they switch skin, and the sidecar then
+# reads that loss as a deletion and never brings it back. Adding the tiles to
+# the seeds as well is the actual fix: it is where a skin switch gets its
+# content from.
+_FAVOURITES_SEEDS = (
+    'special://home/media/builds_favourites_xml/skin.fentastic/favourites.xml',
+    'special://home/media/builds_favourites_xml/skin.estuary/favourites.xml',
+)
+
+
+def _seed_umbrella_tiles(fixture_text):
+    """Add the two Umbrella-era tiles to the per-skin favourites seeds, so a
+    skin switch keeps them instead of wiping them. Add-only and idempotent;
+    each seed is left alone if it already has them or cannot be read.
+    Returns the number of seeds updated. Never raises."""
+    if not _umbrella_installed():
+        return 0
+    tiles_by_name = {}
+    for name in UMBRELLA_TILE_NAMES:
+        snippet = _extract_tile(fixture_text, name)
+        if snippet is None:
+            return 0                     # fixture incomplete -> safe no-op
+        tiles_by_name[name] = snippet.encode('utf-8')
+    updated = 0
+    for seed in _FAVOURITES_SEEDS:
+        try:
+            path = xbmcvfs.translatePath(seed)
+        except Exception:
+            continue
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, 'rb') as f:
+                seed_content = f.read()
+        except OSError:
+            continue
+        missing = _missing_tiles(seed_content, UMBRELLA_TILE_NAMES)
+        if not missing:
+            continue
+        new_seed = _insert_tiles_before_close(
+            seed_content, [tiles_by_name[n] for n in missing])
+        if new_seed is None:
+            continue                     # no </favourites> -> leave it alone
+        tmp = path + '.aitmp'
+        try:
+            with open(tmp, 'wb') as f:
+                f.write(new_seed)
+            os.replace(tmp, path)
+            updated += 1
+        except OSError as e:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            _log('could not update favourites seed {0}: {1}'.format(seed, e),
+                 level='WARNING')
+    if updated:
+        _log('added the Umbrella / search-engine tiles to {0} favourites '
+             'seed(s), so a skin switch keeps them'.format(updated))
+    return updated
+
+
 def _insert_mdblist_tiles(content, fixture_text):
     """One-time, opt-in restore of the two MDBList personal tiles for an existing
     install that already has a favourites.xml (clean installs get them from the
@@ -847,6 +984,15 @@ def ensure_patched():
     content, debrid_notice_restored = _insert_debrid_notice_tile(
         content, fixture_text)
     content, mdblist_restored = _insert_mdblist_tiles(content, fixture_text)
+    content, umbrella_tiles_added = _insert_umbrella_tiles(
+        content, fixture_text)
+    # Independent of the user's own file: the seeds are what a skin switch
+    # copies over it, so they need the tiles whether or not the user's file
+    # got them this time round.
+    try:
+        _seed_umbrella_tiles(fixture_text)
+    except Exception as e:
+        _log('favourites seed update failed: {0}'.format(e), level='WARNING')
     content, service_position_fixed = (
         _move_existing_service_tile_after_torbox(content))
 
@@ -913,6 +1059,7 @@ def ensure_patched():
         if (not fixed_existing and not fixed_torbox_status
                 and not service_position_fixed and not force_premiumize
                 and not force_personal and not mdblist_restored
+                and not umbrella_tiles_added
                 and (not missing_service or had_service_marker)
                 ):
             return 'user_removed_tiles'
@@ -977,6 +1124,7 @@ def ensure_patched():
     if (not missing and not fixed_existing and not marker_added
             and not fixed_torbox_status and not service_marker_added
             and not debrid_notice_restored and not mdblist_restored
+            and not umbrella_tiles_added
             and not service_position_fixed and not full_marker_added
             and not reseed_marker_added and not personal_reseed_added
             and not full_reseed_added
@@ -1057,6 +1205,17 @@ def ensure_patched():
         except Exception:
             pass
 
+    if umbrella_tiles_added:
+        # Same rule, same reason: only a tile that reached the disk counts as
+        # inserted, and only then may a future deletion be left alone.
+        try:
+            _s = _load_seen_state()
+            if UMBRELLA_TILES_SEEN_KEY not in _s:
+                _s.add(UMBRELLA_TILES_SEEN_KEY)
+                _save_seen_state(_s)
+        except Exception:
+            pass
+
     if missing:
         _log('restored {0} missing personal tile(s): {1}'.format(
             len(missing), ', '.join(missing)), level='INFO')
@@ -1074,6 +1233,8 @@ def ensure_patched():
         _log('restored subscription notification settings tile', level='INFO')
     if mdblist_restored:
         _log('restored MDBList personal tiles (My Movies/My Series)', level='INFO')
+    if umbrella_tiles_added:
+        _log('added the Umbrella + search-engine home tiles', level='INFO')
     if service_position_fixed:
         _log('moved Premiumize status tile next to TorBox', level='INFO')
     if missing_full_tiles:

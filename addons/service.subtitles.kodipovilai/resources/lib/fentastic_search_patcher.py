@@ -53,9 +53,24 @@ except Exception:
 
 # The POV search node. navigator.search has no extra query params, so no
 # '&' escaping is needed inside the XML attribute value.
+#
+# Which add-on the button opens is now a user choice (POV or Umbrella), so the
+# target comes from search_provider rather than from this constant. The
+# constant stays because it IS the POV value and reads better than a dict
+# lookup at the two places that mean "POV specifically".
 POV_SEARCH_ONCLICK = (
     'ActivateWindow(videos,'
     'plugin://plugin.video.pov/?mode=navigator.search,return)')
+
+
+def _target_onclick():
+    """The search hub for the provider the user picked, POV when they never
+    picked one or when Umbrella is not installed."""
+    try:
+        from resources.lib import search_provider
+        return search_provider.hub_onclick()
+    except Exception:
+        return POV_SEARCH_ONCLICK
 
 # NOX also has a main-menu "חיפוש" hub item that points at POV's TV-only
 # search-history; repoint it to the full search hub too. Matched by the exact
@@ -205,22 +220,48 @@ def _apply(target_onclick_for_factory):
     return 'no_target'
 
 
+def _nox_known_paths():
+    """Every search path this item may currently hold: the skin's own default,
+    plus each provider's hub. Switching provider has to recognise the one that
+    is in the file TODAY, not only the one the skin shipped with -- otherwise
+    the second switch is a no-op and the menu item stays on the first."""
+    paths = [_NOX_OLD_SEARCH]
+    try:
+        from resources.lib import search_provider
+        paths.extend(search_provider.all_hub_paths())
+    except Exception:
+        paths.append(_NOX_NEW_SEARCH)
+    return paths
+
+
 def _repoint_nox_main_menu():
-    """Repoint NOX's main-menu search item to the full POV search hub.
+    """Repoint NOX's main-menu search item to the chosen provider's search
+    hub. Unlike the buttons this item is already wrapped in the skin's own
+    ActivateWindow, so it takes the bare plugin path.
     Returns 'patched' / 'unchanged' / 'no_target' / 'failed'."""
     if xbmcvfs is None:
         return 'failed'
     if not _exists(NOX_MAIN_MENU):
         return 'no_target'
     try:
+        from resources.lib import search_provider
+        new_path = search_provider.hub_path()
+    except Exception:
+        new_path = _NOX_NEW_SEARCH
+    try:
         content = _read(NOX_MAIN_MENU)
     except Exception as e:
         _log('nox main-menu read failed: {0}'.format(e), level='WARNING')
         return 'failed'
-    if _NOX_OLD_SEARCH not in content:
+    updated = content
+    for old in _nox_known_paths():
+        if old == new_path:
+            continue
+        updated = updated.replace(old, new_path)
+    if updated == content:
         return 'unchanged'
     try:
-        _write(NOX_MAIN_MENU, content.replace(_NOX_OLD_SEARCH, _NOX_NEW_SEARCH))
+        _write(NOX_MAIN_MENU, updated)
     except Exception as e:
         _log('nox main-menu write failed: {0}'.format(e), level='WARNING')
         return 'failed'
@@ -228,14 +269,17 @@ def _repoint_nox_main_menu():
 
 
 def ensure_patched():
-    """Repoint the home search icon to POV's full search hub
-    (navigator.search: Movies / TV Shows / People / Movies Collection) on
-    FENtastic, Estuary and NOX -- plus NOX's main-menu search item -- so every
-    skin's magnifying glass offers the same richer set of search options, not
-    just movie+show."""
+    """Repoint the home search icon to the chosen provider's full search hub
+    (POV's navigator.search: Movies / TV Shows / People / Movies Collection,
+    or Umbrella's tools_searchNavigator) on FENtastic, Estuary and NOX -- plus
+    NOX's main-menu search item -- so every skin's magnifying glass offers the
+    same richer set of search options, not just movie+show, and offers them
+    from whichever add-on the user asked for."""
+    target = _target_onclick()
+
     def _target_factory(buttons):
         def _target(cid):
-            return POV_SEARCH_ONCLICK
+            return target
         return _target
 
     status = _apply(_target_factory)
