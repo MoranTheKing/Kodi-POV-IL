@@ -1,3 +1,15 @@
+v0.2.475
+- Umbrella (optional): the source list now shows, under each source and before
+  you pick it, how well an available Hebrew subtitle matches that exact
+  release - the same badge POV already has, and the two share their data, so a
+  title checked in one shows its badge straight away in the other.
+- MDBList: connecting or disconnecting it can no longer disturb any other POV
+  setting. Kodi rewrites a whole add-on's settings file around every single
+  write, and this was the last place still doing that the old way.
+- Both source lists are now protected against a failure in that badge. It
+  could previously have hidden every source in the list, which would have
+  looked like the sources themselves had stopped working.
+
 v0.2.474
 - "Connect Services" now connects your debrid accounts everywhere at once.
   Real-Debrid, Premiumize, AllDebrid, TorBox, OffCloud and Easynews go
