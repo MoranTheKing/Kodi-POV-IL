@@ -1,3 +1,21 @@
+v0.2.474
+- "Connect Services" now connects your debrid accounts everywhere at once.
+  Real-Debrid, Premiumize, AllDebrid, TorBox, OffCloud and Easynews go
+  through Account Manager, so one connect fills them into every add-on you
+  have installed instead of into POV alone. Same screen, same single click,
+  and it is in Hebrew now. Each row says whether it is connected everywhere,
+  connected to POV only, or not connected. Trakt, TMDb lists and EasyDebrid
+  still connect to POV directly.
+- Account Manager now installs by itself, for everyone, including anyone who
+  already has the build. Nothing you have connected changes.
+- MDBList keeps its QR pairing from a phone, and now passes the key on to
+  your other add-ons too.
+- New: you can choose whether the search button searches with POV or with
+  Umbrella. The new tile "מנוע החיפוש" on the home screen switches between
+  them, on all four skins, and the change appears right away. Only shown if
+  Umbrella is installed.
+- New home tile for Umbrella itself, for anyone who installed it.
+
 v0.2.473
 - Umbrella (optional): the rest of the menus are now in Hebrew too - the main
   menu, the Discover lists and the personal lists. A few rows stay in English

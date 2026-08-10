@@ -48,7 +48,25 @@ AF3_SKIN_ID = 'skin.arctic.fuse.3'
 SEARCH_PATH_REL = ('addons/' + AF3_SKIN_ID +
                    '/shortcuts/generator/data/setup/search_path.xml')
 
-MARKER = '<!-- AI_SUBS_POV_SEARCH_v3_rollback -->'
+_MARKER_BASE = '<!-- AI_SUBS_POV_SEARCH_v3_rollback'
+
+
+def _marker(provider):
+    """The marker carries the PROVIDER, so choosing a different search add-on
+    makes the already-patched check miss and the rules get re-injected. A
+    marker that ignored the provider would leave AF3 searching whatever it was
+    first patched with, for ever."""
+    return '{0}_{1} -->'.format(_MARKER_BASE, provider)
+
+
+def _any_marker_re():
+    import re as _re
+    return _re.compile(_re.escape(_MARKER_BASE) + r'[^>]*-->\n?')
+
+
+# Kept for the modules that import it by name; the POV spelling is the one
+# every device carries today.
+MARKER = _marker('pov')
 # Older markers: our #207 v1 marker plus any Codex search markers. When any
 # of these (or a Codex artifact below) is present we STRIP everything and
 # re-inject ONLY the #207 rules, forcing a device stuck on a Codex build
@@ -82,23 +100,39 @@ _POV_RULE_RE = re.compile(
     r'        </rule>\n',
     re.DOTALL)
 
-# POV search path prefixes (the generator appends the encoded query, then
-# our empty suffix). Note: in search_path.xml, '&' is written as the
+# Search path prefixes (the generator appends the encoded query, then our
+# empty suffix). Note: in search_path.xml, '&' is written as the
 # double-escaped '&amp;amp;' because the value is XML text that the
 # generator later parses again. We mirror the existing TMDb rows exactly.
-_POV_MOVIE_PREFIX = ('plugin://plugin.video.pov/?mode=build_movie_list'
-                     '&amp;amp;action=tmdb_movies_search&amp;amp;query=')
-_POV_TV_PREFIX = ('plugin://plugin.video.pov/?mode=build_tvshow_list'
-                  '&amp;amp;action=tmdb_tv_search&amp;amp;query=')
-# People search (actors AND directors): POV's router does
-# person_search(params['query']) (entry.py mode=person_search).
-_POV_PEOPLE_PREFIX = ('plugin://plugin.video.pov/?mode=person_search'
-                      '&amp;amp;query=')
-# Movie collections: same shape as movie search, action=..._collections
-# (menus/movies.py handles tmdb_movies_search_collections).
-_POV_COLLECTIONS_PREFIX = (
-    'plugin://plugin.video.pov/?mode=build_movie_list'
-    '&amp;amp;action=tmdb_movies_search_collections&amp;amp;query=')
+#
+# Which add-on they point at is the user's choice; search_provider owns the
+# table for both providers and the fallback when Umbrella is not installed.
+# POV's four are repeated here as the fallback for the (impossible in the
+# build, possible in a standalone install) case where that module is absent.
+_POV_FALLBACK = {
+    'Movies': ('plugin://plugin.video.pov/?mode=build_movie_list'
+               '&amp;amp;action=tmdb_movies_search&amp;amp;query='),
+    'Tv': ('plugin://plugin.video.pov/?mode=build_tvshow_list'
+           '&amp;amp;action=tmdb_tv_search&amp;amp;query='),
+    # People search (actors AND directors): POV's router does
+    # person_search(params['query']) (entry.py mode=person_search).
+    'People': ('plugin://plugin.video.pov/?mode=person_search'
+               '&amp;amp;query='),
+    # Movie collections: same shape as movie search, action=..._collections
+    # (menus/movies.py handles tmdb_movies_search_collections).
+    'Collections': ('plugin://plugin.video.pov/?mode=build_movie_list'
+                    '&amp;amp;action=tmdb_movies_search_collections'
+                    '&amp;amp;query='),
+}
+
+
+def _provider_and_prefixes():
+    """(provider name, {row: path prefix}) for the chosen search add-on."""
+    try:
+        from resources.lib import search_provider
+        return search_provider.current(), search_provider.af3_prefixes()
+    except Exception:
+        return 'pov', _POV_FALLBACK
 
 
 def _log(msg, level='INFO'):
@@ -166,27 +200,35 @@ def ensure_patched():
         _log('read failed: {0}'.format(e), level='WARNING')
         return 'read_failed'
 
-    # Already exactly at the #207 target (current marker, no stale marker
-    # and no Codex artifact to clean up) -> nothing to do.
+    provider, prefixes = _provider_and_prefixes()
+    marker = _marker(provider)
+
+    # Already exactly at the target for THIS provider (its marker, no stale
+    # marker and no Codex artifact to clean up) -> nothing to do.
     has_old = any(m in text for m in OLD_MARKERS)
     has_codex = any(a in text for a in _CODEX_ARTIFACTS)
-    if MARKER in text and not has_old and not has_codex:
+    if marker in text and not has_old and not has_codex:
         return 'already_patched'
 
     # Strip ALL of our prior POV rule blocks (POVMovies/POVTv AND Codex's
     # POVDiscover) from every rule-set, and drop every marker we've ever
-    # stamped, returning the file to a clean stock state before we
-    # re-inject ONLY the #207 rules below.
+    # stamped -- including the other provider's, and the un-suffixed one every
+    # device carries today -- returning the file to a clean stock state before
+    # we re-inject below.
     text = _POV_RULE_RE.sub('', text)
-    for m in (MARKER,) + OLD_MARKERS:
+    text = _any_marker_re().sub('', text)
+    for m in OLD_MARKERS:
         text = text.replace(m + '\n', '').replace(m, '')
 
     # Build the per-rule-set injections (movies, tv, people, collections).
+    # The TOKENS keep their historical DefaultSearch-POV* spelling whatever the
+    # provider is: they are opaque keys shared with the searchwidgets node
+    # written by af3_home_patcher, and renaming them would break every row.
     path_rules = (
-        _rule('DefaultSearch-POVMovies', _POV_MOVIE_PREFIX)
-        + _rule('DefaultSearch-POVTv', _POV_TV_PREFIX)
-        + _rule('DefaultSearch-POVPeople', _POV_PEOPLE_PREFIX)
-        + _rule('DefaultSearch-POVCollections', _POV_COLLECTIONS_PREFIX))
+        _rule('DefaultSearch-POVMovies', prefixes['Movies'])
+        + _rule('DefaultSearch-POVTv', prefixes['Tv'])
+        + _rule('DefaultSearch-POVPeople', prefixes['People'])
+        + _rule('DefaultSearch-POVCollections', prefixes['Collections']))
     # suffix empty for all
     end_rules = (
         _rule('DefaultSearch-POVMovies', '')
@@ -225,10 +267,10 @@ def ensure_patched():
     # its own line at the very top after the first '>'.
     first_gt = new_text.find('>')
     if first_gt != -1:
-        new_text = (new_text[:first_gt + 1] + '\n' + MARKER
+        new_text = (new_text[:first_gt + 1] + '\n' + marker
                     + new_text[first_gt + 1:])
     else:
-        new_text = MARKER + '\n' + new_text
+        new_text = marker + '\n' + new_text
 
     tmp_path = path + '.aitmp'
     try:
@@ -243,6 +285,6 @@ def ensure_patched():
         _log('write failed: {0}'.format(e), level='WARNING')
         return 'write_failed'
 
-    _log('added POV movie/tv/people/collections search rules to '
-         'search_path.xml', 'INFO')
+    _log('added {0} movie/tv/people/collections search rules to '
+         'search_path.xml'.format(provider), 'INFO')
     return 'patched'
