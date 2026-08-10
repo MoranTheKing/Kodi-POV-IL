@@ -2691,6 +2691,21 @@ prevent.
 - The `.google` provenance sidecar can be evicted by `cache.prune()`
   independently of its `.srt` sibling, so provenance can lapse for titles still
   being watched. The fix touches cache eviction.
+- **A subtitle-match SETUP block whose END-marker LINE is lost, while its start
+  marker and body survive, cannot be removed by either revert.** The
+  END-anchored form has nothing to anchor on, and the legacy form is
+  structurally unable to match a v7 block -- which is the same property that
+  keeps it from half-removing a healthy one. `ensure_patched()` then inserts a
+  second SETUP in front of the orphan. Left alone on purpose: it needs damage
+  from OUTSIDE this code (our own write is atomic, proven by failure
+  injection), the result compiles and works, and it stabilises at two blocks
+  rather than growing -- the cost is the setup running twice per window open.
+  The fix would be a third regex bounded by the loop line, which is more risk
+  on a migration path than the defect it removes. What WAS fixed is the
+  reporting: that run used to return `'unchanged'` because `MARKER in original`
+  is a substring test rather than a statement about what happened, so a real
+  write was invisible in the log and POV's reload was skipped. A status has to
+  describe what the run did.
 
 ## Working style
 
