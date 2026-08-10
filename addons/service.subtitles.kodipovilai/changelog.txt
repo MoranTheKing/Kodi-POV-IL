@@ -1,3 +1,9 @@
+v0.2.472
+- Umbrella (optional): its menus are now in Hebrew, and it asks for titles,
+  plot summaries and artwork in Hebrew too. Anything with no Hebrew
+  translation still shows in English, exactly as before. If you already chose
+  a language yourself, your choice is kept.
+
 v0.2.471
 - New optional add-on in the wizard menu: Account Manager. Connect your
   debrid accounts once in one place and it fills them into every add-on you
