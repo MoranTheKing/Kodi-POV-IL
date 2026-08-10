@@ -2016,6 +2016,28 @@ def _maybe_patch_umbrella_language():
                 level='WARNING')
         except Exception:
             pass
+    # Two source-flow repairs: fire the Hebrew-availability warm at the START
+    # of the scrape so the badge is there on the FIRST entry rather than the
+    # second, and stop Kodi announcing "playback failed" when the user simply
+    # backed out of the source list.
+    try:
+        from resources.lib import umbrella_source_ux_patcher
+        st = umbrella_source_ux_patcher.ensure_patched()
+        if st == 'patched':
+            kodi_utils.log(
+                'umbrella_source_ux_patcher: prewarm + quiet cancel applied',
+                level='INFO')
+        elif st in ('unmatched', 'compile_failed', 'write_failed',
+                    'read_failed'):
+            kodi_utils.log(
+                'umbrella_source_ux_patcher: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'umbrella_source_ux_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
 
 
 def _maybe_patch_pov_bookmark_refresh():
