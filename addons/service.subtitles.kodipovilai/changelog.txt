@@ -1,4 +1,4 @@
-v0.2.476
+v0.2.477
 - The Hebrew keyboard comes back by itself. If the Hebrew layout ever
   disappears from Kodi's keyboard-layout list - so the on-screen keyboard can
   only type English, everywhere - it is now restored automatically on the next
