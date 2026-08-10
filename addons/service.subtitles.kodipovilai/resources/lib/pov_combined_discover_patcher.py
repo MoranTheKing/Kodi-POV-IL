@@ -40,6 +40,7 @@
 # Safe no-op if POV isn't installed or was refactored away from the anchors.
 
 import os
+import re
 
 try:
     import xbmcvfs
@@ -59,20 +60,33 @@ TMDB_MENU_REL = 'resources/lib/menus/tmdb.py'
 MARKER = '# AI_SUBS_POV_COMBINED_DISCOVER_v1'
 
 # --- edit 1: tmdb_api.py -- add the two data functions after the existing
-#     tmdb_movies_search (exact-string anchor; both funcs reuse base_url,
-#     get_tmdb, cache_object, EXPIRES_4_HOURS already present in the file).
-_API_ANCHOR = (
-    "def tmdb_movies_search(query, page_no):\n"
-    "\tstring = 'tmdb_movies_search_%s_%s' % (query, page_no)\n"
-    "\turl = '%s/search/movie?language=en-US&query=%s&page=%s' % "
-    "(base_url, query, page_no)\n"
-    "\treturn cache_object(get_tmdb, string, url, "
-    "expiration=EXPIRES_4_HOURS)\n")
+#     tmdb_movies_search. Both reuse base_url, get_tmdb, cache_object and
+#     EXPIRES_4_HOURS, which are already present in the file.
+#
+#     This used to be an exact-string anchor pinning the whole of
+#     tmdb_movies_search, including its url line. POV 6.08 moved the API
+#     version out of base_url ('https://api.themoviedb.org/3' became
+#     'https://api.themoviedb.org') and put the '/3' at every call site, so
+#     the anchor stopped matching and the patcher quietly skipped -- while
+#     the menus/tmdb.py half stayed patched and called a tmdb_search_multi
+#     that no longer existed. So the anchor now pins only what we actually
+#     depend on -- the def line and the shape of the body -- and the URL
+#     PREFIX for our own two functions is read out of POV's own search line
+#     rather than hard-coded. Whichever side of the '/3' move POV is on, we
+#     build our URLs the same way it builds its own.
+_API_ANCHOR_RE = re.compile(
+    r"^def tmdb_movies_search\(query, page_no\):[ \t]*\n"
+    r"(?:[ \t]+.*\n)+", re.MULTILINE)
+# The path between base_url and the endpoint, as POV currently writes it:
+# '' on POV <= 6.07, '/3' from 6.08 on.
+_API_PREFIX_RE = re.compile(
+    r"url = '%s(?P<pfx>[^']*)/search/movie\?language=en-US"
+    r"&query=%s&page=%s' % \(base_url, query, page_no\)")
 _API_ADDITION = (
     "\n"
     "def tmdb_search_multi(query, page_no=1):\n"
     "\tstring = 'tmdb_search_multi_%s_%s' % (query, page_no)\n"
-    "\turl = '%s/search/multi?language=en-US&query=%s&page=%s' % "
+    "\turl = '%s{pfx}/search/multi?language=en-US&query=%s&page=%s' % "
     "(base_url, query, page_no)\n"
     "\tdata = cache_object(get_tmdb, string, url, "
     "expiration=EXPIRES_4_HOURS)\n"
@@ -83,7 +97,7 @@ _API_ADDITION = (
     "\n"
     "def tmdb_trending_all(page_no=1):\n"
     "\tstring = 'tmdb_trending_all_%s' % page_no\n"
-    "\turl = '%s/trending/all/week?language=en-US&page=%s' % "
+    "\turl = '%s{pfx}/trending/all/week?language=en-US&page=%s' % "
     "(base_url, page_no)\n"
     "\tdata = cache_object(get_tmdb, string, url, "
     "expiration=EXPIRES_4_HOURS)\n"
@@ -91,6 +105,20 @@ _API_ADDITION = (
     "\texcept Exception: results = []\n"
     "\treturn [i for i in results if i.get('media_type') in "
     "('movie', 'tv')]\n")
+
+
+def _api_patch(text):
+    """Insert the two data functions straight after tmdb_movies_search,
+    using the same base_url/version convention that function uses. Returns
+    the new text, or the text unchanged if anything does not line up."""
+    m = _API_ANCHOR_RE.search(text)
+    if not m:
+        return text
+    p = _API_PREFIX_RE.search(m.group(0))
+    if not p:
+        return text
+    addition = _API_ADDITION.replace('{pfx}', p.group('pfx'))
+    return text[:m.end()] + addition + text[m.end():]
 
 # --- edit 2: menus/tmdb.py TmdbListBuilder.fetch_results -- branch on the
 #     params (exact-string anchor). POV 6.07 refactored build_tmdb_list()
@@ -156,8 +184,10 @@ def _invalidate_pyc(py_path):
 
 
 def _patch_one(path, anchor, make_new, label, marker=MARKER):
-    """Apply one exact-string edit. make_new(text)->new_text. Returns
-    'patched' | 'already_patched' | 'unmatched' | 'read_failed' |
+    """Apply one edit. make_new(text)->new_text, returning the text
+    unchanged when it cannot find its anchor. `anchor` is an optional
+    exact-string pre-check; pass None when make_new does its own matching.
+    Returns 'patched' | 'already_patched' | 'unmatched' | 'read_failed' |
     'write_failed'."""
     try:
         with open(path, 'r', encoding='utf-8') as f:
@@ -168,17 +198,26 @@ def _patch_one(path, anchor, make_new, label, marker=MARKER):
 
     if marker in text:
         return 'already_patched'
-    if anchor not in text:
+    if anchor is not None and anchor not in text:
         _log('{0}: anchor not found -- POV may have changed; skipping'
              .format(label), level='WARNING')
         return 'unmatched'
 
     new_text = make_new(text)
     if new_text == text:
+        _log('{0}: anchor not found -- POV may have changed; skipping'
+             .format(label), level='WARNING')
         return 'unmatched'
     # stamp marker on its own line at the very top (after any shebang/coding
     # is unnecessary here; these files start with imports).
     new_text = marker + '\n' + new_text
+
+    try:
+        compile(new_text, path, 'exec')
+    except SyntaxError as e:
+        _log('{0}: patched content would not compile -- skipping ({1})'
+             .format(label, e), level='WARNING')
+        return 'compile_failed'
 
     tmp = path + '.aitmp'
     try:
@@ -207,10 +246,7 @@ def ensure_patched():
     results = []
 
     if os.path.isfile(api_path):
-        st = _patch_one(
-            api_path, _API_ANCHOR,
-            lambda t: t.replace(_API_ANCHOR, _API_ANCHOR + _API_ADDITION, 1),
-            'tmdb_api.py')
+        st = _patch_one(api_path, None, _api_patch, 'tmdb_api.py')
         results.append('api=' + st)
     else:
         results.append('api=no_file')
