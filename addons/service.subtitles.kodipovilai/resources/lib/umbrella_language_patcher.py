@@ -61,6 +61,80 @@ MODERN_REL = 'resources/language/resource.language.en_gb/strings.po'
 FILTER_SETTINGS = ('useLanguageforOriginal', 'trakt.useLanguage')
 FILTER_DONE_SETTING = '_umbrella_lang_filters_v1'
 
+# --- third half: the metadata language itself -------------------------------
+# Umbrella ships api.language=English, and we had deliberately never touched
+# it -- the filter fix above only fires once the language is ALREADY not
+# English, i.e. after a user changed it by hand. On an Israeli build that is
+# the wrong default: titles, overviews and artwork should come back in Hebrew.
+#
+# 'Hebrew' is one of Umbrella's own options (its settings.xml lists it), so
+# this is a value their own picker writes, not an arrangement of ours.
+#
+# ORDER MATTERS, and getting it wrong is the exact bug we already fixed:
+# api.language also drives two CONTENT FILTERS, and switching to Hebrew with
+# those still on asks TMDb and Trakt for titles ORIGINALLY MADE in Hebrew --
+# which empties every list. So this must run BEFORE
+# ensure_content_filters_sane(), in the same startup. service.py calls them in
+# that order and must keep doing so.
+#
+# Applied once, and only while the setting still reads exactly what Umbrella
+# shipped: somebody who has already chosen a language has said what they want.
+API_LANGUAGE_SETTING = 'api.language'
+API_LANGUAGE_SHIPPED = 'English'
+API_LANGUAGE_WANTED = 'Hebrew'
+API_LANGUAGE_DONE_SETTING = '_umbrella_api_language_v1'
+
+
+def ensure_api_language():
+    """Put Umbrella's metadata language on Hebrew, once. Returns a short
+    status string; never raises. MUST be called before
+    ensure_content_filters_sane()."""
+    addon = _umbrella_addon()
+    if addon is None:
+        return 'not_installed'
+    try:
+        from resources.lib import kodi_utils as _ku
+        if (_ku.get_setting(API_LANGUAGE_DONE_SETTING, '') or '') == 'done':
+            return 'unchanged'
+    except Exception:
+        pass
+    try:
+        current = (addon.getSetting(API_LANGUAGE_SETTING) or '').strip()
+    except Exception:
+        return 'read_failed'
+    if current != API_LANGUAGE_SHIPPED:
+        # Already moved -- theirs to decide. Mark it settled so we never
+        # revisit it, not even if they happen to set it back to English.
+        try:
+            from resources.lib import kodi_utils as _ku
+            _ku.set_setting(API_LANGUAGE_DONE_SETTING, 'done')
+        except Exception:
+            pass
+        return 'user_chosen'
+    try:
+        from resources.lib import addon_settings_safe
+        from resources.lib.umbrella_setup_patcher import (
+            UMBRELLA_GUARD_PROPERTY)
+        changed, _, failed = addon_settings_safe.apply(
+            UMBRELLA_ADDON_ID, ((API_LANGUAGE_SETTING, API_LANGUAGE_WANTED),),
+            guard_property=UMBRELLA_GUARD_PROPERTY)
+    except Exception as e:
+        _log('could not set api.language: {0}'.format(e), 'WARNING')
+        return 'write_failed'
+    if failed:
+        # Leaving the marker off is the whole point: a half-applied language
+        # with the filters about to be re-evaluated is the empty-lists bug.
+        return 'write_failed'
+    try:
+        from resources.lib import kodi_utils as _ku
+        _ku.set_setting(API_LANGUAGE_DONE_SETTING, 'done')
+    except Exception:
+        pass
+    if changed:
+        _log('Umbrella metadata language set to Hebrew')
+        return 'patched'
+    return 'unchanged'
+
 
 def _log(msg, level='INFO'):
     if kodi_utils is None:
