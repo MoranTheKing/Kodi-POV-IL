@@ -1,3 +1,12 @@
+v0.2.478
+- Searching Umbrella in Hebrew now finds what you are looking for. Typing a
+  title in Hebrew returned "no results" while the same title in English
+  worked; the search request was never actually being sent. Movie search, TV
+  search and person search are all fixed, and so are titles with an
+  apostrophe in them.
+- Repaired the unified Discover data source for POV 6.08, which had stopped
+  being applied after a POV update.
+
 v0.2.477
 - The Hebrew keyboard comes back by itself. If the Hebrew layout ever
   disappears from Kodi's keyboard-layout list - so the on-screen keyboard can
