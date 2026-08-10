@@ -534,10 +534,12 @@ Four things established by reading 1.1.5a, so they are not re-derived:
   and NO collision: our patchers touch POV's `modules/settings.py`,
   `caches/trakt_cache.py`, `modules/sources.py` and Umbrella's
   `resources/lib/modules/sources.py`. Keep it that way.
-- **It flips Kodi's global `general.addonupdates` to 0** (install updates
-  automatically) via JSON-RPC, but only for users who authorise Trakt through
-  it. Not ours to prevent; worth knowing before blaming the build for an
-  unexpected add-on update.
+- **It sets Kodi's global `general.addonupdates` to 2** — "never check for
+  updates" — via JSON-RPC in `control.updates_off()`, and never restores it.
+  An earlier version of this note said "to 0 (install updates automatically)";
+  that was wrong, and the direction matters: the setting STOPS add-on updates
+  rather than forcing them. Only `traktAuth` calls it, which is one more
+  reason the build's Trakt row does not go through Account Manager.
 - **Uninstalling it without "revoke" first** leaves the add-ons carrying
   whatever it wrote. Its own string 40088 says so.
 
