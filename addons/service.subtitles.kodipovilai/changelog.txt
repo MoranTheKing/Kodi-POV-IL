@@ -1,3 +1,10 @@
+v0.2.476
+- The Hebrew keyboard comes back by itself. If the Hebrew layout ever
+  disappears from Kodi's keyboard-layout list - so the on-screen keyboard can
+  only type English, everywhere - it is now restored automatically on the next
+  start. Your chosen layout, and any other layout you added, are left exactly
+  as they are.
+
 v0.2.475
 - Umbrella (optional): the source list now shows, under each source and before
   you pick it, how well an available Hebrew subtitle matches that exact
