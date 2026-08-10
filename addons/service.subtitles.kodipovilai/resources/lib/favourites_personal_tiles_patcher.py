@@ -548,6 +548,43 @@ def _drop_umbrella_tiles(fixture_text):
     return out
 
 
+# The "שליחת לוג" tile used to open POV's own Changelog & Log Utils MENU in a
+# video window (mode=navigator.log_utils) and leave the user to find the
+# upload inside it. Field report: it loads forever and never gets anywhere --
+# a container that never returns a directory just spins, with no error and no
+# way out but Back.
+#
+# Whatever is wrong inside POV, the tile did not need to go there at all: the
+# Wizard has its own uploader (`mode=uploadlog` -> logging.upload_log()),
+# which posts the log and shows the URL and a QR. It is our code, it does the
+# one thing the tile is named after, and RunPlugin does not open a container
+# at all -- so it cannot hang one.
+_OLD_SEND_LOG = b'mode=navigator.log_utils'
+_NEW_SEND_LOG = (b'RunPlugin("plugin://plugin.program.kodipovilwizard/'
+                 b'?mode=uploadlog")')
+_SEND_LOG_RE = re.compile(
+    rb'(<favourite\b(?:(?!</favourite>).)*?>)'
+    rb'((?:(?!</favourite>).)*?mode=navigator\.log_utils'
+    rb'(?:(?!</favourite>).)*?)(</favourite>)',
+    re.DOTALL,
+)
+
+
+def _fix_existing_send_log_action(content):
+    """Repoint an existing "send log" tile at the Wizard's own uploader.
+    Returns (content, changed). Touches only that one element's action; the
+    tile's name and icon are left exactly as the user has them."""
+    if _OLD_SEND_LOG not in content:
+        return content, False
+    new_content, n = _SEND_LOG_RE.subn(
+        lambda m: m.group(1) + _NEW_SEND_LOG + m.group(3), content)
+    if not n:
+        return content, False
+    _log('repointed the "send log" tile at the Wizard uploader ({0} tile(s))'
+         .format(n))
+    return new_content, True
+
+
 def _insert_umbrella_tiles(content, fixture_text):
     """One-time, opt-in insert of the Umbrella + search-engine-switch tiles for
     an existing install (clean installs get them from the shipped fixture).
@@ -1004,6 +1041,7 @@ def ensure_patched():
     content, mdblist_restored = _insert_mdblist_tiles(content, fixture_text)
     content, umbrella_tiles_added = _insert_umbrella_tiles(
         content, fixture_text)
+    content, send_log_fixed = _fix_existing_send_log_action(content)
     # Independent of the user's own file: the seeds are what a skin switch
     # copies over it, so they need the tiles whether or not the user's file
     # got them this time round.
@@ -1077,7 +1115,7 @@ def ensure_patched():
         if (not fixed_existing and not fixed_torbox_status
                 and not service_position_fixed and not force_premiumize
                 and not force_personal and not mdblist_restored
-                and not umbrella_tiles_added
+                and not umbrella_tiles_added and not send_log_fixed
                 and (not missing_service or had_service_marker)
                 ):
             return 'user_removed_tiles'
@@ -1142,7 +1180,7 @@ def ensure_patched():
     if (not missing and not fixed_existing and not marker_added
             and not fixed_torbox_status and not service_marker_added
             and not debrid_notice_restored and not mdblist_restored
-            and not umbrella_tiles_added
+            and not umbrella_tiles_added and not send_log_fixed
             and not service_position_fixed and not full_marker_added
             and not reseed_marker_added and not personal_reseed_added
             and not full_reseed_added
@@ -1253,6 +1291,8 @@ def ensure_patched():
         _log('restored MDBList personal tiles (My Movies/My Series)', level='INFO')
     if umbrella_tiles_added:
         _log('added the Umbrella + search-engine home tiles', level='INFO')
+    if send_log_fixed:
+        _log('send-log tile now uses the Wizard uploader', level='INFO')
     if service_position_fixed:
         _log('moved Premiumize status tile next to TorBox', level='INFO')
     if missing_full_tiles:
