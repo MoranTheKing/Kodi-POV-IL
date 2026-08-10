@@ -2679,6 +2679,51 @@ would write all four keys before reporting that the token failed, which is the
 "watched-status points at MDBList with no key" state the gating exists to
 prevent.
 
+### The Hebrew keyboard layout can vanish from `locale.keyboardlayouts`
+
+Field report: the on-screen keyboard offered only English QWERTY, in POV, in
+Umbrella and in Kodi's own search alike -- so a Kodi setting, not an add-on.
+Settings -> Interface -> Regional -> Keyboard layouts had only English ticked,
+while **Hebrew QWERTY was still present in the list to tick**. Ticking it by
+hand worked immediately.
+
+That "still present" is the whole diagnosis: the layout exists on the device,
+the SETTING had lost it. Which also rules out the two things it looked like.
+It was reported right after using the new search-provider tile, and that tile
+does not write a single Kodi setting -- it writes skin files and calls
+`ReloadSkin()`. And the quickfix ships no `guisettings.xml` at all, so an
+update cannot have overwritten it. The timing was coincidence.
+
+The real defect was ours and it was the RECOVERY, not the cause: both keyboard
+seeds lived inside `hebrew_build_ui_patcher`'s once-per-device
+`_prefs_already_seeded()` block, so once the layout went missing for any
+reason nothing would ever put it back, and the user simply could not type
+Hebrew. That block was conflating two different things:
+
+- **which** layout is active is a preference -> still seeded once, hands off
+  after that;
+- **whether** the Hebrew layout is available at all is infrastructure on a
+  Hebrew build, the same category as the skin-strings repair that already runs
+  every start -> now checked on every startup and restored if absent.
+
+`_ensure_hebrew_layout_available()` is additive: it appends Hebrew only when
+missing and leaves the order, the active layout, and any layout the user added
+alone. The old seed wrote a fixed two-item list, which silently dropped a
+third layout a user had chosen. It also **reads the value back** and only
+claims success when Hebrew really landed -- Kodi validates a setting against
+the options that exist right now and silently keeps the old value otherwise,
+the same trap as `CAddonSettings::Load` one level up, so the write can
+"succeed" and change nothing.
+
+Cause of the original loss: still unproven. The likeliest mechanism is a
+startup ordering race -- Kodi loads settings before the language resources
+that provide keyboard layouts have registered them, finds a stored value that
+is not (yet) a known option, prunes it, and writes the pruned list back on
+exit. That fits every observation, and it is also why the repair belongs in
+our service: it runs long after the add-ons are up, so by then the layout is a
+valid option and the write sticks. If it recurs, the WARNING now names which
+of the two cases it is.
+
 ### Known, deliberately not fixed
 
 - POV's `menu_editor.shortcut_folder_add_item` does
