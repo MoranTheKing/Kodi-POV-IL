@@ -226,7 +226,6 @@ def ensure_patched():
         _log('read failed: {0}'.format(e), level='WARNING')
         return 'read_failed'
 
-    already = MARKER in original
 
     # Revert any prior version so we re-apply cleanly (idempotent).
     content = revert(original)
@@ -276,7 +275,15 @@ def ensure_patched():
         _drop_pyc(path)
         _log('injected Hebrew-subtitle match into Umbrella source results',
              level='INFO')
-        return 'unchanged' if already else 'patched'
+        # 'patched', unconditionally: we only reach here when the bytes
+        # really changed (the `content == original` check above returns
+        # 'unchanged' otherwise), so this is always a real write. It used to
+        # report 'unchanged' whenever the marker string appeared anywhere in
+        # the ORIGINAL file, which is a substring test, not a statement about
+        # what happened -- so a write that repaired a damaged block was logged
+        # as a no-op, the caller's status set never saw it, and POV's reload
+        # was skipped. A status has to describe what the run DID.
+        return 'patched'
     except OSError as e:
         try:
             os.remove(tmp)
