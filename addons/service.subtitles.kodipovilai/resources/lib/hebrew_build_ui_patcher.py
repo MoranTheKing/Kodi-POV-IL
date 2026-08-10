@@ -625,15 +625,58 @@ def _ensure_subtitle_outline_style():
     return changed
 
 
+HEBREW_LAYOUT = 'Hebrew QWERTY'
+ENGLISH_LAYOUT = 'English QWERTY'
+
+
+def _ensure_hebrew_layout_available():
+    """Make sure the Hebrew keyboard layout is IN the list Kodi offers, every
+    startup, additively.
+
+    Split out of the once-per-device seed below, because the two are not the
+    same kind of thing and were being treated as one:
+
+      * WHICH layout is active is a preference. Seed it once, then hands off --
+        a user who prefers to start in Hebrew must keep that.
+      * WHETHER the Hebrew layout is AVAILABLE at all is infrastructure on a
+        Hebrew build, the same category as the skin-strings repair above. Once
+        it is missing, the keyboard's layout button has nothing to cycle to and
+        the user simply cannot type Hebrew -- and, seeded once and never
+        re-checked, it could never come back on its own.
+
+    Additive on purpose: read the current list, append Hebrew only if it is
+    absent, and write back the same order otherwise. It never removes a layout
+    the user added, never reorders, and never touches the active layout. The
+    old version wrote a fixed two-item list, which silently dropped any third
+    layout a user had chosen."""
+    current = _get_kodi_setting('locale.keyboardlayouts')
+    if isinstance(current, str):
+        current = [p.strip() for p in current.split('|') if p.strip()]
+    if not isinstance(current, list):
+        return False                 # cannot read it -> do not guess
+    if HEBREW_LAYOUT in current:
+        return False
+    wanted = list(current) + [HEBREW_LAYOUT]
+    if not _set_kodi_setting('locale.keyboardlayouts', wanted):
+        return False
+    kodi_utils.log(
+        'hebrew_build_ui_patcher: the Hebrew keyboard layout was missing from '
+        'locale.keyboardlayouts and has been restored (now: {0})'
+        .format(', '.join(wanted)), level='INFO')
+    return True
+
+
 def _ensure_runtime_keyboard_layout():
+    """The once-per-device seed: both layouts present, English active.
+    Availability is kept honest afterwards by _ensure_hebrew_layout_available;
+    the ACTIVE layout is never touched again after this."""
     changed = False
-    layouts = ['English QWERTY', 'Hebrew QWERTY']
-    # Kodi accepts keyboardlayouts as a list through JSON-RPC. Keep the
-    # active layout English so existing users do not unexpectedly switch;
-    # the keyboard button can then cycle to Hebrew.
-    if _set_kodi_setting('locale.keyboardlayouts', layouts):
+    if _set_kodi_setting('locale.keyboardlayouts',
+                         [ENGLISH_LAYOUT, HEBREW_LAYOUT]):
         changed = True
-    if _set_kodi_setting('locale.activekeyboardlayout', 'English QWERTY'):
+    # Keep the active layout English so existing users do not unexpectedly
+    # switch; the keyboard button can then cycle to Hebrew.
+    if _set_kodi_setting('locale.activekeyboardlayout', ENGLISH_LAYOUT):
         changed = True
     return changed
 
@@ -718,6 +761,10 @@ def ensure_patched():
     # only the exact untouched build fingerprint; custom profiles are preserved.
     if _ensure_subtitle_outline_style():
         changed.append('subtitle_outline')
+    # Every start, additively: on a Hebrew build, being able to REACH the
+    # Hebrew keyboard is infrastructure, not a preference. See the function.
+    if _ensure_hebrew_layout_available():
+        changed.append('hebrew_layout_restored')
     # USER-PREFERENCE seeds: once per device, then hands-off (see marker note).
     if not _prefs_already_seeded():
         if _clear_skin_bool('HomeMenuNoFavButton'):
