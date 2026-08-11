@@ -2070,6 +2070,21 @@ def _maybe_patch_umbrella_language():
     # a refreshed token across to Umbrella, and what covers a user who
     # authorised before this existed.
     try:
+        from resources.lib import trakt_umbrella_mirror
+        st = trakt_umbrella_mirror.mirror()
+        if st == 'mirrored':
+            kodi_utils.log(
+                'trakt_umbrella_mirror: Umbrella now shares POV\'s Trakt '
+                'authorisation', level='INFO')
+        elif st in ('write_failed', 'incomplete'):
+            kodi_utils.log('trakt_umbrella_mirror: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'trakt_umbrella_mirror failed: {0}'.format(e), level='WARNING')
+        except Exception:
+            pass
+    try:
         from resources.lib import mdblist_umbrella_mirror
         st = mdblist_umbrella_mirror.mirror()
         if st == 'mirrored':
@@ -2554,8 +2569,8 @@ def _maybe_patch_pov_remember_source():
 # VERBATIM so the standalone (repo-channel) service runs the exact same code.
 
 
-def _start_mdblist_mirror_keeper(monitor):
-    """Keep Umbrella on whatever MDBList access token POV currently holds.
+def _start_service_mirror_keeper(monitor):
+    """Keep Umbrella on whatever MDBList and Trakt authorisations POV holds.
 
     The startup mirror covers most of it, but POV refreshes its token
     silently in the background -- with its own client_id, the only one that
@@ -2574,6 +2589,10 @@ def _start_mdblist_mirror_keeper(monitor):
         from resources.lib import mdblist_umbrella_mirror
     except Exception:
         return
+    try:
+        from resources.lib import trakt_umbrella_mirror
+    except Exception:
+        trakt_umbrella_mirror = None
 
     def _loop():
         try:
@@ -2584,6 +2603,11 @@ def _start_mdblist_mirror_keeper(monitor):
                     mdblist_umbrella_mirror.mirror()
                 except Exception:
                     pass
+                if trakt_umbrella_mirror is not None:
+                    try:
+                        trakt_umbrella_mirror.mirror()
+                    except Exception:
+                        pass
                 if monitor.waitForAbort(15 * 60):
                     break
         except Exception:
@@ -4874,7 +4898,7 @@ def main():
     # (so they survive the user leaving the video or restarting Kodi) and
     # uploaded from this thread one at a time with a throttle -- never bursting
     # past Telegram's bot rate limit. Best-effort; never blocks.
-    _start_mdblist_mirror_keeper(monitor)
+    _start_service_mirror_keeper(monitor)
     _start_pool_queue_drainer(monitor)
     # (the Hebrew warm drainer was already started at the top of main(), before
     # the build startup repairs, so it's alive for the first play of the session)
