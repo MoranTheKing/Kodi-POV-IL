@@ -3586,9 +3586,15 @@ def main():
             # except at the one moment the user asks for the service again.
             try:
                 from resources.lib import mdblist_umbrella_mirror
-                if _mdblist_connected_in_pov():
+                connected = _mdblist_connected_in_pov()
+                if connected:
                     _rearm_mdblist_one_shots()
-                _safe_log('mdblist mirror: ' + mdblist_umbrella_mirror.mirror())
+                # reclaim ONLY here. This is the one place in the build that
+                # knows a human just pressed connect; everywhere else is a
+                # timer, and a timer must never take back a source the user
+                # chose.
+                _safe_log('mdblist mirror: '
+                          + mdblist_umbrella_mirror.mirror(reclaim=connected))
             except Exception as e:
                 _safe_log('mdblist mirror failed: {0}'.format(e),
                           level='WARNING')
