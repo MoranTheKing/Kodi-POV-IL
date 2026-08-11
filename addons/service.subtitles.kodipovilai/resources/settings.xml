@@ -872,8 +872,15 @@
           <control type="toggle"/>
         </setting>
         <!-- Hidden marker: which Umbrella watch-source keys we have had
-             our one say about. See umbrella_watch_source.py. -->
-        <setting id="_umb_watch_source_v1" type="string" label="30000">
+             our one say about, and what we wrote. See umbrella_watch_source.py.
+             v2 on purpose: the new id spends one more claim on every device,
+             for the people left on Local by a revoke-and-reconnect. An
+             UNDECLARED setting is silently dropped by Kodi, so renaming the
+             constant without renaming this would make the marker a no-op and
+             the claim would repeat on every pass.
+             (No double hyphen anywhere in here: XML forbids it inside a
+             comment, and it took a parse error to remember that.) -->
+        <setting id="_umb_watch_source_v2" type="string" label="30000">
           <level>4</level>
           <default></default>
           <constraints>
@@ -883,6 +890,16 @@
         <!-- Hidden marker: the POV seasons view id WE last wrote, so ours can
              be replaced when the skin changes and the user's never is.
              See pov_seasons_view_seed.py. -->
+        <!-- Hidden marker: whether we have already offered to restore
+             Umbrella's watched state, and what the user answered. Asked once
+             per device, never again. See umbrella_watch_prompt.py. -->
+        <setting id="_umb_watch_prompt_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
         <setting id="_pov_seasons_view_v1" type="string" label="30000">
           <level>4</level>
           <default></default>

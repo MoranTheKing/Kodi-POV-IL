@@ -3533,11 +3533,23 @@ def main():
         elif action == 'connect_gemini':
             _handle_connect_gemini(params)
         elif action == 'mdblist_mirror_umbrella':
-            # POV has just finished its own MDBList authorisation. Hand the
-            # access token to Umbrella so one authorisation covers both.
+            # POV has just finished its own MDBList authorisation (or revoked
+            # it). Hand the access token to Umbrella so one authorisation
+            # covers both.
+            #
+            # `connected=1` is set by the Connect Services row itself, and
+            # ONLY when POV's token actually changed across POV's own set() --
+            # so it means a human authorised the service, not that they
+            # declined a confirmation and not that POV rotated the token on
+            # its own timer. Both of those were tried as signals from out here
+            # and both silently reverted settings people had chosen; this one
+            # is measured at the click rather than inferred after it. Nothing
+            # else in the build may pass it.
+            connected = params.get('connected') == '1'
             try:
                 from resources.lib import mdblist_umbrella_mirror
-                _safe_log('mdblist mirror: ' + mdblist_umbrella_mirror.mirror())
+                _safe_log('mdblist mirror: '
+                          + mdblist_umbrella_mirror.mirror(reclaim=connected))
             except Exception as e:
                 _safe_log('mdblist mirror failed: {0}'.format(e),
                           level='WARNING')

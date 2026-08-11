@@ -1,3 +1,14 @@
+v0.2.483
+- MDBList no longer has to be reconnected by hand. When the server stops
+  accepting the saved authorisation, POV now renews it and retries instead of
+  going quiet for half an hour, and Umbrella picks the renewed one up instead
+  of asking you to authorise it again in a screen this build does not use.
+- Umbrella's watched marks and resume points come back if something has reset
+  them. If you connect the service again it is restored automatically; if it
+  was reset without you connecting anything, you are asked once, and an answer
+  of no is never asked again.
+- The two MDBList tiles on the home screen come back for anyone who lost them.
+
 v0.2.482
 - Trakt is now connected once, for both POV and Umbrella. Connecting it in POV
   used to leave Umbrella with nothing, which is why Umbrella showed every
