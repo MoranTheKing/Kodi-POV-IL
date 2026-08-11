@@ -96,7 +96,22 @@ def settle(done, skip=()):
     Writes only on a change: this runs on a timer."""
     try:
         merged = _done()
-        merged.update((k, v) for k, v in done.items() if k not in skip)
+        for key, value in done.items():
+            if key in skip:
+                continue
+            if value == NOTHING and merged.get(key) not in (None, NOTHING):
+                # Never demote a recorded claim to "not ours". The merge alone
+                # does not settle same-key contention: the other process may
+                # have read Umbrella AFTER we claimed the setting but BEFORE
+                # we recorded it, in which case it saw a value it had no
+                # record of and concluded it was the user's. Letting that
+                # conclusion land would lose the claim for good -- NOTHING is
+                # never replaced -- and the setting could then never be
+                # re-claimed from Local. A concrete value is only ever written
+                # here by the process that wrote it to Umbrella, so preferring
+                # it over NOTHING is always the right way round.
+                continue
+            merged[key] = value
         value = ','.join('%s=%s' % (k, v) for k, v in sorted(merged.items()))
         if (kodi_utils.get_setting(MARKER_SETTING, '') or '').strip() == value:
             return

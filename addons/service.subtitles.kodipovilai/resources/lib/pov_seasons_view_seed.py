@@ -239,8 +239,8 @@ def ensure_seeded():
         if not first_say:
             if current == want:
                 _publish(want)      # cheap, and covers a property lost to a
-                _SETTLED[:] = [skin, want]   # POV service that never ran
-                return 'already'             # this boot
+                _SETTLED[:] = [skin, _published()]   # POV service that never
+                return 'already'                     # ran this boot
             if current is not None and current not in set(done.values()):
                 # We have already had our say in this skin and the row is no
                 # longer any value we wrote -- in this skin or in another one
@@ -267,7 +267,12 @@ def ensure_seeded():
     done[skin] = want
     _remember(done)
     _publish(want)
-    _SETTLED[:] = [skin, want]
+    # Against what POV is reading now, not against `want`. _publish() is
+    # best-effort and swallows its own failures, and memoising the value we
+    # MEANT to set would then never match, so every tick would reopen the
+    # database to reach this same line again. The user_choice branch already
+    # took that lesson; these two had not.
+    _SETTLED[:] = [skin, _published()]
     if current == want:
         result = 'already'
     elif current is None:
