@@ -122,6 +122,24 @@ UMBRELLA_DEFAULTS = (
 )
 UMBRELLA_DEFAULTS_DONE_SETTING = '_umbrella_defaults_v1'
 
+# Where Umbrella reads watched state from: 0 local, 1 Trakt, 2 Simkl,
+# 3 MDBList. It ships 0, and the build was seeding it nowhere -- so a user
+# whose history lives in Trakt saw every episode unwatched in Umbrella while
+# POV, which AM does set, showed the ticks correctly. Field-reported.
+#
+# Only ever moved from the shipped 0, and only once Umbrella actually holds
+# Trakt credentials, because indicators.alt = 1 with no Trakt is worse than
+# leaving it alone: playcount.py gates on `watch_history_service == '1' and
+# traktCredentials`, so it would fall through to no indicators at all AND
+# stop the local ones working.
+INDICATORS_SETTING = 'indicators.alt'
+INDICATORS_TRAKT = '1'
+INDICATORS_SHIPPED = '0'
+INDICATORS_DONE_SETTING = '_umbrella_indicators_v1'
+# getTraktCredentialsInfo() returns False unless all three are non-empty.
+UMBRELLA_TRAKT_KEYS = ('trakt.user.name', 'trakt.user.token',
+                       'trakt.refreshtoken')
+
 MARKER = '# AI_SUBS_UMBRELLA_SOURCE_NAME_v1'
 
 # The single line in playItem() that means "this picked source resolved".
@@ -300,6 +318,60 @@ def ensure_umbrella_defaults():
                  done | set(k for k in seen if k not in failed))
     if changed:
         _log('Umbrella defaults applied: ' + ', '.join(changed))
+        return 'patched'
+    return 'unchanged'
+
+
+def ensure_watched_indicators():
+    """Point Umbrella at Trakt for watched state, once, if it is still on the
+    shipped default and Trakt is actually connected.
+
+    Returns 'not_installed' | 'already_done' | 'no_trakt' | 'user_set'
+    | 'unchanged' | 'patched' | 'write_failed'. Never raises."""
+    addon = _addon()
+    if addon is None:
+        return 'not_installed'
+    if _already_done(INDICATORS_DONE_SETTING):
+        return 'already_done'
+    if addon_settings_safe is None:
+        return 'write_failed'
+
+    try:
+        current = (addon.getSetting(INDICATORS_SETTING) or '').strip()
+    except Exception:
+        # Could not read it -> cannot claim to know where it stands. Say
+        # nothing, mark nothing, and look again next startup.
+        return 'write_failed'
+
+    if current != INDICATORS_SHIPPED:
+        # Somebody has already chosen a source -- Umbrella's own settings
+        # screen, AM, or the user. Settle it so we never revisit, even if
+        # they later happen to put it back on local.
+        _record_done(INDICATORS_DONE_SETTING, {INDICATORS_SETTING})
+        return 'user_set'
+
+    try:
+        connected = all((addon.getSetting(k) or '').strip()
+                        for k in UMBRELLA_TRAKT_KEYS)
+    except Exception:
+        return 'write_failed'
+    if not connected:
+        # Deliberately NOT recorded: Trakt is usually connected after the
+        # first run, and a marker here would mean the ticks never appear for
+        # anyone who connects it later. This is the one path that must stay
+        # retryable.
+        return 'no_trakt'
+
+    changed, _, failed = addon_settings_safe.apply(
+        UMBRELLA_ADDON_ID, ((INDICATORS_SETTING, INDICATORS_TRAKT),),
+        guard_property=UMBRELLA_GUARD_PROPERTY)
+    if failed:
+        _log('watched indicators did not stick -- will retry next startup',
+             'WARNING')
+        return 'write_failed'
+    _record_done(INDICATORS_DONE_SETTING, {INDICATORS_SETTING})
+    if changed:
+        _log('Umbrella now takes watched state from Trakt')
         return 'patched'
     return 'unchanged'
 
