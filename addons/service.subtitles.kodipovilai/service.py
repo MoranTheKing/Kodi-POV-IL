@@ -2725,7 +2725,7 @@ def _start_service_mirror_keeper(monitor):
                 # with them. By the first tick the splash is long gone.
                 if umbrella_watch_prompt is not None:
                     try:
-                        umbrella_watch_prompt.maybe_ask()
+                        umbrella_watch_prompt.maybe_ask_async()
                     except Exception:
                         pass
                 if pov_seasons_view_seed is not None:
