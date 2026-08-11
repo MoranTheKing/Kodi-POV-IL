@@ -163,8 +163,14 @@ def _reader(addon_id):
     return _get
 
 
-def mirror():
+def mirror(reclaim=False):
     """Give Umbrella POV's Trakt authorisation, pointed at POV's Trakt app.
+
+    `reclaim` says the user has just pressed connect. Nothing passes it today:
+    Trakt has no instant trigger on POV's Connect Services row the way MDBList
+    does, and inventing a signal for it -- an empty Umbrella token, say -- is
+    exactly the mistake that had the timer overruling a hand-set Local, since
+    Umbrella's own re_auth() empties that token by itself.
 
     Returns 'no_pov' | 'no_umbrella' | 'no_token' | 'incomplete'
     | 'unchanged' | 'mirrored' | 'adopted' | 'pov_writes_off'
@@ -271,8 +277,7 @@ def mirror():
     src, settle_keys = [], None
     if umbrella_watch_source is not None and not umbrella('mdblist.token'):
         src, settle_keys = umbrella_watch_source.pairs(
-            umbrella, umbrella_watch_source.TRAKT,
-            reclaim=not umb_token)
+            umbrella, umbrella_watch_source.TRAKT, reclaim=reclaim)
 
     if (stale or umb_token == token) and not src:
         # Nothing to write, but the look at the watch-source settings still
