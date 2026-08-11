@@ -2691,6 +2691,10 @@ def _start_service_mirror_keeper(monitor):
         from resources.lib import pov_seasons_view_seed
     except Exception:
         pov_seasons_view_seed = None
+    try:
+        from resources.lib import umbrella_watch_prompt
+    except Exception:
+        umbrella_watch_prompt = None
 
     def _loop():
         try:
@@ -2716,6 +2720,14 @@ def _start_service_mirror_keeper(monitor):
                 # can rule this build out in one step -- a thread that carries
                 # on writing to POV ninety seconds later would make the switch
                 # a lie.
+                # Deliberately in the keeper and not in the startup steps:
+                # it can put a dialog on screen, and boot is already crowded
+                # with them. By the first tick the splash is long gone.
+                if umbrella_watch_prompt is not None:
+                    try:
+                        umbrella_watch_prompt.maybe_ask()
+                    except Exception:
+                        pass
                 if pov_seasons_view_seed is not None:
                     try:
                         # Inside the try, not in the `if`: this is the only
