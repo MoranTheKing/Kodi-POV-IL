@@ -865,6 +865,15 @@
           <default>true</default>
           <control type="toggle"/>
         </setting>
+        <!-- Hidden marker: which Umbrella watch-source keys we have had
+             our one say about. See umbrella_watch_source.py. -->
+        <setting id="_umb_watch_source_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
         <setting id="_remember_source_default_v1" type="string" label="30000">
           <level>4</level>
           <default></default>
