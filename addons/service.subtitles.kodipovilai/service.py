@@ -1764,9 +1764,9 @@ def _maybe_seed_pov_seasons_view():
     """Open POV's season list in a view that draws a poster.
 
     Reported as "per-season posters only work in NOX". They work everywhere;
-    the screen was a text list with no poster in the layout at all. Seeds
-    POV's own views.db -- the same row POV's Set View writes -- and only for
-    somebody who has never chosen a seasons view themselves. See the module."""
+    the screen was a text list with no poster in the layout at all. Writes
+    POV's own views.db -- the same row POV's Set View writes -- once per skin,
+    over whatever is there, and then never again. See the module."""
     if _skip_pov_patchers():
         return
     try:
