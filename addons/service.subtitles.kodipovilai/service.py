@@ -175,6 +175,7 @@ def _run_build_startup_repairs():
         _maybe_fix_pov_container_refresh_crash,
         _maybe_patch_pov_movie_networks,
         _maybe_patch_pov_view_mode,
+        _maybe_patch_mdblist_reauth,
         _maybe_seed_pov_seasons_view,
         _maybe_patch_pov_resume_cancel,
         _maybe_patch_pov_scraper_settings,
@@ -1755,6 +1756,48 @@ def _maybe_fix_pov_maincache_schema():
         try:
             kodi_utils.log(
                 'pov_maincache_schema_fix failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_mdblist_reauth():
+    """Let an expired MDBList token heal itself instead of being reconnected.
+
+    POV refreshes only on a clock check and treats a 401 as just another
+    network error, so a token the server stops accepting is permanent: every
+    call fails, the sync monitor backs off half an hour, and the account has
+    to be authorised again by hand. Umbrella then compounds it with a dialog
+    telling the user to re-authenticate in a screen this build does not use.
+    See both modules."""
+    if _skip_pov_patchers():
+        return
+    try:
+        from resources.lib import pov_mdblist_reauth_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        st = pov_mdblist_reauth_patcher.ensure_patched()
+        if st in ('unmatched', 'compile_failed', 'write_failed'):
+            kodi_utils.log('pov_mdblist_reauth_patcher: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log('pov_mdblist_reauth_patcher failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+    # Umbrella's half is NOT behind the POV switch: it is a change to
+    # Umbrella, and the switch promises only to leave POV alone.
+    try:
+        from resources.lib import umbrella_mdblist_token_patcher, kodi_utils
+        st = umbrella_mdblist_token_patcher.ensure_patched()
+        if st in ('unmatched', 'compile_failed', 'write_failed'):
+            kodi_utils.log(
+                'umbrella_mdblist_token_patcher: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'umbrella_mdblist_token_patcher failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
