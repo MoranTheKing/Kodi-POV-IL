@@ -65,6 +65,11 @@ try:
 except Exception:
     addon_settings_safe = None
 
+try:
+    from resources.lib import umbrella_watch_source
+except Exception:
+    umbrella_watch_source = None
+
 
 POV_ADDON_ID = 'plugin.video.pov'
 UMBRELLA_ADDON_ID = 'plugin.video.umbrella'
@@ -76,6 +81,7 @@ POV_REFRESH = 'mdblist.refresh'
 # Umbrella's. Its refresh is written EMPTY on purpose -- see the header.
 UMB_TOKEN = 'mdblist.token'
 UMB_REFRESH = 'mdblist.refresh.token'
+
 
 UMBRELLA_GUARD_PROPERTY = 'umbrella.updateSettings'
 
@@ -129,18 +135,36 @@ def mirror():
         # copying this would reproduce the exact bug this module replaces.
         return 'api_key_only'
 
-    if umb_token == token:
+    # Have Umbrella actually READ from MDBList. Connecting it does not do
+    # that on its own; see umbrella_watch_source for the rules. Computed
+    # BEFORE the token comparison below, because someone already connected
+    # has a token that matches and would otherwise never reach this -- and
+    # they are exactly the people who reported the missing ticks.
+    wanted, settle_keys = [], None
+    if umbrella_watch_source is not None:
+        wanted, settle_keys = umbrella_watch_source.pairs(
+            lambda k: _get(UMBRELLA_ADDON_ID, k),
+            umbrella_watch_source.MDBLIST)
+
+    if umb_token != token:
+        wanted = [(UMB_TOKEN, token), (UMB_REFRESH, '')] + wanted
+    elif not wanted:
         return 'unchanged'
 
     changed, _restored, failed = addon_settings_safe.apply(
-        UMBRELLA_ADDON_ID,
-        ((UMB_TOKEN, token), (UMB_REFRESH, '')),
+        UMBRELLA_ADDON_ID, tuple(wanted),
         guard_property=UMBRELLA_GUARD_PROPERTY)
     if failed:
         _log('mirror did not stick ({0}) -- will retry next startup'
              .format(', '.join(failed)), level='WARNING')
         return 'write_failed'
+    if settle_keys and umbrella_watch_source is not None:
+        umbrella_watch_source.settle(settle_keys)
     if not changed:
         return 'unchanged'
-    _log('Umbrella now shares POV\'s MDBList authorisation', level='INFO')
+    _log('Umbrella now shares POV\'s MDBList authorisation'
+         + (' and takes watched state from it'
+            if any(k in (umbrella_watch_source.INDICATORS,
+                         umbrella_watch_source.SCROBBLE)
+                   for k in changed) else ''), level='INFO')
     return 'mirrored'
