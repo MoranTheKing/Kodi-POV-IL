@@ -1688,15 +1688,30 @@ def _mdblist_push_to_acctmgr(key, username):
         _safe_log('mdblist -> acctmgr did not stick: {0}'.format(failed),
                   level='WARNING')
         return False
+    return True
+
+
+def _mdblist_acctmgr_resync():
+    """Start Account Manager's own MDBList sync.
+
+    Fired LAST, after every dialog of ours has closed, and never before.
+    AM's mdblistReSync branch ends with `xbmc.sleep(3000)` then
+    `control.openSettings()` -- so roughly six seconds after it is spawned it
+    puts its own settings window on screen, over whatever is there. Spawning
+    it before our dialogs meant AM's settings jumped on top of the Umbrella
+    question while the user was still reading it, which is exactly what was
+    reported: the question appeared and was gone before it could be answered.
+    We cannot stop AM opening its settings -- that is its code -- but we can
+    make sure nothing of ours is still on screen when it does."""
     try:
         import xbmc as _mxbmc
         _mxbmc.executebuiltin(
             'RunScript({0},action=mdblistReSync)'.format(ACCTMGR_ADDON_ID))
+        return True
     except Exception as e:
         _safe_log('mdblist acctmgr resync failed to start: {0}'.format(e),
                   level='WARNING')
         return False
-    return True
 
 
 def _mdblist_clear_acctmgr():
@@ -2056,6 +2071,9 @@ def _test_save_mdblist(kodi_utils, mdblist_pair, key, retry=False):
     except Exception as e:
         _safe_log('mdblist umbrella offer failed: {0}'.format(e),
                   level='WARNING')
+    # Last of all -- see _mdblist_acctmgr_resync for why the order matters.
+    if spread:
+        _mdblist_acctmgr_resync()
     return 'ok'
 
 
