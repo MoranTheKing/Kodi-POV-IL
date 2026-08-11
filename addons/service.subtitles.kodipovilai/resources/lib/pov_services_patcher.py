@@ -263,7 +263,13 @@ def _ai_make_mdblist():
             _ai_before = _ai_tok()
             result = _base.set(self)
             _ai_after = _ai_tok()
-            _ai_fresh = bool(_ai_after and _ai_before is not None
+            # BEFORE MUST BE EMPTY, not merely different. POV's own set()
+            # is `if self.token: <revoke> else: <connect>`, so an
+            # authorisation can only ever begin from an empty token. Without
+            # that clause the window spans the whole time the revoke
+            # confirmation sits open, and a background token rotation landing
+            # while the user thinks about it read as a fresh authorisation.
+            _ai_fresh = bool(_ai_after and _ai_before == ''
                              and _ai_after != _ai_before)
             # Fired whatever the outcome: the revoke path returns early too,
             # and after a revoke POV's token is empty -- which the mirror

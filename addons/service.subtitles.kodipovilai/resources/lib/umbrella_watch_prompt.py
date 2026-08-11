@@ -17,6 +17,13 @@
 # Once per device. Answered no, or dismissed, and it never comes back: a
 # question asked twice is a question that overrules the answer.
 
+import threading
+
+try:
+    import xbmc
+except Exception:
+    xbmc = None
+
 try:
     import xbmcgui
 except Exception:
@@ -95,11 +102,19 @@ def _reader(addon_id):
 
 def maybe_ask():
     """Returns 'asked_yes' | 'asked_no' | 'already_asked' | 'no_mismatch'
-    | 'unavailable'. Never raises."""
+    | 'busy' | 'unavailable'. Never raises."""
     if ws is None or addon_settings_safe is None or xbmcgui is None:
         return 'unavailable'
     if _asked():
         return 'already_asked'
+    # Not over a film. There is no hurry -- the question keeps until the next
+    # tick, and a modal dialog across somebody's playback is worse than
+    # waiting.
+    try:
+        if xbmc is not None and xbmc.Player().isPlayingVideo():
+            return 'busy'
+    except Exception:
+        pass
 
     umbrella = _reader(UMBRELLA_ADDON_ID)
     # Connected to something? A service with no token has nothing to read
@@ -107,14 +122,36 @@ def maybe_ask():
     if not (umbrella('mdblist.token') or umbrella('trakt.user.token')):
         return 'no_mismatch'
 
+    # Which services can actually answer right now. Restoring the marker's
+    # value blind was a blocker: connect Trakt through POV, connect MDBList
+    # inside Umbrella itself (a route this build never touches, so POV's token
+    # stays empty and the mirror never runs), then revoke Trakt in Umbrella --
+    # which DOES reset these two settings, unlike MDBList's revoke. The marker
+    # still said Trakt, so a user answering yes got their indicators pointed
+    # at a revoked account while the live one sat there unused, with no error
+    # and no second chance. `pairs()` never has this problem because it only
+    # ever writes the caller's own live source; only this module restores a
+    # historical value, so only this module has to check it.
+    live = set()
+    if umbrella('mdblist.token'):
+        live.add(ws.MDBLIST)
+    if umbrella('trakt.user.token'):
+        live.add(ws.TRAKT)
+    # MDBList over Trakt, the same preference the mirrors use.
+    fallback = (ws.MDBLIST if ws.MDBLIST in live
+                else (ws.TRAKT if ws.TRAKT in live else None))
+
     done = ws._done()
     wanted = []
     for key in ws.KEYS:
         prev = done.get(key)
         if not prev or prev == ws.NOTHING:
             continue                     # never ours -> never our business
-        if umbrella(key) == ws.SHIPPED_LOCAL:
-            wanted.append((key, prev))
+        if umbrella(key) != ws.SHIPPED_LOCAL:
+            continue
+        target = prev if prev in live else fallback
+        if target:
+            wanted.append((key, target))
     if not wanted:
         return 'no_mismatch'
 
@@ -134,6 +171,14 @@ def maybe_ask():
     # and asking again because a write failed would punish them for our
     # problem; the timer re-mirrors anyway.
     _remember('yes')
+    # Keep the marker describing what is actually there. Where the stale
+    # service was swapped for the live one, the record has to follow or the
+    # mirrors' "is this still ours?" test is answered against a value nobody
+    # wrote. settle() merges and never demotes, so this is additive.
+    try:
+        ws.settle(dict((k, v) for k, v in wanted if k not in failed))
+    except Exception:
+        pass
     if failed:
         _log('user said yes but the write did not stick ({0})'
              .format(', '.join(failed)), level='WARNING')
@@ -141,3 +186,17 @@ def maybe_ask():
         _log('watched state restored from the connected service at the '
              'user\'s request')
     return 'asked_yes'
+
+
+def maybe_ask_async():
+    """Ask on a thread of its own.
+
+    Dialog().yesno() blocks until it is answered, and Kodi gives it no
+    timeout. Called inline from the keeper loop it would stop the MDBList and
+    Trakt mirrors and the seasons-view seeder for as long as the dialog stood
+    -- possibly forever, on a box nobody is sitting at -- which is precisely
+    the per-minute guarantee that loop exists to provide."""
+    try:
+        threading.Thread(target=maybe_ask, daemon=True).start()
+    except Exception:
+        pass
