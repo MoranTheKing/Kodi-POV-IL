@@ -37,7 +37,7 @@ ICON_SRC_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), 'icons')
 ICON_FILENAMES = ('gemini.png',)
 
-INJECT_VERSION = 10
+INJECT_VERSION = 11
 MARKER = '# AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
 END_MARKER = '# END AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
 TUPLE_MARKER = "# AI_SUBS_MYSERVICES_TUPLE_v{0}".format(INJECT_VERSION)
@@ -77,6 +77,10 @@ TUPLE_MARKER = "# AI_SUBS_MYSERVICES_TUPLE_v{0}".format(INJECT_VERSION)
 #     stays as the fallback wherever AM is missing, and one clearly
 #     marked row at the bottom still reaches the untouched POV-only
 #     menu. Screen is in Hebrew from this version on.
+#   v11 (addon v0.2.481): MDBList now subclasses POV's own native
+#     MDBList instead of forwarding to our API-key pairing, so one
+#     OAuth device authorisation covers POV and Umbrella both, and
+#     the token is mirrored to Umbrella straight afterwards.
 # Each bump triggers a one-time re-patch on the next Kodi startup;
 # OLD_MARKERS lists every prior version's marker so the legacy
 # blocks get stripped cleanly before the new one is injected.
@@ -90,6 +94,7 @@ OLD_MARKERS = [
     '# AI_SUBS_MYSERVICES_INJECT_v7',
     '# AI_SUBS_MYSERVICES_INJECT_v8',
     '# AI_SUBS_MYSERVICES_INJECT_v9',
+    '# AI_SUBS_MYSERVICES_INJECT_v10',
 ]
 
 # Two service classes plus a hook that monkey-patches authorize()
@@ -188,32 +193,40 @@ class Gemini:
         return True
 
 
-class _AiMDBList:
-    """Forwarder for MDBList. The pairing UX (QR / type, validation, and
-    saving into POV's own mdblist.token) lives in the addon's default.py
-    under the connect_mdblist action -- spawned via RunScript. This REPLACES
-    POV's native manual-key MDBList service so pairing gets a QR like the
-    others. Named _AiMDBList (not MDBList) so it never shadows POV's own
-    native MDBList class elsewhere in this module."""
+class _AiMDBList(MDBList):
+    """MDBList, authorised ONCE for both add-ons.
+
+    This used to forward to our own API-key pairing, because when it was
+    written POV's MDBList service was a bare keyboard prompt with no QR. POV
+    6.08 replaced that with the OAuth device flow -- QR, short code, polling --
+    which is the SAME flow Umbrella uses and yields the same kind of token. So
+    the reason for a separate pairing is gone, and keeping it was what forced
+    users to connect twice: an API key here, a device code inside Umbrella.
+
+    We now subclass POV's own MDBList (same module, so it is simply in scope)
+    and add one step: once POV's authorisation has succeeded, ask the build's
+    add-on to hand the resulting access token to Umbrella. Everything POV does
+    -- the QR, the polling, the watched-indicator wiring, the revoke path --
+    is POV's own code, unchanged.
+
+    Named _AiMDBList, not MDBList, so it never shadows the class it extends.
+    """
     icon = 'mdblist.png'  # POV's own MDBList icon (native service)
 
-    def __init__(self):
-        # This class runs INSIDE POV, so kodi_utils.get_setting reads POV's
-        # OWN settings -- where mdblist.token lives.
-        try:
-            self.token = (kodi_utils.get_setting('mdblist.token') or '').strip()
-        except Exception:
-            self.token = ''
-
     def set(self):
+        result = MDBList.set(self)
+        # Fired whatever the outcome: the revoke path returns early too, and
+        # after a revoke POV's token is empty -- which the mirror reads as
+        # "nothing to hand over" and leaves Umbrella's own authorisation
+        # alone, rather than tearing it down on POV's behalf.
         try:
             import xbmc as _aix
             _aix.executebuiltin(
                 'RunScript(service.subtitles.kodipovilai,'
-                'action=connect_mdblist)')
-        except Exception as e:
-            notification('Failed to launch MDBList setup: %s' % str(e)[:60])
-        return True
+                'action=mdblist_mirror_umbrella)')
+        except Exception:
+            pass
+        return result
 
 
 def _ai_am_service(prefix, icon_name, keys, title, pov_names):
