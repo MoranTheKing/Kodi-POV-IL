@@ -2035,6 +2035,27 @@ def _maybe_patch_umbrella_language():
                 level='WARNING')
         except Exception:
             pass
+    # Keep Umbrella on whatever MDBList access token POV currently holds. POV
+    # owns the refreshing -- only its client_id can -- so this is what carries
+    # a refreshed token across to Umbrella, and what covers a user who
+    # authorised before this existed.
+    try:
+        from resources.lib import mdblist_umbrella_mirror
+        st = mdblist_umbrella_mirror.mirror()
+        if st == 'mirrored':
+            kodi_utils.log(
+                'mdblist_umbrella_mirror: Umbrella now shares POV\'s MDBList '
+                'authorisation', level='INFO')
+        elif st == 'write_failed':
+            kodi_utils.log(
+                'mdblist_umbrella_mirror: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'mdblist_umbrella_mirror failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
     # Searching Umbrella in Hebrew found nothing: the percent-encoded query
     # made Umbrella's own api_key substitution raise, so the request was
     # never sent. See umbrella_tmdb_apikey_patcher for the full account.

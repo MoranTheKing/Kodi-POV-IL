@@ -2066,61 +2066,10 @@ def _test_save_mdblist(kodi_utils, mdblist_pair, key, retry=False):
             + ('\n\nהמפתח מסונכרן כעת גם לשאר התוספים.' if spread else '')
             + '\n\nאם הרשימות לא מופיעות מיד, ייתכן שיהיה צורך להפעיל מחדש '
               'את POV.')
-    try:
-        _mdblist_offer_umbrella()
-    except Exception as e:
-        _safe_log('mdblist umbrella offer failed: {0}'.format(e),
-                  level='WARNING')
     # Last of all -- see _mdblist_acctmgr_resync for why the order matters.
     if spread:
         _mdblist_acctmgr_resync()
     return 'ok'
-
-
-# Umbrella cannot be connected to MDBList by copying the key, and the attempt
-# is worse than doing nothing: Account Manager writes the key into a setting
-# called `mdblist.api`, which does not exist anywhere in Umbrella -- Umbrella
-# reads `mdblist.token` -- so the sync reports success and Umbrella stays
-# empty. That was field-reported as "it says connected but shows nothing",
-# and going to Umbrella's own settings and authorising there was what fixed
-# it.
-#
-# Writing the key to `mdblist.token` instead would not fix it either.
-# Umbrella fills that setting from an OAuth device flow --
-# POST /oauth/device-authorization/ then poll /oauth/token/ -- and sends it
-# as `Authorization: Bearer <access_token>`. An MDBList API key is a
-# different credential; Umbrella never uses the `?apikey=` form at all. So
-# the only honest route is Umbrella's own authorisation, which is one screen
-# and a code typed once.
-UMBRELLA_ADDON_ID = 'plugin.video.umbrella'
-UMBRELLA_MDBLIST_TOKEN = 'mdblist.token'
-UMBRELLA_MDBLIST_AUTH = (
-    'RunPlugin(plugin://plugin.video.umbrella/?action=mdblistAuth)')
-
-
-def _mdblist_offer_umbrella():
-    """Offer Umbrella's own MDBList authorisation, if it needs one."""
-    try:
-        umb = xbmcaddon.Addon(UMBRELLA_ADDON_ID)
-    except Exception:
-        return  # not installed -- nothing to offer
-    try:
-        if (umb.getSetting(UMBRELLA_MDBLIST_TOKEN) or '').strip():
-            return  # already authorised in Umbrella
-    except Exception:
-        return
-    if not xbmcgui.Dialog().yesno(
-            'MDBList - אמברלה',
-            'אמברלה דורשת אישור נפרד משלה ל-MDBList, ולא ניתן להעביר אליה '
-            'את המפתח.\n\nלאשר עכשיו? ייפתח מסך של אמברלה עם קוד קצר '
-            'להזנה באתר MDBList.',
-            nolabel='לא עכשיו', yeslabel='לאשר עכשיו'):
-        return
-    try:
-        xbmc.executebuiltin(UMBRELLA_MDBLIST_AUTH)
-    except Exception as e:
-        _safe_log('umbrella mdblistAuth launch failed: {0}'.format(e),
-                  level='WARNING')
 
 
 def _test_save_or_retry(kodi_utils, gemini, api_key, retry_cb):
@@ -3583,6 +3532,15 @@ def main():
             _handle_test_connection(params)
         elif action == 'connect_gemini':
             _handle_connect_gemini(params)
+        elif action == 'mdblist_mirror_umbrella':
+            # POV has just finished its own MDBList authorisation. Hand the
+            # access token to Umbrella so one authorisation covers both.
+            try:
+                from resources.lib import mdblist_umbrella_mirror
+                _safe_log('mdblist mirror: ' + mdblist_umbrella_mirror.mirror())
+            except Exception as e:
+                _safe_log('mdblist mirror failed: {0}'.format(e),
+                          level='WARNING')
         elif action == 'connect_mdblist':
             _handle_connect_mdblist(params)
         elif action == 'search_provider':
