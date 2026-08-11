@@ -189,6 +189,12 @@ def mirror():
         UMBRELLA_ADDON_ID, tuple(wanted),
         guard_property=UMBRELLA_GUARD_PROPERTY)
     if failed:
+        # Record the watch-source keys that DID stick. A batch can fail on an
+        # unrelated key -- the token -- while these two land perfectly well,
+        # and leaving them unrecorded is how our own write gets read back as
+        # the user's on the next pass.
+        if settle_keys and umbrella_watch_source is not None:
+            umbrella_watch_source.settle(settle_keys, skip=failed)
         _log('mirror did not stick ({0}) -- will retry next startup'
              .format(', '.join(failed)), level='WARNING')
         return 'write_failed'

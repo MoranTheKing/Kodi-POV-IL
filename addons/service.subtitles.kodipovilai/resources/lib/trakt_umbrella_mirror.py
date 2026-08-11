@@ -78,6 +78,14 @@ except Exception:
 
 
 POV_ADDON_ID = 'plugin.video.pov'
+
+# The build-wide "make no change to plugin.video.pov" switch. Its help text
+# promises exactly that, without qualification, and this module holds the one
+# write to POV in either mirror -- so it has to answer to the switch or the
+# switch is not true. Read here rather than imported from service.py: that
+# module is the Kodi service entry point and importing it from a library is
+# how you get a second copy of the service running.
+POV_PATCHING_OFF_SETTING = '_pov_patching_off'
 UMBRELLA_ADDON_ID = 'plugin.video.umbrella'
 
 POV_TOKEN = 'trakt.token'
@@ -101,6 +109,16 @@ def _log(msg, level='INFO'):
         kodi_utils.log('trakt_umbrella_mirror: ' + msg, level=level)
     except Exception:
         pass
+
+
+def _pov_writes_off():
+    if kodi_utils is None:
+        return False
+    try:
+        return (kodi_utils.get_setting(POV_PATCHING_OFF_SETTING, '')
+                or '').strip().lower() == 'true'
+    except Exception:
+        return False
 
 
 def _newer(a, b):
@@ -146,8 +164,8 @@ def mirror():
     """Give Umbrella POV's Trakt authorisation, pointed at POV's Trakt app.
 
     Returns 'no_pov' | 'no_umbrella' | 'no_token' | 'incomplete'
-    | 'unchanged' | 'mirrored' | 'adopted' | 'write_failed'.
-    Never raises."""
+    | 'unchanged' | 'mirrored' | 'adopted' | 'pov_writes_off'
+    | 'write_failed'. Never raises."""
     if addon_settings_safe is None:
         return 'write_failed'
 
@@ -209,6 +227,12 @@ def mirror():
     if (umb_token and umb_token != token and umb_refresh
             and umbrella('trakt.authed.clientid') == client_id
             and _newer(umb_expires, expires)):
+        if _pov_writes_off():
+            # The switch forbids the write to POV. It does NOT permit the
+            # opposite either: falling through would push POV's stale copy
+            # over the pair Umbrella has just rotated, and retire Umbrella's
+            # working refresh token. Stand down entirely this pass.
+            return 'pov_writes_off'
         # The username comes across too. It is not needed to authenticate,
         # but POV shows it, and a screen naming one account while holding
         # another account's token is the kind of thing that gets diagnosed
@@ -272,6 +296,11 @@ def mirror():
         UMBRELLA_ADDON_ID, tuple(wanted),
         guard_property=UMBRELLA_GUARD_PROPERTY)
     if failed:
+        # Same as the MDBList mirror: keep whatever the watch-source keys
+        # actually achieved, so a failure on the token does not lose the
+        # record of a claim that landed.
+        if settle_keys and umbrella_watch_source is not None:
+            umbrella_watch_source.settle(settle_keys, skip=failed)
         _log('mirror did not stick ({0}) -- will retry'
              .format(', '.join(failed)), level='WARNING')
         return 'write_failed'

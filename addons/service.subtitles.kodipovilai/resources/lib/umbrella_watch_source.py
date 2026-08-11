@@ -77,15 +77,27 @@ def _done():
     return out
 
 
-def settle(done):
+def settle(done, skip=()):
     """Record what we did about each key.
 
-    Writes only on a change. The callers settle on their fast path too -- the
-    one taken on almost every pass -- and this runs on a timer, so an
-    unconditional set_setting() would rewrite our settings.xml every tick for
-    the life of the box."""
-    value = ','.join('%s=%s' % (k, v) for k, v in sorted(done.items()))
+    MERGED into what the marker already says, not written over it. Two of
+    these run in different processes -- the timer, and the instant trigger on
+    POV's Connect Services screen -- each holding the marker as it was when
+    they started, so a plain overwrite lets the later one drop what the
+    earlier one just recorded.
+
+    `skip` is the keys whose write did NOT stick. They keep whatever the
+    marker had before, because recording a write that did not happen is worse
+    than recording nothing: next pass would find our own value standing there
+    unclaimed, read it as the user's, and refuse the takeover that was owed.
+    This build's own set_setting notes that some Kodi/Android builds swallow
+    a write and report success, so it is not a theoretical branch.
+
+    Writes only on a change: this runs on a timer."""
     try:
+        merged = _done()
+        merged.update((k, v) for k, v in done.items() if k not in skip)
+        value = ','.join('%s=%s' % (k, v) for k, v in sorted(merged.items()))
         if (kodi_utils.get_setting(MARKER_SETTING, '') or '').strip() == value:
             return
         kodi_utils.set_setting(MARKER_SETTING, value)

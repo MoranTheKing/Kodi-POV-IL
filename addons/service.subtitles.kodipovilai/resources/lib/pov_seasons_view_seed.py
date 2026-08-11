@@ -128,6 +128,20 @@ def _current_skin():
         return ''
 
 
+def _published():
+    """What POV would currently read as the seasons view, or '' if nothing.
+
+    A window property read is an in-memory lookup, which is what lets the
+    per-minute tick check it every time."""
+    if xbmcgui is None:
+        return ''
+    try:
+        return (xbmcgui.Window(10000).getProperty(
+            'pov_%s' % VIEW_TYPE) or '').strip()
+    except Exception:
+        return ''
+
+
 def _publish(view_id):
     """Set the window property POV reads the view from.
 
@@ -176,14 +190,19 @@ def _remember(done):
         pass
 
 
-# The skin this process has already settled, if any. Purely in-memory, and
-# that is the point: it exists so the once-a-minute tick does not open POV's
-# views.db once a minute forever. Nothing but POV's own Set View can change
-# that row while the skin stays put, and when it does we would only be
-# standing aside anyway -- so one look per skin per Kodi session is the whole
-# of what this needs. A skin change clears it because that is the one event
-# that makes the row wrong.
-_SETTLED_SKIN = [None]
+# (skin, the view POV was reading when we last settled it). Purely
+# in-memory, and it exists so the once-a-minute tick does not open POV's
+# views.db once a minute forever.
+#
+# The second half is load-bearing, and keying only on the skin was a bug. POV
+# has a "Reset All Views" on its own Set View Modes screen, and it does
+# `DELETE FROM views` for every row and clears every pov_* window property --
+# without changing the skin. A skin-only memo never notices, so the seasons
+# screen loses its poster view and does not get it back until the next
+# restart: the exact fault this module exists to fix, silently reappearing.
+# Comparing the window property as well costs an in-memory lookup and catches
+# it on the next tick, because that is precisely what POV clears.
+_SETTLED = [None, None]
 
 
 def ensure_seeded():
@@ -196,7 +215,7 @@ def ensure_seeded():
         # view number for an unknown skin is how you land somebody on a
         # layout that does not exist.
         return 'unknown_skin'
-    if _SETTLED_SKIN[0] == skin:
+    if _SETTLED[0] == skin and _SETTLED[1] == _published():
         return 'seen'
 
     path = _db_path()
@@ -220,14 +239,16 @@ def ensure_seeded():
         if not first_say:
             if current == want:
                 _publish(want)      # cheap, and covers a property lost to a
-                _SETTLED_SKIN[0] = skin      # POV service that never ran
+                _SETTLED[:] = [skin, want]   # POV service that never ran
                 return 'already'             # this boot
             if current is not None and current not in set(done.values()):
                 # We have already had our say in this skin and the row is no
                 # longer any value we wrote -- in this skin or in another one
                 # that shares the table. That is the user picking a view, and
-                # it stands.
-                _SETTLED_SKIN[0] = skin
+                # it stands. Memoised against what POV is reading NOW, not
+                # against `want`, or every tick would re-open the database to
+                # decide again that it must do nothing.
+                _SETTLED[:] = [skin, _published()]
                 return 'user_choice'
 
         cur.execute("""INSERT OR REPLACE INTO views VALUES (?, ?)""",
@@ -246,7 +267,7 @@ def ensure_seeded():
     done[skin] = want
     _remember(done)
     _publish(want)
-    _SETTLED_SKIN[0] = skin
+    _SETTLED[:] = [skin, want]
     if current == want:
         result = 'already'
     elif current is None:

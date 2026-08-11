@@ -2668,10 +2668,15 @@ def _start_service_mirror_keeper(monitor):
                 # can rule this build out in one step -- a thread that carries
                 # on writing to POV ninety seconds later would make the switch
                 # a lie.
-                if pov_seasons_view_seed is not None and \
-                        not _skip_pov_patchers():
+                if pov_seasons_view_seed is not None:
                     try:
-                        pov_seasons_view_seed.ensure_seeded()
+                        # Inside the try, not in the `if`: this is the only
+                        # call in the loop body that sat outside one, and an
+                        # exception here would take the whole keeper thread
+                        # down -- both mirrors with it -- for the rest of the
+                        # session, through an outer catch that logs nothing.
+                        if not _skip_pov_patchers():
+                            pov_seasons_view_seed.ensure_seeded()
                     except Exception:
                         pass
                 if monitor.waitForAbort(60):
