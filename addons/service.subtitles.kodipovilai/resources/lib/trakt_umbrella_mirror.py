@@ -271,7 +271,8 @@ def mirror():
     src, settle_keys = [], None
     if umbrella_watch_source is not None and not umbrella('mdblist.token'):
         src, settle_keys = umbrella_watch_source.pairs(
-            umbrella, umbrella_watch_source.TRAKT)
+            umbrella, umbrella_watch_source.TRAKT,
+            reclaim=not umb_token)
 
     if (stale or umb_token == token) and not src:
         # Nothing to write, but the look at the watch-source settings still
