@@ -1978,15 +1978,6 @@ def _maybe_patch_umbrella_language():
             kodi_utils.log(
                 'umbrella_setup_patcher: Umbrella defaults applied',
                 level='INFO')
-        ind = umbrella_setup_patcher.ensure_watched_indicators()
-        if ind == 'patched':
-            kodi_utils.log(
-                'umbrella_setup_patcher: Umbrella now takes watched state '
-                'from Trakt', level='INFO')
-        elif ind == 'write_failed':
-            kodi_utils.log(
-                'umbrella_setup_patcher: watched indicators ' + ind,
-                level='WARNING')
         hook = umbrella_setup_patcher.ensure_source_name_published()
         if hook == 'patched':
             kodi_utils.log(
