@@ -190,11 +190,17 @@ def pairs(read_umbrella, source, may_replace=(), reclaim=False):
         elif prev != source and prev in may_replace and current == prev:
             out.append((key, source))
             touched[key] = source
-        elif reclaim and prev != NOTHING and current == SHIPPED_LOCAL:
+        elif (reclaim and current == SHIPPED_LOCAL
+              and (prev == source or prev in may_replace)):
             # We wrote `prev` here and it is gone; the service is being
-            # connected again right now. Note the order: this is reached only
-            # after the may_replace branch has declined, so it can never
-            # decide the MDBList-over-Trakt question.
+            # connected again right now, so take it again -- but only what
+            # this source is entitled to: what it put there itself, or what it
+            # outranks anyway. Without that last clause Trakt could reclaim a
+            # slot the marker says is MDBList's. The MDBList mirror does take
+            # it straight back on the same tick, so the end state was right,
+            # but a rule that depends on another module running afterwards to
+            # come out correct is one nobody can reason about locally.
+            # NOTHING is excluded by both arms: it is neither source.
             out.append((key, source))
             touched[key] = source
     return out, touched
