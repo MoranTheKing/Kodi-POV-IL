@@ -25,10 +25,13 @@
 # TWO THINGS ARE DIFFERENT FROM THE MDBLIST ONE, and both are handled:
 #
 #   * call_trakt recurses. Its first line turns a dict argument into a call to
-#     itself, and after the rename that inner call lands on the WRAPPER, which
-#     does its own retry. Harmless -- the inner call returns a real result, so
-#     the outer sees one and stops -- and at worst, when both fail, one extra
-#     refresh attempt that the lock serialises anyway.
+#     itself -- by POPPING 'path' out of the caller's dict. After the rename
+#     that inner call lands on the WRAPPER, and leaving it there was a real
+#     bug, not the harmless one first written here: the pop happens once, the
+#     outer retry re-enters with the same now-EMPTY dict, and KeyError: 'path'
+#     comes out of a background sync thread -- on exactly the revoked account
+#     this exists to rescue. The wrapper therefore resolves the dict form
+#     itself, on a copy, before any retry logic runs.
 #   * call_trakt is handed to a ThreadPoolExecutor (executor.map(call_trakt,
 #     args)). The status flag is thread-local for exactly that reason: a
 #     shared one would have one worker's 401 answer another worker's question.
@@ -124,10 +127,18 @@ def _ai_trakt_refresh_once():
 
 def call_trakt(path, params=None, data=None, with_auth=True, method=None, pagination=False, page=1):
 \t# Refresh and retry once on a 401. Without this a rejected token is
-\t# permanent until the account is authorised again by hand. `path` may be a
-\t# dict, which _ai_call_trakt_once turns into a call to THIS wrapper -- see
-\t# the header; it costs at most one extra refresh attempt, already
-\t# serialised.
+\t# permanent until the account is authorised again by hand.
+\t#
+\t# The dict form is resolved HERE, on a COPY, before anything else. POV's
+\t# own first line does `path.pop('path')`, which empties the caller's dict;
+\t# left to the inner function that pop happened once, then the retry below
+\t# re-entered with the same now-empty dict and raised KeyError out of a
+\t# background sync thread -- on exactly the revoked account this exists to
+\t# rescue. Resolving first means the retry only ever sees a string, and the
+\t# copy means a caller's dict survives the call.
+\tif isinstance(path, dict):
+\t\t_ai_p = dict(path)
+\t\treturn call_trakt(str(_ai_p.pop('path')), **_ai_p)
 \t_ai_trakt_tls.status = 0
 \tresult = _ai_call_trakt_once(path, params=params, data=data, with_auth=with_auth, method=method, pagination=pagination, page=page)
 \tif result is not None or getattr(_ai_trakt_tls, 'status', 0) != 401: return result
