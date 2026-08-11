@@ -149,6 +149,15 @@ def mirror():
     if umb_token != token:
         wanted = [(UMB_TOKEN, token), (UMB_REFRESH, '')] + wanted
     elif not wanted:
+        # Nothing to write -- but we DID look at the two watch-source
+        # settings, and the look is the one we get. Recording it on this path
+        # too is what stops a later, deliberate move back to Local being
+        # quietly undone: this branch is reached on almost every pass (token
+        # unchanged, source already chosen), so leaving it unrecorded means
+        # the "once" rule never actually takes hold and the next pass after
+        # the user moves the setting claims it all over again.
+        if settle_keys and umbrella_watch_source is not None:
+            umbrella_watch_source.settle(settle_keys)
         return 'unchanged'
 
     changed, _restored, failed = addon_settings_safe.apply(

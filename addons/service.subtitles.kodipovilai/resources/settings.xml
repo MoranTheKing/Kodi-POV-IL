@@ -531,12 +531,18 @@
           <level>4</level>
           <visible>false</visible>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <!-- Hidden, retry-safe one-shot migration: subtitle box -> outline. -->
         <setting id="_subtitle_outline_migration_v1" type="string" label="30000">
           <level>4</level>
           <visible>false</visible>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
       </group>
     </category>
@@ -868,6 +874,16 @@
         <!-- Hidden marker: which Umbrella watch-source keys we have had
              our one say about. See umbrella_watch_source.py. -->
         <setting id="_umb_watch_source_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden marker: the POV seasons view id WE last wrote, so ours can
+             be replaced when the skin changes and the user's never is.
+             See pov_seasons_view_seed.py. -->
+        <setting id="_pov_seasons_view_v1" type="string" label="30000">
           <level>4</level>
           <default></default>
           <constraints>
