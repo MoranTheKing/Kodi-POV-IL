@@ -2962,6 +2962,38 @@ refreshing. The dialog is dropped: in this build MDBList is connected in POV,
 for both add-ons, so "re-authenticate in settings" points at a screen that
 cannot fix it.
 
+#### 0.2.484 / qf 0.1.529 / note 587 — Trakt recovers from a 401 too
+
+The same defect, in the file next door, found because the MDBList fix landed on
+a real device and the log showed `TraktMonitor - Failed. Error from Trakt` two
+lines above `MDBListMonitor - Success`. `trakt_expires()` refreshes on a clock
+check only and `call_trakt()` swallows a 401 as a `RequestException`, so a
+rejected token is permanent there too. `pov_trakt_reauth_patcher` is the
+sibling of the MDBList one — same five-anchor discipline, same cross-thread and
+cross-process refresh lock, same refusal to touch the API-key-shaped state
+(empty `trakt.refresh`).
+
+Two things about `call_trakt` are NOT true of `call_mdblist`, and both cost a
+blocker:
+
+- **It recurses through a POP.** `if isinstance(path, dict): return
+  call_trakt(str(path.pop('path')), **path)` empties the CALLER's dict. After
+  the rename that inner call lands on the wrapper, so the pop happened once and
+  the outer retry re-entered with an empty dict: `KeyError: 'path'`, 3/3 runs,
+  out of a background sync thread, on exactly the revoked account the patch
+  exists to rescue. The wrapper now resolves the dict form itself, on a copy,
+  before any retry logic. Documented in the header as "harmless" for a whole
+  round first — a comment asserting a behaviour nobody executed.
+- **It is handed to a ThreadPoolExecutor** (`executor.map(call_trakt, args)`),
+  which is why the status flag is thread-local rather than a module global.
+
+The other blocker was in `service.py`, not the patcher: both `ensure_patched()`
+calls shared one `try`, so an exception out of the MDBList patcher skipped the
+Trakt one entirely — reproducing this round's own field symptom from a hiccup
+on the other side of the pair, behind a WARNING that read as if it were only
+about MDBList. **One `try` per patcher.** Anything that applies a list of
+independent repairs in a loop wants the same rule.
+
 ### Account Manager Lite: what its author confirmed (2026-08-11)
 
 Answers to the report filed against AM Lite 1.1.5a, verified against its
