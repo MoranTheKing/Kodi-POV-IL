@@ -26,8 +26,14 @@
 #     from set_view_mode(). Writing the row is exactly what POV's own "Set
 #     View" writes, so nothing here is a patch to POV -- it is the same table,
 #     the same key, the same value.
-#   * a row we did not write is a decision the user made in POV's own UI, and
-#     is never touched, not now and not later.
+#   * ONE forced say per skin, then never again. The first time this runs in a
+#     given skin the poster view is written over whatever is there, including a
+#     value the user appears to have chosen. That is deliberate and it is the
+#     build owner's call: the seasons screen has been landing on view numbers
+#     nobody picked -- one skin's id applied in another, or a stale row from an
+#     older build -- so "a row is already there" is not evidence that anybody
+#     chose it. After that one say, a view the user moves to is theirs and is
+#     never touched again.
 #
 # THE ID IS PER SKIN AND POV'S TABLE IS NOT. `views` is
 # (view_type TEXT, view_id TEXT, UNIQUE (view_type)) -- no skin column -- so
@@ -35,9 +41,13 @@
 # layouts in different skins. 51 is Poster in Estuary, in FENtastic and in
 # NOX (all three derive their numbering from Estuary), but Arctic Fuse 3
 # numbers its own views and 512 is its Poster Wall; its 51 does not exist.
-# That is why the value is rewritten when the skin changes, and why we track
-# what WE last wrote: our own value may be replaced with the one that suits
-# the skin now running, and anything else may not.
+#
+# So the marker records what we wrote FOR EACH SKIN, not just the last value:
+# on a device that switches between skins the row in the shared table keeps
+# being overwritten by the skin now running, and "is this still ours?" can
+# only be answered against every value we have ever written, not the most
+# recent one. Get that wrong and switching skins once makes the build think
+# the user chose the number the other skin left behind.
 #
 # Deliberately narrow: `view.seasons` only. The season screen is what was
 # reported; movies, shows and episodes keep whatever they have.
@@ -81,8 +91,9 @@ POSTER_VIEWS = {
     'skin.arctic.fuse.3': '512',
 }
 
-# Holds the view id WE last wrote, so ours can be replaced and the user's
-# cannot. Empty means we have never written one.
+# "skin.fentastic=51,skin.arctic.fuse.3=512" -- which skins we have had our
+# one forced say in, and what we wrote in each. Empty means we have never
+# written one anywhere.
 MARKER_SETTING = '_pov_seasons_view_v1'
 
 
@@ -134,26 +145,39 @@ def _publish(view_id):
         pass
 
 
-def _ours():
-    if kodi_utils is None:
-        return ''
-    try:
-        return (kodi_utils.get_setting(MARKER_SETTING, '') or '').strip()
-    except Exception:
-        return ''
+def _done():
+    """{skin id: the view id we wrote in that skin}. Never raises."""
+    raw = ''
+    if kodi_utils is not None:
+        try:
+            raw = (kodi_utils.get_setting(MARKER_SETTING, '') or '').strip()
+        except Exception:
+            raw = ''
+    out = {}
+    for part in raw.split(','):
+        skin, _sep, view_id = part.strip().partition('=')
+        skin, view_id = skin.strip(), view_id.strip()
+        if skin and view_id:
+            out[skin] = view_id
+    return out
 
 
-def _remember(view_id):
+def _remember(done):
+    """Write only on a change: this runs on a timer, and rewriting our own
+    settings.xml every tick for the life of the box buys nothing."""
     if kodi_utils is None:
         return
+    value = ','.join('%s=%s' % (s, v) for s, v in sorted(done.items()))
     try:
-        kodi_utils.set_setting(MARKER_SETTING, view_id)
+        if (kodi_utils.get_setting(MARKER_SETTING, '') or '').strip() == value:
+            return
+        kodi_utils.set_setting(MARKER_SETTING, value)
     except Exception:
         pass
 
 
 def ensure_seeded():
-    """Returns 'no_pov' | 'unknown_skin' | 'seeded' | 'reseeded'
+    """Returns 'no_pov' | 'unknown_skin' | 'seeded' | 'overrode' | 'reseeded'
     | 'already' | 'user_choice' | 'failed'. Never raises."""
     skin = _current_skin()
     want = POSTER_VIEWS.get(skin)
@@ -167,6 +191,9 @@ def ensure_seeded():
     if not path:
         return 'no_pov'
 
+    done = _done()
+    first_say = skin not in done
+    current = None
     con = None
     try:
         con = sqlite3.connect(path, timeout=5, isolation_level=None)
@@ -178,14 +205,16 @@ def ensure_seeded():
         row = cur.fetchone()
         current = (row[0] or '').strip() if row else None
 
-        if current == want:
-            _publish(want)      # cheap, and covers a property lost to a
-            return 'already'    # POV service that never ran this boot
-        if current is not None and current != _ours():
-            # Either the user picked this in POV's own Set View, or they
-            # changed ours afterwards. Both are answers, and we do not get to
-            # give a second one.
-            return 'user_choice'
+        if not first_say:
+            if current == want:
+                _publish(want)      # cheap, and covers a property lost to a
+                return 'already'    # POV service that never ran this boot
+            if current is not None and current not in set(done.values()):
+                # We have already had our say in this skin and the row is no
+                # longer any value we wrote -- in this skin or in another one
+                # that shares the table. That is the user picking a view, and
+                # it stands.
+                return 'user_choice'
 
         cur.execute("""INSERT OR REPLACE INTO views VALUES (?, ?)""",
                     (VIEW_TYPE, want))
@@ -200,10 +229,21 @@ def ensure_seeded():
             except sqlite3.Error:
                 pass
 
-    _remember(want)
+    done[skin] = want
+    _remember(done)
     _publish(want)
-    result = 'seeded' if current is None else 'reseeded'
-    _log('season list will open in {0}\'s poster view ({1}){2}'.format(
-        skin, want, '' if result == 'seeded' else ' -- skin changed'),
-        level='INFO')
+    if current == want:
+        result = 'already'
+    elif current is None:
+        result = 'seeded'
+    elif first_say:
+        result = 'overrode'
+    else:
+        result = 'reseeded'
+    if result != 'already':
+        _log('season list will open in {0}\'s poster view ({1}){2}'.format(
+            skin, want,
+            {'overrode': ' -- replacing ' + str(current),
+             'reseeded': ' -- skin changed'}.get(result, '')),
+            level='INFO')
     return result
