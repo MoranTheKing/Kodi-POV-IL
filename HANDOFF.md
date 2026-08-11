@@ -101,9 +101,18 @@ tools/build_wizard_quickfix.py          # replaces only the Wizard in a quickfix
   human-sources engine and its MoranSubs bridge.
 - `resources/lib/subsync.py`, `sync_align.py`, `mkv_probe.py`,
   `release_match.py` — SubSync (build edition; see `SUBSYNC_PLAN.md`).
-- `resources/lib/pov_*_patcher.py`, `<skin>_*_patcher.py` — runtime patchers
-  applied by the build's service at boot. Marker-gated, compile-checked,
-  atomic writes; a patch that can't apply never breaks POV.
+- `resources/lib/pov_*_patcher.py`, `<skin>_*_patcher.py`,
+  `umbrella_*_patcher.py` — runtime patchers applied by the build's service at
+  boot. Marker-gated, compile-checked, atomic writes, `.pyc` dropped; a patch
+  that can't apply never breaks its host. Anchors are built from the target
+  file's own detected EOL — see the CRLF entry below for why.
+- `resources/lib/mdblist_umbrella_mirror.py`, `trakt_umbrella_mirror.py`,
+  `umbrella_watch_source.py` — one authorisation covering POV and Umbrella,
+  and the two Umbrella settings that decide which service it READS watched
+  state from. All writes go through `addon_settings_safe`; never bare
+  `setSetting` another add-on.
+- `resources/lib/pov_seasons_view_seed.py` — writes POV's own `views.db` row
+  so the season list opens on a poster view, per skin, once.
 
 ## Shipping a quickfix (checklist)
 
@@ -2723,6 +2732,229 @@ exit. That fits every observation, and it is also why the repair belongs in
 our service: it runs long after the add-ons are up, so by then the layout is a
 valid option and the write sticks. If it recurs, the WARNING now names which
 of the two cases it is.
+
+### What shipped 0.2.476 → 0.2.482 (notifications 579–585)
+
+| Version | What it fixed |
+| --- | --- |
+| 0.2.476–0.2.477 / qf 0.1.521–0.1.522 / note 580 | The Hebrew keyboard layout restores itself whenever it goes missing; the "send log" tile points at the Wizard's own uploader |
+| 0.2.478 / qf 0.1.523 / note 581 | Umbrella's Hebrew search (first attempt); the POV discover patcher's `tmdb_api.py` anchor repaired |
+| 0.2.479 / qf 0.1.524 / note 582 | The Hebrew search fix made to actually reach the device (CRLF); Kodi's 20s playlist timer stops raising "playback failed" on a deliberate cancel |
+| 0.2.480 / qf 0.1.525 / note 583 | Umbrella's MDBList routed to Umbrella's own authorisation; AM's settings window stops landing on top of our question |
+| 0.2.481 / qf 0.1.526 / note 584 | POV's search-history crash (maincache column order surviving a 5.x upgrade); one MDBList authorisation for POV and Umbrella |
+| 0.2.482 / qf 0.1.527 / note 585 | One Trakt authorisation for both; Umbrella actually READS from the connected service; the season list opens on a poster view; Hebrew season names; 27 settings stop erroring on every settings load |
+
+#### Test against what SHIPS, not what upstream publishes (0.2.478 → 0.2.479)
+
+The Hebrew-search fix shipped as a complete no-op and the user had to report
+the same bug twice. The patcher anchored on `^class TMDb:\n`, which is what
+upstream Umbrella looks like — but the pack this build ships carries
+`indexers/tmdb.py` and `windows/source_results.py` as **CRLF** while
+`modules/sources.py`, `menus/movies.py` and `menus/tvshows.py` are LF. In
+Python's MULTILINE mode `$` matches before `\n`, never before `\r`, so the
+anchor could not match the file on any real device.
+
+Two rules came out of it, and both have caught later bugs:
+
+- Every anchor is now built from the file's own detected EOL, and every
+  patcher harness runs a CRLF copy as well as an LF one.
+- `\r?\n+` is wrong for "one or more newlines": it eats one CRLF and then
+  stalls on the `\r`. It has to be `(?:\r?\n)+`. That form was already
+  wrong in a revert path nobody had exercised.
+
+#### Kodi's own dialogs and settings (0.2.479, 0.2.481, 0.2.482)
+
+- **"Playback failed" on a deliberate cancel.** `PlayListPlayer.cpp` raises it
+  when a run of failed plays exceeds `playlisttimeout` (default 20s), and
+  `Reset()` does NOT clear `m_iFailedSongs` — so opening a source list, waiting,
+  and backing out counted as a failure and popped a dialog. Merged
+  `<playlisttimeout>0</playlisttimeout>` into `advancedsettings.xml`. Detection
+  parses the XML tree: a validator found that a substring test would read a
+  COMMENTED-OUT example as "already set", forever.
+- **Kodi silently drops `setSetting` for a setting the target add-on does not
+  declare.** This is why Account Manager's writes of `mdblist.api` and
+  `resume.source` into Umbrella are no-ops — neither exists in Umbrella's
+  settings.xml. Verify every id against the real file before writing it.
+- **`CSettingString` rejects an EMPTY `<default>`** unless the setting also
+  declares `<constraints><allowempty>true</allowempty></constraints>`. 27 of our
+  hidden marker settings had an empty default without it, so Kodi logged an
+  error on every settings load — roughly once a minute, since constructing
+  `xbmcaddon.Addon()` re-validates the whole file.
+
+#### SQLite TEXT affinity and POV's search history (0.2.481)
+
+Search screens crashed with `'int' object is not iterable` on any device
+upgraded from POV 5.x: the `maincache` table kept the 5.x column order while
+6.x writes positionally, so everything saved afterwards went into the wrong
+column. TEXT affinity converts numbers to strings on the way in, and TEXT
+always sorts above INTEGER, which is what made it look like a sorting bug.
+`pov_maincache_schema_fix` rebuilds the table in 6.x order, copying only rows
+whose `expires` is genuinely an integer. It refuses to run when the file is
+absent — `sqlite3.connect()` creates an empty database, and a zero-byte
+`maincache.db` in POV's profile is a new way to break POV.
+
+#### One authorisation, two add-ons (0.2.481 MDBList, 0.2.482 Trakt)
+
+Both services were being connected twice, once in POV and once in Umbrella.
+They are not the same problem:
+
+- **MDBList.** An access token authenticates the USER; any client may present
+  it. So POV's token is handed to Umbrella as-is. Umbrella is deliberately
+  given NO refresh token, because a refresh token is bound to the client that
+  issued it and Umbrella posts its own client id. POV owns the refreshing.
+- **Trakt.** A token is bound to the APPLICATION: every call carries a
+  `trakt-api-key` header and Trakt rejects a token issued to a different app.
+  Umbrella supports exactly this as a documented feature — the "Use Custom
+  Trakt API Keys" switch — so Umbrella is pointed at POV's Trakt application
+  through its own setting. `trakt.authed.clientid` must be set too, or
+  Umbrella compares it against `traktClientID()`, decides its own credentials
+  are foreign, and drops them.
+- **Trakt refresh tokens are single-use.** Once Umbrella runs as POV's
+  application it refreshes on its own and rotates the pair. Pushing POV's older
+  copy back over it would leave Umbrella holding a retired refresh token, and
+  its next refresh clears the whole authorisation and tells the user to
+  re-authorise. So when Umbrella's token differs and expires LATER, POV is the
+  stale side and we adopt Umbrella's pair instead.
+
+#### Connecting a service is not the same as USING it (0.2.482)
+
+Umbrella showed every episode unwatched while POV showed the ticks, on a
+device where everything said "connected". `indicators.alt` (watch history) and
+`scrobble.source` (scrobble and resume) are each a single CHOICE — 0 local,
+1 Trakt, 2 Simkl, 3 MDBList — and Umbrella ships both at 0. Connecting a
+service never changes them.
+
+`umbrella_watch_source` claims them, and the rules are all scar tissue:
+
+- **Once per key**, so somebody who puts one back to Local keeps it.
+- **Only from the shipped 0.** A validator caught an earlier version reversing
+  a deliberate answer: Umbrella's own `traktAuth()` ASKS about indicators, and
+  declining leaves the setting at 0, indistinguishable from never-asked. Only
+  claiming from 0 is what protects an answer already given.
+- **Not gated on "first connect".** That was the first shape and it only ever
+  helped a device connecting for the first time — everybody already connected,
+  which is everybody who reported the missing ticks, would have kept Local.
+- **The marker records WHAT we wrote, not merely that we wrote.** MDBList is
+  preferred over Trakt, and ordering the two calls is not enough: the instant
+  trigger on POV's Connect Services screen fires the MDBList mirror alone,
+  from its own process, while the timer fires both. So MDBList may replace a
+  Trakt value **of our own making**, and the preference holds whichever service
+  was connected first. A Trakt value we did not write is recorded as "wrote
+  nothing" and is never replaced.
+- **Settle on the no-write path too, and merge rather than overwrite.** The
+  no-write path is taken on almost every pass; leaving it unrecorded meant the
+  "once" rule never took hold. And a merge that let "not ours" win over a
+  concrete value would lose a claim permanently.
+
+#### Per-season posters were never the problem (0.2.482)
+
+Reported as "works in NOX, not in Estuary or FENtastic". It works everywhere:
+POV gives every season its own TMDb poster on `poster`, `icon`, `thumb`,
+`season.poster` AND `tvshow.poster`; TMDb returns a distinct poster per season
+under `language=he` (checked live against six shows, none returns null); and
+Estuary, FENtastic and NOX resolve posters through a byte-identical
+`PosterVar`, while Arctic Fuse 3 prefers `ListItem.Art(poster)` outright.
+
+The screenshot settled it: the screen was FENtastic's Advanced List (630) — a
+column of season labels beside one landscape still, with **no poster anywhere
+in the layout**. A poster the layout never draws is indistinguishable from a
+poster that is missing.
+
+`pov_seasons_view_seed` therefore writes POV's OWN `views.db` row — the same
+row POV's "Set View" writes — with that skin's poster view. Points worth
+keeping:
+
+- POV's `views` table is `(view_type TEXT, view_id TEXT, UNIQUE(view_type))`
+  with **no skin column**, so one number is applied in every skin and the same
+  number means different layouts. 51 is Poster in Estuary, FENtastic and NOX
+  (all three inherit Estuary's numbering); Arctic Fuse 3 numbers its own and
+  wants 512. The marker therefore records what we wrote **per skin**.
+- POV loads `views.db` into window properties exactly once, from its own
+  service at Kodi start, and `set_view_mode()` reads only the property — so the
+  row has to be published to `Window(10000)` as well, or it sits unused until
+  the next restart.
+- Forced once per skin over whatever is there, on the maintainer's
+  instruction: a row already present is not evidence anybody chose it, since
+  the screen had been landing on numbers from other skins. After that one say,
+  a view the user moves to is theirs.
+- POV's "Reset All Views" does `DELETE FROM views` **and** clears every `pov_*`
+  property without changing the skin, so the per-session memo that avoids
+  reopening the database has to compare the window property too, not just the
+  skin.
+
+#### Four validator passes, seven blockers, four of them regressions
+
+The 0.2.482 batch went through four adversarial passes. Three of the four
+rounds of fixes introduced a fresh blocker of their own:
+
+- gating the kill switch in the keeper loop, while leaving the one path that
+  writes POV settings ungated;
+- adding a memo to save database opens, which disabled the feature's own
+  self-heal;
+- recording claims only after a successful write, so a partial write lost the
+  claim.
+
+The common shape in every one: **inferring from one side of an interface
+without checking the other.** Budget for a pass per round of fixes, not one
+pass per feature.
+
+### Not yet released: MDBList recovers from a 401 (branch work after note 585)
+
+Field report: "MDBList session expired — please re-authenticate in settings"
+recurring, cleared only by reconnecting the account. The log shows POV itself
+getting `401 .../sync/last_activities` twice within eight seconds of startup,
+from two different POV sync threads — so it is POV's token being rejected, not
+just the copy Umbrella holds.
+
+POV refreshes on a CLOCK CHECK only (`mdbl_expires()`), and `call_mdblist()`
+treats a 401 as just another `RequestException`: it logs and returns None.
+Once the stored token stops being accepted while `mdblist.expires` still looks
+fine, there is no way back — every call fails, the sync monitor backs off half
+an hour, and only reconnecting by hand helps. Umbrella has had the reactive
+refresh-and-retry from the start; POV never had it.
+
+`pov_mdblist_reauth_patcher` adds it, deliberately NOT on the API-key path
+(a `mdblist.token` with no `mdblist.refresh` beside it is an API key and there
+is nothing to refresh). It also serialises `mdbl_refresh()` behind a window
+property: MDBList rotates the refresh token, and POV starts two sync passes
+seconds apart at every startup, each calling `mdbl_expires()` — so two
+refreshes with the same rotating token is the normal case here, and the loser
+can leave a token stored that the server has already replaced.
+
+`umbrella_mdblist_token_patcher` handles the popup, which was ours: Umbrella
+captures its Authorization header once at import, and we deliberately leave its
+refresh token empty, so after POV rotates it keeps sending the old token and
+has nothing to renew. Its refresher now re-reads `mdblist.token` first and
+adopts a newer one — all the common case needs, since somebody else did the
+refreshing. The dialog is dropped: in this build MDBList is connected in POV,
+for both add-ons, so "re-authenticate in settings" points at a screen that
+cannot fix it.
+
+### Account Manager Lite: what its author confirmed (2026-08-11)
+
+Answers to the report filed against AM Lite 1.1.5a, verified against its
+shipped code rather than taken on trust:
+
+- **The force-close after `traktAuth`/`traktReSync` is deliberate and stays.**
+  AM rewrites the Trakt handling inside the add-ons it supports and bypasses
+  their own authorisation, so they must restart to rebuild their Trakt
+  databases; a dialog could be dismissed or stolen by another add-on, a hard
+  exit cannot. Reasonable for AM — but not something a build's main connect
+  screen can do, which is why Trakt stays on POV's native connect here.
+- **`control.updates_off()` is NOT permanent**, which is what an earlier
+  comment in this repo claimed. `startup.py run_addon_updates()` calls
+  `autoupdate_on()` and then `UpdateAddonRepos()`, so add-on updates come back
+  on the next start; it only parks them until AM's own startup work is done.
+- **Declining the "create your sync list now?" prompt falling off the end of
+  its branch** was accepted as a bug and is fixed for their next release.
+- The "no sync list" check is a safeguard for an incomplete revoke; once Trakt
+  is authorised the button becomes "Edit Sync List".
+
+Still worth watching: every startup AM logs `No Trakt auth found - resetting
+services to defaults` (because Trakt is on POV here, not AM) and then walks
+`restore default service`/`restore default API keys` for Umbrella and POV. It
+has reported `no changes needed` so far, but that is the routine that could
+overwrite the Trakt settings this build writes into Umbrella.
 
 ### Known, deliberately not fixed
 
