@@ -1769,7 +1769,10 @@ def _maybe_patch_mdblist_reauth():
     call fails, the sync monitor backs off half an hour, and the account has
     to be authorised again by hand. Umbrella then compounds it with a dialog
     telling the user to re-authenticate in a screen this build does not use.
-    See both modules."""
+
+    Trakt has the identical defect in the file next door, and a field log
+    showed it failing in the same breath as the MDBList one recovered, so it
+    gets the same treatment. See the modules."""
     # The switch guards the POV half ONLY. Written as an early return over
     # both halves first, which silently took Umbrella's fix down with it --
     # the switch's own text promises to stop changes to plugin.video.pov and
@@ -1782,6 +1785,11 @@ def _maybe_patch_mdblist_reauth():
             if st in ('unmatched', 'compile_failed', 'write_failed'):
                 kodi_utils.log(
                     'pov_mdblist_reauth_patcher: ' + st, level='WARNING')
+            from resources.lib import pov_trakt_reauth_patcher
+            st = pov_trakt_reauth_patcher.ensure_patched()
+            if st in ('unmatched', 'compile_failed', 'write_failed'):
+                kodi_utils.log(
+                    'pov_trakt_reauth_patcher: ' + st, level='WARNING')
         except Exception as e:
             try:
                 from resources.lib import kodi_utils
