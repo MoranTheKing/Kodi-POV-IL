@@ -68,6 +68,11 @@ try:
 except Exception:
     addon_settings_safe = None
 
+try:
+    from resources.lib import umbrella_watch_source
+except Exception:
+    umbrella_watch_source = None
+
 
 POV_ADDON_ID = 'plugin.video.pov'
 UMBRELLA_ADDON_ID = 'plugin.video.umbrella'
@@ -135,7 +140,16 @@ def mirror():
              level='WARNING')
         return 'incomplete'
 
-    if umb_token == token:
+    # Which service Umbrella should READ watched state from. Trakt only
+    # claims it when MDBList has not -- both settings are a single choice and
+    # this build prefers MDBList when the two are connected together.
+    src, settle_keys = [], None
+    if umbrella_watch_source is not None and not _get(
+            UMBRELLA_ADDON_ID, 'mdblist.token'):
+        src, settle_keys = umbrella_watch_source.pairs(
+            lambda k: _get(UMBRELLA_ADDON_ID, k), umbrella_watch_source.TRAKT)
+
+    if umb_token == token and not src:
         return 'unchanged'
 
     first_connect = not umb_token
@@ -156,10 +170,7 @@ def mirror():
         ('trakt.authed.clientid', client_id),
         ('trakt.isauthed', 'true'),
     ]
-    if first_connect:
-        # Only now -- see the module header on why this is not touched again.
-        wanted.append(('indicators.alt', '1'))
-        wanted.append(('scrobble.source', '1'))
+    wanted.extend(src)
 
     changed, _restored, failed = addon_settings_safe.apply(
         UMBRELLA_ADDON_ID, tuple(wanted),
@@ -168,6 +179,8 @@ def mirror():
         _log('mirror did not stick ({0}) -- will retry'
              .format(', '.join(failed)), level='WARNING')
         return 'write_failed'
+    if settle_keys and umbrella_watch_source is not None:
+        umbrella_watch_source.settle(settle_keys)
     if not changed:
         return 'unchanged'
     _log('Umbrella now shares POV\'s Trakt authorisation{0}'.format(
