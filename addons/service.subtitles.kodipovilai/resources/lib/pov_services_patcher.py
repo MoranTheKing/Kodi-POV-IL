@@ -37,7 +37,7 @@ ICON_SRC_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), 'icons')
 ICON_FILENAMES = ('gemini.png',)
 
-INJECT_VERSION = 10
+INJECT_VERSION = 11
 MARKER = '# AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
 END_MARKER = '# END AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
 TUPLE_MARKER = "# AI_SUBS_MYSERVICES_TUPLE_v{0}".format(INJECT_VERSION)
@@ -77,6 +77,10 @@ TUPLE_MARKER = "# AI_SUBS_MYSERVICES_TUPLE_v{0}".format(INJECT_VERSION)
 #     stays as the fallback wherever AM is missing, and one clearly
 #     marked row at the bottom still reaches the untouched POV-only
 #     menu. Screen is in Hebrew from this version on.
+#   v11 (addon v0.2.481): MDBList now subclasses POV's own native
+#     MDBList instead of forwarding to our API-key pairing, so one
+#     OAuth device authorisation covers POV and Umbrella both, and
+#     the token is mirrored to Umbrella straight afterwards.
 # Each bump triggers a one-time re-patch on the next Kodi startup;
 # OLD_MARKERS lists every prior version's marker so the legacy
 # blocks get stripped cleanly before the new one is injected.
@@ -90,6 +94,7 @@ OLD_MARKERS = [
     '# AI_SUBS_MYSERVICES_INJECT_v7',
     '# AI_SUBS_MYSERVICES_INJECT_v8',
     '# AI_SUBS_MYSERVICES_INJECT_v9',
+    '# AI_SUBS_MYSERVICES_INJECT_v10',
 ]
 
 # Two service classes plus a hook that monkey-patches authorize()
@@ -188,32 +193,60 @@ class Gemini:
         return True
 
 
-class _AiMDBList:
-    """Forwarder for MDBList. The pairing UX (QR / type, validation, and
-    saving into POV's own mdblist.token) lives in the addon's default.py
-    under the connect_mdblist action -- spawned via RunScript. This REPLACES
-    POV's native manual-key MDBList service so pairing gets a QR like the
-    others. Named _AiMDBList (not MDBList) so it never shadows POV's own
-    native MDBList class elsewhere in this module."""
-    icon = 'mdblist.png'  # POV's own MDBList icon (native service)
+def _ai_make_mdblist():
+    """Build the MDBList row on top of POV's OWN MDBList class, or return
+    None if this POV has not got one.
 
-    def __init__(self):
-        # This class runs INSIDE POV, so kodi_utils.get_setting reads POV's
-        # OWN settings -- where mdblist.token lives.
-        try:
-            self.token = (kodi_utils.get_setting('mdblist.token') or '').strip()
-        except Exception:
-            self.token = ''
+    Resolved through globals() at call time rather than written as
+    `class _AiMDBList(MDBList)` at module level. That spelling is evaluated
+    the moment this block is imported, so a POV release that renames or drops
+    MDBList would raise NameError while the module was still loading and take
+    the WHOLE Connect Services screen down -- every row, not just this one.
+    That is the failure v7 of this patcher was written to end, when POV
+    renamed TMDbList to TMDBList and dropped EasyDebrid; re-introducing it
+    for MDBList would undo that lesson.
 
-    def set(self):
-        try:
-            import xbmc as _aix
-            _aix.executebuiltin(
-                'RunScript(service.subtitles.kodipovilai,'
-                'action=connect_mdblist)')
-        except Exception as e:
-            notification('Failed to launch MDBList setup: %s' % str(e)[:60])
-        return True
+    What the class adds to POV's own is a single step. MDBList used to need
+    connecting twice -- an API key here, a device code inside Umbrella --
+    because when this row was first written POV's MDBList service was a bare
+    keyboard prompt with no QR. POV 6.08 replaced that with the OAuth device
+    flow, which is the SAME flow Umbrella uses and yields the same kind of
+    token, so the separate pairing had no reason left to exist. POV's QR,
+    polling, watched-indicator wiring and revoke path are all its own code,
+    untouched; we only hand the resulting token on to Umbrella afterwards.
+    """
+    _base = globals().get('MDBList')
+    if _base is None:
+        return None
+
+    class _AiMDBList(_base):
+        icon = 'mdblist.png'  # POV's own MDBList icon (native service)
+
+        def set(self):
+            result = _base.set(self)
+            # Fired whatever the outcome: the revoke path returns early too,
+            # and after a revoke POV's token is empty -- which the mirror
+            # reads as "nothing to hand over" and leaves Umbrella's own
+            # authorisation alone rather than tearing it down for POV.
+            try:
+                import xbmc as _aix
+                _aix.executebuiltin(
+                    'RunScript(service.subtitles.kodipovilai,'
+                    'action=mdblist_mirror_umbrella)')
+            except Exception:
+                pass
+            return result
+
+    # POV's watch_indicators decorator puts instance.__class__.__name__ into
+    # the dialog it shows ("watched status will be set to <name>"), so without
+    # this the user is told about "_AiMDBList". It is the same service; it
+    # should say so.
+    try:
+        _AiMDBList.__name__ = _base.__name__
+        _AiMDBList.__qualname__ = _base.__name__
+    except Exception:
+        pass
+    return _AiMDBList
 
 
 def _ai_am_service(prefix, icon_name, keys, title, pov_names):
@@ -369,13 +402,20 @@ def authorize():
          ('easynews.username', 'easynews.password'),  ('EasyNews',)),
         ('gemini-ai',    'ours', 'gemini.png',     None, (), None),
     )
-    _ai_ours = {'mdblist': _AiMDBList, 'gemini-ai': Gemini}
+    # Built at call time; None when this POV has no MDBList class, in which
+    # case the row is simply left out rather than crashing the screen.
+    _ai_mdblist_cls = _ai_make_mdblist()
+    _ai_ours = {'gemini-ai': Gemini}
+    if _ai_mdblist_cls is not None:
+        _ai_ours['mdblist'] = _ai_mdblist_cls
     _ai_am_ok = _ai_am_addon() is not None
 
     _ai_services = []
     for _ai_name, _ai_kind, _ai_icon, _ai_pfx, _ai_keys, _ai_pov in _ai_table:
         if _ai_kind == 'ours':
-            _ai_services.append((_ai_name, _ai_ours[_ai_name]))
+            _ai_cls_ours = _ai_ours.get(_ai_name)
+            if _ai_cls_ours is not None:
+                _ai_services.append((_ai_name, _ai_cls_ours))
             continue
         if _ai_kind == 'am' and _ai_am_ok:
             _ai_services.append((_ai_name, _ai_am_service(
@@ -391,7 +431,12 @@ def authorize():
     def _builder():
         for name, api in services:
             item = kodi_utils.make_listitem()
-            item.setLabel('[B]%s[/B]' % name.upper())
+            # No [B]..[/B] of our own. The select dialog's focused row is
+            # already emphasised by the skin, which wraps the label in its
+            # own bold tag -- and a bold tag inside a bold tag came back
+            # from the field rendering the leftover "[/B]" as literal text
+            # on whichever row happened to be focused.
+            item.setLabel(name.upper())
             try:
                 inst = api()
             except Exception:

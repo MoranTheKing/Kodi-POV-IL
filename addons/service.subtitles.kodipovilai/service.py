@@ -160,6 +160,7 @@ def _run_build_startup_repairs():
         # FIRST: heal Idan Plus before the user can navigate to it (a corrupt
         # displayChannels.json otherwise crashes every channel load). Cheap,
         # self-contained, and independent of the POV/skin repairs below.
+        _maybe_fix_pov_maincache_schema,
         _maybe_patch_idanplus_channels,
         _maybe_patch_hebrew_build_ui,
         _maybe_patch_brand_assets,
@@ -1729,6 +1730,35 @@ def _maybe_patch_pov_build_content_logger():
             pass
 
 
+def _maybe_fix_pov_maincache_schema():
+    """POV's search-history menus crash with "'int' object is not iterable"
+    on any device upgraded from POV 5.x -- its maincache table kept the old
+    column order while 6.x writes positionally. See the module for the full
+    account. Runs first: it is a data repair, and every POV menu that reads
+    that cache is wrong until it is done."""
+    if _skip_pov_patchers():
+        return
+    try:
+        from resources.lib import pov_maincache_schema_fix, kodi_utils
+    except Exception:
+        return
+    try:
+        st = pov_maincache_schema_fix.repair()
+        if st == 'repaired':
+            kodi_utils.log(
+                'pov_maincache_schema_fix: POV search history repaired',
+                level='INFO')
+        elif st == 'failed':
+            kodi_utils.log('pov_maincache_schema_fix: failed', level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_maincache_schema_fix failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_meta_blank():
     """Patch POV's indexers/metadata.py so a transient per-item
     metadata fetch failure (movie_details timeout/blip) doesn't persist
@@ -2032,6 +2062,27 @@ def _maybe_patch_umbrella_language():
         try:
             kodi_utils.log(
                 'kodi_playlist_timeout_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+    # Keep Umbrella on whatever MDBList access token POV currently holds. POV
+    # owns the refreshing -- only its client_id can -- so this is what carries
+    # a refreshed token across to Umbrella, and what covers a user who
+    # authorised before this existed.
+    try:
+        from resources.lib import mdblist_umbrella_mirror
+        st = mdblist_umbrella_mirror.mirror()
+        if st == 'mirrored':
+            kodi_utils.log(
+                'mdblist_umbrella_mirror: Umbrella now shares POV\'s MDBList '
+                'authorisation', level='INFO')
+        elif st == 'write_failed':
+            kodi_utils.log(
+                'mdblist_umbrella_mirror: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'mdblist_umbrella_mirror failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
@@ -2501,6 +2552,47 @@ def _maybe_patch_pov_remember_source():
 # The auto-on-play machinery (state, the on-play search/apply flow, and the
 # Player listener) lives in resources/lib/autosub_service.py -- extracted
 # VERBATIM so the standalone (repo-channel) service runs the exact same code.
+
+
+def _start_mdblist_mirror_keeper(monitor):
+    """Keep Umbrella on whatever MDBList access token POV currently holds.
+
+    The startup mirror covers most of it, but POV refreshes its token
+    silently in the background -- with its own client_id, the only one that
+    can -- and a set-top box stays on for days. Once POV rotates the token,
+    the copy Umbrella reads from disk is stale, so the next Umbrella session
+    authenticates with a dead token. Umbrella also fixes its Authorization
+    header at module-import time and reuses its interpreter, so there is no
+    way to hand it a new token mid-session; what matters is that the value on
+    disk is right BEFORE it next imports.
+
+    A periodic re-mirror is two settings reads and writes only on a change,
+    so it costs nothing to run often. Deliberately NOT a patch to POV's own
+    mdbl_refresh(): another injection into somebody else's file, to achieve
+    what a cheap poll already achieves, is surface area for no gain."""
+    try:
+        from resources.lib import mdblist_umbrella_mirror
+    except Exception:
+        return
+
+    def _loop():
+        try:
+            if monitor.waitForAbort(90):   # let startup settle first
+                return
+            while not monitor.abortRequested():
+                try:
+                    mdblist_umbrella_mirror.mirror()
+                except Exception:
+                    pass
+                if monitor.waitForAbort(15 * 60):
+                    break
+        except Exception:
+            pass
+
+    try:
+        threading.Thread(target=_loop, daemon=True).start()
+    except Exception:
+        pass
 
 
 def _start_pool_queue_drainer(monitor):
@@ -4782,6 +4874,7 @@ def main():
     # (so they survive the user leaving the video or restarting Kodi) and
     # uploaded from this thread one at a time with a throttle -- never bursting
     # past Telegram's bot rate limit. Best-effort; never blocks.
+    _start_mdblist_mirror_keeper(monitor)
     _start_pool_queue_drainer(monitor)
     # (the Hebrew warm drainer was already started at the top of main(), before
     # the build startup repairs, so it's alive for the first play of the session)
