@@ -139,7 +139,7 @@ def settle(done, skip=()):
         pass
 
 
-def pairs(read_umbrella, source, may_replace=(), reclaim=False):
+def pairs(read_umbrella, source, may_replace=()):
     """(key, value) pairs to write so Umbrella reads watched state from
     `source`, plus the marker state to settle afterwards.
 
@@ -157,19 +157,18 @@ def pairs(read_umbrella, source, may_replace=(), reclaim=False):
     still exactly the one WE wrote: anything else is the user's, including
     the user having chosen Trakt by hand.
 
-    `reclaim` says this pass is establishing the service's token from nothing
-    -- a connect, not a refresh. It permits ONE case that is otherwise
-    refused: the marker says we wrote a value here, and the setting is back at
-    the shipped Local anyway. Our claim is plainly not standing, so something
-    reset it, and a user reconnecting the service is asking for it to work.
-
-    It is gated on the connect for a reason. Ungated, the timer would take
-    back a Local somebody chose deliberately, fifteen minutes after they chose
-    it -- which is the exact failure the once-rule exists to prevent, and it
-    is worth more than this narrow repair. Clearing the whole marker at a
-    connect was tried first and was a blocker: it also erased a Trakt claim
-    standing legitimately alongside, and MDBList then recorded that Trakt
-    value as "not ours" and could never take it over again."""
+    THERE IS NO "the user just reconnected, so take it again" CASE, and three
+    rounds of review went into learning why. The repair it chased -- our claim
+    recorded, the setting somehow back at Local -- is real but was never
+    demonstrated in the field, while every signal tried for "a human just
+    connected" turned out to fire without one: an empty Umbrella token (its
+    own Revoke, and Trakt's re_auth clearing itself on a failed refresh), then
+    "POV is connected right now" (the connect row fires whatever the outcome,
+    so a declined confirmation counted), then "POV's token changed" (POV
+    rotates it on its own timer). Each attempt silently reverted a source the
+    user had chosen. What actually delivers the repair is a one-shot: bump
+    MARKER_SETTING and every device gets one more claim, from Local only.
+    """
     done = _done()
     out, touched = [], dict(done)
     for key in KEYS:
@@ -188,19 +187,6 @@ def pairs(read_umbrella, source, may_replace=(), reclaim=False):
             else:
                 touched[key] = NOTHING
         elif prev != source and prev in may_replace and current == prev:
-            out.append((key, source))
-            touched[key] = source
-        elif (reclaim and current == SHIPPED_LOCAL
-              and (prev == source or prev in may_replace)):
-            # We wrote `prev` here and it is gone; the service is being
-            # connected again right now, so take it again -- but only what
-            # this source is entitled to: what it put there itself, or what it
-            # outranks anyway. Without that last clause Trakt could reclaim a
-            # slot the marker says is MDBList's. The MDBList mirror does take
-            # it straight back on the same tick, so the end state was right,
-            # but a rule that depends on another module running afterwards to
-            # come out correct is one nobody can reason about locally.
-            # NOTHING is excluded by both arms: it is neither source.
             out.append((key, source))
             touched[key] = source
     return out, touched
