@@ -1,3 +1,9 @@
+v0.2.480
+- Connecting MDBList now offers Umbrella's own one-time authorisation.
+  Umbrella cannot accept the key from Account Manager - it needs its own
+  authorisation - which is why it used to show as connected while staying
+  empty.
+
 v0.2.479
 - The Hebrew search fix in 0.2.478 never actually reached your device. It
   looked for a line ending that the copy of Umbrella this build installs
