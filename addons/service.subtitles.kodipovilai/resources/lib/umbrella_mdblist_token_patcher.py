@@ -193,8 +193,15 @@ def revert():
     if MARKER not in content:
         return 'not_patched'
     fit, _eol = _fitter(content)
-    out = content.replace(fit(_NEW_REFRESH), fit(_OLD_REFRESH), 1)
-    out = out.replace(fit(_NEW_NOTIFY), fit(_OLD_NOTIFY), 1)
+    # Both replacements must land -- see the same guard in the POV patcher.
+    out = content
+    for new, old in ((_NEW_REFRESH, _OLD_REFRESH), (_NEW_NOTIFY, _OLD_NOTIFY)):
+        before = out
+        out = out.replace(fit(new), fit(old), 1)
+        if out == before:
+            _log('revert found the file no longer as we left it -- refusing',
+                 level='WARNING')
+            return 'failed'
     out = re.sub(r'[ \t]*' + re.escape(MARKER) + r'(?:\r?\n)', '', out, count=1)
     if MARKER in out:
         return 'failed'

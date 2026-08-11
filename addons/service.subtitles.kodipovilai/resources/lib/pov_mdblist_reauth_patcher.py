@@ -62,14 +62,17 @@ MARKER = '# AI_SUBS_POV_MDBL_REAUTH_v1'
 _OLD_DEF = 'def call_mdblist(path, params=None, json=None, method=None):'
 _NEW_DEF = 'def _ai_call_mdblist_once(path, params=None, json=None, method=None):'
 
-_OLD_EXCEPT = (
-    "\texcept requests.RequestException as e:\n"
-    "\t\tlogger('mdblist error', str(e))"
-)
+# Anchored on the `except` LINE alone, never on the logger call under it.
+# pov_mdblist_patcher rewrites that logger line to redact the api key from the
+# message, and both patchers run at every startup from the same steps tuple.
+# Matching the logger text meant this patcher applied only while it happened to
+# run first -- reorder the tuple, or edit either anchor, and the whole 401
+# recovery would go quietly missing behind one WARNING. Inserting after the
+# `except` line is independent of what the handler body looks like.
+_OLD_EXCEPT = "\texcept requests.RequestException as e:\n"
 _NEW_EXCEPT = (
     "\texcept requests.RequestException as e:\n"
     "\t\t_ai_mdbl_tls.status = getattr(getattr(e, 'response', None), 'status_code', 0) or 0\n"
-    "\t\tlogger('mdblist error', str(e))"
 )
 
 _OLD_EXPIRES = '\tif interval + current >= expires: mdbl_refresh()'
@@ -100,6 +103,15 @@ def _ai_mdbl_refresh_once():
 \t\t\tkodi_utils.sleep(250)
 \t\tif get_setting('mdblist.token') != before: return True
 \t\twindow.setProperty(_AI_MDBL_REFRESH_LOCK, 'true')
+\t\t# Check-then-set is not atomic on a window property, so two threads
+\t\t# arriving together can both get past the poll. Reading the token again
+\t\t# AFTER claiming catches that: if the other one already refreshed, its
+\t\t# token is on disk and there is nothing left to do. The poll ceiling
+\t\t# above is deliberate too -- a process that died holding the property
+\t\t# must not deadlock every caller after it.
+\t\tif get_setting('mdblist.token') != before:
+\t\t\twindow.clearProperty(_AI_MDBL_REFRESH_LOCK)
+\t\t\treturn True
 \ttry:
 \t\tmdbl_refresh()
 \tfinally:
@@ -243,10 +255,19 @@ def revert():
     def _fit(text):
         return text.replace('\n', eol) if eol != '\n' else text
 
-    out = content.replace(_fit(_INJECT), '', 1)
-    out = out.replace(_fit(_NEW_EXPIRES), _fit(_OLD_EXPIRES), 1)
-    out = out.replace(_fit(_NEW_EXCEPT), _fit(_OLD_EXCEPT), 1)
-    out = out.replace(_fit(_NEW_DEF), _fit(_OLD_DEF), 1)
+    # Every replacement has to actually land. Checking only that the marker
+    # went would let a file somebody had edited near the injected text lose
+    # its marker while keeping the injection -- a revert that reports success
+    # and leaves the patch in place is worse than one that refuses.
+    out = content
+    for new, old in ((_INJECT, ''), (_NEW_EXPIRES, _OLD_EXPIRES),
+                     (_NEW_EXCEPT, _OLD_EXCEPT), (_NEW_DEF, _OLD_DEF)):
+        before = out
+        out = out.replace(_fit(new), _fit(old) if old else '', 1)
+        if out == before:
+            _log('revert found the file no longer as we left it -- refusing',
+                 level='WARNING')
+            return 'failed'
     out = re.sub(r'[ \t]*' + re.escape(MARKER) + r'(?:\r?\n)', '', out, count=1)
     if MARKER in out:
         return 'failed'
