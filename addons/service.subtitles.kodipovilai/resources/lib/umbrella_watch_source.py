@@ -57,8 +57,17 @@ def _settled():
 
 
 def settle(keys):
+    """Record the keys we have had our say about.
+
+    Writes only on a change. The callers now settle on their fast path too --
+    the one taken on almost every pass -- and this runs on a timer, so an
+    unconditional set_setting() here would rewrite our settings.xml every
+    tick for the life of the box."""
+    value = ','.join(sorted(keys))
     try:
-        kodi_utils.set_setting(MARKER_SETTING, ','.join(sorted(keys)))
+        if (kodi_utils.get_setting(MARKER_SETTING, '') or '') == value:
+            return
+        kodi_utils.set_setting(MARKER_SETTING, value)
     except Exception:
         pass
 
