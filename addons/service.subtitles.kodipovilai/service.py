@@ -2661,7 +2661,15 @@ def _start_service_mirror_keeper(monitor):
                 # Same tick, and here because this is the only periodic hook
                 # we have: Kodi changes skin without a restart, and POV's
                 # seasons view id means a different layout in each skin.
-                if pov_seasons_view_seed is not None:
+                #
+                # _skip_pov_patchers() is checked HERE, not only on the
+                # startup pass. This is the one job in this loop that writes
+                # inside POV's own profile, and the switch exists so somebody
+                # can rule this build out in one step -- a thread that carries
+                # on writing to POV ninety seconds later would make the switch
+                # a lie.
+                if pov_seasons_view_seed is not None and \
+                        not _skip_pov_patchers():
                     try:
                         pov_seasons_view_seed.ensure_seeded()
                     except Exception:

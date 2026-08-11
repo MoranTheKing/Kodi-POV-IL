@@ -95,13 +95,34 @@ def _log(msg, level='INFO'):
         pass
 
 
-def _get(addon_id, key):
+def _reader(addon_id):
+    """A read function backed by ONE Addon object, for the life of this call.
+
+    Constructing xbmcaddon.Addon() re-parses and re-validates the whole of
+    that add-on's settings.xml -- POV declares 251 settings, Umbrella 545 --
+    and this runs every minute now, so a fresh construction per key was
+    several hundred reparses a minute on a set-top box.
+
+    One per add-on per pass, and deliberately NOT cached between passes: a
+    long-lived object can go stale against a file another process rewrote,
+    and the whole reason this runs on a timer is to notice the token POV
+    refreshed in the background.
+
+    Returns None for every key when the add-on is not installed or cannot be
+    opened -- which is not the same as ''."""
     if xbmcaddon is None:
-        return None
+        return lambda _key: None
     try:
-        return (xbmcaddon.Addon(addon_id).getSetting(key) or '').strip()
+        addon = xbmcaddon.Addon(addon_id)
     except Exception:
-        return None      # not installed, or unreadable -- not the same as ''
+        return lambda _key: None
+
+    def _get(key):
+        try:
+            return (addon.getSetting(key) or '').strip()
+        except Exception:
+            return None
+    return _get
 
 
 def mirror():
@@ -112,39 +133,43 @@ def mirror():
     if addon_settings_safe is None:
         return 'write_failed'
 
-    token = _get(POV_ADDON_ID, POV_TOKEN)
+    pov = _reader(POV_ADDON_ID)
+    token = pov(POV_TOKEN)
     if token is None:
         return 'no_pov'
-    refresh = _get(POV_ADDON_ID, POV_REFRESH)
-    if refresh is None:
-        return 'no_pov'
-
-    umb_token = _get(UMBRELLA_ADDON_ID, UMB_TOKEN)
-    if umb_token is None:
-        return 'no_umbrella'
-
     if not token:
         # POV has nothing. Deliberately NOT clearing Umbrella: it may hold a
         # perfectly good token of its own, authorised inside Umbrella before
         # any of this existed, and taking that away would be a regression
-        # dressed up as tidiness.
+        # dressed up as tidiness. Answered before Umbrella is opened, because
+        # on a box with no MDBList this is every pass of a per-minute timer.
         return 'no_token'
 
+    refresh = pov(POV_REFRESH)
+    if refresh is None:
+        return 'no_pov'
     if not refresh:
         # An API key, not an access token. Umbrella only sends Bearer, so
         # copying this would reproduce the exact bug this module replaces.
         return 'api_key_only'
+
+    umbrella = _reader(UMBRELLA_ADDON_ID)
+    umb_token = umbrella(UMB_TOKEN)
+    if umb_token is None:
+        return 'no_umbrella'
 
     # Have Umbrella actually READ from MDBList. Connecting it does not do
     # that on its own; see umbrella_watch_source for the rules. Computed
     # BEFORE the token comparison below, because someone already connected
     # has a token that matches and would otherwise never reach this -- and
     # they are exactly the people who reported the missing ticks.
+    # may_replace=(TRAKT,): a Trakt value WE put here loses to MDBList, so the
+    # preference holds even for somebody who connected Trakt first.
     wanted, settle_keys = [], None
     if umbrella_watch_source is not None:
         wanted, settle_keys = umbrella_watch_source.pairs(
-            lambda k: _get(UMBRELLA_ADDON_ID, k),
-            umbrella_watch_source.MDBLIST)
+            umbrella, umbrella_watch_source.MDBLIST,
+            may_replace=(umbrella_watch_source.TRAKT,))
 
     if umb_token != token:
         wanted = [(UMB_TOKEN, token), (UMB_REFRESH, '')] + wanted
