@@ -4,7 +4,10 @@
            <setting id="_something" type="string" label="30000">
              <level>4</level>
              <default></default>
-           </setting>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
        Level 4 is SettingLevel::Internal and there is NO <control>. Both parts
        are load-bearing, and both were previously wrong in every marker here.
 
@@ -293,62 +296,98 @@
         <setting id="_temp_purge_done" type="string" label="30000">
           <level>4</level>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <!-- Hidden marker: which CACHE_RTL_FIX_VERSION has run. -->
         <setting id="_rtl_fix_done" type="string" label="30000">
           <level>4</level>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <!-- Hidden marker: community pool default-on migration has run. -->
         <setting id="_pool_default_on_v1" type="string" label="30000">
           <level>4</level>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <!-- Hidden marker: Arabic gender-reference force-on migration has run. -->
         <setting id="_gender_ref_on_v1" type="string" label="30000">
           <level>4</level>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <!-- Hidden marker: POV personal-list sort -> recently-added migration has run. -->
         <setting id="_lists_sort_recent_v1" type="string" label="30000">
           <level>4</level>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <!-- Hidden marker: Gemini model bump (3.1->3.5 flash-lite, 3.5->3.6 flash) has run. -->
         <setting id="_gemini_model_bump_v1" type="string" label="30000">
           <level>4</level>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <!-- Hidden marker: Gemini 3 temp/thinking tuning migration has run. -->
         <setting id="_gemini3_tune_v1" type="string" label="30000">
           <level>4</level>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <!-- Hidden marker: FENtastic OSD auto-close enabled (migration). -->
         <setting id="_fen_osd_autoclose_v1" type="string" label="30000">
           <level>4</level>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <!-- Hidden: anonymous per-install id for usage telemetry. -->
         <setting id="_telemetry_id" type="string" label="30000">
           <level>4</level>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <!-- Hidden marker: POV always-resume default migration. -->
         <setting id="_pov_autoplay_default_v1" type="string" label="30000">
           <level>4</level>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <!-- Hidden marker: one-shot revert of the 0.2.158 Auto Play mistake. -->
         <setting id="_pov_autoplay_revert_v2" type="string" label="30000">
           <level>4</level>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <!-- Hidden marker: one-shot revert of the forced POV always-resume,
              so "Play from start" starts at 0. -->
         <setting id="_pov_resume_revert_v1" type="string" label="30000">
           <level>4</level>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <!-- Hidden marker for DarkSubs hook bookkeeping (reserved: the
              patcher itself is idempotent and doesn't need a flag, but
@@ -356,14 +395,23 @@
         <setting id="_darksubs_takeover_done" type="string" label="30000">
           <level>4</level>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <setting id="_darksubs_hook_last_fire" type="string" label="30000">
           <level>4</level>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <setting id="_darksubs_hook_last_outcome" type="string" label="30000">
           <level>4</level>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <!-- Hidden: daily Gemini Flash Lite request counter. Reset
              at UTC midnight by gemini_quota.note_request. -->
@@ -375,6 +423,9 @@
         <setting id="_usage_date_utc" type="string" label="30000">
           <level>4</level>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <!-- Hidden: model id the counter above belongs to, so the
              daily count is scoped per-model (Flash-Lite 500/day vs
@@ -383,6 +434,9 @@
         <setting id="_usage_model" type="string" label="30000">
           <level>4</level>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <!-- Hidden: which tile-refresh generation this install has already
              applied (build_icons_patcher.TILE_REFRESH_GEN). Gates the one-time
@@ -391,6 +445,9 @@
         <setting id="_tiles_refresh_gen" type="string" label="30000">
           <level>4</level>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <!-- Hidden legacy compatibility flag. The user-facing control is now
              embedded_translation_mode in Advanced. Keep this declared so an
@@ -425,6 +482,9 @@
         <setting id="_pov_series_networks_reseed" type="string" label="30000">
           <level>4</level>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <!-- Hidden marker: one-time restore of the FENtastic/AF3 genre
              shortcut-folder rows in navigator.db (movies/series by genre).
@@ -432,6 +492,9 @@
         <setting id="_pov_genre_folders_reseed" type="string" label="30000">
           <level>4</level>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <!-- Hidden marker: one-time tune of POV scraper settings
              (pre-release/3D off, piratebay on) has been applied.
@@ -439,6 +502,9 @@
         <setting id="_pov_scraper_tune" type="string" label="30000">
           <level>4</level>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <!-- Escape hatch: stop this add-on rewriting plugin.video.pov's
              own source files. POV updates itself whenever its author
@@ -718,6 +784,9 @@
         </setting>
         <setting id="other_lang" type="string" label="30000">
           <level>4</level><default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <setting id="auto_translate" type="string" label="30000">
           <level>4</level><default>false</default>
@@ -742,15 +811,27 @@
         </setting>
         <setting id="OS_USER_API_KEY_VALUE" type="string" label="30000">
           <level>4</level><default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <setting id="OSuser" type="string" label="30000">
           <level>4</level><default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <setting id="OSpass" type="string" label="30000">
           <level>4</level><default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <setting id="_engine_defaults_v" type="string" label="30000">
           <level>4</level><default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
       </group>
     </category>
@@ -787,6 +868,9 @@
         <setting id="_remember_source_default_v1" type="string" label="30000">
           <level>4</level>
           <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
         </setting>
         <setting id="remember_source_status" type="action" label="32505"> <!-- Check remembered sources (diagnostic) -->
           <level>0</level>
