@@ -78,6 +78,12 @@ _NEW_EXCEPT = (
 _OLD_EXPIRES = '\tif interval + current >= expires: mdbl_refresh()'
 _NEW_EXPIRES = '\tif interval + current >= expires: _ai_mdbl_refresh_once()'
 
+# The injected code CALLS this, so its existence is an anchor too. Without
+# it a POV release that renamed the refresher would still be patched, and
+# the first 401 would raise NameError inside somebody's sync instead of
+# quietly declining to help. Caught by a harness that renamed it.
+_OLD_REFRESH_DEF = 'def mdbl_refresh():'
+
 _INSERT_BEFORE = 'def _get_mdbl_paginated_list(url):'
 
 # Thread-local, not a module global: POV runs several sync threads at once and
@@ -190,7 +196,8 @@ def ensure_patched():
     for name, anchor in (('call_mdblist def', old_def),
                          ('RequestException handler', old_except),
                          ('mdbl_expires clock check', old_expires),
-                         ('insertion point', insert_before)):
+                         ('insertion point', insert_before),
+                         ('mdbl_refresh def', _fit(_OLD_REFRESH_DEF))):
         if content.count(anchor) != 1:
             _log('{0} not found exactly once -- POV may have changed it; '
                  'leaving alone'.format(name), level='WARNING')
