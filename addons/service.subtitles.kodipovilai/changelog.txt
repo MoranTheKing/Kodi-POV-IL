@@ -1,3 +1,11 @@
+v0.2.481
+- Fixed the "POV error" when opening a search screen. POV changed the layout
+  of its cache between versions but kept the old one on devices that had it,
+  so anything it saved afterwards was written into the wrong place. The cache
+  is repaired in place and your saved searches are kept.
+- MDBList is now connected once, for both POV and Umbrella. Umbrella used to
+  need a separate authorisation of its own; it no longer does.
+
 v0.2.480
 - Connecting MDBList now offers Umbrella's own one-time authorisation.
   Umbrella cannot accept the key from Account Manager - it needs its own
