@@ -125,11 +125,8 @@ def _reader(addon_id):
     return _get
 
 
-def mirror(reclaim=False):
+def mirror():
     """Give Umbrella whatever MDBList access token POV currently holds.
-
-    `reclaim` says the user has just pressed connect. Only the Connect
-    Services trigger passes it; the timer and the startup pass never do.
 
     Returns 'no_pov' | 'no_umbrella' | 'no_token' | 'api_key_only'
     | 'unchanged' | 'mirrored' | 'write_failed'. Never raises."""
@@ -172,16 +169,7 @@ def mirror(reclaim=False):
     if umbrella_watch_source is not None:
         wanted, settle_keys = umbrella_watch_source.pairs(
             umbrella, umbrella_watch_source.MDBLIST,
-            may_replace=(umbrella_watch_source.TRAKT,),
-            # ONLY from the connect action. This was `not umb_token` first,
-            # on the theory that an empty token means the user has just
-            # reconnected -- and it does not. Umbrella empties its own tokens
-            # with no user action at all: its Revoke button, and, for Trakt,
-            # re_auth() on a failed refresh or a client-id mismatch. Any of
-            # those made the very next timer tick take back a Local the user
-            # had chosen by hand, which is the one thing this module promises
-            # never to do.
-            reclaim=reclaim)
+            may_replace=(umbrella_watch_source.TRAKT,))
 
     if umb_token != token:
         wanted = [(UMB_TOKEN, token), (UMB_REFRESH, '')] + wanted

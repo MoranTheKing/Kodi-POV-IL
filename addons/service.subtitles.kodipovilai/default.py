@@ -80,81 +80,6 @@ def _safe_log(msg, level='INFO'):
             pass
 
 
-# A digest of the last POV MDBList token we saw at the connect row, so a
-# genuine new authorisation can be told from a click that changed nothing.
-# The digest, not the token: nothing here needs a second copy of a credential.
-_MDBL_SEEN_SETTING = '_mdblist_seen_token_v1'
-
-
-def _mdblist_new_authorisation():
-    """True only when POV's MDBList token is present AND is not the one we
-    saw last time this row was used.
-
-    "Is POV connected right now" is NOT the same question, and answering that
-    one instead was a bug. The Connect Services row fires this action whatever
-    the outcome, and POV's own MDBList.set() has a third outcome besides
-    connect and revoke: clicked while already connected, it asks "are you
-    sure?" and, on No or Back, returns having written nothing at all
-    (myservices.py). The token is still there, so a snapshot says "connected",
-    and a click the user DECLINED would re-take a watch source they had
-    deliberately put back to Local -- the exact thing this whole mechanism
-    exists to prevent.
-
-    A real authorisation always yields a NEW token. A declined dialog leaves
-    the old one. That is the difference, and it is the only reliable one
-    available here.
-
-    A revoke forgets the digest, so the next genuine connect counts as new.
-    An install that has never recorded one counts its first connected click as
-    new: that is the migration case, it happens once, and it is the right
-    answer for somebody who connected before this existed."""
-    try:
-        import xbmcaddon
-        token = (xbmcaddon.Addon('plugin.video.pov')
-                 .getSetting('mdblist.token') or '').strip()
-    except Exception:
-        return False
-    try:
-        from resources.lib import kodi_utils
-        if not token:
-            if kodi_utils.get_setting(_MDBL_SEEN_SETTING, ''):
-                kodi_utils.set_setting(_MDBL_SEEN_SETTING, '')
-            return False
-        import hashlib
-        digest = hashlib.sha256(token.encode('utf-8')).hexdigest()[:16]
-        if digest == (kodi_utils.get_setting(_MDBL_SEEN_SETTING, '') or ''):
-            return False
-        kodi_utils.set_setting(_MDBL_SEEN_SETTING, digest)
-        return True
-    except Exception:
-        # Cannot tell -- so do not claim a connect happened.
-        return False
-
-
-def _rearm_mdblist_one_shots():
-    """Put the MDBList home tiles back within reach at a real connect.
-
-    The tiles are add-once so that a later deletion sticks, and that reading
-    cannot tell a deletion from the file being rewritten while MDBList was
-    disconnected -- a skin switch or a favourites reseed does exactly that,
-    and the tiles were then refused forever.
-
-    The watched-state claim is deliberately NOT re-armed from here. Clearing
-    that marker at a connect was tried and was a blocker: it also erased a
-    Trakt claim standing legitimately alongside, and MDBList could then never
-    take those settings over. That case is handled inside the mirror instead,
-    where it can see which value is whose."""
-    try:
-        from resources.lib import favourites_personal_tiles_patcher as _tiles
-        if _tiles.rearm_mdblist_tiles():
-            _safe_log('MDBList home tiles re-armed after a reconnect')
-        # Put them back now rather than at the next boot: the user is standing
-        # in front of the screen they just went to fetch.
-        _tiles.ensure_patched()
-    except Exception as e:
-        _safe_log('tile re-arm failed: {0}'.format(e), level='WARNING')
-
-
 def _handle_search(handle, params):
     """List available subtitles. Kodi calls this when the user opens
     the subtitle search dialog."""
@@ -3610,27 +3535,23 @@ def main():
         elif action == 'mdblist_mirror_umbrella':
             # POV has just finished its own MDBList authorisation (or revoked
             # it). Hand the access token to Umbrella so one authorisation
-            # covers both -- and, when this is a CONNECT, re-arm the two
-            # one-shots that a revoke-and-reconnect otherwise leaves spent.
+            # covers both.
             #
-            # This is the whole reason the connect has to be an event and not
-            # a poll. A user who revoked MDBList in POV, in Umbrella and in
-            # Account Manager and then reconnected got their lists back but
-            # no watched state, and lost the two MDBList home tiles for good:
-            # both features record "we have had our say" so that a later
-            # change by hand is respected, and both readings were correct
-            # except at the one moment the user asks for the service again.
+            # NO "the user just connected, so re-take the watch source" here,
+            # deliberately. Three rounds of review killed three different
+            # attempts at that signal and every one of them ended the same
+            # way: something the user had set by hand got silently reverted.
+            # POV's row fires this action whatever the outcome, so a declined
+            # confirmation looks like a connect; and POV rotates its MDBList
+            # token on a timer of its own, so "the token changed" does not
+            # mean a human did anything either. There is no reliable signal
+            # available here, and the repair those attempts were chasing is
+            # already delivered once by the two v2 one-shots -- see
+            # umbrella_watch_source.MARKER_SETTING and the MDBLIST_RESEED key
+            # in favourites_personal_tiles_patcher.
             try:
                 from resources.lib import mdblist_umbrella_mirror
-                # reclaim ONLY here, and only on a NEW authorisation. This
-                # is the one place in the build that can tell a human just
-                # connected the service; everywhere else is a timer, and a
-                # timer must never take back a source the user chose.
-                new_auth = _mdblist_new_authorisation()
-                if new_auth:
-                    _rearm_mdblist_one_shots()
-                _safe_log('mdblist mirror: '
-                          + mdblist_umbrella_mirror.mirror(reclaim=new_auth))
+                _safe_log('mdblist mirror: ' + mdblist_umbrella_mirror.mirror())
             except Exception as e:
                 _safe_log('mdblist mirror failed: {0}'.format(e),
                           level='WARNING')
