@@ -2898,7 +2898,7 @@ The common shape in every one: **inferring from one side of an interface
 without checking the other.** Budget for a pass per round of fixes, not one
 pass per feature.
 
-### Not yet released: MDBList recovers from a 401 (branch work after note 585)
+#### 0.2.483 / qf 0.1.528 / note 586 — MDBList recovers from a 401
 
 Field report: "MDBList session expired — please re-authenticate in settings"
 recurring, cleared only by reconnecting the account. The log shows POV itself
