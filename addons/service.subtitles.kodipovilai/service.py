@@ -1779,25 +1779,29 @@ def _maybe_patch_mdblist_reauth():
     # says nothing about any other add-on, and turning it on to isolate a POV
     # problem must not change Umbrella's behaviour as a side effect.
     if not _skip_pov_patchers():
-        try:
-            from resources.lib import pov_mdblist_reauth_patcher, kodi_utils
-            st = pov_mdblist_reauth_patcher.ensure_patched()
-            if st in ('unmatched', 'compile_failed', 'write_failed'):
-                kodi_utils.log(
-                    'pov_mdblist_reauth_patcher: ' + st, level='WARNING')
-            from resources.lib import pov_trakt_reauth_patcher
-            st = pov_trakt_reauth_patcher.ensure_patched()
-            if st in ('unmatched', 'compile_failed', 'write_failed'):
-                kodi_utils.log(
-                    'pov_trakt_reauth_patcher: ' + st, level='WARNING')
-        except Exception as e:
+        # ONE try EACH. Sharing a try meant an exception out of the MDBList
+        # patcher -- and it has unguarded paths, an os.listdir over
+        # __pycache__ among them -- skipped the Trakt one entirely. That
+        # reproduces the exact field symptom this round exists to close
+        # (MDBList fixed, Trakt still failing beside it), from a hiccup on
+        # the other side of the pair, behind a WARNING that reads as if it
+        # were only about MDBList.
+        for _mod_name in ('pov_mdblist_reauth_patcher',
+                          'pov_trakt_reauth_patcher'):
             try:
                 from resources.lib import kodi_utils
-                kodi_utils.log(
-                    'pov_mdblist_reauth_patcher failed: {0}'.format(e),
-                    level='WARNING')
-            except Exception:
-                pass
+                _mod = __import__('resources.lib.' + _mod_name,
+                                  fromlist=[_mod_name])
+                st = _mod.ensure_patched()
+                if st in ('unmatched', 'compile_failed', 'write_failed'):
+                    kodi_utils.log(_mod_name + ': ' + st, level='WARNING')
+            except Exception as e:
+                try:
+                    from resources.lib import kodi_utils
+                    kodi_utils.log('{0} failed: {1}'.format(_mod_name, e),
+                                   level='WARNING')
+                except Exception:
+                    pass
     try:
         from resources.lib import umbrella_mdblist_token_patcher, kodi_utils
         st = umbrella_mdblist_token_patcher.ensure_patched()
