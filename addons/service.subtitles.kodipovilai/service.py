@@ -2554,6 +2554,47 @@ def _maybe_patch_pov_remember_source():
 # VERBATIM so the standalone (repo-channel) service runs the exact same code.
 
 
+def _start_mdblist_mirror_keeper(monitor):
+    """Keep Umbrella on whatever MDBList access token POV currently holds.
+
+    The startup mirror covers most of it, but POV refreshes its token
+    silently in the background -- with its own client_id, the only one that
+    can -- and a set-top box stays on for days. Once POV rotates the token,
+    the copy Umbrella reads from disk is stale, so the next Umbrella session
+    authenticates with a dead token. Umbrella also fixes its Authorization
+    header at module-import time and reuses its interpreter, so there is no
+    way to hand it a new token mid-session; what matters is that the value on
+    disk is right BEFORE it next imports.
+
+    A periodic re-mirror is two settings reads and writes only on a change,
+    so it costs nothing to run often. Deliberately NOT a patch to POV's own
+    mdbl_refresh(): another injection into somebody else's file, to achieve
+    what a cheap poll already achieves, is surface area for no gain."""
+    try:
+        from resources.lib import mdblist_umbrella_mirror
+    except Exception:
+        return
+
+    def _loop():
+        try:
+            if monitor.waitForAbort(90):   # let startup settle first
+                return
+            while not monitor.abortRequested():
+                try:
+                    mdblist_umbrella_mirror.mirror()
+                except Exception:
+                    pass
+                if monitor.waitForAbort(15 * 60):
+                    break
+        except Exception:
+            pass
+
+    try:
+        threading.Thread(target=_loop, daemon=True).start()
+    except Exception:
+        pass
+
+
 def _start_pool_queue_drainer(monitor):
     """Drive both pool queues from the long-lived service:
       1. process_harvest_queue() -- gently pull a couple of queued Ktuvit subs
@@ -4833,6 +4874,7 @@ def main():
     # (so they survive the user leaving the video or restarting Kodi) and
     # uploaded from this thread one at a time with a throttle -- never bursting
     # past Telegram's bot rate limit. Best-effort; never blocks.
+    _start_mdblist_mirror_keeper(monitor)
     _start_pool_queue_drainer(monitor)
     # (the Hebrew warm drainer was already started at the top of main(), before
     # the build startup repairs, so it's alive for the first play of the session)
