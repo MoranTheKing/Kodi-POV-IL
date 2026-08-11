@@ -160,6 +160,7 @@ def _run_build_startup_repairs():
         # FIRST: heal Idan Plus before the user can navigate to it (a corrupt
         # displayChannels.json otherwise crashes every channel load). Cheap,
         # self-contained, and independent of the POV/skin repairs below.
+        _maybe_fix_pov_maincache_schema,
         _maybe_patch_idanplus_channels,
         _maybe_patch_hebrew_build_ui,
         _maybe_patch_brand_assets,
@@ -1725,6 +1726,35 @@ def _maybe_patch_pov_build_content_logger():
             kodi_utils.log(
                 'pov_build_content_logger_patcher failed: '
                 '{0}'.format(e), level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_fix_pov_maincache_schema():
+    """POV's search-history menus crash with "'int' object is not iterable"
+    on any device upgraded from POV 5.x -- its maincache table kept the old
+    column order while 6.x writes positionally. See the module for the full
+    account. Runs first: it is a data repair, and every POV menu that reads
+    that cache is wrong until it is done."""
+    if _skip_pov_patchers():
+        return
+    try:
+        from resources.lib import pov_maincache_schema_fix, kodi_utils
+    except Exception:
+        return
+    try:
+        st = pov_maincache_schema_fix.repair()
+        if st == 'repaired':
+            kodi_utils.log(
+                'pov_maincache_schema_fix: POV search history repaired',
+                level='INFO')
+        elif st == 'failed':
+            kodi_utils.log('pov_maincache_schema_fix: failed', level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_maincache_schema_fix failed: {0}'.format(e),
+                level='WARNING')
         except Exception:
             pass
 

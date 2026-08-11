@@ -193,40 +193,60 @@ class Gemini:
         return True
 
 
-class _AiMDBList(MDBList):
-    """MDBList, authorised ONCE for both add-ons.
+def _ai_make_mdblist():
+    """Build the MDBList row on top of POV's OWN MDBList class, or return
+    None if this POV has not got one.
 
-    This used to forward to our own API-key pairing, because when it was
-    written POV's MDBList service was a bare keyboard prompt with no QR. POV
-    6.08 replaced that with the OAuth device flow -- QR, short code, polling --
-    which is the SAME flow Umbrella uses and yields the same kind of token. So
-    the reason for a separate pairing is gone, and keeping it was what forced
-    users to connect twice: an API key here, a device code inside Umbrella.
+    Resolved through globals() at call time rather than written as
+    `class _AiMDBList(MDBList)` at module level. That spelling is evaluated
+    the moment this block is imported, so a POV release that renames or drops
+    MDBList would raise NameError while the module was still loading and take
+    the WHOLE Connect Services screen down -- every row, not just this one.
+    That is the failure v7 of this patcher was written to end, when POV
+    renamed TMDbList to TMDBList and dropped EasyDebrid; re-introducing it
+    for MDBList would undo that lesson.
 
-    We now subclass POV's own MDBList (same module, so it is simply in scope)
-    and add one step: once POV's authorisation has succeeded, ask the build's
-    add-on to hand the resulting access token to Umbrella. Everything POV does
-    -- the QR, the polling, the watched-indicator wiring, the revoke path --
-    is POV's own code, unchanged.
-
-    Named _AiMDBList, not MDBList, so it never shadows the class it extends.
+    What the class adds to POV's own is a single step. MDBList used to need
+    connecting twice -- an API key here, a device code inside Umbrella --
+    because when this row was first written POV's MDBList service was a bare
+    keyboard prompt with no QR. POV 6.08 replaced that with the OAuth device
+    flow, which is the SAME flow Umbrella uses and yields the same kind of
+    token, so the separate pairing had no reason left to exist. POV's QR,
+    polling, watched-indicator wiring and revoke path are all its own code,
+    untouched; we only hand the resulting token on to Umbrella afterwards.
     """
-    icon = 'mdblist.png'  # POV's own MDBList icon (native service)
+    _base = globals().get('MDBList')
+    if _base is None:
+        return None
 
-    def set(self):
-        result = MDBList.set(self)
-        # Fired whatever the outcome: the revoke path returns early too, and
-        # after a revoke POV's token is empty -- which the mirror reads as
-        # "nothing to hand over" and leaves Umbrella's own authorisation
-        # alone, rather than tearing it down on POV's behalf.
-        try:
-            import xbmc as _aix
-            _aix.executebuiltin(
-                'RunScript(service.subtitles.kodipovilai,'
-                'action=mdblist_mirror_umbrella)')
-        except Exception:
-            pass
-        return result
+    class _AiMDBList(_base):
+        icon = 'mdblist.png'  # POV's own MDBList icon (native service)
+
+        def set(self):
+            result = _base.set(self)
+            # Fired whatever the outcome: the revoke path returns early too,
+            # and after a revoke POV's token is empty -- which the mirror
+            # reads as "nothing to hand over" and leaves Umbrella's own
+            # authorisation alone rather than tearing it down for POV.
+            try:
+                import xbmc as _aix
+                _aix.executebuiltin(
+                    'RunScript(service.subtitles.kodipovilai,'
+                    'action=mdblist_mirror_umbrella)')
+            except Exception:
+                pass
+            return result
+
+    # POV's watch_indicators decorator puts instance.__class__.__name__ into
+    # the dialog it shows ("watched status will be set to <name>"), so without
+    # this the user is told about "_AiMDBList". It is the same service; it
+    # should say so.
+    try:
+        _AiMDBList.__name__ = _base.__name__
+        _AiMDBList.__qualname__ = _base.__name__
+    except Exception:
+        pass
+    return _AiMDBList
 
 
 def _ai_am_service(prefix, icon_name, keys, title, pov_names):
@@ -382,13 +402,20 @@ def authorize():
          ('easynews.username', 'easynews.password'),  ('EasyNews',)),
         ('gemini-ai',    'ours', 'gemini.png',     None, (), None),
     )
-    _ai_ours = {'mdblist': _AiMDBList, 'gemini-ai': Gemini}
+    # Built at call time; None when this POV has no MDBList class, in which
+    # case the row is simply left out rather than crashing the screen.
+    _ai_mdblist_cls = _ai_make_mdblist()
+    _ai_ours = {'gemini-ai': Gemini}
+    if _ai_mdblist_cls is not None:
+        _ai_ours['mdblist'] = _ai_mdblist_cls
     _ai_am_ok = _ai_am_addon() is not None
 
     _ai_services = []
     for _ai_name, _ai_kind, _ai_icon, _ai_pfx, _ai_keys, _ai_pov in _ai_table:
         if _ai_kind == 'ours':
-            _ai_services.append((_ai_name, _ai_ours[_ai_name]))
+            _ai_cls_ours = _ai_ours.get(_ai_name)
+            if _ai_cls_ours is not None:
+                _ai_services.append((_ai_name, _ai_cls_ours))
             continue
         if _ai_kind == 'am' and _ai_am_ok:
             _ai_services.append((_ai_name, _ai_am_service(
