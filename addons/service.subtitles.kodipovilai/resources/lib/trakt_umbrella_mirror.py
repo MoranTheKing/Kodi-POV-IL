@@ -45,13 +45,16 @@
 #     set instead. Writing a setting that does not exist is how the MDBList
 #     sync came to report success while doing nothing.
 #
-# The watched-indicator switch is set ONLY on the first connect, when
-# Umbrella held no Trakt token. Umbrella asks that question itself at the end
-# of its own authorisation ("set Trakt as your service for watched and
-# unwatched indicators?"), so once Umbrella HAS Trakt, indicators.alt sitting
-# at 0 means the user was asked and said no -- and flipping it then would
-# reverse a decision they made. When we are the ones connecting, they were
-# never asked, so there is no answer to overrule.
+# The watched-indicator switch is NOT gated on "this is the first connect".
+# That was the first shape of this and it only ever helped a device
+# connecting for the first time, while everybody already connected -- which
+# is everybody who reported the missing ticks -- kept Local forever. The rule
+# that replaced it lives in umbrella_watch_source: claim a setting once, and
+# only while it still reads the shipped Local. Umbrella asks that question
+# itself at the end of its own authorisation ("set Trakt as your service for
+# watched and unwatched indicators?"), and anything other than the shipped 0
+# is an answer somebody gave, so the "only from 0" rule is what protects it.
+# `first_connect` below survives for the log line and nothing else.
 
 try:
     import xbmcaddon
@@ -85,6 +88,8 @@ POV_CLIENT_ID = 'trakt.client_id'
 POV_CLIENT_SECRET = 'trakt.client_secret'
 
 UMB_TOKEN = 'trakt.user.token'
+UMB_REFRESH = 'trakt.refreshtoken'
+UMB_EXPIRES = 'trakt.token.expires'
 
 UMBRELLA_GUARD_PROPERTY = 'umbrella.updateSettings'
 
@@ -96,6 +101,21 @@ def _log(msg, level='INFO'):
         kodi_utils.log('trakt_umbrella_mirror: ' + msg, level=level)
     except Exception:
         pass
+
+
+def _newer(a, b):
+    """True when epoch-seconds string `a` is strictly later than `b`.
+
+    POV stores trakt.expires as int(created_at + expires_in) and Umbrella
+    stores trakt.token.expires as str(time.time() + expires_in) -- different
+    formatting, same clock, so a float compare works on both. Anything that
+    does not parse is treated as "not newer": this decides whether to take
+    Umbrella's copy over POV's, and a guess in that direction is how you lose
+    the live credential."""
+    try:
+        return float(a) > float(b)
+    except (TypeError, ValueError):
+        return False
 
 
 def _get(addon_id, key):
@@ -111,7 +131,8 @@ def mirror():
     """Give Umbrella POV's Trakt authorisation, pointed at POV's Trakt app.
 
     Returns 'no_pov' | 'no_umbrella' | 'no_token' | 'incomplete'
-    | 'unchanged' | 'mirrored' | 'write_failed'. Never raises."""
+    | 'unchanged' | 'mirrored' | 'adopted' | 'write_failed'.
+    Never raises."""
     if addon_settings_safe is None:
         return 'write_failed'
 
@@ -140,6 +161,43 @@ def mirror():
              level='WARNING')
         return 'incomplete'
 
+    # WHICHEVER SIDE ROTATED LAST OWNS THE PAIR.
+    #
+    # Trakt refresh tokens are single-use: the refresh that hands back a new
+    # access token also hands back a new REFRESH token and retires the old
+    # one. Once Umbrella is running as POV's application it can and does
+    # refresh on its own -- re_auth() fires on any 401 it meets in the
+    # background and writes the rotated pair into its own settings. If we
+    # then pushed POV's older copy back over it, Umbrella would be holding a
+    # refresh token Trakt has already retired, and its next refresh gets
+    # invalid_grant -- at which point Umbrella clears the whole
+    # authorisation and tells the user to re-authorise (trakt.py re_auth).
+    # POV's copy would be just as dead.
+    #
+    # So when Umbrella holds a DIFFERENT token that expires LATER than POV's,
+    # Umbrella is the one that refreshed and POV is the stale side. Copy it
+    # back instead, and both are on the live pair again. Guarded on
+    # trakt.authed.clientid, because a token Umbrella got as ITSELF is issued
+    # to Umbrella's application and is no use to POV.
+    if (umb_token and umb_token != token
+            and _get(UMBRELLA_ADDON_ID, 'trakt.authed.clientid') == client_id
+            and _get(UMBRELLA_ADDON_ID, UMB_REFRESH)
+            and _newer(_get(UMBRELLA_ADDON_ID, UMB_EXPIRES), expires)):
+        back = (
+            (POV_TOKEN, umb_token),
+            (POV_REFRESH, _get(UMBRELLA_ADDON_ID, UMB_REFRESH)),
+            (POV_EXPIRES, _get(UMBRELLA_ADDON_ID, UMB_EXPIRES) or ''),
+        )
+        _changed, _restored, failed = addon_settings_safe.apply(
+            POV_ADDON_ID, back)
+        if failed:
+            _log('could not adopt Umbrella\'s refreshed Trakt token ({0})'
+                 .format(', '.join(failed)), level='WARNING')
+            return 'write_failed'
+        _log('adopted the Trakt token Umbrella refreshed -- POV\'s copy was '
+             'the stale one', level='INFO')
+        return 'adopted'
+
     # Which service Umbrella should READ watched state from. Trakt only
     # claims it when MDBList has not -- both settings are a single choice and
     # this build prefers MDBList when the two are connected together.
@@ -150,6 +208,12 @@ def mirror():
             lambda k: _get(UMBRELLA_ADDON_ID, k), umbrella_watch_source.TRAKT)
 
     if umb_token == token and not src:
+        # Nothing to write, but the look at the watch-source settings still
+        # counts -- see the same branch in mdblist_umbrella_mirror for why
+        # skipping it here would quietly re-claim a setting the user moved
+        # back to Local.
+        if settle_keys and umbrella_watch_source is not None:
+            umbrella_watch_source.settle(settle_keys)
         return 'unchanged'
 
     first_connect = not umb_token
