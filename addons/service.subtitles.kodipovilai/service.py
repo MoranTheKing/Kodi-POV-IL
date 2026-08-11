@@ -175,6 +175,7 @@ def _run_build_startup_repairs():
         _maybe_fix_pov_container_refresh_crash,
         _maybe_patch_pov_movie_networks,
         _maybe_patch_pov_view_mode,
+        _maybe_seed_pov_seasons_view,
         _maybe_patch_pov_resume_cancel,
         _maybe_patch_pov_scraper_settings,
         _maybe_patch_pov_aiostreams,
@@ -1759,6 +1760,32 @@ def _maybe_fix_pov_maincache_schema():
             pass
 
 
+def _maybe_seed_pov_seasons_view():
+    """Open POV's season list in a view that draws a poster.
+
+    Reported as "per-season posters only work in NOX". They work everywhere;
+    the screen was a text list with no poster in the layout at all. Writes
+    POV's own views.db -- the same row POV's Set View writes -- once per skin,
+    over whatever is there, and then never again. See the module."""
+    if _skip_pov_patchers():
+        return
+    try:
+        from resources.lib import pov_seasons_view_seed, kodi_utils
+    except Exception:
+        return
+    try:
+        st = pov_seasons_view_seed.ensure_seeded()
+        if st == 'failed':
+            kodi_utils.log('pov_seasons_view_seed: failed', level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_seasons_view_seed failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_meta_blank():
     """Patch POV's indexers/metadata.py so a transient per-item
     metadata fetch failure (movie_details timeout/blip) doesn't persist
@@ -2065,10 +2092,17 @@ def _maybe_patch_umbrella_language():
                 level='WARNING')
         except Exception:
             pass
-    # Keep Umbrella on whatever MDBList access token POV currently holds. POV
-    # owns the refreshing -- only its client_id can -- so this is what carries
-    # a refreshed token across to Umbrella, and what covers a user who
-    # authorised before this existed.
+    # Keep Umbrella on whatever MDBList and Trakt authorisations POV currently
+    # holds. POV owns the refreshing -- only its client_id can -- so this is
+    # what carries a refreshed token across to Umbrella, and what covers a
+    # user who authorised before this existed.
+    #
+    # MDBLIST FIRST, AND THE ORDER IS LOAD-BEARING. Both mirrors claim the
+    # same two Umbrella settings (indicators.alt / scrobble.source) and the
+    # claim is one-shot per key, so whichever runs first while they are still
+    # at the shipped Local wins permanently. This build prefers MDBList, and
+    # the keeper loop in _start_service_mirror_keeper runs them in this same
+    # order for the same reason -- if you change one, change both.
     try:
         from resources.lib import mdblist_umbrella_mirror
         st = mdblist_umbrella_mirror.mirror()
@@ -2084,6 +2118,21 @@ def _maybe_patch_umbrella_language():
             kodi_utils.log(
                 'mdblist_umbrella_mirror failed: {0}'.format(e),
                 level='WARNING')
+        except Exception:
+            pass
+    try:
+        from resources.lib import trakt_umbrella_mirror
+        st = trakt_umbrella_mirror.mirror()
+        if st == 'mirrored':
+            kodi_utils.log(
+                'trakt_umbrella_mirror: Umbrella now shares POV\'s Trakt '
+                'authorisation', level='INFO')
+        elif st in ('write_failed', 'incomplete'):
+            kodi_utils.log('trakt_umbrella_mirror: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'trakt_umbrella_mirror failed: {0}'.format(e), level='WARNING')
         except Exception:
             pass
     # Searching Umbrella in Hebrew found nothing: the percent-encoded query
@@ -2554,8 +2603,8 @@ def _maybe_patch_pov_remember_source():
 # VERBATIM so the standalone (repo-channel) service runs the exact same code.
 
 
-def _start_mdblist_mirror_keeper(monitor):
-    """Keep Umbrella on whatever MDBList access token POV currently holds.
+def _start_service_mirror_keeper(monitor):
+    """Keep Umbrella on whatever MDBList and Trakt authorisations POV holds.
 
     The startup mirror covers most of it, but POV refreshes its token
     silently in the background -- with its own client_id, the only one that
@@ -2569,11 +2618,31 @@ def _start_mdblist_mirror_keeper(monitor):
     A periodic re-mirror is two settings reads and writes only on a change,
     so it costs nothing to run often. Deliberately NOT a patch to POV's own
     mdbl_refresh(): another injection into somebody else's file, to achieve
-    what a cheap poll already achieves, is surface area for no gain."""
+    what a cheap poll already achieves, is surface area for no gain.
+
+    Every minute, not every quarter of an hour, and that is what makes a
+    fresh connect land. MDBList gets an instant push -- POV's Connect
+    Services row fires our mirror the moment it returns -- but Trakt has no
+    such hook, and wiring one means wrapping another class on the screen
+    that takes the whole of Connect Services down if it raises. A minute of
+    lag is worth more than that risk. In the steady state a pass is a
+    handful of getSetting calls and no writes at all.
+
+    MDBLIST BEFORE TRAKT, and the startup pass in _maybe_patch_umbrella_
+    language uses the same order for the same reason: both claim the same
+    two watch-source settings, once, and first past the post wins."""
     try:
         from resources.lib import mdblist_umbrella_mirror
     except Exception:
         return
+    try:
+        from resources.lib import trakt_umbrella_mirror
+    except Exception:
+        trakt_umbrella_mirror = None
+    try:
+        from resources.lib import pov_seasons_view_seed
+    except Exception:
+        pov_seasons_view_seed = None
 
     def _loop():
         try:
@@ -2584,7 +2653,33 @@ def _start_mdblist_mirror_keeper(monitor):
                     mdblist_umbrella_mirror.mirror()
                 except Exception:
                     pass
-                if monitor.waitForAbort(15 * 60):
+                if trakt_umbrella_mirror is not None:
+                    try:
+                        trakt_umbrella_mirror.mirror()
+                    except Exception:
+                        pass
+                # Same tick, and here because this is the only periodic hook
+                # we have: Kodi changes skin without a restart, and POV's
+                # seasons view id means a different layout in each skin.
+                #
+                # _skip_pov_patchers() is checked HERE, not only on the
+                # startup pass. This is the one job in this loop that writes
+                # inside POV's own profile, and the switch exists so somebody
+                # can rule this build out in one step -- a thread that carries
+                # on writing to POV ninety seconds later would make the switch
+                # a lie.
+                if pov_seasons_view_seed is not None:
+                    try:
+                        # Inside the try, not in the `if`: this is the only
+                        # call in the loop body that sat outside one, and an
+                        # exception here would take the whole keeper thread
+                        # down -- both mirrors with it -- for the rest of the
+                        # session, through an outer catch that logs nothing.
+                        if not _skip_pov_patchers():
+                            pov_seasons_view_seed.ensure_seeded()
+                    except Exception:
+                        pass
+                if monitor.waitForAbort(60):
                     break
         except Exception:
             pass
@@ -4874,7 +4969,7 @@ def main():
     # (so they survive the user leaving the video or restarting Kodi) and
     # uploaded from this thread one at a time with a throttle -- never bursting
     # past Telegram's bot rate limit. Best-effort; never blocks.
-    _start_mdblist_mirror_keeper(monitor)
+    _start_service_mirror_keeper(monitor)
     _start_pool_queue_drainer(monitor)
     # (the Hebrew warm drainer was already started at the top of main(), before
     # the build startup repairs, so it's alive for the first play of the session)

@@ -367,16 +367,30 @@ def authorize():
     #
     #   trakt      -- AM 1.1.5a's traktAuth AND traktReSync both end in
     #                 os._exit(1): they FORCE-CLOSE KODI, after a 3-second
-    #                 "Force Closing Kodi!" toast. traktAuth also calls
-    #                 control.updates_off(), silently turning Kodi's global
-    #                 add-on auto-updates off. And answering "no" to its
-    #                 "create your sync list now?" question falls straight off
-    #                 the end of the branch, so the click does nothing at all.
-    #                 None of that is acceptable from the build's main connect
-    #                 screen; POV's native Trakt connect does none of it.
-    #                 Trakt-everywhere is still available to anyone who wants
-    #                 it -- from inside Account Manager, where the force-close
-    #                 is at least in the add-on that causes it.
+    #                 "Force Closing Kodi!" toast. That alone is why this row
+    #                 stays POV-only -- POV's native Trakt connect does none
+    #                 of it, and a build's main connect screen cannot kill
+    #                 Kodi. Trakt-everywhere is still available to anyone who
+    #                 wants it, from inside Account Manager, where the
+    #                 force-close is at least in the add-on that causes it.
+    #
+    #                 The other two objections raised with AM's author were
+    #                 answered, and the answers check out against 1.1.5a:
+    #                   * the force-close is deliberate. AM rewrites the Trakt
+    #                     handling inside the add-ons it supports and bypasses
+    #                     their own authorisation, so they have to be restarted
+    #                     to rebuild their Trakt databases, and a dialog could
+    #                     be dismissed or stolen while a hard exit cannot.
+    #                   * control.updates_off() is NOT permanent, which is what
+    #                     an earlier version of this comment claimed. It parks
+    #                     Kodi's add-on updates only until AM's own startup
+    #                     work is done: startup.py run_addon_updates() calls
+    #                     autoupdate_on() and then UpdateAddonRepos(), so the
+    #                     setting comes back on the next start. Verified in the
+    #                     shipped code, not taken on trust.
+    #                 Answering "no" to its "create your sync list now?"
+    #                 question falling off the end of the branch is a real bug
+    #                 and its author has fixed it for the next release.
     #   easydebrid -- AM writes `easydebrid.token` but never DECLARES it in
     #                 its settings.xml, so the write is a silent no-op and its
     #                 EasyDebrid rows are absent from its own settings screen.
