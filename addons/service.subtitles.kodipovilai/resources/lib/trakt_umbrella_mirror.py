@@ -4,9 +4,12 @@
 # in this build connects POV, and Umbrella is left with nothing -- which is
 # also why Umbrella showed every episode unwatched while POV showed the
 # ticks. Account Manager exists to solve this, but its Trakt route ends in
-# os._exit(1) (Kodi force-closes) and its traktAuth turns Kodi's add-on
-# updates off, so this build deliberately routes Trakt to POV instead. That
-# left Umbrella out.
+# os._exit(1) -- Kodi force-closes -- which its author confirms is deliberate
+# and is not going to change: AM rewrites the Trakt handling inside the
+# add-ons it supports, so they must be restarted to rebuild their Trakt
+# databases. Reasonable for AM; not something a build's main connect screen
+# can do. So this build routes Trakt to POV instead, and that left Umbrella
+# out.
 #
 # Trakt is NOT like MDBList, though. An MDBList access token authenticates
 # the user and any client may present it, which is why simply handing POV's
