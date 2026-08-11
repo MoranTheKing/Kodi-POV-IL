@@ -227,15 +227,22 @@ def mirror():
     # the test and the copy, and POV would end up with halves of two pairs.
     umb_refresh = umbrella(UMB_REFRESH) or ''
     umb_expires = umbrella(UMB_EXPIRES) or ''
-    if (umb_token and umb_token != token and umb_refresh
-            and umbrella('trakt.authed.clientid') == client_id
-            and _newer(umb_expires, expires)):
-        if _pov_writes_off():
-            # The switch forbids the write to POV. It does NOT permit the
-            # opposite either: falling through would push POV's stale copy
-            # over the pair Umbrella has just rotated, and retire Umbrella's
-            # working refresh token. Stand down entirely this pass.
-            return 'pov_writes_off'
+    adopt = (umb_token and umb_token != token and umb_refresh
+             and umbrella('trakt.authed.clientid') == client_id
+             and _newer(umb_expires, expires))
+    # The switch forbids the write to POV, and it does NOT permit the opposite
+    # either: mirroring POV's stale copy over the pair Umbrella has just
+    # rotated would retire Umbrella's working refresh token. So the TOKEN work
+    # stands down -- and ONLY the token work.
+    #
+    # Standing the whole function down here was the first shape of this and it
+    # was wrong for a reason worth writing out: with the switch on, POV's
+    # expiry never advances, so this condition stays true on every tick for as
+    # long as the switch is on. Returning early took the watch-source claim
+    # down with it, permanently and silently, on a switch documented as
+    # touching nothing but POV.
+    stale = bool(adopt and _pov_writes_off())
+    if adopt and not stale:
         # The username comes across too. It is not needed to authenticate,
         # but POV shows it, and a screen naming one account while holding
         # another account's token is the kind of thing that gets diagnosed
@@ -266,18 +273,18 @@ def mirror():
         src, settle_keys = umbrella_watch_source.pairs(
             umbrella, umbrella_watch_source.TRAKT)
 
-    if umb_token == token and not src:
+    if (stale or umb_token == token) and not src:
         # Nothing to write, but the look at the watch-source settings still
         # counts -- see the same branch in mdblist_umbrella_mirror for why
         # skipping it here would quietly re-claim a setting the user moved
         # back to Local.
         if settle_keys and umbrella_watch_source is not None:
             umbrella_watch_source.settle(settle_keys)
-        return 'unchanged'
+        return 'pov_writes_off' if stale else 'unchanged'
 
     first_connect = not umb_token
 
-    wanted = [
+    wanted = [] if stale else [
         # The application first, then the switch that makes Umbrella use it:
         # the token is only meaningful once Umbrella is identifying itself as
         # POV's app.
@@ -310,7 +317,9 @@ def mirror():
     if settle_keys and umbrella_watch_source is not None:
         umbrella_watch_source.settle(settle_keys)
     if not changed:
-        return 'unchanged'
+        return 'pov_writes_off' if stale else 'unchanged'
+    if stale:
+        return 'pov_writes_off'
     _log('Umbrella now shares POV\'s Trakt authorisation{0}'.format(
         ' (and takes watched state from it)' if first_connect else ''),
         level='INFO')
