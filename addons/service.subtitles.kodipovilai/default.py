@@ -80,18 +80,54 @@ def _safe_log(msg, level='INFO'):
             pass
 
 
-def _mdblist_connected_in_pov():
-    """True when POV holds an MDBList token right now.
+# A digest of the last POV MDBList token we saw at the connect row, so a
+# genuine new authorisation can be told from a click that changed nothing.
+# The digest, not the token: nothing here needs a second copy of a credential.
+_MDBL_SEEN_SETTING = '_mdblist_seen_token_v1'
 
-    The connect action fires on the revoke path too -- POV's own row returns
-    early there -- so the token is what tells the two apart. After a revoke it
-    is empty, and nothing should be re-armed for a service the user has just
-    taken away."""
+
+def _mdblist_new_authorisation():
+    """True only when POV's MDBList token is present AND is not the one we
+    saw last time this row was used.
+
+    "Is POV connected right now" is NOT the same question, and answering that
+    one instead was a bug. The Connect Services row fires this action whatever
+    the outcome, and POV's own MDBList.set() has a third outcome besides
+    connect and revoke: clicked while already connected, it asks "are you
+    sure?" and, on No or Back, returns having written nothing at all
+    (myservices.py). The token is still there, so a snapshot says "connected",
+    and a click the user DECLINED would re-take a watch source they had
+    deliberately put back to Local -- the exact thing this whole mechanism
+    exists to prevent.
+
+    A real authorisation always yields a NEW token. A declined dialog leaves
+    the old one. That is the difference, and it is the only reliable one
+    available here.
+
+    A revoke forgets the digest, so the next genuine connect counts as new.
+    An install that has never recorded one counts its first connected click as
+    new: that is the migration case, it happens once, and it is the right
+    answer for somebody who connected before this existed."""
     try:
         import xbmcaddon
-        return bool((xbmcaddon.Addon('plugin.video.pov')
-                     .getSetting('mdblist.token') or '').strip())
+        token = (xbmcaddon.Addon('plugin.video.pov')
+                 .getSetting('mdblist.token') or '').strip()
     except Exception:
+        return False
+    try:
+        from resources.lib import kodi_utils
+        if not token:
+            if kodi_utils.get_setting(_MDBL_SEEN_SETTING, ''):
+                kodi_utils.set_setting(_MDBL_SEEN_SETTING, '')
+            return False
+        import hashlib
+        digest = hashlib.sha256(token.encode('utf-8')).hexdigest()[:16]
+        if digest == (kodi_utils.get_setting(_MDBL_SEEN_SETTING, '') or ''):
+            return False
+        kodi_utils.set_setting(_MDBL_SEEN_SETTING, digest)
+        return True
+    except Exception:
+        # Cannot tell -- so do not claim a connect happened.
         return False
 
 
@@ -3586,15 +3622,15 @@ def main():
             # except at the one moment the user asks for the service again.
             try:
                 from resources.lib import mdblist_umbrella_mirror
-                connected = _mdblist_connected_in_pov()
-                if connected:
+                # reclaim ONLY here, and only on a NEW authorisation. This
+                # is the one place in the build that can tell a human just
+                # connected the service; everywhere else is a timer, and a
+                # timer must never take back a source the user chose.
+                new_auth = _mdblist_new_authorisation()
+                if new_auth:
                     _rearm_mdblist_one_shots()
-                # reclaim ONLY here. This is the one place in the build that
-                # knows a human just pressed connect; everywhere else is a
-                # timer, and a timer must never take back a source the user
-                # chose.
                 _safe_log('mdblist mirror: '
-                          + mdblist_umbrella_mirror.mirror(reclaim=connected))
+                          + mdblist_umbrella_mirror.mirror(reclaim=new_auth))
             except Exception as e:
                 _safe_log('mdblist mirror failed: {0}'.format(e),
                           level='WARNING')

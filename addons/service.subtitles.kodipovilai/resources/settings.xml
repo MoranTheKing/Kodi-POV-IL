@@ -890,6 +890,17 @@
         <!-- Hidden marker: the POV seasons view id WE last wrote, so ours can
              be replaced when the skin changes and the user's never is.
              See pov_seasons_view_seed.py. -->
+        <!-- Hidden marker: a digest of the last POV MDBList token seen at the
+             Connect Services row, so a real authorisation can be told from a
+             click that changed nothing. A digest, never the token itself.
+             See _mdblist_new_authorisation in default.py. -->
+        <setting id="_mdblist_seen_token_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
         <setting id="_pov_seasons_view_v1" type="string" label="30000">
           <level>4</level>
           <default></default>
