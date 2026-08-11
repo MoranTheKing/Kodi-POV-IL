@@ -1770,24 +1770,26 @@ def _maybe_patch_mdblist_reauth():
     to be authorised again by hand. Umbrella then compounds it with a dialog
     telling the user to re-authenticate in a screen this build does not use.
     See both modules."""
-    if _skip_pov_patchers():
-        return
-    try:
-        from resources.lib import pov_mdblist_reauth_patcher, kodi_utils
-    except Exception:
-        return
-    try:
-        st = pov_mdblist_reauth_patcher.ensure_patched()
-        if st in ('unmatched', 'compile_failed', 'write_failed'):
-            kodi_utils.log('pov_mdblist_reauth_patcher: ' + st, level='WARNING')
-    except Exception as e:
+    # The switch guards the POV half ONLY. Written as an early return over
+    # both halves first, which silently took Umbrella's fix down with it --
+    # the switch's own text promises to stop changes to plugin.video.pov and
+    # says nothing about any other add-on, and turning it on to isolate a POV
+    # problem must not change Umbrella's behaviour as a side effect.
+    if not _skip_pov_patchers():
         try:
-            kodi_utils.log('pov_mdblist_reauth_patcher failed: {0}'.format(e),
-                           level='WARNING')
-        except Exception:
-            pass
-    # Umbrella's half is NOT behind the POV switch: it is a change to
-    # Umbrella, and the switch promises only to leave POV alone.
+            from resources.lib import pov_mdblist_reauth_patcher, kodi_utils
+            st = pov_mdblist_reauth_patcher.ensure_patched()
+            if st in ('unmatched', 'compile_failed', 'write_failed'):
+                kodi_utils.log(
+                    'pov_mdblist_reauth_patcher: ' + st, level='WARNING')
+        except Exception as e:
+            try:
+                from resources.lib import kodi_utils
+                kodi_utils.log(
+                    'pov_mdblist_reauth_patcher failed: {0}'.format(e),
+                    level='WARNING')
+            except Exception:
+                pass
     try:
         from resources.lib import umbrella_mdblist_token_patcher, kodi_utils
         st = umbrella_mdblist_token_patcher.ensure_patched()
@@ -1796,6 +1798,9 @@ def _maybe_patch_mdblist_reauth():
                 'umbrella_mdblist_token_patcher: ' + st, level='WARNING')
     except Exception as e:
         try:
+            # Re-imported: if the import above is what raised, `kodi_utils` is
+            # unbound here and the handler would raise instead of logging.
+            from resources.lib import kodi_utils
             kodi_utils.log(
                 'umbrella_mdblist_token_patcher failed: {0}'.format(e),
                 level='WARNING')

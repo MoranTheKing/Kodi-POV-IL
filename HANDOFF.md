@@ -2950,11 +2950,24 @@ shipped code rather than taken on trust:
 - The "no sync list" check is a safeguard for an incomplete revoke; once Trakt
   is authorised the button becomes "Edit Sync List".
 
-Still worth watching: every startup AM logs `No Trakt auth found - resetting
-services to defaults` (because Trakt is on POV here, not AM) and then walks
-`restore default service`/`restore default API keys` for Umbrella and POV. It
-has reported `no changes needed` so far, but that is the routine that could
-overwrite the Trakt settings this build writes into Umbrella.
+Still worth watching, with the trigger now pinned down. Every startup AM logs
+`No Trakt auth found - resetting services to defaults` (because Trakt is on POV
+here, not AM) and walks `restore default service` / `restore default API keys`
+for Umbrella and POV. Every one of those `no changes needed` lines is a correct
+no-op **while AM Lite's own master `trakt.token` is empty** — a third,
+independent store from POV's `trakt.token` and Umbrella's `trakt.user.token`,
+and it only fills if somebody runs Account Manager's OWN "Connect Trakt" flow.
+
+The moment it is not empty, AM's `ensure_defaults()` flips to "authed" and the
+next startup's `trakt_sync.Auth().trakt_auth()` overwrites POV's
+`trakt.client_id/client_secret/token/refresh/expires/trakt_user` and Umbrella's
+`trakt.user.token/refreshtoken/token.expires/user.name/authed.clientid/isauthed`
+with AM's own app's pair — while leaving `trakt.clientid` and
+`traktuserkey.customenabled` (our custom-app switch) in place, which is exactly
+the client-id/token mismatch Umbrella's own `re_auth()` treats as foreign
+credentials and clears. So: connecting Trakt inside Account Manager on a device
+that already has it through POV is the one action that breaks this arrangement.
+Support note, not a code fix — nothing in this build's own flow does it.
 
 ### Known, deliberately not fixed
 
