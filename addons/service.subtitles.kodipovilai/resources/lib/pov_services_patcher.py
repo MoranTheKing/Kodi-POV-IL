@@ -37,7 +37,7 @@ ICON_SRC_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), 'icons')
 ICON_FILENAMES = ('gemini.png',)
 
-INJECT_VERSION = 11
+INJECT_VERSION = 12
 MARKER = '# AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
 END_MARKER = '# END AI_SUBS_MYSERVICES_INJECT_v{0}'.format(INJECT_VERSION)
 TUPLE_MARKER = "# AI_SUBS_MYSERVICES_TUPLE_v{0}".format(INJECT_VERSION)
@@ -81,6 +81,11 @@ TUPLE_MARKER = "# AI_SUBS_MYSERVICES_TUPLE_v{0}".format(INJECT_VERSION)
 #     MDBList instead of forwarding to our API-key pairing, so one
 #     OAuth device authorisation covers POV and Umbrella both, and
 #     the token is mirrored to Umbrella straight afterwards.
+#   v12 (addon v0.2.483): the MDBList row reads POV's token before AND
+#     after POV's own set(), so the mirror can be told a human really
+#     authorised the service rather than declined a confirmation. It is
+#     the only place with both sides of one click; every attempt to infer
+#     it from outside reverted somebody's settings.
 # Each bump triggers a one-time re-patch on the next Kodi startup;
 # OLD_MARKERS lists every prior version's marker so the legacy
 # blocks get stripped cleanly before the new one is injected.
@@ -95,6 +100,7 @@ OLD_MARKERS = [
     '# AI_SUBS_MYSERVICES_INJECT_v8',
     '# AI_SUBS_MYSERVICES_INJECT_v9',
     '# AI_SUBS_MYSERVICES_INJECT_v10',
+    '# AI_SUBS_MYSERVICES_INJECT_v11',
 ]
 
 # Two service classes plus a hook that monkey-patches authorize()
@@ -223,7 +229,42 @@ def _ai_make_mdblist():
         icon = 'mdblist.png'  # POV's own MDBList icon (native service)
 
         def set(self):
+            # Read POV's token on BOTH sides of the call.
+            #
+            # This is the only place in the build that sees a before and an
+            # after for the SAME click, and that is what turns "a human just
+            # authorised this" from a guess into a measurement. Three
+            # attempts to infer it from outside failed, each silently
+            # reverting a setting somebody had chosen: an empty Umbrella
+            # token (Umbrella empties its own), "POV is connected right now"
+            # (this row fires whatever the outcome, so a declined
+            # confirmation counted), and "POV's token changed" (POV rotates
+            # it on its own timer). Here none of those apply: a declined
+            # confirmation leaves the token identical, a revoke leaves it
+            # empty, and only a real authorisation replaces it with a new
+            # non-empty value inside the few seconds of the click.
+            #
+            # get_setting is taken from POV's own module globals through
+            # globals(), not imported: if a POV release ever renames it we
+            # simply cannot tell, `fresh` stays False, and the behaviour is
+            # exactly what it was before this existed. Nothing here may raise
+            # -- this runs inside the Connect Services screen, where an
+            # exception takes every row down, not just this one.
+            _ai_gs = globals().get('get_setting')
+
+            def _ai_tok():
+                if _ai_gs is None:
+                    return None
+                try:
+                    return (_ai_gs('mdblist.token') or '').strip()
+                except Exception:
+                    return None
+
+            _ai_before = _ai_tok()
             result = _base.set(self)
+            _ai_after = _ai_tok()
+            _ai_fresh = bool(_ai_after and _ai_before is not None
+                             and _ai_after != _ai_before)
             # Fired whatever the outcome: the revoke path returns early too,
             # and after a revoke POV's token is empty -- which the mirror
             # reads as "nothing to hand over" and leaves Umbrella's own
@@ -232,7 +273,8 @@ def _ai_make_mdblist():
                 import xbmc as _aix
                 _aix.executebuiltin(
                     'RunScript(service.subtitles.kodipovilai,'
-                    'action=mdblist_mirror_umbrella)')
+                    'action=mdblist_mirror_umbrella%s)'
+                    % (',connected=1' if _ai_fresh else ''))
             except Exception:
                 pass
             return result

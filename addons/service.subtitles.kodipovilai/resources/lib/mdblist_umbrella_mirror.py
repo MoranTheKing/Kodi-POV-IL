@@ -125,8 +125,13 @@ def _reader(addon_id):
     return _get
 
 
-def mirror():
+def mirror(reclaim=False):
     """Give Umbrella whatever MDBList access token POV currently holds.
+
+    `reclaim` comes from exactly one place: POV's Connect Services row, which
+    measures the token across POV's own set() and so can tell a real
+    authorisation from a declined dialog. The timer and the startup pass never
+    pass it, and nothing else may.
 
     Returns 'no_pov' | 'no_umbrella' | 'no_token' | 'api_key_only'
     | 'unchanged' | 'mirrored' | 'write_failed'. Never raises."""
@@ -169,7 +174,8 @@ def mirror():
     if umbrella_watch_source is not None:
         wanted, settle_keys = umbrella_watch_source.pairs(
             umbrella, umbrella_watch_source.MDBLIST,
-            may_replace=(umbrella_watch_source.TRAKT,))
+            may_replace=(umbrella_watch_source.TRAKT,),
+            reclaim=reclaim)
 
     if umb_token != token:
         wanted = [(UMB_TOKEN, token), (UMB_REFRESH, '')] + wanted

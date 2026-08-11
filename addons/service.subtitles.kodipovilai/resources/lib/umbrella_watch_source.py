@@ -139,7 +139,7 @@ def settle(done, skip=()):
         pass
 
 
-def pairs(read_umbrella, source, may_replace=()):
+def pairs(read_umbrella, source, may_replace=(), reclaim=False):
     """(key, value) pairs to write so Umbrella reads watched state from
     `source`, plus the marker state to settle afterwards.
 
@@ -157,17 +157,23 @@ def pairs(read_umbrella, source, may_replace=()):
     still exactly the one WE wrote: anything else is the user's, including
     the user having chosen Trakt by hand.
 
-    THERE IS NO "the user just reconnected, so take it again" CASE, and three
-    rounds of review went into learning why. The repair it chased -- our claim
-    recorded, the setting somehow back at Local -- is real but was never
-    demonstrated in the field, while every signal tried for "a human just
-    connected" turned out to fire without one: an empty Umbrella token (its
-    own Revoke, and Trakt's re_auth clearing itself on a failed refresh), then
-    "POV is connected right now" (the connect row fires whatever the outcome,
-    so a declined confirmation counted), then "POV's token changed" (POV
-    rotates it on its own timer). Each attempt silently reverted a source the
-    user had chosen. What actually delivers the repair is a one-shot: bump
-    MARKER_SETTING and every device gets one more claim, from Local only.
+    `reclaim` says a human has just authorised this service. Our claim is
+    recorded, the setting is back at the shipped Local anyway, so something
+    reset it -- and somebody asking for the service is asking for it to work.
+    Allowed only for what this source put there itself or outranks in any
+    case, so it can never decide the MDBList-over-Trakt question, and never
+    for NOTHING, which is a value we did not write.
+
+    THE SIGNAL IS THE WHOLE DIFFICULTY, and three rounds of review went into
+    it. Every attempt to infer "a human just connected" from outside the click
+    fired without one, and each silently reverted a source somebody had
+    chosen: an empty Umbrella token (Umbrella empties its own -- its Revoke,
+    and Trakt's re_auth on a failed refresh), "POV is connected right now"
+    (the connect row fires whatever the outcome, so a declined confirmation
+    counted), and "POV's token changed" (POV rotates it on its own timer).
+    What finally works is not an inference at all: pov_services_patcher reads
+    POV's token on BOTH sides of POV's own set(), which is the only place that
+    sees one click's before and after. Nothing else may pass reclaim=True.
     """
     done = _done()
     out, touched = [], dict(done)
@@ -187,6 +193,10 @@ def pairs(read_umbrella, source, may_replace=()):
             else:
                 touched[key] = NOTHING
         elif prev != source and prev in may_replace and current == prev:
+            out.append((key, source))
+            touched[key] = source
+        elif (reclaim and current == SHIPPED_LOCAL
+              and (prev == source or prev in may_replace)):
             out.append((key, source))
             touched[key] = source
     return out, touched

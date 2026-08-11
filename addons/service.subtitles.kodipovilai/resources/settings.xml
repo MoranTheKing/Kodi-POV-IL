@@ -890,6 +890,16 @@
         <!-- Hidden marker: the POV seasons view id WE last wrote, so ours can
              be replaced when the skin changes and the user's never is.
              See pov_seasons_view_seed.py. -->
+        <!-- Hidden marker: whether we have already offered to restore
+             Umbrella's watched state, and what the user answered. Asked once
+             per device, never again. See umbrella_watch_prompt.py. -->
+        <setting id="_umb_watch_prompt_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
         <setting id="_pov_seasons_view_v1" type="string" label="30000">
           <level>4</level>
           <default></default>

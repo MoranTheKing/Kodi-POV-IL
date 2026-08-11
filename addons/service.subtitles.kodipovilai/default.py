@@ -3537,21 +3537,19 @@ def main():
             # it). Hand the access token to Umbrella so one authorisation
             # covers both.
             #
-            # NO "the user just connected, so re-take the watch source" here,
-            # deliberately. Three rounds of review killed three different
-            # attempts at that signal and every one of them ended the same
-            # way: something the user had set by hand got silently reverted.
-            # POV's row fires this action whatever the outcome, so a declined
-            # confirmation looks like a connect; and POV rotates its MDBList
-            # token on a timer of its own, so "the token changed" does not
-            # mean a human did anything either. There is no reliable signal
-            # available here, and the repair those attempts were chasing is
-            # already delivered once by the two v2 one-shots -- see
-            # umbrella_watch_source.MARKER_SETTING and the MDBLIST_RESEED key
-            # in favourites_personal_tiles_patcher.
+            # `connected=1` is set by the Connect Services row itself, and
+            # ONLY when POV's token actually changed across POV's own set() --
+            # so it means a human authorised the service, not that they
+            # declined a confirmation and not that POV rotated the token on
+            # its own timer. Both of those were tried as signals from out here
+            # and both silently reverted settings people had chosen; this one
+            # is measured at the click rather than inferred after it. Nothing
+            # else in the build may pass it.
+            connected = params.get('connected') == '1'
             try:
                 from resources.lib import mdblist_umbrella_mirror
-                _safe_log('mdblist mirror: ' + mdblist_umbrella_mirror.mirror())
+                _safe_log('mdblist mirror: '
+                          + mdblist_umbrella_mirror.mirror(reclaim=connected))
             except Exception as e:
                 _safe_log('mdblist mirror failed: {0}'.format(e),
                           level='WARNING')
