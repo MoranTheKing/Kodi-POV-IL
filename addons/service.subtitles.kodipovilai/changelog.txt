@@ -1,3 +1,18 @@
+v0.2.482
+- Trakt is now connected once, for both POV and Umbrella. Connecting it in POV
+  used to leave Umbrella with nothing, which is why Umbrella showed every
+  episode as unwatched while POV showed the ticks.
+- Umbrella now actually reads watched state and resume points from whichever
+  service you connected. Connecting one never made Umbrella use it, so the
+  ticks stayed missing even when everything said "connected". MDBList is
+  preferred when both are connected, whichever you connected first. A source
+  you have chosen yourself is never changed.
+- The season list now opens in a view that shows each season's own poster.
+  POV always supplied them; in some skins the screen was a plain list with no
+  poster in it at all. If you pick a view yourself afterwards, it stays.
+- Season names are in Hebrew.
+- Our own settings screen no longer logs an error every time it opens.
+
 v0.2.481
 - Fixed the "POV error" when opening a search screen. POV changed the layout
   of its cache between versions but kept the old one on devices that had it,
