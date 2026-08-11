@@ -56,11 +56,24 @@ MDBLIST = '3'
 NOTHING = '-'
 
 # v2, deliberately: changing the id spends one more claim on every device.
-# unclaim() re-arms a connect from here on, but the people who already went
-# through a revoke-and-reconnect are sitting with the marker spent and Umbrella
-# back on Local -- lists but no watched state, which is the complaint this was
-# written to end. The claim is still only ever taken FROM Local and still only
-# once, so somebody who has chosen a source keeps it.
+#
+# WHY, HONESTLY. A user reported lists in Umbrella but no watched state after
+# revoking MDBList in POV, in Umbrella and in Account Manager and reconnecting.
+# The mechanism first written here -- that AM's revoke resets these two
+# settings -- is WRONG, and checking it against AM 1.1.5a is what showed that:
+# its Umbrella MDBList revoke clears `mdblist.api` and nothing else
+# (acct_vwr.py data_mdb), and Umbrella's own mdblistRevoke clears only the two
+# tokens. Neither goes near indicators.alt. The likeliest explanation is far
+# duller: the claim shipped in 0.2.482, minutes before the report, and their
+# device did not have it yet.
+#
+# The bump stays anyway, as a judgement call rather than a diagnosis. Anybody
+# actually sitting with a spent marker and Local comes right silently instead
+# of through a support conversation, and the cost is bounded: the claim is
+# still only ever taken FROM Local, still only once, so the only person who
+# loses anything is one who deliberately chose Local while connected, and they
+# can choose it again. Recorded as a guess so nobody later mistakes it for
+# evidence.
 MARKER_SETTING = '_umb_watch_source_v2'
 
 
@@ -126,30 +139,7 @@ def settle(done, skip=()):
         pass
 
 
-def unclaim():
-    """Forget that we have had our say, so the next pass may claim again.
-
-    Called only when the user has just CONNECTED a service by hand, which is
-    the one event that legitimately re-arms the one-shot. The field case: a
-    user revoked MDBList in POV, in Umbrella and in Account Manager, then
-    reconnected -- and AM's revoke resets Umbrella's watch-source settings to
-    Local on the way through. Without this, the marker still said "settled",
-    so Umbrella kept its lists and never got watched state back, permanently,
-    and no amount of reconnecting helped. That is the exact complaint the
-    one-shot was supposed to fix, arriving through the back door.
-
-    Deliberately scoped to a real connect. It is not a licence to re-claim on
-    a timer -- a setting somebody moves while connected still stands until
-    they connect again themselves."""
-    try:
-        if not (kodi_utils.get_setting(MARKER_SETTING, '') or '').strip():
-            return
-        kodi_utils.set_setting(MARKER_SETTING, '')
-    except Exception:
-        pass
-
-
-def pairs(read_umbrella, source, may_replace=()):
+def pairs(read_umbrella, source, may_replace=(), reclaim=False):
     """(key, value) pairs to write so Umbrella reads watched state from
     `source`, plus the marker state to settle afterwards.
 
@@ -165,7 +155,21 @@ def pairs(read_umbrella, source, may_replace=()):
     preference would come down to which service the user happened to connect
     first. The replacement is allowed ONLY when the value standing there is
     still exactly the one WE wrote: anything else is the user's, including
-    the user having chosen Trakt by hand."""
+    the user having chosen Trakt by hand.
+
+    `reclaim` says this pass is establishing the service's token from nothing
+    -- a connect, not a refresh. It permits ONE case that is otherwise
+    refused: the marker says we wrote a value here, and the setting is back at
+    the shipped Local anyway. Our claim is plainly not standing, so something
+    reset it, and a user reconnecting the service is asking for it to work.
+
+    It is gated on the connect for a reason. Ungated, the timer would take
+    back a Local somebody chose deliberately, fifteen minutes after they chose
+    it -- which is the exact failure the once-rule exists to prevent, and it
+    is worth more than this narrow repair. Clearing the whole marker at a
+    connect was tried first and was a blocker: it also erased a Trakt claim
+    standing legitimately alongside, and MDBList then recorded that Trakt
+    value as "not ours" and could never take it over again."""
     done = _done()
     out, touched = [], dict(done)
     for key in KEYS:
@@ -184,6 +188,13 @@ def pairs(read_umbrella, source, may_replace=()):
             else:
                 touched[key] = NOTHING
         elif prev != source and prev in may_replace and current == prev:
+            out.append((key, source))
+            touched[key] = source
+        elif reclaim and prev != NOTHING and current == SHIPPED_LOCAL:
+            # We wrote `prev` here and it is gone; the service is being
+            # connected again right now. Note the order: this is reached only
+            # after the may_replace branch has declined, so it can never
+            # decide the MDBList-over-Trakt question.
             out.append((key, source))
             touched[key] = source
     return out, touched

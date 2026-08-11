@@ -169,7 +169,11 @@ def mirror():
     if umbrella_watch_source is not None:
         wanted, settle_keys = umbrella_watch_source.pairs(
             umbrella, umbrella_watch_source.MDBLIST,
-            may_replace=(umbrella_watch_source.TRAKT,))
+            may_replace=(umbrella_watch_source.TRAKT,),
+            # Umbrella holds no token yet, so this pass is a connect rather
+            # than a refresh -- the one moment a claim of ours that has since
+            # been reset to Local may be taken again.
+            reclaim=not umb_token)
 
     if umb_token != token:
         wanted = [(UMB_TOKEN, token), (UMB_REFRESH, '')] + wanted

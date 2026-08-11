@@ -96,17 +96,18 @@ def _mdblist_connected_in_pov():
 
 
 def _rearm_mdblist_one_shots():
-    """Undo the two "we have had our say" records, at a real connect only.
+    """Put the MDBList home tiles back within reach at a real connect.
 
-    Both exist so that a change the user makes afterwards is respected, and
-    both are right about that -- but a revoke-and-reconnect is not a change
-    the user made to either of them, and it left this build unable to put
-    back the watched state or the home tiles the user was asking for."""
-    try:
-        from resources.lib import umbrella_watch_source
-        umbrella_watch_source.unclaim()
-    except Exception as e:
-        _safe_log('watch-source re-arm failed: {0}'.format(e), level='WARNING')
+    The tiles are add-once so that a later deletion sticks, and that reading
+    cannot tell a deletion from the file being rewritten while MDBList was
+    disconnected -- a skin switch or a favourites reseed does exactly that,
+    and the tiles were then refused forever.
+
+    The watched-state claim is deliberately NOT re-armed from here. Clearing
+    that marker at a connect was tried and was a blocker: it also erased a
+    Trakt claim standing legitimately alongside, and MDBList could then never
+    take those settings over. That case is handled inside the mirror instead,
+    where it can see which value is whose."""
     try:
         from resources.lib import favourites_personal_tiles_patcher as _tiles
         if _tiles.rearm_mdblist_tiles():
