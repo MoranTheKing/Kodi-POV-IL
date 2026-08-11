@@ -175,6 +175,7 @@ def _run_build_startup_repairs():
         _maybe_fix_pov_container_refresh_crash,
         _maybe_patch_pov_movie_networks,
         _maybe_patch_pov_view_mode,
+        _maybe_patch_mdblist_reauth,
         _maybe_seed_pov_seasons_view,
         _maybe_patch_pov_resume_cancel,
         _maybe_patch_pov_scraper_settings,
@@ -1760,6 +1761,53 @@ def _maybe_fix_pov_maincache_schema():
             pass
 
 
+def _maybe_patch_mdblist_reauth():
+    """Let an expired MDBList token heal itself instead of being reconnected.
+
+    POV refreshes only on a clock check and treats a 401 as just another
+    network error, so a token the server stops accepting is permanent: every
+    call fails, the sync monitor backs off half an hour, and the account has
+    to be authorised again by hand. Umbrella then compounds it with a dialog
+    telling the user to re-authenticate in a screen this build does not use.
+    See both modules."""
+    # The switch guards the POV half ONLY. Written as an early return over
+    # both halves first, which silently took Umbrella's fix down with it --
+    # the switch's own text promises to stop changes to plugin.video.pov and
+    # says nothing about any other add-on, and turning it on to isolate a POV
+    # problem must not change Umbrella's behaviour as a side effect.
+    if not _skip_pov_patchers():
+        try:
+            from resources.lib import pov_mdblist_reauth_patcher, kodi_utils
+            st = pov_mdblist_reauth_patcher.ensure_patched()
+            if st in ('unmatched', 'compile_failed', 'write_failed'):
+                kodi_utils.log(
+                    'pov_mdblist_reauth_patcher: ' + st, level='WARNING')
+        except Exception as e:
+            try:
+                from resources.lib import kodi_utils
+                kodi_utils.log(
+                    'pov_mdblist_reauth_patcher failed: {0}'.format(e),
+                    level='WARNING')
+            except Exception:
+                pass
+    try:
+        from resources.lib import umbrella_mdblist_token_patcher, kodi_utils
+        st = umbrella_mdblist_token_patcher.ensure_patched()
+        if st in ('unmatched', 'compile_failed', 'write_failed'):
+            kodi_utils.log(
+                'umbrella_mdblist_token_patcher: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            # Re-imported: if the import above is what raised, `kodi_utils` is
+            # unbound here and the handler would raise instead of logging.
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'umbrella_mdblist_token_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_seed_pov_seasons_view():
     """Open POV's season list in a view that draws a poster.
 
@@ -2643,6 +2691,10 @@ def _start_service_mirror_keeper(monitor):
         from resources.lib import pov_seasons_view_seed
     except Exception:
         pov_seasons_view_seed = None
+    try:
+        from resources.lib import umbrella_watch_prompt
+    except Exception:
+        umbrella_watch_prompt = None
 
     def _loop():
         try:
@@ -2668,6 +2720,14 @@ def _start_service_mirror_keeper(monitor):
                 # can rule this build out in one step -- a thread that carries
                 # on writing to POV ninety seconds later would make the switch
                 # a lie.
+                # Deliberately in the keeper and not in the startup steps:
+                # it can put a dialog on screen, and boot is already crowded
+                # with them. By the first tick the splash is long gone.
+                if umbrella_watch_prompt is not None:
+                    try:
+                        umbrella_watch_prompt.maybe_ask_async()
+                    except Exception:
+                        pass
                 if pov_seasons_view_seed is not None:
                     try:
                         # Inside the try, not in the `if`: this is the only
