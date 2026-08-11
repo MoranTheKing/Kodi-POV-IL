@@ -771,8 +771,10 @@ budget-safe on the 1000 req/day free key.
   1. `pov_mdblist_patcher.ensure_lists_sort_recent()`: one-time flip of POV's
      `sort.watchlist` + `sort.collection` from default 0 (A-Z) to 1 (date-added
      desc), only when at default (respects a deliberate choice), gated by hidden
-     marker `_lists_sort_recent_v1` DECLARED in settings.xml (Sonnet caught that
-     an undeclared marker may not persist on Kodi 19+ schema settings). Governs
+     marker `_lists_sort_recent_v1`, declared in settings.xml. **The reason
+     recorded here at the time was wrong** and is corrected in the entry below
+     on undeclared markers: they DO persist. Declaring them is house style, not
+     a fix. Governs
      MDBList/Trakt/TMDB watchlist+collection views; skin-independent.
   1b. **Fix G (0.2.435) — the sort actually working.** The 0.2.433 `sort.*`=1
      write did NOT take: POV serves settings from a cached `pov_settings` window-
@@ -2732,6 +2734,36 @@ exit. That fits every observation, and it is also why the repair belongs in
 our service: it runs long after the add-ons are up, so by then the layout is a
 valid option and the write sticks. If it recurs, the WARNING now names which
 of the two cases it is.
+
+#### Undeclared settings DO persist — an old note here said otherwise
+
+Written down because this repo asserted the opposite for months, and a
+validator went and read Kodi's own C++ to settle it.
+
+`Addon.setSetting()` on an id that is NOT in the add-on's settings.xml does
+not silently vanish. `CAddon::UpdateSetting()` creates a hidden internal
+`CSettingString` through `AddSettingWithoutDefinition()`, registers it in the
+same settings-manager tree as any declared setting, and `SaveSettings()`
+serialises the whole tree with no "was this declared" filter -- so it reaches
+disk. `CAddonSettings::Load()` does the mirror image on the way back in,
+recreating an unknown id it finds in the stored values. Hidden markers written
+this way survive a restart on Kodi 19+.
+
+Two things this does NOT contradict, and they are the ones that actually bit:
+
+  * Kodi silently drops a `setSetting` into ANOTHER add-on for an id that
+    add-on does not declare. That is a different code path and it is real --
+    it is why Account Manager's writes of `mdblist.api` and `resume.source`
+    into Umbrella are no-ops.
+  * `CSettingString` still rejects an EMPTY `<default>` unless the setting
+    declares `<allowempty>true</allowempty>`, which is what made 27 of our own
+    settings log an error on every settings load.
+
+So: declare markers for consistency and so the next reader can find them, not
+because an undeclared one would be lost. About ten markers in this add-on are
+still undeclared (`_ktuvit_on_v4`, `_builtin_engine_rollout_v2`,
+`_pool_share_force_v1` and friends); they work, and they are a tidiness item
+rather than a bug.
 
 ### What shipped 0.2.476 → 0.2.482 (notifications 579–585)
 
