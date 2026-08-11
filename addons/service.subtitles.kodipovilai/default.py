@@ -80,6 +80,44 @@ def _safe_log(msg, level='INFO'):
             pass
 
 
+def _mdblist_connected_in_pov():
+    """True when POV holds an MDBList token right now.
+
+    The connect action fires on the revoke path too -- POV's own row returns
+    early there -- so the token is what tells the two apart. After a revoke it
+    is empty, and nothing should be re-armed for a service the user has just
+    taken away."""
+    try:
+        import xbmcaddon
+        return bool((xbmcaddon.Addon('plugin.video.pov')
+                     .getSetting('mdblist.token') or '').strip())
+    except Exception:
+        return False
+
+
+def _rearm_mdblist_one_shots():
+    """Undo the two "we have had our say" records, at a real connect only.
+
+    Both exist so that a change the user makes afterwards is respected, and
+    both are right about that -- but a revoke-and-reconnect is not a change
+    the user made to either of them, and it left this build unable to put
+    back the watched state or the home tiles the user was asking for."""
+    try:
+        from resources.lib import umbrella_watch_source
+        umbrella_watch_source.unclaim()
+    except Exception as e:
+        _safe_log('watch-source re-arm failed: {0}'.format(e), level='WARNING')
+    try:
+        from resources.lib import favourites_personal_tiles_patcher as _tiles
+        if _tiles.rearm_mdblist_tiles():
+            _safe_log('MDBList home tiles re-armed after a reconnect')
+        # Put them back now rather than at the next boot: the user is standing
+        # in front of the screen they just went to fetch.
+        _tiles.ensure_patched()
+    except Exception as e:
+        _safe_log('tile re-arm failed: {0}'.format(e), level='WARNING')
+
+
 def _handle_search(handle, params):
     """List available subtitles. Kodi calls this when the user opens
     the subtitle search dialog."""
@@ -3533,10 +3571,22 @@ def main():
         elif action == 'connect_gemini':
             _handle_connect_gemini(params)
         elif action == 'mdblist_mirror_umbrella':
-            # POV has just finished its own MDBList authorisation. Hand the
-            # access token to Umbrella so one authorisation covers both.
+            # POV has just finished its own MDBList authorisation (or revoked
+            # it). Hand the access token to Umbrella so one authorisation
+            # covers both -- and, when this is a CONNECT, re-arm the two
+            # one-shots that a revoke-and-reconnect otherwise leaves spent.
+            #
+            # This is the whole reason the connect has to be an event and not
+            # a poll. A user who revoked MDBList in POV, in Umbrella and in
+            # Account Manager and then reconnected got their lists back but
+            # no watched state, and lost the two MDBList home tiles for good:
+            # both features record "we have had our say" so that a later
+            # change by hand is respected, and both readings were correct
+            # except at the one moment the user asks for the service again.
             try:
                 from resources.lib import mdblist_umbrella_mirror
+                if _mdblist_connected_in_pov():
+                    _rearm_mdblist_one_shots()
                 _safe_log('mdblist mirror: ' + mdblist_umbrella_mirror.mirror())
             except Exception as e:
                 _safe_log('mdblist mirror failed: {0}'.format(e),

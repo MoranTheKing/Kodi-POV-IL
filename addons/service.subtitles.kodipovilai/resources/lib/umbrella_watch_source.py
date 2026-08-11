@@ -55,7 +55,13 @@ MDBLIST = '3'
 # replaced -- whatever is in that setting was not put there by us.
 NOTHING = '-'
 
-MARKER_SETTING = '_umb_watch_source_v1'
+# v2, deliberately: changing the id spends one more claim on every device.
+# unclaim() re-arms a connect from here on, but the people who already went
+# through a revoke-and-reconnect are sitting with the marker spent and Umbrella
+# back on Local -- lists but no watched state, which is the complaint this was
+# written to end. The claim is still only ever taken FROM Local and still only
+# once, so somebody who has chosen a source keeps it.
+MARKER_SETTING = '_umb_watch_source_v2'
 
 
 def _done():
@@ -116,6 +122,29 @@ def settle(done, skip=()):
         if (kodi_utils.get_setting(MARKER_SETTING, '') or '').strip() == value:
             return
         kodi_utils.set_setting(MARKER_SETTING, value)
+    except Exception:
+        pass
+
+
+def unclaim():
+    """Forget that we have had our say, so the next pass may claim again.
+
+    Called only when the user has just CONNECTED a service by hand, which is
+    the one event that legitimately re-arms the one-shot. The field case: a
+    user revoked MDBList in POV, in Umbrella and in Account Manager, then
+    reconnected -- and AM's revoke resets Umbrella's watch-source settings to
+    Local on the way through. Without this, the marker still said "settled",
+    so Umbrella kept its lists and never got watched state back, permanently,
+    and no amount of reconnecting helped. That is the exact complaint the
+    one-shot was supposed to fix, arriving through the back door.
+
+    Deliberately scoped to a real connect. It is not a licence to re-claim on
+    a timer -- a setting somebody moves while connected still stands until
+    they connect again themselves."""
+    try:
+        if not (kodi_utils.get_setting(MARKER_SETTING, '') or '').strip():
+            return
+        kodi_utils.set_setting(MARKER_SETTING, '')
     except Exception:
         pass
 

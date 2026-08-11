@@ -95,8 +95,14 @@ MDBLIST_TILES_SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_MDBLIST_TILES_SEEN_v1 -->'
 # this is for: put them back once, for anyone who still has MDBList connected,
 # then hand control back to the normal rule -- so a deletion made AFTER this
 # fires is respected permanently, like any other.
-MDBLIST_RESEED_MARKER = '<!-- AI_SUBS_FAVOURITES_MDBLIST_RESEED_v1 -->'
-MDBLIST_RESEED_KEY = 'mdblist_reseed_v1'
+# v2 spends one more, for the devices that lost the tiles across a
+# revoke-and-reconnect of MDBList. rearm_mdblist_tiles() handles that from the
+# connect action now, but only for connects that happen from here on -- the
+# people who already went through it are sitting with the tiles gone and the
+# sidecar saying we put them there once. This is the same mechanism used for
+# the same reason, one more time.
+MDBLIST_RESEED_MARKER = '<!-- AI_SUBS_FAVOURITES_MDBLIST_RESEED_v2 -->'
+MDBLIST_RESEED_KEY = 'mdblist_reseed_v2'
 # The POV movies personal tile: we splice the MDBList tiles right after it so they
 # land next to the existing "My Movies/My Series" group rather than at the bottom.
 _POV_MOVIES_TILE_NAME = '[B]הסרטים שלי (POV)[/B]'
@@ -803,6 +809,35 @@ def _fix_existing_torbox_status_action(content):
 def _has_restore_marker(content):
     return any(marker.encode('utf-8') in content
                for marker in RESTORE_MARKERS)
+
+
+def rearm_mdblist_tiles():
+    """Forget that we have inserted the MDBList tiles, so the next pass adds
+    them again. Returns True when something was actually forgotten.
+
+    'mdblist_tiles' in the sidecar means "we put these here once, so their
+    absence now is the user deleting them and must be respected". That is the
+    right reading -- except after a REVOKE-AND-RECONNECT, where the tiles go
+    because MDBList went, not because anybody chose to remove them. The field
+    report: reconnected MDBList through POV and "my movies / my series"
+    stayed gone from the home screen, with nothing able to bring them back.
+
+    Called only from the connect action, never on a timer: a deletion by hand
+    while connected still sticks.
+
+    The XML marker is deliberately NOT removed here. It is add-only bookkeeping
+    inside favourites.xml, and _insert_mdblist_tiles consults the sidecar first;
+    clearing the sidecar is what re-arms, and rewriting the user's favourites
+    file from a connect handler is more than this needs to do."""
+    try:
+        seen = _load_seen_state()
+        if 'mdblist_tiles' not in seen:
+            return False
+        seen.discard('mdblist_tiles')
+        _save_seen_state(seen)
+        return True
+    except Exception:
+        return False
 
 
 def _has_marker(content, marker):
