@@ -95,8 +95,18 @@ MDBLIST_TILES_SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_MDBLIST_TILES_SEEN_v1 -->'
 # this is for: put them back once, for anyone who still has MDBList connected,
 # then hand control back to the normal rule -- so a deletion made AFTER this
 # fires is respected permanently, like any other.
-MDBLIST_RESEED_MARKER = '<!-- AI_SUBS_FAVOURITES_MDBLIST_RESEED_v1 -->'
-MDBLIST_RESEED_KEY = 'mdblist_reseed_v1'
+# v2 spends one more, for the devices that lost the tiles across a
+# revoke-and-reconnect of MDBList: the file was rewritten while MDBList was
+# disconnected, so the tiles went, and the sidecar then refused to bring them
+# back because it said we had already put them there once. Same mechanism as
+# v1, same class of loss, one more time.
+#
+# A re-arm fired from the connect action was tried instead and removed: POV's
+# connect row fires whatever the outcome, so a declined confirmation counted
+# as a connect, and there is no reliable "a human just connected" signal to be
+# had there. A one-shot needs no signal.
+MDBLIST_RESEED_MARKER = '<!-- AI_SUBS_FAVOURITES_MDBLIST_RESEED_v2 -->'
+MDBLIST_RESEED_KEY = 'mdblist_reseed_v2'
 # The POV movies personal tile: we splice the MDBList tiles right after it so they
 # land next to the existing "My Movies/My Series" group rather than at the bottom.
 _POV_MOVIES_TILE_NAME = '[B]הסרטים שלי (POV)[/B]'

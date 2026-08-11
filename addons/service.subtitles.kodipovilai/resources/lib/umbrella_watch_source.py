@@ -55,7 +55,26 @@ MDBLIST = '3'
 # replaced -- whatever is in that setting was not put there by us.
 NOTHING = '-'
 
-MARKER_SETTING = '_umb_watch_source_v1'
+# v2, deliberately: changing the id spends one more claim on every device.
+#
+# WHY, HONESTLY. A user reported lists in Umbrella but no watched state after
+# revoking MDBList in POV, in Umbrella and in Account Manager and reconnecting.
+# The mechanism first written here -- that AM's revoke resets these two
+# settings -- is WRONG, and checking it against AM 1.1.5a is what showed that:
+# its Umbrella MDBList revoke clears `mdblist.api` and nothing else
+# (acct_vwr.py data_mdb), and Umbrella's own mdblistRevoke clears only the two
+# tokens. Neither goes near indicators.alt. The likeliest explanation is far
+# duller: the claim shipped in 0.2.482, minutes before the report, and their
+# device did not have it yet.
+#
+# The bump stays anyway, as a judgement call rather than a diagnosis. Anybody
+# actually sitting with a spent marker and Local comes right silently instead
+# of through a support conversation, and the cost is bounded: the claim is
+# still only ever taken FROM Local, still only once, so the only person who
+# loses anything is one who deliberately chose Local while connected, and they
+# can choose it again. Recorded as a guess so nobody later mistakes it for
+# evidence.
+MARKER_SETTING = '_umb_watch_source_v2'
 
 
 def _done():
@@ -120,7 +139,7 @@ def settle(done, skip=()):
         pass
 
 
-def pairs(read_umbrella, source, may_replace=()):
+def pairs(read_umbrella, source, may_replace=(), reclaim=False):
     """(key, value) pairs to write so Umbrella reads watched state from
     `source`, plus the marker state to settle afterwards.
 
@@ -136,7 +155,26 @@ def pairs(read_umbrella, source, may_replace=()):
     preference would come down to which service the user happened to connect
     first. The replacement is allowed ONLY when the value standing there is
     still exactly the one WE wrote: anything else is the user's, including
-    the user having chosen Trakt by hand."""
+    the user having chosen Trakt by hand.
+
+    `reclaim` says a human has just authorised this service. Our claim is
+    recorded, the setting is back at the shipped Local anyway, so something
+    reset it -- and somebody asking for the service is asking for it to work.
+    Allowed only for what this source put there itself or outranks in any
+    case, so it can never decide the MDBList-over-Trakt question, and never
+    for NOTHING, which is a value we did not write.
+
+    THE SIGNAL IS THE WHOLE DIFFICULTY, and three rounds of review went into
+    it. Every attempt to infer "a human just connected" from outside the click
+    fired without one, and each silently reverted a source somebody had
+    chosen: an empty Umbrella token (Umbrella empties its own -- its Revoke,
+    and Trakt's re_auth on a failed refresh), "POV is connected right now"
+    (the connect row fires whatever the outcome, so a declined confirmation
+    counted), and "POV's token changed" (POV rotates it on its own timer).
+    What finally works is not an inference at all: pov_services_patcher reads
+    POV's token on BOTH sides of POV's own set(), which is the only place that
+    sees one click's before and after. Nothing else may pass reclaim=True.
+    """
     done = _done()
     out, touched = [], dict(done)
     for key in KEYS:
@@ -155,6 +193,10 @@ def pairs(read_umbrella, source, may_replace=()):
             else:
                 touched[key] = NOTHING
         elif prev != source and prev in may_replace and current == prev:
+            out.append((key, source))
+            touched[key] = source
+        elif (reclaim and current == SHIPPED_LOCAL
+              and (prev == source or prev in may_replace)):
             out.append((key, source))
             touched[key] = source
     return out, touched
