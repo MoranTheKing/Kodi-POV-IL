@@ -391,7 +391,12 @@ def authorize():
     def _builder():
         for name, api in services:
             item = kodi_utils.make_listitem()
-            item.setLabel('[B]%s[/B]' % name.upper())
+            # No [B]..[/B] of our own. The select dialog's focused row is
+            # already emphasised by the skin, which wraps the label in its
+            # own bold tag -- and a bold tag inside a bold tag came back
+            # from the field rendering the leftover "[/B]" as literal text
+            # on whichever row happened to be focused.
+            item.setLabel(name.upper())
             try:
                 inst = api()
             except Exception:
