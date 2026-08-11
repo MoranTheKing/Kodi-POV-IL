@@ -1,3 +1,8 @@
+v0.2.484
+- Trakt no longer has to be reconnected by hand either. When the server stops
+  accepting the saved authorisation, POV now renews it and retries, the same
+  way MDBList already does, instead of going quiet for half an hour.
+
 v0.2.483
 - MDBList no longer has to be reconnected by hand. When the server stops
   accepting the saved authorisation, POV now renews it and retries instead of
