@@ -118,13 +118,28 @@ def _newer(a, b):
         return False
 
 
-def _get(addon_id, key):
+def _reader(addon_id):
+    """A read function backed by ONE Addon object, for the life of this call.
+
+    Same reasoning as the MDBList mirror: constructing xbmcaddon.Addon()
+    re-parses that add-on's whole settings.xml, this pass reads nine of POV's
+    keys, and it now runs every minute. Not cached between passes -- noticing
+    a token POV refreshed in the background is the entire point of the timer.
+
+    Returns None for every key when the add-on is not installed."""
     if xbmcaddon is None:
-        return None
+        return lambda _key: None
     try:
-        return (xbmcaddon.Addon(addon_id).getSetting(key) or '').strip()
+        addon = xbmcaddon.Addon(addon_id)
     except Exception:
-        return None      # not installed / unreadable -- not the same as ''
+        return lambda _key: None
+
+    def _get(key):
+        try:
+            return (addon.getSetting(key) or '').strip()
+        except Exception:
+            return None
+    return _get
 
 
 def mirror():
@@ -136,23 +151,29 @@ def mirror():
     if addon_settings_safe is None:
         return 'write_failed'
 
-    token = _get(POV_ADDON_ID, POV_TOKEN)
+    pov = _reader(POV_ADDON_ID)
+    token = pov(POV_TOKEN)
     if token is None:
         return 'no_pov'
-    refresh = _get(POV_ADDON_ID, POV_REFRESH)
-    client_id = _get(POV_ADDON_ID, POV_CLIENT_ID)
-    client_secret = _get(POV_ADDON_ID, POV_CLIENT_SECRET)
-    expires = _get(POV_ADDON_ID, POV_EXPIRES) or ''
-    user = _get(POV_ADDON_ID, POV_USER) or ''
+    if not token:
+        # POV is not connected. Umbrella may hold a perfectly good
+        # authorisation of its own -- leave it alone. Checked before Umbrella
+        # is opened at all: on a box with no Trakt this is every pass, and it
+        # is the difference between one settings.xml reparse a minute and
+        # nine.
+        return 'no_token'
 
-    umb_token = _get(UMBRELLA_ADDON_ID, UMB_TOKEN)
+    refresh = pov(POV_REFRESH)
+    client_id = pov(POV_CLIENT_ID)
+    client_secret = pov(POV_CLIENT_SECRET)
+    expires = pov(POV_EXPIRES) or ''
+    user = pov(POV_USER) or ''
+
+    umbrella = _reader(UMBRELLA_ADDON_ID)
+    umb_token = umbrella(UMB_TOKEN)
     if umb_token is None:
         return 'no_umbrella'
 
-    if not token:
-        # POV is not connected. Umbrella may hold a perfectly good
-        # authorisation of its own -- leave it alone.
-        return 'no_token'
     if not (refresh and client_id and client_secret):
         # Without the application's own id and secret Umbrella cannot present
         # this token as POV, and without the refresh token it cannot survive
@@ -179,17 +200,26 @@ def mirror():
     # back instead, and both are on the live pair again. Guarded on
     # trakt.authed.clientid, because a token Umbrella got as ITSELF is issued
     # to Umbrella's application and is no use to POV.
-    if (umb_token and umb_token != token
-            and _get(UMBRELLA_ADDON_ID, 'trakt.authed.clientid') == client_id
-            and _get(UMBRELLA_ADDON_ID, UMB_REFRESH)
-            and _newer(_get(UMBRELLA_ADDON_ID, UMB_EXPIRES), expires)):
-        back = (
-            (POV_TOKEN, umb_token),
-            (POV_REFRESH, _get(UMBRELLA_ADDON_ID, UMB_REFRESH)),
-            (POV_EXPIRES, _get(UMBRELLA_ADDON_ID, UMB_EXPIRES) or ''),
-        )
+    #
+    # Read once into locals and write those same values: re-reading them for
+    # the write would leave a window where Umbrella refreshes again between
+    # the test and the copy, and POV would end up with halves of two pairs.
+    umb_refresh = umbrella(UMB_REFRESH) or ''
+    umb_expires = umbrella(UMB_EXPIRES) or ''
+    if (umb_token and umb_token != token and umb_refresh
+            and umbrella('trakt.authed.clientid') == client_id
+            and _newer(umb_expires, expires)):
+        # The username comes across too. It is not needed to authenticate,
+        # but POV shows it, and a screen naming one account while holding
+        # another account's token is the kind of thing that gets diagnosed
+        # as "Trakt is broken".
+        back = [(POV_TOKEN, umb_token), (POV_REFRESH, umb_refresh),
+                (POV_EXPIRES, umb_expires)]
+        umb_user = umbrella('trakt.user.name') or ''
+        if umb_user and umb_user != user:
+            back.append((POV_USER, umb_user))
         _changed, _restored, failed = addon_settings_safe.apply(
-            POV_ADDON_ID, back)
+            POV_ADDON_ID, tuple(back))
         if failed:
             _log('could not adopt Umbrella\'s refreshed Trakt token ({0})'
                  .format(', '.join(failed)), level='WARNING')
@@ -201,11 +231,13 @@ def mirror():
     # Which service Umbrella should READ watched state from. Trakt only
     # claims it when MDBList has not -- both settings are a single choice and
     # this build prefers MDBList when the two are connected together.
+    # No may_replace: Trakt never takes these off MDBList, in either
+    # direction. The mdblist.token gate covers the common case; the marker
+    # covers the rest.
     src, settle_keys = [], None
-    if umbrella_watch_source is not None and not _get(
-            UMBRELLA_ADDON_ID, 'mdblist.token'):
+    if umbrella_watch_source is not None and not umbrella('mdblist.token'):
         src, settle_keys = umbrella_watch_source.pairs(
-            lambda k: _get(UMBRELLA_ADDON_ID, k), umbrella_watch_source.TRAKT)
+            umbrella, umbrella_watch_source.TRAKT)
 
     if umb_token == token and not src:
         # Nothing to write, but the look at the watch-source settings still

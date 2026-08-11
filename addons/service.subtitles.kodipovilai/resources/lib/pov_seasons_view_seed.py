@@ -176,9 +176,19 @@ def _remember(done):
         pass
 
 
+# The skin this process has already settled, if any. Purely in-memory, and
+# that is the point: it exists so the once-a-minute tick does not open POV's
+# views.db once a minute forever. Nothing but POV's own Set View can change
+# that row while the skin stays put, and when it does we would only be
+# standing aside anyway -- so one look per skin per Kodi session is the whole
+# of what this needs. A skin change clears it because that is the one event
+# that makes the row wrong.
+_SETTLED_SKIN = [None]
+
+
 def ensure_seeded():
-    """Returns 'no_pov' | 'unknown_skin' | 'seeded' | 'overrode' | 'reseeded'
-    | 'already' | 'user_choice' | 'failed'. Never raises."""
+    """Returns 'no_pov' | 'unknown_skin' | 'seen' | 'seeded' | 'overrode'
+    | 'reseeded' | 'already' | 'user_choice' | 'failed'. Never raises."""
     skin = _current_skin()
     want = POSTER_VIEWS.get(skin)
     if not want:
@@ -186,6 +196,8 @@ def ensure_seeded():
         # view number for an unknown skin is how you land somebody on a
         # layout that does not exist.
         return 'unknown_skin'
+    if _SETTLED_SKIN[0] == skin:
+        return 'seen'
 
     path = _db_path()
     if not path:
@@ -208,12 +220,14 @@ def ensure_seeded():
         if not first_say:
             if current == want:
                 _publish(want)      # cheap, and covers a property lost to a
-                return 'already'    # POV service that never ran this boot
+                _SETTLED_SKIN[0] = skin      # POV service that never ran
+                return 'already'             # this boot
             if current is not None and current not in set(done.values()):
                 # We have already had our say in this skin and the row is no
                 # longer any value we wrote -- in this skin or in another one
                 # that shares the table. That is the user picking a view, and
                 # it stands.
+                _SETTLED_SKIN[0] = skin
                 return 'user_choice'
 
         cur.execute("""INSERT OR REPLACE INTO views VALUES (?, ?)""",
@@ -232,6 +246,7 @@ def ensure_seeded():
     done[skin] = want
     _remember(done)
     _publish(want)
+    _SETTLED_SKIN[0] = skin
     if current == want:
         result = 'already'
     elif current is None:
