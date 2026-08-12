@@ -92,14 +92,16 @@ TVSHOWS_PA_V5 = TVSHOWS_PA_V4[:-1] + ", {'action': 'mdblist_watchlist', 'iconIma
 
 
 def _mdblist_connected():
-    """True only when POV has an MDBList API key stored. The MDBList tile routes
-    through POV's mdblist_watchlist action, which errors without a key -- so we
-    never surface it in the personal area unless MDBList is actually connected.
-    Mirrors favourites_personal_tiles_patcher._mdblist_connected()."""
+    """True only when POV holds an MDBList key -- read from POV's
+    settings.xml, not from Kodi's in-memory copy.
+
+    Account Manager writes that file DIRECTLY (its own table points at
+    addon_data/plugin.video.pov/settings.xml), so after the way everyone
+    connects MDBList now, Kodi's copy still says empty while the file
+    holds the key. See pov_settings_read for the full account."""
     try:
-        import xbmcaddon
-        tok = xbmcaddon.Addon('plugin.video.pov').getSetting('mdblist.token') or ''
-        return bool(tok.strip())
+        from resources.lib import pov_settings_read
+        return pov_settings_read.mdblist_connected()
     except Exception:
         return False
 
