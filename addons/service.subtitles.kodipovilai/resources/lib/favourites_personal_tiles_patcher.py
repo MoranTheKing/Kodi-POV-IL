@@ -1167,6 +1167,20 @@ def ensure_patched():
                            or 'personal_reseed' in _reseed_seen)
     had_full_reseed = (_has_marker(content, FULL_BUILD_RESEED_MARKER)
                        or 'full_build_reseed' in _reseed_seen)
+    # ONE GATE FOR EVERY SPLICE BELOW. Each of the insert helpers finds its
+    # anchor by that anchor's own </favourite> and splices next to it, so none
+    # of them notices that the DOCUMENT has no </favourites> at all -- a file
+    # caught mid-write, or damaged. They would then write the truncated
+    # snapshot back, discarding whatever the real writer still had to append.
+    # _insert_mdblist_tiles grew its own check for this; the Umbrella tiles,
+    # the debrid notice and the service-tile move all had the same hole, and a
+    # validator reproduced a torn file being written back through the Umbrella
+    # path. Refusing here covers all of them at once, before anything is
+    # computed, and costs only a deferral to the next run.
+    if b'</favourites>' not in content:
+        _log('favourites.xml has no closing tag; leaving every tile for a '
+             'later run', level='WARNING')
+        return 'no_favourites'
     content, fixed_existing = _fix_existing_debrid_notice_action(content)
     content, fixed_torbox_status = _fix_existing_torbox_status_action(content)
     content, debrid_notice_restored = _insert_debrid_notice_tile(
