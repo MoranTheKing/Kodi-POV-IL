@@ -2994,6 +2994,84 @@ on the other side of the pair, behind a WARNING that read as if it were only
 about MDBList. **One `try` per patcher.** Anything that applies a list of
 independent repairs in a loop wants the same rule.
 
+### Why every update closed Kodi, and what replaced it (2026-08-12)
+
+The quick update force-closed Kodi on **every** release. On Android — where
+most of these devices are — nothing brings Kodi back, so each release cost
+each user a manual relaunch. The reason turned out not to be the files:
+
+```
+plugin.video.pov               <reuselanguageinvoker>true</reuselanguageinvoker>
+plugin.video.umbrella          <reuselanguageinvoker>true</reuselanguageinvoker>
+service.subtitles.kodipovilai  <reuselanguageinvoker>true</reuselanguageinvoker>
+```
+
+Kodi keeps **one Python interpreter alive per add-on and reuses it**. A module
+already imported stays imported, so editing POV's `.py` on disk changes nothing
+until that interpreter is destroyed. Our patchers already delete the target's
+`.pyc`; memory simply beats disk. Force-closing Kodi was the blunt way to drop
+those interpreters.
+
+Disabling an add-on destroys its invoker, so they can be dropped one at a time:
+`UpdateLocalAddons()` → cycle our own service (it restarts from the NEW code and
+re-runs every third-party patcher) → **wait for it to report a finished pass** →
+cycle the add-ons it patched → `ReloadSkin()`.
+
+**The wait is on a VERSION, not a flag**, and that is the part worth keeping. A
+boolean cannot distinguish "the new service finished" from "the old service,
+still running from before the update, finished its own pass" — and acting on
+the second reloads POV against half-written files. `service.py` publishes its
+own version to a window property only after every step has been through; an
+aborted pass deliberately publishes nothing, and the property is cleared at the
+start of each pass so a stale value from the previous instance cannot satisfy a
+waiter.
+
+Anything that does not fully take falls back to the force-close, so the worst
+case is unchanged. An add-on the user disabled by hand is left alone rather
+than silently re-enabled.
+
+**This does not take effect on the release that ships it.** The new wizard code
+arrives in the package, but the update is executed by the OLD wizard, which
+does not know about it. That is inherent to changing the update mechanism
+itself; the quiet behaviour starts one release later.
+
+**Still open on the update flow:** ask instead of force-closing when a restart
+IS genuinely needed (with a countdown, defaulting to No); auto-relaunch on
+Windows/Linux only — the code is already in `restart_kodi()`, commented out —
+because Android, Android TV, iOS and webOS have no reliable way to relaunch
+Kodi, which is exactly why "don't quit" is the answer rather than "come back".
+
+### The watched tick in the Poster view (2026-08-12)
+
+Reported as "no tick on the poster". Present in every other view — List,
+Shift, Wall, InfoWall, WideWall, WideInfoWall — and missing only in the
+build's default, in POV and Umbrella alike, for movies and for seasons.
+
+Three explanations were ruled out **before** touching anything, and the order
+matters because each was cheaper than the next:
+
+- **Not the data.** POV computes watched state in ONE place
+  (`menus/movies.py` → `get_watched_status_movie`), and that same function
+  feeds the home widget, which does show the tick.
+- **Not a cache.** A full Kodi restart changed nothing.
+- **Not POV-versus-Umbrella.** The skin draws every video list, whichever
+  add-on produced it — which is also why the same fix covers both.
+
+The cause: `skin.fentastic`'s Poster view builds its tiles from
+`InfoWallMovieLayout`, and that include carries no watched control at all. It
+exists only in `BigInfoWallMovieLayout`, which the other views use.
+
+The control is inserted into the VIEW, not into the shared layout. One edit
+there instead of four would draw a **second** tick in every view that already
+has one, because several stack both layouts. `skin.povil.nox` is left alone —
+its Poster view is already correct — and a skin with no verified recipe is not
+patched on a guess: a wrong coordinate ships a tick floating over artwork on
+every device. Estuary and Arctic Fuse 3 still need their own recipe.
+
+The patcher parses the XML before writing. Kodi silently refuses a skin file it
+cannot parse and the user gets an empty screen with nothing in the log pointing
+at us, so a bad edit must never reach disk.
+
 ### Account Manager Lite: what its author confirmed (2026-08-11)
 
 Answers to the report filed against AM Lite 1.1.5a, verified against its

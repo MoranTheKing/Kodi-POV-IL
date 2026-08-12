@@ -391,6 +391,23 @@ def auto_quick_update():
     # it simply takes effect the next time Kodi starts on its own.
     if not record_quick_update_applied(note_id):
         return
+    # Try to apply it without throwing the user out of Kodi first. This is
+    # not cosmetic: the old flow force-closed on EVERY update, and Android --
+    # where most of these devices are -- has no way to bring Kodi back, so
+    # every release cost every user a manual relaunch. See Wizard.hot_reload
+    # for why a restart was needed at all (reuselanguageinvoker) and what
+    # replaces it. A hot reload that does not fully take falls straight back
+    # to the old behaviour, so the worst case is unchanged.
+    try:
+        if wizard.hot_reload():
+            logging.log(
+                '[QUICK-UPDATE] Update {0} applied in place; no restart '
+                'needed.'.format(note_id))
+            return
+    except Exception as reload_err:
+        logging.log(
+            '[QUICK-UPDATE] Hot reload raised, restarting instead: '
+            '{0}'.format(reload_err), level=xbmc.LOGWARNING)
     wizard.force_close_kodi_in_5_seconds(
         dialog_header="עדכון מהיר הסתיים בהצלחה"
     )
@@ -777,6 +794,17 @@ def wait_for_gui_ready(timeout=90):
 
 # Don't run the script while video is playing :)
 check_for_video()
+# FIRST, before anything can need them: switch back on anything a previous
+# hot reload left disabled. A disabled add-on cannot heal itself, and a
+# disabled add-on stays disabled across restarts -- so if a cycle was cut
+# short (enable call failed, Kodi killed between the two calls), this is the
+# only thing standing between the user and a permanently missing POV.
+try:
+    from resources.libs.wizard import Wizard as _HealWizard
+    _HealWizard.heal_disabled_addons()
+except Exception as _heal_err:
+    logging.log('[HOT-RELOAD] heal pass failed: {0}'.format(_heal_err),
+                level=xbmc.LOGWARNING)
 # Ensure that any needed folders are created
 tools.ensure_folders()
 # Stop this script if it's been run more than once
