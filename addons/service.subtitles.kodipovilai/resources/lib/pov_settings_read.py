@@ -89,14 +89,31 @@ def _trim_tail(content):
     block, and rstrip() does not treat NUL as whitespace. And a trailing
     comment or processing instruction, which the XML spec explicitly allows
     after the root element. Rejecting either would send a perfectly readable
-    file down the "I cannot tell" path and cost this module its point."""
-    tail = content.rstrip().rstrip('\x00').rstrip()
+    file down the "I cannot tell" path and cost this module its point.
+
+    NO REGEX HERE EITHER. `re.sub(r'(?:<!--.*?-->|<\?.*?\?>)$', ...)` rescans
+    from every candidate opener to the end for each one that does not close, so
+    a file carrying many unclosed `<!--` costs O(n^2) -- measured at 98 seconds
+    on 64k of them, on a call this module's own docstring says runs while a menu
+    is being drawn. That is the exact trap _strip_comments was rewritten to
+    escape, walked straight back into. rfind looks backwards from the end and
+    stops at the first hit."""
+    # An index, not a slice: slicing the string on every trailing comment
+    # copies the whole prefix each time, which is quadratic again for the sake
+    # of tidier code.
+    end = len(content)
     while True:
-        stripped = re.sub(r'(?:<!--.*?-->|<\?.*?\?>)$', '', tail, flags=re.S)
-        stripped = stripped.rstrip().rstrip('\x00').rstrip()
-        if stripped == tail:
-            return tail
-        tail = stripped
+        while end and (content[end - 1].isspace() or content[end - 1] == '\x00'):
+            end -= 1
+        if content.endswith('-->', 0, end):
+            opener = content.rfind('<!--', 0, end)
+        elif content.endswith('?>', 0, end):
+            opener = content.rfind('<?', 0, end)
+        else:
+            return content[:end]
+        if opener == -1:
+            return content[:end]
+        end = opener
 
 
 def _strip_comments(content):

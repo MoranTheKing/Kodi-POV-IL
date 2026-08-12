@@ -195,6 +195,12 @@ def _run_build_startup_repairs():
         # displayChannels.json otherwise crashes every channel load). Cheap,
         # self-contained, and independent of the POV/skin repairs below.
         _maybe_fix_pov_maincache_schema,
+        # Immediately after it, and for the same reason its own
+        # docstring gives: every POV menu that reads one of these
+        # caches is wrong until the table is rebuilt. That module
+        # covers maincache from a hardcoded schema; this one covers
+        # the other four the same POV upgrade transposed.
+        _maybe_repair_pov_cache_schema,
         _maybe_patch_idanplus_channels,
         _maybe_patch_hebrew_build_ui,
         _maybe_patch_brand_assets,
@@ -232,7 +238,6 @@ def _run_build_startup_repairs():
         _maybe_reseed_genre_folders,
         _maybe_patch_fentastic_widgets,
         _maybe_patch_skin_watched_poster,
-        _maybe_repair_pov_cache_schema,
         _maybe_patch_favourites_xml,
         _maybe_patch_favourites_personal_tiles,
         _maybe_patch_pov_torbox_usage,
