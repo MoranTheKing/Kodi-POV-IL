@@ -240,6 +240,33 @@ def _fragment_parses(fragment):
         return False
 
 
+def _comment_spans(content):
+    """[(start, end)] of every <!-- ... --> region, longest-first order."""
+    spans = []
+    idx = 0
+    while True:
+        start = content.find('<!--', idx)
+        if start == -1:
+            return spans
+        end = content.find('-->', start + 4)
+        if end == -1:
+            # Unterminated: everything from here on is commented out.
+            spans.append((start, len(content)))
+            return spans
+        end += 3
+        spans.append((start, end))
+        idx = end
+
+
+def _in_comment(position, spans):
+    for start, end in spans:
+        if start <= position < end:
+            return True
+        if position < start:
+            break
+    return False
+
+
 def _include_block(content, name):
     """(start, end) of one <include name="..."> ... </include>, or None.
 
@@ -249,15 +276,33 @@ def _include_block(content, name):
     NESTING IS COUNTED. A skin layout is full of <include>Something</include>
     references, so stopping at the first closing tag cuts the block in half --
     which is exactly what happened first time round, and the fragment parse
-    below caught it. Depth counting, with self-closing <include ... /> not
-    counted as an opener."""
+    caught it.
+
+    COMMENTS ARE NOT CODE, and skins are full of commented-out markup -- this
+    build's own MyVideoNav.xml keeps two whole views that way. A dead copy of
+    the opener earlier in the file used to win the search outright, and a
+    `</include>` mentioned inside a comment ended the block early, while an
+    `<include` inside one pushed the depth up and ran the block PAST its real
+    end into markup that is none of our business. All three were reproduced.
+    Comment regions are located once and every token inside them ignored --
+    for finding the opener and for counting alike."""
     opener = '<include name="%s">' % name
-    start = content.find(opener)
-    if start == -1:
-        return None
+    spans = _comment_spans(content)
+    start = -1
+    probe = 0
+    while True:
+        found = content.find(opener, probe)
+        if found == -1:
+            return None
+        if not _in_comment(found, spans):
+            start = found
+            break
+        probe = found + 1
     depth = 0
     for match in re.finditer(r'<include\b[^>]*?(/?)>|</include>',
                              content[start:]):
+        if _in_comment(start + match.start(), spans):
+            continue
         token = match.group(0)
         if token == '</include>':
             depth -= 1
@@ -298,12 +343,18 @@ def _patch_list_one(skin_id, recipe):
     start, end = bounds
     block = content[start:end]
     pattern = _list_pattern(recipe)
-    found = len(pattern.findall(block))
-    if found != recipe['expected']:
+    # A commented-out copy of the texture is not a texture. Counting one would
+    # push the total off `expected` and abandon a skin that is in fact fine;
+    # rewriting one would put our marker inside a comment, where the revert
+    # could never find it again.
+    block_comments = _comment_spans(block)
+    live = [m for m in pattern.finditer(block)
+            if not _in_comment(m.start(), block_comments)]
+    if len(live) != recipe['expected']:
         _log('{0}: expected {1} {2} textures in {3}, found {4} -- the skin has '
              'changed; leaving it alone'.format(
                  skin_id, recipe['expected'], recipe['from_var'],
-                 recipe['include'], found), level='WARNING')
+                 recipe['include'], len(live)), level='WARNING')
         return 'unmatched'
 
     eol = _eol(content)
@@ -318,7 +369,12 @@ def _patch_list_one(skin_id, recipe):
             LIST_MARKER, eol, indent, match.group(1), recipe['to_var'],
             match.group(2))
 
-    new_block = pattern.sub(_swap, block)
+    new_block = ''
+    cursor = 0
+    for match in live:
+        new_block += block[cursor:match.start()] + _swap(match)
+        cursor = match.end()
+    new_block += block[cursor:]
     new_content = content[:start] + new_block + content[end:]
 
     # THE BLOCK, NOT THE FILE. These skin XMLs are not valid XML to a strict
