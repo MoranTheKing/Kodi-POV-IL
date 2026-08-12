@@ -391,6 +391,23 @@ def auto_quick_update():
     # it simply takes effect the next time Kodi starts on its own.
     if not record_quick_update_applied(note_id):
         return
+    # Try to apply it without throwing the user out of Kodi first. This is
+    # not cosmetic: the old flow force-closed on EVERY update, and Android --
+    # where most of these devices are -- has no way to bring Kodi back, so
+    # every release cost every user a manual relaunch. See Wizard.hot_reload
+    # for why a restart was needed at all (reuselanguageinvoker) and what
+    # replaces it. A hot reload that does not fully take falls straight back
+    # to the old behaviour, so the worst case is unchanged.
+    try:
+        if wizard.hot_reload():
+            logging.log(
+                '[QUICK-UPDATE] Update {0} applied in place; no restart '
+                'needed.'.format(note_id))
+            return
+    except Exception as reload_err:
+        logging.log(
+            '[QUICK-UPDATE] Hot reload raised, restarting instead: '
+            '{0}'.format(reload_err), level=xbmc.LOGWARNING)
     wizard.force_close_kodi_in_5_seconds(
         dialog_header="עדכון מהיר הסתיים בהצלחה"
     )
