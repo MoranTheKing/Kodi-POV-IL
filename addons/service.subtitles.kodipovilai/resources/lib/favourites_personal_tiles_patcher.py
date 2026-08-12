@@ -735,25 +735,50 @@ def _insert_mdblist_tiles(content, fixture_text):
         return content, False            # not connected -> never add, never stamp
     seen = _load_seen_state()
     already_present = _missing_tiles(content, MDBLIST_WATCHLIST_TILE_NAMES) == ()
-    # The one-time forced restore (see MDBLIST_RESEED_MARKER). Claimed BEFORE
-    # the checks below so it is spent exactly once whether or not it ends up
-    # inserting anything -- an install that already has the tiles must not keep
-    # the credit and spend it after a genuine deletion later.
+    # The one-time forced restore (see MDBLIST_RESEED_MARKER).
     forced = (not _has_marker(content, MDBLIST_RESEED_MARKER)
               and MDBLIST_RESEED_KEY not in seen)
-    if forced:
-        seen.add(MDBLIST_RESEED_KEY)
-        _save_seen_state(seen)
+
+    def _spend_reseed(*extra):
+        """Bank the one-time credit, plus any other keys, in one write.
+
+        SPENT ONLY ON A DECIDED OUTCOME. It used to be claimed up front,
+        before any of the checks below -- so a user whose favourites.xml was
+        torn on the one run that mattered lost the single restore they were
+        entitled to, forever and silently, without a tile ever being written.
+        An install that already HAS the tiles is a decided outcome and spends
+        it here: the credit must not sit around to be spent after a genuine
+        later deletion, which is what claiming it early was for. The INSERTING
+        path does not spend it here at all -- ensure_patched() banks it once
+        the file is actually on disk, for the same reason it banks
+        'mdblist_tiles' there and not here."""
+        keys = set(extra)
+        if forced:
+            keys.add(MDBLIST_RESEED_KEY)
+        keys -= seen
+        if keys:
+            seen.update(keys)
+            _save_seen_state(seen)
+
     if already_present:
         # Tiles present -> persist "seen" so a LATER delete sticks.
-        if 'mdblist_tiles' not in seen:
-            seen.add('mdblist_tiles')
-            _save_seen_state(seen)
+        _spend_reseed('mdblist_tiles')
         return content, False
     # Absent: if we've ever inserted them, respect the deletion and never re-add
     # -- unless this is the single forced restore, which overrides exactly once.
     if not forced and ('mdblist_tiles' in seen
                        or _has_marker(content, MDBLIST_TILES_SEEN_MARKER)):
+        return content, False
+    # A FILE WITH NO CLOSING TAG IS NOT A FILE WE WRITE TO. Kodi always closes
+    # favourites.xml; missing it means we caught the writer mid-flight, or the
+    # file is damaged. _insert_tile_after only needs its anchor's own
+    # </favourite>, so without this check a fully-anchored insertion would
+    # splice tiles into that truncated snapshot and write it back -- discarding
+    # whatever the real writer still had to append. Refuse, spend nothing, and
+    # let the next run see a whole file.
+    if b'</favourites>' not in content:
+        _log('favourites.xml has no closing tag; leaving the MDBList tiles '
+             'for a later run', level='WARNING')
         return content, False
     tiles = []
     tile_texts = []
@@ -795,16 +820,10 @@ def _insert_mdblist_tiles(content, fixture_text):
         # was written for: nothing anchored at all.
         appended = _insert_tiles_before_close(placed, leftovers)
         if appended is None:
-            # No </favourites> at all: the file is truncated or not a
-            # favourites list. Falling through to the old splice here would
-            # either wedge the leftover between the anchor and the tile we
-            # just placed there, or -- when there is no POV films tile either
-            # -- return the ALREADY-MUTATED content flagged "nothing changed",
-            # so the caller computes the placement and then drops it without
-            # writing. Neither is worth doing on a file this shape: refuse,
-            # return exactly what we were given, and leave it untouched.
-            _log('favourites.xml has no closing tag; leaving the MDBList '
-                 'tiles for a later run', level='WARNING')
+            # Unreachable: the closing tag was checked before any of this.
+            # Kept because the old fallback below would otherwise wedge the
+            # leftover between the anchor and the tile just placed there, and
+            # that is not a thing to leave one refactor away from happening.
             return content, False
         placed, leftovers = appended, []
     if not leftovers:
@@ -1369,8 +1388,12 @@ def ensure_patched():
         # the user's and left alone. See _insert_mdblist_tiles.
         try:
             _s = _load_seen_state()
-            if 'mdblist_tiles' not in _s:
-                _s.add('mdblist_tiles')
+            # The one-time forced restore is banked HERE too, not when the
+            # placement was computed: a credit spent on a write that never
+            # landed is a restore the user silently never gets.
+            _new = {'mdblist_tiles', MDBLIST_RESEED_KEY} - _s
+            if _new:
+                _s.update(_new)
                 _save_seen_state(_s)
         except Exception:
             pass
