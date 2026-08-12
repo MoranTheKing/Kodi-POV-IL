@@ -223,7 +223,7 @@ def test_workflow_package_guards() -> None:
     workflow = (ROOT / ".github/workflows/build-apk.yml").read_text(
         encoding="utf-8"
     )
-    assert "WIZARD_VERSION: '0.1.35'" in workflow
+    assert "WIZARD_VERSION: '0.1.44'" in workflow
     assert "default: '21.3-povil.48'" in workflow
     assert "default: '2103048'" in workflow
     assert "EXPECTED_RELEASE: '21.3-povil.48'" in workflow
@@ -247,7 +247,7 @@ def test_wizard_rebuild_from_clean_checkout() -> None:
     """The surgical Wizard release must rebuild after its source is committed."""
     manifest_path = (
         ROOT
-        / "wizard/release_manifests/plugin.program.kodipovilwizard-0.1.35.json"
+        / "wizard/release_manifests/plugin.program.kodipovilwizard-0.1.44.json"
     )
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert set(manifest["replace"]) == {
@@ -272,8 +272,8 @@ def test_wizard_rebuild_from_clean_checkout() -> None:
             clean / "tools/build_wizard_package.py",
         )
         shutil.copy2(
-            ROOT / "dist/plugin.program.kodipovilwizard-0.1.34.zip",
-            clean / "dist/plugin.program.kodipovilwizard-0.1.34.zip",
+            ROOT / "dist/plugin.program.kodipovilwizard-0.1.43.zip",
+            clean / "dist/plugin.program.kodipovilwizard-0.1.43.zip",
         )
         shutil.copy2(
             manifest_path,
@@ -315,14 +315,14 @@ def test_wizard_rebuild_from_clean_checkout() -> None:
             sys.executable,
             "tools/build_wizard_package.py",
             "--previous",
-            "dist/plugin.program.kodipovilwizard-0.1.34.zip",
+            "dist/plugin.program.kodipovilwizard-0.1.43.zip",
             "--manifest",
             "wizard/release_manifests/"
-            "plugin.program.kodipovilwizard-0.1.35.json",
+            "plugin.program.kodipovilwizard-0.1.44.json",
             "--version",
-            "0.1.35",
+            "0.1.44",
         )
-        rebuilt = clean / "dist/plugin.program.kodipovilwizard-0.1.35.zip"
+        rebuilt = clean / "dist/plugin.program.kodipovilwizard-0.1.44.zip"
         assert hashlib.sha256(rebuilt.read_bytes()).hexdigest() == (
             manifest["output_sha256"]
         )
@@ -346,7 +346,7 @@ def test_phase_one_artifacts() -> None:
         / ("Kodi-POV-IL-FENtastic-quickfix-%s.zip"
            % quickfix_match.group(1))
     ).is_file()
-    assert "kodipovilwizard-0.1.35.zip" in build
+    assert "kodipovilwizard-0.1.44.zip" in build
 
     # Accept both legal publication states:
     #   phase 1 -> artifacts/snapshot N are live while note N-1 remains live;
@@ -357,11 +357,14 @@ def test_phase_one_artifacts() -> None:
     note_id = int(note.split("|||", 1)[0])
     assert note_id in (snapshot_id - 1, snapshot_id)
 
-    old_wizard = ROOT / "dist/plugin.program.kodipovilwizard-0.1.34.zip"
-    new_wizard = ROOT / "dist/plugin.program.kodipovilwizard-0.1.35.zip"
+    # Each release against its OWN predecessor. This pair used to be pinned
+    # to a historical one and drifted into asserting a file list that had
+    # nothing to do with the version being shipped.
+    old_wizard = ROOT / "dist/plugin.program.kodipovilwizard-0.1.43.zip"
+    new_wizard = ROOT / "dist/plugin.program.kodipovilwizard-0.1.44.zip"
     latest_wizard = ROOT / "dist/plugin.program.kodipovilwizard-latest.zip"
     assert new_wizard.read_bytes() == latest_wizard.read_bytes()
-    page_wizard = ROOT / "wizard/plugin.program.kodipovilwizard-0.1.35.zip"
+    page_wizard = ROOT / "wizard/plugin.program.kodipovilwizard-0.1.44.zip"
     page_latest = ROOT / "wizard/plugin.program.kodipovilwizard-latest.zip"
     assert new_wizard.read_bytes() == page_wizard.read_bytes()
     assert new_wizard.read_bytes() == page_latest.read_bytes()
