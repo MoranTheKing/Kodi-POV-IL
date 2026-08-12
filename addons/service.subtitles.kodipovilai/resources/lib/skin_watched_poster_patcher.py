@@ -423,13 +423,27 @@ def _revert_list_one(skin_id, recipe):
         return 'failed'
     start, end = bounds
     block = content[start:end]
-    restored = re.sub(
+    restored, undone = re.subn(
         r'%s%s[ \t]*(<texture[^>]*>)\$VAR\[%s\](</texture>)' % (
             re.escape(LIST_MARKER), re.escape(eol),
             re.escape(recipe['to_var'])),
         lambda m: '%s$VAR[%s]%s' % (m.group(1), recipe['from_var'],
                                     m.group(2)),
         block)
+    if undone != recipe['expected']:
+        # COUNT WHAT WE PUT BACK, don't just look for leftover markers. If
+        # somebody deletes one marker LINE outright -- leaving its texture on
+        # the new variable with nothing to find it by -- the leftover-marker
+        # check below sees a clean file and reports success, while one texture
+        # stays on the fix and the other goes back. That half-state is
+        # unreachable by either function afterwards: the patch refuses (the
+        # count is no longer two) and the revert refuses (no marker left). So
+        # the number of reversions has to match the number we made, or we
+        # touch nothing.
+        _log('{0}: expected to undo {1} texture(s), matched {2} -- the block '
+             'is no longer as we left it; refusing'.format(
+                 skin_id, recipe['expected'], undone), level='WARNING')
+        return 'failed'
     if LIST_MARKER in restored:
         # Somebody edited inside our replacement. Guessing what to remove from
         # a file the whole UI is drawn from is worse than leaving it.
