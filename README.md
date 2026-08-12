@@ -87,6 +87,32 @@ Quick updates are controlled by:
 
 When the quick update number increases, installed builds receive the `gui` package automatically on next Kodi startup.
 
+## Update delivery (from wizard `0.1.42`)
+
+A quick update no longer closes Kodi. The wizard applies it in place by cycling
+the add-ons that hold a reused Python interpreter, waits for the service to
+report a finished repair pass, and reloads the skin. Nothing is applied while
+something is playing -- the update stays on disk and takes effect at the next
+start, and the notification says so rather than claiming it was applied. If any
+part does not take, it falls back to the previous behaviour (a restart), and an
+add-on left switched off is recorded on disk and switched back on at the next
+start.
+
+## POV self-update and its caches (from `0.2.489`)
+
+POV updates itself from its author's repository, and its newer versions changed
+the column order of their own cache tables while keeping `CREATE TABLE IF NOT
+EXISTS`. On a device that already had the previous version, the old table
+survives and the new code writes every value into the wrong column -- which
+shows up as search errors and empty "new"/"popular" rows.
+
+The build repairs this on startup: the affected cache tables are rebuilt in the
+order POV's own source declares, in one transaction, keeping every row that is
+still readable. Only caches are touched -- watched status, resume points, views
+and the navigator lists are out of scope by rule. Favourites saved before the
+change are copied into the table the newer POV reads, and the original file is
+left untouched.
+
 ## Subtitle display and community-pool behavior
 
 From MoranSubs `0.2.443` / quickfix `0.1.485`:
