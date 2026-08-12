@@ -53,6 +53,60 @@ def _settings_path(addon_id=POV_ADDON_ID):
     return path if os.path.isfile(path) else ''
 
 
+def _is_complete_document(content):
+    """True only for a settings file that was fully written.
+
+    A HALF-WRITTEN FILE MUST NOT ANSWER. Account Manager rewrites this file
+    whole. Read it in the middle of that and you get a valid-looking prefix
+    with the key not in it yet -- and the three-way return above would then
+    treat "the file says there is no key" as a definitive answer and hide the
+    MDBList row from a user who is, in fact, connected. That is the same
+    failure this module exists to prevent, arriving from the other side.
+
+    The test is the closing tag, which is written last: without it the file is
+    a fragment, we cannot answer from it, and the caller falls back to Kodi's
+    in-memory copy. A deliberately empty <settings/> is a complete document and
+    is accepted -- that one really does mean "no key".
+    """
+    if '</settings>' in content:
+        return True
+    return re.search(r'<settings\b[^>]*/>', content) is not None
+
+
+def _strip_comments(content):
+    """Comments removed, or None when the file cannot be trusted.
+
+    WHY NOT A REGEX. `re.sub(r'<!--.*?-->', ...)` rescans to end-of-string for
+    every `<!--` that has no closer ahead of it, so a file carrying many of
+    them costs O(n^2) -- measured at six seconds on 80KB, inside a call that
+    runs while a menu is being drawn. find() walks the string once.
+
+    An unterminated comment means the file is malformed, and the honest answer
+    to "is MDBList connected" is then "I cannot tell": returning None sends the
+    caller to Kodi's in-memory copy instead of to a half-parsed guess.
+
+    A comment ends at its FIRST `-->`, so text after that is live content even
+    if the author meant it to stay commented out. That is what the XML spec
+    says and what Kodi's own parser does -- matching it is the point, because a
+    reader that disagreed with Kodi about what the file contains would be worse
+    than one that is occasionally surprising.
+    """
+    if '<!--' not in content:
+        return content
+    out = []
+    idx = 0
+    while True:
+        start = content.find('<!--', idx)
+        if start < 0:
+            out.append(content[idx:])
+            return ''.join(out)
+        end = content.find('-->', start + 4)
+        if end < 0:
+            return None
+        out.append(content[idx:start])
+        idx = end + 3
+
+
 def get_setting(setting_id, addon_id=POV_ADDON_ID):
     """The stored value, '' when the file says there is none, or None when the
     file could not be read at all.
@@ -85,9 +139,13 @@ def get_setting(setting_id, addon_id=POV_ADDON_ID):
             content = handle.read()
     except Exception:
         return None
+    if not _is_complete_document(content):
+        return None
     # Commented-out settings are not settings. A parser whose whole job is to
     # read this file correctly should not be fooled by <!-- ... -->.
-    content = re.sub(r'<!--.*?-->', '', content, flags=re.S)
+    content = _strip_comments(content)
+    if content is None:
+        return None
     quoted = re.escape(setting_id)
     match = re.search(
         r'<setting[^>]*\bid="%s"[^>]*>([^<]*)</setting>' % quoted, content)
