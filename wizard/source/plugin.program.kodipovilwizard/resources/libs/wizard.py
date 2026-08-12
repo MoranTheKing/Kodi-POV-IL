@@ -460,10 +460,19 @@ class Wizard:
         add-on stayed off forever. Reproduced by a validator that made every
         call raise and watched a still-disabled POV lose its record.
 
-        The difference is in the reply. Kodi answering "no such add-on" is an
-        `error` object, which is an ANSWER -- the id really is gone and the
-        record should be dropped. No reply at all, or a reply we cannot read,
-        is not an answer, and the record must survive it.
+        WE DO NOT READ THE ERROR. Treating any `error` reply as "no such
+        add-on" was the same bug wearing a different hat: JSON-RPC also
+        answers with an error for a busy or internal failure -- plausible
+        right after the UpdateLocalAddons() this file itself calls, while the
+        add-on database is still being rebuilt -- and the add-on in question
+        is installed the whole time. Reproduced with a generic -32603 and the
+        record was dropped on a still-disabled add-on.
+
+        So when the details call does not give a straight answer we ask a
+        different question instead of interpreting the refusal: list every
+        add-on Kodi has, enabled or not. Present in that list means installed,
+        and its own flag is the state. Missing from a list we actually
+        received means gone. No list means we still do not know.
         """
         result = cls._jsonrpc('Addons.GetAddonDetails', {
             'addonid': addon_id, 'properties': ['enabled']})
@@ -471,9 +480,21 @@ class Wizard:
             return bool(result['result']['addon']['enabled'])
         except Exception:
             pass
-        if isinstance(result, dict) and 'error' in result:
-            return 'absent'
-        return None
+        listing = cls._jsonrpc('Addons.GetAddons',
+                               {'enabled': 'all', 'properties': ['enabled']})
+        try:
+            addons = listing['result']['addons']
+        except Exception:
+            return None
+        for addon in addons:
+            try:
+                if addon.get('addonid') != addon_id:
+                    continue
+            except Exception:
+                continue
+            enabled = addon.get('enabled')
+            return None if enabled is None else bool(enabled)
+        return 'absent'
 
     @classmethod
     def _addon_is_enabled_static(cls, addon_id):
@@ -541,16 +562,29 @@ class Wizard:
             # add-on. os.replace is atomic: either the old content survives
             # intact or the new content lands whole.
             tmp = path + '.tmp'
+            # A DIRECTORY SITTING ON THE TEMP NAME BLOCKS EVERY FUTURE WRITE.
+            # os.remove refuses to delete a directory, so the old cleanup left
+            # it there forever and the record could never be written again on
+            # that install -- silently, since every failure is swallowed.
+            cls._clear_tmp(tmp)
             with open(tmp, 'w', encoding='utf-8') as f:
                 f.write('\n'.join(ids))
             os.replace(tmp, path)
             return True
         except Exception:
-            try:
-                os.remove(path + '.tmp')
-            except Exception:
-                pass
+            cls._clear_tmp(path + '.tmp')
             return False
+
+    @staticmethod
+    def _clear_tmp(tmp):
+        """Remove the scratch file whether it is a file or a directory."""
+        try:
+            if os.path.isdir(tmp):
+                os.rmdir(tmp)
+            elif os.path.exists(tmp):
+                os.remove(tmp)
+        except Exception:
+            pass
 
     @classmethod
     def heal_disabled_addons(cls):
@@ -595,7 +629,14 @@ class Wizard:
                     still_off.append(addon_id)
             except Exception:
                 still_off.append(addon_id)
-        cls._pending_enable_write(still_off)
+        if not cls._pending_enable_write(still_off):
+            # Harmless -- the ids stay listed and the next start re-verifies
+            # them, finds them already on, and clears them then. Logged because
+            # every other write in this file is checked, and a silent one here
+            # would look like a gap rather than a decision.
+            logging.log('[HOT-RELOAD] could not update the record after '
+                        'healing; it will be re-checked at the next start',
+                        level=xbmc.LOGWARNING)
         if gone:
             logging.log('[HOT-RELOAD] no longer installed, dropping from the '
                         'record: {0}'.format(', '.join(gone)),
