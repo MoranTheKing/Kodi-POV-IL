@@ -110,6 +110,21 @@ MDBLIST_RESEED_KEY = 'mdblist_reseed_v2'
 # The POV movies personal tile: we splice the MDBList tiles right after it so they
 # land next to the existing "My Movies/My Series" group rather than at the bottom.
 _POV_MOVIES_TILE_NAME = '[B]הסרטים שלי (POV)[/B]'
+_POV_SERIES_TILE_NAME = '[B]הסדרות שלי (POV)[/B]'
+# The families the MDBList tiles belong beside. Order does not matter: the tile
+# goes after the LAST of these that the file has, so an install that kept only
+# one of the three still gets a sensible position.
+MDBLIST_MOVIES_ANCHORS = (
+    '[B]הסרטים שלי (TMDB)[/B]',
+    '[B]הסרטים שלי (Trakt)[/B]',
+    _POV_MOVIES_TILE_NAME,
+)
+MDBLIST_SERIES_ANCHORS = (
+    '[B]הסדרות שלי (TMDB)[/B]',
+    '[B]הסדרות שלי (Trakt)[/B]',
+    _POV_SERIES_TILE_NAME,
+)
+MDBLIST_SERIES_TILE_NAME = '[B]הסדרות שלי (MDBList)[/B]'
 PREMIUMIZE_ACTION = 'premiumize.show_account_info'
 TORBOX_ACTION = 'torbox.show_account_info'
 TORBOX_STATUS_ACTION = (
@@ -387,13 +402,16 @@ def _insert_debrid_notice_tile(content, fixture_text):
 
 
 def _mdblist_connected():
-    """True only when POV has an MDBList API key stored. The MDBList tiles route
-    through POV's mdblist_watchlist action, which errors without a key -- so we
-    never surface them unless MDBList is actually connected."""
+    """True only when POV holds an MDBList key -- read from POV's
+    settings.xml, not from Kodi's in-memory copy.
+
+    Account Manager writes that file DIRECTLY (its own table points at
+    addon_data/plugin.video.pov/settings.xml), so after the way everyone
+    connects MDBList now, Kodi's copy still says empty while the file
+    holds the key. See pov_settings_read for the full account."""
     try:
-        import xbmcaddon
-        tok = xbmcaddon.Addon('plugin.video.pov').getSetting('mdblist.token') or ''
-        return bool(tok.strip())
+        from resources.lib import pov_settings_read
+        return pov_settings_read.mdblist_connected()
     except Exception:
         return False
 
@@ -739,6 +757,7 @@ def _insert_mdblist_tiles(content, fixture_text):
         return content, False
     tiles = []
     tile_texts = []
+    pending = []
     # Insert only the ACTUALLY-missing tile(s): if the user deleted just one of the
     # pair (and we never got to stamp 'seen'), never duplicate the survivor.
     for name in _missing_tiles(content, MDBLIST_WATCHLIST_TILE_NAMES):
@@ -747,6 +766,47 @@ def _insert_mdblist_tiles(content, fixture_text):
             return content, False        # fixture incomplete -> safe no-op
         tiles.append(snippet.encode('utf-8'))
         tile_texts.append(snippet)
+        pending.append((name, snippet.encode('utf-8')))
+
+    # EACH TILE NEXT TO ITS OWN KIND. Both used to go in together, right after
+    # the POV films tile, which is why they ended up side by side at the bottom
+    # of the home screen instead of films-with-films and series-with-series.
+    # Placed one at a time, after the LAST tile of the matching family that the
+    # file actually has, so it works whichever of TMDB/Trakt/POV a given install
+    # kept. Anything we cannot place falls through to the old behaviour rather
+    # than being dropped.
+    placed = content
+    leftovers = []
+    for name, tile_bytes in pending:
+        anchors = (MDBLIST_SERIES_ANCHORS if name == MDBLIST_SERIES_TILE_NAME
+                   else MDBLIST_MOVIES_ANCHORS)
+        moved = _insert_tile_after(placed, tile_bytes, anchors)
+        if moved is None:
+            leftovers.append(tile_bytes)
+        else:
+            placed = moved
+    if leftovers and placed is not content:
+        # Some tiles found their family and some did not. The old fallback
+        # splices right after the POV FILMS tile -- which, on a file that
+        # already has an anchored tile sitting there, pushes it off its own
+        # anchor and undoes the point of this change. When anything has been
+        # placed, the leftovers go to the end of the file instead, where they
+        # cannot disturb it. The POV-films splice stays only for the case it
+        # was written for: nothing anchored at all.
+        appended = _insert_tiles_before_close(placed, leftovers)
+        if appended is not None:
+            placed, leftovers = appended, []
+    if not leftovers:
+        new_content = placed
+        new_content, _ = _insert_marker(new_content, MDBLIST_TILES_SEEN_MARKER)
+        new_content, _ = _insert_marker(new_content, MDBLIST_RESEED_MARKER)
+        live = _live_add_tiles(tile_texts)
+        if live:
+            _log('added {0} MDBList tile(s) to the running Kodi favourites '
+                 'list -- no restart needed'.format(live), level='INFO')
+        return new_content, True
+    content = placed
+    tiles = leftovers
     pov_movies_pat = re.compile(
         rb'([ \t]*<favourite\s[^>]*?name="'
         + re.escape(_POV_MOVIES_TILE_NAME.encode('utf-8'))
@@ -915,6 +975,39 @@ def _insert_tiles_before_close(content, tiles):
     if close_idx == -1:
         return None
     return content[:close_idx] + b''.join(tiles) + content[close_idx:]
+
+
+def _insert_tile_after(content, tile_bytes, anchor_names):
+    """Put one tile straight after the last of `anchor_names` present.
+
+    Appending to the end of the file is what put "My Movies (MDBList)" and
+    "My Series (MDBList)" next to EACH OTHER at the bottom of the home screen
+    instead of each beside its own kind -- films with films, series with
+    series. The tiles were right, the position was not, and it reads as a bug
+    to anybody looking at their home screen.
+
+    Returns None when no anchor is present, so the caller can fall back to
+    appending rather than guessing a position in a file it does not recognise.
+    """
+    best = -1
+    for name in anchor_names:
+        needle = b'name="' + name.encode('utf-8') + b'"'
+        idx = content.rfind(needle)
+        if idx == -1:
+            continue
+        end = content.find(b'</favourite>', idx)
+        if end == -1:
+            continue
+        end += len(b'</favourite>')
+        # Carry the newline that follows the anchor with it, so the inserted
+        # tile lands on its own line exactly like every other one.
+        while end < len(content) and content[end:end + 1] in (b'\r', b'\n'):
+            end += 1
+        if end > best:
+            best = end
+    if best == -1:
+        return None
+    return content[:best] + tile_bytes + content[best:]
 
 
 def _install_canonical_home(fav_path, content):
