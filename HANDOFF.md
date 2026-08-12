@@ -648,10 +648,36 @@ So films scrape with their English title and series scrape with the Hebrew one.
 On an English build nobody ever notices. POV is unaffected because it keeps the
 original title for scraping.
 
-THE FIX is to seed those two show-side settings to true, through
-`addon_settings_safe` like every other Umbrella setting this build sets. It
-costs one IMDb lookup per play and it is exactly what upstream already does for
-movies. Not yet shipped.
+THE FIX seeds those two show-side settings to true, through
+`addon_settings_safe` like every other Umbrella setting this build sets, once
+each and respecting a user who later turns them off. It is exactly what
+upstream already does for movies. `imdb.Showyear.check` is deliberately left
+alone: the year is not what is wrong, and changing more than the reported fault
+is how a fix earns a bug report of its own.
+
+Measured cost: one IMDb suggestion request per explicit play, 0.3-1.1s in
+fifteen live calls, on the path before the sources window opens. Zero requests
+when rendering an episode list. Every failure -- no id, timeout, junk JSON --
+falls back to the title it was handed and never breaks playback.
+
+THREE KNOWN GAPS, all validated, none blocking:
+
+1. **Continuous playback bypasses it.** `prescrapeNext()` calls `getSources()`
+   directly and `imdb_meta_chk` lives only in `play()`, whose `preResolved`
+   branch also returns before the gate. A user who turns Umbrella's
+   "Continuous playback" on still scrapes every episode after the first with
+   the displayed title. That setting is off by default and this build ships no
+   Umbrella settings file, so it is opt-in -- but closing it means patching
+   Umbrella's own source, not a setting.
+2. **`imdb_meta_chk` never checks that the reply is about the id it asked
+   for.** A malformed or wrong-entity id makes the endpoint fall back to fuzzy
+   search and return an unrelated title, complete with a year, which passes its
+   only sanity check. Pre-existing -- movies have had this exposure since
+   upstream shipped their flag true -- but this makes it reachable for shows.
+3. **IMDb's canonical title is occasionally a worse match than the one we
+   had.** tt1877368 answers "The Great British Baking Show" where releases use
+   "Bake Off". Umbrella already hardcodes a workaround for one such title, so
+   the class is known upstream and only partly handled.
 
 ## POV auto-updates itself out from under the build (2026-08-12, critical)
 
