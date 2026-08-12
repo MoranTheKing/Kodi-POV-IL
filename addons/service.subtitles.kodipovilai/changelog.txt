@@ -1,3 +1,8 @@
+v0.2.490
+- Umbrella now looks up a series by its original name before searching for
+  sources, so a show with a Hebrew name gets its own sources instead of
+  whatever happened to share the same season and episode number.
+
 v0.2.489
 - Fixes POV search, and the new/popular rows being empty or missing, after
   POV updates itself: the new version writes its caches in a different order
