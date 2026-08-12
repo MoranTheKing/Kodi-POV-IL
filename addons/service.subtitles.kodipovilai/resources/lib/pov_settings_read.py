@@ -54,9 +54,19 @@ def _settings_path(addon_id=POV_ADDON_ID):
 
 
 def get_setting(setting_id, addon_id=POV_ADDON_ID):
-    """The stored value, or '' when it cannot be read.
+    """The stored value, '' when the file says there is none, or None when the
+    file could not be read at all.
 
-    Both settings.xml shapes are handled. Kodi 18+ writes
+    THE THREE-WAY ANSWER IS THE POINT. An earlier version returned '' for all
+    three, and mdblist_connected() then fell back to Kodi's in-memory copy on
+    every one of them -- including the case where the file explicitly says the
+    key is gone. A user who revokes MDBList without restarting Kodi would have
+    kept the stale token in memory and been shown the row and the tiles
+    pointing at an action that now errors: exactly the broken-entry outcome
+    this module exists to prevent, in the opposite direction.
+
+    Both settings.xml shapes are handled, in either attribute order. Kodi 18+
+    writes
 
         <setting id="mdblist.token">abc</setting>
 
@@ -69,21 +79,26 @@ def get_setting(setting_id, addon_id=POV_ADDON_ID):
     """
     path = _settings_path(addon_id)
     if not path:
-        return ''
+        return None
     try:
         with open(path, 'r', encoding='utf-8') as handle:
             content = handle.read()
     except Exception:
-        return ''
+        return None
+    # Commented-out settings are not settings. A parser whose whole job is to
+    # read this file correctly should not be fooled by <!-- ... -->.
+    content = re.sub(r'<!--.*?-->', '', content, flags=re.S)
     quoted = re.escape(setting_id)
     match = re.search(
         r'<setting[^>]*\bid="%s"[^>]*>([^<]*)</setting>' % quoted, content)
     if match:
         return _unescape(match.group(1)).strip()
-    match = re.search(
-        r'<setting[^>]*\bid="%s"[^>]*\bvalue="([^"]*)"' % quoted, content)
-    if match:
-        return _unescape(match.group(1)).strip()
+    # value="..." in either order: id first, or value first.
+    for pattern in (r'<setting[^>]*\bid="%s"[^>]*\bvalue="([^"]*)"' % quoted,
+                    r'<setting[^>]*\bvalue="([^"]*)"[^>]*\bid="%s"' % quoted):
+        match = re.search(pattern, content)
+        if match:
+            return _unescape(match.group(1)).strip()
     return ''
 
 
@@ -98,12 +113,13 @@ def _unescape(text):
 def mdblist_connected():
     """True when POV holds an MDBList key, whoever wrote it.
 
-    Falls back to Kodi's in-memory copy when the file cannot be read at all --
-    a fresh install with no addon_data yet, for instance. The fallback can only
-    ever say True on its own account, never suppress a True the file gave.
-    """
-    if get_setting('mdblist.token'):
-        return True
+    Kodi's in-memory copy is consulted ONLY when the file could not be read at
+    all -- a fresh install with no addon_data yet, for instance. A file that
+    says the key is empty is an answer, not a gap, and must not be overridden
+    by a value Kodi loaded before the user revoked it."""
+    value = get_setting('mdblist.token')
+    if value is not None:
+        return bool(value)
     try:
         import xbmcaddon
         token = xbmcaddon.Addon(POV_ADDON_ID).getSetting('mdblist.token') or ''

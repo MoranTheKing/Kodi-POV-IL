@@ -785,6 +785,17 @@ def _insert_mdblist_tiles(content, fixture_text):
             leftovers.append(tile_bytes)
         else:
             placed = moved
+    if leftovers and placed is not content:
+        # Some tiles found their family and some did not. The old fallback
+        # splices right after the POV FILMS tile -- which, on a file that
+        # already has an anchored tile sitting there, pushes it off its own
+        # anchor and undoes the point of this change. When anything has been
+        # placed, the leftovers go to the end of the file instead, where they
+        # cannot disturb it. The POV-films splice stays only for the case it
+        # was written for: nothing anchored at all.
+        appended = _insert_tiles_before_close(placed, leftovers)
+        if appended is not None:
+            placed, leftovers = appended, []
     if not leftovers:
         new_content = placed
         new_content, _ = _insert_marker(new_content, MDBLIST_TILES_SEEN_MARKER)
