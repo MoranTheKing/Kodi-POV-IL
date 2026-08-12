@@ -1,3 +1,7 @@
+v0.1.44
+- Recovering an add-on left switched off by an interrupted update is
+  quicker and no longer gives up on a temporary hiccup.
+
 v0.1.43
 - Fixes a fresh install failing to start: the startup script logged before
   it created its own folder, and the log write took the whole script down.
