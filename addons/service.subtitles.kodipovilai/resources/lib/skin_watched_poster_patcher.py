@@ -133,6 +133,22 @@ def _patch_one(skin_id, recipe):
                  recipe['rel'], found), level='WARNING')
         return 'unmatched'
 
+    # A nested <include> inside one of these blocks would end the non-greedy
+    # match early, and the tick would be inserted INSIDE the include element
+    # instead of after it. That is still well-formed XML -- so the parse below
+    # would pass it -- but a <control> is not a legal child of
+    # <include content="...">, which takes <param> only, so Kodi drops it and
+    # the fix becomes a silent no-op. The block count would not change either,
+    # so nothing else here would notice. The skin ships only <param> children
+    # today; this is what keeps a future release from breaking us quietly.
+    for block in pattern.findall(content):
+        if '<include' in block[len('<include content="%s">'
+                                  % recipe['include']):]:
+            _log('{0}: a {1} block now nests another <include>; the insertion '
+                 'point is no longer unambiguous -- leaving it alone'.format(
+                     skin_id, recipe['include']), level='WARNING')
+            return 'unmatched'
+
     control = _control(recipe, eol)
     new_content = pattern.sub(lambda m: m.group(1) + control, content)
 

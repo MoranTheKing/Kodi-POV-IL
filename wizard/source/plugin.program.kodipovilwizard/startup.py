@@ -794,6 +794,17 @@ def wait_for_gui_ready(timeout=90):
 
 # Don't run the script while video is playing :)
 check_for_video()
+# FIRST, before anything can need them: switch back on anything a previous
+# hot reload left disabled. A disabled add-on cannot heal itself, and a
+# disabled add-on stays disabled across restarts -- so if a cycle was cut
+# short (enable call failed, Kodi killed between the two calls), this is the
+# only thing standing between the user and a permanently missing POV.
+try:
+    from resources.libs.wizard import Wizard as _HealWizard
+    _HealWizard.heal_disabled_addons()
+except Exception as _heal_err:
+    logging.log('[HOT-RELOAD] heal pass failed: {0}'.format(_heal_err),
+                level=xbmc.LOGWARNING)
 # Ensure that any needed folders are created
 tools.ensure_folders()
 # Stop this script if it's been run more than once
