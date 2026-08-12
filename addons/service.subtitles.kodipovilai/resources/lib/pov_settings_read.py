@@ -90,10 +90,10 @@ def _trim_tail(content):
     comment or processing instruction, which the XML spec explicitly allows
     after the root element. Rejecting either would send a perfectly readable
     file down the "I cannot tell" path and cost this module its point."""
-    tail = content.rstrip('\x00 \t\r\n')
+    tail = content.rstrip().rstrip('\x00').rstrip()
     while True:
         stripped = re.sub(r'(?:<!--.*?-->|<\?.*?\?>)$', '', tail, flags=re.S)
-        stripped = stripped.rstrip('\x00 \t\r\n')
+        stripped = stripped.rstrip().rstrip('\x00').rstrip()
         if stripped == tail:
             return tail
         tail = stripped
