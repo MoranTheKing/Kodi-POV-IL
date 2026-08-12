@@ -80,6 +80,26 @@ REBUILDABLE = frozenset((
     'results_data',
 ))
 
+# THE SAME UPGRADE ORPHANS THE FAVOURITES, in a different way. POV 5 kept them
+# in a file of their own, spelled the British way; POV 6 keeps them in
+# watched.db, spelled the American way:
+#
+#     5.12.04  favourites.db  ->  table `favourites`
+#     6.08.10  watched.db     ->  table `favorites`
+#
+# Nothing migrates them, so POV 6 opens a table it has just created, finds it
+# empty, and the user's favourites are simply gone from the screen. The rows
+# are still on disk in the old file -- which is why this copies them across
+# instead of shrugging.
+#
+# Two other databases moved in the same release (traktcache4.db ->
+# traktcache.db, providerscache2.db -> providerscache.db). Both are caches that
+# refill themselves from Trakt or from the scrapers within a sync, so they are
+# deliberately left alone: an empty cache costs a few seconds once. Favourites
+# are typed by hand and come back from nowhere.
+LEGACY_FAVOURITES = ('favourites.db', 'favourites')
+CURRENT_FAVOURITES = ('watched.db', 'favorites')
+
 
 def _log(msg, level='INFO'):
     if kodi_utils is None:
@@ -147,11 +167,18 @@ def _declared_tables():
     body = body[start:end if end != -1 else len(body)]
 
     out = []
+    indexes = {}
     current = None
     for line in body.splitlines():
         connect = re.search(r'database_connect\(\s*(\w+_db)\s*\)', line)
         if connect:
             current = connect.group(1)
+            continue
+        index = re.search(
+            r'(CREATE INDEX IF NOT EXISTS\s+\w+\s+ON\s+(\w+)\s*\([^)]*\))',
+            line)
+        if index:
+            indexes.setdefault(index.group(2), []).append(index.group(1))
             continue
         create = re.search(
             r'(CREATE TABLE IF NOT EXISTS\s+(\w+)\s*\((.*)\))\s*"""', line)
@@ -159,7 +186,12 @@ def _declared_tables():
             columns = _column_names(create.group(3))
             if columns:
                 out.append((current, create.group(2), columns, create.group(1)))
-    return out
+    # DROP TABLE takes the table's indexes with it. POV would rebuild them the
+    # next time check_databases() runs, but "the next time" can be a whole Kodi
+    # session away, and metadata without its index is the slowest screen in the
+    # build. Put them back in the same breath.
+    return [(db, table, cols, stmt, indexes.get(table, []))
+            for db, table, cols, stmt in out]
 
 
 def _column_names(definition):
@@ -197,6 +229,75 @@ def _actual_columns(cursor, table):
         return []
 
 
+def _table_columns(cursor, table):
+    return _actual_columns(cursor, table)
+
+
+def _migrate_favourites(data_dir, declared, results):
+    """Copy POV 5's favourites into the table POV 6 reads.
+
+    ADDITIVE AND ONCE. The old file is never modified and never deleted -- if
+    this is wrong in some way nobody has thought of, the originals are still
+    there. It runs only while POV 6's table is still EMPTY, which is both the
+    only moment it is safe and the reason it cannot run twice: the second time,
+    the destination has rows and we stop.
+
+    GATED ON POV'S OWN DECLARATIONS, not on a version number and not on the
+    files being present. A device still running POV 5 declares `favourites` and
+    knows nothing about `favorites`; copying rows into a table that version
+    never reads would be a silent no-op at best, and my own test caught it
+    happening. So: only when THIS POV says favourites live in the new table and
+    no longer declares the old one."""
+    if CURRENT_FAVOURITES[1] not in declared or LEGACY_FAVOURITES[1] in declared:
+        return
+    old_path = os.path.join(data_dir, LEGACY_FAVOURITES[0])
+    new_path = os.path.join(data_dir, CURRENT_FAVOURITES[0])
+    if not (os.path.isfile(old_path) and os.path.isfile(new_path)):
+        return
+    source = destination = None
+    try:
+        source = sqlite3.connect(old_path, timeout=10)
+        destination = sqlite3.connect(new_path, timeout=10)
+        old_cols = _table_columns(source.cursor(), LEGACY_FAVOURITES[1])
+        new_cols = _table_columns(destination.cursor(), CURRENT_FAVOURITES[1])
+        if not old_cols or not new_cols:
+            return
+        if sorted(old_cols) != sorted(new_cols):
+            results['favourites'] = 'shape_differs'
+            _log('favourites: the old table is {0} and the new one is {1} -- '
+                 'not copying a shape we do not recognise'.format(
+                     old_cols, new_cols), level='WARNING')
+            return
+        if destination.execute('SELECT COUNT(*) FROM %s'
+                               % CURRENT_FAVOURITES[1]).fetchone()[0]:
+            results['favourites'] = 'already_populated'
+            return
+        rows = source.execute('SELECT %s FROM %s' % (
+            ', '.join(old_cols), LEGACY_FAVOURITES[1])).fetchall()
+        if not rows:
+            results['favourites'] = 'nothing_to_move'
+            return
+        destination.executemany(
+            'INSERT OR IGNORE INTO %s (%s) VALUES (%s)' % (
+                CURRENT_FAVOURITES[1], ', '.join(old_cols),
+                ', '.join('?' * len(old_cols))), rows)
+        destination.commit()
+        results['favourites'] = 'migrated'
+        _log('favourites: moved {0} entr(ies) from {1} into {2}, which is '
+             'where this POV looks for them'.format(
+                 len(rows), LEGACY_FAVOURITES[0], CURRENT_FAVOURITES[0]))
+    except Exception as error:
+        results['favourites'] = 'failed'
+        _log('favourites: {0}'.format(error), level='WARNING')
+    finally:
+        for connection in (source, destination):
+            if connection is not None:
+                try:
+                    connection.close()
+                except Exception:
+                    pass
+
+
 def ensure_patched():
     """Returns {'db.table': status}. Statuses: 'rebuilt' | 'ok' | 'renamed'
     | 'skipped' | 'failed'."""
@@ -207,8 +308,9 @@ def ensure_patched():
         return results
 
     by_db = {}
-    for variable, table, columns, statement in tables:
-        by_db.setdefault(variable, []).append((table, columns, statement))
+    for variable, table, columns, statement, table_indexes in tables:
+        by_db.setdefault(variable, []).append(
+            (table, columns, statement, table_indexes))
 
     for variable, entries in by_db.items():
         path = paths.get(variable)
@@ -220,7 +322,7 @@ def ensure_patched():
         try:
             connection = sqlite3.connect(path, timeout=10)
             cursor = connection.cursor()
-            for table, columns, statement in entries:
+            for table, columns, statement, table_indexes in entries:
                 key = '{0}.{1}'.format(os.path.basename(path), table)
                 actual = _actual_columns(cursor, table)
                 if not actual:
@@ -244,6 +346,8 @@ def ensure_patched():
                     continue
                 cursor.execute('DROP TABLE %s' % table)
                 cursor.execute(statement)
+                for index_statement in table_indexes:
+                    cursor.execute(index_statement)
                 connection.commit()
                 results[key] = 'rebuilt'
                 _log('{0}: rebuilt -- POV writes {1} but the table on disk was '
@@ -259,4 +363,9 @@ def ensure_patched():
                     connection.close()
                 except Exception:
                     pass
+
+    data_dir = os.path.dirname(next(iter(paths.values()), ''))
+    if data_dir:
+        _migrate_favourites(
+            data_dir, {t for _, t, _, _, _ in tables}, results)
     return results
