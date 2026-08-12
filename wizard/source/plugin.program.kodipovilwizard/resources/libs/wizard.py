@@ -362,8 +362,17 @@ class Wizard:
                 # Same reasoning as the startup path: prefer applying it in
                 # place. A hand-started update deserves it even more, because
                 # the user is sitting in front of Kodi right now.
-                if not self.hot_reload():
+                outcome = self.hot_reload()
+                if not outcome:
                     self.force_close_kodi_in_5_seconds(dialog_header="עדכון מהיר הסתיים בהצלחה")
+                elif outcome == self.HOT_RELOAD_DEFERRED:
+                    # Postponed because something is playing. Saying "applied"
+                    # here would be a lie the user can catch: nothing changed
+                    # on screen and nothing will until Kodi is restarted.
+                    logging.log_notify(
+                        CONFIG.ADDONTITLE,
+                        '[COLOR {0}]העדכון הותקן ויוחל בהפעלה הבאה'
+                        '[/COLOR]'.format(CONFIG.COLOR2))
                 else:
                     logging.log_notify(
                         CONFIG.ADDONTITLE,
@@ -440,19 +449,59 @@ class Wizard:
             return {}
 
     @classmethod
-    def _addon_is_enabled_static(cls, addon_id):
-        """True/False, or None when the add-on is not installed at all.
+    def _addon_state(cls, addon_id):
+        """True | False | 'absent' | None.
 
-        None is deliberately NOT False: an id we cannot look up (uninstalled,
-        or Kodi not answering) must not be treated as 'confirmed off', or the
-        heal pass would keep retrying something that does not exist.
+        'absent' AND None BOTH used to be None, and that conflation was a real
+        bug: heal_disabled_addons treated "not False" as healed, so an early
+        start where Kodi's JSON-RPC was not answering yet looked exactly like
+        "the user uninstalled it" -- and the pending record, the only thing
+        that would ever have switched the add-on back on, was deleted. The
+        add-on stayed off forever. Reproduced by a validator that made every
+        call raise and watched a still-disabled POV lose its record.
+
+        The difference is in the reply. Kodi answering "no such add-on" is an
+        `error` object, which is an ANSWER -- the id really is gone and the
+        record should be dropped. No reply at all, or a reply we cannot read,
+        is not an answer, and the record must survive it.
         """
         result = cls._jsonrpc('Addons.GetAddonDetails', {
             'addonid': addon_id, 'properties': ['enabled']})
         try:
             return bool(result['result']['addon']['enabled'])
         except Exception:
-            return None
+            pass
+        if isinstance(result, dict) and 'error' in result:
+            return 'absent'
+        return None
+
+    @classmethod
+    def _addon_is_enabled_static(cls, addon_id):
+        """True/False, or None when the add-on cannot be confirmed either way.
+
+        None is deliberately NOT False: an id we cannot look up (uninstalled,
+        or Kodi not answering) must not be treated as 'confirmed off', or the
+        heal pass would keep retrying something that does not exist.
+        """
+        state = cls._addon_state(addon_id)
+        return None if state == 'absent' else state
+
+    @classmethod
+    def _jsonrpc_ready(cls, attempts=20, wait_ms=500):
+        """Wait until Kodi's JSON-RPC actually answers, up to ~10s.
+
+        heal_disabled_addons runs from startup.py BEFORE wait_for_gui_ready(),
+        whose own docstring says this script starts before the GUI exists. Every
+        decision the heal makes reads a JSON-RPC reply, so asking before the
+        interface is up produces silence and silence used to mean "healed".
+        Ping first; if nothing answers, the heal does nothing at all and the
+        record is left for the next start."""
+        for _ in range(attempts):
+            result = cls._jsonrpc('JSONRPC.Ping', {})
+            if isinstance(result, dict) and 'result' in result:
+                return True
+            xbmc.sleep(wait_ms)
+        return False
 
     def _addon_is_enabled(self, addon_id):
         return self._addon_is_enabled_static(addon_id)
@@ -474,6 +523,9 @@ class Wizard:
     def _pending_enable_write(cls, ids):
         try:
             path = cls._pending_enable_path()
+        except Exception:
+            return False
+        try:
             folder = os.path.dirname(path)
             if folder and not os.path.isdir(folder):
                 os.makedirs(folder)
@@ -481,10 +533,23 @@ class Wizard:
                 if os.path.isfile(path):
                     os.remove(path)
                 return True
-            with open(path, 'w', encoding='utf-8') as f:
+            # WRITE BESIDE IT, THEN RENAME. open(path, 'w') truncates the file
+            # the instant it succeeds, so a write that then fails -- a full
+            # disk, a stray directory in the way -- left the record EMPTY and
+            # took every other pending id down with it. That is the one file
+            # standing between a failed enable and a permanently disabled
+            # add-on. os.replace is atomic: either the old content survives
+            # intact or the new content lands whole.
+            tmp = path + '.tmp'
+            with open(tmp, 'w', encoding='utf-8') as f:
                 f.write('\n'.join(ids))
+            os.replace(tmp, path)
             return True
         except Exception:
+            try:
+                os.remove(path + '.tmp')
+            except Exception:
+                pass
             return False
 
     @classmethod
@@ -499,23 +564,42 @@ class Wizard:
         pending = cls._pending_enable_read()
         if not pending:
             return []
-        healed, still_off = [], []
+        if not cls._jsonrpc_ready():
+            # Nothing answered. We cannot enable and we cannot check, so the
+            # only safe move is to touch nothing: the record stays exactly as
+            # it is and the next start tries again.
+            logging.log('[HOT-RELOAD] JSON-RPC is not answering yet; leaving '
+                        '{0} recorded for the next start'.format(
+                            ', '.join(pending)), level=xbmc.LOGWARNING)
+            return []
+        healed, gone, still_off = [], [], []
         for addon_id in pending:
             try:
                 cls._jsonrpc('Addons.SetAddonEnabled',
                              {'addonid': addon_id, 'enabled': True})
-                # VERIFY, and keep the record when it did not take. Clearing
-                # the list on a failed enable is how a temporary problem
-                # becomes a permanent one: the id is forgotten and nothing
-                # ever tries again. Caught by a test that made every enable
-                # fail and then found the add-on off with an empty list.
-                if cls._addon_is_enabled_static(addon_id) is not False:
+                # VERIFY, and keep the record unless we got a real answer.
+                # Clearing the list on a failed enable is how a temporary
+                # problem becomes a permanent one: the id is forgotten and
+                # nothing ever tries again. Caught by a test that made every
+                # enable fail and then found the add-on off with an empty list.
+                state = cls._addon_state(addon_id)
+                if state is True:
                     healed.append(addon_id)
+                elif state == 'absent':
+                    # Kodi says there is no such add-on. It was uninstalled
+                    # while pending; there is nothing left to enable, so the
+                    # record goes rather than being retried forever.
+                    gone.append(addon_id)
                 else:
+                    # False (still off) or None (no answer) -- both keep it.
                     still_off.append(addon_id)
             except Exception:
                 still_off.append(addon_id)
         cls._pending_enable_write(still_off)
+        if gone:
+            logging.log('[HOT-RELOAD] no longer installed, dropping from the '
+                        'record: {0}'.format(', '.join(gone)),
+                        level=xbmc.LOGWARNING)
         if healed:
             logging.log('[HOT-RELOAD] re-enabled after an interrupted '
                         'reload: {0}'.format(', '.join(healed)),
@@ -558,8 +642,20 @@ class Wizard:
         if self._addon_is_enabled(addon_id) is not True:
             return False
         pending = self._pending_enable_read()
-        if addon_id not in pending:
-            self._pending_enable_write(pending + [addon_id])
+        if addon_id not in pending and not self._pending_enable_write(
+                pending + [addon_id]):
+            # NO RECORD, NO DISABLE. The whole safety of this cycle rests on
+            # the id being on disk before the add-on goes off: that record is
+            # what the next Kodi start reads to switch it back on. If it could
+            # not be written, disabling anyway means a failed enable leaves the
+            # add-on off with nothing tracking it -- the exact permanent
+            # breakage this is here to prevent. Skipping costs a stale
+            # interpreter until the next restart, which is merely the old
+            # behaviour.
+            logging.log('[HOT-RELOAD] could not record {0} before cycling it; '
+                        'leaving it alone'.format(addon_id),
+                        level=xbmc.LOGERROR)
+            return False
         self._jsonrpc('Addons.SetAddonEnabled',
                       {'addonid': addon_id, 'enabled': False})
         xbmc.sleep(1500)
@@ -615,8 +711,18 @@ class Wizard:
         except Exception:
             return ''
 
+    # Truthy, so `if not hot_reload()` still reads "fall back to a restart",
+    # but distinguishable for a caller that wants to tell the user the truth:
+    # the update is on disk and will take effect at the next start, it has NOT
+    # been applied yet.
+    HOT_RELOAD_DEFERRED = 'deferred'
+
     def hot_reload(self, expected_version=None, timeout_seconds=240):
-        """Apply an installed update in place. True when it fully took."""
+        """Apply an installed update in place.
+
+        True when it fully took, HOT_RELOAD_DEFERRED when it was deliberately
+        postponed (both mean "do not force-close"), False when the caller
+        should restart Kodi."""
         try:
             if not expected_version:
                 expected_version = self._installed_version_on_disk(
@@ -636,7 +742,7 @@ class Wizard:
                 logging.log('[HOT-RELOAD] something is playing; leaving the '
                             'installed update to take effect at the next '
                             'start rather than interrupting it.')
-                return True
+                return self.HOT_RELOAD_DEFERRED
             xbmc.executebuiltin('UpdateLocalAddons()')
             xbmc.sleep(1000)
             # Clear the marker OURSELVES before the service is cycled. The
