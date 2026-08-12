@@ -591,6 +591,99 @@ are not exempt from anything: they land in `self.sourceDict`, flow into
 BEFORE the filter block. More 720p after an update means more providers, not a
 lost setting.
 
+## POV auto-updates itself out from under the build (2026-08-12, critical)
+
+The build ships POV 5.12.04 **and** `repository.kodifitzwell`, the POV author's
+own repo, and the build's `guisettings.xml` has `general.addonupdates = 0`
+("install updates automatically"). So on the first launch after a fresh
+install, Kodi replaces our POV with whatever that repo publishes -- today
+6.08.10. That is legitimate and there is nothing to "fix" about it, but two
+consequences bite every one of our users and nobody else:
+
+**1. Five cache tables poisoned.** POV 6 reordered the columns of its own cache
+tables and kept `CREATE TABLE IF NOT EXISTS`, so on an UPGRADE the old table
+survives -- and POV 6 writes to it positionally, with no column list:
+
+    5.12.04:  maincache (id, data, expires)      6.08.10:  maincache (id, expires, data)
+    INSERT OR REPLACE INTO maincache VALUES (?, ?, ?)   <- no column names
+
+The expiry lands in the payload column and the payload in the expiry column.
+Everything that reads a cached list gets an int. It never expires either: the
+test is `expires > ?` and in SQLite TEXT always compares greater than INTEGER.
+Affected: `maincache`, `metadata`, `season_metadata`, `function_cache`,
+`results_data`. Symptoms reported from the field: search errors with
+`TypeError: 'int' object is not iterable`, and empty or missing
+popular/new widgets. A device that installs POV 6 CLEAN never sees any of it --
+only a device that came through the build.
+
+**2. Favourites orphaned.** POV 5 kept them in `favourites.db` (`favourites`);
+POV 6 keeps them in `watched.db` (`favorites`) and migrates nothing.
+`traktcache4.db -> traktcache.db` and `providerscache2.db ->
+providerscache.db` moved too, but both refill themselves within a sync.
+
+`resources/lib/pov_cache_schema_patcher.py` repairs both, reading POV's OWN
+declarations out of its `cache.py` rather than keeping a copy here -- POV has
+changed these once already. It rebuilds a table only when the column NAMES
+match and just the order differs, only for a closed list of caches, and it
+restores the declared indexes in the same breath (DROP TABLE takes them with
+it). Watched status, resume points, views and the navigator lists are out of
+scope by rule and by name.
+
+**When POV next changes version, diff the CREATE statements first.** The whole
+class of bug is invisible in a normal review: nothing in POV's diff looks
+dangerous, and the damage only appears on machines that had the previous
+version.
+
+## Never log before the folders exist (2026-08-12, cost: every new install)
+
+The hot-reload heal pass was placed at the top of the wizard's `startup.py`, on
+the reasoning that nothing should need a disabled add-on before it is back. But
+`import resources.libs.wizard` reaches `custom_save_data_config`, which logs one
+line at IMPORT time, and `logging.log` opens the wizard log with `'w+'`. On a
+fresh profile `addon_data/plugin.program.kodipovilwizard` does not exist yet, so
+the open raised `FileNotFoundError` out of an import statement -- and the
+handler below it logged too, and raised again. `startup.py` died before doing
+anything, and the build could not be installed at all.
+
+Three rules, locked by `tools/test_wizard_startup_order.py`:
+
+1. `tools.ensure_folders()` runs before anything imports the wizard package.
+2. A handler for "the log could not be written" uses `xbmc.log`, never
+   `logging.log`.
+3. `logging.log` creates its own folder and never lets a file failure escape to
+   its caller. The Kodi log line is already out by then; an import-time logger
+   that raises takes down whatever imported it.
+
+Note the recovery problem this created: the crash happens at line 819 and
+`auto_quick_update()` is called at line 949, so an affected device never checks
+for updates again -- and our repo channel serves only the subtitles add-on, not
+the wizard. The way out is a MANUAL quick update from the wizard UI
+(`default.py`, a different entry point), which also creates the missing folder
+as a side effect and unsticks the startup service permanently.
+
+## The watched tick: two opposite reports, one source of truth (2026-08-12)
+
+"No tick in the default view" and "a tick on EVERYTHING in this one view" are
+the same bug seen from both sides, and both are fixed against
+`WallWatchedIconVar` (gated on `Integer.IsGreater(ListItem.Playcount,0)`),
+which is what the views that behave correctly already read.
+
+The view users call **"סמלילי אלבומים"** is `View_630_AdvancedList`. The skin
+does not name it: its container is a `<control type="fixedlist" id="630">` with
+no `<viewtype>` element, so Kodi labels it from its own table -- string 541,
+"Album icons". (Same table gives 20021 "Poster" = "כרזה", which is the
+cross-check.) It builds rows from `ViewTypeBaseLayout_`, used by nothing else
+in the skin, which drew its icon from `$VAR[ListPVRRecordingsIconVar]` -- the
+PVR RECORDINGS variable, whose third rule is a hardcoded `OverlayWatched.png`
+for ANY non-empty overlay. POV and Umbrella set an overlay on unwatched items
+too, so every row got a tick.
+
+Two things worth keeping: skin XML in this build is NOT valid XML to a strict
+parser (raw `&` inside skin expressions), so pre-write checks must parse the
+rewritten BLOCK, not the file. And any scanner over skin markup must skip
+comment regions -- this build's own `MyVideoNav.xml` keeps two whole views
+commented out, and a dead copy of a block will otherwise win the search.
+
 ## Resolved questions (so they don't resurface)
 
 - **FENtastic DialogSubtitles "row height" marker (investigated 2026-07):**
