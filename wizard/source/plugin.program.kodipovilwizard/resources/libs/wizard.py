@@ -359,14 +359,339 @@ class Wizard:
                                
             if not auto_quick_update:
                 CONFIG.set_setting('quick_update_notedismiss', 'false')
-                self.force_close_kodi_in_5_seconds(dialog_header="עדכון מהיר הסתיים בהצלחה")
-                
+                # Same reasoning as the startup path: prefer applying it in
+                # place. A hand-started update deserves it even more, because
+                # the user is sitting in front of Kodi right now.
+                if not self.hot_reload():
+                    self.force_close_kodi_in_5_seconds(dialog_header="עדכון מהיר הסתיים בהצלחה")
+                else:
+                    logging.log_notify(
+                        CONFIG.ADDONTITLE,
+                        '[COLOR {0}]העדכון הותקן והוחל[/COLOR]'.format(
+                            CONFIG.COLOR2))
+
             return True
 
             # self.dialog.ok(CONFIG.ADDONTITLE, "[COLOR {0}]עדכון מהיר הסתיים. לחץ אישור/OK כדי לסגור את קודי. לאחר מכן, הפעל אותו מחדש.[/COLOR]".format(CONFIG.COLOR2))
         else:
             logging.log_notify(CONFIG.ADDONTITLE,
                                '[COLOR {0}]עדכון מהיר: בוטל![/COLOR]'.format(CONFIG.COLOR2))
+            return False
+    #####################################################
+
+    #####################################################
+    # KODI-RD-IL
+    #
+    # HOT RELOAD -- why closing Kodi was ever needed, and why it is not.
+    #
+    # A quick update writes new files and the old code keeps running. That is
+    # not a caching problem: plugin.video.pov, plugin.video.umbrella and our
+    # own service.subtitles.kodipovilai all declare
+    #
+    #     <reuselanguageinvoker>true</reuselanguageinvoker>
+    #
+    # so Kodi keeps ONE Python interpreter alive per add-on and reuses it.
+    # A module that has already been imported stays imported. Editing POV's
+    # .py on disk therefore changes nothing until that interpreter is gone --
+    # which is the entire reason the update used to force-close Kodi. The
+    # patchers already delete the target's .pyc; memory simply beats disk.
+    #
+    # Disabling an add-on destroys its invoker. So the interpreters can be
+    # dropped one at a time, in order, without touching Kodi:
+    #
+    #   1. UpdateLocalAddons() so Kodi re-reads any changed addon.xml.
+    #   2. Toggle OUR service -- it restarts from the NEW code and re-runs
+    #      every third-party patcher.
+    #   3. WAIT for it to say it finished, and to say so with the new VERSION
+    #      (see _publish_repairs_state in service.py). Reloading POV before
+    #      the patchers have run against it is worse than not reloading at
+    #      all: POV would come back on half-written files.
+    #   4. Toggle the add-ons that were patched, so they pick the files up.
+    #   5. ReloadSkin() for skin changes.
+    #
+    # Anything that cannot be hot-applied still falls back to the old
+    # force-close. The worst case is exactly today's behaviour.
+    HOT_RELOAD_SELF = 'service.subtitles.kodipovilai'
+    # plugin.program.openwizard was listed here and removed: it is the name of
+    # the upstream fork this wizard descends from, not an add-on installed on
+    # any device, so it silently no-opped. Account Manager is
+    # script.module.acctmgr, and a module has no invoker of its own to drop.
+    HOT_RELOAD_TARGETS = (
+        'plugin.video.pov',
+        'plugin.video.umbrella',
+    )
+    REPAIRS_DONE_PROPERTY = 'kodipovil_startup_repairs_done'
+    # Written BEFORE an add-on is disabled and cleared only once it is
+    # verified back on. Anything still listed at the next Kodi start was left
+    # disabled by a cycle that did not finish, and gets switched back on.
+    # Without this, one failed enable is a permanently broken POV that no
+    # restart repairs -- a disabled add-on stays disabled.
+    PENDING_ENABLE_FILE = 'special://profile/addon_data/' \
+                          'plugin.program.kodipovilwizard/pending_enable.txt'
+
+    @staticmethod
+    def _jsonrpc(method, params):
+        import json
+        try:
+            return json.loads(xbmc.executeJSONRPC(json.dumps({
+                'jsonrpc': '2.0', 'id': 1,
+                'method': method, 'params': params})))
+        except Exception:
+            return {}
+
+    @classmethod
+    def _addon_is_enabled_static(cls, addon_id):
+        """True/False, or None when the add-on is not installed at all.
+
+        None is deliberately NOT False: an id we cannot look up (uninstalled,
+        or Kodi not answering) must not be treated as 'confirmed off', or the
+        heal pass would keep retrying something that does not exist.
+        """
+        result = cls._jsonrpc('Addons.GetAddonDetails', {
+            'addonid': addon_id, 'properties': ['enabled']})
+        try:
+            return bool(result['result']['addon']['enabled'])
+        except Exception:
+            return None
+
+    def _addon_is_enabled(self, addon_id):
+        return self._addon_is_enabled_static(addon_id)
+
+    @classmethod
+    def _pending_enable_path(cls):
+        import xbmcvfs
+        return xbmcvfs.translatePath(cls.PENDING_ENABLE_FILE)
+
+    @classmethod
+    def _pending_enable_read(cls):
+        try:
+            with open(cls._pending_enable_path(), 'r', encoding='utf-8') as f:
+                return [line.strip() for line in f if line.strip()]
+        except Exception:
+            return []
+
+    @classmethod
+    def _pending_enable_write(cls, ids):
+        try:
+            path = cls._pending_enable_path()
+            folder = os.path.dirname(path)
+            if folder and not os.path.isdir(folder):
+                os.makedirs(folder)
+            if not ids:
+                if os.path.isfile(path):
+                    os.remove(path)
+                return True
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write('\n'.join(ids))
+            return True
+        except Exception:
+            return False
+
+    @classmethod
+    def heal_disabled_addons(cls):
+        """Switch back on anything a previous cycle left off.
+
+        Runs at every Kodi start, from the wizard, BEFORE anything else needs
+        those add-ons. It has to live here rather than in the service add-on,
+        because the service is one of the things that can be left disabled and
+        a disabled add-on cannot heal itself.
+        """
+        pending = cls._pending_enable_read()
+        if not pending:
+            return []
+        healed, still_off = [], []
+        for addon_id in pending:
+            try:
+                cls._jsonrpc('Addons.SetAddonEnabled',
+                             {'addonid': addon_id, 'enabled': True})
+                # VERIFY, and keep the record when it did not take. Clearing
+                # the list on a failed enable is how a temporary problem
+                # becomes a permanent one: the id is forgotten and nothing
+                # ever tries again. Caught by a test that made every enable
+                # fail and then found the add-on off with an empty list.
+                if cls._addon_is_enabled_static(addon_id) is not False:
+                    healed.append(addon_id)
+                else:
+                    still_off.append(addon_id)
+            except Exception:
+                still_off.append(addon_id)
+        cls._pending_enable_write(still_off)
+        if healed:
+            logging.log('[HOT-RELOAD] re-enabled after an interrupted '
+                        'reload: {0}'.format(', '.join(healed)),
+                        level=xbmc.LOGWARNING)
+        if still_off:
+            logging.log('[HOT-RELOAD] still could not enable {0}; the record '
+                        'is kept so the next start tries again'.format(
+                            ', '.join(still_off)), level=xbmc.LOGERROR)
+        return healed
+
+    def _enable_and_verify(self, addon_id, attempts=4):
+        """Turn it back on and CHECK. Returns True only when it is on."""
+        for attempt in range(attempts):
+            self._jsonrpc('Addons.SetAddonEnabled',
+                          {'addonid': addon_id, 'enabled': True})
+            for _ in range(6):
+                if self._addon_is_enabled(addon_id) is True:
+                    return True
+                xbmc.sleep(500)
+            logging.log('[HOT-RELOAD] {0} did not come back on (attempt '
+                        '{1}/{2}); retrying'.format(
+                            addon_id, attempt + 1, attempts),
+                        level=xbmc.LOGWARNING)
+        return False
+
+    def _cycle_addon(self, addon_id):
+        """Disable then re-enable, so the reused interpreter is destroyed.
+
+        Skipped when the add-on is missing OR when the user has it disabled
+        already -- re-enabling something somebody turned off by hand is not
+        ours to do, and it would be a silent settings change on every update.
+
+        THE RE-ENABLE IS VERIFIED, not fired and forgotten. _jsonrpc swallows
+        every error and returns {}, so an enable that failed looks exactly
+        like one that worked -- and the cost of believing it is a user left
+        with POV switched off, which no restart repairs. The id is written to
+        disk BEFORE the disable so that even a crash between the two calls is
+        recoverable at the next start.
+        """
+        if self._addon_is_enabled(addon_id) is not True:
+            return False
+        pending = self._pending_enable_read()
+        if addon_id not in pending:
+            self._pending_enable_write(pending + [addon_id])
+        self._jsonrpc('Addons.SetAddonEnabled',
+                      {'addonid': addon_id, 'enabled': False})
+        xbmc.sleep(1500)
+        if not self._enable_and_verify(addon_id):
+            logging.log('[HOT-RELOAD] {0} could NOT be switched back on. It '
+                        'stays recorded and will be enabled at the next Kodi '
+                        'start.'.format(addon_id), level=xbmc.LOGERROR)
+            return False
+        remaining = [i for i in self._pending_enable_read() if i != addon_id]
+        self._pending_enable_write(remaining)
+        return True
+
+    def _wait_for_repairs(self, expected_version, timeout_seconds):
+        """Wait for OUR service to report a finished pass at this version."""
+        window = xbmcgui.Window(10000)
+        monitor = xbmc.Monitor()
+        waited = 0
+        while waited < timeout_seconds:
+            if monitor.abortRequested():
+                return False
+            try:
+                if window.getProperty(
+                        self.REPAIRS_DONE_PROPERTY) == expected_version:
+                    return True
+            except Exception:
+                pass
+            if monitor.waitForAbort(2):
+                return False
+            waited += 2
+        return False
+
+    @staticmethod
+    def _installed_version_on_disk(addon_id):
+        """Read the version from addon.xml, NOT from xbmcaddon.
+
+        xbmcaddon answers from Kodi's in-memory add-on database, which still
+        holds the PRE-update metadata at this point. The file on disk is the
+        one the quick update just wrote, and it is the version the restarted
+        service will report -- so it is the only one worth waiting for.
+        """
+        import re
+        import xbmcvfs
+        try:
+            path = xbmcvfs.translatePath(
+                'special://home/addons/{0}/addon.xml'.format(addon_id))
+            with open(path, 'r', encoding='utf-8') as handle:
+                head = handle.read(4096)
+            match = re.search(r'version="([^"]+)"[^>]*provider-name', head)
+            if not match:
+                match = re.search(
+                    r'<addon[^>]*?\sversion="([^"]+)"', head, re.S)
+            return match.group(1) if match else ''
+        except Exception:
+            return ''
+
+    def hot_reload(self, expected_version=None, timeout_seconds=240):
+        """Apply an installed update in place. True when it fully took."""
+        try:
+            if not expected_version:
+                expected_version = self._installed_version_on_disk(
+                    self.HOT_RELOAD_SELF)
+            if not expected_version:
+                logging.log('[HOT-RELOAD] could not read the newly installed '
+                            'version from disk; falling back to a restart.',
+                            level=xbmc.LOGWARNING)
+                return False
+            # Never while something is playing. This file already refuses a
+            # mere ReloadSkin() during playback; disabling the add-on that is
+            # SERVING the stream is far worse. Force-closing instead would be
+            # worse still, so the update simply stays on disk and takes effect
+            # at the next start -- which is what happens today anyway, minus
+            # the stream being killed. True means "do not force-close".
+            if xbmc.getCondVisibility('Player.HasMedia'):
+                logging.log('[HOT-RELOAD] something is playing; leaving the '
+                            'installed update to take effect at the next '
+                            'start rather than interrupting it.')
+                return True
+            xbmc.executebuiltin('UpdateLocalAddons()')
+            xbmc.sleep(1000)
+            # Clear the marker OURSELVES before the service is cycled. The
+            # service clears it too, but its first poll can land before the
+            # restarted interpreter has even reached that line -- and if the
+            # quickfix did not bump our own add-on version, a stale value from
+            # the PREVIOUS pass matches expected_version and the wait returns
+            # true before any new work has happened.
+            try:
+                xbmcgui.Window(10000).clearProperty(self.REPAIRS_DONE_PROPERTY)
+            except Exception:
+                pass
+            if not self._cycle_addon(self.HOT_RELOAD_SELF):
+                logging.log('[HOT-RELOAD] {0} could not be cycled; falling '
+                            'back to a restart.'.format(
+                                self.HOT_RELOAD_SELF), level=xbmc.LOGWARNING)
+                return False
+            if not self._wait_for_repairs(expected_version, timeout_seconds):
+                logging.log('[HOT-RELOAD] the service did not report a '
+                            'finished repair pass at version {0} within {1}s; '
+                            'falling back to a restart so the update is not '
+                            'left half-applied.'.format(
+                                expected_version, timeout_seconds),
+                            level=xbmc.LOGWARNING)
+                return False
+            left_off = []
+            for addon_id in self.HOT_RELOAD_TARGETS:
+                try:
+                    if self._addon_is_enabled(addon_id) is not True:
+                        continue
+                    if self._cycle_addon(addon_id):
+                        logging.log('[HOT-RELOAD] reloaded ' + addon_id)
+                    else:
+                        left_off.append(addon_id)
+                except Exception as cycle_err:
+                    left_off.append(addon_id)
+                    logging.log('[HOT-RELOAD] {0} could not be reloaded: '
+                                '{1}'.format(addon_id, cycle_err),
+                                level=xbmc.LOGWARNING)
+            if left_off:
+                # Report FAILURE, not success. The caller then force-closes,
+                # which is exactly the recovery we want: the ids are on disk,
+                # and heal_disabled_addons() switches them back on at the next
+                # start. Reporting success here would leave the user with a
+                # missing add-on and no restart to bring it back.
+                logging.log('[HOT-RELOAD] these are still off and recorded '
+                            'for the next start: {0}'.format(
+                                ', '.join(left_off)), level=xbmc.LOGERROR)
+                return False
+            xbmc.executebuiltin('ReloadSkin()')
+            logging.log('[HOT-RELOAD] update applied without closing Kodi')
+            return True
+        except Exception as err:
+            logging.log('[HOT-RELOAD] failed, falling back to a restart: '
+                        '{0}'.format(err), level=xbmc.LOGERROR)
             return False
     #####################################################
 
