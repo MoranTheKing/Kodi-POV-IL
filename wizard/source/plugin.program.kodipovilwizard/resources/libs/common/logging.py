@@ -59,18 +59,33 @@ def log(msg, level=xbmc.LOGDEBUG):
         level = xbmc.LOGINFO
     
     xbmc.log('{0}: {1}'.format(CONFIG.ADDONTITLE, msg), level)
+    # WRITING THE LOG MUST NEVER KILL THE CALLER. On a FRESH install
+    # addon_data/plugin.program.kodipovilwizard does not exist yet, and
+    # open(CONFIG.WIZLOG, 'w+') then raises FileNotFoundError straight out of
+    # log() -- into whatever was logging, which at import time is a module
+    # nobody can catch from. That is exactly how a wizard that logs one line
+    # too early turns into "nobody can install the build". The Kodi log line
+    # above has already gone out by this point, so nothing here is worth an
+    # exception: create the folder, and swallow whatever is left.
     if CONFIG.ENABLEWIZLOG == 'true':
-        if not os.path.exists(CONFIG.WIZLOG):
-            with open(CONFIG.WIZLOG, 'w+') as f:
-                f.close()
+        try:
+            folder = os.path.dirname(CONFIG.WIZLOG)
+            if folder and not os.path.isdir(folder):
+                os.makedirs(folder)
+            if not os.path.exists(CONFIG.WIZLOG):
+                with open(CONFIG.WIZLOG, 'w+') as f:
+                    f.close()
 
-        lastcheck = CONFIG.NEXTCLEANDATE if not CONFIG.NEXTCLEANDATE == 0 else tools.get_date()
-        if CONFIG.CLEANWIZLOG == 'true' and time.mktime(time.strptime(lastcheck, "%Y-%m-%d %H:%M:%S")) <= tools.get_date():
-            check_log()
+            lastcheck = CONFIG.NEXTCLEANDATE if not CONFIG.NEXTCLEANDATE == 0 else tools.get_date()
+            if CONFIG.CLEANWIZLOG == 'true' and time.mktime(time.strptime(lastcheck, "%Y-%m-%d %H:%M:%S")) <= tools.get_date():
+                check_log()
 
-        line = "[{0}] {1}".format(tools.get_date(formatted=True), msg)
-        line = line.rstrip('\r\n') + '\n'
-        tools.write_to_file(CONFIG.WIZLOG, line, mode='a')
+            line = "[{0}] {1}".format(tools.get_date(formatted=True), msg)
+            line = line.rstrip('\r\n') + '\n'
+            tools.write_to_file(CONFIG.WIZLOG, line, mode='a')
+        except Exception as log_err:
+            xbmc.log('{0}: could not write the wizard log: {1}'.format(
+                CONFIG.ADDONTITLE, log_err), xbmc.LOGWARNING)
 
 
 def check_log():
