@@ -794,8 +794,19 @@ def _insert_mdblist_tiles(content, fixture_text):
         # cannot disturb it. The POV-films splice stays only for the case it
         # was written for: nothing anchored at all.
         appended = _insert_tiles_before_close(placed, leftovers)
-        if appended is not None:
-            placed, leftovers = appended, []
+        if appended is None:
+            # No </favourites> at all: the file is truncated or not a
+            # favourites list. Falling through to the old splice here would
+            # either wedge the leftover between the anchor and the tile we
+            # just placed there, or -- when there is no POV films tile either
+            # -- return the ALREADY-MUTATED content flagged "nothing changed",
+            # so the caller computes the placement and then drops it without
+            # writing. Neither is worth doing on a file this shape: refuse,
+            # return exactly what we were given, and leave it untouched.
+            _log('favourites.xml has no closing tag; leaving the MDBList '
+                 'tiles for a later run', level='WARNING')
+            return content, False
+        placed, leftovers = appended, []
     if not leftovers:
         new_content = placed
         new_content, _ = _insert_marker(new_content, MDBLIST_TILES_SEEN_MARKER)
