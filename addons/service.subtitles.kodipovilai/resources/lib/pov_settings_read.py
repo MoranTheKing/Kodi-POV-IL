@@ -67,10 +67,17 @@ def _is_complete_document(content):
     a fragment, we cannot answer from it, and the caller falls back to Kodi's
     in-memory copy. A deliberately empty <settings/> is a complete document and
     is accepted -- that one really does mean "no key".
+
+    AT THE END, not merely somewhere. Asking `'</settings>' in content` passed
+    a file whose only closing tag was inside a comment, or inside an attribute
+    value, while the live document was still half-written -- and the reader
+    then answered from it with confidence. The closing tag has to be the last
+    thing in the file, which is precisely what "the writer finished" means.
     """
-    if '</settings>' in content:
+    tail = content.rstrip()
+    if tail.endswith('</settings>'):
         return True
-    return re.search(r'<settings\b[^>]*/>', content) is not None
+    return re.search(r'<settings\b[^>]*/>$', tail) is not None
 
 
 def _strip_comments(content):
