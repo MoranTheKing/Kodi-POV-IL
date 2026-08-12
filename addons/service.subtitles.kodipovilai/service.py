@@ -232,6 +232,7 @@ def _run_build_startup_repairs():
         _maybe_reseed_genre_folders,
         _maybe_patch_fentastic_widgets,
         _maybe_patch_skin_watched_poster,
+        _maybe_repair_pov_cache_schema,
         _maybe_patch_favourites_xml,
         _maybe_patch_favourites_personal_tiles,
         _maybe_patch_pov_torbox_usage,
@@ -827,6 +828,37 @@ def _maybe_reseed_genre_folders():
             kodi_utils.log(
                 'pov_genre_folders_reseed_patcher run failed: {0}'.format(e),
                 level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_repair_pov_cache_schema():
+    """Rebuild POV's cache tables when a POV update reordered their columns.
+
+    POV 6 renamed nothing and changed no code we own -- it swapped the order of
+    the columns in five of its own cache tables and kept CREATE TABLE IF NOT
+    EXISTS, so on an upgrade it writes every value into the wrong column of the
+    table the previous version left behind. See the module for the whole chain.
+    Not behind _skip_pov_patchers(): this repairs POV's DATA, not its code, and
+    isolating POV's code is not a reason to leave a poisoned cache in place.
+    """
+    try:
+        from resources.lib import pov_cache_schema_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        results = pov_cache_schema_patcher.ensure_patched()
+        rebuilt = [k for k, v in results.items() if v == 'rebuilt']
+        if rebuilt:
+            kodi_utils.log(
+                'pov_cache_schema_patcher: rebuilt {0} POV cache table(s) '
+                'left in the previous version\'s column order: {1}'.format(
+                    len(rebuilt), ', '.join(sorted(rebuilt))), level='INFO')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log('pov_cache_schema_patcher failed: {0}'.format(e),
+                           level='WARNING')
         except Exception:
             pass
 

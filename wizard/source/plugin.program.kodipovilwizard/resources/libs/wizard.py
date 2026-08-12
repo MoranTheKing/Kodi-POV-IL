@@ -593,9 +593,15 @@ class Wizard:
         rmtree rather than rmdir: a NON-EMPTY directory squatting on the temp
         name defeats rmdir, the failure is swallowed, and every future write of
         the recovery record fails forever on that install -- the same permanent
-        silent block, just one shape narrower."""
+        silent block, just one shape narrower. A SYMLINK is checked first,
+        because rmtree refuses to follow one (rightly -- that is how a link
+        pointing somewhere real would get deleted) and would leave the same
+        permanent block behind; unlinking removes the link and nothing it
+        points at."""
         try:
-            if os.path.isdir(tmp):
+            if os.path.islink(tmp):
+                os.unlink(tmp)
+            elif os.path.isdir(tmp):
                 import shutil
                 shutil.rmtree(tmp, ignore_errors=True)
             elif os.path.exists(tmp):
