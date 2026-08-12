@@ -399,10 +399,14 @@ def auto_quick_update():
     # replaces it. A hot reload that does not fully take falls straight back
     # to the old behaviour, so the worst case is unchanged.
     try:
-        if wizard.hot_reload():
+        outcome = wizard.hot_reload()
+        if outcome:
             logging.log(
-                '[QUICK-UPDATE] Update {0} applied in place; no restart '
-                'needed.'.format(note_id))
+                '[QUICK-UPDATE] Update {0} {1}.'.format(
+                    note_id,
+                    'is installed and will take effect at the next start'
+                    if outcome == wizard.HOT_RELOAD_DEFERRED
+                    else 'applied in place; no restart needed'))
             return
     except Exception as reload_err:
         logging.log(
