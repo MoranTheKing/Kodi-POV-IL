@@ -143,6 +143,35 @@ def _ensure_build_marker():
         pass
 
 
+REPAIRS_DONE_PROPERTY = 'kodipovil_startup_repairs_done'
+
+
+def _publish_repairs_state(value):
+    """Announce the repair pass to anyone waiting on it.
+
+    The value is this add-on's VERSION, not a bare 'true', and that is the
+    whole point. The quick update installs new files and then has to know
+    that the patchers have run FROM THE NEW CODE before it drops the other
+    add-ons' cached Python interpreters. A boolean cannot tell the difference
+    between 'the new service finished' and 'the old service, still running
+    from before the update, finished its own pass' -- and acting on the
+    second is exactly how a reload lands half-applied.
+    """
+    try:
+        import xbmcgui
+        xbmcgui.Window(10000).setProperty(REPAIRS_DONE_PROPERTY, value or '')
+    except Exception:
+        pass
+
+
+def _addon_version():
+    try:
+        import xbmcaddon
+        return xbmcaddon.Addon().getAddonInfo('version') or ''
+    except Exception:
+        return ''
+
+
 def _run_build_startup_repairs():
     """Run build-only UI/POV repairs early in Kodi startup.
 
@@ -155,6 +184,11 @@ def _run_build_startup_repairs():
         monitor = xbmc.Monitor()
     except Exception:
         monitor = None
+
+    # Clear first: a stale value from the PREVIOUS service instance would
+    # otherwise satisfy a waiter the moment it looked, before this pass has
+    # touched anything.
+    _publish_repairs_state('')
 
     steps = (
         # FIRST: heal Idan Plus before the user can navigate to it (a corrupt
@@ -246,6 +280,11 @@ def _run_build_startup_repairs():
                     level='WARNING')
             except Exception:
                 pass
+
+    # Only after every step has been through. An early return above means the
+    # pass was aborted, and an aborted pass must NOT look finished -- the
+    # waiter would then reload POV against half-applied patches.
+    _publish_repairs_state(_addon_version())
 
 
 def _start_build_startup_repairs():
