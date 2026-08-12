@@ -116,9 +116,39 @@ COCO_PROVIDERS_LEGACY_KEYS = ('provider.comet', 'provider.mediafusion')
 # Applied once each, and the timeout only while it still reads exactly what
 # Umbrella shipped -- a user who has already moved that slider has said what
 # they want and we do not argue.
+#   imdb.Showmeta.check / imdb.Showtitle.check -- scrape a series under the
+#     name the trackers use, not the name we display.
+#
+#     Field report: "In Treatment S02E12 gives sources for completely different
+#     shows." The log, same episode, same evening:
+#
+#         22:53  tvshowtitle='In Treatment' -> In.Treatment.S02E12... played
+#         23:01  tvshowtitle='בטיפול'        -> unplayable, three times
+#
+#     Umbrella scrapes with the title it is handed. No torrent is named
+#     "בטיפול S02E12", so the only results are whatever matched the S02E12
+#     pattern alone -- anime, in the screenshot that came with the report.
+#
+#     Umbrella already solves this, for films only. sources.play() calls
+#     imdb_meta_chk(), which asks IMDb for the canonical title by id and
+#     replaces the one it was given -- and its own defaults are asymmetric:
+#
+#         movies:   imdb.Moviemeta.check = true    imdb.Movietitle.check = true
+#         tv shows: imdb.Showmeta.check  = false   imdb.Showtitle.check  = false
+#
+#     On an English build the asymmetry is invisible. On this one it is the
+#     whole difference between films that work and series that do not. Both
+#     show-side flags are needed: the parent decides whether the lookup happens
+#     at all, the child whether the title is replaced. imdb.Showyear.check is
+#     deliberately left alone -- the year is not what is wrong here, and
+#     changing more than the reported fault is how a fix earns a bug report of
+#     its own. POV is unaffected either way: it keeps the original title for
+#     scraping already, which is why it filters correctly on the same device.
 UMBRELLA_DEFAULTS = (
     ('sources.retryall', 'true', None),
     ('scrapers.timeout', '45', '60'),
+    ('imdb.Showmeta.check', 'true', None),
+    ('imdb.Showtitle.check', 'true', None),
 )
 UMBRELLA_DEFAULTS_DONE_SETTING = '_umbrella_defaults_v1'
 
