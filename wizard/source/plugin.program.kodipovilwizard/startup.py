@@ -798,19 +798,32 @@ def wait_for_gui_ready(timeout=90):
 
 # Don't run the script while video is playing :)
 check_for_video()
-# FIRST, before anything can need them: switch back on anything a previous
-# hot reload left disabled. A disabled add-on cannot heal itself, and a
-# disabled add-on stays disabled across restarts -- so if a cycle was cut
-# short (enable call failed, Kodi killed between the two calls), this is the
-# only thing standing between the user and a permanently missing POV.
+# Ensure that any needed folders are created
+tools.ensure_folders()
+# Switch back on anything a previous hot reload left disabled. A disabled
+# add-on cannot heal itself, and a disabled add-on stays disabled across
+# restarts -- so if a cycle was cut short (enable call failed, Kodi killed
+# between the two calls), this is the only thing standing between the user and
+# a permanently missing POV.
+#
+# AFTER ensure_folders(), NOT BEFORE. It used to run first, on the reasoning
+# that nothing should need those add-ons before they are back. But importing
+# resources.libs.wizard pulls in extract -> custom_save_data_config, which logs
+# at import time, and on a FRESH install the wizard's addon_data folder does
+# not exist yet, so the log write raised FileNotFoundError out of an import --
+# and the fallback below logged too, and raised again. startup.py died before
+# it did anything, and nobody could install the build. Nothing in this pass
+# needs to precede folder creation; being early was worth nothing and cost
+# every new installation.
 try:
     from resources.libs.wizard import Wizard as _HealWizard
     _HealWizard.heal_disabled_addons()
 except Exception as _heal_err:
-    logging.log('[HOT-RELOAD] heal pass failed: {0}'.format(_heal_err),
-                level=xbmc.LOGWARNING)
-# Ensure that any needed folders are created
-tools.ensure_folders()
+    # xbmc.log, not logging.log: the wizard logger writes to a file, and this
+    # handler exists precisely for the case where writing that file is what
+    # went wrong.
+    xbmc.log('KODI-POV-IL: [HOT-RELOAD] heal pass failed: {0}'.format(
+        _heal_err), xbmc.LOGWARNING)
 # Stop this script if it's been run more than once
 # if CONFIG.KODIV < 18:
     # stop_if_duplicate()
