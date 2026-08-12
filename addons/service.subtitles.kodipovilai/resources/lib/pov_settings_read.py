@@ -74,10 +74,29 @@ def _is_complete_document(content):
     then answered from it with confidence. The closing tag has to be the last
     thing in the file, which is precisely what "the writer finished" means.
     """
-    tail = content.rstrip()
+    tail = _trim_tail(content)
     if tail.endswith('</settings>'):
         return True
     return re.search(r'<settings\b[^>]*/>$', tail) is not None
+
+
+def _trim_tail(content):
+    """Everything after the document's last real element, removed.
+
+    Two things live past the closing tag on a file that is nevertheless
+    complete. NUL padding, because a block-based filesystem -- Android flash,
+    where most of these devices are -- can zero-fill the tail of the last
+    block, and rstrip() does not treat NUL as whitespace. And a trailing
+    comment or processing instruction, which the XML spec explicitly allows
+    after the root element. Rejecting either would send a perfectly readable
+    file down the "I cannot tell" path and cost this module its point."""
+    tail = content.rstrip('\x00 \t\r\n')
+    while True:
+        stripped = re.sub(r'(?:<!--.*?-->|<\?.*?\?>)$', '', tail, flags=re.S)
+        stripped = stripped.rstrip('\x00 \t\r\n')
+        if stripped == tail:
+            return tail
+        tail = stripped
 
 
 def _strip_comments(content):
