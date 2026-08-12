@@ -1,3 +1,11 @@
+v0.2.485
+- The tick that marks something as watched now appears on the poster too. It
+  was showing in every other view and missing only in the one the build opens
+  by default, in POV and in Umbrella alike, for films and for seasons.
+- An update no longer closes Kodi. It is applied in place, so there is nothing
+  to reopen afterwards. This takes effect from the next update onwards, since
+  this one is still installed by the previous version.
+
 v0.2.484
 - Trakt no longer has to be reconnected by hand either. When the server stops
   accepting the saved authorisation, POV now renews it and retries, the same

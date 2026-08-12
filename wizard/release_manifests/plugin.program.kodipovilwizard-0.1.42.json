@@ -1,0 +1,13 @@
+{
+  "version": "0.1.42",
+  "previous_version": "0.1.41",
+  "previous_sha256": "448eda1137d484d63c72197a512a7e5945e4b408e2c7c2fbf4e7c7ae48dad5f1",
+  "output_sha256": "32fe5370257887fa39850c53beb22bf4a2e3980626c63e7bc71efe321c67d756",
+  "replace": [
+    "plugin.program.kodipovilwizard/addon.xml",
+    "plugin.program.kodipovilwizard/changelog.txt",
+    "plugin.program.kodipovilwizard/resources/libs/wizard.py",
+    "plugin.program.kodipovilwizard/startup.py"
+  ],
+  "add": []
+}
