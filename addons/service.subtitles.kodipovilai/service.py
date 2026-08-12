@@ -231,6 +231,7 @@ def _run_build_startup_repairs():
         _maybe_reseed_series_networks,
         _maybe_reseed_genre_folders,
         _maybe_patch_fentastic_widgets,
+        _maybe_patch_skin_watched_poster,
         _maybe_patch_favourites_xml,
         _maybe_patch_favourites_personal_tiles,
         _maybe_patch_pov_torbox_usage,
@@ -825,6 +826,41 @@ def _maybe_reseed_genre_folders():
         try:
             kodi_utils.log(
                 'pov_genre_folders_reseed_patcher run failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_skin_watched_poster():
+    """Draw the watched tick in the Poster view, the build's default.
+
+    Deliberately NOT behind _skip_pov_patchers(): that switch exists to take
+    POV out of the loop while a POV problem is being isolated, and this edits
+    a skin. Gating it there would silently disable a repair that has nothing
+    to do with the add-on being isolated.
+    """
+    try:
+        from resources.lib import skin_watched_poster_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        results = skin_watched_poster_patcher.ensure_patched()
+        patched = [k for k, v in results.items() if v == 'patched']
+        if patched:
+            kodi_utils.log(
+                'skin_watched_poster_patcher: Poster view now shows watched '
+                'marks in {0}'.format(', '.join(patched)), level='INFO')
+        broken = [k for k, v in results.items()
+                  if v in ('unmatched', 'parse_failed', 'write_failed')]
+        if broken:
+            kodi_utils.log(
+                'skin_watched_poster_patcher: left alone: '
+                '{0}'.format(', '.join(broken)), level='WARNING')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'skin_watched_poster_patcher failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
