@@ -1,3 +1,9 @@
+v0.1.42
+- A quick update is applied without closing Kodi. Anything that cannot be
+  applied in place still falls back to the old restart, and an add-on left
+  disabled by an interrupted reload is switched back on at the next start.
+- Nothing is reloaded while something is playing.
+
 [COLOR yellow][B]v0.1.41[/B][/COLOR]
 * Account Manager is no longer opt-in: it installs by itself, once, on every
   device including ones that already have the build. It is what lets

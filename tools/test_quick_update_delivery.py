@@ -108,7 +108,17 @@ class FakeLogging:
 
 
 class FakeXbmc:
+    # Kodi's real log levels, not just the one the first version of this test
+    # happened to need. A stub that carries only what today's code path uses
+    # turns tomorrow's log line into a test failure that says nothing about
+    # the change -- which is exactly what happened when the hot reload started
+    # logging at WARNING.
+    LOGDEBUG = 0
+    LOGINFO = 1
+    LOGWARNING = 3
     LOGERROR = 4
+    LOGFATAL = 6
+    LOGNONE = 7
 
 
 # The functions auto_quick_update() actually calls. They are compiled from the
