@@ -43,6 +43,59 @@ except Exception:
 
 
 MARKER = '<!-- AI_SUBS_WATCHED_POSTER_v1 -->'
+LIST_MARKER = '<!-- AI_SUBS_WATCHED_LIST_v1 -->'
+
+# THE SECOND REPORT, the opposite of the first: "in this view it ticks
+# EVERYTHING -- films and series I have never watched, and never marked."
+#
+# HOW WE KNOW IT IS THIS LINE. The same user says the tick is correct in the
+# default Poster view. Poster draws through WallWatchedIconVar, which is gated
+# on Integer.IsGreater(ListItem.Playcount,0) -- so if it is right there, the
+# playcount is right, and the data is not the problem. A view that ticks
+# unwatched items is therefore a view that never looks at the playcount. There
+# is exactly one such variable in this skin:
+#
+#   <variable name="ListWatchedIconVar">
+#       ...
+#       <value condition="!String.IsEmpty(ListItem.Overlay)">$INFO[ListItem.Overlay]</value>
+#
+# "has any overlay at all" is not "is watched". It is used by the List, Wide
+# List and Banner views and by nothing else, which matches a report about one
+# specific view rather than the whole skin.
+#
+# THE PLAYCOUNT DECIDES, because that is the source the view that works uses.
+# Two lines replace the one:
+#
+#   watched per the playcount            -> the tick, same texture as before
+#   any overlay that is not about watching -> unchanged ($INFO as before)
+#
+# So a RAR, a ZIP, a locked source or an HD badge -- which this same variable
+# also draws, in the file manager -- keeps its icon exactly as it is today.
+# What stops being drawn is only an overlay claiming "watched" on an item
+# whose playcount says otherwise, and an "unwatched" overlay, which pointed at
+# a texture this skin does not even ship. That contradiction is the bug: one
+# view calls an item watched while the other, reading the playcount, correctly
+# does not.
+LIST_OLD = ('<value condition="!String.IsEmpty(ListItem.Overlay)">'
+            '$INFO[ListItem.Overlay]</value>')
+LIST_NEW = (
+    LIST_MARKER + '{eol}{indent}'
+    '<value condition="Integer.IsGreater(ListItem.Playcount,0)">'
+    'OverlayWatched.png</value>{eol}{indent}'
+    '<value condition="!String.IsEmpty(ListItem.Overlay) + '
+    '!String.IsEqual(ListItem.Overlay,OverlayWatched.png) + '
+    '!String.IsEqual(ListItem.Overlay,OverlayUnwatched.png)">'
+    '$INFO[ListItem.Overlay]</value>')
+
+# The variable the line has to be inside. Bounded on purpose: the same
+# `!String.IsEmpty(ListItem.Overlay)` test appears in other variables in this
+# file (the PVR ones), and those are not ours to change.
+LIST_VARIABLES = {
+    'skin.fentastic': {
+        'rel': 'xml/Variables.xml',
+        'variable': 'ListWatchedIconVar',
+    },
+}
 
 # The include whose closing tag we insert after, and the position of the tick
 # inside that tile. Both are per skin: the poster in skin.fentastic's tile is
@@ -181,6 +234,107 @@ def _patch_one(skin_id, recipe):
     return 'patched'
 
 
+def _fragment_parses(fragment):
+    """True when this piece of skin XML is well formed.
+
+    Bare & is escaped first, because a skin expression is full of them and
+    they are legal to Kodi. Everything else -- an unclosed tag, a stray angle
+    bracket, a broken attribute -- still fails, which is what we are checking
+    for."""
+    try:
+        import xml.etree.ElementTree as ET
+        safe = re.sub(r'&(?!(?:[a-zA-Z][a-zA-Z0-9]*|#[0-9]+|#x[0-9a-fA-F]+);)',
+                      '&amp;', fragment)
+        ET.fromstring(safe)
+        return True
+    except Exception:
+        return False
+
+
+def _variable_block(content, name):
+    """(start, end) of one <variable name="..."> ... </variable>, or None."""
+    opener = '<variable name="%s">' % name
+    start = content.find(opener)
+    if start == -1:
+        return None
+    end = content.find('</variable>', start)
+    if end == -1:
+        return None
+    return start, end + len('</variable>')
+
+
+def _patch_list_one(skin_id, recipe):
+    """'patched' | 'already_patched' | 'no_skin' | 'unmatched'
+    | 'parse_failed' | 'read_failed' | 'write_failed'."""
+    path = _skin_path(skin_id, recipe['rel'])
+    if not path:
+        return 'no_skin'
+    try:
+        with open(path, 'r', encoding='utf-8', newline='') as handle:
+            content = handle.read()
+    except OSError as e:
+        _log('{0}: read failed: {1}'.format(skin_id, e), level='WARNING')
+        return 'read_failed'
+
+    if LIST_MARKER in content:
+        return 'already_patched'
+
+    bounds = _variable_block(content, recipe['variable'])
+    if bounds is None:
+        _log('{0}: no {1} variable in {2}; leaving it alone'.format(
+            skin_id, recipe['variable'], recipe['rel']), level='WARNING')
+        return 'unmatched'
+    start, end = bounds
+    block = content[start:end]
+    # Exactly one, or we do not know which one the report is about. The same
+    # test appears in this file's PVR variables, which is why the search is
+    # bounded to this block in the first place.
+    if block.count(LIST_OLD) != 1:
+        _log('{0}: expected one watched-overlay line in {1}, found {2} -- the '
+             'skin has changed; leaving it alone'.format(
+                 skin_id, recipe['variable'], block.count(LIST_OLD)),
+             level='WARNING')
+        return 'unmatched'
+
+    eol = _eol(content)
+    # Reuse the file's own indentation for the line we are replacing, so the
+    # two lines that take its place sit exactly where it did.
+    line_start = block.rfind('\n', 0, block.find(LIST_OLD)) + 1
+    indent = block[line_start:block.find(LIST_OLD)]
+    new_block = block.replace(
+        LIST_OLD, LIST_NEW.format(eol=eol, indent=indent))
+    new_content = content[:start] + new_block + content[end:]
+
+    # THE BLOCK, NOT THE FILE. Variables.xml is not valid XML to a strict
+    # parser -- it carries raw & inside skin expressions, which Kodi's own
+    # parser accepts and ElementTree does not -- so parsing the whole file
+    # would fail on every install and this fix would never apply anywhere.
+    # Everything outside the block is byte-identical to what was already
+    # there, so checking the one piece we rewrote is the check that means
+    # something.
+    if not _fragment_parses(new_block):
+        _log('{0}: patched block would not parse -- skipping'.format(skin_id),
+             level='WARNING')
+        return 'parse_failed'
+
+    tmp = path + '.aitmp'
+    try:
+        with open(tmp, 'w', encoding='utf-8', newline='') as handle:
+            handle.write(new_content)
+        os.replace(tmp, path)
+    except OSError as e:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        _log('{0}: write failed: {1}'.format(skin_id, e), level='WARNING')
+        return 'write_failed'
+
+    _log('{0}: the list views now tick only what was actually watched'.format(
+        skin_id))
+    return 'patched'
+
+
 def ensure_patched():
     """Patch every skin we have a verified recipe for. Returns {skin: status}."""
     out = {}
@@ -190,12 +344,67 @@ def ensure_patched():
         except Exception as e:
             out[skin_id] = 'failed'
             _log('{0}: {1}'.format(skin_id, e), level='WARNING')
+    for skin_id, recipe in LIST_VARIABLES.items():
+        key = skin_id + ':list'
+        try:
+            out[key] = _patch_list_one(skin_id, recipe)
+        except Exception as e:
+            out[key] = 'failed'
+            _log('{0}: {1}'.format(key, e), level='WARNING')
     return out
+
+
+def _revert_list_one(skin_id, recipe):
+    path = _skin_path(skin_id, recipe['rel'])
+    if not path:
+        return 'no_skin'
+    try:
+        with open(path, 'r', encoding='utf-8', newline='') as handle:
+            content = handle.read()
+    except OSError:
+        return 'failed'
+    if LIST_MARKER not in content:
+        return 'not_patched'
+    eol = _eol(content)
+    bounds = _variable_block(content, recipe['variable'])
+    if bounds is None:
+        return 'failed'
+    start, end = bounds
+    block = content[start:end]
+    line_start = block.rfind('\n', 0, block.find(LIST_MARKER)) + 1
+    indent = block[line_start:block.find(LIST_MARKER)]
+    restored = block.replace(LIST_NEW.format(eol=eol, indent=indent), LIST_OLD)
+    if LIST_MARKER in restored:
+        # Somebody edited inside our replacement. Guessing what to remove from
+        # a file the whole UI is drawn from is worse than leaving it.
+        _log('{0}: revert found the block no longer as we left it -- '
+             'refusing'.format(skin_id), level='WARNING')
+        return 'failed'
+    new_content = content[:start] + restored + content[end:]
+    if not _fragment_parses(restored):
+        return 'failed'
+    tmp = path + '.aitmp'
+    try:
+        with open(tmp, 'w', encoding='utf-8', newline='') as handle:
+            handle.write(new_content)
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        return 'failed'
+    return 'reverted'
 
 
 def revert():
     """Undo, for a device that needs the skin exactly as shipped."""
     out = {}
+    for skin_id, recipe in LIST_VARIABLES.items():
+        try:
+            out[skin_id + ':list'] = _revert_list_one(skin_id, recipe)
+        except Exception:
+            out[skin_id + ':list'] = 'failed'
     for skin_id, recipe in RECIPES.items():
         path = _skin_path(skin_id, recipe['rel'])
         if not path:
