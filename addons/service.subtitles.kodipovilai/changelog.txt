@@ -1,3 +1,11 @@
+v0.2.487
+- Fixes a fresh install that could not start at all.
+- The watched tick no longer appears on films and series you never watched
+  in the list views; it now follows the same watched count the poster view
+  already used, so the two can no longer disagree.
+- An add-on that an interrupted update left switched off is recovered more
+  reliably, and an update is never told it was applied when it was not.
+
 v0.2.486
 - MDBList now shows up in "My Movies" and "My Series" after you connect it in
   Account Manager, which is how it is connected now.
