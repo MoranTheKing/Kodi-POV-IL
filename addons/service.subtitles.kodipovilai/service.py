@@ -832,7 +832,12 @@ def _maybe_reseed_genre_folders():
 
 
 def _maybe_patch_skin_watched_poster():
-    """Draw the watched tick in the Poster view, the build's default.
+    """Make the watched tick tell the truth: draw it in the Poster view, which
+    never had one, and stop the list views drawing it on everything.
+
+    Both halves are the same bug seen from opposite sides, and both are fixed
+    against the same source of truth -- the playcount -- so the two views can
+    no longer disagree about whether something was watched.
 
     Deliberately NOT behind _skip_pov_patchers(): that switch exists to take
     POV out of the loop while a POV problem is being isolated, and this edits
@@ -848,8 +853,8 @@ def _maybe_patch_skin_watched_poster():
         patched = [k for k, v in results.items() if v == 'patched']
         if patched:
             kodi_utils.log(
-                'skin_watched_poster_patcher: Poster view now shows watched '
-                'marks in {0}'.format(', '.join(patched)), level='INFO')
+                'skin_watched_poster_patcher: watched marks corrected in '
+                '{0}'.format(', '.join(patched)), level='INFO')
         broken = [k for k, v in results.items()
                   if v in ('unmatched', 'parse_failed', 'write_failed')]
         if broken:
