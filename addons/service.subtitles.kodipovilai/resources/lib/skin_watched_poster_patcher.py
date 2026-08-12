@@ -444,6 +444,15 @@ def _revert_list_one(skin_id, recipe):
              'is no longer as we left it; refusing'.format(
                  skin_id, recipe['expected'], undone), level='WARNING')
         return 'failed'
+    if ('$VAR[%s]' % recipe['to_var']) in restored:
+        # COUNTING IS NOT THE SAME AS CHECKING. Two undone and two expected can
+        # still leave one texture on the new variable if a stray marker pair
+        # elsewhere in the block made up the numbers. The only statement worth
+        # making is the direct one: after a revert, nothing in this block may
+        # still be reading the variable we put there.
+        _log('{0}: the block still reads {1} after reverting -- refusing'
+             .format(skin_id, recipe['to_var']), level='WARNING')
+        return 'failed'
     if LIST_MARKER in restored:
         # Somebody edited inside our replacement. Guessing what to remove from
         # a file the whole UI is drawn from is worse than leaving it.
