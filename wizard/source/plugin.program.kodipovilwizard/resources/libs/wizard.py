@@ -449,8 +449,8 @@ class Wizard:
             return {}
 
     @classmethod
-    def _addon_state(cls, addon_id):
-        """True | False | 'absent' | None.
+    def _addon_state(cls, addon_id, resolve_absent=False):
+        """True | False | 'absent' (only when asked) | None.
 
         'absent' AND None BOTH used to be None, and that conflation was a real
         bug: heal_disabled_addons treated "not False" as healed, so an early
@@ -473,6 +473,15 @@ class Wizard:
         add-on Kodi has, enabled or not. Present in that list means installed,
         and its own flag is the state. Missing from a list we actually
         received means gone. No list means we still do not know.
+
+        THAT LISTING IS ONLY FETCHED WHEN SOMEBODY NEEDS THE DIFFERENCE.
+        Listing every installed add-on is not free -- it locks and walks Kodi's
+        add-on manager, the very subsystem UpdateLocalAddons() is busy
+        rebuilding -- and _enable_and_verify polls this up to 24 times per
+        add-on while waiting for one to come back on. It does not care whether
+        a non-answer means "gone" or "cannot tell"; both are "not on yet". So
+        only the heal pass, which decides whether to DROP a record, asks for
+        the difference, and it asks once per pending id per Kodi start.
         """
         result = cls._jsonrpc('Addons.GetAddonDetails', {
             'addonid': addon_id, 'properties': ['enabled']})
@@ -480,6 +489,8 @@ class Wizard:
             return bool(result['result']['addon']['enabled'])
         except Exception:
             pass
+        if not resolve_absent:
+            return None
         listing = cls._jsonrpc('Addons.GetAddons',
                                {'enabled': 'all', 'properties': ['enabled']})
         try:
@@ -577,10 +588,16 @@ class Wizard:
 
     @staticmethod
     def _clear_tmp(tmp):
-        """Remove the scratch file whether it is a file or a directory."""
+        """Remove the scratch file, whatever it turns out to be.
+
+        rmtree rather than rmdir: a NON-EMPTY directory squatting on the temp
+        name defeats rmdir, the failure is swallowed, and every future write of
+        the recovery record fails forever on that install -- the same permanent
+        silent block, just one shape narrower."""
         try:
             if os.path.isdir(tmp):
-                os.rmdir(tmp)
+                import shutil
+                shutil.rmtree(tmp, ignore_errors=True)
             elif os.path.exists(tmp):
                 os.remove(tmp)
         except Exception:
@@ -616,7 +633,7 @@ class Wizard:
                 # problem becomes a permanent one: the id is forgotten and
                 # nothing ever tries again. Caught by a test that made every
                 # enable fail and then found the add-on off with an empty list.
-                state = cls._addon_state(addon_id)
+                state = cls._addon_state(addon_id, resolve_absent=True)
                 if state is True:
                     healed.append(addon_id)
                 elif state == 'absent':
