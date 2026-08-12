@@ -1,3 +1,9 @@
+v0.2.486
+- MDBList now shows up in "My Movies" and "My Series" after you connect it in
+  Account Manager, which is how it is connected now.
+- The two MDBList tiles sit next to their own kind on the home screen - films
+  with films, series with series - instead of side by side at the end.
+
 v0.2.485
 - The tick that marks something as watched now appears on the poster too. It
   was showing in every other view and missing only in the one the build opens
