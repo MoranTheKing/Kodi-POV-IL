@@ -591,6 +591,68 @@ are not exempt from anything: they land in `self.sourceDict`, flow into
 BEFORE the filter block. More 720p after an update means more providers, not a
 lost setting.
 
+## Shipped 2026-08-12: note 589 (0.2.489 / wizard 0.1.44 / quickfix 0.1.534)
+
+One day, one release, nine code changes, six adversarial validation rounds.
+Every finding below was reproduced by execution before it was folded.
+
+- **A fresh install could not start at all.** See "Never log before the folders
+  exist" below. Wizard 0.1.43.
+- **POV's five cache tables rebuilt** after POV auto-updated itself and
+  reordered their columns, and the **favourites** it orphaned copied across.
+  See "POV auto-updates itself out from under the build".
+- **The watched tick** stopped appearing on unwatched items in the album-icons
+  view, and started appearing in the Poster view where it never had. See "The
+  watched tick: two opposite reports, one source of truth".
+- **MDBList in My Movies / My Series**, from the file Account Manager actually
+  writes rather than Kodi's in-memory copy, with each tile placed beside its
+  own kind.
+- **The recovery record** for an add-on left disabled by an interrupted update:
+  it survives a dead JSON-RPC, a full disk and a squatted temp name, and is
+  only dropped when Kodi actually says the add-on is gone.
+
+Two release-process lessons worth more than the fixes:
+
+1. **The wizard ZIP was built before the last two folds touched wizard.py**, so
+   it shipped without them. The "two artifact chains" gotcha, hit again. What
+   caught it was `tools/test_platform_packages.py` after it was retargeted from
+   a historical version to the current one -- so keep that test pointing at the
+   release being shipped, and compare each artifact to its OWN predecessor.
+2. **The same performance trap was walked into twice in one day**: a regex with
+   `.*?` anchored at the end costs O(n^2) on input that never closes.
+   `_strip_comments` was rewritten to escape it in the morning and `_trim_tail`
+   reintroduced it in the afternoon (98 seconds on 64k unclosed comments, on a
+   call that runs while a menu is drawn). If a scanner walks text, walk it once.
+
+## Umbrella scrapes a TV show with whatever title it was handed (open)
+
+Field report: "In Treatment S02E12 in Umbrella gives sources for completely
+different shows." The log settles it in one line -- the same episode, the same
+evening:
+
+    22:53  tvshowtitle='In Treatment'  -> In.Treatment.S02E12...x264-CasStudio, played
+    23:01  tvshowtitle='בטיפול'         -> unplayable, three times
+
+Umbrella scrapes with the title it is given. No torrent is named "בטיפול
+S02E12", so the only results are whatever matched the S02E12 pattern alone --
+in the screenshot, anime from NYAA.
+
+It is not a bug in Umbrella so much as an asymmetry in its own settings.
+`sources.play()` calls `imdb_meta_chk()`, which asks IMDb for the canonical
+title by id and replaces the one it was handed -- but only when the flag is on:
+
+    movies:   imdb.Moviemeta.check = true   imdb.Movietitle.check = true
+    tv shows: imdb.Showmeta.check  = false  imdb.Showtitle.check  = false
+
+So films scrape with their English title and series scrape with the Hebrew one.
+On an English build nobody ever notices. POV is unaffected because it keeps the
+original title for scraping.
+
+THE FIX is to seed those two show-side settings to true, through
+`addon_settings_safe` like every other Umbrella setting this build sets. It
+costs one IMDb lookup per play and it is exactly what upstream already does for
+movies. Not yet shipped.
+
 ## POV auto-updates itself out from under the build (2026-08-12, critical)
 
 The build ships POV 5.12.04 **and** `repository.kodifitzwell`, the POV author's
