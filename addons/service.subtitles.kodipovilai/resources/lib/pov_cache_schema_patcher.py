@@ -262,6 +262,24 @@ def _declared_tables():
     if not tables:
         _log('could not read any table definition out of POV\'s cache.py -- '
              'doing nothing', level='WARNING')
+    # A CREATE quoted in a trailing comment reads exactly like a real one, and
+    # the stale copy people leave behind when they change a schema is precisely
+    # the OLD column order -- so a healthy table would be "repaired" into the
+    # broken shape, logged like any other success. Rather than trying to tell
+    # code from prose, refuse whenever the same table in the same database is
+    # declared twice with different columns: two answers means no answer.
+    seen = {}
+    conflicting = set()
+    for db, table, cols, _stmt in tables:
+        key = (db, table)
+        if key in seen and seen[key] != cols:
+            conflicting.add(key)
+        seen[key] = cols
+    if conflicting:
+        for db, table in sorted(conflicting):
+            _log('{0}.{1} is declared more than once with different columns -- '
+                 'refusing to touch it'.format(db, table), level='WARNING')
+        tables = [t for t in tables if (t[0], t[1]) not in conflicting]
     # DROP TABLE takes the table's indexes with it. POV would rebuild them the
     # next time check_databases() runs, but "the next time" can be a whole Kodi
     # session away, and metadata without its index is the slowest screen in the
@@ -309,6 +327,39 @@ def _actual_columns(cursor, table):
         return None
 
 
+def _one_table(cursor, key, table, columns, statement, index_statements,
+               results):
+    """Decide and, if needed, rebuild a single table. Raises on failure."""
+    actual = _actual_columns(cursor, table)
+    if actual is None:
+        results[key] = 'unreadable'
+        _log('{0}: could not read the table definition -- the database is '
+             'locked or damaged; leaving it'.format(key), level='WARNING')
+        return
+    if not actual:
+        return                                  # not created yet; POV will
+    if actual == columns:
+        results[key] = 'ok'
+        return
+    if sorted(actual) != sorted(columns):
+        # Columns were added or removed. That is a migration and POV owns it;
+        # dropping the table here could destroy something we do not understand.
+        results[key] = 'renamed'
+        _log('{0}: columns differ by name, not order -- leaving it to '
+             'POV'.format(key), level='WARNING')
+        return
+    if table not in REBUILDABLE:
+        results[key] = 'skipped'
+        _log('{0}: column order changed but this table is not a cache -- '
+             'refusing to rebuild it'.format(key), level='WARNING')
+        return
+    kept, total = _rebuild(cursor, table, columns, statement, index_statements)
+    results[key] = 'rebuilt'
+    _log('{0}: rebuilt -- POV writes {1} but the table on disk was {2}, so '
+         'every value was landing in the wrong column. Kept {3} of {4} '
+         'row(s).'.format(key, columns, actual, kept, total))
+
+
 def _rebuild(cursor, table, columns, statement, index_statements):
     """Rebuild one table in the order POV declares. Returns (kept, total).
 
@@ -340,8 +391,24 @@ def _rebuild(cursor, table, columns, statement, index_statements):
         cursor.execute('DROP TABLE IF EXISTS %s' % scratch)
         cursor.execute(_renamed(statement, table, scratch))
         columns_sql = ', '.join(columns)
-        keep = ("WHERE typeof(expires) = 'integer'" if 'expires' in columns
-                else '')
+        # WHAT A HEALTHY ROW LOOKS LIKE, FROM BOTH SIDES. The expiry has to
+        # be a real integer, and the payload has to start like something
+        # serialised -- a bracket or a brace for JSON and Python repr alike,
+        # a quote for a string. Testing only the expiry is not enough:
+        # SQLite's INTEGER affinity quietly turns a payload like '42' into a
+        # real integer when the swap lands it in the expiry column, so a
+        # transposed row looks perfectly healthy from that side alone. A
+        # genuinely cached bare number is dropped with it, and that costs one
+        # refetch.
+        tests = []
+        if 'expires' in columns:
+            openers = ('[', '{', chr(34), chr(39))
+            tests.append("typeof(expires) = 'integer'")
+            tests.append('substr(%s, 1, 1) IN (%s)' % (
+                columns[-1],
+                ', '.join("'%s'" % (o * 2 if o == chr(39) else o)
+                          for o in openers)))
+        keep = ('WHERE ' + ' AND '.join(tests)) if tests else ''
         cursor.execute(
             'INSERT OR REPLACE INTO %s (%s) SELECT %s FROM %s %s'
             % (scratch, columns_sql, columns_sql, table, keep))
@@ -466,40 +533,17 @@ def ensure_patched():
             cursor = connection.cursor()
             for table, columns, statement, table_indexes in entries:
                 key = '{0}.{1}'.format(os.path.basename(path), table)
-                actual = _actual_columns(cursor, table)
-                if actual is None:
-                    results[key] = 'unreadable'
-                    _log('{0}: could not read the table definition -- the '
-                         'database is locked or damaged; leaving it'.format(
-                             key), level='WARNING')
-                    continue
-                if not actual:
-                    continue                    # not created yet; POV will
-                if actual == columns:
-                    results[key] = 'ok'
-                    continue
-                if sorted(actual) != sorted(columns):
-                    # Columns were added or removed. That is a migration and
-                    # POV owns it; dropping the table here could destroy
-                    # something we do not understand.
-                    results[key] = 'renamed'
-                    _log('{0}: columns differ by name, not order -- leaving it '
-                         'to POV'.format(key), level='WARNING')
-                    continue
-                if table not in REBUILDABLE:
-                    results[key] = 'skipped'
-                    _log('{0}: column order changed but this table is not a '
-                         'cache -- refusing to rebuild it'.format(key),
-                         level='WARNING')
-                    continue
-                kept, total = _rebuild(cursor, table, columns, statement,
-                                       table_indexes)
-                results[key] = 'rebuilt'
-                _log('{0}: rebuilt -- POV writes {1} but the table on disk was '
-                     '{2}, so every value was landing in the wrong column. '
-                     'Kept {3} of {4} row(s).'.format(
-                         key, columns, actual, kept, total))
+                # Per table, not per file. metacache.db holds three of these,
+                # and a lock on one of them used to take the other two down
+                # with it for the whole boot.
+                try:
+                    _one_table(cursor, key, table, columns, statement,
+                               table_indexes, results)
+                except Exception as error:
+                    results[key] = 'failed'
+                    _log('{0}: {1}'.format(key, error), level='WARNING')
         except Exception as error:
+            # Opening the file, not a table: nothing inside it was reached.
             results[os.path.basename(path)] = 'failed'
             _log('{0}: {1}'.format(os.path.basename(path), error),
                  level='WARNING')
