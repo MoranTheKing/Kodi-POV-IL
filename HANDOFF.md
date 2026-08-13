@@ -3507,6 +3507,102 @@ Support note, not a code fix — nothing in this build's own flow does it.
   write was invisible in the log and POV's reload was skipped. A status has to
   describe what the run did.
 
+## The "last ten updates" tile, and four rounds of getting it wrong
+
+The tile itself is three lines of XML. Deciding whether it may be re-seeded
+took four review rounds, every one of which found something real, including in
+the fix from the round before. Worth reading before touching
+`recent_updates_tile_patcher.py`.
+
+The problem: the wizard's `update_favourites_xml_file()` copies a static
+per-skin `favourites.xml` over the user's own on every skin switch, so the
+tile disappears through no fault of theirs and must come back. A tile the user
+deleted must NOT. From `favourites.xml` alone those two are indistinguishable,
+and five designs proved it (the module header lists them).
+
+The answer is that the writer knew all along: the wizard now counts its own
+replacements, and the patcher records that count when it seeds. Count moved ->
+the wizard did it -> restore. Count did not -> the user did -> never again.
+
+What the rounds added, each of them load-bearing:
+
+  * BOTH facts are kept in BOTH add-ons' `addon_data`. Kodi's per-add-on
+    "Clear data" button wipes exactly one folder and exists on every add-on,
+    so a single copy of either the record or the count could be taken by one
+    click, and losing the count reads as "never replaced" -> every wizard
+    removal becomes a user deletion.
+  * The record is written BEFORE the tile and only becomes `offered` once the
+    tile is really in the file. An absent record has to mean "never offered"
+    for a first run to seed at all, so a tile must never be able to outlive
+    its record. `seeding` is what tells a power cut apart from a deletion, and
+    the retry is BOUNDED -- an unfinished seed that can never finish would
+    otherwise undo every deletion the user makes, forever.
+  * Seeding requires EVERY copy to land. One copy is not the mechanism with a
+    scratch on it, it is the mechanism with its redundancy gone.
+  * A count that is present and UNREADABLE is damage, not zero, and a count
+    BELOW its own snapshot is impossible, since the wizard only adds. Either
+    way the count is not consulted.
+  * When the count cannot be trusted the anchors decide -- and their verdict
+    is NOT recorded. A recorded deletion is permanent: it is the first thing
+    every later start checks and it never looks at the count again. That
+    weight belongs to a fact, not to a guess read off favourites that a skin
+    seed may itself contain.
+
+## Kodi's unknown-addon window kills an add-on's own service
+
+`Addons.SetAddonEnabled` flips the enabled flag at once and Kodi finishes
+loading the add-on a couple of seconds later -- but it starts the add-on's
+service script at the FIRST of those moments. POV reads a setting at module
+import (`tmdb_api`), so inside that window the whole import chain dies and
+`POVMonitor` never starts: no Trakt sync monitor, no premium notification, for
+the rest of the session. Field log 2026-08-13 21:40, with our own "cycled POV"
+line landing three tenths of a second after the crash.
+
+`pov_addon_window_patcher.py` teaches POV's `addon()` to wait the window out.
+Two things about it are not optional:
+
+  * It runs FIRST in `main()`, ahead of every patcher that can arm a cycle.
+    It sat in the build-repairs pass until a review pointed out that pass runs
+    AFTER `pov_reload.reload_if_patched()`.
+  * The wait uses the abort monitor, not `sleep`. It runs inside POV's service
+    startup and Kodi force-kills a script that will not stop within 5 seconds.
+
+Verify the anchor against a REAL 6.08.x POV, not the 5.12.04 in our build zip
+-- POV auto-updates itself on first launch, and 5.12.04 does not even have the
+crashing import.
+
+## Account Manager forces Kodi's global auto-update on, every boot
+
+Confirmed from the shipped pack, not inferred: `startup.py`'s
+`run_addon_updates()` calls `control.autoupdate_on()`, which sets Kodi's
+`general.addonupdates` to 0 (install automatically) over JSON-RPC, then runs
+`UpdateAddonRepos()`. Its gate is a Trakt token, and `StartupManager()` runs
+every boot.
+
+So on any device with Trakt connected through Account Manager, Kodi may
+replace Umbrella, POV and the rest from their own repos. Our ~49 third-party
+patchers are self-healing and re-apply at the next start, so this does not
+lose them permanently. What it does risk is an upstream change that MOVES an
+anchor: 80 places return `unmatched` rather than guess, and the feature then
+disappears with only a WARNING nobody reads. The maintainer has said they are
+fine with auto-update; making `unmatched` visible instead of buried is the
+follow-up worth doing.
+
+## A correction I had to make about myself
+
+Two commits on this branch declared 17 one-shot markers in `settings.xml` and
+justified it with the claim that Kodi drops a write to an undeclared id. That
+claim is false, and the section above titled "Undeclared settings DO persist"
+had already settled it from Kodi's own C++ two days earlier -- naming several
+of the same markers and calling them a tidiness item rather than a bug. I
+audited my way to the same list and drew the opposite conclusion without
+reading what was already here.
+
+The declarations stayed (house style, and this section says so too). Every
+place that asserted the false reason was corrected in `bfdd288`. The lesson is
+narrower than "read the docs": this file is the record, and re-deriving
+something it already answers is how a settled question gets unsettled wrongly.
+
 ## Working style
 
 - Be certain before shipping: read the code, reproduce with a unit test.
