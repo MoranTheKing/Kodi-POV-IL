@@ -538,13 +538,48 @@ class Wizard:
     def _addon_is_enabled(self, addon_id):
         return self._addon_is_enabled_static(addon_id)
 
-    # The same Window(10000) key pov_reload reads. The service add-on's five
+    # The same Window(10000) record pov_reload reads. The service add-on's
     # skin-reload guards live in a DIFFERENT process and cannot see anything in
     # this one, so without this they report "not cycling" for the whole of the
-    # dance below and let a ReloadSkin through. The value is a deadline, not a
-    # flag, so that this process dying mid-update cannot block their reloads for
-    # the rest of the session.
-    CYCLING_PROPERTY = 'kodipovil_pov_cycling_until'
+    # dance below and let a ReloadSkin through.
+    #
+    # The shape must match pov_reload's exactly: "count|monotonic|wall".
+    # A COUNT because this add-on can be cycling twice at once -- it ships a
+    # startup service AND a plugin entry point, and nothing serialises them, so
+    # a user re-triggering Quick Update during the silent startup update gives
+    # two overlapping cycles; with a plain flag the first to finish cleared it
+    # for both. TWO CLOCKS because a wall clock alone was defeated by an NTP
+    # step, which Android boxes without an RTC do routinely, and shortly after
+    # the network comes up -- the same event an update waits for.
+    CYCLING_PROPERTY = 'kodipovil_pov_cycling'
+    CYCLING_MAX_HORIZON = 300
+
+    @classmethod
+    def _read_cycling(cls):
+        try:
+            import xbmcgui
+            raw = (xbmcgui.Window(10000).getProperty(cls.CYCLING_PROPERTY)
+                   or '').strip()
+            count, mono, wall = raw.split('|')
+            mono, wall = float(mono), float(wall)
+            # Reject rather than clamp anything outside a plausible epoch
+            # range. This also rejects inf and nan, and float() overflows a
+            # long enough numeral straight to inf. We only ever write
+            # now+seconds, so a value out here did not come from us.
+            if not (-1e12 < mono < 1e12) or not (-1e12 < wall < 1e12):
+                return 0, 0.0, 0.0
+            return int(count), mono, wall
+        except Exception:
+            return 0, 0.0, 0.0
+
+    @classmethod
+    def _write_cycling(cls, count, mono, wall):
+        try:
+            import xbmcgui
+            value = '' if count <= 0 else '%d|%f|%f' % (count, mono, wall)
+            xbmcgui.Window(10000).setProperty(cls.CYCLING_PROPERTY, value)
+        except Exception:
+            pass
 
     @classmethod
     def _pov_cycling(cls):
@@ -552,25 +587,43 @@ class Wizard:
         state where it cannot be constructed."""
         try:
             import time
-            import xbmcgui
-            raw = (xbmcgui.Window(10000).getProperty(cls.CYCLING_PROPERTY)
-                   or '').strip()
-            return bool(raw) and time.time() < float(raw)
+            count, mono, wall = cls._read_cycling()
+            if count <= 0:
+                return False
+            now_mono, now_wall = time.monotonic(), time.time()
+            # Clamped, so a corrupt value cannot pin every guarded reload in the
+            # build "cycling" for the rest of the session.
+            horizon_mono = min(mono, now_mono + cls.CYCLING_MAX_HORIZON)
+            horizon_wall = min(wall, now_wall + cls.CYCLING_MAX_HORIZON)
+            return now_mono < horizon_mono or now_wall < horizon_wall
         except Exception:
             return False
 
     @classmethod
     def _publish_cycling(cls, seconds):
+        """Join (seconds > 0) or leave (0) the set of cyclers."""
         try:
             import time
-            import xbmcgui
-            value = '' if not seconds else '%d' % int(time.time() + seconds)
-            xbmcgui.Window(10000).setProperty(cls.CYCLING_PROPERTY, value)
+            count, mono, wall = cls._read_cycling()
+            now_mono, now_wall = time.monotonic(), time.time()
+            live = count > 0 and (now_mono < mono or now_wall < wall)
+            if seconds:
+                seconds = min(seconds, cls.CYCLING_MAX_HORIZON)
+                if live:
+                    cls._write_cycling(count + 1, max(mono, now_mono + seconds),
+                                       max(wall, now_wall + seconds))
+                else:
+                    cls._write_cycling(1, now_mono + seconds,
+                                       now_wall + seconds)
+            elif live:
+                cls._write_cycling(count - 1, mono, wall)
+            else:
+                cls._write_cycling(0, 0.0, 0.0)
         except Exception:
             pass
 
     @staticmethod
-    def _wait_until_resolvable(addon_ids, timeout=20):
+    def _wait_until_resolvable(addon_ids, timeout=90):
         """Block until every id can actually be CONSTRUCTED, or time out.
 
         The enabled flag is not this question. Addons.GetAddonDetails reports
@@ -580,9 +633,15 @@ class Wizard:
         that redraws POV-backed windows in that moment gets a screen full of
         errors.
 
-        Best effort: a timeout returns anyway rather than blocking the update.
-        The window is normally a second or two, and waiting past it costs
-        nothing, whereas not waiting costs the home screen.
+        THE TIMEOUT IS GENEROUS ON PURPOSE, because the caller acts on the
+        answer by force-closing Kodi. The measured gap is under three seconds
+        and this wait is completely invisible -- no dialog, no progress -- so
+        stretching it costs nothing, while guessing "broken" about a device
+        that was merely slow costs that user a full app close, and on Android
+        a manual relaunch. A tight 20s made "half a second late" and "genuinely
+        never coming back" the same outcome. Ninety seconds is ~30x the
+        observed worst case, and this same startup path already tolerates a
+        240s wait elsewhere.
         """
         try:
             import xbmcaddon
@@ -606,9 +665,11 @@ class Wizard:
                 return False
             waited += 0.5
         if pending:
-            logging.log('[HOT-RELOAD] still not constructible after {0:.0f}s, '
-                        'reloading anyway: {1}'.format(
-                            waited, ', '.join(pending)),
+            # NOT "reloading anyway" -- the caller acts on this now. A log
+            # line that contradicts the next log line is exactly what costs an
+            # hour when the next fault is diagnosed from a field log.
+            logging.log('[HOT-RELOAD] still not constructible after {0:.0f}s: '
+                        '{1}'.format(waited, ', '.join(pending)),
                         level=xbmc.LOGWARNING)
         return not pending
 
@@ -1896,6 +1957,16 @@ def af3_tools_menu():
 def af3_tool_action(tool_id):
     for tool in AF3_TOOLS:
         if tool['id'] == tool_id:
+            # One of these tools is a bare ReloadSkin(), reachable from the AF3
+            # home tools row at any moment -- including while an update has POV
+            # disabled. Predates the reload-guard work rather than being caused
+            # by it, but it is a real route to the same broken home screen, and
+            # the button costs nothing to hold for a moment.
+            if 'ReloadSkin' in (tool.get('builtin') or '') \
+                    and Wizard._pov_cycling():
+                logging.log('[AF3 TOOLS] POV is mid-cycle; not reloading the '
+                            'skin right now.', level=xbmc.LOGWARNING)
+                return False
             xbmc.executebuiltin(tool['builtin'])
             return True
     return False
