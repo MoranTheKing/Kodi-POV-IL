@@ -272,7 +272,13 @@ def _sidecar():
             # throw away a deletion we may well have recorded and put the tile
             # back. The cost of being wrong this way is a tile somebody never
             # sees again; the other way it is a tile they cannot get rid of.
-            return {'state': REMOVED_TOKEN}
+            #
+            # LABELLED, because a caller has to be able to tell this apart from
+            # a removal somebody actually wrote down. The repair path treats a
+            # present tile as proof that the record is wrong and rewrites it --
+            # right when the record is this guess, and a silent erasure of the
+            # user's decision when it is a real one.
+            return {'state': REMOVED_TOKEN, 'inferred': True}
         return {}
     for copy in legible:
         # A recorded deletion outranks everything -- among copies that can
@@ -329,7 +335,11 @@ def _write_sidecar(state, anchors=None, attempts=0, require_all=False):
         try:
             directory = os.path.dirname(path)
             if directory and not os.path.isdir(directory):
-                os.makedirs(directory)
+                # exist_ok, because two processes can reach this line at once
+                # and the loser used to take a FileExistsError as "this copy
+                # could not be written" -- and with require_all that is an
+                # offer withdrawn over a directory that does exist.
+                os.makedirs(directory, exist_ok=True)
             # ATOMIC, like the favourites.xml write below it. A half-written
             # record is unreadable, and an unreadable record now costs the user
             # their tile -- so it must never be possible to observe one.
@@ -475,6 +485,31 @@ def ensure_patched():
     # the same hour its own dead invariant was repaired; it had been sitting
     # underneath it the whole time.
     if has_tile:
+        if (record.get('state') == REMOVED_TOKEN
+                and not record.get('inferred')):
+            # A DELETION SOMEBODY ACTUALLY WROTE DOWN, and a tile in the file
+            # anyway. Leave both exactly as they are.
+            #
+            # This is the hole the has_tile reordering opened, and it opened it
+            # the same day it was written: the repair below fires on any record
+            # that is not OFFERED, so it rewrote a recorded removal to
+            # "offered" -- and then the next skin switch to a seed WITHOUT the
+            # tile read as an ordinary wizard removal, and put back the tile
+            # the user had deleted. The comment above considered only two ways
+            # a tile can be present against a REMOVED record, an unreadable
+            # record and a manual re-add, and both are fine to re-offer. It
+            # missed the third, which the repair list two lines up names out
+            # loud: a per-skin seed can carry the tile itself. No seed we ship
+            # today does -- I checked every one in the build -- but seeding it
+            # is exactly what the open "tile on all four skins" item would do,
+            # and the record would be quietly erased on the devices that got it.
+            #
+            # The cost of this guard: a user who deletes the tile and then
+            # re-creates it by hand does not get that re-add remembered as a
+            # fresh offer, so a later skin switch will not restore it for them.
+            # Against silently forgetting every user's deletion, that is not a
+            # close call.
+            return 'already_present'
         if (not record.get('anchors')
                 or record.get('state') != OFFERED_TOKEN
                 or not _sidecar_is_whole()
@@ -500,11 +535,10 @@ def ensure_patched():
             #                     tile comes back. The tile is here NOW, so
             #                     here is the honest baseline.
             #
-            # ...and a record that says REMOVED with the tile in the file is
-            # covered by the second of those. Either it is a record we could
-            # not read, or the user put the tile back by hand from the
-            # Favourites window; both mean the same thing about what they want
-            # right now, and neither is served by leaving a removal on record.
+            # A REMOVED record still reaches here when it is the INFERRED one
+            # -- no copy legible, so the removal is this module's own guess and
+            # the tile in front of us is better evidence than the guess. A
+            # removal that was really written down returned above.
             _write_sidecar(OFFERED_TOKEN, theirs[:ANCHOR_COUNT])
         return 'already_present'
 
@@ -533,15 +567,19 @@ def ensure_patched():
     elif record:
         moved = _marker_moved(record.get('replaced_token'), now)
         if record.get('state') == SEEDING_TOKEN and moved != REPLACED:
-            # OUT OF ATTEMPTS ON A SEED THAT NEVER REACHED THE FILE. Every
-            # branch below is written for a tile that was successfully offered
-            # and has since gone missing, and asks the mark who took it. This
-            # tile was never once in favourites.xml -- the record says so, and
-            # a favourites write that fails takes its own record back down, so
+            # OUT OF ATTEMPTS ON A SEED THAT NEVER LANDED. Every branch below
+            # is written for a tile that was successfully offered and has since
+            # gone missing, and asks the mark who took it. THIS attempt never
+            # put anything in favourites.xml -- the record says so, and a
+            # favourites write that fails takes its own record back down, so
             # SEEDING surviving here means the process died between the two.
             # Falling through asked "did anyone replace the file?", got the
-            # perfectly true answer "no", and wrote down a deletion by a user
-            # who had never seen the tile in the first place.
+            # perfectly true answer "no", and wrote down a deletion for a tile
+            # that this run never wrote -- on a first install, one the user had
+            # never once seen. (Not always a first install: a re-seed after a
+            # wipe can exhaust its attempts the same way, and there the tile
+            # HAS been seen before. Either way the verdict was invented, which
+            # is what makes it wrong.)
             #
             # So: stop, and record nothing. Not a rollback of the record --
             # that would read as "never offered" on the next start and seed

@@ -3689,6 +3689,18 @@ symptoms:
 repaired: `ensure_patched` asked the record whether the user had removed the
 tile BEFORE asking whether the tile was in the file.
 
+...and a seventh, which was the SIXTH ONE'S OWN FIX, caught by the next review
+the same day. Moving `has_tile` in front of the removal check meant the repair
+below it -- which fires on any record that is not `offered` -- rewrote a
+RECORDED deletion to "offered" whenever the tile was in the file for any
+reason. A per-skin seed carrying the tile is such a reason, and seeding it on
+all four skins is open work in this repo; on the devices that got it, the
+user's deletion would have been erased and the next skin switch to a seed
+without the tile would have put the tile back. A removal somebody actually
+wrote down is now left strictly alone; only the INFERRED one -- the module's
+own guess when no copy of the record is legible -- is still overridden by a
+tile that is really there.
+
 ### The fuzzer was reporting zero because half of it was switched off
 
 `x_fuzz_orderings.py` sets `ever_deleted_and_seen = True` two lines above the
@@ -3709,7 +3721,12 @@ clear_svc, delete, boot} with INV1 and INV2 both at zero.
 **Read this before trusting any green fuzz run in this repo**: an oracle that
 cannot fire looks exactly like an oracle that found nothing.
 
-### Two residuals, deliberately not fixed
+### Four residuals, deliberately not fixed
+
+The first two go the safe direction -- a tile somebody never sees again. **The
+third does not**, and this section listed only the safe ones until a review
+pointed that out.
+
 
   * A MARK WRITE THAT FAILS OUTRIGHT while the favourites copy succeeds --
     `addon_data` unwritable, `userdata` fine -- leaves a replacement nobody can
@@ -3725,6 +3742,23 @@ cannot fire looks exactly like an oracle that found nothing.
     again, the other way it is a tile they cannot get rid of. The fuzzer
     excuses it by checking the filesystem, not the action names, so the
     exception cannot quietly widen.
+  * BOTH RECORD COPIES ABSENT reads as a fresh install and re-offers the tile
+    -- including to somebody who deleted it, if they happen to click "Clear
+    data" on both add-ons, however far apart. This one goes the WRONG way, and
+    it cannot be closed without closing fresh installs with it: "no record at
+    all" has to mean "never offered" or nothing could ever seed. `t_clear.py`
+    test 6 and the fuzzer's `accepted_resets` carve-out both call it the user
+    asking for a reset, which is a fair reading of two deliberate wipes, but it
+    is a reading and not a fact.
+  * `_sidecar()` PREFERS THE WIZARD-FOLDER COPY with no freshness comparison,
+    so a copy that stays readable but stops accepting writes shadows a
+    correctly-updating one forever, and "whatever this start cannot settle, the
+    next one can" stops being true under that one fault. It fails safe -- the
+    seed refuses on one copy and returns `write_failed` rather than deciding
+    anything -- so it is a broken promise rather than a lost tile. Fixing it
+    means comparing the two legible copies and preferring the fresher, which
+    needs something in the record to order them by; worth doing, not worth
+    doing in the same pass as the fix that found it.
 
 ## Smaller, also open
 

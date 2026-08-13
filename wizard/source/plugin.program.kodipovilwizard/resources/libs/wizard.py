@@ -1396,7 +1396,7 @@ def _record_favourites_replaced():
         try:
             directory = _os.path.dirname(path)
             if directory and not _os.path.isdir(directory):
-                _os.makedirs(directory)
+                _os.makedirs(directory, exist_ok=True)
             # Atomic: a half-written mark is an unreadable one, and the reader
             # has to treat unreadable as "no idea" -- which costs it the one
             # fact this whole mechanism exists to provide.
