@@ -1215,6 +1215,33 @@ was uploading partial/failed translations (stayed mostly English) the server onl
 
 ## Open items (as of this handoff)
 
+0. **A home widget showing the last 10 update notes — REQUESTED, NOT BUILT.**
+   Asked for more than once, agreed to more than once, and never written down
+   until now, which is exactly why it kept being forgotten. Requirements as
+   given:
+
+   - A widget on the HOME screen, on **all four skins** (FENtastic, Estuary,
+     NOX, Arctic Fuse 3), listing the ten most recent update notes so a user
+     can read what changed without waiting for a notification to appear.
+   - **If the user deletes the widget it must stay deleted** -- not restored by
+     the next quick update, and not by the next launch. `fentastic_widget_patcher`
+     already has the pattern for this and the comment explaining why
+     (`_WIDGET_SEED_FLAG` / `_WIDGET_SEED_VERSION`): seed once per device, then
+     the user owns the widget list. Anything that re-adds a row on every start
+     is the bug that pattern exists to prevent.
+
+   The part worth knowing before starting: **there is no archive of past note
+   texts.** `wizard/assets/notification_files/quick_update.txt` holds only the
+   current note and is overwritten every release, and `build_versions/N.txt`
+   carries the manifest for note N but not its text. So the widget needs a
+   published archive file (devices read raw.githubusercontent; they cannot
+   read git), and the release tooling has to append to it.
+
+   The good news: **git has every version of quick_update.txt**, so the archive
+   can be built RETROACTIVELY rather than starting empty from today --
+   `git log -p wizard/assets/notification_files/quick_update.txt` is the whole
+   history. One-time backfill, then append on each release.
+
 1. **Trakt/TMDB add crash — RESOLVED (AI 0.2.377 / quickfix 0.1.416).** The
    REAL root cause (from a SECOND field crash log, 2026-07-16) was **our own
    patch**, not POV's setting. `pov_combined_discover_patcher` (edit 3) had
