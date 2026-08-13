@@ -538,6 +538,45 @@ class Wizard:
     def _addon_is_enabled(self, addon_id):
         return self._addon_is_enabled_static(addon_id)
 
+    @classmethod
+    def _pov_coming_back(cls, timeout=8):
+        """Is POV's outage the kind that ENDS? Bounded, and sized from the code.
+
+        Only called once POV is known to be unusable. Enabled says yes at once:
+        that is the construction lag after a re-enable, and it clears in under
+        three seconds. Disabled is the ambiguous one, so the wait is measured
+        against how long a cycle can legitimately hold that state --
+        pov_reload's _run_cycle sleeps 1.5s and then re-enables with a twelve
+        by five hundred millisecond verify loop behind it. Eight seconds covers
+        that; four would have given up in the middle of a cycle that was
+        recovering, and reloaded the skin into it, which is the crash itself.
+
+        The point of the bound is the other side: an add-on the user switched
+        off stays off, its widgets are already dead on the home screen, and a
+        reload cannot make that worse -- so it must not cost this wait on every
+        update for the rest of the install's life. Absent answers no too, and
+        immediately: there is nothing to come back.
+        """
+        try:
+            import xbmc as _x
+        except Exception:
+            return False
+        waited = 0.0
+        while True:
+            state = cls._addon_is_enabled_static('plugin.video.pov')
+            if state is None:
+                return False            # Kodi has no such add-on
+            if state:
+                return True             # on, just not built yet
+            if waited >= timeout:
+                return False
+            try:
+                if _x.Monitor().waitForAbort(0.5):
+                    return False
+            except Exception:
+                return False
+            waited += 0.5
+
     # NO SHARED RECORD and NO STICKY FLAG. Five rounds of a Window(10000)
     # count-and-deadlines scheme each broke a new way, and the sticky
     # "I have seen POV work" flag that replaced it could never be set here at
@@ -1000,12 +1039,51 @@ class Wizard:
             # both when POV is fine and when POV is not installed, so this
             # costs nothing in either ordinary case.
             if resolvable and Wizard._pov_cycling():
+                # WAIT ONLY WHILE POV LOOKS LIKE IT IS COMING BACK. "Unusable"
+                # covers two states that deserve opposite answers, and this
+                # runs in front of the user: on the button they are watching a
+                # dialog, on startup it is dead time before anything else can
+                # happen. A cycle re-enables POV within about a second and a
+                # half; an add-on the user switched off stays off forever, its
+                # widgets are ALREADY dead on the home screen, and a skin
+                # reload cannot make that worse -- so waiting on it buys
+                # nothing and costs the same seconds on every future update.
+                #
+                # Kodi's enabled flag separates them, which is the one job it
+                # is good for. Enabled-but-unconstructible is the ~2.7s lag
+                # after a re-enable: wait it out. Disabled is either the middle
+                # of a cycle or a deliberate off; give it a few seconds to come
+                # back, and if it does not, stop treating it as a cycle.
                 logging.log('[HOT-RELOAD] POV is unusable and this pass did '
-                            'not cycle it -- something else has it down; '
-                            'waiting before touching the skin.',
+                            'not cycle it -- something else has it down.',
                             level=xbmc.LOGWARNING)
-                resolvable = self._wait_until_resolvable(
-                    ['plugin.video.pov'], timeout=12)
+                if self._pov_coming_back(timeout=8):
+                    resolvable = self._wait_until_resolvable(
+                        ['plugin.video.pov'], timeout=12)
+                elif 'plugin.video.pov' in self._pending_enable_read():
+                    # OFF, NOT COMING BACK, AND OURS. _cycle_addon writes the
+                    # id here before disabling and clears it once the re-enable
+                    # is verified, so a POV still listed is one WE switched off
+                    # and could not switch on again. That is not a state to
+                    # paper over with a reload and an "applied" message: defer,
+                    # say so, and let heal_disabled_addons fix it at the next
+                    # start.
+                    logging.log('[HOT-RELOAD] POV is off and still recorded '
+                                'from a cycle that could not re-enable it; '
+                                'deferring rather than reloading over it.',
+                                level=xbmc.LOGERROR)
+                    resolvable = False
+                else:
+                    # OFF BY THE USER'S OWN CHOICE. Nothing here touched it,
+                    # nothing is going to turn it on, and its widgets are
+                    # already dead on the home screen -- a reload cannot make
+                    # that worse. Waiting or deferring would cost this user
+                    # seconds and a downgraded message on every update for the
+                    # life of the install, and buy nothing.
+                    logging.log('[HOT-RELOAD] POV is switched off and staying '
+                                'off, and nothing here turned it off; the '
+                                'skin reload goes ahead.',
+                                level=xbmc.LOGWARNING)
             if not resolvable:
                 # SKIP THE RELOAD, DO NOT FORCE-CLOSE. An earlier version
                 # returned False here, and False makes the caller close Kodi --

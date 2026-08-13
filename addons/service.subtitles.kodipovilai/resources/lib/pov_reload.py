@@ -27,6 +27,9 @@ except Exception:
 POV_ADDON_ID = 'plugin.video.pov'
 _cycled = False
 _pending = False
+# The one disk-probe thread. Not a cached answer -- a handle, so a probe that
+# never returns is never started twice. See _probe_path.
+_probe_thread = None
 # True from the moment POV is disabled until it can actually be constructed
 # again. PUBLISHED ON PURPOSE: while this is set, plugin://plugin.video.pov/
 # does not resolve, so anything that would make Kodi re-draw POV's widgets --
@@ -86,8 +89,15 @@ def _is_resolvable():
         return False
 
 
-def _is_installed():
+def _is_installed(budget=None):
     """Does POV exist on disk at all?
+
+    `budget` is the caller's remaining seconds, if it has one. Without it the
+    probe uses its own 3s ceiling, which is fine for a one-off question and
+    wrong inside a timed loop: a caller that asked for two seconds got three,
+    because the probe's ceiling did not know about the caller's. Overshoot was
+    measured at 201% for a 1s request. The bound a caller passes is the bound
+    it gets; this is how that stays true when the disk is slow.
 
     This is how "mid-cycle" is told apart from "not installed", and it is
     deliberately NOT a JSON-RPC question. Addons.GetAddonDetails answers the
@@ -115,11 +125,13 @@ def _is_installed():
         import xbmcvfs
     except Exception:
         return True
+    cap = 3.0 if budget is None else max(0.0, min(3.0, budget))
     for root in ('special://home/addons/', 'special://xbmc/addons/'):
         path = root + POV_ADDON_ID + '/addon.xml'
         # translate-then-exists, the same order the rest of this add-on uses
         # (af3_home_patcher._exists), so one convention covers all of it.
-        ok = _probe_path(lambda: xbmcvfs.exists(xbmcvfs.translatePath(path)))
+        ok = _probe_path(lambda: xbmcvfs.exists(xbmcvfs.translatePath(path)),
+                         timeout=cap)
         if ok is None:
             # No answer -- either it raised or it did not come back. Where
             # _exists reads that as "no file", this reads it as "no idea", and
@@ -140,7 +152,26 @@ def _probe_path(fn, timeout=3.0):
     config. This function is called from inside wait_until_settled's polling
     loop, whose entire contract is a hard bound on how long the service is
     allowed not to start, so a hang here would quietly void that bound.
+
+    ONE PROBE THREAD, EVER. join() bounds how long the CALLER waits; it cannot
+    cancel a thread stuck in a C-level syscall, and nothing in Python can. The
+    first version started a fresh one per attempt, so against a mount that
+    never answers, a single wait leaked three permanently-blocked threads and
+    the count climbed for the rest of the session -- in the module written to
+    stop Kodi becoming unstable. If the last probe never came back, the disk is
+    still not answering: say so from the thread we already have, and start no
+    more. Two callers racing here can each start one before either records it,
+    so the true bound is "one per concurrent guard site", not one full stop --
+    a handful, once, instead of a count that climbs all session. Not worth a
+    lock for a value whose only wrong answer is "probe again in a moment".
     """
+    global _probe_thread
+    prior = _probe_thread
+    try:
+        if prior is not None and prior.is_alive():
+            return None
+    except Exception:
+        return None
     box = {}
 
     def run():
@@ -153,6 +184,7 @@ def _probe_path(fn, timeout=3.0):
         import threading
         t = threading.Thread(target=run)
         t.daemon = True     # a stuck stat must not keep Kodi's process alive
+        _probe_thread = t
         t.start()
         t.join(timeout)
     except Exception:
@@ -238,7 +270,10 @@ def wait_until_settled(timeout=30, alien_timeout=None):
         if not ours:
             if _is_resolvable():
                 return True
-            if not _is_installed():
+            # Hand the probe what is LEFT of this call's budget, so a slow disk
+            # cannot push the answer past the bound the caller asked for.
+            left = (timeout if ours else alien) - (time.monotonic() - started)
+            if not _is_installed(budget=left):
                 # Kodi has no such add-on. Nothing to wait for, now or ever.
                 return True
         if ours_before is not None and ours != ours_before:
