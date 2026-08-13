@@ -539,6 +539,155 @@ class Wizard:
         return self._addon_is_enabled_static(addon_id)
 
     @classmethod
+    def _pov_coming_back(cls, timeout=8):
+        """Is POV's outage the kind that ENDS? Bounded, and sized from the code.
+
+        Only called once POV is known to be unusable. Enabled says yes at once:
+        that is the construction lag after a re-enable, and it clears in under
+        three seconds. Disabled is the ambiguous one, so the wait is measured
+        against how long a cycle can legitimately hold that state --
+        pov_reload's _run_cycle sleeps 1.5s and then re-enables with a twelve
+        by five hundred millisecond verify loop behind it. Eight seconds covers
+        that; four would have given up in the middle of a cycle that was
+        recovering, and reloaded the skin into it, which is the crash itself.
+
+        The point of the bound is the other side: a cycle whose re-enable
+        failed is not going to fix itself in this session, and the caller has
+        to stop waiting and say so rather than hold the update open.
+
+        NO ANSWER IS NOT AN ANSWER. _addon_is_enabled_static returns None both
+        for an id Kodi does not have and for a lookup that failed, and its own
+        docstring is explicit that the two must not be merged. Merging them
+        here read one transient JSON-RPC error as "POV does not exist",
+        returned in under a millisecond, and dropped the caller past the guard
+        -- and this runs inside hot_reload, which is driving UpdateLocalAddons
+        and a string of enable calls, so a busy moment is likelier here than
+        almost anywhere. None now means ask again. Absence is not this
+        function's question: the only caller reaches it through _pov_cycling(),
+        which has already established POV is on disk.
+        """
+        try:
+            import xbmc as _x
+        except Exception:
+            return False
+        waited = 0.0
+        while True:
+            if cls._addon_is_enabled_static('plugin.video.pov') is True:
+                return True             # on, just not built yet
+            if waited >= timeout:
+                return False
+            try:
+                if _x.Monitor().waitForAbort(0.5):
+                    return False
+            except Exception:
+                return False
+            waited += 0.5
+
+    # NO SHARED RECORD and NO STICKY FLAG. Five rounds of a Window(10000)
+    # count-and-deadlines scheme each broke a new way, and the sticky
+    # "I have seen POV work" flag that replaced it could never be set here at
+    # all: this add-on's plugin entry point declares reuselanguageinvoker=false,
+    # so Kodi builds a fresh interpreter for every invocation. A guard resting
+    # on process memory is dead on arrival in a process that has none.
+    #
+    # Just ask whether POV can be constructed. See pov_reload.py.
+
+    @classmethod
+    def _pov_cycling(cls):
+        """True while POV is installed but cannot be constructed right now.
+
+        The installed half matters here more than it does in the service. One
+        of the guarded call sites is the AF3 tools row's reload BUTTON: without
+        it, a user who has removed POV presses that button and nothing happens,
+        every time, with only a log line to say why. A cycle disables POV, it
+        never uninstalls it, so the folder on disk separates the two -- and it
+        is deliberately not a JSON-RPC question, because that call answers
+        "no idea" for an unknown add-on and for a busy moment alike, and the
+        busy moment is the one being guarded.
+        """
+        try:
+            import xbmcaddon
+            xbmcaddon.Addon('plugin.video.pov')
+            return False
+        except Exception:
+            pass
+        # The disk check runs on a thread with a join timeout because
+        # `except` covers a call that fails, not one that never returns, and
+        # a stat against a dead network mount is the second kind. One of the
+        # callers is a button the user just pressed.
+        box = {}
+
+        def _look():
+            try:
+                import xbmcvfs
+                for root in ('special://home/addons/', 'special://xbmc/addons/'):
+                    path = root + 'plugin.video.pov/addon.xml'
+                    if xbmcvfs.exists(xbmcvfs.translatePath(path)):
+                        box['v'] = True
+                        return
+                box['v'] = False
+            except Exception:
+                pass
+
+        try:
+            import threading
+            t = threading.Thread(target=_look)
+            t.daemon = True
+            t.start()
+            t.join(3.0)
+        except Exception:
+            return True
+        # No answer -> keep guarding. On disk -> a real cycle, wait for it.
+        # Not on disk -> nothing to wait for, ever.
+        return box.get('v', True)
+
+    @staticmethod
+    def _wait_until_resolvable(addon_ids, timeout=30):
+        """Block until every id can actually be CONSTRUCTED, or time out.
+
+        The enabled flag is not this question. Addons.GetAddonDetails reports
+        enabled the instant it is set, while xbmcaddon.Addon(id) -- the call an
+        add-on's own first line makes, and the one that raises "Unknown addon
+        id" in the field logs -- keeps failing for a moment afterwards. Anything
+        that redraws POV-backed windows in that moment gets a screen full of
+        errors.
+
+        Thirty seconds against a measured window of under three. The caller no
+        longer force-closes on a timeout -- it defers -- so this only has to be
+        long enough not to defer an update that was about to work, and short
+        enough not to add a silent minute to a chain that is already quiet.
+        """
+        try:
+            import xbmcaddon
+        except Exception:
+            return True
+        waited = 0.0
+        pending = [i for i in (addon_ids or []) if i]
+        while pending and waited < timeout:
+            still = []
+            for addon_id in pending:
+                try:
+                    xbmcaddon.Addon(addon_id)
+                except Exception:
+                    still.append(addon_id)
+            if not still:
+                return True
+            pending = still
+            try:
+                xbmc.sleep(500)
+            except Exception:
+                return False
+            waited += 0.5
+        if pending:
+            # NOT "reloading anyway" -- the caller acts on this now. A log
+            # line that contradicts the next log line is exactly what costs an
+            # hour when the next fault is diagnosed from a field log.
+            logging.log('[HOT-RELOAD] still not constructible after {0:.0f}s: '
+                        '{1}'.format(waited, ', '.join(pending)),
+                        level=xbmc.LOGWARNING)
+        return not pending
+
+    @classmethod
     def _pending_enable_path(cls):
         import xbmcvfs
         return xbmcvfs.translatePath(cls.PENDING_ENABLE_FILE)
@@ -833,11 +982,13 @@ class Wizard:
                             level=xbmc.LOGWARNING)
                 return False
             left_off = []
+            cycled = []
             for addon_id in self.HOT_RELOAD_TARGETS:
                 try:
                     if self._addon_is_enabled(addon_id) is not True:
                         continue
                     if self._cycle_addon(addon_id):
+                        cycled.append(addon_id)
                         logging.log('[HOT-RELOAD] reloaded ' + addon_id)
                     else:
                         left_off.append(addon_id)
@@ -856,6 +1007,116 @@ class Wizard:
                             'for the next start: {0}'.format(
                                 ', '.join(left_off)), level=xbmc.LOGERROR)
                 return False
+            # NOT YET. Every id above has just been re-enabled, and Kodi's
+            # enabled flag -- which is all _addon_is_enabled can see -- flips
+            # before the add-on can actually be constructed. ReloadSkin()
+            # rebuilds every window, so firing it in that gap hands the home
+            # screen a set of widgets whose add-on raises "Unknown addon id",
+            # which is precisely what two user logs show happening during a
+            # quick update. This is the same fault the service add-on's
+            # pov_reload guards against; the wizard cannot import that module,
+            # so it makes the same check for itself.
+            # ONLY WHAT WAS ACTUALLY CYCLED. HOT_RELOAD_TARGETS is a static
+            # tuple that includes the opt-in Umbrella pilot, which most users
+            # never install -- and an id that is not installed can never become
+            # constructible, so waiting on the whole tuple burned the full
+            # timeout on EVERY update, including the silent one at startup.
+            # Measured at 20.0s for a user without Umbrella. The loop above
+            # already knows which ids it cycled; those are the only ones whose
+            # readiness this wait is about.
+            resolvable = self._wait_until_resolvable(cycled)
+            # AND POV, WHICH THIS LOOP MAY NEVER HAVE TOUCHED. Everything above
+            # is bookkeeping about what THIS function did, and POV can be
+            # unusable because of something else entirely. Concretely: cycling
+            # HOT_RELOAD_SELF restarts the service, whose main() calls
+            # pov_reload.reload_if_patched(), which starts a background thread
+            # that disables POV for a second and a half. _wait_for_repairs()
+            # returns when the service's synchronous repair pass ends, and that
+            # pass does not wait for the thread. So the `_addon_is_enabled`
+            # check at the top of the loop can read False for POV, `continue`
+            # past it, leave `cycled` empty -- and an empty list is resolvable
+            # instantly, by definition. ReloadSkin() then fires into the outage
+            # and returns True, which the manual path turns into an on-screen
+            # "העדכון הותקן והוחל". That is the original crash, with a
+            # notification claiming it worked.
+            #
+            # So ask the live question the rest of this feature asks, instead
+            # of trusting a record of our own actions. _pov_cycling() is False
+            # both when POV is fine and when POV is not installed, so this
+            # costs nothing in either ordinary case.
+            if resolvable and Wizard._pov_cycling():
+                # WAIT ONLY WHILE POV LOOKS LIKE IT IS COMING BACK. "Unusable"
+                # covers two states that deserve opposite answers, and this
+                # runs in front of the user: on the button they are watching a
+                # dialog, on startup it is dead time before anything else can
+                # happen. A cycle re-enables POV within about a second and a
+                # half; an add-on the user switched off stays off forever, its
+                # widgets are ALREADY dead on the home screen, and a skin
+                # reload cannot make that worse -- so waiting on it buys
+                # nothing and costs the same seconds on every future update.
+                #
+                # Kodi's enabled flag separates them, which is the one job it
+                # is good for. Enabled-but-unconstructible is the ~2.7s lag
+                # after a re-enable: wait it out. Disabled is either the middle
+                # of a cycle or a deliberate off; give it a few seconds to come
+                # back, and if it does not, stop treating it as a cycle.
+                logging.log('[HOT-RELOAD] POV is unusable and this pass did '
+                            'not cycle it -- something else has it down.',
+                            level=xbmc.LOGWARNING)
+                if self._pov_coming_back(timeout=8):
+                    resolvable = self._wait_until_resolvable(
+                        ['plugin.video.pov'], timeout=12)
+                else:
+                    # NOT COMING BACK -> DO NOT RELOAD. An earlier attempt
+                    # split this by asking whether the id was recorded in
+                    # pending_enable, on the theory that a POV nobody here
+                    # switched off was the user's own choice and safe to
+                    # reload over. That record is written only by
+                    # _cycle_addon -- pov_reload's cycle, the one this whole
+                    # feature is named after, writes nothing anywhere the
+                    # wizard can see. So a SERVICE cycle whose re-enable
+                    # failed read as "the user's choice", the reload fired
+                    # into a live outage, and the user was told the update had
+                    # been applied. The original crash, reached through the
+                    # check meant to prevent it.
+                    #
+                    # There is nothing to split anyway. The service's
+                    # _ensure_pov_enabled() re-enables POV early in EVERY
+                    # start whenever it is installed and off, whoever turned
+                    # it off -- so a deliberately-disabled POV does not
+                    # survive a restart here, and an unusable POV in front of
+                    # us is a cycle: running, or one that failed. Both answer
+                    # "not now".
+                    logging.log('[HOT-RELOAD] POV is off and not coming back '
+                                'on its own; deferring rather than reloading '
+                                'over it. It is switched back on at the next '
+                                'start and the update shows then.',
+                                level=xbmc.LOGERROR)
+                    resolvable = False
+            if not resolvable:
+                # SKIP THE RELOAD, DO NOT FORCE-CLOSE. An earlier version
+                # returned False here, and False makes the caller close Kodi --
+                # so a device that was merely slow got an app close it never got
+                # before this work, and on Android that means a manual relaunch.
+                # Worse, this wait sits at the end of a chain that is already
+                # silent for minutes, so the close arrives out of nowhere.
+                #
+                # Nothing is lost by skipping: the files are on disk, the ids
+                # are recorded in pending_enable, heal_disabled_addons switches
+                # them back on at the next start, and the skin picks the update
+                # up then. The user gets a working Kodi now instead of a closed
+                # one, which is the whole point of a hot reload.
+                logging.log('[HOT-RELOAD] cycled add-ons are not constructible '
+                            'yet; leaving the skin alone -- the update is '
+                            'installed and shows on the next start.',
+                            level=xbmc.LOGWARNING)
+                # DEFERRED, NOT True. Both keep the caller from force-closing,
+                # but True also means "fully took" -- and the manual path turns
+                # that into an on-screen "העדכון הותקן והוחל", telling the user
+                # the update has been APPLIED while they are still running the
+                # old code. The log line directly above says the opposite. Of
+                # the two, the notification is the one the user reads.
+                return self.HOT_RELOAD_DEFERRED
             xbmc.executebuiltin('ReloadSkin()')
             logging.log('[HOT-RELOAD] update applied without closing Kodi')
             return True
@@ -1495,7 +1756,18 @@ def auto_update_active_skin_pack():
         if ensure():
             xbmc.sleep(800)
             try:
-                xbmc.executebuiltin('ReloadSkin()')
+                # This runs from startup right after the quick update, so a POV
+                # cycle can still be in flight. Rebuilding every window against
+                # an add-on that cannot resolve is the fault this whole change
+                # is about; the skin pack is already on disk either way, so it
+                # simply takes effect on the next start instead.
+                if Wizard._pov_cycling():
+                    logging.log('[Skin Auto Update] POV is mid-cycle; not '
+                                'reloading the skin now -- the pack is '
+                                'installed and applies on the next start.',
+                                level=xbmc.LOGWARNING)
+                else:
+                    xbmc.executebuiltin('ReloadSkin()')
             except Exception:
                 pass
     except Exception as e:
@@ -1775,6 +2047,16 @@ def af3_tools_menu():
 def af3_tool_action(tool_id):
     for tool in AF3_TOOLS:
         if tool['id'] == tool_id:
+            # One of these tools is a bare ReloadSkin(), reachable from the AF3
+            # home tools row at any moment -- including while an update has POV
+            # disabled. Predates the reload-guard work rather than being caused
+            # by it, but it is a real route to the same broken home screen, and
+            # the button costs nothing to hold for a moment.
+            if 'ReloadSkin' in (tool.get('builtin') or '') \
+                    and Wizard._pov_cycling():
+                logging.log('[AF3 TOOLS] POV is mid-cycle; not reloading the '
+                            'skin right now.', level=xbmc.LOGWARNING)
+                return False
             xbmc.executebuiltin(tool['builtin'])
             return True
     return False
