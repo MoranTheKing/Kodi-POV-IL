@@ -337,13 +337,13 @@ def _reload_skin_if_fentastic():
         settled = True
         try:
             from resources.lib import pov_reload
-            settled = pov_reload.wait_until_settled(30)
+            settled = pov_reload.wait_until_settled()
         except Exception:
             settled = True
         if not settled:
-            _log('POV still cycling after 30s; leaving the reload for the '
-                 'next service run rather than rebuilding the home screen '
-                 'against an add-on that cannot resolve', level='WARNING')
+            _log('POV still cycling; leaving the reload for the next service '
+                 'run rather than rebuilding the home screen against an '
+                 'add-on that cannot resolve', level='WARNING')
             return
         _SKIN_RELOADED[0] = True
         _log('reloading the skin so the restored widget includes take effect '

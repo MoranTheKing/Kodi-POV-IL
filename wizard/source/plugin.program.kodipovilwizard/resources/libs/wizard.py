@@ -549,13 +549,32 @@ class Wizard:
 
     @classmethod
     def _pov_cycling(cls):
-        """True while POV cannot be constructed right now."""
+        """True while POV is installed but cannot be constructed right now.
+
+        The installed half matters here more than it does in the service. One
+        of the guarded call sites is the AF3 tools row's reload BUTTON: without
+        it, a user who has removed POV presses that button and nothing happens,
+        every time, with only a log line to say why. A cycle disables POV, it
+        never uninstalls it, so the folder on disk separates the two -- and it
+        is deliberately not a JSON-RPC question, because that call answers
+        "no idea" for an unknown add-on and for a busy moment alike, and the
+        busy moment is the one being guarded.
+        """
         try:
             import xbmcaddon
             xbmcaddon.Addon('plugin.video.pov')
             return False
         except Exception:
-            return True
+            pass
+        try:
+            import xbmcvfs
+            for root in ('special://home/addons/', 'special://xbmc/addons/'):
+                path = root + 'plugin.video.pov/addon.xml'
+                if xbmcvfs.exists(xbmcvfs.translatePath(path)):
+                    return True
+        except Exception:
+            return True     # cannot check -> keep guarding
+        return False        # not on disk: nothing to wait for, ever
 
     @staticmethod
     def _wait_until_resolvable(addon_ids, timeout=30):

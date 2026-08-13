@@ -1008,7 +1008,7 @@ def _tile_reload_worker():
         settled, saved = True, None
         try:
             from resources.lib import pov_reload
-            settled = pov_reload.wait_until_settled(30)
+            settled = pov_reload.wait_until_settled()
             if settled:
                 saved = pov_reload._capture_home_focus()
         except Exception:

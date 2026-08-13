@@ -60,12 +60,14 @@ _armed = False
 # single invocation. The AF3 tools-row guard built on that flag could therefore
 # never fire, on any platform, ever, while looking correct on the page.
 #
-# So there is no flag. is_cycling() is exactly "POV cannot be constructed right
-# now", which is true on the first call in a cold process and true in the
-# wizard's throwaway interpreter. Absence is handled where it belongs -- in the
-# waiting, not the asking -- by _gave_up below.
-_gave_up = False
-_timeouts = 0
+# So there is no flag, and there is no memory. is_cycling() is two questions
+# asked fresh every time -- can POV be constructed, and is POV on disk -- and
+# both are answered the same way on the first call in a cold process as on the
+# thousandth, which is what makes it work in the wizard's throwaway interpreter
+# as well as in the long-lived service. The disk is what separates "mid-cycle"
+# from "not installed"; see _is_installed for why that question is not put to
+# JSON-RPC.
+
 
 
 def _is_resolvable():
@@ -84,73 +86,111 @@ def _is_resolvable():
         return False
 
 
+def _is_installed():
+    """Does POV exist on disk at all?
+
+    This is how "mid-cycle" is told apart from "not installed", and it is
+    deliberately NOT a JSON-RPC question. Addons.GetAddonDetails answers the
+    same way -- no usable answer -- for an id Kodi has never heard of and for a
+    call that failed because Kodi was busy, and Kodi is at its busiest during
+    exactly the moment being guarded. Reading absence out of that reply makes
+    the guard report SAFE in the middle of a real cycle: measured, a single
+    transient RPC failure turned a genuine 5-second outage into an instant
+    "go ahead", which is the original fault verbatim.
+
+    Disabling an add-on does not delete its folder, so addon.xml is present
+    throughout a cycle and missing only when POV genuinely is not installed.
+    Anything that stops us reading the disk answers "installed", so an
+    unanswerable question keeps the guard on rather than turning it off.
+    """
+    try:
+        import xbmcvfs
+    except Exception:
+        return True
+    for root in ('special://home/addons/', 'special://xbmc/addons/'):
+        path = root + POV_ADDON_ID + '/addon.xml'
+        try:
+            # translate-then-exists, the same order the rest of this add-on
+            # uses (af3_home_patcher._exists), so one convention covers all of
+            # it. Note the except returns INSTALLED where _exists returns
+            # missing: there, a failed check means "no file"; here it means
+            # "no answer", and the safe reading of no answer is to keep
+            # guarding.
+            if xbmcvfs.exists(xbmcvfs.translatePath(path)):
+                return True
+        except Exception:
+            return True
+    return False
+
+
 def is_cycling():
-    """True while POV cannot be constructed.
+    """True while POV is installed but cannot be constructed.
 
     With no Kodi at all there is nothing to guard, and answering "cycling"
     would make every guard in the build block on a machine where none of this
-    applies. Absence of Kodi is not a POV cycle.
+    applies. Absence of Kodi is not a POV cycle, and neither is absence of POV.
     """
     if xbmc is None:
         return False
-    return _armed or _cycling or not _is_resolvable()
-
-
-def wait_until_settled(timeout=8):
-    """Block until POV can be constructed again. True when it is safe.
-
-    THE TIMEOUT IS SHORT, AND GIVING UP IS REMEMBERED. A user who turns POV off
-    deliberately -- or who never had it -- leaves it unconstructible for good,
-    and an unbounded reading of "not constructible means wait" made every
-    guarded reload in the build stall for the full timeout, every time, for the
-    rest of the session. Measured at the previous 30s default: 62 add-on
-    constructions and a real 30-second stall per call site, for a condition
-    that was never going to clear.
-
-    So the wait is bounded at a few times the ~2.7s window actually observed,
-    and once it has run out we ask Kodi whether POV is switched off. If it is,
-    this is not a cycle and never was: stop waiting for it, for the rest of
-    this process. If Kodi says it is enabled and it still cannot be built, that
-    is strange enough to keep being careful about, so no latch is set.
-    """
-    global _gave_up, _timeouts
-    if _gave_up or xbmc is None:
+    if _armed or _cycling:
         return True
-    if not is_cycling():
+    if _is_resolvable():
+        return False
+    return _is_installed()
+
+
+def wait_until_settled(timeout=30):
+    """Block until POV can be constructed again. True when it is safe to go on.
+
+    NO LATCH. An earlier version remembered "I gave up on POV" for the life of
+    the process, to avoid paying a wait for someone who does not have POV. It
+    was a single fuse in front of every guarded reload in the build, and
+    ordinary things tripped it: one JSON-RPC hiccup while Kodi was busy, or a
+    user taking half a minute over a settings toggle. Once tripped it never
+    reset, so a later, genuine cycle went completely unguarded -- reproduced,
+    with a real ReloadSkin firing against unresolvable POV and the AF3 rebuild
+    marked done so it never retried. A guard that silently turns itself off for
+    the rest of a session, while logging that it made a deliberate safe choice,
+    is worse than no guard at all.
+
+    What replaces it costs nothing and forgets nothing: POV that is not on disk
+    is not cycling, so the user who does not have it never waits, on this call
+    or any later one, without a flag being kept anywhere.
+
+    THIRTY SECONDS, AND NOT MORE, BECAUSE OF WHERE THIS IS CALLED FROM. Three
+    of the four call sites are steps in _run_build_startup_repairs(), which the
+    service runs INLINE on its main thread in build mode -- so this number is
+    not just a delayed reload, it is the subtitle service not starting. The
+    armed span alone can legitimately last two minutes (the cycle waits for the
+    user to stop navigating before it disables anything), and waiting that out
+    would be correct and unusable. Thirty covers the ordinary sequence -- the
+    cycle's own 8s settle plus its ~9s of downtime -- and gives up on the rest.
+
+    THE TIMEOUT NEVER REPORTS SAFE. Running out of patience is not evidence
+    that POV came back, and saying so is how the guard would fail open. Every
+    caller treats False as "not now": it logs, leaves its work undone and
+    unstamped, and the next service run tries again.
+    """
+    if xbmc is None:
         return True
     waited = 0.0
-    while waited < timeout:
-        if not is_cycling():
-            return True
+    while True:
+        if not (_armed or _cycling):
+            if _is_resolvable():
+                return True
+            if not _is_installed():
+                # Kodi has no such add-on. Nothing to wait for, now or ever.
+                return True
+        if waited >= timeout:
+            _log('POV still unresolvable after {0:.0f}s; telling the caller to '
+                 'defer to its next run'.format(waited), level='WARNING')
+            return False
         try:
             if xbmc.Monitor().waitForAbort(0.5):
                 return False
         except Exception:
             return False
         waited += 0.5
-    _timeouts += 1
-    if _is_enabled() is not True:
-        # Kodi says POV is switched off, or cannot find it at all. Either way
-        # this is not a cycle and never was, so stop paying for it. NOT INSTALLED
-        # counts here too: dropping the old sticky flag fixed a cold process
-        # being blind, but it also meant a user who simply does not have POV
-        # started paying a wait at every guarded site. One bounded wait per
-        # process is the price of the cold-start fix; more than that is not.
-        _gave_up = True
-        _log('POV is not switched on; not waiting for it again this session',
-             level='WARNING')
-        return True
-    if _timeouts >= 3:
-        # Enabled, yet still unconstructible after three full waits. Whatever
-        # this is, it is not a window that is about to pass, and paying the
-        # timeout at every guarded site for the rest of the session helps
-        # nobody. Three strikes bounds the total cost at a few seconds per
-        # process while still being patient with a genuinely slow cycle.
-        _gave_up = True
-        _log('POV reports enabled but will not construct after {0} waits; '
-             'proceeding without it'.format(_timeouts), level='WARNING')
-        return True
-    return not is_cycling()
 
 
 def note_patched():
@@ -289,26 +329,34 @@ def _restore_home_focus(saved):
 
 
 def _deferred_cycle():
+    # ONE try/finally around the whole body, not one per stage. The flags are
+    # cleared on every exit -- returns, exceptions, and the gaps BETWEEN the
+    # stages alike. An earlier shape cleared _armed in each branch that could
+    # return, which is correct for the branches it lists and silently wrong for
+    # anything raised outside them: the flag stays raised, is_cycling() answers
+    # "yes" forever, and every guarded skin reload in the session is deferred
+    # for a cycle that already ended. Bounded waits kept that from being fatal;
+    # it still meant no reload ever ran again.
     global _cycling, _armed
     try:
-        if not _wait_until_idle():
-            _log('aborted before cycle', level='WARNING')
-            _armed = False
-            return
-        try:
-            if xbmc.getCondVisibility('Player.HasMedia'):
-                _log('media playing; skipping POV cycle (applies next launch)',
-                     level='INFO')
-                _armed = False
-                return
-        except Exception:
-            pass
-    except Exception:
-        # Every early exit clears the armed flag. Leaving it set on a path that
-        # never cycles would block skin reloads forever on a session where POV
-        # was never touched at all.
+        _run_cycle()
+    finally:
+        _cycling = False
         _armed = False
-        raise
+
+
+def _run_cycle():
+    global _cycling
+    if not _wait_until_idle():
+        _log('aborted before cycle', level='WARNING')
+        return
+    try:
+        if xbmc.getCondVisibility('Player.HasMedia'):
+            _log('media playing; skipping POV cycle (applies next launch)',
+                 level='INFO')
+            return
+    except Exception:
+        pass
     saved_focus = _capture_home_focus()
     try:
         # Raised BEFORE the disable and lowered only once POV can be
@@ -348,9 +396,3 @@ def _deferred_cycle():
             _set_enabled(True)
         except Exception:
             pass
-    finally:
-        # Both lowered in a finally: a flag that stays raised because
-        # something threw would block every future skin reload for the rest of
-        # the session, trading a two-second fault for a permanent one.
-        _cycling = False
-        _armed = False
