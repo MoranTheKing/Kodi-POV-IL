@@ -1321,6 +1321,44 @@ def wizard(action, name, url):
 
 #########################################################################################################
 # KODI-RD-IL - BUILD SKIN SWITCH
+# Bumped every time the line below replaces userdata/favourites.xml with a
+# per-skin seed. THIS IS THE ONLY PLACE THAT DOES THAT, which is the whole
+# point: the service's tile patcher needs to know whether a tile that has gone
+# missing was removed by the user or by this copy, and five separate attempts
+# to INFER that from the file's contents all failed -- a marker Kodi strips on
+# any GUI favourites edit, a sidecar that could not tell "offered" from "still
+# wanted", anchors that a build-seeded favourites list defeats, and a seed
+# comparison that a wipe-then-restore makes ambiguous. The writer knows. It
+# only ever had to say so.
+FAVOURITES_REPLACED_FILE = ('special://profile/addon_data/'
+                            'plugin.program.kodipovilwizard/'
+                            'favourites_replaced.txt')
+
+
+def _record_favourites_replaced():
+    """Count this replacement. Best-effort: a miss costs a tile, not data."""
+    try:
+        import os as _os
+        import xbmcvfs
+        path = xbmcvfs.translatePath(FAVOURITES_REPLACED_FILE)
+        directory = _os.path.dirname(path)
+        if directory and not _os.path.isdir(directory):
+            _os.makedirs(directory)
+        count = 0
+        try:
+            with open(path, 'r', encoding='utf-8') as handle:
+                count = int((handle.read() or '0').strip() or 0)
+        except Exception:
+            count = 0
+        tmp = path + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as handle:
+            handle.write(str(count + 1))
+        _os.replace(tmp, path)
+    except Exception as err:
+        logging.log('[FAVOURITES] could not record the replacement: '
+                    '{0}'.format(err), level=xbmc.LOGWARNING)
+
+
 def update_favourites_xml_file(gotoskin):
     try:
         import os as _os
@@ -1341,6 +1379,7 @@ def update_favourites_xml_file(gotoskin):
             return True
         from shutil import copyfile
         copyfile(source_favourites_xml,destination_favourites_xml)
+        _record_favourites_replaced()
         return True
     except Exception as e:
         logging.log_notify(CONFIG.ADDONTITLE,
