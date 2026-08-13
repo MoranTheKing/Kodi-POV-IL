@@ -4608,39 +4608,89 @@ def _maybe_set_default_subtitle_service():
 
 
 def _ensure_pov_enabled():
-    """Recover plugin.video.pov if it was left disabled -- e.g. our pov_reload
-    cycle (disable+enable to re-import the patched sources.py after enabling
-    remember_source) lost the re-enable race on a slow box, or any other reason.
-    POV is THE content addon: if it's installed but disabled, every home row and
-    every "My Movies/My Shows" tile is empty and nothing plays -- on ALL skins.
-    pov_reload retries within its own cycle, but if that ultimately failed there
-    was previously nothing to bring POV back on a later boot. This is that net:
-    cheap, idempotent, runs early every startup, only acts when POV is installed
-    AND currently disabled."""
+    """Switch POV back on if OUR OWN CYCLE left it off. Not otherwise.
+
+    POV is THE content add-on: installed but disabled means every home row and
+    every "My Movies/My Shows" tile is empty and nothing plays, on all skins.
+    pov_reload retries inside its own cycle, but a cycle that is interrupted --
+    the box is switched off mid-update, the process is killed -- leaves POV off
+    with nothing to bring it back. This is that net.
+
+    IT USED TO HEAL UNCONDITIONALLY, AND THAT WAS A SILENT SETTINGS CHANGE.
+    "POV is off" has two causes and this could not tell them apart, so it
+    treated the user's own choice as damage and undid it. Worse, it undid it
+    invisibly and early: hot_reload's first act is to cycle this service, so a
+    fresh main() -- and this function with it -- runs to completion before the
+    wizard's own POV checks are ever reached. A user who switched POV off found
+    it back on after any update, with nothing on screen and nothing in the log
+    to say why. The wizard's _cycle_addon refuses to do exactly this, in as many
+    words: "re-enabling something somebody turned off by hand is not ours to
+    do". This now honours the same rule.
+
+    So it acts only on evidence. pov_reload writes a record before it disables
+    POV and clears it only once POV can be constructed again; that record, and
+    the wizard's pending_enable list for the add-ons IT cycles, are the only
+    things that make a disabled POV ours to fix.
+    """
     if xbmc is None:
         return
     try:
+        from resources.lib import pov_reload
+        ours = pov_reload.cycle_left_pov_off()
+    except Exception:
+        ours = False
+    if not ours:
+        return
+    try:
         import json as _json
+        # WAIT FOR JSON-RPC. This runs early in startup, and a single
+        # unanswered call used to be indistinguishable from "POV is fine" --
+        # no exception, no log, no retry until the next full restart. The
+        # wizard's own heal polls for readiness for the same reason.
         get = _json.dumps({
             'jsonrpc': '2.0', 'id': 1,
             'method': 'Addons.GetAddonDetails',
             'params': {'addonid': 'plugin.video.pov',
                        'properties': ['enabled']},
         })
-        data = _json.loads(xbmc.executeJSONRPC(get) or '{}')
-        addon = (data.get('result') or {}).get('addon') or {}
+        addon = {}
+        monitor = xbmc.Monitor()
+        for attempt in range(20):
+            data = _json.loads(xbmc.executeJSONRPC(get) or '{}')
+            addon = (data.get('result') or {}).get('addon') or {}
+            if 'enabled' in addon:
+                break
+            if monitor.waitForAbort(0.5):
+                return
         if 'enabled' not in addon:
-            return  # not installed / unknown -> leave alone
+            # Still no answer. The record stays, so the next start tries again.
+            xbmc.log('[' + ADDON_ID + '] POV is recorded as left off by our '
+                     'cycle, but Kodi is not answering yet; keeping the record',
+                     level=xbmc.LOGWARNING)
+            return
         if addon.get('enabled'):
-            return  # already enabled -> nothing to do
+            # Somebody already switched it back on. Nothing to do, and the
+            # record has served its purpose.
+            pov_reload.clear_cycle_record()
+            return
         en = _json.dumps({
             'jsonrpc': '2.0', 'id': 1,
             'method': 'Addons.SetAddonEnabled',
             'params': {'addonid': 'plugin.video.pov', 'enabled': True},
         })
         xbmc.executeJSONRPC(en)
-        xbmc.log('[' + ADDON_ID + '] re-enabled POV (it was disabled)',
-                 level=xbmc.LOGINFO)
+        data = _json.loads(xbmc.executeJSONRPC(get) or '{}')
+        back = ((data.get('result') or {}).get('addon') or {}).get('enabled')
+        if back:
+            pov_reload.clear_cycle_record()
+            xbmc.log('[' + ADDON_ID + '] re-enabled POV after an interrupted '
+                     'cycle of ours', level=xbmc.LOGINFO)
+        else:
+            # KEEP THE RECORD ON A FAILED ENABLE. Clearing it here is how a
+            # temporary problem becomes a permanent one: the evidence goes and
+            # nothing ever tries again.
+            xbmc.log('[' + ADDON_ID + '] POV would not switch back on; the '
+                     'record stays for the next start', level=xbmc.LOGWARNING)
     except Exception:
         pass
 

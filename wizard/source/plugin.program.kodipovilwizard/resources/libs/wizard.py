@@ -538,6 +538,39 @@ class Wizard:
     def _addon_is_enabled(self, addon_id):
         return self._addon_is_enabled_static(addon_id)
 
+    # Written by the service's pov_reload before it disables POV, and cleared
+    # only once POV can be constructed again. Read here, never written here:
+    # one writer per file is what stops two processes dropping each other's
+    # entries, and the entry that would get dropped is the one saying POV is
+    # off and somebody has to fix it.
+    POV_CYCLE_PENDING_FILE = ('special://profile/addon_data/'
+                              'service.subtitles.kodipovilai/'
+                              'pov_cycle_pending.txt')
+
+    @classmethod
+    def _pov_outage_is_ours(cls):
+        """Did OUR side of the build switch POV off and fail to switch it back?
+
+        Two records, because there are two things that cycle add-ons here: the
+        wizard's own pending_enable list, and the service's pov_reload cycle.
+        Reading only one of them is precisely how a failed service cycle got
+        mistaken for a user's deliberate choice.
+        """
+        try:
+            if 'plugin.video.pov' in cls._pending_enable_read():
+                return True
+        except Exception:
+            pass
+        try:
+            import os
+            import xbmcvfs
+            return os.path.exists(
+                xbmcvfs.translatePath(cls.POV_CYCLE_PENDING_FILE))
+        except Exception:
+            # Cannot tell -> assume it is ours, which defers rather than
+            # reloading over an outage that might be real.
+            return True
+
     @classmethod
     def _pov_coming_back(cls, timeout=8):
         """Is POV's outage the kind that ENDS? Bounded, and sized from the code.
@@ -1066,33 +1099,37 @@ class Wizard:
                 if self._pov_coming_back(timeout=8):
                     resolvable = self._wait_until_resolvable(
                         ['plugin.video.pov'], timeout=12)
-                else:
-                    # NOT COMING BACK -> DO NOT RELOAD. An earlier attempt
-                    # split this by asking whether the id was recorded in
-                    # pending_enable, on the theory that a POV nobody here
-                    # switched off was the user's own choice and safe to
-                    # reload over. That record is written only by
-                    # _cycle_addon -- pov_reload's cycle, the one this whole
-                    # feature is named after, writes nothing anywhere the
-                    # wizard can see. So a SERVICE cycle whose re-enable
-                    # failed read as "the user's choice", the reload fired
-                    # into a live outage, and the user was told the update had
-                    # been applied. The original crash, reached through the
-                    # check meant to prevent it.
+                elif self._pov_outage_is_ours():
+                    # OURS, AND NOT RECOVERING. Do not reload over it and do
+                    # not call the update applied: the record survives, the
+                    # startup heal switches POV back on, and the update shows
+                    # then.
                     #
-                    # There is nothing to split anyway. The service's
-                    # _ensure_pov_enabled() re-enables POV early in EVERY
-                    # start whenever it is installed and off, whoever turned
-                    # it off -- so a deliberately-disabled POV does not
-                    # survive a restart here, and an unusable POV in front of
-                    # us is a cycle: running, or one that failed. Both answer
-                    # "not now".
-                    logging.log('[HOT-RELOAD] POV is off and not coming back '
-                                'on its own; deferring rather than reloading '
-                                'over it. It is switched back on at the next '
-                                'start and the update shows then.',
+                    # This split was tried once before and was WRONG, because
+                    # it asked only pending_enable -- which _cycle_addon writes
+                    # and pov_reload did not. A service cycle whose re-enable
+                    # failed therefore read as "the user's choice", the reload
+                    # fired into a live outage, and the user was told the
+                    # update had been applied. It is only safe now because
+                    # pov_reload records its own cycle too; _pov_outage_is_ours
+                    # reads both, and if it ever reads only one again this
+                    # branch is a crash waiting to happen.
+                    logging.log('[HOT-RELOAD] POV is off after a cycle of ours '
+                                'that could not switch it back on; deferring '
+                                'rather than reloading over it.',
                                 level=xbmc.LOGERROR)
                     resolvable = False
+                else:
+                    # NOBODY HERE TURNED IT OFF. Since the startup heal stopped
+                    # re-enabling POV unconditionally, "switched off by the
+                    # user" is a state that persists -- so treating it as an
+                    # outage to sit through would cost this user a wait and a
+                    # downgraded message on every update, forever. Its widgets
+                    # are already dead on the home screen; a reload cannot make
+                    # that worse.
+                    logging.log('[HOT-RELOAD] POV is switched off and nothing '
+                                'here turned it off; the skin reload goes '
+                                'ahead.', level=xbmc.LOGWARNING)
             if not resolvable:
                 # SKIP THE RELOAD, DO NOT FORCE-CLOSE. An earlier version
                 # returned False here, and False makes the caller close Kodi --

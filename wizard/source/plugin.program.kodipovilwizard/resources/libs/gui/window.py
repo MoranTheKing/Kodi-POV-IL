@@ -477,6 +477,62 @@ def split_notify(notify):
         return False, False
 
 
+def recent_updates_text(url=None):
+    """The last ten notes as one readable block, newest first.
+
+    Parsed with the same `<id>|||<title>` shape a single note uses, because it
+    IS a run of single notes concatenated -- the archive is generated from the
+    published file's own git history, so nothing here has to agree with a
+    separate hand-kept list.
+
+    Split on a HEADER AT THE START OF A LINE, not on any '|||' anywhere.
+    split_notify() above may split on the first occurrence because it is
+    reading one note; here a body that mentioned '|||' mid-sentence would
+    otherwise tear a record in half and shift every later one.
+    """
+    response = tools.open_url(url or CONFIG.RECENT_UPDATES_URL)
+    if not response:
+        return ''
+    raw = response.text
+    try:
+        raw = response.text.decode('utf-8')
+    except Exception:
+        pass
+    raw = raw.replace('\r\n', '\n').replace('\r', '').replace('\t', '    ')
+    import re as _re
+    parts = _re.split(r'(?m)^(\d+)\|\|\|', raw)
+    # re.split with one group yields [before, id, rest, id, rest, ...]
+    blocks = []
+    for index in range(1, len(parts) - 1, 2):
+        chunk = parts[index + 1].strip('\n')
+        if not chunk:
+            continue
+        head, _, body = chunk.partition('\n')
+        blocks.append((head.strip(), body.strip()))
+    if not blocks:
+        return ''
+    out = []
+    for title, body in blocks[:10]:
+        out.append(CONFIG.THEME3.format(title))
+        if body:
+            out.append(body)
+        out.append('')
+    return '[CR]'.join(out).rstrip('[CR]')
+
+
+def show_recent_updates():
+    """Menu/tile entry point: show the archive, or say plainly that it is
+    unreachable rather than opening an empty box."""
+    text = recent_updates_text()
+    if not text:
+        log_notify(CONFIG.ADDONTITLE,
+                   '[COLOR {0}]לא הצלחנו לטעון את העדכונים האחרונים[/COLOR]'
+                   .format(CONFIG.COLOR2))
+        return False
+    show_text_box('10 העדכונים האחרונים', text)
+    return True
+
+
 def show_notification(msg, test=False, source="notification"):
     class Notification(xbmcgui.WindowXMLDialog):
 

@@ -44,6 +44,10 @@ APKFILE = 'http://'
 BUILD_SKIN_SWITCH_IMAGE_URL = 'https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/wizard/assets/build_menu_screenshots/pov_il_splash.jpg'
 # KODI-RD-IL - AUTO QUICK UPDATES
 QUICK_UPDATE_NOTIFICATION_URL = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/notification_files/quick_update.txt'
+# The last ten notes, newest first, same format concatenated. Regenerated from
+# git at every release by tools/build_recent_updates.py -- so it is the text
+# people were actually shown, and it cannot drift from it.
+RECENT_UPDATES_URL = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/notification_files/recent_updates.txt'
 # KODI-RD-IL - AUTO ANDROID/WINDOWS UPDATE
 # WINDOWS SOFTWARE
 LATEST_WINDOWS_VERSION_TEXT_FILE = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/kodi_version_auto_update/windows/latest_windows_version.txt'
