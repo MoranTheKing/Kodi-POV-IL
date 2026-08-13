@@ -139,6 +139,30 @@ def _mark_cycle_pending(pending):
         return False
 
 
+def _forget_record_if_pov_works():
+    """A record only means anything while POV is actually broken.
+
+    Without this it never expires. A cycle that overran its own budget by a
+    second left the record behind, POV came back unnoticed, and days later --
+    after the user had switched POV off themselves -- the startup heal read
+    that ancient record as authority and switched it back on. Which is the
+    silent settings change this whole mechanism exists to stop, reached through
+    staleness instead of through a guess.
+
+    So: any time we can see POV working, the record is obsolete by definition.
+    Drop it there and then, and the only records that survive are the ones
+    describing an outage that is still real.
+    """
+    try:
+        import os
+        if not os.path.exists(_cycle_pending_path()):
+            return
+    except Exception:
+        return
+    if _is_resolvable():
+        _mark_cycle_pending(False)
+
+
 def cycle_left_pov_off():
     """True when a cycle of ours switched POV off and never switched it back.
 
@@ -279,6 +303,10 @@ def is_cycling():
     if _armed or _cycling:
         return True
     if _is_resolvable():
+        # Seen working -> any leftover cycle record is stale. Cleared here
+        # because this is the one function every guard calls, so the record
+        # cannot outlive the outage it describes by more than a moment.
+        _forget_record_if_pov_works()
         return False
     return _is_installed()
 
@@ -550,7 +578,16 @@ def _run_cycle():
         # cannot tell our interrupted cycle from a user who switched POV off,
         # and it used to guess -- always healing, which quietly reversed a
         # setting the user had chosen.
-        _mark_cycle_pending(True)
+        # NO RECORD, NO DISABLE -- the wizard's _cycle_addon says this in as
+        # many words and refuses for the same reason. The record is the ONLY
+        # thing that brings POV back if this process dies in the next second
+        # and a half; disabling without it risks POV stuck off forever with
+        # nothing pointing at why. Skipping costs a stale interpreter until the
+        # next restart, which is just the old behaviour.
+        if not _mark_cycle_pending(True):
+            _log('could not record the cycle; not disabling POV',
+                 level='WARNING')
+            return
         _set_enabled(False)
         try:
             xbmc.sleep(1500)

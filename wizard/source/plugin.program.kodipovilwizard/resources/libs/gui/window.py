@@ -517,7 +517,13 @@ def recent_updates_text(url=None):
         if body:
             out.append(body)
         out.append('')
-    return '[CR]'.join(out).rstrip('[CR]')
+    # NOT rstrip('[CR]') -- that strips any of the CHARACTERS '[', 'C', 'R',
+    # ']', so a note body ending in '[/COLOR]' lost its last two characters.
+    # The separator is a token; remove it as one.
+    text = '[CR]'.join(out)
+    while text.endswith('[CR]'):
+        text = text[:-4]
+    return text
 
 
 def show_recent_updates():

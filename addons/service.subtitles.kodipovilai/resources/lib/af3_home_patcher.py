@@ -373,6 +373,18 @@ HOME_WIDGETS = [
 
 HOME_SUBMENU = [
     {
+        # The other three skins carry this as a favourites tile. AF3 does not
+        # read favourites for its home at all -- which is the whole reason this
+        # module exists -- so the same entry has to arrive here, or "on all
+        # skins" quietly means three. _MERGE_FILES covers this list, so a user
+        # who removes it keeps it removed, same as any other row.
+        'label': '10 העדכונים האחרונים',
+        'icon': 'special://home/media/build_icons/Wizard/wizard_pov_il.png',
+        'path': ('RunPlugin("plugin://plugin.program.kodipovilwizard/'
+                 '?mode=recentupdates")'),
+        'target': '',
+    },
+    {
         'label': 'POV',
         'icon': 'special://home/media/build_icons/POV/Logo_POV_IL.png',
         'path': 'RunAddon("plugin.video.pov")',
