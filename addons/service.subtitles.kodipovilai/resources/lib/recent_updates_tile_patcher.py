@@ -114,9 +114,23 @@ REPLACED_FILES = (
 REPLACED_FILE = REPLACED_FILES[0]
 
 
-def _replacement_counts():
-    """Every copy of the count that is actually on disk, as ints."""
-    found = []
+def _counter_state():
+    """(count, trustworthy).
+
+    ABSENT AND UNREADABLE ARE NOT THE SAME THING, and conflating them cost an
+    innocent user their tile. No file at all means zero replacements -- on any
+    device running this code the file is simply absent until the first skin
+    switch, and calling that "unknown" would send every ordinary device down
+    the guessing path the counter exists to replace. But a file that IS there
+    and cannot be read is damage, and reading damage as zero says "nobody has
+    replaced favourites.xml" about a device where somebody may well have. That
+    verdict is permanent, so it must not be reached by guessing.
+
+    A copy we CAN read settles it: the count only ever grows, so the highest
+    readable copy is a fact even if the other is corrupt.
+    """
+    values = []
+    damaged = False
     for ref in REPLACED_FILES:
         try:
             import xbmcvfs
@@ -127,29 +141,25 @@ def _replacement_counts():
             continue
         try:
             with open(path, 'r', encoding='utf-8') as handle:
-                found.append(int((handle.read() or '0').strip() or 0))
+                values.append(int((handle.read() or '0').strip() or 0))
         except FileNotFoundError:
             continue
         except Exception:
-            continue
-    return found
+            # There, and unreadable. Corrupt, truncated by a power cut, or
+            # half-written -- on the SD cards these boxes run from, not exotic.
+            damaged = True
+    if values:
+        return max(values), True
+    if damaged:
+        return 0, False
+    return 0, True
 
 
 def _replacement_count():
-    """How many times the wizard has replaced favourites.xml.
-
-    NO FILE MEANS ZERO, not "unknown". The wizard that writes it ships in the
-    same quickfix as this patcher, so on any device running this code the file
-    is simply absent until the first skin switch -- and reading that as unknown
-    would send every ordinary device down the guessing path this exists to
-    replace. A wizard too old to write it at all leaves the count at zero
-    forever, which reads any missing tile as a deletion: the milder direction,
-    and only reachable by mixing versions that ship together.
-    """
+    """The count alone, for recording alongside a record we are writing."""
     if xbmcvfs is None:
         return None
-    counts = _replacement_counts()
-    return max(counts) if counts else 0
+    return _counter_state()[0]
 _FAV_ACTION_RE = re.compile(r'<favourite\b[^>]*>(.*?)</favourite>', re.S)
 TILE_NAME = '[B][COLOR yellow]10 העדכונים האחרונים[/COLOR][/B]'
 TILE_THUMB = 'special://home/media/build_icons/Wizard/wizard_pov_il.png'
@@ -215,20 +225,25 @@ def _sidecar():
         # not a second opinion, it is a copy that got wiped and came back.
         if copy.get('state') == REMOVED_TOKEN:
             return copy
+    count, trustworthy = _counter_state()
     if copies and copies[0] is not None:
-        # Beside the counter: its 'replaced' snapshot and the live counter are
-        # in the same folder, so they are lost together and stay comparable.
-        return copies[0]
+        record = dict(copies[0])
+        if not trustworthy:
+            # Every copy of the count is there and unreadable. Reading that as
+            # zero says "nobody replaced favourites.xml" about a device where
+            # somebody may well have -- and the verdict it leads to is
+            # permanent. The record itself is fine; only the number is damage.
+            record['counter_lost'] = True
+        return record
     survivor = dict(present[0])
-    if not _replacement_counts():
-        # The copy beside the counter is gone AND no copy of the counter is
-        # left anywhere -- so it was reset, and comparing a snapshot against a
-        # zero that means "wiped" rather than "never replaced" would read EVERY
-        # missing tile as a deletion, including the ones the wizard removed
-        # itself. That is not the conservative answer, it is a meaningless one.
-        # Say so, and let the caller fall back to the anchors, which is the
-        # case they exist for. A wizard new enough to mirror the count never
-        # gets here; one too old to does, and guessing beats pretending.
+    if not trustworthy or not count:
+        # The copy beside the counter is gone, and the count is either
+        # unreadable or back at zero -- so whatever took the record took the
+        # count with it. Comparing a snapshot against a zero that means "wiped"
+        # rather than "never replaced" would read EVERY missing tile as a
+        # deletion, including the ones the wizard removed itself. That is not
+        # the conservative answer, it is a meaningless one. Say so, and let the
+        # caller fall back to the anchors, which is the case they exist for.
         survivor['counter_lost'] = True
     return survivor
 
@@ -278,10 +293,21 @@ def _write_sidecar(state, anchors=None, attempts=0, require_all=False):
             os.replace(tmp, path)
             written += 1
         except Exception as e:
+            # Take the scratch file with us. A rename that fails once will
+            # usually fail again, and the name carries the pid -- so left
+            # alone, every restart adds another one, forever.
+            try:
+                os.remove('{0}.{1}.tmp'.format(path, os.getpid()))
+            except Exception:
+                pass
             _log('could not record the tile state at {0}: {1}'
                  .format(path, e), level='WARNING')
     if require_all:
-        return written == len(_seen_paths()) and written > 0
+        # Against the CONSTANT, not against _seen_paths(): if a path failed to
+        # resolve, that list is shorter, and "every copy landed" would be
+        # satisfied by the one that did -- the redundancy gone, silently, in
+        # the exact check written to prevent that.
+        return written == len(SEEN_FILES)
     return written > 0
 
 
@@ -322,10 +348,22 @@ def _favourites_path():
         return ''
 
 
-def _guess_from_anchors(record, theirs):
+def _guess_from_anchors(record, theirs, may_record=True):
     """The old, inferential answer. Only for a device whose wizard predates the
-    replacement counter -- it is a guess, and every version of this guess has
-    been wrong in one direction or the other."""
+    replacement counter, or one where the counter cannot be read -- it is a
+    guess, and every version of this guess has been wrong in one direction or
+    the other.
+
+    may_record is what stops a guess hardening into a fact. Recording
+    REMOVED_TOKEN is permanent: the first check on every later start returns
+    on it and never looks at the counter again. That is the right weight for
+    an answer read off the counter, and far too much for one read off a
+    handful of favourites that the skin seed may itself contain -- the seeds
+    share tiles, so a "surviving" anchor can be a build tile that survives
+    everything. So with no readable counter the tile is still not restored --
+    the promise is that a deletion sticks, and this start cannot prove it was
+    not one -- but nothing is written down, and the next start decides again,
+    on facts if the counter has come back."""
     anchors = [a for a in record.get('anchors') or [] if isinstance(a, str)]
     if not anchors:
         # Nothing to measure against, and no counter either. Fall back to the
@@ -336,8 +374,12 @@ def _guess_from_anchors(record, theirs):
     # A majority, not all: requiring every anchor made MORE anchors mean MORE
     # false wipes, since deleting one unrelated favourite tripped it.
     if survived * 2 >= len(anchors):
-        _write_sidecar(REMOVED_TOKEN)
-        _log('the tile was removed by the user; not offering it again')
+        if may_record:
+            _write_sidecar(REMOVED_TOKEN)
+            _log('the tile was removed by the user; not offering it again')
+        else:
+            _log('the tile is gone and the replacement count cannot be read; '
+                 'leaving it alone this start, without recording a verdict')
         return 'user_removed'
     return None
 
@@ -405,12 +447,18 @@ def ensure_patched():
         # rid of, which is the one thing this feature promised.
         _log('a previous seed did not finish; trying again '
              '(attempt {0})'.format(attempts + 1))
-    elif record.get('counter_lost'):
-        # The counter is gone, so there is nothing to compare against. The
-        # anchors are the fallback for exactly this, and they answer it well:
-        # a wizard-driven replacement takes the user's own favourites with it,
-        # a deletion leaves them in place.
-        verdict = _guess_from_anchors(record, theirs)
+    elif (record.get('counter_lost')
+          or (now is not None and isinstance(then, int) and now < then)):
+        # Either the counter could not be read, or it has gone BACKWARDS since
+        # we seeded -- and it cannot: the wizard only ever counts up. A count
+        # below its own snapshot is therefore not a low number, it is a reset
+        # or a corrupted read, and comparing against it would say "nobody
+        # replaced the file" about a device where the wizard may well have.
+        # The anchors are the fallback for exactly this, and they answer it
+        # well: a wizard-driven replacement takes the user's own favourites
+        # with it, a deletion leaves them in place -- but only well enough to
+        # act on now, never well enough to write down.
+        verdict = _guess_from_anchors(record, theirs, may_record=False)
         if verdict:
             return verdict
     elif record and now is not None and isinstance(then, int):
