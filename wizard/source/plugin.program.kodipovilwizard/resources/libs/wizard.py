@@ -1321,7 +1321,7 @@ def wizard(action, name, url):
 
 #########################################################################################################
 # KODI-RD-IL - BUILD SKIN SWITCH
-# Bumped every time the line below replaces userdata/favourites.xml with a
+# Marked every time the line below replaces userdata/favourites.xml with a
 # per-skin seed. THIS IS THE ONLY PLACE THAT DOES THAT, which is the whole
 # point: the service's tile patcher needs to know whether a tile that has gone
 # missing was removed by the user or by this copy, and five separate attempts
@@ -1333,37 +1333,50 @@ def wizard(action, name, url):
 # TWO COPIES, one in each add-on's addon_data, for the same reason the reader's
 # own record is kept twice: Kodi's per-add-on "Clear data" button wipes exactly
 # one folder, and there is such a button on every add-on. A single copy here
-# meant one click could take the count while userdata/favourites.xml survived,
-# and the reader -- seeing a count reset to zero -- concluded that nobody had
-# replaced the file, so a tile this function had removed was never put back.
-# The reader takes the highest of the copies, so a wiped one cannot lower it.
+# meant one click could take the mark while userdata/favourites.xml survived,
+# and the reader -- seeing no mark at all -- concluded that nobody had replaced
+# the file, so a tile this function had removed was never put back. The reader
+# compares the two copies as a PAIR against the pair it recorded, so a wiped
+# one cannot speak for the other.
 FAVOURITES_REPLACED_FILES = (
     'special://profile/addon_data/plugin.program.kodipovilwizard/'
     'favourites_replaced.txt',
     'special://profile/addon_data/service.subtitles.kodipovilai/'
     'favourites_replaced.txt',
 )
-# Kept for anything that still imports the old name.
-FAVOURITES_REPLACED_FILE = FAVOURITES_REPLACED_FILES[0]
 
 
 def _record_favourites_replaced():
-    """Count this replacement. Best-effort: a miss costs a tile, not data.
+    """Mark this replacement. Best-effort: a miss costs a tile, not data.
 
     Nothing in here may raise. The caller reports any exception to the user as
-    "failed to set up the home screen" and returns False, and a missed count is
+    "failed to set up the home screen" and returns False, and a missed mark is
     worth a tile at most -- never that.
+
+    IT WRITES, AND NEVER READS. This counted, once: read both copies, write the
+    highest plus one. The read is what killed it. A copy that is there and
+    cannot be read returns nothing, and nothing counts as zero, so a device
+    whose copies were both corrupted had its count of 4 rewritten as 1 -- and
+    the reader, comparing against the 4 it had recorded, watched the number
+    climb back past 4 over the next few skin switches and concluded that the
+    user had deleted a tile this very function had removed. The tile was gone
+    for good, on a device whose owner had done nothing but switch skins. Worse,
+    the rewrite HEALED the corruption into a clean, wrong number, so by the
+    time the reader looked there was no damage left for it to notice.
+
+    A fresh mark needs no previous value, so there is nothing to lose, misread
+    or rewind, and a corrupted copy is repaired by the next replacement rather
+    than averaged into it. The reader only ever asks whether the mark it
+    recorded is still the mark on disk.
     """
     try:
         import os as _os
+        import uuid as _uuid
         import xbmcvfs
     except Exception:
         return
-    # Read every copy first and count up from the HIGHEST. A copy that was
-    # wiped reads as zero, and starting from zero would silently rewind the
-    # count for both.
-    count = 0
-    paths = []
+    # One mark for both copies, so the pair the reader compares stays a pair.
+    token = _uuid.uuid4().hex
     for ref in FAVOURITES_REPLACED_FILES:
         try:
             path = xbmcvfs.translatePath(ref)
@@ -1371,22 +1384,29 @@ def _record_favourites_replaced():
             continue
         if not path:
             continue
-        paths.append(path)
-        try:
-            with open(path, 'r', encoding='utf-8') as handle:
-                count = max(count, int((handle.read() or '0').strip() or 0))
-        except Exception:
-            pass
-    for path in paths:
+        # The pid keeps two processes off one scratch path: without it both
+        # write the same tmp, one replaces it, and the other's replace fails on
+        # a file that is no longer there -- a write lost for no reason but a
+        # shared name.
+        tmp = '{0}.{1}.tmp'.format(path, _os.getpid())
         try:
             directory = _os.path.dirname(path)
             if directory and not _os.path.isdir(directory):
                 _os.makedirs(directory)
-            tmp = path + '.tmp'
+            # Atomic: a half-written mark is an unreadable one, and the reader
+            # has to treat unreadable as "no idea" -- which costs it the one
+            # fact this whole mechanism exists to provide.
             with open(tmp, 'w', encoding='utf-8') as handle:
-                handle.write(str(count + 1))
+                handle.write(token)
             _os.replace(tmp, path)
         except Exception as err:
+            # Take the scratch file with us. A rename that fails once will
+            # usually fail again, and the name carries the pid -- so left
+            # alone, every attempt adds another one, forever.
+            try:
+                _os.remove(tmp)
+            except Exception:
+                pass
             logging.log('[FAVOURITES] could not record the replacement at '
                         '{0}: {1}'.format(path, err), level=xbmc.LOGWARNING)
 
