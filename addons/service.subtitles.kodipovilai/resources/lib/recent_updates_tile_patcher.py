@@ -28,15 +28,14 @@
 #      the tile returns it to exactly the seed and reads as another wipe.
 #
 # The writer knew the whole time. update_favourites_xml_file is the only thing
-# that replaces the file, so it bumps a counter as it does; this records that
-# counter when it seeds, and later:
+# that replaces the file, so it leaves a mark as it does; this records that
+# mark when it seeds, and later:
 #
-#   counter moved   -> the file was replaced -> put the tile back
-#   counter did not -> nobody replaced it    -> that was the user -> never again
+#   the mark changed -> the file was replaced -> put the tile back
+#   the mark did not -> nobody replaced it   -> that was the user -> never again
 #
-# A fact, for the price of one integer. The anchors remain only as a fallback
-# for a device whose wizard predates the counter -- which, since both ship in
-# the same quickfix, is essentially none.
+# A fact, for the price of one string. The anchors remain only as a fallback
+# for the one case the mark cannot settle: every copy of it damaged at once.
 #
 # All of it rests on ONE invariant: the tile never exists without a record. An
 # absent record has to mean "never offered", or no first run could ever seed
@@ -67,17 +66,17 @@ FAVOURITES_REL = 'favourites.xml'
 # one copy meant a single click could take the record while favourites.xml
 # survived, and a tile the user had deleted came back:
 #
-#   record in OUR folder      -> "Clear data" on the subtitle add-on took it.
-#   record beside the counter -> "Clear data" on the WIZARD took it, together
-#                                with the counter -- and both gone reads as a
-#                                fresh install, which is the same bug one
-#                                add-on over.
+#   record in OUR folder    -> "Clear data" on the subtitle add-on took it.
+#   record beside the mark  -> "Clear data" on the WIZARD took it, together
+#                              with the mark -- and both gone reads as a fresh
+#                              install, which is the same bug one add-on over.
 #
-# Two copies, and no single button can reach both. The counter is mirrored the
-# same way and for the same reason -- a count that could be reset to zero by
-# one click was just as fatal as a record that could be deleted by one, because
-# a zero reads as "the file was never replaced" and turns every tile the wizard
-# removed into a tile the user removed. Neither fact is now losable in one act.
+# Two copies, and no single button can reach both. The wizard's mark is
+# mirrored the same way and for the same reason -- a mark one click could take
+# was just as fatal as a record one click could take, because a folder with no
+# mark in it reads as "the file was never replaced" and turns every tile the
+# wizard removed into a tile the user removed. Neither fact is losable in one
+# act now.
 SEEN_FILES = (
     'special://profile/addon_data/plugin.program.kodipovilwizard/'
     'recent_updates_tile_seen.txt',
@@ -98,68 +97,113 @@ SEED_ATTEMPT_LIMIT = 2
 # How many of the user's own favourites to remember. More than one because any
 # single anchor can itself be deleted; few because this is a hint, not a backup.
 ANCHOR_COUNT = 5
-# The wizard bumps these every time it replaces userdata/favourites.xml with a
-# per-skin seed, which is the only thing that does. Comparing the count against
-# the value we saw when we last seeded turns "who removed the tile" from a
-# guess into a fact. One copy per add-on folder, for the same reason the record
-# is kept twice: one "Clear data" click must not be able to take it. A wiped
-# copy reads as zero, so the HIGHEST of them is the count -- a copy that was
-# reset cannot drag the other backwards.
+# The wizard writes a fresh mark here every time it replaces
+# userdata/favourites.xml with a per-skin seed, which is the only thing that
+# does. Comparing the mark against the one we saw when we last seeded turns
+# "who removed the tile" from a guess into a fact. One copy per add-on folder,
+# for the same reason the record is kept twice: one "Clear data" click must not
+# be able to take it.
+#
+# A MARK, NOT A COUNT. This was a counter for three rounds of review, and the
+# counter is what the fourth killed. To increment a count you first have to
+# read it, and every way of reading it wrong still yields a perfectly ordinary
+# number -- just a smaller one. A corrupt copy read as nothing, so the wizard
+# rewrote a device's count of 4 as 1; the reader, comparing against the 4 it
+# had recorded, watched the number climb back past 4 over the next few skin
+# switches and concluded that the user had deleted a tile the wizard itself had
+# removed. Gone for good, on a device whose owner had done nothing but switch
+# skins. A mark is written without ever being read, so nothing can rewind it,
+# and the only question ever asked of it -- "is this still the mark I saw?" --
+# has no wrong-but-plausible answers, only right, different, or unreadable.
 REPLACED_FILES = (
     'special://profile/addon_data/plugin.program.kodipovilwizard/'
     'favourites_replaced.txt',
     'special://profile/addon_data/service.subtitles.kodipovilai/'
     'favourites_replaced.txt',
 )
-REPLACED_FILE = REPLACED_FILES[0]
+# There is a file and it cannot be read. Not a mark -- the wizard writes uuid4
+# hex, which cannot contain a '!' -- and not None, because both of those mean
+# something definite and this means "no idea".
+DAMAGED = '!damaged'
+SAME, REPLACED, UNKNOWN = 'same', 'replaced', 'unknown'
 
 
-def _counter_state():
-    """(count, trustworthy).
+def _marker_pair():
+    """What each copy of the wizard's mark says right now.
 
-    ABSENT AND UNREADABLE ARE NOT THE SAME THING, and conflating them cost an
-    innocent user their tile. No file at all means zero replacements -- on any
-    device running this code the file is simply absent until the first skin
-    switch, and calling that "unknown" would send every ordinary device down
-    the guessing path the counter exists to replace. But a file that IS there
-    and cannot be read is damage, and reading damage as zero says "nobody has
-    replaced favourites.xml" about a device where somebody may well have. That
-    verdict is permanent, so it must not be reached by guessing.
+    Three values, and conflating any two of them has cost somebody their tile
+    at least once already:
 
-    A copy we CAN read settles it: the count only ever grows, so the highest
-    readable copy is a fact even if the other is corrupt.
+        None      -- no file at all. Nothing has ever replaced favourites.xml.
+        a mark    -- what the wizard's last replacement wrote.
+        DAMAGED   -- there is a file and it cannot be read.
     """
-    values = []
-    damaged = False
+    if xbmcvfs is None:
+        return [DAMAGED for _ in REPLACED_FILES]
+    out = []
     for ref in REPLACED_FILES:
         try:
-            import xbmcvfs
             path = xbmcvfs.translatePath(ref)
         except Exception:
-            continue
+            path = ''
         if not path:
+            out.append(DAMAGED)
             continue
         try:
             with open(path, 'r', encoding='utf-8') as handle:
-                values.append(int((handle.read() or '0').strip() or 0))
+                # Empty is half-written, which is damage, not a mark.
+                out.append((handle.read() or '').strip() or DAMAGED)
         except FileNotFoundError:
-            continue
+            out.append(None)
         except Exception:
             # There, and unreadable. Corrupt, truncated by a power cut, or
             # half-written -- on the SD cards these boxes run from, not exotic.
-            damaged = True
-    if values:
-        return max(values), True
-    if damaged:
-        return 0, False
-    return 0, True
+            out.append(DAMAGED)
+    return out
 
 
-def _replacement_count():
-    """The count alone, for recording alongside a record we are writing."""
-    if xbmcvfs is None:
-        return None
-    return _counter_state()[0]
+def _marker_moved(then, now):
+    """Has the wizard replaced favourites.xml since `then` was recorded?
+
+    SAME | REPLACED | UNKNOWN, per copy and then over the pair:
+
+        was       is        verdict
+        --------------------------------------------------------------------
+        anything  the same  SAME      nothing wrote it
+        None      a mark    REPLACED  a mark appeared, and only a replacement
+                                      writes one
+        DAMAGED   a mark    REPLACED  only a write heals damage
+        a mark    another   REPLACED  rewritten
+        anything  None      UNKNOWN   a mark cannot un-write itself, so this is
+                                      damage, not evidence
+        anything  DAMAGED   UNKNOWN   it may be a new mark, corrupted
+
+    Over the pair: one copy showing a new mark is proof, so any REPLACED wins.
+    Failing that, one copy still holding the mark we recorded is proof that
+    nothing wrote it -- a replacement writes both -- so SAME beats UNKNOWN.
+    Only when neither copy can say anything is the answer unknown.
+
+    THE PAIR IS COMPARED AS A PAIR, never copy against copy. A copy whose write
+    once failed sits there holding an older mark forever, and against a single
+    recorded value that stale copy reads as "different" -- which is the reading
+    that puts a deleted tile back.
+    """
+    if not isinstance(then, list) or len(then) != len(now):
+        # No snapshot, or one written by a different shape of this code.
+        return UNKNOWN
+    verdicts = []
+    for was, is_ in zip(then, now):
+        if was == is_:
+            verdicts.append(SAME)
+        elif is_ is None or is_ == DAMAGED:
+            verdicts.append(UNKNOWN)
+        else:
+            verdicts.append(REPLACED)
+    if REPLACED in verdicts:
+        return REPLACED
+    if SAME in verdicts:
+        return SAME
+    return UNKNOWN
 _FAV_ACTION_RE = re.compile(r'<favourite\b[^>]*>(.*?)</favourite>', re.S)
 TILE_NAME = '[B][COLOR yellow]10 העדכונים האחרונים[/COLOR][/B]'
 TILE_THUMB = 'special://home/media/build_icons/Wizard/wizard_pov_il.png'
@@ -225,27 +269,19 @@ def _sidecar():
         # not a second opinion, it is a copy that got wiped and came back.
         if copy.get('state') == REMOVED_TOKEN:
             return copy
-    count, trustworthy = _counter_state()
+    # NO SECOND-GUESSING THE MARK FROM HERE. This used to flag the record when
+    # the wizard's copy of it was gone and the count read zero, on the theory
+    # that whatever took the record took the count with it -- and that guess is
+    # precisely what let a deleted tile come back. A genuine zero, on the very
+    # many devices where nobody has ever switched skin, is indistinguishable
+    # from a wiped one, so the user's deletion was seen, believed, and then
+    # deliberately not written down for fear of the wrong reason -- and the
+    # next skin switch put the tile back. _marker_moved answers the question
+    # itself now, where "no file" is a value with a meaning rather than a
+    # suspicious number.
     if copies and copies[0] is not None:
-        record = dict(copies[0])
-        if not trustworthy:
-            # Every copy of the count is there and unreadable. Reading that as
-            # zero says "nobody replaced favourites.xml" about a device where
-            # somebody may well have -- and the verdict it leads to is
-            # permanent. The record itself is fine; only the number is damage.
-            record['counter_lost'] = True
-        return record
-    survivor = dict(present[0])
-    if not trustworthy or not count:
-        # The copy beside the counter is gone, and the count is either
-        # unreadable or back at zero -- so whatever took the record took the
-        # count with it. Comparing a snapshot against a zero that means "wiped"
-        # rather than "never replaced" would read EVERY missing tile as a
-        # deletion, including the ones the wizard removed itself. That is not
-        # the conservative answer, it is a meaningless one. Say so, and let the
-        # caller fall back to the anchors, which is the case they exist for.
-        survivor['counter_lost'] = True
-    return survivor
+        return dict(copies[0])
+    return dict(present[0])
 
 
 def _write_sidecar(state, anchors=None, attempts=0, require_all=False):
@@ -260,11 +296,11 @@ def _write_sidecar(state, anchors=None, attempts=0, require_all=False):
     twice is not made at all.
     """
     import json
-    # The counter goes in with the anchors: what matters later is not its
-    # value but whether it has MOVED since this moment. Read ONCE, so both
-    # copies carry the same number even if the wizard bumps it mid-write.
+    # The mark goes in with the anchors: what matters later is not what it says
+    # but whether it has CHANGED since this moment. Read ONCE, so both copies
+    # carry the same pair even if the wizard writes a new mark mid-write.
     payload = json.dumps({'state': state, 'anchors': list(anchors or []),
-                          'replaced': _replacement_count(),
+                          'replaced_token': _marker_pair(),
                           'seed_attempts': int(attempts or 0)},
                          ensure_ascii=False)
     written = 0
@@ -348,22 +384,21 @@ def _favourites_path():
         return ''
 
 
-def _guess_from_anchors(record, theirs, may_record=True):
-    """The old, inferential answer. Only for a device whose wizard predates the
-    replacement counter, or one where the counter cannot be read -- it is a
-    guess, and every version of this guess has been wrong in one direction or
-    the other.
+def _guess_from_anchors(record, theirs):
+    """The old, inferential answer, for the one case the mark cannot settle:
+    no copy of it able to say anything. It is a guess, and every version of
+    this guess has been wrong in one direction or the other.
 
-    may_record is what stops a guess hardening into a fact. Recording
-    REMOVED_TOKEN is permanent: the first check on every later start returns
-    on it and never looks at the counter again. That is the right weight for
-    an answer read off the counter, and far too much for one read off a
-    handful of favourites that the skin seed may itself contain -- the seeds
-    share tiles, so a "surviving" anchor can be a build tile that survives
-    everything. So with no readable counter the tile is still not restored --
-    the promise is that a deletion sticks, and this start cannot prove it was
-    not one -- but nothing is written down, and the next start decides again,
-    on facts if the counter has come back."""
+    IT NEVER WRITES A VERDICT DOWN. Recording REMOVED_TOKEN is permanent -- the
+    first check on every later start returns on it and never looks at the mark
+    again -- which is the right weight for an answer read off the mark and far
+    too much for one read off a handful of favourites that the skin seed may
+    itself contain: the seeds share tiles, so a "surviving" anchor can be a
+    build tile that survives everything. So a start with no readable mark still
+    does not restore the tile -- the promise is that a deletion sticks, and
+    this start cannot prove it was not one -- but nothing is written down, and
+    the next start decides again on facts, because the caller re-baselines the
+    snapshot to the mark as it reads now before asking."""
     anchors = [a for a in record.get('anchors') or [] if isinstance(a, str)]
     if not anchors:
         # Nothing to measure against, and no counter either. Fall back to the
@@ -374,12 +409,8 @@ def _guess_from_anchors(record, theirs, may_record=True):
     # A majority, not all: requiring every anchor made MORE anchors mean MORE
     # false wipes, since deleting one unrelated favourite tripped it.
     if survived * 2 >= len(anchors):
-        if may_record:
-            _write_sidecar(REMOVED_TOKEN)
-            _log('the tile was removed by the user; not offering it again')
-        else:
-            _log('the tile is gone and the replacement count cannot be read; '
-                 'leaving it alone this start, without recording a verdict')
+        _log("the tile is gone and the wizard's mark cannot be read; leaving "
+             'it alone this start, without recording a verdict')
         return 'user_removed'
     return None
 
@@ -427,8 +458,7 @@ def ensure_patched():
             _write_sidecar(OFFERED_TOKEN, theirs[:ANCHOR_COUNT])
         return 'already_present'
 
-    now = _replacement_count()
-    then = record.get('replaced')
+    now = _marker_pair()
     try:
         attempts = int(record.get('seed_attempts') or 0)
     except Exception:
@@ -447,33 +477,36 @@ def ensure_patched():
         # rid of, which is the one thing this feature promised.
         _log('a previous seed did not finish; trying again '
              '(attempt {0})'.format(attempts + 1))
-    elif (record.get('counter_lost')
-          or (now is not None and isinstance(then, int) and now < then)):
-        # Either the counter could not be read, or it has gone BACKWARDS since
-        # we seeded -- and it cannot: the wizard only ever counts up. A count
-        # below its own snapshot is therefore not a low number, it is a reset
-        # or a corrupted read, and comparing against it would say "nobody
-        # replaced the file" about a device where the wizard may well have.
-        # The anchors are the fallback for exactly this, and they answer it
-        # well: a wizard-driven replacement takes the user's own favourites
-        # with it, a deletion leaves them in place -- but only well enough to
-        # act on now, never well enough to write down.
-        verdict = _guess_from_anchors(record, theirs, may_record=False)
-        if verdict:
-            return verdict
-    elif record and now is not None and isinstance(then, int):
-        if now <= then:
+    elif record:
+        moved = _marker_moved(record.get('replaced_token'), now)
+        if moved == SAME:
             # Nobody replaced the file since we seeded, and the tile is gone.
             # That was the user, whichever way they did it.
             _write_sidecar(REMOVED_TOKEN)
             _log('the tile was removed by the user; not offering it again')
             return 'user_removed'
-        _log('favourites.xml was replaced {0} time(s) since we seeded it; '
-             'restoring the tile'.format(now - then))
-    elif record:
-        verdict = _guess_from_anchors(record, theirs)
-        if verdict:
-            return verdict
+        if moved == UNKNOWN:
+            # No copy of the mark can speak: both damaged, or gone from a
+            # folder something wiped.
+            #
+            # RE-BASELINE FIRST, and then guess. Recording the mark as it reads
+            # NOW is what keeps damage from becoming permanent: leave the old
+            # snapshot in place and the pair stays uncomparable for as long as
+            # the damage lasts, so every start goes on guessing off anchors
+            # that a skin seed can itself supply -- and the one thing that
+            # cannot happen from the guessing path is the tile ever being
+            # settled. With the snapshot re-baselined, whatever this start
+            # cannot settle the next one can: the mark either still reads the
+            # way it does now, which means nothing wrote it, or it does not,
+            # which means the wizard did.
+            _write_sidecar(record.get('state') or OFFERED_TOKEN,
+                           record.get('anchors'), attempts=attempts)
+            verdict = _guess_from_anchors(record, theirs)
+            if verdict:
+                return verdict
+        else:
+            _log("the wizard's mark changed since we seeded the tile, so it "
+                 'replaced favourites.xml; restoring the tile')
 
     closing = text.rfind('</favourites>')
     if closing == -1:
