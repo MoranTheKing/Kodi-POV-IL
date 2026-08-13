@@ -98,6 +98,37 @@ part does not take, it falls back to the previous behaviour (a restart), and an
 add-on left switched off is recorded on disk and switched back on at the next
 start.
 
+## The skin refresh waits for POV (from `0.2.491`)
+
+A quick update does two things that used to be able to collide: it refreshes
+the skin, and it restarts the main video add-on so the update takes effect
+straight away. When both happened at the same moment the home screen was
+rebuilt while that add-on could not be loaded, every row backed by it failed,
+and Kodi had to be closed.
+
+Every refresh on the update path now waits for the add-on to be ready first --
+on every skin. If it is not ready in time the refresh is left for the next
+start rather than forced through, and the notification says the update applies
+next time instead of claiming it was applied. A refresh that is postponed is
+not recorded as done, so the next start does it.
+
+## The last ten updates, on the home screen (from `0.2.491`)
+
+The ten most recent update notes are readable from a tile on the home screen,
+newest first. The list is never longer than ten, so it stays quick to open.
+
+Removing the tile is respected: it does not come back at the next update or the
+next start. Switching skin rewrites the home tiles from the skin's own defaults
+-- if that removes the tile without you asking, it is restored; if you removed
+it yourself, it stays removed.
+
+## Add-ons you switched off stay off (from `0.2.491`)
+
+The build repairs a main add-on left disabled by an update that was interrupted
+-- a device switched off mid-update, for example. It now does that only when
+there is a record showing the build itself disabled it and could not switch it
+back on. An add-on you turned off yourself is left alone.
+
 ## POV self-update and its caches (from `0.2.489`)
 
 POV updates itself from its author's repository, and its newer versions changed

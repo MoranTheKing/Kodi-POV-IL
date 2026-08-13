@@ -149,6 +149,13 @@ tools/build_wizard_quickfix.py          # replaces only the Wizard in a quickfix
    cache-busters here: empirical testing showed raw.githubusercontent ignores
    them for its cache key. Old Wizard <=0.1.32 clients still read mutable
    `build.txt`, which is why this wait is mandatory.
+8b. **A NEW FILE in the add-on needs `--allow-add`.** `build_addon_quickfix.py`
+   refuses to add a member the previous quickfix did not have unless it is
+   named: `--allow-add addons/service.subtitles.kodipovilai/resources/lib/<new>.py`.
+   Without it the build stops with "member names or order changed". That guard
+   exists so a stray file cannot slip into a package unnoticed, so name the
+   file rather than weakening it. Only the first quickfix carrying the file
+   needs the flag; every later one inherits it.
 9. **Phase 2 — note only:** now bump `quick_update.txt` to `N` (the id before
    `|||`) and update its footer. Every user-facing quickfix/AI release needs a
    fresh id plus a gentle Hebrew title/body; changing only the footer never
@@ -156,6 +163,12 @@ tools/build_wizard_quickfix.py          # replaces only the Wizard in a quickfix
    commit/push it alone, and do not call the release live until the public raw
    URL returns the exact new note. A notification-only re-announcement needs
    only this phase because no artifact/manifest pairing changes.
+9b. **Regenerate the note archive AFTER writing the new note:**
+   `python3 tools/build_recent_updates.py`, then commit
+   `wizard/assets/notification_files/recent_updates.txt` with the note. It
+   reads the working copy first, so running it before the note is written
+   publishes an archive missing the very update announcing it. It is capped at
+   ten and verifies its own output round-trips.
 10. Wizard delivery invariant: never persist the new note id until
     `quick_update()` succeeds, and success requires extraction `(100%, 0 errors)`.
     False, exception, partial extraction, corrupt ZIP or a missing versioned
@@ -590,6 +603,141 @@ are not exempt from anything: they land in `self.sourceDict`, flow into
 `self.scraper_sources`, and are merged into `self.sources` at line 817, i.e.
 BEFORE the filter block. More 720p after an update means more providers, not a
 lost setting.
+
+## Shipped 2026-08-13: note 591 (0.2.491 / wizard 0.1.45 / quickfix 0.1.536)
+
+**The quick-update freeze.** Two of our own code paths ran at the same moment:
+one refreshes the skin after an update, the other restarts POV so the update
+takes effect. When they met, the home screen was rebuilt while POV could not be
+constructed, every POV row on it raised "Unknown addon id", and POV's service
+had to be killed. Root-caused from two field logs and confirmed by the reporter
+applying the same update cleanly on NOX -- the one skin where that patcher does
+not run, which is what identified the pairing.
+
+Every skin reload on the update path now waits for POV to be constructible
+first: both FENtastic patchers, the AF3 rebuild and its tools row, the search
+switch, the service's tile reload (no skin gate at all, so it covers every
+skin), and all three reload sites in the wizard. A reload that cannot go ahead
+is deferred, logged, and left UNSTAMPED so the next run retries. No path
+reports "applied" for an update that was not.
+
+Measured per guarded site: POV healthy 0.00s, a real cycle 3.05s, POV not
+installed 0.00s, POV switched off by hand 10.15s.
+
+**Eleven adversarial rounds, and what each killed.** Worth keeping, because
+every one of these reads sensible on the page:
+
+| Design | Why it died |
+|---|---|
+| A shared counter in `Window(10000)` | Five rounds, each finding a new way it was wrong |
+| A sticky "I have seen POV work" flag | The wizard's entry point is `reuselanguageinvoker=false`, so its interpreter is new every invocation. The flag could never be set there, on any platform, ever |
+| A `_gave_up` latch | One transient JSON-RPC failure disarmed every guard in the process for the rest of the session |
+| Asking JSON-RPC "is POV installed" | It answers the same for "unknown id" and "busy", and busy is the moment being guarded. Now a disk check |
+| Splitting on `pending_enable` alone | `pov_reload` recorded nothing there, so a failed SERVICE cycle read as the user's own choice and the reload fired into it -- the original crash, through the check meant to prevent it |
+
+Three of those blockers were code added mid-fix. The rule that caught them was
+running the validator's own reproduction against the fold, every time.
+
+**Also in 0.2.491:**
+
+- `_ensure_pov_enabled` stopped re-enabling POV on no evidence. It ran on every
+  boot and undid a user's deliberate choice silently -- and because
+  `hot_reload`'s first act is to cycle the service, it completed before the
+  wizard's own POV checks were even reached. It now acts only on a record
+  `pov_reload` writes before disabling and clears only once POV can be
+  constructed again. See "Two records, two questions" below.
+- The last ten update notes, with a home tile on every skin. See that section.
+- AF3's un-seeded submenu slots, and the version constant that asked every AF3
+  user to upgrade on every boot. See the AF3 section.
+
+## Two records, two questions (the tile durability rule, got wrong twice)
+
+`recent_updates_tile_patcher` seeds one favourites tile. Its "do not put back
+what the user removed" rule was wrong in both directions before it was right,
+and both wrongs came from answering with one record what needs two.
+
+- Marker as a comment INSIDE `favourites.xml`: the wizard's
+  `update_favourites_xml_file()` copies a static per-skin seed over that file
+  on every skin switch, so the marker died with it and a DELETED tile came
+  back.
+- Marker as a sidecar file: it survives the copy, but it says "we have offered
+  this", which is true forever -- so a tile the same copy removed from someone
+  who never touched it was never restored. Silent and permanent.
+
+The two questions are separate: *is this still a file we edited* (a comment
+beside the tile -- its ABSENCE proves the file was replaced) and *did the user
+tell us to go away* (the sidecar, recording a deletion, written at the moment
+the comment still proves it was one). `favourites_xml_patcher` already does
+this with its anchor tile; this now does it too.
+
+Known hole, deliberately written into the code: deleting the tile and switching
+skin with no service run in between. The tile returns once; delete it again and
+the next start records it for good.
+
+## The last ten update notes (0.2.491)
+
+`tools/build_recent_updates.py` regenerates
+`wizard/assets/notification_files/recent_updates.txt` from the git history of
+`quick_update.txt` itself, so the archive is the text users were actually
+shown and cannot drift from it. Ten is enforced AT GENERATION, not left to the
+reader -- a reader that trims is one bad release away from shipping ninety.
+
+Parsed by splitting on a header at the START OF A LINE, never on any `|||`:
+a body mentioning `|||` mid-sentence would otherwise tear a record in half and
+shift every one after it.
+
+Reachable at `plugin://plugin.program.kodipovilwizard/?mode=recentupdates`,
+plus a favourites tile on the three skins that use favourites and a
+`HOME_SUBMENU` row on AF3, which does not.
+
+**Regenerate it at every release, in phase 2, after `quick_update.txt` is
+written** -- it reads the working copy first so the new note is in its own
+archive.
+
+## Arctic Fuse 3 leaves four submenu slots un-seeded (2026-08-13)
+
+A user's Kodi force-closed on opening a submenu after playback. AF3 declares
+FIVE submenu slots in its generator data -- `homesubmenu`, `1101submenu`,
+`1102submenu`, `1103submenu`, `1104submenu` -- and ships a stock node file for
+the first one only. `Includes_Home.xml` builds the include name from the slot
+at parse time, so reaching a slot with no node leaves
+`<include>skinvariables-1102submenu-staticitems</include>` unresolved. Kodi
+keeps the unresolved element rather than dropping it, the directory provider
+reads the literal string `"include"` as a path, and the process dies. The
+user's exact final log line reproduces from that mechanism.
+
+NOT OUR BUG -- verified against a clone of the real skin, the pack we ship, and
+`script.skinvariables`, plus running `af3_home_patcher` end-to-end against a
+fake filesystem: it creates and deletes none of those files. It is our users'
+crash though, so the four numbered slots are seeded EMPTY. Empty on purpose:
+real entries would put items in a submenu nobody built. It does not make a slot
+visible either -- AF3 gates that on `HomeSwitcher.<id>.Toggle`, a string this
+repo never sets. A slot the user has populated is left byte-for-byte alone.
+
+**And a version constant that had rotted.** `af3_home_patcher.AF3_CE_VERSION`
+was `6.3.2.9` while `wizard.AF3_CE_SKIN_VERSION` had moved the shipped pack to
+`6.3.2.14`, and the gate compared with `==`. So it read as "is the skin the
+version we ship" and behaved as "is it any other version at all": every AF3
+user already on the correct pack was asked to upgrade on every boot -- a
+progress dialog and five add-on re-registrations, forever, for nothing. Fixed,
+and the comparison is now `>=` like the wizard's own gate, so the next constant
+left behind costs nothing instead of costing a dialog a day.
+
+## The startup repair pass runs inline on main, on purpose (2026-08-13)
+
+There was a `_start_build_startup_repairs()` that put the pass on a daemon
+thread, and nothing ever called it. Deleted rather than wired up, because two
+things depend on the pass finishing before `main()` moves on:
+
+- `pov_reload.wait_until_settled`'s bounds (30s, and 10s for an outage we did
+  not cause) were chosen BECAUSE three of its four callers are steps in that
+  inline pass, where a wait is not a delayed reload, it is the subtitle service
+  not starting. Off the main thread those numbers would have to be re-derived.
+- `_publish_repairs_state` / `REPAIRS_DONE_PROPERTY` is what the wizard's
+  `hot_reload` waits on before it cycles anything.
+
+Moving it is reasonable to want; doing it by accident is not, which is what a
+dead function sitting there invites.
 
 ## Shipped 2026-08-12: note 589 (0.2.489 / wizard 0.1.44 / quickfix 0.1.534)
 
