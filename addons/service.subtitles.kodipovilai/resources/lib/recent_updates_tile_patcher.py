@@ -54,6 +54,38 @@ REMOVED_TOKEN = 'user_removed'
 # How many of the user's own favourites to remember. More than one because any
 # single anchor can itself be deleted; few because this is a hint, not a backup.
 ANCHOR_COUNT = 5
+# The wizard bumps this every time it replaces userdata/favourites.xml with a
+# per-skin seed, which is the only thing that does. Comparing it against the
+# value we saw when we last seeded turns "who removed the tile" from a guess
+# into a fact. The anchors below stay as a fallback for a device where the
+# wizard is older than this and never writes the file.
+REPLACED_FILE = ('special://profile/addon_data/'
+                 'plugin.program.kodipovilwizard/favourites_replaced.txt')
+
+
+def _replacement_count():
+    """How many times the wizard has replaced favourites.xml.
+
+    NO FILE MEANS ZERO, not "unknown". The wizard that writes it ships in the
+    same quickfix as this patcher, so on any device running this code the file
+    is simply absent until the first skin switch -- and reading that as unknown
+    would send every ordinary device down the guessing path this exists to
+    replace. A wizard too old to write it at all leaves the count at zero
+    forever, which reads any missing tile as a deletion: the milder direction,
+    and only reachable by mixing versions that ship together.
+    """
+    try:
+        import xbmcvfs
+        path = xbmcvfs.translatePath(REPLACED_FILE)
+    except Exception:
+        return None
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            return int((handle.read() or '0').strip() or 0)
+    except FileNotFoundError:
+        return 0
+    except Exception:
+        return None
 _FAV_ACTION_RE = re.compile(r'<favourite\b[^>]*>(.*?)</favourite>', re.S)
 TILE_NAME = '[B][COLOR yellow]10 העדכונים האחרונים[/COLOR][/B]'
 TILE_THUMB = 'special://home/media/build_icons/Wizard/wizard_pov_il.png'
@@ -105,7 +137,10 @@ def _write_sidecar(state, anchors=None):
         directory = os.path.dirname(path)
         if directory and not os.path.isdir(directory):
             os.makedirs(directory)
-        payload = {'state': state, 'anchors': list(anchors or [])}
+        # The counter goes in with the anchors: what matters later is not its
+        # value but whether it has MOVED since this moment.
+        payload = {'state': state, 'anchors': list(anchors or []),
+                   'replaced': _replacement_count()}
         # ATOMIC, like the favourites.xml write below it. A half-written record
         # is unreadable, and an unreadable record now costs the user their
         # tile -- so it must never be possible to observe one.
@@ -132,6 +167,26 @@ def _favourites_path():
         return xbmcvfs.translatePath('special://userdata/' + FAVOURITES_REL)
     except Exception:
         return ''
+
+
+def _guess_from_anchors(record, theirs):
+    """The old, inferential answer. Only for a device whose wizard predates the
+    replacement counter -- it is a guess, and every version of this guess has
+    been wrong in one direction or the other."""
+    anchors = [a for a in record.get('anchors') or [] if isinstance(a, str)]
+    if not anchors:
+        # Nothing to measure against, and no counter either. Fall back to the
+        # safer of the two: offered once, not offered again. Re-seeding here,
+        # as an earlier version did, put the tile back on every single boot.
+        return 'already_seen'
+    survived = sum(1 for a in anchors if a in theirs)
+    # A majority, not all: requiring every anchor made MORE anchors mean MORE
+    # false wipes, since deleting one unrelated favourite tripped it.
+    if survived * 2 >= len(anchors):
+        _write_sidecar(REMOVED_TOKEN)
+        _log('the tile was removed by the user; not offering it again')
+        return 'user_removed'
+    return None
 
 
 def ensure_patched():
@@ -168,38 +223,21 @@ def ensure_patched():
             _write_sidecar('offered', theirs[:ANCHOR_COUNT])
         return 'already_present'
 
-    anchors = [a for a in record.get('anchors') or [] if isinstance(a, str)]
-    if record and not anchors:
-        # WE HAVE A RECORD BUT NOTHING TO MEASURE AGAINST -- their favourites
-        # were only ours at seed time, or the anchor write failed. Without
-        # anchors the two cases cannot be told apart, so fall back to the
-        # safer one: we offered it once, and we do not offer again. Skipping
-        # the check entirely, as this did, re-seeded on every single boot --
-        # the v1 behaviour, for exactly the users least able to escape it.
-        return 'already_seen'
-    if anchors:
-        survived = sum(1 for a in anchors if a in theirs)
-        # A MAJORITY, NOT ALL. Requiring every anchor made MORE anchors mean
-        # MORE false wipes: deleting our tile and one unrelated favourite in
-        # the same sitting -- or months apart, since anchors are never
-        # refreshed -- tripped it and put the tile back. A GUI delete of one
-        # tile leaves the rest standing; the wizard's copyfile leaves almost
-        # nothing of theirs. Half is a wide gap between those two.
-        if survived * 2 >= len(anchors):
-            # EVERY one of their favourites we remembered is still there, and
-            # only ours is gone. That was them.
-            #
-            # ALL, not ANY. The per-skin seed the wizard copies over the file
-            # contains the build's own service tiles, so an anchor can easily
-            # be in BOTH their file and that seed -- and would survive the copy
-            # and make a wipe look like a deletion. A wipe drops everything
-            # that was theirs alone; a deletion of our tile drops nothing else.
+    now = _replacement_count()
+    then = record.get('replaced')
+    if record and now is not None and isinstance(then, int):
+        if now <= then:
+            # Nobody replaced the file since we seeded, and the tile is gone.
+            # That was the user, whichever way they did it.
             _write_sidecar(REMOVED_TOKEN)
             _log('the tile was removed by the user; not offering it again')
             return 'user_removed'
-        # Not one of their favourites left -- this file was replaced wholesale,
-        # so our tile went with it and they never asked for that.
-        _log('favourites.xml was replaced; restoring the tile')
+        _log('favourites.xml was replaced {0} time(s) since we seeded it; '
+             'restoring the tile'.format(now - then))
+    elif record:
+        verdict = _guess_from_anchors(record, theirs)
+        if verdict:
+            return verdict
 
     closing = text.rfind('</favourites>')
     if closing == -1:
