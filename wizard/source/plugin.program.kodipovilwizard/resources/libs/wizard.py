@@ -538,6 +538,37 @@ class Wizard:
     def _addon_is_enabled(self, addon_id):
         return self._addon_is_enabled_static(addon_id)
 
+    # The same Window(10000) key pov_reload reads. The service add-on's five
+    # skin-reload guards live in a DIFFERENT process and cannot see anything in
+    # this one, so without this they report "not cycling" for the whole of the
+    # dance below and let a ReloadSkin through. The value is a deadline, not a
+    # flag, so that this process dying mid-update cannot block their reloads for
+    # the rest of the session.
+    CYCLING_PROPERTY = 'kodipovil_pov_cycling_until'
+
+    @classmethod
+    def _pov_cycling(cls):
+        """True while anyone -- this add-on or the service one -- has POV in a
+        state where it cannot be constructed."""
+        try:
+            import time
+            import xbmcgui
+            raw = (xbmcgui.Window(10000).getProperty(cls.CYCLING_PROPERTY)
+                   or '').strip()
+            return bool(raw) and time.time() < float(raw)
+        except Exception:
+            return False
+
+    @classmethod
+    def _publish_cycling(cls, seconds):
+        try:
+            import time
+            import xbmcgui
+            value = '' if not seconds else '%d' % int(time.time() + seconds)
+            xbmcgui.Window(10000).setProperty(cls.CYCLING_PROPERTY, value)
+        except Exception:
+            pass
+
     @staticmethod
     def _wait_until_resolvable(addon_ids, timeout=20):
         """Block until every id can actually be CONSTRUCTED, or time out.
@@ -877,6 +908,7 @@ class Wizard:
                 return False
             left_off = []
             cycled = []
+            self._publish_cycling(120)
             for addon_id in self.HOT_RELOAD_TARGETS:
                 try:
                     if self._addon_is_enabled(addon_id) is not True:
@@ -900,6 +932,7 @@ class Wizard:
                 logging.log('[HOT-RELOAD] these are still off and recorded '
                             'for the next start: {0}'.format(
                                 ', '.join(left_off)), level=xbmc.LOGERROR)
+                self._publish_cycling(0)
                 return False
             # NOT YET. Every id above has just been re-enabled, and Kodi's
             # enabled flag -- which is all _addon_is_enabled can see -- flips
@@ -918,11 +951,25 @@ class Wizard:
             # Measured at 20.0s for a user without Umbrella. The loop above
             # already knows which ids it cycled; those are the only ones whose
             # readiness this wait is about.
-            self._wait_until_resolvable(cycled)
+            resolvable = self._wait_until_resolvable(cycled)
+            self._publish_cycling(0)
+            if not resolvable:
+                # ACT ON THE ANSWER. Every other guard added for this fault
+                # skips its reload when the wait says "not yet"; this one asked
+                # and then reloaded regardless, which is the same bug at the one
+                # site that matters most. Reporting failure is the right
+                # outcome, not skipping quietly: the caller then force-closes,
+                # and a restart is what makes an add-on that will not come back
+                # usable again. The files are already in place either way.
+                logging.log('[HOT-RELOAD] cycled add-ons did not become usable; '
+                            'falling back to a restart rather than rebuilding '
+                            'the screen against them', level=xbmc.LOGERROR)
+                return False
             xbmc.executebuiltin('ReloadSkin()')
             logging.log('[HOT-RELOAD] update applied without closing Kodi')
             return True
         except Exception as err:
+            self._publish_cycling(0)
             logging.log('[HOT-RELOAD] failed, falling back to a restart: '
                         '{0}'.format(err), level=xbmc.LOGERROR)
             return False
@@ -1558,7 +1605,18 @@ def auto_update_active_skin_pack():
         if ensure():
             xbmc.sleep(800)
             try:
-                xbmc.executebuiltin('ReloadSkin()')
+                # This runs from startup right after the quick update, so a POV
+                # cycle can still be in flight. Rebuilding every window against
+                # an add-on that cannot resolve is the fault this whole change
+                # is about; the skin pack is already on disk either way, so it
+                # simply takes effect on the next start instead.
+                if Wizard._pov_cycling():
+                    logging.log('[Skin Auto Update] POV is mid-cycle; not '
+                                'reloading the skin now -- the pack is '
+                                'installed and applies on the next start.',
+                                level=xbmc.LOGWARNING)
+                else:
+                    xbmc.executebuiltin('ReloadSkin()')
             except Exception:
                 pass
     except Exception as e:

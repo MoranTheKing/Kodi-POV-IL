@@ -45,9 +45,49 @@ _cycling = False
 _armed = False
 
 
+# The window is announced on a Window(10000) property as well as in these
+# globals, because THE WIZARD CYCLES POV TOO -- from its own add-on, in its own
+# process, with raw Addons.SetAddonEnabled. Module globals cannot be seen
+# across that boundary, so for the whole of the wizard's disable/enable dance
+# every guard in this add-on reported "not cycling" and let a ReloadSkin
+# straight through. Demonstrated: POV unresolvable, is_cycling() False,
+# wait_until_settled() returning True instantly, and the reload firing through
+# a "guarded" site. Window(10000) properties are how this build already passes
+# state between add-ons (see REPAIRS_DONE_PROPERTY).
+#
+# THE VALUE IS AN EXPIRY, NOT A FLAG. A property is only cleared by whoever set
+# it, so a process killed mid-cycle -- which is exactly the failure mode all of
+# this exists to survive -- would leave it set until Kodi restarts, and block
+# every skin reload for the rest of the session. Storing a deadline means the
+# worst case is a short delay that heals itself.
+_CYCLING_PROPERTY = 'kodipovil_pov_cycling_until'
+
+
+def _publish_cycling(seconds):
+    """Announce (or withdraw) the window for other add-ons."""
+    try:
+        import time
+        import xbmcgui
+        value = '' if not seconds else '%d' % int(time.time() + seconds)
+        xbmcgui.Window(10000).setProperty(_CYCLING_PROPERTY, value)
+    except Exception:
+        pass
+
+
+def _another_addon_is_cycling():
+    try:
+        import time
+        import xbmcgui
+        raw = (xbmcgui.Window(10000).getProperty(_CYCLING_PROPERTY) or '').strip()
+        return bool(raw) and time.time() < float(raw)
+    except Exception:
+        return False
+
+
 def is_cycling():
-    """True while POV is, or is about to become, unresolvable."""
-    return _armed or _cycling
+    """True while POV is, or is about to become, unresolvable -- whether this
+    add-on is the one cycling it or the wizard is."""
+    return _armed or _cycling or _another_addon_is_cycling()
 
 
 def wait_until_settled(timeout=30):
@@ -252,6 +292,10 @@ def _deferred_cycle():
         # constructed again, so the flag always covers the whole unresolvable
         # window rather than part of it.
         _cycling = True
+        # 60s is a ceiling, not an expectation: the window is normally a couple
+        # of seconds and the finally below withdraws it. It only matters if this
+        # process dies mid-cycle.
+        _publish_cycling(60)
         _set_enabled(False)
         try:
             xbmc.sleep(1500)
@@ -291,3 +335,4 @@ def _deferred_cycle():
         # the session, trading a two-second fault for a permanent one.
         _cycling = False
         _armed = False
+        _publish_cycling(0)
