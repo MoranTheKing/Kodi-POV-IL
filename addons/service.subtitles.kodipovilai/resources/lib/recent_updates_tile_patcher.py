@@ -8,16 +8,27 @@
 # rudeness as re-enabling an add-on they switched off, and this build has just
 # finished apologising for that one.
 #
-# THE MARKER IS A SIDECAR, NOT A COMMENT INSIDE favourites.xml. That was the
-# first shape and it was wrong: the wizard's update_favourites_xml_file() copies
-# a static per-skin seed straight over userdata/favourites.xml on every skin
-# switch, unconditionally. The marker went with it, so a user who deleted the
-# tile and then switched skin -- an ordinary menu action -- got it back on the
-# next start. favourites_xml_patcher moved its own delete-tracking to a sidecar
-# for exactly this reason; this now does the same.
+# TWO RECORDS, BECAUSE THERE ARE TWO QUESTIONS, and each single-record shape
+# got one of them wrong.
 #
-# A user who wipes their addon_data as well gets the offer again, which is
-# right: that is a new profile, not their edited one.
+# A comment inside favourites.xml alone: the wizard's update_favourites_xml_file
+# copies a static per-skin seed straight over that file on every skin switch,
+# so the comment went with it and a tile the user had DELETED came back.
+#
+# A sidecar alone: it says "we have offered this once", which is true forever --
+# so when that same skin switch removed the tile from a user who had NEVER
+# touched it, nothing ever put it back. Silent, permanent, and triggered by a
+# menu entry this build puts in front of everyone.
+#
+# So the comment answers "is this still a favourites.xml WE edited", and the
+# sidecar answers "did the user tell us to go away". Together they separate a
+# deliberate deletion (our marker still there, our tile gone) from an external
+# wipe (our marker gone too), which is exactly what favourites_xml_patcher does
+# with its anchor tile.
+#
+# The one case this cannot see: deleting the tile and switching skin with no
+# service run in between. The tile returns once; delete it again and the next
+# start records it for good.
 
 import os
 import re
@@ -36,6 +47,11 @@ except Exception:
 FAVOURITES_REL = 'favourites.xml'
 SEEN_FILE = ('special://profile/addon_data/service.subtitles.kodipovilai/'
              'recent_updates_tile_seen.txt')
+# Written into favourites.xml beside the tile. Its ABSENCE is the signal: this
+# file is no longer one we edited, so anything of ours missing from it was
+# removed by the copy, not by the user.
+EDIT_MARKER = '<!-- AI_SUBS_FAVOURITES_RECENT_UPDATES_v2 -->'
+REMOVED_TOKEN = 'user_removed'
 TILE_NAME = '[B][COLOR yellow]10 העדכונים האחרונים[/COLOR][/B]'
 TILE_THUMB = 'special://home/media/build_icons/Wizard/wizard_pov_il.png'
 TILE_ACTION = ('RunPlugin("plugin://plugin.program.kodipovilwizard/'
@@ -60,26 +76,34 @@ def _seen_path():
         return ''
 
 
-def _already_offered():
+def _sidecar():
     try:
-        return os.path.isfile(_seen_path())
+        with open(_seen_path(), 'r', encoding='utf-8') as handle:
+            return handle.read().strip()
     except Exception:
-        # Cannot tell -> assume offered. Guessing "no" would re-add a tile the
-        # user may have deleted, which is the one outcome to avoid.
+        return ''
+
+
+def _user_removed_it():
+    try:
+        return _sidecar() == REMOVED_TOKEN
+    except Exception:
+        # Cannot tell -> assume they removed it. Guessing the other way re-adds
+        # a tile somebody deleted, which is the worse of the two.
         return True
 
 
-def _mark_offered():
+def _write_sidecar(token):
     try:
         path = _seen_path()
         directory = os.path.dirname(path)
         if directory and not os.path.isdir(directory):
             os.makedirs(directory)
         with open(path, 'w', encoding='utf-8') as handle:
-            handle.write('1\n')
+            handle.write(token + '\n')
         return True
     except Exception as e:
-        _log('could not record the offer: {0}'.format(e), level='WARNING')
+        _log('could not record the tile state: {0}'.format(e), level='WARNING')
         return False
 
 
@@ -90,6 +114,27 @@ def _favourites_path():
         return xbmcvfs.translatePath('special://userdata/' + FAVOURITES_REL)
     except Exception:
         return ''
+
+
+def _stamp_marker(path, text):
+    """Add our marker to a favourites.xml that already carries the tile."""
+    closing = text.rfind('</favourites>')
+    if closing == -1:
+        return False
+    updated = text[:closing] + '    ' + EDIT_MARKER + '\n' + text[closing:]
+    tmp = path + '.recent_updates.tmp'
+    try:
+        with open(tmp, 'w', encoding='utf-8') as handle:
+            handle.write(updated)
+        os.replace(tmp, path)
+        return True
+    except Exception:
+        try:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        except Exception:
+            pass
+        return False
 
 
 def ensure_patched():
@@ -109,11 +154,30 @@ def ensure_patched():
         _log('could not read favourites.xml: {0}'.format(e), level='WARNING')
         return 'read_failed'
 
-    if _already_offered():
-        # Offered before. Whether the tile is there or the user removed it is
-        # none of our business now.
-        return 'already_seen'
+    has_tile = TILE_ACTION in text
+    has_marker = EDIT_MARKER in text
 
+    if _user_removed_it():
+        # They told us to go away. Nothing reopens that.
+        return 'user_removed'
+
+    if has_tile:
+        if not has_marker:
+            # Present but unmarked -- a fresh seed that already carried it, or
+            # our marker was stripped. Mark it so a later deletion is readable
+            # as a deletion rather than as a wipe.
+            _stamp_marker(path, text)
+        return 'already_present'
+
+    if has_marker:
+        # OUR file, OUR tile gone: the user removed it. Record that durably,
+        # because the marker itself will not survive the next skin switch.
+        _write_sidecar(REMOVED_TOKEN)
+        _log('the tile was removed by the user; not restoring it again')
+        return 'user_removed'
+
+    # No tile and no marker: this favourites.xml is not one we edited -- a
+    # first run, or a file the skin switch replaced wholesale. Seed it.
     closing = text.rfind('</favourites>')
     if closing == -1:
         # Not a favourites file we understand. Writing into it blind could
@@ -124,8 +188,8 @@ def ensure_patched():
 
     # If a tile with this action somehow exists already, do not add a second --
     # just record that the offer has been made.
-    addition = TILE + '\n' if TILE_ACTION not in text else ''
-    updated = text[:closing] + addition + text[closing:]
+    updated = (text[:closing] + TILE + '\n    ' + EDIT_MARKER + '\n'
+               + text[closing:])
 
     tmp = path + '.recent_updates.tmp'
     try:
@@ -151,9 +215,7 @@ def ensure_patched():
         _log('could not write favourites.xml: {0}'.format(e), level='WARNING')
         return 'write_failed'
 
-    # RECORDED ONLY AFTER THE WRITE SUCCEEDED. Marking first and failing to
-    # write would mean the tile was never offered and never will be.
-    _mark_offered()
-    _log('seeded the "last ten updates" tile{0}'.format(
-        '' if addition else ' (tile was already present)'))
+    # RECORDED ONLY AFTER THE WRITE SUCCEEDED.
+    _write_sidecar('offered')
+    _log('seeded the "last ten updates" tile')
     return 'seeded'
