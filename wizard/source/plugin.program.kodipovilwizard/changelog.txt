@@ -1,3 +1,9 @@
+v0.1.45
+- A quick update waits for POV to be usable again before refreshing the skin,
+  so an update can no longer rebuild the home screen while POV is restarting.
+- When it cannot be applied straight away the update now says so plainly
+  instead of reporting that it was applied.
+
 v0.1.44
 - Recovering an add-on left switched off by an interrupted update is
   quicker and no longer gives up on a temporary hiccup.
