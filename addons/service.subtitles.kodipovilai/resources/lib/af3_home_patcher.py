@@ -1269,8 +1269,30 @@ def _wait_for_quick_update_notice(max_seconds=180):
 
 
 def _rebuild_af3_shortcuts():
+    """True when the rebuild actually ran. THE RETURN VALUE IS LOAD-BEARING:
+    ensure_patched() must only write the version marker when it is True, or a
+    rebuild that did not happen is recorded as done and never retried."""
     if xbmc is None:
-        return
+        return False
+    # Arctic Fuse 3's own route to the same fault FENtastic hit: this rebuilds
+    # the shortcut templates and then reloads the skin, so POV's home tiles are
+    # redrawn. Doing that while pov_reload has POV disabled leaves every one of
+    # them raising "Unknown addon id". Waiting costs a delayed rebuild; not
+    # waiting costs the home screen.
+    #
+    # The wait is computed inside the try and acted on OUTSIDE it. Putting the
+    # `return` inside meant any exception in here -- including one from the
+    # logging call this module does not actually have -- was swallowed by the
+    # except and execution fell straight through to the rebuild. A guard that
+    # fails open silently is worse than no guard, because it reads as covered.
+    settled = True
+    try:
+        from resources.lib import pov_reload
+        settled = pov_reload.wait_until_settled()
+    except Exception:
+        settled = True          # no pov_reload here means nothing to wait for
+    if not settled:
+        return False
     _set_af3_runtime_defaults()
     _seed_af3_spotlight_once()
     _seed_af3_layout_once()
@@ -1282,6 +1304,7 @@ def _rebuild_af3_shortcuts():
     xbmc.sleep(1800)
     xbmc.executebuiltin('SetFocus(310)')
     xbmc.executebuiltin('AlarmClock(POVAF3FocusSpotlight,SetFocus(310),00:02,silent)')
+    return True
 
 
 def ensure_patched():
@@ -1374,7 +1397,15 @@ def ensure_patched():
     if want_rebuild and _is_af3_active():
         if _wait_for_quick_update_notice():
             return 'rebuild_deferred_quick_update_notice'
-        _rebuild_af3_shortcuts()
+        # The marker is written ONLY when the rebuild really ran -- the same
+        # rule the comment above states, and the one the pov_reload guard
+        # inside _rebuild_af3_shortcuts broke by returning early with no way
+        # for this caller to tell. Measured before this line: the rebuild was
+        # skipped, the marker was written anyway, and the next boot returned
+        # 'already_patched' -- so a DEFERRED rebuild became a DROPPED one,
+        # permanently, while the log said 'patched_rebuilt'.
+        if not _rebuild_af3_shortcuts():
+            return 'rebuild_deferred_pov_cycling'
         try:
             _write(marker, PATCH_VERSION + '\n')
         except Exception:

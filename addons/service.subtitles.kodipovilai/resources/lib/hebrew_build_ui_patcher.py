@@ -345,6 +345,20 @@ def _reload_skin_if_active():
             return
         if xbmc.getSkinDir() != FENTASTIC_SKIN_ID:
             return
+        # Same reason as fentastic_widget_patcher: ReloadSkin() while POV is
+        # mid-cycle rebuilds the home screen against an add-on that cannot
+        # resolve, and every POV widget on it fails.
+        settled = True
+        try:
+            from resources.lib import pov_reload
+            settled = pov_reload.wait_until_settled()
+        except Exception:
+            settled = True
+        if not settled:
+            kodi_utils.log(
+                'hebrew_build_ui_patcher: POV still cycling; deferring the '
+                'skin reload to the next service run', level='WARNING')
+            return
         _SKIN_RELOADED = True
         kodi_utils.log(
             'hebrew_build_ui_patcher: reloading the skin so the restored '

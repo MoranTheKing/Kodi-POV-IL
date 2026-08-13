@@ -1000,12 +1000,21 @@ def _tile_reload_worker():
         import xbmc
         if xbmc.getCondVisibility('Player.HasMedia'):
             return
-        saved = None
+        # Wait out any POV cycle FIRST. This function has always imported
+        # pov_reload -- for the focus snapshot -- and never asked it the one
+        # question that matters: rebuilding every window while POV cannot be
+        # constructed is what breaks the home screen. It applies to every skin,
+        # since unlike the other reload sites this one has no skin guard at all.
+        settled, saved = True, None
         try:
             from resources.lib import pov_reload
-            saved = pov_reload._capture_home_focus()
+            settled = pov_reload.wait_until_settled()
+            if settled:
+                saved = pov_reload._capture_home_focus()
         except Exception:
-            saved = None
+            settled, saved = True, None
+        if not settled:
+            return
         xbmc.executebuiltin('ReloadSkin()')
         try:
             xbmc.sleep(1200)
@@ -3663,6 +3672,19 @@ def _reload_skin_if_safe():
     try:
         import xbmc
         if xbmc.getCondVisibility('Window.IsVisible(home)'):
+            return
+        # Not while POV is being cycled: ReloadSkin() rebuilds every window,
+        # and any POV-backed one raises "Unknown addon id" until the cycle
+        # finishes. Skipping outright is fine here -- unlike the widget
+        # patcher's reload, this one only refreshes player-OSD XML, which Kodi
+        # re-reads on the next OSD open anyway.
+        cycling = False
+        try:
+            from resources.lib import pov_reload
+            cycling = pov_reload.is_cycling()
+        except Exception:
+            cycling = False
+        if cycling:
             return
         xbmc.executebuiltin("ReloadSkin()")
     except Exception:

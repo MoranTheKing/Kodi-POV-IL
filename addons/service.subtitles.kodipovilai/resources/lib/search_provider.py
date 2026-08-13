@@ -220,11 +220,39 @@ def _refresh_active_skin(af3_changed):
         import xbmc
     except Exception:
         return False
+    # Every branch below rebuilds windows, and POV widgets live on the home
+    # screen of all four skins -- so this guard belongs before the branch, not
+    # inside one of them. Estuary, NOX and Arctic Fuse 3 were exposed to the
+    # same fault as FENtastic; only the code path differed.
+    # DO NOT WAIT HERE. Alone among the reload sites, this one is on a direct
+    # user click -- the settings dialog's provider switch -- so a 30-second
+    # block would look like the build had frozen, with no busy indicator. Skip
+    # instead: the provider is already written to disk and the skin files
+    # already rewritten before this runs, and the caller's dialog says the
+    # change takes effect after a restart when this returns False. Nothing is
+    # lost, and the click stays instant.
+    cycling = False
+    try:
+        from resources.lib import pov_reload
+        cycling = pov_reload.is_cycling()
+    except Exception:
+        cycling = False
+    if cycling:
+        _log('POV is cycling; not reloading the skin now. The provider is '
+             'already stored and applied to the skin files, so it takes '
+             'effect on the next start.', 'WARNING')
+        return False
     if af3_changed and skin == 'skin.arctic.fuse.3':
         try:
             from resources.lib import af3_home_patcher
-            af3_home_patcher._rebuild_af3_shortcuts()
-            return True
+            # RETURN WHAT IT SAYS, do not assume it worked. This call site was
+            # written when _rebuild_af3_shortcuts() returned None either way, so
+            # discarding it was harmless; it now returns False when it defers a
+            # rebuild, and reporting True regardless tells the settings dialog
+            # the switch took effect when the AF3 search rows still hold the old
+            # provider -- and the dialog then does NOT show its "restart for
+            # this to apply" message, so the user has no way to know.
+            return bool(af3_home_patcher._rebuild_af3_shortcuts())
         except Exception as e:
             _log('AF3 rebuild failed: {0}'.format(e), 'WARNING')
             return False
