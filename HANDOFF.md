@@ -3588,6 +3588,62 @@ disappears with only a WARNING nobody reads. The maintainer has said they are
 fine with auto-update; making `unmatched` visible instead of buried is the
 follow-up worth doing.
 
+## OPEN, AND BLOCKING THE RELEASE: two ways a deleted tile still comes back
+
+Found by the final full-scope review, both reproduced against real code from
+both add-ons wired together, both surviving at the time of writing. Do not
+package until these are closed.
+
+Both are the SAME shape, which is the useful part: **the snapshot goes stale
+against a counter that was reset, and the code then judges on a pair of
+numbers that are no longer comparable.**
+
+  1. THE WRITER ROLLS THE COUNT BACK. Round 3 taught the READER to tell a
+     corrupt count from a zero. It never touched the WRITER.
+     `_record_favourites_replaced()` still swallows an unreadable file and
+     counts up from 0, so if both copies are corrupt and one ordinary skin
+     switch happens, the wizard overwrites a true count of 4 with 1 -- healing
+     the corruption into a clean-looking wrong number before the reader can
+     ever see it as damage. Every later boot then reads now(1) < then(4),
+     falls to the anchors, and the tile never returns however many skin
+     switches follow. An untouched user loses it permanently.
+     Round 3's commit message says "either way the counter is not consulted".
+     It is consulted; it has just been quietly rewritten first.
+
+  2. CLEAR DATA ON THE WIZARD, THEN A DELETION, THEN A SKIN SWITCH. The
+     deletion is recognised but deliberately not recorded, because the count
+     is not trustworthy and a guess must not harden into a permanent verdict.
+     Later an ordinary skin switch moves the count past the stale snapshot,
+     which reads as "the wizard removed it" -- and the tile the user deleted
+     comes back. Fuzzing every ordering of {switch, clear_wizard, clear_svc,
+     delete, boot} to depth 6 found 30 of 15,625 sequences that violate the
+     promise, all of them clear_wizard + delete before the first observing
+     boot, then switch. clear_svc alone never does it, because the reader
+     prefers the wizard's copy.
+
+The direction a fix should probably take, not yet tried: when the count is not
+comparable -- damaged, or below its own snapshot -- RE-BASELINE the snapshot
+to the current count instead of judging on the pair. That makes the next real
+skin switch a genuine signal again, and it closes both cases with one rule.
+Whatever is chosen, it needs the wizard-side writer fixed too: a writer that
+counts up from zero after corruption destroys the evidence the reader was
+taught to look for.
+
+## Smaller, also open
+
+  * Four more written-and-undeclared marker ids the settings test cannot see,
+    because they are passed as module constants rather than literals:
+    `_fen_widgets_seeded`, `_ui_prefs_seeded`, `_pov_scraper_tune_state`,
+    `_pov_torbox_usage_patch_version`. No functional risk (undeclared ids
+    persist), so this is completeness, not a bug.
+  * `tools/test_platform_packages.py` is RED and was already red three commits
+    before this work started: the wizard tree drifted from its declared 0.1.45
+    hash. Not a regression from this release, but it has to be settled before
+    the 0.1.46 packaging step, because that test is the packaging gate.
+  * Point 8b of the packaging notes quotes an error string
+    ("member names or order changed") that the tool does not actually print.
+    The real one names the added files and `--allow-add`.
+
 ## A correction I had to make about myself
 
 Two commits on this branch declared 17 one-shot markers in `settings.xml` and
