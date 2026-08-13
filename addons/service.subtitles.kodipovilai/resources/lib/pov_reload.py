@@ -60,26 +60,93 @@ _armed = False
 # this exists to survive -- would leave it set until Kodi restarts, and block
 # every skin reload for the rest of the session. Storing a deadline means the
 # worst case is a short delay that heals itself.
-_CYCLING_PROPERTY = 'kodipovil_pov_cycling_until'
+_CYCLING_PROPERTY = 'kodipovil_pov_cycling'
+# Longest a single announcement is honoured. A crash-safety net, not a budget:
+# the measured window is a couple of seconds, and every exit path withdraws.
+_MAX_HORIZON = 300
 
 
-def _publish_cycling(seconds):
-    """Announce (or withdraw) the window for other add-ons."""
+def _read_cycling():
+    """(count, monotonic_deadline, wall_deadline). Zeros when nothing is set."""
     try:
-        import time
         import xbmcgui
-        value = '' if not seconds else '%d' % int(time.time() + seconds)
+        raw = (xbmcgui.Window(10000).getProperty(_CYCLING_PROPERTY) or '').strip()
+        count, mono, wall = raw.split('|')
+        mono, wall = float(mono), float(wall)
+        # Reject rather than clamp anything outside a plausible epoch range.
+        # This also rejects inf and nan -- every comparison against nan is
+        # False, so `not (... < nan < ...)` is True -- and float() overflows a
+        # long enough numeral straight to inf. We only ever write now+seconds,
+        # so a value out here did not come from us.
+        if not (-1e12 < mono < 1e12) or not (-1e12 < wall < 1e12):
+            return 0, 0.0, 0.0
+        return int(count), float(mono), float(wall)
+    except Exception:
+        return 0, 0.0, 0.0
+
+
+def _write_cycling(count, mono, wall):
+    try:
+        import xbmcgui
+        value = '' if count <= 0 else '%d|%f|%f' % (count, mono, wall)
         xbmcgui.Window(10000).setProperty(_CYCLING_PROPERTY, value)
     except Exception:
         pass
 
 
+def _publish_cycling(seconds):
+    """Join (seconds > 0) or leave (0) the set of cyclers.
+
+    A COUNT, NOT A FLAG, because there can be more than one cycler. The wizard
+    ships both a startup service and a plugin entry point, and nothing
+    serialises them -- so a user re-triggering Quick Update while the silent
+    startup update is still running gives two overlapping cycles. With a plain
+    flag, whichever finished first cleared it for both, and the other one's
+    window went unannounced: reproduced, with the reload firing against a POV
+    that was still genuinely unresolvable.
+
+    TWO DEADLINES, and both must expire before the window is considered over.
+    The wall clock alone was defeated by an NTP step: Android boxes often have
+    no RTC and correct their clock shortly after the network comes up -- the
+    same network event an update depends on -- so a forward jump made a live
+    window look expired mid-cycle. Reproduced, with the reload firing. Monotonic
+    alone is not enough either: CPython does not guarantee its reference point
+    is shared between processes (it is on Linux and Windows, which is everything
+    this build runs on, but a guarantee that holds by platform accident is not
+    one to rest a whole mechanism on). Requiring BOTH to expire means either
+    clock can misbehave without reopening the race; the cost is that the window
+    may be honoured slightly too long, which is harmless.
+    """
+    import time
+    count, mono, wall = _read_cycling()
+    now_mono, now_wall = time.monotonic(), time.time()
+    live = count > 0 and (now_mono < mono or now_wall < wall)
+    if seconds:
+        seconds = min(seconds, _MAX_HORIZON)
+        if live:
+            _write_cycling(count + 1, max(mono, now_mono + seconds),
+                           max(wall, now_wall + seconds))
+        else:
+            _write_cycling(1, now_mono + seconds, now_wall + seconds)
+    elif live:
+        _write_cycling(count - 1, mono, wall)
+    else:
+        _write_cycling(0, 0.0, 0.0)
+
+
 def _another_addon_is_cycling():
     try:
         import time
-        import xbmcgui
-        raw = (xbmcgui.Window(10000).getProperty(_CYCLING_PROPERTY) or '').strip()
-        return bool(raw) and time.time() < float(raw)
+        count, mono, wall = _read_cycling()
+        if count <= 0:
+            return False
+        now_mono, now_wall = time.monotonic(), time.time()
+        # Clamped: a corrupt or hostile value (inf, or a numeral long enough
+        # that float() overflows to inf) would otherwise pin every guarded
+        # reload in the build "cycling" for the rest of the session.
+        horizon_mono = min(mono, now_mono + _MAX_HORIZON)
+        horizon_wall = min(wall, now_wall + _MAX_HORIZON)
+        return now_mono < horizon_mono or now_wall < horizon_wall
     except Exception:
         return False
 
