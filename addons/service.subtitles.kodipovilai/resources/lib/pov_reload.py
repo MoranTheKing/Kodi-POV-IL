@@ -159,6 +159,20 @@ def _forget_record_if_pov_works():
             return
     except Exception:
         return
+    if not _is_resolvable():
+        return
+    # TWICE, WITH A GAP. _run_cycle writes the record and disables POV on the
+    # next line, and in between POV is still constructible. A DIFFERENT Kodi
+    # interpreter -- the wizard's, which shares none of this module's flags --
+    # asking is_cycling() at that instant reads "working" correctly and would
+    # delete the record a moment before it becomes the only thing that brings
+    # POV back. The gap is microseconds wide, so a second look after a pause
+    # lands the far side of the disable and sees the outage.
+    try:
+        import time
+        time.sleep(0.3)
+    except Exception:
+        return
     if _is_resolvable():
         _mark_cycle_pending(False)
 
