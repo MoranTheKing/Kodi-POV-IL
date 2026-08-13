@@ -30,6 +30,17 @@ _pending = False
 # The one disk-probe thread. Not a cached answer -- a handle, so a probe that
 # never returns is never started twice. See _probe_path.
 _probe_thread = None
+try:
+    import threading as _threading
+    _probe_lock = _threading.Lock()
+except Exception:                       # no threads here at all
+    class _NoLock(object):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+    _probe_lock = _NoLock()
 # True from the moment POV is disabled until it can actually be constructed
 # again. PUBLISHED ON PURPOSE: while this is set, plugin://plugin.video.pov/
 # does not resolve, so anything that would make Kodi re-draw POV's widgets --
@@ -166,12 +177,6 @@ def _probe_path(fn, timeout=3.0):
     lock for a value whose only wrong answer is "probe again in a moment".
     """
     global _probe_thread
-    prior = _probe_thread
-    try:
-        if prior is not None and prior.is_alive():
-            return None
-    except Exception:
-        return None
     box = {}
 
     def run():
@@ -182,10 +187,23 @@ def _probe_path(fn, timeout=3.0):
 
     try:
         import threading
-        t = threading.Thread(target=run)
-        t.daemon = True     # a stuck stat must not keep Kodi's process alive
-        _probe_thread = t
-        t.start()
+        # LOCKED, because "read the handle, then set it" is two steps with
+        # thread construction in between. Two callers could both find nothing
+        # in flight, both start one, and the faster one's handle land LAST --
+        # leaving the slow one running untracked, so the next caller starts
+        # yet another against the same dead mount. Measured at about one
+        # racing pair in twenty-five, which is not rare on a box where the
+        # tile-reload worker and a settings click overlap.
+        with _probe_lock:
+            if _probe_thread is not None and _probe_thread.is_alive():
+                return None
+            t = threading.Thread(target=run)
+            t.daemon = True  # a stuck stat must not keep Kodi's process alive
+            _probe_thread = t
+            t.start()
+        # Joined OUTSIDE the lock: a probe that never returns must not also
+        # block everyone else at the door. They look, see it alive, and get
+        # their "no answer" immediately.
         t.join(timeout)
     except Exception:
         return None

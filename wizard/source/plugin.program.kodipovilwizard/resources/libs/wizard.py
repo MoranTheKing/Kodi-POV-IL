@@ -551,11 +551,20 @@ class Wizard:
         that; four would have given up in the middle of a cycle that was
         recovering, and reloaded the skin into it, which is the crash itself.
 
-        The point of the bound is the other side: an add-on the user switched
-        off stays off, its widgets are already dead on the home screen, and a
-        reload cannot make that worse -- so it must not cost this wait on every
-        update for the rest of the install's life. Absent answers no too, and
-        immediately: there is nothing to come back.
+        The point of the bound is the other side: a cycle whose re-enable
+        failed is not going to fix itself in this session, and the caller has
+        to stop waiting and say so rather than hold the update open.
+
+        NO ANSWER IS NOT AN ANSWER. _addon_is_enabled_static returns None both
+        for an id Kodi does not have and for a lookup that failed, and its own
+        docstring is explicit that the two must not be merged. Merging them
+        here read one transient JSON-RPC error as "POV does not exist",
+        returned in under a millisecond, and dropped the caller past the guard
+        -- and this runs inside hot_reload, which is driving UpdateLocalAddons
+        and a string of enable calls, so a busy moment is likelier here than
+        almost anywhere. None now means ask again. Absence is not this
+        function's question: the only caller reaches it through _pov_cycling(),
+        which has already established POV is on disk.
         """
         try:
             import xbmc as _x
@@ -563,10 +572,7 @@ class Wizard:
             return False
         waited = 0.0
         while True:
-            state = cls._addon_is_enabled_static('plugin.video.pov')
-            if state is None:
-                return False            # Kodi has no such add-on
-            if state:
+            if cls._addon_is_enabled_static('plugin.video.pov') is True:
                 return True             # on, just not built yet
             if waited >= timeout:
                 return False
@@ -1060,30 +1066,33 @@ class Wizard:
                 if self._pov_coming_back(timeout=8):
                     resolvable = self._wait_until_resolvable(
                         ['plugin.video.pov'], timeout=12)
-                elif 'plugin.video.pov' in self._pending_enable_read():
-                    # OFF, NOT COMING BACK, AND OURS. _cycle_addon writes the
-                    # id here before disabling and clears it once the re-enable
-                    # is verified, so a POV still listed is one WE switched off
-                    # and could not switch on again. That is not a state to
-                    # paper over with a reload and an "applied" message: defer,
-                    # say so, and let heal_disabled_addons fix it at the next
-                    # start.
-                    logging.log('[HOT-RELOAD] POV is off and still recorded '
-                                'from a cycle that could not re-enable it; '
-                                'deferring rather than reloading over it.',
+                else:
+                    # NOT COMING BACK -> DO NOT RELOAD. An earlier attempt
+                    # split this by asking whether the id was recorded in
+                    # pending_enable, on the theory that a POV nobody here
+                    # switched off was the user's own choice and safe to
+                    # reload over. That record is written only by
+                    # _cycle_addon -- pov_reload's cycle, the one this whole
+                    # feature is named after, writes nothing anywhere the
+                    # wizard can see. So a SERVICE cycle whose re-enable
+                    # failed read as "the user's choice", the reload fired
+                    # into a live outage, and the user was told the update had
+                    # been applied. The original crash, reached through the
+                    # check meant to prevent it.
+                    #
+                    # There is nothing to split anyway. The service's
+                    # _ensure_pov_enabled() re-enables POV early in EVERY
+                    # start whenever it is installed and off, whoever turned
+                    # it off -- so a deliberately-disabled POV does not
+                    # survive a restart here, and an unusable POV in front of
+                    # us is a cycle: running, or one that failed. Both answer
+                    # "not now".
+                    logging.log('[HOT-RELOAD] POV is off and not coming back '
+                                'on its own; deferring rather than reloading '
+                                'over it. It is switched back on at the next '
+                                'start and the update shows then.',
                                 level=xbmc.LOGERROR)
                     resolvable = False
-                else:
-                    # OFF BY THE USER'S OWN CHOICE. Nothing here touched it,
-                    # nothing is going to turn it on, and its widgets are
-                    # already dead on the home screen -- a reload cannot make
-                    # that worse. Waiting or deferring would cost this user
-                    # seconds and a downgraded message on every update for the
-                    # life of the install, and buy nothing.
-                    logging.log('[HOT-RELOAD] POV is switched off and staying '
-                                'off, and nothing here turned it off; the '
-                                'skin reload goes ahead.',
-                                level=xbmc.LOGWARNING)
             if not resolvable:
                 # SKIP THE RELOAD, DO NOT FORCE-CLOSE. An earlier version
                 # returned False here, and False makes the caller close Kodi --
