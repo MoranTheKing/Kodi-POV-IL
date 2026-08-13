@@ -887,6 +887,22 @@
             <allowempty>true</allowempty>
           </constraints>
         </setting>
+        <!-- Hidden marker: which add-ons' self update check we have already
+             settled, so the decision is taken once and never re-taken.
+             DECLARED ON PURPOSE. setSetting on an id this file does not
+             declare does not reach disk, so the marker would read empty on
+             every start, and a user who turned the update check back on would
+             find it turned off again at the next boot, forever. Guarding on
+             the shipped value is not enough by itself: the shipped value is
+             exactly what they would have put back.
+             See update_nag_patcher.py. -->
+        <setting id="_update_nag_quiet_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
         <!-- Hidden marker: the POV seasons view id WE last wrote, so ours can
              be replaced when the skin changes and the user's never is.
              See pov_seasons_view_seed.py. -->
