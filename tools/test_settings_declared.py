@@ -1,19 +1,27 @@
 #!/usr/bin/env python3
-"""Every setting id we read or write must be declared in settings.xml.
+"""Every setting id we read or write should be declared in settings.xml.
 
-Kodi does not store a value for an id the add-on's settings.xml does not
-declare: setSetting returns without error and the value never reaches disk,
-so the next read comes back empty. For an ordinary setting that shows up
-immediately. For the one-shot markers -- "have we already done this once?" --
-it does not: the write appears to work, the read appears to say "not done
-yet", and the add-on quietly redoes the thing on every start. Where the
-one-shot writes a value the user might have deliberately moved back, that is
-the add-on overruling them on every boot, forever.
+CONSISTENCY, NOT PERSISTENCE. An earlier version of this docstring said Kodi
+drops a write to an undeclared id. It does not: CAddon::UpdateSetting creates
+a hidden CSettingString through AddSettingWithoutDefinition, SaveSettings
+serialises it with no "was this declared" filter, and CAddonSettings::Load
+recreates it on the way back in. HANDOFF.md had already settled this from
+Kodi's own source, and this test was written without reading it. What DOES
+get dropped is a setSetting into ANOTHER add-on for an id that add-on has not
+declared -- a different code path, and the reason Account Manager's writes
+into Umbrella are no-ops.
 
-That is not hypothetical. An audit in this release found 14 markers written to
-undeclared ids, and the only reason most did no visible harm was that their
-own guards made the repeat a no-op. This test is here so the next one is
-caught by a test run instead of by a user.
+So this test is house style: it keeps every id findable in one place, so the
+next person auditing "what does this add-on store?" gets a complete answer
+from the schema instead of from a grep. That is worth having. It is not
+guarding against data loss, and it should not be cited as if it were.
+
+KNOWN GAPS, because a test that overstates its coverage is worse than none:
+it only sees ids passed as inline string literals, so the very common idiom
+here -- DONE_SETTING = '_x_v1' then set_setting(DONE_SETTING, ...) -- is
+invisible to it, which today hides 7 of the ids this file checks. It also
+only knows our kodi_utils helpers, not the Addon().getSetting/setSetting
+convention that resources/lib/subs_engine uses. Both are worth closing.
 
 Run with no arguments; exits non-zero on the first undeclared id.
 """
@@ -102,11 +110,13 @@ def main():
               .format(len(missing)))
         for setting_id, path, line in missing:
             print("  {0}  ({1}:{2})".format(setting_id, path, line))
-        print("Kodi will not persist these. A one-shot marker among them "
-              "means the one-shot runs on every start.")
+        print("Undeclared ids still persist, so this is a tidiness failure "
+              "rather than a data-loss one: declare them so the schema stays "
+              "the single place that answers what this add-on stores.")
         return 1
-    print("PASS every setting id the code touches is declared "
-          "({0} declared ids)".format(len(declared)))
+    print("PASS every setting id this test can SEE is declared ({0} declared "
+          "ids). See KNOWN GAPS above: literals only, our helpers only."
+          .format(len(declared)))
     return 0
 
 

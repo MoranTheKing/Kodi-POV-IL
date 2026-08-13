@@ -889,12 +889,18 @@
         </setting>
         <!-- Hidden marker: which add-ons' self update check we have already
              settled, so the decision is taken once and never taken again.
-             DECLARED ON PURPOSE. setSetting on an id this file does not
-             declare never reaches disk, so the marker would read empty on
-             every start, and a user who turned the update check back on would
-             find it turned off again at the next boot, forever. Guarding on
-             the shipped value does not cover for that: the shipped value is
-             exactly what they would have put back.
+             Declared for consistency and so the next reader can find it.
+             CORRECTION, kept because I got this wrong here first: an earlier
+             version of this comment claimed an undeclared id never reaches
+             disk and that the marker would therefore read empty on every
+             start. That is false, and HANDOFF.md already said so. Kodi's
+             CAddon::UpdateSetting creates a hidden CSettingString through
+             AddSettingWithoutDefinition for an id this file does not declare,
+             SaveSettings serialises it with no "was this declared" filter, and
+             CAddonSettings::Load recreates it on the way back in. Undeclared
+             markers persist. What does NOT persist is a setSetting into
+             ANOTHER add-on for an id that add-on has not declared, which is a
+             different code path.
              See update_nag_patcher.py. -->
         <setting id="_update_nag_quiet_v1" type="string" label="30000">
           <level>4</level>
@@ -903,16 +909,13 @@
             <allowempty>true</allowempty>
           </constraints>
         </setting>
-        <!-- THE REST OF THE ONE SHOT MARKERS, declared for the same reason,
-             and found by auditing every one of them after the one above
-             turned up missing: 13 more were being written to ids this file
-             never declared, so they never reached disk and read empty on
-             every start. Each guards a change we promised to make once. Most
-             were saved from doing visible harm by their own guard, which
-             writes a value that is already where it wants it, so the repeat
-             is a no op. That is luck, not design, and it stops being luck the
-             moment a user moves the value back. Declaring them is what makes
-             "once" true.
+        <!-- THE REST OF THE ONE SHOT MARKERS, declared for the same reason:
+             consistency, and so the next reader finds them all in one place.
+             They were NOT broken. An earlier version of this comment said
+             they had never reached disk and that their one shots had been
+             running on every start; that was wrong, and nothing in this block
+             changes behaviour for anyone. Kept as house style, which is what
+             HANDOFF.md concluded about these same markers by name.
              Every one holds a short string ('1', or a comma separated list of
              the keys it has settled), which is why they are all plain strings
              with an empty default.
@@ -1009,11 +1012,10 @@
             <allowempty>true</allowempty>
           </constraints>
         </setting>
-        <!-- Three more of the same, from the DarkSubs side of the audit. These
-             are written, not just read, so undeclared they were the live case
-             rather than the lucky one: the "we have already offered this"
-             flags never persisted, so the offer could be made again on every
-             start. -->
+        <!-- Three more of the same, from the DarkSubs side of the audit.
+             Also not broken: I claimed these were the live case, with the
+             offer being made again on every start. They persisted like the
+             rest. Declared here for the same reason as the rest. -->
         <setting id="_darksubs_autoenable_done" type="string" label="30000">
           <level>4</level>
           <default></default>
