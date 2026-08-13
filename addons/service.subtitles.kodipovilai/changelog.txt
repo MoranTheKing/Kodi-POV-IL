@@ -1,3 +1,12 @@
+v0.2.491
+- A quick update no longer freezes Kodi. The build refreshes the skin after an
+  update, and it also restarts POV so the update takes effect straight away;
+  when the two happened at the same moment the home screen was rebuilt while
+  POV could not load, every POV row on it failed and Kodi had to be closed.
+  Each refresh now waits for POV to be ready first, on every skin, and if it
+  is not ready in time the refresh is left for the next start instead of being
+  forced through.
+
 v0.2.490
 - Umbrella now looks up a series by its original name before searching for
   sources, so a show with a Hebrew name gets its own sources instead of
