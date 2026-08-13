@@ -236,22 +236,26 @@ def _seen_paths():
 
 
 def _read_one(path):
-    """One copy: a dict, or None if there is no file there at all."""
+    """One copy: the dict it holds, DAMAGED if there is a file we cannot read,
+    or None if there is no file there at all.
+
+    THREE ANSWERS, NOT TWO, for the same reason the wizard's mark has three.
+    This used to hand back a synthetic {'state': REMOVED_TOKEN} for anything
+    unreadable -- a conservative reading, and the right one when it is all we
+    have. What made it wrong was that it did not look like a guess by the time
+    _sidecar saw it, so a corrupt copy could outvote a perfectly legible one
+    that disagreed. Keep the guess, but keep it labelled.
+    """
     try:
         import json
         with open(path, 'r', encoding='utf-8') as handle:
             data = json.loads(handle.read())
-        return data if isinstance(data, dict) else {'state': REMOVED_TOKEN}
+        return data if isinstance(data, dict) else DAMAGED
     except FileNotFoundError:
         return None
     except Exception:
-        # THERE IS A FILE AND WE CANNOT READ IT. Truncated by a power cut,
-        # corrupted, or written by an older format. Treating that as "never
-        # seeded" throws away a recorded deletion and puts the tile back --
-        # so an unreadable record is read as the deletion it most likely is.
-        # The cost of being wrong this way is a tile somebody never sees
-        # again; the other way it is a tile they cannot get rid of.
-        return {'state': REMOVED_TOKEN}
+        # Truncated by a power cut, corrupted, or written by an older format.
+        return DAMAGED
 
 
 def _sidecar():
@@ -260,13 +264,30 @@ def _sidecar():
     Empty only when EVERY copy is gone, which no single "Clear data" can do.
     """
     copies = [_read_one(path) for path in _seen_paths()]
-    present = [c for c in copies if c is not None]
-    if not present:
+    legible = [c for c in copies if isinstance(c, dict)]
+    if not legible:
+        if any(c is DAMAGED for c in copies):
+            # Every copy that exists is unreadable. Now the conservative
+            # reading IS the only reading: treating it as "never seeded" would
+            # throw away a deletion we may well have recorded and put the tile
+            # back. The cost of being wrong this way is a tile somebody never
+            # sees again; the other way it is a tile they cannot get rid of.
+            return {'state': REMOVED_TOKEN}
         return {}
-    for copy in present:
-        # A recorded deletion outranks everything. If any surviving copy says
-        # the user removed the tile, that is the answer -- the other copy is
-        # not a second opinion, it is a copy that got wiped and came back.
+    for copy in legible:
+        # A recorded deletion outranks everything -- among copies that can
+        # actually be read. If a surviving copy says the user removed the tile,
+        # that is the answer; the other copy is not a second opinion, it is a
+        # copy that got wiped and came back.
+        #
+        # A COPY WE CANNOT READ DOES NOT GET A VOTE HERE. One corrupted byte in
+        # one of the two used to be enough: the unreadable copy was turned into
+        # a removal and returned without so much as consulting the healthy copy
+        # sitting next to it saying "offered". Nothing else had to happen -- the
+        # tile was still on screen, the user had touched nothing -- and from
+        # that boot on, the first line of ensure_patched returned on it and the
+        # self-heal below could never run again. The next perfectly ordinary
+        # skin switch then took the tile away for good.
         if copy.get('state') == REMOVED_TOKEN:
             return copy
     # NO SECOND-GUESSING THE MARK FROM HERE. This used to flag the record when
@@ -279,9 +300,9 @@ def _sidecar():
     # next skin switch put the tile back. _marker_moved answers the question
     # itself now, where "no file" is a value with a meaning rather than a
     # suspicious number.
-    if copies and copies[0] is not None:
+    if isinstance(copies[0], dict):
         return dict(copies[0])
-    return dict(present[0])
+    return dict(legible[0])
 
 
 def _write_sidecar(state, anchors=None, attempts=0, require_all=False):
@@ -348,9 +369,15 @@ def _write_sidecar(state, anchors=None, attempts=0, require_all=False):
 
 
 def _sidecar_is_whole():
-    """True when every copy is on disk. A missing one is healed on sight."""
+    """True when every copy is on disk AND readable. Anything less is healed on
+    sight, while the tile is there to prove what the record should say.
+
+    READABLE, not merely present: a corrupted copy passes every other test in
+    the heal condition -- it exists, and the legible copy beside it says
+    OFFERED with anchors -- so nothing repaired it, and it sat there as a live
+    hazard until the day it was the only copy left."""
     paths = _seen_paths()
-    return bool(paths) and all(os.path.exists(p) for p in paths)
+    return bool(paths) and all(isinstance(_read_one(p), dict) for p in paths)
 
 
 def _forget_sidecar():
@@ -418,7 +445,7 @@ def _guess_from_anchors(record, theirs):
 def ensure_patched():
     """'no_kodi' | 'no_favourites' | 'already_present' | 'user_removed'
     | 'already_seen' | 'read_failed' | 'unparseable' | 'write_failed'
-    | 'seeded'."""
+    | 'seed_abandoned' | 'seeded'."""
     if xbmcvfs is None:
         return 'no_kodi'
     path = _favourites_path()
@@ -437,15 +464,22 @@ def ensure_patched():
     record = _sidecar()
     theirs = _their_favourites(text)
 
-    if record.get('state') == REMOVED_TOKEN:
-        # They told us to go away. Nothing reopens that.
-        return 'user_removed'
-
+    now = _marker_pair()
+    # THE TILE ITSELF OUTRANKS ANYTHING THE RECORD SAYS -- so this is asked
+    # first. A tile sitting in favourites.xml cannot be a tile the user
+    # removed; whatever the record thinks, the file in front of us settles it.
+    # Asking the record first meant an unreadable one returned "removed" with
+    # the tile plainly on screen, and the repair below -- the one thing that
+    # could have fixed the record while the tile was there to prove what it
+    # should say -- was unreachable from that moment on. The fuzzer found this
+    # the same hour its own dead invariant was repaired; it had been sitting
+    # underneath it the whole time.
     if has_tile:
         if (not record.get('anchors')
                 or record.get('state') != OFFERED_TOKEN
-                or not _sidecar_is_whole()):
-            # Three repairs in one write, all of them "the tile is here and the
+                or not _sidecar_is_whole()
+                or record.get('replaced_token') != now):
+            # Four repairs in one write, all of them "the tile is here and the
             # record does not say so properly":
             #   no anchors     -- a fresh install whose seed already carried the
             #                     tile, so this never ran. Without anchors the
@@ -453,12 +487,31 @@ def ensure_patched():
             #                     measured against and would read as a wipe.
             #   still SEEDING  -- the tile went in but the second record write
             #                     did not. Settle it now.
-            #   a copy missing -- one "Clear data" took it. Put it back while
-            #                     the tile is here to prove it belongs.
+            #   a copy missing
+            #   or unreadable  -- one "Clear data" took it, or a bad sector
+            #                     ate it. Put it back while the tile is here to
+            #                     prove it belongs.
+            #   the mark moved -- somebody wrote a mark and the tile survived
+            #                     it, which a real replacement cannot do: it
+            #                     overwrites the whole file. So the mark ran
+            #                     ahead of a copy that never happened, and if
+            #                     that is left standing, the user's next
+            #                     deletion reads as that replacement and the
+            #                     tile comes back. The tile is here NOW, so
+            #                     here is the honest baseline.
+            #
+            # ...and a record that says REMOVED with the tile in the file is
+            # covered by the second of those. Either it is a record we could
+            # not read, or the user put the tile back by hand from the
+            # Favourites window; both mean the same thing about what they want
+            # right now, and neither is served by leaving a removal on record.
             _write_sidecar(OFFERED_TOKEN, theirs[:ANCHOR_COUNT])
         return 'already_present'
 
-    now = _marker_pair()
+    if record.get('state') == REMOVED_TOKEN:
+        # They told us to go away. Nothing reopens that.
+        return 'user_removed'
+
     try:
         attempts = int(record.get('seed_attempts') or 0)
     except Exception:
@@ -479,6 +532,28 @@ def ensure_patched():
              '(attempt {0})'.format(attempts + 1))
     elif record:
         moved = _marker_moved(record.get('replaced_token'), now)
+        if record.get('state') == SEEDING_TOKEN and moved != REPLACED:
+            # OUT OF ATTEMPTS ON A SEED THAT NEVER REACHED THE FILE. Every
+            # branch below is written for a tile that was successfully offered
+            # and has since gone missing, and asks the mark who took it. This
+            # tile was never once in favourites.xml -- the record says so, and
+            # a favourites write that fails takes its own record back down, so
+            # SEEDING surviving here means the process died between the two.
+            # Falling through asked "did anyone replace the file?", got the
+            # perfectly true answer "no", and wrote down a deletion by a user
+            # who had never seen the tile in the first place.
+            #
+            # So: stop, and record nothing. Not a rollback of the record --
+            # that would read as "never offered" on the next start and seed
+            # again, which is the retry loop this limit exists to end, and it
+            # would run for as long as the settling write kept failing: a tile
+            # the user deletes and deletes and cannot get rid of. Leaving the
+            # exhausted record exactly where it is says "we gave up" and stays
+            # said. A later mark, though, is real evidence that the wizard has
+            # been through the file, and that earns a fresh attempt.
+            _log('a previous seed never finished after {0} attempts; leaving '
+                 'it alone rather than inventing a verdict'.format(attempts))
+            return 'seed_abandoned'
         if moved == SAME:
             # Nobody replaced the file since we seeded, and the tile is gone.
             # That was the user, whichever way they did it.

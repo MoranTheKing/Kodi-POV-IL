@@ -1373,10 +1373,14 @@ def _record_favourites_replaced():
         import os as _os
         import uuid as _uuid
         import xbmcvfs
+        # INSIDE the try, with the imports. uuid4 does not realistically fail,
+        # but the promise this docstring makes is "nothing in here may raise",
+        # and a promise with one line sitting outside it is not one.
+        # One mark for both copies, so the pair the reader compares stays a
+        # pair.
+        token = _uuid.uuid4().hex
     except Exception:
         return
-    # One mark for both copies, so the pair the reader compares stays a pair.
-    token = _uuid.uuid4().hex
     for ref in FAVOURITES_REPLACED_FILES:
         try:
             path = xbmcvfs.translatePath(ref)
@@ -1430,8 +1434,21 @@ def update_favourites_xml_file(gotoskin):
                 f"favourites.xml in place")
             return True
         from shutil import copyfile
-        copyfile(source_favourites_xml,destination_favourites_xml)
+        # MARK FIRST, THEN COPY, and the order is the whole point -- the same
+        # order the reader uses for its own record, and for the same reason.
+        # These two steps are not atomic together. A power cut between them, or
+        # an ENOSPC that the mark writer swallows by design while the big copy
+        # has already landed, leaves the file replaced with nothing to say so:
+        # the reader then sees the tile gone, asks the mark whether anyone
+        # replaced the file, is told no, and records a deletion against a user
+        # who was only switching skin. Permanent, and silent.
+        #
+        # Reversed, the leftover is a mark with no replacement behind it, and
+        # that one is recoverable: the tile is still in the file, so the reader
+        # takes the has_tile path and re-baselines onto the new mark before it
+        # can ever be read as a replacement.
         _record_favourites_replaced()
+        copyfile(source_favourites_xml,destination_favourites_xml)
         return True
     except Exception as e:
         logging.log_notify(CONFIG.ADDONTITLE,
