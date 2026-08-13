@@ -1288,7 +1288,7 @@ def _rebuild_af3_shortcuts():
     settled = True
     try:
         from resources.lib import pov_reload
-        settled = pov_reload.wait_until_settled(30)
+        settled = pov_reload.wait_until_settled()
     except Exception:
         settled = True          # no pov_reload here means nothing to wait for
     if not settled:
