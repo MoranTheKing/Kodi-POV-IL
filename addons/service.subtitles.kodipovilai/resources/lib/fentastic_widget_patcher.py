@@ -306,8 +306,19 @@ def _reload_skin_if_fentastic():
     skin and back" was the only thing that ever appeared to help. Do the reload
     here instead of leaving the user to discover it.
 
-    Guarded three ways: only when FENtastic is the active skin, never during
-    playback, and at most once per service run.
+    Guarded four ways: only when FENtastic is the active skin, never during
+    playback, at most once per service run, and NEVER while POV is being
+    cycled.
+
+    That last guard is not theoretical. A user's build broke on exactly this
+    pairing: pov_reload had POV disabled to make it re-import its patched
+    sources, and this reload landed 0.6 s into that window. ReloadSkin()
+    rebuilds every window, the home screen came back with its POV widgets, and
+    each one raised "Unknown addon id 'plugin.video.pov'" -- ending with POV's
+    own service killed for not stopping in time, and the quick update never
+    recording itself as done, so it retried and nagged on every launch. The
+    same update applied cleanly when they switched to NOX and back, because
+    this patcher does not run on NOX at all. That is what named the pairing.
     """
     if _SKIN_RELOADED[0] or xbmc is None:
         return
@@ -316,6 +327,19 @@ def _reload_skin_if_fentastic():
             return
         if xbmc.getSkinDir() != SKIN_ADDON_ID:
             return
+        # Wait, do not skip: the restored includes are the whole point of this
+        # reload, so dropping it would leave the widgets missing until the next
+        # skin change. A few seconds later is free; a few seconds early is the
+        # bug above.
+        try:
+            from resources.lib import pov_reload
+            if not pov_reload.wait_until_settled(30):
+                _log('POV still cycling after 30s; leaving the reload for the '
+                     'next service run rather than rebuilding the home screen '
+                     'against an add-on that cannot resolve', level='WARNING')
+                return
+        except Exception:
+            pass
         _SKIN_RELOADED[0] = True
         _log('reloading the skin so the restored widget includes take effect '
              'now, instead of at the next skin change', level='WARNING')

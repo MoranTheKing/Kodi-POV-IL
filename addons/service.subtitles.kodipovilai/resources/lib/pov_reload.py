@@ -27,6 +27,49 @@ except Exception:
 POV_ADDON_ID = 'plugin.video.pov'
 _cycled = False
 _pending = False
+# True from the moment POV is disabled until it can actually be constructed
+# again. PUBLISHED ON PURPOSE: while this is set, plugin://plugin.video.pov/
+# does not resolve, so anything that would make Kodi re-draw POV's widgets --
+# above all ReloadSkin() -- has to wait. A user hit exactly that: the widget
+# patcher reloaded the skin 0.6 s into this window, the home screen rebuilt,
+# every POV widget raised "Unknown addon id", and POV's own service had to be
+# killed for not stopping. The same update applied cleanly on NOX, where that
+# patcher never runs -- which is what identified the pairing.
+_cycling = False
+# Raised the moment a cycle is REQUESTED, not when it begins. The cycle waits
+# for the user to be idle first -- up to two minutes -- and a reload that asked
+# "is POV cycling?" during that wait was told no, went ahead, and then had the
+# disable land on the freshly rebuilt screen a few seconds later. Waiting has
+# to cover the whole span from armed to finished, or it is just a smaller
+# version of the same race.
+_armed = False
+
+
+def is_cycling():
+    """True while POV is, or is about to become, unresolvable."""
+    return _armed or _cycling
+
+
+def wait_until_settled(timeout=30):
+    """Block until POV resolves again, or the timeout runs out.
+
+    Returns True if it is safe to touch POV-backed UI. Callers that redraw
+    widgets should check this rather than assuming; the cost of waiting is a
+    delayed refresh, and the cost of not waiting is a broken home screen.
+    """
+    if not is_cycling() or xbmc is None:
+        return True
+    waited = 0.0
+    while waited < timeout:
+        if not is_cycling():
+            return True
+        try:
+            if xbmc.Monitor().waitForAbort(0.5):
+                return False
+        except Exception:
+            return False
+        waited += 0.5
+    return not is_cycling()
 
 
 def note_patched():
@@ -77,16 +120,37 @@ def _is_enabled():
         return None
 
 
+def _is_resolvable():
+    """Can plugin.video.pov actually be CONSTRUCTED right now?
+
+    Not the same question as "is it enabled", and the difference is the whole
+    bug. Addons.GetAddonDetails reports enabled=true as soon as the flag is
+    flipped, while xbmcaddon.Addon(id) -- the call POV's own kodi_utils makes
+    on its very first line -- still raises "Unknown addon id". Declaring the
+    cycle finished on the flag therefore released the UI a beat before the
+    add-on could be used, which is precisely the beat the failures land in.
+    This probes with the same call that fails, so success here means the thing
+    callers are about to do will work."""
+    try:
+        import xbmcaddon
+        xbmcaddon.Addon(POV_ADDON_ID)
+        return True
+    except Exception:
+        return False
+
+
 def request_reload():
-    global _cycled
+    global _cycled, _armed
     if _cycled or xbmc is None:
         return False
     _cycled = True
+    _armed = True
     try:
         import threading
         threading.Thread(target=_deferred_cycle, daemon=True).start()
         return True
     except Exception as e:
+        _armed = False
         _log('could not start reload thread: {0}'.format(e), level='WARNING')
         return False
 
@@ -162,18 +226,32 @@ def _restore_home_focus(saved):
 
 
 def _deferred_cycle():
-    if not _wait_until_idle():
-        _log('aborted before cycle', level='WARNING')
-        return
+    global _cycling, _armed
     try:
-        if xbmc.getCondVisibility('Player.HasMedia'):
-            _log('media playing; skipping POV cycle (applies next launch)',
-                 level='INFO')
+        if not _wait_until_idle():
+            _log('aborted before cycle', level='WARNING')
+            _armed = False
             return
+        try:
+            if xbmc.getCondVisibility('Player.HasMedia'):
+                _log('media playing; skipping POV cycle (applies next launch)',
+                     level='INFO')
+                _armed = False
+                return
+        except Exception:
+            pass
     except Exception:
-        pass
+        # Every early exit clears the armed flag. Leaving it set on a path that
+        # never cycles would block skin reloads forever on a session where POV
+        # was never touched at all.
+        _armed = False
+        raise
     saved_focus = _capture_home_focus()
     try:
+        # Raised BEFORE the disable and lowered only once POV can be
+        # constructed again, so the flag always covers the whole unresolvable
+        # window rather than part of it.
+        _cycling = True
         _set_enabled(False)
         try:
             xbmc.sleep(1500)
@@ -181,17 +259,22 @@ def _deferred_cycle():
             pass
         _set_enabled(True)
         # Never leave POV disabled: verify it came back, retry a few times.
+        # THE TEST IS RESOLVABILITY, NOT THE ENABLED FLAG. The flag flips
+        # immediately; the add-on stays unusable for a moment after, and
+        # reporting success on the flag is what let the rest of the service
+        # carry on into that moment.
         ok = False
-        for _ in range(6):
-            if _is_enabled() is True:
+        for _ in range(12):
+            if _is_resolvable():
                 ok = True
                 break
-            _set_enabled(True)
+            if _is_enabled() is not True:
+                _set_enabled(True)
             try:
-                xbmc.sleep(1000)
+                xbmc.sleep(500)
             except Exception:
                 pass
-        _log('cycled POV (re-import patched sources); enabled={0}'.format(ok),
+        _log('cycled POV (re-import patched sources); resolvable={0}'.format(ok),
              level='INFO')
         if not ok:
             _set_enabled(True)
@@ -202,3 +285,9 @@ def _deferred_cycle():
             _set_enabled(True)
         except Exception:
             pass
+    finally:
+        # Both lowered in a finally: a flag that stays raised because
+        # something threw would block every future skin reload for the rest of
+        # the session, trading a two-second fault for a permanent one.
+        _cycling = False
+        _armed = False
