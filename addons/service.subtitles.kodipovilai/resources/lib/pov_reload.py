@@ -45,116 +45,61 @@ _cycling = False
 _armed = False
 
 
-# The window is announced on a Window(10000) property as well as in these
-# globals, because THE WIZARD CYCLES POV TOO -- from its own add-on, in its own
-# process, with raw Addons.SetAddonEnabled. Module globals cannot be seen
-# across that boundary, so for the whole of the wizard's disable/enable dance
-# every guard in this add-on reported "not cycling" and let a ReloadSkin
-# straight through. Demonstrated: POV unresolvable, is_cycling() False,
-# wait_until_settled() returning True instantly, and the reload firing through
-# a "guarded" site. Window(10000) properties are how this build already passes
-# state between add-ons (see REPAIRS_DONE_PROPERTY).
+# HOW WE KNOW POV IS UNUSABLE: WE ASK IT. No shared flag, no counter, no
+# deadline, no cross-process record.
 #
-# THE VALUE IS AN EXPIRY, NOT A FLAG. A property is only cleared by whoever set
-# it, so a process killed mid-cycle -- which is exactly the failure mode all of
-# this exists to survive -- would leave it set until Kodi restarts, and block
-# every skin reload for the rest of the session. Storing a deadline means the
-# worst case is a short delay that heals itself.
-_CYCLING_PROPERTY = 'kodipovil_pov_cycling'
-# Longest a single announcement is honoured. A crash-safety net, not a budget:
-# the measured window is a couple of seconds, and every exit path withdraws.
-_MAX_HORIZON = 300
+# Five rounds of validation went into a Window(10000) record holding a count and
+# two clock deadlines, and every round found a new way it was wrong: a wall
+# clock an NTP step could defeat, a flag with no owner that overlapping cyclers
+# clobbered, a counter whose cross-process read-modify-write lost increments in
+# one direction and decrements in the other, an unmatched leave that wiped a
+# live record, and a "clamp" that was a tautology and pinned the window open for
+# the session. Each fix was correct about the bug in front of it and introduced
+# the next one. That is what a design being wrong looks like from the inside.
+#
+# The record only ever existed to answer one question -- can POV be constructed
+# right now -- and that question needs no coordination at all, because
+# xbmcaddon.Addon(id) answers it directly, in whichever process is asking, with
+# no state to get out of step. It is also strictly broader: it covers the wizard
+# cycling POV, this add-on cycling POV, and any cause nobody has thought of,
+# including Kodi's own updater.
+#
+# THE ONE THING A DIRECT PROBE CANNOT TELL YOU is the difference between "POV is
+# mid-cycle" and "POV is not installed, or the user disabled it" -- and treating
+# the second as cycling would make every guarded reload in the build wait, every
+# time, for a user who simply does not have POV. Hence the sticky flag below:
+# once POV has been seen working in this process, a later failure to construct
+# it is a transient window worth waiting out. Before that, it is absence, and
+# nothing waits.
+_seen_resolvable = False
 
 
-def _read_cycling():
-    """(count, monotonic_deadline, wall_deadline). Zeros when nothing is set."""
-    try:
-        import xbmcgui
-        raw = (xbmcgui.Window(10000).getProperty(_CYCLING_PROPERTY) or '').strip()
-        count, mono, wall = raw.split('|')
-        mono, wall = float(mono), float(wall)
-        # Reject rather than clamp anything outside a plausible epoch range.
-        # This also rejects inf and nan -- every comparison against nan is
-        # False, so `not (... < nan < ...)` is True -- and float() overflows a
-        # long enough numeral straight to inf. We only ever write now+seconds,
-        # so a value out here did not come from us.
-        if not (-1e12 < mono < 1e12) or not (-1e12 < wall < 1e12):
-            return 0, 0.0, 0.0
-        return int(count), float(mono), float(wall)
-    except Exception:
-        return 0, 0.0, 0.0
+def _is_resolvable():
+    """Can plugin.video.pov actually be CONSTRUCTED right now?
 
-
-def _write_cycling(count, mono, wall):
-    try:
-        import xbmcgui
-        value = '' if count <= 0 else '%d|%f|%f' % (count, mono, wall)
-        xbmcgui.Window(10000).setProperty(_CYCLING_PROPERTY, value)
-    except Exception:
-        pass
-
-
-def _publish_cycling(seconds):
-    """Join (seconds > 0) or leave (0) the set of cyclers.
-
-    A COUNT, NOT A FLAG, because there can be more than one cycler. The wizard
-    ships both a startup service and a plugin entry point, and nothing
-    serialises them -- so a user re-triggering Quick Update while the silent
-    startup update is still running gives two overlapping cycles. With a plain
-    flag, whichever finished first cleared it for both, and the other one's
-    window went unannounced: reproduced, with the reload firing against a POV
-    that was still genuinely unresolvable.
-
-    TWO DEADLINES, and both must expire before the window is considered over.
-    The wall clock alone was defeated by an NTP step: Android boxes often have
-    no RTC and correct their clock shortly after the network comes up -- the
-    same network event an update depends on -- so a forward jump made a live
-    window look expired mid-cycle. Reproduced, with the reload firing. Monotonic
-    alone is not enough either: CPython does not guarantee its reference point
-    is shared between processes (it is on Linux and Windows, which is everything
-    this build runs on, but a guarantee that holds by platform accident is not
-    one to rest a whole mechanism on). Requiring BOTH to expire means either
-    clock can misbehave without reopening the race; the cost is that the window
-    may be honoured slightly too long, which is harmless.
+    Not the same question as "is it enabled". Addons.GetAddonDetails reports
+    enabled=true as soon as the flag is set, while this call -- the one POV's
+    own kodi_utils makes on its first line, and the one that raises "Unknown
+    addon id" in the field logs -- keeps failing for a moment afterwards.
     """
-    import time
-    count, mono, wall = _read_cycling()
-    now_mono, now_wall = time.monotonic(), time.time()
-    live = count > 0 and (now_mono < mono or now_wall < wall)
-    if seconds:
-        seconds = min(seconds, _MAX_HORIZON)
-        if live:
-            _write_cycling(count + 1, max(mono, now_mono + seconds),
-                           max(wall, now_wall + seconds))
-        else:
-            _write_cycling(1, now_mono + seconds, now_wall + seconds)
-    elif live:
-        _write_cycling(count - 1, mono, wall)
-    else:
-        _write_cycling(0, 0.0, 0.0)
-
-
-def _another_addon_is_cycling():
+    global _seen_resolvable
     try:
-        import time
-        count, mono, wall = _read_cycling()
-        if count <= 0:
-            return False
-        now_mono, now_wall = time.monotonic(), time.time()
-        # Clamped: a corrupt or hostile value (inf, or a numeral long enough
-        # that float() overflows to inf) would otherwise pin every guarded
-        # reload in the build "cycling" for the rest of the session.
-        horizon_mono = min(mono, now_mono + _MAX_HORIZON)
-        horizon_wall = min(wall, now_wall + _MAX_HORIZON)
-        return now_mono < horizon_mono or now_wall < horizon_wall
+        import xbmcaddon
+        xbmcaddon.Addon(POV_ADDON_ID)
+        _seen_resolvable = True
+        return True
     except Exception:
         return False
 
 
 def is_cycling():
-    """True while POV is, or is about to become, unresolvable -- whether this
-    add-on is the one cycling it or the wizard is."""
-    return _armed or _cycling or _another_addon_is_cycling()
+    """True while POV cannot be constructed but has been able to before now --
+    i.e. a window that will pass, rather than an add-on that is not there."""
+    if _armed or _cycling:
+        return True
+    if _is_resolvable():
+        return False
+    return _seen_resolvable
 
 
 def wait_until_settled(timeout=30):
@@ -226,24 +171,6 @@ def _is_enabled():
     except Exception:
         return None
 
-
-def _is_resolvable():
-    """Can plugin.video.pov actually be CONSTRUCTED right now?
-
-    Not the same question as "is it enabled", and the difference is the whole
-    bug. Addons.GetAddonDetails reports enabled=true as soon as the flag is
-    flipped, while xbmcaddon.Addon(id) -- the call POV's own kodi_utils makes
-    on its very first line -- still raises "Unknown addon id". Declaring the
-    cycle finished on the flag therefore released the UI a beat before the
-    add-on could be used, which is precisely the beat the failures land in.
-    This probes with the same call that fails, so success here means the thing
-    callers are about to do will work."""
-    try:
-        import xbmcaddon
-        xbmcaddon.Addon(POV_ADDON_ID)
-        return True
-    except Exception:
-        return False
 
 
 def request_reload():
@@ -359,10 +286,6 @@ def _deferred_cycle():
         # constructed again, so the flag always covers the whole unresolvable
         # window rather than part of it.
         _cycling = True
-        # 60s is a ceiling, not an expectation: the window is normally a couple
-        # of seconds and the finally below withdraws it. It only matters if this
-        # process dies mid-cycle.
-        _publish_cycling(60)
         _set_enabled(False)
         try:
             xbmc.sleep(1500)
@@ -402,4 +325,3 @@ def _deferred_cycle():
         # the session, trading a two-second fault for a permanent one.
         _cycling = False
         _armed = False
-        _publish_cycling(0)
