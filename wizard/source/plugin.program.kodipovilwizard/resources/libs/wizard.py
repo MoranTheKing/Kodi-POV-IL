@@ -2382,16 +2382,25 @@ def _auto_prompt_suppressed(latest_release, manual):
     try:
         suppressed = [release_version.canonical_release_label(r)
                       for r in (CONFIG.NO_AUTO_APP_PROMPT_TARGETS or [])]
+        # BOTH SIDES CANONICALISED. Today every caller hands us a label that
+        # _latest_platform_release has already put through this same function,
+        # so comparing raw would work -- and would keep working right up until
+        # a new call site passes the pointer file's text straight in, at which
+        # point a trailing newline silently stops the suppression matching and
+        # the dialog nobody wanted is back. Cheap here, invisible there.
+        if release_version.canonical_release_label(latest_release) \
+                not in suppressed:
+            return False
+        logging.log(
+            '[Application Update Check] {0} is marked as a package nobody '
+            'needs prompting for; skipping the automatic dialog.'
+            .format(latest_release), level=xbmc.LOGINFO)
     except Exception:
-        # A malformed entry must not be able to take the update prompt down
-        # with it -- the safe direction here is to ask.
+        # A malformed entry -- or a logger that fails -- must not be able to
+        # take the update prompt down with it. The safe direction is to ask:
+        # an unwanted prompt is a nuisance, an update nobody is ever told
+        # about is a device left behind.
         return False
-    if latest_release not in suppressed:
-        return False
-    logging.log(
-        '[Application Update Check] {0} is marked as a package nobody needs '
-        'prompting for; skipping the automatic dialog.'.format(latest_release),
-        level=xbmc.LOGINFO)
     return True
 
 

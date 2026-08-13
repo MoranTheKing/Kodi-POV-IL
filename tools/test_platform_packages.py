@@ -3,12 +3,14 @@
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import importlib.util
 import json
 import re
 import shutil
 import subprocess
+import types
 import sys
 import tempfile
 from pathlib import Path
@@ -219,6 +221,85 @@ def test_update_checker_guards() -> None:
     assert "kodi_version_update_check(kodi_version_update_check_manual)" in router
 
 
+def test_no_auto_app_prompt_targets() -> None:
+    """The automatic app-update dialog must stay suppressible, and only that.
+
+    That dialog fires from startup.py on EVERY start and its "later" button
+    records nothing, so a package nobody needs is a prompt at every boot until
+    the user hand-reinstalls the application. NO_AUTO_APP_PROMPT_TARGETS names
+    the releases nobody should be prompted for -- by TARGET, so it expires on
+    its own rather than muting a population that then has to be remembered.
+
+    Both halves are load-bearing and both are checked here by RUNNING the real
+    guard against the real release_version and the real uservar list, not by
+    grepping for it: it must suppress what it names, and it must fail towards
+    ASKING for everything else, because the other direction is a device never
+    told about an update it needs.
+    """
+    wizard_src = (WIZARD_ROOT / "resources/libs/wizard.py").read_text(
+        encoding="utf-8"
+    )
+    uservar_src = (WIZARD_ROOT / "uservar.py").read_text(encoding="utf-8")
+    config_src = (
+        WIZARD_ROOT / "resources/libs/common/config.py"
+    ).read_text(encoding="utf-8")
+
+    # Both platforms call it, and both do so BEFORE their dialog.
+    for call in (
+        "if is_new_version_available and _auto_prompt_suppressed(\n"
+        "                latest_release, kodi_version_update_check_manual):",
+    ):
+        assert wizard_src.count(call) == 2, (
+            "both kodi_apk_update_check and kodi_windows_update_check must "
+            "consult the guard before raising their dialog"
+        )
+    # Surfaced with a default, so an older uservar.py cannot stop the wizard
+    # loading, and read through CONFIG rather than importing uservar directly.
+    assert "NO_AUTO_APP_PROMPT_TARGETS" in uservar_src
+    assert "getattr(\n            uservar, 'NO_AUTO_APP_PROMPT_TARGETS', [])" in config_src
+
+    match = re.search(
+        r"^def _auto_prompt_suppressed\(latest_release, manual\):"
+        r"[\s\S]*?\n\n\n",
+        wizard_src,
+        re.M,
+    )
+    assert match, "cannot isolate _auto_prompt_suppressed"
+
+    shipped = re.search(
+        r"^NO_AUTO_APP_PROMPT_TARGETS = (\[[^\]]*\])", uservar_src, re.M
+    )
+    assert shipped, "NO_AUTO_APP_PROMPT_TARGETS must be a plain list literal"
+    targets = ast.literal_eval(shipped.group(1))
+
+    def suppressed(latest, manual, listed=targets):
+        namespace = {
+            "release_version": _load_release_version(),
+            "logging": types.SimpleNamespace(log=lambda *a, **k: None),
+            "xbmc": types.SimpleNamespace(LOGINFO=1),
+            "CONFIG": types.SimpleNamespace(
+                NO_AUTO_APP_PROMPT_TARGETS=listed
+            ),
+        }
+        exec(compile(match.group(0), "guard", "exec"), namespace)
+        return namespace["_auto_prompt_suppressed"](latest, manual)
+
+    if targets:
+        named = targets[0]
+        assert suppressed(named, False) is True
+        # Asking is always answered. A suppression that also hid the release
+        # from somebody who went looking for it would be a lie, not a mute.
+        assert suppressed(named, True) is False
+        # Pointer files end in a newline; canonicalisation has to survive it.
+        assert suppressed(named + "\n", False) is True
+    # Everything not named is prompted for -- this is what makes the list
+    # expire by itself when the next package actually matters.
+    assert suppressed("21.3-povil.9999", False) is False
+    # ...and every way the list can be malformed still asks.
+    for broken in ([], None, [None, 42], "21.3-povil.49"):
+        assert suppressed("21.3-povil.9999", False, broken) is False
+
+
 def test_workflow_package_guards() -> None:
     workflow = (ROOT / ".github/workflows/build-apk.yml").read_text(
         encoding="utf-8"
@@ -425,6 +506,7 @@ def main() -> int:
     test_release_version_rules()
     test_windows_installer_guards()
     test_update_checker_guards()
+    test_no_auto_app_prompt_targets()
     test_workflow_package_guards()
     test_wizard_rebuild_from_clean_checkout()
     test_phase_one_artifacts()
