@@ -342,6 +342,9 @@ class Router:
         # LOGGING
         elif mode == 'uploadlog':  # Upload Log File
             logging.upload_log()
+        elif mode == 'recentupdates':  # The last ten update notes
+            from resources.libs.gui import window
+            window.show_recent_updates()
         elif mode == 'viewlog':  # View kodi.log
             logging.view_log_file()
         elif mode == 'viewwizlog':  # View wizard.log

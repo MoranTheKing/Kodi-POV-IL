@@ -121,6 +121,7 @@ class Config:
         self.BUILD_SKIN_SWITCH_IMAGE_URL = uservar.BUILD_SKIN_SWITCH_IMAGE_URL
         # KODI-RD-IL - AUTO QUICK UPDATES
         self.QUICK_UPDATE_NOTIFICATION_URL = uservar.QUICK_UPDATE_NOTIFICATION_URL
+        self.RECENT_UPDATES_URL = uservar.RECENT_UPDATES_URL
         #########################################################################################################
         
         self.HEADERTYPE = uservar.HEADERTYPE

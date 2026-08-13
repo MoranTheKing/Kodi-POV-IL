@@ -100,6 +100,63 @@ def _is_resolvable():
         return False
 
 
+# Written before POV is disabled, removed once it is verified back on. The
+# wizard keeps the same kind of record for the add-ons IT cycles
+# (pending_enable.txt) and for the same reason: a cycle that dies between the
+# disable and the enable leaves POV off, and a disabled add-on cannot switch
+# itself back on.
+#
+# SEPARATE FILE, NOT THE WIZARD'S. Two processes doing read-modify-write on one
+# list can drop an entry, and the entry that would get dropped is the one
+# saying "POV is off and somebody has to fix it". One writer per file removes
+# that whole class of problem; the healer simply reads both.
+CYCLE_PENDING_FILE = ('special://profile/addon_data/'
+                      'service.subtitles.kodipovilai/pov_cycle_pending.txt')
+
+
+def _cycle_pending_path():
+    import xbmcvfs
+    return xbmcvfs.translatePath(CYCLE_PENDING_FILE)
+
+
+def _mark_cycle_pending(pending):
+    """Record -- or clear -- "we have POV switched off right now"."""
+    try:
+        import os
+        path = _cycle_pending_path()
+        if pending:
+            directory = os.path.dirname(path)
+            if directory and not os.path.isdir(directory):
+                os.makedirs(directory)
+            with open(path, 'w', encoding='utf-8') as handle:
+                handle.write(POV_ADDON_ID + '\n')
+        elif os.path.exists(path):
+            os.remove(path)
+        return True
+    except Exception as e:
+        _log('could not {0} the cycle record: {1}'.format(
+            'write' if pending else 'clear', e), level='WARNING')
+        return False
+
+
+def cycle_left_pov_off():
+    """True when a cycle of ours switched POV off and never switched it back.
+
+    Read by the startup heal. It is the whole difference between "our cycle was
+    interrupted, put POV back" and "the user switched POV off", which look
+    identical from outside and deserve opposite answers.
+    """
+    try:
+        import os
+        return os.path.exists(_cycle_pending_path())
+    except Exception:
+        return False
+
+
+def clear_cycle_record():
+    _mark_cycle_pending(False)
+
+
 def _is_installed(budget=None):
     """Does POV exist on disk at all?
 
@@ -487,6 +544,13 @@ def _run_cycle():
         # constructed again, so the flag always covers the whole unresolvable
         # window rather than part of it.
         _cycling = True
+        # RECORDED BEFORE THE DISABLE, exactly like the wizard's _cycle_addon,
+        # so that a process killed in the next second and a half leaves
+        # evidence that POV is off because of us. Without it the startup heal
+        # cannot tell our interrupted cycle from a user who switched POV off,
+        # and it used to guess -- always healing, which quietly reversed a
+        # setting the user had chosen.
+        _mark_cycle_pending(True)
         _set_enabled(False)
         try:
             xbmc.sleep(1500)
@@ -511,12 +575,22 @@ def _run_cycle():
                 pass
         _log('cycled POV (re-import patched sources); resolvable={0}'.format(ok),
              level='INFO')
-        if not ok:
+        if ok:
+            # CLEARED ONLY ON PROOF. The record is what tells the next start to
+            # switch POV back on, so it comes off the disk only once POV has
+            # actually been constructed -- not when the enable call returned,
+            # which it does whether or not the enable took.
+            _mark_cycle_pending(False)
+        else:
             _set_enabled(True)
+            _log('POV did not come back; the cycle record stays so the next '
+                 'start switches it on', level='WARNING')
         _restore_home_focus(saved_focus)
     except Exception as e:
         _log('cycle failed: {0}'.format(e), level='WARNING')
         try:
             _set_enabled(True)
+            if _is_resolvable():
+                _mark_cycle_pending(False)
         except Exception:
             pass
