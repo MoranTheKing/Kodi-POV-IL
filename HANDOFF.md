@@ -1242,6 +1242,18 @@ was uploading partial/failed translations (stayed mostly English) the server onl
    `git log -p wizard/assets/notification_files/quick_update.txt` is the whole
    history. One-time backfill, then append on each release.
 
+   **TEN, AND NEVER MORE THAN TEN -- IN THE PUBLISHED FILE, NOT JUST ON SCREEN.**
+   The obvious build is an archive that grows for ever and a widget that shows
+   the first ten of it. That is the wrong one: every device re-fetches this
+   file, so an archive nobody trims turns into a payload that grows by a note
+   per release, for ever, on every launch, on every device -- to display ten
+   rows. The release tooling appends the new note and **drops the oldest in the
+   same step**, so the file is a fixed ten entries from the day it is created
+   and the fetch never grows. The backfill takes the last ten notes, not all of
+   them. The widget then displays what it is given rather than deciding what to
+   trim, which also means the cap cannot be lost by a skin that renders the
+   list differently.
+
 1. **Trakt/TMDB add crash — RESOLVED (AI 0.2.377 / quickfix 0.1.416).** The
    REAL root cause (from a SECOND field crash log, 2026-07-16) was **our own
    patch**, not POV's setting. `pov_combined_discover_patcher` (edit 3) had
