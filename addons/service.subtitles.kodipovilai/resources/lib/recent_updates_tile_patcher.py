@@ -42,6 +42,10 @@
 # absent record has to mean "never offered", or no first run could ever seed
 # anything -- so the record is written FIRST and the tile only follows a good
 # write, which makes that meaning true by construction rather than by hope.
+# For the same reason the record is kept in BOTH add-ons' folders and marked
+# SEEDING until the tile is really in the file: a "Clear data" click must not
+# be able to reach every copy, and a power cut must not be able to look like a
+# deletion.
 
 import os
 import re
@@ -58,17 +62,34 @@ except Exception:
 
 
 FAVOURITES_REL = 'favourites.xml'
-# BESIDE THE WIZARD'S COUNTER, NOT IN OUR OWN addon_data. Kodi ships a
-# "Clear data" button on every add-on's settings screen, and it wipes exactly
-# one folder: that add-on's. With this record living in ours, a user who
-# deleted the tile and later cleared this add-on's data -- a normal
-# troubleshooting step, unrelated to favourites -- lost the record while the
-# counter and favourites.xml both survived, and the tile they had deleted came
-# back. Keeping the record next to the counter it is compared against means one
-# action cannot take one without the other.
-SEEN_FILE = ('special://profile/addon_data/plugin.program.kodipovilwizard/'
-             'recent_updates_tile_seen.txt')
+# IN BOTH add-ons' addon_data, because Kodi's per-add-on "Clear data" button
+# wipes exactly one folder and there is such a button on EVERY add-on. Keeping
+# one copy meant a single click could take the record while favourites.xml
+# survived, and a tile the user had deleted came back:
+#
+#   record in OUR folder      -> "Clear data" on the subtitle add-on took it.
+#   record beside the counter -> "Clear data" on the WIZARD took it, together
+#                                with the counter -- and both gone reads as a
+#                                fresh install, which is the same bug one
+#                                add-on over.
+#
+# Two copies, and no single button can reach both. The first is beside the
+# counter it is compared against; the second is the survivor. Losing the wizard
+# copy also resets the counter to zero, which can only ever read as "the file
+# was not replaced since we seeded" -- the safe direction.
+SEEN_FILES = (
+    'special://profile/addon_data/plugin.program.kodipovilwizard/'
+    'recent_updates_tile_seen.txt',
+    'special://profile/addon_data/service.subtitles.kodipovilai/'
+    'recent_updates_tile_seen.txt',
+)
 REMOVED_TOKEN = 'user_removed'
+# Written before the tile, replaced by OFFERED once the tile is really in the
+# file. Anything that kills the process in between -- a power cut, a force
+# close -- leaves this behind, and it is the only thing that distinguishes
+# "we never finished offering" from "they deleted what we offered".
+SEEDING_TOKEN = 'seeding'
+OFFERED_TOKEN = 'offered'
 # How many of the user's own favourites to remember. More than one because any
 # single anchor can itself be deleted; few because this is a hint, not a backup.
 ANCHOR_COUNT = 5
@@ -122,22 +143,28 @@ def _log(msg, level='INFO'):
         pass
 
 
-def _seen_path():
-    try:
-        return xbmcvfs.translatePath(SEEN_FILE)
-    except Exception:
-        return ''
+def _seen_paths():
+    """Every copy of the record, most authoritative first."""
+    out = []
+    for ref in SEEN_FILES:
+        try:
+            path = xbmcvfs.translatePath(ref)
+        except Exception:
+            continue
+        if path:
+            out.append(path)
+    return out
 
 
-def _sidecar():
-    """{'state': ..., 'anchors': [...]} -- always a dict, never raises."""
+def _read_one(path):
+    """One copy: a dict, or None if there is no file there at all."""
     try:
         import json
-        with open(_seen_path(), 'r', encoding='utf-8') as handle:
+        with open(path, 'r', encoding='utf-8') as handle:
             data = json.loads(handle.read())
         return data if isinstance(data, dict) else {'state': REMOVED_TOKEN}
     except FileNotFoundError:
-        return {}
+        return None
     except Exception:
         # THERE IS A FILE AND WE CANNOT READ IT. Truncated by a power cut,
         # corrupted, or written by an older format. Treating that as "never
@@ -148,50 +175,88 @@ def _sidecar():
         return {'state': REMOVED_TOKEN}
 
 
+def _sidecar():
+    """The record, from whichever copies survive. Always a dict, never raises.
+
+    Empty only when EVERY copy is gone, which no single "Clear data" can do.
+    """
+    copies = [_read_one(path) for path in _seen_paths()]
+    present = [c for c in copies if c is not None]
+    if not present:
+        return {}
+    for copy in present:
+        # A recorded deletion outranks everything. If any surviving copy says
+        # the user removed the tile, that is the answer -- the other copy is
+        # not a second opinion, it is a copy that got wiped and came back.
+        if copy.get('state') == REMOVED_TOKEN:
+            return copy
+    if copies and copies[0] is not None:
+        # Beside the counter: its 'replaced' snapshot and the live counter are
+        # in the same folder, so they are lost together and stay comparable.
+        return copies[0]
+    # Only the survivor is left, so the counter went with the copy that did.
+    # Its snapshot is now being compared against a counter reset to zero, which
+    # can only read as "not replaced since we seeded" -- and that is the
+    # direction that keeps a deleted tile deleted.
+    return present[0]
+
+
 def _write_sidecar(state, anchors=None):
-    try:
-        import json
-        path = _seen_path()
-        directory = os.path.dirname(path)
-        if directory and not os.path.isdir(directory):
-            os.makedirs(directory)
-        # The counter goes in with the anchors: what matters later is not its
-        # value but whether it has MOVED since this moment.
-        payload = {'state': state, 'anchors': list(anchors or []),
-                   'replaced': _replacement_count()}
-        # ATOMIC, like the favourites.xml write below it. A half-written record
-        # is unreadable, and an unreadable record now costs the user their
-        # tile -- so it must never be possible to observe one.
-        tmp = path + '.tmp'
-        # A stray DIRECTORY here blocks every future write, silently and
-        # forever, because the failure is swallowed -- and a record that can
-        # never be written is a deletion that can never be remembered. The
-        # favourites.xml write below has this guard; this one needs it more.
-        if os.path.isdir(tmp):
-            import shutil
-            shutil.rmtree(tmp, ignore_errors=True)
-        with open(tmp, 'w', encoding='utf-8') as handle:
-            handle.write(json.dumps(payload, ensure_ascii=False))
-        os.replace(tmp, path)
-        return True
-    except Exception as e:
-        _log('could not record the tile state: {0}'.format(e), level='WARNING')
-        return False
+    """Write every copy. True if at least one landed."""
+    import json
+    # The counter goes in with the anchors: what matters later is not its
+    # value but whether it has MOVED since this moment. Read ONCE, so both
+    # copies carry the same number even if the wizard bumps it mid-write.
+    payload = json.dumps({'state': state, 'anchors': list(anchors or []),
+                          'replaced': _replacement_count()},
+                         ensure_ascii=False)
+    written = 0
+    for path in _seen_paths():
+        try:
+            directory = os.path.dirname(path)
+            if directory and not os.path.isdir(directory):
+                os.makedirs(directory)
+            # ATOMIC, like the favourites.xml write below it. A half-written
+            # record is unreadable, and an unreadable record now costs the user
+            # their tile -- so it must never be possible to observe one.
+            tmp = path + '.tmp'
+            # A stray DIRECTORY here blocks every future write, silently and
+            # forever, because the failure is swallowed -- and a record that
+            # can never be written is a deletion that can never be remembered.
+            # The favourites.xml write below has this guard; this needs it more.
+            if os.path.isdir(tmp):
+                import shutil
+                shutil.rmtree(tmp, ignore_errors=True)
+            with open(tmp, 'w', encoding='utf-8') as handle:
+                handle.write(payload)
+            os.replace(tmp, path)
+            written += 1
+        except Exception as e:
+            _log('could not record the tile state at {0}: {1}'
+                 .format(path, e), level='WARNING')
+    return written > 0
+
+
+def _sidecar_is_whole():
+    """True when every copy is on disk. A missing one is healed on sight."""
+    paths = _seen_paths()
+    return bool(paths) and all(os.path.exists(p) for p in paths)
 
 
 def _forget_sidecar():
     """Undo a record we just wrote, when the write it was covering failed.
 
-    Best effort by design: if the removal itself fails, the record stays and
-    says "offered" for a tile that never got written, so the next run reads a
-    deletion the user never made and stops offering. That costs one user one
-    tile. The opposite -- leaving the tile with no record -- costs them a tile
-    they cannot remove, on every start, forever.
+    Best effort by design: if a removal fails, that copy stays and claims a
+    tile was offered that never got written, so the next run reads a deletion
+    the user never made and stops offering. That costs one user one tile. The
+    opposite -- leaving the tile with no record -- costs them a tile they
+    cannot remove, on every start, forever.
     """
-    try:
-        os.remove(_seen_path())
-    except Exception:
-        pass
+    for path in _seen_paths():
+        try:
+            os.remove(path)
+        except Exception:
+            pass
 
 
 def _their_favourites(text):
@@ -231,7 +296,8 @@ def _guess_from_anchors(record, theirs):
 
 def ensure_patched():
     """'no_kodi' | 'no_favourites' | 'already_present' | 'user_removed'
-    | 'read_failed' | 'unparseable' | 'write_failed' | 'seeded'."""
+    | 'already_seen' | 'read_failed' | 'unparseable' | 'write_failed'
+    | 'seeded'."""
     if xbmcvfs is None:
         return 'no_kodi'
     path = _favourites_path()
@@ -255,17 +321,32 @@ def ensure_patched():
         return 'user_removed'
 
     if has_tile:
-        if not record.get('anchors'):
-            # The tile is here but we have no anchors -- a fresh install whose
-            # seed already carried it, so this patcher never ran. Record them
-            # now, or the user's first deletion has nothing to be measured
-            # against and would read as a wipe.
-            _write_sidecar('offered', theirs[:ANCHOR_COUNT])
+        if (not record.get('anchors')
+                or record.get('state') != OFFERED_TOKEN
+                or not _sidecar_is_whole()):
+            # Three repairs in one write, all of them "the tile is here and the
+            # record does not say so properly":
+            #   no anchors     -- a fresh install whose seed already carried the
+            #                     tile, so this never ran. Without anchors the
+            #                     user's first deletion has nothing to be
+            #                     measured against and would read as a wipe.
+            #   still SEEDING  -- the tile went in but the second record write
+            #                     did not. Settle it now.
+            #   a copy missing -- one "Clear data" took it. Put it back while
+            #                     the tile is here to prove it belongs.
+            _write_sidecar(OFFERED_TOKEN, theirs[:ANCHOR_COUNT])
         return 'already_present'
 
     now = _replacement_count()
     then = record.get('replaced')
-    if record and now is not None and isinstance(then, int):
+    if record.get('state') == SEEDING_TOKEN:
+        # We wrote the record, then died before the tile reached the file --
+        # a power cut, a force close, a kill. The user was never shown
+        # anything, so there is no deletion here to respect; the checks below
+        # would read this as one and take the tile away from someone who never
+        # saw it. Fall through and finish what the last run started.
+        _log('a previous seed did not finish; trying again')
+    elif record and now is not None and isinstance(then, int):
         if now <= then:
             # Nobody replaced the file since we seeded, and the tile is gone.
             # That was the user, whichever way they did it.
@@ -298,9 +379,10 @@ def ensure_patched():
     # far as offering. Writing it afterwards -- as this did until now -- left
     # exactly one crack, a failed record write after a good favourites write,
     # and every start after that re-seeded a tile the user kept deleting.
-    # The anchors come from the file as it was BEFORE we touch it: their
-    # favourites, not ours.
-    if not _write_sidecar('offered', theirs[:ANCHOR_COUNT]):
+    # It goes down as SEEDING, not OFFERED, because between here and the write
+    # below the process can simply stop existing. The anchors come from the file
+    # as it was BEFORE we touch it: their favourites, not ours.
+    if not _write_sidecar(SEEDING_TOKEN, theirs[:ANCHOR_COUNT]):
         # Offering something we cannot remember offering is how the tile
         # becomes impossible to get rid of. Rather not offer it.
         return 'write_failed'
@@ -326,13 +408,20 @@ def ensure_patched():
                 os.remove(tmp)
         except Exception:
             pass
-        # Put the record back the way we found it. Left in place it would say
-        # "offered" for a tile that is not there, and the next run would read
-        # that as a deletion by a user who was never shown anything.
+        # Put the record back the way we found it. Left behind it would claim a
+        # tile that is not there, and while SEEDING is the one state that reads
+        # correctly as "unfinished", clearing it is still tidier than relying on
+        # that -- and it is what makes a first run after this look like a first
+        # run.
         _forget_sidecar()
         _log('could not write favourites.xml: {0}'.format(e), level='WARNING')
         return 'write_failed'
 
+    # The tile is really in the file now, so the record can stop saying it is
+    # halfway there. If THIS write fails the state stays SEEDING with the tile
+    # present, and the next run heals it above -- no path leaves a tile that
+    # the record cannot account for.
+    _write_sidecar(OFFERED_TOKEN, theirs[:ANCHOR_COUNT])
     _log('seeded the "last ten updates" tile ({0} anchor(s) recorded)'
          .format(len(theirs[:ANCHOR_COUNT])))
     return 'seeded'
