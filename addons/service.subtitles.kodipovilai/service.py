@@ -3664,6 +3664,17 @@ def _reload_skin_if_safe():
         import xbmc
         if xbmc.getCondVisibility('Window.IsVisible(home)'):
             return
+        # Not while POV is being cycled: ReloadSkin() rebuilds every window,
+        # and any POV-backed one raises "Unknown addon id" until the cycle
+        # finishes. Skipping outright is fine here -- unlike the widget
+        # patcher's reload, this one only refreshes player-OSD XML, which Kodi
+        # re-reads on the next OSD open anyway.
+        try:
+            from resources.lib import pov_reload
+            if pov_reload.is_cycling():
+                return
+        except Exception:
+            pass
         xbmc.executebuiltin("ReloadSkin()")
     except Exception:
         pass
