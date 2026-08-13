@@ -36,7 +36,6 @@ BUILD_WIZARD_ID = 'plugin.program.kodipovilwizard'
 BUILD_MARKER = 'build_mode.json'
 BUILD_MARKER_TEXT = 'Kodi POV IL'
 _BUILD_MODE_CACHE = None
-_BUILD_SELF_HEAL_THREAD = None
 
 
 def _translate_path(path):
@@ -295,28 +294,23 @@ def _run_build_startup_repairs():
     _publish_repairs_state(_addon_version())
 
 
-def _start_build_startup_repairs():
-    global _BUILD_SELF_HEAL_THREAD
-    try:
-        if _BUILD_SELF_HEAL_THREAD and _BUILD_SELF_HEAL_THREAD.is_alive():
-            return
-    except Exception:
-        pass
-
-    try:
-        _BUILD_SELF_HEAL_THREAD = threading.Thread(
-            target=_run_build_startup_repairs,
-            name='KodiPovIlBuildStartupRepairs')
-        _BUILD_SELF_HEAL_THREAD.daemon = True
-        _BUILD_SELF_HEAL_THREAD.start()
-    except Exception as e:
-        try:
-            from resources.lib import kodi_utils
-            kodi_utils.log(
-                'build startup repair thread failed: {0}'.format(e),
-                level='WARNING')
-        except Exception:
-            pass
+# THE REPAIR PASS RUNS INLINE ON MAIN, ON PURPOSE. There used to be a
+# _start_build_startup_repairs() here that put _run_build_startup_repairs on a
+# daemon thread, and nothing ever called it -- main() calls the pass directly.
+# Deleted rather than wired up, because wiring it up is not a tidy-up, it is a
+# behaviour change with two dependants:
+#
+#   * pov_reload.wait_until_settled's bounds (30s, and 10s for an outage we did
+#     not cause) were chosen BECAUSE three of its four callers are steps in this
+#     inline pass, where a wait is the subtitle service not starting. Off the
+#     main thread those numbers could be far more generous -- and would have to
+#     be re-derived, not inherited.
+#   * _publish_repairs_state / REPAIRS_DONE_PROPERTY is what the wizard's
+#     hot_reload waits on before it cycles anything. Its ordering assumes the
+#     pass has finished when main() moves on.
+#
+# Moving it is a reasonable thing to want. It is not a reasonable thing to do
+# by accident, which a dead function sitting here invites.
 
 
 
