@@ -50,8 +50,11 @@ SEEN_FILE = ('special://profile/addon_data/service.subtitles.kodipovilai/'
 # Written into favourites.xml beside the tile. Its ABSENCE is the signal: this
 # file is no longer one we edited, so anything of ours missing from it was
 # removed by the copy, not by the user.
-EDIT_MARKER = '<!-- AI_SUBS_FAVOURITES_RECENT_UPDATES_v2 -->'
 REMOVED_TOKEN = 'user_removed'
+# How many of the user's own favourites to remember. More than one because any
+# single anchor can itself be deleted; few because this is a hint, not a backup.
+ANCHOR_COUNT = 5
+_FAV_ACTION_RE = re.compile(r'<favourite\b[^>]*>(.*?)</favourite>', re.S)
 TILE_NAME = '[B][COLOR yellow]10 העדכונים האחרונים[/COLOR][/B]'
 TILE_THUMB = 'special://home/media/build_icons/Wizard/wizard_pov_il.png'
 TILE_ACTION = ('RunPlugin("plugin://plugin.program.kodipovilwizard/'
@@ -77,34 +80,36 @@ def _seen_path():
 
 
 def _sidecar():
+    """{'state': ..., 'anchors': [...]} -- always a dict, never raises."""
     try:
+        import json
         with open(_seen_path(), 'r', encoding='utf-8') as handle:
-            return handle.read().strip()
+            data = json.loads(handle.read())
+        return data if isinstance(data, dict) else {}
     except Exception:
-        return ''
+        return {}
 
 
-def _user_removed_it():
+def _write_sidecar(state, anchors=None):
     try:
-        return _sidecar() == REMOVED_TOKEN
-    except Exception:
-        # Cannot tell -> assume they removed it. Guessing the other way re-adds
-        # a tile somebody deleted, which is the worse of the two.
-        return True
-
-
-def _write_sidecar(token):
-    try:
+        import json
         path = _seen_path()
         directory = os.path.dirname(path)
         if directory and not os.path.isdir(directory):
             os.makedirs(directory)
+        payload = {'state': state, 'anchors': list(anchors or [])}
         with open(path, 'w', encoding='utf-8') as handle:
-            handle.write(token + '\n')
+            handle.write(json.dumps(payload, ensure_ascii=False))
         return True
     except Exception as e:
         _log('could not record the tile state: {0}'.format(e), level='WARNING')
         return False
+
+
+def _their_favourites(text):
+    """The actions of every favourite in the file that is not ours."""
+    return [a.strip() for a in _FAV_ACTION_RE.findall(text)
+            if a.strip() and a.strip() != TILE_ACTION]
 
 
 def _favourites_path():
@@ -116,30 +121,9 @@ def _favourites_path():
         return ''
 
 
-def _stamp_marker(path, text):
-    """Add our marker to a favourites.xml that already carries the tile."""
-    closing = text.rfind('</favourites>')
-    if closing == -1:
-        return False
-    updated = text[:closing] + '    ' + EDIT_MARKER + '\n' + text[closing:]
-    tmp = path + '.recent_updates.tmp'
-    try:
-        with open(tmp, 'w', encoding='utf-8') as handle:
-            handle.write(updated)
-        os.replace(tmp, path)
-        return True
-    except Exception:
-        try:
-            if os.path.exists(tmp):
-                os.remove(tmp)
-        except Exception:
-            pass
-        return False
-
-
 def ensure_patched():
-    """'no_kodi' | 'no_favourites' | 'already_seen' | 'read_failed'
-    | 'unparseable' | 'write_failed' | 'seeded'."""
+    """'no_kodi' | 'no_favourites' | 'already_present' | 'user_removed'
+    | 'read_failed' | 'unparseable' | 'write_failed' | 'seeded'."""
     if xbmcvfs is None:
         return 'no_kodi'
     path = _favourites_path()
@@ -155,29 +139,40 @@ def ensure_patched():
         return 'read_failed'
 
     has_tile = TILE_ACTION in text
-    has_marker = EDIT_MARKER in text
+    record = _sidecar()
+    theirs = _their_favourites(text)
 
-    if _user_removed_it():
+    if record.get('state') == REMOVED_TOKEN:
         # They told us to go away. Nothing reopens that.
         return 'user_removed'
 
     if has_tile:
-        if not has_marker:
-            # Present but unmarked -- a fresh seed that already carried it, or
-            # our marker was stripped. Mark it so a later deletion is readable
-            # as a deletion rather than as a wipe.
-            _stamp_marker(path, text)
+        if not record.get('anchors'):
+            # The tile is here but we have no anchors -- a fresh install whose
+            # seed already carried it, so this patcher never ran. Record them
+            # now, or the user's first deletion has nothing to be measured
+            # against and would read as a wipe.
+            _write_sidecar('offered', theirs[:ANCHOR_COUNT])
         return 'already_present'
 
-    if has_marker:
-        # OUR file, OUR tile gone: the user removed it. Record that durably,
-        # because the marker itself will not survive the next skin switch.
-        _write_sidecar(REMOVED_TOKEN)
-        _log('the tile was removed by the user; not restoring it again')
-        return 'user_removed'
+    anchors = [a for a in record.get('anchors') or [] if isinstance(a, str)]
+    if anchors:
+        if all(a in theirs for a in anchors):
+            # EVERY one of their favourites we remembered is still there, and
+            # only ours is gone. That was them.
+            #
+            # ALL, not ANY. The per-skin seed the wizard copies over the file
+            # contains the build's own service tiles, so an anchor can easily
+            # be in BOTH their file and that seed -- and would survive the copy
+            # and make a wipe look like a deletion. A wipe drops everything
+            # that was theirs alone; a deletion of our tile drops nothing else.
+            _write_sidecar(REMOVED_TOKEN)
+            _log('the tile was removed by the user; not offering it again')
+            return 'user_removed'
+        # Not one of their favourites left -- this file was replaced wholesale,
+        # so our tile went with it and they never asked for that.
+        _log('favourites.xml was replaced; restoring the tile')
 
-    # No tile and no marker: this favourites.xml is not one we edited -- a
-    # first run, or a file the skin switch replaced wholesale. Seed it.
     closing = text.rfind('</favourites>')
     if closing == -1:
         # Not a favourites file we understand. Writing into it blind could
@@ -186,17 +181,12 @@ def ensure_patched():
              level='WARNING')
         return 'unparseable'
 
-    # If a tile with this action somehow exists already, do not add a second --
-    # just record that the offer has been made.
-    updated = (text[:closing] + TILE + '\n    ' + EDIT_MARKER + '\n'
-               + text[closing:])
+    updated = text[:closing] + TILE + '\n' + text[closing:]
 
     tmp = path + '.recent_updates.tmp'
     try:
         # A leftover DIRECTORY on this path blocks the write forever, silently,
-        # because every failure here is swallowed. The wizard hit exactly this
-        # on a sibling record file and had to add a cleanup; cheaper to clear
-        # it than to strand the tile.
+        # because every failure here is swallowed.
         if os.path.isdir(tmp):
             import shutil
             shutil.rmtree(tmp, ignore_errors=True)
@@ -215,7 +205,10 @@ def ensure_patched():
         _log('could not write favourites.xml: {0}'.format(e), level='WARNING')
         return 'write_failed'
 
-    # RECORDED ONLY AFTER THE WRITE SUCCEEDED.
-    _write_sidecar('offered')
-    _log('seeded the "last ten updates" tile')
+    # RECORDED ONLY AFTER THE WRITE SUCCEEDED, and the anchors come from the
+    # file as it was BEFORE we touched it -- their favourites, not ours.
+    _write_sidecar('offered', theirs[:ANCHOR_COUNT])
+    _log('seeded the "last ten updates" tile ({0} anchor(s) recorded)'
+         .format(len(theirs[:ANCHOR_COUNT])))
     return 'seeded'
+
