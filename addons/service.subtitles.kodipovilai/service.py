@@ -223,9 +223,6 @@ def _run_build_startup_repairs():
         _maybe_restore_pov_torbox,
         _maybe_patch_af3_home,
         _maybe_cleanup_wizard,
-        # Before anything that can cycle POV: the cycle is what opens the
-        # window this teaches POV to wait out.
-        _maybe_patch_pov_addon_window,
         _maybe_quiet_update_nags,
         _maybe_patch_pov_repeat_timer,
         _maybe_patch_pov_widget_crash_guard,
@@ -5072,6 +5069,15 @@ def main():
     # TorBox UUID-as-title problem AND raises the % match across all
     # debrid services to ~85-95% (the full release name has the
     # encoder/source/group tokens that subtitle releases carry).
+    # FIRST OF THE POV PATCHERS, and it has to be: it is the one that teaches
+    # POV to survive the seconds after a re-enable in which Kodi still calls it
+    # unknown, and every patcher below can arm the cycle that creates those
+    # seconds. It sat in the build-repairs pass until a review pointed out that
+    # the pass runs AFTER reload_if_patched() -- so on the one boot that matters
+    # most, a fresh install or a POV that just auto-updated, five patchers
+    # would arm a cycle against a POV that had not been taught anything yet.
+    _maybe_patch_pov_addon_window()
+
     _maybe_patch_pov_source_name()
 
     # Harden POV's debrid resolve_external_sources() against its own
