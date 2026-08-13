@@ -73,10 +73,11 @@ FAVOURITES_REL = 'favourites.xml'
 #                                fresh install, which is the same bug one
 #                                add-on over.
 #
-# Two copies, and no single button can reach both. The first is beside the
-# counter it is compared against; the second is the survivor. Losing the wizard
-# copy also resets the counter to zero, which can only ever read as "the file
-# was not replaced since we seeded" -- the safe direction.
+# Two copies, and no single button can reach both. The counter is mirrored the
+# same way and for the same reason -- a count that could be reset to zero by
+# one click was just as fatal as a record that could be deleted by one, because
+# a zero reads as "the file was never replaced" and turns every tile the wizard
+# removed into a tile the user removed. Neither fact is now losable in one act.
 SEEN_FILES = (
     'special://profile/addon_data/plugin.program.kodipovilwizard/'
     'recent_updates_tile_seen.txt',
@@ -90,16 +91,48 @@ REMOVED_TOKEN = 'user_removed'
 # "we never finished offering" from "they deleted what we offered".
 SEEDING_TOKEN = 'seeding'
 OFFERED_TOKEN = 'offered'
+# How many times an unfinished seed may be retried before it stops being read
+# as unfinished. One genuine power cut needs one retry; a state that retries
+# forever is a tile the user can never delete.
+SEED_ATTEMPT_LIMIT = 2
 # How many of the user's own favourites to remember. More than one because any
 # single anchor can itself be deleted; few because this is a hint, not a backup.
 ANCHOR_COUNT = 5
-# The wizard bumps this every time it replaces userdata/favourites.xml with a
-# per-skin seed, which is the only thing that does. Comparing it against the
-# value we saw when we last seeded turns "who removed the tile" from a guess
-# into a fact. The anchors below stay as a fallback for a device where the
-# wizard is older than this and never writes the file.
-REPLACED_FILE = ('special://profile/addon_data/'
-                 'plugin.program.kodipovilwizard/favourites_replaced.txt')
+# The wizard bumps these every time it replaces userdata/favourites.xml with a
+# per-skin seed, which is the only thing that does. Comparing the count against
+# the value we saw when we last seeded turns "who removed the tile" from a
+# guess into a fact. One copy per add-on folder, for the same reason the record
+# is kept twice: one "Clear data" click must not be able to take it. A wiped
+# copy reads as zero, so the HIGHEST of them is the count -- a copy that was
+# reset cannot drag the other backwards.
+REPLACED_FILES = (
+    'special://profile/addon_data/plugin.program.kodipovilwizard/'
+    'favourites_replaced.txt',
+    'special://profile/addon_data/service.subtitles.kodipovilai/'
+    'favourites_replaced.txt',
+)
+REPLACED_FILE = REPLACED_FILES[0]
+
+
+def _replacement_counts():
+    """Every copy of the count that is actually on disk, as ints."""
+    found = []
+    for ref in REPLACED_FILES:
+        try:
+            import xbmcvfs
+            path = xbmcvfs.translatePath(ref)
+        except Exception:
+            continue
+        if not path:
+            continue
+        try:
+            with open(path, 'r', encoding='utf-8') as handle:
+                found.append(int((handle.read() or '0').strip() or 0))
+        except FileNotFoundError:
+            continue
+        except Exception:
+            continue
+    return found
 
 
 def _replacement_count():
@@ -113,18 +146,10 @@ def _replacement_count():
     forever, which reads any missing tile as a deletion: the milder direction,
     and only reachable by mixing versions that ship together.
     """
-    try:
-        import xbmcvfs
-        path = xbmcvfs.translatePath(REPLACED_FILE)
-    except Exception:
+    if xbmcvfs is None:
         return None
-    try:
-        with open(path, 'r', encoding='utf-8') as handle:
-            return int((handle.read() or '0').strip() or 0)
-    except FileNotFoundError:
-        return 0
-    except Exception:
-        return None
+    counts = _replacement_counts()
+    return max(counts) if counts else 0
 _FAV_ACTION_RE = re.compile(r'<favourite\b[^>]*>(.*?)</favourite>', re.S)
 TILE_NAME = '[B][COLOR yellow]10 העדכונים האחרונים[/COLOR][/B]'
 TILE_THUMB = 'special://home/media/build_icons/Wizard/wizard_pov_il.png'
@@ -194,21 +219,38 @@ def _sidecar():
         # Beside the counter: its 'replaced' snapshot and the live counter are
         # in the same folder, so they are lost together and stay comparable.
         return copies[0]
-    # Only the survivor is left, so the counter went with the copy that did.
-    # Its snapshot is now being compared against a counter reset to zero, which
-    # can only read as "not replaced since we seeded" -- and that is the
-    # direction that keeps a deleted tile deleted.
-    return present[0]
+    survivor = dict(present[0])
+    if not _replacement_counts():
+        # The copy beside the counter is gone AND no copy of the counter is
+        # left anywhere -- so it was reset, and comparing a snapshot against a
+        # zero that means "wiped" rather than "never replaced" would read EVERY
+        # missing tile as a deletion, including the ones the wizard removed
+        # itself. That is not the conservative answer, it is a meaningless one.
+        # Say so, and let the caller fall back to the anchors, which is the
+        # case they exist for. A wizard new enough to mirror the count never
+        # gets here; one too old to does, and guessing beats pretending.
+        survivor['counter_lost'] = True
+    return survivor
 
 
-def _write_sidecar(state, anchors=None):
-    """Write every copy. True if at least one landed."""
+def _write_sidecar(state, anchors=None, attempts=0, require_all=False):
+    """Write every copy.
+
+    require_all decides what "success" means, and the two callers need
+    different answers. Recording a DELETION: one copy beats none, always take
+    it. Recording that we are about to OFFER: one copy is not the mechanism,
+    it is the mechanism with its redundancy quietly gone, and one "Clear data"
+    click on the surviving folder brings a deleted tile back -- the very bug
+    the second copy exists to prevent. So an offer that cannot be remembered
+    twice is not made at all.
+    """
     import json
     # The counter goes in with the anchors: what matters later is not its
     # value but whether it has MOVED since this moment. Read ONCE, so both
     # copies carry the same number even if the wizard bumps it mid-write.
     payload = json.dumps({'state': state, 'anchors': list(anchors or []),
-                          'replaced': _replacement_count()},
+                          'replaced': _replacement_count(),
+                          'seed_attempts': int(attempts or 0)},
                          ensure_ascii=False)
     written = 0
     for path in _seen_paths():
@@ -219,7 +261,11 @@ def _write_sidecar(state, anchors=None):
             # ATOMIC, like the favourites.xml write below it. A half-written
             # record is unreadable, and an unreadable record now costs the user
             # their tile -- so it must never be possible to observe one.
-            tmp = path + '.tmp'
+            # The pid keeps two processes off one scratch path. Without it
+            # both write the same tmp, one replaces it, and the other's
+            # replace fails on a file that is no longer there -- a write lost
+            # for no reason but a shared name.
+            tmp = '{0}.{1}.tmp'.format(path, os.getpid())
             # A stray DIRECTORY here blocks every future write, silently and
             # forever, because the failure is swallowed -- and a record that
             # can never be written is a deletion that can never be remembered.
@@ -234,6 +280,8 @@ def _write_sidecar(state, anchors=None):
         except Exception as e:
             _log('could not record the tile state at {0}: {1}'
                  .format(path, e), level='WARNING')
+    if require_all:
+        return written == len(_seen_paths()) and written > 0
     return written > 0
 
 
@@ -339,13 +387,32 @@ def ensure_patched():
 
     now = _replacement_count()
     then = record.get('replaced')
-    if record.get('state') == SEEDING_TOKEN:
+    try:
+        attempts = int(record.get('seed_attempts') or 0)
+    except Exception:
+        attempts = 0
+    if record.get('state') == SEEDING_TOKEN and attempts < SEED_ATTEMPT_LIMIT:
         # We wrote the record, then died before the tile reached the file --
         # a power cut, a force close, a kill. The user was never shown
         # anything, so there is no deletion here to respect; the checks below
         # would read this as one and take the tile away from someone who never
         # saw it. Fall through and finish what the last run started.
-        _log('a previous seed did not finish; trying again')
+        #
+        # COUNTED, because "unfinished" must be a phase and not a home. If the
+        # write that settles the state can never land, this state persists with
+        # the tile sitting in the file, and every deletion the user makes is
+        # read as another unfinished seed and undone -- a tile they cannot get
+        # rid of, which is the one thing this feature promised.
+        _log('a previous seed did not finish; trying again '
+             '(attempt {0})'.format(attempts + 1))
+    elif record.get('counter_lost'):
+        # The counter is gone, so there is nothing to compare against. The
+        # anchors are the fallback for exactly this, and they answer it well:
+        # a wizard-driven replacement takes the user's own favourites with it,
+        # a deletion leaves them in place.
+        verdict = _guess_from_anchors(record, theirs)
+        if verdict:
+            return verdict
     elif record and now is not None and isinstance(then, int):
         if now <= then:
             # Nobody replaced the file since we seeded, and the tile is gone.
@@ -382,9 +449,12 @@ def ensure_patched():
     # It goes down as SEEDING, not OFFERED, because between here and the write
     # below the process can simply stop existing. The anchors come from the file
     # as it was BEFORE we touch it: their favourites, not ours.
-    if not _write_sidecar(SEEDING_TOKEN, theirs[:ANCHOR_COUNT]):
-        # Offering something we cannot remember offering is how the tile
-        # becomes impossible to get rid of. Rather not offer it.
+    if not _write_sidecar(SEEDING_TOKEN, theirs[:ANCHOR_COUNT],
+                          attempts=attempts + 1, require_all=True):
+        # Offering something we cannot remember offering -- in both places -- is
+        # how the tile becomes impossible to get rid of. Rather not offer it.
+        # A partial write is worse than none, so take back whatever landed.
+        _forget_sidecar()
         return 'write_failed'
 
     updated = text[:closing] + TILE + '\n' + text[closing:]

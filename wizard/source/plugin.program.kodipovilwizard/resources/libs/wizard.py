@@ -1330,33 +1330,65 @@ def wizard(action, name, url):
 # wanted", anchors that a build-seeded favourites list defeats, and a seed
 # comparison that a wipe-then-restore makes ambiguous. The writer knows. It
 # only ever had to say so.
-FAVOURITES_REPLACED_FILE = ('special://profile/addon_data/'
-                            'plugin.program.kodipovilwizard/'
-                            'favourites_replaced.txt')
+# TWO COPIES, one in each add-on's addon_data, for the same reason the reader's
+# own record is kept twice: Kodi's per-add-on "Clear data" button wipes exactly
+# one folder, and there is such a button on every add-on. A single copy here
+# meant one click could take the count while userdata/favourites.xml survived,
+# and the reader -- seeing a count reset to zero -- concluded that nobody had
+# replaced the file, so a tile this function had removed was never put back.
+# The reader takes the highest of the copies, so a wiped one cannot lower it.
+FAVOURITES_REPLACED_FILES = (
+    'special://profile/addon_data/plugin.program.kodipovilwizard/'
+    'favourites_replaced.txt',
+    'special://profile/addon_data/service.subtitles.kodipovilai/'
+    'favourites_replaced.txt',
+)
+# Kept for anything that still imports the old name.
+FAVOURITES_REPLACED_FILE = FAVOURITES_REPLACED_FILES[0]
 
 
 def _record_favourites_replaced():
-    """Count this replacement. Best-effort: a miss costs a tile, not data."""
+    """Count this replacement. Best-effort: a miss costs a tile, not data.
+
+    Nothing in here may raise. The caller reports any exception to the user as
+    "failed to set up the home screen" and returns False, and a missed count is
+    worth a tile at most -- never that.
+    """
     try:
         import os as _os
         import xbmcvfs
-        path = xbmcvfs.translatePath(FAVOURITES_REPLACED_FILE)
-        directory = _os.path.dirname(path)
-        if directory and not _os.path.isdir(directory):
-            _os.makedirs(directory)
-        count = 0
+    except Exception:
+        return
+    # Read every copy first and count up from the HIGHEST. A copy that was
+    # wiped reads as zero, and starting from zero would silently rewind the
+    # count for both.
+    count = 0
+    paths = []
+    for ref in FAVOURITES_REPLACED_FILES:
+        try:
+            path = xbmcvfs.translatePath(ref)
+        except Exception:
+            continue
+        if not path:
+            continue
+        paths.append(path)
         try:
             with open(path, 'r', encoding='utf-8') as handle:
-                count = int((handle.read() or '0').strip() or 0)
+                count = max(count, int((handle.read() or '0').strip() or 0))
         except Exception:
-            count = 0
-        tmp = path + '.tmp'
-        with open(tmp, 'w', encoding='utf-8') as handle:
-            handle.write(str(count + 1))
-        _os.replace(tmp, path)
-    except Exception as err:
-        logging.log('[FAVOURITES] could not record the replacement: '
-                    '{0}'.format(err), level=xbmc.LOGWARNING)
+            pass
+    for path in paths:
+        try:
+            directory = _os.path.dirname(path)
+            if directory and not _os.path.isdir(directory):
+                _os.makedirs(directory)
+            tmp = path + '.tmp'
+            with open(tmp, 'w', encoding='utf-8') as handle:
+                handle.write(str(count + 1))
+            _os.replace(tmp, path)
+        except Exception as err:
+            logging.log('[FAVOURITES] could not record the replacement at '
+                        '{0}: {1}'.format(path, err), level=xbmc.LOGWARNING)
 
 
 def update_favourites_xml_file(gotoskin):
