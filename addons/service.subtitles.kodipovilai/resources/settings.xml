@@ -888,15 +888,147 @@
           </constraints>
         </setting>
         <!-- Hidden marker: which add-ons' self update check we have already
-             settled, so the decision is taken once and never re-taken.
+             settled, so the decision is taken once and never taken again.
              DECLARED ON PURPOSE. setSetting on an id this file does not
-             declare does not reach disk, so the marker would read empty on
+             declare never reaches disk, so the marker would read empty on
              every start, and a user who turned the update check back on would
              find it turned off again at the next boot, forever. Guarding on
-             the shipped value is not enough by itself: the shipped value is
+             the shipped value does not cover for that: the shipped value is
              exactly what they would have put back.
              See update_nag_patcher.py. -->
         <setting id="_update_nag_quiet_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- THE REST OF THE ONE SHOT MARKERS, declared for the same reason,
+             and found by auditing every one of them after the one above
+             turned up missing: 13 more were being written to ids this file
+             never declared, so they never reached disk and read empty on
+             every start. Each guards a change we promised to make once. Most
+             were saved from doing visible harm by their own guard, which
+             writes a value that is already where it wants it, so the repeat
+             is a no op. That is luck, not design, and it stops being luck the
+             moment a user moves the value back. Declaring them is what makes
+             "once" true.
+             Every one holds a short string ('1', or a comma separated list of
+             the keys it has settled), which is why they are all plain strings
+             with an empty default.
+             (No double hyphen anywhere in here: XML forbids it inside a
+             comment, and it took a second parse error to relearn that.) -->
+        <setting id="_builtin_engine_rollout_v2" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_chunk_lines_50_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_fast_first_chunk_default_v2" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_ktuvit_on_v4" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_nox_poster_rating_default_v2" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_pool_share_force_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_remember_source_force_v2" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_umbrella_api_language_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_umbrella_coco_providers_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_umbrella_coco_providers_v2" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_umbrella_coco_wired_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_umbrella_defaults_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_umbrella_lang_filters_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Three more of the same, from the DarkSubs side of the audit. These
+             are written, not just read, so undeclared they were the live case
+             rather than the lucky one: the "we have already offered this"
+             flags never persisted, so the offer could be made again on every
+             start. -->
+        <setting id="_darksubs_autoenable_done" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_force_ai_autoenable_done" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_darksubs_nag_done" type="string" label="30000">
           <level>4</level>
           <default></default>
           <constraints>
