@@ -13,11 +13,11 @@ on:
       version:
         description: 'Release tag / version label (e.g., 21.3-povil.1)'
         required: true
-        default: '21.3-povil.48'
+        default: '21.3-povil.49'
       version_code:
         description: 'Android versionCode (integer, must increase each release)'
         required: true
-        default: '2103048'
+        default: '2103049'
       kodi_version:
         description: 'Upstream Kodi version to rebrand (e.g., 21.3)'
         required: true
@@ -36,8 +36,8 @@ env:
   PACKAGE_ID: 'org.xbmc.povi'
   APP_NAME: 'Kodi POV IL'
   WIZARD_VERSION: '0.1.45'
-  EXPECTED_RELEASE: '21.3-povil.48'
-  EXPECTED_VERSION_CODE: '2103048'
+  EXPECTED_RELEASE: '21.3-povil.49'
+  EXPECTED_VERSION_CODE: '2103049'
   EXPECTED_KODI_VERSION: '21.3'
 
 jobs:
@@ -238,7 +238,7 @@ jobs:
             unzip -o "src/dist/plugin.program.kodipovilwizard-${WIZARD_VERSION}.zip" -d "$ASSETS/addons/" >/dev/null
             # The wizard imports requests at startup; pull its pure-python
             # dependency stack (platform "all") out of the build zip.
-            unzip -o src/dist/Kodi-POV-IL-FENtastic-test-0.1.101.zip \
+            unzip -o src/dist/Kodi-POV-IL-FENtastic-test-0.1.106.zip \
               'addons/script.module.requests/*' \
               'addons/script.module.six/*' \
               'addons/script.module.certifi/*' \
@@ -327,7 +327,7 @@ jobs:
           python3 src/.github/scripts/build_webos_ipk.py build \
             --official "$WORK/kodi-official.ipk" \
             --wizard "src/dist/plugin.program.kodipovilwizard-${WIZARD_VERSION}.zip" \
-            --build-zip "src/dist/Kodi-POV-IL-FENtastic-test-0.1.101.zip" \
+            --build-zip "src/dist/Kodi-POV-IL-FENtastic-test-0.1.106.zip" \
             --branding-dir "$RUNNER_TEMP/platform-branding" \
             --release-label "$VERSION" \
             --output "$OUT_IPK"
@@ -343,7 +343,7 @@ jobs:
           curl -fL --retry 3 -o $RUNNER_TEMP/win/kodi-setup.exe \
             "https://mirrors.kodi.tv/releases/windows/win64/kodi-${KODI_VERSION}-Omega-x64.exe"
           cp "src/dist/plugin.program.kodipovilwizard-${WIZARD_VERSION}.zip" $RUNNER_TEMP/win/wizard.zip
-          cp src/dist/Kodi-POV-IL-FENtastic-test-0.1.101.zip     $RUNNER_TEMP/win/build.zip
+          cp src/dist/Kodi-POV-IL-FENtastic-test-0.1.106.zip     $RUNNER_TEMP/win/build.zip
           cp src/dist/installer/build-windows-installer.nsi     $RUNNER_TEMP/win/installer.nsi
           cp "$RUNNER_TEMP/platform-branding/povil.ico"          $RUNNER_TEMP/win/povil.ico
           if [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)-povil\.([0-9]+)$ ]]; then
