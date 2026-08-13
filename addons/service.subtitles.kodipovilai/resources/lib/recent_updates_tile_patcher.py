@@ -8,10 +8,16 @@
 # rudeness as re-enabling an add-on they switched off, and this build has just
 # finished apologising for that one.
 #
-# The marker lives inside favourites.xml, next to the ones the sibling patchers
-# write, so "has the build offered this?" survives exactly as long as the file
-# it is a statement about. A user who wipes favourites.xml gets the tile again,
-# which is right: that is a new favourites.xml, not their edited one.
+# THE MARKER IS A SIDECAR, NOT A COMMENT INSIDE favourites.xml. That was the
+# first shape and it was wrong: the wizard's update_favourites_xml_file() copies
+# a static per-skin seed straight over userdata/favourites.xml on every skin
+# switch, unconditionally. The marker went with it, so a user who deleted the
+# tile and then switched skin -- an ordinary menu action -- got it back on the
+# next start. favourites_xml_patcher moved its own delete-tracking to a sidecar
+# for exactly this reason; this now does the same.
+#
+# A user who wipes their addon_data as well gets the offer again, which is
+# right: that is a new profile, not their edited one.
 
 import os
 import re
@@ -28,7 +34,8 @@ except Exception:
 
 
 FAVOURITES_REL = 'favourites.xml'
-SEEN_MARKER = '<!-- AI_SUBS_FAVOURITES_RECENT_UPDATES_SEEN_v1 -->'
+SEEN_FILE = ('special://profile/addon_data/service.subtitles.kodipovilai/'
+             'recent_updates_tile_seen.txt')
 TILE_NAME = '[B][COLOR yellow]10 העדכונים האחרונים[/COLOR][/B]'
 TILE_THUMB = 'special://home/media/build_icons/Wizard/wizard_pov_il.png'
 TILE_ACTION = ('RunPlugin("plugin://plugin.program.kodipovilwizard/'
@@ -44,6 +51,36 @@ def _log(msg, level='INFO'):
         kodi_utils.log('recent_updates_tile: ' + msg, level=level)
     except Exception:
         pass
+
+
+def _seen_path():
+    try:
+        return xbmcvfs.translatePath(SEEN_FILE)
+    except Exception:
+        return ''
+
+
+def _already_offered():
+    try:
+        return os.path.isfile(_seen_path())
+    except Exception:
+        # Cannot tell -> assume offered. Guessing "no" would re-add a tile the
+        # user may have deleted, which is the one outcome to avoid.
+        return True
+
+
+def _mark_offered():
+    try:
+        path = _seen_path()
+        directory = os.path.dirname(path)
+        if directory and not os.path.isdir(directory):
+            os.makedirs(directory)
+        with open(path, 'w', encoding='utf-8') as handle:
+            handle.write('1\n')
+        return True
+    except Exception as e:
+        _log('could not record the offer: {0}'.format(e), level='WARNING')
+        return False
 
 
 def _favourites_path():
@@ -72,7 +109,7 @@ def ensure_patched():
         _log('could not read favourites.xml: {0}'.format(e), level='WARNING')
         return 'read_failed'
 
-    if SEEN_MARKER in text:
+    if _already_offered():
         # Offered before. Whether the tile is there or the user removed it is
         # none of our business now.
         return 'already_seen'
@@ -88,10 +125,19 @@ def ensure_patched():
     # If a tile with this action somehow exists already, do not add a second --
     # just record that the offer has been made.
     addition = TILE + '\n' if TILE_ACTION not in text else ''
-    updated = (text[:closing] + addition + '    ' + SEEN_MARKER + '\n'
-               + text[closing:])
+    updated = text[:closing] + addition + text[closing:]
 
     tmp = path + '.recent_updates.tmp'
+    try:
+        # A leftover DIRECTORY on this path blocks the write forever, silently,
+        # because every failure here is swallowed. The wizard hit exactly this
+        # on a sibling record file and had to add a cleanup; cheaper to clear
+        # it than to strand the tile.
+        if os.path.isdir(tmp):
+            import shutil
+            shutil.rmtree(tmp, ignore_errors=True)
+    except Exception:
+        pass
     try:
         with open(tmp, 'w', encoding='utf-8') as handle:
             handle.write(updated)
@@ -105,6 +151,9 @@ def ensure_patched():
         _log('could not write favourites.xml: {0}'.format(e), level='WARNING')
         return 'write_failed'
 
+    # RECORDED ONLY AFTER THE WRITE SUCCEEDED. Marking first and failing to
+    # write would mean the tile was never offered and never will be.
+    _mark_offered()
     _log('seeded the "last ten updates" tile{0}'.format(
-        '' if addition else ' marker (tile was already present)'))
+        '' if addition else ' (tile was already present)'))
     return 'seeded'
