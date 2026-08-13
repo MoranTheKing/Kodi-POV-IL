@@ -28,10 +28,15 @@
 # re-enable would not help either, because the wait has to happen INSIDE the
 # add-on Kodi has just started.
 #
-# So the fix goes where the failure is. addon() retries for up to four seconds
-# -- the observed window is about 2.7 -- and only after Addon() has already
-# raised once, so nothing is slower on the path everybody takes. If POV really
-# is gone, the last attempt raises exactly as before.
+# So the fix goes where the failure is. addon() retries for up to three
+# seconds -- the observed window is about 2.7 -- and only after Addon() has
+# already raised once, so nothing is slower on the path everybody takes. It
+# waits on the abort monitor rather than sleeping, because this runs inside
+# POV's own service startup and Kodi force-kills a script that will not stop
+# within 5 seconds; a deaf wait would spend most of that budget. If POV really
+# is gone, the last attempt raises exactly as before -- the one cost of this
+# fix is that a genuinely absent POV takes three seconds to say so instead of
+# none, which buys a present-but-not-yet-loaded one its whole service.
 
 import os
 import re
@@ -67,14 +72,21 @@ _PATCHED = (
     "\t# catches up later -- and it starts this add-on's service inside that\n"
     "\t# window. Reading a setting there used to kill the import chain and\n"
     "\t# with it the whole background service, for the rest of the session.\n"
-    "\tfor _ in range(40):\n"
-    "\t\txbmc.sleep(100)\n"
+    "\t#\n"
+    "\t# waitForAbort, not sleep: this runs inside the service's own startup,\n"
+    "\t# and Kodi force-kills a script that does not stop within 5 seconds of\n"
+    "\t# being asked. A wait that ignores the ask would spend most of that\n"
+    "\t# budget refusing to hear it.\n"
+    "\t_monitor = xbmc.Monitor()\n"
+    "\tfor _ in range(30):\n"
+    "\t\tif _monitor.waitForAbort(0.1):\n"
+    "\t\t\tbreak\n"
     "\t\ttry:\n"
     "\t\t\treturn Addon(id=addon_id)\n"
     "\t\texcept Exception:\n"
     "\t\t\tcontinue\n"
-    "\t# Out of patience: this is not the window, the add-on is really gone.\n"
-    "\t# Raise the way stock does, so nothing downstream has to change.\n"
+    "\t# Out of patience, or Kodi is shutting down. Either way this is not the\n"
+    "\t# window: raise the way stock does, so nothing downstream has to change.\n"
     "\treturn Addon(id=addon_id)\n"
 )
 
