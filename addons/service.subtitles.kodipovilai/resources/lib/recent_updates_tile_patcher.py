@@ -37,6 +37,11 @@
 # A fact, for the price of one integer. The anchors remain only as a fallback
 # for a device whose wizard predates the counter -- which, since both ship in
 # the same quickfix, is essentially none.
+#
+# All of it rests on ONE invariant: the tile never exists without a record. An
+# absent record has to mean "never offered", or no first run could ever seed
+# anything -- so the record is written FIRST and the tile only follows a good
+# write, which makes that meaning true by construction rather than by hope.
 
 import os
 import re
@@ -174,6 +179,21 @@ def _write_sidecar(state, anchors=None):
         return False
 
 
+def _forget_sidecar():
+    """Undo a record we just wrote, when the write it was covering failed.
+
+    Best effort by design: if the removal itself fails, the record stays and
+    says "offered" for a tile that never got written, so the next run reads a
+    deletion the user never made and stops offering. That costs one user one
+    tile. The opposite -- leaving the tile with no record -- costs them a tile
+    they cannot remove, on every start, forever.
+    """
+    try:
+        os.remove(_seen_path())
+    except Exception:
+        pass
+
+
 def _their_favourites(text):
     """The actions of every favourite in the file that is not ours."""
     return [a.strip() for a in _FAV_ACTION_RE.findall(text)
@@ -267,6 +287,24 @@ def ensure_patched():
              level='WARNING')
         return 'unparseable'
 
+    # RECORDED BEFORE THE TILE GOES IN, NOT AFTER -- and the seeding depends on
+    # it. "No record" is read as "never offered", which is the only reading that
+    # lets a first run ever seed anything; the danger is that it is also what a
+    # LOST record looks like, and a lost record turns the user's deletion back
+    # into a fresh offer on the next start. That reading cannot be made safe by
+    # inspection, so it is made true by construction: while the record is
+    # written first and the tile only follows a successful write, a tile can
+    # never exist without a record, and absence really does mean we never got as
+    # far as offering. Writing it afterwards -- as this did until now -- left
+    # exactly one crack, a failed record write after a good favourites write,
+    # and every start after that re-seeded a tile the user kept deleting.
+    # The anchors come from the file as it was BEFORE we touch it: their
+    # favourites, not ours.
+    if not _write_sidecar('offered', theirs[:ANCHOR_COUNT]):
+        # Offering something we cannot remember offering is how the tile
+        # becomes impossible to get rid of. Rather not offer it.
+        return 'write_failed'
+
     updated = text[:closing] + TILE + '\n' + text[closing:]
 
     tmp = path + '.recent_updates.tmp'
@@ -288,12 +326,13 @@ def ensure_patched():
                 os.remove(tmp)
         except Exception:
             pass
+        # Put the record back the way we found it. Left in place it would say
+        # "offered" for a tile that is not there, and the next run would read
+        # that as a deletion by a user who was never shown anything.
+        _forget_sidecar()
         _log('could not write favourites.xml: {0}'.format(e), level='WARNING')
         return 'write_failed'
 
-    # RECORDED ONLY AFTER THE WRITE SUCCEEDED, and the anchors come from the
-    # file as it was BEFORE we touched it -- their favourites, not ours.
-    _write_sidecar('offered', theirs[:ANCHOR_COUNT])
     _log('seeded the "last ten updates" tile ({0} anchor(s) recorded)'
          .format(len(theirs[:ANCHOR_COUNT])))
     return 'seeded'
