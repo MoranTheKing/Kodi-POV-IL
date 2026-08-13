@@ -245,8 +245,14 @@ def _refresh_active_skin(af3_changed):
     if af3_changed and skin == 'skin.arctic.fuse.3':
         try:
             from resources.lib import af3_home_patcher
-            af3_home_patcher._rebuild_af3_shortcuts()
-            return True
+            # RETURN WHAT IT SAYS, do not assume it worked. This call site was
+            # written when _rebuild_af3_shortcuts() returned None either way, so
+            # discarding it was harmless; it now returns False when it defers a
+            # rebuild, and reporting True regardless tells the settings dialog
+            # the switch took effect when the AF3 search rows still hold the old
+            # provider -- and the dialog then does NOT show its "restart for
+            # this to apply" message, so the user has no way to know.
+            return bool(af3_home_patcher._rebuild_af3_shortcuts())
         except Exception as e:
             _log('AF3 rebuild failed: {0}'.format(e), 'WARNING')
             return False

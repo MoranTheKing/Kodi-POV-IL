@@ -876,11 +876,13 @@ class Wizard:
                             level=xbmc.LOGWARNING)
                 return False
             left_off = []
+            cycled = []
             for addon_id in self.HOT_RELOAD_TARGETS:
                 try:
                     if self._addon_is_enabled(addon_id) is not True:
                         continue
                     if self._cycle_addon(addon_id):
+                        cycled.append(addon_id)
                         logging.log('[HOT-RELOAD] reloaded ' + addon_id)
                     else:
                         left_off.append(addon_id)
@@ -908,7 +910,15 @@ class Wizard:
             # quick update. This is the same fault the service add-on's
             # pov_reload guards against; the wizard cannot import that module,
             # so it makes the same check for itself.
-            self._wait_until_resolvable(self.HOT_RELOAD_TARGETS)
+            # ONLY WHAT WAS ACTUALLY CYCLED. HOT_RELOAD_TARGETS is a static
+            # tuple that includes the opt-in Umbrella pilot, which most users
+            # never install -- and an id that is not installed can never become
+            # constructible, so waiting on the whole tuple burned the full
+            # timeout on EVERY update, including the silent one at startup.
+            # Measured at 20.0s for a user without Umbrella. The loop above
+            # already knows which ids it cycled; those are the only ones whose
+            # readiness this wait is about.
+            self._wait_until_resolvable(cycled)
             xbmc.executebuiltin('ReloadSkin()')
             logging.log('[HOT-RELOAD] update applied without closing Kodi')
             return True
