@@ -45,33 +45,27 @@ _cycling = False
 _armed = False
 
 
-# HOW WE KNOW POV IS UNUSABLE: WE ASK IT. No shared flag, no counter, no
-# deadline, no cross-process record.
+# HOW WE KNOW POV IS UNUSABLE: WE ASK IT. No shared state, no cross-process
+# record -- five validation rounds of a Window(10000) count-and-deadlines
+# scheme each found a new way it was wrong, and the question it existed to
+# answer needs no coordination at all.
 #
-# Five rounds of validation went into a Window(10000) record holding a count and
-# two clock deadlines, and every round found a new way it was wrong: a wall
-# clock an NTP step could defeat, a flag with no owner that overlapping cyclers
-# clobbered, a counter whose cross-process read-modify-write lost increments in
-# one direction and decrements in the other, an unmatched leave that wiped a
-# live record, and a "clamp" that was a tautology and pinned the window open for
-# the session. Each fix was correct about the bug in front of it and introduced
-# the next one. That is what a design being wrong looks like from the inside.
+# WHAT REPLACED IT FIRST, AND WHY THAT WAS ALSO WRONG. The probe cannot tell
+# "POV is mid-cycle" from "POV is not installed", so the first attempt kept a
+# sticky "I have seen POV work in this process" flag and treated a failure as a
+# cycle only after that. It reads sensibly and it is broken twice over: the
+# FIRST call in any process is always told "not cycling", because the flag
+# still holds its default -- and the wizard's plugin entry point declares
+# reuselanguageinvoker=false, so Kodi hands it a brand-new interpreter on every
+# single invocation. The AF3 tools-row guard built on that flag could therefore
+# never fire, on any platform, ever, while looking correct on the page.
 #
-# The record only ever existed to answer one question -- can POV be constructed
-# right now -- and that question needs no coordination at all, because
-# xbmcaddon.Addon(id) answers it directly, in whichever process is asking, with
-# no state to get out of step. It is also strictly broader: it covers the wizard
-# cycling POV, this add-on cycling POV, and any cause nobody has thought of,
-# including Kodi's own updater.
-#
-# THE ONE THING A DIRECT PROBE CANNOT TELL YOU is the difference between "POV is
-# mid-cycle" and "POV is not installed, or the user disabled it" -- and treating
-# the second as cycling would make every guarded reload in the build wait, every
-# time, for a user who simply does not have POV. Hence the sticky flag below:
-# once POV has been seen working in this process, a later failure to construct
-# it is a transient window worth waiting out. Before that, it is absence, and
-# nothing waits.
-_seen_resolvable = False
+# So there is no flag. is_cycling() is exactly "POV cannot be constructed right
+# now", which is true on the first call in a cold process and true in the
+# wizard's throwaway interpreter. Absence is handled where it belongs -- in the
+# waiting, not the asking -- by _gave_up below.
+_gave_up = False
+_timeouts = 0
 
 
 def _is_resolvable():
@@ -82,34 +76,47 @@ def _is_resolvable():
     own kodi_utils makes on its first line, and the one that raises "Unknown
     addon id" in the field logs -- keeps failing for a moment afterwards.
     """
-    global _seen_resolvable
     try:
         import xbmcaddon
         xbmcaddon.Addon(POV_ADDON_ID)
-        _seen_resolvable = True
         return True
     except Exception:
         return False
 
 
 def is_cycling():
-    """True while POV cannot be constructed but has been able to before now --
-    i.e. a window that will pass, rather than an add-on that is not there."""
-    if _armed or _cycling:
-        return True
-    if _is_resolvable():
-        return False
-    return _seen_resolvable
+    """True while POV cannot be constructed.
 
-
-def wait_until_settled(timeout=30):
-    """Block until POV resolves again, or the timeout runs out.
-
-    Returns True if it is safe to touch POV-backed UI. Callers that redraw
-    widgets should check this rather than assuming; the cost of waiting is a
-    delayed refresh, and the cost of not waiting is a broken home screen.
+    With no Kodi at all there is nothing to guard, and answering "cycling"
+    would make every guard in the build block on a machine where none of this
+    applies. Absence of Kodi is not a POV cycle.
     """
-    if not is_cycling() or xbmc is None:
+    if xbmc is None:
+        return False
+    return _armed or _cycling or not _is_resolvable()
+
+
+def wait_until_settled(timeout=8):
+    """Block until POV can be constructed again. True when it is safe.
+
+    THE TIMEOUT IS SHORT, AND GIVING UP IS REMEMBERED. A user who turns POV off
+    deliberately -- or who never had it -- leaves it unconstructible for good,
+    and an unbounded reading of "not constructible means wait" made every
+    guarded reload in the build stall for the full timeout, every time, for the
+    rest of the session. Measured at the previous 30s default: 62 add-on
+    constructions and a real 30-second stall per call site, for a condition
+    that was never going to clear.
+
+    So the wait is bounded at a few times the ~2.7s window actually observed,
+    and once it has run out we ask Kodi whether POV is switched off. If it is,
+    this is not a cycle and never was: stop waiting for it, for the rest of
+    this process. If Kodi says it is enabled and it still cannot be built, that
+    is strange enough to keep being careful about, so no latch is set.
+    """
+    global _gave_up, _timeouts
+    if _gave_up or xbmc is None:
+        return True
+    if not is_cycling():
         return True
     waited = 0.0
     while waited < timeout:
@@ -121,6 +128,28 @@ def wait_until_settled(timeout=30):
         except Exception:
             return False
         waited += 0.5
+    _timeouts += 1
+    if _is_enabled() is not True:
+        # Kodi says POV is switched off, or cannot find it at all. Either way
+        # this is not a cycle and never was, so stop paying for it. NOT INSTALLED
+        # counts here too: dropping the old sticky flag fixed a cold process
+        # being blind, but it also meant a user who simply does not have POV
+        # started paying a wait at every guarded site. One bounded wait per
+        # process is the price of the cold-start fix; more than that is not.
+        _gave_up = True
+        _log('POV is not switched on; not waiting for it again this session',
+             level='WARNING')
+        return True
+    if _timeouts >= 3:
+        # Enabled, yet still unconstructible after three full waits. Whatever
+        # this is, it is not a window that is about to pass, and paying the
+        # timeout at every guarded site for the rest of the session helps
+        # nobody. Three strikes bounds the total cost at a few seconds per
+        # process while still being patient with a genuinely slow cycle.
+        _gave_up = True
+        _log('POV reports enabled but will not construct after {0} waits; '
+             'proceeding without it'.format(_timeouts), level='WARNING')
+        return True
     return not is_cycling()
 
 

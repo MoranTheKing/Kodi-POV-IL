@@ -538,29 +538,24 @@ class Wizard:
     def _addon_is_enabled(self, addon_id):
         return self._addon_is_enabled_static(addon_id)
 
-    # NO SHARED RECORD. Five validation rounds went into a Window(10000)
-    # count-plus-deadlines that both add-ons wrote, and each round found a new
-    # way it broke -- clock steps, overlapping cyclers clobbering each other, a
-    # cross-process read-modify-write losing counts both ways, an unmatched
-    # leave wiping a live record. It only ever existed to answer "can POV be
-    # constructed right now", which every process can ask directly, with
-    # nothing to keep in step. See pov_reload.py for the same reasoning.
+    # NO SHARED RECORD and NO STICKY FLAG. Five rounds of a Window(10000)
+    # count-and-deadlines scheme each broke a new way, and the sticky
+    # "I have seen POV work" flag that replaced it could never be set here at
+    # all: this add-on's plugin entry point declares reuselanguageinvoker=false,
+    # so Kodi builds a fresh interpreter for every invocation. A guard resting
+    # on process memory is dead on arrival in a process that has none.
     #
-    # The sticky flag distinguishes a window that will pass from an add-on that
-    # is simply not installed -- otherwise every guarded reload would wait, for
-    # every user who does not have POV.
-    _seen_pov_resolvable = False
+    # Just ask whether POV can be constructed. See pov_reload.py.
 
     @classmethod
     def _pov_cycling(cls):
-        """True while POV cannot be constructed but has been able to before."""
+        """True while POV cannot be constructed right now."""
         try:
             import xbmcaddon
             xbmcaddon.Addon('plugin.video.pov')
-            cls._seen_pov_resolvable = True
             return False
         except Exception:
-            return cls._seen_pov_resolvable
+            return True
 
     @staticmethod
     def _wait_until_resolvable(addon_ids, timeout=30):
@@ -573,15 +568,10 @@ class Wizard:
         that redraws POV-backed windows in that moment gets a screen full of
         errors.
 
-        THE TIMEOUT IS GENEROUS ON PURPOSE, because the caller acts on the
-        answer by force-closing Kodi. The measured gap is under three seconds
-        and this wait is completely invisible -- no dialog, no progress -- so
-        stretching it costs nothing, while guessing "broken" about a device
-        that was merely slow costs that user a full app close, and on Android
-        a manual relaunch. A tight 20s made "half a second late" and "genuinely
-        never coming back" the same outcome. Ninety seconds is ~30x the
-        observed worst case, and this same startup path already tolerates a
-        240s wait elsewhere.
+        Thirty seconds against a measured window of under three. The caller no
+        longer force-closes on a timeout -- it defers -- so this only has to be
+        long enough not to defer an update that was about to work, and short
+        enough not to add a silent minute to a chain that is already quiet.
         """
         try:
             import xbmcaddon
@@ -968,7 +958,13 @@ class Wizard:
                             'yet; leaving the skin alone -- the update is '
                             'installed and shows on the next start.',
                             level=xbmc.LOGWARNING)
-                return True
+                # DEFERRED, NOT True. Both keep the caller from force-closing,
+                # but True also means "fully took" -- and the manual path turns
+                # that into an on-screen "העדכון הותקן והוחל", telling the user
+                # the update has been APPLIED while they are still running the
+                # old code. The log line directly above says the opposite. Of
+                # the two, the notification is the one the user reads.
+                return self.HOT_RELOAD_DEFERRED
             xbmc.executebuiltin('ReloadSkin()')
             logging.log('[HOT-RELOAD] update applied without closing Kodi')
             return True
