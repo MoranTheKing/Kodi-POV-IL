@@ -240,6 +240,7 @@ def _run_build_startup_repairs():
         _maybe_patch_skin_watched_poster,
         _maybe_patch_favourites_xml,
         _maybe_patch_favourites_personal_tiles,
+        _maybe_seed_recent_updates_tile,
         _maybe_patch_pov_torbox_usage,
         _maybe_patch_pov_cache_empty,
         _maybe_patch_pov_trakt_cache_empty,
@@ -1571,6 +1572,31 @@ def _maybe_patch_favourites_xml():
             kodi_utils.log(
                 'favourites_xml_patcher failed: {0}'.format(e),
                 level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_seed_recent_updates_tile():
+    """Put the "10 העדכונים האחרונים" tile on the home screen, once ever.
+
+    Deliberately runs right after the personal-tiles restore, so it looks at a
+    favourites.xml that has already been repaired if it needed repairing --
+    otherwise a mid-repair file could be read as "no closing tag" and the offer
+    would be silently skipped for that boot.
+    """
+    try:
+        from resources.lib import recent_updates_tile_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = recent_updates_tile_patcher.ensure_patched()
+        if status not in ('already_seen', 'no_kodi', 'no_favourites'):
+            kodi_utils.log('recent_updates_tile_patcher: {0}'.format(status),
+                           level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log('recent_updates_tile_patcher failed: {0}'.format(e),
+                           level='WARNING')
         except Exception:
             pass
 
