@@ -224,15 +224,23 @@ def _refresh_active_skin(af3_changed):
     # screen of all four skins -- so this guard belongs before the branch, not
     # inside one of them. Estuary, NOX and Arctic Fuse 3 were exposed to the
     # same fault as FENtastic; only the code path differed.
-    settled = True
+    # DO NOT WAIT HERE. Alone among the reload sites, this one is on a direct
+    # user click -- the settings dialog's provider switch -- so a 30-second
+    # block would look like the build had frozen, with no busy indicator. Skip
+    # instead: the provider is already written to disk and the skin files
+    # already rewritten before this runs, and the caller's dialog says the
+    # change takes effect after a restart when this returns False. Nothing is
+    # lost, and the click stays instant.
+    cycling = False
     try:
         from resources.lib import pov_reload
-        settled = pov_reload.wait_until_settled(30)
+        cycling = pov_reload.is_cycling()
     except Exception:
-        settled = True
-    if not settled:
-        _log('POV still cycling; skipping the skin refresh so the home screen '
-             'is not rebuilt against an add-on that cannot resolve', 'WARNING')
+        cycling = False
+    if cycling:
+        _log('POV is cycling; not reloading the skin now. The provider is '
+             'already stored and applied to the skin files, so it takes '
+             'effect on the next start.', 'WARNING')
         return False
     if af3_changed and skin == 'skin.arctic.fuse.3':
         try:
