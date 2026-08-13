@@ -1271,6 +1271,25 @@ def _wait_for_quick_update_notice(max_seconds=180):
 def _rebuild_af3_shortcuts():
     if xbmc is None:
         return
+    # Arctic Fuse 3's own route to the same fault FENtastic hit: this rebuilds
+    # the shortcut templates and then reloads the skin, so POV's home tiles are
+    # redrawn. Doing that while pov_reload has POV disabled leaves every one of
+    # them raising "Unknown addon id". Waiting costs a delayed rebuild; not
+    # waiting costs the home screen.
+    #
+    # The wait is computed inside the try and acted on OUTSIDE it. Putting the
+    # `return` inside meant any exception in here -- including one from the
+    # logging call this module does not actually have -- was swallowed by the
+    # except and execution fell straight through to the rebuild. A guard that
+    # fails open silently is worse than no guard, because it reads as covered.
+    settled = True
+    try:
+        from resources.lib import pov_reload
+        settled = pov_reload.wait_until_settled(30)
+    except Exception:
+        settled = True          # no pov_reload here means nothing to wait for
+    if not settled:
+        return
     _set_af3_runtime_defaults()
     _seed_af3_spotlight_once()
     _seed_af3_layout_once()

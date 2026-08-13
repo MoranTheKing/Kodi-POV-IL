@@ -220,6 +220,20 @@ def _refresh_active_skin(af3_changed):
         import xbmc
     except Exception:
         return False
+    # Every branch below rebuilds windows, and POV widgets live on the home
+    # screen of all four skins -- so this guard belongs before the branch, not
+    # inside one of them. Estuary, NOX and Arctic Fuse 3 were exposed to the
+    # same fault as FENtastic; only the code path differed.
+    settled = True
+    try:
+        from resources.lib import pov_reload
+        settled = pov_reload.wait_until_settled(30)
+    except Exception:
+        settled = True
+    if not settled:
+        _log('POV still cycling; skipping the skin refresh so the home screen '
+             'is not rebuilt against an add-on that cannot resolve', 'WARNING')
+        return False
     if af3_changed and skin == 'skin.arctic.fuse.3':
         try:
             from resources.lib import af3_home_patcher

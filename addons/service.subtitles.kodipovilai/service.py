@@ -1000,12 +1000,21 @@ def _tile_reload_worker():
         import xbmc
         if xbmc.getCondVisibility('Player.HasMedia'):
             return
-        saved = None
+        # Wait out any POV cycle FIRST. This function has always imported
+        # pov_reload -- for the focus snapshot -- and never asked it the one
+        # question that matters: rebuilding every window while POV cannot be
+        # constructed is what breaks the home screen. It applies to every skin,
+        # since unlike the other reload sites this one has no skin guard at all.
+        settled, saved = True, None
         try:
             from resources.lib import pov_reload
-            saved = pov_reload._capture_home_focus()
+            settled = pov_reload.wait_until_settled(30)
+            if settled:
+                saved = pov_reload._capture_home_focus()
         except Exception:
-            saved = None
+            settled, saved = True, None
+        if not settled:
+            return
         xbmc.executebuiltin('ReloadSkin()')
         try:
             xbmc.sleep(1200)

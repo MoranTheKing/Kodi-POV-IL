@@ -331,15 +331,20 @@ def _reload_skin_if_fentastic():
         # reload, so dropping it would leave the widgets missing until the next
         # skin change. A few seconds later is free; a few seconds early is the
         # bug above.
+        # Decided inside the try, acted on outside it: a `return` inside
+        # would be swallowed by the except, and the reload would go ahead
+        # exactly when it must not.
+        settled = True
         try:
             from resources.lib import pov_reload
-            if not pov_reload.wait_until_settled(30):
-                _log('POV still cycling after 30s; leaving the reload for the '
-                     'next service run rather than rebuilding the home screen '
-                     'against an add-on that cannot resolve', level='WARNING')
-                return
+            settled = pov_reload.wait_until_settled(30)
         except Exception:
-            pass
+            settled = True
+        if not settled:
+            _log('POV still cycling after 30s; leaving the reload for the '
+                 'next service run rather than rebuilding the home screen '
+                 'against an add-on that cannot resolve', level='WARNING')
+            return
         _SKIN_RELOADED[0] = True
         _log('reloading the skin so the restored widget includes take effect '
              'now, instead of at the next skin change', level='WARNING')
