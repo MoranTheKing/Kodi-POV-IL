@@ -147,6 +147,24 @@ copy removes them -- so the prompt offered something the add-on screen had no
 way to accept. The check is switched off once. If you switch it back on, it
 stays on.
 
+## You are not asked to reinstall the app for nothing (from `0.2.492`)
+
+The Android and Windows packages are checked at every start, and if a newer
+one exists you are offered it -- there is no "do not ask again", so an offer
+you keep declining comes back at every start until you act on it. That is the
+right behaviour for a package that changes the application.
+
+It is the wrong behaviour for one that does not. A package also carries a copy
+of the build, used only to set up a brand new install; an install that already
+exists gets the same content through the ordinary update, so for it the new
+package holds nothing new. Those releases are now marked, and the offer is not
+raised for them. Nothing is hidden: the release exists, the download page
+serves it, and "עדכון גרסת קודי" in the wizard menu still finds it and installs
+it if you ask.
+
+Installing a package over an existing one keeps everything -- settings,
+add-ons, accounts, watched history. It is an upgrade, not a reinstall.
+
 ## POV self-update and its caches (from `0.2.489`)
 
 POV updates itself from its author's repository, and its newer versions changed
