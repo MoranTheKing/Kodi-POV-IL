@@ -53,7 +53,15 @@ except Exception:
 
 
 FAVOURITES_REL = 'favourites.xml'
-SEEN_FILE = ('special://profile/addon_data/service.subtitles.kodipovilai/'
+# BESIDE THE WIZARD'S COUNTER, NOT IN OUR OWN addon_data. Kodi ships a
+# "Clear data" button on every add-on's settings screen, and it wipes exactly
+# one folder: that add-on's. With this record living in ours, a user who
+# deleted the tile and later cleared this add-on's data -- a normal
+# troubleshooting step, unrelated to favourites -- lost the record while the
+# counter and favourites.xml both survived, and the tile they had deleted came
+# back. Keeping the record next to the counter it is compared against means one
+# action cannot take one without the other.
+SEEN_FILE = ('special://profile/addon_data/plugin.program.kodipovilwizard/'
              'recent_updates_tile_seen.txt')
 REMOVED_TOKEN = 'user_removed'
 # How many of the user's own favourites to remember. More than one because any
@@ -150,6 +158,13 @@ def _write_sidecar(state, anchors=None):
         # is unreadable, and an unreadable record now costs the user their
         # tile -- so it must never be possible to observe one.
         tmp = path + '.tmp'
+        # A stray DIRECTORY here blocks every future write, silently and
+        # forever, because the failure is swallowed -- and a record that can
+        # never be written is a deletion that can never be remembered. The
+        # favourites.xml write below has this guard; this one needs it more.
+        if os.path.isdir(tmp):
+            import shutil
+            shutil.rmtree(tmp, ignore_errors=True)
         with open(tmp, 'w', encoding='utf-8') as handle:
             handle.write(json.dumps(payload, ensure_ascii=False))
         os.replace(tmp, path)
