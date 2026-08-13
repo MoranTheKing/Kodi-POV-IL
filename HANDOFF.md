@@ -3721,6 +3721,18 @@ clear_svc, delete, boot} with INV1 and INV2 both at zero.
 **Read this before trusting any green fuzz run in this repo**: an oracle that
 cannot fire looks exactly like an oracle that found nothing.
 
+The same lesson came back one level deeper. Every fuzzer here wrote its
+`switch` action with a TILE-FREE seed and had no action that re-adds the tile
+by hand, so `has_tile()` could only ever become true through the patcher's own
+seeding call -- structurally blind to a tile arriving in `favourites.xml` from
+anywhere else, which is where the sixth and seventh bugs both lived. Both were
+caught by hand, with 16,807 green orderings running alongside.
+`x_fuzz_seeded_tile.py` closes it with `switch_seeded` (a per-skin seed that
+carries the tile) and `readd` (the user re-favourites it), and it takes
+`TILE_ADDON_DIR` so it can be pointed at an older revision **and made to go
+red on demand** -- against `c2f6a3f` it reports 46 violations, against HEAD
+zero. Do that to any fuzzer here before believing it.
+
 ### Four residuals, deliberately not fixed
 
 The first two go the safe direction -- a tile somebody never sees again. **The
