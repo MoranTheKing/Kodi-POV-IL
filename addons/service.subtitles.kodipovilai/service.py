@@ -223,6 +223,10 @@ def _run_build_startup_repairs():
         _maybe_restore_pov_torbox,
         _maybe_patch_af3_home,
         _maybe_cleanup_wizard,
+        # Before anything that can cycle POV: the cycle is what opens the
+        # window this teaches POV to wait out.
+        _maybe_patch_pov_addon_window,
+        _maybe_quiet_update_nags,
         _maybe_patch_pov_repeat_timer,
         _maybe_patch_pov_widget_crash_guard,
         _maybe_patch_pov_favorites_refresh,
@@ -2080,6 +2084,71 @@ def _maybe_run_fav_diagnostic():
         try:
             kodi_utils.log(
                 'pov_favorites_diagnostic run failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_addon_window():
+    """Stop POV's own service dying in the seconds Kodi calls POV unknown.
+
+    Kodi flips the enabled flag at once and finishes loading the add-on a
+    couple of seconds later, and it starts the add-on's service at the first
+    of those two moments. POV's import chain reads a setting on the way up
+    (tmdb_api, at module level), so inside that window the whole service dies
+    -- no Trakt sync monitor, no premium-account notification, for the rest of
+    the session, plus a red error in the log. We open that window ourselves
+    every time pov_reload cycles POV, but it is Kodi's window and a hand
+    toggle hits it too, so the wait belongs inside POV. NOT cycled afterwards:
+    cycling is the thing that opens the window, and the patch is on disk for
+    the next one either way."""
+    try:
+        from resources.lib import pov_addon_window_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_addon_window_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_addon_window_patcher: POV now waits out the '
+                'unknown-addon window instead of losing its service',
+                level='INFO')
+        elif status in ('read_failed', 'write_failed', 'compile_failed',
+                        'unmatched'):
+            kodi_utils.log(
+                'pov_addon_window_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_addon_window_patcher run failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_quiet_update_nags():
+    """Switch off the self-update check in Umbrella and Account Manager Lite.
+
+    Both nag at every start about a version the build pins deliberately, and
+    neither offers a way to take it -- taking it would strip the patches that
+    make them work here. Settings only, once each, and only while the value
+    is still the one they shipped."""
+    try:
+        from resources.lib import update_nag_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = update_nag_patcher.ensure_quiet()
+        if status == 'patched':
+            kodi_utils.log(
+                'update_nag_patcher: self-update notifications switched off',
+                level='INFO')
+        elif status == 'write_failed':
+            kodi_utils.log('update_nag_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'update_nag_patcher run failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
