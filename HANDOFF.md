@@ -3772,6 +3772,31 @@ pointed that out.
     needs something in the record to order them by; worth doing, not worth
     doing in the same pass as the fix that found it.
 
+## Pre-marker installs are frozen out of every app update, permanently
+
+`kodi_version_update_check` returns early on the AUTOMATIC path whenever
+`_marked_platform_release()` is None -- which is every package through `.47`,
+since `system/povil-release.txt` first shipped in `.48`. Wizard 0.1.35 added
+that in `3979e13` for a real reason: 0.1.34's bridge classified any unmarked
+install as `.47`, so a routine quick update was followed, for every legacy
+user at once, by a dialog demanding they hand-reinstall the whole application.
+
+The mitigation was right and it is also blunt: those installs will never be
+told automatically about ANY future package, including one that matters, and
+they are exactly the population that has never updated the app. Their only way
+out is the manual menu item, which still works and still uses the `.47` bridge
+(so it reports "21.3-povil.47" to somebody who may be on `.43` -- the number is
+the bridge, not a reading).
+
+**What makes this worth revisiting now**: the fault in 0.1.34 was not that the
+installed version was unknown. It was prompting at all for a package nobody
+needed -- and `NO_AUTO_APP_PROMPT_TARGETS` now handles exactly that, precisely,
+by naming the release rather than muting a population. With that in place the
+blanket skip could be relaxed to "prompt an unmarked install too, for releases
+that are not on the suppression list". Deliberately NOT done in this release:
+it un-mutes a whole population that is currently quiet, which is not something
+to slip into a train that has already been validated and is about to leave.
+
 ## Smaller, also open
 
   * Four more written-and-undeclared marker ids the settings test cannot see,
