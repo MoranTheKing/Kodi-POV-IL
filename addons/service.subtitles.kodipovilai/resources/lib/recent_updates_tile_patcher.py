@@ -85,9 +85,17 @@ def _sidecar():
         import json
         with open(_seen_path(), 'r', encoding='utf-8') as handle:
             data = json.loads(handle.read())
-        return data if isinstance(data, dict) else {}
-    except Exception:
+        return data if isinstance(data, dict) else {'state': REMOVED_TOKEN}
+    except FileNotFoundError:
         return {}
+    except Exception:
+        # THERE IS A FILE AND WE CANNOT READ IT. Truncated by a power cut,
+        # corrupted, or written by an older format. Treating that as "never
+        # seeded" throws away a recorded deletion and puts the tile back --
+        # so an unreadable record is read as the deletion it most likely is.
+        # The cost of being wrong this way is a tile somebody never sees
+        # again; the other way it is a tile they cannot get rid of.
+        return {'state': REMOVED_TOKEN}
 
 
 def _write_sidecar(state, anchors=None):
@@ -98,8 +106,13 @@ def _write_sidecar(state, anchors=None):
         if directory and not os.path.isdir(directory):
             os.makedirs(directory)
         payload = {'state': state, 'anchors': list(anchors or [])}
-        with open(path, 'w', encoding='utf-8') as handle:
+        # ATOMIC, like the favourites.xml write below it. A half-written record
+        # is unreadable, and an unreadable record now costs the user their
+        # tile -- so it must never be possible to observe one.
+        tmp = path + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as handle:
             handle.write(json.dumps(payload, ensure_ascii=False))
+        os.replace(tmp, path)
         return True
     except Exception as e:
         _log('could not record the tile state: {0}'.format(e), level='WARNING')
@@ -156,8 +169,23 @@ def ensure_patched():
         return 'already_present'
 
     anchors = [a for a in record.get('anchors') or [] if isinstance(a, str)]
+    if record and not anchors:
+        # WE HAVE A RECORD BUT NOTHING TO MEASURE AGAINST -- their favourites
+        # were only ours at seed time, or the anchor write failed. Without
+        # anchors the two cases cannot be told apart, so fall back to the
+        # safer one: we offered it once, and we do not offer again. Skipping
+        # the check entirely, as this did, re-seeded on every single boot --
+        # the v1 behaviour, for exactly the users least able to escape it.
+        return 'already_seen'
     if anchors:
-        if all(a in theirs for a in anchors):
+        survived = sum(1 for a in anchors if a in theirs)
+        # A MAJORITY, NOT ALL. Requiring every anchor made MORE anchors mean
+        # MORE false wipes: deleting our tile and one unrelated favourite in
+        # the same sitting -- or months apart, since anchors are never
+        # refreshed -- tripped it and put the tile back. A GUI delete of one
+        # tile leaves the rest standing; the wizard's copyfile leaves almost
+        # nothing of theirs. Half is a wide gap between those two.
+        if survived * 2 >= len(anchors):
             # EVERY one of their favourites we remembered is still there, and
             # only ours is gone. That was them.
             #
