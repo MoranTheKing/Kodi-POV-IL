@@ -538,92 +538,32 @@ class Wizard:
     def _addon_is_enabled(self, addon_id):
         return self._addon_is_enabled_static(addon_id)
 
-    # The same Window(10000) record pov_reload reads. The service add-on's
-    # skin-reload guards live in a DIFFERENT process and cannot see anything in
-    # this one, so without this they report "not cycling" for the whole of the
-    # dance below and let a ReloadSkin through.
+    # NO SHARED RECORD. Five validation rounds went into a Window(10000)
+    # count-plus-deadlines that both add-ons wrote, and each round found a new
+    # way it broke -- clock steps, overlapping cyclers clobbering each other, a
+    # cross-process read-modify-write losing counts both ways, an unmatched
+    # leave wiping a live record. It only ever existed to answer "can POV be
+    # constructed right now", which every process can ask directly, with
+    # nothing to keep in step. See pov_reload.py for the same reasoning.
     #
-    # The shape must match pov_reload's exactly: "count|monotonic|wall".
-    # A COUNT because this add-on can be cycling twice at once -- it ships a
-    # startup service AND a plugin entry point, and nothing serialises them, so
-    # a user re-triggering Quick Update during the silent startup update gives
-    # two overlapping cycles; with a plain flag the first to finish cleared it
-    # for both. TWO CLOCKS because a wall clock alone was defeated by an NTP
-    # step, which Android boxes without an RTC do routinely, and shortly after
-    # the network comes up -- the same event an update waits for.
-    CYCLING_PROPERTY = 'kodipovil_pov_cycling'
-    CYCLING_MAX_HORIZON = 300
-
-    @classmethod
-    def _read_cycling(cls):
-        try:
-            import xbmcgui
-            raw = (xbmcgui.Window(10000).getProperty(cls.CYCLING_PROPERTY)
-                   or '').strip()
-            count, mono, wall = raw.split('|')
-            mono, wall = float(mono), float(wall)
-            # Reject rather than clamp anything outside a plausible epoch
-            # range. This also rejects inf and nan, and float() overflows a
-            # long enough numeral straight to inf. We only ever write
-            # now+seconds, so a value out here did not come from us.
-            if not (-1e12 < mono < 1e12) or not (-1e12 < wall < 1e12):
-                return 0, 0.0, 0.0
-            return int(count), mono, wall
-        except Exception:
-            return 0, 0.0, 0.0
-
-    @classmethod
-    def _write_cycling(cls, count, mono, wall):
-        try:
-            import xbmcgui
-            value = '' if count <= 0 else '%d|%f|%f' % (count, mono, wall)
-            xbmcgui.Window(10000).setProperty(cls.CYCLING_PROPERTY, value)
-        except Exception:
-            pass
+    # The sticky flag distinguishes a window that will pass from an add-on that
+    # is simply not installed -- otherwise every guarded reload would wait, for
+    # every user who does not have POV.
+    _seen_pov_resolvable = False
 
     @classmethod
     def _pov_cycling(cls):
-        """True while anyone -- this add-on or the service one -- has POV in a
-        state where it cannot be constructed."""
+        """True while POV cannot be constructed but has been able to before."""
         try:
-            import time
-            count, mono, wall = cls._read_cycling()
-            if count <= 0:
-                return False
-            now_mono, now_wall = time.monotonic(), time.time()
-            # Clamped, so a corrupt value cannot pin every guarded reload in the
-            # build "cycling" for the rest of the session.
-            horizon_mono = min(mono, now_mono + cls.CYCLING_MAX_HORIZON)
-            horizon_wall = min(wall, now_wall + cls.CYCLING_MAX_HORIZON)
-            return now_mono < horizon_mono or now_wall < horizon_wall
-        except Exception:
+            import xbmcaddon
+            xbmcaddon.Addon('plugin.video.pov')
+            cls._seen_pov_resolvable = True
             return False
-
-    @classmethod
-    def _publish_cycling(cls, seconds):
-        """Join (seconds > 0) or leave (0) the set of cyclers."""
-        try:
-            import time
-            count, mono, wall = cls._read_cycling()
-            now_mono, now_wall = time.monotonic(), time.time()
-            live = count > 0 and (now_mono < mono or now_wall < wall)
-            if seconds:
-                seconds = min(seconds, cls.CYCLING_MAX_HORIZON)
-                if live:
-                    cls._write_cycling(count + 1, max(mono, now_mono + seconds),
-                                       max(wall, now_wall + seconds))
-                else:
-                    cls._write_cycling(1, now_mono + seconds,
-                                       now_wall + seconds)
-            elif live:
-                cls._write_cycling(count - 1, mono, wall)
-            else:
-                cls._write_cycling(0, 0.0, 0.0)
         except Exception:
-            pass
+            return cls._seen_pov_resolvable
 
     @staticmethod
-    def _wait_until_resolvable(addon_ids, timeout=90):
+    def _wait_until_resolvable(addon_ids, timeout=30):
         """Block until every id can actually be CONSTRUCTED, or time out.
 
         The enabled flag is not this question. Addons.GetAddonDetails reports
@@ -969,7 +909,6 @@ class Wizard:
                 return False
             left_off = []
             cycled = []
-            self._publish_cycling(120)
             for addon_id in self.HOT_RELOAD_TARGETS:
                 try:
                     if self._addon_is_enabled(addon_id) is not True:
@@ -993,7 +932,6 @@ class Wizard:
                 logging.log('[HOT-RELOAD] these are still off and recorded '
                             'for the next start: {0}'.format(
                                 ', '.join(left_off)), level=xbmc.LOGERROR)
-                self._publish_cycling(0)
                 return False
             # NOT YET. Every id above has just been re-enabled, and Kodi's
             # enabled flag -- which is all _addon_is_enabled can see -- flips
@@ -1013,24 +951,28 @@ class Wizard:
             # already knows which ids it cycled; those are the only ones whose
             # readiness this wait is about.
             resolvable = self._wait_until_resolvable(cycled)
-            self._publish_cycling(0)
             if not resolvable:
-                # ACT ON THE ANSWER. Every other guard added for this fault
-                # skips its reload when the wait says "not yet"; this one asked
-                # and then reloaded regardless, which is the same bug at the one
-                # site that matters most. Reporting failure is the right
-                # outcome, not skipping quietly: the caller then force-closes,
-                # and a restart is what makes an add-on that will not come back
-                # usable again. The files are already in place either way.
-                logging.log('[HOT-RELOAD] cycled add-ons did not become usable; '
-                            'falling back to a restart rather than rebuilding '
-                            'the screen against them', level=xbmc.LOGERROR)
-                return False
+                # SKIP THE RELOAD, DO NOT FORCE-CLOSE. An earlier version
+                # returned False here, and False makes the caller close Kodi --
+                # so a device that was merely slow got an app close it never got
+                # before this work, and on Android that means a manual relaunch.
+                # Worse, this wait sits at the end of a chain that is already
+                # silent for minutes, so the close arrives out of nowhere.
+                #
+                # Nothing is lost by skipping: the files are on disk, the ids
+                # are recorded in pending_enable, heal_disabled_addons switches
+                # them back on at the next start, and the skin picks the update
+                # up then. The user gets a working Kodi now instead of a closed
+                # one, which is the whole point of a hot reload.
+                logging.log('[HOT-RELOAD] cycled add-ons are not constructible '
+                            'yet; leaving the skin alone -- the update is '
+                            'installed and shows on the next start.',
+                            level=xbmc.LOGWARNING)
+                return True
             xbmc.executebuiltin('ReloadSkin()')
             logging.log('[HOT-RELOAD] update applied without closing Kodi')
             return True
         except Exception as err:
-            self._publish_cycling(0)
             logging.log('[HOT-RELOAD] failed, falling back to a restart: '
                         '{0}'.format(err), level=xbmc.LOGERROR)
             return False
