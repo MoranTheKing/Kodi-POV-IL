@@ -3528,11 +3528,12 @@ Support note, not a code fix — nothing in this build's own flow does it.
   write was invisible in the log and POV's reload was skipped. A status has to
   describe what the run did.
 
-## The "last ten updates" tile, and four rounds of getting it wrong
+## The "last ten updates" tile, and six rounds of getting it wrong
 
 The tile itself is three lines of XML. Deciding whether it may be re-seeded
-took four review rounds, every one of which found something real, including in
-the fix from the round before. Worth reading before touching
+took six review rounds, every one of which found something real, including in
+the fix from the round before, and twice including in the round that had just
+declared itself done. Worth reading before touching
 `recent_updates_tile_patcher.py`.
 
 The problem: the wizard's `update_favourites_xml_file()` copies a static
@@ -3541,9 +3542,27 @@ tile disappears through no fault of theirs and must come back. A tile the user
 deleted must NOT. From `favourites.xml` alone those two are indistinguishable,
 and five designs proved it (the module header lists them).
 
-The answer is that the writer knew all along: the wizard now counts its own
-replacements, and the patcher records that count when it seeds. Count moved ->
-the wizard did it -> restore. Count did not -> the user did -> never again.
+The answer is that the writer knew all along: the wizard leaves a MARK every
+time it replaces the file, and the patcher records that mark when it seeds.
+Mark changed -> the wizard did it -> restore. Mark unchanged -> the user did ->
+never again.
+
+It was a COUNT for three of those rounds, and the count is what rounds four and
+five killed. To increment a count you first have to read it, and every way of
+reading it wrong still yields a perfectly ordinary number -- just a smaller
+one. A corrupt copy read as nothing, so the wizard rewrote a device's count of
+4 as 1, healing the damage into a clean and wrong number before the reader
+could ever notice it was damage; the reader, comparing against the 4 it had
+recorded, watched the number climb back past 4 over the next few skin switches
+and concluded that the user had deleted a tile the wizard itself had removed.
+A uuid4 mark is written and never read, so nothing can rewind it, and the only
+question ever asked of it -- "is this still the mark I saw?" -- has no
+wrong-but-plausible answers. What it gives up is that a count BELOW its own
+snapshot was provably impossible and therefore catchable; a mark restored to an
+earlier value just looks like a mark. That needs `addon_data` rolled back for
+the mark but not for the record beside it, which no Kodi button does and no
+backup tool does by halves -- against corruption, which an SD card does on its
+own.
 
 What the rounds added, each of them load-bearing:
 
@@ -3560,14 +3579,46 @@ What the rounds added, each of them load-bearing:
     otherwise undo every deletion the user makes, forever.
   * Seeding requires EVERY copy to land. One copy is not the mechanism with a
     scratch on it, it is the mechanism with its redundancy gone.
-  * A count that is present and UNREADABLE is damage, not zero, and a count
-    BELOW its own snapshot is impossible, since the wizard only adds. Either
-    way the count is not consulted.
-  * When the count cannot be trusted the anchors decide -- and their verdict
-    is NOT recorded. A recorded deletion is permanent: it is the first thing
-    every later start checks and it never looks at the count again. That
-    weight belongs to a fact, not to a guess read off favourites that a skin
-    seed may itself contain.
+  * PRESENT-BUT-UNREADABLE IS ITS OWN ANSWER, everywhere, and every place that
+    collapsed it into one of the other two cost somebody their tile. The mark
+    reads as absent / a value / damaged; the record reads as absent / legible /
+    damaged. A copy that cannot be read gets no vote while one that can
+    disagrees -- the version that let a single corrupt copy outvote a healthy
+    one saying "offered" needed nothing but ordinary flash wear, and latched
+    the moment it happened.
+  * The two copies are compared AS A PAIR against the pair that was recorded,
+    never copy against copy. A copy whose write once failed sits there holding
+    an older mark forever, and against a single recorded value that stale copy
+    reads as "different" -- which is the reading that puts a deleted tile back.
+  * When no copy of the mark can speak, the snapshot is RE-BASELINED to what it
+    says now and the anchors decide this one start -- and their verdict is NOT
+    recorded. A recorded deletion is permanent: it is the first thing every
+    later start checks and it never looks at the mark again. That weight
+    belongs to a fact, not to a guess read off favourites that a skin seed may
+    itself contain. Re-baselining is what stops damage keeping the question
+    open forever, so it becomes one start of "cannot tell" instead.
+  * THE FILE OUTRANKS THE RECORD. `ensure_patched` checks whether the tile is
+    actually in `favourites.xml` before it checks whether the record says the
+    user removed it. A tile that is present cannot be a tile they removed, and
+    asking the record first meant an unreadable one returned "removed" with the
+    tile plainly on screen -- and the repair that could have fixed the record
+    while the tile was there to prove what it should say was unreachable from
+    that moment on.
+  * THE WIZARD MARKS BEFORE IT COPIES, the same order the reader uses for its
+    own record and for the same reason. The two steps are not atomic: a power
+    cut between them, or an ENOSPC that the mark writer swallows by design
+    while the big copy has already landed, leaves the file replaced with
+    nothing to say so -- and that is unrecoverable. Reversed, the leftover is a
+    mark with no replacement behind it, and the tile is still in the file, so
+    the reader re-baselines onto it before it can be read as a replacement.
+  * An EXHAUSTED seed gives up without recording anything. Out of attempts, the
+    branch below is written for a tile that was offered and has gone missing,
+    and "nobody replaced the file" is perfectly true of a tile that never
+    reached `favourites.xml` -- which is what two interrupted seeds leave. It
+    used to answer that by telling the user they had deleted something they had
+    never seen. Note that rolling the record BACK is not the fix either: that
+    reads as "never offered" next start and seeds again, which is the retry
+    loop the attempt limit exists to end.
 
 ## Kodi's unknown-addon window kills an add-on's own service
 
@@ -3609,46 +3660,71 @@ disappears with only a WARNING nobody reads. The maintainer has said they are
 fine with auto-update; making `unmatched` visible instead of buried is the
 follow-up worth doing.
 
-## OPEN, AND BLOCKING THE RELEASE: two ways a deleted tile still comes back
+## CLOSED: the two blockers, and the three the review found after them
 
-Found by the final full-scope review, both reproduced against real code from
-both add-ons wired together, both surviving at the time of writing. Do not
-package until these are closed.
+Both original blockers were the same shape -- **the snapshot went stale against
+a counter that had been reset, and the code judged on a pair of numbers that no
+longer meant the same thing** -- so rather than patch the two instances, the
+number went. See the tile section above for the mark that replaced it. What
+each of the five turned out to need, since the fixes are not obvious from the
+symptoms:
 
-Both are the SAME shape, which is the useful part: **the snapshot goes stale
-against a counter that was reset, and the code then judges on a pair of
-numbers that are no longer comparable.**
-
-  1. THE WRITER ROLLS THE COUNT BACK. Round 3 taught the READER to tell a
-     corrupt count from a zero. It never touched the WRITER.
-     `_record_favourites_replaced()` still swallows an unreadable file and
-     counts up from 0, so if both copies are corrupt and one ordinary skin
-     switch happens, the wizard overwrites a true count of 4 with 1 -- healing
-     the corruption into a clean-looking wrong number before the reader can
-     ever see it as damage. Every later boot then reads now(1) < then(4),
-     falls to the anchors, and the tile never returns however many skin
-     switches follow. An untouched user loses it permanently.
-     Round 3's commit message says "either way the counter is not consulted".
-     It is consulted; it has just been quietly rewritten first.
-
+  1. THE WRITER ROLLED THE COUNT BACK. Not fixable in the reader: the writer
+     healed the corruption into a clean, wrong number before the reader could
+     see there had been any. Fixed by removing the read -- a mark needs no
+     previous value.
   2. CLEAR DATA ON THE WIZARD, THEN A DELETION, THEN A SKIN SWITCH. The
-     deletion is recognised but deliberately not recorded, because the count
-     is not trustworthy and a guess must not harden into a permanent verdict.
-     Later an ordinary skin switch moves the count past the stale snapshot,
-     which reads as "the wizard removed it" -- and the tile the user deleted
-     comes back. Fuzzing every ordering of {switch, clear_wizard, clear_svc,
-     delete, boot} to depth 6 found 30 of 15,625 sequences that violate the
-     promise, all of them clear_wizard + delete before the first observing
-     boot, then switch. clear_svc alone never does it, because the reader
-     prefers the wizard's copy.
+     deletion was seen and deliberately not recorded, because a count of zero
+     could not be told from a wiped one. With a mark, "no file at all" is a
+     value with a meaning, so the deletion is recorded and the later switch
+     cannot reopen it.
+  3. ONE CORRUPTED RECORD COPY OUTVOTED THE LEGIBLE ONE, which needed nothing
+     but ordinary flash wear on one file.
+  4. THE WIZARD COPIED THE FILE AND THEN MARKED IT, so a power cut between the
+     two left a replacement nothing could see.
+  5. AN EXHAUSTED SEED INVENTED A DELETION for a tile that had never once been
+     in `favourites.xml`.
 
-The direction a fix should probably take, not yet tried: when the count is not
-comparable -- damaged, or below its own snapshot -- RE-BASELINE the snapshot
-to the current count instead of judging on the pair. That makes the next real
-skin switch a genuine signal again, and it closes both cases with one rule.
-Whatever is chosen, it needs the wizard-side writer fixed too: a writer that
-counts up from zero after corruption destroys the evidence the reader was
-taught to look for.
+...and a sixth, found by the fuzzer within an hour of its oracle being
+repaired: `ensure_patched` asked the record whether the user had removed the
+tile BEFORE asking whether the tile was in the file.
+
+### The fuzzer was reporting zero because half of it was switched off
+
+`x_fuzz_orderings.py` sets `ever_deleted_and_seen = True` two lines above the
+`not ever_deleted_and_seen` that guards INV2 -- the invariant that catches an
+untouched user being told they deleted the tile, which is the exact harm the
+whole feature is about. The moment INV2's other clauses could be true, this
+line had already falsified its first one. **INV2 could not fire for any input,
+ever**, and 15,625 orderings reported "violations: 0" with it disabled. It also
+indexed the prefix with `seq.index(step)`, which finds the FIRST `'boot'` in
+the tuple no matter which one the loop is standing on.
+
+Both repaired, and the action set widened past atomic actions -- every original
+action was all-or-nothing, so no interruption could be modelled and none of
+blockers 3-5 was reachable even with a working oracle. It now runs 16,807
+orderings over {switch, switch_unmarked, corrupt_seen_wiz, clear_wizard,
+clear_svc, delete, boot} with INV1 and INV2 both at zero.
+
+**Read this before trusting any green fuzz run in this repo**: an oracle that
+cannot fire looks exactly like an oracle that found nothing.
+
+### Two residuals, deliberately not fixed
+
+  * A MARK WRITE THAT FAILS OUTRIGHT while the favourites copy succeeds --
+    `addon_data` unwritable, `userdata` fine -- leaves a replacement nobody can
+    detect, and the reader will eventually read it as a deletion. It cannot be
+    fixed by failing the skin switch: a bookkeeping file is never worth the
+    thing the user actually asked for. It is modelled in the fuzzer as
+    `switch_unmarked` and excused by name, so the shape of what cannot be
+    caught stays written down instead of being rediscovered.
+  * NO LEGIBLE COPY OF THE RECORD ANYWHERE (one wiped by "Clear data", the
+    other corrupted) reads as a deletion. Nothing is left that knows whether
+    the tile was ever offered, and this is the direction the feature chose from
+    the start: the cost of being wrong this way is a tile somebody never sees
+    again, the other way it is a tile they cannot get rid of. The fuzzer
+    excuses it by checking the filesystem, not the action names, so the
+    exception cannot quietly widen.
 
 ## Smaller, also open
 
