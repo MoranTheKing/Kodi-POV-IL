@@ -1,34 +1,42 @@
 # Seeds ONE home tile: "10 העדכונים האחרונים", opening the wizard's archive of
 # the last ten update notes.
 #
-# OFFERED ONCE, NEVER RE-OFFERED. The marker records that the build has put the
-# tile in front of this user, not that the tile is currently there. So a user
-# who deletes it keeps it deleted -- through the next update, the next start,
-# and every one after. Restoring a tile somebody removed is the same class of
-# rudeness as re-enabling an add-on they switched off, and this build has just
-# finished apologising for that one.
+# OFFERED ONCE, NEVER RE-OFFERED. A user who deletes the tile keeps it
+# deleted -- through the next update, the next start, and every one after.
+# Restoring a tile somebody removed is the same rudeness as re-enabling an
+# add-on they switched off, which this build spent another commit apologising
+# for. But a tile removed by something OTHER than the user has to come back,
+# and the wizard removes it routinely: update_favourites_xml_file() copies a
+# static per-skin seed over the whole file on every skin switch.
 #
-# TWO RECORDS, BECAUSE THERE ARE TWO QUESTIONS, and each single-record shape
-# got one of them wrong.
+# SO ASK THE WIZARD, DO NOT READ THE TEA LEAVES. Five designs tried to work
+# out which of the two had happened from favourites.xml alone, and every one
+# failed in one direction or the other:
 #
-# A comment inside favourites.xml alone: the wizard's update_favourites_xml_file
-# copies a static per-skin seed straight over that file on every skin switch,
-# so the comment went with it and a tile the user had DELETED came back.
+#   1. A comment marker in the file -- the skin-switch copy took it, so a
+#      DELETED tile came back.
+#   2. A sidecar saying "offered once" -- survives the copy, so a tile the copy
+#      removed was never restored.
+#   3. Both together -- Kodi re-serialises favourites.xml from memory on ANY
+#      GUI favourites edit, so the comment died in the same write that removed
+#      the tile. Broken for the primary deletion path, day one.
+#   4. Anchors: remember some of the user's own favourites, and judge by how
+#      many survived. Defeated by a favourites list made only of build-seeded
+#      tiles, which also live in the seed and survive the copy.
+#   5. Compare the file against the shipped seed -- exact for a fresh copy, but
+#      after a wipe-and-restore the file IS the seed plus our tile, so deleting
+#      the tile returns it to exactly the seed and reads as another wipe.
 #
-# A sidecar alone: it says "we have offered this once", which is true forever --
-# so when that same skin switch removed the tile from a user who had NEVER
-# touched it, nothing ever put it back. Silent, permanent, and triggered by a
-# menu entry this build puts in front of everyone.
+# The writer knew the whole time. update_favourites_xml_file is the only thing
+# that replaces the file, so it bumps a counter as it does; this records that
+# counter when it seeds, and later:
 #
-# So the comment answers "is this still a favourites.xml WE edited", and the
-# sidecar answers "did the user tell us to go away". Together they separate a
-# deliberate deletion (our marker still there, our tile gone) from an external
-# wipe (our marker gone too), which is exactly what favourites_xml_patcher does
-# with its anchor tile.
+#   counter moved   -> the file was replaced -> put the tile back
+#   counter did not -> nobody replaced it    -> that was the user -> never again
 #
-# The one case this cannot see: deleting the tile and switching skin with no
-# service run in between. The tile returns once; delete it again and the next
-# start records it for good.
+# A fact, for the price of one integer. The anchors remain only as a fallback
+# for a device whose wizard predates the counter -- which, since both ship in
+# the same quickfix, is essentially none.
 
 import os
 import re
@@ -47,9 +55,6 @@ except Exception:
 FAVOURITES_REL = 'favourites.xml'
 SEEN_FILE = ('special://profile/addon_data/service.subtitles.kodipovilai/'
              'recent_updates_tile_seen.txt')
-# Written into favourites.xml beside the tile. Its ABSENCE is the signal: this
-# file is no longer one we edited, so anything of ours missing from it was
-# removed by the copy, not by the user.
 REMOVED_TOKEN = 'user_removed'
 # How many of the user's own favourites to remember. More than one because any
 # single anchor can itself be deleted; few because this is a hint, not a backup.
