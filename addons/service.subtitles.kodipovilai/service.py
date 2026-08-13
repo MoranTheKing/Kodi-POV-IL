@@ -3678,12 +3678,14 @@ def _reload_skin_if_safe():
         # finishes. Skipping outright is fine here -- unlike the widget
         # patcher's reload, this one only refreshes player-OSD XML, which Kodi
         # re-reads on the next OSD open anyway.
+        cycling = False
         try:
             from resources.lib import pov_reload
-            if pov_reload.is_cycling():
-                return
+            cycling = pov_reload.is_cycling()
         except Exception:
-            pass
+            cycling = False
+        if cycling:
+            return
         xbmc.executebuiltin("ReloadSkin()")
     except Exception:
         pass

@@ -538,6 +538,49 @@ class Wizard:
     def _addon_is_enabled(self, addon_id):
         return self._addon_is_enabled_static(addon_id)
 
+    @staticmethod
+    def _wait_until_resolvable(addon_ids, timeout=20):
+        """Block until every id can actually be CONSTRUCTED, or time out.
+
+        The enabled flag is not this question. Addons.GetAddonDetails reports
+        enabled the instant it is set, while xbmcaddon.Addon(id) -- the call an
+        add-on's own first line makes, and the one that raises "Unknown addon
+        id" in the field logs -- keeps failing for a moment afterwards. Anything
+        that redraws POV-backed windows in that moment gets a screen full of
+        errors.
+
+        Best effort: a timeout returns anyway rather than blocking the update.
+        The window is normally a second or two, and waiting past it costs
+        nothing, whereas not waiting costs the home screen.
+        """
+        try:
+            import xbmcaddon
+        except Exception:
+            return True
+        waited = 0.0
+        pending = [i for i in (addon_ids or []) if i]
+        while pending and waited < timeout:
+            still = []
+            for addon_id in pending:
+                try:
+                    xbmcaddon.Addon(addon_id)
+                except Exception:
+                    still.append(addon_id)
+            if not still:
+                return True
+            pending = still
+            try:
+                xbmc.sleep(500)
+            except Exception:
+                return False
+            waited += 0.5
+        if pending:
+            logging.log('[HOT-RELOAD] still not constructible after {0:.0f}s, '
+                        'reloading anyway: {1}'.format(
+                            waited, ', '.join(pending)),
+                        level=xbmc.LOGWARNING)
+        return not pending
+
     @classmethod
     def _pending_enable_path(cls):
         import xbmcvfs
@@ -856,6 +899,16 @@ class Wizard:
                             'for the next start: {0}'.format(
                                 ', '.join(left_off)), level=xbmc.LOGERROR)
                 return False
+            # NOT YET. Every id above has just been re-enabled, and Kodi's
+            # enabled flag -- which is all _addon_is_enabled can see -- flips
+            # before the add-on can actually be constructed. ReloadSkin()
+            # rebuilds every window, so firing it in that gap hands the home
+            # screen a set of widgets whose add-on raises "Unknown addon id",
+            # which is precisely what two user logs show happening during a
+            # quick update. This is the same fault the service add-on's
+            # pov_reload guards against; the wizard cannot import that module,
+            # so it makes the same check for itself.
+            self._wait_until_resolvable(self.HOT_RELOAD_TARGETS)
             xbmc.executebuiltin('ReloadSkin()')
             logging.log('[HOT-RELOAD] update applied without closing Kodi')
             return True
