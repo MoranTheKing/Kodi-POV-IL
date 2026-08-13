@@ -152,10 +152,31 @@ tools/build_wizard_quickfix.py          # replaces only the Wizard in a quickfix
 8b. **A NEW FILE in the add-on needs `--allow-add`.** `build_addon_quickfix.py`
    refuses to add a member the previous quickfix did not have unless it is
    named: `--allow-add addons/service.subtitles.kodipovilai/resources/lib/<new>.py`.
-   Without it the build stops with "member names or order changed". That guard
-   exists so a stray file cannot slip into a package unnoticed, so name the
-   file rather than weakening it. Only the first quickfix carrying the file
-   needs the flag; every later one inherits it.
+   Without it the build stops -- and it names the added files and the flag,
+   rather than saying "member names or order changed" as this document used to
+   claim. That guard exists so a stray file cannot slip into a package
+   unnoticed, so name the file rather than weakening it. Only the first
+   quickfix carrying the file needs the flag; every later one inherits it.
+
+   **COUNT THE NEW FILES AGAINST THE SHIPPED QUICKFIX, NOT AGAINST YOUR OWN
+   MEMORY OF THIS BRANCH.** My own release notes said "exactly two new files"
+   for 0.1.537 and named the two written this week. There are three: the tile
+   patcher was added in `c6fff06`, several commits earlier, and never shipped,
+   so it is just as new to `0.1.536` as the other two. The build would have
+   stopped on it. One command answers it, and it is worth running every time:
+
+   ```
+   python3 - <<'PY'
+   import zipfile, os, pathlib
+   z = 'dist/Kodi-POV-IL-FENtastic-quickfix-<PREV>.zip'
+   have = {os.path.basename(n) for n in zipfile.ZipFile(z).namelist()}
+   root = pathlib.Path('addons/service.subtitles.kodipovilai')
+   print(sorted({p.name for p in root.rglob('*.py')} - have))
+   PY
+   ```
+
+   For 0.1.537 that is `pov_addon_window_patcher.py`,
+   `recent_updates_tile_patcher.py` and `update_nag_patcher.py`.
 9. **Phase 2 — note only:** now bump `quick_update.txt` to `N` (the id before
    `|||`) and update its footer. Every user-facing quickfix/AI release needs a
    fresh id plus a gentle Hebrew title/body; changing only the footer never
@@ -3636,13 +3657,18 @@ taught to look for.
     `_fen_widgets_seeded`, `_ui_prefs_seeded`, `_pov_scraper_tune_state`,
     `_pov_torbox_usage_patch_version`. No functional risk (undeclared ids
     persist), so this is completeness, not a bug.
-  * `tools/test_platform_packages.py` is RED and was already red three commits
-    before this work started: the wizard tree drifted from its declared 0.1.45
-    hash. Not a regression from this release, but it has to be settled before
-    the 0.1.46 packaging step, because that test is the packaging gate.
-  * Point 8b of the packaging notes quotes an error string
-    ("member names or order changed") that the tool does not actually print.
-    The real one names the added files and `--allow-add`.
+  * `tools/test_platform_packages.py` is RED, and I had this wrong. I called it
+    "drift to be settled before packaging". It is not drift and there is
+    nothing to settle: `test_wizard_rebuild_from_clean_checkout` copies the
+    CURRENT wizard source into a clean tree and rebuilds the LAST RELEASED
+    version from it, so the moment anyone edits `wizard/source/**` for the next
+    version, the rebuilt zip stops matching the released manifest's SHA-256 and
+    the test goes red. By design. It goes green again in the packaging commit
+    itself, which writes the 0.1.46 manifest and moves the pins -- exactly what
+    `aef40a7` did for 0.1.45. Twelve lines carry a version, all in that file:
+    lines 226, 250, 275-276, 318, 321, 323, 325, 349, 363-364, 367 -- the
+    0.1.45 ones become 0.1.46 and the 0.1.44 ones become 0.1.45. So it is a
+    packaging STEP, not a blocker standing in front of packaging.
 
 ## A correction I had to make about myself
 
