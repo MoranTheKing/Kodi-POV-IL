@@ -566,15 +566,35 @@ class Wizard:
             return False
         except Exception:
             pass
+        # The disk check runs on a thread with a join timeout because
+        # `except` covers a call that fails, not one that never returns, and
+        # a stat against a dead network mount is the second kind. One of the
+        # callers is a button the user just pressed.
+        box = {}
+
+        def _look():
+            try:
+                import xbmcvfs
+                for root in ('special://home/addons/', 'special://xbmc/addons/'):
+                    path = root + 'plugin.video.pov/addon.xml'
+                    if xbmcvfs.exists(xbmcvfs.translatePath(path)):
+                        box['v'] = True
+                        return
+                box['v'] = False
+            except Exception:
+                pass
+
         try:
-            import xbmcvfs
-            for root in ('special://home/addons/', 'special://xbmc/addons/'):
-                path = root + 'plugin.video.pov/addon.xml'
-                if xbmcvfs.exists(xbmcvfs.translatePath(path)):
-                    return True
+            import threading
+            t = threading.Thread(target=_look)
+            t.daemon = True
+            t.start()
+            t.join(3.0)
         except Exception:
-            return True     # cannot check -> keep guarding
-        return False        # not on disk: nothing to wait for, ever
+            return True
+        # No answer -> keep guarding. On disk -> a real cycle, wait for it.
+        # Not on disk -> nothing to wait for, ever.
+        return box.get('v', True)
 
     @staticmethod
     def _wait_until_resolvable(addon_ids, timeout=30):
@@ -960,6 +980,32 @@ class Wizard:
             # already knows which ids it cycled; those are the only ones whose
             # readiness this wait is about.
             resolvable = self._wait_until_resolvable(cycled)
+            # AND POV, WHICH THIS LOOP MAY NEVER HAVE TOUCHED. Everything above
+            # is bookkeeping about what THIS function did, and POV can be
+            # unusable because of something else entirely. Concretely: cycling
+            # HOT_RELOAD_SELF restarts the service, whose main() calls
+            # pov_reload.reload_if_patched(), which starts a background thread
+            # that disables POV for a second and a half. _wait_for_repairs()
+            # returns when the service's synchronous repair pass ends, and that
+            # pass does not wait for the thread. So the `_addon_is_enabled`
+            # check at the top of the loop can read False for POV, `continue`
+            # past it, leave `cycled` empty -- and an empty list is resolvable
+            # instantly, by definition. ReloadSkin() then fires into the outage
+            # and returns True, which the manual path turns into an on-screen
+            # "העדכון הותקן והוחל". That is the original crash, with a
+            # notification claiming it worked.
+            #
+            # So ask the live question the rest of this feature asks, instead
+            # of trusting a record of our own actions. _pov_cycling() is False
+            # both when POV is fine and when POV is not installed, so this
+            # costs nothing in either ordinary case.
+            if resolvable and Wizard._pov_cycling():
+                logging.log('[HOT-RELOAD] POV is unusable and this pass did '
+                            'not cycle it -- something else has it down; '
+                            'waiting before touching the skin.',
+                            level=xbmc.LOGWARNING)
+                resolvable = self._wait_until_resolvable(
+                    ['plugin.video.pov'], timeout=12)
             if not resolvable:
                 # SKIP THE RELOAD, DO NOT FORCE-CLOSE. An earlier version
                 # returned False here, and False makes the caller close Kodi --
