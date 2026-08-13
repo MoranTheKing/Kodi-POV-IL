@@ -2367,6 +2367,34 @@ def _installed_platform_release():
     return _marked_platform_release() or _LEGACY_PLATFORM_RELEASE
 
 
+def _auto_prompt_suppressed(latest_release, manual):
+    """Should the automatic dialog for `latest_release` be held back?
+
+    Only ever true for the AUTOMATIC check. A user who opens "עדכון גרסת קודי"
+    from the menu asked the question, and always gets the real answer.
+
+    The list is keyed by the release being offered, not by the release
+    installed, so it expires on its own: the next package that genuinely needs
+    installing is simply not in it, and everybody is prompted for that one.
+    """
+    if manual:
+        return False
+    try:
+        suppressed = [release_version.canonical_release_label(r)
+                      for r in (CONFIG.NO_AUTO_APP_PROMPT_TARGETS or [])]
+    except Exception:
+        # A malformed entry must not be able to take the update prompt down
+        # with it -- the safe direction here is to ask.
+        return False
+    if latest_release not in suppressed:
+        return False
+    logging.log(
+        '[Application Update Check] {0} is marked as a package nobody needs '
+        'prompting for; skipping the automatic dialog.'.format(latest_release),
+        level=xbmc.LOGINFO)
+    return True
+
+
 def _latest_platform_release(pointer_url):
     response = tools.open_url(pointer_url)
     if not response:
@@ -2395,6 +2423,9 @@ def kodi_apk_update_check(kodi_version_update_check_manual, os_type_label):
         installed_release = _installed_platform_release()
         is_new_version_available = release_version.is_newer_release(
             latest_release, installed_release)
+        if is_new_version_available and _auto_prompt_suppressed(
+                latest_release, kodi_version_update_check_manual):
+            return
         
         if is_new_version_available:
 
@@ -2507,6 +2538,9 @@ def kodi_windows_update_check(kodi_version_update_check_manual, os_type_label):
         installed_release = _installed_platform_release()
         is_new_version_available = release_version.is_newer_release(
             latest_release, installed_release)
+        if is_new_version_available and _auto_prompt_suppressed(
+                latest_release, kodi_version_update_check_manual):
+            return
             
         if is_new_version_available:
             
