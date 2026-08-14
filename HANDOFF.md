@@ -149,6 +149,34 @@ tools/build_wizard_quickfix.py          # replaces only the Wizard in a quickfix
    cache-busters here: empirical testing showed raw.githubusercontent ignores
    them for its cache key. Old Wizard <=0.1.32 clients still read mutable
    `build.txt`, which is why this wait is mandatory.
+8b. **A NEW FILE in the add-on needs `--allow-add`.** `build_addon_quickfix.py`
+   refuses to add a member the previous quickfix did not have unless it is
+   named: `--allow-add addons/service.subtitles.kodipovilai/resources/lib/<new>.py`.
+   Without it the build stops -- and it names the added files and the flag,
+   rather than saying "member names or order changed" as this document used to
+   claim. That guard exists so a stray file cannot slip into a package
+   unnoticed, so name the file rather than weakening it. Only the first
+   quickfix carrying the file needs the flag; every later one inherits it.
+
+   **COUNT THE NEW FILES AGAINST THE SHIPPED QUICKFIX, NOT AGAINST YOUR OWN
+   MEMORY OF THIS BRANCH.** My own release notes said "exactly two new files"
+   for 0.1.537 and named the two written this week. There are three: the tile
+   patcher was added in `c6fff06`, several commits earlier, and never shipped,
+   so it is just as new to `0.1.536` as the other two. The build would have
+   stopped on it. One command answers it, and it is worth running every time:
+
+   ```
+   python3 - <<'PY'
+   import zipfile, os, pathlib
+   z = 'dist/Kodi-POV-IL-FENtastic-quickfix-<PREV>.zip'
+   have = {os.path.basename(n) for n in zipfile.ZipFile(z).namelist()}
+   root = pathlib.Path('addons/service.subtitles.kodipovilai')
+   print(sorted({p.name for p in root.rglob('*.py')} - have))
+   PY
+   ```
+
+   For 0.1.537 that is `pov_addon_window_patcher.py`,
+   `recent_updates_tile_patcher.py` and `update_nag_patcher.py`.
 9. **Phase 2 — note only:** now bump `quick_update.txt` to `N` (the id before
    `|||`) and update its footer. Every user-facing quickfix/AI release needs a
    fresh id plus a gentle Hebrew title/body; changing only the footer never
@@ -156,6 +184,12 @@ tools/build_wizard_quickfix.py          # replaces only the Wizard in a quickfix
    commit/push it alone, and do not call the release live until the public raw
    URL returns the exact new note. A notification-only re-announcement needs
    only this phase because no artifact/manifest pairing changes.
+9b. **Regenerate the note archive AFTER writing the new note:**
+   `python3 tools/build_recent_updates.py`, then commit
+   `wizard/assets/notification_files/recent_updates.txt` with the note. It
+   reads the working copy first, so running it before the note is written
+   publishes an archive missing the very update announcing it. It is capped at
+   ten and verifies its own output round-trips.
 10. Wizard delivery invariant: never persist the new note id until
     `quick_update()` succeeds, and success requires extraction `(100%, 0 errors)`.
     False, exception, partial extraction, corrupt ZIP or a missing versioned
@@ -590,6 +624,141 @@ are not exempt from anything: they land in `self.sourceDict`, flow into
 `self.scraper_sources`, and are merged into `self.sources` at line 817, i.e.
 BEFORE the filter block. More 720p after an update means more providers, not a
 lost setting.
+
+## Shipped 2026-08-13: note 591 (0.2.491 / wizard 0.1.45 / quickfix 0.1.536)
+
+**The quick-update freeze.** Two of our own code paths ran at the same moment:
+one refreshes the skin after an update, the other restarts POV so the update
+takes effect. When they met, the home screen was rebuilt while POV could not be
+constructed, every POV row on it raised "Unknown addon id", and POV's service
+had to be killed. Root-caused from two field logs and confirmed by the reporter
+applying the same update cleanly on NOX -- the one skin where that patcher does
+not run, which is what identified the pairing.
+
+Every skin reload on the update path now waits for POV to be constructible
+first: both FENtastic patchers, the AF3 rebuild and its tools row, the search
+switch, the service's tile reload (no skin gate at all, so it covers every
+skin), and all three reload sites in the wizard. A reload that cannot go ahead
+is deferred, logged, and left UNSTAMPED so the next run retries. No path
+reports "applied" for an update that was not.
+
+Measured per guarded site: POV healthy 0.00s, a real cycle 3.05s, POV not
+installed 0.00s, POV switched off by hand 10.15s.
+
+**Eleven adversarial rounds, and what each killed.** Worth keeping, because
+every one of these reads sensible on the page:
+
+| Design | Why it died |
+|---|---|
+| A shared counter in `Window(10000)` | Five rounds, each finding a new way it was wrong |
+| A sticky "I have seen POV work" flag | The wizard's entry point is `reuselanguageinvoker=false`, so its interpreter is new every invocation. The flag could never be set there, on any platform, ever |
+| A `_gave_up` latch | One transient JSON-RPC failure disarmed every guard in the process for the rest of the session |
+| Asking JSON-RPC "is POV installed" | It answers the same for "unknown id" and "busy", and busy is the moment being guarded. Now a disk check |
+| Splitting on `pending_enable` alone | `pov_reload` recorded nothing there, so a failed SERVICE cycle read as the user's own choice and the reload fired into it -- the original crash, through the check meant to prevent it |
+
+Three of those blockers were code added mid-fix. The rule that caught them was
+running the validator's own reproduction against the fold, every time.
+
+**Also in 0.2.491:**
+
+- `_ensure_pov_enabled` stopped re-enabling POV on no evidence. It ran on every
+  boot and undid a user's deliberate choice silently -- and because
+  `hot_reload`'s first act is to cycle the service, it completed before the
+  wizard's own POV checks were even reached. It now acts only on a record
+  `pov_reload` writes before disabling and clears only once POV can be
+  constructed again. See "Two records, two questions" below.
+- The last ten update notes, with a home tile on every skin. See that section.
+- AF3's un-seeded submenu slots, and the version constant that asked every AF3
+  user to upgrade on every boot. See the AF3 section.
+
+## Two records, two questions (the tile durability rule, got wrong twice)
+
+`recent_updates_tile_patcher` seeds one favourites tile. Its "do not put back
+what the user removed" rule was wrong in both directions before it was right,
+and both wrongs came from answering with one record what needs two.
+
+- Marker as a comment INSIDE `favourites.xml`: the wizard's
+  `update_favourites_xml_file()` copies a static per-skin seed over that file
+  on every skin switch, so the marker died with it and a DELETED tile came
+  back.
+- Marker as a sidecar file: it survives the copy, but it says "we have offered
+  this", which is true forever -- so a tile the same copy removed from someone
+  who never touched it was never restored. Silent and permanent.
+
+The two questions are separate: *is this still a file we edited* (a comment
+beside the tile -- its ABSENCE proves the file was replaced) and *did the user
+tell us to go away* (the sidecar, recording a deletion, written at the moment
+the comment still proves it was one). `favourites_xml_patcher` already does
+this with its anchor tile; this now does it too.
+
+Known hole, deliberately written into the code: deleting the tile and switching
+skin with no service run in between. The tile returns once; delete it again and
+the next start records it for good.
+
+## The last ten update notes (0.2.491)
+
+`tools/build_recent_updates.py` regenerates
+`wizard/assets/notification_files/recent_updates.txt` from the git history of
+`quick_update.txt` itself, so the archive is the text users were actually
+shown and cannot drift from it. Ten is enforced AT GENERATION, not left to the
+reader -- a reader that trims is one bad release away from shipping ninety.
+
+Parsed by splitting on a header at the START OF A LINE, never on any `|||`:
+a body mentioning `|||` mid-sentence would otherwise tear a record in half and
+shift every one after it.
+
+Reachable at `plugin://plugin.program.kodipovilwizard/?mode=recentupdates`,
+plus a favourites tile on the three skins that use favourites and a
+`HOME_SUBMENU` row on AF3, which does not.
+
+**Regenerate it at every release, in phase 2, after `quick_update.txt` is
+written** -- it reads the working copy first so the new note is in its own
+archive.
+
+## Arctic Fuse 3 leaves four submenu slots un-seeded (2026-08-13)
+
+A user's Kodi force-closed on opening a submenu after playback. AF3 declares
+FIVE submenu slots in its generator data -- `homesubmenu`, `1101submenu`,
+`1102submenu`, `1103submenu`, `1104submenu` -- and ships a stock node file for
+the first one only. `Includes_Home.xml` builds the include name from the slot
+at parse time, so reaching a slot with no node leaves
+`<include>skinvariables-1102submenu-staticitems</include>` unresolved. Kodi
+keeps the unresolved element rather than dropping it, the directory provider
+reads the literal string `"include"` as a path, and the process dies. The
+user's exact final log line reproduces from that mechanism.
+
+NOT OUR BUG -- verified against a clone of the real skin, the pack we ship, and
+`script.skinvariables`, plus running `af3_home_patcher` end-to-end against a
+fake filesystem: it creates and deletes none of those files. It is our users'
+crash though, so the four numbered slots are seeded EMPTY. Empty on purpose:
+real entries would put items in a submenu nobody built. It does not make a slot
+visible either -- AF3 gates that on `HomeSwitcher.<id>.Toggle`, a string this
+repo never sets. A slot the user has populated is left byte-for-byte alone.
+
+**And a version constant that had rotted.** `af3_home_patcher.AF3_CE_VERSION`
+was `6.3.2.9` while `wizard.AF3_CE_SKIN_VERSION` had moved the shipped pack to
+`6.3.2.14`, and the gate compared with `==`. So it read as "is the skin the
+version we ship" and behaved as "is it any other version at all": every AF3
+user already on the correct pack was asked to upgrade on every boot -- a
+progress dialog and five add-on re-registrations, forever, for nothing. Fixed,
+and the comparison is now `>=` like the wizard's own gate, so the next constant
+left behind costs nothing instead of costing a dialog a day.
+
+## The startup repair pass runs inline on main, on purpose (2026-08-13)
+
+There was a `_start_build_startup_repairs()` that put the pass on a daemon
+thread, and nothing ever called it. Deleted rather than wired up, because two
+things depend on the pass finishing before `main()` moves on:
+
+- `pov_reload.wait_until_settled`'s bounds (30s, and 10s for an outage we did
+  not cause) were chosen BECAUSE three of its four callers are steps in that
+  inline pass, where a wait is not a delayed reload, it is the subtitle service
+  not starting. Off the main thread those numbers would have to be re-derived.
+- `_publish_repairs_state` / `REPAIRS_DONE_PROPERTY` is what the wizard's
+  `hot_reload` waits on before it cycles anything.
+
+Moving it is reasonable to want; doing it by accident is not, which is what a
+dead function sitting there invites.
 
 ## Shipped 2026-08-12: note 589 (0.2.489 / wizard 0.1.44 / quickfix 0.1.534)
 
@@ -3358,6 +3527,352 @@ Support note, not a code fix — nothing in this build's own flow does it.
   is a substring test rather than a statement about what happened, so a real
   write was invisible in the log and POV's reload was skipped. A status has to
   describe what the run did.
+
+## The "last ten updates" tile, and six rounds of getting it wrong
+
+The tile itself is three lines of XML. Deciding whether it may be re-seeded
+took six review rounds, every one of which found something real, including in
+the fix from the round before, and twice including in the round that had just
+declared itself done. Worth reading before touching
+`recent_updates_tile_patcher.py`.
+
+The problem: the wizard's `update_favourites_xml_file()` copies a static
+per-skin `favourites.xml` over the user's own on every skin switch, so the
+tile disappears through no fault of theirs and must come back. A tile the user
+deleted must NOT. From `favourites.xml` alone those two are indistinguishable,
+and five designs proved it (the module header lists them).
+
+The answer is that the writer knew all along: the wizard leaves a MARK every
+time it replaces the file, and the patcher records that mark when it seeds.
+Mark changed -> the wizard did it -> restore. Mark unchanged -> the user did ->
+never again.
+
+It was a COUNT for three of those rounds, and the count is what rounds four and
+five killed. To increment a count you first have to read it, and every way of
+reading it wrong still yields a perfectly ordinary number -- just a smaller
+one. A corrupt copy read as nothing, so the wizard rewrote a device's count of
+4 as 1, healing the damage into a clean and wrong number before the reader
+could ever notice it was damage; the reader, comparing against the 4 it had
+recorded, watched the number climb back past 4 over the next few skin switches
+and concluded that the user had deleted a tile the wizard itself had removed.
+A uuid4 mark is written and never read, so nothing can rewind it, and the only
+question ever asked of it -- "is this still the mark I saw?" -- has no
+wrong-but-plausible answers. What it gives up is that a count BELOW its own
+snapshot was provably impossible and therefore catchable; a mark restored to an
+earlier value just looks like a mark. That needs `addon_data` rolled back for
+the mark but not for the record beside it, which no Kodi button does and no
+backup tool does by halves -- against corruption, which an SD card does on its
+own.
+
+What the rounds added, each of them load-bearing:
+
+  * BOTH facts are kept in BOTH add-ons' `addon_data`. Kodi's per-add-on
+    "Clear data" button wipes exactly one folder and exists on every add-on,
+    so a single copy of either the record or the count could be taken by one
+    click, and losing the count reads as "never replaced" -> every wizard
+    removal becomes a user deletion.
+  * The record is written BEFORE the tile and only becomes `offered` once the
+    tile is really in the file. An absent record has to mean "never offered"
+    for a first run to seed at all, so a tile must never be able to outlive
+    its record. `seeding` is what tells a power cut apart from a deletion, and
+    the retry is BOUNDED -- an unfinished seed that can never finish would
+    otherwise undo every deletion the user makes, forever.
+  * Seeding requires EVERY copy to land. One copy is not the mechanism with a
+    scratch on it, it is the mechanism with its redundancy gone.
+  * PRESENT-BUT-UNREADABLE IS ITS OWN ANSWER, everywhere, and every place that
+    collapsed it into one of the other two cost somebody their tile. The mark
+    reads as absent / a value / damaged; the record reads as absent / legible /
+    damaged. A copy that cannot be read gets no vote while one that can
+    disagrees -- the version that let a single corrupt copy outvote a healthy
+    one saying "offered" needed nothing but ordinary flash wear, and latched
+    the moment it happened.
+  * The two copies are compared AS A PAIR against the pair that was recorded,
+    never copy against copy. A copy whose write once failed sits there holding
+    an older mark forever, and against a single recorded value that stale copy
+    reads as "different" -- which is the reading that puts a deleted tile back.
+  * When no copy of the mark can speak, the snapshot is RE-BASELINED to what it
+    says now and the anchors decide this one start -- and their verdict is NOT
+    recorded. A recorded deletion is permanent: it is the first thing every
+    later start checks and it never looks at the mark again. That weight
+    belongs to a fact, not to a guess read off favourites that a skin seed may
+    itself contain. Re-baselining is what stops damage keeping the question
+    open forever, so it becomes one start of "cannot tell" instead.
+  * THE FILE OUTRANKS THE RECORD. `ensure_patched` checks whether the tile is
+    actually in `favourites.xml` before it checks whether the record says the
+    user removed it. A tile that is present cannot be a tile they removed, and
+    asking the record first meant an unreadable one returned "removed" with the
+    tile plainly on screen -- and the repair that could have fixed the record
+    while the tile was there to prove what it should say was unreachable from
+    that moment on.
+  * THE WIZARD MARKS BEFORE IT COPIES, the same order the reader uses for its
+    own record and for the same reason. The two steps are not atomic: a power
+    cut between them, or an ENOSPC that the mark writer swallows by design
+    while the big copy has already landed, leaves the file replaced with
+    nothing to say so -- and that is unrecoverable. Reversed, the leftover is a
+    mark with no replacement behind it, and the tile is still in the file, so
+    the reader re-baselines onto it before it can be read as a replacement.
+  * An EXHAUSTED seed gives up without recording anything. Out of attempts, the
+    branch below is written for a tile that was offered and has gone missing,
+    and "nobody replaced the file" is perfectly true of a tile that never
+    reached `favourites.xml` -- which is what two interrupted seeds leave. It
+    used to answer that by telling the user they had deleted something they had
+    never seen. Note that rolling the record BACK is not the fix either: that
+    reads as "never offered" next start and seeds again, which is the retry
+    loop the attempt limit exists to end.
+
+## Kodi's unknown-addon window kills an add-on's own service
+
+`Addons.SetAddonEnabled` flips the enabled flag at once and Kodi finishes
+loading the add-on a couple of seconds later -- but it starts the add-on's
+service script at the FIRST of those moments. POV reads a setting at module
+import (`tmdb_api`), so inside that window the whole import chain dies and
+`POVMonitor` never starts: no Trakt sync monitor, no premium notification, for
+the rest of the session. Field log 2026-08-13 21:40, with our own "cycled POV"
+line landing three tenths of a second after the crash.
+
+`pov_addon_window_patcher.py` teaches POV's `addon()` to wait the window out.
+Two things about it are not optional:
+
+  * It runs FIRST in `main()`, ahead of every patcher that can arm a cycle.
+    It sat in the build-repairs pass until a review pointed out that pass runs
+    AFTER `pov_reload.reload_if_patched()`.
+  * The wait uses the abort monitor, not `sleep`. It runs inside POV's service
+    startup and Kodi force-kills a script that will not stop within 5 seconds.
+
+Verify the anchor against a REAL 6.08.x POV, not the 5.12.04 in our build zip
+-- POV auto-updates itself on first launch, and 5.12.04 does not even have the
+crashing import.
+
+## The window patch covers ONE of POV's two Addon() call sites
+
+`pov_addon_window_patcher.py` rewrites POV's `addon()` helper in
+`resources/lib/modules/kodi_utils.py` so it waits out the seconds in which
+Kodi calls a just-re-enabled add-on unknown. That is the call site the field
+log died on. It is not the only one.
+
+The same file builds an `Addon()` **at module scope**, on the line that runs
+when anything imports it -- `addon_object, window, execJSONRPC = Addon(), ...`
+in the 6.08.06 copy devices actually run, and an equivalent line in the copy
+this build ships. `get_setting`, `set_setting` and `make_settings_dict` in the
+same file each construct their own as well.
+
+**These are exposed the same way, and Kodi's source says so plainly.** From
+`xbmc/interfaces/legacy/LegacyAddon.cpp`, the constructor with no id fills the
+id in from the calling script and then runs the identical check:
+
+    if (id.empty())
+      id = getDefaultId();
+    ...
+    if (!CServiceBroker::GetAddonMgr().GetAddon(id, pAddon, OnlyEnabled::CHOICE_YES))
+      throw AddonException("Unknown addon id '%s'.", id.c_str());
+
+So `Addon()` and `Addon(id='plugin.video.pov')` end at the same line, with the
+same enabled-only filter. There is no version of this where the bare one is
+safe and the other is not. The field log happens to show `kodi_utils` importing
+cleanly and dying later at `addon()`, which says the module-scope line was
+outside the window on that boot -- one sample about timing, not a property of
+the code.
+
+**Not fixed in 0.2.492, deliberately.** The fix that covers all of them is to
+anchor on `from xbmcaddon import Addon` and shadow the name with a retrying
+wrapper, so every use in the file inherits it. That is a wider change to a
+third-party file that auto-updates itself, and the current patch fails safe
+when POV moves under it -- it reports `unmatched` and changes nothing -- while
+a name-shadowing patch has more ways to be subtly wrong against a version
+nobody has seen yet. It is the right next step, with its own anchor-uniqueness
+and compile checks, and it should not ride along at the end of a release.
+
+What ships is a strict improvement on nothing, and the README says only what it
+does: it covers the failure that was reported, not every instance of the class.
+
+## Account Manager forces Kodi's global auto-update on, every boot
+
+Confirmed from the shipped pack, not inferred: `startup.py`'s
+`run_addon_updates()` calls `control.autoupdate_on()`, which sets Kodi's
+`general.addonupdates` to 0 (install automatically) over JSON-RPC, then runs
+`UpdateAddonRepos()`. Its gate is a Trakt token, and `StartupManager()` runs
+every boot.
+
+So on any device with Trakt connected through Account Manager, Kodi may
+replace Umbrella, POV and the rest from their own repos. Our ~49 third-party
+patchers are self-healing and re-apply at the next start, so this does not
+lose them permanently. What it does risk is an upstream change that MOVES an
+anchor: 80 places return `unmatched` rather than guess, and the feature then
+disappears with only a WARNING nobody reads. The maintainer has said they are
+fine with auto-update; making `unmatched` visible instead of buried is the
+follow-up worth doing.
+
+## CLOSED: the two blockers, and the three the review found after them
+
+Both original blockers were the same shape -- **the snapshot went stale against
+a counter that had been reset, and the code judged on a pair of numbers that no
+longer meant the same thing** -- so rather than patch the two instances, the
+number went. See the tile section above for the mark that replaced it. What
+each of the five turned out to need, since the fixes are not obvious from the
+symptoms:
+
+  1. THE WRITER ROLLED THE COUNT BACK. Not fixable in the reader: the writer
+     healed the corruption into a clean, wrong number before the reader could
+     see there had been any. Fixed by removing the read -- a mark needs no
+     previous value.
+  2. CLEAR DATA ON THE WIZARD, THEN A DELETION, THEN A SKIN SWITCH. The
+     deletion was seen and deliberately not recorded, because a count of zero
+     could not be told from a wiped one. With a mark, "no file at all" is a
+     value with a meaning, so the deletion is recorded and the later switch
+     cannot reopen it.
+  3. ONE CORRUPTED RECORD COPY OUTVOTED THE LEGIBLE ONE, which needed nothing
+     but ordinary flash wear on one file.
+  4. THE WIZARD COPIED THE FILE AND THEN MARKED IT, so a power cut between the
+     two left a replacement nothing could see.
+  5. AN EXHAUSTED SEED INVENTED A DELETION for a tile that had never once been
+     in `favourites.xml`.
+
+...and a sixth, found by the fuzzer within an hour of its oracle being
+repaired: `ensure_patched` asked the record whether the user had removed the
+tile BEFORE asking whether the tile was in the file.
+
+...and a seventh, which was the SIXTH ONE'S OWN FIX, caught by the next review
+the same day. Moving `has_tile` in front of the removal check meant the repair
+below it -- which fires on any record that is not `offered` -- rewrote a
+RECORDED deletion to "offered" whenever the tile was in the file for any
+reason. A per-skin seed carrying the tile is such a reason, and seeding it on
+all four skins is open work in this repo; on the devices that got it, the
+user's deletion would have been erased and the next skin switch to a seed
+without the tile would have put the tile back. A removal somebody actually
+wrote down is now left strictly alone; only the INFERRED one -- the module's
+own guess when no copy of the record is legible -- is still overridden by a
+tile that is really there.
+
+### The fuzzer was reporting zero because half of it was switched off
+
+`x_fuzz_orderings.py` sets `ever_deleted_and_seen = True` two lines above the
+`not ever_deleted_and_seen` that guards INV2 -- the invariant that catches an
+untouched user being told they deleted the tile, which is the exact harm the
+whole feature is about. The moment INV2's other clauses could be true, this
+line had already falsified its first one. **INV2 could not fire for any input,
+ever**, and 15,625 orderings reported "violations: 0" with it disabled. It also
+indexed the prefix with `seq.index(step)`, which finds the FIRST `'boot'` in
+the tuple no matter which one the loop is standing on.
+
+Both repaired, and the action set widened past atomic actions -- every original
+action was all-or-nothing, so no interruption could be modelled and none of
+blockers 3-5 was reachable even with a working oracle. It now runs 16,807
+orderings over {switch, switch_unmarked, corrupt_seen_wiz, clear_wizard,
+clear_svc, delete, boot} with INV1 and INV2 both at zero.
+
+**Read this before trusting any green fuzz run in this repo**: an oracle that
+cannot fire looks exactly like an oracle that found nothing.
+
+The same lesson came back one level deeper. Every fuzzer here wrote its
+`switch` action with a TILE-FREE seed and had no action that re-adds the tile
+by hand, so `has_tile()` could only ever become true through the patcher's own
+seeding call -- structurally blind to a tile arriving in `favourites.xml` from
+anywhere else, which is where the sixth and seventh bugs both lived. Both were
+caught by hand, with 16,807 green orderings running alongside.
+`x_fuzz_seeded_tile.py` closes it with `switch_seeded` (a per-skin seed that
+carries the tile) and `readd` (the user re-favourites it), and it takes
+`TILE_ADDON_DIR` so it can be pointed at an older revision **and made to go
+red on demand** -- against `c2f6a3f` it reports 46 violations, against HEAD
+zero. Do that to any fuzzer here before believing it.
+
+### Four residuals, deliberately not fixed
+
+The first two go the safe direction -- a tile somebody never sees again. **The
+third does not**, and this section listed only the safe ones until a review
+pointed that out.
+
+
+  * A MARK WRITE THAT FAILS OUTRIGHT while the favourites copy succeeds --
+    `addon_data` unwritable, `userdata` fine -- leaves a replacement nobody can
+    detect, and the reader will eventually read it as a deletion. It cannot be
+    fixed by failing the skin switch: a bookkeeping file is never worth the
+    thing the user actually asked for. It is modelled in the fuzzer as
+    `switch_unmarked` and excused by name, so the shape of what cannot be
+    caught stays written down instead of being rediscovered.
+  * NO LEGIBLE COPY OF THE RECORD ANYWHERE (one wiped by "Clear data", the
+    other corrupted) reads as a deletion. Nothing is left that knows whether
+    the tile was ever offered, and this is the direction the feature chose from
+    the start: the cost of being wrong this way is a tile somebody never sees
+    again, the other way it is a tile they cannot get rid of. The fuzzer
+    excuses it by checking the filesystem, not the action names, so the
+    exception cannot quietly widen.
+  * BOTH RECORD COPIES ABSENT reads as a fresh install and re-offers the tile
+    -- including to somebody who deleted it, if they happen to click "Clear
+    data" on both add-ons, however far apart. This one goes the WRONG way, and
+    it cannot be closed without closing fresh installs with it: "no record at
+    all" has to mean "never offered" or nothing could ever seed. `t_clear.py`
+    test 6 and the fuzzer's `accepted_resets` carve-out both call it the user
+    asking for a reset, which is a fair reading of two deliberate wipes, but it
+    is a reading and not a fact.
+  * `_sidecar()` PREFERS THE WIZARD-FOLDER COPY with no freshness comparison,
+    so a copy that stays readable but stops accepting writes shadows a
+    correctly-updating one forever, and "whatever this start cannot settle, the
+    next one can" stops being true under that one fault. It fails safe -- the
+    seed refuses on one copy and returns `write_failed` rather than deciding
+    anything -- so it is a broken promise rather than a lost tile. Fixing it
+    means comparing the two legible copies and preferring the fresher, which
+    needs something in the record to order them by; worth doing, not worth
+    doing in the same pass as the fix that found it.
+
+## Pre-marker installs are frozen out of every app update, permanently
+
+`kodi_version_update_check` returns early on the AUTOMATIC path whenever
+`_marked_platform_release()` is None -- which is every package through `.47`,
+since `system/povil-release.txt` first shipped in `.48`. Wizard 0.1.35 added
+that in `3979e13` for a real reason: 0.1.34's bridge classified any unmarked
+install as `.47`, so a routine quick update was followed, for every legacy
+user at once, by a dialog demanding they hand-reinstall the whole application.
+
+The mitigation was right and it is also blunt: those installs will never be
+told automatically about ANY future package, including one that matters, and
+they are exactly the population that has never updated the app. Their only way
+out is the manual menu item, which still works and still uses the `.47` bridge
+(so it reports "21.3-povil.47" to somebody who may be on `.43` -- the number is
+the bridge, not a reading).
+
+**What makes this worth revisiting now**: the fault in 0.1.34 was not that the
+installed version was unknown. It was prompting at all for a package nobody
+needed -- and `NO_AUTO_APP_PROMPT_TARGETS` now handles exactly that, precisely,
+by naming the release rather than muting a population. With that in place the
+blanket skip could be relaxed to "prompt an unmarked install too, for releases
+that are not on the suppression list". Deliberately NOT done in this release:
+it un-mutes a whole population that is currently quiet, which is not something
+to slip into a train that has already been validated and is about to leave.
+
+## Smaller, also open
+
+  * Four more written-and-undeclared marker ids the settings test cannot see,
+    because they are passed as module constants rather than literals:
+    `_fen_widgets_seeded`, `_ui_prefs_seeded`, `_pov_scraper_tune_state`,
+    `_pov_torbox_usage_patch_version`. No functional risk (undeclared ids
+    persist), so this is completeness, not a bug.
+  * `tools/test_platform_packages.py` is RED, and I had this wrong. I called it
+    "drift to be settled before packaging". It is not drift and there is
+    nothing to settle: `test_wizard_rebuild_from_clean_checkout` copies the
+    CURRENT wizard source into a clean tree and rebuilds the LAST RELEASED
+    version from it, so the moment anyone edits `wizard/source/**` for the next
+    version, the rebuilt zip stops matching the released manifest's SHA-256 and
+    the test goes red. By design. It goes green again in the packaging commit
+    itself, which writes the 0.1.46 manifest and moves the pins -- exactly what
+    `aef40a7` did for 0.1.45. Twelve lines carry a version, all in that file:
+    lines 226, 250, 275-276, 318, 321, 323, 325, 349, 363-364, 367 -- the
+    0.1.45 ones become 0.1.46 and the 0.1.44 ones become 0.1.45. So it is a
+    packaging STEP, not a blocker standing in front of packaging.
+
+## A correction I had to make about myself
+
+Two commits on this branch declared 17 one-shot markers in `settings.xml` and
+justified it with the claim that Kodi drops a write to an undeclared id. That
+claim is false, and the section above titled "Undeclared settings DO persist"
+had already settled it from Kodi's own C++ two days earlier -- naming several
+of the same markers and calling them a tidiness item rather than a bug. I
+audited my way to the same list and drew the opposite conclusion without
+reading what was already here.
+
+The declarations stayed (house style, and this section says so too). Every
+place that asserted the false reason was corrected in `bfdd288`. The lesson is
+narrower than "read the docs": this file is the record, and re-deriving
+something it already answers is how a settled question gets unsettled wrongly.
 
 ## Working style
 

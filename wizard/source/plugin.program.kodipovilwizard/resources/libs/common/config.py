@@ -65,6 +65,10 @@ class Config:
         self.APK_DOWNLOAD_URL = uservar.APK_DOWNLOAD_URL
         self.APK_PACKAGE_ID = uservar.APK_PACKAGE_ID
         self.APK_PACKAGE_IDS = getattr(uservar, 'APK_PACKAGE_IDS', [uservar.APK_PACKAGE_ID])
+        # getattr with a default: an older uservar.py that predates this
+        # constant must not stop the wizard loading.
+        self.NO_AUTO_APP_PROMPT_TARGETS = getattr(
+            uservar, 'NO_AUTO_APP_PROMPT_TARGETS', [])
         self.APK_DOWNLOADER_CODE = uservar.APK_DOWNLOADER_CODE
         self.APK_DOWNLOADER_CODE_IMAGE_URL = uservar.APK_DOWNLOADER_CODE_IMAGE_URL
         ###################################
@@ -121,6 +125,7 @@ class Config:
         self.BUILD_SKIN_SWITCH_IMAGE_URL = uservar.BUILD_SKIN_SWITCH_IMAGE_URL
         # KODI-RD-IL - AUTO QUICK UPDATES
         self.QUICK_UPDATE_NOTIFICATION_URL = uservar.QUICK_UPDATE_NOTIFICATION_URL
+        self.RECENT_UPDATES_URL = uservar.RECENT_UPDATES_URL
         #########################################################################################################
         
         self.HEADERTYPE = uservar.HEADERTYPE

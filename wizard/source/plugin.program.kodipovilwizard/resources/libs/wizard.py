@@ -538,6 +538,39 @@ class Wizard:
     def _addon_is_enabled(self, addon_id):
         return self._addon_is_enabled_static(addon_id)
 
+    # Written by the service's pov_reload before it disables POV, and cleared
+    # only once POV can be constructed again. Read here, never written here:
+    # one writer per file is what stops two processes dropping each other's
+    # entries, and the entry that would get dropped is the one saying POV is
+    # off and somebody has to fix it.
+    POV_CYCLE_PENDING_FILE = ('special://profile/addon_data/'
+                              'service.subtitles.kodipovilai/'
+                              'pov_cycle_pending.txt')
+
+    @classmethod
+    def _pov_outage_is_ours(cls):
+        """Did OUR side of the build switch POV off and fail to switch it back?
+
+        Two records, because there are two things that cycle add-ons here: the
+        wizard's own pending_enable list, and the service's pov_reload cycle.
+        Reading only one of them is precisely how a failed service cycle got
+        mistaken for a user's deliberate choice.
+        """
+        try:
+            if 'plugin.video.pov' in cls._pending_enable_read():
+                return True
+        except Exception:
+            pass
+        try:
+            import os
+            import xbmcvfs
+            return os.path.exists(
+                xbmcvfs.translatePath(cls.POV_CYCLE_PENDING_FILE))
+        except Exception:
+            # Cannot tell -> assume it is ours, which defers rather than
+            # reloading over an outage that might be real.
+            return True
+
     @classmethod
     def _pov_coming_back(cls, timeout=8):
         """Is POV's outage the kind that ENDS? Bounded, and sized from the code.
@@ -1066,33 +1099,37 @@ class Wizard:
                 if self._pov_coming_back(timeout=8):
                     resolvable = self._wait_until_resolvable(
                         ['plugin.video.pov'], timeout=12)
-                else:
-                    # NOT COMING BACK -> DO NOT RELOAD. An earlier attempt
-                    # split this by asking whether the id was recorded in
-                    # pending_enable, on the theory that a POV nobody here
-                    # switched off was the user's own choice and safe to
-                    # reload over. That record is written only by
-                    # _cycle_addon -- pov_reload's cycle, the one this whole
-                    # feature is named after, writes nothing anywhere the
-                    # wizard can see. So a SERVICE cycle whose re-enable
-                    # failed read as "the user's choice", the reload fired
-                    # into a live outage, and the user was told the update had
-                    # been applied. The original crash, reached through the
-                    # check meant to prevent it.
+                elif self._pov_outage_is_ours():
+                    # OURS, AND NOT RECOVERING. Do not reload over it and do
+                    # not call the update applied: the record survives, the
+                    # startup heal switches POV back on, and the update shows
+                    # then.
                     #
-                    # There is nothing to split anyway. The service's
-                    # _ensure_pov_enabled() re-enables POV early in EVERY
-                    # start whenever it is installed and off, whoever turned
-                    # it off -- so a deliberately-disabled POV does not
-                    # survive a restart here, and an unusable POV in front of
-                    # us is a cycle: running, or one that failed. Both answer
-                    # "not now".
-                    logging.log('[HOT-RELOAD] POV is off and not coming back '
-                                'on its own; deferring rather than reloading '
-                                'over it. It is switched back on at the next '
-                                'start and the update shows then.',
+                    # This split was tried once before and was WRONG, because
+                    # it asked only pending_enable -- which _cycle_addon writes
+                    # and pov_reload did not. A service cycle whose re-enable
+                    # failed therefore read as "the user's choice", the reload
+                    # fired into a live outage, and the user was told the
+                    # update had been applied. It is only safe now because
+                    # pov_reload records its own cycle too; _pov_outage_is_ours
+                    # reads both, and if it ever reads only one again this
+                    # branch is a crash waiting to happen.
+                    logging.log('[HOT-RELOAD] POV is off after a cycle of ours '
+                                'that could not switch it back on; deferring '
+                                'rather than reloading over it.',
                                 level=xbmc.LOGERROR)
                     resolvable = False
+                else:
+                    # NOBODY HERE TURNED IT OFF. Since the startup heal stopped
+                    # re-enabling POV unconditionally, "switched off by the
+                    # user" is a state that persists -- so treating it as an
+                    # outage to sit through would cost this user a wait and a
+                    # downgraded message on every update, forever. Its widgets
+                    # are already dead on the home screen; a reload cannot make
+                    # that worse.
+                    logging.log('[HOT-RELOAD] POV is switched off and nothing '
+                                'here turned it off; the skin reload goes '
+                                'ahead.', level=xbmc.LOGWARNING)
             if not resolvable:
                 # SKIP THE RELOAD, DO NOT FORCE-CLOSE. An earlier version
                 # returned False here, and False makes the caller close Kodi --
@@ -1284,6 +1321,100 @@ def wizard(action, name, url):
 
 #########################################################################################################
 # KODI-RD-IL - BUILD SKIN SWITCH
+# Marked every time the line below replaces userdata/favourites.xml with a
+# per-skin seed. THIS IS THE ONLY PLACE THAT DOES THAT, which is the whole
+# point: the service's tile patcher needs to know whether a tile that has gone
+# missing was removed by the user or by this copy, and five separate attempts
+# to INFER that from the file's contents all failed -- a marker Kodi strips on
+# any GUI favourites edit, a sidecar that could not tell "offered" from "still
+# wanted", anchors that a build-seeded favourites list defeats, and a seed
+# comparison that a wipe-then-restore makes ambiguous. The writer knows. It
+# only ever had to say so.
+# TWO COPIES, one in each add-on's addon_data, for the same reason the reader's
+# own record is kept twice: Kodi's per-add-on "Clear data" button wipes exactly
+# one folder, and there is such a button on every add-on. A single copy here
+# meant one click could take the mark while userdata/favourites.xml survived,
+# and the reader -- seeing no mark at all -- concluded that nobody had replaced
+# the file, so a tile this function had removed was never put back. The reader
+# compares the two copies as a PAIR against the pair it recorded, so a wiped
+# one cannot speak for the other.
+FAVOURITES_REPLACED_FILES = (
+    'special://profile/addon_data/plugin.program.kodipovilwizard/'
+    'favourites_replaced.txt',
+    'special://profile/addon_data/service.subtitles.kodipovilai/'
+    'favourites_replaced.txt',
+)
+
+
+def _record_favourites_replaced():
+    """Mark this replacement. Best-effort: a miss costs a tile, not data.
+
+    Nothing in here may raise. The caller reports any exception to the user as
+    "failed to set up the home screen" and returns False, and a missed mark is
+    worth a tile at most -- never that.
+
+    IT WRITES, AND NEVER READS. This counted, once: read both copies, write the
+    highest plus one. The read is what killed it. A copy that is there and
+    cannot be read returns nothing, and nothing counts as zero, so a device
+    whose copies were both corrupted had its count of 4 rewritten as 1 -- and
+    the reader, comparing against the 4 it had recorded, watched the number
+    climb back past 4 over the next few skin switches and concluded that the
+    user had deleted a tile this very function had removed. The tile was gone
+    for good, on a device whose owner had done nothing but switch skins. Worse,
+    the rewrite HEALED the corruption into a clean, wrong number, so by the
+    time the reader looked there was no damage left for it to notice.
+
+    A fresh mark needs no previous value, so there is nothing to lose, misread
+    or rewind, and a corrupted copy is repaired by the next replacement rather
+    than averaged into it. The reader only ever asks whether the mark it
+    recorded is still the mark on disk.
+    """
+    try:
+        import os as _os
+        import uuid as _uuid
+        import xbmcvfs
+        # INSIDE the try, with the imports. uuid4 does not realistically fail,
+        # but the promise this docstring makes is "nothing in here may raise",
+        # and a promise with one line sitting outside it is not one.
+        # One mark for both copies, so the pair the reader compares stays a
+        # pair.
+        token = _uuid.uuid4().hex
+    except Exception:
+        return
+    for ref in FAVOURITES_REPLACED_FILES:
+        try:
+            path = xbmcvfs.translatePath(ref)
+        except Exception:
+            continue
+        if not path:
+            continue
+        # The pid keeps two processes off one scratch path: without it both
+        # write the same tmp, one replaces it, and the other's replace fails on
+        # a file that is no longer there -- a write lost for no reason but a
+        # shared name.
+        tmp = '{0}.{1}.tmp'.format(path, _os.getpid())
+        try:
+            directory = _os.path.dirname(path)
+            if directory and not _os.path.isdir(directory):
+                _os.makedirs(directory, exist_ok=True)
+            # Atomic: a half-written mark is an unreadable one, and the reader
+            # has to treat unreadable as "no idea" -- which costs it the one
+            # fact this whole mechanism exists to provide.
+            with open(tmp, 'w', encoding='utf-8') as handle:
+                handle.write(token)
+            _os.replace(tmp, path)
+        except Exception as err:
+            # Take the scratch file with us. A rename that fails once will
+            # usually fail again, and the name carries the pid -- so left
+            # alone, every attempt adds another one, forever.
+            try:
+                _os.remove(tmp)
+            except Exception:
+                pass
+            logging.log('[FAVOURITES] could not record the replacement at '
+                        '{0}: {1}'.format(path, err), level=xbmc.LOGWARNING)
+
+
 def update_favourites_xml_file(gotoskin):
     try:
         import os as _os
@@ -1303,6 +1434,20 @@ def update_favourites_xml_file(gotoskin):
                 f"favourites.xml in place")
             return True
         from shutil import copyfile
+        # MARK FIRST, THEN COPY, and the order is the whole point -- the same
+        # order the reader uses for its own record, and for the same reason.
+        # These two steps are not atomic together. A power cut between them, or
+        # an ENOSPC that the mark writer swallows by design while the big copy
+        # has already landed, leaves the file replaced with nothing to say so:
+        # the reader then sees the tile gone, asks the mark whether anyone
+        # replaced the file, is told no, and records a deletion against a user
+        # who was only switching skin. Permanent, and silent.
+        #
+        # Reversed, the leftover is a mark with no replacement behind it, and
+        # that one is recoverable: the tile is still in the file, so the reader
+        # takes the has_tile path and re-baselines onto the new mark before it
+        # can ever be read as a replacement.
+        _record_favourites_replaced()
         copyfile(source_favourites_xml,destination_favourites_xml)
         return True
     except Exception as e:
@@ -2222,6 +2367,43 @@ def _installed_platform_release():
     return _marked_platform_release() or _LEGACY_PLATFORM_RELEASE
 
 
+def _auto_prompt_suppressed(latest_release, manual):
+    """Should the automatic dialog for `latest_release` be held back?
+
+    Only ever true for the AUTOMATIC check. A user who opens "עדכון גרסת קודי"
+    from the menu asked the question, and always gets the real answer.
+
+    The list is keyed by the release being offered, not by the release
+    installed, so it expires on its own: the next package that genuinely needs
+    installing is simply not in it, and everybody is prompted for that one.
+    """
+    if manual:
+        return False
+    try:
+        suppressed = [release_version.canonical_release_label(r)
+                      for r in (CONFIG.NO_AUTO_APP_PROMPT_TARGETS or [])]
+        # BOTH SIDES CANONICALISED. Today every caller hands us a label that
+        # _latest_platform_release has already put through this same function,
+        # so comparing raw would work -- and would keep working right up until
+        # a new call site passes the pointer file's text straight in, at which
+        # point a trailing newline silently stops the suppression matching and
+        # the dialog nobody wanted is back. Cheap here, invisible there.
+        if release_version.canonical_release_label(latest_release) \
+                not in suppressed:
+            return False
+        logging.log(
+            '[Application Update Check] {0} is marked as a package nobody '
+            'needs prompting for; skipping the automatic dialog.'
+            .format(latest_release), level=xbmc.LOGINFO)
+    except Exception:
+        # A malformed entry -- or a logger that fails -- must not be able to
+        # take the update prompt down with it. The safe direction is to ask:
+        # an unwanted prompt is a nuisance, an update nobody is ever told
+        # about is a device left behind.
+        return False
+    return True
+
+
 def _latest_platform_release(pointer_url):
     response = tools.open_url(pointer_url)
     if not response:
@@ -2250,6 +2432,9 @@ def kodi_apk_update_check(kodi_version_update_check_manual, os_type_label):
         installed_release = _installed_platform_release()
         is_new_version_available = release_version.is_newer_release(
             latest_release, installed_release)
+        if is_new_version_available and _auto_prompt_suppressed(
+                latest_release, kodi_version_update_check_manual):
+            return
         
         if is_new_version_available:
 
@@ -2362,6 +2547,9 @@ def kodi_windows_update_check(kodi_version_update_check_manual, os_type_label):
         installed_release = _installed_platform_release()
         is_new_version_available = release_version.is_newer_release(
             latest_release, installed_release)
+        if is_new_version_available and _auto_prompt_suppressed(
+                latest_release, kodi_version_update_check_manual):
+            return
             
         if is_new_version_available:
             
