@@ -208,10 +208,19 @@ def test_the_full_build_carries_the_current_addons():
         # staleness already appended to `stale` is thrown away with it, so a
         # missing add-on would erase a found stale wizard. Reported together or
         # the fix is a rearrangement.
+        #
+        # Exception, not AssertionError -- the same widening the runner below
+        # got, applied here too. The first version of this caught only the
+        # assert _bundled_version writes itself, which left BadZipFile from a
+        # truncated zip and UnicodeDecodeError from a mis-encoded addon.xml
+        # escaping the loop and discarding whatever was already in `stale`.
+        # That is the identical hole, one exception type over: the lesson was
+        # learnt in the runner and not carried down here.
         try:
             shipped = _bundled_version(package, member)
-        except AssertionError as exc:
-            stale.append("{0} unreadable -- {1}".format(label, exc))
+        except Exception as exc:
+            stale.append("{0} unreadable -- {1}: {2}".format(
+                label, type(exc).__name__, str(exc).rstrip(".")))
             continue
         if shipped < in_tree:
             stale.append("{0} {1} (worktree {2}; rebuild via {3})".format(
