@@ -112,13 +112,18 @@ def _addon_xml_path():
     """Absolute path of POV's addon.xml, or '' when POV is not installed."""
     if xbmcvfs is None:
         return ''
+    # The join and the isfile are INSIDE the try, not after it. Wrapping only
+    # the translatePath call was a "never raises" that was not one: a
+    # translatePath returning None makes os.path.join raise TypeError, and a
+    # path with a null byte makes os.path.isfile raise ValueError -- both
+    # straight out through ensure_patched, whose docstring promises otherwise.
     try:
         base = xbmcvfs.translatePath(
             'special://home/addons/' + POV_ADDON_ID + '/')
+        path = os.path.join(base, 'addon.xml')
+        return path if os.path.isfile(path) else ''
     except Exception:
         return ''
-    path = os.path.join(base, 'addon.xml')
-    return path if os.path.isfile(path) else ''
 
 
 def _read_setting():
