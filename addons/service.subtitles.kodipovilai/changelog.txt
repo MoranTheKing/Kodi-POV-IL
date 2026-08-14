@@ -1,3 +1,13 @@
+v0.2.493
+- The "10 latest updates" tile is now only offered once the wizard installed on
+  this device is new enough to open it. Until then nothing is written and
+  nothing is shown, so the tile never appears as something that cannot be
+  clicked; it arrives on its own the moment the wizard catches up.
+- The main video add-on is now also covered at the earlier of its two moments
+  -- the one during import, before its own code runs -- so the seconds in which
+  Kodi still calls a just-re-enabled add-on unknown can no longer take its
+  background service at either point.
+
 v0.2.492
 - The ten most recent update notes are now readable from a tile on the home
   screen. Removing the tile is respected: it does not come back at the next
