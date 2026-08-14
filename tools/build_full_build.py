@@ -53,9 +53,14 @@ WIZARD_PREFIX = "plugin.program.kodipovilwizard/"
 # An earlier version of this comment called that stale copy "harmless on a
 # device -- the wizard excludes its own id when it extracts a quickfix". THAT
 # WAS WRONG, and wrong in the direction that costs users. CONFIG.EXCLUDES is
-# read by whitelist.py, clear.py, menu.py and backup.py -- the paths that
-# DELETE -- and by nothing on the extraction path: extract.all() takes
-# `excludes = []` and startup.py hands it CONFIG.HOME with ignore=True. So a
+# read in eight files -- whitelist, clear, menu, backup, install, tools, db and
+# custom_save_data_config -- and `grep -c EXCLUDES extract.py` returns 0. That
+# zero is the whole point, and it is the only count worth stating: an earlier
+# draft of this comment named four of the eight and called them "the paths that
+# DELETE", which was both an undercount and untrue of two of them. extract.all()
+# takes `excludes = []`; wizard.py's quick_update() calls it as
+# `extract.all(lib, CONFIG.HOME, ignore=True, title=title)`, and ignore=True
+# also bypasses the self-skip on the wizard's own id at extract.py:249. So a
 # quick update lays its bundled wizard straight over the installed one, and
 # since uservar.AUTOUPDATE is 'No' (the device log says so in as many words:
 # "[Auto Update Wizard] Not Enabled") the quickfix is not merely ONE way the
@@ -67,8 +72,17 @@ WIZARD_PREFIX = "plugin.program.kodipovilwizard/"
 # every device that took the update, and would have stayed dead until some
 # later quickfix happened to carry a newer wizard. The fix is not in this file:
 # every quickfix must now be run through build_wizard_quickfix.py as well, and
-# test_quickfix_package_scope.py fails the build if the newest quickfix carries
-# a wizard older than the worktree's.
+# test_quickfix_package_scope.py fails the release if it did not.
+#
+# AND THIS TOOL'S OUTPUT IS GATED THERE TOO, because the same review that
+# corrected the paragraph above found the full build was the worse half of it:
+# 0.1.105, the build every fresh install got until this release, bundled wizard
+# 0.1.36 and add-on 0.2.462 -- ten and thirty releases behind -- while
+# startup.py's fresh-install branch recorded the newest note as already applied.
+# The verify at the end of this file could not catch that and still cannot: it
+# checks the result against the versions typed on the command line, and a build
+# is self-consistent with a wrong answer just as happily as with a right one.
+# Freshness needs the worktree to compare against, so it lives in the test.
 #
 # For the full build the rule was always this one, and it holds unchanged: take
 # the wizard from its own package. Verified by the version check at the end --
@@ -238,7 +252,8 @@ def main() -> int:
     ap.add_argument("--wizard-zip", required=True,
                     help="the wizard release package; its copy of the wizard "
                          "wins over the quickfix's, which used to lag by a "
-                         "release and is now gated against doing so")
+                         "release. Whether THIS build's copy is current is not "
+                         "checked here -- see test_quickfix_package_scope.py")
     ap.add_argument("--output", required=True)
     ap.add_argument("--addon-version", required=True,
                     help="version the add-on inside the result must carry")
