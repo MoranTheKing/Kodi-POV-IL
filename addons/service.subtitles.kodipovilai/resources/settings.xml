@@ -340,6 +340,14 @@
             <allowempty>true</allowempty>
           </constraints>
         </setting>
+        <!-- Hidden marker: Gemini model bump (3.1->3.5 flash-lite, 3.5/3.6->3.7 flash) has run. -->
+        <setting id="_gemini_model_bump_v2" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
         <!-- Hidden marker: Gemini 3 temp/thinking tuning migration has run. -->
         <setting id="_gemini3_tune_v1" type="string" label="30000">
           <level>4</level>
