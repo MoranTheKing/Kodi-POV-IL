@@ -1,3 +1,15 @@
+v0.2.494
+- Kodi no longer force-closes when several rows on the home screen reload at
+  once -- most often on the way back from a submenu to the home screen. The
+  video add-on was set to run every one of those loads inside a single shared
+  Python interpreter, and loading them together corrupted it. Each load now
+  gets its own, which closes the whole family of crashes rather than the one
+  way of provoking it that was reported. Takes effect from the next start of
+  Kodi after this update, and rows may take slightly longer to draw.
+- The AI translation add-on moves to Gemini 3.7 Flash. Anyone already on 3.5
+  or 3.6 Flash is moved across once, automatically; any other model you chose
+  yourself is left exactly as it is.
+
 v0.2.493
 - The "10 latest updates" tile is now only offered once the wizard installed on
   this device is new enough to open it. Until then nothing is written and
