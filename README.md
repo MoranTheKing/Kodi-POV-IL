@@ -138,6 +138,9 @@ starts, so it could land in that gap and stop before it began: no Trakt sync
 for the rest of the session, and an error in the log. It now waits the gap out
 instead of giving up.
 
+This covers the point the failure was reported from. The same add-on reads its
+own details in a few other places that are not covered yet; those are next.
+
 ## No more update prompts you cannot act on (from `0.2.492`)
 
 Two of the add-ons that ship with the build checked their own home page at
