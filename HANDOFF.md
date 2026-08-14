@@ -3643,6 +3643,48 @@ Verify the anchor against a REAL 6.08.x POV, not the 5.12.04 in our build zip
 -- POV auto-updates itself on first launch, and 5.12.04 does not even have the
 crashing import.
 
+## The window patch covers ONE of POV's two Addon() call sites
+
+`pov_addon_window_patcher.py` rewrites POV's `addon()` helper in
+`resources/lib/modules/kodi_utils.py` so it waits out the seconds in which
+Kodi calls a just-re-enabled add-on unknown. That is the call site the field
+log died on. It is not the only one.
+
+The same file builds an `Addon()` **at module scope**, on the line that runs
+when anything imports it -- `addon_object, window, execJSONRPC = Addon(), ...`
+in the 6.08.06 copy devices actually run, and an equivalent line in the copy
+this build ships. `get_setting`, `set_setting` and `make_settings_dict` in the
+same file each construct their own as well.
+
+**These are exposed the same way, and Kodi's source says so plainly.** From
+`xbmc/interfaces/legacy/LegacyAddon.cpp`, the constructor with no id fills the
+id in from the calling script and then runs the identical check:
+
+    if (id.empty())
+      id = getDefaultId();
+    ...
+    if (!CServiceBroker::GetAddonMgr().GetAddon(id, pAddon, OnlyEnabled::CHOICE_YES))
+      throw AddonException("Unknown addon id '%s'.", id.c_str());
+
+So `Addon()` and `Addon(id='plugin.video.pov')` end at the same line, with the
+same enabled-only filter. There is no version of this where the bare one is
+safe and the other is not. The field log happens to show `kodi_utils` importing
+cleanly and dying later at `addon()`, which says the module-scope line was
+outside the window on that boot -- one sample about timing, not a property of
+the code.
+
+**Not fixed in 0.2.492, deliberately.** The fix that covers all of them is to
+anchor on `from xbmcaddon import Addon` and shadow the name with a retrying
+wrapper, so every use in the file inherits it. That is a wider change to a
+third-party file that auto-updates itself, and the current patch fails safe
+when POV moves under it -- it reports `unmatched` and changes nothing -- while
+a name-shadowing patch has more ways to be subtly wrong against a version
+nobody has seen yet. It is the right next step, with its own anchor-uniqueness
+and compile checks, and it should not ride along at the end of a release.
+
+What ships is a strict improvement on nothing, and the README says only what it
+does: it covers the failure that was reported, not every instance of the class.
+
 ## Account Manager forces Kodi's global auto-update on, every boot
 
 Confirmed from the shipped pack, not inferred: `startup.py`'s
