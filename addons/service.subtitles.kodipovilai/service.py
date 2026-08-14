@@ -5010,6 +5010,21 @@ def main():
     # opens/searches first in the dialog.
     _maybe_set_default_subtitle_service()
 
+    # BEFORE ANYTHING THAT CAN RE-ENABLE POV, which is what the line below is.
+    # This teaches POV to survive the seconds after a re-enable in which Kodi
+    # still calls it unknown -- so it has to be applied before those seconds
+    # can start, not merely before the patchers that arm a cycle later on.
+    #
+    # It sat with the POV patchers, sixty lines down, behind a comment of mine
+    # claiming it ran "FIRST OF THE POV PATCHERS, and it has to be". It did run
+    # first among those -- and _ensure_pov_enabled is not one of them: it issues
+    # SetAddonEnabled directly. So on the exact boot this feature exists for --
+    # a cycle interrupted last time, POV left off, and the patch not currently
+    # on disk because POV auto-updated over it -- the window opened sixty lines
+    # before anything taught POV to wait it out. A review caught the claim; the
+    # ordering it described is now real.
+    _maybe_patch_pov_addon_window()
+
     # Same safety net for POV: our pov_reload cycle (for remember_source) could
     # have left POV disabled on a slow box, which empties every home row + tile
     # and breaks playback on ALL skins. Bring it back if it's installed and off.
@@ -5069,15 +5084,6 @@ def main():
     # TorBox UUID-as-title problem AND raises the % match across all
     # debrid services to ~85-95% (the full release name has the
     # encoder/source/group tokens that subtitle releases carry).
-    # FIRST OF THE POV PATCHERS, and it has to be: it is the one that teaches
-    # POV to survive the seconds after a re-enable in which Kodi still calls it
-    # unknown, and every patcher below can arm the cycle that creates those
-    # seconds. It sat in the build-repairs pass until a review pointed out that
-    # the pass runs AFTER reload_if_patched() -- so on the one boot that matters
-    # most, a fresh install or a POV that just auto-updated, five patchers
-    # would arm a cycle against a POV that had not been taught anything yet.
-    _maybe_patch_pov_addon_window()
-
     _maybe_patch_pov_source_name()
 
     # Harden POV's debrid resolve_external_sources() against its own
