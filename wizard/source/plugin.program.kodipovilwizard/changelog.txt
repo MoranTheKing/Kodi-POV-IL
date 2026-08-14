@@ -1,3 +1,10 @@
+v0.1.46
+- Switching skin now leaves a mark, so the build can tell a home tile the skin
+  switch removed from one you removed yourself, and put back only the first.
+- You are no longer asked, at every start, to reinstall the whole application
+  for a package that carries nothing an existing install needs. Asking for the
+  check yourself in the menu still finds and offers it.
+
 v0.1.45
 - A quick update waits for POV to be usable again before refreshing the skin,
   so an update can no longer rebuild the home screen while POV is restarting.

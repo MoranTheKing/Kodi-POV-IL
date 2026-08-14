@@ -44,6 +44,10 @@ APKFILE = 'http://'
 BUILD_SKIN_SWITCH_IMAGE_URL = 'https://github.com/MoranTheKing/Kodi-POV-IL/raw/main/wizard/assets/build_menu_screenshots/pov_il_splash.jpg'
 # KODI-RD-IL - AUTO QUICK UPDATES
 QUICK_UPDATE_NOTIFICATION_URL = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/notification_files/quick_update.txt'
+# The last ten notes, newest first, same format concatenated. Regenerated from
+# git at every release by tools/build_recent_updates.py -- so it is the text
+# people were actually shown, and it cannot drift from it.
+RECENT_UPDATES_URL = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/notification_files/recent_updates.txt'
 # KODI-RD-IL - AUTO ANDROID/WINDOWS UPDATE
 # WINDOWS SOFTWARE
 LATEST_WINDOWS_VERSION_TEXT_FILE = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/kodi_version_auto_update/windows/latest_windows_version.txt'
@@ -59,6 +63,27 @@ APK_PACKAGE_ID = 'org.xbmc.povi'
 # as "our app" so people on an old org.xbmc.kodirdil build (or the short-lived
 # org.moran.kodi / org.mora.kodi rename attempts) still get the update prompt.
 APK_PACKAGE_IDS = ['org.xbmc.povi', 'org.xbmc.kodi', 'org.xbmc.kodirdil', 'org.moran.kodi', 'org.mora.kodi']
+# APK/Windows releases that must NOT raise the automatic "there is a new
+# version of our app" dialog on start. Everything else about them is normal:
+# the download page serves them, and the manual check in the menu finds and
+# offers them.
+#
+# WHY THIS EXISTS. That dialog fires from startup.py on EVERY start, and its
+# "later" button records nothing -- so a release nobody needs is a prompt at
+# every boot, forever, until the user reinstalls the whole application. A
+# package release is worth that only when the application itself changed. When
+# it carries nothing but a newer pre-loaded build zip -- which hydrates a clean
+# profile and nothing else, since an existing install gets the same content
+# through the ordinary quick update -- an existing user would sit through a
+# full reinstall to arrive at what they already have.
+#
+# NAMED BY TARGET, NOT BY WHO IS INSTALLED, and that is the whole point: this
+# says "nobody needs to be moved to .49", not "leave .48 users alone". So it
+# expires by itself. The day a package release matters -- a Kodi version bump,
+# a signing change, anything in the application -- it simply is not in this
+# list, and everyone including the .48 devices is prompted for it as usual,
+# with nothing to remember to undo.
+NO_AUTO_APP_PROMPT_TARGETS = ['21.3-povil.49']
 APK_DOWNLOADER_CODE = ''
 APK_DOWNLOADER_CODE_IMAGE_URL = 'https://raw.githubusercontent.com/MoranTheKing/Kodi-POV-IL/main/wizard/assets/kodi_version_auto_update/apk/apk_downloader_code.png'
 #########################################################

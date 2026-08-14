@@ -36,7 +36,6 @@ BUILD_WIZARD_ID = 'plugin.program.kodipovilwizard'
 BUILD_MARKER = 'build_mode.json'
 BUILD_MARKER_TEXT = 'Kodi POV IL'
 _BUILD_MODE_CACHE = None
-_BUILD_SELF_HEAL_THREAD = None
 
 
 def _translate_path(path):
@@ -224,6 +223,7 @@ def _run_build_startup_repairs():
         _maybe_restore_pov_torbox,
         _maybe_patch_af3_home,
         _maybe_cleanup_wizard,
+        _maybe_quiet_update_nags,
         _maybe_patch_pov_repeat_timer,
         _maybe_patch_pov_widget_crash_guard,
         _maybe_patch_pov_favorites_refresh,
@@ -240,6 +240,7 @@ def _run_build_startup_repairs():
         _maybe_patch_skin_watched_poster,
         _maybe_patch_favourites_xml,
         _maybe_patch_favourites_personal_tiles,
+        _maybe_seed_recent_updates_tile,
         _maybe_patch_pov_torbox_usage,
         _maybe_patch_pov_cache_empty,
         _maybe_patch_pov_trakt_cache_empty,
@@ -294,28 +295,23 @@ def _run_build_startup_repairs():
     _publish_repairs_state(_addon_version())
 
 
-def _start_build_startup_repairs():
-    global _BUILD_SELF_HEAL_THREAD
-    try:
-        if _BUILD_SELF_HEAL_THREAD and _BUILD_SELF_HEAL_THREAD.is_alive():
-            return
-    except Exception:
-        pass
-
-    try:
-        _BUILD_SELF_HEAL_THREAD = threading.Thread(
-            target=_run_build_startup_repairs,
-            name='KodiPovIlBuildStartupRepairs')
-        _BUILD_SELF_HEAL_THREAD.daemon = True
-        _BUILD_SELF_HEAL_THREAD.start()
-    except Exception as e:
-        try:
-            from resources.lib import kodi_utils
-            kodi_utils.log(
-                'build startup repair thread failed: {0}'.format(e),
-                level='WARNING')
-        except Exception:
-            pass
+# THE REPAIR PASS RUNS INLINE ON MAIN, ON PURPOSE. There used to be a
+# _start_build_startup_repairs() here that put _run_build_startup_repairs on a
+# daemon thread, and nothing ever called it -- main() calls the pass directly.
+# Deleted rather than wired up, because wiring it up is not a tidy-up, it is a
+# behaviour change with two dependants:
+#
+#   * pov_reload.wait_until_settled's bounds (30s, and 10s for an outage we did
+#     not cause) were chosen BECAUSE three of its four callers are steps in this
+#     inline pass, where a wait is the subtitle service not starting. Off the
+#     main thread those numbers could be far more generous -- and would have to
+#     be re-derived, not inherited.
+#   * _publish_repairs_state / REPAIRS_DONE_PROPERTY is what the wizard's
+#     hot_reload waits on before it cycles anything. Its ordering assumes the
+#     pass has finished when main() moves on.
+#
+# Moving it is a reasonable thing to want. It is not a reasonable thing to do
+# by accident, which a dead function sitting here invites.
 
 
 
@@ -1575,6 +1571,31 @@ def _maybe_patch_favourites_xml():
             pass
 
 
+def _maybe_seed_recent_updates_tile():
+    """Put the "10 העדכונים האחרונים" tile on the home screen, once ever.
+
+    Deliberately runs right after the personal-tiles restore, so it looks at a
+    favourites.xml that has already been repaired if it needed repairing --
+    otherwise a mid-repair file could be read as "no closing tag" and the offer
+    would be silently skipped for that boot.
+    """
+    try:
+        from resources.lib import recent_updates_tile_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = recent_updates_tile_patcher.ensure_patched()
+        if status not in ('already_seen', 'no_kodi', 'no_favourites'):
+            kodi_utils.log('recent_updates_tile_patcher: {0}'.format(status),
+                           level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log('recent_updates_tile_patcher failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_favourites_personal_tiles():
     """Restore the 6 personal home tiles ("הסרטים שלי / הסדרות שלי"
     in TMDB / Trakt / POV variants) when they're missing from
@@ -2060,6 +2081,71 @@ def _maybe_run_fav_diagnostic():
         try:
             kodi_utils.log(
                 'pov_favorites_diagnostic run failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_addon_window():
+    """Stop POV's own service dying in the seconds Kodi calls POV unknown.
+
+    Kodi flips the enabled flag at once and finishes loading the add-on a
+    couple of seconds later, and it starts the add-on's service at the first
+    of those two moments. POV's import chain reads a setting on the way up
+    (tmdb_api, at module level), so inside that window the whole service dies
+    -- no Trakt sync monitor, no premium-account notification, for the rest of
+    the session, plus a red error in the log. We open that window ourselves
+    every time pov_reload cycles POV, but it is Kodi's window and a hand
+    toggle hits it too, so the wait belongs inside POV. NOT cycled afterwards:
+    cycling is the thing that opens the window, and the patch is on disk for
+    the next one either way."""
+    try:
+        from resources.lib import pov_addon_window_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_addon_window_patcher.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_addon_window_patcher: POV now waits out the '
+                'unknown-addon window instead of losing its service',
+                level='INFO')
+        elif status in ('read_failed', 'write_failed', 'compile_failed',
+                        'unmatched'):
+            kodi_utils.log(
+                'pov_addon_window_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_addon_window_patcher run failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_quiet_update_nags():
+    """Switch off the self-update check in Umbrella and Account Manager Lite.
+
+    Both nag at every start about a version the build pins deliberately, and
+    neither offers a way to take it -- taking it would strip the patches that
+    make them work here. Settings only, once each, and only while the value
+    is still the one they shipped."""
+    try:
+        from resources.lib import update_nag_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = update_nag_patcher.ensure_quiet()
+        if status == 'patched':
+            kodi_utils.log(
+                'update_nag_patcher: self-update notifications switched off',
+                level='INFO')
+        elif status == 'write_failed':
+            kodi_utils.log('update_nag_patcher: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'update_nag_patcher run failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
@@ -4608,39 +4694,89 @@ def _maybe_set_default_subtitle_service():
 
 
 def _ensure_pov_enabled():
-    """Recover plugin.video.pov if it was left disabled -- e.g. our pov_reload
-    cycle (disable+enable to re-import the patched sources.py after enabling
-    remember_source) lost the re-enable race on a slow box, or any other reason.
-    POV is THE content addon: if it's installed but disabled, every home row and
-    every "My Movies/My Shows" tile is empty and nothing plays -- on ALL skins.
-    pov_reload retries within its own cycle, but if that ultimately failed there
-    was previously nothing to bring POV back on a later boot. This is that net:
-    cheap, idempotent, runs early every startup, only acts when POV is installed
-    AND currently disabled."""
+    """Switch POV back on if OUR OWN CYCLE left it off. Not otherwise.
+
+    POV is THE content add-on: installed but disabled means every home row and
+    every "My Movies/My Shows" tile is empty and nothing plays, on all skins.
+    pov_reload retries inside its own cycle, but a cycle that is interrupted --
+    the box is switched off mid-update, the process is killed -- leaves POV off
+    with nothing to bring it back. This is that net.
+
+    IT USED TO HEAL UNCONDITIONALLY, AND THAT WAS A SILENT SETTINGS CHANGE.
+    "POV is off" has two causes and this could not tell them apart, so it
+    treated the user's own choice as damage and undid it. Worse, it undid it
+    invisibly and early: hot_reload's first act is to cycle this service, so a
+    fresh main() -- and this function with it -- runs to completion before the
+    wizard's own POV checks are ever reached. A user who switched POV off found
+    it back on after any update, with nothing on screen and nothing in the log
+    to say why. The wizard's _cycle_addon refuses to do exactly this, in as many
+    words: "re-enabling something somebody turned off by hand is not ours to
+    do". This now honours the same rule.
+
+    So it acts only on evidence. pov_reload writes a record before it disables
+    POV and clears it only once POV can be constructed again; that record, and
+    the wizard's pending_enable list for the add-ons IT cycles, are the only
+    things that make a disabled POV ours to fix.
+    """
     if xbmc is None:
         return
     try:
+        from resources.lib import pov_reload
+        ours = pov_reload.cycle_left_pov_off()
+    except Exception:
+        ours = False
+    if not ours:
+        return
+    try:
         import json as _json
+        # WAIT FOR JSON-RPC. This runs early in startup, and a single
+        # unanswered call used to be indistinguishable from "POV is fine" --
+        # no exception, no log, no retry until the next full restart. The
+        # wizard's own heal polls for readiness for the same reason.
         get = _json.dumps({
             'jsonrpc': '2.0', 'id': 1,
             'method': 'Addons.GetAddonDetails',
             'params': {'addonid': 'plugin.video.pov',
                        'properties': ['enabled']},
         })
-        data = _json.loads(xbmc.executeJSONRPC(get) or '{}')
-        addon = (data.get('result') or {}).get('addon') or {}
+        addon = {}
+        monitor = xbmc.Monitor()
+        for attempt in range(20):
+            data = _json.loads(xbmc.executeJSONRPC(get) or '{}')
+            addon = (data.get('result') or {}).get('addon') or {}
+            if 'enabled' in addon:
+                break
+            if monitor.waitForAbort(0.5):
+                return
         if 'enabled' not in addon:
-            return  # not installed / unknown -> leave alone
+            # Still no answer. The record stays, so the next start tries again.
+            xbmc.log('[' + ADDON_ID + '] POV is recorded as left off by our '
+                     'cycle, but Kodi is not answering yet; keeping the record',
+                     level=xbmc.LOGWARNING)
+            return
         if addon.get('enabled'):
-            return  # already enabled -> nothing to do
+            # Somebody already switched it back on. Nothing to do, and the
+            # record has served its purpose.
+            pov_reload.clear_cycle_record()
+            return
         en = _json.dumps({
             'jsonrpc': '2.0', 'id': 1,
             'method': 'Addons.SetAddonEnabled',
             'params': {'addonid': 'plugin.video.pov', 'enabled': True},
         })
         xbmc.executeJSONRPC(en)
-        xbmc.log('[' + ADDON_ID + '] re-enabled POV (it was disabled)',
-                 level=xbmc.LOGINFO)
+        data = _json.loads(xbmc.executeJSONRPC(get) or '{}')
+        back = ((data.get('result') or {}).get('addon') or {}).get('enabled')
+        if back:
+            pov_reload.clear_cycle_record()
+            xbmc.log('[' + ADDON_ID + '] re-enabled POV after an interrupted '
+                     'cycle of ours', level=xbmc.LOGINFO)
+        else:
+            # KEEP THE RECORD ON A FAILED ENABLE. Clearing it here is how a
+            # temporary problem becomes a permanent one: the evidence goes and
+            # nothing ever tries again.
+            xbmc.log('[' + ADDON_ID + '] POV would not switch back on; the '
+                     'record stays for the next start', level=xbmc.LOGWARNING)
     except Exception:
         pass
 
@@ -4873,6 +5009,21 @@ def main():
     # When the engine is on, make MoranSubs the default subtitle service so it
     # opens/searches first in the dialog.
     _maybe_set_default_subtitle_service()
+
+    # BEFORE ANYTHING THAT CAN RE-ENABLE POV, which is what the line below is.
+    # This teaches POV to survive the seconds after a re-enable in which Kodi
+    # still calls it unknown -- so it has to be applied before those seconds
+    # can start, not merely before the patchers that arm a cycle later on.
+    #
+    # It sat with the POV patchers, sixty lines down, behind a comment of mine
+    # claiming it ran "FIRST OF THE POV PATCHERS, and it has to be". It did run
+    # first among those -- and _ensure_pov_enabled is not one of them: it issues
+    # SetAddonEnabled directly. So on the exact boot this feature exists for --
+    # a cycle interrupted last time, POV left off, and the patch not currently
+    # on disk because POV auto-updated over it -- the window opened sixty lines
+    # before anything taught POV to wait it out. A review caught the claim; the
+    # ordering it described is now real.
+    _maybe_patch_pov_addon_window()
 
     # Same safety net for POV: our pov_reload cycle (for remember_source) could
     # have left POV disabled on a slow box, which empties every home row + tile

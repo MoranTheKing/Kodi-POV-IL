@@ -31,7 +31,12 @@ except ImportError:
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
 PATCH_VERSION = '2026-06-01-pov-home-v21'
-AF3_CE_VERSION = '6.3.2.9'
+# Must track wizard.py's AF3_CE_SKIN_VERSION, which is the version actually
+# shipped in the pack. It did not: the wizard went to 6.3.2.14 and this stayed
+# at 6.3.2.9, so every AF3 user already ON the correct pack was told to
+# "upgrade" on every single boot -- a progress dialog and five add-on
+# re-registrations, forever, for nothing.
+AF3_CE_VERSION = '6.3.2.14'
 # AF3's bundled TMDbHelper 6.15.6 imports jurialmunkey.ftools, which only
 # exists from script.module.jurialmunkey 0.2.35. Users who switched to AF3
 # while an older jurialmunkey (e.g. 0.2.28) was on disk get a TMDbHelper that
@@ -368,6 +373,18 @@ HOME_WIDGETS = [
 
 HOME_SUBMENU = [
     {
+        # The other three skins carry this as a favourites tile. AF3 does not
+        # read favourites for its home at all -- which is the whole reason this
+        # module exists -- so the same entry has to arrive here, or "on all
+        # skins" quietly means three. _MERGE_FILES covers this list, so a user
+        # who removes it keeps it removed, same as any other row.
+        'label': '10 העדכונים האחרונים',
+        'icon': 'special://home/media/build_icons/Wizard/wizard_pov_il.png',
+        'path': ('RunPlugin("plugin://plugin.program.kodipovilwizard/'
+                 '?mode=recentupdates")'),
+        'target': '',
+    },
+    {
         'label': 'POV',
         'icon': 'special://home/media/build_icons/POV/Logo_POV_IL.png',
         'path': 'RunAddon("plugin.video.pov")',
@@ -675,7 +692,20 @@ def _request_ce_skin_upgrade():
         return False
     # Re-run the AF3 deps/skin install when EITHER the skin is on an older
     # version OR jurialmunkey is too old for the bundled TMDbHelper.
-    if _read_af3_version() == AF3_CE_VERSION and not _jurialmunkey_too_old():
+    #
+    # OLDER, not DIFFERENT. This was an equality test, which reads as "is the
+    # skin the version we ship" and behaves as "is it any other version at
+    # all" -- so the moment the shipped pack moved ahead of this constant,
+    # every up-to-date user was asked to upgrade on every boot. The wizard's
+    # own gate (_af3_pack_current) has always compared with >=; this now does
+    # the same, and a constant left behind again costs nothing instead of
+    # costing a dialog a day.
+    try:
+        current_ok = (_version_tuple(_read_af3_version())
+                      >= _version_tuple(AF3_CE_VERSION))
+    except Exception:
+        current_ok = _read_af3_version() == AF3_CE_VERSION
+    if current_ok and not _jurialmunkey_too_old():
         return False
     try:
         xbmc.executebuiltin(
@@ -1161,6 +1191,56 @@ _LAYOUT_COMMANDS = [
 ]
 
 
+# Arctic Fuse 3 declares FIVE submenu slots in its generator data --
+# homesubmenu, 1101submenu, 1102submenu, 1103submenu, 1104submenu -- but ships
+# a stock node file for the first one only. Includes_Home.xml builds the
+# include name from the slot at parse time, so reaching a slot whose node was
+# never written leaves <include>skinvariables-1102submenu-staticitems</include>
+# unresolved. Kodi leaves the unresolved element in the tree rather than
+# dropping it, the directory provider then reads the literal string "include"
+# as a path, and a user hit exactly that: the submenu dialog opened for the
+# first time and Kodi was gone eight milliseconds later.
+#
+# NOT OUR BUG -- the slots, the generator data and the missing files are all
+# stock AF3, and nothing here creates or deletes any of them (established by
+# running this module end-to-end against a fake filesystem). But it is our
+# users' crash, and a file we can write costs nothing.
+#
+# THE NODES ARE EMPTY ON PURPOSE. Seeding real entries would put menu items in
+# a submenu the user never populated. An empty list resolves the include and
+# leaves the slot looking exactly as empty as the user left it. Writing one
+# does not make a slot visible either: AF3 gates that on HomeSwitcher.<id>.Toggle,
+# which only its own settings screen sets and which this build never touches.
+AF3_EMPTY_SUBMENUS = ('1101submenu', '1102submenu', '1103submenu',
+                      '1104submenu')
+
+
+def _seed_af3_empty_submenus():
+    """Write an empty node for each AF3 submenu slot that has none.
+
+    Never overwrites: a slot the user has populated through AF3's own Edit Menu
+    has a node already, and that is theirs. Returns the number written.
+    """
+    if xbmcvfs is None:
+        return 0
+    written = 0
+    for slot in AF3_EMPTY_SUBMENUS:
+        target = AF3_NODES + 'skinvariables-shortcut-' + slot + '.json'
+        try:
+            if _exists(target):
+                continue
+            _mkdir(AF3_NODES)
+            _write(target, _json([]))
+            written += 1
+        except Exception:
+            # NO LOGGING HERE. This module has none -- it reports through the
+            # status its caller logs -- and reaching for a _log() that does not
+            # exist would raise NameError inside this except and take the whole
+            # seeding pass down silently. That has happened here before.
+            continue
+    return written
+
+
 def _seed_af3_layout_once():
     """Seed the home-layout / rating-row defaults ONCE, then never touch them
     again, so a user who changes the AF3 home layout (switcher mode, vertical
@@ -1375,6 +1455,12 @@ def ensure_patched():
         _set_af3_runtime_defaults()
         _seed_af3_spotlight_once()
         _seed_af3_layout_once()
+        # Every AF3 boot, not only the ones that rebuild: the crash this
+        # prevents is reached by opening a submenu, which has nothing to do
+        # with whether anything needed patching. It writes only files that are
+        # missing, so on all boots after the first it does four existence
+        # checks and stops.
+        _seed_af3_empty_submenus()
 
     marker = AF3_NODES + '.pov_home_version'
     marker_changed = True

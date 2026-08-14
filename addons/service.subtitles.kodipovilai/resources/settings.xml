@@ -887,6 +887,156 @@
             <allowempty>true</allowempty>
           </constraints>
         </setting>
+        <!-- Hidden marker: which add-ons' self update check we have already
+             settled, so the decision is taken once and never taken again.
+             Declared for consistency and so the next reader can find it.
+             CORRECTION, kept because I got this wrong here first: an earlier
+             version of this comment claimed an undeclared id never reaches
+             disk and that the marker would therefore read empty on every
+             start. That is false, and HANDOFF.md already said so. Kodi's
+             CAddon::UpdateSetting creates a hidden CSettingString through
+             AddSettingWithoutDefinition for an id this file does not declare,
+             SaveSettings serialises it with no "was this declared" filter, and
+             CAddonSettings::Load recreates it on the way back in. Undeclared
+             markers persist. What does NOT persist is a setSetting into
+             ANOTHER add-on for an id that add-on has not declared, which is a
+             different code path.
+             See update_nag_patcher.py. -->
+        <setting id="_update_nag_quiet_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- THE REST OF THE ONE SHOT MARKERS, declared for the same reason:
+             consistency, and so the next reader finds them all in one place.
+             They were NOT broken. An earlier version of this comment said
+             they had never reached disk and that their one shots had been
+             running on every start; that was wrong, and nothing in this block
+             changes behaviour for anyone. Kept as house style, which is what
+             HANDOFF.md concluded about these same markers by name.
+             Every one holds a short string ('1', or a comma separated list of
+             the keys it has settled), which is why they are all plain strings
+             with an empty default.
+             (No double hyphen anywhere in here: XML forbids it inside a
+             comment, and it took a second parse error to relearn that.) -->
+        <setting id="_builtin_engine_rollout_v2" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_chunk_lines_50_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_fast_first_chunk_default_v2" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_ktuvit_on_v4" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_nox_poster_rating_default_v2" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_pool_share_force_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_remember_source_force_v2" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_umbrella_api_language_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_umbrella_coco_providers_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_umbrella_coco_providers_v2" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_umbrella_coco_wired_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_umbrella_defaults_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_umbrella_lang_filters_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Three more of the same, from the DarkSubs side of the audit.
+             Also not broken: I claimed these were the live case, with the
+             offer being made again on every start. They persisted like the
+             rest. Declared here for the same reason as the rest. -->
+        <setting id="_darksubs_autoenable_done" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_force_ai_autoenable_done" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <setting id="_darksubs_nag_done" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
         <!-- Hidden marker: the POV seasons view id WE last wrote, so ours can
              be replaced when the skin changes and the user's never is.
              See pov_seasons_view_seed.py. -->

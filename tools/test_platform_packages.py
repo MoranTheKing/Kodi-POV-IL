@@ -3,12 +3,14 @@
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import importlib.util
 import json
 import re
 import shutil
 import subprocess
+import types
 import sys
 import tempfile
 from pathlib import Path
@@ -219,15 +221,94 @@ def test_update_checker_guards() -> None:
     assert "kodi_version_update_check(kodi_version_update_check_manual)" in router
 
 
+def test_no_auto_app_prompt_targets() -> None:
+    """The automatic app-update dialog must stay suppressible, and only that.
+
+    That dialog fires from startup.py on EVERY start and its "later" button
+    records nothing, so a package nobody needs is a prompt at every boot until
+    the user hand-reinstalls the application. NO_AUTO_APP_PROMPT_TARGETS names
+    the releases nobody should be prompted for -- by TARGET, so it expires on
+    its own rather than muting a population that then has to be remembered.
+
+    Both halves are load-bearing and both are checked here by RUNNING the real
+    guard against the real release_version and the real uservar list, not by
+    grepping for it: it must suppress what it names, and it must fail towards
+    ASKING for everything else, because the other direction is a device never
+    told about an update it needs.
+    """
+    wizard_src = (WIZARD_ROOT / "resources/libs/wizard.py").read_text(
+        encoding="utf-8"
+    )
+    uservar_src = (WIZARD_ROOT / "uservar.py").read_text(encoding="utf-8")
+    config_src = (
+        WIZARD_ROOT / "resources/libs/common/config.py"
+    ).read_text(encoding="utf-8")
+
+    # Both platforms call it, and both do so BEFORE their dialog.
+    for call in (
+        "if is_new_version_available and _auto_prompt_suppressed(\n"
+        "                latest_release, kodi_version_update_check_manual):",
+    ):
+        assert wizard_src.count(call) == 2, (
+            "both kodi_apk_update_check and kodi_windows_update_check must "
+            "consult the guard before raising their dialog"
+        )
+    # Surfaced with a default, so an older uservar.py cannot stop the wizard
+    # loading, and read through CONFIG rather than importing uservar directly.
+    assert "NO_AUTO_APP_PROMPT_TARGETS" in uservar_src
+    assert "getattr(\n            uservar, 'NO_AUTO_APP_PROMPT_TARGETS', [])" in config_src
+
+    match = re.search(
+        r"^def _auto_prompt_suppressed\(latest_release, manual\):"
+        r"[\s\S]*?\n\n\n",
+        wizard_src,
+        re.M,
+    )
+    assert match, "cannot isolate _auto_prompt_suppressed"
+
+    shipped = re.search(
+        r"^NO_AUTO_APP_PROMPT_TARGETS = (\[[^\]]*\])", uservar_src, re.M
+    )
+    assert shipped, "NO_AUTO_APP_PROMPT_TARGETS must be a plain list literal"
+    targets = ast.literal_eval(shipped.group(1))
+
+    def suppressed(latest, manual, listed=targets):
+        namespace = {
+            "release_version": _load_release_version(),
+            "logging": types.SimpleNamespace(log=lambda *a, **k: None),
+            "xbmc": types.SimpleNamespace(LOGINFO=1),
+            "CONFIG": types.SimpleNamespace(
+                NO_AUTO_APP_PROMPT_TARGETS=listed
+            ),
+        }
+        exec(compile(match.group(0), "guard", "exec"), namespace)
+        return namespace["_auto_prompt_suppressed"](latest, manual)
+
+    if targets:
+        named = targets[0]
+        assert suppressed(named, False) is True
+        # Asking is always answered. A suppression that also hid the release
+        # from somebody who went looking for it would be a lie, not a mute.
+        assert suppressed(named, True) is False
+        # Pointer files end in a newline; canonicalisation has to survive it.
+        assert suppressed(named + "\n", False) is True
+    # Everything not named is prompted for -- this is what makes the list
+    # expire by itself when the next package actually matters.
+    assert suppressed("21.3-povil.9999", False) is False
+    # ...and every way the list can be malformed still asks.
+    for broken in ([], None, [None, 42], "21.3-povil.49"):
+        assert suppressed("21.3-povil.9999", False, broken) is False
+
+
 def test_workflow_package_guards() -> None:
     workflow = (ROOT / ".github/workflows/build-apk.yml").read_text(
         encoding="utf-8"
     )
-    assert "WIZARD_VERSION: '0.1.45'" in workflow
-    assert "default: '21.3-povil.48'" in workflow
-    assert "default: '2103048'" in workflow
-    assert "EXPECTED_RELEASE: '21.3-povil.48'" in workflow
-    assert "EXPECTED_VERSION_CODE: '2103048'" in workflow
+    assert "WIZARD_VERSION: '0.1.46'" in workflow
+    assert "default: '21.3-povil.49'" in workflow
+    assert "default: '2103049'" in workflow
+    assert "EXPECTED_RELEASE: '21.3-povil.49'" in workflow
+    assert "EXPECTED_VERSION_CODE: '2103049'" in workflow
     assert "Validate release inputs" in workflow
     assert "            aapt \\" in workflow
     assert "python3-pil" in workflow
@@ -247,13 +328,20 @@ def test_wizard_rebuild_from_clean_checkout() -> None:
     """The surgical Wizard release must rebuild after its source is committed."""
     manifest_path = (
         ROOT
-        / "wizard/release_manifests/plugin.program.kodipovilwizard-0.1.45.json"
+        / "wizard/release_manifests/plugin.program.kodipovilwizard-0.1.46.json"
     )
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    # Every member listed here has a change in this release, and nothing else
+    # does -- the point of pinning the set is that an over-broad replace list
+    # cannot slip through, so it moves per release rather than being loosened.
     assert set(manifest["replace"]) == {
         "plugin.program.kodipovilwizard/addon.xml",
         "plugin.program.kodipovilwizard/changelog.txt",
+        "plugin.program.kodipovilwizard/uservar.py",
         "plugin.program.kodipovilwizard/resources/libs/wizard.py",
+        "plugin.program.kodipovilwizard/resources/libs/common/config.py",
+        "plugin.program.kodipovilwizard/resources/libs/common/router.py",
+        "plugin.program.kodipovilwizard/resources/libs/gui/window.py",
     }
     assert manifest["add"] == []
     builder_source = (ROOT / "tools/build_wizard_package.py").read_text(
@@ -272,8 +360,8 @@ def test_wizard_rebuild_from_clean_checkout() -> None:
             clean / "tools/build_wizard_package.py",
         )
         shutil.copy2(
-            ROOT / "dist/plugin.program.kodipovilwizard-0.1.44.zip",
-            clean / "dist/plugin.program.kodipovilwizard-0.1.44.zip",
+            ROOT / "dist/plugin.program.kodipovilwizard-0.1.45.zip",
+            clean / "dist/plugin.program.kodipovilwizard-0.1.45.zip",
         )
         shutil.copy2(
             manifest_path,
@@ -315,14 +403,14 @@ def test_wizard_rebuild_from_clean_checkout() -> None:
             sys.executable,
             "tools/build_wizard_package.py",
             "--previous",
-            "dist/plugin.program.kodipovilwizard-0.1.44.zip",
+            "dist/plugin.program.kodipovilwizard-0.1.45.zip",
             "--manifest",
             "wizard/release_manifests/"
-            "plugin.program.kodipovilwizard-0.1.45.json",
+            "plugin.program.kodipovilwizard-0.1.46.json",
             "--version",
-            "0.1.45",
+            "0.1.46",
         )
-        rebuilt = clean / "dist/plugin.program.kodipovilwizard-0.1.45.zip"
+        rebuilt = clean / "dist/plugin.program.kodipovilwizard-0.1.46.zip"
         assert hashlib.sha256(rebuilt.read_bytes()).hexdigest() == (
             manifest["output_sha256"]
         )
@@ -346,7 +434,7 @@ def test_phase_one_artifacts() -> None:
         / ("Kodi-POV-IL-FENtastic-quickfix-%s.zip"
            % quickfix_match.group(1))
     ).is_file()
-    assert "kodipovilwizard-0.1.45.zip" in build
+    assert "kodipovilwizard-0.1.46.zip" in build
 
     # Accept both legal publication states:
     #   phase 1 -> artifacts/snapshot N are live while note N-1 remains live;
@@ -360,11 +448,11 @@ def test_phase_one_artifacts() -> None:
     # Each release against its OWN predecessor. This pair used to be pinned
     # to a historical one and drifted into asserting a file list that had
     # nothing to do with the version being shipped.
-    old_wizard = ROOT / "dist/plugin.program.kodipovilwizard-0.1.44.zip"
-    new_wizard = ROOT / "dist/plugin.program.kodipovilwizard-0.1.45.zip"
+    old_wizard = ROOT / "dist/plugin.program.kodipovilwizard-0.1.45.zip"
+    new_wizard = ROOT / "dist/plugin.program.kodipovilwizard-0.1.46.zip"
     latest_wizard = ROOT / "dist/plugin.program.kodipovilwizard-latest.zip"
     assert new_wizard.read_bytes() == latest_wizard.read_bytes()
-    page_wizard = ROOT / "wizard/plugin.program.kodipovilwizard-0.1.45.zip"
+    page_wizard = ROOT / "wizard/plugin.program.kodipovilwizard-0.1.46.zip"
     page_latest = ROOT / "wizard/plugin.program.kodipovilwizard-latest.zip"
     assert new_wizard.read_bytes() == page_wizard.read_bytes()
     assert new_wizard.read_bytes() == page_latest.read_bytes()
@@ -381,10 +469,17 @@ def test_phase_one_artifacts() -> None:
             for name in old_crc.keys() & new_crc
             if old_crc[name] != new_crc[name]
         }
+        # Same set the manifest declares: what the package actually changed,
+        # proven from the two ZIPs rather than from the manifest that asked
+        # for it.
         assert changed == {
             "plugin.program.kodipovilwizard/addon.xml",
             "plugin.program.kodipovilwizard/changelog.txt",
+            "plugin.program.kodipovilwizard/uservar.py",
             "plugin.program.kodipovilwizard/resources/libs/wizard.py",
+            "plugin.program.kodipovilwizard/resources/libs/common/config.py",
+            "plugin.program.kodipovilwizard/resources/libs/common/router.py",
+            "plugin.program.kodipovilwizard/resources/libs/gui/window.py",
         }
         assert not (set(new_crc) - set(old_crc))
         assert not (set(old_crc) - set(new_crc))
@@ -425,6 +520,7 @@ def main() -> int:
     test_release_version_rules()
     test_windows_installer_guards()
     test_update_checker_guards()
+    test_no_auto_app_prompt_targets()
     test_workflow_package_guards()
     test_wizard_rebuild_from_clean_checkout()
     test_phase_one_artifacts()
