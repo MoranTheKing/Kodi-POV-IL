@@ -4318,7 +4318,7 @@ def _maybe_tune_gemini3_defaults():
 def _maybe_bump_gemini_model():
     """One-shot: move existing users off the superseded default Gemini models to
     their newer, same-quota successors -- gemini-3.1-flash-lite -> 3.5-flash-lite
-    (the free 500/day default) and gemini-3.5-flash -> 3.6-flash (the paid
+    (the free 500/day default) and 3.5-flash / 3.6-flash -> 3.7-flash (the paid
     regular-Flash pick). Both are drop-in upgrades (identical free-tier quota,
     better quality), so we rewrite the STORED model once. Only those two exact
     old ids are bumped; any other deliberate choice (3.1-flash, 2.5-*) is left
@@ -4329,16 +4329,22 @@ def _maybe_bump_gemini_model():
     except Exception:
         return
     try:
-        if kodi_utils.get_setting('_gemini_model_bump_v1', '') == '1':
+        # v2, NOT v1. The v1 marker is already '1' on every device that took
+        # the 3.5 -> 3.6 bump, so reusing it would make this migration a no-op
+        # for exactly the users who need it -- the ones already on 3.6. A new
+        # id per bump is the only thing that makes a once-only migration
+        # repeatable across releases.
+        if kodi_utils.get_setting('_gemini_model_bump_v2', '') == '1':
             return
         cur = (kodi_utils.get_setting('model', '') or '').strip()
         new = {'gemini-3.1-flash-lite': 'gemini-3.5-flash-lite',
-               'gemini-3.5-flash': 'gemini-3.6-flash'}.get(cur)
+               'gemini-3.5-flash': 'gemini-3.7-flash',
+               'gemini-3.6-flash': 'gemini-3.7-flash'}.get(cur)
         if new:
             kodi_utils.set_setting('model', new)
             kodi_utils.log('Gemini model bumped {0} -> {1} (migration v1)'.format(
                 cur, new), level='INFO')
-        kodi_utils.set_setting('_gemini_model_bump_v1', '1')
+        kodi_utils.set_setting('_gemini_model_bump_v2', '1')
     except Exception as e:
         try:
             kodi_utils.log('gemini model bump migration failed: {0}'.format(e),
