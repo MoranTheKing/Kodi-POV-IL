@@ -65,9 +65,18 @@ def _pointed_at(key):
     name that did not end in dotted digits -- a crash mode dist/ is exactly
     untidy enough to reach."""
     text = BUILD_TXT.read_text(encoding="utf-8")
-    match = re.search(r'^%s="([^"]+)"' % re.escape(key), text, re.M)
-    assert match, "build.txt has no %s= line" % key
-    name = match.group(1).rsplit("/", 1)[-1]
+    found = re.findall(r'^%s="([^"]+)"' % re.escape(key), text, re.M)
+    assert found, "build.txt has no %s= line" % key
+    # findall, not search, because build.txt legitimately repeats a key: it
+    # carries `version=` twice, once for the wizard block and once for the
+    # build block. `gui` and `url` appear once each today, and a silent
+    # first-match-wins would be the wrong answer the day that stops being
+    # true -- for a key whose whole job is to name which file ships.
+    assert len(found) == 1, (
+        "build.txt has {0} {1}= lines; which one names the release is not a "
+        "question this should answer by guessing".format(len(found), key)
+    )
+    name = found[0].rsplit("/", 1)[-1]
     package = DIST / name
     assert package.is_file(), (
         "build.txt sends devices to {0}, which is not in dist/. Either the "
@@ -176,6 +185,7 @@ def test_the_full_build_carries_the_current_addons():
     it needs the worktree to compare against, which is what this test has.
     """
     package = _shipped_full_build()
+    stale = []
     for label, in_tree_xml, member, tool in (
         ("wizard", WIZARD_XML_IN_TREE, WIZARD_XML_IN_PACKAGE,
          "build_wizard_package.py"),
@@ -184,13 +194,18 @@ def test_the_full_build_carries_the_current_addons():
     ):
         in_tree = _addon_version(in_tree_xml.read_text(encoding="utf-8"))
         shipped = _bundled_version(package, member)
-        assert shipped >= in_tree, (
-            "{0} bundles {1} {2} but the worktree is at {3}. Every fresh "
-            "install would get {2} and be recorded as already up to date. "
-            "Rebuild the full build from a current {4} package before "
-            "releasing.".format(package.name, label, _shown(shipped),
-                                _shown(in_tree), tool)
-        )
+        # Collected, not asserted one at a time. Both went stale together in
+        # 0.1.105 and asserting on the first would have reported the wizard
+        # and hidden the add-on -- the same serial reveal the runner below was
+        # fixed for, one level down.
+        if shipped < in_tree:
+            stale.append("{0} {1} (worktree {2}; rebuild via {3})".format(
+                label, _shown(shipped), _shown(in_tree), tool))
+    assert not stale, (
+        "{0} is stale: {1}. Every fresh install would get these versions AND "
+        "be recorded as already up to date, so nothing would repair "
+        "them.".format(package.name, "; ".join(stale))
+    )
 
 
 def test_quickfix_contains_only_our_addons():
@@ -253,13 +268,23 @@ if __name__ == "__main__":
     # once. It matters most for exactly the case these guards exist for: the
     # quickfix and the full build go stale for the same reason, in the same
     # release, and seeing only the first hides half the work.
+    #
+    # Catch Exception, not AssertionError. The first version caught only
+    # assertions, which left the guarantee true for every failure the tests
+    # write themselves and false for every failure the world hands them: a
+    # truncated download raises BadZipFile, a missing build.txt raises
+    # FileNotFoundError, a mis-encoded addon.xml raises UnicodeDecodeError.
+    # Each of those aborted the run and took the remaining tests with it --
+    # the exact behaviour this loop was written to stop, reachable by exactly
+    # the inputs a release goes wrong on.
     failures = []
     for test in tests:
         try:
             test()
-        except AssertionError as exc:
+        except Exception as exc:
             failures.append((test.__name__, exc))
-            print("FAIL - {0}\n    {1}".format(test.__name__, exc))
+            print("FAIL - {0}\n    {1}: {2}".format(
+                test.__name__, type(exc).__name__, exc))
         else:
             print("ok - {0}".format(test.__name__))
     if failures:
