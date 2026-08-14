@@ -213,6 +213,43 @@ TILE = ('    <favourite name="{0}" thumb="{1}">{2}</favourite>'
         .format(TILE_NAME, TILE_THUMB, TILE_ACTION))
 
 
+# THE TILE OPENS A WIZARD ROUTE, AND THE WIZARD IS UPDATED SEPARATELY.
+# `?mode=recentupdates` was added to the wizard's router in 0.1.46. This
+# patcher ships in the ADD-ON, which reaches a device through the quickfix --
+# a different channel, arriving first. Between the two, the tile was on the
+# home screen and did nothing at all: pressing it ran the plugin, no branch in
+# the router matched, and the script exited in about a millisecond. A user
+# reported exactly that, and the log showed it precisely -- "[ mode:
+# recentupdates ]" followed by "script successfully run", with wizard v0.1.45
+# installed.
+#
+# So the tile is not offered until the thing it opens exists. Checked against
+# the wizard actually installed, not against what this build shipped with,
+# because those are not the same on a device mid-update. A wizard we cannot
+# read at all is treated as too old: the cost is one boot's delay, and the
+# alternative is the dead tile again.
+WIZARD_ADDON_ID = 'plugin.program.kodipovilwizard'
+WIZARD_MIN_VERSION = (0, 1, 46)
+
+
+def _wizard_can_serve_the_tile():
+    """Is the INSTALLED wizard new enough to answer the tile's route?"""
+    try:
+        import xbmcaddon
+        raw = xbmcaddon.Addon(WIZARD_ADDON_ID).getAddonInfo('version')
+    except Exception:
+        # Not installed, or Kodi still calls it unknown this early. Either way
+        # this is not the boot to offer the tile on.
+        return False
+    try:
+        parts = tuple(int(p) for p in str(raw).strip().split('.')[:3])
+    except Exception:
+        # An unparseable version is not evidence of anything. Do not guess it
+        # is new enough; a dead tile is worse than a late one.
+        return False
+    return parts >= WIZARD_MIN_VERSION
+
+
 def _log(msg, level='INFO'):
     if kodi_utils is None:
         return
@@ -455,7 +492,7 @@ def _guess_from_anchors(record, theirs):
 def ensure_patched():
     """'no_kodi' | 'no_favourites' | 'already_present' | 'user_removed'
     | 'already_seen' | 'read_failed' | 'unparseable' | 'write_failed'
-    | 'seed_abandoned' | 'seeded'."""
+    | 'seed_abandoned' | 'wizard_too_old' | 'seeded'."""
     if xbmcvfs is None:
         return 'no_kodi'
     path = _favourites_path()
@@ -620,6 +657,15 @@ def ensure_patched():
         else:
             _log("the wizard's mark changed since we seeded the tile, so it "
                  'replaced favourites.xml; restoring the tile')
+
+    if not _wizard_can_serve_the_tile():
+        # Nothing is written down: no record, no attempt counted. The next
+        # start asks again, and the tile appears the moment the wizard that
+        # can open it is in place.
+        _log('the installed wizard is older than {0}, which is where the tile'
+             "'s route lives; not offering it yet"
+             .format('.'.join(str(n) for n in WIZARD_MIN_VERSION)))
+        return 'wizard_too_old'
 
     closing = text.rfind('</favourites>')
     if closing == -1:
