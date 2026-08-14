@@ -625,6 +625,45 @@ are not exempt from anything: they land in `self.sourceDict`, flow into
 BEFORE the filter block. More 720p after an update means more providers, not a
 lost setting.
 
+## Shipped 2026-08-14: note 592 (0.2.492 / wizard 0.1.46 / quickfix 0.1.537)
+
+The largest single release on this branch: 38 commits, six adversarial review
+rounds on the home tile alone, and three code fixes that came out of reviewing
+the reviewer's own fixes.
+
+**The "last ten updates" home tile.** One favourites entry covering all four
+skins. Everything hard about it was deciding whether it may be re-seeded --
+see the tile section further down, and read it before touching that file.
+
+**POV's background service.** Kodi calls an add-on unknown for about 2.7
+seconds after re-enabling it while starting its service straight away, and
+POV reads a setting at import. Patched inside POV, where the wait has to
+happen, and now applied before anything in `main()` that can re-enable POV.
+Covers the reported call site; the module-scope one is recorded as open.
+
+**The two update nags.** Umbrella's `general.checkAddonUpdates` and
+Account Manager's `check_for_update`, switched off once through
+`addon_settings_safe`, never against a user who moved the setting themselves.
+
+**An add-on switched off stays off.** `_ensure_pov_enabled` now repairs only
+an outage the build itself caused and recorded.
+
+**Arctic Fuse 3's empty submenus.** The skin declares five submenu slots and
+ships a node file for one; the unresolved include crashed Kodi on open.
+
+**No prompt to reinstall the app for nothing.** `NO_AUTO_APP_PROMPT_TARGETS`,
+keyed by target release so it expires by itself. The manual menu check is
+untouched, and the guard fails towards asking.
+
+**17 hidden marker ids declared**, plus `tools/test_settings_declared.py`.
+House style, not data loss -- undeclared ids persist; see the correction
+further down.
+
+**Packaging note.** The APK workflow moves to wizard 0.1.46 and release
+21.3-povil.49, and its embedded build zip stays 0.1.105 because 0.1.106 was
+not built: there is no scripted recipe for a full build in this repo, and the
+one artifact fresh installs depend on is not the place to improvise one.
+
 ## Shipped 2026-08-13: note 591 (0.2.491 / wizard 0.1.45 / quickfix 0.1.536)
 
 **The quick-update freeze.** Two of our own code paths ran at the same moment:
