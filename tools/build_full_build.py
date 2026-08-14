@@ -56,8 +56,10 @@ WIZARD_PREFIX = "plugin.program.kodipovilwizard/"
 # read in eight files -- whitelist, clear, menu, backup, install, tools, db and
 # custom_save_data_config -- and `grep -c EXCLUDES extract.py` returns 0. That
 # zero is the whole point, and it is the only count worth stating: an earlier
-# draft of this comment named four of the eight and called them "the paths that
-# DELETE", which was both an undercount and untrue of two of them. extract.all()
+# draft of this comment named four of the eight and called them "the paths
+# that DELETE", which undercounted by four and was untrue of three of the
+# four it did name -- whitelist and menu only filter a listing, backup only
+# filters what is zipped, and clear alone gates an actual delete. extract.all()
 # takes `excludes = []`; wizard.py's quick_update() calls it as
 # `extract.all(lib, CONFIG.HOME, ignore=True, title=title)`, and ignore=True
 # also bypasses the self-skip on the wizard's own id at extract.py:249. So a
@@ -77,7 +79,8 @@ WIZARD_PREFIX = "plugin.program.kodipovilwizard/"
 # AND THIS TOOL'S OUTPUT IS GATED THERE TOO, because the same review that
 # corrected the paragraph above found the full build was the worse half of it:
 # 0.1.105, the build every fresh install got until this release, bundled wizard
-# 0.1.36 and add-on 0.2.462 -- ten and thirty releases behind -- while
+# 0.1.36 against a worktree at 0.1.46, and add-on 0.2.462 against 0.2.493 --
+# the numbers, not a rounded count of releases, which drifts -- while
 # startup.py's fresh-install branch recorded the newest note as already applied.
 # The verify at the end of this file could not catch that and still cannot: it
 # checks the result against the versions typed on the command line, and a build

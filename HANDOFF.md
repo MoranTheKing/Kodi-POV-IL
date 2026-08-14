@@ -644,9 +644,11 @@ Three facts, each verified in the source rather than reasoned about:
     db, custom_save_data_config -- and `grep -c EXCLUDES extract.py` returns
     **0**. That zero is the claim; the eight are only there to show the search
     was done. An earlier draft of this said "read by whitelist, clear, menu and
-    backup -- the paths that DELETE", which undercounted by four and was untrue
-    of two (`db.py` lists, `custom_save_data_config.py` generates a whitelist).
-    The conclusion survived the correction, but state the zero, not the list.
+    backup -- the paths that DELETE", which undercounted by four AND was untrue
+    of three of the four it named: whitelist and menu only filter a listing,
+    backup only filters what is zipped, and `clear.py` alone gates a real
+    delete. Corrected twice, in two review rounds, because each draft fixed
+    the count and left the characterisation. **State the zero, not the list.**
   * `uservar.py` -- `AUTOUPDATE = 'No'`. The wizard's self-updater never runs,
     and the device log says so in as many words: `[Auto Update Wizard] Not
     Enabled`.
@@ -675,7 +677,7 @@ wizard makes the tile appear.
 of the guard covered the quickfix only. A validator pass pointed at the other
 door and it was standing wider open: build **0.1.105**, the one `build.txt`
 sent every fresh installation to until this release, bundled wizard **0.1.36**
-and add-on **0.2.462** -- ten and thirty releases behind. And `startup.py`'s
+and add-on **0.2.462**, against a worktree at 0.1.46 / 0.2.493. And `startup.py`'s
 fresh-install branch calls `record_quick_update_applied()` with the current
 note id, commented "A fresh install already carries the current package". It
 did not. So a new user got a months-old build *and* a record saying they were
@@ -749,6 +751,32 @@ of the 592 section: there IS a scripted recipe now, and 0.1.106 exists.
 moments, before its own code runs -- is now covered by its own patch, and
 `ensure_patched()` reports `'partial'` when only one of the two lands, so a POV
 update that rewrites one anchor can no longer read as all-fine.
+
+**PHASE 1 IS NOT NEUTRAL, AND THIS RELEASE IS WHY.** Round 2's review traced
+what a device actually resolves and found something the two-phase gate's own
+description never says out loud. `auto_quick_update()` reads the LIVE note id,
+then `check.check_build(name, 'gui', release_id=<that id>)` fetches
+`build_versions/<id>.txt` -- *not* live `build.txt`. That indirection is
+deliberate (raw.githubusercontent ignores query strings in its cache key, so
+each note gets its own immutable path), and it means **the previous note's
+manifest stays the live target for the whole of phase 1**.
+
+`build_versions/592.txt` pins quickfix **0.1.537** and build **0.1.105**: the
+defective pair. So while artifacts sit published under a note that has not
+moved, every device that has not yet taken 592 keeps being handed the dead
+tile. Phase 1 does not merely delay the fix, it prolongs the defect's reach.
+
+Nothing is wrong with the mechanism -- rewriting 592's manifest would break the
+immutability the cache workaround depends on, and note 592 *is* the release
+that shipped 0.1.537. The correct response is operational: **keep phase 1
+short.** Verify, wait out the cache window, flip. Do not leave a release parked
+between phases overnight because the artifacts "are already up".
+
+The current release's snapshot is covered: `test_platform_packages.py` requires
+live `build.txt` to be byte-identical to some `build_versions/<id>.txt`, and
+the two new guards check live `build.txt`, so together they pin the snapshot
+that is about to go live. Older snapshots are immutable history and are checked
+by nothing, correctly.
 
 **Residuals, recorded not fixed.**
 
