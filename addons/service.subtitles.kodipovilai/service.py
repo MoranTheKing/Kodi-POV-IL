@@ -226,6 +226,7 @@ def _run_build_startup_repairs():
         _maybe_quiet_update_nags,
         _maybe_patch_pov_repeat_timer,
         _maybe_patch_pov_widget_crash_guard,
+        _maybe_patch_pov_language_invoker,
         _maybe_patch_pov_favorites_refresh,
         _maybe_patch_pov_bookmark_refresh,
         _maybe_patch_umbrella_language,
@@ -2220,6 +2221,53 @@ def _maybe_patch_pov_widget_crash_guard():
         try:
             kodi_utils.log(
                 'pov_widget_crash_guard run failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_language_invoker():
+    """Close the crash class the two guards above only narrow.
+
+    Both of them remove a TRIGGER for "many POV widgets refresh at once"; this
+    removes what makes that burst fatal. POV ships
+    <reuselanguageinvoker>true</reuselanguageinvoker>, so concurrent
+    invocations share one Python interpreter and corrupt CPython's internals
+    (a NULL refcount write inside python3.8.dll in the 2026-08-14 minidump,
+    on a thread the Kodi log identifies as POV's). With the flag off, each
+    invocation gets its own interpreter and the same burst is merely slower.
+
+    POV keeps this flag in TWO places -- a hidden `reuse_language_invoker`
+    setting and its own addon.xml -- and runs a service that rewrites the xml
+    from the setting, so the module writes both, setting first. Effective from
+    the next Kodi start: Kodi has already read addon.xml by the time this pass
+    runs. See the module header for why we do not force it live."""
+    if _skip_pov_patchers():
+        return
+    try:
+        from resources.lib import pov_language_invoker_guard, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_language_invoker_guard.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_language_invoker_guard: reuse-language-invoker turned '
+                'OFF (setting + addon.xml) -- prevents the concurrent-widget '
+                'native crash; takes effect at the next Kodi start',
+                level='INFO')
+        elif status == 'setting_only':
+            kodi_utils.log(
+                'pov_language_invoker_guard: setting written, addon.xml was '
+                'not -- POV reconciles it from the setting on its next start',
+                level='WARNING')
+        elif status in ('unreadable', 'no_tag', 'write_failed'):
+            kodi_utils.log(
+                'pov_language_invoker_guard: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log(
+                'pov_language_invoker_guard run failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
@@ -4342,7 +4390,7 @@ def _maybe_bump_gemini_model():
                'gemini-3.6-flash': 'gemini-3.7-flash'}.get(cur)
         if new:
             kodi_utils.set_setting('model', new)
-            kodi_utils.log('Gemini model bumped {0} -> {1} (migration v1)'.format(
+            kodi_utils.log('Gemini model bumped {0} -> {1} (migration v2)'.format(
                 cur, new), level='INFO')
         kodi_utils.set_setting('_gemini_model_bump_v2', '1')
     except Exception as e:
