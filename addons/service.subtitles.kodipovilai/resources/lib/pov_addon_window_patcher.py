@@ -79,11 +79,25 @@ MARKER = '# AI_SUBS_POV_ADDON_WINDOW_v1'
 # would never see coming. Neither copy of POV does that today; "today" is not
 # the timescale this patch lives on.
 #
-# This waits for the window to close BEFORE the first construction, so every
-# construction after it -- module scope, get_setting, addon(), all of them --
-# simply succeeds. No name is rebound, no type changes, no call site behaves
-# differently. On an ordinary start the first attempt succeeds and it costs
-# one discarded object.
+# This waits for the window to close BEFORE the first construction, so the
+# module-scope line that follows it -- the one that kills the import -- is
+# past the window by the time it runs. No name is rebound, no type changes, no
+# call site behaves differently. On an ordinary start the first attempt
+# succeeds and it costs one discarded object.
+#
+# WHAT IT DOES NOT COVER, stated because the first version of this comment
+# claimed "module scope, get_setting, addon(), all of them -- simply succeed"
+# and that is not something this code guarantees. get_setting, set_setting,
+# make_settings_dict, get_setting_fallback and local_string each construct
+# their own Addon and get no retry from this. They are fine if the window
+# never reopens after the import resolves it -- and this codebase knows POV
+# runs a REUSED language invoker whose interpreter outlives a single call, and
+# that the disable/enable cycle which opens the window happens more than once
+# in a session, so "imported once" is a fact about one past moment rather than
+# a promise. Whether that combination is actually reachable is unconfirmed.
+# The wrapper approach would have covered them and is rejected above for its
+# own reasons; patching five more anchors is the alternative, and each new
+# anchor is another thing that can silently stop matching on a POV update.
 IMPORT_MARKER = '# AI_SUBS_POV_IMPORT_WINDOW_v1'
 _IMPORT_ANCHOR = 'from xbmcaddon import Addon\n'
 _IMPORT_PATCHED = (
@@ -246,9 +260,19 @@ def ensure_patched():
                  level='WARNING')
 
     if new_content == content:
-        # Either both are already ours, or neither anchor is there any more.
-        return 'clean' if (MARKER in content or IMPORT_MARKER in content) \
-            else 'unmatched'
+        # THREE ANSWERS, because this commit gave 'clean' two meanings and a
+        # review caught it. Both patches present is clean. Neither anchor
+        # findable is unmatched. ONE of each -- which is what a POV update
+        # rewriting only addon() leaves behind -- was reported as 'clean',
+        # and the caller warns on 'unmatched' and says nothing about 'clean'.
+        # So the protection that the field log was actually about could go
+        # away on a POV self-update and the status would say all is well.
+        have = (MARKER in content, IMPORT_MARKER in content)
+        if all(have):
+            return 'clean'
+        if any(have):
+            return 'partial'
+        return 'unmatched'
 
     try:
         compile(new_content, path, 'exec')
