@@ -56,6 +56,71 @@ POV_ADDON_ID = 'plugin.video.pov'
 KODI_UTILS_REL = 'resources/lib/modules/kodi_utils.py'
 MARKER = '# AI_SUBS_POV_ADDON_WINDOW_v1'
 
+# THE SECOND CALL SITE, and the earlier one. addon() below is the function the
+# field log died in, but kodi_utils builds an Addon at MODULE scope too -- on
+# the line that runs the moment anything imports it, which for POV's own
+# service is about as early as its Python gets to run:
+#
+#   addon_object, window, execJSONRPC = Addon(), xbmcgui.Window(10000), ...
+#
+# Kodi's LegacyAddon.cpp settles that this is the same exposure, not a lesser
+# one: the constructor with no id fills the id in from the calling script and
+# then runs the identical
+# GetAddon(id, pAddon, OnlyEnabled::CHOICE_YES) as Addon(id='plugin.video.pov').
+# Same line, same filter. If it raises, kodi_utils itself fails to import and
+# nothing downstream of it can even be defined -- strictly worse than the
+# failure that was reported.
+#
+# SO WAIT ONCE, AT THE IMPORT, RATHER THAN WRAPPING EVERY USE. A review
+# proposed shadowing the imported `Addon` name with a retrying function, which
+# would cover every use in the file at once -- and would also turn a class into
+# a function inside a third-party file that updates itself on its own
+# schedule, where any future `isinstance(x, Addon)` becomes a TypeError we
+# would never see coming. Neither copy of POV does that today; "today" is not
+# the timescale this patch lives on.
+#
+# This waits for the window to close BEFORE the first construction, so every
+# construction after it -- module scope, get_setting, addon(), all of them --
+# simply succeeds. No name is rebound, no type changes, no call site behaves
+# differently. On an ordinary start the first attempt succeeds and it costs
+# one discarded object.
+IMPORT_MARKER = '# AI_SUBS_POV_IMPORT_WINDOW_v1'
+_IMPORT_ANCHOR = 'from xbmcaddon import Addon\n'
+_IMPORT_PATCHED = (
+    'from xbmcaddon import Addon\n'
+    + IMPORT_MARKER + '\n'
+    '# Kodi calls an add-on unknown for a couple of seconds after re-enabling\n'
+    '# it, and starts its service inside that window. The next line builds an\n'
+    '# Addon at module scope, so landing in the window there kills the import\n'
+    '# and every definition below it. Wait the window out once, here, and the\n'
+    '# rest of this file constructs normally.\n'
+    '#\n'
+    '# waitForAbort, not sleep: this runs inside the service\'s own startup and\n'
+    '# Kodi force-kills a script that will not stop within 5 seconds of being\n'
+    '# asked. Nothing is raised on the way out -- if POV really cannot be\n'
+    '# resolved, the line below fails exactly as it did before this patch.\n'
+    'try:\n'
+    '\tAddon()\n'
+    'except Exception:\n'
+    '\t_ai_subs_monitor = xbmc.Monitor()\n'
+    '\tfor _ in range(30):\n'
+    '\t\tif _ai_subs_monitor.waitForAbort(0.1):\n'
+    '\t\t\tbreak\n'
+    '\t\ttry:\n'
+    '\t\t\tAddon()\n'
+    '\t\t\tbreak\n'
+    '\t\texcept Exception:\n'
+    '\t\t\tcontinue\n'
+)
+# Our own earlier block, so a re-patch replaces rather than stacks. Anchored on
+# the import line and the marker, then every line to the end of the injected
+# try/except -- which is the only run of non-blank lines that follows it.
+_OURS_IMPORT_RE = re.compile(
+    r'from xbmcaddon import Addon\n'
+    r'# AI_SUBS_POV_IMPORT_WINDOW_v\d+\n'
+    r'(?:(?:#|try:|except|\t).*\n)*',
+)
+
 # POV indents with tabs. This must match byte for byte.
 _STOCK = ("def addon(addon_id='plugin.video.pov'):\n"
           "\treturn Addon(id=addon_id)\n")
@@ -151,21 +216,39 @@ def ensure_patched():
         _log('read failed: {0}'.format(e), level='WARNING')
         return 'read_failed'
 
-    if MARKER in content:
-        return 'clean'
-
+    # TWO INDEPENDENT PATCHES, and either may land without the other. They
+    # protect different moments -- the import, and every later call -- and POV
+    # rewriting one of the two anchors is no reason to give up the other.
     new_content = content
-    if _OURS_RE.search(new_content):
-        # An older version of ours. Back to stock first, then forward -- so
-        # this never leaves two retry loops wrapped around each other.
-        new_content = _OURS_RE.sub(_STOCK, new_content, count=1)
-    if _STOCK not in new_content:
-        # POV rewrote addon(). Guessing at a replacement for a function this
-        # central is how a build breaks everything at once.
-        _log('addon() is not the function we know; leaving it alone',
-             level='WARNING')
-        return 'unmatched'
-    new_content = new_content.replace(_STOCK, _PATCHED, 1)
+
+    if IMPORT_MARKER not in new_content:
+        if _OURS_IMPORT_RE.search(new_content):
+            new_content = _OURS_IMPORT_RE.sub(
+                _IMPORT_ANCHOR, new_content, count=1)
+        if _IMPORT_ANCHOR in new_content:
+            new_content = new_content.replace(
+                _IMPORT_ANCHOR, _IMPORT_PATCHED, 1)
+        else:
+            _log('kodi_utils no longer imports Addon the way we know; '
+                 'leaving the import alone', level='WARNING')
+
+    if MARKER not in new_content:
+        if _OURS_RE.search(new_content):
+            # An older version of ours. Back to stock first, then forward -- so
+            # this never leaves two retry loops wrapped around each other.
+            new_content = _OURS_RE.sub(_STOCK, new_content, count=1)
+        if _STOCK in new_content:
+            new_content = new_content.replace(_STOCK, _PATCHED, 1)
+        else:
+            # POV rewrote addon(). Guessing at a replacement for a function
+            # this central is how a build breaks everything at once.
+            _log('addon() is not the function we know; leaving it alone',
+                 level='WARNING')
+
+    if new_content == content:
+        # Either both are already ours, or neither anchor is there any more.
+        return 'clean' if (MARKER in content or IMPORT_MARKER in content) \
+            else 'unmatched'
 
     try:
         compile(new_content, path, 'exec')
