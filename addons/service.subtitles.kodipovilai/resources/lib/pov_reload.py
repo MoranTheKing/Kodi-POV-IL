@@ -100,6 +100,101 @@ def _is_resolvable():
         return False
 
 
+# Written before POV is disabled, removed once it is verified back on. The
+# wizard keeps the same kind of record for the add-ons IT cycles
+# (pending_enable.txt) and for the same reason: a cycle that dies between the
+# disable and the enable leaves POV off, and a disabled add-on cannot switch
+# itself back on.
+#
+# SEPARATE FILE, NOT THE WIZARD'S. Two processes doing read-modify-write on one
+# list can drop an entry, and the entry that would get dropped is the one
+# saying "POV is off and somebody has to fix it". One writer per file removes
+# that whole class of problem; the healer simply reads both.
+CYCLE_PENDING_FILE = ('special://profile/addon_data/'
+                      'service.subtitles.kodipovilai/pov_cycle_pending.txt')
+
+
+def _cycle_pending_path():
+    import xbmcvfs
+    return xbmcvfs.translatePath(CYCLE_PENDING_FILE)
+
+
+def _mark_cycle_pending(pending):
+    """Record -- or clear -- "we have POV switched off right now"."""
+    try:
+        import os
+        path = _cycle_pending_path()
+        if pending:
+            directory = os.path.dirname(path)
+            if directory and not os.path.isdir(directory):
+                os.makedirs(directory)
+            with open(path, 'w', encoding='utf-8') as handle:
+                handle.write(POV_ADDON_ID + '\n')
+        elif os.path.exists(path):
+            os.remove(path)
+        return True
+    except Exception as e:
+        _log('could not {0} the cycle record: {1}'.format(
+            'write' if pending else 'clear', e), level='WARNING')
+        return False
+
+
+def _forget_record_if_pov_works():
+    """A record only means anything while POV is actually broken.
+
+    Without this it never expires. A cycle that overran its own budget by a
+    second left the record behind, POV came back unnoticed, and days later --
+    after the user had switched POV off themselves -- the startup heal read
+    that ancient record as authority and switched it back on. Which is the
+    silent settings change this whole mechanism exists to stop, reached through
+    staleness instead of through a guess.
+
+    So: any time we can see POV working, the record is obsolete by definition.
+    Drop it there and then, and the only records that survive are the ones
+    describing an outage that is still real.
+    """
+    try:
+        import os
+        if not os.path.exists(_cycle_pending_path()):
+            return
+    except Exception:
+        return
+    if not _is_resolvable():
+        return
+    # TWICE, WITH A GAP. _run_cycle writes the record and disables POV on the
+    # next line, and in between POV is still constructible. A DIFFERENT Kodi
+    # interpreter -- the wizard's, which shares none of this module's flags --
+    # asking is_cycling() at that instant reads "working" correctly and would
+    # delete the record a moment before it becomes the only thing that brings
+    # POV back. The gap is microseconds wide, so a second look after a pause
+    # lands the far side of the disable and sees the outage.
+    try:
+        import time
+        time.sleep(0.3)
+    except Exception:
+        return
+    if _is_resolvable():
+        _mark_cycle_pending(False)
+
+
+def cycle_left_pov_off():
+    """True when a cycle of ours switched POV off and never switched it back.
+
+    Read by the startup heal. It is the whole difference between "our cycle was
+    interrupted, put POV back" and "the user switched POV off", which look
+    identical from outside and deserve opposite answers.
+    """
+    try:
+        import os
+        return os.path.exists(_cycle_pending_path())
+    except Exception:
+        return False
+
+
+def clear_cycle_record():
+    _mark_cycle_pending(False)
+
+
 def _is_installed(budget=None):
     """Does POV exist on disk at all?
 
@@ -222,6 +317,10 @@ def is_cycling():
     if _armed or _cycling:
         return True
     if _is_resolvable():
+        # Seen working -> any leftover cycle record is stale. Cleared here
+        # because this is the one function every guard calls, so the record
+        # cannot outlive the outage it describes by more than a moment.
+        _forget_record_if_pov_works()
         return False
     return _is_installed()
 
@@ -487,6 +586,22 @@ def _run_cycle():
         # constructed again, so the flag always covers the whole unresolvable
         # window rather than part of it.
         _cycling = True
+        # RECORDED BEFORE THE DISABLE, exactly like the wizard's _cycle_addon,
+        # so that a process killed in the next second and a half leaves
+        # evidence that POV is off because of us. Without it the startup heal
+        # cannot tell our interrupted cycle from a user who switched POV off,
+        # and it used to guess -- always healing, which quietly reversed a
+        # setting the user had chosen.
+        # NO RECORD, NO DISABLE -- the wizard's _cycle_addon says this in as
+        # many words and refuses for the same reason. The record is the ONLY
+        # thing that brings POV back if this process dies in the next second
+        # and a half; disabling without it risks POV stuck off forever with
+        # nothing pointing at why. Skipping costs a stale interpreter until the
+        # next restart, which is just the old behaviour.
+        if not _mark_cycle_pending(True):
+            _log('could not record the cycle; not disabling POV',
+                 level='WARNING')
+            return
         _set_enabled(False)
         try:
             xbmc.sleep(1500)
@@ -511,12 +626,22 @@ def _run_cycle():
                 pass
         _log('cycled POV (re-import patched sources); resolvable={0}'.format(ok),
              level='INFO')
-        if not ok:
+        if ok:
+            # CLEARED ONLY ON PROOF. The record is what tells the next start to
+            # switch POV back on, so it comes off the disk only once POV has
+            # actually been constructed -- not when the enable call returned,
+            # which it does whether or not the enable took.
+            _mark_cycle_pending(False)
+        else:
             _set_enabled(True)
+            _log('POV did not come back; the cycle record stays so the next '
+                 'start switches it on', level='WARNING')
         _restore_home_focus(saved_focus)
     except Exception as e:
         _log('cycle failed: {0}'.format(e), level='WARNING')
         try:
             _set_enabled(True)
+            if _is_resolvable():
+                _mark_cycle_pending(False)
         except Exception:
             pass

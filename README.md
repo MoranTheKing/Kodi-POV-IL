@@ -98,6 +98,76 @@ part does not take, it falls back to the previous behaviour (a restart), and an
 add-on left switched off is recorded on disk and switched back on at the next
 start.
 
+## The skin refresh waits for POV (from `0.2.491`)
+
+A quick update does two things that used to be able to collide: it refreshes
+the skin, and it restarts the main video add-on so the update takes effect
+straight away. When both happened at the same moment the home screen was
+rebuilt while that add-on could not be loaded, every row backed by it failed,
+and Kodi had to be closed.
+
+Every refresh on the update path now waits for the add-on to be ready first --
+on every skin. If it is not ready in time the refresh is left for the next
+start rather than forced through, and the notification says the update applies
+next time instead of claiming it was applied. A refresh that is postponed is
+not recorded as done, so the next start does it.
+
+## The last ten updates, on the home screen (from `0.2.492`)
+
+The ten most recent update notes are readable from a tile on the home screen,
+newest first. The list is never longer than ten, so it stays quick to open.
+
+Removing the tile is respected: it does not come back at the next update or the
+next start. Switching skin rewrites the home tiles from the skin's own defaults
+-- if that removes the tile without you asking, it is restored; if you removed
+it yourself, it stays removed.
+
+## Add-ons you switched off stay off (from `0.2.492`)
+
+The build repairs a main add-on left disabled by an update that was interrupted
+-- a device switched off mid-update, for example. It now does that only when
+there is a record showing the build itself disabled it and could not switch it
+back on. An add-on you turned off yourself is left alone.
+
+## The main add-on keeps its background service (from `0.2.492`)
+
+Kodi treats an add-on as unknown for a couple of seconds after it is switched
+back on, while it finishes loading it -- but it starts that add-on's own
+background service straight away. The main video add-on reads a setting as it
+starts, so it could land in that gap and stop before it began: no Trakt sync
+for the rest of the session, and an error in the log. It now waits the gap out
+instead of giving up.
+
+This covers the point the failure was reported from. The same add-on reads its
+own details in a few other places that are not covered yet; those are next.
+
+## No more update prompts you cannot act on (from `0.2.492`)
+
+Two of the add-ons that ship with the build checked their own home page at
+every start and offered a newer version. The build pins those versions on
+purpose -- they carry changes made for this build, and taking the upstream
+copy removes them -- so the prompt offered something the add-on screen had no
+way to accept. The check is switched off once. If you switch it back on, it
+stays on.
+
+## You are not asked to reinstall the app for nothing (from `0.2.492`)
+
+The Android and Windows packages are checked at every start, and if a newer
+one exists you are offered it -- there is no "do not ask again", so an offer
+you keep declining comes back at every start until you act on it. That is the
+right behaviour for a package that changes the application.
+
+It is the wrong behaviour for one that does not. A package also carries a copy
+of the build, used only to set up a brand new install; an install that already
+exists gets the same content through the ordinary update, so for it the new
+package holds nothing new. Those releases are now marked, and the offer is not
+raised for them. Nothing is hidden: the release exists, the download page
+serves it, and "עדכון גרסת קודי" in the wizard menu still finds it and installs
+it if you ask.
+
+Installing a package over an existing one keeps everything -- settings,
+add-ons, accounts, watched history. It is an upgrade, not a reinstall.
+
 ## POV self-update and its caches (from `0.2.489`)
 
 POV updates itself from its author's repository, and its newer versions changed
