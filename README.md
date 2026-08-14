@@ -112,6 +112,38 @@ start rather than forced through, and the notification says the update applies
 next time instead of claiming it was applied. A refresh that is postponed is
 not recorded as done, so the next start does it.
 
+## Choosing the Android app: take 64-bit
+
+Both Android builds work on a 64-bit device, but the 32-bit one opens large 4K
+files much more slowly -- measured on an NVIDIA SHIELD, the same file took 14
+seconds on 32-bit and 3 seconds on 64-bit. The whole difference is in reading
+the file's index, which for anything over 4 GB is work that 32-bit hardware
+does several times over.
+
+**Every SHIELD is 64-bit** (all models, not only the Pro), and so are Fire TV
+Stick 4K and 4K Max, Onn 4K, Chromecast with Google TV and Mi Box S. The
+download page used to send most of these to the 32-bit file; it no longer does.
+Take 32-bit only if 64-bit refuses to install.
+
+Switching is safe: both carry the same app id and signing key, so 64-bit
+installs over 32-bit as an update and your data stays put.
+
+## Choosing the Android app: take 64-bit
+
+Both Android builds run on a 64-bit device, but the 32-bit one opens large 4K
+files much more slowly. Measured on an NVIDIA SHIELD, same file, minutes apart:
+14 seconds on 32-bit against 3 seconds on 64-bit. The whole difference is in
+reading the file's index, which for anything over 4 GB is work a 32-bit build
+has to do several times over.
+
+**Every SHIELD is 64-bit** -- all models, not only the Pro -- and so are Fire TV
+Stick 4K and 4K Max, Onn 4K, Chromecast with Google TV and Mi Box S. The
+download page used to send most of those to the 32-bit file. It no longer does.
+Take 32-bit only if 64-bit refuses to install.
+
+Switching is safe: both carry the same app id and signing key, so 64-bit
+installs over 32-bit as an update and your data stays where it is.
+
 ## The tile from the last update now opens (from `0.2.493`)
 
 The "10 latest updates" tile arrived on the home screen with the previous
