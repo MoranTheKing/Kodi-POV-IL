@@ -639,16 +639,18 @@ Three facts, each verified in the source rather than reasoned about:
     quick-update call site is `wizard.py`'s `quick_update()`:
     `extract.all(lib, CONFIG.HOME, ignore=True, title=title)`; `startup.py:519`
     makes the identical call for fresh installs. `ignore=True` also bypasses
-    the self-skip on the wizard's own id at `extract.py:249`. `CONFIG.EXCLUDES`
-    is read in eight files -- whitelist, clear, menu, backup, install, tools,
-    db, custom_save_data_config -- and `grep -c EXCLUDES extract.py` returns
-    **0**. That zero is the claim; the eight are only there to show the search
-    was done. An earlier draft of this said "read by whitelist, clear, menu and
-    backup -- the paths that DELETE", which undercounted by four AND was untrue
-    of three of the four it named: whitelist and menu only filter a listing,
-    backup only filters what is zipped, and `clear.py` alone gates a real
-    delete. Corrected twice, in two review rounds, because each draft fixed
-    the count and left the characterisation. **State the zero, not the list.**
+    the self-skip on the wizard's own id at `extract.py:249`. **`grep -c
+    EXCLUDES extract.py` returns 0.** That is the whole claim and the only one
+    worth making. Three review rounds each corrected a different sentence that
+    tried to say more: first which files read `CONFIG.EXCLUDES` (four named,
+    eight exist), then what they do with it ("the paths that DELETE" -- three
+    of the four named do not delete), then what those three do instead
+    ("filter a listing" -- `menu.py:582` does not filter, it relabels
+    `[PROTECTED]` vs `[REMOVE]`). Each draft was closer and still wrong. A
+    hand-kept census of call sites rots, and the conclusion never needed one:
+    EXCLUDES cannot govern extraction if extraction never reads it. **When a
+    supporting detail has been wrong three times, delete the detail, not the
+    adjective.**
   * `uservar.py` -- `AUTOUPDATE = 'No'`. The wizard's self-updater never runs,
     and the device log says so in as many words: `[Auto Update Wizard] Not
     Enabled`.
@@ -779,6 +781,22 @@ that is about to go live. Older snapshots are immutable history and are checked
 by nothing, correctly.
 
 **Residuals, recorded not fixed.**
+
+*Only this one test file survives its own failures.* Rounds 1-3 built the rule
+"run every test, report every failure, let no exception hide the rest" into
+`test_quickfix_package_scope.py` and nowhere else. Of the fifteen
+`tools/test_*.py`, thirteen call their tests in a flat unguarded sequence, so
+the first failure still stops the file and everything after it goes unreported.
+Pre-existing, and the same defect class these rounds spent three passes closing
+in one file. Worth lifting into a shared runner.
+
+*`_pointed_at` requires exactly one matching line, which is stricter than the
+format allows.* `check.py`'s `check_build()` disambiguates by `name="..."`, so
+`build.txt` could legitimately carry a second named build block, and both
+`gui=` and `url=` would then appear twice for a good reason and hard-fail a
+working release. Verified not currently at risk: live `build.txt` and all 56
+`build_versions/*.txt` have exactly one of each. Revisit if a second block is
+ever added.
 
 *Order-dependent compression, not content.* The validator built the quickfix
 both ways. In the prescribed order it reproduced the shipped 0.1.538

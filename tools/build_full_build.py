@@ -52,14 +52,17 @@ WIZARD_PREFIX = "plugin.program.kodipovilwizard/"
 #
 # An earlier version of this comment called that stale copy "harmless on a
 # device -- the wizard excludes its own id when it extracts a quickfix". THAT
-# WAS WRONG, and wrong in the direction that costs users. CONFIG.EXCLUDES is
-# read in eight files -- whitelist, clear, menu, backup, install, tools, db and
-# custom_save_data_config -- and `grep -c EXCLUDES extract.py` returns 0. That
-# zero is the whole point, and it is the only count worth stating: an earlier
-# draft of this comment named four of the eight and called them "the paths
-# that DELETE", which undercounted by four and was untrue of three of the
-# four it did name -- whitelist and menu only filter a listing, backup only
-# filters what is zipped, and clear alone gates an actual delete. extract.all()
+# WAS WRONG, and wrong in the direction that costs users.
+#
+# THE CLAIM IS `grep -c EXCLUDES extract.py` == 0. Nothing else. Three review
+# rounds each corrected a different sentence that tried to say more -- first
+# which files read CONFIG.EXCLUDES (four named, eight exist), then what those
+# files do with it ("the paths that DELETE"; three of the four named do not
+# delete), then what the three do instead ("filter a listing"; menu.py:582 does
+# not filter, it relabels [PROTECTED] vs [REMOVE]). Every draft was closer and
+# still wrong, because a hand-kept census of call sites rots and the conclusion
+# never needed one. EXCLUDES cannot govern extraction if extraction never reads
+# it, and extraction never reads it. Run the grep. extract.all()
 # takes `excludes = []`; wizard.py's quick_update() calls it as
 # `extract.all(lib, CONFIG.HOME, ignore=True, title=title)`, and ignore=True
 # also bypasses the self-skip on the wizard's own id at extract.py:249. So a

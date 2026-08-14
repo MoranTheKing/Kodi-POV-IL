@@ -116,9 +116,12 @@ def _bundled_version(package, member):
 
     Reads through an assertion rather than letting ZipFile raise: a package
     with the member missing is the most alarming answer this function has, and
-    a bare KeyError does not say so. It also aborts the __main__ runner's loop
-    below, which would take the other three tests in this file down with it --
-    a malformed package would then reduce coverage instead of failing it."""
+    a bare KeyError does not say so.
+
+    (An earlier version of this docstring also claimed the KeyError would take
+    the other tests in this file down with it. That stopped being true when the
+    runner below started catching Exception rather than AssertionError. The
+    reason to assert is now the message alone, which is reason enough.)"""
     with zipfile.ZipFile(package) as archive:
         names = set(archive.namelist())
         assert member in names, (
@@ -193,18 +196,30 @@ def test_the_full_build_carries_the_current_addons():
          "build_ai_subtitles_packages.py"),
     ):
         in_tree = _addon_version(in_tree_xml.read_text(encoding="utf-8"))
-        shipped = _bundled_version(package, member)
         # Collected, not asserted one at a time. Both went stale together in
         # 0.1.105 and asserting on the first would have reported the wizard
         # and hidden the add-on -- the same serial reveal the runner below was
         # fixed for, one level down.
+        #
+        # The raise is collected too, and that is the half the first version of
+        # this loop missed: _bundled_version asserts when the member is absent,
+        # and an assert that escapes the loop is indistinguishable from the
+        # per-iteration assert this replaced. Worse in one direction -- a
+        # staleness already appended to `stale` is thrown away with it, so a
+        # missing add-on would erase a found stale wizard. Reported together or
+        # the fix is a rearrangement.
+        try:
+            shipped = _bundled_version(package, member)
+        except AssertionError as exc:
+            stale.append("{0} unreadable -- {1}".format(label, exc))
+            continue
         if shipped < in_tree:
             stale.append("{0} {1} (worktree {2}; rebuild via {3})".format(
                 label, _shown(shipped), _shown(in_tree), tool))
     assert not stale, (
-        "{0} is stale: {1}. Every fresh install would get these versions AND "
+        "{0} cannot go out: {1}. Every fresh install would get this build AND "
         "be recorded as already up to date, so nothing would repair "
-        "them.".format(package.name, "; ".join(stale))
+        "it.".format(package.name, "; ".join(stale))
     )
 
 
