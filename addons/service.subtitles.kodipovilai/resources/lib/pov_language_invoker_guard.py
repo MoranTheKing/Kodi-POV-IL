@@ -63,11 +63,33 @@
 # database underneath a wizard hot-reload that is polling it. Neither belongs
 # in an unattended startup pass. One restart is the whole cost.
 #
-# WHAT IT COSTS: every POV invocation gets a fresh interpreter, so POV repays
-# its imports each time instead of once. Menus and widgets are somewhat slower
-# to draw. That is the trade being made on purpose -- against a crash that
-# takes the entire application down, on a build whose home screen loads
-# several POV widgets at once by design.
+# WHAT IT COSTS, STATED HONESTLY: every POV invocation gets a fresh
+# interpreter, so POV repays its imports each time instead of once. In the very
+# scenario this exists for -- several home widgets refreshing together -- the
+# trade is one shared interpreter under contention for N interpreters cold-
+# starting at the same moment. On the cheap Android boxes this build actually
+# runs on, that peak is not free. It is still the right side of the trade,
+# because the failure it replaces is the whole application dying, but if POV
+# starts feeling heavy after this release, this is the first thing to suspect.
+#
+# POV'S OWN SERVICE CAN RACE US, AND THAT IS TOLERATED, NOT PREVENTED.
+# reuseLanguageInvokerCheck() runs when POV's service starts; this runs from
+# our repair pass, which is ~29 steps and several seconds later, so in practice
+# POV has long finished. But if POV ever read the setting BEFORE our write and
+# wrote the xml AFTER it, it would put back `true` from the stale value it
+# read. Nothing here locks against that, for the same reason nothing locks
+# against a read-only filesystem: this runs at every start and writes only
+# what is wrong, so the next boot repairs it. The cost of losing that race is
+# one more restart, not a wrong state that persists.
+#
+# UNDOING IT IS NOT THE USUAL REMEDY. Every other POV patcher here is undone
+# by switching POV patching off and reinstalling POV. That does NOT undo this
+# one: `reuse_language_invoker` lives in POV's per-profile settings, which a
+# reinstall does not touch, and POV's own check then rewrites addon.xml from
+# it regardless of our switch. To genuinely revert, set POV's
+# `reuse_language_invoker` back to `true` -- POV's own menu can do it -- and
+# switch POV patching off, or this will turn it straight back around at the
+# next start.
 #
 # Self-healing: runs every startup and WRITES ONLY WHAT IS WRONG, so a device
 # that is already safe is a pure no-op, and a POV self-update that restores
@@ -160,21 +182,40 @@ def _write_setting():
         return False
 
 
-def _xml_value(raw):
-    """('false' | 'true' | ..., match) for the one tag, or (None, None).
+def _xml_state(raw):
+    """(the element's text as bytes, match) for the one tag, or (None, None).
 
-    None means "do not touch this file": either the tag is absent (POV warns
-    about that itself) or it appears more than once, and a file we cannot
-    describe exactly is a file we have no business rewriting.
+    None means "do not touch this file", and there are three ways to get it:
+    the document does not parse, POV's own reader would not see exactly one
+    such element, or the byte pattern cannot describe it uniquely. A file we
+    cannot describe exactly is a file we have no business rewriting.
+
+    TWO READERS, ON PURPOSE. ElementTree decides WHETHER there is an element,
+    because it is the same reader POV uses (`root.iter('reuselanguageinvoker')`
+    in entry.py) and it is blind to comments -- a byte pattern is not, and on
+    a hand-corrupted file whose only remaining copy of the tag sits inside an
+    XML comment, a pattern-only guard would happily rewrite the comment,
+    report success, and leave POV showing its mismatch dialog forever. The
+    byte pattern then decides WHERE to write, so the rest of the file survives
+    untouched instead of being re-serialised.
+
+    A self-closing `<reuselanguageinvoker />` -- which ElementTree emits
+    whenever the text is empty -- is found here but not matchable, so it ends
+    as "do not touch". That is the right answer twice over: Kodi reads the
+    empty text as not-true, so reuse is already off, and POV's own check
+    rewrites it from the setting we have just corrected.
     """
+    try:
+        import xml.etree.ElementTree as ET
+        elements = list(ET.fromstring(raw).iter('reuselanguageinvoker'))
+    except Exception:
+        return None, None
+    if len(elements) != 1:
+        return None, None
     found = _TAG_RE.findall(raw)
     if len(found) != 1:
         return None, None
-    match = _TAG_RE.search(raw)
-    try:
-        return found[0][2].decode('ascii', 'replace').strip().lower(), match
-    except Exception:
-        return None, None
+    return found[0][2], _TAG_RE.search(raw)
 
 
 def _write_xml(path, raw, match):
@@ -230,7 +271,10 @@ def ensure_patched():
       'patched'       setting and addon.xml now both say false
       'setting_only'  the setting was written, addon.xml was not (POV's own
                       check will finish the job, with its dialog)
-      'no_tag'        addon.xml has no single reuselanguageinvoker element
+      'no_tag'        addon.xml has no single REWRITABLE reuselanguageinvoker
+                      element -- absent, duplicated, self-closing, or in a
+                      document that does not parse. The setting is still
+                      written, and POV reconciles the xml from it.
       'write_failed'  nothing was written
     Never raises."""
     path = _addon_xml_path()
@@ -251,10 +295,15 @@ def ensure_patched():
         _log('could not read addon.xml: {0}'.format(exc), level='WARNING')
         raw = None
 
-    xml_val, match = (None, None) if raw is None else _xml_value(raw)
+    xml_val, match = (None, None) if raw is None else _xml_state(raw)
 
     setting_ok = cur == WANTED
-    xml_ok = xml_val == WANTED
+    # EXACT BYTES, not a case-folded compare, because POV's check is exact:
+    # `item.text != current_addon_setting` in entry.py. An addon.xml reading
+    # `False` would satisfy a lenient guard, which would then leave POV
+    # detecting a mismatch and re-showing its reload dialog at every single
+    # boot, forever, with nothing on either side ever fixing the casing.
+    xml_ok = xml_val == WANTED.encode('ascii')
     if setting_ok and xml_ok:
         return 'already_off'
 
