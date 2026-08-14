@@ -3,7 +3,7 @@
 # Free-tier daily request caps differ a lot by model family, so the
 # number we display has to follow the selected model:
 #   * gemini-3.5-flash-lite / 3.1-flash-lite / 2.5-flash-lite -> ~500 requests/day
-#   * gemini-3.6-flash / 3.5-flash / 3.1-flash / 2.5-flash (regular Flash) -> only
+#   * gemini-3.7-flash / 3.6-flash / 3.5-flash / 3.1-flash / 2.5-flash (regular Flash) -> only
 #     ~20 requests/day (a very tight free cap; regular Flash on the free
 #     tier is really a paid-key model).
 # The count resets at UTC midnight. We persist it in hidden addon
@@ -42,6 +42,7 @@ MODEL_LIMITS = {
     'gemini-3.5-flash-lite': 500,
     'gemini-3.1-flash-lite': 500,
     'gemini-2.5-flash-lite': 500,
+    'gemini-3.7-flash':      20,
     'gemini-3.6-flash':      20,
     'gemini-3.5-flash':      20,
     'gemini-3.1-flash':      20,
