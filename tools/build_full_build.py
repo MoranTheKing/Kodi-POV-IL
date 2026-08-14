@@ -48,13 +48,31 @@ WIZARD_PREFIX = "plugin.program.kodipovilwizard/"
 # THE WIZARD COMES FROM ITS OWN PACKAGE, NOT FROM THE QUICKFIX. The quickfix
 # carries a copy of the wizard, and it is always one release behind: it is
 # built by copying the previous quickfix and replacing the add-on subtree, so
-# the wizard inside it only moves when somebody puts it there. That copy is
-# harmless on a device -- the wizard excludes its own id when it extracts a
-# quickfix, so it never overwrites itself -- but a full build has no such
-# protection, and shipping fresh installs a wizard one version older than the
-# one the update channel is already serving is exactly the staleness this
-# rebuild exists to end. Verified by the version check at the end: the first
-# run of this tool built a 0.1.106 carrying wizard 0.1.45 and said so.
+# the wizard inside it only moves when somebody puts it there.
+#
+# An earlier version of this comment called that stale copy "harmless on a
+# device -- the wizard excludes its own id when it extracts a quickfix". THAT
+# WAS WRONG, and wrong in the direction that costs users. CONFIG.EXCLUDES is
+# read by whitelist.py, clear.py, menu.py and backup.py -- the paths that
+# DELETE -- and by nothing on the extraction path: extract.all() takes
+# `excludes = []` and startup.py hands it CONFIG.HOME with ignore=True. So a
+# quick update lays its bundled wizard straight over the installed one, and
+# since uservar.AUTOUPDATE is 'No' (the device log says so in as many words:
+# "[Auto Update Wizard] Not Enabled") the quickfix is not merely ONE way the
+# wizard reaches a device, it is the ONLY one.
+#
+# Which turns the staleness into a shipped defect rather than a cosmetic lag:
+# quickfix 0.1.537 shipped add-on 0.2.492, whose home tile opens a wizard route
+# that only 0.1.46 has, alongside wizard 0.1.45 -- so the tile landed dead on
+# every device that took the update, and would have stayed dead until some
+# later quickfix happened to carry a newer wizard. The fix is not in this file:
+# every quickfix must now be run through build_wizard_quickfix.py as well, and
+# test_quickfix_package_scope.py fails the build if the newest quickfix carries
+# a wizard older than the worktree's.
+#
+# For the full build the rule was always this one, and it holds unchanged: take
+# the wizard from its own package. Verified by the version check at the end --
+# the first run of this tool built a 0.1.106 carrying wizard 0.1.45 and said so.
 
 
 def _members(path: Path) -> dict:
@@ -219,7 +237,8 @@ def main() -> int:
     ap.add_argument("--quickfix", required=True)
     ap.add_argument("--wizard-zip", required=True,
                     help="the wizard release package; its copy of the wizard "
-                         "wins over the quickfix's, which lags by a release")
+                         "wins over the quickfix's, which used to lag by a "
+                         "release and is now gated against doing so")
     ap.add_argument("--output", required=True)
     ap.add_argument("--addon-version", required=True,
                     help="version the add-on inside the result must carry")

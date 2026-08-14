@@ -23,6 +23,7 @@ So this test does not check for those two files by name. It checks the rule
 they broke: the package may contain add-ons we build and nothing else.
 """
 
+import re
 import sys
 import zipfile
 from pathlib import Path
@@ -30,6 +31,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
+WIZARD_XML_IN_TREE = (
+    ROOT / "wizard/source/plugin.program.kodipovilwizard/addon.xml"
+)
+WIZARD_XML_IN_PACKAGE = "addons/plugin.program.kodipovilwizard/addon.xml"
 
 # Add-ons this build produces and is therefore entitled to overwrite.
 OWNED_ADDONS = {
@@ -50,6 +55,58 @@ def _latest_quickfix():
     if not packages:
         raise AssertionError("no quickfix package found in dist/")
     return packages[-1]
+
+
+def _addon_version(xml):
+    """The <addon> element's version, never the XML declaration's.
+
+    `version="1.0"` sits in the <?xml ?> prologue of every one of these files,
+    so the obvious search for `version="..."` finds it first and reports every
+    package as 1.0 -- equal to itself and to everything else, which is a
+    comparison that can never fail and therefore a guard that never guards."""
+    match = re.search(r"<addon\b[^>]*\bversion=\"([0-9][0-9.]*)\"", xml, re.S)
+    if match is None:
+        raise AssertionError("no <addon version=...> found")
+    return tuple(int(part) for part in match.group(1).split("."))
+
+
+def test_quickfix_carries_the_current_wizard():
+    """The newest quickfix must not bundle a wizard older than the worktree's.
+
+    THIS IS THE GATE FOR A DEFECT THAT SHIPPED. A quick update is laid straight
+    over the add-ons folder and nothing on that path consults CONFIG.EXCLUDES --
+    extract.all() takes `excludes = []`. With uservar.AUTOUPDATE set to 'No',
+    the wizard has no other way onto a device at all, so the copy inside the
+    quickfix IS the wizard every user runs.
+
+    The quickfix, though, is built by copying the previous one and replacing the
+    add-on subtree, so its wizard only moves when somebody remembers to run
+    build_wizard_quickfix.py too. Nobody did for 0.1.537: it shipped add-on
+    0.2.492, whose home tile opens a wizard route that exists only in 0.1.46,
+    next to wizard 0.1.45. The tile installed itself on every device and could
+    not be opened on any of them.
+
+    Like test_platform_packages.py, this is red between a version bump and the
+    packaging commit that answers it, and that is the point -- the red is the
+    reminder, and it clears when the quickfix is rebuilt with the wizard in it.
+    """
+    package = _latest_quickfix()
+    in_tree = _addon_version(WIZARD_XML_IN_TREE.read_text(encoding="utf-8"))
+    with zipfile.ZipFile(package) as archive:
+        shipped = _addon_version(
+            archive.read(WIZARD_XML_IN_PACKAGE).decode("utf-8")
+        )
+    assert shipped >= in_tree, (
+        "{0} bundles wizard {1} but the worktree is at {2}. A quick update "
+        "overwrites the installed wizard with this copy and the wizard has no "
+        "self-update, so shipping it would put every user back on {1}. Rebuild "
+        "the quickfix through build_wizard_quickfix.py before "
+        "releasing.".format(
+            package.name,
+            ".".join(str(part) for part in shipped),
+            ".".join(str(part) for part in in_tree),
+        )
+    )
 
 
 def test_quickfix_contains_only_our_addons():
