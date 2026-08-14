@@ -38,7 +38,7 @@
 
 - עץ קבצים מסודר של המיגרציה.
 - מסמך diff של `Twilight -> POV`.
-- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.105.zip`.
+- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.106.zip`.
 - הוראות התקנה ובדיקת smoke test לטלפון: `ANDROID_TESTING.md`.
 
 ## חבילת בדיקה (גרסה נוכחית)
@@ -111,6 +111,18 @@ on every skin. If it is not ready in time the refresh is left for the next
 start rather than forced through, and the notification says the update applies
 next time instead of claiming it was applied. A refresh that is postponed is
 not recorded as done, so the next start does it.
+
+## The tile from the last update now opens (from `0.2.493`)
+
+The "10 latest updates" tile arrived on the home screen with the previous
+update, and on most devices it did nothing when clicked. It opens a screen that
+belongs to the wizard, and the update carried a wizard that did not have that
+screen yet -- so the tile was real and the destination was not.
+
+This update ships them together, and adds the rule that keeps them together:
+the tile is now only offered once the wizard installed on the device is new
+enough to open it. Until then nothing is written and nothing is shown, so a
+tile that cannot be clicked can no longer appear at all.
 
 ## The last ten updates, on the home screen (from `0.2.492`)
 

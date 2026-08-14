@@ -625,6 +625,210 @@ are not exempt from anything: they land in `self.sourceDict`, flow into
 BEFORE the filter block. More 720p after an update means more providers, not a
 lost setting.
 
+## Shipped 2026-08-14: note 593 (0.2.493 / wizard 0.1.46 / quickfix 0.1.538 / build 0.1.106)
+
+**The quickfix is the only way the wizard reaches a device, and it was always
+shipping a wizard one release behind.** This is the defect note 592 landed on
+every device, and it is worth stating precisely because I got it wrong twice
+before I got it right -- once in a comment in `tools/build_full_build.py`, and
+once out loud to the user.
+
+Three facts, each verified in the source rather than reasoned about:
+
+  * `resources/libs/extract.py` -- `all()` takes `excludes = []`. The
+    quick-update call site is `wizard.py`'s `quick_update()`:
+    `extract.all(lib, CONFIG.HOME, ignore=True, title=title)`; `startup.py:519`
+    makes the identical call for fresh installs. `ignore=True` also bypasses
+    the self-skip on the wizard's own id at `extract.py:249`. **`grep -c
+    EXCLUDES extract.py` returns 0.** That is the whole claim and the only one
+    worth making. Three review rounds each corrected a different sentence that
+    tried to say more: first which files read `CONFIG.EXCLUDES` (four named,
+    eight exist), then what they do with it ("the paths that DELETE" -- three
+    of the four named do not delete), then what those three do instead
+    ("filter a listing" -- `menu.py:582` does not filter, it relabels
+    `[PROTECTED]` vs `[REMOVE]`). Each draft was closer and still wrong. A
+    hand-kept census of call sites rots, and the conclusion never needed one:
+    EXCLUDES cannot govern extraction if extraction never reads it. **When a
+    supporting detail has been wrong three times, delete the detail, not the
+    adjective.**
+  * `uservar.py` -- `AUTOUPDATE = 'No'`. The wizard's self-updater never runs,
+    and the device log says so in as many words: `[Auto Update Wizard] Not
+    Enabled`.
+  * `tools/build_addon_quickfix.py` copies the previous quickfix and replaces
+    only the add-on subtree. The bundled wizard moves only when somebody
+    separately runs `tools/build_wizard_quickfix.py`.
+
+Put together: the quickfix's wizard copy IS the wizard every user runs, and it
+lags by one release unless a second tool is remembered. For 0.1.537 it was not.
+That quickfix shipped add-on 0.2.492 -- whose new home tile opens
+`plugin://plugin.program.kodipovilwizard/?mode=recentupdates` -- next to wizard
+0.1.45, which has no such route. Proven by grep over the artifacts: the string
+`recentupdates` appears in `resources/libs/common/router.py` of the 0.1.46
+package, of quickfix 0.1.538 and of build 0.1.106, and appears nowhere in the
+0.1.45 package or in quickfix 0.1.537. The tile installed itself on every
+device that took the update and could not be opened on any of them.
+
+**Why the version gate was not enough.** 0.2.493's `_wizard_can_serve_the_tile()`
+stops the tile being SEEDED when the installed wizard is older than 0.1.46, so
+nobody gets a dead tile again. But a gate that refuses to act is not a fix for
+a wizard that never arrives -- it would have meant no tile, quietly, forever.
+The two halves are both needed: the gate stops the dead tile, shipping the
+wizard makes the tile appear.
+
+**The full build was the worse half, and the review found it.** The first cut
+of the guard covered the quickfix only. A validator pass pointed at the other
+door and it was standing wider open: build **0.1.105**, the one `build.txt`
+sent every fresh installation to until this release, bundled wizard **0.1.36**
+and add-on **0.2.462**, against a worktree at 0.1.46 / 0.2.493. And `startup.py`'s
+fresh-install branch calls `record_quick_update_applied()` with the current
+note id, commented "A fresh install already carries the current package". It
+did not. So a new user got a months-old build *and* a record saying they were
+up to date, which suppressed the one mechanism that would have repaired it,
+until the note id next moved. 0.1.106 is the first full build for which that
+comment is true.
+
+`build_full_build.py`'s own verify cannot catch this and still cannot: it
+checks the result against the versions typed on the command line, and a build
+is self-consistent with a wrong answer just as happily as with a right one.
+**Freshness is not a property a package can check about itself** -- it needs
+the worktree to compare against. That is why both guards live in the test and
+neither lives in a packager.
+
+**The durable half.** In `tools/test_quickfix_package_scope.py`:
+`test_quickfix_carries_the_current_wizard()` and
+`test_the_full_build_carries_the_current_addons()` (the latter checks the
+add-on as well as the wizard). Like `test_platform_packages.py` they are red
+between a version bump and the packaging commit that answers it, and that is
+the point: the red is the reminder. Both were watched fail on the real
+artifacts that shipped the defect -- quickfix 0.1.537 "bundles wizard 0.1.45
+but the worktree is at 0.1.46", build 0.1.105 "bundles wizard 0.1.36" -- and
+watched pass on 0.1.538 / 0.1.106. **A guard that has not been seen to fail has
+not been tested.**
+
+Two supporting changes came out of the same review. Both packages are now
+resolved through `build.txt`'s `gui=` and `url=` lines rather than "the
+highest-numbered matching name in `dist/`": `dist/` accumulates, and a stray
+hand-built zip with a bigger number would have the guard inspecting a file no
+device will ever download while the real one went unchecked. And the
+`__main__` runner no longer stops at the first failure -- the quickfix and the
+full build go stale for the same reason in the same release, so reporting one
+and hiding the other turns a single knowable set into a serial reveal.
+
+`_addon_version()` deliberately anchors on `<addon ... version="...">`. The
+obvious search for `version="..."` finds the `<?xml version="1.0"?>` prologue
+first and reports every package as 1.0 -- equal to itself and to everything
+else, which is a comparison that cannot fail and therefore a guard that does
+not guard. That mistake was made while diagnosing this, in a throwaway command,
+and printed a confident wrong answer.
+
+**How a quickfix is built from now on -- both tools, in this order:**
+
+```
+python3 tools/build_addon_quickfix.py \
+    --previous dist/Kodi-POV-IL-FENtastic-quickfix-<prev>.zip \
+    --addon-zip dist/service.subtitles.kodipovilai-build-<ver>.zip \
+    --output <scratch>/stage1.zip
+python3 tools/build_wizard_quickfix.py \
+    --previous <scratch>/stage1.zip \
+    --output dist/Kodi-POV-IL-FENtastic-quickfix-<next>.zip \
+    --wizard-zip dist/plugin.program.kodipovilwizard-<wver>.zip \
+    --wizard-version <wver>
+```
+
+Verified independently of both tools for 0.1.538: 1,767 members, none added and
+none dropped; the 1,275 members outside both subtrees byte-identical to
+0.1.537; the 348-member add-on subtree exactly the 0.2.493 build zip; the
+144-member wizard subtree exactly the 0.1.46 package; `pool.py` inherited
+untouched; no foreign add-ons.
+
+**The full build is now scripted end to end.** `tools/build_full_build.py`
+built 0.1.106 from 0.1.105 + quickfix 0.1.538 + the 0.1.46 wizard package: 5,087
+members verified, 1,623 byte-identical to the quickfix, 144 to the wizard
+package, 3,320 to the previous build. 46 members needed `--allow-add` (26 in our
+add-on, 20 in `skin.fentastic`) -- all genuinely new since 0.1.105, which is the
+mechanism working, not a warning. This retires the "Packaging note" at the end
+of the 592 section: there IS a scripted recipe now, and 0.1.106 exists.
+
+**Also in 0.2.493.** POV's import-time `Addon()` -- the earlier of its two
+moments, before its own code runs -- is now covered by its own patch, and
+`ensure_patched()` reports `'partial'` when only one of the two lands, so a POV
+update that rewrites one anchor can no longer read as all-fine.
+
+**PHASE 1 IS NOT NEUTRAL, AND THIS RELEASE IS WHY.** Round 2's review traced
+what a device actually resolves and found something the two-phase gate's own
+description never says out loud. `auto_quick_update()` reads the LIVE note id,
+then `check.check_build(name, 'gui', release_id=<that id>)` fetches
+`build_versions/<id>.txt` -- *not* live `build.txt`. That indirection is
+deliberate (raw.githubusercontent ignores query strings in its cache key, so
+each note gets its own immutable path), and it means **the previous note's
+manifest stays the live target for the whole of phase 1**.
+
+`build_versions/592.txt` pins quickfix **0.1.537** and build **0.1.105**: the
+defective pair. So while artifacts sit published under a note that has not
+moved, every device that has not yet taken 592 keeps being handed the dead
+tile. Phase 1 does not merely delay the fix, it prolongs the defect's reach.
+
+Nothing is wrong with the mechanism -- rewriting 592's manifest would break the
+immutability the cache workaround depends on, and note 592 *is* the release
+that shipped 0.1.537. The correct response is operational: **keep phase 1
+short.** Verify, wait out the cache window, flip. Do not leave a release parked
+between phases overnight because the artifacts "are already up".
+
+The current release's snapshot is covered: `test_platform_packages.py` requires
+live `build.txt` to be byte-identical to some `build_versions/<id>.txt`, and
+the two new guards check live `build.txt`, so together they pin the snapshot
+that is about to go live. Older snapshots are immutable history and are checked
+by nothing, correctly.
+
+**Residuals, recorded not fixed.**
+
+*Only this one test file survives its own failures.* Rounds 1-3 built the rule
+"run every test, report every failure, let no exception hide the rest" into
+`test_quickfix_package_scope.py` and nowhere else. Of the fifteen
+`tools/test_*.py`, thirteen call their tests in a flat unguarded sequence, so
+the first failure still stops the file and everything after it goes unreported.
+Pre-existing, and the same defect class these rounds spent three passes closing
+in one file. Worth lifting into a shared runner.
+
+*`_pointed_at` requires exactly one matching line, which is stricter than the
+format allows.* `check.py`'s `check_build()` disambiguates by `name="..."`, so
+`build.txt` could legitimately carry a second named build block, and both
+`gui=` and `url=` would then appear twice for a good reason and hard-fail a
+working release. Verified not currently at risk: live `build.txt` and all 56
+`build_versions/*.txt` have exactly one of each. Revisit if a second block is
+ever added.
+
+*Order-dependent compression, not content.* The validator built the quickfix
+both ways. In the prescribed order it reproduced the shipped 0.1.538
+**byte-for-byte**, which independently confirms how it was made. Reversed, both
+tools' verifies still pass, member names and order are identical and all 1,967
+members decompress to identical bytes -- but 491 differ in *compressed* size,
+because `build_wizard_quickfix.py` passes `compresslevel=9` to every member it
+rewrites while `build_addon_quickfix.py` uses zipfile's default. Whichever runs
+last recompresses at its own level. Nothing wrong reaches Kodi, which only sees
+decompressed content, but byte-reproducibility is order-dependent and neither
+tool enforces the order. Run addon-then-wizard.
+
+*None of `tools/test_*.py` is wired into CI.* Verified: no workflow, Makefile
+or pre-commit config runs them. This is deliberate -- several are red between
+releases by design, so a naive wiring would be permanently red and quickly
+ignored -- but it does mean these guards are only as durable as the habit of
+running them. A CI job that runs them and is *allowed* to be red inside a
+release window would be better than either extreme; nobody has designed it.
+
+*The guards compare version numbers, not content.* They cannot catch "the
+wizard source changed but nobody bumped `addon.xml`". That moves the
+forgetfulness up one level rather than eliminating it, which is a real boundary
+of what they prove.
+
+*Stale `build.txt` copies inside the full build.* The two copies
+(`wizard/assets/build.txt` and `media/wizard_assets/build.txt`) still say
+wizard 0.1.30 / build 0.1.101, carried since 0.1.101. Nothing reads them: every
+`CONFIG.BUILDFILE` access in the wizard goes through `tools.open_url()` against
+the live URL. Inert baggage, but it should be corrected the next time
+`build_full_build.py` is touched -- which needs a tool change, because the
+verify correctly refuses any member matching neither source.
+
 ## Shipped 2026-08-14: note 592 (0.2.492 / wizard 0.1.46 / quickfix 0.1.537)
 
 The largest single release on this branch: 38 commits, six adversarial review
