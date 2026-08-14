@@ -625,6 +625,117 @@ are not exempt from anything: they land in `self.sourceDict`, flow into
 BEFORE the filter block. More 720p after an update means more providers, not a
 lost setting.
 
+## Open 2026-08-14: two user reports, one solved, one narrowed
+
+### "Sources take 15s on our build, 5s on clean Kodi" -- SOLVED, and it was us
+
+A user compared two logs on the same NVIDIA SHIELD, minutes apart, same file,
+same debrid host. Ours 14.4s to open, clean Kodi 3.2s.
+
+**Method worth reusing: line the two timelines up phase by phase.** Every phase
+matched to within 0.1s except one.
+
+| phase | ours | clean |
+| --- | --- | --- |
+| `CurlFile::Open` -> seek to EOF (moov) | 0.357s | 0.329s |
+| -> seek to position 48 | 1.001s | 0.930s |
+| -> `timescale not set` | 0.311s | 0.322s |
+| **-> `avformat_find_stream_info starting`** | **12.220s** | **1.191s** |
+| -> `Input #0` | 0.509s | 0.456s |
+
+The stall is inside `avformat_open_input` parsing the moov atom, and it is
+CPU-bound, not network: **19 log lines in those 12 seconds, no I/O between
+them.** That single fact kills every "it's our add-ons competing" theory and
+every cache-tuning answer at once.
+
+**Cause: he was running the 32-bit APK on 64-bit hardware.** Proven from the
+logs without needing the header, which his paste had truncated: across 4,867
+lines his log contains **338 pointers and not one wider than 8 hex digits**;
+the clean log, same Kodi build on the same machine, has **270 at 10 digits**
+and says `Platform: Android ARM 64-bit` outright. A 64-bit process cannot avoid
+printing wide addresses -- the clean log proves this build prints them.
+
+A 6.69 GB file carries 64-bit byte offsets through a sample table of hundreds
+of thousands of entries: one instruction on arm64, a sequence on 32-bit.
+
+**Our APK is a repack of the official Kodi APK per architecture** (`apktool d
+-s`, original dex kept, package id patched), so the ffmpeg is Kodi's own and
+identical in both. The only difference between his run and the clean run is
+which official APK was repacked.
+
+**He was on 32-bit because our own download pages told him to.** The old text:
+"Nvidia Shield Pro -> 64-bit. every other streamer (Fire TV, Onn, Xiaomi,
+Chromecast) -> 32-bit." His device logs as `NVIDIA SHIELD Android TV`, not
+"Pro", so it fell in the 32-bit bucket. Every SHIELD has been arm64 since 2015,
+and so are all four streamers that sentence named.
+
+And the information architecture said it a second way, which is the part worth
+remembering: the detailed instructions live at `downloads/android-phone/`
+(64-bit) and `downloads/android-tv/` (32-bit), **so an Android TV owner
+following the obvious link lands on 32-bit by the name of the page.** Fixed in
+all three pages; `android-tv/` now opens by sending most of its readers away.
+
+**There is no mitigation for 32-bit.** Kodi exposes no `probesize` /
+`analyzeduration`; cache and buffer settings only affect reads, and reads are
+not the bottleneck. You cannot make a 32-bit register file do 64-bit
+arithmetic at 64-bit speed. The fix is the 64-bit APK -- and because both ABIs
+share `org.xbmc.povi` and the signing key, it installs in place and keeps data.
+
+### The Arctic Fuse 3 crash -- NARROWED, not solved. Do not guess further.
+
+Reported as still happening after the earlier fix: stop a show, switch to the
+Movies tab, widgets start, Kodi dies. **Only in AF3.**
+
+**Two corrections to what I first told the user, both mine:**
+
+  1. I said AF3 is not ours. **It is** -- `dist/Kodi-POV-IL-AF3-skin-pack.zip`,
+     3,842 members, version **6.3.2.14**, exactly the version he is running. I
+     had checked only the full build zip, where it does not appear, and drew a
+     conclusion from the wrong artifact.
+  2. I blamed 16 `CImageLoader::DoWork` failures on
+     `resource://resource.images.studios.coloured`. **Red herring.** They are
+     merely the last lines in a log that has debug logging OFF, so they were
+     the only thing left to see.
+
+**What the minidump actually says** (the first copy he sent had a UTF-8 BOM
+prepended and would not parse; the re-sent one is clean):
+
+```
+EXCEPTION : 0xC0000005  ACCESS_VIOLATION
+operation : WRITE
+address   : 0x0000000000000000      <- null pointer write
+module    : python3.8.dll +0xDFEC1
+```
+
+**The crash is inside the Python interpreter, not the skin.** Platform is
+Windows 11, not Android -- worth noting, since the earlier AF3 fix (the
+unresolved `skinvariables-1102submenu-staticitems` include) is a different
+failure, and that include fires **once, at 11:21, two hours before the 13:37
+crash.** It is not the trigger.
+
+A null write inside CPython is almost always a thread touching the interpreter
+while or after it is torn down, which fits the reported sequence exactly:
+playback stops -> the player's script ends and its interpreter is destroyed ->
+tab switch -> widgets fire -> a still-live thread calls into Python that is
+going away.
+
+**Blocked on one thing, and only one:** his log has **zero debug lines**, so
+nothing names the script that was running. Do not attempt a fix before that
+arrives -- every candidate (our service's Monitor thread, POV's player script,
+TMDbHelper's widget calls) is equally consistent with the evidence so far.
+
+**What was asked of him:** enable `Settings -> System -> Logging -> Enable
+debug logging`, reproduce (stop a series, switch to the Movies tab), send the
+log. Then the script is named and there is something to fix.
+
+**Dump-reading notes for next time** (both cost time here):
+`MINIDUMP_MODULE.ModuleNameRva` is at offset **20**, not 32.
+`MINIDUMP_THREAD.Stack` is at offset **24**, not 16 -- offset 16 is the Teb, and
+reading it as the stack descriptor yields a plausible-looking 22 MB stack that
+is nonsense. Also: the captured stack for the faulting thread is the crash
+handler's own frames (`dbgcore`/`dbghelp`), so the exception record, not the
+stack scan, is the authority in a 544 KB mini dump.
+
 ## Shipped 2026-08-14: note 593 (0.2.493 / wizard 0.1.46 / quickfix 0.1.538 / build 0.1.106)
 
 **The quickfix is the only way the wizard reaches a device, and it was always
