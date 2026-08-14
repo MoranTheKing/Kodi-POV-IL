@@ -31,10 +31,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
+BUILD_TXT = ROOT / "wizard/assets/build.txt"
 WIZARD_XML_IN_TREE = (
     ROOT / "wizard/source/plugin.program.kodipovilwizard/addon.xml"
 )
+ADDON_XML_IN_TREE = ROOT / "addons/service.subtitles.kodipovilai/addon.xml"
 WIZARD_XML_IN_PACKAGE = "addons/plugin.program.kodipovilwizard/addon.xml"
+ADDON_XML_IN_PACKAGE = "addons/service.subtitles.kodipovilai/addon.xml"
 
 # Add-ons this build produces and is therefore entitled to overwrite.
 OWNED_ADDONS = {
@@ -47,14 +50,39 @@ OWNED_ADDONS = {
 }
 
 
-def _latest_quickfix():
-    packages = sorted(
-        DIST.glob("Kodi-POV-IL-FENtastic-quickfix-*.zip"),
-        key=lambda p: [int(part) for part in p.stem.rsplit("-", 1)[1].split(".")],
+def _pointed_at(key):
+    """The dist/ file that build.txt's `<key>=` line sends a device to.
+
+    These used to be "the highest-numbered matching name in dist/", which is
+    not the same question. dist/ accumulates: a hand-built zip, an aborted
+    release, a scratch file someone forgot -- any of them with a bigger number
+    than the artifact actually being shipped, and the guard would then be
+    inspecting a file no device will ever download while the real one goes
+    unchecked. build.txt is what the wizard fetches, so build.txt is the
+    authority on which file is the release.
+
+    It also removes the version-parsing sort, which raised ValueError on any
+    name that did not end in dotted digits -- a crash mode dist/ is exactly
+    untidy enough to reach."""
+    text = BUILD_TXT.read_text(encoding="utf-8")
+    match = re.search(r'^%s="([^"]+)"' % re.escape(key), text, re.M)
+    assert match, "build.txt has no %s= line" % key
+    name = match.group(1).rsplit("/", 1)[-1]
+    package = DIST / name
+    assert package.is_file(), (
+        "build.txt sends devices to {0}, which is not in dist/. Either the "
+        "artifact was never built or the pointer was flipped ahead of "
+        "it.".format(name)
     )
-    if not packages:
-        raise AssertionError("no quickfix package found in dist/")
-    return packages[-1]
+    return package
+
+
+def _latest_quickfix():
+    return _pointed_at("gui")
+
+
+def _shipped_full_build():
+    return _pointed_at("url")
 
 
 def _addon_version(xml):
@@ -68,6 +96,28 @@ def _addon_version(xml):
     if match is None:
         raise AssertionError("no <addon version=...> found")
     return tuple(int(part) for part in match.group(1).split("."))
+
+
+def _shown(version):
+    return ".".join(str(part) for part in version)
+
+
+def _bundled_version(package, member):
+    """The version of an add-on inside a shipped package.
+
+    Reads through an assertion rather than letting ZipFile raise: a package
+    with the member missing is the most alarming answer this function has, and
+    a bare KeyError does not say so. It also aborts the __main__ runner's loop
+    below, which would take the other three tests in this file down with it --
+    a malformed package would then reduce coverage instead of failing it."""
+    with zipfile.ZipFile(package) as archive:
+        names = set(archive.namelist())
+        assert member in names, (
+            "{0} does not contain {1}. A package that ships no copy of this "
+            "add-on at all cannot be checked for a stale one, and is a bigger "
+            "problem than the staleness.".format(package.name, member)
+        )
+        return _addon_version(archive.read(member).decode("utf-8"))
 
 
 def test_quickfix_carries_the_current_wizard():
@@ -92,21 +142,55 @@ def test_quickfix_carries_the_current_wizard():
     """
     package = _latest_quickfix()
     in_tree = _addon_version(WIZARD_XML_IN_TREE.read_text(encoding="utf-8"))
-    with zipfile.ZipFile(package) as archive:
-        shipped = _addon_version(
-            archive.read(WIZARD_XML_IN_PACKAGE).decode("utf-8")
-        )
+    shipped = _bundled_version(package, WIZARD_XML_IN_PACKAGE)
     assert shipped >= in_tree, (
         "{0} bundles wizard {1} but the worktree is at {2}. A quick update "
         "overwrites the installed wizard with this copy and the wizard has no "
         "self-update, so shipping it would put every user back on {1}. Rebuild "
         "the quickfix through build_wizard_quickfix.py before "
-        "releasing.".format(
-            package.name,
-            ".".join(str(part) for part in shipped),
-            ".".join(str(part) for part in in_tree),
-        )
+        "releasing.".format(package.name, _shown(shipped), _shown(in_tree))
     )
+
+
+def test_the_full_build_carries_the_current_addons():
+    """The same rule for the artifact a FRESH install gets, and for both
+    add-ons in it rather than just the wizard.
+
+    The quickfix guard above closes the door existing devices come through.
+    This is the other door, and it was standing wider open. A fresh install
+    extracts the full build and then, at startup.py's fresh-install branch,
+    calls record_quick_update_applied() with the CURRENT note id -- stamping
+    the newest update as already applied. The comment there explains why: "A
+    fresh install already carries the current package."
+
+    It did not. Build 0.1.105, the one build.txt sent every new installation to
+    until this release, bundled wizard 0.1.36 and add-on 0.2.462 -- ten and
+    thirty releases behind. So a new user got a months-old build AND a record
+    saying they were up to date, which suppressed the quick update that is the
+    only thing that would have repaired it, until the note id next moved.
+
+    Nothing detected that, because build_full_build.py's own verify only checks
+    the result against the versions the operator typed on the command line: a
+    build is self-consistent with a wrong answer just as happily as with a
+    right one. Freshness is not a property a package can check about itself --
+    it needs the worktree to compare against, which is what this test has.
+    """
+    package = _shipped_full_build()
+    for label, in_tree_xml, member, tool in (
+        ("wizard", WIZARD_XML_IN_TREE, WIZARD_XML_IN_PACKAGE,
+         "build_wizard_package.py"),
+        ("add-on", ADDON_XML_IN_TREE, ADDON_XML_IN_PACKAGE,
+         "build_ai_subtitles_packages.py"),
+    ):
+        in_tree = _addon_version(in_tree_xml.read_text(encoding="utf-8"))
+        shipped = _bundled_version(package, member)
+        assert shipped >= in_tree, (
+            "{0} bundles {1} {2} but the worktree is at {3}. Every fresh "
+            "install would get {2} and be recorded as already up to date. "
+            "Rebuild the full build from a current {4} package before "
+            "releasing.".format(package.name, label, _shown(shipped),
+                                _shown(in_tree), tool)
+        )
 
 
 def test_quickfix_contains_only_our_addons():
@@ -163,7 +247,23 @@ if __name__ == "__main__":
         for name, value in sorted(globals().items())
         if name.startswith("test_") and callable(value)
     ]
+    # Run every test even after one fails. The loop used to stop at the first
+    # failure, so a release with two things wrong reported one, got fixed, and
+    # reported the next -- a serial reveal of a set that was always knowable at
+    # once. It matters most for exactly the case these guards exist for: the
+    # quickfix and the full build go stale for the same reason, in the same
+    # release, and seeing only the first hides half the work.
+    failures = []
     for test in tests:
-        test()
-        print("ok - {0}".format(test.__name__))
+        try:
+            test()
+        except AssertionError as exc:
+            failures.append((test.__name__, exc))
+            print("FAIL - {0}\n    {1}".format(test.__name__, exc))
+        else:
+            print("ok - {0}".format(test.__name__))
+    if failures:
+        print("\n{0} FAILURE(S): {1}".format(
+            len(failures), ", ".join(name for name, _ in failures)))
+        sys.exit(1)
     print("ALL TESTS PASSED")
