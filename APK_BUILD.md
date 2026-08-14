@@ -116,6 +116,32 @@ Never write a hyphenated POV label into `appinfo.json`.
 
 - `Kodi-POV-IL-<version>-32bit.apk` and `Kodi-POV-IL-32bit.apk`
 - `Kodi-POV-IL-<version>-64bit.apk` and `Kodi-POV-IL-64bit.apk`
+
+### Which one a user should install: 64-bit, unless it refuses
+
+Both ABIs are built and both carry the same package id (`org.xbmc.povi`) and
+the same signing key, so one installs in place over the other and keeps the
+user's data. That makes 64-bit the safe default and switching to it painless.
+
+**32-bit on 64-bit hardware is not merely "supported but old" -- it is slow in
+a way that gets blamed on the build.** Measured on one user's NVIDIA SHIELD,
+same file, minutes apart: opening a 6.69 GB 4K source took 14.4s on the 32-bit
+APK and 3.2s on 64-bit Kodi. The gap is entirely in ffmpeg's MP4 index parse
+(12.2s vs 1.2s); every other phase matched to within 0.1s, and the phase is
+CPU-bound -- 19 log lines in 12 seconds with no I/O between them. Files over
+4 GB carry 64-bit byte offsets through a sample table with hundreds of
+thousands of entries, which is one instruction on arm64 and a sequence on
+32-bit. Nothing tunable changes this: Kodi exposes no ffmpeg probe settings,
+and cache/buffer settings only affect reads, which are not the bottleneck.
+
+Every SHIELD is arm64 (all models, all generations). So are Fire TV Stick 4K
+and 4K Max, Onn 4K, Chromecast with Google TV and Mi Box S. 32-bit is for
+devices where 64-bit will not install, and nothing else.
+
+**To tell which ABI a user is running from their kodi.log**: the header line
+says `Platform: Android ARM 64-bit`. If the log is truncated above it, count
+pointer widths -- a 64-bit process prints 10-12 hex-digit addresses constantly;
+a 32-bit one never exceeds 8.
 - `Kodi-POV-IL-Setup-<version>.exe` and `Kodi-POV-IL-Setup.exe`
 - `Kodi-POV-IL-<version>-webos.ipk` and `Kodi-POV-IL-webos.ipk`
 
