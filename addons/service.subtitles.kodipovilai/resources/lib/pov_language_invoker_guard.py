@@ -199,11 +199,18 @@ def _xml_state(raw):
     byte pattern then decides WHERE to write, so the rest of the file survives
     untouched instead of being re-serialised.
 
-    A self-closing `<reuselanguageinvoker />` -- which ElementTree emits
-    whenever the text is empty -- is found here but not matchable, so it ends
-    as "do not touch". That is the right answer twice over: Kodi reads the
-    empty text as not-true, so reuse is already off, and POV's own check
-    rewrites it from the setting we have just corrected.
+    THE TWO EMPTY FORMS ARE TREATED DIFFERENTLY, AND THAT IS DELIBERATE.
+    `<reuselanguageinvoker></reuselanguageinvoker>` is matchable, so it gets
+    rewritten to `false`; a self-closing `<reuselanguageinvoker />` -- which
+    ElementTree emits whenever the text is empty -- is not, so it is left
+    alone. They are XML-equivalent, so the asymmetry needs a reason, and it is
+    NOT "one is already off": Kodi reads both empty forms as not-true, so
+    reuse is already off in both. The reason we rewrite at all is to make
+    POV's own check silent, because that check is an exact string compare and
+    anything other than `false` leaves it re-showing its dialog every boot.
+    Only the pair form can be given that text without inventing structure the
+    file does not have; the self-closing one is left for POV to reconcile from
+    the setting we have just corrected, which costs one dialog and settles.
     """
     try:
         import xml.etree.ElementTree as ET
@@ -257,8 +264,12 @@ def _write_xml(path, raw, match):
             os.unlink(tmp)
         except FileNotFoundError:
             pass
-        except Exception:
-            pass
+        except Exception as cleanup_exc:
+            # Say so. The line above this one logs why the write failed; a
+            # silent second failure here would leave a stray file next to
+            # POV's addon.xml with nothing in the log to explain it.
+            _log('and its temp file could not be removed either: {0}'.format(
+                cleanup_exc), level='WARNING')
         return False
 
 
