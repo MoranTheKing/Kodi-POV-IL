@@ -13,11 +13,11 @@ on:
       version:
         description: 'Release tag / version label (e.g., 21.3-povil.1)'
         required: true
-        default: '21.3-povil.48'
+        default: '21.3-povil.49'
       version_code:
         description: 'Android versionCode (integer, must increase each release)'
         required: true
-        default: '2103048'
+        default: '2103049'
       kodi_version:
         description: 'Upstream Kodi version to rebrand (e.g., 21.3)'
         required: true
@@ -35,9 +35,9 @@ env:
   OLD_PACKAGE_ID: 'org.xbmc.kodi'
   PACKAGE_ID: 'org.xbmc.povi'
   APP_NAME: 'Kodi POV IL'
-  WIZARD_VERSION: '0.1.45'
-  EXPECTED_RELEASE: '21.3-povil.48'
-  EXPECTED_VERSION_CODE: '2103048'
+  WIZARD_VERSION: '0.1.46'
+  EXPECTED_RELEASE: '21.3-povil.49'
+  EXPECTED_VERSION_CODE: '2103049'
   EXPECTED_KODI_VERSION: '21.3'
 
 jobs:

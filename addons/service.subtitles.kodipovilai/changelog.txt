@@ -1,3 +1,22 @@
+v0.2.492
+- The ten most recent update notes are now readable from a tile on the home
+  screen. Removing the tile is respected: it does not come back at the next
+  update or the next start. Switching skin rewrites the home tiles from the
+  skin's own defaults -- if that removes the tile without you asking it is
+  restored, and if you removed it yourself it stays removed.
+- The main video add-on no longer loses its background service to the seconds
+  in which Kodi still calls a just-re-enabled add-on unknown, so Trakt sync
+  keeps running instead of stopping for the rest of the session.
+- Two of the bundled add-ons stop offering a newer version at every start that
+  their own settings screen had no way to accept. Switch the check back on and
+  it stays on.
+- An add-on you switched off yourself is no longer switched back on. The build
+  only repairs one it disabled itself and could not restore.
+- Arctic Fuse 3 no longer force-closes Kodi when a submenu with no content of
+  its own is opened.
+- You are not asked to reinstall the whole application for a package that
+  carries nothing new for an install that already exists.
+
 v0.2.491
 - A quick update no longer freezes Kodi. The build refreshes the skin after an
   update, and it also restarts POV so the update takes effect straight away;
