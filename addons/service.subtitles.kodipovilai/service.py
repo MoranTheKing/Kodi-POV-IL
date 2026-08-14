@@ -2111,7 +2111,11 @@ def _maybe_patch_pov_addon_window():
                 'unknown-addon window instead of losing its service',
                 level='INFO')
         elif status in ('read_failed', 'write_failed', 'compile_failed',
-                        'unmatched'):
+                        'unmatched', 'partial'):
+            # 'partial' means one of the two patches went missing because POV
+            # rewrote the text it anchors on. The other one still being in
+            # place is exactly why it needs saying out loud: the file looks
+            # patched, and half of what it is patched for is gone.
             kodi_utils.log(
                 'pov_addon_window_patcher: ' + status, level='WARNING')
     except Exception as e:
