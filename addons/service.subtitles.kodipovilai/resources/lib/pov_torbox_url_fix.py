@@ -31,6 +31,14 @@
 # accented filename cannot break it either -- and touches nothing else. The
 # token is hex and passes through byte-for-byte.
 #
+# encode('utf-8', 'replace') rather than plain encode(): a LONE SURROGATE
+# reaching this function raises UnicodeEncodeError otherwise, and it can
+# reach it -- json.loads accepts \\ud800 as a valid escape, so a corrupted
+# name from TorBox's own backend is enough. 'replace' turns it into '?',
+# which costs a character of a COSMETIC filename and never raises. On the
+# download path POV's own call site has no try/except at all, so raising
+# here would not have degraded gracefully.
+#
 # IT IS IDEMPOTENT ON THE URL, which matters more than it looks: `%` is left
 # alone, so a link TorBox already encoded, or one that passes through twice, is
 # unchanged rather than double-encoded into a different file name.
@@ -83,7 +91,7 @@ def _ai_safe_url(_u):  ''' + MARKER + '''
 \t_out = []
 \tfor _c in _u:
 \t\tif _c in _bad or _c < '!' or _c > '~':
-\t\t\t_out.append(''.join('%%%02X' % _b for _b in _c.encode('utf-8')))
+\t\t\t_out.append(''.join('%%%02X' % _b for _b in _c.encode('utf-8', 'replace')))
 \t\telse: _out.append(_c)
 \treturn ''.join(_out)
 

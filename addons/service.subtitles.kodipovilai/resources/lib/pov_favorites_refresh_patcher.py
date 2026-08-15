@@ -176,7 +176,7 @@ def _patch_dialogs():
     try:
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
-    except OSError as e:
+    except Exception as e:
         _log('dialogs read failed: {0}'.format(e), level='WARNING')
         return 'read_failed'
     if MARKER in content:
@@ -221,7 +221,7 @@ def _patch_list_helper():
     try:
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
-    except OSError as e:
+    except Exception as e:
         _log('list_helper read failed: {0}'.format(e), level='WARNING')
         return 'read_failed'
     if MARKER_MANAGE in content:
