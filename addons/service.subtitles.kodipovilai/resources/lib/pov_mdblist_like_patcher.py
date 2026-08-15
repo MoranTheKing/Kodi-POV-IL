@@ -80,12 +80,25 @@ _LIKE_ID, _UNLIKE_ID = 32776, 32783
 # None as failure, clear the cached list bucket, tell the user, refresh.
 # 'liked_lists' is the bucket that changes here -- clearing it is what makes
 # the list appear in (or vanish from) "My Liked Lists" without a restart.
+#
+# AND THE MENU'S IN-PROCESS MEMO IS RESET TOO, which is not optional. POV ships
+# reuselanguageinvoker=true, so menus.mdblist stays warm in sys.modules across
+# invocations, and container_refresh() redraws in the SAME interpreter. Clearing
+# only the on-disk cache would leave the memo holding the pre-click answer, so
+# the row you just liked would keep offering "Like" for the rest of the session
+# -- defeating the entire point of showing one entry. Imported inside the
+# function: menus.mdblist imports this module at its top, so a module-level
+# import here would be circular.
 _API_FUNCS = '''
 def mdbl_like_a_list(params):  ''' + MARKER + '''
 	list_id = params['list_id']
 	result = call_mdblist('lists/%s/like' % list_id, method='put')
 	if result is None: return kodi_utils.notification(32574)
 	mdbl_cache.clear_mdbl_list_data('liked_lists')
+	try:
+		from menus import mdblist as _ai_menu
+		_ai_menu._ai_liked_ids_cache[0] = None
+	except Exception: pass
 	kodi_utils.notification(32576)
 	kodi_utils.container_refresh()
 
@@ -94,6 +107,10 @@ def mdbl_unlike_a_list(params):  ''' + MARKER + '''
 	result = call_mdblist('lists/%s/like' % list_id, method='delete')
 	if result is None: return kodi_utils.notification(32574)
 	mdbl_cache.clear_mdbl_list_data('liked_lists')
+	try:
+		from menus import mdblist as _ai_menu
+		_ai_menu._ai_liked_ids_cache[0] = None
+	except Exception: pass
 	kodi_utils.notification(32576)
 	kodi_utils.container_refresh()
 
@@ -213,8 +230,17 @@ def _menu_block(ind):
     # POV shows BOTH for Trakt in this same situation, so this is deliberately
     # better than the thing it was modelled on -- and it costs nothing extra,
     # because the liked set is a cached read POV already performs.
+    # 'external' is EXCLUDED, and that is not tidiness. POV classifies a list
+    # imported from another platform as 'external' and fetches it from a
+    # different resource entirely -- external/lists/user, and its items from
+    # external/lists/<id>/items, which POV's own get_mdbl_list_contents already
+    # does. MDBList's schema has no write routes under external/lists at all,
+    # so "Like" on such a row would call lists/<id>/like with an id from the
+    # wrong id space: a guaranteed failure notification at best, and at worst a
+    # numeric collision that likes a stranger's list. A button that can never
+    # work does not belong in the menu.
     return (
-        "%sif list_type != 'my_lists':  %s\n"
+        "%sif list_type not in ('my_lists', 'external'):  %s\n"
         "%sif list_type == 'liked_lists' or str(list_id) in _ai_liked_ids():\n"
         "%s%s\n"
         "%selse:\n"
