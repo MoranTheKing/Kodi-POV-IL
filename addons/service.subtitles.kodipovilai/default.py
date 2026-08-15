@@ -208,7 +208,12 @@ def _handle_download(handle, params):
     if _p and _p.get('type') == 'engine' and _p.get('embedded'):
         try:
             from resources.lib import subs_engine_bridge
-            if subs_engine_bridge.select_embedded(_p.get('stream_index')):
+            # Pass the picked language through. It was being dropped here and
+            # only here, which left the out-of-range fallback inside
+            # select_embedded re-finding a HEBREW stream for a '[מובנה] EN'
+            # pick -- and now also decides whether the RTL repair applies.
+            if subs_engine_bridge.select_embedded(_p.get('stream_index'),
+                                                  lang=_p.get('lang')):
                 kodi_utils.notify('כתובית עברית מובנה הופעלה', time_ms=3000)
         except Exception as _e:
             _safe_log('embedded select failed: {0}'.format(_e), level='WARNING')
@@ -3505,6 +3510,25 @@ def _handle_choose_subs(params):
             pass
 
 
+def _handle_embedded_rtl(params):
+    """Background RTL repair of the embedded Hebrew track that was just
+    selected. Fired by subs_engine_bridge.select_embedded; runs in its own
+    process because the extraction takes minutes and the process that made the
+    selection is a picker subprocess about to be ended by endOfDirectory.
+
+    Takes no parameters: the track is found by language in the file that is
+    playing right now, and passing Kodi's subtitle stream INDEX would be worse
+    than useless -- it is a player index, not the Matroska track number the
+    extractor wants."""
+    try:
+        from resources.lib import embedded_rtl
+        status = embedded_rtl.repair()
+    except Exception as e:
+        _safe_log('embedded_rtl repair failed: {0}'.format(e), level='WARNING')
+        return
+    _safe_log('embedded_rtl: {0}'.format(status), level='INFO')
+
+
 def main():
     if xbmc is None:
         _safe_log('default.py invoked outside Kodi -- nothing to do',
@@ -3575,6 +3599,8 @@ def main():
             _handle_translate_file(params)
         elif action == 'bg_translate_picker':
             _handle_bg_translate_picker(params)
+        elif action == 'embedded_rtl':
+            _handle_embedded_rtl(params)
         elif action == 'darksubs_status':
             _handle_darksubs_status(params)
         elif action == 'open_pov_settings':

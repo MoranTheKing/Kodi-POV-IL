@@ -263,8 +263,15 @@ def autosub_on_play():
             except Exception:
                 pass
             if _heb_idx is not None:
-                _pl.setSubtitleStream(_heb_idx)
-                _pl.showSubtitles(True)
+                # Through select_embedded rather than setSubtitleStream direct:
+                # it does the same two calls, and it is the one place that also
+                # starts the background RTL repair for an embedded HEBREW track
+                # (Kodi renders those with an LTR base direction, which throws
+                # the closing punctuation to the wrong end of every line). This
+                # auto-on-play selection is how most users meet an embedded
+                # Hebrew track at all, so leaving it on the direct call would
+                # have fixed the defect everywhere except where it happens.
+                subs_engine_bridge.select_embedded(_heb_idx, lang='he')
                 try:
                     import json as _json
                     import urllib.parse as _up
