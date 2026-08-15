@@ -65,10 +65,12 @@ API_REL_PATH = 'resources/lib/indexers/mdblist_api.py'
 MENU_REL_PATH = 'resources/lib/menus/mdblist.py'
 
 MARKER = '# AI_SUBS_MDBL_LIKE_v3'
-# Detection is by FAMILY, not by exact version: a device carrying an older
-# version must read as already-patched and be left alone, because injecting v2
-# beside v1 would give the user two of each entry. (v1 never shipped, so this
-# is insurance rather than migration.)
+# TWO different questions, and conflating them is what broke the v2 -> v3
+# upgrade. MARKER answers "is the CURRENT version already applied" -> leave it
+# alone. _MARKER_ANY answers "is ANY version of ours in there" -> if it is not
+# the current one it must be REVERTED first, never injected beside, or the user
+# gets two of each entry. Detecting only the family and returning 'unchanged'
+# meant every device that took 0.2.496 kept v2 permanently.
 _MARKER_ANY = '# AI_SUBS_MDBL_LIKE_v'
 
 # POV's own string ids, the same two menus/trakt.py uses, so the entries read
@@ -230,6 +232,53 @@ _SEARCH_BLOCK_LINES = (
 def _search_block(ind):
     return ''.join((ind + ln if ln else '') + '\n'
                    for ln in _SEARCH_BLOCK_LINES)
+
+
+# ---- revert-then-reapply ---------------------------------------------------
+# WITHOUT THIS, A VERSION BUMP REACHES NOBODY. Both halves used to return
+# 'unchanged' the moment they saw ANY marker in the family, so a device already
+# carrying v2 -- which is every device that took 0.2.496 -- would keep v2
+# forever. Nothing else would heal it either: the quickfix ships NO POV python
+# at all, and the full build ships mdblist_api.py but not menus/mdblist.py, so
+# neither artifact ever replaces an injected file. The v3 fix for "Like opens
+# the keyboard" would have shipped to exactly the users who did not have the
+# bug. Verified against the real artifacts, not assumed.
+#
+# The revert is possible because every injected region has ONE shape, in both
+# versions: a line carrying the marker, followed by its block -- lines indented
+# strictly deeper than the marked line. That covers all of them, the single
+# label line (no block), the module-level helpers, the context-menu branch
+# nested five tabs deep, and the class overrides. So removal needs no knowledge
+# of what any particular version wrote, which is the point: v4 will be able to
+# revert v3 the same way, and this is checked by a test that patches a stock
+# tree and asserts the revert reproduces it BYTE FOR BYTE.
+#
+# Trailing blank lines ARE consumed, and that is measured, not assumed. The
+# first attempt handed them back on the theory that a block ends against POV's
+# own spacing -- it does not: every blank line following an injected block is
+# one the injection itself wrote (the templates carry their own separators), so
+# giving them back left five stray blanks in mdblist.py and three in
+# mdblist_api.py, which would have accumulated on every future version bump.
+# The round-trip test below is what caught it and is what keeps it honest.
+def _revert(content):
+    lines = content.split('\n')
+    out, i = [], 0
+    while i < len(lines):
+        line = lines[i]
+        if _MARKER_ANY not in line:
+            out.append(line)
+            i += 1
+            continue
+        base = len(line) - len(line.lstrip())
+        i += 1
+        block = []
+        while i < len(lines):
+            nxt = lines[i]
+            if nxt.strip() and (len(nxt) - len(nxt.lstrip())) <= base:
+                break
+            block.append(nxt)
+            i += 1
+    return '\n'.join(out)
 
 _RUN = ("cm_append((%s, 'RunPlugin(%%s)' %% build_url("
         "{'mode': 'mdblist.mdbl_%s_a_list', 'list_id': list_id})))")
@@ -401,8 +450,19 @@ def _patch_api():
     content = _read(path)
     if content is None:
         return 'read_failed'
-    if _MARKER_ANY in content:
+    if MARKER in content:
         return 'unchanged'
+    # An OLDER version of ours is in there. Strip it and reapply, or this
+    # device keeps the version it already has -- see _revert.
+    repatch = False
+    if _MARKER_ANY in content:
+        content = _revert(content)
+        repatch = True
+        if _MARKER_ANY in content:
+            _log('could not fully remove the previous injection -- leaving '
+                 'the file alone rather than stacking on top of it',
+                 level='WARNING')
+            return 'revert_failed'
     m = _API_ANCHOR_RE.search(content)
     if not m:
         _log('mdblist_api.py: delete_mdbl_list anchor not found -- shape '
@@ -417,7 +477,8 @@ def _patch_api():
         _log('mdblist_api.py: patched content would not compile -- skipping '
              '({0})'.format(e), level='WARNING')
         return 'compile_failed'
-    return 'patched' if _write(path, new_content) else 'write_failed'
+    ok = 'repatched' if repatch else 'patched'
+    return ok if _write(path, new_content) else 'write_failed'
 
 
 def _patch_menu():
@@ -427,8 +488,19 @@ def _patch_menu():
     content = _read(path)
     if content is None:
         return 'read_failed'
-    if _MARKER_ANY in content:
+    if MARKER in content:
         return 'unchanged'
+    # An OLDER version of ours is in there. Strip it and reapply, or this
+    # device keeps the version it already has -- see _revert.
+    repatch = False
+    if _MARKER_ANY in content:
+        content = _revert(content)
+        repatch = True
+        if _MARKER_ANY in content:
+            _log('could not fully remove the previous injection -- leaving '
+                 'the file alone rather than stacking on top of it',
+                 level='WARNING')
+            return 'revert_failed'
 
     # Same uniqueness discipline as the menu anchor below. Taking the first of
     # several hits is a guess, and this file is one POV edit away from having
@@ -475,7 +547,8 @@ def _patch_menu():
         _log('mdblist.py: patched content would not compile -- skipping '
              '({0})'.format(e), level='WARNING')
         return 'compile_failed'
-    return 'patched' if _write(path, new_content) else 'write_failed'
+    ok = 'repatched' if repatch else 'patched'
+    return ok if _write(path, new_content) else 'write_failed'
 
 
 def ensure_patched():
@@ -495,8 +568,12 @@ def ensure_patched():
     A menu entry must never outlive its handler, so the menu is only touched
     once the API side is known good.
     """
+    # 'repatched' belongs in this set as much as the other two: the handler is
+    # present and current. Leaving it out is not theoretical -- it is what the
+    # first cut of the revert did, and the upgrade test caught it as
+    # menu=skipped_no_api on exactly the v2 devices this release exists for.
     a = _patch_api()
-    if a in ('patched', 'unchanged'):
+    if a in ('patched', 'repatched', 'unchanged'):
         m = _patch_menu()
     else:
         m = 'skipped_no_api'
