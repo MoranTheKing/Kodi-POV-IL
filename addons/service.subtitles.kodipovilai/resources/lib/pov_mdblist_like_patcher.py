@@ -1,0 +1,245 @@
+# Give an MDBList list the same long-press menu a Trakt list already has.
+#
+# THE GAP. Long-pressing a list under MDBList -> "search lists" offers only
+# "Add to a Menu", "Add to a Shortcut Folder" and "Export to TMDB". The SAME
+# gesture on a Trakt list also offers "Like List" and "Unlike List"
+# (menus/trakt.py). Nothing about MDBList makes it the odd one out -- POV
+# simply never wired the two entries there.
+#
+# MDBLIST DOES SUPPORT IT, and that was worth proving before writing a menu
+# entry that could not work. Probed with no credentials and no writes:
+#
+#   GET /lists/<id>/like     -> 405, Allow: PUT, DELETE
+#   GET /lists/<id>/zzznope  -> 405, Allow: GET, HEAD, PUT, DELETE
+#
+# A path the API does not know answers with the catch-all's verb set;
+# lists/<id>/like answers with a DIFFERENT one that excludes GET. That is a
+# real, distinct route, and its verbs say what it wants: PUT to like, DELETE to
+# unlike. POV already reads the other half of this feature -- mdblist_api maps
+# list_type 'liked_lists' to 'lists/liked', and the list plot already shows each
+# list's like count -- so only the action was missing.
+#
+# NO ROUTER CHANGE IS NEEDED. entry.py sends every mode starting with
+# 'mdblist.' to indexers.mdblist_api and calls mode.split('.')[-1], so defining
+# the two functions in that module is the whole wiring.
+#
+# NO SKIN CHANGE IS NEEDED EITHER. This is POV's own context menu, built with
+# listitem.addContextMenuItems, and Kodi draws it identically under every skin.
+#
+# (Umbrella has exactly the same gap -- like_list/unlike_list for Trakt only,
+# and for MDBList nothing but a read of /lists/liked. Checked across matrix,
+# nexus, omega and piers. Nothing to mirror from there.)
+#
+# ANCHORED BY SHAPE, NOT BY LITERAL. POV rewrites these files between releases
+# -- the favourites patcher lost a whole release to a literal that stopped
+# matching when 6.08.12 changed one argument and one level of indentation. So
+# the menu edit anchors on "the line that appends add2menu_str", reusing its
+# captured indentation, and the API edit anchors on "the line that defines
+# delete_mdbl_list". Both survive renaming, re-nesting and added arguments.
+
+import os
+import re as _re
+
+try:
+    import xbmcvfs
+except Exception:
+    xbmcvfs = None
+
+try:
+    from resources.lib import kodi_utils
+except Exception:
+    kodi_utils = None
+
+
+POV_ADDON_ID = 'plugin.video.pov'
+API_REL_PATH = 'resources/lib/indexers/mdblist_api.py'
+MENU_REL_PATH = 'resources/lib/menus/mdblist.py'
+
+MARKER = '# AI_SUBS_MDBL_LIKE_v1'
+
+# POV's own string ids, the same two menus/trakt.py uses, so the entries read
+# identically to the Trakt ones in every language POV ships.
+_LIKE_ID, _UNLIKE_ID = 32776, 32783
+
+# ---- the API half ---------------------------------------------------------
+# Mirrors delete_mdbl_list, which is the closest existing shape: call, treat
+# None as failure, clear the cached list bucket, tell the user, refresh.
+# 'liked_lists' is the bucket that changes here -- clearing it is what makes
+# the list appear in (or vanish from) "My Liked Lists" without a restart.
+_API_FUNCS = '''
+def mdbl_like_a_list(params):  ''' + MARKER + '''
+	list_id = params['list_id']
+	result = call_mdblist('lists/%s/like' % list_id, method='put')
+	if result is None: return kodi_utils.notification(32574)
+	mdbl_cache.clear_mdbl_list_data('liked_lists')
+	kodi_utils.notification(32576)
+	kodi_utils.container_refresh()
+
+def mdbl_unlike_a_list(params):  ''' + MARKER + '''
+	list_id = params['list_id']
+	result = call_mdblist('lists/%s/like' % list_id, method='delete')
+	if result is None: return kodi_utils.notification(32574)
+	mdbl_cache.clear_mdbl_list_data('liked_lists')
+	kodi_utils.notification(32576)
+	kodi_utils.container_refresh()
+
+'''
+
+_API_ANCHOR_RE = _re.compile(r'^def delete_mdbl_list\(params\):', _re.M)
+
+# ---- the menu half --------------------------------------------------------
+# The two labels, defined once at module level next to POV's own. Anchored on
+# whichever module-level line defines deletelist_str rather than on the exact
+# tuple assignment, which has changed shape before.
+_LABEL_ANCHOR_RE = _re.compile(
+    r'^(?P<line>[^\n]*\bdeletelist_str\b[^\n]*=[^\n]*)$', _re.M)
+_LABEL_LINE = ('_ai_likelist_str, _ai_unlikelist_str = ls(%d), ls(%d)  %s'
+               % (_LIKE_ID, _UNLIKE_ID, MARKER))
+
+# Insert the like/unlike branch immediately BEFORE the add2menu append, so the
+# two land at the top of the menu exactly as they do for Trakt.
+_MENU_ANCHOR_RE = _re.compile(
+    r'^(?P<ind>[ \t]+)cm_append\(\(add2menu_str,', _re.M)
+
+_RUN = ("cm_append((%s, 'RunPlugin(%%s)' %% build_url("
+        "{'mode': 'mdblist.mdbl_%s_a_list', 'list_id': list_id})))")
+
+
+def _log(msg, level='INFO'):
+    if kodi_utils is None:
+        return
+    try:
+        kodi_utils.log('pov_mdblist_like_patcher: ' + msg, level=level)
+    except Exception:
+        pass
+
+
+def _pov_path(rel):
+    if xbmcvfs is None:
+        return ''
+    try:
+        base = xbmcvfs.translatePath(
+            'special://home/addons/' + POV_ADDON_ID + '/')
+    except Exception:
+        return ''
+    p = os.path.join(base, *rel.split('/'))
+    return p if os.path.isfile(p) else ''
+
+
+def _write(path, new_content):
+    tmp = path + '.aitmp'
+    try:
+        with open(tmp, 'w', encoding='utf-8') as f:
+            f.write(new_content)
+        os.replace(tmp, path)
+        return True
+    except Exception as e:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        _log('write failed for {0}: {1}'.format(path, e), level='WARNING')
+        return False
+
+
+def _read(path):
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except Exception as e:
+        _log('read failed for {0}: {1}'.format(path, e), level='WARNING')
+        return None
+
+
+def _menu_block(ind):
+    """The like/unlike branch, indented to match the menu POV already builds.
+
+    The inner indent is derived from the captured one rather than assumed:
+    POV writes these files with tabs, but a file that ever arrives
+    space-indented would otherwise get a tab spliced into it and stop
+    compiling -- which the compile check would catch, but only by refusing to
+    apply the fix at all.
+    """
+    inner = ind + ('\t' if ind.endswith('\t') else '    ')
+    like = _RUN % ('_ai_likelist_str', 'like')
+    unlike = _RUN % ('_ai_unlikelist_str', 'unlike')
+    return (
+        # A list already liked can only be unliked; one you OWN is neither
+        # (POV gives my_lists its own new/delete pair, same as Trakt does).
+        "%sif list_type == 'liked_lists':  %s\n%s%s\n"
+        "%selif list_type != 'my_lists':\n%s%s\n%s%s\n"
+        % (ind, MARKER, inner, unlike,
+           ind, inner, like, inner, unlike))
+
+
+def _patch_api():
+    path = _pov_path(API_REL_PATH)
+    if not path:
+        return 'no_file'
+    content = _read(path)
+    if content is None:
+        return 'read_failed'
+    if MARKER in content:
+        return 'unchanged'
+    m = _API_ANCHOR_RE.search(content)
+    if not m:
+        _log('mdblist_api.py: delete_mdbl_list anchor not found -- shape '
+             'changed upstream, skipping', level='WARNING')
+        return 'unmatched'
+    new_content = content[:m.start()] + _API_FUNCS.lstrip('\n') + content[m.start():]
+    try:
+        compile(new_content, path, 'exec')
+    except SyntaxError as e:
+        _log('mdblist_api.py: patched content would not compile -- skipping '
+             '({0})'.format(e), level='WARNING')
+        return 'compile_failed'
+    return 'patched' if _write(path, new_content) else 'write_failed'
+
+
+def _patch_menu():
+    path = _pov_path(MENU_REL_PATH)
+    if not path:
+        return 'no_file'
+    content = _read(path)
+    if content is None:
+        return 'read_failed'
+    if MARKER in content:
+        return 'unchanged'
+
+    lm = _LABEL_ANCHOR_RE.search(content)
+    if not lm:
+        _log('mdblist.py: no module-level deletelist_str line -- shape changed '
+             'upstream, skipping', level='WARNING')
+        return 'unmatched'
+    hits = _MENU_ANCHOR_RE.findall(content)
+    if len(hits) != 1:
+        # Two call sites means POV grew a second list menu we have not looked
+        # at; patching "the first" would be a guess.
+        _log('mdblist.py: add2menu anchor matched {0} times, expected 1 -- '
+             'not editing'.format(len(hits)), level='WARNING')
+        return 'unmatched'
+    mm = _MENU_ANCHOR_RE.search(content)
+    new_content = (content[:mm.start()] + _menu_block(mm.group('ind'))
+                   + content[mm.start():])
+    new_content = _LABEL_ANCHOR_RE.sub(
+        lambda m: m.group('line') + '\n' + _LABEL_LINE, new_content, 1)
+    if new_content == content:
+        return 'unmatched'
+    try:
+        compile(new_content, path, 'exec')
+    except SyntaxError as e:
+        _log('mdblist.py: patched content would not compile -- skipping '
+             '({0})'.format(e), level='WARNING')
+        return 'compile_failed'
+    return 'patched' if _write(path, new_content) else 'write_failed'
+
+
+def ensure_patched():
+    """Add Like List / Unlike List to MDBList's list context menu, and the two
+    API calls behind them. Idempotent, defensive, never raises."""
+    a = _patch_api()
+    m = _patch_menu()
+    summary = 'api={0}, menu={1}'.format(a, m)
+    if 'patched' in (a, m):
+        _log('MDBList like/unlike applied (' + summary + ')', level='INFO')
+    return summary

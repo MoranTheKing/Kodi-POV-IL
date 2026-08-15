@@ -218,6 +218,7 @@ def _run_build_startup_repairs():
         _maybe_seed_pov_seasons_view,
         _maybe_patch_pov_resume_cancel,
         _maybe_patch_pov_scraper_settings,
+        _maybe_patch_pov_mdblist_like,
         _maybe_patch_pov_aiostreams,
         _maybe_patch_pov_resolve_diag,
         _maybe_restore_pov_torbox,
@@ -1294,6 +1295,32 @@ def _maybe_patch_pov_resume_cancel():
             kodi_utils.log(
                 'pov_resume_cancel_patcher failed: {0}'.format(e),
                 level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_mdblist_like():
+    """Give an MDBList list the same long-press menu a Trakt list already has:
+    Like List / Unlike List, which POV wired for Trakt and never for MDBList.
+    MDBList's API does support it (PUT/DELETE on lists/<id>/like) and POV
+    already reads the liked-lists bucket, so only the action was missing."""
+    if _skip_pov_patchers():
+        return
+    try:
+        from resources.lib import pov_mdblist_like_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_mdblist_like_patcher.ensure_patched()
+        if 'patched' in status:
+            kodi_utils.log('pov_mdblist_like_patcher: ' + status, level='INFO')
+        elif 'unmatched' in status or 'failed' in status:
+            kodi_utils.log('pov_mdblist_like_patcher: ' + status,
+                           level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log('pov_mdblist_like_patcher failed: {0}'.format(e),
+                           level='WARNING')
         except Exception:
             pass
 
