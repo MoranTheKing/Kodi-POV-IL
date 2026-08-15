@@ -765,6 +765,113 @@ rather than 52 because three non-patchers are now named as such.
 Both are hardening with no user-visible effect, so they ride the next release
 rather than justifying their own.
 
+### Two field defects fixed on the same branch (#70, #71)
+
+**#71 — an SRT index and timecode drawn on screen inside a cue.** The user's
+screenshot shows one cue rendering its own Hebrew line plus a raw `286` and
+`00:15:51,284 --> 00:15:54,054`; the next cue is fine. A blank line is the ONLY
+thing separating SRT entries, so when the model omits one while copying a chunk
+back, two entries arrive as a single block and everything downstream treats the
+second entry's header as TEXT of the first: `restore_block_timings` gives the
+merged block the first source block's header back and leaves the rest alone.
+
+**It shipped quietly because the damage hides inside a tolerance.** The reply
+looks exactly one entry short, and the caller accepts up to 15% loss without
+retrying, so nothing upstream complains.
+
+`parse_blocks` now splits such a block apart. This runs on every parse rather
+than behind a heuristic because the shape is unambiguous: a digits-only line
+whose next non-empty line is a timecode is an entry header, never dialogue.
+Bare numbers DO occur in speech -- a year, a score, a countdown -- but never
+with a timecode under them.
+
+**The one shape that needed care is the one that could delete text.** A cue
+whose entire dialogue is a bare number (`42`), welded to an entry that ALSO
+lost its index, would split in front of the number: the cue above loses its
+text, the cue below swallows the digits as its index, and the number reaches
+nobody. That is worse in kind than the weld -- the weld is ugly and visible,
+this is invisible. The digits are treated as the next entry's index only when
+the entry being closed would still have text of its own.
+
+**#70 — punctuation at the wrong end of every embedded subtitle.** `?` is
+already in `_TRAILING_PUNCT_CHARS` and `fix_rtl_punctuation` is correct by
+execution, so neither is the bug. **Kodi draws an EMBEDDED track itself,
+straight out of the container, resolving BiDi with a left-to-right base
+direction.** Under the BiDi algorithm a punctuation mark is neutral: one
+between two Hebrew letters takes their direction and renders correctly, one at
+the END of a line has no strong character after it and takes the paragraph's
+direction instead. That is precisely the report -- "the marks are fine except
+the question mark".
+
+Files we deliver ourselves never show this: `fix_rtl_punctuation` wraps each
+line in RLE..PDF, and `rtl_base` is the default *because* these setups default
+to LTR (on-device verification, 0.2.416). A track inside the video is the one
+place that fix cannot reach — we do not own those bytes and Kodi never asks us
+about them.
+
+**Why it surfaced now, with a date.** Auto-on-play began SELECTING an embedded
+Hebrew track whenever the file has one (`autosub_service`, **2026-07-22**),
+because it is perfectly synced. That turned a track users had to go looking for
+into the one they get by default, and a long-standing rendering flaw became
+"suddenly all the embedded subtitles".
+
+`embedded_rtl.py` extracts the track, applies the same RTL fix and delivers the
+result as an external subtitle. The native track plays throughout, so the user
+is never without subtitles, and the cue times come out of the container so the
+perfect sync that made it worth preferring survives.
+
+**The cost is governed by the setting that already governs it.** Extraction is
+the same operation the embedded-AI path performs, so this obeys
+`embedded_translation_mode` rather than inventing a second switch: `off` and
+`align_only` skip it, `local_only` keeps it off the network. It inherits that
+path's one-at-a-time lock, pacing and abort-on-stall.
+
+Fired from `select_embedded` rather than from each caller — four places select
+an embedded track and a fifth would be easy to add without noticing. autosub's
+direct `setSubtitleStream` was routed through it for the same reason: that is
+how most users meet an embedded Hebrew track, so leaving it out would have
+fixed the defect everywhere except where it happens.
+
+**Known limit, recorded in the module:** the track is chosen by LANGUAGE, not
+by the stream the user picked. Kodi's subtitle stream index is a player index
+and the extractor wants a Matroska track number; they are different numbers and
+pairing them is guesswork, so a file with two distinct Hebrew text tracks may
+be repaired from the other one.
+
+**Two things the validator caught that matter beyond this change.**
+
+*A window property is not a lock.* `getProperty` then `setProperty` is a
+check-then-set with a gap, so two RunScript processes both conclude they are
+first — and `autosub_service` already documents `onAVStarted` firing more than
+once per file, with its own busy flag being the same unlocked pattern behind a
+13-second wait. Before this change the worst case was calling
+`setSubtitleStream` twice, which costs nothing; after it, the same pre-existing
+race reaches two concurrent container extractions on one debrid token, which is
+what closed a movie in the field. Now `os.open(O_CREAT|O_EXCL)`, which has no
+gap. **Any future cross-process claim in this codebase should use the same
+thing, not a Window property.**
+
+*`moransubs.current_sub` is our record, not Kodi's.* Only our own pick flows
+write it; Kodi's native subtitle button, the OSD track list and the
+subtitles-off toggle do not. Gating a live overwrite on it meant a user who had
+just turned subtitles OFF would have had them turned back on. The player is now
+asked what is actually on (`VideoPlayer.SubtitlesEnabled` plus the active
+stream's language), with our record as a third check rather than the only one.
+**It was only ever a cosmetic "» נוכחית" marker before; it is not a source of
+truth about what is on screen.**
+
+**Tests now live in `tools/`** (`test_welded_blocks.py`, `test_embedded_rtl.py`,
+`test_embedded_rtl_sabotage.py`), so they run as regression: **18/18**. Every
+guard is proven by deleting it and watching the defect return. That pass earned
+its keep three times over — it found that the delivered-file leak detector used
+a `^`-anchored regex without `re.M` and could not match anything; that the
+wiring case checked for two substrings in a source file and stayed green
+against a `select_embedded` that fired nothing; and that the new lock, whose
+timestamp is written with `%.1f` and can round FORWARD, asked `0 <= age <
+stale`, so a claim a few milliseconds in the future read as neither live nor
+stale, got reclaimed, and both processes extracted. `translate.py`'s extraction
+flag carries the same clamp for the same reason.
+
 ## Shipped 2026-08-15: note 595 (0.2.495 / wizard 0.1.46 / quickfix 0.1.540 / build 0.1.108)
 
 **A total playback outage, caused by POV updating itself, fixed the same day.**
