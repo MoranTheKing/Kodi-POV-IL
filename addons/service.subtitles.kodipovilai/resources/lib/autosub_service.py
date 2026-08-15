@@ -263,37 +263,26 @@ def autosub_on_play():
             except Exception:
                 pass
             if _heb_idx is not None:
-                # Through select_embedded rather than setSubtitleStream direct:
-                # it does the same two calls, and it is the one place that also
-                # starts the background RTL repair for an embedded HEBREW track
-                # (Kodi renders those with an LTR base direction, which throws
-                # the closing punctuation to the wrong end of every line). This
-                # auto-on-play selection is how most users meet an embedded
-                # Hebrew track at all, so leaving it on the direct call would
-                # have fixed the defect everywhere except where it happens.
-                # The return value MATTERS. setSubtitleStream used to be a bare
-                # call, so a Player-API failure raised into the except below and
-                # execution fell through to the real subtitle search --
-                # unannounced, but recovered. select_embedded swallows its own
-                # exceptions and returns False instead, so ignoring that would
-                # announce a subtitle that is not on screen AND skip the
-                # fallback, turning a recoverable failure into a dead end.
-                if subs_engine_bridge.select_embedded(_heb_idx, lang='he'):
-                    try:
-                        import json as _json
-                        import urllib.parse as _up
-                        _elink = _up.quote(_json.dumps(
-                            {'type': 'engine', 'embedded': True,
-                             'stream_index': _heb_idx}, ensure_ascii=False))
-                        kodi_utils.set_current_subtitle(_elink)
-                    except Exception:
-                        pass
-                    _final_overlay(
-                        '[COLOR lightblue]הופעל תרגום מובנה בעברית[/COLOR]')
-                    return  # embedded Hebrew applied -- the best, we're done
-                kodi_utils.log('autosub: embedded Hebrew stream {0} could not '
-                               'be selected -- falling through to the search'
-                               .format(_heb_idx), level='WARNING')
+                # Bare calls, deliberately: a Player-API failure raises into the
+                # except below, which skips the overlay and the return, so
+                # execution falls through to the real subtitle search. Routing
+                # these through something that swallows its own exceptions and
+                # returns a bool would announce a subtitle that is not on
+                # screen and lose that recovery -- unless the caller checks the
+                # bool, which is a second thing to get right for no gain.
+                _pl.setSubtitleStream(_heb_idx)
+                _pl.showSubtitles(True)
+                try:
+                    import json as _json
+                    import urllib.parse as _up
+                    _elink = _up.quote(_json.dumps(
+                        {'type': 'engine', 'embedded': True,
+                         'stream_index': _heb_idx}, ensure_ascii=False))
+                    kodi_utils.set_current_subtitle(_elink)
+                except Exception:
+                    pass
+                _final_overlay('[COLOR lightblue]הופעל תרגום מובנה בעברית[/COLOR]')
+                return  # embedded Hebrew applied -- it's the best, we're done
         except Exception:
             pass
 

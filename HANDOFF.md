@@ -793,7 +793,10 @@ nobody. That is worse in kind than the weld -- the weld is ugly and visible,
 this is invisible. The digits are treated as the next entry's index only when
 the entry being closed would still have text of its own.
 
-**#70 — punctuation at the wrong end of every embedded subtitle.** `?` is
+**#70 — punctuation at the wrong end of every embedded subtitle. BUILT, THEN
+REMOVED ON THE BUILD OWNER'S DECISION. Do not rebuild it without asking.**
+
+The diagnosis is solid and worth keeping even though the fix is gone. `?` is
 already in `_TRAILING_PUNCT_CHARS` and `fix_rtl_punctuation` is correct by
 execution, so neither is the bug. **Kodi draws an EMBEDDED track itself,
 straight out of the container, resolving BiDi with a left-to-right base
@@ -801,76 +804,83 @@ direction.** Under the BiDi algorithm a punctuation mark is neutral: one
 between two Hebrew letters takes their direction and renders correctly, one at
 the END of a line has no strong character after it and takes the paragraph's
 direction instead. That is precisely the report -- "the marks are fine except
-the question mark".
+the question mark". That sentence WAS the diagnosis, not a detail.
 
 Files we deliver ourselves never show this: `fix_rtl_punctuation` wraps each
 line in RLE..PDF, and `rtl_base` is the default *because* these setups default
 to LTR (on-device verification, 0.2.416). A track inside the video is the one
-place that fix cannot reach — we do not own those bytes and Kodi never asks us
-about them.
+place that fix cannot reach — we do not own those bytes, Kodi never asks us
+about them, there is no Kodi setting for the base direction, and the APK is a
+rebrand of upstream binaries rather than a source build, so the renderer is not
+ours to change either.
 
-**Why it surfaced now, with a date.** Auto-on-play began SELECTING an embedded
-Hebrew track whenever the file has one (`autosub_service`, **2026-07-22**),
-because it is perfectly synced. That turned a track users had to go looking for
-into the one they get by default, and a long-standing rendering flaw became
-"suddenly all the embedded subtitles".
+**Why it surfaced when it did, with a date.** Auto-on-play began SELECTING an
+embedded Hebrew track whenever the file has one (`autosub_service`,
+**2026-07-22**), because it is perfectly synced. That turned a track users had
+to go looking for into the one they get by default.
 
-`embedded_rtl.py` extracts the track, applies the same RTL fix and delivers the
-result as an external subtitle. The native track plays throughout, so the user
-is never without subtitles, and the cue times come out of the container so the
-perfect sync that made it worth preferring survives.
+**So the only possible repair is to stop letting Kodi render it: extract the
+track's text, RTL-fix it, and deliver our own copy.** That was built
+(`embedded_rtl.py`), validated and tested — and then removed, because
+extraction is the part that does not hold up. It is a container read over the
+network for anyone not on a local file, it is not dependable across debrid
+providers, and the build owner's judgement was that a repair that only works
+for some users is worse than no repair: *"אם זה הפתרון היחיד אז עדיף כבר לוותר
+על המשימה הספציפית הזאת"*. The task is closed as won't-fix, not as unsolved.
 
-**The cost is governed by the setting that already governs it.** Extraction is
-the same operation the embedded-AI path performs, so this obeys
-`embedded_translation_mode` rather than inventing a second switch: `off` and
-`align_only` skip it, `local_only` keeps it off the network. It inherits that
-path's one-at-a-time lock, pacing and abort-on-stall.
+**If it ever comes back**, the removed commit is `45651a0` + `cc778df` on this
+branch and has the whole thing: the atomic lock, the policy gate reusing
+`embedded_translation_mode`, the live-player checks, and a sabotage-proven test
+suite. There is also one cheaper idea that was considered and NOT built:
+`_embedded_aligned_source_srt` reads only the embedded track's TIMESTAMPS (via
+`mkv_probe`, far cheaper than reading its text) and re-times an EXTERNAL Hebrew
+subtitle onto them. That gives perfect sync and correct punctuation — but it
+delivers a DIFFERENT translation than the embedded one, which is not what the
+user picked, so it was never proposed as a like-for-like fix.
 
-Fired from `select_embedded` rather than from each caller — four places select
-an embedded track and a fifth would be easy to add without noticing. autosub's
-direct `setSubtitleStream` was routed through it for the same reason: that is
-how most users meet an embedded Hebrew track, so leaving it out would have
-fixed the defect everywhere except where it happens.
-
-**Known limit, recorded in the module:** the track is chosen by LANGUAGE, not
-by the stream the user picked. Kodi's subtitle stream index is a player index
-and the extractor wants a Matroska track number; they are different numbers and
-pairing them is guesswork, so a file with two distinct Hebrew text tracks may
-be repaired from the other one.
-
-**Two things the validator caught that matter beyond this change.**
+**Two findings from that work were kept, because they outlive it.**
 
 *A window property is not a lock.* `getProperty` then `setProperty` is a
 check-then-set with a gap, so two RunScript processes both conclude they are
 first — and `autosub_service` already documents `onAVStarted` firing more than
 once per file, with its own busy flag being the same unlocked pattern behind a
-13-second wait. Before this change the worst case was calling
-`setSubtitleStream` twice, which costs nothing; after it, the same pre-existing
-race reaches two concurrent container extractions on one debrid token, which is
-what closed a movie in the field. Now `os.open(O_CREAT|O_EXCL)`, which has no
-gap. **Any future cross-process claim in this codebase should use the same
-thing, not a Window property.**
+13-second wait. Use `os.open(O_CREAT|O_EXCL)` for any cross-process claim in
+this codebase. `translate.py`'s `povil.embedded_extract_active` has the same
+weakness; it is pre-existing and shared with the embedded-AI path and was not
+rewritten, so if a double-extraction report ever arrives from there, that is
+where to look.
 
-*`moransubs.current_sub` is our record, not Kodi's.* Only our own pick flows
+*`moransubs.current_sub` is OUR record, not Kodi's.* Only our own pick flows
 write it; Kodi's native subtitle button, the OSD track list and the
-subtitles-off toggle do not. Gating a live overwrite on it meant a user who had
-just turned subtitles OFF would have had them turned back on. The player is now
-asked what is actually on (`VideoPlayer.SubtitlesEnabled` plus the active
-stream's language), with our record as a third check rather than the only one.
-**It was only ever a cosmetic "» נוכחית" marker before; it is not a source of
-truth about what is on screen.**
+subtitles-off toggle do not. It is a cosmetic "» נוכחית" marker and must not be
+used to answer "what is on screen right now" — ask the player
+(`VideoPlayer.SubtitlesEnabled` plus the active stream's language).
 
-**Tests now live in `tools/`** (`test_welded_blocks.py`, `test_embedded_rtl.py`,
-`test_embedded_rtl_sabotage.py`), so they run as regression: **18/18**. Every
-guard is proven by deleting it and watching the defect return. That pass earned
-its keep three times over — it found that the delivered-file leak detector used
-a `^`-anchored regex without `re.M` and could not match anything; that the
-wiring case checked for two substrings in a source file and stayed green
-against a `select_embedded` that fired nothing; and that the new lock, whose
-timestamp is written with `%.1f` and can round FORWARD, asked `0 <= age <
-stale`, so a claim a few milliseconds in the future read as neither live nor
-stale, got reclaimed, and both processes extracted. `translate.py`'s extraction
-flag carries the same clamp for the same reason.
+### provider.piratebay turned OFF (build owner's instruction, 2026-08-15)
+
+One value in `pov_scraper_settings_patcher`'s `DESIRED`, `true` -> `false`.
+That patcher had been turning it ON for source counts; that is reversed.
+
+**Written rather than dropped from the list, deliberately.** Removing the key
+would leave every existing device on the `true` we ourselves put there, and
+POV's own default for it is `true`, so a fresh install would turn it back on by
+itself. Writing `false` covers both the quick update and new installers, which
+is what was asked for.
+
+**A user who turns it back on keeps it on.** This is not a special case added
+for this key — the patcher records the value IT wrote, and any key whose live
+value has since drifted from that record is treated as the user's and never
+touched again, including across a future fingerprint bump. `tools/
+test_piratebay_off.py` proves it against the real `ensure_patched()`, and the
+sabotage case deletes that guard to confirm the choice really is reverted
+without it.
+
+While writing that test the patcher's `key absent in this POV schema` comment
+turned out to be wrong: Kodi answers an unknown setting id with `''` rather
+than raising, so that branch is only reached when `getSetting` itself blows up.
+The behaviour is right and worth keeping — an empty read also happens
+transiently while POV is starting, and skipping on it would mark the tune done
+and never retry — but the comment now says what actually happens.
 
 ## Shipped 2026-08-15: note 595 (0.2.495 / wizard 0.1.46 / quickfix 0.1.540 / build 0.1.108)
 
