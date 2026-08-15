@@ -1,3 +1,19 @@
+v0.2.497
+- Pressing Like or Unlike on a list you found by searching used to say
+  "Success" and then re-open the search keyboard. It now simply redraws the
+  list you were looking at, with the entry flipped to the other one. The same
+  applied to Unlike, and to both alike.
+- MDBList list search now opens a screen of its own instead of the keyboard
+  directly, listing the searches you have run before. Pressing Back from a set
+  of results returns to that screen rather than all the way out to the home
+  screen, so looking up another list no longer means starting over. A search
+  you have run before is one click away, and can be removed from the list or
+  the whole history cleared. The results themselves also carry a "new search"
+  row at the top, so a second search never needs Back at all.
+- Cancelling the search keyboard leaves you where you were. It used to take
+  you to an empty listing with nothing in it, which then had to be backed out
+  of.
+
 v0.2.496
 - MDBList lists now carry the same long-press menu that Trakt lists already
   had, including Like and Unlike. The entry shown is the one that applies: a

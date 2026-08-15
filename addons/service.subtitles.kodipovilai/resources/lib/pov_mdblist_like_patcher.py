@@ -64,11 +64,13 @@ POV_ADDON_ID = 'plugin.video.pov'
 API_REL_PATH = 'resources/lib/indexers/mdblist_api.py'
 MENU_REL_PATH = 'resources/lib/menus/mdblist.py'
 
-MARKER = '# AI_SUBS_MDBL_LIKE_v2'
-# Detection is by FAMILY, not by exact version: a device carrying an older
-# version must read as already-patched and be left alone, because injecting v2
-# beside v1 would give the user two of each entry. (v1 never shipped, so this
-# is insurance rather than migration.)
+MARKER = '# AI_SUBS_MDBL_LIKE_v3'
+# TWO different questions, and conflating them is what broke the v2 -> v3
+# upgrade. MARKER answers "is the CURRENT version already applied" -> leave it
+# alone. _MARKER_ANY answers "is ANY version of ours in there" -> if it is not
+# the current one it must be REVERTED first, never injected beside, or the user
+# gets two of each entry. Detecting only the family and returning 'unchanged'
+# meant every device that took 0.2.496 kept v2 permanently.
 _MARKER_ANY = '# AI_SUBS_MDBL_LIKE_v'
 
 # POV's own string ids, the same two menus/trakt.py uses, so the entries read
@@ -90,6 +92,46 @@ _LIKE_ID, _UNLIKE_ID = 32776, 32783
 # function: menus.mdblist imports this module at its top, so a module-level
 # import here would be circular.
 _API_FUNCS = '''
+def _ai_refresh_after_like():  ''' + MARKER + '''
+	"""Redraw the current listing so the flipped entry shows -- WITHOUT
+	re-running a search prompt.
+
+	A BARE Container.Refresh IS WRONG HERE, and 0.2.496 shipped it. POV's
+	search results live at a path with NO search_title in it: the title was
+	typed into a dialog, and SearchMdblLists.__init__ falls back to
+	dialog.input('POV') whenever that parameter is absent. Refreshing that path
+	therefore re-runs the prompt -- the user pressed Like, got "Success", and
+	landed back on the keyboard.
+
+	The title is recoverable without asking: SearchMdblLists sets
+	category_name = search_title, and BaseList.build() hands it to
+	setPluginCategory, so the live container is already carrying it. Refresh to
+	the same path WITH the parameter and the same results redraw in place.
+
+	When the title cannot be recovered -- blank category, or getInfoLabel
+	itself failing so we cannot even tell which screen this is -- DO NOTHING.
+	A stale menu entry is a small wrong thing that the next navigation fixes;
+	opening a keyboard the user did not ask for is a large one. The unsafe flag
+	is set in the except branch for exactly that reason: not knowing where we
+	are has to fail closed, not fall through to the bare refresh."""
+	target, unsafe = None, False
+	try:
+		import xbmc
+		from urllib.parse import quote_plus
+		path = xbmc.getInfoLabel('Container.FolderPath') or ''
+		if 'search_mdbl_lists' in path and 'search_title=' not in path:
+			unsafe = True
+			title = xbmc.getInfoLabel('Container.PluginCategory') or ''
+			if title.strip():
+				sep = '&' if '?' in path else '?'
+				target = '%s%ssearch_title=%s' % (path, sep, quote_plus(title))
+	except Exception:
+		unsafe = True
+	try:
+		if target: kodi_utils.execute_builtin('Container.Refresh(%s)' % target)
+		elif not unsafe: kodi_utils.container_refresh()
+	except Exception: pass
+
 def mdbl_like_a_list(params):  ''' + MARKER + '''
 	list_id = params['list_id']
 	result = call_mdblist('lists/%s/like' % list_id, method='put')
@@ -100,7 +142,7 @@ def mdbl_like_a_list(params):  ''' + MARKER + '''
 		_ai_menu._ai_liked_ids_cache[0] = False
 	except Exception: pass
 	kodi_utils.notification(32576)
-	kodi_utils.container_refresh()
+	_ai_refresh_after_like()
 
 def mdbl_unlike_a_list(params):  ''' + MARKER + '''
 	list_id = params['list_id']
@@ -112,7 +154,7 @@ def mdbl_unlike_a_list(params):  ''' + MARKER + '''
 		_ai_menu._ai_liked_ids_cache[0] = False
 	except Exception: pass
 	kodi_utils.notification(32576)
-	kodi_utils.container_refresh()
+	_ai_refresh_after_like()
 
 '''
 
@@ -131,6 +173,225 @@ _LABEL_LINE = ('_ai_likelist_str, _ai_unlikelist_str = ls(%d), ls(%d)  %s'
 # two land at the top of the menu exactly as they do for Trakt.
 _MENU_ANCHOR_RE = _re.compile(
     r'^(?P<ind>[ \t]+)cm_append\(\(add2menu_str,', _re.M)
+
+# ---- the search-screen half ------------------------------------------------
+# Two defects that belong to POV's search flow rather than to the menu, both
+# reported against 0.2.496 and both reachable in three keypresses.
+#
+# 1. CANCEL BUILT AN EMPTY SCREEN. dialog.input() returns '' when the user
+#    cancels. SearchMdblLists carried that '' through fetch_results (which sets
+#    lists = []) into a finished, empty directory -- so Cancel *navigated*, to a
+#    blank listing with nothing in it and no way out but Back. Ending the
+#    directory as NOT succeeded is what makes Kodi stay where it was, and is
+#    what POV's own get_search_term already does with `if not query.strip()`.
+#
+# 2. A SECOND SEARCH MEANT GOING HOME. The results are the first directory
+#    pushed after the home screen -- the keyboard is a dialog, not a screen --
+#    so Back from them correctly lands on home, and searching again means
+#    finding the tile a second time. POV solves this everywhere else with
+#    search_history, whose first row is "NEW SEARCH...". MDBList's tile skips
+#    that screen entirely, so the row is added to the results themselves: it
+#    re-invokes this same mode with no search_title, which is precisely what
+#    makes POV prompt.
+#
+#    This does NOT change what Back does, and deliberately so. Making Back
+#    re-prompt would mean rendering the results at a child URL of a prompt URL,
+#    and the only way to do that from a FOLDER item is to leave a directory
+#    behind that re-prompts every time it is popped -- including after a
+#    Cancel, which is defect 1 turned into a loop. The row gets the user what
+#    Back was wanted for (type another list name, without leaving the screen)
+#    without putting a trap in the navigation stack.
+_SEARCH_ANCHOR_RE = _re.compile(
+    r'^(?P<ind>[ \t]+)def fetch_results\(self\):[^\n]*\n'
+    r'[ \t]+if self\.search_title:', _re.M)
+
+_NEW_SEARCH_HELPER = (
+    "_ai_new_search_str = '[B]חיפוש חדש...[/B]'  " + MARKER + "\n"
+    "_ai_hist_key = 'mdbl_list_queries'  " + MARKER + "\n\n"
+    "def _ai_new_search_item():  " + MARKER + "\n"
+    "\t_ai_li = make_listitem()\n"
+    "\t_ai_li.setLabel(_ai_new_search_str)\n"
+    "\t_ai_li.setArt({'icon': default_icon, 'poster': default_icon,\n"
+    "\t\t'thumb': default_icon, 'fanart': fanart, 'banner': default_icon})\n"
+    "\treturn _ai_li\n")
+
+# The intermediate screen, which is what makes Back mean what the user expects.
+#
+# Before this, the tile opened the keyboard directly, so the results were the
+# FIRST directory after the home screen -- a dialog leaves nothing on the
+# navigation stack -- and Back from them correctly went home. There was no
+# search screen to return to because there had never been one.
+#
+# The obvious repair, pushing a directory that re-prompts when you land back on
+# it, is a trap: Back stops meaning "get me out of here" and starts meaning
+# "ask me again", the only way out becomes Cancel, and Cancel from a directory
+# that must still render something is exactly the blank screen this release is
+# fixing. It is not even consistent -- POV caches directory listings when
+# pov_kodi_menu_cache is on, so the re-prompt would simply not happen there.
+#
+# So this follows POV's own answer, menus/history.py: a plain LISTING that does
+# not prompt on arrival -- "new search" plus the queries you have run before.
+# Back from results lands on it, Back again goes home, Cancel at the keyboard
+# leaves you on it. No trap, and search history comes free.
+#
+# It reuses POV's storage and POV's own context-menu modes rather than growing
+# a parallel one: remove_from_history and clear_search_history are already
+# routed in entry.py and take exactly the setting_id/query pair used here.
+_SEARCH_SCREEN = (
+    "def _ai_mdbl_search_screen(params):  " + MARKER + "\n"
+    "\timport sys as _ai_sys\n"
+    "\t_ai_h = int(_ai_sys.argv[1])\n"
+    "\tkodi_utils.add_dir(_ai_h,\n"
+    "\t\t{'mode': 'build_mdbl_list.search_mdbl_lists', 'ai_prompt': '1'},\n"
+    "\t\t_ai_new_search_str, iconImage=default_icon)\n"
+    "\ttry:\n"
+    "\t\tfrom caches.main_cache import MainCache as _ai_MC\n"
+    "\t\t_ai_rows = _ai_MC().get(_ai_hist_key) or []\n"
+    "\texcept Exception:\n"
+    "\t\t_ai_rows = []\n"
+    "\t_ai_items = []\n"
+    "\tfor _ai_q in _ai_rows:\n"
+    "\t\ttry:\n"
+    "\t\t\t_ai_li = make_listitem()\n"
+    "\t\t\t_ai_li.setLabel('[I]%s[/I]' % _ai_q)\n"
+    "\t\t\t_ai_li.setArt({'icon': default_icon, 'poster': default_icon,\n"
+    "\t\t\t\t'thumb': default_icon, 'fanart': fanart,\n"
+    "\t\t\t\t'banner': default_icon})\n"
+    "\t\t\t_ai_li.addContextMenuItems([\n"
+    "\t\t\t\t(ls(32698), 'RunPlugin(%s)' % build_url({\n"
+    "\t\t\t\t\t'mode': 'remove_from_history',\n"
+    "\t\t\t\t\t'setting_id': _ai_hist_key, 'query': _ai_q})),\n"
+    "\t\t\t\t(ls(32699), 'RunPlugin(%s)' % build_url({\n"
+    "\t\t\t\t\t'mode': 'clear_search_history',\n"
+    "\t\t\t\t\t'setting_id': _ai_hist_key, 'query': _ai_q}))])\n"
+    "\t\t\t_ai_items.append((build_url({\n"
+    "\t\t\t\t'mode': 'build_mdbl_list.search_mdbl_lists',\n"
+    "\t\t\t\t'search_title': _ai_q}), _ai_li, True))\n"
+    "\t\texcept Exception: pass\n"
+    "\tif _ai_items: kodi_utils.add_items(_ai_h, _ai_items)\n"
+    "\tkodi_utils.set_category(_ai_h, params.get('name') or 'MDBList')\n"
+    "\tkodi_utils.set_content(_ai_h, '')\n"
+    "\tkodi_utils.end_directory(_ai_h)\n"
+    "\tkodi_utils.set_view_mode('view.main', '')\n")
+
+# The tile's mode is unchanged, so a favourite already saved to the home screen
+# keeps working: it simply renders the screen now instead of the keyboard.
+# ai_prompt=1 is what asks for the keyboard, and it is what the new-search rows
+# on both screens send.
+#
+# INSERTED BESIDE POV'S LINE, NOT OVER IT, and the round-trip test is what
+# forced that. The first cut rewrote the whole function -- which reverts to
+# NOTHING, because _revert can only delete, so undoing it would have deleted
+# POV's own `return SearchMdblLists(params).build()` and left an empty
+# function. The redirect is therefore a single marked line above POV's, with
+# its body on the SAME line so no block hangs off it: revert removes exactly
+# that one line and POV's original is untouched underneath.
+_ENTRY_ANCHOR_RE = _re.compile(
+    r'^def search_mdbl_lists\(params\):\n'
+    r'(?P<ind>[ \t]+)return SearchMdblLists\(params\)\.build\(\)\n', _re.M)
+
+
+def _entry_block(m):
+    ind = m.group('ind')
+    return ('def search_mdbl_lists(params):\n'
+            + ind + "if not params.get('search_title') and not "
+            "params.get('ai_prompt'): return _ai_mdbl_search_screen(params)  "
+            + MARKER + '\n'
+            + ind + 'return SearchMdblLists(params).build()\n')
+
+_SEARCH_BLOCK_LINES = (
+    "def build(self):  " + MARKER,
+    "\tif not (self.search_title or '').strip():",
+    "\t\timport sys as _ai_sys, xbmcplugin as _ai_xp",
+    "\t\treturn _ai_xp.endOfDirectory(int(_ai_sys.argv[1]), succeeded=False)",
+    "\ttry:",
+    "\t\tfrom menus.history import add_to_search_history as _ai_remember",
+    "\t\t_ai_remember(self.search_title, _ai_hist_key)",
+    "\texcept Exception: pass",
+    "\treturn super().build()",
+    "",
+    "def process_results(self):  " + MARKER,
+    "\tyield (build_url({'mode': 'build_mdbl_list.search_mdbl_lists',",
+    "\t\t'ai_prompt': '1'}), _ai_new_search_item(), True)",
+    "\tfor _ai_row in super().process_results(): yield _ai_row",
+    "",
+)
+
+
+def _search_block(ind):
+    return ''.join((ind + ln if ln else '') + '\n'
+                   for ln in _SEARCH_BLOCK_LINES)
+
+
+# ---- revert-then-reapply ---------------------------------------------------
+# WITHOUT THIS, A VERSION BUMP REACHES NOBODY. Both halves used to return
+# 'unchanged' the moment they saw ANY marker in the family, so a device already
+# carrying v2 -- which is every device that took 0.2.496 -- would keep v2
+# forever. Nothing else would heal it either: the quickfix ships NO POV python
+# at all, and the full build ships mdblist_api.py but not menus/mdblist.py, so
+# neither artifact ever replaces an injected file. The v3 fix for "Like opens
+# the keyboard" would have shipped to exactly the users who did not have the
+# bug. Verified against the real artifacts, not assumed.
+#
+# The revert is possible because every injected region has ONE shape, in both
+# versions: a line carrying the marker, followed by its block -- lines indented
+# strictly deeper than the marked line. That covers all of them, the single
+# label line (no block), the module-level helpers, the context-menu branch
+# nested five tabs deep, and the class overrides. So removal needs no knowledge
+# of what any particular version wrote, which is the point: v4 will be able to
+# revert v3 the same way, and this is checked by a test that patches a stock
+# tree and asserts the revert reproduces it BYTE FOR BYTE.
+#
+# Trailing blank lines ARE consumed, and that is measured, not assumed. The
+# first attempt handed them back on the theory that a block ends against POV's
+# own spacing -- it does not: every blank line following an injected block is
+# one the injection itself wrote (the templates carry their own separators), so
+# giving them back left five stray blanks in mdblist.py and three in
+# mdblist_api.py, which would have accumulated on every future version bump.
+# The round-trip test below is what caught it and is what keeps it honest.
+# READ THIS BEFORE EDITING ANY INJECTED TEMPLATE ABOVE.
+#
+# _revert knows nothing about Python syntax. It finds a marked line and eats
+# everything indented deeper, full stop. That makes ONE rule load-bearing:
+#
+#   EVERY line of an injected block must be indented strictly deeper than its
+#   marked first line -- INCLUDING lines inside docstrings and string literals.
+#
+# _ai_refresh_after_like's docstring is hand-indented with a leading tab on
+# every line for exactly this reason, not for looks. Paste an example into it
+# at column 0, or a copied comment block that happens to start flush-left, and
+# the revert stops at that line, leaves the rest of the block behind, and the
+# result does not compile.
+#
+# It fails SAFE, not destructively: _patch_api/_patch_menu compile() the
+# candidate before writing, so a broken revert is refused and nothing is
+# written. But "safe" here means the device is stuck on its OLD version
+# forever, at every boot, with no way forward -- which is the same
+# silently-stuck-forever outcome that made v2 devices unreachable in the first
+# place, reached by a different door.
+#
+# The guard is the byte-for-byte round-trip check in
+# tools/test_mdblist_search_nav.py: revert(patch(stock)) must equal stock. It
+# will fail the moment this rule is broken. Do not weaken it.
+def _revert(content):
+    lines = content.split('\n')
+    out, i = [], 0
+    while i < len(lines):
+        line = lines[i]
+        if _MARKER_ANY not in line:
+            out.append(line)
+            i += 1
+            continue
+        base = len(line) - len(line.lstrip())
+        i += 1
+        block = []
+        while i < len(lines):
+            nxt = lines[i]
+            if nxt.strip() and (len(nxt) - len(nxt.lstrip())) <= base:
+                break
+            block.append(nxt)
+            i += 1
+    return '\n'.join(out)
 
 _RUN = ("cm_append((%s, 'RunPlugin(%%s)' %% build_url("
         "{'mode': 'mdblist.mdbl_%s_a_list', 'list_id': list_id})))")
@@ -302,8 +563,19 @@ def _patch_api():
     content = _read(path)
     if content is None:
         return 'read_failed'
-    if _MARKER_ANY in content:
+    if MARKER in content:
         return 'unchanged'
+    # An OLDER version of ours is in there. Strip it and reapply, or this
+    # device keeps the version it already has -- see _revert.
+    repatch = False
+    if _MARKER_ANY in content:
+        content = _revert(content)
+        repatch = True
+        if _MARKER_ANY in content:
+            _log('could not fully remove the previous injection -- leaving '
+                 'the file alone rather than stacking on top of it',
+                 level='WARNING')
+            return 'revert_failed'
     m = _API_ANCHOR_RE.search(content)
     if not m:
         _log('mdblist_api.py: delete_mdbl_list anchor not found -- shape '
@@ -318,7 +590,8 @@ def _patch_api():
         _log('mdblist_api.py: patched content would not compile -- skipping '
              '({0})'.format(e), level='WARNING')
         return 'compile_failed'
-    return 'patched' if _write(path, new_content) else 'write_failed'
+    ok = 'repatched' if repatch else 'patched'
+    return ok if _write(path, new_content) else 'write_failed'
 
 
 def _patch_menu():
@@ -328,8 +601,19 @@ def _patch_menu():
     content = _read(path)
     if content is None:
         return 'read_failed'
-    if _MARKER_ANY in content:
+    if MARKER in content:
         return 'unchanged'
+    # An OLDER version of ours is in there. Strip it and reapply, or this
+    # device keeps the version it already has -- see _revert.
+    repatch = False
+    if _MARKER_ANY in content:
+        content = _revert(content)
+        repatch = True
+        if _MARKER_ANY in content:
+            _log('could not fully remove the previous injection -- leaving '
+                 'the file alone rather than stacking on top of it',
+                 level='WARNING')
+            return 'revert_failed'
 
     # Same uniqueness discipline as the menu anchor below. Taking the first of
     # several hits is a guess, and this file is one POV edit away from having
@@ -346,11 +630,38 @@ def _patch_menu():
         _log('mdblist.py: add2menu anchor matched {0} times, expected 1 -- '
              'not editing'.format(len(hits)), level='WARNING')
         return 'unmatched'
+    # The search overrides are anchored separately, and their absence is NOT
+    # fatal: the like/unlike menu is the feature, the search repairs ride
+    # along. If POV reshapes SearchMdblLists we still want the menu, with a
+    # warning naming what was skipped -- not a silent all-or-nothing.
+    searches = _SEARCH_ANCHOR_RE.findall(content)
+    if len(searches) != 1:
+        _log('mdblist.py: SearchMdblLists.fetch_results anchor matched {0} '
+             'times, expected 1 -- shipping the menu without the search '
+             'repairs'.format(len(searches)), level='WARNING')
+
     mm = _MENU_ANCHOR_RE.search(content)
     new_content = (content[:mm.start()] + _menu_block(mm.group('ind'))
                    + content[mm.start():])
+    helpers = _LIKED_HELPER
+    if len(searches) == 1:
+        helpers = helpers + '\n' + _NEW_SEARCH_HELPER
+        sm = _SEARCH_ANCHOR_RE.search(new_content)
+        new_content = (new_content[:sm.start()] + _search_block(sm.group('ind'))
+                       + new_content[sm.start():])
+        # The intermediate screen rides on the same anchor being sound: it is
+        # only useful once build() can refuse a cancelled search, or landing
+        # back on it would immediately re-prompt.
+        entries = _ENTRY_ANCHOR_RE.findall(new_content)
+        if len(entries) != 1:
+            _log('mdblist.py: search_mdbl_lists entry matched {0} times, '
+                 'expected 1 -- shipping without the search screen'
+                 .format(len(entries)), level='WARNING')
+        else:
+            helpers = helpers + '\n' + _SEARCH_SCREEN
+            new_content = _ENTRY_ANCHOR_RE.sub(_entry_block, new_content, 1)
     new_content = _LABEL_ANCHOR_RE.sub(
-        lambda m: m.group('line') + '\n' + _LABEL_LINE + '\n\n' + _LIKED_HELPER,
+        lambda m: m.group('line') + '\n' + _LABEL_LINE + '\n\n' + helpers,
         new_content, 1)
     if new_content == content:
         return 'unmatched'
@@ -360,7 +671,8 @@ def _patch_menu():
         _log('mdblist.py: patched content would not compile -- skipping '
              '({0})'.format(e), level='WARNING')
         return 'compile_failed'
-    return 'patched' if _write(path, new_content) else 'write_failed'
+    ok = 'repatched' if repatch else 'patched'
+    return ok if _write(path, new_content) else 'write_failed'
 
 
 def ensure_patched():
@@ -380,8 +692,12 @@ def ensure_patched():
     A menu entry must never outlive its handler, so the menu is only touched
     once the API side is known good.
     """
+    # 'repatched' belongs in this set as much as the other two: the handler is
+    # present and current. Leaving it out is not theoretical -- it is what the
+    # first cut of the revert did, and the upgrade test caught it as
+    # menu=skipped_no_api on exactly the v2 devices this release exists for.
     a = _patch_api()
-    if a in ('patched', 'unchanged'):
+    if a in ('patched', 'repatched', 'unchanged'):
         m = _patch_menu()
     else:
         m = 'skipped_no_api'
@@ -389,6 +705,6 @@ def ensure_patched():
              'handler crashes POV rather than failing politely'.format(a),
              level='WARNING')
     summary = 'api={0}, menu={1}'.format(a, m)
-    if a == 'patched' or m == 'patched':
+    if 'patched' in (a, m) or 'repatched' in (a, m):
         _log('MDBList like/unlike applied (' + summary + ')', level='INFO')
     return summary
