@@ -6,18 +6,27 @@
 # (menus/trakt.py). Nothing about MDBList makes it the odd one out -- POV
 # simply never wired the two entries there.
 #
-# MDBLIST DOES SUPPORT IT, and that was worth proving before writing a menu
-# entry that could not work. Probed with no credentials and no writes:
+# MDBLIST DOES SUPPORT IT, and that was worth settling before writing a menu
+# entry that could not work. MDBList publishes an OpenAPI schema, readable
+# without credentials at GET /schema/?format=json, and it defines the route:
 #
-#   GET /lists/<id>/like     -> 405, Allow: PUT, DELETE
-#   GET /lists/<id>/zzznope  -> 405, Allow: GET, HEAD, PUT, DELETE
+#   /lists/{listid}/like   listid: integer, "The ID of the list to like"
+#     put     "Like a List"    -- "PUT ensures the list is liked"
+#     delete  "Unlike a List"  -- "DELETE ensures the list is not liked"
+#     200 -> {"status": "liked"|"unliked", "like_count": int}
 #
-# A path the API does not know answers with the catch-all's verb set;
-# lists/<id>/like answers with a DIFFERENT one that excludes GET. That is a
-# real, distinct route, and its verbs say what it wants: PUT to like, DELETE to
-# unlike. POV already reads the other half of this feature -- mdblist_api maps
+# so the numeric id POV already has (item['id']) is the right key, the verbs are
+# the right way round, and the success body is non-empty JSON. The schema's
+# entries for /lists/{listid} and /lists/{listid}/items match calls POV already
+# ships, which is what makes it trustworthy rather than merely plausible.
+#
+# POV already reads the other half of this feature -- mdblist_api maps
 # list_type 'liked_lists' to 'lists/liked', and the list plot already shows each
 # list's like count -- so only the action was missing.
+#
+# (An earlier note here inferred the same thing from an Allow header. The
+# inference was right but the evidence as written was not: the "unknown path"
+# control answers 401, not 405. The schema replaces it.)
 #
 # NO ROUTER CHANGE IS NEEDED. entry.py sends every mode starting with
 # 'mdblist.' to indexers.mdblist_api and calls mode.split('.')[-1], so defining
@@ -189,7 +198,9 @@ def _patch_api():
     new_content = content[:m.start()] + _API_FUNCS.lstrip('\n') + content[m.start():]
     try:
         compile(new_content, path, 'exec')
-    except SyntaxError as e:
+    except Exception as e:
+        # Not just SyntaxError: compile() also raises ValueError (a NUL byte in
+        # the source is enough), and ensure_patched promises it never raises.
         _log('mdblist_api.py: patched content would not compile -- skipping '
              '({0})'.format(e), level='WARNING')
         return 'compile_failed'
@@ -206,10 +217,13 @@ def _patch_menu():
     if MARKER in content:
         return 'unchanged'
 
-    lm = _LABEL_ANCHOR_RE.search(content)
-    if not lm:
-        _log('mdblist.py: no module-level deletelist_str line -- shape changed '
-             'upstream, skipping', level='WARNING')
+    # Same uniqueness discipline as the menu anchor below. Taking the first of
+    # several hits is a guess, and this file is one POV edit away from having
+    # two label blocks.
+    labels = _LABEL_ANCHOR_RE.findall(content)
+    if len(labels) != 1:
+        _log('mdblist.py: deletelist_str line matched {0} times, expected 1 -- '
+             'not editing'.format(len(labels)), level='WARNING')
         return 'unmatched'
     hits = _MENU_ANCHOR_RE.findall(content)
     if len(hits) != 1:
@@ -227,7 +241,7 @@ def _patch_menu():
         return 'unmatched'
     try:
         compile(new_content, path, 'exec')
-    except SyntaxError as e:
+    except Exception as e:
         _log('mdblist.py: patched content would not compile -- skipping '
              '({0})'.format(e), level='WARNING')
         return 'compile_failed'
@@ -236,10 +250,30 @@ def _patch_menu():
 
 def ensure_patched():
     """Add Like List / Unlike List to MDBList's list context menu, and the two
-    API calls behind them. Idempotent, defensive, never raises."""
+    API calls behind them. Idempotent, defensive, never raises.
+
+    THE API HALF GOES FIRST, AND THE MENU HALF DEPENDS ON IT. These are two
+    files, and a future POV release can change the shape of one and not the
+    other -- which is exactly what happened to the favourites patcher. If the
+    menu were patched while the API anchor missed, the entry would still appear
+    and fire mode 'mdblist.mdbl_like_a_list' at a function that does not exist:
+    entry.py resolves it with a bare getattr and Router does not suppress, so
+    the user gets an uncaught AttributeError out of POV's plugin entry point
+    rather than a failed action. Worse, it would be permanent -- the menu
+    file's own marker blocks any retry of that half forever.
+
+    A menu entry must never outlive its handler, so the menu is only touched
+    once the API side is known good.
+    """
     a = _patch_api()
-    m = _patch_menu()
+    if a in ('patched', 'unchanged'):
+        m = _patch_menu()
+    else:
+        m = 'skipped_no_api'
+        _log('menu left alone: the API half is {0}, and an entry without its '
+             'handler crashes POV rather than failing politely'.format(a),
+             level='WARNING')
     summary = 'api={0}, menu={1}'.format(a, m)
-    if 'patched' in (a, m):
+    if a == 'patched' or m == 'patched':
         _log('MDBList like/unlike applied (' + summary + ')', level='INFO')
     return summary

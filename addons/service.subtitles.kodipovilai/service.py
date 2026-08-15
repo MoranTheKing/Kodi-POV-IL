@@ -1312,11 +1312,17 @@ def _maybe_patch_pov_mdblist_like():
         return
     try:
         status = pov_mdblist_like_patcher.ensure_patched()
-        if 'patched' in status:
-            kodi_utils.log('pov_mdblist_like_patcher: ' + status, level='INFO')
-        elif 'unmatched' in status or 'failed' in status:
+        # Judge the VALUES, not the whole string. `'patched' in status` reads
+        # True for "api=unmatched, menu=patched" -- the substring is right
+        # there in the healthy half -- so a half-failed run logged INFO and the
+        # WARNING branch was unreachable for exactly the case worth seeing.
+        parts = [p.split('=', 1)[-1].strip()
+                 for p in status.split(',') if '=' in p]
+        if any(p not in ('patched', 'unchanged', 'no_file') for p in parts):
             kodi_utils.log('pov_mdblist_like_patcher: ' + status,
                            level='WARNING')
+        elif 'patched' in parts:
+            kodi_utils.log('pov_mdblist_like_patcher: ' + status, level='INFO')
     except Exception as e:
         try:
             kodi_utils.log('pov_mdblist_like_patcher failed: {0}'.format(e),
