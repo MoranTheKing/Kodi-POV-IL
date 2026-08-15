@@ -64,7 +64,7 @@ POV_ADDON_ID = 'plugin.video.pov'
 API_REL_PATH = 'resources/lib/indexers/mdblist_api.py'
 MENU_REL_PATH = 'resources/lib/menus/mdblist.py'
 
-MARKER = '# AI_SUBS_MDBL_LIKE_v2'
+MARKER = '# AI_SUBS_MDBL_LIKE_v3'
 # Detection is by FAMILY, not by exact version: a device carrying an older
 # version must read as already-patched and be left alone, because injecting v2
 # beside v1 would give the user two of each entry. (v1 never shipped, so this
@@ -90,6 +90,46 @@ _LIKE_ID, _UNLIKE_ID = 32776, 32783
 # function: menus.mdblist imports this module at its top, so a module-level
 # import here would be circular.
 _API_FUNCS = '''
+def _ai_refresh_after_like():  ''' + MARKER + '''
+	"""Redraw the current listing so the flipped entry shows -- WITHOUT
+	re-running a search prompt.
+
+	A BARE Container.Refresh IS WRONG HERE, and 0.2.496 shipped it. POV's
+	search results live at a path with NO search_title in it: the title was
+	typed into a dialog, and SearchMdblLists.__init__ falls back to
+	dialog.input('POV') whenever that parameter is absent. Refreshing that path
+	therefore re-runs the prompt -- the user pressed Like, got "Success", and
+	landed back on the keyboard.
+
+	The title is recoverable without asking: SearchMdblLists sets
+	category_name = search_title, and BaseList.build() hands it to
+	setPluginCategory, so the live container is already carrying it. Refresh to
+	the same path WITH the parameter and the same results redraw in place.
+
+	When the title cannot be recovered -- blank category, or getInfoLabel
+	itself failing so we cannot even tell which screen this is -- DO NOTHING.
+	A stale menu entry is a small wrong thing that the next navigation fixes;
+	opening a keyboard the user did not ask for is a large one. The unsafe flag
+	is set in the except branch for exactly that reason: not knowing where we
+	are has to fail closed, not fall through to the bare refresh."""
+	target, unsafe = None, False
+	try:
+		import xbmc
+		from urllib.parse import quote_plus
+		path = xbmc.getInfoLabel('Container.FolderPath') or ''
+		if 'search_mdbl_lists' in path and 'search_title=' not in path:
+			unsafe = True
+			title = xbmc.getInfoLabel('Container.PluginCategory') or ''
+			if title.strip():
+				sep = '&' if '?' in path else '?'
+				target = '%s%ssearch_title=%s' % (path, sep, quote_plus(title))
+	except Exception:
+		unsafe = True
+	try:
+		if target: kodi_utils.execute_builtin('Container.Refresh(%s)' % target)
+		elif not unsafe: kodi_utils.container_refresh()
+	except Exception: pass
+
 def mdbl_like_a_list(params):  ''' + MARKER + '''
 	list_id = params['list_id']
 	result = call_mdblist('lists/%s/like' % list_id, method='put')
@@ -100,7 +140,7 @@ def mdbl_like_a_list(params):  ''' + MARKER + '''
 		_ai_menu._ai_liked_ids_cache[0] = False
 	except Exception: pass
 	kodi_utils.notification(32576)
-	kodi_utils.container_refresh()
+	_ai_refresh_after_like()
 
 def mdbl_unlike_a_list(params):  ''' + MARKER + '''
 	list_id = params['list_id']
@@ -112,7 +152,7 @@ def mdbl_unlike_a_list(params):  ''' + MARKER + '''
 		_ai_menu._ai_liked_ids_cache[0] = False
 	except Exception: pass
 	kodi_utils.notification(32576)
-	kodi_utils.container_refresh()
+	_ai_refresh_after_like()
 
 '''
 
@@ -131,6 +171,65 @@ _LABEL_LINE = ('_ai_likelist_str, _ai_unlikelist_str = ls(%d), ls(%d)  %s'
 # two land at the top of the menu exactly as they do for Trakt.
 _MENU_ANCHOR_RE = _re.compile(
     r'^(?P<ind>[ \t]+)cm_append\(\(add2menu_str,', _re.M)
+
+# ---- the search-screen half ------------------------------------------------
+# Two defects that belong to POV's search flow rather than to the menu, both
+# reported against 0.2.496 and both reachable in three keypresses.
+#
+# 1. CANCEL BUILT AN EMPTY SCREEN. dialog.input() returns '' when the user
+#    cancels. SearchMdblLists carried that '' through fetch_results (which sets
+#    lists = []) into a finished, empty directory -- so Cancel *navigated*, to a
+#    blank listing with nothing in it and no way out but Back. Ending the
+#    directory as NOT succeeded is what makes Kodi stay where it was, and is
+#    what POV's own get_search_term already does with `if not query.strip()`.
+#
+# 2. A SECOND SEARCH MEANT GOING HOME. The results are the first directory
+#    pushed after the home screen -- the keyboard is a dialog, not a screen --
+#    so Back from them correctly lands on home, and searching again means
+#    finding the tile a second time. POV solves this everywhere else with
+#    search_history, whose first row is "NEW SEARCH...". MDBList's tile skips
+#    that screen entirely, so the row is added to the results themselves: it
+#    re-invokes this same mode with no search_title, which is precisely what
+#    makes POV prompt.
+#
+#    This does NOT change what Back does, and deliberately so. Making Back
+#    re-prompt would mean rendering the results at a child URL of a prompt URL,
+#    and the only way to do that from a FOLDER item is to leave a directory
+#    behind that re-prompts every time it is popped -- including after a
+#    Cancel, which is defect 1 turned into a loop. The row gets the user what
+#    Back was wanted for (type another list name, without leaving the screen)
+#    without putting a trap in the navigation stack.
+_SEARCH_ANCHOR_RE = _re.compile(
+    r'^(?P<ind>[ \t]+)def fetch_results\(self\):[^\n]*\n'
+    r'[ \t]+if self\.search_title:', _re.M)
+
+_NEW_SEARCH_HELPER = (
+    "_ai_new_search_str = '[B]חיפוש חדש...[/B]'  " + MARKER + "\n\n"
+    "def _ai_new_search_item():  " + MARKER + "\n"
+    "\t_ai_li = make_listitem()\n"
+    "\t_ai_li.setLabel(_ai_new_search_str)\n"
+    "\t_ai_li.setArt({'icon': default_icon, 'poster': default_icon,\n"
+    "\t\t'thumb': default_icon, 'fanart': fanart, 'banner': default_icon})\n"
+    "\treturn _ai_li\n")
+
+_SEARCH_BLOCK_LINES = (
+    "def build(self):  " + MARKER,
+    "\tif not (self.search_title or '').strip():",
+    "\t\timport sys as _ai_sys, xbmcplugin as _ai_xp",
+    "\t\treturn _ai_xp.endOfDirectory(int(_ai_sys.argv[1]), succeeded=False)",
+    "\treturn super().build()",
+    "",
+    "def process_results(self):  " + MARKER,
+    "\tyield (build_url({'mode': 'build_mdbl_list.search_mdbl_lists'}),",
+    "\t\t_ai_new_search_item(), True)",
+    "\tfor _ai_row in super().process_results(): yield _ai_row",
+    "",
+)
+
+
+def _search_block(ind):
+    return ''.join((ind + ln if ln else '') + '\n'
+                   for ln in _SEARCH_BLOCK_LINES)
 
 _RUN = ("cm_append((%s, 'RunPlugin(%%s)' %% build_url("
         "{'mode': 'mdblist.mdbl_%s_a_list', 'list_id': list_id})))")
@@ -346,11 +445,27 @@ def _patch_menu():
         _log('mdblist.py: add2menu anchor matched {0} times, expected 1 -- '
              'not editing'.format(len(hits)), level='WARNING')
         return 'unmatched'
+    # The search overrides are anchored separately, and their absence is NOT
+    # fatal: the like/unlike menu is the feature, the search repairs ride
+    # along. If POV reshapes SearchMdblLists we still want the menu, with a
+    # warning naming what was skipped -- not a silent all-or-nothing.
+    searches = _SEARCH_ANCHOR_RE.findall(content)
+    if len(searches) != 1:
+        _log('mdblist.py: SearchMdblLists.fetch_results anchor matched {0} '
+             'times, expected 1 -- shipping the menu without the search '
+             'repairs'.format(len(searches)), level='WARNING')
+
     mm = _MENU_ANCHOR_RE.search(content)
     new_content = (content[:mm.start()] + _menu_block(mm.group('ind'))
                    + content[mm.start():])
+    helpers = _LIKED_HELPER
+    if len(searches) == 1:
+        helpers = helpers + '\n' + _NEW_SEARCH_HELPER
+        sm = _SEARCH_ANCHOR_RE.search(new_content)
+        new_content = (new_content[:sm.start()] + _search_block(sm.group('ind'))
+                       + new_content[sm.start():])
     new_content = _LABEL_ANCHOR_RE.sub(
-        lambda m: m.group('line') + '\n' + _LABEL_LINE + '\n\n' + _LIKED_HELPER,
+        lambda m: m.group('line') + '\n' + _LABEL_LINE + '\n\n' + helpers,
         new_content, 1)
     if new_content == content:
         return 'unmatched'
