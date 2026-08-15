@@ -571,12 +571,29 @@ def _wrap_rtl_base_line(line, cue_hebrew=False, legacy_engine=False):
 # A well-formed block holds exactly one timecode line and leaves here untouched,
 # so this costs one scan and changes nothing for input that was already correct.
 def _has_text_line(lines, lo, hi):
-    """True when lines[lo:hi] hold a line that is neither an index nor a
-    timecode -- i.e. the entry they make up would still say something."""
-    for ln in lines[lo:hi]:
-        s = ln.strip()
-        if s and not _INDEX_RE.match(s) and not _TIMECODE_RE.match(s):
-            return True
+    """True when lines[lo:hi] would still say something on screen.
+
+    A digits-only line counts as TEXT unless it is itself an entry header --
+    that is, unless a timecode follows it. The first version treated every
+    digits-only line as a header, which meant a cue whose only dialogue IS a
+    number could never satisfy this test: asked whether entry 41 (text: "42")
+    still had something to say, it answered no, so the cut stayed at the
+    timecode and the NEXT entry's index line ("50") was left behind as a second
+    line of dialogue that nobody ever wrote. Same disambiguation as the split
+    itself uses, and for the same reason -- digits alone are ambiguous, digits
+    followed by a timecode are not.
+    """
+    for j in range(lo, min(hi, len(lines))):
+        s = lines[j].strip()
+        if not s or _TIMECODE_RE.match(s):
+            continue
+        if _INDEX_RE.match(s):
+            k = j + 1
+            while k < len(lines) and not lines[k].strip():
+                k += 1
+            if k < len(lines) and _TIMECODE_RE.match(lines[k].strip()):
+                continue          # a header, not something the viewer reads
+        return True
     return False
 
 
