@@ -363,6 +363,49 @@ else:
 
     shutil.rmtree(up, ignore_errors=True)
 
+
+# --- the revert_failed net, forced to fire --------------------------------
+# Unreachable by construction today: every marker-bearing line is either the
+# trigger for its own strip or nested inside a block already being discarded,
+# so nothing survives _revert. 3000 fuzz trials in review found no input that
+# left one behind. It is kept anyway, because it is the ONLY thing between a
+# future change to _revert and silently writing a file with two versions
+# stacked in it -- and a branch that has never once executed is not a net.
+# So it is exercised here by making _revert fail on purpose.
+rf = tempfile.mkdtemp()
+rfroot = os.path.join(rf, 'addons', 'plugin.video.pov')
+shutil.copytree(STOCK if os.path.isdir(STOCK) else root, rfroot)
+vfs.translatePath = lambda p: p.replace('special://home/addons/',
+                                        os.path.join(rf, 'addons') + os.sep)
+sp = importlib.util.spec_from_file_location('_rf', PATCHER)
+rfmod = importlib.util.module_from_spec(sp)
+sp.loader.exec_module(rfmod)
+rfmod.ensure_patched()                       # get the tree into a patched state
+
+before = {}
+for rel in ('resources/lib/menus/mdblist.py',
+            'resources/lib/indexers/mdblist_api.py'):
+    before[rel] = open(os.path.join(rfroot, *rel.split('/')),
+                       encoding='utf-8').read()
+
+rfmod.MARKER = '# AI_SUBS_MDBL_LIKE_v99'     # pretend a newer version arrived
+rfmod._revert = lambda c: c                  # ...whose revert does not work
+st = rfmod.ensure_patched()
+check('a revert that leaves a marker behind is REFUSED, not written over',
+      'revert_failed' in str(st), repr(st))
+check('...and the file on disk is untouched',
+      all(open(os.path.join(rfroot, *rel.split('/')),
+               encoding='utf-8').read() == was
+          for rel, was in before.items()),
+      'the patcher wrote a file it had just refused')
+check('...and the status is one service.py WARNs about',
+      all(part.split('=', 1)[-1].strip()
+          not in ('patched', 'repatched', 'unchanged', 'no_file')
+          for part in str(st).split(',')
+          if 'revert_failed' in part),
+      'revert_failed would be logged as healthy')
+shutil.rmtree(rf, ignore_errors=True)
+
 shutil.rmtree(work, ignore_errors=True)
 print()
 print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')
