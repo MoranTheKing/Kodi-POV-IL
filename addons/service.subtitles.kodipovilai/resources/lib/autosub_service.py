@@ -271,18 +271,29 @@ def autosub_on_play():
                 # auto-on-play selection is how most users meet an embedded
                 # Hebrew track at all, so leaving it on the direct call would
                 # have fixed the defect everywhere except where it happens.
-                subs_engine_bridge.select_embedded(_heb_idx, lang='he')
-                try:
-                    import json as _json
-                    import urllib.parse as _up
-                    _elink = _up.quote(_json.dumps(
-                        {'type': 'engine', 'embedded': True,
-                         'stream_index': _heb_idx}, ensure_ascii=False))
-                    kodi_utils.set_current_subtitle(_elink)
-                except Exception:
-                    pass
-                _final_overlay('[COLOR lightblue]הופעל תרגום מובנה בעברית[/COLOR]')
-                return  # embedded Hebrew applied -- it's the best, we're done
+                # The return value MATTERS. setSubtitleStream used to be a bare
+                # call, so a Player-API failure raised into the except below and
+                # execution fell through to the real subtitle search --
+                # unannounced, but recovered. select_embedded swallows its own
+                # exceptions and returns False instead, so ignoring that would
+                # announce a subtitle that is not on screen AND skip the
+                # fallback, turning a recoverable failure into a dead end.
+                if subs_engine_bridge.select_embedded(_heb_idx, lang='he'):
+                    try:
+                        import json as _json
+                        import urllib.parse as _up
+                        _elink = _up.quote(_json.dumps(
+                            {'type': 'engine', 'embedded': True,
+                             'stream_index': _heb_idx}, ensure_ascii=False))
+                        kodi_utils.set_current_subtitle(_elink)
+                    except Exception:
+                        pass
+                    _final_overlay(
+                        '[COLOR lightblue]הופעל תרגום מובנה בעברית[/COLOR]')
+                    return  # embedded Hebrew applied -- the best, we're done
+                kodi_utils.log('autosub: embedded Hebrew stream {0} could not '
+                               'be selected -- falling through to the search'
+                               .format(_heb_idx), level='WARNING')
         except Exception:
             pass
 

@@ -570,28 +570,56 @@ def _wrap_rtl_base_line(line, cue_hebrew=False, legacy_engine=False):
 #     dialogue on its own.
 # A well-formed block holds exactly one timecode line and leaves here untouched,
 # so this costs one scan and changes nothing for input that was already correct.
+def _has_text_line(lines, lo, hi):
+    """True when lines[lo:hi] hold a line that is neither an index nor a
+    timecode -- i.e. the entry they make up would still say something."""
+    for ln in lines[lo:hi]:
+        s = ln.strip()
+        if s and not _INDEX_RE.match(s) and not _TIMECODE_RE.match(s):
+            return True
+    return False
+
+
 def _split_welded_block(block):
     """Split a block that carries a LATER entry's header inside its text."""
     lines = block.split('\n')
     tc_at = [i for i, ln in enumerate(lines) if _TIMECODE_RE.match(ln.strip())]
     if len(tc_at) < 2:
         return [block]
-    cuts = []
+    cuts, prev = [], 0
     for i in tc_at[1:]:
         # The index line belongs to the entry its timecode opens, so cut BEFORE
         # the index -- cutting between the two would strand the number as the
         # last line of the previous cue, which is the same defect one line
         # smaller.
-        start = i - 1 if (i and _INDEX_RE.match(lines[i - 1].strip())) else i
-        if start > 0:
+        start = i
+        if i and _INDEX_RE.match(lines[i - 1].strip()):
+            # ...UNLESS taking that line leaves the entry we are closing with
+            # no text at all. Then the digits are not the next entry's index,
+            # they are this entry's ONLY line of dialogue -- a score, a house
+            # number, an answer shouted back -- and cutting in front of them
+            # DELETES them: the cue above loses its text and the cue below
+            # swallows the number as its index, so the number never reaches the
+            # screen at all. Leaving it where it is costs nothing, because the
+            # block below gets its index restored from the source either way.
+            # Silent deletion is a worse outcome than the weld we came to fix.
+            if _has_text_line(lines, prev, i - 1):
+                start = i - 1
+        if start > prev:
             cuts.append(start)
+            prev = start
     if not cuts:
         return [block]
     out, prev = [], 0
     for cut in cuts + [len(lines)]:
         part = '\n'.join(lines[prev:cut])
         if part.strip():
-            out.append(part.strip('\n'))
+            # rstrip the CR too. Splitting a CRLF block mid-way leaves the last
+            # line's '\r' with no '\n' behind it, which a block that came
+            # straight from BLOCK_SEPARATOR never carries (the separator eats
+            # it), and a caller that rejoins blocks without stripping would
+            # carry that artefact into the file.
+            out.append(part.strip('\r\n'))
         prev = cut
     return out or [block]
 
