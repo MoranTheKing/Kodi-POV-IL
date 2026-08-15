@@ -38,7 +38,7 @@
 
 - עץ קבצים מסודר של המיגרציה.
 - מסמך diff של `Twilight -> POV`.
-- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.106.zip`.
+- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.107.zip`.
 - הוראות התקנה ובדיקת smoke test לטלפון: `ANDROID_TESTING.md`.
 
 ## חבילת בדיקה (גרסה נוכחית)
@@ -143,6 +143,32 @@ Take 32-bit only if 64-bit refuses to install.
 
 Switching is safe: both carry the same app id and signing key, so 64-bit
 installs over 32-bit as an update and your data stays where it is.
+
+## Kodi no longer closes on the way back to the home screen (from `0.2.494`)
+
+When several rows on the home screen reloaded at the same moment, Kodi could
+close itself completely. It happened most often on the way back from a submenu
+to the home screen, and it took the whole application down rather than the row
+that caused it.
+
+The video add-on was set to run every one of those loads inside a single shared
+Python interpreter. Loading several at once corrupted it, and a corrupted
+interpreter is not something an add-on can recover from. Each load now gets its
+own, so the same burst is merely slower instead of fatal. That closes the whole
+family rather than the one way of provoking it that was reported -- two earlier
+versions of this crash were each fixed by removing a single trigger, and a
+third arrived by an ordinary route.
+
+Two things worth knowing. **The fix takes effect from the next start of Kodi
+after the update**, because Kodi reads that setting while it is starting, before
+the update has run. And rows may take slightly longer to draw -- about a tenth
+of a second per load, measured on a real device. Opening films and skipping
+forward or back are not affected at all.
+
+## AI translation moves to Gemini 3.7 Flash (from `0.2.494`)
+
+Anyone already on 3.5 or 3.6 Flash is moved across once, automatically. Any
+other model you picked yourself is left exactly as it is.
 
 ## The tile from the last update now opens (from `0.2.493`)
 
