@@ -30,6 +30,14 @@ building the chain, it's about making the chain *sync-aware*:
 - `translate.list_candidates` (translate.py:363) already orders the picker:
   embedded he → human he (live + pool-mirrored Ktuvit) → AI pool → MT →
   foreign grouped by language with "תרגום AI לעברית" actions.
+  Since 0.2.496 a further row sits at the front when it is available:
+  **"עברית מסונכרנת למובנה" (`_engine_kind: 'embedded_he'`, 101%)** — a Hebrew
+  subtitle re-timed onto the embedded track's timeline, via `subsync`'s oracle
+  path with `include_he=True`. It is offered ONLY as a picker row and is
+  skipped by `autosub_service` on purpose (it delivers a different translation
+  from the embedded one, and resolving it costs a ~45s alignment), so the
+  auto-on-play order above is unchanged. See `tools/test_embedded_sync_lang.py`
+  and `tools/test_autosub_never_auto_syncs.py`.
 - The community pool (Cloudflare Worker + KV + Telegram channel) already keys
   every variant by **source-content hash** (`pool.py:257`), so "same source
   sub = same timing" reuse is exact. `/embedded` and `/ktuvit` registries

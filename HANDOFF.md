@@ -736,7 +736,7 @@ is nonsense. Also: the captured stack for the faulting thread is the crash
 handler's own frames (`dbgcore`/`dbghelp`), so the exception record, not the
 stack scan, is the authority in a 544 KB mini dump.
 
-## Hardening after 595 (on the branch, NOT released)
+## Hardening and two field defects — SHIPPED in 596 (0.2.496)
 
 **`except OSError` around a text read cannot catch `UnicodeDecodeError`** (it
 is a `ValueError`), so a corrupted third-party file raised straight out of
@@ -881,6 +881,74 @@ than raising, so that branch is only reached when `getSetting` itself blows up.
 The behaviour is right and worth keeping — an empty read also happens
 transiently while POV is starting, and skipping on it would mark the tune done
 and never retry — but the comment now says what actually happens.
+
+## Shipped 2026-08-15: note 596 (0.2.496 / wizard 0.1.46 / quickfix 0.1.541 / build 0.1.109)
+
+Contents: MDBList Like/Unlike in the long-press menu (#74), the
+"עברית מסונכרנת למובנה" picker row, the welded-cue split (#71),
+provider.piratebay off (#73), and the 70-handler sweep (#68/#69). Each is
+recorded in its own section above. What follows is what the RELEASE itself
+taught, which was not in any of them.
+
+### pool.py is frozen in the cloud container, and nothing said so
+
+The chain died at step 3 of 11, three version files already bumped, on:
+
+    pool.py's logic changed since ...-0.2.495.zip -- it cannot be inherited
+
+**The guard is right and must not be worked around.** Inheritance copies
+pool.py **whole** out of the previous zip, so an edit to it would be silently
+discarded; refusing is the only honest option. What was wrong was the timing —
+the offending change was ONE line of the 70-handler sweep (`except OSError` ->
+`except Exception` at `share_cache`'s `.release` sidecar read), made in a
+different session by someone not thinking about packaging at all.
+
+**pool.py was reverted to the shipped bytes.** Not a comment, not whitespace:
+the comparison is bytes outside the credential block, so a comment breaks
+inheritance exactly as a logic change does. That one handler therefore stays
+narrow while the other 69 shipped. It can only be widened by the maintainer, in
+a build where $POOL_SECRET is present.
+
+`tools/test_pool_py_frozen.py` now asserts this at the front of the chain,
+where it costs a one-line revert. It steps aside when $POOL_SECRET is set, and
+its sabotage cases prove both halves: a one-line edit outside the key block is
+detected, and a DIFFERENT credential is not mistaken for one.
+
+**Rule: a constraint discovered by a build tool mid-chain belongs in a test at
+the start of the chain.** The tool was not wrong to refuse. It was just the
+wrong place to find out.
+
+### The installer pins had been stale for two releases
+
+`build-apk.yml` copies the full build in by hardcoded filename, three times
+(APK assets, webOS IPK, Windows installer). The wizard beside it is
+parameterised; the build zip is typed out. 0.1.107 and 0.1.108 both shipped
+without touching it, so it sat pinned at **0.1.106** while the manifest served
+0.1.108 — anyone building a fresh installer got a build three releases behind,
+silently, because a stale pin names a file that really does exist.
+
+Pinned to 0.1.109, and `tools/test_installer_pins_current.py` compares those
+pins against what `wizard/assets/build.txt` actually serves — the same source a
+device reads, not "highest number in dist/". Watched fail against the real
+0.1.106 state before being allowed to pass. ANDROID_TESTING.md quotes the same
+filename to a human tester and is checked with it.
+
+**This is the third time a hand-maintained version pointer has drifted**
+(quickfix wizard 0.1.537, full build 0.1.105, installers 0.1.106). Every one
+was found late, by someone looking for something else. If a version is typed in
+two places, a test has to compare them.
+
+### Both --allow-add gates fired, correctly
+
+`pov_mdblist_like_patcher.py` is genuinely new, so both the quickfix and the
+full build refused it until it was named. That is task #51's guard working as
+designed; naming the file is the deliberate act it exists to force.
+
+### Credential verification
+
+Seven artifacts — the previous build/quickfix/full and all four new ones —
+carry a byte-identical pool.py (`d9db6b0d...`), key fingerprint
+`eb564fb8...`, one distinct credential across the set.
 
 ## Shipped 2026-08-15: note 595 (0.2.495 / wizard 0.1.46 / quickfix 0.1.540 / build 0.1.108)
 
