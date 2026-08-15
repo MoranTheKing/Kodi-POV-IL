@@ -38,7 +38,7 @@
 
 - עץ קבצים מסודר של המיגרציה.
 - מסמך diff של `Twilight -> POV`.
-- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.107.zip`.
+- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.108.zip`.
 - הוראות התקנה ובדיקת smoke test לטלפון: `ANDROID_TESTING.md`.
 
 ## חבילת בדיקה (גרסה נוכחית)
@@ -143,6 +143,22 @@ Take 32-bit only if 64-bit refuses to install.
 
 Switching is safe: both carry the same app id and signing key, so 64-bit
 installs over 32-bit as an update and your data stays where it is.
+
+## Films and episodes play again (from `0.2.495`)
+
+The video add-on updated itself and began asking the file host to put the
+file's name inside the download link. The name arrives with spaces in it, which
+makes the link invalid, and Kodi refused it without ever contacting the file —
+so playback failed instantly, on everything, because every release name has
+spaces.
+
+The link is now repaired before playback rather than the request being taken
+away, so the add-on keeps the feature it added and a future version of it needs
+no further repair from us.
+
+The same add-on update also moved its favourites code, which quietly stopped
+the repair that makes a title you add appear straight away instead of only
+after navigating away and back. That works again too.
 
 ## Kodi no longer closes on the way back to the home screen (from `0.2.494`)
 

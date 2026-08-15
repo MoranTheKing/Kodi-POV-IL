@@ -736,6 +736,77 @@ is nonsense. Also: the captured stack for the faulting thread is the crash
 handler's own frames (`dbgcore`/`dbghelp`), so the exception record, not the
 stack scan, is the authority in a 544 KB mini dump.
 
+## Shipped 2026-08-15: note 595 (0.2.495 / wizard 0.1.46 / quickfix 0.1.540 / build 0.1.108)
+
+**A total playback outage, caused by POV updating itself, fixed the same day.**
+POV 6.08.12 (published 08:31; the field log fails at 11:22) added ONE request
+parameter in `debrids/torbox_api.py` `unrestrict_link()`:
+
+    params = {key: ids[0], 'file_id': ids[1], 'token': self.token,
+              'append_name': 'true'}          # <- new in 6.08.12
+
+`append_name=true` asks TorBox to put the file name into the link it returns,
+and TorBox returns it UNENCODED. The link arrives with raw spaces and brackets,
+libcurl rejects it (`URL using bad/illegal format ... (3)`) and never sends a
+byte. Every release name has spaces, so nothing plays at all. POV's changelog
+does not mention the change.
+
+**WE ENCODE, WE DO NOT DELETE — and the first version of this fix was the
+wrong one.** It removed the parameter, which worked. The user rejected it with
+the argument that settles it: POV added it deliberately and will keep it, so we
+would be deleting it again in every release, and playback would break for one
+boot each time. **Never design a fix that has to win a race against an add-on
+that updates itself.** `pov_torbox_url_fix.py` injects a `_ai_safe_url()` helper
+into POV's own module and wraps the one call site, so POV keeps its feature and
+a future POV that keeps `append_name` needs nothing from us.
+
+**WHAT GETS ENCODED WAS MEASURED.** Feeding characters to curl one at a time,
+exactly TWO are rejected in a query: **the space and the square brackets**.
+Parens, `+ ~ & ' , ; = : @ #` and even `<>"{}|\^%` all parse. The helper covers
+the URI-excluded set plus anything outside printable ASCII (Hebrew filenames),
+leaves `%` alone so it is idempotent and cannot double-encode, and passes
+non-strings through because `_get()` also returns errors. `encode('utf-8',
+'replace')`, not plain `encode()`: a lone surrogate raises otherwise, and
+`json.loads` accepts `\ud800`, so a corrupted backend name is enough — and
+POV's download call site has no try/except at all.
+
+**SECOND FIX: `pov_favorites_refresh_patcher` had been failing silently.** The
+same POV release moved favourites into a new `indexers/local_api.py`, changing
+the anchored line twice over — `action('favorites', mediatype, ...)` instead of
+`action(mediatype, ...)`, and one tab instead of two. The log said so at every
+boot while the feature did nothing. Re-anchored **by shape** (`notification
+(32576) if action(...) else notification(32574)` + the gated refresh beneath at
+the same captured indentation), so a further argument or nesting change cannot
+break it. The `dropped_choice()` 6.08.12 added is left byte-identical.
+
+**HOW TO ANSWER "WHAT ELSE DID THE POV UPDATE BREAK".** Not with a string audit
+— the first attempt compared anchor constants and was worthless, because it
+could not tell a search anchor from the replacement half AND its "old" tree was
+one of our own patched builds, so it reported our markers as regressions. The
+answer is `scratchpad/run_all_patchers.py`: run every patcher's REAL
+`ensure_patched()` against a fresh copy of stock POV, each in its own tree.
+Fetch stock POV from the author's repo (`https://kodiyashimaru.github.io/repo/
+plugin.video.pov/plugin.video.pov-<ver>.zip`) — only the CURRENT version is
+served, older ones 404.
+
+**AND THAT HARNESS WAS FLATTERING ITSELF, which is worth more than its output.**
+Three ways, all confirmed live: unknown statuses passed silently because GOOD
+and BAD were enumerations and nothing required membership; eight modules were
+never invoked because it assumed `ensure_patched()` and counted "no
+ensure_patched()" as healthy; and `translatePath` rewrote only `special://home/`
+so any patcher resolving `profile/temp/skin` got a tidy `no_file` that counted
+as healthy — live for 16 modules. **A harness that reports green because its
+fakes are too permissive is worse than no harness.** Fixing the third broke it
+completely (home went under `_special/` too, so every patcher reported
+`no_file`) — caught because the result was absurd, not because the code looked
+wrong.
+
+**Also fixed, from the validator:** `except OSError` around a UTF-8 read cannot
+catch `UnicodeDecodeError` (a `ValueError`), so a corrupted POV file raised out
+of a function documented as never raising. Widened here and in
+`pov_container_refresh_crash_fix` (the template it was copied from); ~40 other
+patchers share the pattern and that sweep is task #68.
+
 ## Shipped 2026-08-15: note 594 (0.2.494 / wizard 0.1.46 / quickfix 0.1.539 / build 0.1.107)
 
 Two things, and nothing else -- the whole diff against 0.2.493 is 8 files.

@@ -31,6 +31,7 @@
 # skipped+logged if the upstream shape changed.
 
 import os
+import re as _re
 
 try:
     import xbmcvfs
@@ -77,15 +78,37 @@ _FAV_V2 = ('container_refresh()  # AI_SUBS_FAV_REFRESH_v2'
            ': refresh open list on add too (widget_refresh removed -- it crashed Kodi on add)')
 
 # dialogs.py favorites_choice -- POV-local favorites. Original gated line
-# (refresh stays False on add) -> guarded refresh. Tabs match POV.
-_FAV_CHOICE_OLD = (
-    '\t\tnotification(32576) if action(mediatype, tmdb_id, title) else notification(32574)\n'
-    '\t\tif refresh: container_refresh()'
-)
-_FAV_CHOICE_NEW = (
-    '\t\tnotification(32576) if action(mediatype, tmdb_id, title) else notification(32574)\n'
-    '\t\t' + _REFRESH
-)
+# (refresh stays False on add) -> guarded refresh.
+#
+# MATCHED AS A PATTERN, NOT A LITERAL, AND THAT IS THE POINT. This was two
+# exact strings with two tabs of indentation and `action(mediatype, tmdb_id,
+# title)`. POV 6.08.12 changed BOTH: it moved favourites into the new
+# indexers/local_api.py, so the call became `action('favorites', mediatype,
+# tmdb_id, title)`, and it flattened the enclosing block, so the indentation
+# dropped to one tab. The literal stopped matching and the device log said so
+# every boot -- "no favorites add-refresh anchor matched" -- while the feature
+# quietly did nothing.
+#
+# Swapping in a new literal would buy exactly one POV release. What actually
+# identifies this line is its SHAPE: notification(32576) on success of some
+# action(...) call, notification(32574) otherwise, followed by the gated
+# refresh on the next line at the same indentation. That is what we match, so
+# a further argument or a change of nesting cannot break it again.
+#
+# The indentation is captured and reused rather than assumed, and the sibling
+# dropped_choice() that 6.08.12 added is NOT touched: it calls
+# container_refresh() unconditionally already, so it needs nothing from us --
+# and requiring `if refresh:` in the pattern is what keeps us out of it.
+_FAV_CHOICE_RE = _re.compile(
+    r'^(?P<ind>[ \t]+)notification\(32576\) if action\((?P<args>[^\n()]*)\)'
+    r' else notification\(32574\)\n'
+    r'(?P=ind)if refresh: container_refresh\(\)$', _re.M)
+
+
+def _fav_choice_sub(match):
+    """Keep POV's own line verbatim; replace only the refresh under it."""
+    return (match.group(0).split('\n')[0] + '\n'
+            + match.group('ind') + _REFRESH)
 
 # indexers/list_helper.py BaseListManager.manage() -- the single shared toggle
 # point for TMDB / Trakt / MDBList managers. Refresh right after the toggle so
@@ -153,7 +176,7 @@ def _patch_dialogs():
     try:
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
-    except OSError as e:
+    except Exception as e:
         _log('dialogs read failed: {0}'.format(e), level='WARNING')
         return 'read_failed'
     if MARKER in content:
@@ -165,8 +188,15 @@ def _patch_dialogs():
         new_content = new_content.replace(_FAV_V1, _REFRESH)
     elif _FAV_V2 in new_content:                     # unguarded v2 -> guarded
         new_content = new_content.replace(_FAV_V2, _REFRESH)
-    elif _FAV_CHOICE_OLD in new_content:             # fresh POV -> guarded
-        new_content = new_content.replace(_FAV_CHOICE_OLD, _FAV_CHOICE_NEW, 1)
+    else:                                            # fresh POV -> guarded
+        hits = len(_FAV_CHOICE_RE.findall(new_content))
+        if hits == 1:
+            new_content = _FAV_CHOICE_RE.sub(_fav_choice_sub, new_content, 1)
+        elif hits > 1:
+            # Two call sites matching this shape means POV grew a second one we
+            # have not looked at. Patching "the first" would be a guess.
+            _log('dialogs.py: favorites add-refresh shape matched {0} times, '
+                 'expected 1 -- not editing'.format(hits), level='WARNING')
 
     if new_content == content:
         _log('dialogs.py: no favorites add-refresh anchor matched -- shape '
@@ -191,7 +221,7 @@ def _patch_list_helper():
     try:
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
-    except OSError as e:
+    except Exception as e:
         _log('list_helper read failed: {0}'.format(e), level='WARNING')
         return 'read_failed'
     if MARKER_MANAGE in content:

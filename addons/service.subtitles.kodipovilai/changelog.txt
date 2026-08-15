@@ -1,3 +1,16 @@
+v0.2.495
+- Films and episodes play again. The video add-on updated itself this morning
+  and began asking the file host to put the file's name inside the download
+  link; the name arrives with spaces in it, which makes the link invalid, and
+  Kodi refused it without ever contacting the file. Every release name has
+  spaces, so nothing played at all. The link is now made valid before playback
+  instead of the request being taken away, so the add-on keeps the feature it
+  added and a future version of it needs no further repair.
+- The same add-on update moved its favourites code, which quietly stopped the
+  repair that makes an added title appear straight away instead of only after
+  navigating away and back. It works again, and it is now matched in a way
+  that a further change of that kind cannot break.
+
 v0.2.494
 - Kodi no longer force-closes when several rows on the home screen reload at
   once -- most often on the way back from a submenu to the home screen. The
