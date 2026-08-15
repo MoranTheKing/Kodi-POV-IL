@@ -221,7 +221,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_aiostreams,
         _maybe_patch_pov_resolve_diag,
         _maybe_restore_pov_torbox,
-        _maybe_fix_pov_torbox_append_name,
+        _maybe_fix_pov_torbox_url,
         _maybe_patch_af3_home,
         _maybe_cleanup_wizard,
         _maybe_quiet_update_nags,
@@ -2227,40 +2227,42 @@ def _maybe_patch_pov_widget_crash_guard():
             pass
 
 
-def _maybe_fix_pov_torbox_append_name():
-    """Restore playback: POV 6.08.12 asks TorBox to append the filename to the
-    download link, TorBox returns it unencoded, and libcurl rejects the URL
+def _maybe_fix_pov_torbox_url():
+    """Restore playback. POV 6.08.12 asks TorBox to append the file name to the
+    download link (`append_name=true`); TorBox returns it unencoded, so the
+    link arrives with raw spaces and brackets and libcurl rejects it
     (`URL using bad/illegal format`) without sending a byte. Every release name
-    has spaces, so nothing plays at all. Nothing in POV reads that name back
-    out of the URL -- it is sent and never used -- so dropping the parameter
-    restores the 6.08.06 behaviour exactly. Self-healing: a POV update re-adds
-    it and the next startup takes it out again."""
+    has spaces, so nothing plays.
+
+    We ENCODE the link rather than removing POV's parameter: POV added it
+    deliberately and would re-add it in every release, and each of those
+    releases would break playback again until this patcher caught up. Encoding
+    keeps POV's feature and makes the URL valid, so a future POV that keeps
+    `append_name` needs nothing from us."""
     if _skip_pov_patchers():
         return
     try:
-        from resources.lib import pov_torbox_append_name_fix, kodi_utils
+        from resources.lib import pov_torbox_url_fix, kodi_utils
     except Exception:
         return
     try:
-        status = pov_torbox_append_name_fix.ensure_patched()
+        status = pov_torbox_url_fix.ensure_patched()
         if status == 'patched':
             kodi_utils.log(
-                'pov_torbox_append_name_fix: removed append_name from POV\'s '
-                'TorBox unrestrict call (restores playback)', level='INFO')
+                'pov_torbox_url_fix: TorBox links are percent-encoded before '
+                'playback (restores playback on POV 6.08.12+)', level='INFO')
             try:
                 from resources.lib import pov_reload
                 pov_reload.note_patched()
             except Exception:
                 pass
         elif status in ('read_failed', 'write_failed', 'compile_failed',
-                        'unexpected_shape'):
-            kodi_utils.log(
-                'pov_torbox_append_name_fix: ' + status, level='WARNING')
+                        'no_anchor'):
+            kodi_utils.log('pov_torbox_url_fix: ' + status, level='WARNING')
     except Exception as e:
         try:
-            kodi_utils.log(
-                'pov_torbox_append_name_fix run failed: {0}'.format(e),
-                level='WARNING')
+            kodi_utils.log('pov_torbox_url_fix run failed: {0}'.format(e),
+                           level='WARNING')
         except Exception:
             pass
 
