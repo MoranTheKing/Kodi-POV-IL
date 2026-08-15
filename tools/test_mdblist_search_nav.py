@@ -277,6 +277,92 @@ try:
 finally:
     api_src = saved
 
+
+# --- THE UPGRADE PATH: a device already carrying v2 must be healed ---------
+# This is the scenario that made the whole release pointless and that neither
+# suite covered. Both halves used to return 'unchanged' on seeing ANY marker in
+# the family, so every device that took 0.2.496 kept v2 -- and nothing else
+# would ever replace those files: the quickfix ships NO POV python, and the
+# full build ships mdblist_api.py but not menus/mdblist.py. The fix would have
+# reached only the users who did not have the bug.
+import subprocess
+
+v2_src = subprocess.run(
+    ['git', 'show', 'a8e8634:addons/service.subtitles.kodipovilai/resources/'
+     'lib/pov_mdblist_like_patcher.py'],
+    capture_output=True, text=True, cwd=ROOT).stdout
+
+if not v2_src.strip():
+    check('the v2 patcher could be fetched from git', False,
+          'cannot test the upgrade path without the real v2')
+else:
+    up = tempfile.mkdtemp()
+    uproot = os.path.join(up, 'addons', 'plugin.video.pov')
+    shutil.copytree(STOCK if os.path.isdir(STOCK) else root, uproot)
+    pristine = {}
+    for rel in ('resources/lib/menus/mdblist.py',
+                'resources/lib/indexers/mdblist_api.py'):
+        pristine[rel] = open(os.path.join(uproot, *rel.split('/')),
+                             encoding='utf-8').read()
+
+    vfs.translatePath = lambda p: p.replace(
+        'special://home/addons/', os.path.join(up, 'addons') + os.sep)
+    v2p = os.path.join(up, 'v2_patcher.py')
+    with open(v2p, 'w', encoding='utf-8') as f:
+        f.write(v2_src)
+    sp = importlib.util.spec_from_file_location('_v2', v2p)
+    v2mod = importlib.util.module_from_spec(sp)
+    sp.loader.exec_module(v2mod)
+    st2 = v2mod.ensure_patched()
+    check('v2 applies to the stock tree (the state real devices are in)',
+          'patched' in str(st2), repr(st2))
+
+    # ...and now the CURRENT patcher meets that device.
+    importlib.reload(patcher) if False else None
+    sp3 = importlib.util.spec_from_file_location('_v3', PATCHER)
+    v3mod = importlib.util.module_from_spec(sp3)
+    sp3.loader.exec_module(v3mod)
+    st3 = v3mod.ensure_patched()
+    check('the current patcher does NOT walk away from a v2 device',
+          'unchanged' not in str(st3),
+          'status %r -- v2 devices keep the bug forever' % (st3,))
+    check('...and reports that it re-patched, so it is visible in the log',
+          'repatched' in str(st3), repr(st3))
+
+    up_menu = open(os.path.join(uproot, 'resources', 'lib', 'menus',
+                                'mdblist.py'), encoding='utf-8').read()
+    up_api = open(os.path.join(uproot, 'resources', 'lib', 'indexers',
+                               'mdblist_api.py'), encoding='utf-8').read()
+    check('the search-nav fix actually landed on the upgraded device',
+          '_ai_new_search_item' in up_menu and 'succeeded=False' in up_menu,
+          'the v3 menu overrides are not there')
+    check('the refresh fix actually landed on the upgraded device',
+          '_ai_refresh_after_like' in up_api
+          and 'kodi_utils.container_refresh()' not in body(up_api,
+                                                           'mdbl_like_a_list'),
+          'the like body still carries the bare refresh')
+    check('no v2 remnant is left stacked underneath',
+          'AI_SUBS_MDBL_LIKE_v2' not in up_menu
+          and 'AI_SUBS_MDBL_LIKE_v2' not in up_api,
+          'both versions are now injected -- the user sees duplicate entries')
+    check('exactly ONE Like entry, not two',
+          up_menu.count('_ai_likelist_str, _ai_unlikelist_str') == 1,
+          'the label block was injected twice')
+
+    # The strongest check available: reverting a freshly patched file must
+    # reproduce POV's own bytes. If it does not, the revert is shaving or
+    # adding something and every upgrade drifts the file a little further.
+    for rel, original in pristine.items():
+        patched_now = open(os.path.join(uproot, *rel.split('/')),
+                           encoding='utf-8').read()
+        check('revert(patched %s) == POV byte for byte'
+              % rel.split('/')[-1],
+              v3mod._revert(patched_now) == original,
+              'the revert does not round-trip -- repeated upgrades will drift '
+              'this file')
+
+    shutil.rmtree(up, ignore_errors=True)
+
 shutil.rmtree(work, ignore_errors=True)
 print()
 print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')
