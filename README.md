@@ -38,7 +38,7 @@
 
 - עץ קבצים מסודר של המיגרציה.
 - מסמך diff של `Twilight -> POV`.
-- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.108.zip`.
+- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.110.zip`.
 - הוראות התקנה ובדיקת smoke test לטלפון: `ANDROID_TESTING.md`.
 
 ## חבילת בדיקה (גרסה נוכחית)
@@ -143,6 +143,30 @@ Take 32-bit only if 64-bit refuses to install.
 
 Switching is safe: both carry the same app id and signing key, so 64-bit
 installs over 32-bit as an update and your data stays where it is.
+
+## Searching MDBList lists: a screen of its own (from `0.2.497`)
+
+Searching for a list used to open the keyboard straight from the home screen,
+which meant the results were the first thing on the screen after home — so
+**Back** from them went all the way out, and looking up a second list meant
+finding the tile again.
+
+It now opens a screen of its own first, listing the searches you have run
+before. Back from a set of results returns to that screen; Back again goes
+home. A search you have run before is one click away, and long-pressing it
+offers to remove it or clear the whole history. The results themselves also
+carry a **new search** row at the top, so a second search never needs Back at
+all.
+
+**Cancelling the keyboard now leaves you where you were.** It used to take you
+to an empty listing with nothing in it, which then had to be backed out of.
+
+## Like and Unlike no longer send you back to the keyboard (from `0.2.497`)
+
+Pressing either one on a list you found by searching said "Success" and then
+re-opened the search keyboard. It now simply redraws the list you were looking
+at, with the entry flipped to the other one. This applied to Unlike exactly as
+it did to Like.
 
 ## MDBList lists get the menu Trakt lists already had (from `0.2.496`)
 
