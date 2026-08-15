@@ -1,11 +1,22 @@
 # One-time tune of plugin.video.pov's scraper settings for the build.
 #
 # The build owner WANTS pre-release (CAM/SCR/TELE) and 3D results included by
-# default, so this restores both to ON. It also turns the default-ON
-# "piratebay" provider back on (the build's userdata left it off, which reduced
-# source counts). v1 of this patcher briefly turned pre-release/3D off; v2
-# restores them, and because the marker version changed it re-applies on any
-# device that got v1.
+# default, so this restores both to ON. v1 of this patcher briefly turned
+# pre-release/3D off; v2 restores them, and because the marker version changed
+# it re-applies on any device that got v1.
+#
+# provider.piratebay: OFF, on the build owner's instruction (2026-08-15). It
+# had been turned ON here for source counts; that is reversed. POV's own
+# default for it is true, so this has to be written rather than simply dropped
+# from the list -- removing the key would leave every existing device on the
+# 'true' we ourselves put there, and would let a fresh POV install turn it on
+# again from its own default.
+#
+# A USER WHO TURNS IT BACK ON KEEPS IT ON. That is not a special case added for
+# this key, it is what the state map below already guarantees: we remember the
+# value WE wrote, and any key whose live value has drifted from that is treated
+# as the user's and never touched again -- including across a future version
+# bump. Verified against the real flow, not assumed.
 #
 # NOTE: this does NOT affect the "1080p-named source shown as SD" report. POV
 # derives 4K/1080p/720p by regex on the release name
@@ -62,7 +73,7 @@ def _tune_version():
 DESIRED = (
     ('include_prerelease_results', 'true'),
     ('include_3d_results', 'true'),
-    ('provider.piratebay', 'true'),
+    ('provider.piratebay', 'false'),
 )
 
 # id -> the LOWEST value we are willing to leave in place. Unlike DESIRED these
@@ -268,7 +279,15 @@ def ensure_patched():
         except Exception:
             cur = None
         if cur is None:
-            continue  # key absent in this POV schema -- leave it alone
+            # Only reached when getSetting RAISED. It does not mean "POV has no
+            # such key" -- Kodi answers an unknown id with '', not an error, so
+            # a key POV has dropped reads as empty and gets written. That is
+            # deliberate rather than merely tolerated: an empty read also
+            # happens transiently while POV is still coming up, and skipping on
+            # it would mark the tune done and never retry, leaving the setting
+            # wrong forever. Writing a stray id Kodi then ignores is the
+            # cheaper mistake of the two.
+            continue
         cur_norm = (cur or '').strip().lower()
         if cur_norm == want:
             state[key] = want
@@ -292,7 +311,15 @@ def ensure_patched():
         except Exception:
             cur = None
         if cur is None:
-            continue  # key absent in this POV schema -- leave it alone
+            # Only reached when getSetting RAISED. It does not mean "POV has no
+            # such key" -- Kodi answers an unknown id with '', not an error, so
+            # a key POV has dropped reads as empty and gets written. That is
+            # deliberate rather than merely tolerated: an empty read also
+            # happens transiently while POV is still coming up, and skipping on
+            # it would mark the tune done and never retry, leaving the setting
+            # wrong forever. Writing a stray id Kodi then ignores is the
+            # cheaper mistake of the two.
+            continue
         raw = (cur or '').strip()
         try:
             cur_val = int(float(raw)) if raw else None

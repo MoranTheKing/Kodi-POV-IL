@@ -1264,15 +1264,13 @@ def select_embedded(stream_index, lang=None):
     the first stream of the requested language (lowest index = the embedded
     one), never an external appended later.
 
-    For a HEBREW track this ALSO starts the background RTL repair
-    (embedded_rtl): Kodi renders an embedded track with an LTR base direction,
-    which throws the mark that closes each line to the wrong end of it, and the
-    only way to fix a track we don't own is to extract it and deliver our own
-    copy. The native stream is what plays until that copy is ready, so this
-    stays a pure improvement -- see embedded_rtl.py for the full reasoning.
-    Firing it from here rather than from each caller is deliberate: there are
-    four places that select an embedded track and a fifth would be easy to add
-    without noticing this one."""
+    NOTE (2026-08-15): an embedded HEBREW track renders with its line-final
+    punctuation at the wrong end, because Kodi draws the track itself with an
+    LTR BiDi base direction and we cannot put RLE..PDF into bytes we do not
+    own. The only repair is to extract the track's text and deliver our own
+    copy, and that was built and then REMOVED at the build owner's decision --
+    extraction is not dependable enough across debrid providers to be the
+    answer. Do not rebuild it here without that conversation. See HANDOFF.md."""
     try:
         import xbmc
         p = xbmc.Player()
@@ -1292,16 +1290,6 @@ def select_embedded(stream_index, lang=None):
         p.showSubtitles(True)
         kodi_utils.log('subs_engine_bridge.select_embedded: set stream {0}'
                        .format(target), level='INFO')
-        # Hebrew only. The other caller of this function selects a FOREIGN
-        # source track for the embedded-AI path to display while it translates;
-        # that text is not RTL and has nothing to repair.
-        if (lang or '').lower() in ('he', 'heb', 'hebrew'):
-            try:
-                from resources.lib import embedded_rtl
-                embedded_rtl.fire()
-            except Exception as e:
-                kodi_utils.log('select_embedded: rtl repair not started: {0}'
-                               .format(e), level='DEBUG')
         return True
     except Exception as e:
         kodi_utils.log('subs_engine_bridge.select_embedded failed: {0}'
