@@ -78,7 +78,7 @@ def _read_engine_text():
     try:
         with open(p, 'r', encoding='utf-8', errors='replace') as f:
             return f.read()
-    except OSError:
+    except Exception:
         return ''
 
 
@@ -127,7 +127,7 @@ def _diagnose():
             with open(engine, 'r+', encoding='utf-8') as f:
                 f.seek(0, 2)  # SEEK_END
             writable = True
-        except OSError:
+        except Exception:
             writable = False
     out.append(('engine.py כתיב', writable,
                 'יש הרשאת כתיבה' if writable else

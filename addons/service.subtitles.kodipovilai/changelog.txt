@@ -1,3 +1,30 @@
+v0.2.496
+- MDBList lists now carry the same long-press menu that Trakt lists already
+  had, including Like and Unlike. The entry shown is the one that applies: a
+  list you have already liked offers Unlike, one you have not offers Like. The
+  check reads the list data the add-on has already fetched, so it costs no
+  extra network request; when that data is not there to read, both entries are
+  offered rather than the wrong one guessed. Lists that belong to you, and
+  lists MDBList itself only mirrors from elsewhere, are left alone -- neither
+  can be liked, so neither is offered a button that cannot work.
+- A new row in the subtitle list, "עברית מסונכרנת למובנה", takes a Hebrew subtitle and
+  re-times it onto the timeline of the film's own built-in subtitle track. It
+  appears only when there is both a Hebrew subtitle to re-time and a built-in
+  track to time it against, and it is never chosen for you -- it delivers a
+  different translation from the one inside the file, so it is offered as a
+  choice rather than applied automatically.
+- A raw subtitle number and timecode could appear inside the text of a
+  subtitle, mid-film. Two entries had been welded into one when the translation
+  lost the blank line between them, and everything after the weld was read as
+  text. They are separated again, and a cue is only ever split where real text
+  follows.
+- The "piratebay" source provider is now off. Anyone who turns it back on keeps
+  it on, through this and any later update.
+- Around forty of the repairs this add-on applies to the other add-ons could
+  stop silently on a file they failed to read, leaving the repair unapplied
+  with nothing said about it. They now report it. The tool that audits them was
+  itself unable to fail, and now can.
+
 v0.2.495
 - Films and episodes play again. The video add-on updated itself this morning
   and began asking the file host to put the file's name inside the download

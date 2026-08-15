@@ -263,6 +263,13 @@ def autosub_on_play():
             except Exception:
                 pass
             if _heb_idx is not None:
+                # Bare calls, deliberately: a Player-API failure raises into the
+                # except below, which skips the overlay and the return, so
+                # execution falls through to the real subtitle search. Routing
+                # these through something that swallows its own exceptions and
+                # returns a bool would announce a subtitle that is not on
+                # screen and lose that recovery -- unless the caller checks the
+                # bool, which is a second thing to get right for no gain.
                 _pl.setSubtitleStream(_heb_idx)
                 _pl.showSubtitles(True)
                 try:
@@ -305,6 +312,21 @@ def autosub_on_play():
             src = pl.get('source')
             if src and src in failed_sources:
                 continue  # this source already failed -- don't waste time on it
+            if pl.get('type') == 'embedded_sync':
+                # "עברית מסונכרנת למובנה" is a CHOICE, never automatic. It
+                # delivers a different translation from the one inside the file,
+                # which is the whole reason it is offered as a row rather than
+                # applied for you -- and resolving it costs a 45s alignment that
+                # reads the debrid token, where auto-on-play is supposed to be
+                # immediate.
+                #
+                # It is reachable from here, which is not obvious: the fast path
+                # above only matches a stream labelled exactly 'heb', while
+                # embedded_candidates() normalises 'Hebrew'/'HE'/'iw' too. So a
+                # file whose Hebrew track is spelled any other way falls through
+                # to this loop, and the row sorts to the FRONT of he_list --
+                # first pick, by default, on an ordinary install.
+                continue
             is_embedded = (pl.get('type') == 'engine' and pl.get('embedded'))
             try:
                 path = translate.resolve(link2, info)

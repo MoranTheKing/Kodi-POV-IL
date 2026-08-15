@@ -505,7 +505,9 @@
           </constraints>
         </setting>
         <!-- Hidden marker: one-time tune of POV scraper settings
-             (pre-release/3D off, piratebay on) has been applied.
+             (pre-release/3D on, piratebay off) has been applied. The value is
+             a fingerprint of what the tune intends to write, so editing that
+             list re-runs it once on every device.
              Read/written by pov_scraper_settings_patcher.py. -->
         <setting id="_pov_scraper_tune" type="string" label="30000">
           <level>4</level>

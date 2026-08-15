@@ -155,7 +155,14 @@ def _restore_native(path, native_filename):
         with open(src, 'r', encoding='utf-8') as f:
             native = f.read()
         compile(native, src, 'exec')
-    except (OSError, SyntaxError):
+    except Exception:
+        # Was (OSError, SyntaxError), and missed by the sweep that widened the
+        # other 70 read handlers -- in this very file. UnicodeDecodeError is a
+        # ValueError, so a bundled copy that ever stops being clean UTF-8 raises
+        # straight out of here; _patch_one() calls this with no guard and
+        # ensure_patched() -- documented "never raises" -- would abandon every
+        # remaining target for that boot. Dormant today (the bundled files are
+        # ASCII), which is exactly why it is worth closing while it is cheap.
         return False
     tmp = path + '.aitmp'
     try:
@@ -176,7 +183,7 @@ def _patch_one(path, native_filename, tmdb_mt, trakt_mt, suffix):
     try:
         with open(path, 'r', encoding='utf-8') as f:
             original = f.read()
-    except OSError as e:
+    except Exception as e:
         _log('{0}: read failed: {1}'.format(path, e), level='WARNING')
         return 'read_failed'
 
@@ -195,7 +202,7 @@ def _patch_one(path, native_filename, tmdb_mt, trakt_mt, suffix):
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 original = f.read()
-        except OSError:
+        except Exception:
             return 'restored'
 
     # episodes.py (suffix=None): restore-only, nothing to inject.

@@ -218,6 +218,7 @@ def _run_build_startup_repairs():
         _maybe_seed_pov_seasons_view,
         _maybe_patch_pov_resume_cancel,
         _maybe_patch_pov_scraper_settings,
+        _maybe_patch_pov_mdblist_like,
         _maybe_patch_pov_aiostreams,
         _maybe_patch_pov_resolve_diag,
         _maybe_restore_pov_torbox,
@@ -1298,13 +1299,45 @@ def _maybe_patch_pov_resume_cancel():
             pass
 
 
+def _maybe_patch_pov_mdblist_like():
+    """Give an MDBList list the same long-press menu a Trakt list already has:
+    Like List / Unlike List, which POV wired for Trakt and never for MDBList.
+    MDBList's API does support it (PUT/DELETE on lists/<id>/like) and POV
+    already reads the liked-lists bucket, so only the action was missing."""
+    if _skip_pov_patchers():
+        return
+    try:
+        from resources.lib import pov_mdblist_like_patcher, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_mdblist_like_patcher.ensure_patched()
+        # Judge the VALUES, not the whole string. `'patched' in status` reads
+        # True for "api=unmatched, menu=patched" -- the substring is right
+        # there in the healthy half -- so a half-failed run logged INFO and the
+        # WARNING branch was unreachable for exactly the case worth seeing.
+        parts = [p.split('=', 1)[-1].strip()
+                 for p in status.split(',') if '=' in p]
+        if any(p not in ('patched', 'unchanged', 'no_file') for p in parts):
+            kodi_utils.log('pov_mdblist_like_patcher: ' + status,
+                           level='WARNING')
+        elif 'patched' in parts:
+            kodi_utils.log('pov_mdblist_like_patcher: ' + status, level='INFO')
+    except Exception as e:
+        try:
+            kodi_utils.log('pov_mdblist_like_patcher failed: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _maybe_patch_pov_scraper_settings():
     """One-time tune of POV's scraper settings for the build: keep pre-release
     (CAM/SCR/TELE) and 3D results ON (the build owner wants them), and turn the
-    default-ON provider.piratebay back ON (the build's userdata left it off,
-    reducing source counts). Applied once per marker version, only where the
-    value still differs, so a user who later changes any of these keeps their
-    choice."""
+    default-ON provider.piratebay OFF (build owner's instruction, 2026-08-15 --
+    it had been turned on here for source counts). Applied once per marker
+    version, only where the value still differs, so a user who later changes
+    any of these keeps their choice."""
     if _skip_pov_patchers():
         return
     try:
@@ -1315,8 +1348,8 @@ def _maybe_patch_pov_scraper_settings():
         status = pov_scraper_settings_patcher.ensure_patched()
         if status == 'patched':
             kodi_utils.log(
-                'pov_scraper_settings_patcher: restored pre-release/3D on and '
-                'piratebay on, and raised the scraper/debrid timeout to POV '
+                'pov_scraper_settings_patcher: pre-release/3D on, piratebay '
+                'off, and the scraper/debrid timeout at POV '
                 "6.08's own default", level='INFO')
         elif status in ('already', 'no_pov', 'unchanged'):
             pass

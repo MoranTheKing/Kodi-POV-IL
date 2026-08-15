@@ -736,6 +736,152 @@ is nonsense. Also: the captured stack for the faulting thread is the crash
 handler's own frames (`dbgcore`/`dbghelp`), so the exception record, not the
 stack scan, is the authority in a 544 KB mini dump.
 
+## Hardening after 595 (on the branch, NOT released)
+
+**`except OSError` around a text read cannot catch `UnicodeDecodeError`** (it
+is a `ValueError`), so a corrupted third-party file raised straight out of
+functions whose docstrings promise they never do. 70 handlers in 51 files
+widened, by ast rather than sed -- the same `except OSError` guards
+`os.remove`/`os.replace`, where it is exactly right, so the decision is made
+on the structure of the try body. The filter needed three passes and each
+narrowing came from reading what it proposed: counting `encoding=` as proof of
+a read swept in every atomic-WRITE helper (168 handlers), keying on the mode
+still matched a binary `.read()` (100), and requiring a text-mode open or a
+bare `.read()` with no binary open in the same body gave the right 70. Proven
+by feeding five patchers a non-UTF-8 target: one raised before, none after.
+
+**`scratchpad/run_all_patchers.py` is now the answer to "what did the POV
+update break", and it can fail.** Seven fake-greens were removed in total --
+three yesterday (unknown statuses waved through, 8 modules never invoked,
+`translatePath` handling only `special://home/`) and four here: composite
+statuses tokenised so that KEY names counted as statuses (16 clean rows looked
+broken), a stateless settings stub that made a patcher's self-verified write
+look failed, bare imports that turned a harness limitation into a reported
+patcher failure (two modules were never tested at all until this), and modules
+with several `maybe_*` entry points having one called and reported as the
+whole. **49 patchers, 0 needing attention, against stock POV 6.08.12** -- 49
+rather than 52 because three non-patchers are now named as such.
+
+Both are hardening with no user-visible effect, so they ride the next release
+rather than justifying their own.
+
+### Two field defects fixed on the same branch (#70, #71)
+
+**#71 — an SRT index and timecode drawn on screen inside a cue.** The user's
+screenshot shows one cue rendering its own Hebrew line plus a raw `286` and
+`00:15:51,284 --> 00:15:54,054`; the next cue is fine. A blank line is the ONLY
+thing separating SRT entries, so when the model omits one while copying a chunk
+back, two entries arrive as a single block and everything downstream treats the
+second entry's header as TEXT of the first: `restore_block_timings` gives the
+merged block the first source block's header back and leaves the rest alone.
+
+**It shipped quietly because the damage hides inside a tolerance.** The reply
+looks exactly one entry short, and the caller accepts up to 15% loss without
+retrying, so nothing upstream complains.
+
+`parse_blocks` now splits such a block apart. This runs on every parse rather
+than behind a heuristic because the shape is unambiguous: a digits-only line
+whose next non-empty line is a timecode is an entry header, never dialogue.
+Bare numbers DO occur in speech -- a year, a score, a countdown -- but never
+with a timecode under them.
+
+**The one shape that needed care is the one that could delete text.** A cue
+whose entire dialogue is a bare number (`42`), welded to an entry that ALSO
+lost its index, would split in front of the number: the cue above loses its
+text, the cue below swallows the digits as its index, and the number reaches
+nobody. That is worse in kind than the weld -- the weld is ugly and visible,
+this is invisible. The digits are treated as the next entry's index only when
+the entry being closed would still have text of its own.
+
+**#70 — punctuation at the wrong end of every embedded subtitle. BUILT, THEN
+REMOVED ON THE BUILD OWNER'S DECISION. Do not rebuild it without asking.**
+
+The diagnosis is solid and worth keeping even though the fix is gone. `?` is
+already in `_TRAILING_PUNCT_CHARS` and `fix_rtl_punctuation` is correct by
+execution, so neither is the bug. **Kodi draws an EMBEDDED track itself,
+straight out of the container, resolving BiDi with a left-to-right base
+direction.** Under the BiDi algorithm a punctuation mark is neutral: one
+between two Hebrew letters takes their direction and renders correctly, one at
+the END of a line has no strong character after it and takes the paragraph's
+direction instead. That is precisely the report -- "the marks are fine except
+the question mark". That sentence WAS the diagnosis, not a detail.
+
+Files we deliver ourselves never show this: `fix_rtl_punctuation` wraps each
+line in RLE..PDF, and `rtl_base` is the default *because* these setups default
+to LTR (on-device verification, 0.2.416). A track inside the video is the one
+place that fix cannot reach — we do not own those bytes, Kodi never asks us
+about them, there is no Kodi setting for the base direction, and the APK is a
+rebrand of upstream binaries rather than a source build, so the renderer is not
+ours to change either.
+
+**Why it surfaced when it did, with a date.** Auto-on-play began SELECTING an
+embedded Hebrew track whenever the file has one (`autosub_service`,
+**2026-07-22**), because it is perfectly synced. That turned a track users had
+to go looking for into the one they get by default.
+
+**So the only possible repair is to stop letting Kodi render it: extract the
+track's text, RTL-fix it, and deliver our own copy.** That was built
+(`embedded_rtl.py`), validated and tested — and then removed, because
+extraction is the part that does not hold up. It is a container read over the
+network for anyone not on a local file, it is not dependable across debrid
+providers, and the build owner's judgement was that a repair that only works
+for some users is worse than no repair: *"אם זה הפתרון היחיד אז עדיף כבר לוותר
+על המשימה הספציפית הזאת"*. The task is closed as won't-fix, not as unsolved.
+
+**If it ever comes back**, the removed commit is `45651a0` + `cc778df` on this
+branch and has the whole thing: the atomic lock, the policy gate reusing
+`embedded_translation_mode`, the live-player checks, and a sabotage-proven test
+suite. There is also one cheaper idea that was considered and NOT built:
+`_embedded_aligned_source_srt` reads only the embedded track's TIMESTAMPS (via
+`mkv_probe`, far cheaper than reading its text) and re-times an EXTERNAL Hebrew
+subtitle onto them. That gives perfect sync and correct punctuation — but it
+delivers a DIFFERENT translation than the embedded one, which is not what the
+user picked, so it was never proposed as a like-for-like fix.
+
+**Two findings from that work were kept, because they outlive it.**
+
+*A window property is not a lock.* `getProperty` then `setProperty` is a
+check-then-set with a gap, so two RunScript processes both conclude they are
+first — and `autosub_service` already documents `onAVStarted` firing more than
+once per file, with its own busy flag being the same unlocked pattern behind a
+13-second wait. Use `os.open(O_CREAT|O_EXCL)` for any cross-process claim in
+this codebase. `translate.py`'s `povil.embedded_extract_active` has the same
+weakness; it is pre-existing and shared with the embedded-AI path and was not
+rewritten, so if a double-extraction report ever arrives from there, that is
+where to look.
+
+*`moransubs.current_sub` is OUR record, not Kodi's.* Only our own pick flows
+write it; Kodi's native subtitle button, the OSD track list and the
+subtitles-off toggle do not. It is a cosmetic "» נוכחית" marker and must not be
+used to answer "what is on screen right now" — ask the player
+(`VideoPlayer.SubtitlesEnabled` plus the active stream's language).
+
+### provider.piratebay turned OFF (build owner's instruction, 2026-08-15)
+
+One value in `pov_scraper_settings_patcher`'s `DESIRED`, `true` -> `false`.
+That patcher had been turning it ON for source counts; that is reversed.
+
+**Written rather than dropped from the list, deliberately.** Removing the key
+would leave every existing device on the `true` we ourselves put there, and
+POV's own default for it is `true`, so a fresh install would turn it back on by
+itself. Writing `false` covers both the quick update and new installers, which
+is what was asked for.
+
+**A user who turns it back on keeps it on.** This is not a special case added
+for this key — the patcher records the value IT wrote, and any key whose live
+value has since drifted from that record is treated as the user's and never
+touched again, including across a future fingerprint bump. `tools/
+test_piratebay_off.py` proves it against the real `ensure_patched()`, and the
+sabotage case deletes that guard to confirm the choice really is reverted
+without it.
+
+While writing that test the patcher's `key absent in this POV schema` comment
+turned out to be wrong: Kodi answers an unknown setting id with `''` rather
+than raising, so that branch is only reached when `getSetting` itself blows up.
+The behaviour is right and worth keeping — an empty read also happens
+transiently while POV is starting, and skipping on it would mark the tune done
+and never retry — but the comment now says what actually happens.
+
 ## Shipped 2026-08-15: note 595 (0.2.495 / wizard 0.1.46 / quickfix 0.1.540 / build 0.1.108)
 
 **A total playback outage, caused by POV updating itself, fixed the same day.**

@@ -615,7 +615,7 @@ def ensure_patched():
     try:
         with open(p, 'r', encoding='utf-8') as f:
             content = f.read()
-    except OSError as e:
+    except Exception as e:
         kodi_utils.log(
             'pov_services_patcher: read failed: {0}'.format(e),
             level='WARNING')

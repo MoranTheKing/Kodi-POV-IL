@@ -108,7 +108,7 @@ def ensure_patched():
     try:
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
-    except OSError as e:
+    except Exception as e:
         _log('read failed for {0}: {1}'.format(path, e), level='WARNING')
         return 'read_failed'
 

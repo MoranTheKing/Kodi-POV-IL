@@ -360,7 +360,7 @@ def ensure_patched():
     try:
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
-    except OSError as e:
+    except Exception as e:
         _log('read failed for {0}: {1}'.format(path, e), level='WARNING')
         return 'read_failed'
 
@@ -467,7 +467,7 @@ def ensure_sort_default_patched():
     try:
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
-    except OSError as e:
+    except Exception as e:
         _log('read failed for {0}: {1}'.format(path, e), level='WARNING')
         return 'read_failed'
     if SORT_DEFAULT_MARKER in content:
@@ -529,7 +529,7 @@ def ensure_manager_patched():
     try:
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
-    except OSError as e:
+    except Exception as e:
         _log('read failed for {0}: {1}'.format(path, e), level='WARNING')
         return 'read_failed'
     if MANAGER_MARKER in content:

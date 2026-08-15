@@ -205,19 +205,37 @@ def _decode_link(link):
         return None
 
 
-def _oracle_candidates(info):
+def _oracle_candidates(info, include_he=False):
     """Foreign-language engine candidates as [{'release', 'payload'}] -- the
     bridge's 24h result cache makes this cheap right after the picker/autosub
-    built the list. Never raises."""
+    built the list. Never raises.
+
+    Hebrew is excluded by DEFAULT and that is not an oversight: this list's
+    original job is to be a timing ORACLE for correcting Hebrew, so Hebrew is
+    the thing being corrected and cannot also be the reference.
+
+    `include_he=True` is for the one caller that wants the opposite -- re-timing
+    an external HEBREW subtitle onto the embedded track's timeline, where
+    Hebrew is the payload rather than the reference. Without the flag that
+    caller silently gets zero candidates and falls through to English, which
+    would deliver an ENGLISH subtitle to someone who asked for Hebrew.
+    """
     out = []
     try:
         from resources.lib import subs_engine_bridge as bridge
         if not bridge.enabled():
             return out
         for c in bridge.search(info, modal_progress=False):
-            if (c.get('language') or '') == 'he':
+            if (c.get('language') or '') == 'he' and not include_he:
                 continue
-            if c.get('_engine_kind') not in (None, 'other'):
+            # The kind filter has to widen with the language filter: Hebrew
+            # results are tagged 'human_he'/'mt_he', so leaving this at
+            # ('other', None) would drop every Hebrew row again one line after
+            # letting it through.
+            _kind = c.get('_engine_kind')
+            _ok_kinds = ((None, 'other', 'human_he', 'mt_he') if include_he
+                         else (None, 'other'))
+            if _kind not in _ok_kinds:
                 continue
             pl = _decode_link(c.get('link') or '')
             if not pl or pl.get('type') != 'engine' or pl.get('embedded'):
@@ -523,7 +541,7 @@ def process(info, path, delivered_release):
         try:
             with open(path, 'r', encoding='utf-8', errors='replace') as f:
                 text = f.read()
-        except OSError:
+        except Exception:
             return path, None
         if not text.strip():
             return path, None
@@ -1007,7 +1025,7 @@ def run_deep_job(job):
         try:
             with open(path, 'r', encoding='utf-8', errors='replace') as f:
                 text = f.read()
-        except OSError:
+        except Exception:
             return
         if not text.strip():
             return
