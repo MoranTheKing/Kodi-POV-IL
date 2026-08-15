@@ -311,8 +311,8 @@ msgid "2.5 Flash (fallback)"
 msgstr "2.5 Flash (fallback)"
 
 msgctxt "#32234"
-msgid "3.6 Flash (newest, heavier quota use)"
-msgstr "3.6 Flash (newest, heavier quota use)"
+msgid "3.7 Flash (newest, heavier quota use)"
+msgstr "3.7 Flash (newest, heavier quota use)"
 
 msgctxt "#32254"
 msgid "Test Wyzie connection"
