@@ -425,7 +425,7 @@ def _reapply_rtl_fix_in_place(path, legacy_engine=False, ai_output=None):
     try:
         with open(path, 'r', encoding='utf-8', errors='replace') as f:
             content = f.read()
-    except OSError:
+    except Exception:
         return
     # The Arabic strip repairs a leak from the AI's gender-reference prompt, so
     # it runs ONLY on bytes that prompt could have produced. Two kinds of file
@@ -557,7 +557,7 @@ def _pool_source_text(info, source_hash):
                 cached = f.read()
             if cached:
                 return cached, safe_hash
-        except OSError:
+        except Exception:
             pass
 
     text = pool.fetch(info, raw_hash or None) if pool is not None else None
@@ -727,7 +727,7 @@ def process_harvest_queue(should_cancel=None):
         try:
             with open(path, 'r', encoding='utf-8', errors='replace') as f:
                 text = f.read()
-        except OSError:
+        except Exception:
             text = ''
         if text:
             try:
@@ -1538,7 +1538,7 @@ def _backfill_pool_async(info, translated_path, local_source, source_lang,
                 with open(translated_path + '.release', 'r',
                           encoding='utf-8') as _rf:
                     _rel = (_rf.read().strip() or None)
-            except OSError:
+            except Exception:
                 _rel = None
             pool.contribute_once(info, (cid + '_ar') if ar_tier else cid,
                                  source_lang, cached,
@@ -2557,7 +2557,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         with open(_pool_source_path, 'r', encoding='utf-8',
                                   errors='replace') as _kf:
                             _ktext = _kf.read()
-                    except OSError:
+                    except Exception:
                         _ktext = ''
                     if _ktext:
                         pool.contribute_ktuvit(

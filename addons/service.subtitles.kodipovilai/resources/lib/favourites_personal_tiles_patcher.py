@@ -1054,7 +1054,7 @@ def _install_canonical_home(fav_path, content):
     try:
         with open(fixture_path, 'r', encoding='utf-8') as f:
             fixture_text = f.read()
-    except OSError as e:
+    except Exception as e:
         _log('cannot rescue an empty home, fixture unreadable: {0}'.format(e),
              level='WARNING')
         return 'no_fixture'
@@ -1141,7 +1141,7 @@ def ensure_patched():
     try:
         with open(fixture_path, 'r', encoding='utf-8') as f:
             fixture_text = f.read()
-    except OSError as e:
+    except Exception as e:
         _log('fixture read failed: {0}'.format(e), level='WARNING')
         return 'fixture_unreadable'
 
