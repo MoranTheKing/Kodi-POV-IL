@@ -110,7 +110,7 @@ def ensure_unpatched():
         try:
             with open(li, 'r', encoding='utf-8') as f:
                 content = f.read()
-        except OSError:
+        except Exception:
             content = None
         if content is not None:
             new, changed = _strip_loginit_injection(content)
@@ -127,7 +127,7 @@ def ensure_unpatched():
         try:
             with open(sx, 'r', encoding='utf-8') as f:
                 content = f.read()
-        except OSError:
+        except Exception:
             content = None
         if content is not None:
             new, changed = _strip_settings_injection(content)

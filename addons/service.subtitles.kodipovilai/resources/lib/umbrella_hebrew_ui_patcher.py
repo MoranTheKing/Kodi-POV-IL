@@ -444,7 +444,7 @@ def _english_msgids(path):
     try:
         with open(path, 'r', encoding='utf-8') as f:
             src = f.read()
-    except OSError:
+    except Exception:
         return {}
     found = re.findall(r'msgctxt "#(\d+)"\s*\nmsgid "(.*?)"\s*\n', src)
     return dict((k, v) for k, v in found if v)

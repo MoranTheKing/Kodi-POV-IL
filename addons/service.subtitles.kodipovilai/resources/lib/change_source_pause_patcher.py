@@ -106,7 +106,7 @@ def _patch_one(skin_id, rel, rx, mode):
     try:
         with open(path, 'r', encoding='utf-8', newline='') as f:
             original = f.read()
-    except OSError as e:
+    except Exception as e:
         _log('{0}: read failed: {1}'.format(skin_id, e), level='WARNING')
         return 'read_failed'
 

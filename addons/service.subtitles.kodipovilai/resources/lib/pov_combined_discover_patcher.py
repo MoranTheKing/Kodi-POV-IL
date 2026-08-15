@@ -208,7 +208,7 @@ def _patch_one(path, anchor, make_new, label, marker=MARKER):
     try:
         with open(path, 'r', encoding='utf-8') as f:
             text = f.read()
-    except OSError as e:
+    except Exception as e:
         _log('{0}: read failed: {1}'.format(label, e), level='WARNING')
         return 'read_failed'
 

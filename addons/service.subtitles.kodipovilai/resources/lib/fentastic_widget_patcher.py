@@ -227,7 +227,7 @@ def _patch_one(filename, allow_insert=True):
     try:
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
-    except OSError as e:
+    except Exception as e:
         _log('{0}: read failed: {1}'.format(filename, e),
              level='WARNING')
         return 'read_failed'

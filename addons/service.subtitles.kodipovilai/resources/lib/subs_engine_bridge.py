@@ -1262,7 +1262,15 @@ def select_embedded(stream_index, lang=None):
     appends external subs at HIGHER indices, so this index still points at the
     embedded stream. Use it directly. Only if it's out of range do we re-find
     the first stream of the requested language (lowest index = the embedded
-    one), never an external appended later."""
+    one), never an external appended later.
+
+    NOTE (2026-08-15): an embedded HEBREW track renders with its line-final
+    punctuation at the wrong end, because Kodi draws the track itself with an
+    LTR BiDi base direction and we cannot put RLE..PDF into bytes we do not
+    own. The only repair is to extract the track's text and deliver our own
+    copy, and that was built and then REMOVED at the build owner's decision --
+    extraction is not dependable enough across debrid providers to be the
+    answer. Do not rebuild it here without that conversation. See HANDOFF.md."""
     try:
         import xbmc
         p = xbmc.Player()

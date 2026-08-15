@@ -380,7 +380,7 @@ def ensure_source_name_published():
         # an Umbrella self-update can flip it either way.
         with open(path, 'r', encoding='utf-8', newline='') as f:
             original = f.read()
-    except OSError as e:
+    except Exception as e:
         _log('read failed: {0}'.format(e), 'WARNING')
         return 'read_failed'
     if MARKER in original:
