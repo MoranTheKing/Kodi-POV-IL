@@ -736,6 +736,52 @@ is nonsense. Also: the captured stack for the faulting thread is the crash
 handler's own frames (`dbgcore`/`dbghelp`), so the exception record, not the
 stack scan, is the authority in a 544 KB mini dump.
 
+## Shipped 2026-08-15: note 594 (0.2.494 / wizard 0.1.46 / quickfix 0.1.539 / build 0.1.107)
+
+Two things, and nothing else -- the whole diff against 0.2.493 is 8 files.
+
+**1. The Arctic Fuse 3 force-close, fixed at the class rather than the
+trigger.** Full write-up under "POV native crash" above (item 1b): POV's
+`reuselanguageinvoker` is what turns a burst of concurrent widget loads into a
+native crash, and `pov_language_invoker_guard.py` turns it off the way POV's
+own switch does -- the hidden `reuse_language_invoker` setting FIRST, then
+addon.xml -- because POV runs a service that rewrites addon.xml from that
+setting and would otherwise revert an xml-only edit at every boot, with a
+dialog. **The plan written down the night before said "edit addon.xml", and
+reading POV's source instead of trusting that note is what caught it.**
+Effective at the next Kodi start; measured cost ~0.13-0.18 s per POV
+invocation, from the user's own device logs.
+
+**2. Gemini 3.7 Flash -- committed a day earlier and never packaged.** `b7b186a`
+and `73f9c71` landed AFTER 0.2.493 was built, so the shipped zip still carried
+`gemini-3.6-flash` and the v1 migration marker. Nobody had it. **A commit is
+not a release, and the only thing that proves which is which is reading the
+artifact.** The check that found it is three lines: unzip the shipped
+build-edition zip and grep its `service.py` for the new string.
+
+**The migration marker gets a new id per bump** (`_gemini_model_bump_v2`), or
+the once-only migration is a no-op for exactly the users who need it -- the
+ones sitting on the superseded model. Declare it in `settings.xml` in the same
+commit or `tools/test_settings_declared.py` fails the release; it did.
+
+**Release mechanics, unchanged and worth repeating.** No POOL_SECRET in the
+cloud container, so both add-on zips were rebuilt from the 0.2.493 ones by
+swapping only changed members (`scratchpad/release_494.py`), then quickfix via
+`tools/build_addon_quickfix.py`, then build via `tools/build_full_build.py`,
+both with `--allow-add` for the one new file. The standalone's `service.py` and
+`default.py` are STRIPPED variants and are asserted byte-unchanged rather than
+swapped; it carries no `pov_*` members at all. **The pool credential was
+verified identical to 0.2.493 in all five artifacts** -- standalone, build zip,
+quickfix, full build and the repo-channel copy -- by comparing the
+`__POOL_KEY_BEGIN__..END__` block's digest, and the source placeholder was
+confirmed absent from every one.
+
+Verified independently of both packagers: quickfix 0.1.539 adds exactly one
+member and drops none, its 1,419 members outside the add-on subtree are
+byte-identical to 0.1.538, and its 349-member add-on subtree is exactly the
+0.2.494 build zip. Build 0.1.107: 5,088 members, every one attributable to the
+quickfix, the wizard package or 0.1.106.
+
 ## Shipped 2026-08-14: note 593 (0.2.493 / wizard 0.1.46 / quickfix 0.1.538 / build 0.1.106)
 
 **The quickfix is the only way the wizard reaches a device, and it was always
@@ -1818,6 +1864,57 @@ was uploading partial/failed translations (stayed mostly English) the server onl
    `Container.Refresh`, so nothing is lost. The 0.2.376 `pov_widget_crash_guard`
    (forces `trakt.sync_refresh_widgets` off) is kept as harmless
    defense-in-depth for the separate SyncMonitor path.
+
+   **1b. THE CLASS ITSELF, CLOSED IN 0.2.494 (`pov_language_invoker_guard.py`).**
+   A third trigger arrived on 2026-08-14 (Arctic Fuse 3, returning from
+   `Custom_1101_Hub.xml` to `Home.xml`): same mechanism, five POV invokers
+   inside 39 ms, minidump faulting on a NULL refcount write in python3.8.dll.
+   Kodi logs the OS thread id, so the crash thread was MATCHED to a log line
+   rather than guessed — it was POV's invoker. Two triggers had already been
+   closed one at a time and this was a third, by an ordinary route, so the
+   lever moved to what makes concurrency fatal rather than merely slow:
+   `reuselanguageinvoker` itself.
+
+   **POV OWNS THIS FLAG IN TWO PLACES — do not edit addon.xml alone.** Read it
+   out of POV 6.08.x, do not assume: `resources/settings.xml` declares a hidden
+   `reuse_language_invoker` (default `true`); `resources/lib/entry.py`
+   `reuseLanguageInvokerCheck()` runs as a POV SERVICE at every start and
+   rewrites addon.xml **to match that setting**, then offers
+   `LoadProfile(<profile>)` via a confirm dialog; `modules/kodi_utils.py`
+   `toggle_language_invoker()` is POV's own switch and writes BOTH. An
+   addon.xml-only edit is therefore reverted on the next start, with an English
+   mismatch dialog, every boot, forever. We write both, as POV does.
+
+   **Order is SETTING FIRST, then addon.xml.** If the second write is lost only
+   this order converges — POV's own check then finishes the job. The reverse
+   leaves POV reverting the xml to `true` after every boot. Writing the xml
+   second also keeps the common path silent: both halves agree, so POV's check
+   has nothing to do and never shows its dialog. POV agrees about the
+   direction, too — `toggle_language_invoker()` demands a second confirmation
+   ("may cause addon instability") only when turning the flag back ON.
+
+   **Effective at the NEXT Kodi start, not the current one.** Kodi parses
+   addon.xml while building its add-on list, long before the startup repair
+   pass runs. Neither way to force it live belongs in an unattended pass: POV's
+   `LoadProfile()` restarts every service and dumps the user at the home
+   screen, and `UpdateLocalAddons()` rebuilds the add-on database underneath a
+   wizard hot-reload that polls it (the race `wizard.py:_addon_state` already
+   documents). **Disable/enable via JSON-RPC does NOT help** — it drops the
+   interpreter without re-reading addon.xml.
+
+   **Measured cost, from the user's own device logs** (13/08, Android, Kodi
+   21.3): a POV `router.py` run on a NEW interpreter took **135 ms**, and
+   **127 / 175 ms** in the second log; the same menu-sized run on the reused
+   interpreter took **6–9 ms**. So ~0.13–0.18 s added per POV invocation — an
+   upper bound, since the cold sample also did real work of its own. Nothing on
+   the streaming path is affected, and against a 26 s source scrape in the same
+   log it is noise. Note the invoker ID is REUSED across runs, so pairing log
+   events by that id silently collapses every run into one; pair in event order.
+
+   **This makes `pov_reload` redundant for POV** (its whole job was to cycle POV
+   so it re-imports a patched .py; with reuse off the next invocation
+   re-imports anyway). Left in place deliberately — it is correct either way,
+   and removing it is a separate change with its own risk.
 2. **Anime "navigation" on phone — RESOLVED (not a bug, no code change).** The
    report was: hard to scroll left/right + a long-press bounces to home inside
    anime lists on a phone. Root cause found: it is NOT anime-specific and NOT a
