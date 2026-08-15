@@ -199,6 +199,22 @@ ni2 = srt.parse_blocks(NORMAL_IDX)
 check('with text above it, the digits ARE the next index',
       len(ni2) == 2 and ni2[1].startswith('6\n'), repr(ni2))
 
+# The validator's case, reproduced by execution: entry 41's ONLY dialogue is
+# "42", and the entry welded after it opens with index "50". The first version
+# of _has_text_line called every digits-only line a header, so it answered "41
+# has no text" and left the cut at the timecode -- stranding "50" inside 41 as
+# a second line of dialogue nobody wrote.
+VALIDATOR_CASE = ('41\n00:10:00,000 --> 00:10:02,000\n42\n'
+                  '50\n00:10:05,000 --> 00:10:07,000\nForty-two, he confirmed.\n')
+vc = srt.parse_blocks(VALIDATOR_CASE)
+check('the validator case splits into 2', len(vc) == 2, repr(vc))
+check('entry 41 shows ONLY its own "42"',
+      len(vc) == 2 and vc[0].split('\n')[2:] == ['42'], repr(vc))
+check('the next index is not left inside the cue above',
+      len(vc) == 2 and '50' not in vc[0].split('\n')[2:], repr(vc))
+check('the next entry keeps its own index',
+      len(vc) == 2 and vc[1].startswith('50\n'), repr(vc))
+
 # --- the guard the whole thing rests on: SABOTAGE ---------------------------
 # If _split_welded_block is neutered, the reproduction must go RED again.
 # Without this the suite could be green because the defect never reproduced.
