@@ -22,9 +22,51 @@ import types
 HERE = os.path.dirname(os.path.abspath(__file__))
 LIB = os.path.join(HERE, '..', 'addons', 'service.subtitles.kodipovilai',
                    'resources', 'lib')
-STOCK = ('/tmp/claude-0/-home-user-Kodi-POV-IL/'
-         '70968383-5f01-52a3-afe7-ced1aba28071/scratchpad/pov6812/'
-         'plugin.video.pov')
+# A stock POV tree if this machine happens to have one (set POV_STOCK, or drop
+# it in the session scratchpad). It is a BONUS case, not the test: the path
+# below exists only inside one ephemeral container, and the first version of
+# this file skipped with sys.exit(0) when it was missing -- an exit code
+# indistinguishable from ALL PASS. Committed to the repo, that meant the test
+# proved nothing on any other machine, forever, while still reporting green.
+#
+# So the real fixture is built here, inline: the two POV lines this patcher
+# anchors on, in their real shape (tabs, nesting, argument order), copied from
+# POV 6.08.12. That runs everywhere.
+STOCK = os.environ.get('POV_STOCK') or (
+    '/tmp/claude-0/-home-user-Kodi-POV-IL/'
+    '70968383-5f01-52a3-afe7-ced1aba28071/scratchpad/pov6812/plugin.video.pov')
+
+FIXTURE_MENU = (
+    "from indexers import mdblist_api, list_helper\n"
+    "ls = lambda i: str(i)\n"
+    "add2menu_str, add2folder_str, copy2str = ls(32730), ls(32731), 'x'\n"
+    "newlist_str, deletelist_str, nextpage_str = 'n', ls(32781), ls(32799)\n"
+    "\n"
+    "class BaseMdblList(object):\n"
+    "\tdef process_results(self):\n"
+    "\t\tfor item in self.lists:\n"
+    "\t\t\ttry:\n"
+    "\t\t\t\tcm = []\n"
+    "\t\t\t\tcm_append = cm.append\n"
+    "\t\t\t\titem, list_type = self.parse_item(item)\n"
+    "\t\t\t\tname, user, slug, list_id = item['name'], item['user_name'], "
+    "item.get('slug', ''), item['id']\n"
+    "\t\t\t\tif list_type == 'my_lists':\n"
+    "\t\t\t\t\tcm_append((newlist_str, 'RunPlugin(x)'))\n"
+    "\t\t\t\t\tcm_append((deletelist_str, 'RunPlugin(x)'))\n"
+    "\t\t\t\tcm_append((add2menu_str, 'RunPlugin(x)'))\n"
+    "\t\t\t\tcm_append((add2folder_str, 'RunPlugin(x)'))\n"
+    "\t\t\texcept: pass\n")
+
+FIXTURE_API = (
+    "def call_mdblist(path, params=None, json=None, method=None):\n"
+    "\treturn {}\n"
+    "\n"
+    "def make_new_mdbl_list(params):\n"
+    "\tpass\n"
+    "\n"
+    "def delete_mdbl_list(params):\n"
+    "\tresult = call_mdblist('lists/%s' % params['list_id'], method='delete')\n")
 
 FAIL = []
 
@@ -34,11 +76,6 @@ def check(label, cond, detail=''):
                          ('  -- ' + detail) if detail and not cond else ''))
     if not cond:
         FAIL.append(label)
-
-
-if not os.path.isdir(STOCK):
-    print('SKIP: no stock POV tree at %s' % STOCK)
-    sys.exit(0)
 
 
 def load(home, sabotage=None):
@@ -80,14 +117,29 @@ def load(home, sabotage=None):
 
 
 def fresh_pov():
+    """A POV tree to patch: the real stock one when present, else the inline
+    fixture. Never skips -- a test that reports green without running is worse
+    than one that fails."""
     home = tempfile.mkdtemp()
-    shutil.copytree(STOCK, os.path.join(home, 'addons', 'plugin.video.pov'))
+    root = os.path.join(home, 'addons', 'plugin.video.pov')
+    if os.path.isdir(STOCK):
+        shutil.copytree(STOCK, root)
+        return home
+    for rel, body in (('resources/lib/menus/mdblist.py', FIXTURE_MENU),
+                      ('resources/lib/indexers/mdblist_api.py', FIXTURE_API)):
+        path = os.path.join(root, *rel.split('/'))
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(body)
     return home
 
 
 def povfile(home, rel):
     return os.path.join(home, 'addons', 'plugin.video.pov', *rel.split('/'))
 
+
+print('fixture: %s' % ('real stock POV 6.08.12' if os.path.isdir(STOCK)
+                       else 'inline (no stock tree on this machine)'))
 
 # --- 1. against stock POV ---------------------------------------------------
 home = fresh_pov()
@@ -146,9 +198,13 @@ def run_branch(list_type):
     return calls
 
 
-for lt, want in (('search', ['Like List', 'Unlike List']),
-                 ('top_lists', ['Like List', 'Unlike List']),
-                 ('user_lists', ['Like List', 'Unlike List']),
+# The values POV REALLY produces, traced rather than invented: BaseList's own
+# parse_item hardcodes 'user_lists' (so Search and Top Lists both arrive as
+# that, not as 'search'/'top_lists'), and GetMdblLists.parse_item returns
+# 'liked_lists', 'external' or 'my_lists'. An earlier version of this list used
+# made-up labels, which could only ever re-test the same catch-all branch.
+for lt, want in (('user_lists', ['Like List', 'Unlike List']),
+                 ('external', ['Like List', 'Unlike List']),
                  ('liked_lists', ['Unlike List']),
                  ('my_lists', [])):
     got = [c[0] for c in run_branch(lt)]
@@ -195,6 +251,39 @@ check('a renamed menu anchor is reported, not guessed',
       'menu=unmatched' in st2, st2)
 check('...and the file is left exactly as it was',
       open(mp, encoding='utf-8').read() == renamed)
+
+# --- 6b. the OTHER two anchors drift too ------------------------------------
+for rel, old, new, expect in (
+        ('resources/lib/menus/mdblist.py', 'deletelist_str', 'gone_str',
+         'menu=unmatched'),
+        ('resources/lib/indexers/mdblist_api.py', 'def delete_mdbl_list',
+         'def removed_mdbl_list', 'api=unmatched')):
+    h = fresh_pov()
+    f = povfile(h, rel)
+    txt = open(f, encoding='utf-8').read()
+    with open(f, 'w', encoding='utf-8') as fh:
+        fh.write(txt.replace(old, new))
+    st = load(h).ensure_patched()
+    check('a drifted %s anchor is reported' % old.split()[-1], expect in st, st)
+
+# --- 6c. THE MENU MUST NEVER OUTLIVE ITS HANDLER ----------------------------
+# If the API anchor misses, the menu entry must NOT be added: it would fire a
+# mode at a function that does not exist, and POV's router resolves modes with
+# a bare getattr and does not suppress -- so the user gets an uncaught
+# AttributeError out of the plugin entry point, permanently (the menu marker
+# blocks any retry of that half forever).
+h = fresh_pov()
+f = povfile(h, 'resources/lib/indexers/mdblist_api.py')
+txt = open(f, encoding='utf-8').read()
+with open(f, 'w', encoding='utf-8') as fh:
+    fh.write(txt.replace('def delete_mdbl_list', 'def removed_mdbl_list'))
+mod4 = load(h)
+st4 = mod4.ensure_patched()
+menu4 = open(povfile(h, 'resources/lib/menus/mdblist.py'),
+             encoding='utf-8').read()
+check('with the API half unmatched, the menu is left alone',
+      'menu=skipped_no_api' in st4, st4)
+check('...and no Like entry was written', mod4.MARKER not in menu4)
 
 # --- 7. SABOTAGE: the compile guard -----------------------------------------
 # If the injected block were malformed, the compile check must refuse rather
