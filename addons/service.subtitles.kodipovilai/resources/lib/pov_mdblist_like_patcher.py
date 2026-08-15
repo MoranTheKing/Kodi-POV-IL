@@ -260,6 +260,30 @@ def _search_block(ind):
 # giving them back left five stray blanks in mdblist.py and three in
 # mdblist_api.py, which would have accumulated on every future version bump.
 # The round-trip test below is what caught it and is what keeps it honest.
+# READ THIS BEFORE EDITING ANY INJECTED TEMPLATE ABOVE.
+#
+# _revert knows nothing about Python syntax. It finds a marked line and eats
+# everything indented deeper, full stop. That makes ONE rule load-bearing:
+#
+#   EVERY line of an injected block must be indented strictly deeper than its
+#   marked first line -- INCLUDING lines inside docstrings and string literals.
+#
+# _ai_refresh_after_like's docstring is hand-indented with a leading tab on
+# every line for exactly this reason, not for looks. Paste an example into it
+# at column 0, or a copied comment block that happens to start flush-left, and
+# the revert stops at that line, leaves the rest of the block behind, and the
+# result does not compile.
+#
+# It fails SAFE, not destructively: _patch_api/_patch_menu compile() the
+# candidate before writing, so a broken revert is refused and nothing is
+# written. But "safe" here means the device is stuck on its OLD version
+# forever, at every boot, with no way forward -- which is the same
+# silently-stuck-forever outcome that made v2 devices unreachable in the first
+# place, reached by a different door.
+#
+# The guard is the byte-for-byte round-trip check in
+# tools/test_mdblist_search_nav.py: revert(patch(stock)) must equal stock. It
+# will fail the moment this rule is broken. Do not weaken it.
 def _revert(content):
     lines = content.split('\n')
     out, i = [], 0
@@ -581,6 +605,6 @@ def ensure_patched():
              'handler crashes POV rather than failing politely'.format(a),
              level='WARNING')
     summary = 'api={0}, menu={1}'.format(a, m)
-    if a == 'patched' or m == 'patched':
+    if 'patched' in (a, m) or 'repatched' in (a, m):
         _log('MDBList like/unlike applied (' + summary + ')', level='INFO')
     return summary
