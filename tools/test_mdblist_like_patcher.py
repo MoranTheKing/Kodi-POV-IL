@@ -212,8 +212,11 @@ def run_branch(list_type, liked=()):
 for lt, liked, want in (
         ('user_lists', (), ['Like List']),
         ('user_lists', (4242,), ['Unlike List']),     # already liked
-        ('external', (), ['Like List']),
-        ('external', (4242,), ['Unlike List']),
+        # 'external' gets NEITHER: POV fetches those from external/lists/*,
+        # a resource MDBList's schema gives no write routes at all, so a Like
+        # there would call lists/<id>/like with an id from the wrong id space.
+        ('external', (), []),
+        ('external', (4242,), []),
         ('liked_lists', (), ['Unlike List']),         # by definition liked
         ('liked_lists', (4242,), ['Unlike List']),
         ('my_lists', (), []),
@@ -263,6 +266,13 @@ for name in ('mdbl_like_a_list', 'mdbl_unlike_a_list'):
     check('%s calls lists/<id>/like' % name, "'lists/%s/like'" in body,
           body[:200])
 check('like uses PUT', verbs.get('mdbl_like_a_list') == 'put', repr(verbs))
+# POV ships reuselanguageinvoker=true, so the menu module stays warm and
+# container_refresh() redraws in the same interpreter -- the on-disk cache
+# clear alone would leave the memo holding the pre-click answer.
+for name in ('mdbl_like_a_list', 'mdbl_unlike_a_list'):
+    body = api_txt.split('def %s(params):' % name, 1)[1].split('\ndef ', 1)[0]
+    check('%s resets the menu memo, not just the disk cache' % name,
+          '_ai_liked_ids_cache[0] = None' in body, body[:300])
 check('unlike uses DELETE', verbs.get('mdbl_unlike_a_list') == 'delete',
       repr(verbs))
 
@@ -317,8 +327,9 @@ check('...and no Like entry was written', mod4.MARKER not in menu4)
 # If the injected block were malformed, the compile check must refuse rather
 # than write a POV that cannot start. Break the block and confirm.
 home3 = fresh_pov()
-mod3 = load(home3, sabotage=('"%sif list_type != \'my_lists\':  %s\\n"',
-                             '"%sif list_type != \'my_lists\'  %s\\n"'))
+mod3 = load(home3, sabotage=(
+    '"%sif list_type not in (\'my_lists\', \'external\'):  %s\\n"',
+    '"%sif list_type not in (\'my_lists\', \'external\')  %s\\n"'))
 st3 = mod3.ensure_patched()
 check('SABOTAGE: a malformed block is refused by the compile check',
       'compile_failed' in st3, st3)
