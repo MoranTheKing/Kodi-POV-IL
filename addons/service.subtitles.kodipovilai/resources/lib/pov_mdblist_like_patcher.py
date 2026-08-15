@@ -97,7 +97,7 @@ def mdbl_like_a_list(params):  ''' + MARKER + '''
 	mdbl_cache.clear_mdbl_list_data('liked_lists')
 	try:
 		from menus import mdblist as _ai_menu
-		_ai_menu._ai_liked_ids_cache[0] = None
+		_ai_menu._ai_liked_ids_cache[0] = False
 	except Exception: pass
 	kodi_utils.notification(32576)
 	kodi_utils.container_refresh()
@@ -109,7 +109,7 @@ def mdbl_unlike_a_list(params):  ''' + MARKER + '''
 	mdbl_cache.clear_mdbl_list_data('liked_lists')
 	try:
 		from menus import mdblist as _ai_menu
-		_ai_menu._ai_liked_ids_cache[0] = None
+		_ai_menu._ai_liked_ids_cache[0] = False
 	except Exception: pass
 	kodi_utils.notification(32576)
 	kodi_utils.container_refresh()
@@ -135,7 +135,24 @@ _MENU_ANCHOR_RE = _re.compile(
 _RUN = ("cm_append((%s, 'RunPlugin(%%s)' %% build_url("
         "{'mode': 'mdblist.mdbl_%s_a_list', 'list_id': list_id})))")
 
-# The ids the user has already liked, read ONCE per plugin process.
+# The ids the user has already liked -- read from POV's OWN cache row, never
+# from the network, and at most once per process.
+#
+# THE READ MUST NOT BLOCK THE LISTING. mdbl_get_lists() would have been the
+# obvious call, but it goes through cache_mdbl_object, which falls back to a
+# live request on a cache miss -- inside process_results, the generator Kodi
+# drains to draw the screen. On a cold cache with MDBList unreachable that
+# freezes the whole list for the request timeout, to decide the wording of a
+# context-menu entry the user may never open. A screen is worth more than a
+# label. So this peeks the same SQLite row cache_mdbl_object would read and
+# stops there.
+#
+# THREE STATES, not two. A set means we know; None means we do NOT (cold cache,
+# unreadable db, MDBList never connected) -- and "don't know" shows BOTH
+# entries, exactly as this feature did before it learned to choose. That is
+# always safe, because MDBList defines both verbs as idempotent: PUT "ensures
+# the list is liked", DELETE "ensures the list is not liked", so the wrong one
+# is a no-op and not an error.
 #
 # This is what lets the menu offer the entry that APPLIES instead of both, and
 # it is affordable only because POV already caches this exact read:
@@ -151,15 +168,22 @@ _RUN = ("cm_append((%s, 'RunPlugin(%%s)' %% build_url("
 # list succeeds instead of erroring. The degraded state is a menu that is
 # merely less clever, never one that breaks.
 _LIKED_HELPER = (
-    "_ai_liked_ids_cache = [None]  " + MARKER + "\n"
+    "_ai_liked_ids_cache = [False]  " + MARKER + "\n"
     "\n"
     "def _ai_liked_ids():  " + MARKER + "\n"
-    "\tif _ai_liked_ids_cache[0] is None:\n"
+    "\tif _ai_liked_ids_cache[0] is False:\n"
     "\t\ttry:\n"
-    "\t\t\t_ai_liked_ids_cache[0] = set(str(i.get('id')) for i in "
-    "(mdblist_api.mdbl_get_lists('liked_lists') or []))\n"
+    "\t\t\timport json as _ai_json\n"
+    "\t\t\tfrom caches import mdbl_cache as _ai_mc\n"
+    "\t\t\t_ai_cur = _ai_mc.MDBLCache().dbcur\n"
+    "\t\t\t_ai_cur.execute(_ai_mc.MC_BASE_GET, ('mdbl_liked_lists',))\n"
+    "\t\t\t_ai_row = _ai_cur.fetchone()\n"
+    "\t\t\t_ai_liked_ids_cache[0] = set(\n"
+    "\t\t\t\tstr(i.get('id')) for i in\n"
+    "\t\t\t\t(_ai_json.loads(_ai_row[0]) or {}).get('lists') or []\n"
+    "\t\t\t) if _ai_row else None\n"
     "\t\texcept Exception:\n"
-    "\t\t\t_ai_liked_ids_cache[0] = set()\n"
+    "\t\t\t_ai_liked_ids_cache[0] = None\n"
     "\treturn _ai_liked_ids_cache[0]\n")
 
 
@@ -241,11 +265,14 @@ def _menu_block(ind):
     # work does not belong in the menu.
     return (
         "%sif list_type not in ('my_lists', 'external'):  %s\n"
-        "%sif list_type == 'liked_lists' or str(list_id) in _ai_liked_ids():\n"
+        "%s_ai_liked = _ai_liked_ids()\n"
+        "%sif list_type == 'liked_lists' or (_ai_liked and str(list_id) in _ai_liked):\n"
         "%s%s\n"
         "%selse:\n"
         "%s%s\n"
-        % (ind, MARKER, inner, inner2, unlike, inner, inner2, like))
+        "%sif _ai_liked is None: %s\n"
+        % (ind, MARKER, inner, inner, inner2, unlike,
+           inner, inner2, like, inner2, unlike))
 
 
 def _patch_api():

@@ -190,12 +190,14 @@ check('the injected branch was found in the patched menu', len(block) >= 4,
 
 
 def run_branch(list_type, liked=()):
-    """`liked` = the ids _ai_liked_ids() reports, i.e. the user's liked lists."""
+    """`liked` = what _ai_liked_ids() reports: a set of ids, or None for
+    "cold cache, we do not know"."""
     calls = []
     ns = {'list_type': list_type, 'list_id': 4242,
           'cm_append': lambda t: calls.append(t),
           'build_url': lambda d: 'plugin://pov/?%s' % d['mode'],
-          '_ai_liked_ids': lambda: set(str(x) for x in liked),
+          '_ai_liked_ids': (lambda: None) if liked is None
+                           else (lambda: set(str(x) for x in liked)),
           '_ai_likelist_str': 'Like List',
           '_ai_unlikelist_str': 'Unlike List'}
     exec(compile(src_block, 'branch', 'exec'), ns)
@@ -220,9 +222,17 @@ for lt, liked, want in (
         ('liked_lists', (), ['Unlike List']),         # by definition liked
         ('liked_lists', (4242,), ['Unlike List']),
         ('my_lists', (), []),
-        ('my_lists', (4242,), [])):                   # never, even if liked
+        ('my_lists', (4242,), []),                    # never, even if liked
+        # Cold cache -> we do not know -> offer BOTH, which is always safe
+        # because both verbs are idempotent. Never block the screen for a label.
+        ('user_lists', None, ['Like List', 'Unlike List']),
+        ('liked_lists', None, ['Unlike List']),
+        ('my_lists', None, []),
+        ('external', None, [])):
     got = [c[0] for c in run_branch(lt, liked)]
-    check('%-12s liked=%-8s -> %s' % (lt, bool(liked), want or 'neither'),
+    check('%-12s liked=%-8s -> %s'
+          % (lt, 'unknown' if liked is None else bool(liked),
+             want or 'neither'),
           got == want, 'got %r' % (got,))
 
 # The liked lookup failing must degrade to "Like", never to nothing and never
@@ -269,10 +279,24 @@ check('like uses PUT', verbs.get('mdbl_like_a_list') == 'put', repr(verbs))
 # POV ships reuselanguageinvoker=true, so the menu module stays warm and
 # container_refresh() redraws in the same interpreter -- the on-disk cache
 # clear alone would leave the memo holding the pre-click answer.
+# Not a string match on one sentinel value: assert the reset writes the SAME
+# value the helper's "not computed yet" test looks for. Those live in two
+# different injected files, and a mismatch between them means every like
+# silently stops refreshing the menu -- which is exactly what nearly shipped
+# when the sentinel changed from None to False on one side only.
+_init = re.search(r'_ai_liked_ids_cache = \[(\w+)\]', menu_txt).group(1)
+_test = re.search(r'if _ai_liked_ids_cache\[0\] is (\w+):', menu_txt).group(1)
+check('the helper tests for the value it initialises to', _init == _test,
+      'init=%r tested=%r' % (_init, _test))
 for name in ('mdbl_like_a_list', 'mdbl_unlike_a_list'):
     body = api_txt.split('def %s(params):' % name, 1)[1].split('\ndef ', 1)[0]
+    m_reset = re.search(r'_ai_liked_ids_cache\[0\] = (\w+)', body)
     check('%s resets the menu memo, not just the disk cache' % name,
-          '_ai_liked_ids_cache[0] = None' in body, body[:300])
+          m_reset is not None, body[:300])
+    check('%s resets it to the sentinel the helper checks (%s)' % (name, _init),
+          m_reset and m_reset.group(1) == _init,
+          'resets to %r, helper checks %r'
+          % (m_reset and m_reset.group(1), _init))
 check('unlike uses DELETE', verbs.get('mdbl_unlike_a_list') == 'delete',
       repr(verbs))
 
