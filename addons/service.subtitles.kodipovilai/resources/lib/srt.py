@@ -548,18 +548,73 @@ def _wrap_rtl_base_line(line, cue_hebrew=False, legacy_engine=False):
     return _RLE + normalized + _PDF
 
 
+# --- entries the model welded together -------------------------------------
+# Field report (0.2.495): one cue rendered its own Hebrew line AND the raw
+# "286" + "00:15:51,284 --> 00:15:54,054" of the cue that should have come
+# after it, all on screen at once. The next cue was fine.
+#
+# A blank line is the ONLY thing that separates SRT entries, so when the model
+# omits one while copying a chunk back, two entries arrive as a single block --
+# and every stage after this one then treats the second entry's index and
+# timecode as TEXT belonging to the first. restore_block_timings hands the
+# merged block the first source block's header back and leaves the rest of it
+# alone; the reply looks exactly one entry short, which the caller tolerates
+# (it accepts up to 15% loss without retrying); and the player draws the lot.
+#
+# Splitting them back apart is unambiguous, which is what makes this safe to do
+# on every parse rather than behind a heuristic:
+#   * a digits-only line whose next non-empty line is a timecode is an entry
+#     header. A bare number DOES occur in real dialogue -- a year, a score, a
+#     countdown -- but never with "00:00:00,000 --> 00:00:00,000" under it.
+#   * a timecode line anywhere but at the head of a block is impossible as
+#     dialogue on its own.
+# A well-formed block holds exactly one timecode line and leaves here untouched,
+# so this costs one scan and changes nothing for input that was already correct.
+def _split_welded_block(block):
+    """Split a block that carries a LATER entry's header inside its text."""
+    lines = block.split('\n')
+    tc_at = [i for i, ln in enumerate(lines) if _TIMECODE_RE.match(ln.strip())]
+    if len(tc_at) < 2:
+        return [block]
+    cuts = []
+    for i in tc_at[1:]:
+        # The index line belongs to the entry its timecode opens, so cut BEFORE
+        # the index -- cutting between the two would strand the number as the
+        # last line of the previous cue, which is the same defect one line
+        # smaller.
+        start = i - 1 if (i and _INDEX_RE.match(lines[i - 1].strip())) else i
+        if start > 0:
+            cuts.append(start)
+    if not cuts:
+        return [block]
+    out, prev = [], 0
+    for cut in cuts + [len(lines)]:
+        part = '\n'.join(lines[prev:cut])
+        if part.strip():
+            out.append(part.strip('\n'))
+        prev = cut
+    return out or [block]
+
+
 def parse_blocks(text):
     """Return a list of raw entry blocks (still strings). We don't
     bother with a structured parse since the model handles the
     timecodes verbatim -- if we round-trip strings unchanged for
-    those, we minimise damage from accidental edits."""
+    those, we minimise damage from accidental edits.
+
+    A block that holds more than one entry's header (the model dropped the
+    blank line between them) is split back apart first -- see above."""
     if not text:
         return []
     # Some SRTs start with a BOM. Strip it once.
     if text.startswith('﻿'):
         text = text[1:]
     text = text.strip()
-    return [b for b in BLOCK_SEPARATOR.split(text) if b.strip()]
+    blocks = []
+    for b in BLOCK_SEPARATOR.split(text):
+        if b.strip():
+            blocks.extend(_split_welded_block(b))
+    return blocks
 
 
 # --- Cue-timing integrity ---------------------------------------------------
