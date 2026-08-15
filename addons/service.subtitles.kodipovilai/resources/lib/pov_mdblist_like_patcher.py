@@ -158,6 +158,12 @@ _RUN = ("cm_append((%s, 'RunPlugin(%%s)' %% build_url("
 # poisoned row lived. isinstance checks instead, so a wrong shape falls to
 # unknown the same way a corrupted row already did.
 #
+# Entries WITHOUT an id are dropped rather than stringified. str(None) is the
+# perfectly ordinary string 'None', which would sit in the set and match any
+# row whose own id was also null -- so one malformed entry could flip an
+# unrelated row to "Unlike". Dropping it keeps every well-formed id in the same
+# answer.
+#
 # THREE STATES, not two. A set means we know; None means we do NOT (cold cache,
 # unreadable db, MDBList never connected) -- and "don't know" shows BOTH
 # entries, exactly as this feature did before it learned to choose. That is
@@ -194,6 +200,7 @@ _LIKED_HELPER = (
     " else None\n"
     "\t\t\t_ai_liked_ids_cache[0] = set(\n"
     "\t\t\t\tstr(i.get('id')) for i in _ai_lists\n"
+    "\t\t\t\tif i.get('id') is not None\n"
     "\t\t\t) if isinstance(_ai_lists, list) else None\n"
     "\t\texcept Exception:\n"
     "\t\t\t_ai_liked_ids_cache[0] = None\n"
