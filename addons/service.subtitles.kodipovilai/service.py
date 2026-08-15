@@ -221,6 +221,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_aiostreams,
         _maybe_patch_pov_resolve_diag,
         _maybe_restore_pov_torbox,
+        _maybe_fix_pov_torbox_url,
         _maybe_patch_af3_home,
         _maybe_cleanup_wizard,
         _maybe_quiet_update_nags,
@@ -2222,6 +2223,46 @@ def _maybe_patch_pov_widget_crash_guard():
             kodi_utils.log(
                 'pov_widget_crash_guard run failed: {0}'.format(e),
                 level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_fix_pov_torbox_url():
+    """Restore playback. POV 6.08.12 asks TorBox to append the file name to the
+    download link (`append_name=true`); TorBox returns it unencoded, so the
+    link arrives with raw spaces and brackets and libcurl rejects it
+    (`URL using bad/illegal format`) without sending a byte. Every release name
+    has spaces, so nothing plays.
+
+    We ENCODE the link rather than removing POV's parameter: POV added it
+    deliberately and would re-add it in every release, and each of those
+    releases would break playback again until this patcher caught up. Encoding
+    keeps POV's feature and makes the URL valid, so a future POV that keeps
+    `append_name` needs nothing from us."""
+    if _skip_pov_patchers():
+        return
+    try:
+        from resources.lib import pov_torbox_url_fix, kodi_utils
+    except Exception:
+        return
+    try:
+        status = pov_torbox_url_fix.ensure_patched()
+        if status == 'patched':
+            kodi_utils.log(
+                'pov_torbox_url_fix: TorBox links are percent-encoded before '
+                'playback (restores playback on POV 6.08.12+)', level='INFO')
+            try:
+                from resources.lib import pov_reload
+                pov_reload.note_patched()
+            except Exception:
+                pass
+        elif status in ('read_failed', 'write_failed', 'compile_failed',
+                        'no_anchor'):
+            kodi_utils.log('pov_torbox_url_fix: ' + status, level='WARNING')
+    except Exception as e:
+        try:
+            kodi_utils.log('pov_torbox_url_fix run failed: {0}'.format(e),
+                           level='WARNING')
         except Exception:
             pass
 
