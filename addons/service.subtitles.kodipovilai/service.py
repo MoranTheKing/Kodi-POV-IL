@@ -1318,10 +1318,15 @@ def _maybe_patch_pov_mdblist_like():
         # WARNING branch was unreachable for exactly the case worth seeing.
         parts = [p.split('=', 1)[-1].strip()
                  for p in status.split(',') if '=' in p]
-        if any(p not in ('patched', 'unchanged', 'no_file') for p in parts):
+        # 'repatched' = an older injected version was reverted and the current
+        # one written over it. Healthy, and worth seeing: it is the only signal
+        # that a version bump actually reached this device, which is precisely
+        # what silently failed between v2 and v3.
+        if any(p not in ('patched', 'repatched', 'unchanged', 'no_file')
+               for p in parts):
             kodi_utils.log('pov_mdblist_like_patcher: ' + status,
                            level='WARNING')
-        elif 'patched' in parts:
+        elif 'patched' in parts or 'repatched' in parts:
             kodi_utils.log('pov_mdblist_like_patcher: ' + status, level='INFO')
     except Exception as e:
         try:
