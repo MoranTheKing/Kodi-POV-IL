@@ -206,7 +206,8 @@ _SEARCH_ANCHOR_RE = _re.compile(
     r'[ \t]+if self\.search_title:', _re.M)
 
 _NEW_SEARCH_HELPER = (
-    "_ai_new_search_str = '[B]חיפוש חדש...[/B]'  " + MARKER + "\n\n"
+    "_ai_new_search_str = '[B]חיפוש חדש...[/B]'  " + MARKER + "\n"
+    "_ai_hist_key = 'mdbl_list_queries'  " + MARKER + "\n\n"
     "def _ai_new_search_item():  " + MARKER + "\n"
     "\t_ai_li = make_listitem()\n"
     "\t_ai_li.setLabel(_ai_new_search_str)\n"
@@ -214,16 +215,104 @@ _NEW_SEARCH_HELPER = (
     "\t\t'thumb': default_icon, 'fanart': fanart, 'banner': default_icon})\n"
     "\treturn _ai_li\n")
 
+# The intermediate screen, which is what makes Back mean what the user expects.
+#
+# Before this, the tile opened the keyboard directly, so the results were the
+# FIRST directory after the home screen -- a dialog leaves nothing on the
+# navigation stack -- and Back from them correctly went home. There was no
+# search screen to return to because there had never been one.
+#
+# The obvious repair, pushing a directory that re-prompts when you land back on
+# it, is a trap: Back stops meaning "get me out of here" and starts meaning
+# "ask me again", the only way out becomes Cancel, and Cancel from a directory
+# that must still render something is exactly the blank screen this release is
+# fixing. It is not even consistent -- POV caches directory listings when
+# pov_kodi_menu_cache is on, so the re-prompt would simply not happen there.
+#
+# So this follows POV's own answer, menus/history.py: a plain LISTING that does
+# not prompt on arrival -- "new search" plus the queries you have run before.
+# Back from results lands on it, Back again goes home, Cancel at the keyboard
+# leaves you on it. No trap, and search history comes free.
+#
+# It reuses POV's storage and POV's own context-menu modes rather than growing
+# a parallel one: remove_from_history and clear_search_history are already
+# routed in entry.py and take exactly the setting_id/query pair used here.
+_SEARCH_SCREEN = (
+    "def _ai_mdbl_search_screen(params):  " + MARKER + "\n"
+    "\timport sys as _ai_sys\n"
+    "\t_ai_h = int(_ai_sys.argv[1])\n"
+    "\tkodi_utils.add_dir(_ai_h,\n"
+    "\t\t{'mode': 'build_mdbl_list.search_mdbl_lists', 'ai_prompt': '1'},\n"
+    "\t\t_ai_new_search_str, iconImage=default_icon)\n"
+    "\ttry:\n"
+    "\t\tfrom caches.main_cache import MainCache as _ai_MC\n"
+    "\t\t_ai_rows = _ai_MC().get(_ai_hist_key) or []\n"
+    "\texcept Exception:\n"
+    "\t\t_ai_rows = []\n"
+    "\t_ai_items = []\n"
+    "\tfor _ai_q in _ai_rows:\n"
+    "\t\ttry:\n"
+    "\t\t\t_ai_li = make_listitem()\n"
+    "\t\t\t_ai_li.setLabel('[I]%s[/I]' % _ai_q)\n"
+    "\t\t\t_ai_li.setArt({'icon': default_icon, 'poster': default_icon,\n"
+    "\t\t\t\t'thumb': default_icon, 'fanart': fanart,\n"
+    "\t\t\t\t'banner': default_icon})\n"
+    "\t\t\t_ai_li.addContextMenuItems([\n"
+    "\t\t\t\t(ls(32698), 'RunPlugin(%s)' % build_url({\n"
+    "\t\t\t\t\t'mode': 'remove_from_history',\n"
+    "\t\t\t\t\t'setting_id': _ai_hist_key, 'query': _ai_q})),\n"
+    "\t\t\t\t(ls(32699), 'RunPlugin(%s)' % build_url({\n"
+    "\t\t\t\t\t'mode': 'clear_search_history',\n"
+    "\t\t\t\t\t'setting_id': _ai_hist_key, 'query': _ai_q}))])\n"
+    "\t\t\t_ai_items.append((build_url({\n"
+    "\t\t\t\t'mode': 'build_mdbl_list.search_mdbl_lists',\n"
+    "\t\t\t\t'search_title': _ai_q}), _ai_li, True))\n"
+    "\t\texcept Exception: pass\n"
+    "\tif _ai_items: kodi_utils.add_items(_ai_h, _ai_items)\n"
+    "\tkodi_utils.set_category(_ai_h, params.get('name') or 'MDBList')\n"
+    "\tkodi_utils.set_content(_ai_h, '')\n"
+    "\tkodi_utils.end_directory(_ai_h)\n"
+    "\tkodi_utils.set_view_mode('view.main', '')\n")
+
+# The tile's mode is unchanged, so a favourite already saved to the home screen
+# keeps working: it simply renders the screen now instead of the keyboard.
+# ai_prompt=1 is what asks for the keyboard, and it is what the new-search rows
+# on both screens send.
+#
+# INSERTED BESIDE POV'S LINE, NOT OVER IT, and the round-trip test is what
+# forced that. The first cut rewrote the whole function -- which reverts to
+# NOTHING, because _revert can only delete, so undoing it would have deleted
+# POV's own `return SearchMdblLists(params).build()` and left an empty
+# function. The redirect is therefore a single marked line above POV's, with
+# its body on the SAME line so no block hangs off it: revert removes exactly
+# that one line and POV's original is untouched underneath.
+_ENTRY_ANCHOR_RE = _re.compile(
+    r'^def search_mdbl_lists\(params\):\n'
+    r'(?P<ind>[ \t]+)return SearchMdblLists\(params\)\.build\(\)\n', _re.M)
+
+
+def _entry_block(m):
+    ind = m.group('ind')
+    return ('def search_mdbl_lists(params):\n'
+            + ind + "if not params.get('search_title') and not "
+            "params.get('ai_prompt'): return _ai_mdbl_search_screen(params)  "
+            + MARKER + '\n'
+            + ind + 'return SearchMdblLists(params).build()\n')
+
 _SEARCH_BLOCK_LINES = (
     "def build(self):  " + MARKER,
     "\tif not (self.search_title or '').strip():",
     "\t\timport sys as _ai_sys, xbmcplugin as _ai_xp",
     "\t\treturn _ai_xp.endOfDirectory(int(_ai_sys.argv[1]), succeeded=False)",
+    "\ttry:",
+    "\t\tfrom menus.history import add_to_search_history as _ai_remember",
+    "\t\t_ai_remember(self.search_title, _ai_hist_key)",
+    "\texcept Exception: pass",
     "\treturn super().build()",
     "",
     "def process_results(self):  " + MARKER,
-    "\tyield (build_url({'mode': 'build_mdbl_list.search_mdbl_lists'}),",
-    "\t\t_ai_new_search_item(), True)",
+    "\tyield (build_url({'mode': 'build_mdbl_list.search_mdbl_lists',",
+    "\t\t'ai_prompt': '1'}), _ai_new_search_item(), True)",
     "\tfor _ai_row in super().process_results(): yield _ai_row",
     "",
 )
@@ -560,6 +649,17 @@ def _patch_menu():
         sm = _SEARCH_ANCHOR_RE.search(new_content)
         new_content = (new_content[:sm.start()] + _search_block(sm.group('ind'))
                        + new_content[sm.start():])
+        # The intermediate screen rides on the same anchor being sound: it is
+        # only useful once build() can refuse a cancelled search, or landing
+        # back on it would immediately re-prompt.
+        entries = _ENTRY_ANCHOR_RE.findall(new_content)
+        if len(entries) != 1:
+            _log('mdblist.py: search_mdbl_lists entry matched {0} times, '
+                 'expected 1 -- shipping without the search screen'
+                 .format(len(entries)), level='WARNING')
+        else:
+            helpers = helpers + '\n' + _SEARCH_SCREEN
+            new_content = _ENTRY_ANCHOR_RE.sub(_entry_block, new_content, 1)
     new_content = _LABEL_ANCHOR_RE.sub(
         lambda m: m.group('line') + '\n' + _LABEL_LINE + '\n\n' + helpers,
         new_content, 1)
