@@ -952,7 +952,7 @@ def share_cache(progress_cb=None, should_cancel=None):
         try:
             with open(fp + '.release', 'r', encoding='utf-8') as _rf:
                 rel_override = (_rf.read().strip() or None)
-        except OSError:
+        except Exception:
             rel_override = None
         body = _build_body(info, '', lang, text, release_override=rel_override)
         if body is None:

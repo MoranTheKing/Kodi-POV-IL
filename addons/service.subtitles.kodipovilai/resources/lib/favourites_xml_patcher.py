@@ -318,7 +318,7 @@ def _trakt_connected():
     try:
         with open(pov_settings, 'r', encoding='utf-8') as f:
             content = f.read()
-    except OSError:
+    except Exception:
         return False
     # Look for the trakt_user setting line with a non-empty value.
     m = re.search(
@@ -446,7 +446,7 @@ def ensure_patched():
     try:
         with open(path, 'r', encoding='utf-8') as f:
             original = f.read()
-    except OSError as e:
+    except Exception as e:
         _log('read failed: {0}'.format(e), level='WARNING')
         return 'read_failed'
 

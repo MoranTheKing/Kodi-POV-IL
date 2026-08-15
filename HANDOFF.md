@@ -736,6 +736,35 @@ is nonsense. Also: the captured stack for the faulting thread is the crash
 handler's own frames (`dbgcore`/`dbghelp`), so the exception record, not the
 stack scan, is the authority in a 544 KB mini dump.
 
+## Hardening after 595 (on the branch, NOT released)
+
+**`except OSError` around a text read cannot catch `UnicodeDecodeError`** (it
+is a `ValueError`), so a corrupted third-party file raised straight out of
+functions whose docstrings promise they never do. 70 handlers in 51 files
+widened, by ast rather than sed -- the same `except OSError` guards
+`os.remove`/`os.replace`, where it is exactly right, so the decision is made
+on the structure of the try body. The filter needed three passes and each
+narrowing came from reading what it proposed: counting `encoding=` as proof of
+a read swept in every atomic-WRITE helper (168 handlers), keying on the mode
+still matched a binary `.read()` (100), and requiring a text-mode open or a
+bare `.read()` with no binary open in the same body gave the right 70. Proven
+by feeding five patchers a non-UTF-8 target: one raised before, none after.
+
+**`scratchpad/run_all_patchers.py` is now the answer to "what did the POV
+update break", and it can fail.** Seven fake-greens were removed in total --
+three yesterday (unknown statuses waved through, 8 modules never invoked,
+`translatePath` handling only `special://home/`) and four here: composite
+statuses tokenised so that KEY names counted as statuses (16 clean rows looked
+broken), a stateless settings stub that made a patcher's self-verified write
+look failed, bare imports that turned a harness limitation into a reported
+patcher failure (two modules were never tested at all until this), and modules
+with several `maybe_*` entry points having one called and reported as the
+whole. **49 patchers, 0 needing attention, against stock POV 6.08.12** -- 49
+rather than 52 because three non-patchers are now named as such.
+
+Both are hardening with no user-visible effect, so they ride the next release
+rather than justifying their own.
+
 ## Shipped 2026-08-15: note 595 (0.2.495 / wizard 0.1.46 / quickfix 0.1.540 / build 0.1.108)
 
 **A total playback outage, caused by POV updating itself, fixed the same day.**

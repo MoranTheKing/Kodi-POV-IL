@@ -523,7 +523,7 @@ def process(info, path, delivered_release):
         try:
             with open(path, 'r', encoding='utf-8', errors='replace') as f:
                 text = f.read()
-        except OSError:
+        except Exception:
             return path, None
         if not text.strip():
             return path, None
@@ -1007,7 +1007,7 @@ def run_deep_job(job):
         try:
             with open(path, 'r', encoding='utf-8', errors='replace') as f:
                 text = f.read()
-        except OSError:
+        except Exception:
             return
         if not text.strip():
             return
