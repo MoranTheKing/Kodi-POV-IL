@@ -882,6 +882,82 @@ The behaviour is right and worth keeping — an empty read also happens
 transiently while POV is starting, and skipping on it would mark the tune done
 and never retry — but the comment now says what actually happens.
 
+## Shipped 2026-08-15: note 597 (0.2.497 / wizard 0.1.46 / quickfix 0.1.542 / build 0.1.110)
+
+Three navigation defects in 596's MDBList menu, reported by the build owner
+within hours, plus the upgrade path that would have stopped any fix landing.
+
+### The bare Container.Refresh was wrong, and it was ours
+
+SearchMdblLists.__init__ reads `params.get('search_title') or
+kodi_utils.dialog.input('POV')`. The search-results container's path carries
+NO search_title -- the title was typed into a dialog -- so refreshing that
+path re-runs the prompt. Like said "Success" and re-opened the keyboard.
+Unlike did the same.
+
+The title is recoverable without asking: category_name = search_title, and
+BaseList.build() hands it to setPluginCategory, so the live container carries
+it. Refresh to the same path WITH the parameter and the results redraw in
+place. When it cannot be recovered -- blank category, or getInfoLabel raising
+so we cannot even tell which screen this is -- nothing is refreshed. A stale
+menu entry is small; taking the screen over with an unasked-for keyboard is
+not.
+
+### Back, and why the obvious repair is a trap
+
+The results were the first directory after home (a keyboard is a dialog, not
+a screen), so Back correctly went home -- there was nothing in between.
+Pushing a directory that RE-PROMPTS when you land back on it was rejected on
+evidence: Back would stop meaning "get me out" and start meaning "ask me
+again", the only exit becomes Cancel, and Cancel from a directory that must
+still render something is the blank-screen defect turned into a loop. It is
+not even consistent -- POV caches listings when pov_kodi_menu_cache is on, so
+the re-prompt would not fire there.
+
+POV's own answer is menus/history.py: a plain LISTING that does not prompt on
+arrival. That is what shipped -- "new search" plus previous queries, reusing
+POV's MainCache and its already-routed remove_from_history /
+clear_search_history with our own setting_id. The tile's mode is unchanged,
+so a saved favourite keeps working; ai_prompt=1 is what asks for the keyboard.
+
+### THE PATCHER COULD NOT REPLACE ITSELF -- the finding that mattered most
+
+Both halves returned 'unchanged' on seeing ANY marker in the family, so every
+device that took 0.2.496 would have kept v2 permanently, and silently, since
+'unchanged' read as healthy. Checked against the real artifacts: the quickfix
+contains ZERO POV .py files and the full build ships mdblist_api.py but NOT
+menus/mdblist.py, so no artifact ever replaces an injected file. The whole
+release would have reached only the users who did not have the bug.
+
+MARKER now answers "is the current version applied", _MARKER_ANY answers "is
+some version of ours in there" -> revert, then reapply. _revert works because
+every injected region has one shape in both versions: a marked line plus
+lines indented strictly deeper.
+
+**Rule: an injected block's every line must be indented deeper than its
+marked line, docstrings included.** _revert knows no Python syntax. The guard
+is the byte-for-byte round-trip test, and it caught three real mistakes
+during this work: blank lines that had to be consumed rather than handed back
+(they accumulate otherwise), an entry patch that REPLACED POV's line instead
+of inserting beside it (revert can only delete, so it would have left an empty
+function), and the missing 'repatched' in ensure_patched's gate, which made
+the menu half skip on exactly the v2 devices.
+
+### What review caught that the suite did not
+
+Pointing every history row at ai_prompt instead of search_title -- so each
+remembered query re-opens a blank keyboard -- left all 80 checks green. The
+routing tests stub the screen builder out, and substring checks cannot tell
+WHICH row a string is attached to. The builder is now extracted and executed,
+asserting the URLs it really emits.
+
+### Not verified here
+
+Whether endOfDirectory(succeeded=False) leaves the user on the calling screen
+with no toast is Kodi runtime behaviour and needs a device. It is now
+load-bearing for two flows: cancel from the results' new-search row, and
+cancel from the screen's own.
+
 ## Shipped 2026-08-15: note 596 (0.2.496 / wizard 0.1.46 / quickfix 0.1.541 / build 0.1.109)
 
 Contents: MDBList Like/Unlike in the long-press menu (#74), the
