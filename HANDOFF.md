@@ -1334,14 +1334,28 @@ fixing POV, remember:
 Calls use the `x-goog-api-key` HEADER, not `?key=` (newer `AQ.`-prefixed keys
 401 on the query param). One credential per request. `gemini.py` only.
 
-## Gemini model config (0.2.434)
+## Gemini model config (0.2.494)
 
 Default free model = **`gemini-3.5-flash-lite`** (500/day tier), paid "newest" =
-**`gemini-3.6-flash`** (20/day tier). Dropdown also keeps 3.1-flash, 2.5-flash-
+**`gemini-3.7-flash`** (20/day tier). Dropdown also keeps 3.1-flash, 2.5-flash-
 lite, 2.5-flash. To change models, touch ALL of: `settings.xml` (`<default>` +
 `<option>` values + the numeric labels 32230/32234), `language/*/strings.po`
 (label text), `gemini_quota.py` `MODEL_LIMITS` + `MODEL_TRACKED`, and the code
 fallbacks in `translate.py`, `subsync.py`, `default.py`, `gemini.py:test_key`.
+
+SUPERSEDED IDS STAY IN `MODEL_LIMITS`. 3.6-flash is still there after the move
+to 3.7: a user who declined the migration, or whose setting was written by
+hand, has to resolve to the daily number that model really has rather than
+fall through to a default nobody chose for them.
+
+THE MIGRATION MARKER GETS A NEW ID PER BUMP. `_maybe_bump_gemini_model` is
+once-only and returns early forever once its marker is set, so reusing the
+previous id makes the next bump a no-op for exactly the users who need it --
+the ones sitting on the model it supersedes. 3.5 -> 3.6 used
+`_gemini_model_bump_v1`; 3.6 -> 3.7 uses `_gemini_model_bump_v2`. Declare the
+new id in `settings.xml` in the same commit, beside the old one, not instead
+of it: `tools/test_settings_declared.py` fails the release otherwise, and a
+schema that forgets an id it wrote cannot explain the data it left behind.
 RPM cap (`translate._gemini_free_rpm_cap`) + flash-lite detection are SUBSTRING-
 based ('flash-lite'/'flash'), so new ids auto-tier. Existing users are migrated
 by `service._maybe_bump_gemini_model()` (marker `_gemini_model_bump_v1`, DECLARED
