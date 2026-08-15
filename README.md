@@ -144,6 +144,49 @@ Take 32-bit only if 64-bit refuses to install.
 Switching is safe: both carry the same app id and signing key, so 64-bit
 installs over 32-bit as an update and your data stays where it is.
 
+## MDBList lists get the menu Trakt lists already had (from `0.2.496`)
+
+Holding down on an MDBList list used to offer almost nothing. It now offers the
+same menu a Trakt list does, Like and Unlike included, so a list you find by
+searching can be added to your own without leaving the search.
+
+The entry you are shown is the one that applies: a list you have already liked
+offers **Unlike**, a list you have not offers **Like**. That check reads the
+list data the add-on has already fetched, so it costs no extra request and no
+extra waiting. When that data is not there to read, both entries are offered
+rather than the wrong one guessed — both are safe to press, because liking a
+list you already like changes nothing.
+
+Two kinds of list are deliberately left alone. Your own lists cannot be liked,
+and lists MDBList only mirrors from another service cannot be either — MDBList
+provides no way to do it. Neither is given a button that could not work.
+
+## A Hebrew subtitle re-timed onto the built-in one (from `0.2.496`)
+
+A new row in the subtitle list, **עברית מסונכרנת למובנה**, takes a Hebrew
+subtitle and re-times it onto the timeline of the film's own built-in subtitle
+track. When a Hebrew subtitle is written for a different cut and drifts against
+your copy, this is the row that fixes it.
+
+It appears only when there is both a Hebrew subtitle to re-time and a built-in
+track to time it against, so if the film has no Hebrew subtitle at all the row
+is simply not there and nothing else changes. It is never chosen for you: it
+delivers a different translation from the one inside the file, so it stays a
+choice you make rather than something applied on your behalf.
+
+## Subtitle numbers no longer appear inside the text (from `0.2.496`)
+
+A raw subtitle number and timecode could show up in the middle of a line of
+dialogue, mid-film. Two subtitles had been welded into one when the translation
+lost the blank line that separates them, and everything after the weld was read
+as text rather than as the start of the next subtitle. They are separated
+again.
+
+## The piratebay source provider is off (from `0.2.496`)
+
+It is now off by default. If you turn it back on it stays on, through this
+update and any later one.
+
 ## Films and episodes play again (from `0.2.495`)
 
 The video add-on updated itself and began asking the file host to put the
