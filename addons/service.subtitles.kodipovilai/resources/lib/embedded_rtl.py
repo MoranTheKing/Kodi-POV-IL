@@ -50,7 +50,9 @@
 # one, and delivering the wrong Hebrew track is far less likely than the
 # mis-mapping that pretending to pair them would cause.
 
+import errno
 import os
+import time
 
 try:
     import xbmc
@@ -66,12 +68,21 @@ except Exception:
 ADDON_ID = 'service.subtitles.kodipovilai'
 ACTION = 'embedded_rtl'
 
-# One repair per playing file. The same track can be selected by auto-on-play,
-# by the native picker and by our own chooser within seconds of each other, and
-# each of those fires this; the property holds the URL the repair is FOR, so a
-# genuinely new file is never mistaken for a repeat. It lives on the home window
-# because every fire runs in its own RunScript process.
-_DONE_PROP = 'povil.embedded_rtl_for'
+# One repair per playing file, enforced by an ATOMIC lock and not by a window
+# property. The same track can be selected by auto-on-play, by the native
+# picker and by our own chooser within seconds of each other -- and Kodi's
+# onAVStarted is documented in autosub_service as firing more than once for one
+# file, which starts a second auto-on-play thread. Each of those fires this, in
+# its own RunScript PROCESS.
+#
+# A window property cannot arbitrate that. getProperty-then-setProperty is a
+# check-then-set with a gap in the middle, so two processes that read before
+# either writes both conclude they are first -- and the thing they would then
+# both do is a network-heavy container extraction against the same debrid URL.
+# Two concurrent extractions saturating one token is precisely what closed a
+# movie in the field once already. os.open(O_CREAT|O_EXCL) has no gap: the
+# kernel hands the file to exactly one caller.
+_LOCK_NAME = 'embedded_rtl.lock'
 
 # Deliberately shorter than the embedded-AI extraction budget (900s). Nothing is
 # broken while this runs -- the user is watching the native track -- so a job
@@ -95,6 +106,120 @@ def _playing_file():
         return (xbmc.Player().getPlayingFile() or '').strip()
     except Exception:
         return ''
+
+
+def _lock_path():
+    return os.path.join(kodi_utils.cache_dir(), _LOCK_NAME)
+
+
+def _read_lock(path):
+    """(state, when, url) of an existing lock, or ('', 0.0, '')."""
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            parts = f.read().split('\n')
+        return parts[0].strip(), float(parts[1].strip()), parts[2].strip()
+    except Exception:
+        # Unreadable or half-written -- treat as a corpse, not as a live claim.
+        return '', 0.0, ''
+
+
+def _stale_after():
+    # A live extraction is bounded by its own deadline; anything older than
+    # that plus a margin belongs to a process Kodi has already killed.
+    return _DEADLINE_S + 120
+
+
+def _claim(url):
+    """'ok' to proceed, 'already' if this file is done, 'busy' if someone
+    else holds it. Never raises."""
+    try:
+        path = _lock_path()
+    except Exception:
+        return 'ok'          # no cache dir to lock in -- do not block the fix
+    payload = 'busy\n{0}\n{1}\n'.format(time.time(), url)
+    for second_try in (False, True):
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except OSError as e:
+            if e.errno != errno.EEXIST:
+                _log('lock unavailable ({0}) -- proceeding unlocked'.format(e),
+                     level='WARNING')
+                return 'ok'
+        except Exception:
+            return 'ok'
+        else:
+            try:
+                os.write(fd, payload.encode('utf-8'))
+            except Exception:
+                pass
+            finally:
+                try:
+                    os.close(fd)
+                except Exception:
+                    pass
+            return 'ok'
+        state, when, owner = _read_lock(path)
+        age = time.time() - when
+        # A claim dated in the FUTURE is fresh, not dead. It reads as negative
+        # age from a clock step on a cheap box -- and, less exotically, from the
+        # stamp simply being rounded forward when it was written. Treating that
+        # as stale reclaims a lock somebody is actively holding, which is the
+        # one thing this lock exists to prevent; translate.py's own extraction
+        # flag carries the same clamp for the same reason.
+        if age < 0:
+            age = 0.0
+        if owner == url:
+            if state == 'done':
+                return 'already'
+            if age < _stale_after():
+                return 'busy'
+        elif state == 'busy' and age < _stale_after():
+            # A live claim on a DIFFERENT file. There is one player, so that
+            # claim is obsolete by definition -- the process holding it is
+            # extracting from a video that is no longer playing, its own
+            # abort-on-playback-end is already unwinding it, and its moved_on
+            # guard will stop it delivering. Taking the lock is what lets the
+            # file the user IS watching get repaired; refusing here would mean
+            # the next thing they play is never fixed.
+            _log('taking over a lock left by a previous file', level='INFO')
+        if second_try:
+            return 'busy'
+        try:
+            os.remove(path)
+        except OSError:
+            return 'busy'
+    return 'busy'
+
+
+def _release(url, done):
+    """Mark the file finished, or drop the claim so a later fire can retry.
+
+    Only an outcome that would repeat itself is recorded as done. A transient
+    one -- an extraction the player stalled, a delivery we declined because the
+    user was mid-something -- releases the lock, so re-picking the track
+    actually tries again instead of being told it already happened.
+    """
+    try:
+        path = _lock_path()
+        if done:
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write('done\n{0}\n{1}\n'.format(time.time(), url))
+        else:
+            os.remove(path)
+    except Exception:
+        pass
+
+
+def _is_hebrew_name(name):
+    """Kodi's name for a subtitle stream ('heb', 'Hebrew', 'he', ...)."""
+    n = (name or '').strip().lower()
+    if not n:
+        return False
+    try:
+        from resources.lib.subs_engine_bridge import _LANG_NORMALIZE
+    except Exception:
+        _LANG_NORMALIZE = {'iw': 'he', 'heb': 'he', 'hebrew': 'he'}
+    return _LANG_NORMALIZE.get(n, n[:2]) == 'he'
 
 
 def fire():
@@ -125,7 +250,7 @@ def repair():
     if xbmc is None or kodi_utils is None:
         return 'no_kodi'
     try:
-        from resources.lib import srt, translate
+        from resources.lib import translate
     except Exception as e:
         _log('imports failed: {0}'.format(e), level='WARNING')
         return 'no_modules'
@@ -140,23 +265,13 @@ def repair():
     if not url:
         return 'no_url'
 
-    try:
-        import xbmcgui
-        win = xbmcgui.Window(10000)
-    except Exception:
-        win = None
-
-    if win is not None:
-        try:
-            if (win.getProperty(_DONE_PROP) or '') == url:
-                return 'already'
-        except Exception:
-            pass
-
     # The user's embedded-extraction setting governs this too. 'off' and
     # 'align_only' both mean "do not read the container for subtitle text", and
     # 'local_only' means "not over the network" -- this is the same read, so it
     # obeys the same answer instead of inventing a second switch for it.
+    #
+    # Checked BEFORE the lock is taken, so a setting the user changes
+    # mid-playback takes effect on the next pick rather than on the next file.
     try:
         policy = translate._embedded_translation_policy()
     except Exception:
@@ -170,16 +285,26 @@ def repair():
         _log('skipped: remote file and HTTP extraction is off', level='INFO')
         return 'http_not_allowed'
 
-    # Claim the file now: BEFORE the extraction, because the extraction is the
-    # thing we must not do twice, and AFTER the refusals above, because a run
-    # that declined to do anything has nothing to claim -- flagging it would
-    # make a setting the user changes mid-playback take until the next file to
-    # have any effect.
-    if win is not None:
-        try:
-            win.setProperty(_DONE_PROP, url)
-        except Exception:
-            pass
+    claim = _claim(url)
+    if claim != 'ok':
+        _log('not starting: {0}'.format(claim), level='INFO')
+        return claim
+    status = 'failed'
+    try:
+        status = _repair_locked(translate, url, allow_http)
+    except Exception as e:
+        _log('repair raised: {0}'.format(e), level='WARNING')
+        status = 'failed'
+    finally:
+        # Only an outcome that would repeat itself identically is recorded as
+        # finished. Everything else releases, so re-picking the track retries.
+        _release(url, status in ('delivered', 'no_change'))
+    return status
+
+
+def _repair_locked(translate, url, allow_http):
+    """The repair proper, with this file's lock held."""
+    from resources.lib import srt
 
     # Silence the extractor's own toasts. They are worded for the AI pipeline
     # ("AI: מחלץ תרגום מובנה...") which has nothing to do with this, and the user
@@ -231,13 +356,34 @@ def repair():
              level='INFO')
         return 'moved_on'
 
-    # ...and the user must not have chosen something else meanwhile. Every pick
-    # records itself here, so anything that is no longer an embedded entry is a
-    # deliberate choice we must not overwrite.
+    # ...and the user must not have moved on WITHIN this file either.
+    #
+    # Two questions, because one of them is not enough. Our own record
+    # (moransubs.current_sub) is written by our pick flows only -- Kodi's
+    # native subtitle button, the OSD track list and the "subtitles off"
+    # toggle never touch it -- and this run can last minutes, which is
+    # plenty of time for the user to reach for the remote. Trusting that
+    # record alone would let us switch a track back on that they had just
+    # switched off, which is a worse thing to do than the defect we came to
+    # fix. So ask the player what is actually on RIGHT NOW as well.
     try:
-        cur = kodi_utils.get_current_subtitle() or ''
-        if cur:
-            payload = translate._decode_link(cur) or {}
+        if not xbmc.getCondVisibility('VideoPlayer.SubtitlesEnabled'):
+            _log('subtitles were turned off -- not delivering', level='INFO')
+            return 'subs_off'
+    except Exception:
+        pass
+    try:
+        current = xbmc.Player().getSubtitles() or ''
+    except Exception:
+        current = ''
+    if current and not _is_hebrew_name(current):
+        _log('the active subtitle is {0!r}, no longer Hebrew -- not delivering'
+             .format(current), level='INFO')
+        return 'superseded'
+    try:
+        cur_link = kodi_utils.get_current_subtitle() or ''
+        if cur_link:
+            payload = translate._decode_link(cur_link) or {}
             if not payload.get('embedded'):
                 _log('user picked another subtitle -- not delivering',
                      level='INFO')
