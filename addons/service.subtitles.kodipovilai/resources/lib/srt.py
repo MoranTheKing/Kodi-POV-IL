@@ -548,18 +548,118 @@ def _wrap_rtl_base_line(line, cue_hebrew=False, legacy_engine=False):
     return _RLE + normalized + _PDF
 
 
+# --- entries the model welded together -------------------------------------
+# Field report (0.2.495): one cue rendered its own Hebrew line AND the raw
+# "286" + "00:15:51,284 --> 00:15:54,054" of the cue that should have come
+# after it, all on screen at once. The next cue was fine.
+#
+# A blank line is the ONLY thing that separates SRT entries, so when the model
+# omits one while copying a chunk back, two entries arrive as a single block --
+# and every stage after this one then treats the second entry's index and
+# timecode as TEXT belonging to the first. restore_block_timings hands the
+# merged block the first source block's header back and leaves the rest of it
+# alone; the reply looks exactly one entry short, which the caller tolerates
+# (it accepts up to 15% loss without retrying); and the player draws the lot.
+#
+# Splitting them back apart is unambiguous, which is what makes this safe to do
+# on every parse rather than behind a heuristic:
+#   * a digits-only line whose next non-empty line is a timecode is an entry
+#     header. A bare number DOES occur in real dialogue -- a year, a score, a
+#     countdown -- but never with "00:00:00,000 --> 00:00:00,000" under it.
+#   * a timecode line anywhere but at the head of a block is impossible as
+#     dialogue on its own.
+# A well-formed block holds exactly one timecode line and leaves here untouched,
+# so this costs one scan and changes nothing for input that was already correct.
+def _has_text_line(lines, lo, hi):
+    """True when lines[lo:hi] would still say something on screen.
+
+    A digits-only line counts as TEXT unless it is itself an entry header --
+    that is, unless a timecode follows it. The first version treated every
+    digits-only line as a header, which meant a cue whose only dialogue IS a
+    number could never satisfy this test: asked whether entry 41 (text: "42")
+    still had something to say, it answered no, so the cut stayed at the
+    timecode and the NEXT entry's index line ("50") was left behind as a second
+    line of dialogue that nobody ever wrote. Same disambiguation as the split
+    itself uses, and for the same reason -- digits alone are ambiguous, digits
+    followed by a timecode are not.
+    """
+    for j in range(lo, min(hi, len(lines))):
+        s = lines[j].strip()
+        if not s or _TIMECODE_RE.match(s):
+            continue
+        if _INDEX_RE.match(s):
+            k = j + 1
+            while k < len(lines) and not lines[k].strip():
+                k += 1
+            if k < len(lines) and _TIMECODE_RE.match(lines[k].strip()):
+                continue          # a header, not something the viewer reads
+        return True
+    return False
+
+
+def _split_welded_block(block):
+    """Split a block that carries a LATER entry's header inside its text."""
+    lines = block.split('\n')
+    tc_at = [i for i, ln in enumerate(lines) if _TIMECODE_RE.match(ln.strip())]
+    if len(tc_at) < 2:
+        return [block]
+    cuts, prev = [], 0
+    for i in tc_at[1:]:
+        # The index line belongs to the entry its timecode opens, so cut BEFORE
+        # the index -- cutting between the two would strand the number as the
+        # last line of the previous cue, which is the same defect one line
+        # smaller.
+        start = i
+        if i and _INDEX_RE.match(lines[i - 1].strip()):
+            # ...UNLESS taking that line leaves the entry we are closing with
+            # no text at all. Then the digits are not the next entry's index,
+            # they are this entry's ONLY line of dialogue -- a score, a house
+            # number, an answer shouted back -- and cutting in front of them
+            # DELETES them: the cue above loses its text and the cue below
+            # swallows the number as its index, so the number never reaches the
+            # screen at all. Leaving it where it is costs nothing, because the
+            # block below gets its index restored from the source either way.
+            # Silent deletion is a worse outcome than the weld we came to fix.
+            if _has_text_line(lines, prev, i - 1):
+                start = i - 1
+        if start > prev:
+            cuts.append(start)
+            prev = start
+    if not cuts:
+        return [block]
+    out, prev = [], 0
+    for cut in cuts + [len(lines)]:
+        part = '\n'.join(lines[prev:cut])
+        if part.strip():
+            # rstrip the CR too. Splitting a CRLF block mid-way leaves the last
+            # line's '\r' with no '\n' behind it, which a block that came
+            # straight from BLOCK_SEPARATOR never carries (the separator eats
+            # it), and a caller that rejoins blocks without stripping would
+            # carry that artefact into the file.
+            out.append(part.strip('\r\n'))
+        prev = cut
+    return out or [block]
+
+
 def parse_blocks(text):
     """Return a list of raw entry blocks (still strings). We don't
     bother with a structured parse since the model handles the
     timecodes verbatim -- if we round-trip strings unchanged for
-    those, we minimise damage from accidental edits."""
+    those, we minimise damage from accidental edits.
+
+    A block that holds more than one entry's header (the model dropped the
+    blank line between them) is split back apart first -- see above."""
     if not text:
         return []
     # Some SRTs start with a BOM. Strip it once.
     if text.startswith('﻿'):
         text = text[1:]
     text = text.strip()
-    return [b for b in BLOCK_SEPARATOR.split(text) if b.strip()]
+    blocks = []
+    for b in BLOCK_SEPARATOR.split(text):
+        if b.strip():
+            blocks.extend(_split_welded_block(b))
+    return blocks
 
 
 # --- Cue-timing integrity ---------------------------------------------------

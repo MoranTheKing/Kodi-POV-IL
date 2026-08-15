@@ -208,7 +208,12 @@ def _handle_download(handle, params):
     if _p and _p.get('type') == 'engine' and _p.get('embedded'):
         try:
             from resources.lib import subs_engine_bridge
-            if subs_engine_bridge.select_embedded(_p.get('stream_index')):
+            # Pass the picked language through. It was being dropped here and
+            # only here, which left the out-of-range fallback inside
+            # select_embedded re-finding a HEBREW stream for a '[מובנה] EN'
+            # pick.
+            if subs_engine_bridge.select_embedded(_p.get('stream_index'),
+                                                  lang=_p.get('lang')):
                 kodi_utils.notify('כתובית עברית מובנה הופעלה', time_ms=3000)
         except Exception as _e:
             _safe_log('embedded select failed: {0}'.format(_e), level='WARNING')

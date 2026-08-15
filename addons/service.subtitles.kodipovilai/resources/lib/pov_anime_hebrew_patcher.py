@@ -140,7 +140,7 @@ def _patch_file(rel, pairs):
     try:
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
-    except OSError as e:
+    except Exception as e:
         _log('read failed for {0}: {1}'.format(rel, e), level='WARNING')
         return 'read_failed'
     new_content = content

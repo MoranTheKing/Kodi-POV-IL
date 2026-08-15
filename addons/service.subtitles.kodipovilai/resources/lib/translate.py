@@ -425,7 +425,7 @@ def _reapply_rtl_fix_in_place(path, legacy_engine=False, ai_output=None):
     try:
         with open(path, 'r', encoding='utf-8', errors='replace') as f:
             content = f.read()
-    except OSError:
+    except Exception:
         return
     # The Arabic strip repairs a leak from the AI's gender-reference prompt, so
     # it runs ONLY on bytes that prompt could have produced. Two kinds of file
@@ -557,7 +557,7 @@ def _pool_source_text(info, source_hash):
                 cached = f.read()
             if cached:
                 return cached, safe_hash
-        except OSError:
+        except Exception:
             pass
 
     text = pool.fetch(info, raw_hash or None) if pool is not None else None
@@ -727,7 +727,7 @@ def process_harvest_queue(should_cancel=None):
         try:
             with open(path, 'r', encoding='utf-8', errors='replace') as f:
                 text = f.read()
-        except OSError:
+        except Exception:
             text = ''
         if text:
             try:
@@ -884,6 +884,37 @@ def list_candidates(info, modal_progress=True):
                     engine_other.append(c)
         except Exception as e:
             kodi_utils.log('engine search failed: {0}'.format(e),
+                           level='WARNING')
+
+        # "עברית מסונכרנת למובנה" -- an external Hebrew subtitle re-timed onto
+        # the embedded track's own cue skeleton. Same sync as the embedded
+        # track, and correct end-of-line punctuation, because it is our file.
+        #
+        # SHOWN ONLY WHEN IT CAN ACTUALLY WORK. It needs both halves: an
+        # embedded HEBREW track to take the timing from, and at least one
+        # external Hebrew subtitle to re-time. Both are already in hand here,
+        # so a title with no Hebrew subtitle simply never sees this row rather
+        # than being offered something that would fail when picked. (If the
+        # candidates exist but none of them aligns confidently, resolve() falls
+        # back to selecting the embedded track -- what the user gets today.)
+        try:
+            _emb_he = next((c for c in engine_embedded
+                            if c.get('_engine_kind') == 'embedded_he'), None)
+            if _emb_he is not None and (engine_human or engine_mt):
+                _emb_pl = _decode_link(_emb_he.get('link') or '') or {}
+                engine_embedded.insert(0, {
+                    'filename': 'עברית מסונכרנת למובנה · 101%',
+                    'language': 'he',
+                    'link': urllib.parse.quote(json.dumps({
+                        'type': 'embedded_sync', 'lang': 'he',
+                        'stream_index': _emb_pl.get('stream_index'),
+                    }, ensure_ascii=False)),
+                    'sync': 'true', 'rating': '5',
+                    'is_hi': False, 'is_hd': False,
+                    '_engine_kind': 'embedded_he', '_pct': 101,
+                })
+        except Exception as e:
+            kodi_utils.log('embedded_sync row skipped: {0}'.format(e),
                            level='WARNING')
 
         # Queue EVERY human Ktuvit result for the background harvest, so the
@@ -1538,7 +1569,7 @@ def _backfill_pool_async(info, translated_path, local_source, source_lang,
                 with open(translated_path + '.release', 'r',
                           encoding='utf-8') as _rf:
                     _rel = (_rf.read().strip() or None)
-            except OSError:
+            except Exception:
                 _rel = None
             pool.contribute_once(info, (cid + '_ar') if ar_tier else cid,
                                  source_lang, cached,
@@ -1706,7 +1737,8 @@ def _playing_video_url(info):
 
 
 def _embedded_aligned_source_srt(
-        info, src_lang, progress_cb=None, allow_http=True):
+        info, src_lang, progress_cb=None, allow_http=True,
+        strict_lang=False, include_he=False):
     """FAST, debrid-safe source SRT for the embedded-AI path.
 
     Instead of pulling the embedded track's ~1700 text blocks over the shared
@@ -1861,7 +1893,7 @@ def _embedded_aligned_source_srt(
         # extract.
         _p(10, 100, 'מחפש כתובית מקור תואמת...')
         try:
-            all_cands = subsync._oracle_candidates(info)
+            all_cands = subsync._oracle_candidates(info, include_he=include_he)
         except Exception:
             all_cands = []
         try:
@@ -1876,6 +1908,13 @@ def _embedded_aligned_source_srt(
         pref = (src_lang or 'en').lower()[:2]
         try_langs = [x for x in dict.fromkeys([pref, 'en'] + ext_langs)
                      if x in ext_langs]
+        # The cross-language fallback is right for the AI path -- an English
+        # source still becomes Hebrew at the end of it. It is WRONG for a caller
+        # that DELIVERS what comes back: falling back to English there would
+        # hand an English subtitle to someone who asked for Hebrew. Such a
+        # caller passes strict_lang and gets the picked language or nothing.
+        if strict_lang:
+            try_langs = [x for x in try_langs if x == pref]
         if not try_langs:
             kodi_utils.log('embedded-align: no external subtitle in any language '
                            '-- deferring to full extract', level='INFO')
@@ -2509,6 +2548,74 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         except OSError:
             return None
 
+    if kind == 'embedded_sync':
+        # A Hebrew subtitle the user could already have picked -- but re-timed
+        # onto the EMBEDDED track's own cue skeleton, which is the video's
+        # ground-truth timeline. Two things come out of that:
+        #   * it is synced as exactly as the embedded track is, which is the
+        #     reason anyone prefers the embedded track in the first place;
+        #   * it is OUR file, so it goes through fix_rtl_punctuation and the
+        #     mark that closes each line lands at the right end -- which the
+        #     embedded track itself cannot, because Kodi draws that one with an
+        #     LTR base direction out of bytes we do not own.
+        #
+        # It reads only the Cues INDEX (a handful of range requests), never the
+        # track's text, so it is the cheap half of what the abandoned extraction
+        # would have cost -- that is the whole reason this shape survives where
+        # the extraction did not.
+        #
+        # The honest trade, and the user knows it: this is a DIFFERENT
+        # translation from the one inside the file. That is why it is a picker
+        # entry to choose rather than something applied automatically.
+        _status('מסנכרן כתובית עברית לתזמון המובנה...', time_ms=4000)
+        _sync_path = None
+        try:
+            _pol = _embedded_translation_policy()
+            _sync_path, _used = _embedded_aligned_source_srt(
+                info, 'he', allow_http=bool(_pol.get('allow_http', True)),
+                strict_lang=True, include_he=True)
+            if _sync_path and _used != 'he':
+                # strict_lang should make this impossible; if it ever is not,
+                # delivering it would put a foreign-language subtitle on screen
+                # for a Hebrew pick, so refuse rather than trust the flag.
+                kodi_utils.log('embedded_sync: aligner returned {0!r}, not '
+                               'Hebrew -- discarding'.format(_used),
+                               level='WARNING')
+                _sync_path = None
+        except Exception as e:
+            kodi_utils.log('embedded_sync failed: {0}'.format(e),
+                           level='WARNING')
+        if _sync_path and os.path.isfile(_sync_path):
+            try:
+                with open(_sync_path, 'r', encoding='utf-8') as f:
+                    _body = f.read()
+                _fixed = srt.fix_rtl_punctuation(_body)
+                _out = os.path.join(
+                    kodi_utils.cache_dir(),
+                    'embedded_sync_he.povil-rtl.srt')
+                _tmp = _out + '.aitmp'
+                with open(_tmp, 'w', encoding='utf-8', newline='') as f:
+                    f.write(_fixed)
+                os.replace(_tmp, _out)
+                _status('כתובית עברית מסונכרנת לתזמון המובנה מוכנה',
+                        time_ms=3500)
+                return _out
+            except Exception as e:
+                kodi_utils.log('embedded_sync write failed: {0}'.format(e),
+                               level='WARNING')
+        # Nothing aligned confidently. Fall back to the embedded track itself --
+        # exactly what the user gets today -- rather than leaving them with no
+        # subtitle at all because an optional improvement did not land.
+        try:
+            from . import subs_engine_bridge as _seb
+            if _seb.select_embedded(payload.get('stream_index'), 'he'):
+                _status('לא נמצאה כתובית עברית שמסתנכרנת — הופעל התרגום המובנה',
+                        time_ms=5000)
+        except Exception as e:
+            kodi_utils.log('embedded_sync fallback select failed: {0}'
+                           .format(e), level='WARNING')
+        return None
+
     if kind == 'engine':
         # Embedded Hebrew pick: just switch Kodi's subtitle stream, there
         # is no file to deliver (mirrors DarkSubs's [LOC] selection).
@@ -2557,7 +2664,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         with open(_pool_source_path, 'r', encoding='utf-8',
                                   errors='replace') as _kf:
                             _ktext = _kf.read()
-                    except OSError:
+                    except Exception:
                         _ktext = ''
                     if _ktext:
                         pool.contribute_ktuvit(
