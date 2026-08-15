@@ -288,6 +288,12 @@ for label, row, want in (
         ("a poisoned 'null' row -> unknown, NOT known-empty",
          (_json.dumps(None),), None),
         ('a payload of the wrong shape -> unknown', ('[1, 2, 3]',), None),
+        # An entry with no id must not contribute str(None) == 'None' to the
+        # set, where it would match any row whose own id was null.
+        ('an entry with no id is dropped, the rest survive',
+         ('{"lists": [{"id": 7}, {"name": "no id here"}]}',), {'7'}),
+        ('an explicit null id is dropped too',
+         ('{"lists": [{"id": null}, {"id": 9}]}',), {'9'}),
         ('corrupted text -> unknown', ('not json at all',), None)):
     got, _ = real_helper(row)
     check('real helper: %s' % label, got == want, 'got %r' % (got,))
@@ -301,11 +307,20 @@ reads = []
 
 
 class _CountingCur(object):
+    """Returns NO row, so the memo holds None -- a FALSY answer.
+
+    With a truthy set here, swapping the memo guard from `is False` to a bare
+    truthiness test (`not _ai_liked_ids_cache[0]`) survives green, because
+    `not {'7'}` is False either way. The states that matter -- unknown (None)
+    and known-empty (set()) -- are exactly the falsy ones, i.e. exactly where
+    such a mutation would silently turn one cached read per page into one per
+    row."""
+
     def execute(self, *a):
         reads.append(1)
 
     def fetchone(self):
-        return ('{"lists": [{"id": 7}]}',)
+        return None
 
 
 _mc = types.ModuleType('caches.mdbl_cache')
