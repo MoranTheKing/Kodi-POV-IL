@@ -344,6 +344,102 @@ check('a completed search is remembered',
       'the history screen would always be empty')
 
 
+# --- the search screen itself, EXECUTED -----------------------------------
+# Review mutated the history rows to point at ai_prompt instead of
+# search_title -- which would make every remembered query re-open a blank
+# keyboard rather than jump to its results, defeating the whole screen -- and
+# both suites stayed green. The routing checks above stub this function out,
+# so they cannot see inside it, and the substring checks stay true no matter
+# WHICH row a string is attached to: the mutated line still contained
+# "'ai_prompt': '1'". So the function is extracted and run here, and the
+# assertions are on the URLs it actually emits.
+screen_src = re.search(
+    r'^def _ai_mdbl_search_screen\(params\):.*?(?=\n(?:def |class )|\Z)',
+    menu_src, re.S | re.M)
+check('the search screen builder was injected', screen_src is not None)
+
+if screen_src:
+    added_dirs, added_items, ended = [], [], []
+
+    class _LI(object):
+        def __init__(self):
+            self.label, self.cm = None, []
+
+        def setLabel(self, s):
+            self.label = s
+
+        def setArt(self, d):
+            pass
+
+        def addContextMenuItems(self, items):
+            self.cm = items
+
+    class _Cache(object):
+        rows = ['Sport', 'Comedy']
+
+        def get(self, key):
+            return list(self.rows)
+
+    mc = types.ModuleType('caches.main_cache')
+    mc.MainCache = _Cache
+    sys.modules['caches'] = types.ModuleType('caches')
+    sys.modules['caches.main_cache'] = mc
+
+    k = types.ModuleType('ku3')
+    k.add_dir = lambda h, u, label, iconImage=None: added_dirs.append((u, label))
+    k.add_items = lambda h, items: added_items.extend(items)
+    k.set_category = lambda h, c: None
+    k.set_content = lambda h, c: None
+    k.end_directory = lambda h: ended.append(h)
+    k.set_view_mode = lambda *a: None
+
+    sys.argv = ['plugin://x', '9', '']
+    g = {'kodi_utils': k, 'make_listitem': _LI, 'default_icon': 'i.png',
+         'fanart': 'f.jpg', 'ls': lambda i: 'str%d' % i,
+         '_ai_new_search_str': 'NEW', '_ai_hist_key': 'mdbl_list_queries',
+         'build_url': lambda d: 'url://' + d['mode'] + ''.join(
+             '&%s=%s' % kv for kv in sorted(d.items()) if kv[0] != 'mode')}
+    exec(screen_src.group(0), g)
+    g['_ai_mdbl_search_screen']({'name': 'MDBLIST: Search Lists'})
+
+    check('the screen offers exactly one "new search" action',
+          len(added_dirs) == 1, repr(added_dirs))
+    check('...and it asks for the keyboard (ai_prompt), not another screen',
+          added_dirs and added_dirs[0][0].get('ai_prompt') == '1'
+          and 'search_title' not in added_dirs[0][0], repr(added_dirs))
+
+    check('every remembered query is shown', len(added_items) == 2,
+          repr([i[0] for i in added_items]))
+    check('a history row jumps STRAIGHT to its results',
+          all('search_title=' in i[0] for i in added_items),
+          repr([i[0] for i in added_items]))
+    check('...and never re-opens the keyboard instead',
+          not any('ai_prompt' in i[0] for i in added_items),
+          'a remembered query would prompt again -- the screen is pointless')
+    check('the rows carry the query that was remembered',
+          [i[0] for i in added_items] == [
+              'url://build_mdbl_list.search_mdbl_lists&search_title=Sport',
+              'url://build_mdbl_list.search_mdbl_lists&search_title=Comedy'],
+          repr([i[0] for i in added_items]))
+    check('each row can be removed, and the history cleared',
+          all(len(i[1].cm) == 2 for i in added_items)
+          and all('remove_from_history' in i[1].cm[0][1]
+                  and 'clear_search_history' in i[1].cm[1][1]
+                  and 'mdbl_list_queries' in i[1].cm[0][1]
+                  for i in added_items),
+          repr([i[1].cm for i in added_items]))
+    check('the directory is finished exactly once', ended == [9], repr(ended))
+
+    # ...and with nothing remembered yet, still a usable screen.
+    added_dirs[:], added_items[:], ended[:] = [], [], []
+    _Cache.rows = []
+    g['_ai_mdbl_search_screen']({'name': 'x'})
+    check('an empty history still renders the new-search action',
+          len(added_dirs) == 1 and added_items == [] and ended == [9],
+          'dirs=%r items=%r ended=%r' % (added_dirs, added_items, ended))
+    _Cache.rows = ['Sport', 'Comedy']
+
+
 # --- THE UPGRADE PATH: a device already carrying v2 must be healed ---------
 # This is the scenario that made the whole release pointless and that neither
 # suite covered. Both halves used to return 'unchanged' on seeing ANY marker in
@@ -402,6 +498,10 @@ else:
     check('the search-nav fix actually landed on the upgraded device',
           '_ai_new_search_item' in up_menu and 'succeeded=False' in up_menu,
           'the v3 menu overrides are not there')
+    check('...including the intermediate screen and its entry redirect',
+          '_ai_mdbl_search_screen' in up_menu
+          and "params.get('ai_prompt')" in up_menu,
+          'the newest half of the fix did not survive the upgrade')
     check('the refresh fix actually landed on the upgraded device',
           '_ai_refresh_after_like' in up_api
           and 'kodi_utils.container_refresh()' not in body(up_api,
