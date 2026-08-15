@@ -226,7 +226,12 @@ def bind_overrides():
     sys.modules['xbmcplugin'] = xp
     sys.argv = ['plugin://x', '7', '']
 
-    g = {'build_url': lambda d: 'url://' + d['mode'],
+    # serialise the WHOLE param dict, so a check can assert what the row
+    # actually asks for rather than only which mode it names
+    g = {'build_url': lambda d: 'url://' + d['mode'] + ''.join(
+             '&%s=%s' % kv for kv in sorted(d.items())
+             if kv[0] != 'mode'),
+         '_ai_hist_key': 'mdbl_list_queries',
          '_ai_new_search_item': lambda: 'new-search-item'}
     ns = {}
     exec('class Sub(Base):\n' + '\n'.join(
@@ -255,9 +260,13 @@ check('a real search still builds normally', calls['base_build'] == 1
 rows = list(Sub().process_results())
 check('the "new search" row comes FIRST in the results',
       len(rows) == 2 and rows[0][1] == 'new-search-item', repr(rows))
-check('...and it re-invokes search with no title, which is what prompts',
-      rows and rows[0][0] == 'url://build_mdbl_list.search_mdbl_lists'
-      and 'search_title' not in rows[0][0], repr(rows[0] if rows else None))
+# It must carry ai_prompt. Absence of search_title is NOT enough any more:
+# that combination now renders the intermediate screen, so a row relying on it
+# would bounce the user to the screen instead of opening the keyboard.
+check('...and it asks for the keyboard explicitly, via ai_prompt',
+      rows and rows[0][0] ==
+      'url://build_mdbl_list.search_mdbl_lists&ai_prompt=1',
+      repr(rows[0] if rows else None))
 check('...and the real results are still all there, after it',
       len(rows) == 2 and rows[1] == ('url://real', 'real-item', True),
       repr(rows))
@@ -276,6 +285,63 @@ try:
           'checks above are not testing the fix')
 finally:
     api_src = saved
+
+
+# --- the intermediate search screen, executed -----------------------------
+# This is what makes Back mean what the build owner expected. The routing is
+# the whole feature: the tile must render a SCREEN, the new-search rows must
+# reach the KEYBOARD, and a history row must go straight to RESULTS. Get any
+# one of those backwards and either Back breaks again or the tile stops
+# prompting entirely.
+entry = re.search(r'^def search_mdbl_lists\(params\):\n(?:[ \t]+.*\n)+',
+                  menu_src, re.M)
+check('the search entry point was patched', entry is not None)
+
+if entry:
+    routed = []
+    g = {'_ai_mdbl_search_screen': lambda p: routed.append(('screen', p)),
+         'SearchMdblLists': type('S', (), {
+             '__init__': lambda self, p: routed.append(('list', p)) or None,
+             'build': lambda self: 'built'})}
+    exec(entry.group(0), g)
+    fn = g['search_mdbl_lists']
+
+    routed[:] = []
+    fn({'name': 'MDBLIST: Search Lists'})
+    check('the home tile opens the SCREEN, not the keyboard',
+          routed and routed[0][0] == 'screen', repr(routed))
+
+    routed[:] = []
+    fn({'ai_prompt': '1'})
+    check('a "new search" row goes on to prompt',
+          routed and routed[0][0] == 'list', repr(routed))
+
+    routed[:] = []
+    fn({'search_title': 'Sport'})
+    check('a history row goes straight to the results, no prompt',
+          routed and routed[0][0] == 'list'
+          and routed[0][1].get('search_title') == 'Sport', repr(routed))
+
+    # SABOTAGE: if the redirect is dropped the tile prompts again and Back
+    # goes back to being broken.
+    g2 = dict(g)
+    exec('def search_mdbl_lists(params):\n'
+         '\treturn SearchMdblLists(params).build()\n', g2)
+    routed[:] = []
+    g2['search_mdbl_lists']({'name': 'x'})
+    check('SABOTAGE: without the redirect the tile skips the screen',
+          routed and routed[0][0] == 'list',
+          'the routing checks above are not testing the redirect')
+
+check('the screen offers a new search that prompts',
+      "'ai_prompt': '1'" in menu_src and '_ai_new_search_str' in menu_src)
+check('the screen reuses POV\'s own history storage and menus',
+      '_ai_hist_key' in menu_src and 'remove_from_history' in menu_src
+      and 'clear_search_history' in menu_src,
+      'a parallel history mechanism was grown instead')
+check('a completed search is remembered',
+      'add_to_search_history' in menu_src,
+      'the history screen would always be empty')
 
 
 # --- THE UPGRADE PATH: a device already carrying v2 must be healed ---------
