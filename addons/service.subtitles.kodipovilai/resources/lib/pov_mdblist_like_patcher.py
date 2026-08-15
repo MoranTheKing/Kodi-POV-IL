@@ -147,6 +147,17 @@ _RUN = ("cm_append((%s, 'RunPlugin(%%s)' %% build_url("
 # label. So this peeks the same SQLite row cache_mdbl_object would read and
 # stops there.
 #
+# THE SHAPE IS CHECKED, NOT COERCED. POV's cache_mdbl_object writes its row
+# UNCONDITIONALLY -- including when call_mdblist swallowed a RequestException
+# and returned None, which persists json.dumps(None), the literal string
+# 'null', under this very key, with no TTL. An earlier version unpacked that
+# with `(json.loads(row) or {}).get('lists') or []`, and every one of those
+# `or`s is a place where "we could not tell" quietly becomes "we know, and the
+# answer is nothing": null -> None -> {} -> [] -> set(). The user would then
+# see only "Like" on a list they HAD liked, silently, for as long as the
+# poisoned row lived. isinstance checks instead, so a wrong shape falls to
+# unknown the same way a corrupted row already did.
+#
 # THREE STATES, not two. A set means we know; None means we do NOT (cold cache,
 # unreadable db, MDBList never connected) -- and "don't know" shows BOTH
 # entries, exactly as this feature did before it learned to choose. That is
@@ -178,10 +189,12 @@ _LIKED_HELPER = (
     "\t\t\t_ai_cur = _ai_mc.MDBLCache().dbcur\n"
     "\t\t\t_ai_cur.execute(_ai_mc.MC_BASE_GET, ('mdbl_liked_lists',))\n"
     "\t\t\t_ai_row = _ai_cur.fetchone()\n"
+    "\t\t\t_ai_data = _ai_json.loads(_ai_row[0]) if _ai_row else None\n"
+    "\t\t\t_ai_lists = _ai_data.get('lists') if isinstance(_ai_data, dict)"
+    " else None\n"
     "\t\t\t_ai_liked_ids_cache[0] = set(\n"
-    "\t\t\t\tstr(i.get('id')) for i in\n"
-    "\t\t\t\t(_ai_json.loads(_ai_row[0]) or {}).get('lists') or []\n"
-    "\t\t\t) if _ai_row else None\n"
+    "\t\t\t\tstr(i.get('id')) for i in _ai_lists\n"
+    "\t\t\t) if isinstance(_ai_lists, list) else None\n"
     "\t\texcept Exception:\n"
     "\t\t\t_ai_liked_ids_cache[0] = None\n"
     "\treturn _ai_liked_ids_cache[0]\n")

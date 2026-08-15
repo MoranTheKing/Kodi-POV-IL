@@ -235,21 +235,91 @@ for lt, liked, want in (
              want or 'neither'),
           got == want, 'got %r' % (got,))
 
-# The liked lookup failing must degrade to "Like", never to nothing and never
-# to an error: MDBList's PUT is defined as "ensures the list is liked".
-def _boom():
-    raise RuntimeError('mdblist unreachable')
+# --- 3b. the REAL helper, executed ------------------------------------------
+# Everything above stubs _ai_liked_ids, so until now NOTHING ran the generated
+# helper itself: not the SQLite peek, not the json unpack, not the tri-state,
+# not the except clause. That gap is exactly why a live defect passed a green
+# suite -- POV writes its cache row even when the fetch FAILED, persisting the
+# literal string 'null', and the unpack laundered that into "known: nothing"
+# instead of "unknown". So extract the real helper and feed it rows.
+# Cut at the first column-0 line AFTER the def, not at the next `def` -- what
+# follows the injection is POV's own module-level code (which needs names like
+# `ls`), and swallowing it makes the extraction fail for reasons that have
+# nothing to do with the helper.
+_hl = menu_txt.split('\n')
+_hs = next(i for i, l in enumerate(_hl) if l.startswith('def _ai_liked_ids():'))
+_he = next((i for i in range(_hs + 1, len(_hl))
+            if _hl[i].strip() and not _hl[i][:1] in ('\t', ' ')), len(_hl))
+helper_src = '\n'.join(_hl[_hs:_he])
 
 
-_calls = []
-_ns = {'list_type': 'user_lists', 'list_id': 4242,
-       'cm_append': lambda t: _calls.append(t),
-       'build_url': lambda d: 'plugin://pov/?%s' % d['mode'],
-       '_ai_liked_ids': lambda: set(),
-       '_ai_likelist_str': 'Like List', '_ai_unlikelist_str': 'Unlike List'}
-exec(compile(src_block, 'branch', 'exec'), _ns)
-check('an empty liked set still offers Like',
-      [c[0] for c in _calls] == ['Like List'], repr(_calls))
+def real_helper(row, raises=False):
+    """Run the generated _ai_liked_ids() against one fake cache row."""
+    import json as _j
+
+    class _Cur(object):
+        def execute(self, *a):
+            if raises:
+                raise RuntimeError('database is locked')
+
+        def fetchone(self):
+            return row
+
+    mc = types.ModuleType('caches.mdbl_cache')
+    mc.MC_BASE_GET = 'SELECT ...'
+    mc.MDBLCache = lambda: types.SimpleNamespace(dbcur=_Cur())
+    caches = types.ModuleType('caches')
+    caches.mdbl_cache = mc
+    sys.modules['caches'] = caches
+    sys.modules['caches.mdbl_cache'] = mc
+    ns = {'_ai_liked_ids_cache': [False], 'json': _j}
+    exec(compile(helper_src, 'helper', 'exec'), ns)
+    return ns['_ai_liked_ids'](), ns['_ai_liked_ids_cache']
+
+
+import json as _json
+for label, row, want in (
+        ('a real liked-lists payload',
+         ('{"lists": [{"id": 7}, {"id": 42}]}',), {'7', '42'}),
+        ('an empty but VALID payload -> known, nothing liked',
+         ('{"lists": []}',), set()),
+        ('no cache row at all -> unknown', None, None),
+        # The defect: POV persists json.dumps(None) when its own fetch failed.
+        ("a poisoned 'null' row -> unknown, NOT known-empty",
+         (_json.dumps(None),), None),
+        ('a payload of the wrong shape -> unknown', ('[1, 2, 3]',), None),
+        ('corrupted text -> unknown', ('not json at all',), None)):
+    got, _ = real_helper(row)
+    check('real helper: %s' % label, got == want, 'got %r' % (got,))
+
+got, _ = real_helper(('{"lists": []}',), raises=True)
+check('real helper: a locked/raising db -> unknown, never an exception',
+      got is None, repr(got))
+
+# ...and it must read the row ONCE, not once per row of the listing.
+reads = []
+
+
+class _CountingCur(object):
+    def execute(self, *a):
+        reads.append(1)
+
+    def fetchone(self):
+        return ('{"lists": [{"id": 7}]}',)
+
+
+_mc = types.ModuleType('caches.mdbl_cache')
+_mc.MC_BASE_GET = 'SELECT ...'
+_mc.MDBLCache = lambda: types.SimpleNamespace(dbcur=_CountingCur())
+_c = types.ModuleType('caches')
+_c.mdbl_cache = _mc
+sys.modules['caches'], sys.modules['caches.mdbl_cache'] = _c, _mc
+_ns = {'_ai_liked_ids_cache': [False]}
+exec(compile(helper_src, 'helper', 'exec'), _ns)
+for _ in range(5):
+    _ns['_ai_liked_ids']()
+check('real helper: the cache row is read once, not once per row',
+      len(reads) == 1, '%d reads' % len(reads))
 
 modes = [c[1] for c in run_branch('user_lists', ())
          + run_branch('user_lists', (4242,))]
