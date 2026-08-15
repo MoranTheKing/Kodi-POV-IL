@@ -64,7 +64,12 @@ POV_ADDON_ID = 'plugin.video.pov'
 API_REL_PATH = 'resources/lib/indexers/mdblist_api.py'
 MENU_REL_PATH = 'resources/lib/menus/mdblist.py'
 
-MARKER = '# AI_SUBS_MDBL_LIKE_v1'
+MARKER = '# AI_SUBS_MDBL_LIKE_v2'
+# Detection is by FAMILY, not by exact version: a device carrying an older
+# version must read as already-patched and be left alone, because injecting v2
+# beside v1 would give the user two of each entry. (v1 never shipped, so this
+# is insurance rather than migration.)
+_MARKER_ANY = '# AI_SUBS_MDBL_LIKE_v'
 
 # POV's own string ids, the same two menus/trakt.py uses, so the entries read
 # identically to the Trakt ones in every language POV ships.
@@ -112,6 +117,33 @@ _MENU_ANCHOR_RE = _re.compile(
 
 _RUN = ("cm_append((%s, 'RunPlugin(%%s)' %% build_url("
         "{'mode': 'mdblist.mdbl_%s_a_list', 'list_id': list_id})))")
+
+# The ids the user has already liked, read ONCE per plugin process.
+#
+# This is what lets the menu offer the entry that APPLIES instead of both, and
+# it is affordable only because POV already caches this exact read:
+# mdbl_get_lists('liked_lists') goes through mdbl_cache.cache_mdbl_object, so a
+# page of search results costs one cached lookup rather than a request per row.
+# (The same idea in Umbrella would cost a live request each time, which is why
+# it was not proposed there.)
+#
+# FAIL-OPEN TO AN EMPTY SET, deliberately. If the lookup fails -- MDBList not
+# connected, token expired, cold cache with no network -- every row falls back
+# to offering "Like", and MDBList's own contract makes that harmless: the
+# schema defines PUT as "ensures the list is liked", so liking an already-liked
+# list succeeds instead of erroring. The degraded state is a menu that is
+# merely less clever, never one that breaks.
+_LIKED_HELPER = (
+    "_ai_liked_ids_cache = [None]  " + MARKER + "\n"
+    "\n"
+    "def _ai_liked_ids():  " + MARKER + "\n"
+    "\tif _ai_liked_ids_cache[0] is None:\n"
+    "\t\ttry:\n"
+    "\t\t\t_ai_liked_ids_cache[0] = set(str(i.get('id')) for i in "
+    "(mdblist_api.mdbl_get_lists('liked_lists') or []))\n"
+    "\t\texcept Exception:\n"
+    "\t\t\t_ai_liked_ids_cache[0] = set()\n"
+    "\treturn _ai_liked_ids_cache[0]\n")
 
 
 def _log(msg, level='INFO'):
@@ -169,16 +201,25 @@ def _menu_block(ind):
     compiling -- which the compile check would catch, but only by refusing to
     apply the fix at all.
     """
-    inner = ind + ('\t' if ind.endswith('\t') else '    ')
+    step = '\t' if ind.endswith('\t') else '    '
+    inner, inner2 = ind + step, ind + step + step
     like = _RUN % ('_ai_likelist_str', 'like')
     unlike = _RUN % ('_ai_unlikelist_str', 'unlike')
+    # ONE entry, the one that applies -- not both. A list you own gets neither
+    # (POV already gives my_lists its own new/delete pair). A list already in
+    # your liked lists can only be unliked, whether you reached it from "My
+    # Liked Lists" or from a search. Anything else can only be liked.
+    #
+    # POV shows BOTH for Trakt in this same situation, so this is deliberately
+    # better than the thing it was modelled on -- and it costs nothing extra,
+    # because the liked set is a cached read POV already performs.
     return (
-        # A list already liked can only be unliked; one you OWN is neither
-        # (POV gives my_lists its own new/delete pair, same as Trakt does).
-        "%sif list_type == 'liked_lists':  %s\n%s%s\n"
-        "%selif list_type != 'my_lists':\n%s%s\n%s%s\n"
-        % (ind, MARKER, inner, unlike,
-           ind, inner, like, inner, unlike))
+        "%sif list_type != 'my_lists':  %s\n"
+        "%sif list_type == 'liked_lists' or str(list_id) in _ai_liked_ids():\n"
+        "%s%s\n"
+        "%selse:\n"
+        "%s%s\n"
+        % (ind, MARKER, inner, inner2, unlike, inner, inner2, like))
 
 
 def _patch_api():
@@ -188,7 +229,7 @@ def _patch_api():
     content = _read(path)
     if content is None:
         return 'read_failed'
-    if MARKER in content:
+    if _MARKER_ANY in content:
         return 'unchanged'
     m = _API_ANCHOR_RE.search(content)
     if not m:
@@ -214,7 +255,7 @@ def _patch_menu():
     content = _read(path)
     if content is None:
         return 'read_failed'
-    if MARKER in content:
+    if _MARKER_ANY in content:
         return 'unchanged'
 
     # Same uniqueness discipline as the menu anchor below. Taking the first of
@@ -236,7 +277,8 @@ def _patch_menu():
     new_content = (content[:mm.start()] + _menu_block(mm.group('ind'))
                    + content[mm.start():])
     new_content = _LABEL_ANCHOR_RE.sub(
-        lambda m: m.group('line') + '\n' + _LABEL_LINE, new_content, 1)
+        lambda m: m.group('line') + '\n' + _LABEL_LINE + '\n\n' + _LIKED_HELPER,
+        new_content, 1)
     if new_content == content:
         return 'unmatched'
     try:

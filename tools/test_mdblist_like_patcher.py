@@ -167,19 +167,21 @@ check('the API file was not touched again',
 # Pull the injected branch out of the patched file and run it for each list
 # type, with cm_append/build_url captured. This is what proves the entries
 # appear for the right lists -- a marker check would pass on nonsense.
-block = []
-for line in menu_txt.split('\n'):
-    if mod.MARKER in line and 'list_type' in line:
-        block.append(line)
+# Take the marker line, then every line indented DEEPER than it -- that is a
+# block, whatever shapes the branch happens to use. The first version listed
+# the line prefixes it expected and silently captured only the first line the
+# moment the branch grew an `else:`.
+lines = menu_txt.split('\n')
+start = next(i for i, l in enumerate(lines)
+             if mod.MARKER in l and 'list_type' in l)
+base = len(lines[start]) - len(lines[start].lstrip('\t '))
+block = [lines[start]]
+for l in lines[start + 1:]:
+    if not l.strip():
         continue
-    if block:
-        if line.strip().startswith(('cm_append((_ai_', 'elif list_type')):
-            block.append(line)
-            continue
+    if len(l) - len(l.lstrip('\t ')) <= base:
         break
-# De-indent by the OUTER prefix only. Stripping every leading tab flattens
-# the nested cm_append lines into the if-body's own level, which then does not
-# parse -- the block must keep its relative nesting to be worth executing.
+    block.append(l)
 _outer = re.match(r'^[\t ]*', block[0]).group(0)
 src_block = '\n'.join(
     l[len(_outer):] if l.startswith(_outer) else l for l in block)
@@ -187,11 +189,13 @@ check('the injected branch was found in the patched menu', len(block) >= 4,
       repr(block))
 
 
-def run_branch(list_type):
+def run_branch(list_type, liked=()):
+    """`liked` = the ids _ai_liked_ids() reports, i.e. the user's liked lists."""
     calls = []
     ns = {'list_type': list_type, 'list_id': 4242,
           'cm_append': lambda t: calls.append(t),
           'build_url': lambda d: 'plugin://pov/?%s' % d['mode'],
+          '_ai_liked_ids': lambda: set(str(x) for x in liked),
           '_ai_likelist_str': 'Like List',
           '_ai_unlikelist_str': 'Unlike List'}
     exec(compile(src_block, 'branch', 'exec'), ns)
@@ -203,15 +207,39 @@ def run_branch(list_type):
 # that, not as 'search'/'top_lists'), and GetMdblLists.parse_item returns
 # 'liked_lists', 'external' or 'my_lists'. An earlier version of this list used
 # made-up labels, which could only ever re-test the same catch-all branch.
-for lt, want in (('user_lists', ['Like List', 'Unlike List']),
-                 ('external', ['Like List', 'Unlike List']),
-                 ('liked_lists', ['Unlike List']),
-                 ('my_lists', [])):
-    got = [c[0] for c in run_branch(lt)]
-    check('list_type %-12s offers %s' % (lt, want or 'neither'), got == want,
-          'got %r' % (got,))
+# ONE entry, the one that applies. The liked set is what decides it for a row
+# the user reached from a search -- which is the whole point of v2.
+for lt, liked, want in (
+        ('user_lists', (), ['Like List']),
+        ('user_lists', (4242,), ['Unlike List']),     # already liked
+        ('external', (), ['Like List']),
+        ('external', (4242,), ['Unlike List']),
+        ('liked_lists', (), ['Unlike List']),         # by definition liked
+        ('liked_lists', (4242,), ['Unlike List']),
+        ('my_lists', (), []),
+        ('my_lists', (4242,), [])):                   # never, even if liked
+    got = [c[0] for c in run_branch(lt, liked)]
+    check('%-12s liked=%-8s -> %s' % (lt, bool(liked), want or 'neither'),
+          got == want, 'got %r' % (got,))
 
-modes = [c[1] for c in run_branch('search')]
+# The liked lookup failing must degrade to "Like", never to nothing and never
+# to an error: MDBList's PUT is defined as "ensures the list is liked".
+def _boom():
+    raise RuntimeError('mdblist unreachable')
+
+
+_calls = []
+_ns = {'list_type': 'user_lists', 'list_id': 4242,
+       'cm_append': lambda t: _calls.append(t),
+       'build_url': lambda d: 'plugin://pov/?%s' % d['mode'],
+       '_ai_liked_ids': lambda: set(),
+       '_ai_likelist_str': 'Like List', '_ai_unlikelist_str': 'Unlike List'}
+exec(compile(src_block, 'branch', 'exec'), _ns)
+check('an empty liked set still offers Like',
+      [c[0] for c in _calls] == ['Like List'], repr(_calls))
+
+modes = [c[1] for c in run_branch('user_lists', ())
+         + run_branch('user_lists', (4242,))]
 check('the entries fire the mdblist.* modes',
       all('mdblist.mdbl_' in m and '_a_list' in m for m in modes),
       repr(modes))
@@ -289,8 +317,8 @@ check('...and no Like entry was written', mod4.MARKER not in menu4)
 # If the injected block were malformed, the compile check must refuse rather
 # than write a POV that cannot start. Break the block and confirm.
 home3 = fresh_pov()
-mod3 = load(home3, sabotage=("%sif list_type == 'liked_lists':  %s\\n%s%s\\n",
-                             "%sif list_type == 'liked_lists'  %s\\n%s%s\\n"))
+mod3 = load(home3, sabotage=('"%sif list_type != \'my_lists\':  %s\\n"',
+                             '"%sif list_type != \'my_lists\'  %s\\n"'))
 st3 = mod3.ensure_patched()
 check('SABOTAGE: a malformed block is refused by the compile check',
       'compile_failed' in st3, st3)
