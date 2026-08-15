@@ -176,7 +176,7 @@ def _patch_one(path, native_filename, tmdb_mt, trakt_mt, suffix):
     try:
         with open(path, 'r', encoding='utf-8') as f:
             original = f.read()
-    except OSError as e:
+    except Exception as e:
         _log('{0}: read failed: {1}'.format(path, e), level='WARNING')
         return 'read_failed'
 
@@ -195,7 +195,7 @@ def _patch_one(path, native_filename, tmdb_mt, trakt_mt, suffix):
         try:
             with open(path, 'r', encoding='utf-8') as f:
                 original = f.read()
-        except OSError:
+        except Exception:
             return 'restored'
 
     # episodes.py (suffix=None): restore-only, nothing to inject.

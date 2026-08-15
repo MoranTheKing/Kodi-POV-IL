@@ -94,7 +94,7 @@ def ensure_patched():
     try:
         with open(p, 'r', encoding='utf-8') as f:
             content = f.read()
-    except OSError as e:
+    except Exception as e:
         kodi_utils.log(
             'fentastic_patcher: read failed: {0}'.format(e),
             level='WARNING')
@@ -163,7 +163,7 @@ def ensure_unpatched():
     try:
         with open(p, 'r', encoding='utf-8') as f:
             content = f.read()
-    except OSError:
+    except Exception:
         return 'read_failed'
     if MARKER not in content:
         return 'no_change'

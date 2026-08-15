@@ -298,7 +298,7 @@ def _maybe_relabel_auto_translate():
     try:
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
-    except OSError as e:
+    except Exception as e:
         kodi_utils.log(
             'DarkSubs settings.xml read failed: {0}'.format(e),
             level='WARNING')
