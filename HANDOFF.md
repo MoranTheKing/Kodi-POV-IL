@@ -920,16 +920,16 @@ This section originally read "**None found**", on the strength of reading the
 86 patcher sources. That conclusion is false and every number under it was
 wrong. It was re-done by MEASUREMENT -- patch a pristine host, bump the
 patcher's own marker, run it again against the host it just patched -- against
-**POV 6.08.13 and Umbrella 6.7.82, the current upstream of both**. 22 of the 33
+**POV 6.08.13 and Umbrella 6.7.82, the current upstream of both**. 22 of the 35
 patchers that have a host to measure against fail to upgrade correctly:
 
-    UPGRADES         9   a bump reaches devices already carrying the old one
-    NEVER-UPGRADES  14   second run is a no-op: the fix reaches nobody, quietly
-    DOUBLE-INJECT    8   old block stays live beside the new one
-    DOUBLE-STAMP     2   only the marker COMMENT duplicates; the code is fine
+    UPGRADES        10   a bump reaches devices already carrying the old one
+    NEVER-UPGRADES  16   second run is a no-op: the fix reaches nobody, quietly
+    DOUBLE-INJECT    6   old block stays live beside the new one
+    DOUBLE-STAMP     3   only the marker COMMENT duplicates; the code is fine
     UNPROVEN        24   no host for them on this machine, so: unmeasured
 
-**Fourteen instances of exactly the MDBList shape, not zero.** They include
+**Sixteen instances of exactly the MDBList shape, not zero.** They include
 `pov_view_mode_patcher` (v4), `pov_favorites_refresh_patcher` (v3) and
 `pov_genre_icons_patcher` (v3) -- each has been bumped two or three times, and
 every one of those bumps reached fresh installs only.
@@ -975,21 +975,20 @@ the specifics: `pov_build_content_logger_patcher` and `pov_meta_blank_patcher`
 measure NEVER-UPGRADES, i.e. stuck, not duplicating.
 
 **How bad is DOUBLE-INJECT, measured rather than guessed?** Three successive
-bumps applied to each of the nine: the host still COMPILES every time, and
-carries four copies of the injected block (eight where the patcher hits two
-sites). For seven of the nine the duplicated code is idle -- cache guards and
-early returns that simply re-run. **Two of them duplicate an `append`, and
-those are user-visible:**
+bumps applied to each: the host still COMPILES every time, and carries four
+copies of the injected block (eight where the patcher hits two sites). For most
+of them the duplicated code is idle -- cache guards and early returns that
+simply re-run. Three re-stamp only the marker COMMENT and leave the code
+correct and singular; they are `DOUBLE-STAMP`, a separate verdict, because
+calling that the same thing buries the one that matters:
 
   * `pov_services_patcher` -- `_ai_services.append(...)` ×4 in `myservices.py`,
     i.e. every service listed four times in the "חיבור שירותים" screen.
-  * `pov_mdblist_patcher` -- `original_list.append({...})` ×4 in
-    `mdblist_api.py`, quadrupling watchlist entries.
 
-So neither failure mode dominates the other in general. Stuck is the more
-common outcome (12 vs 9) and the harder to notice, because nothing changes and
-nothing is logged. Duplication is louder but only actually breaks anything when
-the injected block appends.
+So neither failure mode dominates the other in general. Stuck is far more
+common (16 vs 6) and the harder to notice, because nothing changes and nothing
+is logged. Duplication is louder but only actually breaks anything when the
+injected block appends.
 
 **RULE: for a patcher, "I read it and it looks fine" is not a finding. Run it
 twice.** The second run is the only thing that knows what a device already
@@ -1011,14 +1010,32 @@ versioned marker must be pinned too, so the shape cannot enter unclassified.
 
 **It also has to look for the right thing.** The first version discovered
 markers by grepping for `AI_SUBS...`, which is a house convention five WIRED
-patchers do not follow: `darksubs_patcher` (`AI_TRANSLATE_HOOK`, referenced ten
-times from `service.py`), `darksubs_download_sub_patcher`,
+patchers do not follow: `darksubs_patcher` (`AI_TRANSLATE_HOOK`, reached from
+`service.py` via `dark_subs_integration`), `darksubs_download_sub_patcher`,
 `darksubs_embedded_demote_patcher`, `pov_resume_cancel_patcher` and
 `af3_home_patcher` (`POV_AF3_*`). All five were invisible -- not measured, not
 pinned, not even counted as unproven -- so bumping any of them printed ALL PASS
 on every machine. Widening it to any `SHOUTING_NAME_vN` found them with no
-false positives, and `pov_resume_cancel_patcher` turned out to be a fourteenth
-NEVER-UPGRADES. The irony worth remembering: the docstring of the very function
+false positives, and `pov_resume_cancel_patcher` turned out to be another
+NEVER-UPGRADES.
+
+**Two more blind spots of the same kind, found the same way.** The harness
+selected modules by having "patcher" in the FILENAME, and called only
+`ensure_patched()`. Both are naming conventions, and both had exceptions that
+mattered:
+
+  * `pov_torbox_url_fix.py` is called from `service.py` on every boot, rewrites
+    POV's `torbox_api.py` behind an exact-match marker gate -- and its name has
+    no "patcher" in it, so it was never opened. It measures NEVER-UPGRADES.
+    Modules are selected by SHAPE now: a versioned marker plus an
+    `ensure_*`/`heal_*` entry point.
+  * `pov_mdblist_patcher` exposes FIVE entry points and `service.py` calls all
+    five every boot. Measuring `ensure_patched` alone gave the module one
+    verdict derived from one of its six patches; three of the other five reach
+    nobody (`MDBL_NONE_GUARD`, `MDBL_WATCHLIST_ONLY`, `SORT_RECENT_DEFAULT`).
+    Every entry point is called now, and **a module takes the verdict of its
+    WORST marker** -- an `any()` over the set had been quietly awarding it the
+    kinder of the two labels. The irony worth remembering: the docstring of the very function
 that handles constructed markers named `darksubs_patcher` as a case it covered,
 and the regex above it threw that file away before the function was reached.
 
@@ -1052,7 +1069,7 @@ ends `ALL PASS -- PARTIAL: n of m verdicts unverified here`. Related trap:
 broken, and pasting that in is a silent downgrade -- it now prints a
 DO-NOT-PASTE banner above any such line.
 
-`UNPROVEN` is not a clean bill of health, it is an unmeasured patcher: 20 of
+`UNPROVEN` is not a clean bill of health, it is an unmeasured patcher: 24 of
 them -- the skins, the wizard, the All_Subs add-on -- because this machine has
 no stock copy of those hosts. Point `POV_STOCK` / `UMBRELLA_STOCK` (or drop a
 tree where the patcher looks) and re-run with `--pins` to convert one into a
