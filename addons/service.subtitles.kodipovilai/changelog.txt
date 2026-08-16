@@ -1,3 +1,21 @@
+v0.2.499
+- The player bar now hides itself on every skin that can do it, not only on
+  FENtastic. The setting that closes it after a few idle seconds was being
+  turned on by a check that named one skin and returned for all the others, so
+  anyone on Nox had the bar stay up until they pressed Back. It is detected
+  from the skin's own files now, so a skin that has the feature gets it, and if
+  you turn it back off yourself it stays off.
+- Umbrella's "continue watching" for SERIES no longer gets stuck several
+  episodes behind while the EPISODES list is correct. The two read different
+  things: episodes come from MDBList live, series are rebuilt from a table on
+  the device. That table was losing rows -- Umbrella moves its sync marker
+  forward to the current time even when a request failed or came back empty,
+  and the marker never moves back, so whatever was in that window was skipped
+  for good. The sync now reads thirty days further back so a missed window is
+  picked up instead of lost, and a table that has already lost rows is refilled
+  once, by itself -- the same thing Umbrella's own "Force MDBList Sync" button
+  does, without needing to know the button exists.
+
 v0.2.498
 - If you installed the AI subtitles add-on on its own, from the repository,
   rather than as part of the build: the automatic move to Gemini 3.7 Flash
