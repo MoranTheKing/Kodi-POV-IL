@@ -921,15 +921,15 @@ This section originally read "**None found**", on the strength of reading the
 wrong. It was re-done by MEASUREMENT -- patch a pristine host, bump the
 patcher's own marker, run it again against the host it just patched -- against
 **POV 6.08.13 and Umbrella 6.7.82, the current upstream of both**. 21 of the 36
-patchers that have a host to measure against fail to upgrade correctly (66
-modules carry a versioned marker in all):
+patchers that can be measured here fail to upgrade correctly (70 modules
+carry a versioned marker in all):
 
-    UPGRADES        10   a bump reaches devices already carrying the old one
+    UPGRADES         9   a bump reaches devices already carrying the old one
     NEVER-UPGRADES  15   second run is a no-op: the fix reaches nobody, quietly
     DOUBLE-INJECT    6   old block stays live beside the new one
-    DOUBLE-STAMP     3   only the marker COMMENT duplicates; the code is fine
+    DOUBLE-STAMP     6   only the marker COMMENT duplicates; the code is fine
     RETIRED          2   marker-gated and called by nothing; not a live risk
-    UNPROVEN        30   no host for them on this machine, so: unmeasured
+    UNPROVEN        32   no host here, or nothing here can call it
 
 **Fifteen instances of exactly the MDBList shape, not zero.** They include
 `pov_view_mode_patcher` (v4), `pov_favorites_refresh_patcher` (v3) and
@@ -1057,14 +1057,21 @@ A marker does not have to live in the HOST's file. There is a second
 convention here -- a versioned flag in **our own addon's Kodi settings**,
 recording that a one-time change already ran -- and all thirteen of those
 start with an underscore, which `\b` can never anchor before. All thirteen
-were invisible. The sharp one is `pov_mdblist_patcher`'s
-`_lists_sort_recent_v1`, gating `ensure_lists_sort_recent()`, one of the five
-entry points `service.py` calls on every boot, and it has **the worst safety
-net in the tree**: the flag lives in our own settings, so no host update and
-nothing else ever clears it -- worse than `kodi_playlist_timeout_patcher`.
-Changing that one string to `_v2` -- exactly what shipping a fix to that gate
-requires -- printed `ALL PASS` with the module's own line still reading `ok`.
-It now fails, verified by fire drill.
+were invisible. `pov_mdblist_patcher`'s
+`_lists_sort_recent_v1` gates `ensure_lists_sort_recent()`, one of the five
+entry points `service.py` calls on every boot. Changing that one string to
+`_v2` -- exactly what shipping a fix to that gate requires -- printed
+`ALL PASS` with the module's own line still reading `ok`. It now fails.
+
+**Two corrections to how I described this, both mine and both overstated.**
+The fire drill proved the PIN layer trips, not the dynamic simulation: that
+entry point calls `xbmcaddon.Addon('plugin.video.pov')`, and `xbmcaddon` was
+evicted from `sys.modules` and never stubbed, so it returned `no_pov` on every
+run and was never exercised at all (fixed below). And "the worst safety net in
+the tree" is not a superlative one marker can hold -- the whole settings-flag
+convention has no net, and there are at least **thirty** such markers, most of
+them in `service.py` rather than in any patcher. Several are further along
+than this one: `_ktuvit_on_v4` is on its fourth id.
 
 Two supporting fixes went in with it: the Kodi stub grew a real settings store
 backed by a file, so a settings marker is observable in the snapshot like any
@@ -1072,6 +1079,36 @@ other write; and the host list stopped being a hardcoded pair. Seven host
 add-ons this tree patches -- including `skin.arctic.fuse.3`, home of the
 highest-risk patcher in the notes above -- had no key and no env var, so they
 could not be measured on **any** machine without editing the test's source.
+
+**A sixth: the harness assumed a patcher is a runnable module in one folder.**
+Three more things were invisible, and the largest is not in a patcher at all:
+
+  * **`xbmcaddon` was never stubbed.** Only evicted. Every entry point that
+    reads another add-on's settings -- `pov_mdblist_patcher.ensure_lists_sort_
+    recent`, `umbrella_setup_patcher`'s three, `umbrella_language_patcher`'s
+    two, `update_nag_patcher`, `pov_scraper_settings_patcher` -- hit
+    `ModuleNotFoundError`, returned its "host not installed" sentinel, and was
+    never run, on any machine, stock host present or not. Three pinned
+    verdicts were wrong because of it; all three flipped once it was stubbed.
+  * **`service.py` holds SIXTEEN versioned settings markers**, gating one-shot
+    migrations run from `main()` at boot -- including `_gemini_model_bump_v2`,
+    whose own comment states the exact "reusing the old id makes it a no-op
+    for precisely the users who need it" risk this whole exercise is about.
+    Discovery never opened the file: it is one directory above `resources/lib`.
+  * **Three lib modules carry markers with no `ensure_*`/`heal_*` at all** --
+    `kodi_utils` (`_embedded_mode_v1`), `umbrella_watch_prompt`, and
+    `umbrella_watch_source` (`_umb_watch_source_v2`, already bumped once).
+
+The fix separates DISCOVERY from EXECUTABILITY. Anything carrying a versioned
+marker is discovered and pinned, wherever it lives and whatever its shape; only
+a module with a live entry point is simulated. The rest are honestly UNPROVEN
+-- but pinned, which buys the thing that matters most: **the tripwire fires on
+a bump even where nothing can be measured.**
+
+Also: a pinned marker that never lands used to drop out of the verdict in
+silence. `--pins` now prints `[never landed: ...]`, which is how
+`AI_SUBS_MDBL_REDACT_v1` was found to be a phantom -- declared in
+`pov_mdblist_patcher`, never written by the code it nominally gates.
 
 **RULE: for a patcher, "I read it and it looks fine" is not a finding. Run it
 twice.** The second run is the only thing that knows what a device already
@@ -1152,8 +1189,9 @@ ends `ALL PASS -- PARTIAL: n of m verdicts unverified here`. Related trap:
 broken, and pasting that in is a silent downgrade -- it now prints a
 DO-NOT-PASTE banner above any such line.
 
-`UNPROVEN` is not a clean bill of health, it is an unmeasured patcher: 30 of
-them -- the skins, the wizard, the All_Subs add-on -- because this machine has
+`UNPROVEN` is not a clean bill of health, it is an unmeasured patcher: 32 of
+them -- the skins, the wizard, the All_Subs add-on, plus everything nothing
+here can call -- because this machine has
 no stock copy of those hosts. Point `POV_STOCK` / `UMBRELLA_STOCK` (or drop a
 tree where the patcher looks) and re-run with `--pins` to convert one into a
 real verdict.
