@@ -4658,6 +4658,7 @@ def _maybe_enable_osd_autoclose():
                     continue
             if supports:
                 break
+        others = _without(no_feature, skin)
         if not supports:
             # Only cache a negative we actually MEASURED. Zero files read means
             # the walk found nothing to read -- a skin installed somewhere
@@ -4669,18 +4670,17 @@ def _maybe_enable_osd_autoclose():
                 # Capped, and a stale stamp for this same skin is dropped, so
                 # a skin that is updated often does not fill the list with its
                 # own past versions.
-                kodi_utils.set_setting(
-                    '_osd_autoclose_nofeature',
-                    ','.join(_without(no_feature, skin)[-9:] + [stamp]))
+                kodi_utils.set_setting('_osd_autoclose_nofeature',
+                                       ','.join(others[-9:] + [stamp]))
             return  # this skin has no such feature -- nothing to turn on
-        if _without(no_feature, skin) != [s for s in no_feature if s]:
+        if others != [s for s in no_feature if s]:
             # This skin was recorded as featureless and now HAS the feature --
             # a skin update added it. Drop the obsolete entry instead of
             # letting it age out: the cache holds ten, and stale entries push
             # live ones out, which costs the rescans the cache exists to
             # prevent.
             kodi_utils.set_setting('_osd_autoclose_nofeature',
-                                   ','.join(_without(no_feature, skin)))
+                                   ','.join(others))
         xbmc.executebuiltin('Skin.SetBool(OSDAutoClose)')
         xbmc.executebuiltin('Skin.SetString(OSDAutoCloseTime,4)')
         # executebuiltin queues; the read below can otherwise race the write
