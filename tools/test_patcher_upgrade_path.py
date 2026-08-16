@@ -341,13 +341,24 @@ def _install_stubs(home, extra_path=None):
             sys.modules.pop(name, None)
 
     def _tp(p):
-        if not isinstance(p, str):
+        """Every special:// form lands inside `home`, without exception.
+
+        Enumerating just home/ and profile/ and passing the rest through
+        unchanged is not a smaller version of this -- it is a hole. A patcher
+        handed back an untranslated 'special://...' writes it as a RELATIVE
+        path, so it lands in the current working directory. That is how a run
+        of this harness created 'special:/userdata/favourites.xml' inside the
+        repo and very nearly committed it.
+        """
+        if not isinstance(p, str) or not p.startswith('special://'):
             return p
-        if p.startswith('special://home/'):
-            return os.path.join(home, p[len('special://home/'):])
-        if p.startswith('special://profile/'):
-            return os.path.join(home, 'userdata', p[len('special://profile/'):])
-        return p
+        rest = p[len('special://'):]
+        head, _, tail = rest.partition('/')
+        if head == 'home':
+            return os.path.join(home, tail)
+        if head in ('profile', 'masterprofile', 'userdata'):
+            return os.path.join(home, 'userdata', tail)
+        return os.path.join(home, '_special_' + head, tail)
 
     vfs = types.ModuleType('xbmcvfs')
     vfs.translatePath = _tp
@@ -557,6 +568,15 @@ check('the dynamic layer actually ran on something', exercised > 0,
 # --------------------------------------------------------------------------
 # 3. sabotage -- both layers must be able to fail
 # --------------------------------------------------------------------------
+print()
+print('=== hygiene: the harness wrote nothing outside its temp homes ===')
+REPO = os.path.normpath(os.path.join(HERE, '..'))
+strays = sorted(n for d in (os.getcwd(), REPO, HERE)
+                for n in os.listdir(d) if n.startswith('special:'))
+check('no special:// path escaped into the tree', not strays,
+      'found %s -- a patcher was handed an untranslated special:// path and '
+      'wrote it relative to the working directory' % ', '.join(strays))
+
 print()
 print('=== sabotage ===')
 
