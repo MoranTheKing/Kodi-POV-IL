@@ -924,8 +924,8 @@ patcher's own marker, run it again against the host it just patched -- against
 patchers that can be measured here fail to upgrade correctly (81 files
 carry a versioned marker in all):
 
-    UPGRADES         9   a bump reaches devices already carrying the old one
-    NEVER-UPGRADES  17   second run is a no-op: the fix reaches nobody, quietly
+    UPGRADES        11   a bump reaches devices already carrying the old one
+    NEVER-UPGRADES  15   second run is a no-op: the fix reaches nobody, quietly
     DOUBLE-INJECT    6   old block stays live beside the new one
     DOUBLE-STAMP     6   only the marker COMMENT duplicates; the code is fine
     RETIRED          2   marker-gated and called by nothing; not a live risk
@@ -943,7 +943,7 @@ every one of those bumps reached fresh installs only.
 REPLACES the files our markers live in, so the marker vanishes and the patcher
 re-applies cleanly at whatever version it now is.
 
-Measured, marker by marker: **20 of the 21 land inside the host add-on
+Measured, marker by marker: **19 of the 21 land inside the host add-on
 directory and therefore self-heal on its next release.** For those, a
 "never upgrades" bump is a DELAY, not a permanent loss. The window is real --
 the changelog promises behaviour the device does not have until the host's next
@@ -1187,6 +1187,40 @@ now follows one hop into a local helper rather than adding another naming rule.
 
 **And a count corrected: "six" modules gating on an unversioned marker is 23.**
 That number stood for four rounds, wrong by nearly 4x, understating the gap.
+
+**A tenth — and it means my round-9 report to you was wrong.** I announced that
+two modules "flipped to NEVER-UPGRADES, real defects that had been invisible".
+Both were **healthy**, and the verdicts were artefacts:
+
+  * `bump_source()` moves a marker by replacing its literal text. A synthesised
+    `key=value` pair marker has **no verbatim text in the source** — that is
+    the whole premise of the pair rule — so the replace was a silent no-op and
+    the "second run" re-ran the UNCHANGED module. Every pair-shaped gate
+    therefore read NEVER-UPGRADES **regardless of whether it was correct**.
+  * The guard against exactly that, `unmoved()`, asked `runtime_markers()`,
+    which matches one module attribute at a time and so can never represent a
+    pair marker at all. It could not report one unmoved, the escalation never
+    fired, and the no-op sailed through as a measurement.
+  * `build_icons_patcher` had a second cause: the bumped module was written to
+    a bare temp directory, so its `__file__`-relative `media_assets/` lookup
+    failed and it returned at the first guard.
+
+Fixed by bumping the CONSTANT that holds the version, by letting `unmoved()`
+read the bumped source, and by giving the variant its real siblings. Both
+modules measure **UPGRADES**, which matches their source: `_prefs_already_
+seeded()` compares straight against the live constant.
+
+**And the count of no-net patchers moved from one to two**, because the
+instrument improved: `pov_mdblist_patcher`'s `_lists_sort_recent_v1` lives in
+our own addon settings, and until the Kodi stub grew a real settings store it
+could not be observed landing at all.
+
+**The lesson, and the reason this loop stopped here:** the sabotage case meant
+to cover this asserted `PINS[...] == 'NEVER-UPGRADES'` — it had **encoded the
+wrong verdict as the passing condition**. A guard that pins whatever the tool
+currently says confirms the tool, not the truth. Sabotage must assert a
+mechanism ("bumping this really moves the source") or a verdict justified by
+reading the patcher, never the status quo.
 
 **RULE: for a patcher, "I read it and it looks fine" is not a finding. Run it
 twice.** The second run is the only thing that knows what a device already
