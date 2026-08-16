@@ -914,22 +914,409 @@ shared text. Any future release note that promises BEHAVIOUR rather than
 describing a fix needs a case in that file. Watched fail on the real defect:
 reverting the fix turns seven checks red.
 
-### The patcher audit (task #76) found no second instance
+### The patcher audit (task #76) — CORRECTED, the first answer was wrong
 
-86 patchers examined against the shape that broke `pov_mdblist_like_patcher`
-(family-wide marker gate returning 'unchanged', so a version bump never reaches
-a device that already has an older version). **None found.** 23 of the 59
-version-carrying patchers have an explicit old-marker/revert mechanism; the
-rest either rewrite to a desired state rather than injecting, or have never
-been bumped past v1.
+This section originally read "**None found**", on the strength of reading the
+86 patcher sources. That conclusion is false and every number under it was
+wrong. It was re-done by MEASUREMENT -- patch a pristine host, bump the
+patcher's own marker, run it again against the host it just patched -- against
+**POV 6.08.13 and Umbrella 6.7.82, the current upstream of both**. 21 of the 36
+patchers that can be measured here fail to upgrade correctly (81 files
+carry a versioned marker in all):
 
-**What remains is latent, not broken:** a patcher with an exact-version gate
-and no old-marker handling will, on its FIRST bump, leave the old injection in
-place and add the new one beside it -- duplicate entries, which is worse than
-being stuck. `pov_build_content_logger_patcher.py` and
-`pov_meta_blank_patcher.py` are the two most exposed (v2 gate, no
-OLD_MARKERS). A guard test for this shape is NOT written yet; writing it well
-means telling injectors from rewriters, which is the hard half.
+    UPGRADES        11   a bump reaches devices already carrying the old one
+    NEVER-UPGRADES  15   second run is a no-op: the fix reaches nobody, quietly
+    DOUBLE-INJECT    6   old block stays live beside the new one
+    DOUBLE-STAMP     6   only the marker COMMENT duplicates; the code is fine
+    RETIRED          2   marker-gated and called by nothing; not a live risk
+    UNPROVEN        41   no host here, or nothing here can call it
+
+**Fifteen instances of exactly the MDBList shape, not zero.** They include
+`pov_view_mode_patcher` (v4), `pov_favorites_refresh_patcher` (v3) and
+`pov_genre_icons_patcher` (v3) -- each has been bumped two or three times, and
+every one of those bumps reached fresh installs only.
+
+### The auto-update is what stops this being severe — with ONE exception
+
+**POV and Umbrella both update themselves on the device**, POV through
+`repository.kodifitzwell`, Umbrella through its own repo. A host update
+REPLACES the files our markers live in, so the marker vanishes and the patcher
+re-applies cleanly at whatever version it now is.
+
+Measured, marker by marker: **19 of the 21 land inside the host add-on
+directory and therefore self-heal on its next release.** For those, a
+"never upgrades" bump is a DELAY, not a permanent loss. The window is real --
+the changelog promises behaviour the device does not have until the host's next
+release -- and it is the same failure the Gemini/standalone bug had, a note
+that is true of some devices and false of others. But it closes by itself.
+
+**The net is a DEFAULT, not a guarantee.** It holds only while Kodi's add-on
+auto-update is on. The build ships it on (`general.addonupdates = 0`), but our
+own wizard offers "never check for updates" as a supported choice, and anyone
+who takes it loses the net for all 20 at once, silently. Self-healing is what
+usually happens; it is never a reason to ship a bump that cannot upgrade.
+
+**One has no net at all.** `kodi_playlist_timeout_patcher` writes
+`userdata/advancedsettings.xml`, Kodi's own profile data, which no add-on
+update ever touches. Bump that marker and the change reaches nobody who has
+already run it, permanently. It is at v1, so nothing has been lost yet -- it
+must be fixed BEFORE its first bump, not after.
+
+It is the only one among the 21 broken, **not the only one in the tree**:
+`favourites_xml_patcher` (`profile/favourites.xml`) and
+`hebrew_build_ui_patcher` (`profile/guisettings.xml`) also write outside an
+add-on directory. Neither is at risk today -- they read the live content, or
+gate on a setting we own, instead of a marker buried in the target -- but
+refactoring either toward a marker-in-content gate, which is what nearly
+everything else here does, reinstates the permanent trap with nothing
+watching.
+
+**RULE: before choosing a gate for a new patcher, look at where its marker
+lands.** Inside the host add-on, the auto-update is a safety net. In
+`userdata/`, a skin, or anything else we do not replace, there is no net at all.
+
+**Why reading the source gave the wrong answer, in both directions:**
+
+  * `pov_genre_icons_patcher` HAS an `OLD_MARKERS` mechanism and still never
+    upgrades: the tuple enumerates exactly one predecessor. A hand-maintained
+    list is only correct for the single bump it was written for, and nobody
+    remembers to extend it -- `pov_movie_networks_patcher` enumerates v1 and
+    v2 and has the same hole at v4, `pov_services_patcher` enumerates ELEVEN
+    and still double-injects at v13. So "has old-marker handling" is not
+    evidence of anything. Only a FAMILY-PREFIX gate is.
+  * `pov_prewarm_patcher` has no old-marker handling of any kind and upgrades
+    cleanly, because its rewrite happens to consume its own marker.
+
+The two patchers this section named as "the most exposed" were also wrong on
+the specifics: `pov_build_content_logger_patcher` and `pov_meta_blank_patcher`
+measure NEVER-UPGRADES, i.e. stuck, not duplicating.
+
+**How bad is DOUBLE-INJECT, measured rather than guessed?** Three successive
+bumps applied to each: the host still COMPILES every time, and carries four
+copies of the injected block (eight where the patcher hits two sites). For most
+of them the duplicated code is idle -- cache guards and early returns that
+simply re-run. Three re-stamp only the marker COMMENT and leave the code
+correct and singular; they are `DOUBLE-STAMP`, a separate verdict, because
+calling that the same thing buries the one that matters:
+
+  * `pov_services_patcher` -- `_ai_services.append(...)` ×4 in `myservices.py`,
+    i.e. every service listed four times in the "חיבור שירותים" screen.
+
+So neither failure mode dominates the other in general. Stuck is far more
+common (16 vs 6) and the harder to notice, because nothing changes and nothing
+is logged. Duplication is louder but only actually breaks anything when the
+injected block appends.
+
+**Three more blind spots, each found only because the previous fix exposed it.
+All three were the same mistake: deciding what to look at by how it is NAMED.**
+
+  * **Liveness inferred from a function's name.** `fentastic_patcher` keeps a
+    RETIRED `ensure_patched` beside its live `ensure_unpatched` (0.2.10
+    reverted that patch for good). Calling both applies the patch and strips
+    it in the same pass, so nothing lands, and the audit reported "the anchor
+    is dead" at a perfectly healthy anchor. And
+    `pov_build_content_logger_patcher`, whose wrapper is commented out of
+    `service.py`'s steps tuple, was being counted among the NEVER-UPGRADES as
+    though it reached fresh installs -- it reaches nobody. Liveness is asked
+    of the call graph now, and RETIRED is its own verdict, outside the counts.
+  * **The correction had the same disease.** The first liveness check looked
+    for the call's wrapper in ONE file, and could not see `service.py`
+    dispatching two patchers out of a tuple of module-name STRINGS. It
+    declared three live patchers retired -- and a false retirement is worse
+    than the over-counting it replaced, because it drops a live patcher out of
+    the measured set entirely.
+  * **A module still outside the net, and it is the worst-placed one found so
+    far.** `pov_navigator_patcher` rewrites rows in POV's `navigator.db` by
+    comparing them **byte-for-byte against a hand-maintained tuple of known
+    old versions** -- the enumerated-`OLD_MARKERS` bug wearing different
+    clothes. It is invisible twice over: its entry points are `maybe_fix_*`,
+    and it has no marker string at all. And `navigator.db` lives in
+    `addon_data`, so POV never ships it and a POV update can never wipe it:
+    **less** of a safety net than `kodi_playlist_timeout_patcher`, not more.
+    Also unseen: six patchers gating on an UNVERSIONED marker (including
+    `pov_repeat_timer_patcher`, which fixes a real auth-thread bug) -- there
+    is no version to bump, so the tripwire has nothing to hold.
+
+**A fourth naming assumption, and this one was hiding the bug it hunts.**
+Marker discovery assumed a marker is SHOUTING_CASE with `_vN` at the end. Four
+live, shipping patchers break that: `wizard_self_healer`
+(`.ai_subs_wizard_healed_v4`, lowercase, already bumped three times),
+`af3_discover_pov_patcher` (`AI_SUBS_POV_DISCOVER_v6_unified`),
+`af3_search_pov_patcher` (`AI_SUBS_POV_SEARCH_v3_rollback`) and
+`darksubs_opensubtitles_patcher` (whose entire marker is the line
+`OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4`). The two AF3 ones were *pinned* --
+on their DEAD v1/v2/v3 predecessors -- so bumping the live marker would have
+tripped nothing at all. And `af3_discover_pov_patcher` is itself an enumerated-
+`OLD_MARKERS` patcher, i.e. exactly the shape this whole exercise exists to
+catch. Discovery now assumes nothing about spelling and instead scopes the
+search to STRING LITERALS, which is what a marker actually is: text written
+into someone else's file. That gains six real markers and no false ones.
+
+**A fifth, and it was the shortest path to shipping the bug under ALL PASS.**
+A marker does not have to live in the HOST's file. There is a second
+convention here -- a versioned flag in **our own addon's Kodi settings**,
+recording that a one-time change already ran -- and all thirteen of those
+start with an underscore, which `\b` can never anchor before. All thirteen
+were invisible. `pov_mdblist_patcher`'s
+`_lists_sort_recent_v1` gates `ensure_lists_sort_recent()`, one of the five
+entry points `service.py` calls on every boot. Changing that one string to
+`_v2` -- exactly what shipping a fix to that gate requires -- printed
+`ALL PASS` with the module's own line still reading `ok`. It now fails.
+
+**Two corrections to how I described this, both mine and both overstated.**
+The fire drill proved the PIN layer trips, not the dynamic simulation: that
+entry point calls `xbmcaddon.Addon('plugin.video.pov')`, and `xbmcaddon` was
+evicted from `sys.modules` and never stubbed, so it returned `no_pov` on every
+run and was never exercised at all (fixed below). And "the worst safety net in
+the tree" is not a superlative one marker can hold -- the whole settings-flag
+convention has no net, and there are at least **thirty** such markers, most of
+them in `service.py` rather than in any patcher. Several are further along
+than this one: `_ktuvit_on_v4` is on its fourth id.
+
+Two supporting fixes went in with it: the Kodi stub grew a real settings store
+backed by a file, so a settings marker is observable in the snapshot like any
+other write; and the host list stopped being a hardcoded pair. Seven host
+add-ons this tree patches -- including `skin.arctic.fuse.3`, home of the
+highest-risk patcher in the notes above -- had no key and no env var, so they
+could not be measured on **any** machine without editing the test's source.
+
+**A sixth: the harness assumed a patcher is a runnable module in one folder.**
+Three more things were invisible, and the largest is not in a patcher at all:
+
+  * **`xbmcaddon` was never stubbed.** Only evicted. Every entry point that
+    reads another add-on's settings -- `pov_mdblist_patcher.ensure_lists_sort_
+    recent`, `umbrella_setup_patcher`'s three, `umbrella_language_patcher`'s
+    two, `update_nag_patcher`, `pov_scraper_settings_patcher` -- hit
+    `ModuleNotFoundError`, returned its "host not installed" sentinel, and was
+    never run, on any machine, stock host present or not. Three pinned
+    verdicts were wrong because of it; all three flipped once it was stubbed.
+  * **`service.py` holds EIGHTEEN versioned settings markers**, gating one-shot
+    migrations run from `main()` at boot -- including `_gemini_model_bump_v2`,
+    whose own comment states the exact "reusing the old id makes it a no-op
+    for precisely the users who need it" risk this whole exercise is about.
+    Discovery never opened the file: it is one directory above `resources/lib`.
+  * **Three lib modules carry markers with no `ensure_*`/`heal_*` at all** --
+    `kodi_utils` (`_embedded_mode_v1`), `umbrella_watch_prompt`, and
+    `umbrella_watch_source` (`_umb_watch_source_v2`, already bumped once).
+
+The fix separates DISCOVERY from EXECUTABILITY. Anything carrying a versioned
+marker is discovered and pinned, wherever it lives and whatever its shape; only
+a module with a live entry point is simulated. The rest are honestly UNPROVEN
+-- but pinned, which buys the thing that matters most: **the tripwire fires on
+a bump even where nothing can be measured.**
+
+Also: a pinned marker that never lands used to drop out of the verdict in
+silence. `--pins` now prints `[never landed: ...]`, which is how
+`AI_SUBS_MDBL_REDACT_v1` was found to be a phantom -- declared in
+`pov_mdblist_patcher`, never written by the code it nominally gates.
+
+**A seventh, and the only one already proven to have shipped.** A marker's
+NAME and VERSION can be two different constants, joined only at the call site:
+
+    CACHE_RTL_FIX_VERSION = '7'
+    kodi_utils.set_setting('_rtl_fix_done', CACHE_RTL_FIX_VERSION)
+
+Neither literal carries both halves and the joined text exists nowhere in the
+source, so no single-string search could ever have seen it. **That gate has
+been bumped 4→5, 5→6 and 6→7 in shipped releases** — each time precisely so
+"the one-shot backfill re-runs for every existing install", which is this whole
+subject, and the 6→7 commit says outright that it "was NOT bumped when Arabic
+Extended-B and the mid-word join were added ... so without this every existing
+install would skip the backfill forever" — and its own comment says the constant "must be bumped whenever a new
+repair is added here, or every existing install skips the backfill forever".
+Eleven markers of this shape were invisible, seven of them in modules with no
+coverage at all and four hiding *beside* real coverage, which is worse: those
+modules passed "is pinned" and looked fully accounted for.
+
+The call site is read now instead of the text. Only keys starting with `_`
+count — `set_setting('chunk_lines', '50')` is a default, not a version gate,
+and tripping the pin when someone retunes a default is the kind of noise that
+gets a test switched off.
+
+**One shape is deliberately left alone**: `pov_scraper_settings_patcher` gates
+on `'v3-' + md5(desired settings)`. A content-derived version cannot be
+forgotten on a bump, so it is immune by construction rather than unwatched.
+
+**An eighth: the version can live somewhere no module of ours does.** Three
+more shapes, all live:
+
+  * **A PAYLOAD file ships the version as CODE.**
+    `darksubs_opensubtitles_patcher` gates on the text
+    `OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4`, while the file it copies
+    wholesale carries that exact line as a real assignment — in
+    `resources/patches/`, a **sibling** of `resources/lib`, never walked. Two
+    hand-synced copies with nothing linking them. Bump the one that actually
+    ships and the gate keeps matching the old text on every device that has
+    it, permanently. The whole add-on is walked now, and payload source is
+    read as raw text rather than through the string-literal rule.
+  * **A bare version constant is a gate on its own.** `af3_home_patcher`'s
+    `PATCH_VERSION = '2026-06-01-pov-home-v21'` is written into marker FILES
+    whose entire content is the version.
+  * **A live host with no entry.** `plugin.video.idanplus` is patched from
+    `service.py` every boot and had no key, so the docstring's claim that
+    "every host this tree patches now has a key" was **false**. Worse, the
+    guard for it enumerated the three hosts I happened to name — the
+    hand-maintained-list disease, one round after diagnosing it. The host set
+    is **derived from the tree** now and the check compares against that.
+
+**A ninth, and it made two whole rounds of work decorative.** `patchers()`
+discovered markers with all four rules; `simulate_bump()` built its candidate
+set from **two**. So every marker found by the round-7 settings-pair rule and
+the round-8 version-constant rule was discovered, pinned — and then never
+simulated. 26 markers across 14 modules, **including `CACHE_RTL_FIX_VERSION`**,
+the example used to justify writing the pair rule in the first place. Injecting
+the textbook MDBList regression into one of those gates produced a verdict
+byte-identical to the healthy code.
+
+The sabotage case that was supposed to cover it said, in its own failure
+message, *"the pair shape is pinned but cannot be simulated"* — an accidental
+description of the live bug. It asserted on a string utility and never ran a
+simulation. Fixed by making one `all_markers()` the only way to ask, so the two
+lists cannot disagree again, and the new sabotage asserts an end-to-end
+**verdict** instead of a helper's return value.
+
+**The payoff was immediate: two modules flipped to NEVER-UPGRADES** once their
+markers were actually simulated — real defects that had been invisible.
+
+**Also found: a version reachable only through a helper call.**
+`pov_scraper_settings_patcher` writes `set_setting(TUNE_FLAG, _tune_version())`,
+and the hand-maintained half lives inside that helper as `_TUNE_BASE = 'v3'`.
+The module was invisible entirely — not pinned, not even unproven — and it has
+**already shipped this exact bug once**, caught only by a reviewer. Resolution
+now follows one hop into a local helper rather than adding another naming rule.
+
+**And a count corrected: "six" modules gating on an unversioned marker is 23.**
+That number stood for four rounds, wrong by nearly 4x, understating the gap.
+
+**A tenth — and it means my round-9 report to you was wrong.** I announced that
+two modules "flipped to NEVER-UPGRADES, real defects that had been invisible".
+Both were **healthy**, and the verdicts were artefacts:
+
+  * `bump_source()` moves a marker by replacing its literal text. A synthesised
+    `key=value` pair marker has **no verbatim text in the source** — that is
+    the whole premise of the pair rule — so the replace was a silent no-op and
+    the "second run" re-ran the UNCHANGED module. Every pair-shaped gate
+    therefore read NEVER-UPGRADES **regardless of whether it was correct**.
+  * The guard against exactly that, `unmoved()`, asked `runtime_markers()`,
+    which matches one module attribute at a time and so can never represent a
+    pair marker at all. It could not report one unmoved, the escalation never
+    fired, and the no-op sailed through as a measurement.
+  * `build_icons_patcher` had a second cause: the bumped module was written to
+    a bare temp directory, so its `__file__`-relative `media_assets/` lookup
+    failed and it returned at the first guard.
+
+Fixed by bumping the CONSTANT that holds the version, by letting `unmoved()`
+read the bumped source, and by giving the variant its real siblings. Both
+modules measure **UPGRADES**, which matches their source: `_prefs_already_
+seeded()` compares straight against the live constant.
+
+**And the count of no-net patchers moved from one to two**, because the
+instrument improved: `pov_mdblist_patcher`'s `_lists_sort_recent_v1` lives in
+our own addon settings, and until the Kodi stub grew a real settings store it
+could not be observed landing at all.
+
+**The lesson, and the reason this loop stopped here:** the sabotage case meant
+to cover this asserted `PINS[...] == 'NEVER-UPGRADES'` — it had **encoded the
+wrong verdict as the passing condition**. A guard that pins whatever the tool
+currently says confirms the tool, not the truth. Sabotage must assert a
+mechanism ("bumping this really moves the source") or a verdict justified by
+reading the patcher, never the status quo.
+
+**RULE: for a patcher, "I read it and it looks fine" is not a finding. Run it
+twice.** The second run is the only thing that knows what a device already
+carrying the old version receives.
+
+### `tools/test_patcher_upgrade_path.py` — the guard
+
+Not a lint. It imports each patcher against a stubbed Kodi, runs it on a
+pristine host, rewrites the patcher's own version to the next one, and runs it
+again on the host it already patched.
+
+It does not fail on the 21 known-bad ones -- that would be red on day one and
+switched off within a week, and their damage is already done and frozen. Every
+verdict is PINNED instead, keyed on the exact marker strings. **Bumping a
+marker IS changing that set, so the pin misses and the test fails**, naming
+what that patcher's upgrade path actually does before the release leaves. That
+fires at precisely the moment the MDBList bug was born. A new patcher with a
+versioned marker must be pinned too, so the shape cannot enter unclassified.
+
+**It also has to look for the right thing.** The first version discovered
+markers by grepping for `AI_SUBS...`, which is a house convention five WIRED
+patchers do not follow: `darksubs_patcher` (`AI_TRANSLATE_HOOK`, reached from
+`service.py` via `dark_subs_integration`), `darksubs_download_sub_patcher`,
+`darksubs_embedded_demote_patcher`, `pov_resume_cancel_patcher` and
+`af3_home_patcher` (`POV_AF3_*`). All five were invisible -- not measured, not
+pinned, not even counted as unproven -- so bumping any of them printed ALL PASS
+on every machine. Widening it to any `SHOUTING_NAME_vN` found them with no
+false positives, and `pov_resume_cancel_patcher` turned out to be another
+NEVER-UPGRADES.
+
+**Two more blind spots of the same kind, found the same way.** The harness
+selected modules by having "patcher" in the FILENAME, and called only
+`ensure_patched()`. Both are naming conventions, and both had exceptions that
+mattered:
+
+  * `pov_torbox_url_fix.py` is called from `service.py` on every boot, rewrites
+    POV's `torbox_api.py` behind an exact-match marker gate -- and its name has
+    no "patcher" in it, so it was never opened. It measures NEVER-UPGRADES.
+    Modules are selected by SHAPE now: a versioned marker plus an
+    `ensure_*`/`heal_*` entry point.
+  * `pov_mdblist_patcher` exposes FIVE entry points and `service.py` calls all
+    five every boot. Measuring `ensure_patched` alone gave the module one
+    verdict derived from one of its six patches; three of the other five reach
+    nobody (`MDBL_NONE_GUARD`, `MDBL_WATCHLIST_ONLY`, `SORT_RECENT_DEFAULT`).
+    Every entry point is called now, and **a module takes the verdict of its
+    WORST marker** -- an `any()` over the set had been quietly awarding it the
+    kinder of the two labels. The irony worth remembering: the docstring of the very function
+that handles constructed markers named `darksubs_patcher` as a case it covered,
+and the regex above it threw that file away before the function was reached.
+
+Four more things it learned the hard way, each of which produced a confident
+wrong answer first:
+
+  * **Marker presence cannot be a substring test.** `AI_SUBS_..._v1` is a
+    prefix of `..._v12`, so `pov_services_patcher` read as still carrying
+    eleven live markers.
+  * **The bump has to be verified to have happened.** Three patchers build
+    their marker from an integer constant (`'..._v{0}'.format(INJECT_VERSION)`),
+    so rewriting literals moved nothing and the "second run" was just the first
+    run again. `UNBUMPABLE` now reports that instead of inventing a verdict.
+  * **The current marker of those three appears nowhere in their source** --
+    only the retired ones do, inside `OLD_MARKERS`. Markers are read from the
+    imported module, not grepped.
+  * **Two variants of a module must not share a filename.** The literal-bumped
+    and version-bumped sources differ by one digit -- same byte count -- and
+    were written to the same path in the same second, so Python served the
+    first one's cached bytecode for the second and the patcher came back
+    UNBUMPABLE. Each variant gets its own temp directory.
+
+**And "ALL PASS" has to mean something on a machine that is not this one.**
+With no host trees, exactly one patcher (`kodi_playlist_timeout_patcher`, which
+patches Kodi's own userdata and so needs no add-on) still runs -- and the check
+"the dynamic layer ran on something" was satisfied by it forever, while 32 of
+33 verdicts went unverified under a cheerful ALL PASS. The run now compares
+what it re-measured against what the table CLAIMS, names what it skipped, and
+ends `ALL PASS -- PARTIAL: n of m verdicts unverified here`. Related trap:
+`--pins` on a host-less machine emits `UNPROVEN` for a patcher known to be
+broken, and pasting that in is a silent downgrade -- it now prints a
+DO-NOT-PASTE banner above any such line.
+
+`UNPROVEN` is not a clean bill of health, it is an unmeasured patcher: 41 of
+them -- the skins, the wizard, the All_Subs add-on, plus everything nothing
+here can call -- because this machine has
+no stock copy of those hosts. Point `POV_STOCK` / `UMBRELLA_STOCK` (or drop a
+tree where the patcher looks) and re-run with `--pins` to convert one into a
+real verdict.
+
+**Refresh the host trees from their own repos before re-pinning.** POV's
+datadir is `https://kodiyashimaru.github.io/repo/<id>/<id>-<version>.zip` and
+its manifest is `.../repo/packages/addons.xml`; Umbrella's is under
+`umbrellaplug.github.io/matrix/zips/`. Every verdict was identical on POV
+6.08.12 and 6.08.13 and on Umbrella 6.7.81 and 6.7.82, so they are not
+knife-edge on one host release -- but that is a measurement, not a promise
+about the next one, and a host release is exactly what re-anchors a patcher
+(see `pov_favorites_refresh_patcher`, which failed silently for a whole POV
+version).
 
 ## Shipped 2026-08-15: note 597 (0.2.497 / wizard 0.1.46 / quickfix 0.1.542 / build 0.1.110)
 

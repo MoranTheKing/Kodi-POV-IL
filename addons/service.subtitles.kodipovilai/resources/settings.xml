@@ -356,8 +356,23 @@
             <allowempty>true</allowempty>
           </constraints>
         </setting>
-        <!-- Hidden marker: FENtastic OSD auto-close enabled (migration). -->
+        <!-- Hidden marker: FENtastic OSD auto-close enabled (migration). Still
+             read: it is the only record that a FENtastic user was seeded by
+             the old add-on-side migration, and it is carried over to the
+             skin-side mark so an opt-out made back then is not undone. -->
         <setting id="_fen_osd_autoclose_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden: skins scanned and found to have no OSD auto-close, as
+             "<skin id>=<version>" entries. A skin without the feature never
+             gets a skin-side mark, so without this it is re-scanned on every
+             boot; keying on the version means a skin update that ADDS the
+             feature is still noticed. -->
+        <setting id="_osd_autoclose_nofeature" type="string" label="30000">
           <level>4</level>
           <default></default>
           <constraints>
@@ -1054,6 +1069,20 @@
              Umbrella's watched state, and what the user answered. Asked once
              per device, never again. See umbrella_watch_prompt.py. -->
         <setting id="_umb_watch_prompt_v1" type="string" label="30000">
+          <level>4</level>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
+        <!-- Hidden marker: the one-shot MDBList watched-cursor clear has run.
+             Tracked apart from the file patch on purpose: the patch succeeds
+             on the first start and every later start short-circuits before the
+             reset, so a reset that lost a lock race would never be retried.
+             The generation lives in the VALUE, not the key, so a later bump
+             overwrites instead of leaving the old key behind.
+             See umbrella_mdblist_sync_patcher.py. -->
+        <setting id="_umb_mdbl_cursor_reset" type="string" label="30000">
           <level>4</level>
           <default></default>
           <constraints>
