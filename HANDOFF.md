@@ -920,15 +920,16 @@ This section originally read "**None found**", on the strength of reading the
 86 patcher sources. That conclusion is false and every number under it was
 wrong. It was re-done by MEASUREMENT -- patch a pristine host, bump the
 patcher's own marker, run it again against the host it just patched -- against
-**POV 6.08.13 and Umbrella 6.7.82, the current upstream of both**. 23 of the 32
+**POV 6.08.13 and Umbrella 6.7.82, the current upstream of both**. 22 of the 33
 patchers that have a host to measure against fail to upgrade correctly:
 
     UPGRADES         9   a bump reaches devices already carrying the old one
-    NEVER-UPGRADES  13   second run is a no-op: the fix reaches nobody, quietly
-    DOUBLE-INJECT   10   old block stays live beside the new one
-    UNPROVEN        20   no host for them on this machine, so: unmeasured
+    NEVER-UPGRADES  14   second run is a no-op: the fix reaches nobody, quietly
+    DOUBLE-INJECT    8   old block stays live beside the new one
+    DOUBLE-STAMP     2   only the marker COMMENT duplicates; the code is fine
+    UNPROVEN        24   no host for them on this machine, so: unmeasured
 
-**Thirteen instances of exactly the MDBList shape, not zero.** They include
+**Fourteen instances of exactly the MDBList shape, not zero.** They include
 `pov_view_mode_patcher` (v4), `pov_favorites_refresh_patcher` (v3) and
 `pov_genre_icons_patcher` (v3) -- each has been bumped two or three times, and
 every one of those bumps reached fresh installs only.
@@ -940,7 +941,7 @@ every one of those bumps reached fresh installs only.
 REPLACES the files our markers live in, so the marker vanishes and the patcher
 re-applies cleanly at whatever version it now is.
 
-Measured, marker by marker: **22 of the 23 land inside the host add-on
+Measured, marker by marker: **21 of the 22 land inside the host add-on
 directory and therefore self-heal on its next release.** For those, a
 "never upgrades" bump is a DELAY, not a permanent loss. The window is real --
 the changelog promises behaviour the device does not have until the host's next
@@ -1008,8 +1009,21 @@ what that patcher's upgrade path actually does before the release leaves. That
 fires at precisely the moment the MDBList bug was born. A new patcher with a
 versioned marker must be pinned too, so the shape cannot enter unclassified.
 
-Three things it learned the hard way, all of which produced confident wrong
-answers first:
+**It also has to look for the right thing.** The first version discovered
+markers by grepping for `AI_SUBS...`, which is a house convention five WIRED
+patchers do not follow: `darksubs_patcher` (`AI_TRANSLATE_HOOK`, referenced ten
+times from `service.py`), `darksubs_download_sub_patcher`,
+`darksubs_embedded_demote_patcher`, `pov_resume_cancel_patcher` and
+`af3_home_patcher` (`POV_AF3_*`). All five were invisible -- not measured, not
+pinned, not even counted as unproven -- so bumping any of them printed ALL PASS
+on every machine. Widening it to any `SHOUTING_NAME_vN` found them with no
+false positives, and `pov_resume_cancel_patcher` turned out to be a fourteenth
+NEVER-UPGRADES. The irony worth remembering: the docstring of the very function
+that handles constructed markers named `darksubs_patcher` as a case it covered,
+and the regex above it threw that file away before the function was reached.
+
+Four more things it learned the hard way, each of which produced a confident
+wrong answer first:
 
   * **Marker presence cannot be a substring test.** `AI_SUBS_..._v1` is a
     prefix of `..._v12`, so `pov_services_patcher` read as still carrying
@@ -1021,6 +1035,22 @@ answers first:
   * **The current marker of those three appears nowhere in their source** --
     only the retired ones do, inside `OLD_MARKERS`. Markers are read from the
     imported module, not grepped.
+  * **Two variants of a module must not share a filename.** The literal-bumped
+    and version-bumped sources differ by one digit -- same byte count -- and
+    were written to the same path in the same second, so Python served the
+    first one's cached bytecode for the second and the patcher came back
+    UNBUMPABLE. Each variant gets its own temp directory.
+
+**And "ALL PASS" has to mean something on a machine that is not this one.**
+With no host trees, exactly one patcher (`kodi_playlist_timeout_patcher`, which
+patches Kodi's own userdata and so needs no add-on) still runs -- and the check
+"the dynamic layer ran on something" was satisfied by it forever, while 32 of
+33 verdicts went unverified under a cheerful ALL PASS. The run now compares
+what it re-measured against what the table CLAIMS, names what it skipped, and
+ends `ALL PASS -- PARTIAL: n of m verdicts unverified here`. Related trap:
+`--pins` on a host-less machine emits `UNPROVEN` for a patcher known to be
+broken, and pasting that in is a silent downgrade -- it now prints a
+DO-NOT-PASTE banner above any such line.
 
 `UNPROVEN` is not a clean bill of health, it is an unmeasured patcher: 20 of
 them -- the skins, the wizard, the All_Subs add-on -- because this machine has
