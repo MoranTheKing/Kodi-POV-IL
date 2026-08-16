@@ -97,6 +97,14 @@ def load(home):
     sys.modules['resources.lib'] = lib
     ku = types.ModuleType('resources.lib.kodi_utils')
     ku.log = lambda *a, **k: None
+    # A REAL store, not a stub that swallows writes: the one-shot backfill is
+    # gated on a setting, and a get_setting that always returns '' would make
+    # every run look like the first one -- which is exactly the bug the flag
+    # exists to prevent, passing as a green test.
+    store = {}
+    ku.get_setting = lambda k, d='': store.get(k, d)
+    ku.set_setting = lambda k, v: store.__setitem__(k, v)
+    ku._store = store
     sys.modules['resources.lib.kodi_utils'] = ku
     lib.kodi_utils = ku
     spec = importlib.util.spec_from_file_location(
@@ -139,7 +147,22 @@ st = mod.ensure_patched()
 after = mdblist_src(home)
 print('   status: %s' % st)
 check('it patches a stock Umbrella', st == 'patched', st)
-check('the file still compiles', compile(after, 'mdblist.py', 'exec') is None or True)
+
+
+def compiles(src):
+    # `compile(...) is None or True` was ALWAYS true -- a code object is not
+    # None, so the second operand won. It could not report a failure it was
+    # written to report.
+    try:
+        compile(src, 'mdblist.py', 'exec')
+        return True
+    except SyntaxError:
+        return False
+
+
+check('the file still compiles', compiles(after))
+check('SELF-CHECK: the compile check can actually fail',
+      not compiles(after + '\nthis is not python(\n'))
 
 # --- the injected line is where it has to be -------------------------------
 check('the widening lands INSIDE sync_watchedProgress',
@@ -214,12 +237,78 @@ mod2.ensure_patched()
 conn = sqlite3.connect(db)
 left = {r[0] for r in conn.execute('SELECT setting FROM service')}
 conn.close()
+# EVERY key the patcher claims to clear, not the two that happened to get
+# written down: a variant that dropped last_watched_movies_at from the DELETE
+# passed the old two-key version of this check.
+CLEARED = ('last_watched_at', 'last_watched_movies_at',
+           'last_watched_episodes_at')
 check('the watched cursor is cleared so the next sync backfills',
-      'last_watched_at' not in left and 'last_watched_episodes_at' not in left,
-      'still %s' % sorted(left))
+      not [k for k in CLEARED if k in left],
+      'still set: %s' % ', '.join(k for k in CLEARED if k in left))
 check('unrelated sync state is left alone',
       'last_activities_at' in left,
       'the reset must clear the watched cursor, not the whole service table')
+check('the three cleared keys are the three sync_watchedProgress writes',
+      set(CLEARED) == set(re.findall(r"update_last_watched_at\('(\w+)'\)",
+                                     mdblist_src(home2)))
+      or not os.path.isdir(STOCK),
+      'Umbrella advances a cursor this reset does not clear, so that half of '
+      'the watched history still never backfills')
+check('the reset marks itself done so it does not repeat every start',
+      mod2.kodi_utils.get_setting('_umb_mdbl_cursor_reset', '') == '1')
+
+# --- and it RETRIES when the reset could not run --------------------------
+# Tying the backfill to the file write meant a reset that lost a lock race to
+# Umbrella's own sync thread was never attempted again: the next start reads
+# 'unchanged' and returns long before reaching it.
+home4 = fresh_home()
+db4_dir = os.path.join(home4, 'userdata', 'addon_data',
+                       'plugin.video.umbrella')
+os.makedirs(db4_dir)
+db4 = os.path.join(db4_dir, 'mdbSync.db')
+conn = sqlite3.connect(db4)
+conn.execute('CREATE TABLE service (setting TEXT, value TEXT, '
+             'UNIQUE(setting))')
+for k in CLEARED:
+    conn.execute('INSERT INTO service VALUES (?, ?)', (k, 'x'))
+conn.commit()
+conn.close()
+mod4 = load(home4)
+_real_reset = mod4._reset_sync_cursor
+mod4._reset_sync_cursor = lambda: False          # the lock race
+check('the first run patches the file even though the reset failed',
+      mod4.ensure_patched() == 'patched')
+check('a failed reset is NOT marked done',
+      mod4.kodi_utils.get_setting('_umb_mdbl_cursor_reset', '') != '1')
+mod4._reset_sync_cursor = _real_reset            # ... and it clears next time
+check('the next start retries the reset even though the file is unchanged',
+      mod4.ensure_patched() == 'unchanged')
+conn = sqlite3.connect(db4)
+left4 = {r[0] for r in conn.execute('SELECT setting FROM service')}
+conn.close()
+check('the retry actually cleared the cursor',
+      not [k for k in CLEARED if k in left4],
+      'still set: %s' % ', '.join(k for k in CLEARED if k in left4))
+check('and now it is marked done',
+      mod4.kodi_utils.get_setting('_umb_mdbl_cursor_reset', '') == '1')
+
+# --- CRLF: the shape that shipped the Hebrew search fix as a silent no-op --
+home5 = fresh_home()
+p5 = os.path.join(home5, 'addons', 'plugin.video.umbrella', 'resources',
+                  'lib', 'modules', 'mdblist.py')
+with open(p5, 'w', encoding='utf-8', newline='') as f:
+    f.write(before.replace('\n', '\r\n'))
+mod5 = load(home5)
+st5 = mod5.ensure_patched()
+with open(p5, encoding='utf-8', newline='') as f:
+    crlf_after = f.read()
+check('a CRLF copy of the file is still patched', st5 == 'patched', st5)
+check('a CRLF file stays CRLF -- the patch does not rewrite every line ending',
+      '\n' not in crlf_after.replace('\r\n', ''),
+      'the whole file was silently normalised to LF')
+check('the CRLF patch compiles', compiles(crlf_after))
+check('reverting a CRLF file restores it byte-for-byte',
+      mod5._revert(crlf_after, '\r\n') == before.replace('\n', '\r\n'))
 
 # --- SABOTAGE: the checks must be able to fail -----------------------------
 print()
@@ -227,6 +316,24 @@ print('=== sabotage ===')
 check('SABOTAGE: an unpatched file is detected',
       'db_last = max(0, db_last -' not in before,
       'the fixture already contains the patch, so patching proves nothing')
+# _revert() walks "the marked line plus everything indented deeper". A blank
+# line has no indentation to compare, and treating every blank as INSIDE the
+# block eats the separator below it -- and the file's final newline, when the
+# marked line is last. Both cases must survive a round trip.
+_blank = "def f():\n\tx = 1  # AI_SUBS_UMB_MDBL_SINCE_v1\n\n\treturn 2\n"
+check('SABOTAGE: a blank line after the block is not swallowed',
+      mod._revert(_blank) == "def f():\n\n\treturn 2\n",
+      'got %r' % mod._revert(_blank))
+_tail = "def f():\n\treturn 2\n\tx = 1  # AI_SUBS_UMB_MDBL_SINCE_v1\n"
+check("SABOTAGE: a marked LAST line keeps the file's trailing newline",
+      mod._revert(_tail) == "def f():\n\treturn 2\n",
+      'got %r' % mod._revert(_tail))
+_nested = ("def f():\n\tif x:  # AI_SUBS_UMB_MDBL_SINCE_v1\n\t\ta = 1\n\n"
+           "\t\tb = 2\n\treturn 2\n")
+check('SABOTAGE: a blank line INSIDE a block is still part of the block',
+      mod._revert(_nested) == "def f():\n\treturn 2\n",
+      'got %r' % mod._revert(_nested))
+
 broken = before.replace(
     "\t\tif not forced and db_last and (api_last - db_last) < 60: return\n", '')
 home3 = fresh_home()

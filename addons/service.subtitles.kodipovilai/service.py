@@ -171,6 +171,20 @@ def _addon_version():
         return ''
 
 
+def _other_addon_version(addon_id):
+    """Version of SOME OTHER installed add-on, '' if it is not installed.
+
+    Deliberately separate from _addon_version(): that one answers for us, and
+    an id-taking overload of it would read at the call site like our own
+    version filtered by something.
+    """
+    try:
+        import xbmcaddon
+        return xbmcaddon.Addon(addon_id).getAddonInfo('version') or ''
+    except Exception:
+        return ''
+
+
 def _run_build_startup_repairs():
     """Run build-only UI/POV repairs early in Kodi startup.
 
@@ -4557,6 +4571,14 @@ def _maybe_enable_osd_autoclose():
     it back off on purpose, so that marker is read once and converted into the
     skin-side mark WITHOUT rewriting the values. It is the same promise the old
     marker made, kept in the new place.
+
+    The mark is a skin BOOL, and that is not a stylistic choice. Kodi keeps
+    skin bools and skin strings in two separate maps (CSkinInfo::m_bools and
+    m_strings, each with its own name->id table), and `Skin.HasSetting` is
+    wired to the bool one. A mark written with Skin.SetString is invisible to
+    it -- the guard would read false forever and this migration would re-force
+    the values on EVERY boot, which is the opposite of leaving an opt-out
+    alone. _maybe_default_nox_poster_rating pairs them correctly; so does this.
     """
     try:
         from resources.lib import kodi_utils
@@ -4574,7 +4596,17 @@ def _maybe_enable_osd_autoclose():
                 and kodi_utils.get_setting('_fen_osd_autoclose_v1', '') == '1'):
             # Already seeded by the old add-on-side migration. Carry the mark
             # over and touch nothing: whatever the value is now is the user's.
-            xbmc.executebuiltin('Skin.SetString(AISubsOsdSeeded,1)')
+            xbmc.executebuiltin('Skin.SetBool(AISubsOsdSeeded)')
+            return
+        # A skin that does NOT have the feature never gets a skin-side mark --
+        # there is nothing to mark -- so without this it is re-scanned on every
+        # single boot, forever. Remember the answer per skin VERSION, so a skin
+        # update that adds the feature is still picked up (one scan per skin
+        # release, not one per boot).
+        stamp = '%s=%s' % (skin, _other_addon_version(skin))
+        no_feature = (kodi_utils.get_setting('_osd_autoclose_nofeature', '')
+                      or '').split(',')
+        if stamp in no_feature:
             return
         root = xbmcvfs.translatePath('special://home/addons/' + skin + '/')
         supports = False
@@ -4600,9 +4632,18 @@ def _maybe_enable_osd_autoclose():
             if supports:
                 break
         if not supports:
+            # Cache the negative, capped, so the list cannot grow without
+            # bound on a device that has tried many skins.
+            no_feature = [s for s in no_feature if s][-9:] + [stamp]
+            kodi_utils.set_setting('_osd_autoclose_nofeature',
+                                   ','.join(no_feature))
             return  # this skin has no such feature -- nothing to turn on
         xbmc.executebuiltin('Skin.SetBool(OSDAutoClose)')
         xbmc.executebuiltin('Skin.SetString(OSDAutoCloseTime,4)')
+        # executebuiltin queues; the read below can otherwise race the write
+        # and report a failure that did not happen. Same 150ms the NOX rating
+        # rollout settled on next door.
+        xbmc.sleep(150)
         # Only claim it once the skin actually reports the setting: a write
         # issued while the skin is still loading can be lost, and marking
         # regardless is what made a single lost write permanent.
@@ -4611,7 +4652,7 @@ def _maybe_enable_osd_autoclose():
                 'OSD auto-close: %s did not take the setting, will retry on '
                 'the next start' % skin, level='WARNING')
             return
-        xbmc.executebuiltin('Skin.SetString(AISubsOsdSeeded,1)')
+        xbmc.executebuiltin('Skin.SetBool(AISubsOsdSeeded)')
         kodi_utils.log('OSD auto-close enabled (4s) for %s' % skin,
                        level='INFO')
     except Exception as e:
