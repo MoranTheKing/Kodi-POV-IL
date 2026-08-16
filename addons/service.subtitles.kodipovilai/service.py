@@ -4610,6 +4610,7 @@ def _maybe_enable_osd_autoclose():
             return
         root = xbmcvfs.translatePath('special://home/addons/' + skin + '/')
         supports = False
+        scanned = 0
         for base, dirs, files in os.walk(root):
             # A skin's art outweighs its XML by orders of magnitude and holds
             # none of it. Pruning these keeps the walk to the markup, which
@@ -4624,6 +4625,7 @@ def _maybe_enable_osd_autoclose():
                 try:
                     with open(os.path.join(base, fn), encoding='utf-8',
                               errors='replace') as fh:
+                        scanned += 1
                         if 'OSDAutoClose' in fh.read():
                             supports = True
                             break
@@ -4632,11 +4634,18 @@ def _maybe_enable_osd_autoclose():
             if supports:
                 break
         if not supports:
-            # Cache the negative, capped, so the list cannot grow without
-            # bound on a device that has tried many skins.
-            no_feature = [s for s in no_feature if s][-9:] + [stamp]
-            kodi_utils.set_setting('_osd_autoclose_nofeature',
-                                   ','.join(no_feature))
+            # Only cache a negative we actually MEASURED. Zero files read means
+            # the walk found nothing to read, not that the skin lacks the
+            # feature -- special://home/addons is the wrong place for a skin
+            # bundled with Kodi itself, which lives under special://xbmc. A
+            # cached "no" from an empty walk would be permanent for that skin
+            # version; leaving it uncached only costs another look next start.
+            if scanned:
+                # Capped, so the list cannot grow without bound on a device
+                # that has tried many skins.
+                no_feature = [s for s in no_feature if s][-9:] + [stamp]
+                kodi_utils.set_setting('_osd_autoclose_nofeature',
+                                       ','.join(no_feature))
             return  # this skin has no such feature -- nothing to turn on
         xbmc.executebuiltin('Skin.SetBool(OSDAutoClose)')
         xbmc.executebuiltin('Skin.SetString(OSDAutoCloseTime,4)')
