@@ -105,10 +105,12 @@ MDBList bug was born.
 A new patcher with a versioned marker must also be pinned, so the shape cannot
 enter the tree unclassified.
 
-The other 26 are UNPROVEN: no stock copy of their host on this machine (the
+The other 30 are UNPROVEN: no stock copy of their host on this machine (the
 skins, the wizard, service.subtitles.All_Subs). That is an admission, not a
 pass -- and on a machine with no host trees at all, nearly everything lands
-there, so the run says PARTIAL rather than pretending.
+there, so the run says PARTIAL rather than pretending. Every host this tree
+patches now has a key and an env var, so "unmeasured here" is a missing
+directory rather than, as it was, a host with nowhere to point at it.
 
 RETIRED is its own verdict for a marker-gated module nothing calls, and those
 are kept OUT of the broken counts: a patcher reaching no device at all is not
@@ -130,9 +132,19 @@ separate assumptions each hid live, shipping patchers:
   * not "_vN" at all -- darksubs_opensubtitles_patcher's whole marker is
     'OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4'
 
-What IS assumed: a marker is text written into somebody else's file, so the
-search is scoped to STRING LITERALS. That is what makes the loose shape safe --
-an ordinary api_v2 identifier lives in code, not in a string.
+  * not even "in the host's file" -- a whole second convention keeps a
+    versioned flag in OUR OWN addon's Kodi settings to record that a one-time
+    change already ran. All thirteen of those start with an underscore, which
+    \b can never anchor before, so all thirteen were invisible. One of them,
+    pov_mdblist_patcher's '_lists_sort_recent_v1', gates a live entry point
+    and has the worst safety net in the tree: our own settings, cleared by
+    nothing, ever. Bumping it shipped a real regression under ALL PASS.
+
+What IS assumed: a marker is TEXT, so the search is scoped to STRING LITERALS.
+That is what makes the loose shape safe -- an ordinary api_v2 identifier lives
+in code, not in a string. And the Kodi stub carries a real settings store
+backed by a file under the temp home, so a settings marker is observable in
+the snapshot exactly like any other write.
 
 Module selection is not keyed on the filename either. It used to require
 "patcher" in the name, and pov_torbox_url_fix.py does not have it: it is called
@@ -195,18 +207,35 @@ LIB = os.path.normpath(LIB)
 # Stock host add-ons, if this machine has them. The dynamic layer needs a real
 # host to patch; the pin layer below does not and always runs.
 #
-# addon id -> env var to override with. Anything not found here stays UNPROVEN,
-# which is an admission that the patcher was not measured -- never a pass.
+# EVERY host this tree patches gets an entry, not just the two that happen to
+# be cached here. When it was a hardcoded pair, seven other hosts could not be
+# measured on any machine under any environment -- there was no key to point at
+# them, so supplying one meant editing this file. Among the unreachable was
+# skin.arctic.fuse.3, host to af3_discover_pov_patcher, which the notes below
+# call the highest-risk shape in the tree.
+#
+# A host with no tree here leaves its patchers UNPROVEN: an admission that they
+# were not measured, never a pass.
 _SCRATCH = ('/tmp/claude-0/-home-user-Kodi-POV-IL/'
             '70968383-5f01-52a3-afe7-ced1aba28071/scratchpad/')
-STOCK = {
-    'plugin.video.pov': os.environ.get('POV_STOCK') or
-    _SCRATCH + 'pov6813/plugin.video.pov',
-    'plugin.video.umbrella': os.environ.get('UMBRELLA_STOCK') or
-    _SCRATCH + 'umb6782/plugin.video.umbrella',
+HOSTS = {
+    'plugin.video.pov': ('POV_STOCK', _SCRATCH + 'pov6813/plugin.video.pov'),
+    'plugin.video.umbrella': ('UMBRELLA_STOCK',
+                              _SCRATCH + 'umb6782/plugin.video.umbrella'),
+    'skin.arctic.fuse.3': ('AF3_STOCK', ''),
+    'skin.arctic.zephyr.2': ('AZ2_STOCK', ''),
+    'skin.fentastic': ('FENTASTIC_STOCK', ''),
+    'skin.estuary': ('ESTUARY_STOCK', ''),
+    'skin.povil.nox': ('NOX_STOCK', ''),
+    'service.subtitles.All_Subs': ('ALLSUBS_STOCK', ''),
+    'plugin.program.kodipovilwizard': ('WIZARD_STOCK', ''),
 }
-DECLARED_HOSTS = set(STOCK)
-STOCK = {k: v for k, v in STOCK.items() if os.path.isdir(v)}
+DECLARED_HOSTS = set(HOSTS)
+STOCK = {}
+for _id, (_env, _default) in HOSTS.items():
+    _p = os.environ.get(_env) or _default
+    if _p and os.path.isdir(_p):
+        STOCK[_id] = _p
 
 
 def host_version(path):
@@ -262,7 +291,9 @@ pin('pov_source_quality_patcher', 'UPGRADES',
 pin('pov_subtitle_match_patcher', 'UPGRADES',
     'AI_SUBS_MATCH_v7')
 pin('umbrella_setup_patcher', 'UPGRADES',
-    'AI_SUBS_UMBRELLA_SOURCE_NAME_v1')
+    'AI_SUBS_UMBRELLA_SOURCE_NAME_v1', '_umbrella_coco_providers_v1',
+    '_umbrella_coco_providers_v2', '_umbrella_coco_wired_v1',
+    '_umbrella_defaults_v1')
 pin('umbrella_source_ux_patcher', 'UPGRADES',
     'AI_SUBS_UMB_PREWARM_v1', 'AI_SUBS_UMB_QUIETCANCEL_v1')
 pin('umbrella_subtitle_match_patcher', 'UPGRADES',
@@ -294,7 +325,8 @@ pin('pov_mdblist_patcher', 'NEVER-UPGRADES',
     'AI_SUBS_MDBL_MERGE_COLLECTION_v1', 'AI_SUBS_MDBL_NONE_GUARD_v1',
     'AI_SUBS_MDBL_REDACT_v1', 'AI_SUBS_MDBL_SCROBBLE_STOP_v1',
     'AI_SUBS_MDBL_STABLE_IDS_v1', 'AI_SUBS_MDBL_SYNC_GUARD_v1',
-    'AI_SUBS_MDBL_WATCHLIST_ONLY_v2', 'AI_SUBS_SORT_RECENT_DEFAULT_v1')
+    'AI_SUBS_MDBL_WATCHLIST_ONLY_v2', 'AI_SUBS_SORT_RECENT_DEFAULT_v1',
+    '_lists_sort_recent_v1')
 pin('pov_mdblist_reauth_patcher', 'NEVER-UPGRADES',
     'AI_SUBS_POV_MDBL_REAUTH_v1')
 pin('pov_menus_patcher', 'NEVER-UPGRADES',
@@ -428,12 +460,16 @@ pin('favourites_personal_tiles_patcher', 'UNPROVEN',
     'AI_SUBS_FAVOURITES_PREMIUMIZE_RESEED_v1', 'mdblist_reseed_v2')
 pin('fentastic_patcher', 'UNPROVEN',
     'AI_SUBS_NOTIFICATION_WRAP_v1')
+pin('hebrew_build_ui_patcher', 'UNPROVEN',
+    '_subtitle_outline_migration_v1')
 pin('nox_change_source_patcher', 'UNPROVEN',
     'AI_SUBS_NOX_CHANGE_SOURCE_v1')
 pin('nox_osd_collision_patcher', 'UNPROVEN',
     'AI_SUBS_NOX_OSD_FIX_v1')
 pin('pov_container_refresh_crash_fix', 'UNPROVEN',
     'AI_SUBS_POV_WIDGET_REFRESH_v1')
+pin('pov_seasons_view_seed', 'UNPROVEN',
+    '_pov_seasons_view_v1')
 pin('skin_dialog_subtitles_patcher', 'UNPROVEN',
     'AI_SUBS_DIALOG_HEADER_v1', 'AI_SUBS_DIALOG_HEADER_v2')
 pin('skin_dialog_subtitles_row_patcher', 'UNPROVEN',
@@ -442,6 +478,10 @@ pin('skin_watched_poster_patcher', 'UNPROVEN',
     'AI_SUBS_WATCHED_LIST_v1', 'AI_SUBS_WATCHED_POSTER_v1')
 pin('subs_engine_bridge', 'UNPROVEN',
     'Cached_subs_v2')
+pin('umbrella_language_patcher', 'UNPROVEN',
+    '_umbrella_api_language_v1', '_umbrella_lang_filters_v1')
+pin('update_nag_patcher', 'UNPROVEN',
+    '_update_nag_quiet_v1')
 pin('wizard_patcher', 'UNPROVEN',
     'AI_SUBS_LOGINIT_INJECT_v1')
 pin('wizard_self_healer', 'UNPROVEN',
@@ -483,9 +523,20 @@ def check(label, cond, detail=''):
 # always text written into somebody else's file, while an ordinary api_v2 lives
 # in code. Measured over the tree, the widened pattern gains six real markers
 # and no false ones.
+#
+# And a fifth: a marker does NOT have to live in the host's file at all. There
+# is a whole second convention here -- a versioned flag in OUR OWN addon's Kodi
+# settings, recording that a one-time change already ran -- and every one of
+# those starts with an underscore, which \b can never anchor before because _
+# is a word character. Thirteen were invisible, among them
+# pov_mdblist_patcher's '_lists_sort_recent_v1', which gates one of the five
+# entry points service.py calls on every boot. That one has the WORST
+# safety net in the tree: the flag lives in our own settings, so neither a
+# host update nor anything else ever clears it. Bumping it shipped a real
+# MDBList-shaped regression under a printed ALL PASS.
 _MARKER_RES = (
-    re.compile(r'\b[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*_v\d+'
-               r'(?:_[A-Za-z0-9]+)*\b'),
+    re.compile(r'(?<![A-Za-z0-9_])_*[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*'
+               r'_v\d+(?:_[A-Za-z0-9]+)*\b'),
     re.compile(r'\b[A-Za-z][A-Za-z0-9_]*_VERSION\s*=\s*\d+'),
 )
 
@@ -799,6 +850,39 @@ def _install_stubs(home, extra_path=None):
     ku = types.ModuleType('resources.lib.kodi_utils')
     ku.log = lambda *a, **k: None
     ku.logger = lambda *a, **k: None
+
+    # A real settings store, written to a file under `home`.
+    #
+    # Not decoration: a whole class of marker lives in OUR OWN addon settings
+    # rather than in the host's file ('_lists_sort_recent_v1' and twelve like
+    # it). With get_setting/set_setting unstubbed, those patchers either
+    # crashed or wrote somewhere _snapshot cannot see, so their markers could
+    # never be observed landing and the class stayed unmeasurable even once it
+    # was discoverable. Backing it with a file makes the snapshot pick it up
+    # exactly like any other host write.
+    store = os.path.join(home, 'userdata', 'addon_data',
+                         'service.subtitles.kodipovilai', 'settings.probe')
+    os.makedirs(os.path.dirname(store), exist_ok=True)
+
+    def _read():
+        try:
+            with open(store, encoding='utf-8') as f:
+                return dict(ln.rstrip('\n').split('=', 1)
+                            for ln in f if '=' in ln)
+        except OSError:
+            return {}
+
+    def _get(key, default=''):
+        return _read().get(key, default)
+
+    def _set(key, value):
+        d = _read()
+        d[str(key)] = str(value)
+        with open(store, 'w', encoding='utf-8') as f:
+            for k in sorted(d):
+                f.write('%s=%s\n' % (k, d[k]))
+    ku.get_setting = _get
+    ku.set_setting = _set
     sys.modules['resources.lib.kodi_utils'] = ku
     lib.kodi_utils = ku
 
@@ -928,6 +1012,7 @@ def simulate_bump(stem, src, override=None):
         with open(os.path.join(base, stem + '.py'), 'w', encoding='utf-8') as f:
             f.write(text)
     try:
+        snap0 = _snapshot(home)
         s1 = _run(stem, home, extra_path=base)
         if s1 == 'RETIRED':
             # Defined, marker-gated, and called by nothing. Pinned so that
@@ -952,9 +1037,16 @@ def simulate_bump(stem, src, override=None):
             # matches the function NAME and calls a patcher with no host
             # installed a liar.
             results = [part.split('=', 1)[-1] for part in str(s1).split(', ')]
-            if STOCK and any(r.startswith('patched') or r == 'repatched'
-                             for r in results):
-                return 'CLAIMS-PATCHED', s1, 'reported success, wrote no marker'
+            claims = any(r.startswith('patched') or r == 'repatched'
+                         for r in results)
+            # ...and nothing on disk moved. Both halves are needed. A module
+            # can hold markers for one entry point while the entry point that
+            # actually ran patches something markerless -- umbrella_language_
+            # patcher rewrites strings.po with no marker at all, and calling
+            # that a dead anchor was wrong. A REAL dead anchor writes nothing.
+            if STOCK and claims and snap1 == snap0:
+                return ('CLAIMS-PATCHED', s1,
+                        'reported success and changed nothing')
             return 'UNPROVEN', s1, ''
 
         # A FRESH directory per variant, never a rewrite in place. Writing two
@@ -1232,6 +1324,43 @@ def main():
           and bump_marker('OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4')
           == 'OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 5',
           'bump_marker is back to assuming _vN sits at the end')
+
+    # A marker does not have to live in the HOST's file. There is a second
+    # convention here -- a versioned flag in our own addon's Kodi settings,
+    # recording a one-time change -- and every one of those starts with an
+    # underscore, which \b can never anchor before. Thirteen were invisible.
+    # The sharp one gates a live entry point of pov_mdblist_patcher and has
+    # the worst safety net in the tree: our own settings, which nothing ever
+    # clears. Bumping it used to print ALL PASS.
+    check('SABOTAGE: an underscore-led settings marker is discovered',
+          '_lists_sort_recent_v1' in PINS['pov_mdblist_patcher'][1]
+          and '_update_nag_quiet_v1' in PINS['update_nag_patcher'][1],
+          'the marker pattern cannot anchor before a leading underscore '
+          'again, and the whole settings-flag convention is invisible')
+
+    # ...and those markers have to be OBSERVABLE, which needs a real settings
+    # store: unstubbed, the patcher either crashed or wrote where the snapshot
+    # cannot see, so the class stayed unmeasurable even once discoverable.
+    _h = tempfile.mkdtemp(prefix='upgset-')
+    try:
+        _install_stubs(_h)
+        _ku = sys.modules['resources.lib.kodi_utils']
+        _ku.set_setting('_probe_v1', 'done')
+        check('SABOTAGE: the settings store round-trips and lands on disk',
+              _ku.get_setting('_probe_v1', '') == 'done'
+              and any(b'_probe_v1' in v for v in _snapshot(_h).values()),
+              'settings markers are written somewhere _snapshot cannot see')
+    finally:
+        shutil.rmtree(_h, ignore_errors=True)
+
+    # Every host this tree patches needs a key, or its patchers cannot be
+    # measured on ANY machine -- there is nowhere to point at them. The list
+    # was two entries while seven other hosts had live, marker-gated patchers.
+    check('SABOTAGE: every patched host is declarable',
+          {'skin.arctic.fuse.3', 'service.subtitles.All_Subs',
+           'plugin.program.kodipovilwizard'} <= DECLARED_HOSTS,
+          'a host add-on this tree patches has no entry, so its patchers are '
+          'permanently unmeasurable rather than merely unmeasured here')
 
     # runtime_markers reads module attributes, and its collector is a nested
     # function: `found |= ...` there rebinds a local and raises, which the
