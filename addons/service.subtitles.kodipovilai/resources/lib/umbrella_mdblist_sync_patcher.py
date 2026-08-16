@@ -238,6 +238,16 @@ def ensure_patched():
     path = _umbrella_path(MDBLIST_REL)
     if not path:
         return 'no_umbrella' if xbmcvfs is None else 'no_file'
+
+    # Before anything else, and on EVERY exit below. The one-shot backfill
+    # repairs Umbrella's own database and does not depend on our line landing
+    # in Umbrella's source: hanging it off the successful paths meant that a
+    # user whose Umbrella had been refactored just enough to move the anchor
+    # ('unmatched') kept a damaged table forever -- the one case where the
+    # repair is needed MOST, since the forward fix cannot reach them either.
+    # Self-gated and idempotent, so calling it first costs nothing.
+    _ensure_cursor_reset()
+
     try:
         with open(path, encoding='utf-8', newline='') as f:
             content = f.read()
@@ -248,7 +258,6 @@ def ensure_patched():
     fit, eol = _fitter(content)
 
     if MARKER in content:
-        _ensure_cursor_reset()
         return 'unchanged'
 
     repatch = False
@@ -299,7 +308,6 @@ def ensure_patched():
                 except OSError:
                     pass
 
-    _ensure_cursor_reset()
     _log('widened the MDBList watched-sync window by %d days so a missed '
          'or failed page is no longer skipped forever'
          % (_OVERLAP_SECONDS // 86400))
