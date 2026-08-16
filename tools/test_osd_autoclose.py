@@ -25,10 +25,28 @@ _maybe_enable_osd_autoclose is lifted out of service.py and executed.
 Run: python3 tools/test_osd_autoclose.py
 """
 import ast
+import atexit
 import os
+import shutil
 import sys
 import tempfile
 import types
+
+_TMP = []
+
+
+def tmpdir(prefix):
+    """mkdtemp that cleans up after itself. Four runs of the un-cleaned version
+    left 40 directories in /tmp."""
+    d = tempfile.mkdtemp(prefix=prefix)
+    _TMP.append(d)
+    return d
+
+
+@atexit.register
+def _cleanup_tmp():
+    for d in _TMP:
+        shutil.rmtree(d, ignore_errors=True)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ADDON = os.path.normpath(os.path.join(
@@ -87,7 +105,7 @@ class Kodi(object):
         self.skin = skin
         self.addons_root = addons_root
         self.bundled_root = bundled_root or os.path.join(
-            tempfile.mkdtemp(prefix='nokodi-'), 'addons')
+            tmpdir('nokodi-'), 'addons')
         self.versions = versions or {}
         self.bools = {}
         self.strings = {}
@@ -211,7 +229,7 @@ def make_skin(root, skin_id, feature=True, xml_files=40, bulk_dirs=True):
     return base
 
 
-home = tempfile.mkdtemp(prefix='osd-home-')
+home = tmpdir('osd-home-')
 addons = os.path.join(home, 'addons')
 os.makedirs(addons)
 make_skin(addons, 'skin.povil.nox', feature=True)
@@ -256,8 +274,8 @@ check('and a manually changed timeout is left alone',
 k2 = Kodi('skin.povil.nox', addons, VERS)
 boot(k2)
 k2.skin = 'skin.fentastic'
-k2.bools.pop('AISubsOsdSeeded')   # a different skin = a different settings file
-k2.bools.pop('OSDAutoClose')
+k2.bools.pop('AISubsOsdSeeded', None)   # a different skin = a different settings file
+k2.bools.pop('OSDAutoClose', None)
 boot(k2)
 check('switching to a never-seeded skin seeds that skin too',
       k2.bools.get('OSDAutoClose') is True)
@@ -288,6 +306,54 @@ check('and the superseded stamp does not accumulate',
       not in k3.settings.get('_osd_autoclose_nofeature', ''))
 
 # --------------------------------------------------------------------------
+# 4b. the cache prunes by SKIN, and one skin id is a prefix of another
+# --------------------------------------------------------------------------
+# skin.povil.nox already exists, so this family is not hypothetical. Pruning
+# on the bare skin id instead of `<skin>=` would take the longer id's entry
+# out with the shorter one's -- and no fixture above has a prefix pair, so
+# that mutation passed every other check in this file.
+make_skin(addons, 'skin.povil', feature=False)
+make_skin(addons, 'skin.povil.extra', feature=False)
+PV = {'skin.povil': '1.0.0', 'skin.povil.extra': '1.0.0'}
+kp = Kodi('skin.povil', addons, PV)
+boot(kp)
+kp.skin = 'skin.povil.extra'
+boot(kp)
+check('two skins, one id a prefix of the other, both get cached',
+      sorted(kp.settings.get('_osd_autoclose_nofeature', '').split(','))
+      == ['skin.povil.extra=1.0.0', 'skin.povil=1.0.0'],
+      'got %r' % kp.settings.get('_osd_autoclose_nofeature'))
+kp.skin = 'skin.povil'
+kp.versions = dict(PV, **{'skin.povil': '2.0.0'})
+boot(kp)
+check('rewriting the SHORTER id leaves the longer one alone',
+      'skin.povil.extra=1.0.0'
+      in kp.settings.get('_osd_autoclose_nofeature', '').split(','),
+      'got %r -- pruning matched the bare id, so it ate a different skin'
+      % kp.settings.get('_osd_autoclose_nofeature'))
+check('and its own stale stamp is still replaced',
+      'skin.povil=1.0.0'
+      not in kp.settings.get('_osd_autoclose_nofeature', '').split(','))
+
+# --------------------------------------------------------------------------
+# 4c. the cache is capped, so it cannot grow forever
+# --------------------------------------------------------------------------
+kc = Kodi('skin.cap00', addons, {})
+for i in range(14):
+    sid = 'skin.cap%02d' % i
+    make_skin(addons, sid, feature=False)
+    kc.skin = sid
+    kc.versions = {sid: '1.0.0'}
+    boot(kc)
+entries = [s for s in kc.settings.get('_osd_autoclose_nofeature', '').split(',')
+           if s]
+check('fourteen featureless skins do not make a fourteen-entry cache',
+      len(entries) == 10, 'got %d entries' % len(entries))
+check('and it is the OLDEST that were evicted',
+      entries[0] == 'skin.cap04=1.0.0' and entries[-1] == 'skin.cap13=1.0.0',
+      'got %r' % entries)
+
+# --------------------------------------------------------------------------
 # 5. an empty walk is not an answer
 # --------------------------------------------------------------------------
 k4 = boot(Kodi('skin.nowhere', addons, {'skin.nowhere': '1.0.0'}))
@@ -296,7 +362,7 @@ check('a skin that could not be walked at all is NOT cached as featureless',
       'a "no" nobody measured would be permanent for that skin version')
 
 # a skin bundled inside Kodi, under special://xbmc rather than special://home
-bundled = tempfile.mkdtemp(prefix='osd-xbmc-')
+bundled = tmpdir('osd-xbmc-')
 make_skin(bundled, 'skin.builtin', feature=True)
 k5 = Kodi('skin.builtin', addons, {'skin.builtin': '1.0.0'},
           bundled_root=bundled)
@@ -366,6 +432,36 @@ kb = Kodi('skin.builtin', addons, {'skin.builtin': '1.0.0'},
 boot(kb, onlyhome)
 check('SABOTAGE: dropping the special://xbmc root is caught',
       kb.bools.get('OSDAutoClose') is None)
+
+# The two mutations that slipped past this file on its first review. Both are
+# in code that IS correct -- the point is that nothing here could tell.
+bareprefix = '\n\n'.join(FUNCS.values()).replace(
+    "not s.startswith(skin + '=')", 'not s.startswith(skin)')
+check('SABOTAGE: the bare-prefix sabotage applies',
+      bareprefix != '\n\n'.join(FUNCS.values()))
+kpx = Kodi('skin.povil', addons, PV)
+boot(kpx, bareprefix)
+kpx.skin = 'skin.povil.extra'
+boot(kpx, bareprefix)
+kpx.skin = 'skin.povil'
+kpx.versions = dict(PV, **{'skin.povil': '2.0.0'})
+boot(kpx, bareprefix)
+check('SABOTAGE: pruning on the bare skin id eats the longer id',
+      'skin.povil.extra=1.0.0'
+      not in kpx.settings.get('_osd_autoclose_nofeature', '').split(','))
+
+nocap = '\n\n'.join(FUNCS.values()).replace('[-9:] + [stamp]',
+                                            '[-99:] + [stamp]')
+check('SABOTAGE: the cap sabotage applies',
+      nocap != '\n\n'.join(FUNCS.values()))
+kcx = Kodi('skin.cap00', addons, {})
+for i in range(14):
+    kcx.skin = 'skin.cap%02d' % i
+    kcx.versions = {kcx.skin: '1.0.0'}
+    boot(kcx, nocap)
+check('SABOTAGE: a raised cap lets the cache grow',
+      len([s for s in kcx.settings.get('_osd_autoclose_nofeature', '')
+           .split(',') if s]) == 14)
 
 print()
 print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')
