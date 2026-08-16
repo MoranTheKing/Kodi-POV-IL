@@ -149,10 +149,12 @@ pin('pov_view_mode_patcher', 'NEVER-UPGRADES',
     'AI_SUBS_POV_VIEWMODE_v4')
 
 # --- double-inject: the old block stays live beside the new one ------------
-# Measured over three successive bumps: the host still compiles, and carries
-# four copies of the injected block (eight where the patcher hits two sites).
-# Idempotent guards just re-run; anything that APPENDS -- a context-menu row,
-# a list entry -- shows up multiplied on screen.
+# Measured over three successive bumps: the host still compiles every time,
+# and carries four copies of the injected block (eight where the patcher hits
+# two sites). Seven of the nine duplicate idle code -- guards and early returns
+# that just re-run. Two duplicate an append, and those are user-visible:
+# pov_services_patcher lists every service four times in the connect-services
+# screen, pov_mdblist_patcher quadruples watchlist entries.
 pin('pov_cache_empty_patcher', 'DOUBLE-INJECT',
     'AI_SUBS_POV_CACHE_EMPTY_v1')
 pin('pov_combined_discover_patcher', 'DOUBLE-INJECT',

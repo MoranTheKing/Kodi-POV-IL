@@ -947,13 +947,24 @@ every one of those bumps reached fresh installs only.
 
 The two patchers this section named as "the most exposed" were also wrong on
 the specifics: `pov_build_content_logger_patcher` and `pov_meta_blank_patcher`
-measure NEVER-UPGRADES, i.e. stuck, not duplicating. And the claim that
-duplication is "worse than being stuck" does not survive measurement either --
-after three successive bumps the host still COMPILES, carrying four copies of
-the injected block (eight where the patcher hits two sites). Idempotent guards
-just re-run; only something that APPENDS (a context-menu row, a list entry)
-shows up multiplied. Being silently stuck is the worse outcome, and it is also
-the more common one.
+measure NEVER-UPGRADES, i.e. stuck, not duplicating.
+
+**How bad is DOUBLE-INJECT, measured rather than guessed?** Three successive
+bumps applied to each of the nine: the host still COMPILES every time, and
+carries four copies of the injected block (eight where the patcher hits two
+sites). For seven of the nine the duplicated code is idle -- cache guards and
+early returns that simply re-run. **Two of them duplicate an `append`, and
+those are user-visible:**
+
+  * `pov_services_patcher` -- `_ai_services.append(...)` ×4 in `myservices.py`,
+    i.e. every service listed four times in the "חיבור שירותים" screen.
+  * `pov_mdblist_patcher` -- `original_list.append({...})` ×4 in
+    `mdblist_api.py`, quadrupling watchlist entries.
+
+So neither failure mode dominates the other in general. Stuck is the more
+common outcome (12 vs 9) and the harder to notice, because nothing changes and
+nothing is logged. Duplication is louder but only actually breaks anything when
+the injected block appends.
 
 **RULE: for a patcher, "I read it and it looks fine" is not a finding. Run it
 twice.** The second run is the only thing that knows what a device already
