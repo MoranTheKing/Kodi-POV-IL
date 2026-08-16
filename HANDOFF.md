@@ -918,20 +918,44 @@ reverting the fix turns seven checks red.
 
 This section originally read "**None found**", on the strength of reading the
 86 patcher sources. That conclusion is false and every number under it was
-wrong. It was re-done by MEASUREMENT -- patch a pristine stock POV 6.08.12,
-bump the patcher's own marker, run it again against the host it just patched --
-and 21 of the 28 patchers that have a host to measure against fail to upgrade
-correctly:
+wrong. It was re-done by MEASUREMENT -- patch a pristine host, bump the
+patcher's own marker, run it again against the host it just patched -- against
+**POV 6.08.13 and Umbrella 6.7.82, the current upstream of both**. 23 of the 32
+patchers that have a host to measure against fail to upgrade correctly:
 
-    UPGRADES         7   a bump reaches devices already carrying the old one
-    NEVER-UPGRADES  12   second run is a no-op: the fix reaches nobody, quietly
-    DOUBLE-INJECT    9   old block stays live beside the new one
-    UNPROVEN        24   no host for them on this machine, so: unmeasured
+    UPGRADES         9   a bump reaches devices already carrying the old one
+    NEVER-UPGRADES  13   second run is a no-op: the fix reaches nobody, quietly
+    DOUBLE-INJECT   10   old block stays live beside the new one
+    UNPROVEN        20   no host for them on this machine, so: unmeasured
 
-**Twelve instances of exactly the MDBList shape, not zero.** They include
+**Thirteen instances of exactly the MDBList shape, not zero.** They include
 `pov_view_mode_patcher` (v4), `pov_favorites_refresh_patcher` (v3) and
 `pov_genre_icons_patcher` (v3) -- each has been bumped two or three times, and
 every one of those bumps reached fresh installs only.
+
+### The auto-update is what stops this being severe — with ONE exception
+
+**POV and Umbrella both update themselves on the device**, POV through
+`repository.kodifitzwell`, Umbrella through its own repo. A host update
+REPLACES the files our markers live in, so the marker vanishes and the patcher
+re-applies cleanly at whatever version it now is.
+
+Measured, marker by marker: **22 of the 23 land inside the host add-on
+directory and therefore self-heal on its next release.** For those, a
+"never upgrades" bump is a DELAY, not a permanent loss. The window is real --
+the changelog promises behaviour the device does not have until the host's next
+release -- and it is the same failure the Gemini/standalone bug had, a note
+that is true of some devices and false of others. But it closes by itself.
+
+**One does not close.** `kodi_playlist_timeout_patcher` writes
+`userdata/advancedsettings.xml`, Kodi's own profile data, which no add-on
+update ever touches. Bump that marker and the change reaches nobody who has
+already run it, permanently. It is at v1, so nothing has been lost yet -- it
+must be fixed BEFORE its first bump, not after.
+
+**RULE: before choosing a gate for a new patcher, look at where its marker
+lands.** Inside the host add-on, the auto-update is a safety net. In
+`userdata/`, a skin, or anything else we do not replace, there is no net at all.
 
 **Why reading the source gave the wrong answer, in both directions:**
 
@@ -998,10 +1022,21 @@ answers first:
     only the retired ones do, inside `OLD_MARKERS`. Markers are read from the
     imported module, not grepped.
 
-`UNPROVEN` is not a clean bill of health, it is an unmeasured patcher: 24 of
-them, everything targeting a skin, Umbrella, or the wizard, because this
-machine has no stock copy of those. Put one where the patcher looks for it and
-re-run with `--pins` to convert it into a real verdict.
+`UNPROVEN` is not a clean bill of health, it is an unmeasured patcher: 20 of
+them -- the skins, the wizard, the All_Subs add-on -- because this machine has
+no stock copy of those hosts. Point `POV_STOCK` / `UMBRELLA_STOCK` (or drop a
+tree where the patcher looks) and re-run with `--pins` to convert one into a
+real verdict.
+
+**Refresh the host trees from their own repos before re-pinning.** POV's
+datadir is `https://kodiyashimaru.github.io/repo/<id>/<id>-<version>.zip` and
+its manifest is `.../repo/packages/addons.xml`; Umbrella's is under
+`umbrellaplug.github.io/matrix/zips/`. Every verdict was identical on POV
+6.08.12 and 6.08.13 and on Umbrella 6.7.81 and 6.7.82, so they are not
+knife-edge on one host release -- but that is a measurement, not a promise
+about the next one, and a host release is exactly what re-anchors a patcher
+(see `pov_favorites_refresh_patcher`, which failed silently for a whole POV
+version).
 
 ## Shipped 2026-08-15: note 597 (0.2.497 / wizard 0.1.46 / quickfix 0.1.542 / build 0.1.110)
 

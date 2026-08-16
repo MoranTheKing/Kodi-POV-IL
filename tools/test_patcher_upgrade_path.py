@@ -38,12 +38,35 @@ and look at what the device would be left holding.
   DOUBLE-INJECT   both markers present -- the old injected code is still live
                   alongside the new one
 
+HOW BAD IS IT, GIVEN THAT THE HOSTS AUTO-UPDATE
+-----------------------------------------------
+Measured against POV 6.08.13 and Umbrella 6.7.82 -- the current upstream of
+both -- 13 patchers are NEVER-UPGRADES and 10 DOUBLE-INJECT, out of the 32
+that have a host here.
+
+That reads worse than it is, and the reason is worth knowing before anyone
+panics at the table below. **Both hosts update themselves on the user's
+device**, POV through repository.kodifitzwell and Umbrella through its own
+repo. A host update REPLACES the files our markers live in, so the marker
+vanishes and the patcher re-applies cleanly at whatever version it is now.
+
+So for 22 of the 23, a bump that "never upgrades" is a DELAY, not a permanent
+loss: the fix lands on the host's next release. The window is real -- the
+changelog promises behaviour the device does not have until then -- but it
+closes by itself.
+
+**One does not close, and it is the one to fix first.**
+`kodi_playlist_timeout_patcher` writes `userdata/advancedsettings.xml`, which
+is Kodi's own profile data. No add-on update ever touches it. Bump that marker
+and the change reaches nobody who already ran it, permanently. The same trap
+waits for any future patcher that writes outside an add-on directory -- so
+when adding one, check where its marker lands before choosing a gate.
+
 WHAT MAKES IT A GUARD RATHER THAN A REPORT
 ------------------------------------------
-Of the 28 patchers with a host to measure against, 12 are NEVER-UPGRADES and 9
-DOUBLE-INJECT. Failing on all 21 would make this red on day one and it would
-be switched off within a week. The damage in those is also already done and
-frozen: a patcher sitting at v4 that cannot upgrade is not hurting anyone NEW.
+Failing on all 23 would make this red on day one and it would be switched off
+within a week. The damage in them is also already done and frozen: a patcher
+sitting at v4 that cannot upgrade is not hurting anyone NEW.
 
 The danger is the next bump. So every marker is PINNED below with the verdict
 it was measured at. Change a marker -- which is what bumping is -- and the pin
@@ -55,8 +78,19 @@ MDBList bug was born.
 A new patcher with a versioned marker must also be pinned, so the shape cannot
 enter the tree unclassified.
 
+The other 20 are UNPROVEN: no stock copy of their host on this machine (the
+skins, the wizard, the All_Subs add-on). That is an admission, not a pass.
+
 Run:  python3 tools/test_patcher_upgrade_path.py
-      POV_STOCK=/path/to/plugin.video.pov python3 tools/...   (widen coverage)
+      POV_STOCK=... UMBRELLA_STOCK=... python3 tools/...   (widen coverage)
+      python3 tools/test_patcher_upgrade_path.py --pins     (re-measure)
+
+Refresh a host tree from its own repo before re-pinning -- POV's datadir is
+https://kodiyashimaru.github.io/repo/<id>/<id>-<version>.zip, Umbrella's is
+under umbrellaplug.github.io/matrix/zips/. Verdicts were identical on POV
+6.08.12 and 6.08.13, and on Umbrella 6.7.81 and 6.7.82, so they are not
+knife-edge on a single host release -- but that is a measurement, not a
+guarantee for the next one.
 """
 import importlib
 import os
@@ -71,11 +105,35 @@ LIB = os.path.join(HERE, '..', 'addons', 'service.subtitles.kodipovilai',
                    'resources', 'lib')
 LIB = os.path.normpath(LIB)
 
-# A stock POV tree if this machine has one. The dynamic layer needs a real
+# Stock host add-ons, if this machine has them. The dynamic layer needs a real
 # host to patch; the pin layer below does not and always runs.
-STOCK_POV = os.environ.get('POV_STOCK') or (
-    '/tmp/claude-0/-home-user-Kodi-POV-IL/'
-    '70968383-5f01-52a3-afe7-ced1aba28071/scratchpad/pov6812/plugin.video.pov')
+#
+# addon id -> env var to override with. Anything not found here stays UNPROVEN,
+# which is an admission that the patcher was not measured -- never a pass.
+_SCRATCH = ('/tmp/claude-0/-home-user-Kodi-POV-IL/'
+            '70968383-5f01-52a3-afe7-ced1aba28071/scratchpad/')
+STOCK = {
+    'plugin.video.pov': os.environ.get('POV_STOCK') or
+    _SCRATCH + 'pov6813/plugin.video.pov',
+    'plugin.video.umbrella': os.environ.get('UMBRELLA_STOCK') or
+    _SCRATCH + 'umb6782/plugin.video.umbrella',
+}
+STOCK = {k: v for k, v in STOCK.items() if os.path.isdir(v)}
+
+
+def host_version(path):
+    """Whatever the host add-on calls itself, for the banner.
+
+    Both hosts auto-update on the user's device -- POV through
+    repository.kodifitzwell, Umbrella through its own repo -- so a verdict is
+    only worth what the tree it was measured against is worth. Printing the
+    version is how a fixture that has quietly gone stale becomes visible.
+    """
+    try:
+        head = open(os.path.join(path, 'addon.xml'), encoding='utf-8').read(400)
+        return re.search(r'version="([0-9.]+)"', head).group(1)
+    except Exception:
+        return '?'
 
 # --------------------------------------------------------------------------
 # The pins. stem -> (verdict, every versioned marker the module holds)
@@ -115,6 +173,10 @@ pin('pov_source_quality_patcher', 'UPGRADES',
     'AI_SUBS_QUALITY_FIX_v5')
 pin('pov_subtitle_match_patcher', 'UPGRADES',
     'AI_SUBS_MATCH_v7')
+pin('umbrella_source_ux_patcher', 'UPGRADES',
+    'AI_SUBS_UMB_PREWARM_v1', 'AI_SUBS_UMB_QUIETCANCEL_v1')
+pin('umbrella_subtitle_match_patcher', 'UPGRADES',
+    'AI_SUBS_UMB_MATCH_v2')
 
 # --- never upgrade: the second run is a no-op, the fix reaches nobody -------
 # Bumping any of these ships a fix that lands on fresh installs only. Every
@@ -147,14 +209,14 @@ pin('pov_trakt_reauth_patcher', 'NEVER-UPGRADES',
     'AI_SUBS_POV_TRAKT_REAUTH_v1')
 pin('pov_view_mode_patcher', 'NEVER-UPGRADES',
     'AI_SUBS_POV_VIEWMODE_v4')
+pin('umbrella_mdblist_token_patcher', 'NEVER-UPGRADES',
+    'AI_SUBS_UMB_MDBL_TOKEN_v1')
 
 # --- double-inject: the old block stays live beside the new one ------------
-# Measured over three successive bumps: the host still compiles every time,
-# and carries four copies of the injected block (eight where the patcher hits
-# two sites). Seven of the nine duplicate idle code -- guards and early returns
-# that just re-run. Two duplicate an append, and those are user-visible:
-# pov_services_patcher lists every service four times in the connect-services
-# screen, pov_mdblist_patcher quadruples watchlist entries.
+# Measured over three successive bumps: the host still compiles, and carries
+# four copies of the injected block (eight where the patcher hits two sites).
+# Idempotent guards just re-run; anything that APPENDS -- a context-menu row,
+# a list entry -- shows up multiplied on screen.
 pin('pov_cache_empty_patcher', 'DOUBLE-INJECT',
     'AI_SUBS_POV_CACHE_EMPTY_v1')
 pin('pov_combined_discover_patcher', 'DOUBLE-INJECT',
@@ -185,6 +247,8 @@ pin('pov_source_name_patcher', 'DOUBLE-INJECT',
 pin('pov_trakt_cache_empty_patcher', 'DOUBLE-INJECT',
     'AI_SUBS_POV_TRAKT_CACHE_EMPTY_v1',
     'AI_SUBS_POV_TRAKT_TABLE_CLEAR_v1', 'AI_SUBS_POV_TRAKT_TABLE_v1')
+pin('umbrella_tmdb_apikey_patcher', 'DOUBLE-INJECT',
+    'AI_SUBS_UMB_TMDB_APIKEY_v1')
 
 # --- no host on this machine: pinned so a bump still stops here -------------
 # Not a clean bill of health -- an unmeasured patcher. Put the matching stock
@@ -237,16 +301,8 @@ pin('skin_dialog_subtitles_row_patcher', 'UNPROVEN',
     'AI_SUBS_DIALOG_ROW_HEIGHT_v1')
 pin('skin_watched_poster_patcher', 'UNPROVEN',
     'AI_SUBS_WATCHED_LIST_v1', 'AI_SUBS_WATCHED_POSTER_v1')
-pin('umbrella_mdblist_token_patcher', 'UNPROVEN',
-    'AI_SUBS_UMB_MDBL_TOKEN_v1')
 pin('umbrella_setup_patcher', 'UNPROVEN',
     'AI_SUBS_UMBRELLA_SOURCE_NAME_v1')
-pin('umbrella_source_ux_patcher', 'UNPROVEN',
-    'AI_SUBS_UMB_PREWARM_v1', 'AI_SUBS_UMB_QUIETCANCEL_v1')
-pin('umbrella_subtitle_match_patcher', 'UNPROVEN',
-    'AI_SUBS_UMB_MATCH_v2')
-pin('umbrella_tmdb_apikey_patcher', 'UNPROVEN',
-    'AI_SUBS_UMB_TMDB_APIKEY_v1')
 pin('wizard_patcher', 'UNPROVEN',
     'AI_SUBS_LOGINIT_INJECT_v1')
 
@@ -415,9 +471,8 @@ def _snapshot(home):
 
 def _fresh_home():
     home = tempfile.mkdtemp(prefix='upgpath-')
-    if os.path.isdir(STOCK_POV):
-        shutil.copytree(STOCK_POV,
-                        os.path.join(home, 'addons', 'plugin.video.pov'))
+    for addon_id, path in STOCK.items():
+        shutil.copytree(path, os.path.join(home, 'addons', addon_id))
     return home
 
 
@@ -537,9 +592,11 @@ check('no pins for patchers that no longer exist', not stale, ', '.join(stale))
 # 2. the dynamic layer -- only where this machine has a host to patch
 # --------------------------------------------------------------------------
 print()
-have_pov = os.path.isdir(STOCK_POV)
-print('=== simulated bump %s ===' % ('(stock POV present)' if have_pov else
-                                     '(NO host tree here -- see below)'))
+have_pov = bool(STOCK)
+print('=== simulated bump %s ===' % (
+    'against ' + ', '.join('%s %s' % (k.rsplit('.', 1)[-1], host_version(v))
+                           for k, v in sorted(STOCK.items()))
+    if have_pov else '(NO host tree here -- see below)'))
 exercised = unproven = 0
 for stem, src, marks in patchers():
     want = PINS.get(stem, ('?', ()))[0]
