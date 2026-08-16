@@ -921,7 +921,7 @@ This section originally read "**None found**", on the strength of reading the
 wrong. It was re-done by MEASUREMENT -- patch a pristine host, bump the
 patcher's own marker, run it again against the host it just patched -- against
 **POV 6.08.13 and Umbrella 6.7.82, the current upstream of both**. 21 of the 36
-patchers that have a host to measure against fail to upgrade correctly (62
+patchers that have a host to measure against fail to upgrade correctly (66
 modules carry a versioned marker in all):
 
     UPGRADES        10   a bump reaches devices already carrying the old one
@@ -929,7 +929,7 @@ modules carry a versioned marker in all):
     DOUBLE-INJECT    6   old block stays live beside the new one
     DOUBLE-STAMP     3   only the marker COMMENT duplicates; the code is fine
     RETIRED          2   marker-gated and called by nothing; not a live risk
-    UNPROVEN        26   no host for them on this machine, so: unmeasured
+    UNPROVEN        30   no host for them on this machine, so: unmeasured
 
 **Fifteen instances of exactly the MDBList shape, not zero.** They include
 `pov_view_mode_patcher` (v4), `pov_favorites_refresh_patcher` (v3) and
@@ -1052,6 +1052,27 @@ catch. Discovery now assumes nothing about spelling and instead scopes the
 search to STRING LITERALS, which is what a marker actually is: text written
 into someone else's file. That gains six real markers and no false ones.
 
+**A fifth, and it was the shortest path to shipping the bug under ALL PASS.**
+A marker does not have to live in the HOST's file. There is a second
+convention here -- a versioned flag in **our own addon's Kodi settings**,
+recording that a one-time change already ran -- and all thirteen of those
+start with an underscore, which `\b` can never anchor before. All thirteen
+were invisible. The sharp one is `pov_mdblist_patcher`'s
+`_lists_sort_recent_v1`, gating `ensure_lists_sort_recent()`, one of the five
+entry points `service.py` calls on every boot, and it has **the worst safety
+net in the tree**: the flag lives in our own settings, so no host update and
+nothing else ever clears it -- worse than `kodi_playlist_timeout_patcher`.
+Changing that one string to `_v2` -- exactly what shipping a fix to that gate
+requires -- printed `ALL PASS` with the module's own line still reading `ok`.
+It now fails, verified by fire drill.
+
+Two supporting fixes went in with it: the Kodi stub grew a real settings store
+backed by a file, so a settings marker is observable in the snapshot like any
+other write; and the host list stopped being a hardcoded pair. Seven host
+add-ons this tree patches -- including `skin.arctic.fuse.3`, home of the
+highest-risk patcher in the notes above -- had no key and no env var, so they
+could not be measured on **any** machine without editing the test's source.
+
 **RULE: for a patcher, "I read it and it looks fine" is not a finding. Run it
 twice.** The second run is the only thing that knows what a device already
 carrying the old version receives.
@@ -1131,7 +1152,7 @@ ends `ALL PASS -- PARTIAL: n of m verdicts unverified here`. Related trap:
 broken, and pasting that in is a silent downgrade -- it now prints a
 DO-NOT-PASTE banner above any such line.
 
-`UNPROVEN` is not a clean bill of health, it is an unmeasured patcher: 26 of
+`UNPROVEN` is not a clean bill of health, it is an unmeasured patcher: 30 of
 them -- the skins, the wizard, the All_Subs add-on -- because this machine has
 no stock copy of those hosts. Point `POV_STOCK` / `UMBRELLA_STOCK` (or drop a
 tree where the patcher looks) and re-run with `--pins` to convert one into a
