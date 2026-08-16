@@ -914,22 +914,83 @@ shared text. Any future release note that promises BEHAVIOUR rather than
 describing a fix needs a case in that file. Watched fail on the real defect:
 reverting the fix turns seven checks red.
 
-### The patcher audit (task #76) found no second instance
+### The patcher audit (task #76) — CORRECTED, the first answer was wrong
 
-86 patchers examined against the shape that broke `pov_mdblist_like_patcher`
-(family-wide marker gate returning 'unchanged', so a version bump never reaches
-a device that already has an older version). **None found.** 23 of the 59
-version-carrying patchers have an explicit old-marker/revert mechanism; the
-rest either rewrite to a desired state rather than injecting, or have never
-been bumped past v1.
+This section originally read "**None found**", on the strength of reading the
+86 patcher sources. That conclusion is false and every number under it was
+wrong. It was re-done by MEASUREMENT -- patch a pristine stock POV 6.08.12,
+bump the patcher's own marker, run it again against the host it just patched --
+and 21 of the 28 patchers that have a host to measure against fail to upgrade
+correctly:
 
-**What remains is latent, not broken:** a patcher with an exact-version gate
-and no old-marker handling will, on its FIRST bump, leave the old injection in
-place and add the new one beside it -- duplicate entries, which is worse than
-being stuck. `pov_build_content_logger_patcher.py` and
-`pov_meta_blank_patcher.py` are the two most exposed (v2 gate, no
-OLD_MARKERS). A guard test for this shape is NOT written yet; writing it well
-means telling injectors from rewriters, which is the hard half.
+    UPGRADES         7   a bump reaches devices already carrying the old one
+    NEVER-UPGRADES  12   second run is a no-op: the fix reaches nobody, quietly
+    DOUBLE-INJECT    9   old block stays live beside the new one
+    UNPROVEN        24   no host for them on this machine, so: unmeasured
+
+**Twelve instances of exactly the MDBList shape, not zero.** They include
+`pov_view_mode_patcher` (v4), `pov_favorites_refresh_patcher` (v3) and
+`pov_genre_icons_patcher` (v3) -- each has been bumped two or three times, and
+every one of those bumps reached fresh installs only.
+
+**Why reading the source gave the wrong answer, in both directions:**
+
+  * `pov_genre_icons_patcher` HAS an `OLD_MARKERS` mechanism and still never
+    upgrades: the tuple enumerates exactly one predecessor. A hand-maintained
+    list is only correct for the single bump it was written for, and nobody
+    remembers to extend it -- `pov_movie_networks_patcher` enumerates v1 and
+    v2 and has the same hole at v4, `pov_services_patcher` enumerates ELEVEN
+    and still double-injects at v13. So "has old-marker handling" is not
+    evidence of anything. Only a FAMILY-PREFIX gate is.
+  * `pov_prewarm_patcher` has no old-marker handling of any kind and upgrades
+    cleanly, because its rewrite happens to consume its own marker.
+
+The two patchers this section named as "the most exposed" were also wrong on
+the specifics: `pov_build_content_logger_patcher` and `pov_meta_blank_patcher`
+measure NEVER-UPGRADES, i.e. stuck, not duplicating. And the claim that
+duplication is "worse than being stuck" does not survive measurement either --
+after three successive bumps the host still COMPILES, carrying four copies of
+the injected block (eight where the patcher hits two sites). Idempotent guards
+just re-run; only something that APPENDS (a context-menu row, a list entry)
+shows up multiplied. Being silently stuck is the worse outcome, and it is also
+the more common one.
+
+**RULE: for a patcher, "I read it and it looks fine" is not a finding. Run it
+twice.** The second run is the only thing that knows what a device already
+carrying the old version receives.
+
+### `tools/test_patcher_upgrade_path.py` — the guard
+
+Not a lint. It imports each patcher against a stubbed Kodi, runs it on a
+pristine host, rewrites the patcher's own version to the next one, and runs it
+again on the host it already patched.
+
+It does not fail on the 21 known-bad ones -- that would be red on day one and
+switched off within a week, and their damage is already done and frozen. Every
+verdict is PINNED instead, keyed on the exact marker strings. **Bumping a
+marker IS changing that set, so the pin misses and the test fails**, naming
+what that patcher's upgrade path actually does before the release leaves. That
+fires at precisely the moment the MDBList bug was born. A new patcher with a
+versioned marker must be pinned too, so the shape cannot enter unclassified.
+
+Three things it learned the hard way, all of which produced confident wrong
+answers first:
+
+  * **Marker presence cannot be a substring test.** `AI_SUBS_..._v1` is a
+    prefix of `..._v12`, so `pov_services_patcher` read as still carrying
+    eleven live markers.
+  * **The bump has to be verified to have happened.** Three patchers build
+    their marker from an integer constant (`'..._v{0}'.format(INJECT_VERSION)`),
+    so rewriting literals moved nothing and the "second run" was just the first
+    run again. `UNBUMPABLE` now reports that instead of inventing a verdict.
+  * **The current marker of those three appears nowhere in their source** --
+    only the retired ones do, inside `OLD_MARKERS`. Markers are read from the
+    imported module, not grepped.
+
+`UNPROVEN` is not a clean bill of health, it is an unmeasured patcher: 24 of
+them, everything targeting a skin, Umbrella, or the wizard, because this
+machine has no stock copy of those. Put one where the patcher looks for it and
+re-run with `--pins` to convert it into a real verdict.
 
 ## Shipped 2026-08-15: note 597 (0.2.497 / wizard 0.1.46 / quickfix 0.1.542 / build 0.1.110)
 
