@@ -38,7 +38,7 @@
 
 - עץ קבצים מסודר של המיגרציה.
 - מסמך diff של `Twilight -> POV`.
-- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.111.zip`.
+- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.112.zip`.
 - הוראות התקנה ובדיקת smoke test לטלפון: `ANDROID_TESTING.md`.
 
 ## חבילת בדיקה (גרסה נוכחית)
@@ -143,6 +143,41 @@ Take 32-bit only if 64-bit refuses to install.
 
 Switching is safe: both carry the same app id and signing key, so 64-bit
 installs over 32-bit as an update and your data stays where it is.
+
+## The player bar hides itself on every skin that can (from `0.2.499`)
+
+The setting that closes the player's on-screen bar after a few idle seconds was
+being turned on by a check that named one skin — FENtastic — and returned for
+everything else. `skin.povil.nox` ships the identical feature, off by default
+like FENtastic's, so anyone on Nox had the bar stay up until they pressed Back.
+Nothing was broken on those devices; a default simply never reached them.
+
+It is detected from the active skin's own files now, rather than matched
+against a list of names, so a skin that has the feature gets it and one that
+does not is left alone. The record of having seeded it lives in the SKIN's
+settings, which makes it per-skin for free: switch to a skin that has never
+been seeded and it is seeded, and if you turn auto-close back off yourself it
+stays off.
+
+## Umbrella's "continue watching" for series catches up (from `0.2.499`)
+
+The episodes list showed the right next episode while the series list sat
+several episodes behind. They do not read the same thing: episodes come from
+MDBList live, series are rebuilt from a table on the device. So the table was
+missing rows — which is also why Umbrella's own "Force MDBList Sync" fixed it,
+since that wipes the tables and re-reads everything from scratch.
+
+The rows went missing because the sync stores its position as the clock time of
+the last run, and stores it even when a request failed or came back empty. That
+position only ever moves forward, so one network error, one empty response, or
+a few seconds of disagreement between the device's clock and MDBList's, and
+everything in that window was skipped for good.
+
+The sync now reads thirty days further back than its stored position, so a
+window missed for any reason is picked up on the next run instead of lost —
+re-reading the same episodes costs nothing, they simply overwrite. And a table
+that has already lost rows is refilled once, by itself, at the next start: the
+same thing the Force button does, without needing to know the button is there.
 
 ## If you installed the subtitles add-on on its own (from `0.2.498`)
 

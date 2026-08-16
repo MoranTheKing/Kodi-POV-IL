@@ -1226,6 +1226,25 @@ reading the patcher, never the status quo.
 twice.** The second run is the only thing that knows what a device already
 carrying the old version receives.
 
+### The three tests that guard this add-on's runtime behaviour
+
+- `tools/test_patcher_upgrade_path.py` — every patcher's upgrade path, pinned.
+  See below.
+- `tools/test_umbrella_mdblist_sync.py` — runs the Umbrella sync patcher against
+  a real Umbrella 6.7.82 tree, EXECUTES the patched cursor arithmetic (a marker
+  being present would pass a patch that computed the wrong window), and covers
+  CRLF, the byte-exact revert, the retry after a lost lock race, and the repair
+  on the 'unmatched' path.
+- `tools/test_osd_autoclose.py` — lifts `_maybe_enable_osd_autoclose` out of
+  `service.py` by AST and executes it against a fake Kodi whose skin bools and
+  skin strings are SEPARATE MAPS, as Kodi's are. It boots twice to prove a
+  manual opt-out survives. Its sabotage section reintroduces every bug this
+  function has had and asserts each is caught.
+
+**Both new tests exist because a validator built a broken variant and watched
+it pass.** That is the standard for adding a check here: not "does it describe
+the behaviour" but "which mutation does it fail on".
+
 ### `tools/test_patcher_upgrade_path.py` — the guard
 
 Not a lint. It imports each patcher against a stubbed Kodi, runs it on a
@@ -4189,6 +4208,7 @@ Raw by a few minutes; poll rather than assume.
 | 0.2.460 / qf 0.1.502 | POV 6.08 scraper/debrid timeout floor |
 | 0.2.461 / qf 0.1.503 | Kodi's own Hebrew strings self-heal; 43 dropped settings; two revived POV patchers; MDBList QR title |
 | 0.2.462 / wizard 0.1.36 / qf 0.1.504 / build 0.1.105 | FENtastic widget includes; DialogSeekBar; POV reads the shortcut folders the build ships |
+| 0.2.499 / qf 0.1.544 / build 0.1.112 / note 599 | the player bar auto-hides on any capable skin, not just FENtastic; Umbrella's MDBList watched-sync stops skipping windows forever |
 
 ### Things worth not rediscovering
 
@@ -4201,6 +4221,62 @@ Raw by a few minutes; poll rather than assume.
   `<level>4</level>` with no `<control>` — `SettingLevel::Internal`, which is
   Kodi's own idiom. Level never gates get/set from Python. This is what the 43
   dropped settings were.
+- **Kodi skin bools and skin strings are two different namespaces.**
+  `CSkinInfo` keeps `m_bools` and `m_strings` as separate maps with separate
+  name→id allocators (`Skin.cpp:633-729`). `Skin.HasSetting(x)` compiles to
+  `SKIN_BOOL` / `TranslateBool` (`GUIInfoManager.cpp:10466`) and reads the bool
+  one ONLY. Pair `Skin.SetBool` with `Skin.HasSetting`, and `Skin.SetString`
+  with `Skin.String(...)` read through `getInfoLabel`. Crossing them gives a
+  guard that reads false forever — which reads as "not done yet" and re-runs a
+  one-shot migration on every boot. `Skin.SetBool(x)` with no second argument
+  sets true (`SkinBuiltins.cpp:154-169`).
+- **A skin can live under `special://xbmc/addons/`, not just
+  `special://home/addons/`.** Skins shipped inside Kodi are there.
+  `pov_reload.py:235` and `wizard.py:656` walk both; anything that resolves an
+  add-on path by hand should too. (`advancedsettings.xml`'s `<addonpaths>` is a
+  third location none of them cover — a known, accepted blind spot.)
+- **A mark stored in the SKIN's settings is per-skin for free**, and disappears
+  if the skin is reinstalled or reset, so the default is re-seeded. An
+  add-on-side marker can do neither. The trade is that it only means anything
+  while that skin is active.
+- **`executebuiltin` queues.** Reading a setting straight back after writing it
+  can observe the old value. `_maybe_default_nox_poster_rating` settled on
+  `xbmc.sleep(150)` between; `executebuiltin(cmd, True)` is the synchronous
+  form. Verify-then-mark is the right shape either way, so a lost write retries
+  next boot instead of being marked done.
+- **Umbrella's two "continue watching" lists do not read the same thing.**
+  Episodes (`menus/episodes.py:788-791`) scrape MDBList live; shows
+  (`menus/tvshows.py:2550`) are rebuilt from the local `mdb_watched_episodes`
+  table. "Episodes right, shows stuck" therefore always means the TABLE is
+  missing rows, never that the list is drawing wrong.
+- **Umbrella's watched-sync cursor is the wall clock, and it advances on
+  failure.** `sync_watchedProgress` (`modules/mdblist.py:943-990`) breaks out on
+  `if not data: break` — and `get_request` returns `None` rather than raising on
+  any error — then calls `update_last_watched_at` unconditionally, which stores
+  `datetime.utcnow()` (`database/mdbsync.py:522-537`). The cursor only moves
+  forward, so a failed page is skipped permanently. `last_sync()` returns a
+  plain `0` for a missing row, so DELETEing the row is a clean "resync from
+  1970". `upsert_watched_episode` is INSERT OR REPLACE, so widening a fetch
+  window costs bandwidth and nothing else.
+- **Version the VALUE, not the KEY, for a repeatable one-shot.** A versioned
+  key (`_thing_v1` → `_thing_v2`) abandons the old key in our settings on every
+  bump; `test_patcher_upgrade_path` measures that as DOUBLE-STAMP. A fixed key
+  holding a generation constant overwrites and measures UPGRADES. This is the
+  `CACHE_RTL_FIX_VERSION` / `_rtl_fix_done` shape.
+- **A one-shot repair of ANOTHER add-on's data must not hang off our patch
+  landing.** They are independent: the repair still works when the anchor no
+  longer matches, and that user needs it most, because the forward fix cannot
+  reach them either. Track it with its own flag and retry until it succeeds —
+  a lock race lost once must not be lost forever.
+- **A fake that collapses a distinction cannot test the bug that lives in it.**
+  The OSD blocker was a bool/string namespace confusion; a test double with one
+  settings dict would have passed it. `tools/test_osd_autoclose.py` models the
+  split deliberately and reintroduces the bug in its own sabotage section.
+- **A defense with no fixture that exercises it is untested, however correct.**
+  Prefix-safe pruning and a ten-entry cap both survived being mutated away
+  because no fixture had a prefix-colliding skin id or pushed past the cap. The
+  question to ask of any new guard is not "is it right" but "which case here
+  would fail if it were removed".
 - **POV serves settings from a cached blob.** Every read goes through the
   `pov_settings` window property. A cross-add-on write is invisible until that
   property is cleared — `xbmcgui.Window(10000).clearProperty('pov_settings')`.
@@ -4250,6 +4326,113 @@ Raw by a few minutes; poll rather than assume.
 - **Package releases: re-run Deploy GitHub Pages LAST.** The APK download links
   are served from the `gh-pages` branch, not from the release. See
   `APK_RELEASE.md`.
+
+### What shipped 0.2.499 / qf 0.1.544 / build 0.1.112 (note 599)
+
+Two reported defects, and three rounds of validation that each found something
+real. The findings are worth more than the fixes.
+
+**The player bar that would not hide.** `_maybe_enable_osd_autoclose` (was
+`_maybe_enable_fentastic_osd_autoclose`) gated on
+`getSkinDir() != 'skin.fentastic'` and returned otherwise. `skin.povil.nox`
+ships the same `OSDAutoClose` / `OSDAutoCloseTime` settings and the same
+`Timers.xml` `autoclosevideoosd` timer, off by default like FENtastic's, so
+every Nox user had the bar stay up since the feature shipped. Nothing was
+broken on the reporter's device — a default never reached it. It now detects
+the CAPABILITY by scanning the active skin's own XML, so AF3 and Estuary are
+skipped without a list saying so.
+
+**`Skin.HasSetting` reads the BOOL map. Only the bool map.** The rewrite first
+recorded its seeding mark with `Skin.SetString(AISubsOsdSeeded,1)` and read it
+with `Skin.HasSetting(AISubsOsdSeeded)`. `CSkinInfo` keeps `m_bools` and
+`m_strings` as two separate maps, each with its own name→id allocator
+(`Skin.cpp:633-729`), and `GUIInfoManager.cpp:10466` compiles
+`Skin.HasSetting(x)` to `CGUIInfo(SKIN_BOOL, TranslateBool(x))`. A mark written
+as a string is invisible to it, forever. The guard never fired, so the
+migration re-forced the values on EVERY boot — the exact opposite of the
+"leave a deliberate opt-out alone" the function was rewritten to provide.
+`Skin.SetBool(x)` with no second argument does set true
+(`SkinBuiltins.cpp:154-169`, "default is to set it to true").
+`_maybe_default_nox_poster_rating` next door already pairs them correctly; this
+was the only place in the tree that crossed them.
+
+**`special://home/addons/` is not where every skin lives.** A skin shipped
+inside Kodi sits under `special://xbmc/addons/`. `pov_reload.py:235` and
+`wizard.py:656` already walk both roots; the new scan looked in one and could
+never have detected such a skin on any boot.
+
+**A negative you did not measure is not an answer.** A skin WITHOUT the feature
+never gets a skin-side mark, so it is re-walked every boot forever (~200 XML
+files, ~2.4MB on a real Nox). The negative is cached per skin VERSION so a skin
+update that ADDS the feature is still noticed — but only when at least one file
+was actually read. An empty walk caching "no" would be permanent for that
+version.
+
+**Umbrella loses watched episodes permanently, and only one of its two lists
+shows it.** `modules/mdblist.py:943-990` `sync_watchedProgress` pages
+`/sync/watched?since=<db_last>`, breaks on `if not data: break`, and then calls
+`update_last_watched_at` three times UNCONDITIONALLY (983-985).
+`mdbsync.py:522-537` stores `datetime.utcnow()` — the wall clock at sync time,
+not the newest `last_watched_at` ingested. `get_request` (849-878) returns
+`None` on any failure rather than raising, so a transient error produces the
+silent break and the cursor advances anyway. It only moves forward, so that
+window is skipped for good.
+
+The EPISODES list (`menus/episodes.py:788-791`) scrapes MDBList live whenever
+its activity stamp is newer, so it is always right. The SHOWS list
+(`menus/tvshows.py:2550`) is rebuilt from the local `mdb_watched_episodes`
+table. That is the whole reason one looked broken and the other did not, and
+why Umbrella's own Force button — wipe and resync from 1970 — fixed it.
+
+`umbrella_mdblist_sync_patcher` widens the window 30 days
+(`upsert_watched_episode` is INSERT OR REPLACE, so re-ingesting is free) and
+clears the cursor once so a damaged table backfills. `last_sync()`
+(`mdbsync.py:335-355`) returns a plain `0` for a MISSING row, identical to
+epoch — verified, not assumed.
+
+**The repair must not depend on the patch landing.** It was first called only
+on the paths where our line reached Umbrella's source. It repairs Umbrella's
+own DATABASE and is independent of the patch, so a user whose Umbrella had been
+refactored enough to move the anchor got nothing — and that is the user who
+needs it most, because the forward fix cannot reach them either. It now runs as
+soon as Umbrella is found, before the file is read. Reordering it earlier is
+neutral-to-better: post-reset `db_last` is 0, so patched and unpatched both
+compute `since='1970-01-01T00:00:00Z'`, and the old order had a window where
+Umbrella could run the newly-patched 30-day code against a STALE nonzero
+cursor, giving a partial resync instead of the intended full one.
+
+**Put the generation in the VALUE, not the key.** The backfill flag started as
+`_umb_mdbl_cursor_reset_v1`. `test_patcher_upgrade_path` measured the module
+DOUBLE-STAMP: every bump of a versioned KEY abandons the old key in our
+settings forever. `_umb_mdbl_cursor_reset` holding `_RESET_GEN` overwrites
+instead, and measures UPGRADES. This is the `CACHE_RTL_FIX_VERSION` /
+`_rtl_fix_done` shape the tree already uses.
+
+**The guard's pin comparison was one-directional.** `unknown = [m for m in
+marks if m not in pinned]` catches an added or changed marker and is blind to a
+REMOVED one — proven by deleting `_fen_osd_autoclose_v1` from `service.py` and
+watching the guard say ok. Measured: exactly one pin in the tree listed a
+marker no longer in the source, the one just created, so the table never
+carried history and a both-directions check was clean from day one. It also
+catches a RENAME, which previously showed only its "add" half.
+
+**Two of the new test's own checks could not fail**, found by the validator
+building broken variants rather than reading: `compile(after, ...) is None or
+True` is always true (a code object is not None, so the second operand wins),
+and the cursor-clear check named two of the three keys it clears, so dropping
+`last_watched_movies_at` from the DELETE passed. And `tools/test_osd_autoclose.py`
+itself shipped with two defenses nothing could tell were removed — pruning the
+cache on `<skin>=` rather than the bare id, and the ten-entry cap — because no
+fixture had a skin id that was a prefix of another (`skin.povil` /
+`skin.povil.nox` makes that family real) and none pushed more than three skins
+through the cache.
+
+**`tools/test_osd_autoclose.py` models Kodi's two-map split on purpose.** A
+fake with a single settings dict would have PASSED the blocker above, which is
+the failure the file exists to catch. Its sabotage section reintroduces the
+blocker, drops the 150ms wait, caches an unmeasured negative, removes the
+second root, prunes on the bare skin id and raises the cap — and asserts each
+is caught.
 
 ### What shipped 0.2.474 / wizard 0.1.41 (Account Manager + the search switch)
 
