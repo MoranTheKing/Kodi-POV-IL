@@ -105,7 +105,7 @@ MDBList bug was born.
 A new patcher with a versioned marker must also be pinned, so the shape cannot
 enter the tree unclassified.
 
-The other 32 are UNPROVEN, for two different reasons, and neither is a pass:
+The other 38 are UNPROVEN, for two different reasons, and neither is a pass:
 no stock copy of the host on this machine (the skins, the wizard,
 service.subtitles.All_Subs), or nothing here can CALL the code -- service.py's
 boot migrations and the three lib modules with no ensure_*/heal_* are pinned
@@ -146,8 +146,22 @@ separate assumptions each hid live, shipping patchers:
     anchor before, so they were invisible. That convention has NO safety net
     at all: our own settings are cleared by nothing, ever, so a bump that
     cannot upgrade never recovers -- unlike a marker in a host add-on, which
-    the host's next release wipes. There are at least thirty of them and the
-    biggest cluster is in service.py, not in a patcher.
+    the host's next release wipes. There are 29 of them in the table, the
+    biggest cluster in service.py rather than in any patcher.
+
+  * not even "name and version in one string" -- the shape already PROVEN in
+    production splits them: CACHE_RTL_FIX_VERSION = '7' beside
+    set_setting('_rtl_fix_done', CACHE_RTL_FIX_VERSION). Neither literal
+    carries both halves and the joined text exists nowhere, so no
+    single-string search could see it. That gate has been bumped 4->5 and
+    5->6 in shipped releases, each time for exactly the reason this file
+    exists, and its own comment says the constant "must be bumped whenever a
+    new repair is added here, or every existing install skips the backfill
+    forever". The CALL SITE is read instead: a two-argument set_setting whose
+    key and value both resolve to module-level constants becomes "key=value".
+    Only keys starting with _ count -- set_setting('chunk_lines', '50') is a
+    default, not a version gate, and tripping the pin when someone retunes a
+    default is the kind of noise that gets a test switched off.
 
 What IS assumed: a marker is TEXT, so the search is scoped to STRING LITERALS.
 That is what makes the loose shape safe -- an ordinary api_v2 identifier lives
@@ -439,6 +453,10 @@ pin('af3_search_pov_patcher', 'UNPROVEN',
     'AI_SUBS_POV_SEARCH_v3_rollback_pov')
 pin('all_subs_samefile_patcher', 'UNPROVEN',
     'AI_SUBS_ALL_SUBS_SAMEFILE_v1')
+pin('build_icons_patcher', 'UNPROVEN',
+    '_tiles_refresh_gen=2')
+pin('dark_subs_integration', 'UNPROVEN',
+    '_darksubs_autoenable_done=1', '_force_ai_autoenable_done=1')
 pin('darksubs_download_sub_patcher', 'UNPROVEN',
     'AI_DOWNLOAD_SUB_ELIF_v1', 'AI_DOWNLOAD_SUB_ELIF_v2')
 pin('darksubs_embedded_demote_patcher', 'UNPROVEN',
@@ -473,8 +491,10 @@ pin('favourites_personal_tiles_patcher', 'UNPROVEN',
     'AI_SUBS_FAVOURITES_PREMIUMIZE_RESEED_v1', 'mdblist_reseed_v2')
 pin('fentastic_patcher', 'UNPROVEN',
     'AI_SUBS_NOTIFICATION_WRAP_v1')
+pin('fentastic_widget_patcher', 'UNPROVEN',
+    '_fen_widgets_seeded=v1')
 pin('hebrew_build_ui_patcher', 'UNPROVEN',
-    '_subtitle_outline_migration_v1')
+    '_subtitle_outline_migration_v1', '_ui_prefs_seeded=v1')
 pin('kodi_utils', 'UNPROVEN',
     '_embedded_mode_v1')
 pin('nox_change_source_patcher', 'UNPROVEN',
@@ -483,8 +503,14 @@ pin('nox_osd_collision_patcher', 'UNPROVEN',
     'AI_SUBS_NOX_OSD_FIX_v1')
 pin('pov_container_refresh_crash_fix', 'UNPROVEN',
     'AI_SUBS_POV_WIDGET_REFRESH_v1')
+pin('pov_genre_folders_reseed_patcher', 'UNPROVEN',
+    '_pov_genre_folders_reseed=v1')
 pin('pov_seasons_view_seed', 'UNPROVEN',
     '_pov_seasons_view_v1')
+pin('pov_series_networks_reseed_patcher', 'UNPROVEN',
+    '_pov_series_networks_reseed=v1')
+pin('pov_torbox_usage_patcher', 'UNPROVEN',
+    '_pov_torbox_usage_patch_version=6')
 pin('service', 'UNPROVEN',
     '_builtin_engine_rollout_v2', '_chunk_lines_50_v1',
     '_fast_first_chunk_default_v2', '_fen_osd_autoclose_v1',
@@ -493,7 +519,7 @@ pin('service', 'UNPROVEN',
     '_pool_default_on_v1', '_pool_share_force_v1',
     '_pov_autoplay_default_v1', '_pov_autoplay_revert_v2',
     '_pov_resume_revert_v1', '_remember_source_default_v1',
-    '_remember_source_force_v2')
+    '_remember_source_force_v2', '_rtl_fix_done=7', '_temp_purge_done=2')
 pin('skin_dialog_subtitles_patcher', 'UNPROVEN',
     'AI_SUBS_DIALOG_HEADER_v1', 'AI_SUBS_DIALOG_HEADER_v2')
 pin('skin_dialog_subtitles_row_patcher', 'UNPROVEN',
@@ -501,7 +527,7 @@ pin('skin_dialog_subtitles_row_patcher', 'UNPROVEN',
 pin('skin_watched_poster_patcher', 'UNPROVEN',
     'AI_SUBS_WATCHED_LIST_v1', 'AI_SUBS_WATCHED_POSTER_v1')
 pin('subs_engine_bridge', 'UNPROVEN',
-    'Cached_subs_v2')
+    'Cached_subs_v2', '_engine_defaults_v=4')
 pin('umbrella_watch_prompt', 'UNPROVEN',
     '_umb_watch_prompt_v1')
 pin('umbrella_watch_source', 'UNPROVEN',
@@ -585,6 +611,74 @@ def literal_markers(src):
     return out
 
 
+def pair_markers(src):
+    """Markers whose NAME and VERSION are two different constants.
+
+    A seventh shape, and the one already proven in production. The convention
+    is a fixed key with no digits plus a bare version value with no name,
+    joined only at runtime:
+
+        CACHE_RTL_FIX_VERSION = '7'
+        ...
+        kodi_utils.set_setting('_rtl_fix_done', CACHE_RTL_FIX_VERSION)
+
+    Neither literal carries both halves, so no single-string search can ever
+    see it -- and that one has been bumped 4->5 and 5->6 in shipped releases,
+    each time for exactly the reason this file exists. Its own comment says
+    so: "the constant must be bumped whenever a new repair is added here, or
+    every existing install skips the backfill forever."
+
+    So the call site is read instead of the text: a two-argument
+    set_setting/setSetting whose key and value both resolve to module-level
+    string constants becomes the marker "key=value". A value with no digit in
+    it is not a version ('done', 'true') and is skipped.
+    """
+    try:
+        tree = ast.parse(src)
+    except SyntaxError:
+        return set()
+    consts = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) \
+                and isinstance(node.value.value, str):
+            for t in node.targets:
+                if isinstance(t, ast.Name):
+                    consts[t.id] = node.value.value
+
+    def resolve(a):
+        if isinstance(a, ast.Constant) and isinstance(a.value, str):
+            return a.value
+        if isinstance(a, ast.Name):
+            return consts.get(a.id)
+        return None
+
+    out = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or len(node.args) != 2:
+            continue
+        fn = node.func
+        name = fn.attr if isinstance(fn, ast.Attribute) else \
+            fn.id if isinstance(fn, ast.Name) else ''
+        if name not in ('set_setting', 'setSetting'):
+            continue
+        key, val = resolve(node.args[0]), resolve(node.args[1])
+        if not key or not val or not re.search(r'\d', val):
+            continue
+        # The key must be one of OUR one-shot flags. Without this, ordinary
+        # settings writes join the table -- set_setting('chunk_lines', '50')
+        # is not a version gate, and tripping the pin when someone retunes a
+        # default is the kind of noise that gets a test switched off.
+        if not key.startswith('_'):
+            continue
+        # And skip the ones whose key already carries the version: the literal
+        # search has them, and pinning '_gemini_model_bump_v2=1' beside
+        # '_gemini_model_bump_v2' is the same tripwire written twice.
+        if re.search(r'_v\d+$', key):
+            continue
+        out.add('%s=%s' % (key, val))
+    return out
+
+
 def bump_marker(m):
     """The same marker, one version later. None if it carries no version.
 
@@ -596,7 +690,7 @@ def bump_marker(m):
     if hits:
         h = hits[-1]
         return '%s_v%d%s' % (m[:h.start()], int(h.group(1)) + 1, m[h.end():])
-    h = re.search(r'(=\s*)(\d+)\s*$', m)
+    h = re.search(r'(=\s*v?)(\d+)\s*$', m)
     if h:
         return m[:h.start(2)] + str(int(h.group(2)) + 1) + m[h.end(2):]
     return None
@@ -604,7 +698,7 @@ def bump_marker(m):
 
 def marker_family(m):
     """The marker with its version taken out, for grouping."""
-    return re.sub(r'_v\d+', '', re.sub(r'=\s*\d+\s*$', '', m))
+    return re.sub(r'_v\d+', '', re.sub(r'=\s*v?\d+\s*$', '', m))
 
 
 def has(blob, marker):
@@ -809,7 +903,7 @@ def patchers():
     file directly inside resources/lib -- so a versioned marker anywhere else
     was not merely unmeasured, it was unknown to exist:
 
-      * service.py itself holds SIXTEEN versioned settings markers gating
+      * service.py itself holds EIGHTEEN versioned settings markers gating
         one-shot migrations run from main() at boot -- including
         _gemini_model_bump_v2, whose own comment states the exact
         "reusing the old id makes it a no-op for the users who need it" risk
@@ -841,7 +935,7 @@ def patchers():
         src = open(path, encoding='utf-8').read()
         runnable = (os.path.dirname(path) == LIB
                     and bool(re.search(r'(?m)^def (ensure|heal)\w*\(', src)))
-        marks = literal_markers(src)
+        marks = literal_markers(src) | pair_markers(src)
         if runnable:
             marks |= runtime_markers(stem)
         if marks:
@@ -1494,6 +1588,26 @@ def main():
               'a cross-addon settings gate cannot be measured at all')
     finally:
         shutil.rmtree(_h2, ignore_errors=True)
+
+    # A marker whose NAME and VERSION are two separate constants, joined only
+    # at the call site. CACHE_RTL_FIX_VERSION has been bumped 4->5 and 5->6 in
+    # shipped releases for exactly the reason this file exists, and no
+    # single-string search could ever have seen it.
+    check('SABOTAGE: a split name/version pair is discovered',
+          '_rtl_fix_done=7' in PINS.get('service', ('', ()))[1]
+          and '_tiles_refresh_gen=2'
+          in PINS.get('build_icons_patcher', ('', ()))[1],
+          'the pair shape is invisible again, and the RTL backfill gate with '
+          'it')
+    check('SABOTAGE: an ordinary settings write is NOT a marker',
+          not any(m.startswith(('chunk_lines=', 'temperature='))
+                  for m in PINS.get('service', ('', ()))[1]),
+          'retuning a default would trip the pin -- noise like that is how a '
+          'test gets switched off')
+    check('SABOTAGE: a split pair can be bumped',
+          bump_marker('_rtl_fix_done=7') == '_rtl_fix_done=8'
+          and bump_marker('_fen_widgets_seeded=v1') == '_fen_widgets_seeded=v2',
+          'the pair shape is pinned but cannot be simulated')
 
     # Discovery must not stop at resources/lib with an entry point. service.py
     # holds sixteen versioned settings markers gating boot migrations, and
