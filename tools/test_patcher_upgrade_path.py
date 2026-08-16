@@ -105,12 +105,20 @@ MDBList bug was born.
 A new patcher with a versioned marker must also be pinned, so the shape cannot
 enter the tree unclassified.
 
-The other 30 are UNPROVEN: no stock copy of their host on this machine (the
-skins, the wizard, service.subtitles.All_Subs). That is an admission, not a
-pass -- and on a machine with no host trees at all, nearly everything lands
-there, so the run says PARTIAL rather than pretending. Every host this tree
-patches now has a key and an env var, so "unmeasured here" is a missing
-directory rather than, as it was, a host with nowhere to point at it.
+The other 32 are UNPROVEN, for two different reasons, and neither is a pass:
+no stock copy of the host on this machine (the skins, the wizard,
+service.subtitles.All_Subs), or nothing here can CALL the code -- service.py's
+boot migrations and the three lib modules with no ensure_*/heal_* are pinned
+but not runnable. On a machine with no host trees at all nearly everything
+lands here, so the run says PARTIAL rather than pretending. Every host this
+tree patches now has a key and an env var, so "unmeasured here" is a missing
+directory rather than a host with nowhere to point at it.
+
+--pins also prints `[never landed: ...]` for a pinned marker the run never saw
+written. Most are retired predecessors, which is expected on a pristine host --
+but AI_SUBS_MDBL_REDACT_v1 is a phantom: declared in pov_mdblist_patcher and
+never written by the code it nominally gates, which really uses an unversioned
+sentinel. Those used to vanish from the verdict silently.
 
 RETIRED is its own verdict for a marker-gated module nothing calls, and those
 are kept OUT of the broken counts: a patcher reaching no device at all is not
@@ -134,11 +142,12 @@ separate assumptions each hid live, shipping patchers:
 
   * not even "in the host's file" -- a whole second convention keeps a
     versioned flag in OUR OWN addon's Kodi settings to record that a one-time
-    change already ran. All thirteen of those start with an underscore, which
-    \b can never anchor before, so all thirteen were invisible. One of them,
-    pov_mdblist_patcher's '_lists_sort_recent_v1', gates a live entry point
-    and has the worst safety net in the tree: our own settings, cleared by
-    nothing, ever. Bumping it shipped a real regression under ALL PASS.
+    change already ran. Those all start with an underscore, which \b can never
+    anchor before, so they were invisible. That convention has NO safety net
+    at all: our own settings are cleared by nothing, ever, so a bump that
+    cannot upgrade never recovers -- unlike a marker in a host add-on, which
+    the host's next release wipes. There are at least thirty of them and the
+    biggest cluster is in service.py, not in a patcher.
 
 What IS assumed: a marker is TEXT, so the search is scoped to STRING LITERALS.
 That is what makes the loose shape safe -- an ordinary api_v2 identifier lives
@@ -290,10 +299,6 @@ pin('pov_source_quality_patcher', 'UPGRADES',
     'AI_SUBS_QUALITY_FIX_v5')
 pin('pov_subtitle_match_patcher', 'UPGRADES',
     'AI_SUBS_MATCH_v7')
-pin('umbrella_setup_patcher', 'UPGRADES',
-    'AI_SUBS_UMBRELLA_SOURCE_NAME_v1', '_umbrella_coco_providers_v1',
-    '_umbrella_coco_providers_v2', '_umbrella_coco_wired_v1',
-    '_umbrella_defaults_v1')
 pin('umbrella_source_ux_patcher', 'UPGRADES',
     'AI_SUBS_UMB_PREWARM_v1', 'AI_SUBS_UMB_QUIETCANCEL_v1')
 pin('umbrella_subtitle_match_patcher', 'UPGRADES',
@@ -386,6 +391,14 @@ pin('pov_movie_networks_patcher', 'DOUBLE-STAMP',
     'AI_SUBS_POV_MOVIE_PROVIDERS_REVERT_v1',
     'AI_SUBS_POV_MOVIE_PROVIDERS_v1', 'AI_SUBS_POV_MOVIE_PROVIDERS_v2',
     'AI_SUBS_POV_MOVIE_PROVIDERS_v3')
+pin('umbrella_language_patcher', 'DOUBLE-STAMP',
+    '_umbrella_api_language_v1', '_umbrella_lang_filters_v1')
+pin('umbrella_setup_patcher', 'DOUBLE-STAMP',
+    'AI_SUBS_UMBRELLA_SOURCE_NAME_v1', '_umbrella_coco_providers_v1',
+    '_umbrella_coco_providers_v2', '_umbrella_coco_wired_v1',
+    '_umbrella_defaults_v1')
+pin('update_nag_patcher', 'DOUBLE-STAMP',
+    '_update_nag_quiet_v1')
 
 # --- retired: marker-gated, and called by nothing ---------------------------
 # Kept out of the broken counts on purpose: a patcher that reaches no device is
@@ -462,6 +475,8 @@ pin('fentastic_patcher', 'UNPROVEN',
     'AI_SUBS_NOTIFICATION_WRAP_v1')
 pin('hebrew_build_ui_patcher', 'UNPROVEN',
     '_subtitle_outline_migration_v1')
+pin('kodi_utils', 'UNPROVEN',
+    '_embedded_mode_v1')
 pin('nox_change_source_patcher', 'UNPROVEN',
     'AI_SUBS_NOX_CHANGE_SOURCE_v1')
 pin('nox_osd_collision_patcher', 'UNPROVEN',
@@ -470,6 +485,15 @@ pin('pov_container_refresh_crash_fix', 'UNPROVEN',
     'AI_SUBS_POV_WIDGET_REFRESH_v1')
 pin('pov_seasons_view_seed', 'UNPROVEN',
     '_pov_seasons_view_v1')
+pin('service', 'UNPROVEN',
+    '_builtin_engine_rollout_v2', '_chunk_lines_50_v1',
+    '_fast_first_chunk_default_v2', '_fen_osd_autoclose_v1',
+    '_gemini3_tune_v1', '_gemini_model_bump_v2', '_gender_ref_on_v1',
+    '_ktuvit_on_v4', '_nox_poster_rating_default_v2',
+    '_pool_default_on_v1', '_pool_share_force_v1',
+    '_pov_autoplay_default_v1', '_pov_autoplay_revert_v2',
+    '_pov_resume_revert_v1', '_remember_source_default_v1',
+    '_remember_source_force_v2')
 pin('skin_dialog_subtitles_patcher', 'UNPROVEN',
     'AI_SUBS_DIALOG_HEADER_v1', 'AI_SUBS_DIALOG_HEADER_v2')
 pin('skin_dialog_subtitles_row_patcher', 'UNPROVEN',
@@ -478,10 +502,10 @@ pin('skin_watched_poster_patcher', 'UNPROVEN',
     'AI_SUBS_WATCHED_LIST_v1', 'AI_SUBS_WATCHED_POSTER_v1')
 pin('subs_engine_bridge', 'UNPROVEN',
     'Cached_subs_v2')
-pin('umbrella_language_patcher', 'UNPROVEN',
-    '_umbrella_api_language_v1', '_umbrella_lang_filters_v1')
-pin('update_nag_patcher', 'UNPROVEN',
-    '_update_nag_quiet_v1')
+pin('umbrella_watch_prompt', 'UNPROVEN',
+    '_umb_watch_prompt_v1')
+pin('umbrella_watch_source', 'UNPROVEN',
+    '_umb_watch_source_v2')
 pin('wizard_patcher', 'UNPROVEN',
     'AI_SUBS_LOGINIT_INJECT_v1')
 pin('wizard_self_healer', 'UNPROVEN',
@@ -779,15 +803,47 @@ def patchers():
     follow it: it is called from service.py on every boot, rewrites POV's
     torbox_api.py, and gates on '# AI_SUBS_TORBOX_URL_v1' with an exact-match
     early return. It was invisible here, and the family is growing.
+
+    DISCOVERY IS NOT EXECUTABILITY, and conflating them hid the largest
+    population of all. The filter used to require an ensure_*/heal_* def AND a
+    file directly inside resources/lib -- so a versioned marker anywhere else
+    was not merely unmeasured, it was unknown to exist:
+
+      * service.py itself holds SIXTEEN versioned settings markers gating
+        one-shot migrations run from main() at boot -- including
+        _gemini_model_bump_v2, whose own comment states the exact
+        "reusing the old id makes it a no-op for the users who need it" risk
+        this file exists to catch.
+      * kodi_utils (_embedded_mode_v1), umbrella_watch_prompt and
+        umbrella_watch_source (_umb_watch_source_v2, already bumped once) sit
+        in resources/lib but expose no ensure_*/heal_*.
+
+    So a module is DISCOVERED if it carries a versioned marker at all, and it
+    is pinned either way. Only a module with a live entry point can be
+    simulated; the rest are honestly UNPROVEN. That still buys the thing that
+    matters most -- the pin layer trips on a bump -- for all of them.
     """
-    for fn in sorted(os.listdir(LIB)):
-        if not fn.endswith('.py') or fn.startswith('_'):
+    seen = set()
+    files = []
+    for dp, dns, fns in os.walk(LIB):
+        dns[:] = [d for d in dns if d != '__pycache__']
+        files += [os.path.join(dp, f) for f in sorted(fns) if f.endswith('.py')]
+    files.append(os.path.join(os.path.dirname(LIB.rstrip(os.sep)),
+                              '..', 'service.py'))
+    for path in files:
+        path = os.path.normpath(path)
+        if not os.path.isfile(path):
             continue
-        stem = fn[:-3]
-        src = open(os.path.join(LIB, fn), encoding='utf-8').read()
-        if not re.search(r'(?m)^def (ensure|heal)\w*\(', src):
+        stem = os.path.basename(path)[:-3]
+        if stem in seen or stem.startswith('__'):
             continue
-        marks = literal_markers(src) | runtime_markers(stem)
+        seen.add(stem)
+        src = open(path, encoding='utf-8').read()
+        runnable = (os.path.dirname(path) == LIB
+                    and bool(re.search(r'(?m)^def (ensure|heal)\w*\(', src)))
+        marks = literal_markers(src)
+        if runnable:
+            marks |= runtime_markers(stem)
         if marks:
             yield stem, src, sorted(marks)
 
@@ -883,6 +939,56 @@ def _install_stubs(home, extra_path=None):
                 f.write('%s=%s\n' % (k, d[k]))
     ku.get_setting = _get
     ku.set_setting = _set
+
+    # xbmcaddon, which was EVICTED from sys.modules and never replaced.
+    #
+    # A patcher that reads another add-on's settings does it through
+    # xbmcaddon.Addon('plugin.video.pov'), not through kodi_utils. Without the
+    # module, that import raised, the surrounding `except Exception` returned
+    # 'no_pov' / 'not_installed', and the entry point never ran -- on every
+    # machine, stock host present or not. pov_mdblist_patcher's
+    # ensure_lists_sort_recent, the very example these notes call the worst
+    # safety net in the tree, has never once been dynamically exercised here.
+    settings_dir = os.path.join(home, 'userdata', 'addon_data')
+
+    class _Addon(object):
+        def __init__(self, addon_id='service.subtitles.kodipovilai'):
+            # A real Kodi Addon() raises for an add-on that is not installed,
+            # which is exactly how these patchers detect a missing host --
+            # emulate it rather than handing back a store nobody has.
+            if not os.path.isdir(os.path.join(home, 'addons', addon_id)) \
+                    and addon_id != 'service.subtitles.kodipovilai':
+                raise RuntimeError('addon %s is not installed' % addon_id)
+            self._id = addon_id
+            self._f = os.path.join(settings_dir, addon_id, 'settings.probe')
+            os.makedirs(os.path.dirname(self._f), exist_ok=True)
+
+        def _all(self):
+            try:
+                with open(self._f, encoding='utf-8') as f:
+                    return dict(ln.rstrip('\n').split('=', 1)
+                                for ln in f if '=' in ln)
+            except OSError:
+                return {}
+
+        def getSetting(self, key):
+            return self._all().get(key, '')
+
+        def setSetting(self, key, value):
+            d = self._all()
+            d[str(key)] = str(value)
+            with open(self._f, 'w', encoding='utf-8') as f:
+                for k in sorted(d):
+                    f.write('%s=%s\n' % (k, d[k]))
+
+        def getAddonInfo(self, field):
+            return {'id': self._id, 'version': '0.0.0',
+                    'path': os.path.join(home, 'addons', self._id),
+                    'profile': os.path.dirname(self._f)}.get(field, '')
+
+    xa = types.ModuleType('xbmcaddon')
+    xa.Addon = _Addon
+    sys.modules['xbmcaddon'] = xa
     sys.modules['resources.lib.kodi_utils'] = ku
     lib.kodi_utils = ku
 
@@ -1107,6 +1213,19 @@ def simulate_bump(stem, src, override=None):
             per.append('UPGRADES' if new and not old else
                        'DOUBLE' if new else
                        'NEVER-UPGRADES' if old else 'LOST-PATCH')
+        # A pinned marker that NEVER LANDS was silently absent from `per` and
+        # so contributed nothing -- no verdict, no warning. That is how
+        # AI_SUBS_MDBL_REDACT_v1 sat in the table for free: it is a phantom,
+        # declared in pov_mdblist_patcher but never written by the code it
+        # nominally gates, which really uses an unversioned sentinel. Say so,
+        # rather than letting a module look covered because its OTHER markers
+        # were measured.
+        ghosts = [m for m in (literal_markers(text) | runtime_markers(stem,
+                                                                     base))
+                  if m not in landed]
+        if ghosts:
+            s2 = '%s [never landed: %s]' % (s2, ' '.join(sorted(ghosts)))
+
         raw = max(per, key=rank.__getitem__)
         worst = raw
         if raw == 'DOUBLE':
@@ -1352,6 +1471,40 @@ def main():
               'settings markers are written somewhere _snapshot cannot see')
     finally:
         shutil.rmtree(_h, ignore_errors=True)
+
+    # xbmcaddon has to EXIST. It was evicted from sys.modules and never
+    # replaced, so every entry point reading another add-on's settings hit
+    # ModuleNotFoundError, returned its "host not installed" sentinel, and was
+    # never exercised -- including ensure_lists_sort_recent, the example these
+    # notes lean on hardest. Three pinned verdicts were wrong because of it.
+    _h2 = tempfile.mkdtemp(prefix='upgaddon-')
+    try:
+        os.makedirs(os.path.join(_h2, 'addons', 'plugin.video.pov'))
+        _install_stubs(_h2)
+        import xbmcaddon as _xa
+        _a = _xa.Addon('plugin.video.pov')
+        _a.setSetting('probe', 'yes')
+        missing = False
+        try:
+            _xa.Addon('plugin.video.definitely.not.installed')
+        except Exception:
+            missing = True
+        check('SABOTAGE: xbmcaddon exists, stores, and refuses a missing host',
+              _a.getSetting('probe') == 'yes' and missing,
+              'a cross-addon settings gate cannot be measured at all')
+    finally:
+        shutil.rmtree(_h2, ignore_errors=True)
+
+    # Discovery must not stop at resources/lib with an entry point. service.py
+    # holds sixteen versioned settings markers gating boot migrations, and
+    # three lib modules carry markers with no ensure_*/heal_* at all. None of
+    # them were even pinned -- so no tripwire, not merely no measurement.
+    check('SABOTAGE: markers outside the patcher shape are still pinned',
+          '_gemini_model_bump_v2' in PINS.get('service', ('', ()))[1]
+          and '_embedded_mode_v1' in PINS.get('kodi_utils', ('', ()))[1]
+          and '_umb_watch_source_v2'
+          in PINS.get('umbrella_watch_source', ('', ()))[1],
+          'discovery is scoped to runnable patcher modules again')
 
     # Every host this tree patches needs a key, or its patchers cannot be
     # measured on ANY machine -- there is nowhere to point at them. The list
