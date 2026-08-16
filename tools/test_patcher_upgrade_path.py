@@ -33,21 +33,27 @@ simulates the bump for real: patch a pristine host, rewrite the patcher's own
 marker to the next version, run it again against the host it already patched,
 and look at what the device would be left holding.
 
+A module gets the verdict of its WORST marker, because a module that applies
+six patches through five entry points -- pov_mdblist_patcher does -- is only as
+good as the one that reaches nobody.
+
   UPGRADES        old marker gone, new marker in place -- the fix lands
   NEVER-UPGRADES  second run is a no-op -- the fix reaches nobody, silently
   DOUBLE-INJECT   both markers present AND a line of real code duplicated --
                   the old behaviour is still live alongside the new
   DOUBLE-STAMP    both markers present but only the COMMENT duplicated; the
                   patcher re-checked its own output and left the code alone
+  CLAIMS-PATCHED  reported success and wrote no marker, on a host that IS
+                  present -- the anchor has moved and the patch is dead
   LOST-PATCH      neither marker survives -- the feature simply vanishes.
-                  Never pin this; it is a hard failure
+                  Never pin either of these; both are hard failures
   UNBUMPABLE      the harness could not move the version. Not a verdict, a
                   refusal to guess one
 
 HOW BAD IS IT, GIVEN THAT THE HOSTS AUTO-UPDATE
 -----------------------------------------------
 Measured against POV 6.08.13 and Umbrella 6.7.82 -- the current upstream of
-both -- 14 patchers are NEVER-UPGRADES and 8 DOUBLE-INJECT, out of the 33 that
+both -- 16 patchers are NEVER-UPGRADES and 6 DOUBLE-INJECT, out of the 35 that
 have a host here.
 
 That reads worse than it is, and the reason is worth knowing before anyone
@@ -89,12 +95,23 @@ skins, the wizard, service.subtitles.All_Subs). That is an admission, not a
 pass -- and on a machine with no host trees at all, nearly everything lands
 there, so the run says PARTIAL rather than pretending.
 
-Marker discovery is deliberately NOT keyed on the AI_SUBS_ prefix. That is a
-house convention five wired patchers do not follow (darksubs_patcher,
+WHAT COUNTS AS A PATCHER HERE IS DELIBERATELY NOT A NAMING RULE.
+
+Marker discovery is not keyed on the AI_SUBS_ prefix: that is a house
+convention five wired patchers do not follow (darksubs_patcher,
 darksubs_download_sub_patcher, darksubs_embedded_demote_patcher,
 pov_resume_cancel_patcher, af3_home_patcher), and keying on it made all five
-invisible: not measured, not pinned, not even counted. Bumping one printed
-ALL PASS on every machine. Any SHOUTING_NAME_vN counts now.
+invisible -- not measured, not pinned, not even counted. Any SHOUTING_NAME_vN
+counts now.
+
+Module selection is not keyed on the filename either. It used to require
+"patcher" in the name, and pov_torbox_url_fix.py does not have it: it is called
+from service.py on every boot, rewrites POV's torbox_api.py, gates on an
+exact-match marker, and measures NEVER-UPGRADES. Any module with a versioned
+marker and an ensure_*/heal_* entry point is in scope.
+
+And every entry point gets called, not just ensure_patched -- because the
+service calls every one.
 
 Run:  python3 tools/test_patcher_upgrade_path.py
       POV_STOCK=... UMBRELLA_STOCK=... python3 tools/...   (widen coverage)
@@ -108,6 +125,7 @@ knife-edge on a single host release -- but that is a measurement, not a
 guarantee for the next one.
 """
 import importlib
+import inspect
 import os
 import re
 import shutil
@@ -133,6 +151,7 @@ STOCK = {
     'plugin.video.umbrella': os.environ.get('UMBRELLA_STOCK') or
     _SCRATCH + 'umb6782/plugin.video.umbrella',
 }
+DECLARED_HOSTS = set(STOCK)
 STOCK = {k: v for k, v in STOCK.items() if os.path.isdir(v)}
 
 
@@ -188,6 +207,8 @@ pin('pov_source_quality_patcher', 'UPGRADES',
     'AI_SUBS_QUALITY_FIX_v5')
 pin('pov_subtitle_match_patcher', 'UPGRADES',
     'AI_SUBS_MATCH_v7')
+pin('umbrella_setup_patcher', 'UPGRADES',
+    'AI_SUBS_UMBRELLA_SOURCE_NAME_v1')
 pin('umbrella_source_ux_patcher', 'UPGRADES',
     'AI_SUBS_UMB_PREWARM_v1', 'AI_SUBS_UMB_QUIETCANCEL_v1')
 pin('umbrella_subtitle_match_patcher', 'UPGRADES',
@@ -197,12 +218,16 @@ pin('umbrella_subtitle_match_patcher', 'UPGRADES',
 # Bumping any of these ships a fix that lands on fresh installs only, until the
 # host add-on's next release wipes the marker and the patcher re-applies. Every
 # device keeps the old behaviour until then, and the patcher reports success.
-# Before bumping one, give it a gate that recognises the marker FAMILY -- a
-# prefix test, never an enumerated list -- and reverts the old block before
-# re-applying. pov_mdblist_like_patcher is the worked example.
+# Give it a gate that recognises the marker FAMILY -- a prefix test, never an
+# enumerated list -- and revert the old block before re-applying.
+# pov_mdblist_like_patcher is the worked example.
 #
 # kodi_playlist_timeout_patcher is the one with NO safety net: its marker goes
 # into userdata/advancedsettings.xml, which no add-on update ever replaces.
+#
+# pov_mdblist_patcher is here on the WORST of its six markers: three upgrade
+# after a fashion and three (MDBL_NONE_GUARD, MDBL_WATCHLIST_ONLY,
+# SORT_RECENT_DEFAULT) reach nobody. Run --pins to see the breakdown.
 pin('kodi_playlist_timeout_patcher', 'NEVER-UPGRADES',
     'AI_SUBS_PLAYLIST_TIMEOUT_v1')
 pin('pov_bookmark_refresh_patcher', 'NEVER-UPGRADES',
@@ -214,6 +239,11 @@ pin('pov_favorites_refresh_patcher', 'NEVER-UPGRADES',
     'AI_SUBS_FAV_REFRESH_v2', 'AI_SUBS_FAV_REFRESH_v3')
 pin('pov_genre_icons_patcher', 'NEVER-UPGRADES',
     'AI_SUBS_POV_GENRE_ICONS_v2', 'AI_SUBS_POV_GENRE_ICONS_v3')
+pin('pov_mdblist_patcher', 'NEVER-UPGRADES',
+    'AI_SUBS_MDBL_MERGE_COLLECTION_v1', 'AI_SUBS_MDBL_NONE_GUARD_v1',
+    'AI_SUBS_MDBL_REDACT_v1', 'AI_SUBS_MDBL_SCROBBLE_STOP_v1',
+    'AI_SUBS_MDBL_STABLE_IDS_v1', 'AI_SUBS_MDBL_SYNC_GUARD_v1',
+    'AI_SUBS_MDBL_WATCHLIST_ONLY_v2', 'AI_SUBS_SORT_RECENT_DEFAULT_v1')
 pin('pov_mdblist_reauth_patcher', 'NEVER-UPGRADES',
     'AI_SUBS_POV_MDBL_REAUTH_v1')
 pin('pov_menus_patcher', 'NEVER-UPGRADES',
@@ -226,6 +256,8 @@ pin('pov_resolve_diag_patcher', 'NEVER-UPGRADES',
     'AI_SUBS_RESOLVE_DIAG_v1')
 pin('pov_resume_cancel_patcher', 'NEVER-UPGRADES',
     'AI_POV_RESUME_CANCEL_v1')
+pin('pov_torbox_url_fix', 'NEVER-UPGRADES',
+    'AI_SUBS_TORBOX_URL_v1')
 pin('pov_trakt_reauth_patcher', 'NEVER-UPGRADES',
     'AI_SUBS_POV_TRAKT_REAUTH_v1')
 pin('pov_view_mode_patcher', 'NEVER-UPGRADES',
@@ -236,20 +268,12 @@ pin('umbrella_mdblist_token_patcher', 'NEVER-UPGRADES',
 # --- double-inject: the old block stays live beside the new one ------------
 # Measured over three successive bumps: the host still compiles every time, and
 # carries four copies of the injected block. Most duplicate idle code -- guards
-# and early returns that just re-run. Two duplicate an append and are
-# user-visible: pov_services_patcher lists every service four times in the
-# connect-services screen, pov_mdblist_patcher quadruples watchlist entries.
+# and early returns that just re-run. pov_services_patcher is the one that
+# shows: it lists every service four times in the connect-services screen.
 pin('pov_cache_empty_patcher', 'DOUBLE-INJECT',
     'AI_SUBS_POV_CACHE_EMPTY_v1')
 pin('pov_combined_discover_patcher', 'DOUBLE-INJECT',
     'AI_SUBS_POV_COMBINED_DISCOVER_v1')
-pin('pov_debrid_resolve_patcher', 'DOUBLE-INJECT',
-    'AI_SUBS_DEBRID_RESOLVE_GUARD_v1')
-pin('pov_mdblist_patcher', 'DOUBLE-INJECT',
-    'AI_SUBS_MDBL_MERGE_COLLECTION_v1', 'AI_SUBS_MDBL_NONE_GUARD_v1',
-    'AI_SUBS_MDBL_REDACT_v1', 'AI_SUBS_MDBL_SCROBBLE_STOP_v1',
-    'AI_SUBS_MDBL_STABLE_IDS_v1', 'AI_SUBS_MDBL_SYNC_GUARD_v1',
-    'AI_SUBS_MDBL_WATCHLIST_ONLY_v2', 'AI_SUBS_SORT_RECENT_DEFAULT_v1')
 pin('pov_services_patcher', 'DOUBLE-INJECT',
     'AI_SUBS_MYSERVICES_INJECT_v1', 'AI_SUBS_MYSERVICES_INJECT_v10',
     'AI_SUBS_MYSERVICES_INJECT_v11', 'AI_SUBS_MYSERVICES_INJECT_v12',
@@ -270,7 +294,9 @@ pin('umbrella_tmdb_apikey_patcher', 'DOUBLE-INJECT',
 # These test the injected code itself rather than trusting the marker, find it
 # already correct on the second run, and re-stamp only the comment. Harmless,
 # and kept as its own verdict because calling it DOUBLE-INJECT reads far worse
-# than the truth and would bury the two that really do duplicate behaviour.
+# than the truth and would bury the ones that really do duplicate behaviour.
+pin('pov_debrid_resolve_patcher', 'DOUBLE-STAMP',
+    'AI_SUBS_DEBRID_RESOLVE_GUARD_v1')
 pin('pov_hebrew_genres_patcher', 'DOUBLE-STAMP',
     'AI_SUBS_POV_HEBREW_GENRES_v1')
 pin('pov_movie_networks_patcher', 'DOUBLE-STAMP',
@@ -333,14 +359,14 @@ pin('nox_change_source_patcher', 'UNPROVEN',
     'AI_SUBS_NOX_CHANGE_SOURCE_v1')
 pin('nox_osd_collision_patcher', 'UNPROVEN',
     'AI_SUBS_NOX_OSD_FIX_v1')
+pin('pov_container_refresh_crash_fix', 'UNPROVEN',
+    'AI_SUBS_POV_WIDGET_REFRESH_v1')
 pin('skin_dialog_subtitles_patcher', 'UNPROVEN',
     'AI_SUBS_DIALOG_HEADER_v1', 'AI_SUBS_DIALOG_HEADER_v2')
 pin('skin_dialog_subtitles_row_patcher', 'UNPROVEN',
     'AI_SUBS_DIALOG_ROW_HEIGHT_v1')
 pin('skin_watched_poster_patcher', 'UNPROVEN',
     'AI_SUBS_WATCHED_LIST_v1', 'AI_SUBS_WATCHED_POSTER_v1')
-pin('umbrella_setup_patcher', 'UNPROVEN',
-    'AI_SUBS_UMBRELLA_SOURCE_NAME_v1')
 pin('wizard_patcher', 'UNPROVEN',
     'AI_SUBS_LOGINIT_INJECT_v1')
 
@@ -364,8 +390,8 @@ def check(label, cond, detail=''):
 # (AI_TRANSLATE_HOOK), darksubs_download_sub_patcher (AI_DOWNLOAD_SUB_ELIF),
 # darksubs_embedded_demote_patcher (AI_EMBEDDED_DEMOTE), pov_resume_cancel_
 # patcher (AI_POV_RESUME_CANCEL) and af3_home_patcher (POV_AF3_*) -- all wired,
-# darksubs_patcher referenced ten times from service.py. The docstring below
-# even named darksubs_patcher as a case this file handles. It did not.
+# all wired. The docstring below even named darksubs_patcher as a case this
+# file handles. It did not -- this regex threw the file away first.
 _MARKER_RE = r'\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_v\d+\b'
 
 
@@ -425,12 +451,52 @@ def runtime_markers(stem, extra_path=None):
         shutil.rmtree(home, ignore_errors=True)
 
 
+def entry_points(mod):
+    """Every no-argument ensure_*/heal_* the service calls on this module.
+
+    NOT just ensure_patched. pov_mdblist_patcher exposes five entry points --
+    ensure_patched, ensure_manager_patched, ensure_sort_default_patched,
+    ensure_lists_sort_recent, heal_mdblist_account -- and service.py calls all
+    five on every boot. Measuring only the first gave the whole module one
+    verdict (DOUBLE-INJECT) derived from one of its five patches, while two of
+    the others are independently NEVER-UPGRADES and were hidden inside a pin
+    that looked like it covered them.
+    """
+    out = []
+    for name in sorted(dir(mod)):
+        if not (name.startswith('ensure') or name.startswith('heal')):
+            continue
+        fn = getattr(mod, name, None)
+        if not callable(fn):
+            continue
+        try:
+            sig = inspect.signature(fn)
+        except (TypeError, ValueError):
+            continue
+        if any(p.default is p.empty
+               and p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
+               for p in sig.parameters.values()):
+            continue
+        out.append((name, fn))
+    return out
+
+
 def patchers():
+    """Every module that rewrites a foreign file behind a versioned marker.
+
+    Selected by SHAPE, not by filename. The filter used to be `'patcher' in
+    fn`, which is a naming convention -- and pov_torbox_url_fix.py does not
+    follow it: it is called from service.py on every boot, rewrites POV's
+    torbox_api.py, and gates on '# AI_SUBS_TORBOX_URL_v1' with an exact-match
+    early return. It was invisible here, and the family is growing.
+    """
     for fn in sorted(os.listdir(LIB)):
-        if 'patcher' not in fn or not fn.endswith('.py'):
+        if not fn.endswith('.py') or fn.startswith('_'):
             continue
         stem = fn[:-3]
         src = open(os.path.join(LIB, fn), encoding='utf-8').read()
+        if not re.search(r'(?m)^def (ensure|heal)\w*\(', src):
+            continue
         marks = literal_markers(src) | runtime_markers(stem)
         if marks:
             yield stem, src, sorted(marks)
@@ -499,13 +565,26 @@ def _install_stubs(home, extra_path=None):
 
 
 def _run(stem, home, extra_path=None):
-    """Import the patcher fresh and call its entry point. Never raises."""
+    """Import the patcher fresh and call EVERY entry point. Never raises.
+
+    Every one, because the service does: a module's verdict has to cover all
+    the patches it applies, not whichever one happens to be called
+    ensure_patched.
+    """
     _install_stubs(home, extra_path)
     sys.modules.pop('resources.lib.' + stem, None)
     try:
         mod = importlib.import_module('resources.lib.' + stem)
-        fn = getattr(mod, 'ensure_patched', None)
-        return fn() if fn else 'NO_ENTRY'
+        eps = entry_points(mod)
+        if not eps:
+            return 'NO_ENTRY'
+        out = []
+        for name, fn in eps:
+            try:
+                out.append('%s=%s' % (name, fn()))
+            except Exception as e:
+                out.append('%s=EXC:%r' % (name, e))
+        return out[0].split('=', 1)[1] if len(out) == 1 else ', '.join(out)
     except Exception as e:
         return 'EXC:%r' % (e,)
 
@@ -555,7 +634,7 @@ def bump_source(src, markers, versions=False):
     return out
 
 
-def _code_duplicated(before, after):
+def _code_duplicated(before, after, markers):
     """Did a line of real CODE get duplicated, or only a marker comment?
 
     A patcher whose marker sits apart from the code it injects can re-stamp
@@ -564,15 +643,23 @@ def _code_duplicated(before, after):
     it already right, and touches nothing else. Calling that the same thing as
     pov_services_patcher appending a fourth copy of every service row is a
     verdict that reads far worse than the truth.
+
+    A marker line is identified by CONTAINING A MARKER, not by looking like a
+    Python comment. `#` alone would miss an XML host's <!-- ..._v1 --> and
+    misread a harmless re-stamp there as duplicated behaviour; and there is no
+    length floor, because `break` duplicating is not less real than a long
+    line duplicating.
     """
     from collections import Counter
+    fam = {re.sub(r'_v\d+$', '', m) for m in markers}
 
     def code_lines(blob):
         out = []
         for ln in blob.decode('utf-8', 'replace').split('\n'):
             s = ln.strip()
-            if len(s) > 12 and not s.startswith('#'):
-                out.append(s)
+            if not s or s.startswith('#') or any(f in s for f in fam):
+                continue
+            out.append(s)
         return Counter(out)
     b, a = code_lines(before), code_lines(after)
     return any(a[k] > b.get(k, 0) for k in a)
@@ -608,6 +695,20 @@ def simulate_bump(stem, src, override=None):
                                     | runtime_markers(stem, base))
                         if has(blob1, m))
         if not landed:
+            # "Nothing landed" has two very different causes and they were
+            # both called UNPROVEN, with diagnostics that blamed the fixture.
+            # A patcher that REPORTS 'patched' and leaves no marker on a host
+            # that is present has stopped applying -- the anchor moved under
+            # it -- and that is the single most useful thing this file can
+            # say. It is not a missing stock tree.
+            # Read the RESULTS, not the whole status string: _run reports
+            # 'ensure_patched=no_fentastic', and a substring test on that
+            # matches the function NAME and calls a patcher with no host
+            # installed a liar.
+            results = [part.split('=', 1)[-1] for part in str(s1).split(', ')]
+            if STOCK and any(r.startswith('patched') or r == 'repatched'
+                             for r in results):
+                return 'CLAIMS-PATCHED', s1, 'reported success, wrote no marker'
             return 'UNPROVEN', s1, ''
 
         # A FRESH directory per variant, never a rewrite in place. Writing two
@@ -632,11 +733,20 @@ def simulate_bump(stem, src, override=None):
             # harness rewrote marker LITERALS only, so it silently failed to
             # bump the three patchers that build their marker from an integer
             # constant -- and reported a confident verdict for them anyway.
-            if runtime_markers(stem, use) == runtime_markers(stem, base):
+            # EVERY landed marker has to have moved, not merely one of them.
+            # An all-or-nothing set comparison lets a module holding one
+            # literal and one constructed marker escape escalation: the
+            # literal moves, the sets differ, and the constructed one is then
+            # "measured" against an unchanged copy of itself.
+            def unmoved(d):
+                after = runtime_markers(stem, d)
+                return [m for m in landed if m in after]
+            if unmoved(use):
                 # constructed marker: the version lives in an int constant
                 use = variant(versions=True)
-                if runtime_markers(stem, use) == runtime_markers(stem, base):
-                    return 'UNBUMPABLE', s1, 'the bump did not move a marker'
+                if unmoved(use):
+                    return ('UNBUMPABLE', s1,
+                            'still holding %s after the bump' % unmoved(use))
 
             s2 = _run(stem, home, extra_path=use)
             snap2 = _snapshot(home)
@@ -645,23 +755,35 @@ def simulate_bump(stem, src, override=None):
             for d in tmps:
                 shutil.rmtree(d, ignore_errors=True)
 
-        nxt = [re.sub(r'_v\d+$', '_v%d' % (int(re.search(r'_v(\d+)$', m)
-                                              .group(1)) + 1), m)
-               for m in landed]
-        old_left = any(has(blob2, m) for m in landed)
-        new_in = any(has(blob2, m) for m in nxt)
-        if new_in and not old_left:
-            return 'UPGRADES', s1, s2
-        if new_in and old_left:
-            return ('DOUBLE-INJECT' if _code_duplicated(blob1, blob2)
-                    else 'DOUBLE-STAMP'), s1, s2
-        if old_left:
-            return 'NEVER-UPGRADES', s1, s2
-        # Neither marker survives: the patch is simply GONE from the host, so
-        # the feature silently stops existing on a bump. Worse than any of the
-        # above; nothing measures this today, which is why it is a hard fail
-        # in the pin layer rather than a pinnable verdict.
-        return 'LOST-PATCH', s1, s2
+        # PER MARKER, then the worst one -- not `any()` over the whole set.
+        # pov_mdblist_patcher applies five separate patches; two of them never
+        # upgrade and the rest do. An any()-based verdict labelled the module
+        # DOUBLE-INJECT, which is the kinder of the two, and the two that
+        # reach nobody were invisible inside a pin that looked like it covered
+        # them. The worst behaviour in a module is the module's behaviour.
+        rank = {'UPGRADES': 0, 'DOUBLE': 1, 'NEVER-UPGRADES': 2,
+                'LOST-PATCH': 3}
+        per = []
+        for m in landed:
+            n = int(re.search(r'_v(\d+)$', m).group(1))
+            nxt = re.sub(r'_v\d+$', '_v%d' % (n + 1), m)
+            old, new = has(blob2, m), has(blob2, nxt)
+            per.append('UPGRADES' if new and not old else
+                       'DOUBLE' if new else
+                       'NEVER-UPGRADES' if old else 'LOST-PATCH')
+        raw = max(per, key=rank.__getitem__)
+        worst = raw
+        if raw == 'DOUBLE':
+            worst = ('DOUBLE-INJECT' if _code_duplicated(blob1, blob2, landed)
+                     else 'DOUBLE-STAMP')
+        if len(set(per)) > 1:
+            # Name the markers that behave differently from the verdict, so a
+            # module carrying five patches does not hide which of them is the
+            # one that reaches nobody.
+            s2 = '%s [also %s]' % (s2, ' '.join(
+                '%s=%s' % (m.rsplit('_v', 1)[0].replace('AI_SUBS_', ''), p)
+                for m, p in zip(landed, per) if p != raw))
+        return worst, s1, s2
     finally:
         shutil.rmtree(home, ignore_errors=True)
         if base:
@@ -688,9 +810,12 @@ def main():
                       '\n# !! it here, so this is not a re-measurement, it is a'
                       ' downgrade.\n# !! Point its *_STOCK env var at a stock tree'
                       ' and run --pins again.' % (stem, was))
+            # s2 is NOT truncated: it carries the "[also ...]" breakdown for a
+            # module whose markers disagree, which is the most informative
+            # thing this tool prints and was being cut off at 40 characters.
             print("pin('%s', '%s',\n    %s)   # %s -> %s"
                   % (stem, verdict, ', '.join("'%s'" % m for m in marks),
-                     str(s1)[:40], str(s2)[:40]))
+                     str(s1)[:60], s2))
         sys.exit(0)
 
 
@@ -772,7 +897,7 @@ def main():
     # otherwise a fresh clone is red on arrival and gets switched off. Without them
     # the run says loudly that it is partial, and the pin layer above still catches
     # the thing this file exists for.
-    FULL_HOSTS = len(STOCK) >= 2
+    FULL_HOSTS = set(STOCK) == set(DECLARED_HOSTS)
     if FULL_HOSTS:
         check('every pinned verdict was re-measured', not skipped,
               'both hosts are present, so a pin that could not be re-measured is '
@@ -838,6 +963,28 @@ def main():
           'AI_TRANSLATE_HOOK_v4' in PINS['darksubs_patcher'][1]
           and 'POV_AF3_TOUCH_CLEANUP_v1' in PINS['af3_home_patcher'][1],
           'marker discovery is keyed on a house-convention prefix again')
+
+    # A module is selected by SHAPE, not by having "patcher" in its filename.
+    # pov_torbox_url_fix.py is called from service.py on every boot, rewrites
+    # POV's torbox_api.py behind an exact-match marker gate, and measures
+    # NEVER-UPGRADES -- and the filename filter hid it completely.
+    check('SABOTAGE: a rewriter without "patcher" in its name is covered',
+          'pov_torbox_url_fix' in PINS,
+          'the file filter is back to matching on the filename')
+
+    # Every entry point, not just ensure_patched. pov_mdblist_patcher applies
+    # six patches through five entry points; three of them reach nobody, and
+    # calling only the first gave the module a kinder verdict that hid them.
+    check('SABOTAGE: every ensure_*/heal_* entry point is called',
+          PINS['pov_mdblist_patcher'][0] == 'NEVER-UPGRADES',
+          'the module is back to being judged on ensure_patched alone')
+
+    # The status string now reads "ensure_patched=no_fentastic", so a naive
+    # substring test for "patched" matches the function NAME and calls a
+    # patcher with no host installed a liar.
+    check('SABOTAGE: CLAIMS-PATCHED reads the result, not the function name',
+          PINS['fentastic_patcher'][0] == 'UNPROVEN',
+          'an entry-point name is being mistaken for a result')
 
     if have_pov:
         # the simulation must be able to say NEVER-UPGRADES about a patcher that
