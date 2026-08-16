@@ -66,6 +66,19 @@ MARKER = '# AI_SUBS_UMB_MDBL_SINCE_v1'
 # only correct for the one bump it was written for.
 _MARKER_ANY = '# AI_SUBS_UMB_MDBL_SINCE_v'
 
+# The one-shot backfill is tracked SEPARATELY from the file patch. Tying it to
+# the write meant a reset that lost a lock race to Umbrella's own sync thread
+# -- both add-ons start around Kodi boot -- was never retried: the next run
+# reads 'unchanged' and returns before reaching it. Its own flag makes it retry
+# until it actually succeeds.
+#
+# The generation is the VALUE, not part of the key. A versioned key (_..._v1 ->
+# _..._v2) asks for the next backfill correctly but abandons the old key in our
+# settings on every bump; overwriting one value leaves nothing behind. Bump
+# _RESET_GEN to request another full backfill.
+_RESET_FLAG = '_umb_mdbl_cursor_reset'
+_RESET_GEN = '1'
+
 # 30 days. Long enough to cover an outage or a clock that disagrees, short
 # enough that the incremental sync stays incremental.
 _OVERLAP_SECONDS = 2592000
@@ -86,14 +99,23 @@ def _log(msg, level='INFO'):
         pass
 
 
-def _revert(content):
+def _fitter(content):
+    # Umbrella ships this file LF today, but parts of the pack this build
+    # carries are CRLF, and an anchor that only matches LF is how the Hebrew
+    # search fix shipped as a silent no-op. Same helper the token patcher on
+    # this very file uses.
+    eol = '\r\n' if '\r\n' in content else '\n'
+    return (lambda t: t.replace('\n', eol)) if eol != '\n' else (lambda t: t), eol
+
+
+def _revert(content, eol='\n'):
     """Delete a previous version's injected block.
 
     Every line of an injected block is indented strictly deeper than its
     marked line, so the marked line plus everything deeper below it is the
     block. Ours is a single marked line with nothing under it.
     """
-    lines = content.split('\n')
+    lines = content.split(eol)
     out, i = [], 0
     while i < len(lines):
         line = lines[i]
@@ -105,10 +127,24 @@ def _revert(content):
         i += 1
         while i < len(lines):
             nxt = lines[i]
-            if nxt.strip() and (len(nxt) - len(nxt.lstrip())) <= base:
+            if nxt.strip():
+                if (len(nxt) - len(nxt.lstrip())) <= base:
+                    break
+                i += 1
+                continue
+            # A blank line is only INSIDE the block if a deeper non-blank line
+            # follows it. Swallowing every blank unconditionally would eat the
+            # separator below the block -- and the file's trailing newline,
+            # when the marked line is last -- so the revert stops being
+            # byte-exact and the next version cannot cleanly replace this one.
+            j = i
+            while j < len(lines) and not lines[j].strip():
+                j += 1
+            if (j >= len(lines)
+                    or (len(lines[j]) - len(lines[j].lstrip())) <= base):
                 break
-            i += 1
-    return '\n'.join(out)
+            i = j
+    return eol.join(out)
 
 
 def _umbrella_path(rel):
@@ -130,17 +166,24 @@ def _reset_sync_cursor():
     for months needs one full pass. Umbrella's own force button does this by
     wiping every table -- we only clear the CURSOR, so nothing already
     ingested is lost and the next scheduled sync repopulates the gaps.
+
+    Returns True when there is nothing left to do -- which includes "no
+    database yet", since a first sync is a full one anyway. False means the
+    attempt FAILED and must be retried on a later start; Umbrella's own sync
+    thread can hold the file, and giving up then would leave the damaged table
+    damaged.
     """
     if xbmcvfs is None:
-        return
+        return False
     try:
         db = xbmcvfs.translatePath(
             'special://profile/addon_data/' + UMBRELLA_ADDON_ID
             + '/mdbSync.db')
     except Exception:
-        return
+        return False
     if not os.path.isfile(db):
-        return  # nothing synced yet; the first sync is a full one anyway
+        return True  # nothing synced yet; the first sync is a full one anyway
+    conn = None
     try:
         import sqlite3
         conn = sqlite3.connect(db, timeout=10, isolation_level=None)
@@ -156,9 +199,35 @@ def _reset_sync_cursor():
             _log('cleared the watched-sync cursor; the next MDBList sync '
                  'backfills the episodes the old one skipped')
         cur.close()
-        conn.close()
+        return True
     except Exception as e:
-        _log('could not clear the sync cursor: {0}'.format(e),
+        _log('could not clear the sync cursor, will retry on a later '
+             'start: {0}'.format(e), level='WARNING')
+        return False
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def _ensure_cursor_reset():
+    """Run the one-shot backfill, and keep trying until it actually runs.
+
+    Deliberately NOT tied to the file write: the write succeeds on the first
+    start and every later start returns 'unchanged' long before reaching here,
+    so a reset that failed once would never be attempted again.
+    """
+    if kodi_utils is None:
+        return
+    try:
+        if kodi_utils.get_setting(_RESET_FLAG, '') == _RESET_GEN:
+            return
+        if _reset_sync_cursor():
+            kodi_utils.set_setting(_RESET_FLAG, _RESET_GEN)
+    except Exception as e:
+        _log('cursor reset bookkeeping failed: {0}'.format(e),
              level='WARNING')
 
 
@@ -170,33 +239,36 @@ def ensure_patched():
     if not path:
         return 'no_umbrella' if xbmcvfs is None else 'no_file'
     try:
-        with open(path, encoding='utf-8') as f:
+        with open(path, encoding='utf-8', newline='') as f:
             content = f.read()
     except Exception as e:
         _log('read failed: {0}'.format(e), level='WARNING')
         return 'read_failed'
 
+    fit, eol = _fitter(content)
+
     if MARKER in content:
+        _ensure_cursor_reset()
         return 'unchanged'
 
     repatch = False
     if _MARKER_ANY in content:
-        content = _revert(content)
+        content = _revert(content, eol)
         repatch = True
         if _MARKER_ANY in content:
             _log('could not remove an older injection', level='WARNING')
             return 'revert_failed'
 
-    if _ANCHOR not in content:
+    if fit(_ANCHOR) not in content:
         _log('sync_watchedProgress does not have the expected shape -- '
              'Umbrella may have refactored it; leaving the file alone',
              level='WARNING')
         return 'unmatched'
 
     new_content = content.replace(
-        _ANCHOR,
-        _ANCHOR + '\t\tdb_last = max(0, db_last - %d)  %s\n'
-        % (_OVERLAP_SECONDS, MARKER), 1)
+        fit(_ANCHOR),
+        fit(_ANCHOR + '\t\tdb_last = max(0, db_last - %d)  %s\n'
+            % (_OVERLAP_SECONDS, MARKER)), 1)
 
     try:
         compile(new_content, path, 'exec')
@@ -207,7 +279,7 @@ def ensure_patched():
 
     tmp = path + '.aitmp'
     try:
-        with open(tmp, 'w', encoding='utf-8') as f:
+        with open(tmp, 'w', encoding='utf-8', newline='') as f:
             f.write(new_content)
         os.replace(tmp, path)
     except OSError as e:
@@ -227,7 +299,7 @@ def ensure_patched():
                 except OSError:
                     pass
 
-    _reset_sync_cursor()
+    _ensure_cursor_reset()
     _log('widened the MDBList watched-sync window by %d days so a missed '
          'or failed page is no longer skipped forever'
          % (_OVERLAP_SECONDS // 86400))
