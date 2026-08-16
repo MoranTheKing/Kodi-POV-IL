@@ -921,14 +921,15 @@ This section originally read "**None found**", on the strength of reading the
 wrong. It was re-done by MEASUREMENT -- patch a pristine host, bump the
 patcher's own marker, run it again against the host it just patched -- against
 **POV 6.08.13 and Umbrella 6.7.82, the current upstream of both**. 21 of the 36
-patchers that have a host to measure against fail to upgrade correctly:
+patchers that have a host to measure against fail to upgrade correctly (62
+modules carry a versioned marker in all):
 
     UPGRADES        10   a bump reaches devices already carrying the old one
     NEVER-UPGRADES  15   second run is a no-op: the fix reaches nobody, quietly
     DOUBLE-INJECT    6   old block stays live beside the new one
     DOUBLE-STAMP     3   only the marker COMMENT duplicates; the code is fine
     RETIRED          2   marker-gated and called by nothing; not a live risk
-    UNPROVEN        23   no host for them on this machine, so: unmeasured
+    UNPROVEN        26   no host for them on this machine, so: unmeasured
 
 **Fifteen instances of exactly the MDBList shape, not zero.** They include
 `pov_view_mode_patcher` (v4), `pov_favorites_refresh_patcher` (v3) and
@@ -1036,6 +1037,21 @@ All three were the same mistake: deciding what to look at by how it is NAMED.**
     `pov_repeat_timer_patcher`, which fixes a real auth-thread bug) -- there
     is no version to bump, so the tripwire has nothing to hold.
 
+**A fourth naming assumption, and this one was hiding the bug it hunts.**
+Marker discovery assumed a marker is SHOUTING_CASE with `_vN` at the end. Four
+live, shipping patchers break that: `wizard_self_healer`
+(`.ai_subs_wizard_healed_v4`, lowercase, already bumped three times),
+`af3_discover_pov_patcher` (`AI_SUBS_POV_DISCOVER_v6_unified`),
+`af3_search_pov_patcher` (`AI_SUBS_POV_SEARCH_v3_rollback`) and
+`darksubs_opensubtitles_patcher` (whose entire marker is the line
+`OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4`). The two AF3 ones were *pinned* --
+on their DEAD v1/v2/v3 predecessors -- so bumping the live marker would have
+tripped nothing at all. And `af3_discover_pov_patcher` is itself an enumerated-
+`OLD_MARKERS` patcher, i.e. exactly the shape this whole exercise exists to
+catch. Discovery now assumes nothing about spelling and instead scopes the
+search to STRING LITERALS, which is what a marker actually is: text written
+into someone else's file. That gains six real markers and no false ones.
+
 **RULE: for a patcher, "I read it and it looks fine" is not a finding. Run it
 twice.** The second run is the only thing that knows what a device already
 carrying the old version receives.
@@ -1115,7 +1131,7 @@ ends `ALL PASS -- PARTIAL: n of m verdicts unverified here`. Related trap:
 broken, and pasting that in is a silent downgrade -- it now prints a
 DO-NOT-PASTE banner above any such line.
 
-`UNPROVEN` is not a clean bill of health, it is an unmeasured patcher: 24 of
+`UNPROVEN` is not a clean bill of health, it is an unmeasured patcher: 26 of
 them -- the skins, the wizard, the All_Subs add-on -- because this machine has
 no stock copy of those hosts. Point `POV_STOCK` / `UMBRELLA_STOCK` (or drop a
 tree where the patcher looks) and re-run with `--pins` to convert one into a

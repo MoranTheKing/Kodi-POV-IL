@@ -105,7 +105,7 @@ MDBList bug was born.
 A new patcher with a versioned marker must also be pinned, so the shape cannot
 enter the tree unclassified.
 
-The other 23 are UNPROVEN: no stock copy of their host on this machine (the
+The other 26 are UNPROVEN: no stock copy of their host on this machine (the
 skins, the wizard, service.subtitles.All_Subs). That is an admission, not a
 pass -- and on a machine with no host trees at all, nearly everything lands
 there, so the run says PARTIAL rather than pretending.
@@ -117,12 +117,22 @@ table describes. Two are retired today.
 
 WHAT COUNTS AS A PATCHER HERE IS DELIBERATELY NOT A NAMING RULE.
 
-Marker discovery is not keyed on the AI_SUBS_ prefix: that is a house
-convention five wired patchers do not follow (darksubs_patcher,
-darksubs_download_sub_patcher, darksubs_embedded_demote_patcher,
-pov_resume_cancel_patcher, af3_home_patcher), and keying on it made all five
-invisible -- not measured, not pinned, not even counted. Any SHOUTING_NAME_vN
-counts now.
+Marker discovery assumes nothing about how a marker is SPELLED, because four
+separate assumptions each hid live, shipping patchers:
+
+  * not the AI_SUBS_ prefix -- five patchers do not use it
+  * not SHOUTING_CASE -- wizard_self_healer's is '.ai_subs_wizard_healed_v4'
+  * not "_vN at the end" -- af3_discover_pov_patcher ships
+    'AI_SUBS_POV_DISCOVER_v6_unified', and the trailing word meant the module
+    was pinned on its DEAD v1/v2/v3 predecessors, so a bump of the live marker
+    tripped nothing. That module also carries the enumerated-OLD_MARKERS shape
+    this file warns about, so the regex was hiding the very bug it hunts.
+  * not "_vN" at all -- darksubs_opensubtitles_patcher's whole marker is
+    'OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4'
+
+What IS assumed: a marker is text written into somebody else's file, so the
+search is scoped to STRING LITERALS. That is what makes the loose shape safe --
+an ordinary api_v2 identifier lives in code, not in a string.
 
 Module selection is not keyed on the filename either. It used to require
 "patcher" in the name, and pov_torbox_url_fix.py does not have it: it is called
@@ -167,6 +177,7 @@ under umbrellaplug.github.io/matrix/zips/. Verdicts were identical on POV
 knife-edge on a single host release -- but that is a measurement, not a
 guarantee for the next one.
 """
+import ast
 import importlib
 import inspect
 import os
@@ -348,11 +359,11 @@ pin('pov_movie_networks_patcher', 'DOUBLE-STAMP',
 # Kept out of the broken counts on purpose: a patcher that reaches no device is
 # not "the fix lands on fresh installs only", and counting it inflates the risk
 # the table describes. Still PINNED, so re-arming one trips the tripwire and
-# forces a measurement first -- which is when it would start mattering.
-# pov_build_content_logger_patcher's call site exists but its wrapper is
-# commented out of service.py's steps tuple (and it has no compile() gate, so
-# fix that before re-arming). fentastic_dialog_subtitles_patcher is referenced
-# nowhere at all.
+# forces a measurement first. pov_build_content_logger_patcher's call site
+# exists but its wrapper is commented out of service.py's steps tuple (it DOES
+# compile()-check before writing -- an earlier version of this comment said it
+# did not, which was simply false; the gate went in months ago);
+# fentastic_dialog_subtitles_patcher is referenced nowhere at all.
 pin('fentastic_dialog_subtitles_patcher', 'RETIRED',
     'AI_SUBS_DIALOG_HEADER_v1')
 pin('pov_build_content_logger_patcher', 'RETIRED',
@@ -363,26 +374,36 @@ pin('pov_build_content_logger_patcher', 'RETIRED',
 # and service.subtitles.All_Subs (the darksubs_* family). Put the matching
 # stock add-on where the patcher looks for it and re-run with --pins to turn
 # one of these into a real verdict.
+#
+# af3_discover_pov_patcher matters most here: it carries the enumerated
+# OLD_MARKERS shape this file warns about, and its live marker
+# (AI_SUBS_POV_DISCOVER_v6_unified) was invisible until marker discovery
+# stopped assuming the version sits at the end of the token.
 pin('af3_dialog_subtitles_patcher', 'UNPROVEN',
     'AI_SUBS_AF3_HEADER_v1')
 pin('af3_discover_pov_patcher', 'UNPROVEN',
     'AI_SUBS_POV_DISCOVER_v1', 'AI_SUBS_POV_DISCOVER_v2',
-    'AI_SUBS_POV_DISCOVER_v3')
+    'AI_SUBS_POV_DISCOVER_v3', 'AI_SUBS_POV_DISCOVER_v5_rollback',
+    'AI_SUBS_POV_DISCOVER_v6_unified')
 pin('af3_home_patcher', 'UNPROVEN',
     'POV_AF3_PLOT_AUTOSCROLL_v2', 'POV_AF3_TOUCH_CLEANUP_v1')
 pin('af3_search_pov_patcher', 'UNPROVEN',
     'AI_SUBS_POV_SEARCH_v1', 'AI_SUBS_POV_SEARCH_v2',
-    'AI_SUBS_POV_SEARCH_v3')
+    'AI_SUBS_POV_SEARCH_v2_rollback', 'AI_SUBS_POV_SEARCH_v3',
+    'AI_SUBS_POV_SEARCH_v3_rollback',
+    'AI_SUBS_POV_SEARCH_v3_rollback_pov')
 pin('all_subs_samefile_patcher', 'UNPROVEN',
     'AI_SUBS_ALL_SUBS_SAMEFILE_v1')
 pin('darksubs_download_sub_patcher', 'UNPROVEN',
     'AI_DOWNLOAD_SUB_ELIF_v1', 'AI_DOWNLOAD_SUB_ELIF_v2')
 pin('darksubs_embedded_demote_patcher', 'UNPROVEN',
-    'AI_EMBEDDED_DEMOTE_v1', 'AI_EMBEDDED_DEMOTE_v2')
+    'AI_EMBEDDED_DEMOTE_v2')
 pin('darksubs_embedded_insert_patcher', 'UNPROVEN',
-    'AI_SUBS_EMBED_ENG_LAST_v1', 'AI_SUBS_EMBED_ENG_LAST_v2')
+    'AI_SUBS_EMBED_ENG_LAST_v2')
 pin('darksubs_filename_fallback_patcher', 'UNPROVEN',
     'AI_SUBS_FILENAME_FALLBACK_v2')
+pin('darksubs_opensubtitles_patcher', 'UNPROVEN',
+    'OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4')
 pin('darksubs_patcher', 'UNPROVEN',
     'AI_TRANSLATE_HOOK_v1', 'AI_TRANSLATE_HOOK_v2',
     'AI_TRANSLATE_HOOK_v3', 'AI_TRANSLATE_HOOK_v4')
@@ -404,7 +425,7 @@ pin('favourites_personal_tiles_patcher', 'UNPROVEN',
     'AI_SUBS_FAVOURITES_PERSONAL_RESEED_v1',
     'AI_SUBS_FAVOURITES_PERSONAL_TILES_SEEN_v2',
     'AI_SUBS_FAVOURITES_PERSONAL_TILES_v1',
-    'AI_SUBS_FAVOURITES_PREMIUMIZE_RESEED_v1')
+    'AI_SUBS_FAVOURITES_PREMIUMIZE_RESEED_v1', 'mdblist_reseed_v2')
 pin('fentastic_patcher', 'UNPROVEN',
     'AI_SUBS_NOTIFICATION_WRAP_v1')
 pin('nox_change_source_patcher', 'UNPROVEN',
@@ -419,8 +440,12 @@ pin('skin_dialog_subtitles_row_patcher', 'UNPROVEN',
     'AI_SUBS_DIALOG_ROW_HEIGHT_v1')
 pin('skin_watched_poster_patcher', 'UNPROVEN',
     'AI_SUBS_WATCHED_LIST_v1', 'AI_SUBS_WATCHED_POSTER_v1')
+pin('subs_engine_bridge', 'UNPROVEN',
+    'Cached_subs_v2')
 pin('wizard_patcher', 'UNPROVEN',
     'AI_SUBS_LOGINIT_INJECT_v1')
+pin('wizard_self_healer', 'UNPROVEN',
+    'ai_subs_wizard_healed_v4')
 
 FAIL = []
 
@@ -435,21 +460,76 @@ def check(label, cond, detail=''):
 # --------------------------------------------------------------------------
 # reading the tree
 # --------------------------------------------------------------------------
-# Any SHOUTING_NAME_vN. NOT 'AI_SUBS...' -- that prefix is a house convention
-# most patchers happen to follow and five do not, and keying on it made those
-# five invisible: not measured, not pinned, not even counted as unproven, so
-# bumping one printed ALL PASS on every machine. The five are darksubs_patcher
-# (AI_TRANSLATE_HOOK), darksubs_download_sub_patcher (AI_DOWNLOAD_SUB_ELIF),
-# darksubs_embedded_demote_patcher (AI_EMBEDDED_DEMOTE), pov_resume_cancel_
-# patcher (AI_POV_RESUME_CANCEL) and af3_home_patcher (POV_AF3_*) -- all wired,
-# all wired. The docstring below even named darksubs_patcher as a case this
-# file handles. It did not -- this regex threw the file away first.
-_MARKER_RE = r'\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_v\d+\b'
+# A marker is a versioned token INSIDE A STRING LITERAL. Every clause of that
+# sentence was learned by getting it wrong, and each mistake hid live patchers:
+#
+#   * not "AI_SUBS..." -- a house convention five wired patchers do not follow
+#     (darksubs_patcher, darksubs_download_sub_patcher,
+#     darksubs_embedded_demote_patcher, pov_resume_cancel_patcher,
+#     af3_home_patcher)
+#   * not SHOUTING_CASE -- wizard_self_healer's marker is
+#     '.ai_subs_wizard_healed_v4', lowercase, and already bumped three times
+#   * not "_vN at the END" -- af3_discover_pov_patcher ships
+#     'AI_SUBS_POV_DISCOVER_v6_unified' and af3_search_pov_patcher
+#     'AI_SUBS_POV_SEARCH_v3_rollback'. The trailing word broke the \b, so BOTH
+#     were pinned on their dead v1/v2/v3 predecessors and a bump of the live
+#     marker would have tripped nothing. af3_discover_pov_patcher is also the
+#     enumerated-OLD_MARKERS shape this file warns about, so that was the real
+#     bug hiding behind the regex.
+#   * not even "_vN" -- darksubs_opensubtitles_patcher's entire marker is the
+#     line 'OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4'
+#
+# Scoping to string literals is what makes the looser shape safe: a marker is
+# always text written into somebody else's file, while an ordinary api_v2 lives
+# in code. Measured over the tree, the widened pattern gains six real markers
+# and no false ones.
+_MARKER_RES = (
+    re.compile(r'\b[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*_v\d+'
+               r'(?:_[A-Za-z0-9]+)*\b'),
+    re.compile(r'\b[A-Za-z][A-Za-z0-9_]*_VERSION\s*=\s*\d+'),
+)
+
+
+def _in_text(text):
+    out = set()
+    for rx in _MARKER_RES:
+        out |= set(rx.findall(text))
+    return out
 
 
 def literal_markers(src):
-    """Every versioned marker name spelled out in the source."""
-    return set(re.findall(_MARKER_RE, src))
+    """Every versioned marker spelled out in a string literal in the source."""
+    try:
+        tree = ast.parse(src)
+    except SyntaxError:
+        return _in_text(src)
+    out = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            out |= _in_text(node.value)
+    return out
+
+
+def bump_marker(m):
+    """The same marker, one version later. None if it carries no version.
+
+    The version is the LAST _vN in the token, not a trailing one: a marker can
+    carry a word after its number ('..._v6_unified') and that word belongs to
+    the marker.
+    """
+    hits = list(re.finditer(r'_v(\d+)', m))
+    if hits:
+        h = hits[-1]
+        return '%s_v%d%s' % (m[:h.start()], int(h.group(1)) + 1, m[h.end():])
+    h = re.search(r'(=\s*)(\d+)\s*$', m)
+    if h:
+        return m[:h.start(2)] + str(int(h.group(2)) + 1) + m[h.end(2):]
+    return None
+
+
+def marker_family(m):
+    """The marker with its version taken out, for grouping."""
+    return re.sub(r'_v\d+', '', re.sub(r'=\s*\d+\s*$', '', m))
 
 
 def has(blob, marker):
@@ -488,7 +568,12 @@ def runtime_markers(stem, extra_path=None):
             if isinstance(v, bytes):
                 v = v.decode('utf-8', 'replace')
             if isinstance(v, str):
-                found.update(re.findall(_MARKER_RE, v))
+                # .update, NOT `found |= ...`: augmented assignment to a name
+                # from an enclosing scope rebinds it as a local, so every call
+                # raised UnboundLocalError -- swallowed by the except below,
+                # leaving runtime_markers silently returning nothing and
+                # pov_services_patcher measuring CLAIMS-PATCHED.
+                found.update(_in_text(v))
             elif isinstance(v, (list, tuple, set, frozenset)):
                 for x in v:
                     eat(x)
@@ -778,9 +863,10 @@ def bump_source(src, markers, versions=False):
     """
     out = src
     for m in sorted(markers, key=len, reverse=True):
-        n = int(re.search(r'_v(\d+)$', m).group(1))
-        out = re.sub(re.escape(m) + r'(?![0-9])',
-                     re.sub(r'_v\d+$', '_v%d' % (n + 1), m), out)
+        nxt = bump_marker(m)
+        if nxt:
+            out = re.sub(re.escape(m) + r'(?![0-9])',
+                         nxt.replace('\\', '\\\\'), out)
     if versions:
         out = re.sub(r'(?m)^([A-Z_]*VERSION) = (\d+)\s*$',
                      lambda g: '%s = %d' % (g.group(1), int(g.group(2)) + 1),
@@ -805,7 +891,7 @@ def _code_duplicated(before, after, markers):
     line duplicating.
     """
     from collections import Counter
-    fam = {re.sub(r'_v\d+$', '', m) for m in markers}
+    fam = {marker_family(m) for m in markers}
 
     def code_lines(blob):
         out = []
@@ -925,9 +1011,7 @@ def simulate_bump(stem, src, override=None):
                 'LOST-PATCH': 3}
         per = []
         for m in landed:
-            n = int(re.search(r'_v(\d+)$', m).group(1))
-            nxt = re.sub(r'_v\d+$', '_v%d' % (n + 1), m)
-            old, new = has(blob2, m), has(blob2, nxt)
+            old, new = has(blob2, m), has(blob2, bump_marker(m))
             per.append('UPGRADES' if new and not old else
                        'DOUBLE' if new else
                        'NEVER-UPGRADES' if old else 'LOST-PATCH')
@@ -941,7 +1025,7 @@ def simulate_bump(stem, src, override=None):
             # module carrying five patches does not hide which of them is the
             # one that reaches nobody.
             s2 = '%s [also %s]' % (s2, ' '.join(
-                '%s=%s' % (m.rsplit('_v', 1)[0].replace('AI_SUBS_', ''), p)
+                '%s=%s' % (marker_family(m).replace('AI_SUBS_', ''), p)
                 for m, p in zip(landed, per) if p != raw))
         return worst, s1, s2
     finally:
@@ -1123,6 +1207,40 @@ def main():
           'AI_TRANSLATE_HOOK_v4' in PINS['darksubs_patcher'][1]
           and 'POV_AF3_TOUCH_CLEANUP_v1' in PINS['af3_home_patcher'][1],
           'marker discovery is keyed on a house-convention prefix again')
+
+    # The four marker SHAPES that each hid a live patcher until they were
+    # measured for. Every one of these is a real marker shipping today.
+    for stem, marker, shape in (
+            ('wizard_self_healer', 'ai_subs_wizard_healed_v4', 'lowercase'),
+            ('af3_discover_pov_patcher', 'AI_SUBS_POV_DISCOVER_v6_unified',
+             'a word after the version'),
+            ('af3_search_pov_patcher', 'AI_SUBS_POV_SEARCH_v3_rollback',
+             'a word after the version'),
+            ('darksubs_opensubtitles_patcher',
+             'OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4', 'NAME = int')):
+        check('SABOTAGE: a marker with %s is discovered (%s)' % (shape, stem),
+              marker in PINS.get(stem, ('', ()))[1],
+              'the marker shape assumption is back, and this live patcher is '
+              'invisible again')
+
+    # ...and each of those shapes has to survive being bumped, or the
+    # simulation quietly measures the patcher against an unchanged copy.
+    check('SABOTAGE: every marker shape can be bumped',
+          bump_marker('ai_subs_wizard_healed_v4') == 'ai_subs_wizard_healed_v5'
+          and bump_marker('AI_SUBS_POV_DISCOVER_v6_unified')
+          == 'AI_SUBS_POV_DISCOVER_v7_unified'
+          and bump_marker('OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4')
+          == 'OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 5',
+          'bump_marker is back to assuming _vN sits at the end')
+
+    # runtime_markers reads module attributes, and its collector is a nested
+    # function: `found |= ...` there rebinds a local and raises, which the
+    # except swallows, so it silently returned nothing and the constructed
+    # marker of pov_services_patcher vanished.
+    check('SABOTAGE: runtime_markers actually collects',
+          'AI_SUBS_MYSERVICES_INJECT_v12'
+          in PINS['pov_services_patcher'][1],
+          'the constructed marker is missing -- runtime discovery is mute')
 
     # A module is selected by SHAPE, not by having "patcher" in its filename.
     # pov_torbox_url_fix.py is called from service.py on every boot, rewrites
