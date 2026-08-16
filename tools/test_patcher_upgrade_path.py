@@ -343,6 +343,8 @@ pin('pov_source_quality_patcher', 'UPGRADES',
     'AI_SUBS_QUALITY_FIX_v5')
 pin('pov_subtitle_match_patcher', 'UPGRADES',
     'AI_SUBS_MATCH_v7')
+pin('umbrella_mdblist_sync_patcher', 'UPGRADES',
+    'AI_SUBS_UMB_MDBL_SINCE_v1')
 pin('umbrella_source_ux_patcher', 'UPGRADES',
     'AI_SUBS_UMB_PREWARM_v1', 'AI_SUBS_UMB_QUIETCANCEL_v1')
 pin('umbrella_subtitle_match_patcher', 'UPGRADES',
@@ -1584,6 +1586,24 @@ def main():
                  ' The bump will NOT reach any device already carrying the old '
                  'version -- fix the upgrade path first, or the fix ships to '
                  'fresh installs only.'))
+        # ... and the other direction, which this check did NOT have and which
+        # a real change walked straight through: a marker DELETED from the
+        # source left its pin behind and nothing said a word. It matters for
+        # two reasons. A RENAME is a delete plus an add, and only the add half
+        # was visible -- so the table would claim the module has two markers
+        # when it has one, and the pinned verdict would describe a marker that
+        # no longer exists. And a retired migration usually leaves debris: the
+        # hidden setting stays declared in our settings.xml, storing a value
+        # nothing reads. Measured when this was added: exactly one pin in the
+        # whole table was stale, so this starts clean rather than inheriting a
+        # backlog.
+        gone = [m for m in pinned if m not in marks]
+        check('%s pins no marker that is gone from the source' % stem, not gone,
+              'pinned marker(s) %s are no longer in %s. If the migration was '
+              'retired, drop it from the pin (and from settings.xml, if it '
+              'declared one). If it was RENAMED, that is a bump: devices '
+              'carrying the old name are not covered by the new one.'
+              % (', '.join(gone), stem))
 
     stale = sorted(set(PINS) - seen)
     check('no pins for patchers that no longer exist', not stale, ', '.join(stale))
@@ -1864,6 +1884,24 @@ def main():
           and '_umb_watch_source_v2'
           in PINS.get('umbrella_watch_source', ('', ()))[1],
           'discovery is scoped to runnable patcher modules again')
+
+    # The pin comparison used to run one way only -- pinned markers were never
+    # checked for still EXISTING. Deleting a migration therefore passed in
+    # silence, and a rename showed only its added half. Prove the reverse check
+    # can fail by feeding it a marker nothing in the tree defines. Constructed,
+    # not borrowed from the table, so retiring any real migration does not turn
+    # this into a false alarm.
+    _live = {}
+    for _stem, _src, _marks in patchers():
+        _live[_stem] = set(_marks)
+    _victim = next((s for s in ('service', 'umbrella_mdblist_sync_patcher')
+                    if s in _live), None)
+    check('SABOTAGE: a pinned marker that vanished from the source is caught',
+          _victim is not None
+          and [m for m in tuple(PINS[_victim][1]) + ('AI_SUBS_GHOST_v1',)
+               if m not in _live[_victim]] == ['AI_SUBS_GHOST_v1'],
+          'the reverse comparison does not fire, so a deleted or renamed '
+          'marker leaves a pin describing something that no longer exists')
 
     # Every host this tree patches needs a key, or its patchers cannot be
     # measured on ANY machine -- there is nowhere to point at them. The list

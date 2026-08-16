@@ -2005,6 +2005,21 @@ def _maybe_patch_mdblist_reauth():
                 level='WARNING')
         except Exception:
             pass
+    try:
+        from resources.lib import umbrella_mdblist_sync_patcher, kodi_utils
+        st = umbrella_mdblist_sync_patcher.ensure_patched()
+        if st in ('unmatched', 'compile_failed', 'write_failed',
+                  'revert_failed'):
+            kodi_utils.log(
+                'umbrella_mdblist_sync_patcher: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'umbrella_mdblist_sync_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
 
 
 def _maybe_seed_pov_seasons_view():
@@ -4512,34 +4527,97 @@ def _maybe_lower_chunk_lines():
             pass
 
 
-def _maybe_enable_fentastic_osd_autoclose():
-    """One-shot: turn on FENtastic's built-in OSD auto-close (4s) so the player's
-    top/bottom OSD bars hide after a few seconds of no interaction instead of
-    staying until Back. FENtastic ships the feature (Timers.xml) but off by
-    default. Applies to ALL FENtastic player styles (the timer keys on the shared
-    `videoosd` window). Only when skin.fentastic is the ACTIVE skin; marker-gated
-    once it's applied, so a later manual change in the skin settings sticks. If
-    FENtastic isn't active yet we DON'T set the marker, so it applies the first
-    time the user is on FENtastic."""
+def _maybe_enable_osd_autoclose():
+    """Turn on the skin's built-in OSD auto-close (4s) so the player bars hide
+    after a few seconds instead of staying until Back.
+
+    THIS USED TO NAME ONE SKIN. It gated on `getSkinDir() != 'skin.fentastic'`
+    and returned otherwise, so it only ever reached FENtastic users -- while
+    skin.povil.nox ships the identical feature (same `OSDAutoClose` /
+    `OSDAutoCloseTime` settings, same Timers.xml `autoclosevideoosd` timer),
+    also off by default. Every Nox user has had the bar stay up since the
+    feature shipped, and that is what the report was.
+
+    So it detects the CAPABILITY instead of matching a name: if the active
+    skin's own XML declares OSDAutoClose, it supports it. AF3 and Estuary do
+    not and are skipped without a list saying so.
+
+    Seeding is recorded IN THE SKIN's settings, not ours. That matters both
+    ways: the mark is per-skin for free, so switching to a skin that has never
+    been seeded seeds it; and if a skin is reinstalled or its settings are
+    reset, our mark disappears with them and the default is re-seeded. A
+    deliberate opt-out AFTER seeding is left alone, because the mark is still
+    there. An add-on-side marker could do neither -- which is how one lost
+    write became permanent.
+
+    The one population the skin-side mark cannot describe is the users the OLD
+    migration already reached: FENtastic users carrying `_fen_osd_autoclose_v1`
+    have been seeded, but on the add-on side, where the new code cannot see it.
+    Treating them as unseeded would re-enable the setting for anyone who turned
+    it back off on purpose, so that marker is read once and converted into the
+    skin-side mark WITHOUT rewriting the values. It is the same promise the old
+    marker made, kept in the new place.
+    """
     try:
         from resources.lib import kodi_utils
         import xbmc
+        import xbmcvfs
     except Exception:
         return
     try:
-        if kodi_utils.get_setting('_fen_osd_autoclose_v1', '') == '1':
+        skin = xbmc.getSkinDir() or ''
+        if not skin:
             return
-        if (xbmc.getSkinDir() or '') != 'skin.fentastic':
-            return  # retry on a later boot when FENtastic is the active skin
+        if xbmc.getCondVisibility('Skin.HasSetting(AISubsOsdSeeded)'):
+            return  # already seeded for this skin; respect what it is now
+        if (skin == 'skin.fentastic'
+                and kodi_utils.get_setting('_fen_osd_autoclose_v1', '') == '1'):
+            # Already seeded by the old add-on-side migration. Carry the mark
+            # over and touch nothing: whatever the value is now is the user's.
+            xbmc.executebuiltin('Skin.SetString(AISubsOsdSeeded,1)')
+            return
+        root = xbmcvfs.translatePath('special://home/addons/' + skin + '/')
+        supports = False
+        for base, dirs, files in os.walk(root):
+            # A skin's art outweighs its XML by orders of magnitude and holds
+            # none of it. Pruning these keeps the walk to the markup, which
+            # matters because a skin WITHOUT the feature never gets a mark and
+            # is therefore re-scanned on every single start.
+            dirs[:] = [d for d in dirs if d.lower() not in
+                       ('media', 'themes', 'fonts', 'backgrounds', 'extras',
+                        'colors', 'sounds', '.git')]
+            for fn in files:
+                if not fn.endswith('.xml'):
+                    continue
+                try:
+                    with open(os.path.join(base, fn), encoding='utf-8',
+                              errors='replace') as fh:
+                        if 'OSDAutoClose' in fh.read():
+                            supports = True
+                            break
+                except OSError:
+                    continue
+            if supports:
+                break
+        if not supports:
+            return  # this skin has no such feature -- nothing to turn on
         xbmc.executebuiltin('Skin.SetBool(OSDAutoClose)')
         xbmc.executebuiltin('Skin.SetString(OSDAutoCloseTime,4)')
-        kodi_utils.set_setting('_fen_osd_autoclose_v1', '1')
-        kodi_utils.log('FENtastic OSD auto-close enabled (4s, migration v1)',
+        # Only claim it once the skin actually reports the setting: a write
+        # issued while the skin is still loading can be lost, and marking
+        # regardless is what made a single lost write permanent.
+        if not xbmc.getCondVisibility('Skin.HasSetting(OSDAutoClose)'):
+            kodi_utils.log(
+                'OSD auto-close: %s did not take the setting, will retry on '
+                'the next start' % skin, level='WARNING')
+            return
+        xbmc.executebuiltin('Skin.SetString(AISubsOsdSeeded,1)')
+        kodi_utils.log('OSD auto-close enabled (4s) for %s' % skin,
                        level='INFO')
     except Exception as e:
         try:
-            kodi_utils.log('FENtastic OSD auto-close migration failed: '
-                           '{0}'.format(e), level='WARNING')
+            kodi_utils.log('OSD auto-close seeding failed: {0}'.format(e),
+                           level='WARNING')
         except Exception:
             pass
 
@@ -5413,9 +5491,11 @@ def main():
     # Lower chunk size to 50 (block-avoidance), one-shot for existing installs.
     _maybe_lower_chunk_lines()
 
-    # One-shot: enable FENtastic's OSD auto-close (4s) so the player bars hide
-    # after a few idle seconds. Only when FENtastic is the active skin.
-    _maybe_enable_fentastic_osd_autoclose()
+    # One-shot per skin: enable the active skin's own OSD auto-close (4s) so the
+    # player bars hide after a few idle seconds. Detected from the skin's XML,
+    # not from a list of skin names -- Nox ships the same feature FENtastic does
+    # and was missed by the old name check.
+    _maybe_enable_osd_autoclose()
 
     # One-shot: enable POV Auto Play + Always-Resume so "Continue Watching" is
     # one click (no source dialog, resumes where you stopped). Marker-gated.
