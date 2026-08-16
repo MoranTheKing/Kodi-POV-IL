@@ -105,7 +105,7 @@ MDBList bug was born.
 A new patcher with a versioned marker must also be pinned, so the shape cannot
 enter the tree unclassified.
 
-The other 38 are UNPROVEN, for two different reasons, and neither is a pass:
+The other 42 are UNPROVEN, for two different reasons, and neither is a pass:
 no stock copy of the host on this machine (the skins, the wizard,
 service.subtitles.All_Subs), or nothing here can CALL the code -- service.py's
 boot migrations and the three lib modules with no ensure_*/heal_* are pinned
@@ -162,6 +162,19 @@ separate assumptions each hid live, shipping patchers:
     Only keys starting with _ count -- set_setting('chunk_lines', '50') is a
     default, not a version gate, and tripping the pin when someone retunes a
     default is the kind of noise that gets a test switched off.
+
+  * not "in one of our modules" -- a PAYLOAD file ships the version as CODE.
+    darksubs_opensubtitles_patcher gates on the text
+    'OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4' while the file it copies
+    carries that same line as a real assignment, in resources/patches/, a
+    SIBLING of resources/lib. Two hand-synced copies with nothing linking
+    them: bump the one that ships and the gate keeps matching the old text on
+    every device that already has it, forever. The whole add-on is walked now,
+    and a payload's source is read as raw text.
+  * not "written anywhere at all" -- af3_home_patcher's
+    PATCH_VERSION = '2026-06-01-pov-home-v21' is a gate in its own right,
+    written into marker FILES whose entire content is the version. A
+    module-level NAME_VERSION with digits in it counts on sight.
 
 What IS assumed: a marker is TEXT, so the search is scoped to STRING LITERALS.
 That is what makes the loose shape safe -- an ordinary api_v2 identifier lives
@@ -226,6 +239,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 LIB = os.path.join(HERE, '..', 'addons', 'service.subtitles.kodipovilai',
                    'resources', 'lib')
 LIB = os.path.normpath(LIB)
+ADDON = os.path.normpath(os.path.join(LIB, '..', '..'))
 
 # Stock host add-ons, if this machine has them. The dynamic layer needs a real
 # host to patch; the pin layer below does not and always runs.
@@ -252,6 +266,8 @@ HOSTS = {
     'skin.povil.nox': ('NOX_STOCK', ''),
     'service.subtitles.All_Subs': ('ALLSUBS_STOCK', ''),
     'plugin.program.kodipovilwizard': ('WIZARD_STOCK', ''),
+    'plugin.video.idanplus': ('IDANPLUS_STOCK', ''),
+    'service.subtitles.all_subs_plus': ('ALLSUBS_PLUS_STOCK', ''),
 }
 DECLARED_HOSTS = set(HOSTS)
 STOCK = {}
@@ -445,6 +461,8 @@ pin('af3_discover_pov_patcher', 'UNPROVEN',
     'AI_SUBS_POV_DISCOVER_v3', 'AI_SUBS_POV_DISCOVER_v5_rollback',
     'AI_SUBS_POV_DISCOVER_v6_unified')
 pin('af3_home_patcher', 'UNPROVEN',
+    'AF3_CE_VERSION=6.3.2.14', 'JURIALMUNKEY_MIN_VERSION=0.2.35',
+    'PATCH_VERSION=2026-06-01-pov-home-v21',
     'POV_AF3_PLOT_AUTOSCROLL_v2', 'POV_AF3_TOUCH_CLEANUP_v1')
 pin('af3_search_pov_patcher', 'UNPROVEN',
     'AI_SUBS_POV_SEARCH_v1', 'AI_SUBS_POV_SEARCH_v2',
@@ -465,6 +483,8 @@ pin('darksubs_embedded_insert_patcher', 'UNPROVEN',
     'AI_SUBS_EMBED_ENG_LAST_v2')
 pin('darksubs_filename_fallback_patcher', 'UNPROVEN',
     'AI_SUBS_FILENAME_FALLBACK_v2')
+pin('darksubs_hook_diagnostics', 'UNPROVEN',
+    'NAG_VERSION=1')
 pin('darksubs_opensubtitles_patcher', 'UNPROVEN',
     'OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4')
 pin('darksubs_patcher', 'UNPROVEN',
@@ -492,9 +512,10 @@ pin('favourites_personal_tiles_patcher', 'UNPROVEN',
 pin('fentastic_patcher', 'UNPROVEN',
     'AI_SUBS_NOTIFICATION_WRAP_v1')
 pin('fentastic_widget_patcher', 'UNPROVEN',
-    '_fen_widgets_seeded=v1')
+    '_WIDGET_SEED_VERSION=v1', '_fen_widgets_seeded=v1')
 pin('hebrew_build_ui_patcher', 'UNPROVEN',
-    '_subtitle_outline_migration_v1', '_ui_prefs_seeded=v1')
+    '_PREFS_SEED_VERSION=v1', '_subtitle_outline_migration_v1',
+    '_ui_prefs_seeded=v1')
 pin('kodi_utils', 'UNPROVEN',
     '_embedded_mode_v1')
 pin('nox_change_source_patcher', 'UNPROVEN',
@@ -503,15 +524,22 @@ pin('nox_osd_collision_patcher', 'UNPROVEN',
     'AI_SUBS_NOX_OSD_FIX_v1')
 pin('pov_container_refresh_crash_fix', 'UNPROVEN',
     'AI_SUBS_POV_WIDGET_REFRESH_v1')
+pin('pov_favorites_diagnostic', 'UNPROVEN',
+    'DIAG_VERSION=4')
 pin('pov_genre_folders_reseed_patcher', 'UNPROVEN',
-    '_pov_genre_folders_reseed=v1')
+    'RESEED_VERSION=v1', '_pov_genre_folders_reseed=v1')
 pin('pov_seasons_view_seed', 'UNPROVEN',
     '_pov_seasons_view_v1')
 pin('pov_series_networks_reseed_patcher', 'UNPROVEN',
-    '_pov_series_networks_reseed=v1')
+    'RESEED_VERSION=v1', '_pov_series_networks_reseed=v1')
 pin('pov_torbox_usage_patcher', 'UNPROVEN',
-    '_pov_torbox_usage_patch_version=6')
+    'PATCH_VERSION=6', '_pov_torbox_usage_patch_version=6')
+pin('resources/lib/subs_engine/sources/opensubtitles', 'UNPROVEN',
+    'OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4')
+pin('resources/patches/darksubs/opensubtitles', 'UNPROVEN',
+    'OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4')
 pin('service', 'UNPROVEN',
+    'CACHE_RTL_FIX_VERSION=7', 'TEMP_PURGE_VERSION=2',
     '_builtin_engine_rollout_v2', '_chunk_lines_50_v1',
     '_fast_first_chunk_default_v2', '_fen_osd_autoclose_v1',
     '_gemini3_tune_v1', '_gemini_model_bump_v2', '_gender_ref_on_v1',
@@ -527,7 +555,8 @@ pin('skin_dialog_subtitles_row_patcher', 'UNPROVEN',
 pin('skin_watched_poster_patcher', 'UNPROVEN',
     'AI_SUBS_WATCHED_LIST_v1', 'AI_SUBS_WATCHED_POSTER_v1')
 pin('subs_engine_bridge', 'UNPROVEN',
-    'Cached_subs_v2', '_engine_defaults_v=4')
+    'Cached_subs_v2', '_ENGINE_DEFAULTS_VERSION=4',
+    '_engine_defaults_v=4')
 pin('umbrella_watch_prompt', 'UNPROVEN',
     '_umb_watch_prompt_v1')
 pin('umbrella_watch_source', 'UNPROVEN',
@@ -650,6 +679,19 @@ def pair_markers(src):
             return a.value
         if isinstance(a, ast.Name):
             return consts.get(a.id)
+        # '{0}:{1}'.format(kind, NAG_VERSION) -- the same split shape with one
+        # more step. darksubs_hook_diagnostics joins its version this way, and
+        # a resolver that only knew Constant and Name skipped the whole call.
+        if isinstance(a, ast.Call) and isinstance(a.func, ast.Attribute) \
+                and a.func.attr == 'format' \
+                and isinstance(a.func.value, ast.Constant) \
+                and isinstance(a.func.value.value, str):
+            parts = [resolve(x) for x in a.args]
+            if all(p is not None for p in parts):
+                try:
+                    return a.func.value.value.format(*parts)
+                except (IndexError, KeyError, ValueError):
+                    return None
         return None
 
     out = set()
@@ -679,6 +721,40 @@ def pair_markers(src):
     return out
 
 
+def version_constants(src):
+    """Module-level NAME_VERSION = '<value with a digit>'.
+
+    A third way to spell a gate, and af3_home_patcher shows why it has to be
+    caught on its own: PATCH_VERSION = '2026-06-01-pov-home-v21' is written
+    into marker FILES (_LAYOUT_MARKER, _SPOTLIGHT_MARKER) whose whole content
+    IS the version, so neither the string search nor the settings-pair search
+    can see it. darksubs_hook_diagnostics' NAG_VERSION is the same shape with
+    the key built at runtime, which is unresolvable statically.
+
+    This also pins two third-party version requirements (AF3_CE_VERSION,
+    JURIALMUNKEY_MIN_VERSION). That is deliberate rather than tolerated: a
+    host add-on's version changing is exactly when every verdict here needs
+    re-measuring, which these notes say elsewhere in so many words.
+    """
+    try:
+        tree = ast.parse(src)
+    except SyntaxError:
+        return set()
+    out = set()
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if not (isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str)
+                and re.search(r'\d', node.value.value)):
+            continue
+        for t in node.targets:
+            if isinstance(t, ast.Name) and t.id.endswith('VERSION') \
+                    and t.id.isupper():
+                out.add('%s=%s' % (t.id, node.value.value))
+    return out
+
+
 def bump_marker(m):
     """The same marker, one version later. None if it carries no version.
 
@@ -693,6 +769,15 @@ def bump_marker(m):
     h = re.search(r'(=\s*v?)(\d+)\s*$', m)
     if h:
         return m[:h.start(2)] + str(int(h.group(2)) + 1) + m[h.end(2):]
+    # Last resort: bump the final run of digits. af3_home_patcher's gate is
+    # PATCH_VERSION = '2026-06-01-pov-home-v21' -- a date, a name and a
+    # version in one string -- and a rule that only knows "digits right after
+    # the =" cannot move it at all.
+    h = None
+    for h in re.finditer(r'\d+', m):
+        pass
+    if h:
+        return m[:h.start()] + str(int(h.group()) + 1) + m[h.end():]
     return None
 
 
@@ -919,25 +1004,43 @@ def patchers():
     """
     seen = set()
     files = []
-    for dp, dns, fns in os.walk(LIB):
+    for dp, dns, fns in os.walk(ADDON):
         dns[:] = [d for d in dns if d != '__pycache__']
         files += [os.path.join(dp, f) for f in sorted(fns) if f.endswith('.py')]
-    files.append(os.path.join(os.path.dirname(LIB.rstrip(os.sep)),
-                              '..', 'service.py'))
-    for path in files:
+    for path in sorted(files):
         path = os.path.normpath(path)
-        if not os.path.isfile(path):
-            continue
-        stem = os.path.basename(path)[:-3]
-        if stem in seen or stem.startswith('__'):
+        in_lib = os.path.dirname(path) == LIB
+        is_service = os.path.dirname(path) == ADDON
+        if in_lib or is_service:
+            stem = os.path.basename(path)[:-3]
+        else:
+            # A PAYLOAD, keyed by its path: basenames repeat across the tree
+            # (movies.py, cache.py, srt.py...), and a bare-basename key would
+            # let one silently win over another.
+            stem = os.path.relpath(path, ADDON)[:-3].replace(os.sep, '/')
+        if stem in seen or os.path.basename(path).startswith('__'):
             continue
         seen.add(stem)
         src = open(path, encoding='utf-8').read()
-        runnable = (os.path.dirname(path) == LIB
-                    and bool(re.search(r'(?m)^def (ensure|heal)\w*\(', src)))
-        marks = literal_markers(src) | pair_markers(src)
+        runnable = in_lib and bool(
+            re.search(r'(?m)^def (ensure|heal)\w*\(', src))
+        marks = (literal_markers(src) | pair_markers(src)
+                 | version_constants(src))
         if runnable:
             marks |= runtime_markers(stem)
+        if not (in_lib or is_service):
+            # In a payload the version is CODE, not a string -- this file IS
+            # the text that ships. darksubs_opensubtitles_patcher gates on
+            # 'OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4' while the file it
+            # copies carries that same line as a real assignment, in
+            # resources/patches/, a SIBLING of resources/lib. Two hand-synced
+            # copies with nothing linking them: bump the one that ships and
+            # the gate still matches the old text on every device that has it,
+            # forever. Scanning payload source as raw text is the only way to
+            # see that half. It stays off for our own modules, where the same
+            # pattern would just re-find INJECT_VERSION-style constants that
+            # runtime_markers already resolves properly.
+            marks |= set(_MARKER_RES[1].findall(src))
         if marks:
             yield stem, src, sorted(marks)
 
@@ -1222,9 +1325,11 @@ def simulate_bump(stem, src, override=None):
             return 'RETIRED', s1, ''
         snap1 = _snapshot(home)
         blob1 = b''.join(snap1.values())
+        # bump_marker(m) must be able to move it, or the per-marker loop
+        # below would ask has() about None.
         landed = sorted(m for m in (literal_markers(text)
                                     | runtime_markers(stem, base))
-                        if has(blob1, m))
+                        if has(blob1, m) and bump_marker(m))
         if not landed:
             # "Nothing landed" has two very different causes and they were
             # both called UNPROVEN, with diagnostics that blamed the fixture.
@@ -1604,6 +1709,27 @@ def main():
                   for m in PINS.get('service', ('', ()))[1]),
           'retuning a default would trip the pin -- noise like that is how a '
           'test gets switched off')
+    # A payload's version is CODE, in a file that is a sibling of
+    # resources/lib. darksubs_opensubtitles_patcher gates on text that also
+    # lives, as a real assignment, in the file it copies -- two hand-synced
+    # copies with nothing linking them.
+    check('SABOTAGE: a payload file outside resources/lib is scanned',
+          'OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4' in PINS.get(
+              'resources/patches/darksubs/opensubtitles', ('', ()))[1],
+          'the shipped half of the darksubs opensubtitles patch is invisible '
+          'again -- bump it there and the gate keeps matching the old text')
+
+    # A version constant can be a gate on its own, written into a marker FILE
+    # whose whole content is the version.
+    check('SABOTAGE: a bare version constant is a marker',
+          'PATCH_VERSION=2026-06-01-pov-home-v21'
+          in PINS.get('af3_home_patcher', ('', ()))[1]
+          and bump_marker('PATCH_VERSION=2026-06-01-pov-home-v21')
+          == 'PATCH_VERSION=2026-06-01-pov-home-v22',
+          'af3_home_patcher writes PATCH_VERSION into _LAYOUT_MARKER and '
+          '_SPOTLIGHT_MARKER; neither the string nor the settings-pair search '
+          'can see it')
+
     check('SABOTAGE: a split pair can be bumped',
           bump_marker('_rtl_fix_done=7') == '_rtl_fix_done=8'
           and bump_marker('_fen_widgets_seeded=v1') == '_fen_widgets_seeded=v2',
@@ -1623,11 +1749,23 @@ def main():
     # Every host this tree patches needs a key, or its patchers cannot be
     # measured on ANY machine -- there is nowhere to point at them. The list
     # was two entries while seven other hosts had live, marker-gated patchers.
-    check('SABOTAGE: every patched host is declarable',
-          {'skin.arctic.fuse.3', 'service.subtitles.All_Subs',
-           'plugin.program.kodipovilwizard'} <= DECLARED_HOSTS,
-          'a host add-on this tree patches has no entry, so its patchers are '
-          'permanently unmeasurable rather than merely unmeasured here')
+    # DERIVED from the tree, not a list of the three hosts I happened to think
+    # of when this check was written. That list was itself the round-5 disease
+    # -- a hand-maintained enumeration -- and it duly missed
+    # plugin.video.idanplus, a live host patched from service.py every boot.
+    OURS = 'service.subtitles.kodipovilai'
+    used = set()
+    for _p, _t in _addon_sources().items():
+        for _m in re.finditer(
+                r"(?m)^[A-Z][A-Z0-9_]*\s*=\s*'((?:plugin\.(?:video|program)"
+                r"|skin|service\.subtitles)\.[A-Za-z0-9._]+)'", _t):
+            used.add(_m.group(1))
+    used.discard(OURS)
+    check('SABOTAGE: every host this tree patches is declared',
+          used <= DECLARED_HOSTS,
+          'undeclared: %s -- there is nowhere to point a stock tree at them, '
+          'so their patchers are permanently unmeasurable rather than merely '
+          'unmeasured here' % ', '.join(sorted(used - DECLARED_HOSTS)))
 
     # runtime_markers reads module attributes, and its collector is a nested
     # function: `found |= ...` there rebinds a local and raises, which the

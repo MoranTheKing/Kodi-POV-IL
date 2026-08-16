@@ -921,7 +921,7 @@ This section originally read "**None found**", on the strength of reading the
 wrong. It was re-done by MEASUREMENT -- patch a pristine host, bump the
 patcher's own marker, run it again against the host it just patched -- against
 **POV 6.08.13 and Umbrella 6.7.82, the current upstream of both**. 21 of the 36
-patchers that can be measured here fail to upgrade correctly (76 modules
+patchers that can be measured here fail to upgrade correctly (80 files
 carry a versioned marker in all):
 
     UPGRADES         9   a bump reaches devices already carrying the old one
@@ -929,7 +929,7 @@ carry a versioned marker in all):
     DOUBLE-INJECT    6   old block stays live beside the new one
     DOUBLE-STAMP     6   only the marker COMMENT duplicates; the code is fine
     RETIRED          2   marker-gated and called by nothing; not a live risk
-    UNPROVEN        38   no host here, or nothing here can call it
+    UNPROVEN        42   no host here, or nothing here can call it
 
 **Fifteen instances of exactly the MDBList shape, not zero.** They include
 `pov_view_mode_patcher` (v4), `pov_favorites_refresh_patcher` (v3) and
@@ -1118,9 +1118,11 @@ NAME and VERSION can be two different constants, joined only at the call site:
 
 Neither literal carries both halves and the joined text exists nowhere in the
 source, so no single-string search could ever have seen it. **That gate has
-been bumped 4→5 and 5→6 in shipped releases** — each time precisely so "the
-one-shot backfill re-runs for every existing install", which is this whole
-subject — and its own comment says the constant "must be bumped whenever a new
+been bumped 4→5, 5→6 and 6→7 in shipped releases** — each time precisely so
+"the one-shot backfill re-runs for every existing install", which is this whole
+subject, and the 6→7 commit says outright that it "was NOT bumped when Arabic
+Extended-B and the mid-word join were added ... so without this every existing
+install would skip the backfill forever" — and its own comment says the constant "must be bumped whenever a new
 repair is added here, or every existing install skips the backfill forever".
 Eleven markers of this shape were invisible, seven of them in modules with no
 coverage at all and four hiding *beside* real coverage, which is worse: those
@@ -1134,6 +1136,28 @@ gets a test switched off.
 **One shape is deliberately left alone**: `pov_scraper_settings_patcher` gates
 on `'v3-' + md5(desired settings)`. A content-derived version cannot be
 forgotten on a bump, so it is immune by construction rather than unwatched.
+
+**An eighth: the version can live somewhere no module of ours does.** Three
+more shapes, all live:
+
+  * **A PAYLOAD file ships the version as CODE.**
+    `darksubs_opensubtitles_patcher` gates on the text
+    `OPENSUBTITLES_SEARCH_FALLBACK_VERSION = 4`, while the file it copies
+    wholesale carries that exact line as a real assignment — in
+    `resources/patches/`, a **sibling** of `resources/lib`, never walked. Two
+    hand-synced copies with nothing linking them. Bump the one that actually
+    ships and the gate keeps matching the old text on every device that has
+    it, permanently. The whole add-on is walked now, and payload source is
+    read as raw text rather than through the string-literal rule.
+  * **A bare version constant is a gate on its own.** `af3_home_patcher`'s
+    `PATCH_VERSION = '2026-06-01-pov-home-v21'` is written into marker FILES
+    whose entire content is the version.
+  * **A live host with no entry.** `plugin.video.idanplus` is patched from
+    `service.py` every boot and had no key, so the docstring's claim that
+    "every host this tree patches now has a key" was **false**. Worse, the
+    guard for it enumerated the three hosts I happened to name — the
+    hand-maintained-list disease, one round after diagnosing it. The host set
+    is **derived from the tree** now and the check compares against that.
 
 **RULE: for a patcher, "I read it and it looks fine" is not a finding. Run it
 twice.** The second run is the only thing that knows what a device already
@@ -1214,7 +1238,7 @@ ends `ALL PASS -- PARTIAL: n of m verdicts unverified here`. Related trap:
 broken, and pasting that in is a silent downgrade -- it now prints a
 DO-NOT-PASTE banner above any such line.
 
-`UNPROVEN` is not a clean bill of health, it is an unmeasured patcher: 38 of
+`UNPROVEN` is not a clean bill of health, it is an unmeasured patcher: 42 of
 them -- the skins, the wizard, the All_Subs add-on, plus everything nothing
 here can call -- because this machine has
 no stock copy of those hosts. Point `POV_STOCK` / `UMBRELLA_STOCK` (or drop a
