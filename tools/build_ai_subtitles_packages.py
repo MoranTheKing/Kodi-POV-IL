@@ -436,6 +436,44 @@ def _maybe_default_builtin_engine():
         pass
 
 
+def _maybe_bump_gemini_model():
+    """One-shot: move existing users off superseded default Gemini models --
+    3.1-flash-lite -> 3.5-flash-lite and 3.5/3.6-flash -> 3.7-flash. Drop-in
+    upgrades, identical free-tier quota. Marker-gated, so a later manual pick
+    sticks.
+
+    THIS IS A COPY OF THE BUILD EDITION'S MIGRATION, AND THAT IS THE BUG IT
+    FIXES. The standalone runs this SLIM_SERVICE template, not the repo's
+    service.py, so the migration added for 0.2.494 reached the build, the
+    quickfix and the full build -- and never reached the repo-channel users.
+    changelog.txt, however, is shared: they read "anyone already on 3.5 or 3.6
+    Flash is moved across once, automatically" and nothing moved. Reported by a
+    user who read the shipped zip, three releases after the claim.
+
+    The general shape, worth more than this one function: A SHARED CHANGELOG
+    OVER TWO DIFFERENT SERVICES CAN TELL ONE CHANNEL THE TRUTH AND THE OTHER A
+    LIE. tools/test_channels_agree.py now checks this specific claim; any future
+    user-visible promise in a release note needs the same treatment."""
+    try:
+        from resources.lib import kodi_utils
+    except Exception:
+        return
+    try:
+        if kodi_utils.get_setting('_gemini_model_bump_v2', '') == '1':
+            return
+        cur = (kodi_utils.get_setting('model', '') or '').strip()
+        new = {'gemini-3.1-flash-lite': 'gemini-3.5-flash-lite',
+               'gemini-3.5-flash': 'gemini-3.7-flash',
+               'gemini-3.6-flash': 'gemini-3.7-flash'}.get(cur)
+        if new:
+            kodi_utils.set_setting('model', new)
+            kodi_utils.log('Gemini model bumped {0} -> {1} (migration v2)'.format(
+                cur, new), level='INFO')
+        kodi_utils.set_setting('_gemini_model_bump_v2', '1')
+    except Exception:
+        pass
+
+
 def _engine_on():
     try:
         from resources.lib import kodi_utils
@@ -615,6 +653,7 @@ def main():
     # subtitle add-ons when it's on (reversible -- turn the engine off and they
     # come back). Mirrors the full build.
     _maybe_default_builtin_engine()
+    _maybe_bump_gemini_model()
     _ensure_darksubs_enabled()
     _maybe_set_default_subtitle_service()
     _run('hebrew subtitle prefs', _maybe_seed_hebrew_subtitle_prefs)
