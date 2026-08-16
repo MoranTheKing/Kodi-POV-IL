@@ -53,17 +53,17 @@ good as the one that reaches nobody.
 HOW BAD IS IT, GIVEN THAT THE HOSTS AUTO-UPDATE
 -----------------------------------------------
 Measured against POV 6.08.13 and Umbrella 6.7.82 -- the current upstream of
-both -- 15 patchers are NEVER-UPGRADES and 6 DOUBLE-INJECT, out of the 36 that
-have a host here.
+both -- 15 patchers are NEVER-UPGRADES and 6 DOUBLE-INJECT, out of the 40
+that can be measured here.
 
 That reads worse than it is, and the reason is worth knowing before anyone
 panics at the table below. **Both hosts update themselves on the user's
 device**, POV through repository.kodifitzwell and Umbrella through its own
 repo. A host update REPLACES the files our markers live in, so the marker
 vanishes and the patcher re-applies cleanly at whatever version it is now.
-Measured marker by marker: 20 of the 21 write inside the host add-on.
+Measured marker by marker: 19 of the 21 write inside the host add-on.
 
-So for those 20, a bump that "never upgrades" is a DELAY, not a permanent
+So for those 19, a bump that "never upgrades" is a DELAY, not a permanent
 loss: the fix lands on the host's next release. The window is real -- the
 changelog promises behaviour the device does not have until then -- but it
 closes by itself.
@@ -72,15 +72,20 @@ closes by itself.
 It holds only while Kodi's add-on auto-update is on. The build ships it on
 (general.addonupdates = 0), but our own wizard offers "never check for
 updates" as a supported choice, and anyone who takes it loses the net for all
-20 at once, silently. Treat self-healing as what usually happens, never as a
+19 at once, silently. Treat self-healing as what usually happens, never as a
 reason to ship a bump that cannot upgrade.
 
-**One has no net at all, and it is the one to fix first.**
-`kodi_playlist_timeout_patcher` writes `userdata/advancedsettings.xml`, which
-is Kodi's own profile data. No add-on update ever touches it. Bump that marker
-and the change reaches nobody who already ran it, permanently.
+**TWO have no net at all, and they are the ones to fix first.**
+`kodi_playlist_timeout_patcher` writes `userdata/advancedsettings.xml`, Kodi's
+own profile data, and `pov_mdblist_patcher` writes `_lists_sort_recent_v1`
+into OUR OWN addon settings. No add-on update ever touches either. Bump one of
+those markers and the change reaches nobody who already ran it, permanently.
 
-It is the only one AMONG THE 21 BROKEN. It is not the only patcher in the tree
+(That was "one" until the Kodi stub grew a real settings store: before it, the
+second one could not be observed landing at all. The count is a measurement,
+and it moved when the instrument improved.)
+
+They are the two AMONG THE 21 BROKEN. They are not the only patchers in the
 that writes outside an add-on directory: favourites_xml_patcher
 (profile/favourites.xml) and hebrew_build_ui_patcher (profile/guisettings.xml)
 do too. Neither is at risk today -- they read the live content, or gate on a
@@ -319,6 +324,11 @@ def pin(stem, verdict, *markers):
 
 
 # --- upgrade cleanly: a bump reaches devices already carrying the old one ---
+pin('build_icons_patcher', 'UPGRADES',
+    '_tiles_refresh_gen=2')
+pin('hebrew_build_ui_patcher', 'UPGRADES',
+    '_PREFS_SEED_VERSION=v1', '_subtitle_outline_migration_v1',
+    '_ui_prefs_seeded=v1')
 pin('pov_addon_window_patcher', 'UPGRADES',
     'AI_SUBS_POV_ADDON_WINDOW_v1', 'AI_SUBS_POV_IMPORT_WINDOW_v1')
 pin('pov_aiostreams_patcher', 'UPGRADES',
@@ -351,11 +361,6 @@ pin('umbrella_subtitle_match_patcher', 'UPGRADES',
 # pov_mdblist_patcher is here on the WORST of its six markers: three upgrade
 # after a fashion and three (MDBL_NONE_GUARD, MDBL_WATCHLIST_ONLY,
 # SORT_RECENT_DEFAULT) reach nobody. Run --pins for the breakdown.
-pin('build_icons_patcher', 'NEVER-UPGRADES',
-    '_tiles_refresh_gen=2')
-pin('hebrew_build_ui_patcher', 'NEVER-UPGRADES',
-    '_PREFS_SEED_VERSION=v1', '_subtitle_outline_migration_v1',
-    '_ui_prefs_seeded=v1')
 pin('kodi_playlist_timeout_patcher', 'NEVER-UPGRADES',
     'AI_SUBS_PLAYLIST_TIMEOUT_v1')
 pin('pov_bookmark_refresh_patcher', 'NEVER-UPGRADES',
@@ -1293,9 +1298,25 @@ def bump_source(src, markers, versions=False):
     out = src
     for m in sorted(markers, key=len, reverse=True):
         nxt = bump_marker(m)
-        if nxt:
-            out = re.sub(re.escape(m) + r'(?![0-9])',
-                         nxt.replace('\\', '\\\\'), out)
+        if not nxt:
+            continue
+        out = re.sub(re.escape(m) + r'(?![0-9])',
+                     nxt.replace('\\', '\\\\'), out)
+        if '=' not in m:
+            continue
+        # A synthesised "key=value" marker has no verbatim text in the source
+        # -- that is the whole premise of pair_markers -- so the replace above
+        # is a silent no-op and the "second run" runs the UNCHANGED module.
+        # That made every pair-shaped gate read NEVER-UPGRADES regardless of
+        # whether it was healthy, and two correct patchers were pinned as
+        # broken on the strength of it. Move the constant that HOLDS the
+        # version instead.
+        val, nval = m.split('=', 1)[1].strip(), nxt.split('=', 1)[1].strip()
+        if val and val != nval:
+            out = re.sub(r"(?m)^(\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*)"
+                         r"(['\"])%s\2" % re.escape(val),
+                         lambda g: '%s%s%s%s' % (g.group(1), g.group(2),
+                                                 nval, g.group(2)), out)
     if versions:
         out = re.sub(r'(?m)^([A-Z_]*VERSION) = (\d+)\s*$',
                      lambda g: '%s = %d' % (g.group(1), int(g.group(2)) + 1),
@@ -1403,12 +1424,30 @@ def simulate_bump(stem, src, override=None):
         # and Python served the first one's cached bytecode for the second.
         tmps = []
 
+        made = {}
+
         def variant(**kw):
             d = tempfile.mkdtemp(prefix='upgmod-')
             tmps.append(d)
+            body = bump_source(text, landed, **kw)
+            made[d] = body
             with open(os.path.join(d, stem + '.py'), 'w',
                       encoding='utf-8') as f:
-                f.write(bump_source(text, landed, **kw))
+                f.write(body)
+            # The bumped module still resolves its resources relative to
+            # __file__, so it needs its real siblings beside it.
+            # build_icons_patcher's _bundled_root() looks for media_assets/
+            # next to itself; in a bare temp directory it returned
+            # 'no_bundled' at the first guard and never reached the code that
+            # writes its marker, which read as NEVER-UPGRADES.
+            for entry in os.listdir(LIB):
+                if entry in (stem + '.py', '__pycache__'):
+                    continue
+                try:
+                    os.symlink(os.path.join(LIB, entry),
+                               os.path.join(d, entry))
+                except OSError:
+                    pass
             return d
         try:
             use = variant()
@@ -1423,13 +1462,20 @@ def simulate_bump(stem, src, override=None):
             # literal and one constructed marker escape escalation: the
             # literal moves, the sets differ, and the constructed one is then
             # "measured" against an unchanged copy of itself.
-            def unmoved(d):
+            def unmoved(d, text_after=None):
+                # all_markers on the bumped SOURCE, not just runtime
+                # attributes: runtime_markers matches one attribute at a time
+                # and so can never represent a pair marker at all -- it could
+                # not report one "unmoved", the escalation never fired, and a
+                # no-op bump sailed through as a measurement.
                 after = runtime_markers(stem, d)
+                if text_after is not None:
+                    after |= all_markers(text_after)
                 return [m for m in landed if m in after]
-            if unmoved(use):
+            if unmoved(use, made.get(use)):
                 # constructed marker: the version lives in an int constant
                 use = variant(versions=True)
-                if unmoved(use):
+                if unmoved(use, made.get(use)):
                     return ('UNBUMPABLE', s1,
                             'still holding %s after the bump' % unmoved(use))
 
@@ -1785,10 +1831,20 @@ def main():
     # hebrew_build_ui_patcher's verdict is the end-to-end proof: it can only
     # be NEVER-UPGRADES if its _ui_prefs_seeded=v1 pair marker was actually
     # landed, bumped and re-measured.
-    check('SABOTAGE: a pair marker reaches the simulation, not just the pin',
-          PINS['hebrew_build_ui_patcher'][0] == 'NEVER-UPGRADES',
-          'the module is UNPROVEN again -- its pair marker is pinned but the '
-          'dynamic layer never sees it')
+    _hb = open(os.path.join(LIB, 'hebrew_build_ui_patcher.py'),
+               encoding='utf-8').read()
+    check('SABOTAGE: bumping a pair marker really moves the source',
+          "_PREFS_SEED_VERSION = 'v2'"
+          in bump_source(_hb, ['_ui_prefs_seeded=v1']),
+          'a synthesised key=value has no verbatim text to replace, so the '
+          'bump is a silent no-op and the second run re-runs the FIRST '
+          'module -- which reads NEVER-UPGRADES for every pair-shaped gate, '
+          'healthy or not')
+    check('SABOTAGE: a healthy pair-marker gate measures UPGRADES',
+          PINS['hebrew_build_ui_patcher'][0] == 'UPGRADES',
+          '_prefs_already_seeded() compares straight against the live '
+          'constant -- the correct pattern. Anything else here means the '
+          'pair shape is being judged by its shape rather than its behaviour')
 
     # A version that only exists inside a local helper. pov_scraper_settings_
     # patcher writes set_setting(TUNE_FLAG, _tune_version()), and its
