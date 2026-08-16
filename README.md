@@ -38,7 +38,7 @@
 
 - עץ קבצים מסודר של המיגרציה.
 - מסמך diff של `Twilight -> POV`.
-- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.110.zip`.
+- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.111.zip`.
 - הוראות התקנה ובדיקת smoke test לטלפון: `ANDROID_TESTING.md`.
 
 ## חבילת בדיקה (גרסה נוכחית)
@@ -143,6 +143,17 @@ Take 32-bit only if 64-bit refuses to install.
 
 Switching is safe: both carry the same app id and signing key, so 64-bit
 installs over 32-bit as an update and your data stays where it is.
+
+## If you installed the subtitles add-on on its own (from `0.2.498`)
+
+The automatic move to Gemini 3.7 Flash announced in `0.2.494` reached the build
+but never reached anyone who installed the AI subtitles add-on by itself, from
+the repository. The announcement was shared between the two; the change itself
+was not, because the two are not the same program — the standalone runs a
+slimmer service of its own.
+
+Anyone still on 3.5 or 3.6 Flash is moved across once, now, at the next start.
+Any other model you picked yourself is left exactly as it is. Nothing to do.
 
 ## Searching MDBList lists: a screen of its own (from `0.2.497`)
 

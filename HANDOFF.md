@@ -882,6 +882,55 @@ The behaviour is right and worth keeping — an empty read also happens
 transiently while POV is starting, and skipping on it would mark the tune done
 and never retry — but the comment now says what actually happens.
 
+## Shipped 2026-08-16: note 598 (0.2.498 / wizard 0.1.46 / quickfix 0.1.543 / build 0.1.111)
+
+### THE STANDALONE NEVER GOT THE GEMINI MIGRATION, AND THE CHANGELOG SAID IT DID
+
+Reported by a user reading the shipped zip, three releases after the claim.
+They were right.
+
+    BUILD / quickfix / full build   _maybe_bump_gemini_model  present, called
+    STANDALONE / repo channel       ABSENT -- and byte-identical across
+                                    0.2.494 .. 0.2.497, because it never changed
+
+**The two channels do not run the same code.** The build edition runs the
+repo's real `service.py`. The standalone runs `SLIM_SERVICE`, a template
+written inside `tools/build_ai_subtitles_packages.py`. 0.2.494's migration went
+into service.py and nobody carried it across.
+
+**`changelog.txt`, however, IS shared.** Repo-channel users read "anyone
+already on 3.5 or 3.6 Flash is moved across once, automatically", kept
+`gemini-3.6-flash`, and had no way to know.
+
+Fixed in SLIM_SERVICE, gated on the same `_gemini_model_bump_v2` marker (v1
+would be a no-op for exactly the 3.6 users it must move) and called from
+`main()` beside the builtin-engine rollout already there.
+
+**RULE: a shared changelog over two different services can tell one channel the
+truth and the other a lie.** `tools/test_channels_agree.py` asserts this
+specific promise against BOTH services -- deliberately not a diff of the two,
+because they are SUPPOSED to differ; what must not differ is a promise made in
+shared text. Any future release note that promises BEHAVIOUR rather than
+describing a fix needs a case in that file. Watched fail on the real defect:
+reverting the fix turns seven checks red.
+
+### The patcher audit (task #76) found no second instance
+
+86 patchers examined against the shape that broke `pov_mdblist_like_patcher`
+(family-wide marker gate returning 'unchanged', so a version bump never reaches
+a device that already has an older version). **None found.** 23 of the 59
+version-carrying patchers have an explicit old-marker/revert mechanism; the
+rest either rewrite to a desired state rather than injecting, or have never
+been bumped past v1.
+
+**What remains is latent, not broken:** a patcher with an exact-version gate
+and no old-marker handling will, on its FIRST bump, leave the old injection in
+place and add the new one beside it -- duplicate entries, which is worse than
+being stuck. `pov_build_content_logger_patcher.py` and
+`pov_meta_blank_patcher.py` are the two most exposed (v2 gate, no
+OLD_MARKERS). A guard test for this shape is NOT written yet; writing it well
+means telling injectors from rewriters, which is the hard half.
+
 ## Shipped 2026-08-15: note 597 (0.2.497 / wizard 0.1.46 / quickfix 0.1.542 / build 0.1.110)
 
 Three navigation defects in 596's MDBList menu, reported by the build owner
