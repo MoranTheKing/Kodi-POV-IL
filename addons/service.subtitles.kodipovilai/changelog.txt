@@ -1,3 +1,11 @@
+v0.2.498
+- If you installed the AI subtitles add-on on its own, from the repository,
+  rather than as part of the build: the automatic move to Gemini 3.7 Flash
+  announced in 0.2.494 never reached you. The announcement was shared between
+  both, the change itself was not. Anyone still on 3.5 or 3.6 Flash is moved
+  across once, now, and any other model you chose yourself is left as it is.
+  Nothing to do; it happens at the next start.
+
 v0.2.497
 - Pressing Like or Unlike on a list you found by searching used to say
   "Success" and then re-open the search keyboard. It now simply redraws the
