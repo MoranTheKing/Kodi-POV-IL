@@ -53,7 +53,7 @@ good as the one that reaches nobody.
 HOW BAD IS IT, GIVEN THAT THE HOSTS AUTO-UPDATE
 -----------------------------------------------
 Measured against POV 6.08.13 and Umbrella 6.7.82 -- the current upstream of
-both -- 16 patchers are NEVER-UPGRADES and 6 DOUBLE-INJECT, out of the 35 that
+both -- 15 patchers are NEVER-UPGRADES and 6 DOUBLE-INJECT, out of the 36 that
 have a host here.
 
 That reads worse than it is, and the reason is worth knowing before anyone
@@ -61,22 +61,37 @@ panics at the table below. **Both hosts update themselves on the user's
 device**, POV through repository.kodifitzwell and Umbrella through its own
 repo. A host update REPLACES the files our markers live in, so the marker
 vanishes and the patcher re-applies cleanly at whatever version it is now.
+Measured marker by marker: 20 of the 21 write inside the host add-on.
 
-So for 21 of the 22, a bump that "never upgrades" is a DELAY, not a permanent
+So for those 20, a bump that "never upgrades" is a DELAY, not a permanent
 loss: the fix lands on the host's next release. The window is real -- the
 changelog promises behaviour the device does not have until then -- but it
 closes by itself.
 
-**One does not close, and it is the one to fix first.**
+**That safety net is a DEFAULT, not a guarantee, and it is worth saying so.**
+It holds only while Kodi's add-on auto-update is on. The build ships it on
+(general.addonupdates = 0), but our own wizard offers "never check for
+updates" as a supported choice, and anyone who takes it loses the net for all
+20 at once, silently. Treat self-healing as what usually happens, never as a
+reason to ship a bump that cannot upgrade.
+
+**One has no net at all, and it is the one to fix first.**
 `kodi_playlist_timeout_patcher` writes `userdata/advancedsettings.xml`, which
 is Kodi's own profile data. No add-on update ever touches it. Bump that marker
-and the change reaches nobody who already ran it, permanently. The same trap
-waits for any future patcher that writes outside an add-on directory -- so
-when adding one, check where its marker lands before choosing a gate.
+and the change reaches nobody who already ran it, permanently.
+
+It is the only one AMONG THE 21 BROKEN. It is not the only patcher in the tree
+that writes outside an add-on directory: favourites_xml_patcher
+(profile/favourites.xml) and hebrew_build_ui_patcher (profile/guisettings.xml)
+do too. Neither is at risk today -- they read the live content, or gate on a
+setting we own, rather than on a marker buried in the target -- but refactor
+either toward a marker-in-content gate, which is what nearly everything else
+here does, and the same permanent trap reappears with nothing watching. So:
+before choosing a gate for a new patcher, look at WHERE ITS MARKER LANDS.
 
 WHAT MAKES IT A GUARD RATHER THAN A REPORT
 ------------------------------------------
-Failing on all 22 would make this red on day one and it would be switched off
+Failing on all 21 would make this red on day one and it would be switched off
 within a week. The damage in them is also already done and frozen: a patcher
 sitting at v4 that cannot upgrade is not hurting anyone NEW.
 
@@ -90,10 +105,15 @@ MDBList bug was born.
 A new patcher with a versioned marker must also be pinned, so the shape cannot
 enter the tree unclassified.
 
-The other 24 are UNPROVEN: no stock copy of their host on this machine (the
+The other 23 are UNPROVEN: no stock copy of their host on this machine (the
 skins, the wizard, service.subtitles.All_Subs). That is an admission, not a
 pass -- and on a machine with no host trees at all, nearly everything lands
 there, so the run says PARTIAL rather than pretending.
+
+RETIRED is its own verdict for a marker-gated module nothing calls, and those
+are kept OUT of the broken counts: a patcher reaching no device at all is not
+"the fix lands on fresh installs only", and counting it inflates the risk this
+table describes. Two are retired today.
 
 WHAT COUNTS AS A PATCHER HERE IS DELIBERATELY NOT A NAMING RULE.
 
@@ -110,8 +130,31 @@ from service.py on every boot, rewrites POV's torbox_api.py, gates on an
 exact-match marker, and measures NEVER-UPGRADES. Any module with a versioned
 marker and an ensure_*/heal_* entry point is in scope.
 
-And every entry point gets called, not just ensure_patched -- because the
-service calls every one.
+And every entry point gets called, not just ensure_patched -- but only the
+ones the service really calls. Liveness is asked of the CALL GRAPH, because
+shape is not liveness: fentastic_patcher keeps a retired ensure_patched beside
+its live ensure_unpatched, and calling both applies the patch and strips it in
+the same pass, which read as "the anchor is dead" at a perfectly healthy
+anchor. The reverse error is worse -- a false retirement drops a live patcher
+out of the measured set -- so a wrapper is chased across the whole add-on, and
+a module named as a bare string (service.py dispatches two patchers that way)
+counts as live.
+
+WHAT THIS STILL DOES NOT SEE, on purpose or otherwise:
+
+  * modules gating on an UNVERSIONED marker -- six of them, including
+    pov_repeat_timer_patcher, which fixes a real auth-thread bug. There is no
+    version to bump, so the tripwire has nothing to hold; the risk on their
+    second revision is the same, with no convention nudging anyone toward it.
+  * pov_navigator_patcher, which rewrites rows in POV's navigator.db by
+    comparing them byte-for-byte against a hand-maintained tuple of known old
+    versions -- the enumerated-OLD_MARKERS bug in a different costume. Its
+    entry points are maybe_fix_*, it has no marker string at all, and
+    navigator.db lives in addon_data, so it is not shipped in POV's package
+    and a POV update can never wipe it. LESS of a safety net than
+    kodi_playlist_timeout_patcher, not more.
+  * any patch whose target is created at runtime rather than shipped, since
+    _fresh_home only copies what the stock tree contains.
 
 Run:  python3 tools/test_patcher_upgrade_path.py
       POV_STOCK=... UMBRELLA_STOCK=... python3 tools/...   (widen coverage)
@@ -216,24 +259,21 @@ pin('umbrella_subtitle_match_patcher', 'UPGRADES',
 
 # --- never upgrade: the second run is a no-op, the fix reaches nobody -------
 # Bumping any of these ships a fix that lands on fresh installs only, until the
-# host add-on's next release wipes the marker and the patcher re-applies. Every
-# device keeps the old behaviour until then, and the patcher reports success.
-# Give it a gate that recognises the marker FAMILY -- a prefix test, never an
+# host add-on's next release wipes the marker and the patcher re-applies. Give
+# it a gate that recognises the marker FAMILY -- a prefix test, never an
 # enumerated list -- and revert the old block before re-applying.
 # pov_mdblist_like_patcher is the worked example.
 #
-# kodi_playlist_timeout_patcher is the one with NO safety net: its marker goes
-# into userdata/advancedsettings.xml, which no add-on update ever replaces.
+# kodi_playlist_timeout_patcher is the one here with NO safety net: its marker
+# goes into userdata/advancedsettings.xml, which no add-on update replaces.
 #
 # pov_mdblist_patcher is here on the WORST of its six markers: three upgrade
 # after a fashion and three (MDBL_NONE_GUARD, MDBL_WATCHLIST_ONLY,
-# SORT_RECENT_DEFAULT) reach nobody. Run --pins to see the breakdown.
+# SORT_RECENT_DEFAULT) reach nobody. Run --pins for the breakdown.
 pin('kodi_playlist_timeout_patcher', 'NEVER-UPGRADES',
     'AI_SUBS_PLAYLIST_TIMEOUT_v1')
 pin('pov_bookmark_refresh_patcher', 'NEVER-UPGRADES',
     'AI_SUBS_BOOKMARK_REFRESH_LAST_v1')
-pin('pov_build_content_logger_patcher', 'NEVER-UPGRADES',
-    'AI_SUBS_POV_BUILD_LOGGER_v2')
 pin('pov_favorites_refresh_patcher', 'NEVER-UPGRADES',
     'AI_SUBS_FAV_REFRESH_MANAGE_v1', 'AI_SUBS_FAV_REFRESH_MANAGE_v2',
     'AI_SUBS_FAV_REFRESH_v2', 'AI_SUBS_FAV_REFRESH_v3')
@@ -304,6 +344,20 @@ pin('pov_movie_networks_patcher', 'DOUBLE-STAMP',
     'AI_SUBS_POV_MOVIE_PROVIDERS_v1', 'AI_SUBS_POV_MOVIE_PROVIDERS_v2',
     'AI_SUBS_POV_MOVIE_PROVIDERS_v3')
 
+# --- retired: marker-gated, and called by nothing ---------------------------
+# Kept out of the broken counts on purpose: a patcher that reaches no device is
+# not "the fix lands on fresh installs only", and counting it inflates the risk
+# the table describes. Still PINNED, so re-arming one trips the tripwire and
+# forces a measurement first -- which is when it would start mattering.
+# pov_build_content_logger_patcher's call site exists but its wrapper is
+# commented out of service.py's steps tuple (and it has no compile() gate, so
+# fix that before re-arming). fentastic_dialog_subtitles_patcher is referenced
+# nowhere at all.
+pin('fentastic_dialog_subtitles_patcher', 'RETIRED',
+    'AI_SUBS_DIALOG_HEADER_v1')
+pin('pov_build_content_logger_patcher', 'RETIRED',
+    'AI_SUBS_POV_BUILD_LOGGER_v2')
+
 # --- no host on this machine: pinned so a bump still stops here -------------
 # Not a clean bill of health -- an unmeasured patcher. The skins, the wizard,
 # and service.subtitles.All_Subs (the darksubs_* family). Put the matching
@@ -351,8 +405,6 @@ pin('favourites_personal_tiles_patcher', 'UNPROVEN',
     'AI_SUBS_FAVOURITES_PERSONAL_TILES_SEEN_v2',
     'AI_SUBS_FAVOURITES_PERSONAL_TILES_v1',
     'AI_SUBS_FAVOURITES_PREMIUMIZE_RESEED_v1')
-pin('fentastic_dialog_subtitles_patcher', 'UNPROVEN',
-    'AI_SUBS_DIALOG_HEADER_v1')
 pin('fentastic_patcher', 'UNPROVEN',
     'AI_SUBS_NOTIFICATION_WRAP_v1')
 pin('nox_change_source_patcher', 'UNPROVEN',
@@ -451,18 +503,115 @@ def runtime_markers(stem, extra_path=None):
         shutil.rmtree(home, ignore_errors=True)
 
 
-def entry_points(mod):
-    """Every no-argument ensure_*/heal_* the service calls on this module.
+_SOURCES = None
 
-    NOT just ensure_patched. pov_mdblist_patcher exposes five entry points --
-    ensure_patched, ensure_manager_patched, ensure_sort_default_patched,
-    ensure_lists_sort_recent, heal_mdblist_account -- and service.py calls all
-    five on every boot. Measuring only the first gave the whole module one
-    verdict (DOUBLE-INJECT) derived from one of its five patches, while two of
-    the others are independently NEVER-UPGRADES and were hidden inside a pin
-    that looked like it covered them.
+
+def _addon_sources():
+    """Every .py in the add-on, so liveness can be asked of the call graph."""
+    global _SOURCES
+    if _SOURCES is None:
+        _SOURCES = {}
+        root = os.path.dirname(LIB.rstrip(os.sep))
+        root = os.path.dirname(root)          # .../service.subtitles.kodipovilai
+        for dp, _, fns in os.walk(root):
+            if '__pycache__' in dp:
+                continue
+            for fn in fns:
+                if fn.endswith('.py'):
+                    p = os.path.join(dp, fn)
+                    try:
+                        _SOURCES[p] = open(p, encoding='utf-8').read()
+                    except OSError:
+                        pass
+    return _SOURCES
+
+
+def is_live(stem, name):
+    """Does the add-on actually call <stem>.<name>() on a real boot?
+
+    Shape is not liveness, and assuming it was produced a false alarm and an
+    inflated count:
+
+      * fentastic_patcher defines ensure_patched AND ensure_unpatched. Only
+        ensure_unpatched is called -- 0.2.9's patch caused regressions and
+        0.2.10 reverted it for good. Calling both in one pass applies the
+        patch and then strips it, so no marker lands, and the run reported
+        CLAIMS-PATCHED: "the anchor has moved and the patch is dead". The
+        anchor is fine. Nobody calls it.
+      * pov_build_content_logger_patcher's call site still exists, but the
+        function holding it is commented out of service.py's steps tuple. It
+        runs on no device at all, and it was being counted among the
+        NEVER-UPGRADES as though it reached fresh installs.
+
+    So: find the call, then check the function CONTAINING the call is itself
+    reachable. One level of indirection is all this codebase uses, and going
+    deeper would be a dead-code analyser rather than a test.
+
+    A false RETIRED is worse than the over-counting it replaced -- it drops a
+    LIVE patcher out of the measured set -- and the first cut produced three
+    of them, so both ways it got that wrong are handled and the fallback errs
+    toward "live":
+
+      * the wrapper holding the call is usually called from ANOTHER file
+        (darksubs_patcher is reached through dark_subs_integration), so
+        reachability is asked of the whole add-on, not the one file
+      * service.py dispatches the two reauth patchers by NAME, out of a tuple
+        of strings, so no `stem.entry(` text exists anywhere -- see
+        dispatched_by_name
     """
-    out = []
+    own = os.path.abspath(os.path.join(LIB, stem + '.py'))
+    call = re.compile(r'\b%s\.%s\s*\(' % (re.escape(stem), re.escape(name)))
+    sources = _addon_sources()
+    for path, text in sources.items():
+        if os.path.abspath(path) == own:
+            continue
+        for m in call.finditer(text):
+            line_start = text.rfind('\n', 0, m.start()) + 1
+            if text[line_start:m.start()].lstrip().startswith('#'):
+                continue
+            wrappers = re.findall(r'(?m)^def (\w+)\(', text[:m.start()])
+            if not wrappers:
+                return True                     # called at module level
+            if _reachable(wrappers[-1], sources):
+                return True
+    return False
+
+
+def _reachable(fn_name, sources):
+    """Is `fn_name` mentioned anywhere uncommented besides its own def?"""
+    for text in sources.values():
+        for ln in text.split('\n'):
+            s = ln.strip()
+            if (fn_name in s and not s.startswith('#')
+                    and not s.startswith('def ' + fn_name)):
+                return True
+    return False
+
+
+def dispatched_by_name(stem):
+    """Is the module named as a bare string, i.e. imported dynamically?
+
+    service.py holds ('pov_mdblist_reauth_patcher', 'pov_trakt_reauth_patcher')
+    in a tuple and imports each by name. Matched as a WHOLE quoted string, not
+    a substring: log lines like 'pov_build_content_logger_patcher: ' + status
+    are not a call site, and treating them as one resurrects the one module
+    that really is retired.
+    """
+    pat = re.compile(r'[\'"]%s[\'"]' % re.escape(stem))
+    own = os.path.abspath(os.path.join(LIB, stem + '.py'))
+    return any(pat.search(t) for p, t in _addon_sources().items()
+               if os.path.abspath(p) != own)
+
+
+def entry_points(mod, stem):
+    """Every no-argument ensure_*/heal_* the add-on really calls.
+
+    NOT just ensure_patched: pov_mdblist_patcher exposes five and service.py
+    calls all five on every boot, so measuring the first gave the module a
+    verdict derived from one of its six patches while three others reached
+    nobody. And not every ensure_* either -- see is_live.
+    """
+    out, dead = [], []
     for name in sorted(dir(mod)):
         if not (name.startswith('ensure') or name.startswith('heal')):
             continue
@@ -477,8 +626,13 @@ def entry_points(mod):
                and p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
                for p in sig.parameters.values()):
             continue
-        out.append((name, fn))
-    return out
+        (out if is_live(stem, name) else dead).append((name, fn))
+    if not out and dead and dispatched_by_name(stem):
+        # Imported by name: there is no text saying WHICH entry point is
+        # called, so assume all of them. Measuring a dead one costs a wrong
+        # label; missing a live one costs the whole point of the file.
+        return dead, []
+    return out, dead
 
 
 def patchers():
@@ -575,9 +729,9 @@ def _run(stem, home, extra_path=None):
     sys.modules.pop('resources.lib.' + stem, None)
     try:
         mod = importlib.import_module('resources.lib.' + stem)
-        eps = entry_points(mod)
+        eps, dead = entry_points(mod, stem)
         if not eps:
-            return 'NO_ENTRY'
+            return 'RETIRED' if dead else 'NO_ENTRY'
         out = []
         for name, fn in eps:
             try:
@@ -689,6 +843,12 @@ def simulate_bump(stem, src, override=None):
             f.write(text)
     try:
         s1 = _run(stem, home, extra_path=base)
+        if s1 == 'RETIRED':
+            # Defined, marker-gated, and called by nothing. Pinned so that
+            # re-arming it trips the tripwire and forces a measurement, but
+            # kept out of the broken counts: a patcher that reaches no device
+            # is not "the fix lands on fresh installs only".
+            return 'RETIRED', s1, ''
         snap1 = _snapshot(home)
         blob1 = b''.join(snap1.values())
         landed = sorted(m for m in (literal_markers(text)
@@ -985,6 +1145,28 @@ def main():
     check('SABOTAGE: CLAIMS-PATCHED reads the result, not the function name',
           PINS['fentastic_patcher'][0] == 'UNPROVEN',
           'an entry-point name is being mistaken for a result')
+
+    # Liveness comes from the call graph, not from a function's name.
+    # fentastic_patcher defines ensure_patched (dead -- 0.2.10 reverted that
+    # patch for good) and ensure_unpatched (live). Calling both applies the
+    # patch and immediately strips it, so nothing lands and the run reported
+    # CLAIMS-PATCHED at a perfectly healthy anchor.
+    check('SABOTAGE: a retired entry point is not called',
+          not is_live('fentastic_patcher', 'ensure_patched')
+          and is_live('fentastic_patcher', 'ensure_unpatched'),
+          'liveness is back to trusting the function name')
+
+    # ...and the two ways that first went wrong, both of which produced a
+    # FALSE retirement, which drops a live patcher out of the measured set.
+    check('SABOTAGE: a wrapper called from another file counts as live',
+          is_live('darksubs_patcher', 'ensure_patched'),
+          'reachability is being asked of one file again -- darksubs_patcher '
+          'is reached through dark_subs_integration')
+    check('SABOTAGE: dispatch by module name counts as live',
+          dispatched_by_name('pov_mdblist_reauth_patcher')
+          and not dispatched_by_name('pov_build_content_logger_patcher'),
+          'either the reauth pair went dead, or a log line containing the '
+          'module name is being read as a call site')
 
     if have_pov:
         # the simulation must be able to say NEVER-UPGRADES about a patcher that

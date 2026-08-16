@@ -920,16 +920,17 @@ This section originally read "**None found**", on the strength of reading the
 86 patcher sources. That conclusion is false and every number under it was
 wrong. It was re-done by MEASUREMENT -- patch a pristine host, bump the
 patcher's own marker, run it again against the host it just patched -- against
-**POV 6.08.13 and Umbrella 6.7.82, the current upstream of both**. 22 of the 35
+**POV 6.08.13 and Umbrella 6.7.82, the current upstream of both**. 21 of the 36
 patchers that have a host to measure against fail to upgrade correctly:
 
     UPGRADES        10   a bump reaches devices already carrying the old one
-    NEVER-UPGRADES  16   second run is a no-op: the fix reaches nobody, quietly
+    NEVER-UPGRADES  15   second run is a no-op: the fix reaches nobody, quietly
     DOUBLE-INJECT    6   old block stays live beside the new one
     DOUBLE-STAMP     3   only the marker COMMENT duplicates; the code is fine
-    UNPROVEN        24   no host for them on this machine, so: unmeasured
+    RETIRED          2   marker-gated and called by nothing; not a live risk
+    UNPROVEN        23   no host for them on this machine, so: unmeasured
 
-**Sixteen instances of exactly the MDBList shape, not zero.** They include
+**Fifteen instances of exactly the MDBList shape, not zero.** They include
 `pov_view_mode_patcher` (v4), `pov_favorites_refresh_patcher` (v3) and
 `pov_genre_icons_patcher` (v3) -- each has been bumped two or three times, and
 every one of those bumps reached fresh installs only.
@@ -941,18 +942,33 @@ every one of those bumps reached fresh installs only.
 REPLACES the files our markers live in, so the marker vanishes and the patcher
 re-applies cleanly at whatever version it now is.
 
-Measured, marker by marker: **21 of the 22 land inside the host add-on
+Measured, marker by marker: **20 of the 21 land inside the host add-on
 directory and therefore self-heal on its next release.** For those, a
 "never upgrades" bump is a DELAY, not a permanent loss. The window is real --
 the changelog promises behaviour the device does not have until the host's next
 release -- and it is the same failure the Gemini/standalone bug had, a note
 that is true of some devices and false of others. But it closes by itself.
 
-**One does not close.** `kodi_playlist_timeout_patcher` writes
+**The net is a DEFAULT, not a guarantee.** It holds only while Kodi's add-on
+auto-update is on. The build ships it on (`general.addonupdates = 0`), but our
+own wizard offers "never check for updates" as a supported choice, and anyone
+who takes it loses the net for all 20 at once, silently. Self-healing is what
+usually happens; it is never a reason to ship a bump that cannot upgrade.
+
+**One has no net at all.** `kodi_playlist_timeout_patcher` writes
 `userdata/advancedsettings.xml`, Kodi's own profile data, which no add-on
 update ever touches. Bump that marker and the change reaches nobody who has
 already run it, permanently. It is at v1, so nothing has been lost yet -- it
 must be fixed BEFORE its first bump, not after.
+
+It is the only one among the 21 broken, **not the only one in the tree**:
+`favourites_xml_patcher` (`profile/favourites.xml`) and
+`hebrew_build_ui_patcher` (`profile/guisettings.xml`) also write outside an
+add-on directory. Neither is at risk today -- they read the live content, or
+gate on a setting we own, instead of a marker buried in the target -- but
+refactoring either toward a marker-in-content gate, which is what nearly
+everything else here does, reinstates the permanent trap with nothing
+watching.
 
 **RULE: before choosing a gate for a new patcher, look at where its marker
 lands.** Inside the host add-on, the auto-update is a safety net. In
@@ -989,6 +1005,36 @@ So neither failure mode dominates the other in general. Stuck is far more
 common (16 vs 6) and the harder to notice, because nothing changes and nothing
 is logged. Duplication is louder but only actually breaks anything when the
 injected block appends.
+
+**Three more blind spots, each found only because the previous fix exposed it.
+All three were the same mistake: deciding what to look at by how it is NAMED.**
+
+  * **Liveness inferred from a function's name.** `fentastic_patcher` keeps a
+    RETIRED `ensure_patched` beside its live `ensure_unpatched` (0.2.10
+    reverted that patch for good). Calling both applies the patch and strips
+    it in the same pass, so nothing lands, and the audit reported "the anchor
+    is dead" at a perfectly healthy anchor. And
+    `pov_build_content_logger_patcher`, whose wrapper is commented out of
+    `service.py`'s steps tuple, was being counted among the NEVER-UPGRADES as
+    though it reached fresh installs -- it reaches nobody. Liveness is asked
+    of the call graph now, and RETIRED is its own verdict, outside the counts.
+  * **The correction had the same disease.** The first liveness check looked
+    for the call's wrapper in ONE file, and could not see `service.py`
+    dispatching two patchers out of a tuple of module-name STRINGS. It
+    declared three live patchers retired -- and a false retirement is worse
+    than the over-counting it replaced, because it drops a live patcher out of
+    the measured set entirely.
+  * **A module still outside the net, and it is the worst-placed one found so
+    far.** `pov_navigator_patcher` rewrites rows in POV's `navigator.db` by
+    comparing them **byte-for-byte against a hand-maintained tuple of known
+    old versions** -- the enumerated-`OLD_MARKERS` bug wearing different
+    clothes. It is invisible twice over: its entry points are `maybe_fix_*`,
+    and it has no marker string at all. And `navigator.db` lives in
+    `addon_data`, so POV never ships it and a POV update can never wipe it:
+    **less** of a safety net than `kodi_playlist_timeout_patcher`, not more.
+    Also unseen: six patchers gating on an UNVERSIONED marker (including
+    `pov_repeat_timer_patcher`, which fixes a real auth-thread bug) -- there
+    is no version to bump, so the tripwire has nothing to hold.
 
 **RULE: for a patcher, "I read it and it looks fine" is not a finding. Run it
 twice.** The second run is the only thing that knows what a device already
