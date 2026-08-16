@@ -921,15 +921,15 @@ This section originally read "**None found**", on the strength of reading the
 wrong. It was re-done by MEASUREMENT -- patch a pristine host, bump the
 patcher's own marker, run it again against the host it just patched -- against
 **POV 6.08.13 and Umbrella 6.7.82, the current upstream of both**. 21 of the 36
-patchers that can be measured here fail to upgrade correctly (80 files
+patchers that can be measured here fail to upgrade correctly (81 files
 carry a versioned marker in all):
 
     UPGRADES         9   a bump reaches devices already carrying the old one
-    NEVER-UPGRADES  15   second run is a no-op: the fix reaches nobody, quietly
+    NEVER-UPGRADES  17   second run is a no-op: the fix reaches nobody, quietly
     DOUBLE-INJECT    6   old block stays live beside the new one
     DOUBLE-STAMP     6   only the marker COMMENT duplicates; the code is fine
     RETIRED          2   marker-gated and called by nothing; not a live risk
-    UNPROVEN        42   no host here, or nothing here can call it
+    UNPROVEN        41   no host here, or nothing here can call it
 
 **Fifteen instances of exactly the MDBList shape, not zero.** They include
 `pov_view_mode_patcher` (v4), `pov_favorites_refresh_patcher` (v3) and
@@ -1159,6 +1159,35 @@ more shapes, all live:
     hand-maintained-list disease, one round after diagnosing it. The host set
     is **derived from the tree** now and the check compares against that.
 
+**A ninth, and it made two whole rounds of work decorative.** `patchers()`
+discovered markers with all four rules; `simulate_bump()` built its candidate
+set from **two**. So every marker found by the round-7 settings-pair rule and
+the round-8 version-constant rule was discovered, pinned — and then never
+simulated. 26 markers across 14 modules, **including `CACHE_RTL_FIX_VERSION`**,
+the example used to justify writing the pair rule in the first place. Injecting
+the textbook MDBList regression into one of those gates produced a verdict
+byte-identical to the healthy code.
+
+The sabotage case that was supposed to cover it said, in its own failure
+message, *"the pair shape is pinned but cannot be simulated"* — an accidental
+description of the live bug. It asserted on a string utility and never ran a
+simulation. Fixed by making one `all_markers()` the only way to ask, so the two
+lists cannot disagree again, and the new sabotage asserts an end-to-end
+**verdict** instead of a helper's return value.
+
+**The payoff was immediate: two modules flipped to NEVER-UPGRADES** once their
+markers were actually simulated — real defects that had been invisible.
+
+**Also found: a version reachable only through a helper call.**
+`pov_scraper_settings_patcher` writes `set_setting(TUNE_FLAG, _tune_version())`,
+and the hand-maintained half lives inside that helper as `_TUNE_BASE = 'v3'`.
+The module was invisible entirely — not pinned, not even unproven — and it has
+**already shipped this exact bug once**, caught only by a reviewer. Resolution
+now follows one hop into a local helper rather than adding another naming rule.
+
+**And a count corrected: "six" modules gating on an unversioned marker is 23.**
+That number stood for four rounds, wrong by nearly 4x, understating the gap.
+
 **RULE: for a patcher, "I read it and it looks fine" is not a finding. Run it
 twice.** The second run is the only thing that knows what a device already
 carrying the old version receives.
@@ -1238,7 +1267,7 @@ ends `ALL PASS -- PARTIAL: n of m verdicts unverified here`. Related trap:
 broken, and pasting that in is a silent downgrade -- it now prints a
 DO-NOT-PASTE banner above any such line.
 
-`UNPROVEN` is not a clean bill of health, it is an unmeasured patcher: 42 of
+`UNPROVEN` is not a clean bill of health, it is an unmeasured patcher: 41 of
 them -- the skins, the wizard, the All_Subs add-on, plus everything nothing
 here can call -- because this machine has
 no stock copy of those hosts. Point `POV_STOCK` / `UMBRELLA_STOCK` (or drop a

@@ -200,10 +200,14 @@ counts as live.
 
 WHAT THIS STILL DOES NOT SEE, on purpose or otherwise:
 
-  * modules gating on an UNVERSIONED marker -- six of them, including
-    pov_repeat_timer_patcher, which fixes a real auth-thread bug. There is no
-    version to bump, so the tripwire has nothing to hold; the risk on their
-    second revision is the same, with no convention nudging anyone toward it.
+  * modules gating on an UNVERSIONED marker -- 23 of them carry an
+    ensure_*/heal_* entry point and produce no discoverable marker at all,
+    among them pov_repeat_timer_patcher (which fixes a real auth-thread bug),
+    idanplus_channels_patcher and favourites_xml_patcher. There is no version
+    to bump, so the tripwire has nothing to hold; the risk on their second
+    revision is the same, with no convention nudging anyone toward it. This
+    said "six" for four rounds, which was wrong by nearly 4x and understated
+    the exposure.
   * pov_navigator_patcher, which rewrites rows in POV's navigator.db by
     comparing them byte-for-byte against a hand-maintained tuple of known old
     versions -- the enumerated-OLD_MARKERS bug in a different costume. Its
@@ -347,6 +351,11 @@ pin('umbrella_subtitle_match_patcher', 'UPGRADES',
 # pov_mdblist_patcher is here on the WORST of its six markers: three upgrade
 # after a fashion and three (MDBL_NONE_GUARD, MDBL_WATCHLIST_ONLY,
 # SORT_RECENT_DEFAULT) reach nobody. Run --pins for the breakdown.
+pin('build_icons_patcher', 'NEVER-UPGRADES',
+    '_tiles_refresh_gen=2')
+pin('hebrew_build_ui_patcher', 'NEVER-UPGRADES',
+    '_PREFS_SEED_VERSION=v1', '_subtitle_outline_migration_v1',
+    '_ui_prefs_seeded=v1')
 pin('kodi_playlist_timeout_patcher', 'NEVER-UPGRADES',
     'AI_SUBS_PLAYLIST_TIMEOUT_v1')
 pin('pov_bookmark_refresh_patcher', 'NEVER-UPGRADES',
@@ -471,8 +480,6 @@ pin('af3_search_pov_patcher', 'UNPROVEN',
     'AI_SUBS_POV_SEARCH_v3_rollback_pov')
 pin('all_subs_samefile_patcher', 'UNPROVEN',
     'AI_SUBS_ALL_SUBS_SAMEFILE_v1')
-pin('build_icons_patcher', 'UNPROVEN',
-    '_tiles_refresh_gen=2')
 pin('dark_subs_integration', 'UNPROVEN',
     '_darksubs_autoenable_done=1', '_force_ai_autoenable_done=1')
 pin('darksubs_download_sub_patcher', 'UNPROVEN',
@@ -513,9 +520,6 @@ pin('fentastic_patcher', 'UNPROVEN',
     'AI_SUBS_NOTIFICATION_WRAP_v1')
 pin('fentastic_widget_patcher', 'UNPROVEN',
     '_WIDGET_SEED_VERSION=v1', '_fen_widgets_seeded=v1')
-pin('hebrew_build_ui_patcher', 'UNPROVEN',
-    '_PREFS_SEED_VERSION=v1', '_subtitle_outline_migration_v1',
-    '_ui_prefs_seeded=v1')
 pin('kodi_utils', 'UNPROVEN',
     '_embedded_mode_v1')
 pin('nox_change_source_patcher', 'UNPROVEN',
@@ -528,6 +532,8 @@ pin('pov_favorites_diagnostic', 'UNPROVEN',
     'DIAG_VERSION=4')
 pin('pov_genre_folders_reseed_patcher', 'UNPROVEN',
     'RESEED_VERSION=v1', '_pov_genre_folders_reseed=v1')
+pin('pov_scraper_settings_patcher', 'UNPROVEN',
+    '_TUNE_BASE=v3')
 pin('pov_seasons_view_seed', 'UNPROVEN',
     '_pov_seasons_view_v1')
 pin('pov_series_networks_reseed_patcher', 'UNPROVEN',
@@ -704,6 +710,25 @@ def pair_markers(src):
         if name not in ('set_setting', 'setSetting'):
             continue
         key, val = resolve(node.args[0]), resolve(node.args[1])
+        if key and val is None:
+            # The value comes out of a local helper, so no literal for it
+            # exists anywhere: pov_scraper_settings_patcher writes
+            # set_setting(TUNE_FLAG, _tune_version()), and _tune_version
+            # returns '%s-%s' % (_TUNE_BASE, md5(...)). The hand-maintained
+            # half is _TUNE_BASE, and its own comment says a stale one means
+            # "every device that had run the old value would keep it forever"
+            # -- this module has ALREADY shipped that bug once, caught only by
+            # a reviewer. So follow one hop: any module-level string constant
+            # the helper touches is part of that version.
+            fn = node.args[1]
+            if isinstance(fn, ast.Call) and isinstance(fn.func, ast.Name):
+                for d in ast.walk(tree):
+                    if isinstance(d, ast.FunctionDef) and d.name == fn.func.id:
+                        for n in ast.walk(d):
+                            if isinstance(n, ast.Name) and n.id in consts \
+                                    and re.search(r'\d', consts[n.id]):
+                                out.add('%s=%s' % (n.id, consts[n.id]))
+            continue
         if not key or not val or not re.search(r'\d', val):
             continue
         # The key must be one of OUR one-shot flags. Without this, ordinary
@@ -719,6 +744,24 @@ def pair_markers(src):
             continue
         out.add('%s=%s' % (key, val))
     return out
+
+
+def all_markers(src):
+    """Every marker in a source, by all four rules at once.
+
+    ONE function, because there were two lists and they silently disagreed:
+    patchers() discovered with all four detectors while simulate_bump built
+    its candidate set from literal+runtime only. So every marker found by the
+    round-7 settings-pair rule and the round-8 version-constant rule was
+    pinned and then never simulated -- 26 markers across 14 modules, including
+    CACHE_RTL_FIX_VERSION, the very example used to justify writing the pair
+    rule. Injecting the textbook MDBList regression into one of those gates
+    produced a byte-identical verdict to the healthy code.
+
+    The sabotage case for it even said so: "the pair shape is pinned but
+    cannot be simulated". It was asserting on a string utility, not on a run.
+    """
+    return literal_markers(src) | pair_markers(src) | version_constants(src)
 
 
 def version_constants(src):
@@ -1024,8 +1067,7 @@ def patchers():
         src = open(path, encoding='utf-8').read()
         runnable = in_lib and bool(
             re.search(r'(?m)^def (ensure|heal)\w*\(', src))
-        marks = (literal_markers(src) | pair_markers(src)
-                 | version_constants(src))
+        marks = all_markers(src)
         if runnable:
             marks |= runtime_markers(stem)
         if not (in_lib or is_service):
@@ -1327,7 +1369,7 @@ def simulate_bump(stem, src, override=None):
         blob1 = b''.join(snap1.values())
         # bump_marker(m) must be able to move it, or the per-marker loop
         # below would ask has() about None.
-        landed = sorted(m for m in (literal_markers(text)
+        landed = sorted(m for m in (all_markers(text)
                                     | runtime_markers(stem, base))
                         if has(blob1, m) and bump_marker(m))
         if not landed:
@@ -1419,8 +1461,8 @@ def simulate_bump(stem, src, override=None):
         # nominally gates, which really uses an unversioned sentinel. Say so,
         # rather than letting a module look covered because its OTHER markers
         # were measured.
-        ghosts = [m for m in (literal_markers(text) | runtime_markers(stem,
-                                                                     base))
+        ghosts = [m for m in (all_markers(text)
+                              | runtime_markers(stem, base))
                   if m not in landed]
         if ghosts:
             s2 = '%s [never landed: %s]' % (s2, ' '.join(sorted(ghosts)))
@@ -1733,7 +1775,28 @@ def main():
     check('SABOTAGE: a split pair can be bumped',
           bump_marker('_rtl_fix_done=7') == '_rtl_fix_done=8'
           and bump_marker('_fen_widgets_seeded=v1') == '_fen_widgets_seeded=v2',
-          'the pair shape is pinned but cannot be simulated')
+          'bump_marker cannot move the pair shape')
+
+    # ...and it has to be SIMULATED, not merely pinned. That is a different
+    # claim, and for two rounds it was false: patchers() discovered with all
+    # four rules while simulate_bump built its candidates from two, so every
+    # pair and version-constant marker was pinned and never run. The check
+    # above did not notice, because it asserts on a string utility.
+    # hebrew_build_ui_patcher's verdict is the end-to-end proof: it can only
+    # be NEVER-UPGRADES if its _ui_prefs_seeded=v1 pair marker was actually
+    # landed, bumped and re-measured.
+    check('SABOTAGE: a pair marker reaches the simulation, not just the pin',
+          PINS['hebrew_build_ui_patcher'][0] == 'NEVER-UPGRADES',
+          'the module is UNPROVEN again -- its pair marker is pinned but the '
+          'dynamic layer never sees it')
+
+    # A version that only exists inside a local helper. pov_scraper_settings_
+    # patcher writes set_setting(TUNE_FLAG, _tune_version()), and its
+    # hand-maintained half has already shipped this exact bug once.
+    check('SABOTAGE: a version behind a helper call is found',
+          '_TUNE_BASE=v3' in PINS.get('pov_scraper_settings_patcher',
+                                      ('', ()))[1],
+          'the module is invisible again -- not pinned, not even unproven')
 
     # Discovery must not stop at resources/lib with an entry point. service.py
     # holds sixteen versioned settings markers gating boot migrations, and
