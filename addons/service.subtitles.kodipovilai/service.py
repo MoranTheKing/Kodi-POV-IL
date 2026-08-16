@@ -171,6 +171,23 @@ def _addon_version():
         return ''
 
 
+def _without(stamps, skin):
+    """The `<skin>=<version>` stamps that are not this skin's, blanks dropped."""
+    return [s for s in stamps if s and not s.startswith(skin + '=')]
+
+
+def _walk_all(roots):
+    """os.walk over several roots in turn, skipping the ones that are not
+    there. Written out because `break` inside the caller's nested loops has to
+    mean "stop scanning entirely", and chaining generators is the only shape
+    that keeps that true across two roots."""
+    for root in roots:
+        if not os.path.isdir(root):
+            continue
+        for item in os.walk(root):
+            yield item
+
+
 def _other_addon_version(addon_id):
     """Version of SOME OTHER installed add-on, '' if it is not installed.
 
@@ -4608,10 +4625,18 @@ def _maybe_enable_osd_autoclose():
                       or '').split(',')
         if stamp in no_feature:
             return
-        root = xbmcvfs.translatePath('special://home/addons/' + skin + '/')
+        # Both roots, the same pair pov_reload and the wizard already walk: a
+        # skin shipped INSIDE Kodi lives under special://xbmc, not
+        # special://home, and looking in one place only means such a skin can
+        # never be detected on any boot. Estuary happens not to have the
+        # feature, so today this costs nothing -- but "we never looked" and
+        # "it isn't there" were the same answer, which is how the whole bug
+        # started.
+        roots = [xbmcvfs.translatePath(r + skin + '/')
+                 for r in ('special://home/addons/', 'special://xbmc/addons/')]
         supports = False
         scanned = 0
-        for base, dirs, files in os.walk(root):
+        for base, dirs, files in _walk_all(roots):
             # A skin's art outweighs its XML by orders of magnitude and holds
             # none of it. Pruning these keeps the walk to the markup, which
             # matters because a skin WITHOUT the feature never gets a mark and
@@ -4635,18 +4660,27 @@ def _maybe_enable_osd_autoclose():
                 break
         if not supports:
             # Only cache a negative we actually MEASURED. Zero files read means
-            # the walk found nothing to read, not that the skin lacks the
-            # feature -- special://home/addons is the wrong place for a skin
-            # bundled with Kodi itself, which lives under special://xbmc. A
-            # cached "no" from an empty walk would be permanent for that skin
-            # version; leaving it uncached only costs another look next start.
+            # the walk found nothing to read -- a skin installed somewhere
+            # neither root covers, or one we could not open -- not that the
+            # skin lacks the feature. A cached "no" from an empty walk would
+            # be permanent for that skin version; leaving it uncached only
+            # costs another look on the next start.
             if scanned:
-                # Capped, so the list cannot grow without bound on a device
-                # that has tried many skins.
-                no_feature = [s for s in no_feature if s][-9:] + [stamp]
-                kodi_utils.set_setting('_osd_autoclose_nofeature',
-                                       ','.join(no_feature))
+                # Capped, and a stale stamp for this same skin is dropped, so
+                # a skin that is updated often does not fill the list with its
+                # own past versions.
+                kodi_utils.set_setting(
+                    '_osd_autoclose_nofeature',
+                    ','.join(_without(no_feature, skin)[-9:] + [stamp]))
             return  # this skin has no such feature -- nothing to turn on
+        if _without(no_feature, skin) != [s for s in no_feature if s]:
+            # This skin was recorded as featureless and now HAS the feature --
+            # a skin update added it. Drop the obsolete entry instead of
+            # letting it age out: the cache holds ten, and stale entries push
+            # live ones out, which costs the rescans the cache exists to
+            # prevent.
+            kodi_utils.set_setting('_osd_autoclose_nofeature',
+                                   ','.join(_without(no_feature, skin)))
         xbmc.executebuiltin('Skin.SetBool(OSDAutoClose)')
         xbmc.executebuiltin('Skin.SetString(OSDAutoCloseTime,4)')
         # executebuiltin queues; the read below can otherwise race the write

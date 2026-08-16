@@ -341,10 +341,31 @@ p3 = os.path.join(home3, 'addons', 'plugin.video.umbrella', 'resources',
                   'lib', 'modules', 'mdblist.py')
 with open(p3, 'w', encoding='utf-8') as f:
     f.write(broken)
+# A damaged table on this same install. The repair must not depend on our
+# line landing in Umbrella's source -- it clears three keys in Umbrella's own
+# database and is independent of the patch.
+db3_dir = os.path.join(home3, 'userdata', 'addon_data',
+                       'plugin.video.umbrella')
+os.makedirs(db3_dir)
+conn = sqlite3.connect(os.path.join(db3_dir, 'mdbSync.db'))
+conn.execute('CREATE TABLE service (setting TEXT, value TEXT, '
+             'UNIQUE(setting))')
+for k in CLEARED:
+    conn.execute('INSERT INTO service VALUES (?, ?)', (k, 'stale'))
+conn.commit()
+conn.close()
 mod3 = load(home3)
 check('SABOTAGE: a moved anchor is refused, not guessed at',
       mod3.ensure_patched() == 'unmatched',
       'the patcher would edit a file whose shape it no longer recognises')
+conn = sqlite3.connect(os.path.join(db3_dir, 'mdbSync.db'))
+left3 = {r[0] for r in conn.execute('SELECT setting FROM service')}
+conn.close()
+check('a damaged table is still repaired when the anchor no longer matches',
+      not [k for k in CLEARED if k in left3],
+      'this is the user who needs the repair MOST -- the forward fix cannot '
+      'reach them either -- and hanging it off the success path left them '
+      'with a broken table forever')
 
 print()
 print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')
