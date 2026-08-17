@@ -1,3 +1,20 @@
+v0.2.500
+- The update itself no longer rewrites the whole build to change a handful of
+  files. Every quick update was laying down all 1,969 files, 1,330 of them
+  belonging to the skin that was on screen at that moment -- and on some
+  devices Kodi force-closed partway through, over and over, before the update
+  could finish. It now writes only the files that actually differ from what is
+  already on the box: five, on a typical update, instead of 1,969. A device
+  that is several updates behind still receives everything it is missing --
+  the comparison is against that device's own files, so the further behind it
+  is, the more it gets.
+- POV's "Reuse Language Invoker SETTING/XML mismatch" message no longer
+  appears. POV updates itself and its update restores a setting we deliberately
+  turn off, so POV noticed the disagreement and asked to reload the profile.
+  We were already repairing it -- nine seconds too late, every time. The repair
+  now runs first, before POV looks. Pressing OK on that message was always
+  harmless.
+
 v0.2.499
 - The player bar now hides itself on every skin that can do it, not only on
   FENtastic. The setting that closes it after a few idle seconds was being
