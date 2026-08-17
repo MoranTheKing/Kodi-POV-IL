@@ -22,6 +22,7 @@ import xbmcgui
 
 import os
 import sys
+import zlib
 try:  # Python 3
     import zipfile
 except ImportError:  # Python 2
@@ -141,6 +142,58 @@ def preserve_widget_layout(_out, file, ignore):
             and os.path.isfile(os.path.join(_out, *file)))
 
 
+def already_on_disk(item, _out):
+    """True when the file on disk is byte-for-byte what the archive holds.
+
+    WHY THIS EXISTS. A quickfix is a complete snapshot of the build, so every
+    update rewrote all 1,969 members -- 1,330 of them (23.6 MB) inside
+    addons/skin.fentastic, the skin that is LOADED AND RENDERING the progress
+    dialog while its own files are replaced underneath it. Across five
+    consecutive releases the skin changed in NONE of them: a typical release
+    moves 2-6 files out of 1,968. We were writing 44 MB to change five files,
+    and Kodi was force-closing partway through, over and over, on real
+    devices. Not writing a file that is already correct removes that window
+    entirely rather than making it smaller.
+
+    HOW IT COMPARES. Size, then the archive's own CRC32 of the UNCOMPRESSED
+    data, which zipfile reads from the central directory -- so nothing is
+    decompressed to make this decision. Size alone would be worthless here:
+    the failure mode that matters is a file whose content changed while its
+    length did not, and the CRC is what catches it.
+
+    IT IS DELIBERATELY ONE-SIDED. Every uncertainty -- a missing file, an
+    unreadable one, a directory entry, any exception at all -- answers False,
+    and the member is written. A file is skipped ONLY when its bytes are
+    already exactly right. That is what makes it safe for a device several
+    updates behind: it compares against THAT DEVICE'S disk, not against the
+    previous release, so anything it is missing differs and is written.
+    """
+    name = item.filename
+    path = os.path.join(_out, *[p for p in name.split('/') if p])
+    try:
+        if name.endswith('/'):
+            # A directory entry that already IS a directory. Extracting it
+            # only re-asserts that, so skipping is exactly equivalent -- and
+            # without this the summary below would report 198 phantom
+            # "writes" on an update that changed five files. If something
+            # else occupies the path, say False and let extract report it.
+            return os.path.isdir(path)
+        if not os.path.isfile(path):
+            return False
+        if os.path.getsize(path) != item.file_size:
+            return False
+        crc = 0
+        with open(path, 'rb') as fh:
+            while True:
+                chunk = fh.read(262144)
+                if not chunk:
+                    break
+                crc = zlib.crc32(chunk, crc)
+        return (crc & 0xffffffff) == (item.CRC & 0xffffffff)
+    except Exception:
+        return False
+
+
 def all(_in, _out, ignore=None, title=None, progress_dialog_bg=False):
     #####################################################
     # KODI-RD-IL
@@ -163,6 +216,9 @@ def all_with_progress(_in, _out, dp, ignore, title, progress_dialog_bg):
     update = 0
     size = 0
     excludes = []
+    unchanged = 0
+    written = 0
+    last_prog = -1
 
     try:
         zin = zipfile.ZipFile(_in,  'r', allowZip64=True)
@@ -250,9 +306,15 @@ def all_with_progress(_in, _out, dp, ignore, title, progress_dialog_bg):
             skip = True
         if skip:
             logging.log("Skipping: {0}".format(item.filename))
+        elif already_on_disk(item, _out):
+            # Deliberately NOT logged per file. At ~1,960 identical members an
+            # update it would be the log, and the one line that matters -- the
+            # summary below -- would be unfindable inside it.
+            unchanged += 1
         else:
             try:
                 zin.extract(item, _out)
+                written += 1
             except Exception as e:
                 errormsg = "[COLOR {0}]File:[/COLOR] [COLOR {1}]{2}[/COLOR]\n".format(CONFIG.COLOR2,
                                                                                       CONFIG.COLOR1,
@@ -269,13 +331,22 @@ def all_with_progress(_in, _out, dp, ignore, title, progress_dialog_bg):
                 error += errormsg
                 logging.log('Error Extracting: {0}({1})'.format(item.filename, str(e)), level=xbmc.LOGERROR)
                 pass
-        dp.update(prog, line1 + '\n' + line2 + '\n' + line3)
+        # Redraw only when the percentage actually moves: at most 101 updates
+        # instead of one per member. Every one of those is a full dialog
+        # render BY THE SKIN whose files this loop is replacing, and now that
+        # most members are skipped the loop runs fast enough to issue them
+        # faster than the GUI can service them.
+        if prog != last_prog or count == int(nFiles):
+            last_prog = prog
+            dp.update(prog, line1 + '\n' + line2 + '\n' + line3)
     #####################################################
     # KODI-RD-IL
+        # Cancellation is still read every iteration -- it is cheap, and
+        # throttling it would make Cancel feel broken.
         if not progress_dialog_bg:
             if dp.iscanceled():
                 break
-            
+
     if not progress_dialog_bg:
         if dp.iscanceled():
             dp.close()
@@ -284,7 +355,16 @@ def all_with_progress(_in, _out, dp, ignore, title, progress_dialog_bg):
             sys.exit()
     #####################################################
         
-    # KODI_RD_ISRAEL    
+    # The one line worth finding in the log afterwards. "written" is the whole
+    # story of an update: it should be a handful on a current device and large
+    # on one that is several releases behind, and if it is ever large on a
+    # device that just updated, this comparison has stopped working.
+    logging.log('[EXTRACT] {0}: {1} written, {2} already current, {3} skipped '
+                'by rule, {4} error(s)'.format(
+                    title, written, unchanged,
+                    count - written - unchanged - errors, errors))
+
+    # KODI_RD_ISRAEL
     install.restore_fentasticdata()
-    
+
     return prog, errors, error
