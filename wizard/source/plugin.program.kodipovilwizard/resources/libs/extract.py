@@ -169,7 +169,17 @@ def already_on_disk(item, _out):
     previous release, so anything it is missing differs and is written.
     """
     name = item.filename
-    path = os.path.join(_out, *[p for p in name.split('/') if p])
+    # The SAME sanitisation zipfile.extract performs on the member name --
+    # it drops empty, '.' and '..' components before joining. Filtering only
+    # the empty ones meant a member containing '..' was CHECKED at one path
+    # and WRITTEN at another, so a stray file sitting at the unsanitised path
+    # could mark it "already correct" and the real target never got written.
+    # No archive we build has such a name (all of dist/ was scanned: zero),
+    # but extract.all also serves restore-from-backup and install-from-URL,
+    # where the zip is not ours.
+    parts = [p for p in name.split('/')
+             if p not in ('', os.path.curdir, os.path.pardir)]
+    path = os.path.join(_out, *parts) if parts else _out
     try:
         if name.endswith('/'):
             # A directory entry that already IS a directory. Extracting it
@@ -243,7 +253,18 @@ def all_with_progress(_in, _out, dp, ignore, title, progress_dialog_bg):
     title = title if title else zipit[-1].replace('.zip', '')
 
     for item in zin.infolist():
-        
+
+        # Counted BEFORE the ASCII gate, not after. `nFiles` counts every
+        # member, so a member rejected here used to advance nFiles without
+        # advancing count -- harmless while the dialog was redrawn every
+        # iteration, but the redraw is now gated on the percentage moving and
+        # on `count == nFiles` for the final frame, and that equality could
+        # then never be reached: the bar stopped at 98% and stayed there.
+        # dist/Kodi-POV-IL-AF3-skin-pack.zip really does carry six non-ASCII
+        # names. Counting them also puts them in the summary's "skipped by
+        # rule", which is what they are.
+        count += 1
+
         try:
             str(item.filename).encode('ascii')
         except UnicodeDecodeError:
@@ -252,8 +273,7 @@ def all_with_progress(_in, _out, dp, ignore, title, progress_dialog_bg):
         except UnicodeEncodeError:
             logging.log("[ASCII Check] Illegal character found in file: {0}".format(item.filename))
             continue
-            
-        count += 1
+
         prog = int(count / nFiles * 100)
         size += item.file_size
         file = str(item.filename).split('/')
