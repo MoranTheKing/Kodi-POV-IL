@@ -221,6 +221,27 @@ def _run_build_startup_repairs():
     _publish_repairs_state('')
 
     steps = (
+        # BEFORE EVERYTHING, because it is racing a clock we do not control.
+        # POV runs its own ReuseLanguageInvokerCheck a few seconds into its
+        # service start, and if the setting and addon.xml disagree it throws
+        # an English "SETTING/XML mismatch" dialog at the user and offers to
+        # reload the profile. They disagree after any POV self-update: POV
+        # ships addon.xml with the flag ON, ours is the setting that says OFF,
+        # and POV is not in our quickfix at all -- it updates itself from
+        # repository.kodifitzwell, so its own addon.xml comes back.
+        #
+        # Measured on a reporter's device (2026-08-17):
+        #     21:00:39.430  our repair pass starts
+        #     21:00:59.399  POV's ReuseLanguageInvokerCheck   <- the dialog
+        #     21:01:08.934  this guard finally writes, 9.4s too late
+        # From ~29 steps in, it lost the race every time. From here it writes
+        # around 21:00:39, about 19 seconds ahead of POV's check, and POV
+        # finds the two halves already in agreement with nothing to say.
+        #
+        # This can only ever turn the flag OFF -- it is the fix for the Arctic
+        # Fuse 3 native crash, and running it EARLIER applies that fix sooner.
+        # There is no ordering in which it turns the flag back on.
+        _maybe_patch_pov_language_invoker,
         # FIRST: heal Idan Plus before the user can navigate to it (a corrupt
         # displayChannels.json otherwise crashes every channel load). Cheap,
         # self-contained, and independent of the POV/skin repairs below.
@@ -259,7 +280,10 @@ def _run_build_startup_repairs():
         _maybe_quiet_update_nags,
         _maybe_patch_pov_repeat_timer,
         _maybe_patch_pov_widget_crash_guard,
-        _maybe_patch_pov_language_invoker,
+        # _maybe_patch_pov_language_invoker used to sit here. Moved to the
+        # very front of this tuple -- see the note there. It is idempotent
+        # ('already_off' writes nothing), so the move is a reordering, not a
+        # second run.
         _maybe_patch_pov_favorites_refresh,
         _maybe_patch_pov_bookmark_refresh,
         _maybe_patch_umbrella_language,
