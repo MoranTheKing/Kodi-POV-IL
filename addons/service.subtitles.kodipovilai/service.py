@@ -145,6 +145,9 @@ def _ensure_build_marker():
 REPAIRS_DONE_PROPERTY = 'kodipovil_startup_repairs_done'
 
 
+_REPAIRS_STARTED = None
+
+
 def _publish_repairs_state(value):
     """Announce the repair pass to anyone waiting on it.
 
@@ -220,6 +223,13 @@ def _run_build_startup_repairs():
     # touched anything.
     _publish_repairs_state('')
 
+    # Stamped so the invoker guard can report how far ahead of POV's own
+    # check it actually got. The 19-second margin this ordering relies on was
+    # measured on ONE device; this is what turns any future field log into a
+    # second measurement instead of an assumption.
+    global _REPAIRS_STARTED
+    _REPAIRS_STARTED = time.time()
+
     steps = (
         # BEFORE EVERYTHING, because it is racing a clock we do not control.
         # POV runs its own ReuseLanguageInvokerCheck a few seconds into its
@@ -235,8 +245,13 @@ def _run_build_startup_repairs():
         #     21:00:59.399  POV's ReuseLanguageInvokerCheck   <- the dialog
         #     21:01:08.934  this guard finally writes, 9.4s too late
         # From ~29 steps in, it lost the race every time. From here it writes
-        # around 21:00:39, about 19 seconds ahead of POV's check, and POV
-        # finds the two halves already in agreement with nothing to say.
+        # around 21:00:39, about 19 seconds ahead of POV's check, so in the
+        # common case POV finds the two halves already in agreement. It is a
+        # WIDENED MARGIN, not a synchronisation: this pass itself starts after
+        # ~35 other calls in main(), one of which (_ensure_pov_enabled) can
+        # retry for up to 10 seconds, so a slow enough device can still lose.
+        # The guard logs how far ahead it got, so a field log can say whether
+        # the margin holds rather than leaving it assumed.
         #
         # This can only ever turn the flag OFF -- it is the fix for the Arctic
         # Fuse 3 native crash, and running it EARLIER applies that fix sooner.
@@ -2399,12 +2414,20 @@ def _maybe_patch_pov_language_invoker():
         return
     try:
         status = pov_language_invoker_guard.ensure_patched()
+        try:
+            _since = ('%.2fs into the repair pass'
+                      % (time.time() - _REPAIRS_STARTED)
+                      if _REPAIRS_STARTED else 'pass start not stamped')
+        except Exception:
+            _since = 'unknown'
         if status == 'patched':
             kodi_utils.log(
                 'pov_language_invoker_guard: reuse-language-invoker turned '
-                'OFF (setting + addon.xml) -- prevents the concurrent-widget '
-                'native crash; takes effect at the next Kodi start',
-                level='INFO')
+                'OFF (setting + addon.xml) at %s -- prevents the '
+                'concurrent-widget native crash; takes effect at the next '
+                'Kodi start. POV runs its own check a few seconds into its '
+                'service start, so this number is the margin we beat it by'
+                % _since, level='INFO')
         elif status == 'setting_only':
             kodi_utils.log(
                 'pov_language_invoker_guard: setting written, addon.xml was '
