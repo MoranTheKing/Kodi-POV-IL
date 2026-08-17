@@ -23,6 +23,7 @@ Run: python3 tools/test_extract_skip_unchanged.py
 """
 import ast
 import os
+import zlib
 import shutil
 import sys
 import tempfile
@@ -151,6 +152,17 @@ check('a file that changed WITHOUT changing length is still written',
       d['addons/skin.fentastic/xml/Home.xml'] == 'write',
       'size alone was trusted -- this file would never be updated again')
 
+# A CRC that matches while the SIZE does not must still be written. Dropping
+# the size check passed every check in this file until this case existed.
+trunc = tmpdir('extrunc-')
+lay_down(trunc, ARCHIVE)
+tp = os.path.join(trunc, 'addons', 'skin.fentastic', 'xml', 'Home.xml')
+with open(tp, 'ab') as f:
+    f.write(b'\x00' * 16)          # same CRC is not claimed; the SIZE differs
+d = decide(z, trunc)
+check('a file whose LENGTH differs is written even before the CRC is read',
+      d['addons/skin.fentastic/xml/Home.xml'] == 'write')
+
 # --------------------------------------------------------------------------
 # 4. a device several updates behind receives EVERYTHING it is missing
 # --------------------------------------------------------------------------
@@ -203,16 +215,90 @@ d = decide(ze, edge)
 check('a DIRECTORY where a file belongs is written, not skipped',
       d['a/f.txt'] == 'write')
 
-# an unreadable file must not read as "already correct"
+# Each guard tested DIRECTLY, because indirect attempts do not reach them.
+# A NUL in the path looks like it would force an exception -- os.path.isfile
+# swallows ValueError itself and returns False, so the comparison exits at the
+# isfile line and the exception handler is never entered. chmod 0 is worse:
+# it is a no-op for root, which is how CI runs. Both mutations survived this
+# file until these three cases existed.
 unread = tmpdir('exunread-')
 lay_down(unread, EDGE)
-p = os.path.join(unread, 'a', 'f.txt')
-os.chmod(p, 0)
-d = decide(ze, unread)
-os.chmod(p, 0o644)
-check('an UNREADABLE file is written, not assumed correct',
-      d['a/f.txt'] == 'write' or os.geteuid() == 0,
-      'running as root can read it anyway; check skipped')
+real_size = len(EDGE['a/f.txt'])
+real_crc = zlib.crc32(EDGE['a/f.txt']) & 0xffffffff
+
+
+class Item(object):
+    def __init__(self, filename, file_size, CRC):
+        self.filename, self.file_size, self.CRC = filename, file_size, CRC
+
+
+check('SELF-CHECK: the fixture matches when it should',
+      already_on_disk(Item('a/f.txt', real_size, real_crc), unread) is True,
+      'the direct-item cases below would prove nothing')
+
+check('a right CRC with a WRONG size is written',
+      already_on_disk(Item('a/f.txt', real_size + 1, real_crc),
+                      unread) is False,
+      'the size guard is doing no work -- CRC alone is not identity')
+
+check('a right size with a WRONG CRC is written',
+      already_on_disk(Item('a/f.txt', real_size, real_crc ^ 0xffff),
+                      unread) is False)
+
+# The '..' sanitisation. zipfile.extract DROPS '..' components before
+# joining, so member 'a/../f.txt' is written to <out>/a/f.txt. A filter that
+# removes only empty components inspects <out>/a/../f.txt instead, which
+# resolves to <out>/f.txt -- a DIFFERENT FILE. Put matching bytes at that
+# wrong path and the comparison must still say "write", because the real
+# target does not have them.
+dots = tmpdir('exdots-')
+# 'a/' must EXIST, or the unsanitised path <out>/a/../f.txt fails on isfile
+# for the wrong reason and the buggy filter looks correct. That is exactly
+# how this case passed a mutated build the first time it was written.
+lay_down(dots, {'f.txt': EDGE['a/f.txt'],           # the WRONG location
+                'a/other.txt': b'so a/ exists'})
+check('a member containing ".." is judged at the path extract() writes',
+      already_on_disk(Item('a/../f.txt', real_size, real_crc), dots) is False,
+      'it matched a file at the unsanitised path, so the real target would '
+      'be skipped and never written')
+lay_down(dots, {'a/f.txt': EDGE['a/f.txt']})        # the RIGHT location
+check('and it matches once the real target is there',
+      already_on_disk(Item('a/../f.txt', real_size, real_crc), dots) is True)
+
+# An exception INSIDE the comparison, reached no other way.
+_raiser = load()
+_ns = _raiser.__globals__
+
+
+class _BoomPath(object):
+    """The real os.path, except getsize explodes. Delegating rather than
+    re-declaring: a hand-built stand-in was missing curdir/pardir and the
+    comparison died on an AttributeError instead of reaching the handler,
+    which proved nothing at all."""
+    def __getattr__(self, k):
+        return getattr(os.path, k)
+
+    @staticmethod
+    def isfile(q):
+        return True
+
+    @staticmethod
+    def getsize(q):
+        raise OSError('storage went away mid-update')
+
+
+class _BoomOS(object):
+    path = _BoomPath()
+
+    def __getattr__(self, k):
+        return getattr(os, k)
+
+
+_ns['os'] = _BoomOS()
+check('an exception anywhere in the comparison writes, never skips',
+      _raiser(Item('a/f.txt', real_size, real_crc), unread) is False,
+      'the handler returned True -- every I/O hiccup would silently skip a '
+      'file, which is the one thing this function must never do')
 
 # explicit directory entries in the archive are never "already on disk"
 dz = os.path.join(tmpdir('exdirent-'), 'd.zip')
@@ -256,6 +342,21 @@ else:
 # --------------------------------------------------------------------------
 # SABOTAGE
 # --------------------------------------------------------------------------
+# The progress count is incremented BEFORE the ASCII gate. Structural, not
+# behavioural: the loop needs a whole Kodi to run, but the ordering is the
+# entire fix -- a member rejected by the gate must still advance `count`, or
+# `count == nFiles` never becomes true and the bar stops short. Six such names
+# exist in dist/Kodi-POV-IL-AF3-skin-pack.zip today.
+with open(EXTRACT, encoding='utf-8') as f:
+    _src = f.read()
+_body = _src[_src.index('for item in zin.infolist():'):]
+_at_count = _body.find('count += 1')
+_at_ascii = _body.find("encode('ascii')")
+check('count is incremented before the ASCII gate, not after',
+      _at_count != -1 and _at_ascii != -1 and _at_count < _at_ascii,
+      'a non-ASCII member advances nFiles but not count, so the final '
+      'redraw never fires and the bar stalls below 100%')
+
 print()
 print('=== sabotage ===')
 
