@@ -1,3 +1,11 @@
+v0.1.47
+- A quick update now writes only the files that actually changed. It used to
+  lay down all 1,969 files of the build every time -- including 1,330 belonging
+  to the skin drawing the progress bar on screen -- to change a handful, and on
+  some devices Kodi force-closed partway through before it could finish. A
+  device several updates behind still receives everything it is missing: the
+  comparison is against that device's own files.
+
 v0.1.46
 - Switching skin now leaves a mark, so the build can tell a home tile the skin
   switch removed from one you removed yourself, and put back only the first.

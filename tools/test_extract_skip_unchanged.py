@@ -340,6 +340,48 @@ else:
     print('   (dist quickfixes not present -- real-archive check skipped)')
 
 # --------------------------------------------------------------------------
+# 7. THE OWNER'S WORRY, against ground truth: a device MANY updates behind
+# --------------------------------------------------------------------------
+# "what if someone missed 10 updates" -- so this checks 10, 50 and 186, and it
+# does not trust the decision function to grade itself. Ground truth is
+# recomputed from the bytes on disk, and the assertion that matters is
+# WRONGLY SKIPPED == 0. A needless write is wasted effort; a wrong skip is a
+# file the device never receives, which is the only outcome here that would
+# actually hurt someone.
+def _truth_same(item, root):
+    path = os.path.join(root, *[q for q in item.filename.split('/')
+                                if q not in ('', os.path.curdir, os.path.pardir)])
+    if item.filename.endswith('/'):
+        return os.path.isdir(path)
+    if not (os.path.isfile(path)
+            and os.path.getsize(path) == item.file_size):
+        return False
+    with open(path, 'rb') as fh:
+        return (zlib.crc32(fh.read()) & 0xffffffff) == (item.CRC & 0xffffffff)
+
+
+print()
+for _old in ('0.1.534', '0.1.494', '0.1.358'):
+    _p = os.path.join(DIST, 'Kodi-POV-IL-FENtastic-quickfix-%s.zip' % _old)
+    if not (os.path.isfile(_p) and os.path.isfile(cur)):
+        print('   (quickfix %s absent -- span check skipped)' % _old)
+        continue
+    _dev = tmpdir('exspan-')
+    zipfile.ZipFile(_p).extractall(_dev)
+    _bad, _wrote, _skipped = [], 0, 0
+    for _i in zipfile.ZipFile(cur).infolist():
+        _skip = already_on_disk(_i, _dev)
+        if _skip and not _truth_same(_i, _dev):
+            _bad.append(_i.filename)
+        _skipped += _skip
+        _wrote += not _skip
+    _n = 544 - int(_old.rsplit('.', 1)[1])
+    print('   %3d updates behind: %d written, %d skipped' % (_n, _wrote, _skipped))
+    check('a device %d updates behind loses NOTHING' % _n, not _bad,
+          'wrongly skipped %d, e.g. %s' % (len(_bad), _bad[:3]))
+    shutil.rmtree(_dev, ignore_errors=True)
+
+# --------------------------------------------------------------------------
 # SABOTAGE
 # --------------------------------------------------------------------------
 # The progress count is incremented BEFORE the ASCII gate. Structural, not
