@@ -344,7 +344,7 @@ pin('pov_source_quality_patcher', 'UPGRADES',
 pin('pov_subtitle_match_patcher', 'UPGRADES',
     'AI_SUBS_MATCH_v7')
 pin('umbrella_mdblist_sync_patcher', 'UPGRADES',
-    'AI_SUBS_UMB_MDBL_SINCE_v1', '_umb_mdbl_cursor_reset=2')
+    'AI_SUBS_UMB_MDBL_SINCE_v2', '_umb_mdbl_cursor_reset=2')
 pin('umbrella_source_ux_patcher', 'UPGRADES',
     'AI_SUBS_UMB_PREWARM_v1', 'AI_SUBS_UMB_QUIETCANCEL_v1')
 pin('umbrella_subtitle_match_patcher', 'UPGRADES',

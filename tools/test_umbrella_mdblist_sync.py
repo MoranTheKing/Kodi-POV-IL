@@ -23,16 +23,23 @@ exactly how it was reported: episodes right, shows stuck several episodes
 back, and Umbrella's own "Force MDBList Sync" (wipe + resync from 1970) fixing
 it.
 
-The patch widens the fetch window by 30 days so a missed window is re-fetched
+The patch does three things: it stops the cursor advancing when the fetch did
+not succeed (the root defect), widens the fetch window by 30 days so a window
+missed for a reason no flag can see -- device clock skew -- is re-fetched
 instead of lost, and clears the cursor once so an already-damaged table
 backfills.
 
 This runs the real patcher against a real Umbrella tree and then EXECUTES the
-patched function's cursor arithmetic, because "the marker is in the file"
-would pass on a patch that computed the wrong window.
+patched function, driving a scripted MDBList through success, a first-page
+failure, a mid-run failure and a genuinely empty account, because "the marker
+is in the file" would pass on a patch that guards the wrong line -- or that
+guards so eagerly the cursor can never advance at all. The same scenarios are
+run against the STOCK function too, so the suite has to demonstrate the bug it
+claims to fix before it is allowed to claim the fix works.
 
 Run: python3 tools/test_umbrella_mdblist_sync.py
 """
+import datetime as _dtmod
 import importlib.util
 import os
 import re
@@ -70,20 +77,63 @@ def check(label, cond, detail=''):
         FAIL.append(label)
 
 
-# The real function, verbatim from Umbrella 6.7.82, down to the tabs. Used
+# The real function, verbatim from Umbrella 6.7.85, down to the tabs. Used
 # when no stock tree is present so this proves something on any machine --
-# a test that skips is indistinguishable from one that passes.
+# a test that skips is indistinguishable from one that passes. It is the WHOLE
+# function now, not the first few lines: three of the four injected lines live
+# below the fetch loop, and a truncated fixture would report 'unmatched' on a
+# machine without a stock tree and look like a broken patcher instead of a
+# short fixture.
 FIXTURE = (
-    "def sync_watchedProgress(activities=None, forced=False):\n"
-    "\ttry:\n"
+    'def sync_watchedProgress(activities=None, forced=False):\n'
+    '\ttry:\n'
     "\t\tdb_last = mdbsync.last_sync('last_watched_at')\n"
-    "\t\tapi_last = getWatchedActivity(activities)\n"
-    "\t\tif not forced and db_last and (api_last - db_last) < 60: return\n"
-    "\t\tfrom datetime import datetime as _dt\n"
-    "\t\tsince = _dt.utcfromtimestamp(db_last).strftime"
-    "('%Y-%m-%dT%H:%M:%SZ') if db_last else '1970-01-01T00:00:00Z'\n"
-    "\t\toffset = 0\n"
-    "\texcept: pass\n")
+    '\t\tapi_last = getWatchedActivity(activities)\n'
+    '\t\tif not forced and db_last and (api_last - db_last) < 60: return\n'
+    '\t\tfrom datetime import datetime as _dt\n'
+    "\t\tsince = _dt.utcfromtimestamp(db_last).strftime('%Y-%m-%dT%H:%M:%SZ') if db_last else '1970-01-01T00:00:00Z'\n"
+    '\t\toffset = 0\n'
+    '\t\tlimit = 1000\n'
+    '\t\twhile True:\n'
+    '\t\t\turl = f"/sync/watched?since={since}&limit={limit}&offset={offset}"\n'
+    '\t\t\tdata = get_request(url)\n'
+    '\t\t\tif not data: break\n'
+    "\t\t\tfor item in data.get('movies', []):\n"
+    "\t\t\t\tids = item.get('movie', {}).get('ids', {})\n"
+    "\t\t\t\timdb = str(ids.get('imdb', ''))\n"
+    '\t\t\t\tif not imdb: continue\n'
+    '\t\t\t\tmdbsync.upsert_watched_movie(\n'
+    '\t\t\t\t\timdb=imdb,\n'
+    "\t\t\t\t\ttmdb=str(ids.get('tmdb', '')),\n"
+    "\t\t\t\t\ttitle=item.get('movie', {}).get('title', ''),\n"
+    "\t\t\t\t\tyear=str(item.get('movie', {}).get('year', '')),\n"
+    "\t\t\t\t\tlast_watched_at=item.get('last_watched_at', '')\n"
+    '\t\t\t\t)\n'
+    "\t\t\tfor item in data.get('episodes', []):\n"
+    "\t\t\t\tep = item.get('episode', {})\n"
+    "\t\t\t\tshow_ids = ep.get('show', {}).get('ids', {})\n"
+    "\t\t\t\tshow_imdb = str(show_ids.get('imdb', ''))\n"
+    '\t\t\t\tif not show_imdb: continue\n'
+    '\t\t\t\tmdbsync.upsert_watched_episode(\n'
+    '\t\t\t\t\tshow_imdb=show_imdb,\n'
+    "\t\t\t\t\tshow_tmdb=str(show_ids.get('tmdb', '')),\n"
+    "\t\t\t\t\tshow_tvdb=str(show_ids.get('tvdb', '')),\n"
+    "\t\t\t\t\tseason=ep.get('season', 0),\n"
+    "\t\t\t\t\tepisode=ep.get('number', 0),\n"
+    "\t\t\t\t\tlast_watched_at=item.get('last_watched_at', '')\n"
+    '\t\t\t\t)\n'
+    "\t\t\tpagination = data.get('pagination', {})\n"
+    "\t\t\tif not pagination.get('has_more', False): break\n"
+    '\t\t\toffset += limit\n'
+    "\t\tmdbsync.update_last_watched_at('last_watched_at')\n"
+    "\t\tmdbsync.update_last_watched_at('last_watched_movies_at')\n"
+    "\t\tmdbsync.update_last_watched_at('last_watched_episodes_at')\n"
+    '\t\t# invalidate indicator caches so next access fetches fresh data\n'
+    '\t\tmdbsync.cache_delete(mdbsync._hash_function(syncMovies, ()))\n'
+    '\t\tmdbsync.cache_delete(mdbsync._hash_function(syncTVShows, ()))\n'
+    '\t\tcontrol.trigger_widget_refresh()\n'
+    '\texcept: log_utils.error()\n'
+)
 
 
 def load(home):
@@ -205,12 +255,242 @@ check('the window really moves 30 days back',
 check('a cursor at 0 (never synced) stays a full sync',
       max(0, 0 - 2592000) == 0)
 
+# --- the four lines are all there, and they are all ours -------------------
+check('all four injected lines are present',
+      after.count(mod.MARKER) == 4,
+      'found %d marked lines; three of them (init, set, check) only work as a '
+      'set -- a partial application injects a NameError into somebody else\'s '
+      'add-on' % after.count(mod.MARKER))
+check('the flag name does not collide with anything Umbrella uses',
+      before.count(mod._FLAG) == 0,
+      'a collision would silently change Umbrella\'s own logic instead of '
+      'failing')
+check('the guard is read BEFORE the first cursor write',
+      after.index('if not %s: return' % mod._FLAG)
+      < after.index("mdbsync.update_last_watched_at('last_watched_at')"))
+check('the flag is initialised before the loop that clears it',
+      after.index('%s = True' % mod._FLAG)
+      < after.index('if not data: %s = False' % mod._FLAG))
+
+# --- and the patched function BEHAVES --------------------------------------
+# The window arithmetic above is one line of a three-part fix. The other two
+# lines exist only to hold the cursor still on a run that failed, and nothing
+# short of running the function proves that they do. So: extract
+# sync_watchedProgress from both the stock and the patched file, drive each
+# through the same four scripted MDBList conversations, and compare.
+#
+# The stock runs are not decoration. If they ever stop showing the bug, either
+# Umbrella fixed it upstream -- in which case this patch should be retired --
+# or the harness stopped exercising the real path, in which case the patched
+# runs prove nothing either.
+
+
+def extract_func(text, name='sync_watchedProgress'):
+    lines = text.split('\n')
+    start = next((i for i, l in enumerate(lines)
+                  if l.startswith('def %s(' % name)), None)
+    if start is None:
+        return ''
+    end = start + 1
+    while end < len(lines) and (not lines[end].strip()
+                                or lines[end][:1] in ('\t', ' ')):
+        end += 1
+    return '\n'.join(lines[start:end]) + '\n'
+
+
+class FakeSync(object):
+    """Just enough of resources/lib/database/mdbsync to run the loop."""
+
+    def __init__(self, cursor):
+        self.service = {'last_watched_at': cursor}
+        self.movies, self.episodes = [], []
+        self.cursor_writes, self.cache_deleted = [], []
+
+    def last_sync(self, key):
+        return self.service.get(key, 0)
+
+    def update_last_watched_at(self, key='last_watched_at'):
+        self.cursor_writes.append(key)
+        self.service[key] = 9999999999
+
+    def upsert_watched_movie(self, **kw):
+        self.movies.append(kw)
+
+    def upsert_watched_episode(self, **kw):
+        self.episodes.append(kw)
+
+    def cache_delete(self, h):
+        self.cache_deleted.append(h)
+
+    def _hash_function(self, fn, args):
+        return getattr(fn, '__name__', str(fn))
+
+
+CURSOR = 1700000000
+ALL_THREE = ['last_watched_at', 'last_watched_movies_at',
+             'last_watched_episodes_at']
+
+
+def page(movies=0, episodes=0, has_more=False):
+    """A well-formed MDBList page. Note that an EMPTY one is still truthy --
+    it carries `pagination` -- which is the whole reason `not data` is a
+    usable failure signal."""
+    return {
+        'movies': [{'movie': {'ids': {'imdb': 'tt%07d' % i, 'tmdb': str(i)},
+                              'title': 'm%d' % i, 'year': '2020'},
+                    'last_watched_at': '2026-08-01T00:00:00.000Z'}
+                   for i in range(movies)],
+        'episodes': [{'episode': {'show': {'ids': {'imdb': 'tt900%04d' % i,
+                                                   'tmdb': str(i),
+                                                   'tvdb': str(i)}},
+                                  'season': 1, 'number': i + 1},
+                      'last_watched_at': '2026-08-01T00:00:00.000Z'}
+                     for i in range(episodes)],
+        'pagination': {'has_more': has_more},
+    }
+
+
+def run(text, pages):
+    fake = FakeSync(CURSOR)
+    seen = {'refresh': 0, 'urls': []}
+    served = list(pages)
+
+    def get_request(url):
+        seen['urls'].append(url)
+        return served.pop(0) if served else None
+
+    class _Ctl(object):
+        def trigger_widget_refresh(self):
+            seen['refresh'] += 1
+
+    class _Log(object):
+        def error(self):
+            # Umbrella's own `except: log_utils.error()` swallows everything.
+            # Here it must not: a NameError from a half-applied patch would
+            # otherwise surface as "the cursor did not advance" -- and read as
+            # a pass.
+            raise
+
+    g = {'mdbsync': fake, 'get_request': get_request,
+         'getWatchedActivity': lambda a=None: CURSOR + 10000,
+         'control': _Ctl(), 'log_utils': _Log(),
+         'syncMovies': lambda: None, 'syncTVShows': lambda: None}
+    body = extract_func(text)
+    if not body:
+        raise RuntimeError('sync_watchedProgress not found')
+    exec(compile(body, 'mdblist.py', 'exec'), g)
+    g['sync_watchedProgress']()
+    return fake, seen
+
+
+OK_PAGES = [page(1, 2, True), page(1, 2, False)]
+SCENARIOS = [
+    ('both pages came back', OK_PAGES, True),
+    ('the first page failed outright (get_request -> None)', [None], False),
+    ('page two failed after page one had landed',
+     [page(1, 2, True), None], False),
+    ('a 2xx whose body would not parse (get_request -> {})', [{}], False),
+    ('an account with genuinely nothing new', [page(0, 0, False)], True),
+]
+
+print()
+print('=== executing the patched function ===')
+for label, pages, should_advance in SCENARIOS:
+    fake, seen = run(after, pages)
+    moved = fake.service['last_watched_at'] != CURSOR
+    if should_advance:
+        check('%s -> the cursor advances' % label,
+              fake.cursor_writes == ALL_THREE and moved,
+              'wrote %s' % fake.cursor_writes)
+        check('%s -> the indicator caches are invalidated and the widgets '
+              'refresh' % label,
+              len(fake.cache_deleted) == 2 and seen['refresh'] == 1,
+              'cache_delete x%d, refresh x%d'
+              % (len(fake.cache_deleted), seen['refresh']))
+    else:
+        check('%s -> the cursor DOES NOT MOVE' % label,
+              fake.cursor_writes == [] and not moved,
+              'wrote %s -- the window just fetched is now behind the cursor '
+              'and can never be asked for again' % fake.cursor_writes)
+        check('%s -> nothing is re-primed off an API that just refused us'
+              % label,
+              fake.cache_deleted == [] and seen['refresh'] == 0)
+
+# rows that DID arrive before the failure are still ingested: holding the
+# cursor is about what we ask for next time, not about throwing away work.
+fake, _ = run(after, [page(1, 2, True), None])
+check('a page that landed before the failure is still ingested',
+      len(fake.movies) == 1 and len(fake.episodes) == 2,
+      '%d movies, %d episodes' % (len(fake.movies), len(fake.episodes)))
+
+fake, seen = run(after, OK_PAGES)
+check('a full success ingests every row from every page',
+      len(fake.movies) == 2 and len(fake.episodes) == 4,
+      '%d movies, %d episodes' % (len(fake.movies), len(fake.episodes)))
+check('the request really asks from 30 days before the stored cursor',
+      seen['urls'] and 'since=%s' % _dtmod.datetime.utcfromtimestamp(
+          CURSOR - 2592000).strftime('%Y-%m-%dT%H:%M:%SZ') in seen['urls'][0],
+      'first url was %r' % (seen['urls'][0] if seen['urls'] else None))
+
+# --- the same scenarios against STOCK, which must show the bug -------------
+print()
+print('=== the same scenarios against stock Umbrella (the bug) ===')
+for label, pages in (('first page failed', [None]),
+                     ('page two failed', [page(1, 2, True), None]),
+                     ('body would not parse', [{}])):
+    fake, seen = run(before, pages)
+    check('STOCK: %s -> the cursor advances anyway (this is the defect)'
+          % label,
+          fake.cursor_writes == ALL_THREE,
+          'stock no longer loses the window -- either Umbrella fixed this '
+          'upstream and the patch should be retired, or the harness is no '
+          'longer running the real path')
+fake, _ = run(before, OK_PAGES)
+check('STOCK: a successful run advances the cursor too, so the patch is '
+      'only removing the WRONG advances',
+      fake.cursor_writes == ALL_THREE)
+
+# --- SABOTAGE: each of the three new lines is load-bearing -----------------
+print()
+print('=== sabotage: the behavioural checks must be able to fail ===')
+no_set = '\n'.join(l for l in after.split('\n')
+                   if 'if not data: %s = False' % mod._FLAG not in l)
+check('SABOTAGE: dropping the line that CLEARS the flag changes the source',
+      no_set != after)
+fake, _ = run(no_set, [page(1, 2, True), None])
+check('SABOTAGE: without it the cursor advances past a failed page again',
+      fake.cursor_writes == ALL_THREE,
+      'the behavioural test is insensitive to the line it exists to check')
+
+no_check = '\n'.join(l for l in after.split('\n')
+                     if 'if not %s: return' % mod._FLAG not in l)
+fake, _ = run(no_check, [None])
+check('SABOTAGE: dropping the line that READS the flag advances again',
+      fake.cursor_writes == ALL_THREE)
+
+no_init = '\n'.join(l for l in after.split('\n')
+                    if '%s = True' % mod._FLAG not in l)
+try:
+    run(no_init, OK_PAGES)
+    raised = False
+except NameError:
+    raised = True
+check('SABOTAGE: dropping the INIT is a NameError, not a silent no-op',
+      raised,
+      'this is why the patcher applies all four lines or none -- Umbrella '
+      'wraps the whole function in a bare except that would hide it')
+
 # --- idempotence and the upgrade path --------------------------------------
 check('a second run is a no-op', mod.ensure_patched() == 'unchanged')
 check('the file did not change on the second run',
       mdblist_src(home) == after)
 
-bumped = after.replace('_SINCE_v1', '_SINCE_v9')
+# Never the literal previous version: this line silently stopped testing
+# anything the moment MARKER was bumped, because the string it looked for
+# was no longer in the file and `bumped` was just a copy of `after`.
+bumped = after.replace(mod.MARKER, '# AI_SUBS_UMB_MDBL_SINCE_v9')
+check('SELF-CHECK: the downgrade fixture really differs',
+      bumped != after, 'MARKER no longer appears in the patched file')
 p = os.path.join(home, 'addons', 'plugin.video.umbrella', 'resources', 'lib',
                  'modules', 'mdblist.py')
 with open(p, 'w', encoding='utf-8') as f:
