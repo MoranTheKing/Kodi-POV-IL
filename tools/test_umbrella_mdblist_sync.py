@@ -46,7 +46,19 @@ LIB = os.path.normpath(os.path.join(
     HERE, '..', 'addons', 'service.subtitles.kodipovilai', 'resources', 'lib'))
 STOCK = os.environ.get('UMBRELLA_STOCK') or (
     '/tmp/claude-0/-home-user-Kodi-POV-IL/70968383-5f01-52a3-afe7-ced1aba28071'
-    '/scratchpad/umb6782/plugin.video.umbrella')
+    '/scratchpad/umb/plugin.video.umbrella')
+
+
+def stock_version():
+    """Read it, never print a hardcoded one. The banner said '6.7.82' while
+    running against 6.7.85, which is exactly the kind of small lie that makes
+    a later reader trust the wrong thing."""
+    try:
+        with open(os.path.join(STOCK, 'addon.xml'), encoding='utf-8') as f:
+            m = re.search(r'<addon[^>]*?version="([0-9.]+)"', f.read(), re.S)
+        return m.group(1) if m else 'unknown version'
+    except Exception:
+        return 'unknown version'
 
 FAIL = []
 
@@ -137,7 +149,8 @@ def mdblist_src(home):
         return f.read()
 
 
-print('fixture: %s' % ('real Umbrella 6.7.82' if os.path.isdir(STOCK)
+print('fixture: %s' % ('real Umbrella ' + stock_version()
+                       if os.path.isdir(STOCK)
                        else 'inline (no stock tree here)'))
 
 home = fresh_home()
@@ -237,25 +250,46 @@ mod2.ensure_patched()
 conn = sqlite3.connect(db)
 left = {r[0] for r in conn.execute('SELECT setting FROM service')}
 conn.close()
-# EVERY key the patcher claims to clear, not the two that happened to get
-# written down: a variant that dropped last_watched_movies_at from the DELETE
-# passed the old two-key version of this check.
-CLEARED = ('last_watched_at', 'last_watched_movies_at',
-           'last_watched_episodes_at')
-check('the watched cursor is cleared so the next sync backfills',
+# EXACTLY ONE key. This check used to demand all three, and that demand WAS
+# THE BUG -- it encoded a regression as the passing condition, which is the
+# failure mode this project keeps finding in other people's tests and then
+# committed itself. Reported from the field: after clearing three keys, the
+# EPISODES list -- the one that had always been right -- started needing a
+# manual refresh too.
+#
+# Only last_watched_at is the fetch cursor (modules/mdblist.py:945 reads it to
+# build `since`). The other two are read by getEpisodesWatchedActivity() and
+# getMoviesWatchedActivity() (mdblist.py:923-931), which playcount.py:97 uses
+# as the "is there new watched activity" signal:
+#
+#     elif mdblist.getEpisodesWatchedActivity() < ...: timeout = 720
+#     else: timeout = 0
+#
+# last_sync() returns 0 for a missing row, so clearing them pinned that
+# comparison true forever: serve the 12-hour cache, never re-sync.
+CLEARED = ('last_watched_at',)
+KEPT = ('last_watched_movies_at', 'last_watched_episodes_at')
+check('the fetch cursor is cleared so the next sync backfills',
       not [k for k in CLEARED if k in left],
       'still set: %s' % ', '.join(k for k in CLEARED if k in left))
+check('the ACTIVITY signals are left alone -- clearing them broke the '
+      'episodes list',
+      all(k in left for k in KEPT),
+      'cleared %s; playcount.py reads these to decide whether to re-sync, '
+      'and last_sync() returns 0 for a missing row, so zeroing them means '
+      '"serve the stale cache" forever'
+      % ', '.join(k for k in KEPT if k not in left))
 check('unrelated sync state is left alone',
       'last_activities_at' in left,
-      'the reset must clear the watched cursor, not the whole service table')
-check('the three cleared keys are the three sync_watchedProgress writes',
-      set(CLEARED) == set(re.findall(r"update_last_watched_at\('(\w+)'\)",
+      'the reset must clear the fetch cursor, not the whole service table')
+check('the cleared key is the one sync_watchedProgress reads for `since`',
+      set(CLEARED) == set(re.findall(r"db_last = mdbsync\.last_sync\('(\w+)'\)",
                                      mdblist_src(home2)))
       or not os.path.isdir(STOCK),
-      'Umbrella advances a cursor this reset does not clear, so that half of '
-      'the watched history still never backfills')
+      'the reset clears a key the fetch does not read, so the backfill will '
+      'not happen')
 check('the reset marks itself done so it does not repeat every start',
-      mod2.kodi_utils.get_setting('_umb_mdbl_cursor_reset', '') == '1')
+      mod2.kodi_utils.get_setting(mod2._RESET_FLAG, '') == mod2._RESET_GEN)
 
 # --- and it RETRIES when the reset could not run --------------------------
 # Tying the backfill to the file write meant a reset that lost a lock race to
@@ -279,7 +313,7 @@ mod4._reset_sync_cursor = lambda: False          # the lock race
 check('the first run patches the file even though the reset failed',
       mod4.ensure_patched() == 'patched')
 check('a failed reset is NOT marked done',
-      mod4.kodi_utils.get_setting('_umb_mdbl_cursor_reset', '') != '1')
+      mod4.kodi_utils.get_setting(mod4._RESET_FLAG, '') != mod4._RESET_GEN)
 mod4._reset_sync_cursor = _real_reset            # ... and it clears next time
 check('the next start retries the reset even though the file is unchanged',
       mod4.ensure_patched() == 'unchanged')
@@ -290,7 +324,7 @@ check('the retry actually cleared the cursor',
       not [k for k in CLEARED if k in left4],
       'still set: %s' % ', '.join(k for k in CLEARED if k in left4))
 check('and now it is marked done',
-      mod4.kodi_utils.get_setting('_umb_mdbl_cursor_reset', '') == '1')
+      mod4.kodi_utils.get_setting(mod4._RESET_FLAG, '') == mod4._RESET_GEN)
 
 # --- CRLF: the shape that shipped the Hebrew search fix as a silent no-op --
 home5 = fresh_home()

@@ -77,7 +77,15 @@ _MARKER_ANY = '# AI_SUBS_UMB_MDBL_SINCE_v'
 # settings on every bump; overwriting one value leaves nothing behind. Bump
 # _RESET_GEN to request another full backfill.
 _RESET_FLAG = '_umb_mdbl_cursor_reset'
-_RESET_GEN = '1'
+# GEN 2, and the bump is a REPAIR, not a new idea. Generation 1 cleared three
+# keys; two of them were activity signals, not fetch cursors, and clearing
+# them told Umbrella "nothing new to sync" forever (see _reset_sync_cursor).
+# Devices that took that release still have both at epoch and their episodes
+# list still needs a manual refresh. Bumping the generation runs the corrected
+# reset once more on exactly those devices; the sync it forces then writes all
+# three keys back itself (modules/mdblist.py:983-985), so the signals it
+# destroyed are restored by the same pass that backfills the table.
+_RESET_GEN = '2'
 
 # 30 days. Long enough to cover an outage or a clock that disagrees, short
 # enough that the incremental sync stays incremental.
@@ -192,10 +200,27 @@ def _reset_sync_cursor():
             "SELECT name FROM sqlite_master WHERE type='table' "
             "AND name='service'").fetchone()
         if row:
+            # ONLY last_watched_at. This was three keys and that was a
+            # REGRESSION, reported from the field: the episodes list, which
+            # had always been right, started needing a manual refresh too.
+            #
+            # sync_watchedProgress reads ONLY last_watched_at to compute
+            # `since` (modules/mdblist.py:945), so it is the only one that
+            # has to move for a backfill. The other two are read somewhere
+            # else entirely -- getEpisodesWatchedActivity() and
+            # getMoviesWatchedActivity() (mdblist.py:923-931) -- and
+            # playcount.py:97 uses them as the "is there new watched activity"
+            # signal for the indicator cache:
+            #
+            #     elif mdblist.getEpisodesWatchedActivity() < ...: timeout = 720
+            #     else: timeout = 0
+            #
+            # last_sync() returns 0 for a row that is not there, so deleting
+            # the key made that comparison permanently true: serve the 12-hour
+            # cache instead of re-syncing. The refresh the user pressed then
+            # did nothing. One stale list became two.
             cur.execute(
-                "DELETE FROM service WHERE setting IN "
-                "('last_watched_at', 'last_watched_movies_at', "
-                "'last_watched_episodes_at')")
+                "DELETE FROM service WHERE setting = 'last_watched_at'")
             _log('cleared the watched-sync cursor; the next MDBList sync '
                  'backfills the episodes the old one skipped')
         cur.close()
