@@ -15,6 +15,13 @@ the same source a device reads -- so the pin cannot drift from the release
 again without a red test. ANDROID_TESTING.md quotes the same filename to a
 human tester and is checked with it.
 
+README.md is here for the same reason and joined late. It quotes the build zip
+by name too, it drifted to 0.1.113 while the manifest served 0.1.114, and the
+commit that last corrected it said in its own title that nothing watches it --
+then left it unwatched. A pointer that is known to rot and is corrected by hand
+each time is a pointer that will be wrong on the release nobody remembers to
+check.
+
 Run: python3 tools/test_installer_pins_current.py
 """
 import re
@@ -24,7 +31,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 BUILD_TXT = ROOT / 'wizard' / 'assets' / 'build.txt'
 PINNED = [ROOT / '.github' / 'workflows' / 'build-apk.yml',
-          ROOT / 'ANDROID_TESTING.md']
+          ROOT / 'ANDROID_TESTING.md',
+          ROOT / 'README.md']
 ZIP_RE = re.compile(r'Kodi-POV-IL-FENtastic-test-(\d+\.\d+\.\d+)\.zip')
 
 FAIL = []

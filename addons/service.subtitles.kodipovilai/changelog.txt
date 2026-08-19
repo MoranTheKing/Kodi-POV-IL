@@ -1,3 +1,20 @@
+v0.2.501
+- Umbrella's "Shows in Progress" and "Episodes in Progress" fill themselves in
+  again, with no manual refresh in either one. Update 599 fixed the shows list
+  by clearing the sync cursor, but it cleared two more keys alongside it, and
+  those two were not cursors -- they are the signal Umbrella reads to decide
+  whether there is new watched activity worth syncing. Zeroing them meant
+  "nothing new, serve the cache" forever, so the episodes list, which had
+  always been right, started needing a refresh too. Only the fetch cursor is
+  cleared now, and the devices that took the previous release are repaired on
+  their next start.
+- And the root cause underneath both: Umbrella's MDBList sync wrote "synced up
+  to now" even when the fetch had failed. The cursor only ever moves forward,
+  so anything that fell inside a failed request was skipped permanently. The
+  cursor now advances only when the fetch really returned a page of results --
+  a failed request, an unreadable response, or an error envelope all leave it
+  where it was, so the same window is asked for again next time.
+
 v0.2.500
 - The update itself no longer rewrites the whole build to change a handful of
   files. Every quick update was laying down all 1,969 files, 1,330 of them
