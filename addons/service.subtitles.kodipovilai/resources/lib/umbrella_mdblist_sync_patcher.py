@@ -310,7 +310,7 @@ def _reset_sync_cursor():
             # has to move for a backfill. The other two are read somewhere
             # else entirely -- getEpisodesWatchedActivity() and
             # getMoviesWatchedActivity() (mdblist.py:923-931) -- and
-            # playcount.py:97 uses them as the "is there new watched activity"
+            # playcount.py:98 uses them as the "is there new watched activity"
             # signal for the indicator cache:
             #
             #     elif mdblist.getEpisodesWatchedActivity() < ...: timeout = 720

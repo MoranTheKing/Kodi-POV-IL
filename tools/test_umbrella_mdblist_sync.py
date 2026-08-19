@@ -544,6 +544,56 @@ check('revert restores the original byte-for-byte',
       'the injected line must be removable without trace, or the next '
       'version cannot replace it')
 
+# --- the line numbers this patcher cites are real -------------------------
+# This file explains itself by pointing at Umbrella's source -- "mdblist.py:945
+# reads it to build `since`", "playcount.py:98 uses them as the signal". Those
+# citations are how the next person decides whether the reasoning still holds,
+# and a wrong one sends them to a line that says something else. Round 2 of
+# review found one off by a single line, which is exactly how much it takes.
+#
+# Every citation is pinned to a fragment that must appear in the cited range.
+# A new citation with no pin is a failure too, so this cannot be outgrown
+# quietly. When Umbrella moves the code, this goes red and the comment gets
+# re-read -- which is the point, because the comment is what a future reader
+# trusts instead of re-deriving.
+CITATIONS = {
+    ('mdblist.py', 945, 945): "db_last = mdbsync.last_sync('last_watched_at')",
+    ('mdblist.py', 923, 931): 'def getEpisodesWatchedActivity():',
+    ('mdblist.py', 868, 878): 'return response.json()',
+    ('mdblist.py', 983, 985): "update_last_watched_at('last_watched_episodes_at')",
+    ('playcount.py', 98, 98): 'mdblist.getEpisodesWatchedActivity()',
+}
+
+with open(os.path.join(LIB, 'umbrella_mdblist_sync_patcher.py'),
+          encoding='utf-8') as f:
+    PATCHER_SRC = f.read()
+
+cited = set()
+for mod_name, lo, hi in re.findall(r'(\w+\.py):(\d+)(?:-(\d+))?', PATCHER_SRC):
+    cited.add((mod_name, int(lo), int(hi or lo)))
+check('every source citation in the patcher is pinned below',
+      not (cited - set(CITATIONS)),
+      'unpinned: %s' % sorted(cited - set(CITATIONS)))
+check('every pin below still corresponds to a citation in the patcher',
+      not (set(CITATIONS) - cited),
+      'stale pins: %s' % sorted(set(CITATIONS) - cited))
+
+if os.path.isdir(STOCK):
+    for (mod_name, lo, hi), fragment in sorted(CITATIONS.items()):
+        p = os.path.join(STOCK, 'resources', 'lib', 'modules', mod_name)
+        try:
+            with open(p, encoding='utf-8') as f:
+                window = ''.join(f.readlines()[lo - 1:hi])
+        except OSError:
+            window = ''
+        check('%s:%s really says what the comment says it says'
+              % (mod_name, lo if lo == hi else '%d-%d' % (lo, hi)),
+              fragment in window,
+              'expected to find %r there' % fragment)
+else:
+    print('---- %d citations NOT CHECKED (no stock tree on this machine)'
+          % len(CITATIONS))
+
 # --- the cursor reset, which is what repairs an already-damaged table ------
 home2 = fresh_home()
 db_dir = os.path.join(home2, 'userdata', 'addon_data',
