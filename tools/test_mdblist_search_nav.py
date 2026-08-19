@@ -60,56 +60,284 @@ def stock_version():
         return 'unknown version'
 
 
+# THE INLINE FIXTURES ARE REAL POV, NOT A SKETCH OF IT.
+#
+# They used to be hand-written miniatures, and on any machine without a stock
+# POV tree this file reported TEN FAILURES -- not "unverified", FAILURES --
+# because the miniatures were missing shapes the patcher anchors on: no
+# top-level search_mdbl_lists, and a delete_mdbl_list that did not call
+# container_refresh. Every check downstream of those failed for a reason that
+# had nothing to do with the code under test. A red test nobody believes is
+# worse than no test, because it trains people to scroll past red.
+#
+# So both fixtures are now byte-slices of real POV 6.08.13, generated rather
+# than typed, and asserted at generation time to be substrings of the real
+# files. menus/mdblist.py is carried whole: it is 198 lines, every anchor the
+# patcher uses lives in it, and any reduction is drift waiting to happen.
+# mdblist_api.py is the module header (what the injected block needs in scope)
+# plus POV's real delete_mdbl_list, which is its only anchor.
 FIXTURE_MENU = (
-    "from indexers import mdblist_api, list_helper\n"
-    "ls = lambda i: str(i)\n"
-    "build_url, make_listitem = (lambda d: 'u'), (lambda: object())\n"
-    "fanart = default_icon = 'x.png'\n"
-    "add2menu_str, add2folder_str, copy2str = ls(32730), ls(32731), 'x'\n"
-    "newlist_str, deletelist_str, nextpage_str = 'n', ls(32781), ls(32799)\n"
-    "\n"
-    "class BaseMdblList(object):\n"
-    "\tdef process_results(self):\n"
-    "\t\tfor item in self.lists:\n"
-    "\t\t\ttry:\n"
-    "\t\t\t\tcm = []\n"
-    "\t\t\t\tcm_append = cm.append\n"
-    "\t\t\t\titem, list_type = self.parse_item(item)\n"
-    "\t\t\t\tname, user, slug, list_id = 'n', 'u', 's', 1\n"
-    "\t\t\t\tcm_append((add2menu_str, 'RunPlugin(x)'))\n"
-    "\t\t\t\tyield ('u', None, True)\n"
-    "\t\t\texcept: pass\n"
-    "\n"
-    "class SearchMdblLists(BaseMdblList):\n"
-    "\tdef __init__(self, params):\n"
-    "\t\tself.search_title = params.get('search_title')\n"
-    "\n"
-    "\tdef fetch_results(self):\n"
-    "\t\tif self.search_title: self.lists = []\n"
-    "\t\telse: self.lists = []\n")
+    'from indexers import mdblist_api, list_helper\n'
+    'from menus.episodes import Episodes\n'
+    'from menus.movies import Movies\n'
+    'from menus.seasons import Seasons\n'
+    'from menus.tvshows import TVShows\n'
+    'from modules import kodi_utils\n'
+    '# logger = kodi_utils.logger\n'
+    '\n'
+    'KODI_VERSION, ls = kodi_utils.get_kodi_version(), kodi_utils.local_string\n'
+    'build_url, make_listitem = kodi_utils.build_url, kodi_utils.make_listitem\n'
+    "fanart = kodi_utils.get_addoninfo('fanart')\n"
+    "default_icon = kodi_utils.media_path('mdblist.png')\n"
+    "add2menu_str, add2folder_str, copy2str = ls(32730), ls(32731), '[B]Export to TMDB[/B]'\n"
+    "newlist_str, deletelist_str, nextpage_str = '[B]Make a new MDBList list[/B]', ls(32781), ls(32799)\n"
+    'watchl_str, fav_str, coll_str = ls(32500), ls(32453), ls(32499)\n'
+    '\n'
+    'def search_mdbl_lists(params):\n'
+    '\treturn SearchMdblLists(params).build()\n'
+    '\n'
+    'def get_mdbl_lists(params):\n'
+    '\treturn GetMdblLists(params).build()\n'
+    '\n'
+    'def get_mdbl_top_lists(params):\n'
+    '\treturn GetTopLists(params).build()\n'
+    '\n'
+    'def build_mdbl_list(params):\n'
+    '\treturn MdblistBuilder(params).build()\n'
+    '\n'
+    'def mdbl_account_info():\n'
+    '\tfrom modules.utils import jsondate_to_datetime\n'
+    '\ttry:\n'
+    '\t\tkodi_utils.show_busy_dialog()\n'
+    "\t\taccount_info = mdblist_api.call_mdblist('user')\n"
+    "\t\tjoined = jsondate_to_datetime(account_info['date_joined']).astimezone()\n"
+    "\t\tapi_requests = account_info['api_requests']\n"
+    "\t\tremaining = api_requests - account_info['api_requests_count']\n"
+    '\t\tbody = []\n'
+    '\t\tappend = body.append\n'
+    "\t\tappend('[B]Username:[/B] %s' % account_info['username'])\n"
+    "\t\tappend('[B]Joined:[/B] %s' % joined.date())\n"
+    "\t\tappend('[B]Supporter:[/B] %s' % account_info['is_supporter'])\n"
+    "\t\tappend('[B]API Request Limit:[/B] %s' % api_requests)\n"
+    "\t\tappend('[B]API Request Remaining:[/B] %s' % remaining)\n"
+    '\t\tkodi_utils.hide_busy_dialog()\n'
+    "\t\treturn kodi_utils.show_text('MDBList'.upper(), '[CR]'.join(body), font_size='large')\n"
+    '\texcept: kodi_utils.hide_busy_dialog()\n'
+    '\n'
+    'class BaseMdblList(list_helper.BaseList):\n'
+    '\tdef process_results(self):\n'
+    '\t\tfor item in self.lists:\n'
+    '\t\t\ttry:\n'
+    '\t\t\t\tcm = []\n'
+    '\t\t\t\tcm_append = cm.append\n'
+    '\t\t\t\titem, list_type = self.parse_item(item)\n'
+    '\t\t\t\tif not item: continue\n'
+    "\t\t\t\tname, user, slug, list_id = item['name'], item['user_name'], item.get('slug', ''), item['id']\n"
+    "\t\t\t\titem_count = item.get('items')\n"
+    "\t\t\t\turl = build_url({'mode': 'build_mdbl_list', 'user': user, 'slug': slug, 'list_id': list_id, 'list_type': list_type, 'name': name})\n"
+    '\t\t\t\tdisplay, plot = self.get_display_and_plot(item, name, item_count, user)\n'
+    "\t\t\t\tif list_type == 'my_lists':\n"
+    "\t\t\t\t\tcm_append((newlist_str, 'RunPlugin(%s)' % build_url({'mode': 'mdblist.make_new_mdbl_list'})))\n"
+    "\t\t\t\t\tcm_append((deletelist_str, 'RunPlugin(%s)' % build_url({'mode': 'mdblist.delete_mdbl_list', 'list_id': list_id})))\n"
+    "\t\t\t\tcm_append((add2menu_str, 'RunPlugin(%s)' % build_url({'mode': 'menu_editor.add_external', 'name': name, 'iconImage': 'mdblist.png'})))\n"
+    "\t\t\t\tcm_append((add2folder_str, 'RunPlugin(%s)' % build_url({'mode': 'menu_editor.shortcut_folder_add_item', 'name': name, 'iconImage': 'mdblist.png'})))\n"
+    "\t\t\t\tcm_append((copy2str, 'RunPlugin(%s)' % build_url({'mode': 'tmdb_manager_choice', 'mdbl_list_id': list_id, 'mdbl_list_name': name, 'user': user, 'list_slug': slug})))\n"
+    '\t\t\t\tlistitem = make_listitem()\n'
+    '\t\t\t\tlistitem.setLabel(display)\n'
+    "\t\t\t\tlistitem.setArt({'icon': default_icon, 'poster': default_icon, 'thumb': default_icon, 'fanart': fanart, 'banner': default_icon})\n"
+    "\t\t\t\tif plot: listitem.setInfo('video', {'plot': plot}) if KODI_VERSION < 20 else listitem.getVideoInfoTag().setPlot(plot)\n"
+    '\t\t\t\tlistitem.addContextMenuItems(cm)\n'
+    '\t\t\t\tyield (url, listitem, True)\n'
+    '\t\t\texcept: pass\n'
+    '\n'
+    'class SearchMdblLists(BaseMdblList):\n'
+    '\tdef __init__(self, params):\n'
+    '\t\tsuper().__init__(params)\n'
+    "\t\tself.page = params.get('new_page', '1')\n"
+    '\t\tself.pages = self.page\n'
+    "\t\tself.search_title = params.get('search_title') or kodi_utils.dialog.input('POV')\n"
+    '\t\tself.category_name = self.search_title\n'
+    '\n'
+    '\tdef fetch_results(self):\n'
+    "\t\tif self.search_title: self.lists, self.pages = mdblist_api.mdbl_search_lists(self.search_title), '1'\n"
+    '\t\telse: self.lists, self.pages = [], self.page\n'
+    '\n'
+    '\tdef add_next_page(self):\n'
+    '\t\tif int(self.pages) <= int(self.page): return\n'
+    "\t\turl = {'mode': 'build_mdbl_list.search_mdbl_lists', 'search_title': self.search_title, 'new_page': int(self.page) + 1}\n"
+    '\t\tkodi_utils.add_dir(self.handle, url, nextpage_str)\n'
+    '\n'
+    'class GetMdblLists(BaseMdblList):\n'
+    '\tdef __init__(self, params):\n'
+    '\t\tsuper().__init__(params)\n'
+    "\t\tself.sort_method = 'label'\n"
+    "\t\tself.list_type = params['list_type']\n"
+    '\n'
+    '\tdef fetch_results(self):\n'
+    '\t\tself.lists = []\n'
+    "\t\tif self.list_type == 'liked_lists': lists = ('liked_lists',)\n"
+    "\t\telse: lists = ('my_lists', 'external')\n"
+    '\t\tfor i in lists:\n'
+    '\t\t\titems = mdblist_api.mdbl_get_lists(i)\n'
+    '\t\t\tif isinstance(items, list): self.lists.extend(items)\n'
+    '\n'
+    '\tdef parse_item(self, item):\n'
+    "\t\tif self.list_type == 'liked_lists': list_type = 'liked_lists'\n"
+    "\t\telse: list_type = 'external' if 'source' in item else 'my_lists'\n"
+    '\t\treturn item, list_type\n'
+    '\n'
+    '\tdef get_display_and_plot(self, item, name, item_count, user):\n'
+    "\t\tprivacy = item.get('private')\n"
+    "\t\tif self.list_type == 'liked_lists':\n"
+    "\t\t\tdisplay = '%s (x%s) - [I]%s[/I]' % (name, item_count, user) if item_count else '%s - [I]%s[/I]' % (name, user)\n"
+    '\t\telse:\n'
+    "\t\t\tdisplay = '%s (x%s)' % (name, item_count) if item_count else name\n"
+    "\t\t\tif privacy: display = '[I]%s[/I]' % display\n"
+    '\t\treturn display, None\n'
+    '\n'
+    'class GetTopLists(BaseMdblList):\n'
+    '\tdef fetch_results(self):\n'
+    '\t\tself.lists = mdblist_api.mdbl_top_lists()\n'
+    '\n'
+    'class MdblistBuilder(list_helper.BaseMediaListBuilder):\n'
+    "\tmode = 'build_mdbl_list'\n"
+    '\n'
+    '\tdef __init__(self, params):\n'
+    '\t\tsuper().__init__(params)\n'
+    "\t\tself.slug = params.get('slug')\n"
+    "\t\tself.list_type = params.get('list_type')\n"
+    '\n'
+    '\tdef fetch_results(self):\n'
+    '\t\treturn mdblist_api.get_mdbl_list_contents(self.list_type, self.list_id)\n'
+    '\n'
+    '\tdef process_media_types(self, queue, process_list):\n'
+    "\t\tmovies, tvshows = Movies({'id_type': 'trakt_dict'}), TVShows({'id_type': 'trakt_dict'})\n"
+    "\t\tepisodes, seasons = Episodes({'id_type': 'trakt_dict'}), Seasons({'id_type': 'trakt_dict'})\n"
+    '\t\tfor idx, tag in enumerate(process_list, 1):\n'
+    "\t\t\tmtype = tag['mediatype']\n"
+    "\t\t\tif   mtype == 'movie':\n"
+    "\t\t\t\tqueue.put((movies.build_movie_content, idx, {'imdb': tag['imdb_id'], 'tmdb': tag['id']}))\n"
+    "\t\t\telif mtype == 'show':\n"
+    "\t\t\t\tqueue.put((tvshows.build_tvshow_content, idx, {'imdb': tag['imdb_id'], 'tmdb': tag['id']}))\n"
+    "\t\t\telif mtype == 'episode':\n"
+    "\t\t\t\ttmdb_id = tag.get('show_id') or tag.get('show_tmdb') or ''\n"
+    "\t\t\t\tids = {'media_ids': {'tmdb': tmdb_id}, 'season': tag['season_number'], 'episode': tag['episode_number']}\n"
+    '\t\t\t\tqueue.put((episodes.build_episode_content, idx, ids))\n'
+    "\t\t\telif mtype == 'season':\n"
+    "\t\t\t\ttmdb_id = tag.get('show_id') or tag.get('show_tmdb') or ''\n"
+    "\t\t\t\tids = {'tmdb_id': tmdb_id, 'season': tag['season_number'], 'sort': idx}\n"
+    '\t\t\t\tqueue.put((seasons.build_season_list, ids))\n'
+    "\t\treturn {'movies': movies, 'tvshows': tvshows, 'episodes': episodes, 'seasons': seasons}\n"
+    '\n'
+    'class MdbListManager(list_helper.BaseListManager):\n'
+    "\tsetting_key = 'mdblist_user'\n"
+    "\ticon_file = 'mdblist.png'\n"
+    '\theading_id = 32200\n'
+    '\n'
+    '\tdef _get_api(self):\n'
+    '\t\treturn mdblist_api\n'
+    '\n'
+    '\tdef get_custom_lists(self):\n'
+    '\t\tlist1 = [\n'
+    "\t\t\t(str(item['id']), item['name'], '%s items' % item['items'], self.icon)\n"
+    "\t\t\tfor item in self.api.mdbl_get_lists('my_lists') if not item['dynamic']\n"
+    '\t\t]\n'
+    "\t\tlist2 = [('new', 'Create a new list', '', self.icon)]\n"
+    '\t\treturn list1, list2\n'
+    '\n'
+    '\tdef get_default_choices(self):\n'
+    "\t\tchoices = [(i.lower(), i, '', self.icon) for i in (watchl_str, coll_str)]\n"
+    "\t\tif self.mediatype == 'tvshow': choices.append(('dropped', 'Toggle Dropped', '', self.icon))\n"
+    '\t\treturn choices\n'
+    '\n'
+    '\tdef handle_special_action(self, choice_id, choice_name):\n'
+    "\t\tif 'new' in choice_id:\n"
+    '\t\t\tkodi_utils.show_busy_dialog()\n'
+    '\t\t\ttry: self.api.make_new_mdbl_list(None)\n'
+    '\t\t\texcept: return kodi_utils.notification(32574)\n'
+    '\t\t\tfinally: kodi_utils.hide_busy_dialog()\n'
+    '\t\t\treturn self.manage()\n'
+    "\t\tif 'dropped' in choice_id:\n"
+    "\t\t\targs = self.params['tmdb_id'], 'shows', self.params['imdb_id']\n"
+    "\t\t\treturn self.api.hide_unhide_mdbl_items(*args, 'dropped')\n"
+    '\t\treturn False\n'
+    '\n'
+    '\tdef check_item_exists(self, choice_id):\n'
+    "\t\tif 'collection' in choice_id: list_items = self.api.mdblist_collection('all', None)\n"
+    "\t\telif 'watchlist' in choice_id: list_items = self.api.mdblist_watchlist('all', None)\n"
+    "\t\telse: list_items = self.api.get_mdbl_list_contents('my_lists', choice_id)\n"
+    "\t\treturn self.tmdb_id in {i['id'] for i in list_items}\n"
+    '\n'
+    '\tdef execute_toggle(self, choice, action_add):\n'
+    "\t\tif 'collection' in choice[0]:\n"
+    "\t\t\tdata = {'shows' if self.mediatype == 'tvshow' else 'movies': [{'ids': {'tmdb': self.tmdb_id}}]}\n"
+    '\t\t\treturn self.api.add_to_collection(data) if action_add else self.api.remove_from_collection(data)\n'
+    "\t\tdata = {'shows' if self.mediatype == 'tvshow' else 'movies': [{'tmdb': self.tmdb_id}]}\n"
+    '\t\treturn self.api.add_to_list(choice[0], data) if action_add else self.api.remove_from_list(choice[0], data)\n'
+    '\n'
+)
 
+# The API half: real POV module header + real delete_mdbl_list, the only
+# shape the patcher anchors on in this file.
 FIXTURE_API = (
-    "from caches import mdbl_cache\n"
-    "from modules import kodi_utils\n"
-    "\n"
-    "def call_mdblist(path, method='get'): return None\n"
-    "\n"
-    "def delete_mdbl_list(params):\n"
-    "\treturn None\n")
+    'import requests\n'
+    'from threading import Thread\n'
+    'from concurrent.futures import ThreadPoolExecutor\n'
+    'from caches import mdbl_cache\n'
+    'from caches.main_cache import cache_object\n'
+    'from indexers.tmdb_api import movie_external_id, tvshow_external_id\n'
+    'from magneto.modules import client\n'
+    'from modules import kodi_utils, settings\n'
+    'from modules.cache import check_databases\n'
+    'from modules.utils import sort_for_article, jsondate_to_datetime, paginate_list, get_datetime\n'
+    '\n'
+    'EXPIRES_1_HOURS, EXPIRES_2_DAYS, MAX_LIST_ITEMS = 1, 48, 250_000\n'
+    'get_setting, set_setting, logger = kodi_utils.get_setting, kodi_utils.set_setting, kodi_utils.logger\n'
+    "base_url = 'https://api.mdblist.com/%s'\n"
+    'timeout = 10.05\n'
+    'session = requests.Session()\n'
+    'retry = requests.adapters.Retry(total=None, status=1, status_forcelist=(502, 503, 504))\n'
+    "session.mount('https://api.mdblist.com', requests.adapters.HTTPAdapter(pool_maxsize=100, max_retries=retry))\n"
+    '\n'
+    'def delete_mdbl_list(params):\n'
+    '\tif not kodi_utils.confirm_dialog(): return\n'
+    "\tlist_id = params['list_id']\n"
+    "\turl = 'lists/%s' % list_id\n"
+    "\tresult = call_mdblist(url, method='delete')\n"
+    '\tif result is None: return kodi_utils.notification(32574)\n'
+    "\tmdbl_cache.clear_mdbl_list_data('my_lists')\n"
+    '\tkodi_utils.notification(32576)\n'
+    '\tkodi_utils.container_refresh()\n'
+)
 
-work = tempfile.mkdtemp()
-root = os.path.join(work, 'addons', 'plugin.video.pov')
-if os.path.isdir(STOCK):
-    shutil.copytree(STOCK, root)
-    print('fixture: real stock POV %s' % stock_version())
-else:
-    print('fixture: inline (no stock tree on this machine)')
+def lay_down_pristine(dest):
+    """An UNPATCHED POV tree at `dest`.
+
+    Every site that needs one calls this. Two of them used to write
+    `STOCK if os.path.isdir(STOCK) else root` instead -- and `root` is the tree
+    this file patched three hundred lines earlier. With a stock tree present
+    that reads fine; without one, the upgrade replay was handed a tree already
+    carrying the CURRENT marker, so the v2 patcher it was supposed to simulate
+    saw its own marker family and returned 'unchanged', and all five checks
+    below it failed for a reason that had nothing to do with the patcher.
+    """
+    if os.path.isdir(STOCK):
+        shutil.copytree(STOCK, dest)
+        return
     for rel, body in (('resources/lib/menus/mdblist.py', FIXTURE_MENU),
                       ('resources/lib/indexers/mdblist_api.py', FIXTURE_API)):
-        p = os.path.join(root, *rel.split('/'))
+        p = os.path.join(dest, *rel.split('/'))
         os.makedirs(os.path.dirname(p), exist_ok=True)
         with open(p, 'w', encoding='utf-8') as f:
             f.write(body)
+
+
+work = tempfile.mkdtemp()
+root = os.path.join(work, 'addons', 'plugin.video.pov')
+print('fixture: %s' % ('real stock POV ' + stock_version()
+                       if os.path.isdir(STOCK)
+                       else 'inline slices of real POV (no stock tree here)'))
+lay_down_pristine(root)
 
 ku = types.ModuleType('kodi_utils')
 ku.log = lambda *a, **k: None
@@ -473,7 +701,7 @@ if not v2_src.strip():
 else:
     up = tempfile.mkdtemp()
     uproot = os.path.join(up, 'addons', 'plugin.video.pov')
-    shutil.copytree(STOCK if os.path.isdir(STOCK) else root, uproot)
+    lay_down_pristine(uproot)
     pristine = {}
     for rel in ('resources/lib/menus/mdblist.py',
                 'resources/lib/indexers/mdblist_api.py'):
@@ -553,7 +781,7 @@ else:
 # So it is exercised here by making _revert fail on purpose.
 rf = tempfile.mkdtemp()
 rfroot = os.path.join(rf, 'addons', 'plugin.video.pov')
-shutil.copytree(STOCK if os.path.isdir(STOCK) else root, rfroot)
+lay_down_pristine(rfroot)
 vfs.translatePath = lambda p: p.replace('special://home/addons/',
                                         os.path.join(rf, 'addons') + os.sep)
 sp = importlib.util.spec_from_file_location('_rf', PATCHER)
