@@ -270,7 +270,12 @@ check('the guard is read BEFORE the first cursor write',
       < after.index("mdbsync.update_last_watched_at('last_watched_at')"))
 check('the flag is initialised before the loop that clears it',
       after.index('%s = True' % mod._FLAG)
-      < after.index('if not data: %s = False' % mod._FLAG))
+      < after.index('if %s: %s = False' % (mod._NOT_A_PAGE, mod._FLAG)))
+check('the failure test asks whether it LOOKS LIKE A PAGE, not whether it is '
+      'empty',
+      "'pagination' not in data" in mod._NOT_A_PAGE,
+      'get_request hands back a 2xx body verbatim, so a soft-fail envelope '
+      'that is neither a page nor falsy sails through as a last page')
 
 # --- and the patched function BEHAVES --------------------------------------
 # The window arithmetic above is one line of a three-part fix. The other two
@@ -390,7 +395,19 @@ SCENARIOS = [
     ('page two failed after page one had landed',
      [page(1, 2, True), None], False),
     ('a 2xx whose body would not parse (get_request -> {})', [{}], False),
+    # The third shape, and the one `not data` alone cannot see. get_request
+    # returns response.json() verbatim on any 2xx, so a soft-fail envelope is
+    # a TRUTHY dict: the loop ingests nothing, finds no `pagination`, and
+    # leaves as though that had been the final page.
+    ('a 2xx soft-fail envelope that is not a page at all',
+     [{'error': 'rate limited'}], False),
+    ('a soft-fail envelope that also carries empty lists',
+     [{'error': 'rate limited', 'movies': [], 'episodes': []}], False),
     ('an account with genuinely nothing new', [page(0, 0, False)], True),
+    # ... and an empty page is NOT mistaken for a failure just because it is
+    # empty. Freezing the cursor on a quiet account would be the other bug.
+    ('a quiet account across two pages',
+     [page(0, 0, True), page(0, 0, False)], True),
 ]
 
 print()
@@ -437,7 +454,11 @@ print()
 print('=== the same scenarios against stock Umbrella (the bug) ===')
 for label, pages in (('first page failed', [None]),
                      ('page two failed', [page(1, 2, True), None]),
-                     ('body would not parse', [{}])):
+                     ('body would not parse', [{}]),
+                     ('a soft-fail envelope', [{'error': 'rate limited'}]),
+                     ('an envelope with empty lists',
+                      [{'error': 'rate limited', 'movies': [],
+                        'episodes': []}])):
     fake, seen = run(before, pages)
     check('STOCK: %s -> the cursor advances anyway (this is the defect)'
           % label,
@@ -454,7 +475,7 @@ check('STOCK: a successful run advances the cursor too, so the patch is '
 print()
 print('=== sabotage: the behavioural checks must be able to fail ===')
 no_set = '\n'.join(l for l in after.split('\n')
-                   if 'if not data: %s = False' % mod._FLAG not in l)
+                   if '%s = False' % mod._FLAG not in l)
 check('SABOTAGE: dropping the line that CLEARS the flag changes the source',
       no_set != after)
 fake, _ = run(no_set, [page(1, 2, True), None])
@@ -467,6 +488,19 @@ no_check = '\n'.join(l for l in after.split('\n')
 fake, _ = run(no_check, [None])
 check('SABOTAGE: dropping the line that READS the flag advances again',
       fake.cursor_writes == ALL_THREE)
+
+# A 2xx whose body is a JSON ARRAY. `data.get(...)` cannot work on a list, so
+# both versions die on it -- the point is that NEITHER writes the cursor,
+# because the exception unwinds past those three lines. Recorded so that a
+# future change which starts swallowing it has to decide what the cursor does.
+for _which, _text in (('stock', before), ('patched', after)):
+    try:
+        run(_text, [[1, 2, 3]])
+        _raised = None
+    except Exception as _e:
+        _raised = type(_e).__name__
+    check('%s: a JSON array body raises rather than advancing the cursor'
+          % _which, _raised == 'AttributeError', 'got %s' % _raised)
 
 no_init = '\n'.join(l for l in after.split('\n')
                     if '%s = True' % mod._FLAG not in l)

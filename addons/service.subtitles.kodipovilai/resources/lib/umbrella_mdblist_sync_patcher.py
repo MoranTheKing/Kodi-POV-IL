@@ -39,7 +39,10 @@
 #      never told the tail of the function. A flag set on that path, and
 #      checked before the three update_last_watched_at() writes, leaves the
 #      cursor exactly where it was, so the next run asks for the same window
-#      again and the rows finally land.
+#      again and the rows finally land. The flag tests for a PAGE rather than
+#      for emptiness -- see _NOT_A_PAGE -- because get_request hands back a
+#      2xx body verbatim, and a body that is neither a page nor falsy would
+#      otherwise sail through as a successful last page.
 #   2. Overlap the window. The fetch starts 30 days before the stored cursor,
 #      so a window missed for any reason is picked up on the next sync instead
 #      of never. This is free: upsert_watched_episode() is INSERT OR REPLACE,
@@ -138,6 +141,31 @@ _BREAK = "\t\t\tif not data: break\n"
 _OFFSET = "\t\t\toffset += limit\n"
 _FIRST_WRITE = "\t\tmdbsync.update_last_watched_at('last_watched_at')\n"
 
+# What counts as "that was not a page of results".
+#
+# `not data` -- which is all this checked at first -- catches the two shapes
+# get_request() is written to produce on failure: None on any error, and {} on
+# a 2xx whose body will not parse (modules/mdblist.py:868-878). It does NOT
+# catch a THIRD shape: get_request returns `response.json()` verbatim, so a 2xx
+# carrying anything else -- a soft-fail envelope like {"error": "rate limited"}
+# -- comes back TRUTHY. The loop then ingests nothing, reads
+# `pagination = data.get('pagination', {})`, finds has_more falsy, and leaves
+# as though it had reached the last page. The cursor advances over a window
+# that was never fetched. Stock has the same blind spot; a review found it here
+# before it found it in the field.
+#
+# So the test is positive: it has to LOOK like a page. Every real /sync/watched
+# response carries `pagination` -- Umbrella's own loop steers on it, and POV's
+# client indexes into it without a fallback -- so requiring it is requiring the
+# documented shape, not guessing at one.
+#
+# And if that assumption is ever wrong, the cost is small and the direction is
+# the safe one. A response with no `pagination` cannot paginate anyway: the
+# loop reads one page and breaks, so a frozen cursor means ONE extra request
+# per sync interval, re-upserting rows we already have through INSERT OR
+# REPLACE. The opposite mistake is the bug this file exists for.
+_NOT_A_PAGE = "not isinstance(data, dict) or 'pagination' not in data"
+
 
 def _injections(fit):
     """The four lines we add, each as (anchor, anchor with our line inside it).
@@ -163,8 +191,8 @@ def _injections(fit):
         (fit(_LIMIT + _WHILE),
          fit(_LIMIT + '\t\t%s = True  %s\n' % (_FLAG, MARKER) + _WHILE)),
         (fit(_FETCH + _BREAK),
-         fit(_FETCH + '\t\t\tif not data: %s = False  %s\n'
-             % (_FLAG, MARKER) + _BREAK)),
+         fit(_FETCH + '\t\t\tif %s: %s = False  %s\n'
+             % (_NOT_A_PAGE, _FLAG, MARKER) + _BREAK)),
         (fit(_OFFSET + _FIRST_WRITE),
          fit(_OFFSET + '\t\tif not %s: return  %s\n' % (_FLAG, MARKER)
              + _FIRST_WRITE)),
