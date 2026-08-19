@@ -804,9 +804,25 @@ def slim_default_text(text: str) -> str:
     return text
 
 
-def slim_changelog_text(text: str) -> str:
-    """Keep standalone release notes focused on subtitle-addon changes."""
-    skip_terms = (
+# A bullet naming any of these describes something the standalone does not
+# have, so the standalone must not announce it.
+#
+# THE LIST IS ONE LIST ON PURPOSE. It used to be two: this one, which decides
+# what slim_changelog_text() strips, and a shorter hand-copy inside
+# assert_no_standalone_build_payload(), which decides what the build refuses to
+# ship. A term in neither passed both, and three did -- Umbrella, MDBList and
+# POV -- so ten bullets across fourteen releases told people who installed the
+# subtitle add-on ALONE about fixes to add-ons they do not have. That is the
+# defect reported as note 598 in another form: the announcement was shared, the
+# change was not. The assertion now reads THIS tuple, so the two cannot drift
+# again.
+#
+# The three host add-ons are the important entries. The standalone ships
+# patchers for DarkSubs, All_Subs and the skin's subtitle dialog and for
+# nothing else -- include_standalone() drops every pov_*, and the Umbrella
+# patchers are build-only -- and it runs SLIM_SERVICE, which does not run the
+# build's startup repairs at all.
+STANDALONE_SKIP_TERMS = (
         "AF3",
         "Arctic",
         "Estuary",
@@ -829,7 +845,16 @@ def slim_changelog_text(text: str) -> str:
         "Skin",
         "POV search",
         "quickfix",
-    )
+        # the three host add-ons the standalone neither ships nor patches
+        "Umbrella",
+        "MDBList",
+        "POV",
+)
+
+
+def slim_changelog_text(text: str) -> str:
+    """Keep standalone release notes focused on subtitle-addon changes."""
+    skip_terms = STANDALONE_SKIP_TERMS
     sections = re.split(r"(?=^v\d+\.\d+\.\d+\n)", text, flags=re.M)
     kept = []
     for section in sections:
@@ -854,9 +879,16 @@ def slim_changelog_text(text: str) -> str:
         ]
         if filtered:
             kept.append(header + "\n" + "\n".join(filtered).rstrip() + "\n")
+    head = "v{0}\n- AI subtitle addon maintenance update.\n".format(version())
     if not kept:
-        return "v{0}\n- AI subtitle addon maintenance update.\n".format(
-            version())
+        return head
+    # The newest entry must be the version on the tin. Once the three host
+    # add-ons joined the skip list, a release whose every bullet was about
+    # Umbrella or POV left the standalone shipping 0.2.501 with a changelog
+    # topping out at 0.2.497 -- true, but it reads as a stale package rather
+    # than as "nothing in those releases was for you". Say the second thing.
+    if not kept[0].startswith("v{0}\n".format(version())):
+        kept.insert(0, head)
     return "\n".join(kept).rstrip() + "\n"
 
 
@@ -1142,17 +1174,11 @@ def assert_no_standalone_build_payload(zip_path: Path) -> None:
                 + ", ".join(bad_text)
             )
         if changelog_text:
-            forbidden_changelog = (
-                "TorBox",
-                "Premiumize",
-                "FENtastic",
-                "Estuary",
-                "AF3",
-                "Wizard",
-                "quickfix",
-            )
+            # THE SAME tuple slim_changelog_text() filters on, never a
+            # hand-copied subset of it: a subset can only ever be wrong in the
+            # direction of letting something through.
             bad_changelog = [
-                token for token in forbidden_changelog
+                token for token in STANDALONE_SKIP_TERMS
                 if token in changelog_text
             ]
             if bad_changelog:
