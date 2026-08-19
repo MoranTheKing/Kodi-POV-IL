@@ -28,21 +28,47 @@
 # skipped FOREVER -- the cursor only ever moves forward. Exactly the shape of
 # our own enrich bug, where a failure still wrote progress.
 #
-# THE FIX, in two halves:
-#   1. Overlap the window. The fetch starts 30 days before the stored cursor,
+# THE FIX, in three parts:
+#   1. DO NOT ADVANCE THE CURSOR UNLESS THE FETCH ACTUALLY SUCCEEDED. This is
+#      the root defect, and the only one of the three that makes the loss
+#      IMPOSSIBLE rather than merely recoverable. The information needed to
+#      tell success from failure is already there: get_request() returns None
+#      on any error and {} on a 2xx whose body will not parse, while a
+#      genuinely empty page still comes back as a dict carrying `pagination`
+#      -- truthy. So `if not data: break` already separates them; it just
+#      never told the tail of the function. A flag set on that path, and
+#      checked before the three update_last_watched_at() writes, leaves the
+#      cursor exactly where it was, so the next run asks for the same window
+#      again and the rows finally land. The flag tests for a PAGE rather than
+#      for emptiness -- see _NOT_A_PAGE -- because get_request hands back a
+#      2xx body verbatim, and a body that is neither a page nor falsy would
+#      otherwise sail through as a successful last page.
+#   2. Overlap the window. The fetch starts 30 days before the stored cursor,
 #      so a window missed for any reason is picked up on the next sync instead
 #      of never. This is free: upsert_watched_episode() is INSERT OR REPLACE,
-#      so re-ingesting the same rows changes nothing.
-#   2. Repair the damage already done. An overlap only heals 30 days back, and
+#      so re-ingesting the same rows changes nothing. Still needed after (1),
+#      and not redundant with it: the cursor is written from the DEVICE's
+#      clock (datetime.utcnow()) while the items are stamped by MDBList's, so
+#      a device running a minute fast skips a minute of history on a run that
+#      succeeded by every measure the code can take. No success flag can see
+#      that; only an overlap can.
+#   3. Repair the damage already done. An overlap only heals 30 days back, and
 #      this user's table was missing far more, so applying the patch also
 #      clears the stored cursor once -- the next scheduled sync then backfills
 #      from 1970, which is what the force button does, without the user having
 #      to know the button exists.
 #
+# Being too conservative in (1) is cheap and being too permissive is not. If
+# the flag ever stays False when the sync really was fine, the cursor stands
+# still and the next run re-fetches a window it already has -- INSERT OR
+# REPLACE, so no damage, just work. The opposite mistake is the bug we are
+# here for: the cursor only ever moves forward, so a window skipped once is
+# skipped forever. When in doubt the patch does not advance.
+#
 # The guard above the fetch (`api_last - db_last < 60`) is deliberately left
 # alone: it compares MDBList's newest activity against the last sync time to
-# decide whether to bother, and that reasoning is sound. Only the WINDOW was
-# wrong.
+# decide whether to bother, and that reasoning is sound. Only the WINDOW and
+# the UNCONDITIONAL cursor write were wrong.
 
 import os
 import re
@@ -61,10 +87,20 @@ except Exception:
 UMBRELLA_ADDON_ID = 'plugin.video.umbrella'
 MDBLIST_REL = 'resources/lib/modules/mdblist.py'
 
-MARKER = '# AI_SUBS_UMB_MDBL_SINCE_v1'
+MARKER = '# AI_SUBS_UMB_MDBL_SINCE_v2'
 # Prefix, never an enumerated list of predecessors: a hand-maintained tuple is
 # only correct for the one bump it was written for.
+#
+# The name says SINCE because v1 only widened the `since` window and the field
+# already carries it. It is FROZEN, not descriptive: _revert() finds a previous
+# release's injection by this prefix, so renaming it would leave v1's line in
+# place on every device that has one and then add v2's beside it.
 _MARKER_ANY = '# AI_SUBS_UMB_MDBL_SINCE_v'
+
+# The local we introduce into sync_watchedProgress. Deliberately not a name
+# anybody would reach for: it has to be unique inside a function we do not own,
+# and a collision would silently change Umbrella's own logic rather than fail.
+_FLAG = '_ai_fetch_ok'
 
 # The one-shot backfill is tracked SEPARATELY from the file patch. Tying it to
 # the write meant a reset that lost a lock race to Umbrella's own sync thread
@@ -77,7 +113,15 @@ _MARKER_ANY = '# AI_SUBS_UMB_MDBL_SINCE_v'
 # settings on every bump; overwriting one value leaves nothing behind. Bump
 # _RESET_GEN to request another full backfill.
 _RESET_FLAG = '_umb_mdbl_cursor_reset'
-_RESET_GEN = '1'
+# GEN 2, and the bump is a REPAIR, not a new idea. Generation 1 cleared three
+# keys; two of them were activity signals, not fetch cursors, and clearing
+# them told Umbrella "nothing new to sync" forever (see _reset_sync_cursor).
+# Devices that took that release still have both at epoch and their episodes
+# list still needs a manual refresh. Bumping the generation runs the corrected
+# reset once more on exactly those devices; the sync it forces then writes all
+# three keys back itself (modules/mdblist.py:983-985), so the signals it
+# destroyed are restored by the same pass that backfills the table.
+_RESET_GEN = '2'
 
 # 30 days. Long enough to cover an outage or a clock that disagrees, short
 # enough that the incremental sync stays incremental.
@@ -88,6 +132,71 @@ _OVERLAP_SECONDS = 2592000
 # four times in the file and only one of them belongs to this function.
 _ANCHOR = ("\t\tif not forced and db_last and (api_last - db_last) < 60: "
            "return\n\t\tfrom datetime import datetime as _dt\n")
+
+# The other three anchors, as the exact adjacent line pairs we insert between.
+_LIMIT = "\t\tlimit = 1000\n"
+_WHILE = "\t\twhile True:\n"
+_FETCH = "\t\t\tdata = get_request(url)\n"
+_BREAK = "\t\t\tif not data: break\n"
+_OFFSET = "\t\t\toffset += limit\n"
+_FIRST_WRITE = "\t\tmdbsync.update_last_watched_at('last_watched_at')\n"
+
+# What counts as "that was not a page of results".
+#
+# `not data` -- which is all this checked at first -- catches the two shapes
+# get_request() is written to produce on failure: None on any error, and {} on
+# a 2xx whose body will not parse (modules/mdblist.py:868-878). It does NOT
+# catch a THIRD shape: get_request returns `response.json()` verbatim, so a 2xx
+# carrying anything else -- a soft-fail envelope like {"error": "rate limited"}
+# -- comes back TRUTHY. The loop then ingests nothing, reads
+# `pagination = data.get('pagination', {})`, finds has_more falsy, and leaves
+# as though it had reached the last page. The cursor advances over a window
+# that was never fetched. Stock has the same blind spot; a review found it here
+# before it found it in the field.
+#
+# So the test is positive: it has to LOOK like a page. Every real /sync/watched
+# response carries `pagination` -- Umbrella's own loop steers on it, and POV's
+# client indexes into it without a fallback -- so requiring it is requiring the
+# documented shape, not guessing at one.
+#
+# And if that assumption is ever wrong, the cost is small and the direction is
+# the safe one. A response with no `pagination` cannot paginate anyway: the
+# loop reads one page and breaks, so a frozen cursor means ONE extra request
+# per sync interval, re-upserting rows we already have through INSERT OR
+# REPLACE. The opposite mistake is the bug this file exists for.
+_NOT_A_PAGE = "not isinstance(data, dict) or 'pagination' not in data"
+
+
+def _injections(fit):
+    """The four lines we add, each as (anchor, anchor with our line inside it).
+
+    All four are PURE INSERTIONS between two existing lines -- never an edit to
+    a line Umbrella wrote. That is what keeps _revert() byte-exact: it deletes
+    marked lines and everything indented under them, so everything it can
+    delete has to be ours. The obvious alternative for part (1) -- wrap the
+    three update_last_watched_at() calls in an `if` and re-indent them -- reads
+    better and is wrong here, because the revert would then take Umbrella's
+    three lines with it and the next version could not cleanly replace this
+    one.
+
+    An early `return` rather than a skip-and-continue, because everything below
+    those three writes is cache invalidation and a widget refresh: on a run
+    that failed there is nothing new worth showing, and re-priming those caches
+    means going back to an API that just refused us.
+    """
+    return [
+        (fit(_ANCHOR),
+         fit(_ANCHOR + '\t\tdb_last = max(0, db_last - %d)  %s\n'
+             % (_OVERLAP_SECONDS, MARKER))),
+        (fit(_LIMIT + _WHILE),
+         fit(_LIMIT + '\t\t%s = True  %s\n' % (_FLAG, MARKER) + _WHILE)),
+        (fit(_FETCH + _BREAK),
+         fit(_FETCH + '\t\t\tif %s: %s = False  %s\n'
+             % (_NOT_A_PAGE, _FLAG, MARKER) + _BREAK)),
+        (fit(_OFFSET + _FIRST_WRITE),
+         fit(_OFFSET + '\t\tif not %s: return  %s\n' % (_FLAG, MARKER)
+             + _FIRST_WRITE)),
+    ]
 
 
 def _log(msg, level='INFO'):
@@ -192,10 +301,27 @@ def _reset_sync_cursor():
             "SELECT name FROM sqlite_master WHERE type='table' "
             "AND name='service'").fetchone()
         if row:
+            # ONLY last_watched_at. This was three keys and that was a
+            # REGRESSION, reported from the field: the episodes list, which
+            # had always been right, started needing a manual refresh too.
+            #
+            # sync_watchedProgress reads ONLY last_watched_at to compute
+            # `since` (modules/mdblist.py:945), so it is the only one that
+            # has to move for a backfill. The other two are read somewhere
+            # else entirely -- getEpisodesWatchedActivity() and
+            # getMoviesWatchedActivity() (mdblist.py:923-931) -- and
+            # playcount.py:98 uses them as the "is there new watched activity"
+            # signal for the indicator cache:
+            #
+            #     elif mdblist.getEpisodesWatchedActivity() < ...: timeout = 720
+            #     else: timeout = 0
+            #
+            # last_sync() returns 0 for a row that is not there, so deleting
+            # the key made that comparison permanently true: serve the 12-hour
+            # cache instead of re-syncing. The refresh the user pressed then
+            # did nothing. One stale list became two.
             cur.execute(
-                "DELETE FROM service WHERE setting IN "
-                "('last_watched_at', 'last_watched_movies_at', "
-                "'last_watched_episodes_at')")
+                "DELETE FROM service WHERE setting = 'last_watched_at'")
             _log('cleared the watched-sync cursor; the next MDBList sync '
                  'backfills the episodes the old one skipped')
         cur.close()
@@ -268,16 +394,23 @@ def ensure_patched():
             _log('could not remove an older injection', level='WARNING')
             return 'revert_failed'
 
-    if fit(_ANCHOR) not in content:
+    # ALL FOUR OR NONE. Three of the four lines only make sense together --
+    # the flag has to be initialised, set and read -- so a partial application
+    # would inject a NameError into somebody else's add-on, inside a bare
+    # `except: log_utils.error()` that would swallow it and take the whole
+    # sync down with it. `count != 1` rather than `not in`, so a refactor that
+    # DUPLICATED one of these shapes is treated as unrecognised too, instead of
+    # being patched at whichever copy happens to come first.
+    injections = _injections(fit)
+    if any(content.count(anchor) != 1 for anchor, _ in injections):
         _log('sync_watchedProgress does not have the expected shape -- '
              'Umbrella may have refactored it; leaving the file alone',
              level='WARNING')
         return 'unmatched'
 
-    new_content = content.replace(
-        fit(_ANCHOR),
-        fit(_ANCHOR + '\t\tdb_last = max(0, db_last - %d)  %s\n'
-            % (_OVERLAP_SECONDS, MARKER)), 1)
+    new_content = content
+    for anchor, replacement in injections:
+        new_content = new_content.replace(anchor, replacement, 1)
 
     try:
         compile(new_content, path, 'exec')
@@ -308,7 +441,8 @@ def ensure_patched():
                 except OSError:
                     pass
 
-    _log('widened the MDBList watched-sync window by %d days so a missed '
-         'or failed page is no longer skipped forever'
+    _log('MDBList watched-sync: the cursor now advances only when the fetch '
+         'succeeded, and the window overlaps by %d days, so a failed or '
+         'skipped page is no longer lost forever'
          % (_OVERLAP_SECONDS // 86400))
     return 'repatched' if repatch else 'patched'
