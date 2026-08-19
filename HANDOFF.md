@@ -131,6 +131,15 @@ tools/build_wizard_quickfix.py          # replaces only the Wizard in a quickfix
    HTTP 200. Never print the credential while testing.
 5. Get a separate read-only reviewer to inspect the source diff, ZIP member/CRC
    diff, credential preservation and privacy boundary. Do not ship a blocker.
+5b. **Read the STANDALONE changelog, not just the build one.** They are one
+   file filtered by `slim_changelog_text()`, and the standalone ships no
+   `pov_*`, no Umbrella patcher, and `SLIM_SERVICE` rather than the startup
+   repair pass -- so a bullet about POV or Umbrella announces a fix those users
+   do not receive. That is note 598's defect: the announcement was shared, the
+   change was not. `tools/test_standalone_changelog_scope.py` now derives which
+   hosts the standalone patches from `include_standalone()` itself and requires
+   every other host to be filtered -- and requires the ones it DOES patch not
+   to be, so hiding a real fix fails just as loudly.
 6. Choose the next numeric note id `N`, but **do not edit `quick_update.txt`
    yet**. Point mutable `build.txt` at the new quickfix and add
    `wizard/assets/build_versions/N.txt`; its normalized Git blob must be
@@ -190,6 +199,21 @@ tools/build_wizard_quickfix.py          # replaces only the Wizard in a quickfix
    reads the working copy first, so running it before the note is written
    publishes an archive missing the very update announcing it. It is capped at
    ten and verifies its own output round-trips.
+
+   **ASSUME A SHALLOW CLONE.** The tool rebuilds the archive from git history,
+   and on release 601 it ran in a 56-commit checkout, found six commits
+   touching `quick_update.txt`, wrote SEVEN notes and printed
+   `7 note(s) of 7 available` -- a success line for an archive that had just
+   dropped 591-594, which users could see on their home screen. Check with
+   `git rev-parse --is-shallow-repository`. Plain `git fetch --unshallow` times
+   out here (a 70 MB build zip per release); `git fetch --filter=blob:none
+   --unshallow` completes and fetches the small text blobs lazily.
+
+   It can no longer lose a note either way -- the existing archive is now a
+   source as well as the output, and a note may only leave by being pushed off
+   the BOTTOM, never from the middle. `tools/test_recent_updates_archive.py`
+   pins that, including the ordinary slide, so the guard cannot start firing on
+   every release.
 10. Wizard delivery invariant: never persist the new note id until
     `quick_update()` succeeds, and success requires extraction `(100%, 0 errors)`.
     False, exception, partial extraction, corrupt ZIP or a missing versioned
@@ -920,7 +944,7 @@ This section originally read "**None found**", on the strength of reading the
 86 patcher sources. That conclusion is false and every number under it was
 wrong. It was re-done by MEASUREMENT -- patch a pristine host, bump the
 patcher's own marker, run it again against the host it just patched -- against
-**POV 6.08.13 and Umbrella 6.7.82, the current upstream of both**. 21 of the 36
+**POV 6.08.13 and Umbrella 6.7.85, the current upstream of both**. 21 of the 36
 patchers that can be measured here fail to upgrade correctly (81 files
 carry a versioned marker in all):
 
@@ -1230,11 +1254,17 @@ carrying the old version receives.
 
 - `tools/test_patcher_upgrade_path.py` — every patcher's upgrade path, pinned.
   See below.
-- `tools/test_umbrella_mdblist_sync.py` — runs the Umbrella sync patcher against
-  a real Umbrella 6.7.82 tree, EXECUTES the patched cursor arithmetic (a marker
-  being present would pass a patch that computed the wrong window), and covers
-  CRLF, the byte-exact revert, the retry after a lost lock race, and the repair
-  on the 'unmatched' path.
+- `tools/test_umbrella_mdblist_sync.py` — runs the Umbrella sync patcher
+  against the real Umbrella tree (whose version it READS rather than naming:
+  the banner once said 6.7.82 while running against 6.7.85). It EXTRACTS
+  `sync_watchedProgress` from both the stock and the patched file and EXECUTES
+  both against the same scripted MDBList conversations — success, first-page
+  failure, mid-run failure, an unparseable body, a soft-fail envelope, and a
+  genuinely quiet account. The stock runs are required to demonstrate the
+  defect before the patched runs may claim the fix. It also covers CRLF, the
+  byte-exact revert, the retry after a lost lock race, the repair on the
+  'unmatched' path, and pins every source citation in the patcher against the
+  line it names.
 - `tools/test_osd_autoclose.py` — lifts `_maybe_enable_osd_autoclose` out of
   `service.py` by AST and executes it against a fake Kodi whose skin bools and
   skin strings are SEPARATE MAPS, as Kodi's are. It boots twice to prove a
@@ -1244,6 +1274,11 @@ carrying the old version receives.
 **Both new tests exist because a validator built a broken variant and watched
 it pass.** That is the standard for adding a check here: not "does it describe
 the behaviour" but "which mutation does it fail on".
+
+Two more guard the RELEASE rather than the runtime, and are listed with the
+checklist steps they belong to rather than here:
+`tools/test_standalone_changelog_scope.py` (step 5b) and
+`tools/test_recent_updates_archive.py` (step 9b).
 
 ### `tools/test_patcher_upgrade_path.py` — the guard
 
@@ -4431,6 +4466,59 @@ one they did not. Consequence handled rather than shipped: with the hosts
 filtered, a release whose every bullet is about Umbrella left the standalone
 carrying 0.2.501 with a changelog topping out at 0.2.497. The shipped version
 now always heads that changelog.
+
+**The archive builder was about to delete four notes, and would have reported
+success.** Found while writing note 601 itself, which is phase 2 -- so after
+the section above was written, and worth reading as its own lesson.
+
+`tools/build_recent_updates.py` rebuilds the ten-updates archive from git:
+every note ever published is a committed version of `quick_update.txt`, and its
+docstring said that meant it could not drift -- "regenerate and it is right
+again."
+
+True only where the whole history is present. **This checkout is a SHALLOW
+clone**: 56 commits, six of them touching `quick_update.txt`. The tool wrote
+SEVEN notes and printed `7 note(s) of 7 available` -- a success line for an
+archive that had just dropped 591 through 594, which users could see on their
+home screen at that moment. It could not tell "there are only seven notes in
+the world" from "I can only see seven". Nothing would have failed. The tile
+would just have got shorter.
+
+Assume a shallow clone. `git rev-parse --is-shallow-repository` says so, and
+`git fetch --unshallow` times out here -- the repo carries a 70 MB build zip
+per release. `--filter=blob:none --unshallow` completes, and lazily fetches the
+small text blobs on demand.
+
+Four changes, and the last two are the transferable ones:
+
+  * The archive it overwrites is now also a SOURCE. It is the published truth,
+    it is in the working tree, and it needs no network. Git still wins where it
+    reaches, so the text stays the actual text users were shown.
+  * A note may only leave by being pushed off the BOTTOM. The first version of
+    that check said "never fewer ids than before" and was wrong on its first
+    real run: adding 601 pushes 591 out of a ten-item window, which is the
+    window working. What matters is that everything which left is OLDER than
+    everything kept -- a gap in the MIDDLE means something became unreachable.
+  * History is read lazily and stops at ten. `git log` is newest-first and note
+    ids only increase, so the first ten distinct ids ARE the newest ten.
+    Reading eagerly meant one `git show` per commit -- 631 of them, each a lazy
+    blob fetch -- and 3m49s to compute ten records. Now 0.2s.
+  * **EVERY CHECK RUNS BEFORE THE WRITE.** They ran after it, so each one
+    reported a problem it had already caused: the bad archive was on disk and
+    the exception only told you so. The pre-existing round-trip check shipped
+    that way too. A test asking "does the file survive a refused build" is what
+    caught it, and that question is worth asking of every validating writer in
+    this tree.
+
+`tools/test_recent_updates_archive.py` pins all of it, including the ordinary
+slide, so the hole check cannot start firing on every release. Its sabotage
+case was rewritten twice and both rewrites are recorded in it: the first built
+a repo with no commits, where `git log` fails and the tool exits non-zero for a
+reason unrelated to the guard -- so it asserts the MESSAGE, not the exit code.
+And once the archive is a source, a hole is genuinely unreachable, so the guard
+is a tripwire for a route that does not currently exist and testing it means
+injecting the fault. Said out loud in the test rather than hidden behind a
+fixture that proves something easier.
 
 **Open, from this work:** POV commits "up to date as of now" BEFORE fetching
 (`indexers/mdblist_api.py:464`; `reset_activity` writes the new stamps and
