@@ -34,7 +34,7 @@ LIB = os.path.join(HERE, '..', 'addons', 'service.subtitles.kodipovilai',
 # POV 6.08.12. That runs everywhere.
 STOCK = os.environ.get('POV_STOCK') or (
     '/tmp/claude-0/-home-user-Kodi-POV-IL/'
-    '70968383-5f01-52a3-afe7-ced1aba28071/scratchpad/pov6812/plugin.video.pov')
+    '70968383-5f01-52a3-afe7-ced1aba28071/scratchpad/pov6813/plugin.video.pov')
 
 FIXTURE_MENU = (
     "from indexers import mdblist_api, list_helper\n"
