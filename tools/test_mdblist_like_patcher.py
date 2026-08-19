@@ -1,6 +1,7 @@
 """Like List / Unlike List really reach MDBList's long-press menu.
 
-Runs the patcher against a PRISTINE copy of stock POV 6.08.12 and then checks
+Runs the patcher against a PRISTINE copy of the stock POV tree and then
+checks
 the result the way it will actually be used: the menu file compiles, the two
 entries are built for the right list types and NOT for the wrong ones, the
 modes they fire resolve to functions that now exist, and those functions call
@@ -31,10 +32,23 @@ LIB = os.path.join(HERE, '..', 'addons', 'service.subtitles.kodipovilai',
 #
 # So the real fixture is built here, inline: the two POV lines this patcher
 # anchors on, in their real shape (tabs, nesting, argument order), copied from
-# POV 6.08.12. That runs everywhere.
+# POV 6.08.12 -- where they are unchanged in 6.08.13. That runs everywhere.
 STOCK = os.environ.get('POV_STOCK') or (
     '/tmp/claude-0/-home-user-Kodi-POV-IL/'
     '70968383-5f01-52a3-afe7-ced1aba28071/scratchpad/pov6813/plugin.video.pov')
+
+def stock_version():
+    """Read it. Never print a hardcoded one -- a banner that names a version
+    the tree is not is exactly the small lie that makes a later reader trust
+    the wrong thing. Same helper, same reason, as in
+    tools/test_umbrella_mdblist_sync.py."""
+    try:
+        with open(os.path.join(STOCK, 'addon.xml'), encoding='utf-8') as f:
+            m = re.search(r'<addon[^>]*?version="([0-9.]+)"', f.read(), re.S)
+        return m.group(1) if m else 'unknown version'
+    except Exception:
+        return 'unknown version'
+
 
 FIXTURE_MENU = (
     "from indexers import mdblist_api, list_helper\n"
@@ -138,7 +152,8 @@ def povfile(home, rel):
     return os.path.join(home, 'addons', 'plugin.video.pov', *rel.split('/'))
 
 
-print('fixture: %s' % ('real stock POV 6.08.12' if os.path.isdir(STOCK)
+print('fixture: %s' % ('real stock POV ' + stock_version()
+                       if os.path.isdir(STOCK)
                        else 'inline (no stock tree on this machine)'))
 
 # --- 1. against stock POV ---------------------------------------------------
@@ -146,7 +161,7 @@ home = fresh_pov()
 mod = load(home)
 status = mod.ensure_patched()
 print('   status: %s' % status)
-check('both halves patch a stock POV 6.08.12',
+check('both halves patch a stock POV tree',
       status == 'api=patched, menu=patched', status)
 
 api_txt = open(povfile(home, mod.API_REL_PATH), encoding='utf-8').read()

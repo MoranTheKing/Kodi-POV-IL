@@ -47,6 +47,19 @@ STOCK = os.environ.get('POV_STOCK') or (
     '/tmp/claude-0/-home-user-Kodi-POV-IL/'
     '70968383-5f01-52a3-afe7-ced1aba28071/scratchpad/pov6813/plugin.video.pov')
 
+def stock_version():
+    """Read it. Never print a hardcoded one -- a banner that names a version
+    the tree is not is exactly the small lie that makes a later reader trust
+    the wrong thing. Same helper, same reason, as in
+    tools/test_umbrella_mdblist_sync.py."""
+    try:
+        with open(os.path.join(STOCK, 'addon.xml'), encoding='utf-8') as f:
+            m = re.search(r'<addon[^>]*?version="([0-9.]+)"', f.read(), re.S)
+        return m.group(1) if m else 'unknown version'
+    except Exception:
+        return 'unknown version'
+
+
 FIXTURE_MENU = (
     "from indexers import mdblist_api, list_helper\n"
     "ls = lambda i: str(i)\n"
@@ -88,7 +101,7 @@ work = tempfile.mkdtemp()
 root = os.path.join(work, 'addons', 'plugin.video.pov')
 if os.path.isdir(STOCK):
     shutil.copytree(STOCK, root)
-    print('fixture: real stock POV 6.08.12')
+    print('fixture: real stock POV %s' % stock_version())
 else:
     print('fixture: inline (no stock tree on this machine)')
     for rel, body in (('resources/lib/menus/mdblist.py', FIXTURE_MENU),
