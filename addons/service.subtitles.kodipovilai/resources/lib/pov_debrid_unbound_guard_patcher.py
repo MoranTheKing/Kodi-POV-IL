@@ -8,7 +8,11 @@
 #       resolve_external_sources exception: cannot access local variable
 #       'torrent_id' where it is not associated with a value
 #
-# That is not a "no results" condition. It is an UnboundLocalError.
+# That is not a "no results" condition. It is an UnboundLocalError -- and the
+# `resolve_external_sources` in the log line is only where it was CAUGHT. On a
+# device carrying pov_debrid_resolve_patcher, that function's own copy of this
+# defect is already guarded, so the name in the message comes from one level
+# down: the provider's parse_magnet_pack, which nothing was guarding.
 #
 # WHERE IT COMES FROM. debrids/alldebrid_api.py:
 #
@@ -33,12 +37,12 @@
 # This is the same disease as the Umbrella sync cursor, one layer up: the
 # record of what happened and what actually happened disagree.
 #
-# THE CHAIN DOES NOT STOP THERE. When parse_magnet_pack raises,
-# modules/debrid.py's `files = api.parse_magnet_pack(*args)` never completes,
-# so `files` is unbound too -- and ITS handler reads `if files and torrent_id`.
-# The first UnboundLocalError is logged (38 times, in that log); the second one
-# is raised inside the handler and reaches nobody. That is why the log shows
-# `torrent_id` and never `files`.
+# THE CHAIN WOULD NOT STOP THERE ON STOCK POV. When parse_magnet_pack raises,
+# `files = api.parse_magnet_pack(*args)` never completes, so `files` is unbound
+# and the caller's handler reads `if files and torrent_id`. On this build that
+# second crash is already prevented -- see the note on the caller below -- so
+# it is stock POV's problem, not ours, and it is recorded here so nobody
+# rediscovers it as a live one.
 #
 # FOUR SITES, FOUND BY SCANNING RATHER THAN BY READING. An AST pass over every
 # debrid API -- "which names does an except handler read that are only ever
@@ -50,7 +54,23 @@
 #     debrids/alldebrid_api.py   parse_magnet_pack        torrent_id
 #     debrids/real_debrid_api.py parse_magnet_pack        torrent_id
 #     debrids/torbox_api.py      parse_magnet_pack        path, torrent_id
-#     modules/debrid.py          resolve_external_sources api, files, torrent_id
+#
+# THE CALLER IS ALREADY HANDLED, AND I NEARLY SHIPPED A SECOND COPY OF IT.
+# modules/debrid.py's resolve_external_sources has the identical defect and
+# `pov_debrid_resolve_patcher.py` -- in this same directory, months old --
+# already binds `files` and `torrent_id` at the top of it. The first draft of
+# this module patched it AGAIN. It could not even have worked: that patcher
+# inserts its line BETWEEN the `def` and the import, which is the middle of the
+# anchor here, so the site would have reported 'unmatched' on every real device
+# forever while the log carried a WARNING about it every boot. Read the
+# directory before adding a patcher; the bug you just diagnosed may already
+# have a fix beside it.
+#
+# `api` is the one name that patcher does not bind, and it does not need to be:
+# the handler reads `if files and torrent_id: self._delete(api, torrent_id)`,
+# `api` is assigned BEFORE `files` in the body, and `and` short-circuits -- so
+# any failure early enough to leave `api` unbound leaves `files` at the guarded
+# None and `api` is never reached.
 #
 # WHAT THIS DOES AND DOES NOT FIX. It binds those names to None before the try,
 # so the handler runs as written and the ORIGINAL exception survives to the
@@ -101,12 +121,6 @@ _SITES = (
      "\t\tfrom modules.source_utils import supported_video_extensions\n"
      "\t\ttry:\n",
      ('path', 'torrent_id')),
-    ('resources/lib/modules/debrid.py',
-     "\tdef resolve_external_sources(self, title, season, episode):\n"
-     "\t\tfrom modules.source_utils import supported_video_extensions, "
-     "seas_ep_filter, extras_filter\n"
-     "\t\ttry:\n",
-     ('api', 'files', 'torrent_id')),
 )
 
 
@@ -259,7 +273,7 @@ def ensure_patched():
     """
     if xbmcvfs is None:
         return 'no_pov'
-    labels = ('alldebrid', 'realdebrid', 'torbox', 'resolve')
+    labels = ('alldebrid', 'realdebrid', 'torbox')
     out = []
     for label, (rel, anchor, names) in zip(labels, _SITES):
         try:
