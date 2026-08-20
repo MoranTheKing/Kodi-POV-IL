@@ -4362,6 +4362,96 @@ Raw by a few minutes; poll rather than assume.
   are served from the `gh-pages` branch, not from the release. See
   `APK_RELEASE.md`.
 
+### What shipped 0.2.502 / qf 0.1.547 / build 0.1.115 (note 602)
+
+A field report of "AllDebrid says no results for movies and series". The log
+said something else: **70 sources were found**, and 38 of the 38 AllDebrid ones
+failed to resolve with the same message --
+`cannot access local variable 'torrent_id'`. Not a no-results condition. An
+UnboundLocalError.
+
+**Where it comes from.** `debrids/alldebrid_api.py`'s `parse_magnet_pack`
+assigns `torrent_id` inside its `try` and reads it in the `except`.
+`create_transfer` does `result['magnets'][0]`, so an error reply from AllDebrid
+is a KeyError, `torrent_id` was never bound, and **the handler crashes on the
+name while reporting the failure** -- replacing whatever AllDebrid actually
+said. The diagnosis is destroyed by the code written to report it. Same disease
+as the Umbrella cursor one release earlier: the record of what happened and
+what happened disagree.
+
+**Found by scanning, not by reading.** An AST pass -- "which names does an
+except handler read that nothing binds before its try?" -- found the shape in
+three of POV's six debrid providers plus the caller. AllDebrid is just the one
+whose API is failing today.
+
+**What it does and does not do, per site**, because the first version of this
+write-up flattened it and a review caught that by EXECUTING all three instead
+of reading them:
+
+  * alldebrid, real_debrid -- handlers end `if errors: raise` and the caller
+    passes `errors=True`, so the provider's real message now reaches the log.
+  * torbox -- no `errors` parameter, never re-raises. It gains the crash
+    removed and its cleanup running, **not the reason**. Left that way on
+    purpose: making it re-raise would invent an error path into two call sites
+    (`modules/debrid.py:137`, `:166`) that have no `try` of their own.
+
+**The caller was already fixed and I nearly shipped a second copy.**
+`pov_debrid_resolve_patcher.py` had been guarding `resolve_external_sources`
+for months, in the same directory, documenting the same error string. The first
+draft patched it again -- and could not have worked, because that patcher
+inserts its line inside the middle of the new anchor. **Read the directory
+before adding a patcher.** The test that would have caught it now exists:
+apply the sibling first, as the startup pass does, then this one, both orders.
+
+**Two things about AllDebrid, established by probing the live API.** Its
+cache-check endpoint is **gone** -- `magnet/instant` answers `DISCONTINUED` and
+`v4/magnet/instant` does not exist -- so POV routes AllDebrid cache checks
+through a single third-party service using a shared demo key, while Real-Debrid
+gets two independent providers. That is why AllDebrid results show as
+`Unchecked` and why it is a single point of failure. It was NOT the cause here.
+
+**SEVEN VALIDATION ROUNDS, and the shape of what they found is the lesson.**
+
+Rounds 1-5 all hit the same class in the TEST-side scan: a hand-rolled scope
+analysis that kept missing one more Python construct -- a try nested in an
+`if`; a name bound in a nested def, lambda or comprehension; a class body; a
+`global` in a nested helper; `except E as name` (CPython deletes it at the end
+of the handler); a walrus in the function's own decorator or default; `del`.
+**Twice my fix created the next miss, and once I pinned a miss with a test that
+REQUIRED a crashing function to read as clean** -- the exact defect this
+project keeps finding in other people's suites.
+
+The answer was not a longer list. Two changes of method:
+
+  * **the scope question went to CPython.** `symtable` is the compiler's own
+    analyser; it gets every one of those shapes right without being told about
+    any of them.
+  * **the position question became deliberately over-strict.** A name counts as
+    bound only if an unconditional top-level statement before the try binds it.
+    Under-counting can then only cause a false ALARM. Measured before choosing:
+    on POV's 106 files it returns the four real sites and, in the debrid
+    surface the test scans, no noise at all.
+
+**Then round 5 was told to invert the priority -- and that is when the only
+shipped-code finding in seven rounds appeared.** The suite's one EXECUTING
+check was hardcoded to AllDebrid; the other two providers were string-diffed
+and never run. Executing them is what exposed torbox's asymmetry. **A review
+that keeps finding things in the same file is a review pointed at the wrong
+file.**
+
+Round 7 tested what none of the others had -- a read-only directory as a real
+non-root user, a symlinked target, a non-UTF-8 file, `os.replace` failing after
+a successful temp write, 25 two-process races -- and in every adverse case the
+POV file came out byte-identical. Three of its notes were taken anyway: a BOM
+would have made the compile check fail forever (stripped for the CHECK only, so
+the file keeps the byte POV chose), `except*` was invisible because
+`ast.TryStar` is not an `ast.Try`, and the suite was leaving a dozen tree
+copies in /tmp per run.
+
+**Open, from this work:** the scan surfaced a fifth genuine UnboundLocalError
+in POV -- `magneto/modules/control.py`'s `clean_settings` -- outside the debrid
+subsystem and outside this patcher's scope. Not fixed.
+
 ### What shipped 0.2.501 / qf 0.1.546 / build 0.1.114 (note 601)
 
 A regression of mine, its root cause, and a leak the release process itself
