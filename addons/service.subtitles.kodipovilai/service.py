@@ -321,6 +321,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_meta_blank,
         # _maybe_patch_pov_build_content_logger -- RETIRED, see the function.
         _maybe_patch_pov_debrid_status,
+        _maybe_guard_pov_debrid_handlers,
         _maybe_refresh_shared_sdh,
         _maybe_show_af3_first_launch_dialog,
         _maybe_show_debrid_status,
@@ -2013,6 +2014,39 @@ def _maybe_fix_pov_maincache_schema():
         try:
             kodi_utils.log(
                 'pov_maincache_schema_fix failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_guard_pov_debrid_handlers():
+    """Stop POV's debrid error handlers deleting the error they report.
+
+    A field log showed 38 of 38 AllDebrid sources failing to play, every one
+    of them with `cannot access local variable 'torrent_id'`. The name is
+    assigned inside the try and read by the except, so when the provider
+    errs -- expired key, lapsed subscription, changed endpoint -- the handler
+    raises an UnboundLocalError that REPLACES the cause. The user sees "no
+    results"; the log cannot say why.
+
+    Binding those names before the try does not make the provider work. It
+    makes the reason legible, which is the only thing between a shrug and a
+    diagnosis. See the module for the four sites and how they were found."""
+    try:
+        from resources.lib import pov_debrid_unbound_guard_patcher, kodi_utils
+        st = pov_debrid_unbound_guard_patcher.ensure_patched()
+        bad = [p for p in st.split(', ')
+               if p.split('=')[-1] in ('unmatched', 'compile_failed',
+                                       'write_failed', 'revert_failed',
+                                       'read_failed')]
+        if bad:
+            kodi_utils.log(
+                'pov_debrid_unbound_guard_patcher: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'pov_debrid_unbound_guard_patcher failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass

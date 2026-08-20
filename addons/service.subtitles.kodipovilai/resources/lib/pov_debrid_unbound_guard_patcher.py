@@ -1,0 +1,275 @@
+# POV's debrid error handlers crash, and the crash DELETES the real error.
+#
+# THE REPORT: AllDebrid, "no results" for movies and series. The log
+# (paste.kodi.tv/fagigocobe) says otherwise -- 70 sources were found and the
+# scrape worked fine. What failed was every attempt to PLAY one:
+#
+#     38 AllDebrid sources, 38 failures, all identical:
+#       resolve_external_sources exception: cannot access local variable
+#       'torrent_id' where it is not associated with a value
+#
+# That is not a "no results" condition. It is an UnboundLocalError.
+#
+# WHERE IT COMES FROM. debrids/alldebrid_api.py:
+#
+#     try:
+#         extensions = tuple(supported_video_extensions())
+#         torrent_id = self.create_transfer(magnet_url)    # <-- raises
+#         ...
+#     except Exception as e:
+#         if torrent_id: self.delete_torrent(torrent_id)   # <-- never assigned
+#         if errors: raise
+#
+# create_transfer does `result['magnets'][0]`, so an error reply from AllDebrid
+# -- expired key, lapsed subscription, rate limit, a changed endpoint -- is a
+# KeyError. `torrent_id` was never bound, and the HANDLER then reads it.
+#
+# AND THAT IS THE PART WORTH FIXING. The handler does not merely fail; it
+# REPLACES the exception that would have said what AllDebrid actually refused
+# with a generic UnboundLocalError. The diagnosis is destroyed by the code
+# written to report it. Nobody can tell an expired subscription from a broken
+# endpoint, because the evidence is gone before it reaches the log.
+#
+# This is the same disease as the Umbrella sync cursor, one layer up: the
+# record of what happened and what actually happened disagree.
+#
+# THE CHAIN DOES NOT STOP THERE. When parse_magnet_pack raises,
+# modules/debrid.py's `files = api.parse_magnet_pack(*args)` never completes,
+# so `files` is unbound too -- and ITS handler reads `if files and torrent_id`.
+# The first UnboundLocalError is logged (38 times, in that log); the second one
+# is raised inside the handler and reaches nobody. That is why the log shows
+# `torrent_id` and never `files`.
+#
+# FOUR SITES, FOUND BY SCANNING RATHER THAN BY READING. An AST pass over every
+# debrid API -- "which names does an except handler read that are only ever
+# assigned inside its own try?" -- found the same shape in three of the six,
+# plus the caller. AllDebrid is simply the one whose API is failing today; a
+# Real-Debrid or TorBox user whose provider errs at the wrong moment gets the
+# identical unreadable log.
+#
+#     debrids/alldebrid_api.py   parse_magnet_pack        torrent_id
+#     debrids/real_debrid_api.py parse_magnet_pack        torrent_id
+#     debrids/torbox_api.py      parse_magnet_pack        path, torrent_id
+#     modules/debrid.py          resolve_external_sources api, files, torrent_id
+#
+# WHAT THIS DOES AND DOES NOT FIX. It binds those names to None before the try,
+# so the handler runs as written and the ORIGINAL exception survives to the
+# log. It does not make AllDebrid work. It makes the reason legible -- which is
+# the only thing standing between "no results" and a diagnosis.
+#
+# One line per site, inserted between the existing import and `try:`. Pure
+# insertions, never an edit to a line POV wrote, so _revert stays byte-exact.
+
+import os
+
+try:
+    import xbmcvfs
+except Exception:
+    xbmcvfs = None
+
+try:
+    from resources.lib import kodi_utils
+except Exception:
+    kodi_utils = None
+
+
+POV_ADDON_ID = 'plugin.video.pov'
+
+MARKER = '# AI_SUBS_POV_DEBRID_UNBOUND_v1'
+# Prefix, never an enumerated list of predecessors.
+_MARKER_ANY = '# AI_SUBS_POV_DEBRID_UNBOUND_v'
+
+# (relative path, anchor, the names the handler reads)
+#
+# Each anchor carries the `def` line as well as the import and the `try:`.
+# The import line alone repeats across methods in these files; the def line
+# makes each anchor unique and makes the patch self-documenting -- the anchor
+# names the function it is protecting.
+_SITES = (
+    ('resources/lib/debrids/alldebrid_api.py',
+     "\tdef parse_magnet_pack(self, magnet_url, info_hash, errors=False):\n"
+     "\t\tfrom modules.source_utils import supported_video_extensions\n"
+     "\t\ttry:\n",
+     ('torrent_id',)),
+    ('resources/lib/debrids/real_debrid_api.py',
+     "\tdef parse_magnet_pack(self, magnet_url, info_hash, errors=False):\n"
+     "\t\tfrom modules.source_utils import supported_video_extensions\n"
+     "\t\ttry:\n",
+     ('torrent_id',)),
+    ('resources/lib/debrids/torbox_api.py',
+     "\tdef parse_magnet_pack(self, magnet_url, info_hash):\n"
+     "\t\tfrom modules.source_utils import supported_video_extensions\n"
+     "\t\ttry:\n",
+     ('path', 'torrent_id')),
+    ('resources/lib/modules/debrid.py',
+     "\tdef resolve_external_sources(self, title, season, episode):\n"
+     "\t\tfrom modules.source_utils import supported_video_extensions, "
+     "seas_ep_filter, extras_filter\n"
+     "\t\ttry:\n",
+     ('api', 'files', 'torrent_id')),
+)
+
+
+def _log(msg, level='INFO'):
+    if kodi_utils is None:
+        return
+    try:
+        kodi_utils.log('pov_debrid_unbound_guard_patcher: ' + msg, level=level)
+    except Exception:
+        pass
+
+
+def _fitter(content):
+    eol = '\r\n' if '\r\n' in content else '\n'
+    return (lambda t: t.replace('\n', eol)) if eol != '\n' else (lambda t: t), eol
+
+
+def _revert(content, eol='\n'):
+    """Delete a previous version's injected block.
+
+    A marked line plus everything indented strictly deeper below it. Ours is a
+    single marked line with nothing under it -- the line after it is `try:` at
+    the same depth, so the walk stops immediately.
+    """
+    lines = content.split(eol)
+    out, i = [], 0
+    while i < len(lines):
+        line = lines[i]
+        if _MARKER_ANY not in line:
+            out.append(line)
+            i += 1
+            continue
+        base = len(line) - len(line.lstrip())
+        i += 1
+        while i < len(lines):
+            nxt = lines[i]
+            if nxt.strip():
+                if (len(nxt) - len(nxt.lstrip())) <= base:
+                    break
+                i += 1
+                continue
+            j = i
+            while j < len(lines) and not lines[j].strip():
+                j += 1
+            if (j >= len(lines)
+                    or (len(lines[j]) - len(lines[j].lstrip())) <= base):
+                break
+            i = j
+    return eol.join(out)
+
+
+def _pov_path(rel):
+    if xbmcvfs is None:
+        return ''
+    try:
+        base = xbmcvfs.translatePath(
+            'special://home/addons/' + POV_ADDON_ID + '/')
+    except Exception:
+        return ''
+    p = os.path.join(base, *rel.split('/'))
+    return p if os.path.isfile(p) else ''
+
+
+def _drop_pycache(path):
+    stem = os.path.basename(path).split('.')[0] + '.'
+    pycache = os.path.join(os.path.dirname(path), '__pycache__')
+    if not os.path.isdir(pycache):
+        return
+    for fn in os.listdir(pycache):
+        if fn.startswith(stem) and fn.endswith('.pyc'):
+            try:
+                os.remove(os.path.join(pycache, fn))
+            except OSError:
+                pass
+
+
+def _patch_one(rel, anchor, names):
+    """Returns 'no_file' | 'unchanged' | 'patched' | 'repatched' | 'unmatched'
+    | 'read_failed' | 'write_failed' | 'compile_failed' | 'revert_failed'."""
+    path = _pov_path(rel)
+    if not path:
+        return 'no_file'
+    try:
+        with open(path, encoding='utf-8', newline='') as f:
+            content = f.read()
+    except Exception as e:
+        _log('{0}: read failed: {1}'.format(rel, e), level='WARNING')
+        return 'read_failed'
+
+    fit, eol = _fitter(content)
+
+    if MARKER in content:
+        return 'unchanged'
+
+    repatch = False
+    if _MARKER_ANY in content:
+        content = _revert(content, eol)
+        repatch = True
+        if _MARKER_ANY in content:
+            _log('{0}: could not remove an older injection'.format(rel),
+                 level='WARNING')
+            return 'revert_failed'
+
+    # count, not `in`: a refactor that DUPLICATED this shape is unrecognised
+    # rather than patched at whichever copy happens to come first.
+    if content.count(fit(anchor)) != 1:
+        _log('{0}: the expected shape is not there exactly once -- POV may '
+             'have refactored it; leaving the file alone'.format(rel),
+             level='WARNING')
+        return 'unmatched'
+
+    # `a = b = None` rather than a tuple: one name or three, the line reads the
+    # same and there is no comma to get wrong.
+    init = '\t\t' + ' = '.join(names) + ' = None  ' + MARKER + '\n'
+    head, _, tail = anchor.rpartition('\t\ttry:\n')
+    new_content = content.replace(
+        fit(anchor), fit(head + init + '\t\ttry:\n' + tail), 1)
+
+    try:
+        compile(new_content, path, 'exec')
+    except SyntaxError as e:
+        _log('{0}: compile check failed, not writing: {1}'.format(rel, e),
+             level='WARNING')
+        return 'compile_failed'
+
+    tmp = path + '.aitmp'
+    try:
+        with open(tmp, 'w', encoding='utf-8', newline='') as f:
+            f.write(new_content)
+        os.replace(tmp, path)
+    except OSError as e:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        _log('{0}: write failed: {1}'.format(rel, e), level='WARNING')
+        return 'write_failed'
+
+    _drop_pycache(path)
+    return 'repatched' if repatch else 'patched'
+
+
+def ensure_patched():
+    """Idempotent. Never raises. Returns a comma-joined per-file status, e.g.
+    'alldebrid=patched, realdebrid=patched, torbox=patched, resolve=patched'.
+
+    Per FILE, not all-or-none across files: these are four independent handlers
+    in four independent files, and a POV refactor that moves one is no reason
+    to leave the other three crashing.
+    """
+    if xbmcvfs is None:
+        return 'no_pov'
+    labels = ('alldebrid', 'realdebrid', 'torbox', 'resolve')
+    out = []
+    for label, (rel, anchor, names) in zip(labels, _SITES):
+        try:
+            st = _patch_one(rel, anchor, names)
+        except Exception as e:
+            _log('{0}: unexpected failure: {1}'.format(rel, e),
+                 level='WARNING')
+            st = 'read_failed'
+        out.append('%s=%s' % (label, st))
+    if any(s.endswith('=patched') or s.endswith('=repatched') for s in out):
+        _log('debrid error handlers can no longer crash on an unbound name; '
+             'the real provider error now reaches the log')
+    return ', '.join(out)

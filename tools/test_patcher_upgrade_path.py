@@ -333,6 +333,8 @@ pin('pov_addon_window_patcher', 'UPGRADES',
     'AI_SUBS_POV_ADDON_WINDOW_v1', 'AI_SUBS_POV_IMPORT_WINDOW_v1')
 pin('pov_aiostreams_patcher', 'UPGRADES',
     'AI_SUBS_POV_AIOSTREAMS_v2')
+pin('pov_debrid_unbound_guard_patcher', 'UPGRADES',
+    'AI_SUBS_POV_DEBRID_UNBOUND_v1')
 pin('pov_mdblist_like_patcher', 'UPGRADES',
     'AI_SUBS_MDBL_LIKE_v3')
 pin('pov_prewarm_patcher', 'UPGRADES',
