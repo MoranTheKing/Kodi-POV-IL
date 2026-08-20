@@ -263,7 +263,16 @@ def _patch_one(rel, anchor, names):
         fit(anchor), fit(head + init + '\t\ttry:\n' + tail), 1)
 
     try:
-        compile(new_content, path, 'exec')
+        # lstrip the BOM for the CHECK only. Reading with plain utf-8 leaves a
+        # leading BOM in the string as U+FEFF, and compile() rejects it as a
+        # non-printable character -- so a POV file carrying one would report
+        # compile_failed forever and log a WARNING every boot, while importing
+        # perfectly well in Kodi. Stripping it on the way IN would be worse: we
+        # would then write the file back without its BOM, which is a byte
+        # change we did not intend and would break the byte-exact revert.
+        # Stock POV 6.08.13 has no BOM on any of the three; this is about the
+        # file we have not seen.
+        compile(new_content.lstrip('\ufeff'), path, 'exec')
     except SyntaxError as e:
         _log('{0}: compile check failed, not writing: {1}'.format(rel, e),
              level='WARNING')
