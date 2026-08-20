@@ -321,6 +321,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_meta_blank,
         # _maybe_patch_pov_build_content_logger -- RETIRED, see the function.
         _maybe_patch_pov_debrid_status,
+        _maybe_guard_pov_debrid_handlers,
         _maybe_refresh_shared_sdh,
         _maybe_show_af3_first_launch_dialog,
         _maybe_show_debrid_status,
@@ -2013,6 +2014,61 @@ def _maybe_fix_pov_maincache_schema():
         try:
             kodi_utils.log(
                 'pov_maincache_schema_fix failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_guard_pov_debrid_handlers():
+    """Stop POV's debrid error handlers deleting the error they report.
+
+    A field log showed 38 of 38 AllDebrid sources failing to play, every one
+    of them with `cannot access local variable 'torrent_id'`. The name is
+    assigned inside the try and read by the except, so when the provider
+    errs -- expired key, lapsed subscription, changed endpoint -- the handler
+    raises an UnboundLocalError that REPLACES the cause. The user sees "no
+    results"; the log cannot say why.
+
+    Binding those names before the try does not make the provider work, and
+    it does not do the same thing at all three sites -- a claim this docstring
+    made flatly until a review executed all three instead of reading them.
+
+    AllDebrid and Real-Debrid end their handlers `if errors: raise`, and the
+    caller that matters passes errors=True, so the provider's real error now
+    reaches the log verbatim. That is the reported case. TorBox has no
+    `errors` parameter and never re-raises: it gains the crash removed and its
+    own cleanup running, not the reason. Making it re-raise would invent an
+    error path into two call sites that have no try of their own, which is
+    more than a patcher into someone else's add-on gets to do.
+
+    See the module for the three sites, the fourth its sibling patcher owns,
+    and how they were found."""
+    # It writes into POV's own files, so it answers to the switch that says
+    # not to. The tuple around it is inconsistent about this and a good many
+    # steps still skip the check -- which is a reason to tighten those, never a
+    # licence to add one more.
+    #
+    # No count here on purpose. The comment used to name one, it was already
+    # stale by the time it was written (this very line moved the step into the
+    # other column), and two careful recounts afterwards disagreed with each
+    # other. A number nobody can reproduce is worse than no number.
+    if _skip_pov_patchers():
+        return
+    try:
+        from resources.lib import pov_debrid_unbound_guard_patcher, kodi_utils
+        st = pov_debrid_unbound_guard_patcher.ensure_patched()
+        bad = [p for p in st.split(', ')
+               if p.split('=')[-1] in ('unmatched', 'compile_failed',
+                                       'write_failed', 'revert_failed',
+                                       'read_failed')]
+        if bad:
+            kodi_utils.log(
+                'pov_debrid_unbound_guard_patcher: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'pov_debrid_unbound_guard_patcher failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
