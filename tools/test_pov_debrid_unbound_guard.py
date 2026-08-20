@@ -186,6 +186,44 @@ def stock_version():
 
 
 # --- the scan that found the bug, and is now the check ---------------------
+#
+# WHAT IT IS AND IS NOT. A syntactic heuristic, not scope-and-flow analysis.
+# It reads "which names does an except handler read that nothing binds before
+# its try?" and that is enough to have found all four real sites. Two rounds of
+# review have now each moved its boundary, so the boundary is written down:
+#
+#   HANDLED. A try nested inside an if/for (round 1 missed it entirely -- the
+#   old scan walked only top-level statements and swept the try's OWN
+#   assignments into `pre`). Names bound in a NESTED function, lambda or
+#   comprehension, which are different variables in a different scope and used
+#   to mask a real bug in the outer one. `global`/`nonlocal` names, which can
+#   never raise UnboundLocalError and used to be flagged as if they could.
+#
+#   NOT HANDLED, deliberately. A name bound in only ONE branch of an if/else
+#   before the try is treated as bound. Deciding otherwise needs real
+#   reachability analysis, and this is a test guard, not a type checker. If a
+#   future POV writes that shape, this scan will not find it -- so do not read
+#   a clean run as proof that POV is clean, only that these shapes are.
+_NESTED_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda,
+                  ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+
+
+def own_scope_stores(node):
+    """Every Name bound in `node`'s OWN scope -- not in a nested one."""
+    out = []
+
+    def walk(n, top=False):
+        if not top and isinstance(n, _NESTED_SCOPES):
+            return
+        if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store):
+            out.append(n)
+        for child in ast.iter_child_nodes(n):
+            walk(child)
+
+    walk(node, top=True)
+    return out
+
+
 def risky_names(src):
     """{(function, sorted names)} an except reads but the try alone assigns."""
     found = set()
@@ -197,17 +235,19 @@ def risky_names(src):
                     if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
             assigned = {n.id for st in t.body for n in ast.walk(st)
                         if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)}
-            # Everything bound on a line BEFORE the try starts, anywhere in
-            # the function. This used to walk node.body and break at `st is t`
-            # -- which only finds the try when it is a direct statement of the
-            # function. A try nested inside an `if` or a `for` never matched,
-            # the loop never broke, and it swept the try's OWN assignments into
-            # `pre`, cancelling the finding out. A review built the nested
-            # variant and watched this return an empty set on it.
+            # Everything bound on a line BEFORE the try starts -- in THIS
+            # function's own scope. Walking every Store in the subtree was the
+            # round-2 finding: a `tid` bound inside a nested helper or a
+            # comprehension is a different variable entirely, and counting it
+            # masked a real bug in the enclosing function.
             pre = {a.arg for a in node.args.args}
-            pre |= {n.id for n in ast.walk(node)
-                    if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)
-                    and n.lineno < t.lineno}
+            pre |= {n.id for n in own_scope_stores(node)
+                    if n.lineno < t.lineno}
+            # A name declared global/nonlocal is bound elsewhere and cannot
+            # raise UnboundLocalError, so reading it in a handler is safe.
+            pre |= {name for d in ast.walk(node)
+                    if isinstance(d, (ast.Global, ast.Nonlocal))
+                    for name in d.names}
             bad = (read & assigned) - pre
             if bad:
                 found.add((node.name, tuple(sorted(bad))))
@@ -316,6 +356,28 @@ _SAFE = ('def f(self, x):\n\ttid = None\n\tif x:\n\t\ttry:\n'
 check('...and does NOT cry wolf once the name is bound first',
       not risky_names(_SAFE),
       'every guarded site would report as still broken')
+
+# Round 2 found three more shapes. Two are fixed; the third is a stated limit.
+_HELPER = ('def f(self, x):\n'
+           '\tdef helper():\n\t\ttid = 99\n\t\treturn tid\n'
+           '\ttry:\n\t\ttid = self.go()\n'
+           '\texcept Exception:\n\t\tif tid: self.undo(tid)\n')
+check('a name bound only in a NESTED function does not count as bound here',
+      ('f', ('tid',)) in risky_names(_HELPER),
+      "it is a different variable in a different scope, and counting it hid a "
+      'real bug in the enclosing function')
+_COMP = ('def f(self, x):\n\ty = [tid for tid in range(3)]\n'
+         '\ttry:\n\t\ttid = self.go()\n'
+         '\texcept Exception:\n\t\tif tid: self.undo(tid)\n')
+check('...nor one bound only as a comprehension variable',
+      ('f', ('tid',)) in risky_names(_COMP),
+      'comprehensions have their own scope in Python 3')
+_GLOBAL = ('def f(self, x):\n\tglobal tid\n'
+           '\ttry:\n\t\ttid = self.go()\n'
+           '\texcept Exception:\n\t\tif tid: self.undo(tid)\n')
+check('a global/nonlocal name is NOT flagged -- it cannot be unbound',
+      not risky_names(_GLOBAL),
+      'flagging it would send someone to fix a function that is already safe')
 
 # --- 0b. the embedded fixtures really are real POV -------------------------
 # The comment above them says "asserted to be a substring of the real file".
@@ -458,10 +520,17 @@ check('a second run is a no-op',
 check('and the files did not move on that second run',
       debrid_sources(root) == after)
 
-for rel in ('resources/lib/debrids/alldebrid_api.py',
-            'resources/lib/modules/debrid.py'):
+# Only files this patcher actually writes. modules/debrid.py used to be in
+# this loop and, once site 4 was removed, it passed for nothing: _revert() on
+# content with no marker line is the identity function, so the assertion held
+# for any input. The real property for that file -- that it is left alone --
+# is checked above, by name.
+for rel, _, _ in mod._SITES:
     check('revert(%s) is byte-exact' % rel.split('/')[-1],
           mod._revert(after[rel]) == before[rel])
+    check('...and it really was patched, so that revert had work to do',
+          after[rel] != before[rel],
+          'a revert check on an untouched file is the identity function')
 
 # an older marker version must be reverted and replaced, not stacked
 p = os.path.join(root, *AD.split('/'))
@@ -488,6 +557,36 @@ check('a CRLF file is still patched', 'alldebrid=patched' in st2, st2)
 check('a CRLF file stays CRLF', '\n' not in crlf.replace('\r\n', ''))
 check('reverting a CRLF file is byte-exact',
       mod2._revert(crlf, '\r\n') == before[AD].replace('\n', '\r\n'))
+
+# --- a missing file is a per-file 'no_file', never an exception ------------
+# The code was right and nothing exercised it, so a refactor of _pov_path or
+# _patch_one could have broken it silently. Three shapes: one file gone, the
+# whole directory gone, POV not installed at all.
+home7, root7 = fresh_pov()
+os.remove(os.path.join(root7, 'resources', 'lib', 'debrids', 'alldebrid_api.py'))
+mod7 = load(home7)
+st7 = mod7.ensure_patched()
+check('one missing file is no_file, and the others still patch',
+      st7 == 'alldebrid=no_file, realdebrid=patched, torbox=patched', st7)
+
+home8, root8 = fresh_pov()
+shutil.rmtree(os.path.join(root8, 'resources', 'lib', 'debrids'))
+mod8 = load(home8)
+st8 = mod8.ensure_patched()
+check('the whole directory missing is three no_file, not a traceback',
+      st8 == 'alldebrid=no_file, realdebrid=no_file, torbox=no_file', st8)
+
+home9 = tempfile.mkdtemp(prefix='nopov-')
+mod9 = load(home9)
+st9 = mod9.ensure_patched()
+check('POV not installed at all is handled the same way',
+      st9 == 'alldebrid=no_file, realdebrid=no_file, torbox=no_file', st9)
+check('...and none of those statuses is one service.py WARNs about',
+      not any(p.split('=')[-1] in ('unmatched', 'compile_failed',
+                                   'write_failed', 'revert_failed',
+                                   'read_failed')
+              for p in st9.split(', ')),
+      'a device without POV would log a warning every boot')
 
 # --- COEXISTENCE: the sibling patcher runs FIRST on every real device ------
 # THE TEST THAT WOULD HAVE CAUGHT THE FIRST DRAFT. Every patcher here was
