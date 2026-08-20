@@ -1,3 +1,15 @@
+v0.2.502
+- AllDebrid sources that refused to play now say why. A report of "no results"
+  turned out not to be a no-results condition at all: 70 sources were found,
+  and all 38 of the AllDebrid ones failed to start with the same internal
+  error. POV's own error handler was crashing on a variable it never set, and
+  that crash was replacing the message AllDebrid had actually sent -- so the
+  reason, whatever it was, never reached the log. The handler no longer
+  crashes, and for AllDebrid and Real-Debrid the provider's real message now
+  comes through, which is what makes the problem diagnosable instead of just
+  visible. This does not by itself make a refused account work; it makes the
+  refusal readable.
+
 v0.2.501
 - Umbrella's "Shows in Progress" and "Episodes in Progress" fill themselves in
   again, with no manual refresh in either one. Update 599 fixed the shows list
