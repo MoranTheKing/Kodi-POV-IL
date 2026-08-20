@@ -197,13 +197,17 @@ def risky_names(src):
                     if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
             assigned = {n.id for st in t.body for n in ast.walk(st)
                         if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)}
+            # Everything bound on a line BEFORE the try starts, anywhere in
+            # the function. This used to walk node.body and break at `st is t`
+            # -- which only finds the try when it is a direct statement of the
+            # function. A try nested inside an `if` or a `for` never matched,
+            # the loop never broke, and it swept the try's OWN assignments into
+            # `pre`, cancelling the finding out. A review built the nested
+            # variant and watched this return an empty set on it.
             pre = {a.arg for a in node.args.args}
-            for st in node.body:
-                if st is t:
-                    break
-                pre |= {n.id for n in ast.walk(st)
-                        if isinstance(n, ast.Name)
-                        and isinstance(n.ctx, ast.Store)}
+            pre |= {n.id for n in ast.walk(node)
+                    if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)
+                    and n.lineno < t.lineno}
             bad = (read & assigned) - pre
             if bad:
                 found.add((node.name, tuple(sorted(bad))))
@@ -284,9 +288,51 @@ status = mod.ensure_patched()
 after = debrid_sources(root)
 print('   status: %s' % status)
 
-check('all four sites patch on a stock tree',
-      status == ('alldebrid=patched, realdebrid=patched, '
-                 'torbox=patched, resolve=patched'), status)
+check('all three sites patch on a stock tree',
+      status == 'alldebrid=patched, realdebrid=patched, torbox=patched',
+      status)
+
+# --- 0. the scan must see the bug wherever it is written -------------------
+_NESTED = ('def f(self, x):\n'
+           '\tif x:\n'
+           '\t\ttry:\n'
+           '\t\t\ttid = self.go()\n'
+           '\t\texcept Exception:\n'
+           '\t\t\tif tid: self.undo(tid)\n')
+_FLAT = ('def f(self, x):\n'
+         '\ttry:\n'
+         '\t\ttid = self.go()\n'
+         '\texcept Exception:\n'
+         '\t\tif tid: self.undo(tid)\n')
+check('the scan catches the defect as a plain statement',
+      ('f', ('tid',)) in risky_names(_FLAT))
+check('...and catches it nested inside an if, which it used to miss entirely',
+      ('f', ('tid',)) in risky_names(_NESTED),
+      'a future POV release that indents its try one level deeper would walk '
+      'straight past this check')
+_SAFE = ('def f(self, x):\n\ttid = None\n\tif x:\n\t\ttry:\n'
+         '\t\t\ttid = self.go()\n\t\texcept Exception:\n'
+         '\t\t\tif tid: self.undo(tid)\n')
+check('...and does NOT cry wolf once the name is bound first',
+      not risky_names(_SAFE),
+      'every guarded site would report as still broken')
+
+# --- 0b. the embedded fixtures really are real POV -------------------------
+# The comment above them says "asserted to be a substring of the real file".
+# Nothing was asserting it. A hand-edit could have drifted them from POV with
+# the suite still green on every machine without a stock tree.
+if os.path.isdir(STOCK):
+    for rel, body in FIXTURES.items():
+        with io.open(os.path.join(STOCK, *rel.split('/')),
+                     encoding='utf-8', newline='') as f:
+            real = f.read()
+        slice_only = body.split('\n', 1)[1]      # drop the class header
+        check('FIXTURE %s is a byte-slice of real POV' % rel.split('/')[-1],
+              slice_only in real,
+              'it has drifted from the file it claims to be quoting')
+else:
+    print('---- %d fixture(s) NOT CHECKED against a real tree here'
+          % len(FIXTURES))
 
 # --- 1. the scan: before it finds the bug, after it finds nothing ----------
 found_before = {rel: risky_names(t) for rel, t in before.items()}
@@ -300,13 +346,27 @@ check('the scan finds the defect in stock POV, in more than one provider',
 check('and the reported one is among them',
       ('parse_magnet_pack', ('torrent_id',))
       in found_before.get('resources/lib/debrids/alldebrid_api.py', set()))
-check('and so is the caller that masks it a second time',
+# The caller has the identical defect and is NOT this patcher's job:
+# pov_debrid_resolve_patcher.py, months older, already binds files and
+# torrent_id at the top of resolve_external_sources. The first draft of this
+# module patched it a second time and could never have matched, because that
+# patcher's line lands in the middle of this one's anchor. So the scan is
+# expected to still flag it here, and the patcher is expected to leave it
+# alone.
+check('the caller is flagged by the scan but left to the patcher that owns it',
       ('resolve_external_sources', ('api', 'files', 'torrent_id'))
       in found_before.get('resources/lib/modules/debrid.py', set()))
+check('...and this patcher does NOT touch it',
+      before.get('resources/lib/modules/debrid.py')
+      == after.get('resources/lib/modules/debrid.py'),
+      'two patchers writing the same function is how one of them starts '
+      'reporting unmatched forever')
 
 left = {rel: v for rel, v in found_after.items() if v}
-check('AFTER patching, no handler in POV debrid code reads an unbound name',
-      not left, 'still risky: %s' % sorted(left.items()))
+check('AFTER patching, no PROVIDER handler reads an unbound name',
+      not [r for r in left if '/debrids/' in r],
+      'still risky: %s' % sorted((r, v) for r, v in left.items()
+                                 if '/debrids/' in r))
 
 for rel in before:
     if not found_before[rel]:
@@ -393,8 +453,8 @@ check('PATCHED: and it is not swallowed into a bare None either',
 print()
 print('=== the patcher contract ===')
 check('a second run is a no-op',
-      mod.ensure_patched() == ('alldebrid=unchanged, realdebrid=unchanged, '
-                               'torbox=unchanged, resolve=unchanged'))
+      mod.ensure_patched()
+      == 'alldebrid=unchanged, realdebrid=unchanged, torbox=unchanged')
 check('and the files did not move on that second run',
       debrid_sources(root) == after)
 
@@ -429,6 +489,51 @@ check('a CRLF file stays CRLF', '\n' not in crlf.replace('\r\n', ''))
 check('reverting a CRLF file is byte-exact',
       mod2._revert(crlf, '\r\n') == before[AD].replace('\n', '\r\n'))
 
+# --- COEXISTENCE: the sibling patcher runs FIRST on every real device ------
+# THE TEST THAT WOULD HAVE CAUGHT THE FIRST DRAFT. Every patcher here was
+# tested against a pristine POV tree, and on a real device POV is never
+# pristine by the time the next patcher runs -- service.py applies a queue of
+# them in one pass. The first draft of this module added a fourth site on
+# resolve_external_sources; pov_debrid_resolve_patcher had already been
+# guarding that function for months, and it inserts its line BETWEEN the `def`
+# and the import, which is the middle of the anchor the fourth site used. It
+# would have reported 'unmatched' on every device forever, logging a WARNING
+# every boot, and no test would have said a word -- because every test started
+# from a clean tree.
+#
+# So: apply the sibling first, exactly as the startup pass does, then this one.
+home5, root5 = fresh_pov()
+mod5 = load(home5)
+sib_spec = importlib.util.spec_from_file_location(
+    '_sib', os.path.join(LIB, 'pov_debrid_resolve_patcher.py'))
+sib = importlib.util.module_from_spec(sib_spec)
+sib_spec.loader.exec_module(sib)
+sib_status = sib.ensure_patched()
+check('the sibling patcher still applies (it owns resolve_external_sources)',
+      'patch' in str(sib_status).lower() or 'unchanged' in str(sib_status),
+      'sibling said %r' % (sib_status,))
+after5 = mod5.ensure_patched()
+check('and THEN this patcher still gets all three of its own sites',
+      after5 == 'alldebrid=patched, realdebrid=patched, torbox=patched',
+      'got %r -- a sibling moved a line inside one of these anchors' % after5)
+check('...and it reports no unmatched site, which is what would have logged a '
+      'WARNING on every boot forever',
+      'unmatched' not in after5, after5)
+
+# and the other order, since nothing guarantees the queue keeps its shape
+home6, root6 = fresh_pov()
+mod6 = load(home6)
+first = mod6.ensure_patched()
+sib_spec2 = importlib.util.spec_from_file_location(
+    '_sib2', os.path.join(LIB, 'pov_debrid_resolve_patcher.py'))
+sib2 = importlib.util.module_from_spec(sib_spec2)
+sib_spec2.loader.exec_module(sib2)
+sib2_status = sib2.ensure_patched()
+check('the reverse order works too', 'unmatched' not in first
+      and ('patch' in str(sib2_status).lower()
+           or 'unchanged' in str(sib2_status)),
+      'this=%r sibling=%r' % (first, sib2_status))
+
 # --- SABOTAGE --------------------------------------------------------------
 print()
 print('=== sabotage ===')
@@ -444,9 +549,9 @@ mod3 = load(home3)
 st3 = mod3.ensure_patched()
 check('SABOTAGE: a moved anchor is refused, not guessed at',
       'alldebrid=unmatched' in st3, st3)
-check('SABOTAGE: ...and the other three are still patched, because they are '
+check('SABOTAGE: ...and the others are still patched, because they are '
       'independent files',
-      st3.count('=patched') == 3, st3)
+      st3.count('=patched') == 2, st3)
 
 _dup = before[AD] + '\n' + before[AD]
 home4, root4 = fresh_pov()
