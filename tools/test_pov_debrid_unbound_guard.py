@@ -263,9 +263,14 @@ def _unconditional_bindings(stmt):
 
 
 def _deleted(stmt):
-    if not isinstance(stmt, ast.Delete):
-        return set()
-    return {n.id for t in stmt.targets for n in ast.walk(t)
+    """Names this statement might delete -- ANYWHERE inside it, including
+    inside an `if` or a loop. This used to require the statement to BE a
+    `del`, so `if x: del tid` un-bound nothing and the scan called a crashing
+    function clean. A conditional delete means "might be gone", and the
+    conservative reading of that is to stop treating the name as bound: an
+    over-eager subtraction costs a false alarm, the safe direction."""
+    return {n.id for d in ast.walk(stmt) if isinstance(d, ast.Delete)
+            for t in d.targets for n in ast.walk(t)
             if isinstance(n, ast.Name)}
 
 
@@ -331,12 +336,23 @@ def risky_names(src):
             continue
         # CPython's answer to "which of these can be unbound at all"
         fn_locals = locals_by_fn.get((node.name, node.lineno), set())
-        for t in [n for n in ast.walk(node) if isinstance(n, ast.Try)]:
+        tries = [n for n in ast.walk(node) if isinstance(n, ast.Try)]
+        for t in tries:
             read = {n.id for h in t.handlers for n in ast.walk(h)
                     if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
-            assigned = {n.id for st in t.body for n in ast.walk(st)
-                        if isinstance(n, ast.Name)
-                        and isinstance(n.ctx, ast.Store)}
+            # ANY try body at or before this one, not just this one's. The
+            # defect class is "a name whose only binding is inside a try", and
+            # it does not stop being that because the binding sits in an
+            # EARLIER sibling try whose handler swallowed the failure. Scoped
+            # to this try alone, that shape was invisible: neither try saw the
+            # name as both read and assigned, so the check never ran.
+            assigned = set()
+            for other in tries:
+                if other.lineno <= t.lineno:
+                    assigned |= {n.id for st in other.body
+                                 for n in ast.walk(st)
+                                 if isinstance(n, ast.Name)
+                                 and isinstance(n.ctx, ast.Store)}
             bad = (read & assigned & fn_locals) - _bound_before(node, t)
             if bad:
                 found.add((node.name, tuple(sorted(bad))))
@@ -530,6 +546,24 @@ check('a name bound in only ONE branch is not treated as bound',
       'this was a documented gap for three rounds; counting only '
       'unconditional top-level bindings closed it as a side effect')
 
+_SIBLING = ('def f(self, x):\n'
+            '\ttry:\n\t\ttid = self.risky()\n'
+            '\texcept Exception:\n\t\tpass\n'
+            '\ttry:\n\t\ty = self.go()\n'
+            '\texcept Exception:\n\t\tif tid: self.undo(tid)\n')
+check('a name bound only in an EARLIER sibling try is still a finding',
+      ('f', ('tid',)) in risky_names(_SIBLING),
+      'both calls failing leaves tid unbound; scoped to one try at a time, '
+      'neither saw the name as both read and assigned, so nothing was checked')
+
+_COND_DEL = ('def f(self, x):\n\ttid = 1\n\tif x:\n\t\tdel tid\n'
+             '\ttry:\n\t\ttid = self.go()\n'
+             '\texcept Exception:\n\t\tif tid: self.undo(tid)\n')
+check('a CONDITIONAL del un-binds too, not only a top-level one',
+      ('f', ('tid',)) in risky_names(_COND_DEL),
+      '"might be deleted" has to read as "not bound", or the subtraction is '
+      'wrong in the direction that hides a crash')
+
 _KWONLY = ('def f(self, *, tid=None):\n'
            '\ttry:\n\t\ttid = self.go()\n'
            '\texcept Exception:\n\t\tif tid: self.undo(tid)\n')
@@ -633,10 +667,14 @@ class Boom(Exception):
     pass
 
 
-def run_parse(src):
-    """Execute alldebrid's parse_magnet_pack with a failing create_transfer.
+def run_parse(src, args=(True,)):
+    """Execute a provider's parse_magnet_pack with a failing create_transfer.
 
-    Returns the exception it raised, or None."""
+    Returns the exception it raised, or None if it returned instead.
+
+    `args` is what follows (magnet, hash): alldebrid and real_debrid take an
+    `errors` flag, torbox takes nothing.
+    """
     su = types.ModuleType('modules.source_utils')
     su.supported_video_extensions = lambda: ['.mkv', '.mp4']
     mods = types.ModuleType('modules')
@@ -659,7 +697,7 @@ def run_parse(src):
     exec(compile(lift(src, 'parse_magnet_pack'), 'alldebrid_api.py', 'exec'), g)
     try:
         g['parse_magnet_pack'](FakeAPI(), 'magnet:?xt=urn:btih:deadbeef',
-                               'deadbeef', True)
+                               'deadbeef', *args)
         return None
     except Exception as e:
         return e
@@ -684,6 +722,35 @@ check('PATCHED: the provider\'s real error reaches the caller',
       % patched_exc)
 check('PATCHED: and it is not swallowed into a bare None either',
       patched_exc is not None)
+
+# ALL THREE PROVIDERS, NOT JUST THE REPORTED ONE. Four review rounds passed
+# with this section executing alldebrid alone and the other two only
+# string-diffed -- which is exactly why nobody noticed that torbox behaves
+# differently. It has no `errors` parameter and its handler never re-raises,
+# so the crash goes away but the provider's reason does not arrive. That is a
+# real asymmetry, it is documented in the patcher, and it is pinned here so it
+# cannot drift into a silent surprise.
+RD = 'resources/lib/debrids/real_debrid_api.py'
+TB = 'resources/lib/debrids/torbox_api.py'
+
+check('STOCK real_debrid also loses the cause to an UnboundLocalError',
+      isinstance(run_parse(before[RD]), (UnboundLocalError, NameError)))
+check('PATCHED real_debrid keeps it -- it re-raises like alldebrid',
+      isinstance(run_parse(after[RD]), Boom))
+
+tb_stock = run_parse(before[TB], args=())
+tb_patched = run_parse(after[TB], args=())
+check('STOCK torbox crashes on the unbound name',
+      isinstance(tb_stock, (UnboundLocalError, NameError)),
+      'got %r' % tb_stock)
+check('PATCHED torbox no longer crashes',
+      not isinstance(tb_patched, (UnboundLocalError, NameError)),
+      'got %r' % tb_patched)
+check('...but it does NOT surface the cause, because it never re-raises -- '
+      'documented, not fixed',
+      tb_patched is None,
+      'got %r -- if torbox has started re-raising, the patcher comment about '
+      'it is now wrong and should say so' % tb_patched)
 
 # --- 3. idempotence, repatch, revert, CRLF --------------------------------
 print()

@@ -73,9 +73,32 @@
 # None and `api` is never reached.
 #
 # WHAT THIS DOES AND DOES NOT FIX. It binds those names to None before the try,
-# so the handler runs as written and the ORIGINAL exception survives to the
-# log. It does not make AllDebrid work. It makes the reason legible -- which is
-# the only thing standing between "no results" and a diagnosis.
+# so the handler runs as written instead of crashing. It does not make
+# AllDebrid work.
+#
+# AND IT DOES NOT DO THE SAME THING AT ALL THREE SITES. That sentence used to
+# read "the ORIGINAL exception survives to the log", flatly, for all of them.
+# A review executed all three rather than only the reported one and found it is
+# true of two:
+#
+#   alldebrid, real_debrid -- their handlers end `if errors: raise`, and the
+#     caller passes errors=True (modules/debrid.py:81). Once the handler stops
+#     crashing it reaches that line, and the provider's real error is logged
+#     verbatim. This is the reported case, and it is fixed as described.
+#
+#   torbox -- its parse_magnet_pack has NO `errors` parameter and its handler
+#     never re-raises. With the crash gone it simply returns None, the caller
+#     finds no files, and the log says `selected_files failed`. That is a
+#     different generic message, not a diagnosis. What torbox gains is the
+#     crash removed and its own cleanup running; what it does not gain is the
+#     reason.
+#
+# TORBOX IS LEFT THAT WAY ON PURPOSE. Making it re-raise would change POV's
+# control flow, not just stop a crash -- and two of the three call sites
+# (modules/debrid.py:137 and :166) have no try of their own, so an exception
+# there would propagate into code that never expected one. A patcher into
+# somebody else's add-on gets to remove a crash; it does not get to invent an
+# error path.
 #
 # One line per site, inserted between the existing import and `try:`. Pure
 # insertions, never an edit to a line POV wrote, so _revert stays byte-exact.
