@@ -188,59 +188,122 @@ def stock_version():
 
 # --- the scan that found the bug, and is now the check ---------------------
 #
-# THREE ROUNDS OF REVIEW EACH FOUND THE SAME MISTAKE HERE, so the third fix is
-# not another case: it is a change of method.
+# FOUR ROUNDS OF REVIEW EACH FOUND A FALSE NEGATIVE HERE. Worth reading before
+# touching it, because the shape of the mistake never changed:
 #
-# Rounds 1-3 each built a shape my hand-rolled scope analysis walked past --
-# a try nested in an if; a name bound in a nested def, lambda or comprehension;
-# a name bound in a CLASS BODY; a `global` declared inside a nested helper.
-# Each time I patched the shape I was shown and claimed the class was covered.
-# Each time the next round found another. The defect was never the enumeration,
-# it was doing the enumeration at all.
+#   1. a try nested inside an if/for was skipped entirely
+#   2. a name bound in a nested def, lambda or comprehension counted as
+#      binding the OUTER function's variable
+#   3. a name bound in a class body did the same; and a `global` declared in a
+#      nested helper exempted the outer function's own local
+#   4. `except E as name` was counted as a lasting binding (CPython deletes it
+#      at the end of the handler); a walrus in this function's own decorator or
+#      default was counted as binding here (those run in the enclosing scope at
+#      def-time); and `del name` did not un-bind anything
 #
-# THE SCOPE QUESTION IS NOW ANSWERED BY CPYTHON. `symtable` is the compiler's
-# own scope analyser: it says whether a name is a local of this function, and
-# it gets every one of the four cases above right without being told about any
-# of them. A name that is not a local cannot raise UnboundLocalError, so it is
-# not a finding, whatever the text looks like.
+# Every time I fixed the shape I was shown and claimed the class was covered.
+# Every time the next round found another. Twice the "fix" CREATED the next
+# false negative -- and case 4's `except ... as` was pinned by a test that
+# REQUIRED a genuinely crashing function to read as clean, which is the exact
+# defect this project keeps finding in other people's suites.
 #
-# ONLY THE POSITION QUESTION IS LEFT TO ME -- "was it bound on a line before
-# the try?" -- and that one FAILS SAFE. Missing a binding form there makes the
-# scan flag something already safe: noise a reader resolves in a minute. The
-# direction that hides a real crash is now CPython's problem, not mine.
+# SO THE ANSWER IS NOT A LONGER LIST. It is two changes of method:
 #
-# ONE GAP REMAINS AND IS DELIBERATE. A name bound in only one branch of an
-# if/else before the try counts as bound. Deciding otherwise needs reachability
-# analysis, and this is a test guard, not a type checker. So a clean run is
-# evidence about these shapes -- never proof that POV is clean.
+#   THE SCOPE QUESTION BELONGS TO CPYTHON. `symtable` is the compiler's own
+#   scope analyser. Asked "is this name a local of this function", it gets
+#   every shape above right without being told about any of them. A name it
+#   does not call a local cannot raise UnboundLocalError.
+#
+#   THE POSITION QUESTION IS ANSWERED CONSERVATIVELY. A name counts as bound
+#   only if an UNCONDITIONAL statement at the TOP LEVEL of the function body,
+#   before the statement containing the try, binds it: a plain assignment, an
+#   annotated assignment with a value, an import, or a parameter. Anything
+#   else -- a binding inside an if, a for target, a `with ... as`, an
+#   `except ... as`, a walrus in a decorator or default -- does NOT count.
+#
+# That rule is deliberately too strict, and the strictness is the safety
+# argument: under-counting can only produce a FALSE ALARM, which a reader
+# clears in a minute. There is no longer a category of input where getting the
+# position wrong hides a crash. The previous version claimed that property and
+# did not have it.
+#
+# It also closed the gap that had been documented as permanent for three
+# rounds: a name bound in only one branch of an if/else is no longer treated
+# as bound, because it is not a top-level unconditional statement.
+#
+# AND IT COSTS NOTHING IN PRACTICE. Run across POV 6.08.13's whole debrid
+# surface -- eight files -- it returns exactly the four real sites and no
+# noise at all.
+def _params(node):
+    """Every parameter name. All forms -- these are bound at entry, always."""
+    a = node.args
+    names = {p.arg for p in list(getattr(a, 'posonlyargs', [])) + list(a.args)
+             + list(a.kwonlyargs)}
+    for extra in (a.vararg, a.kwarg):
+        if extra is not None:
+            names.add(extra.arg)
+    return names
 
-# Every construct that introduces a new scope in Python 3. Kept only for the
-# POSITION walk; if it is ever incomplete again the result is a false alarm,
-# not a missed crash.
-_NESTED_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda,
-                  ast.ClassDef, ast.ListComp, ast.SetComp, ast.DictComp,
-                  ast.GeneratorExp)
+
+def _unconditional_bindings(stmt):
+    """Names this ONE top-level statement always binds, or None if it is not a
+    form this scan is willing to call unconditional."""
+    if isinstance(stmt, ast.Assign):
+        out = set()
+        for t in stmt.targets:
+            for n in ast.walk(t):
+                if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store):
+                    out.add(n.id)
+        return out
+    if isinstance(stmt, ast.AnnAssign) and stmt.value is not None:
+        return {stmt.target.id} if isinstance(stmt.target, ast.Name) else set()
+    if isinstance(stmt, (ast.Import, ast.ImportFrom)):
+        return {a.asname or a.name.split('.')[0] for a in stmt.names}
+    return None
 
 
-def own_scope_bindings(node):
-    """(name, lineno) for every name bound in `node`'s OWN scope."""
-    out = []
+def _deleted(stmt):
+    if not isinstance(stmt, ast.Delete):
+        return set()
+    return {n.id for t in stmt.targets for n in ast.walk(t)
+            if isinstance(n, ast.Name)}
 
-    def walk(n, top=False):
-        if not top and isinstance(n, _NESTED_SCOPES):
-            return
-        if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store):
-            out.append((n.id, n.lineno))
-        # these bind a name held as a plain string, invisible to ast.Name
-        elif isinstance(n, ast.ExceptHandler) and n.name:
-            out.append((n.name, n.lineno))
-        elif isinstance(n, ast.alias) and n.asname:
-            out.append((n.asname, getattr(n, 'lineno', 0)))
-        for child in ast.iter_child_nodes(n):
-            walk(child)
 
-    walk(node, top=True)
-    return out
+def _bound_before(node, target_try):
+    """Names guaranteed bound where `target_try` sits.
+
+    ONLY unconditional statements at the top level of the function body, and
+    only those before the statement that contains the try. Everything else --
+    a binding inside an `if`, a `for` target, a `with ... as`, an
+    `except ... as`, a walrus in a decorator or a default -- is NOT counted.
+
+    THIS IS THE WHOLE SAFETY ARGUMENT, and the previous version got it wrong
+    in the other direction. Round 4 proved it with three executable cases:
+
+      * `except E as name:` -- CPython runs an implicit `del name` at the end
+        of EVERY such handler, so an earlier one does not bind anything later.
+        A previous round ADDED that as a binding to silence a false alarm, and
+        by doing so wrote a false negative -- then pinned it with a test that
+        required the miss. Flagging it is correct; the old test was wrong.
+      * a walrus in this function's OWN decorator or default argument. Those
+        expressions run in the ENCLOSING scope at def-time; the old walk
+        started at the FunctionDef and descended into `decorator_list` and
+        `args`, so it counted them as bindings here.
+      * `del name` -- an earlier assignment stops being a binding and nothing
+        noticed.
+
+    Under-counting here can only produce a false ALARM. That is the direction
+    this scan is allowed to be wrong in, and now it is the only one it can be.
+    """
+    bound = _params(node)
+    for stmt in node.body:
+        if any(n is target_try for n in ast.walk(stmt)):
+            break
+        got = _unconditional_bindings(stmt)
+        if got:
+            bound |= got
+        bound -= _deleted(stmt)
+    return bound
 
 
 def _function_locals(src):
@@ -274,10 +337,7 @@ def risky_names(src):
             assigned = {n.id for st in t.body for n in ast.walk(st)
                         if isinstance(n, ast.Name)
                         and isinstance(n.ctx, ast.Store)}
-            pre = {a.arg for a in node.args.args}
-            pre |= {name for name, lineno in own_scope_bindings(node)
-                    if lineno < t.lineno}
-            bad = (read & assigned & fn_locals) - pre
+            bad = (read & assigned & fn_locals) - _bound_before(node, t)
             if bad:
                 found.add((node.name, tuple(sorted(bad))))
     return found
@@ -431,17 +491,59 @@ check('a `global` inside a NESTED helper says nothing about the outer local',
 # ...and the shapes round 3 flagged as merely noisy must not have become
 # silent instead. These are safe code; the scan may complain, but the two
 # above must still be found, which the checks above prove.
+# THIS ASSERTION USED TO DEMAND THE WRONG ANSWER, and it is the sharpest
+# lesson of the four rounds. An earlier round saw `except E as tid` flagged,
+# called it a false alarm, taught the scan to treat it as a binding, and pinned
+# that with a check requiring the function to come back clean. It is not clean.
+# CPython runs an implicit `del tid` at the end of EVERY `except ... as`
+# handler -- to break the traceback reference cycle -- so the name is gone by
+# the time the second handler reads it. Executed, that function raises
+# UnboundLocalError and destroys the provider's real error, exactly like the
+# sites this patcher exists for. The scan was right and the test was wrong.
 _EXCEPT_AS = ('def f(self, x):\n'
               '\ttry:\n\t\tpass\n\texcept Exception as tid:\n\t\tpass\n'
               '\ttry:\n\t\ttid = self.go()\n'
               '\texcept Exception:\n\t\tif tid: self.undo(tid)\n')
-check('`except ... as name` counts as a binding, so it is not false-alarmed',
-      not risky_names(_EXCEPT_AS),
-      'the name is a plain string on the AST node, invisible to ast.Name')
+check('`except ... as name` does NOT survive its handler, so it is flagged',
+      ('f', ('tid',)) in risky_names(_EXCEPT_AS),
+      'python deletes that name at the end of the handler; calling it a '
+      'binding is how a test came to require a real crash to read as clean')
+
+_DEL = ('def f(self, x):\n\ttid = 1\n\tdel tid\n'
+        '\ttry:\n\t\ttid = self.go()\n'
+        '\texcept Exception:\n\t\tif tid: self.undo(tid)\n')
+check('a name deleted before the try is no longer bound',
+      ('f', ('tid',)) in risky_names(_DEL))
+
+_OWN_DEFAULT = ('def f(self, x, _s=(tid := None)):\n'
+                '\ttry:\n\t\ttid = self.go()\n'
+                '\texcept Exception:\n\t\tif tid: self.undo(tid)\n')
+check('a walrus in this function\'s OWN default binds in the ENCLOSING scope',
+      ('f', ('tid',)) in risky_names(_OWN_DEFAULT),
+      'defaults and decorators run at def-time, outside the function')
+
+_BRANCH = ('def f(self, x):\n\tif x:\n\t\ttid = 1\n'
+           '\ttry:\n\t\ttid = self.go()\n'
+           '\texcept Exception:\n\t\tif tid: self.undo(tid)\n')
+check('a name bound in only ONE branch is not treated as bound',
+      ('f', ('tid',)) in risky_names(_BRANCH),
+      'this was a documented gap for three rounds; counting only '
+      'unconditional top-level bindings closed it as a side effect')
+
+_KWONLY = ('def f(self, *, tid=None):\n'
+           '\ttry:\n\t\ttid = self.go()\n'
+           '\texcept Exception:\n\t\tif tid: self.undo(tid)\n')
+check('every parameter form counts as bound, including keyword-only',
+      not risky_names(_KWONLY),
+      'parameters are bound at entry; flagging one is pure noise')
 _IMPORT_AS = ('def f(self, x):\n\timport os as tid\n'
               '\ttry:\n\t\ttid = self.go()\n'
               '\texcept Exception:\n\t\tif tid: self.undo(tid)\n')
-check('`import x as name` counts too', not risky_names(_IMPORT_AS))
+check('a top-level import DOES bind, unconditionally', not risky_names(_IMPORT_AS))
+_IMPORT_PLAIN = ('def f(self, x):\n\timport os\n'
+                 '\ttry:\n\t\tos = self.go()\n'
+                 '\texcept Exception:\n\t\tif os: self.undo(os)\n')
+check('...with or without `as`', not risky_names(_IMPORT_PLAIN))
 
 # THE SELF-CHECK THAT MATTERS: the scan must still find the real thing.
 # Everything above is about shapes POV does not currently write; this is the
