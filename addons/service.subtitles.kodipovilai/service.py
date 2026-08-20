@@ -2032,6 +2032,12 @@ def _maybe_guard_pov_debrid_handlers():
     Binding those names before the try does not make the provider work. It
     makes the reason legible, which is the only thing between a shrug and a
     diagnosis. See the module for the four sites and how they were found."""
+    # It writes into POV's own files, so it answers to the switch that says
+    # not to. A new patcher gets this right even though the tuple around it is
+    # inconsistent about it -- 24 of the 57 steps do not check, and that is a
+    # reason to tighten those, never a licence to add a 25th.
+    if _skip_pov_patchers():
+        return
     try:
         from resources.lib import pov_debrid_unbound_guard_patcher, kodi_utils
         st = pov_debrid_unbound_guard_patcher.ensure_patched()
