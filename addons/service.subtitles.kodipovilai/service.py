@@ -2029,9 +2029,20 @@ def _maybe_guard_pov_debrid_handlers():
     raises an UnboundLocalError that REPLACES the cause. The user sees "no
     results"; the log cannot say why.
 
-    Binding those names before the try does not make the provider work. It
-    makes the reason legible, which is the only thing between a shrug and a
-    diagnosis. See the module for the four sites and how they were found."""
+    Binding those names before the try does not make the provider work, and
+    it does not do the same thing at all three sites -- a claim this docstring
+    made flatly until a review executed all three instead of reading them.
+
+    AllDebrid and Real-Debrid end their handlers `if errors: raise`, and the
+    caller that matters passes errors=True, so the provider's real error now
+    reaches the log verbatim. That is the reported case. TorBox has no
+    `errors` parameter and never re-raises: it gains the crash removed and its
+    own cleanup running, not the reason. Making it re-raise would invent an
+    error path into two call sites that have no try of their own, which is
+    more than a patcher into someone else's add-on gets to do.
+
+    See the module for the three sites, the fourth its sibling patcher owns,
+    and how they were found."""
     # It writes into POV's own files, so it answers to the switch that says
     # not to. The tuple around it is inconsistent about this and a good many
     # steps still skip the check -- which is a reason to tighten those, never a

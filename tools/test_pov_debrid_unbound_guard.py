@@ -234,6 +234,18 @@ def stock_version():
 # AND IT COSTS NOTHING IN PRACTICE. Run across POV 6.08.13's whole debrid
 # surface -- eight files -- it returns exactly the four real sites and no
 # noise at all.
+#
+# THE ONE SHAPE STILL NOT COVERED, stated here rather than left to be found a
+# seventh time: a LOOP-CARRIED dependency. Two try/except pairs inside the same
+# loop body, where the earlier one's handler reads a name only the later one
+# assigns, is unbound on the first iteration and the scan does not see it --
+# `assigned` only ever looks at tries at or before the one being examined, so
+# nothing looks backward across an iteration boundary. Measured before leaving
+# it: dropping the position restriction entirely, a strict superset of anything
+# a loop-carried case could need, returns the IDENTICAL 15 findings across
+# POV's 106 files, including all 27 functions that hold two or more tries
+# inside a loop. So it costs nothing today, and it is written down for the day
+# it does.
 def _params(node):
     """Every parameter name. All forms -- these are bound at entry, always."""
     a = node.args
@@ -828,6 +840,50 @@ check('...and none of those statuses is one service.py WARNs about',
                                    'read_failed')
               for p in st9.split(', ')),
       'a device without POV would log a warning every boot')
+
+# --- the two defences that had no fixture ---------------------------------
+# Both were verified correct by a reviewer executing them by hand, which is
+# precisely the state this project calls a defence nothing exercises. The
+# pycache drop in particular only ever ran here by accident, off stale .pyc
+# files that happened to be in a shared scratch tree.
+home10, root10 = fresh_pov()
+mod10 = load(home10)
+_real_sites = mod10._SITES
+try:
+    rel, anchor, _names = _real_sites[0]
+    # a "name" that cannot compile, so the injected line is a syntax error
+    mod10._SITES = ((rel, anchor, ('1invalid',)),) + _real_sites[1:]
+    before10 = io.open(os.path.join(root10, *rel.split('/')),
+                       encoding='utf-8', newline='').read()
+    st10 = mod10.ensure_patched()
+    after10 = io.open(os.path.join(root10, *rel.split('/')),
+                      encoding='utf-8', newline='').read()
+finally:
+    mod10._SITES = _real_sites
+check('an injected line that would not compile is refused',
+      'alldebrid=compile_failed' in st10, st10)
+check('...and the file is left untouched, because the check runs before the '
+      'write', after10 == before10,
+      'a compile guard that writes first guards nothing')
+check('...and the other two sites still patch, being independent files',
+      st10.count('=patched') == 2, st10)
+
+home11, root11 = fresh_pov()
+_pyc_dir = os.path.join(root11, 'resources', 'lib', 'debrids', '__pycache__')
+os.makedirs(_pyc_dir, exist_ok=True)
+_stale = os.path.join(_pyc_dir, 'alldebrid_api.cpython-311.pyc')
+_other = os.path.join(_pyc_dir, 'premiumize_api.cpython-311.pyc')
+for p in (_stale, _other):
+    with open(p, 'wb') as f:
+        f.write(b'stale bytecode')
+mod11 = load(home11)
+mod11.ensure_patched()
+check('the stale .pyc of a patched file is dropped',
+      not os.path.exists(_stale),
+      'python would keep running the pre-patch bytecode')
+check('...and a .pyc belonging to a file we did NOT patch is left alone',
+      os.path.exists(_other),
+      'the drop is meant to be surgical, not a cache purge')
 
 # --- COEXISTENCE: the sibling patcher runs FIRST on every real device ------
 # THE TEST THAT WOULD HAVE CAUGHT THE FIRST DRAFT. Every patcher here was
