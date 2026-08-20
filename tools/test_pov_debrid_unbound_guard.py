@@ -31,6 +31,7 @@ import io
 import os
 import re
 import shutil
+import symtable
 import sys
 import tempfile
 import types
@@ -187,36 +188,54 @@ def stock_version():
 
 # --- the scan that found the bug, and is now the check ---------------------
 #
-# WHAT IT IS AND IS NOT. A syntactic heuristic, not scope-and-flow analysis.
-# It reads "which names does an except handler read that nothing binds before
-# its try?" and that is enough to have found all four real sites. Two rounds of
-# review have now each moved its boundary, so the boundary is written down:
+# THREE ROUNDS OF REVIEW EACH FOUND THE SAME MISTAKE HERE, so the third fix is
+# not another case: it is a change of method.
 #
-#   HANDLED. A try nested inside an if/for (round 1 missed it entirely -- the
-#   old scan walked only top-level statements and swept the try's OWN
-#   assignments into `pre`). Names bound in a NESTED function, lambda or
-#   comprehension, which are different variables in a different scope and used
-#   to mask a real bug in the outer one. `global`/`nonlocal` names, which can
-#   never raise UnboundLocalError and used to be flagged as if they could.
+# Rounds 1-3 each built a shape my hand-rolled scope analysis walked past --
+# a try nested in an if; a name bound in a nested def, lambda or comprehension;
+# a name bound in a CLASS BODY; a `global` declared inside a nested helper.
+# Each time I patched the shape I was shown and claimed the class was covered.
+# Each time the next round found another. The defect was never the enumeration,
+# it was doing the enumeration at all.
 #
-#   NOT HANDLED, deliberately. A name bound in only ONE branch of an if/else
-#   before the try is treated as bound. Deciding otherwise needs real
-#   reachability analysis, and this is a test guard, not a type checker. If a
-#   future POV writes that shape, this scan will not find it -- so do not read
-#   a clean run as proof that POV is clean, only that these shapes are.
+# THE SCOPE QUESTION IS NOW ANSWERED BY CPYTHON. `symtable` is the compiler's
+# own scope analyser: it says whether a name is a local of this function, and
+# it gets every one of the four cases above right without being told about any
+# of them. A name that is not a local cannot raise UnboundLocalError, so it is
+# not a finding, whatever the text looks like.
+#
+# ONLY THE POSITION QUESTION IS LEFT TO ME -- "was it bound on a line before
+# the try?" -- and that one FAILS SAFE. Missing a binding form there makes the
+# scan flag something already safe: noise a reader resolves in a minute. The
+# direction that hides a real crash is now CPython's problem, not mine.
+#
+# ONE GAP REMAINS AND IS DELIBERATE. A name bound in only one branch of an
+# if/else before the try counts as bound. Deciding otherwise needs reachability
+# analysis, and this is a test guard, not a type checker. So a clean run is
+# evidence about these shapes -- never proof that POV is clean.
+
+# Every construct that introduces a new scope in Python 3. Kept only for the
+# POSITION walk; if it is ever incomplete again the result is a false alarm,
+# not a missed crash.
 _NESTED_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda,
-                  ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+                  ast.ClassDef, ast.ListComp, ast.SetComp, ast.DictComp,
+                  ast.GeneratorExp)
 
 
-def own_scope_stores(node):
-    """Every Name bound in `node`'s OWN scope -- not in a nested one."""
+def own_scope_bindings(node):
+    """(name, lineno) for every name bound in `node`'s OWN scope."""
     out = []
 
     def walk(n, top=False):
         if not top and isinstance(n, _NESTED_SCOPES):
             return
         if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store):
-            out.append(n)
+            out.append((n.id, n.lineno))
+        # these bind a name held as a plain string, invisible to ast.Name
+        elif isinstance(n, ast.ExceptHandler) and n.name:
+            out.append((n.name, n.lineno))
+        elif isinstance(n, ast.alias) and n.asname:
+            out.append((n.asname, getattr(n, 'lineno', 0)))
         for child in ast.iter_child_nodes(n):
             walk(child)
 
@@ -224,31 +243,41 @@ def own_scope_stores(node):
     return out
 
 
+def _function_locals(src):
+    """{(name, lineno): {names CPython says are locals of that function}}."""
+    out = {}
+
+    def visit(table):
+        if table.get_type() == 'function':
+            out[(table.get_name(), table.get_lineno())] = {
+                s.get_name() for s in table.get_symbols()
+                if s.is_local() and not s.is_global()}
+        for child in table.get_children():
+            visit(child)
+
+    visit(symtable.symtable(src, '<scan>', 'exec'))
+    return out
+
+
 def risky_names(src):
     """{(function, sorted names)} an except reads but the try alone assigns."""
     found = set()
+    locals_by_fn = _function_locals(src)
     for node in ast.walk(ast.parse(src)):
-        if not isinstance(node, ast.FunctionDef):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
+        # CPython's answer to "which of these can be unbound at all"
+        fn_locals = locals_by_fn.get((node.name, node.lineno), set())
         for t in [n for n in ast.walk(node) if isinstance(n, ast.Try)]:
             read = {n.id for h in t.handlers for n in ast.walk(h)
                     if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
             assigned = {n.id for st in t.body for n in ast.walk(st)
-                        if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)}
-            # Everything bound on a line BEFORE the try starts -- in THIS
-            # function's own scope. Walking every Store in the subtree was the
-            # round-2 finding: a `tid` bound inside a nested helper or a
-            # comprehension is a different variable entirely, and counting it
-            # masked a real bug in the enclosing function.
+                        if isinstance(n, ast.Name)
+                        and isinstance(n.ctx, ast.Store)}
             pre = {a.arg for a in node.args.args}
-            pre |= {n.id for n in own_scope_stores(node)
-                    if n.lineno < t.lineno}
-            # A name declared global/nonlocal is bound elsewhere and cannot
-            # raise UnboundLocalError, so reading it in a handler is safe.
-            pre |= {name for d in ast.walk(node)
-                    if isinstance(d, (ast.Global, ast.Nonlocal))
-                    for name in d.names}
-            bad = (read & assigned) - pre
+            pre |= {name for name, lineno in own_scope_bindings(node)
+                    if lineno < t.lineno}
+            bad = (read & assigned & fn_locals) - pre
             if bad:
                 found.add((node.name, tuple(sorted(bad))))
     return found
@@ -378,6 +407,49 @@ _GLOBAL = ('def f(self, x):\n\tglobal tid\n'
 check('a global/nonlocal name is NOT flagged -- it cannot be unbound',
       not risky_names(_GLOBAL),
       'flagging it would send someone to fix a function that is already safe')
+
+# Round 3's two shapes. Both were false NEGATIVES -- the scan called a function
+# clean that really does raise UnboundLocalError at runtime -- and both are now
+# CPython's answer rather than mine.
+_CLASSBODY = ('def f(self, x):\n'
+              '\tclass H:\n\t\ttid = 99\n'
+              '\ttry:\n\t\ttid = self.go()\n'
+              '\texcept Exception:\n\t\tif tid: self.undo(tid)\n')
+check('a name bound only in a CLASS BODY does not count as bound',
+      ('f', ('tid',)) in risky_names(_CLASSBODY),
+      'a class body is its own scope -- that assignment makes a class '
+      'attribute, never a local of the function around it')
+_NESTED_GLOBAL = ('def f(self, x):\n'
+                  '\tdef h():\n\t\tglobal tid\n\t\ttid = 99\n'
+                  '\ttry:\n\t\ttid = self.go()\n'
+                  '\texcept Exception:\n\t\tif tid: self.undo(tid)\n')
+check('a `global` inside a NESTED helper says nothing about the outer local',
+      ('f', ('tid',)) in risky_names(_NESTED_GLOBAL),
+      'the previous version added every global/nonlocal name it could find '
+      'anywhere in the subtree, which exempted the outer function too')
+
+# ...and the shapes round 3 flagged as merely noisy must not have become
+# silent instead. These are safe code; the scan may complain, but the two
+# above must still be found, which the checks above prove.
+_EXCEPT_AS = ('def f(self, x):\n'
+              '\ttry:\n\t\tpass\n\texcept Exception as tid:\n\t\tpass\n'
+              '\ttry:\n\t\ttid = self.go()\n'
+              '\texcept Exception:\n\t\tif tid: self.undo(tid)\n')
+check('`except ... as name` counts as a binding, so it is not false-alarmed',
+      not risky_names(_EXCEPT_AS),
+      'the name is a plain string on the AST node, invisible to ast.Name')
+_IMPORT_AS = ('def f(self, x):\n\timport os as tid\n'
+              '\ttry:\n\t\ttid = self.go()\n'
+              '\texcept Exception:\n\t\tif tid: self.undo(tid)\n')
+check('`import x as name` counts too', not risky_names(_IMPORT_AS))
+
+# THE SELF-CHECK THAT MATTERS: the scan must still find the real thing.
+# Everything above is about shapes POV does not currently write; this is the
+# one POV does.
+check('SELF-CHECK: the scan still finds the actual reported defect',
+      ('parse_magnet_pack', ('torrent_id',)) in risky_names(FIXTURES[
+          'resources/lib/debrids/alldebrid_api.py']),
+      'the rebuild lost the finding the whole file exists for')
 
 # --- 0b. the embedded fixtures really are real POV -------------------------
 # The comment above them says "asserted to be a substring of the real file".
