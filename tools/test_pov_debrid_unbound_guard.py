@@ -33,6 +33,8 @@ import re
 import shutil
 import symtable
 import sys
+import atexit
+import shutil as _shutil
 import tempfile
 import types
 
@@ -348,7 +350,13 @@ def risky_names(src):
             continue
         # CPython's answer to "which of these can be unbound at all"
         fn_locals = locals_by_fn.get((node.name, node.lineno), set())
-        tries = [n for n in ast.walk(node) if isinstance(n, ast.Try)]
+        # ast.TryStar (`except*`, 3.11+) is NOT a subclass of ast.Try, so
+        # the identical defect written with an exception group would have
+        # been invisible. Nothing in POV uses it today; the check costs
+        # one getattr.
+        _try_types = tuple(t for t in (ast.Try, getattr(ast, 'TryStar', None))
+                           if t is not None)
+        tries = [n for n in ast.walk(node) if isinstance(n, _try_types)]
         for t in tries:
             read = {n.id for h in t.handlers for n in ast.walk(h)
                     if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
@@ -409,11 +417,24 @@ def load(home):
     return mod
 
 
+_SCRATCH_DIRS = []
+
+
+@atexit.register
+def _clean_scratch():
+    """Twelve stock-tree copies per run, never removed, on a machine that runs
+    this suite in two configurations back to back. Found by a reviewer noticing
+    the pile."""
+    for d in _SCRATCH_DIRS:
+        _shutil.rmtree(d, ignore_errors=True)
+
+
 def fresh_pov():
     """A POV tree the patcher can work on: the real one where it exists, the
     byte-slice fixtures where it does not. Both paths run every assertion
     below -- the fixtures carry the exact anchors and the exact handlers."""
     home = tempfile.mkdtemp(prefix='povdbg-')
+    _SCRATCH_DIRS.append(home)
     root = os.path.join(home, 'addons', 'plugin.video.pov')
     if os.path.isdir(STOCK):
         shutil.copytree(STOCK, root)
@@ -840,6 +861,44 @@ check('...and none of those statuses is one service.py WARNs about',
                                    'read_failed')
               for p in st9.split(', ')),
       'a device without POV would log a warning every boot')
+
+# --- a BOM must not read as a broken file ---------------------------------
+# Reading with plain utf-8 leaves a leading BOM in the string as U+FEFF, which
+# compile() rejects -- so a POV file carrying one would report compile_failed
+# forever and log a WARNING every boot, while importing perfectly well in Kodi.
+home12, root12 = fresh_pov()
+p12 = os.path.join(root12, *AD.split('/'))
+with io.open(p12, 'w', encoding='utf-8', newline='') as f:
+    f.write('\ufeff' + before[AD])
+mod12 = load(home12)
+st12 = mod12.ensure_patched()
+with io.open(p12, encoding='utf-8', newline='') as f:
+    bom_after = f.read()
+check('a file with a BOM is patched, not rejected as uncompilable',
+      'alldebrid=patched' in st12, st12)
+check('...and the BOM is still there, because we never asked to remove it',
+      bom_after.startswith('\ufeff'),
+      'stripping it on read would rewrite a byte POV chose and break the '
+      'byte-exact revert')
+check('...and the revert is still byte-exact, BOM and all',
+      mod12._revert(bom_after) == '\ufeff' + before[AD])
+
+# --- except* is a different AST node ---------------------------------------
+_TRYSTAR = ('def f(self, x):\n'
+            '\ttry:\n\t\ttid = self.go()\n'
+            '\texcept* Exception:\n\t\tif tid: self.undo(tid)\n')
+try:
+    ast.parse(_TRYSTAR)
+    _has_trystar = True
+except SyntaxError:
+    _has_trystar = False        # interpreter older than 3.11
+if _has_trystar:
+    check('the same defect written with `except*` is still found',
+          ('f', ('tid',)) in risky_names(_TRYSTAR),
+          'ast.TryStar is not a subclass of ast.Try, so a scan that tests for '
+          'ast.Try alone walks straight past an exception group')
+else:
+    print('---- except* NOT CHECKED (this interpreter predates 3.11)')
 
 # --- the two defences that had no fixture ---------------------------------
 # Both were verified correct by a reviewer executing them by hand, which is
