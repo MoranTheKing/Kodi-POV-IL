@@ -265,11 +265,11 @@ def _patch_one(rel, anchor, names):
 
 def ensure_patched():
     """Idempotent. Never raises. Returns a comma-joined per-file status, e.g.
-    'alldebrid=patched, realdebrid=patched, torbox=patched, resolve=patched'.
+    'alldebrid=patched, realdebrid=patched, torbox=patched'.
 
-    Per FILE, not all-or-none across files: these are four independent handlers
-    in four independent files, and a POV refactor that moves one is no reason
-    to leave the other three crashing.
+    Per FILE, not all-or-none across files: three independent handlers in three
+    independent files, and a POV refactor that moves one is no reason to leave
+    the other two crashing.
     """
     if xbmcvfs is None:
         return 'no_pov'
