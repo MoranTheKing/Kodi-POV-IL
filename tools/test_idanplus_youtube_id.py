@@ -39,6 +39,7 @@ Run: python3 tools/test_idanplus_youtube_id.py
 """
 import importlib.util
 import io
+import re
 import os
 import shutil
 import sys
@@ -150,6 +151,9 @@ ALREADY_OK = (
     'https://youtu.be/dQw4w9WgXcQ?t=30',
     'https://www.youtube.com/embed/dQw4w9WgXcQ',
     'https://www.youtube.com/live/dQw4w9WgXcQ',
+    # the review's case: a real id in the path AND a stray v= in the query.
+    # The ungated version took the query one and got it wrong.
+    'https://youtu.be/dQw4w9WgXcQ?v=WRONGIDXXXX',
 )
 ALSO_BROKEN = (
     'https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=30s',
@@ -184,13 +188,33 @@ for label, tree in list(TREES.items()) + [('inline fixture', None)]:
         check('%s: %s resolves' % (label, u.split('?')[1]),
               run_fn(after, u) == WANT, 'got %r' % run_fn(after, u))
 
-    # THE PROPERTY THAT MAKES IT SAFE TO LEAVE IN PLACE
-    same = [u for u in ALREADY_OK if run_fn(before, u) == run_fn(after, u)]
+    # THE PROPERTY THAT MAKES IT SAFE TO LEAVE IN PLACE, as an invariant over
+    # every shape rather than a sample of five: THE ANSWER MAY ONLY CHANGE
+    # WHERE STOCK RETURNED 'watch'. Stock returning 'watch' IS stock failing --
+    # YouTube ids are eleven characters and 'watch' is five, so no url stock
+    # resolved correctly can reach the injected line.
+    #
+    # A review broke the first version of this, which scanned the whole url
+    # ungated: `youtu.be/<ID>?v=<OTHER>` has a real id in the PATH and a stray
+    # v= in the query, and the fix took the wrong one -- changing an answer
+    # stock had got right. Gating on 'watch' removes that class by
+    # construction. The case is in ALREADY_OK below so it can never come back.
+    differ = [u for u in ALREADY_OK + ALSO_BROKEN + (BROKEN,)
+              if run_fn(before, u) != run_fn(after, u)]
+    check('%s: the answer only ever changes where stock said "watch"' % label,
+          all(run_fn(before, u) == 'watch' for u in differ),
+          'changed a url stock resolved correctly: %s'
+          % [u for u in differ if run_fn(before, u) != 'watch'])
     check('%s: every url stock already got right is UNCHANGED' % label,
-          len(same) == len(ALREADY_OK),
-          'changed: %s' % [u for u in ALREADY_OK if u not in same])
+          all(run_fn(before, u) == run_fn(after, u) for u in ALREADY_OK),
+          'changed: %s' % [u for u in ALREADY_OK
+                           if run_fn(before, u) != run_fn(after, u)])
     check('%s: ...and those were all correct to begin with' % label,
           all(run_fn(before, u) == WANT for u in ALREADY_OK))
+    check('%s: a v= below the length floor is left alone, not guessed at'
+          % label,
+          run_fn(after, 'https://www.youtube.com/watch?v=abc12') == 'watch',
+          'a stray short v= must not be mistaken for an id')
 
     check('%s: a second run is a no-op' % label,
           mod.ensure_patched() == 'unchanged')
@@ -213,8 +237,23 @@ for label, tree in list(TREES.items()) + [('inline fixture', None)]:
 # that outlives its bug becomes noise on every boot forever.
 print()
 print('=== what happens when Idan Plus fixes it upstream ===')
-BAD = ('unmatched', 'compile_failed', 'write_failed', 'revert_failed',
-       'read_failed')
+# READ OUT OF service.py, never copied. A review found this tuple had already
+# drifted -- service.py warns about 'no_function' too and this did not know --
+# and two lists that must agree are how three earlier bugs in this project
+# started.
+def _warn_statuses():
+    with io.open(os.path.join(ROOT, 'addons', 'service.subtitles.kodipovilai',
+                              'service.py'), encoding='utf-8') as f:
+        s = f.read()
+    i = s.index('def _maybe_fix_idanplus_youtube_id():')
+    block = s[i:s.index('\ndef ', i + 1)]
+    return set(re.findall(r"'(\w+)'", block[block.index('if st in ('):]))
+
+
+BAD = tuple(sorted(_warn_statuses()))
+check('the warn set was read out of service.py, not copied',
+      'unmatched' in BAD and 'no_function' in BAD and 'already_fixed' not in BAD,
+      'got %s' % (BAD,))
 UPSTREAM = {
     'they parse the v= parameter':
         "import re\nyoutubePlugin = 'x'\n\n"
@@ -230,6 +269,42 @@ UPSTREAM = {
         "\tvideo_id = m.group(1) if m else url.rstrip('/').rsplit('/', 1)[-1]\n"
         "\treturn '{0}/play/?video_id={1}'.format(youtubePlugin, video_id)\n",
 }
+# AND THE OTHER DIRECTION, which is the one a review found broken: a version
+# that does NOT fix the bug must NOT make us stand down. The first check was
+# `re.search(r"v=|parse_qs|query", body)`, and a comment saying "query the
+# path" or a variable called search_query made it true while fixing nothing --
+# so the patcher would report 'already_fixed', which service.py deliberately
+# does not warn about, and a still-broken version would leave NO trace in the
+# log at all. Silent is worse than the noise the check exists to prevent.
+_RET = "\treturn '{0}/play/?video_id={1}'.format(youtubePlugin, video_id)\n"
+_STOCK_FN = ("def GetYouTube(url):\n\tif url.endswith('/'):\n\t\turl = url[:-1]\n"
+             "\tvideo_id = url[url.rfind('/')+1:]\n\tif '?' in video_id:\n"
+             "\t\tvideo_id = video_id[:video_id.find('?')]\n" + _RET)
+NOT_FIXED = {
+    'a comment that merely says "query"':
+        _STOCK_FN.replace('def GetYouTube(url):\n',
+                          'def GetYouTube(url):\n\t# query the path\n'),
+    'a variable called search_query':
+        _STOCK_FN.replace('def GetYouTube(url):\n',
+                          'def GetYouTube(url):\n\tsearch_query = 1\n'),
+    'a variable whose name ends in v':
+        _STOCK_FN.replace('def GetYouTube(url):\n',
+                          'def GetYouTube(url):\n\tconv = 1\n'),
+    'one that returns the raw url instead of the plugin path':
+        "def GetYouTube(url):\n\treturn url.rsplit('/',1)[-1]\n",
+}
+_probe_home, _ = fresh(body=FIXTURE)
+_probe = load(_probe_home)
+for label, body in NOT_FIXED.items():
+    check('NOT fixed: %s -> we do NOT stand down' % label,
+          not _probe._already_handles_v(body),
+          'a still-broken version would be left broken, silently')
+check('a body we cannot even run does NOT stand down either',
+      not _probe._already_handles_v(
+          "def GetYouTube(url):\n\tvideo_id = extract_id(url)\n" + _RET),
+      'not being able to tell must fall through to the anchor check, which '
+      'warns -- never to a silent stand-down')
+
 for label, body in UPSTREAM.items():
     home, cp = fresh(body=body)
     before = io.open(cp, encoding='utf-8', newline='').read()

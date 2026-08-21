@@ -2030,9 +2030,21 @@ def _maybe_fix_idanplus_youtube_id():
     youtube.com/watch?v= form -- so Kan 11 items stopped resolving when Kan
     moved from embed links to watch links.
 
-    The injected line only speaks when there is a v= to read, so every url the
-    add-on already resolved correctly comes out identical. And it stands down
-    on its own if Idan Plus ships a fix: see _already_handles_v in the module.
+    Kan does not hand out that url -- its mobile API returns a bare id and
+    kan.py wraps it into watch?v= itself, then fails to unwrap its own
+    construction. So this is not a regression and not something Kan changed:
+    every Kan item of that type has always failed.
+
+    The injected line only fires where the add-on produced the literal string
+    'watch', which is the signature of the failure and cannot be an id, so no
+    url it already resolved can reach it. And it stands down on its own if
+    Idan Plus ships a fix -- _already_handles_v RUNS the function rather than
+    reading it.
+
+    DELIBERATELY NOT behind _skip_pov_patchers(). That switch says to leave
+    plugin.video.pov as its author shipped it; this writes to
+    plugin.video.idanplus, a different add-on, and gating it on the POV switch
+    would silently tie two unrelated decisions together.
     """
     try:
         from resources.lib import idanplus_youtube_id_patcher, kodi_utils
