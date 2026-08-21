@@ -57,6 +57,54 @@ _ENGINE_TTL = 7 * 24 * 3600.0   # 7 days; used once HUMAN Hebrew has been found
 # within ~24h, and a 7-day cache would hide it. Balanced at ~daily (was 8h) to
 # cut repeat Worker /lookup traffic while still surfacing next-day Hebrew.
 _AVAIL_TTL_NONE = 24 * 3600.0   # 24 hours
+
+# HOW MANY RELEASE NAMES WE KEEP PER TITLE, and why there is a number here at
+# all. The source-screen badge scores EVERY source row against EVERY name in
+# these lists, so their length is a per-row cost in POV's make_items -- the
+# thing the user waits through between 'sources found' and the list actually
+# appearing. Two of the three lists were union-only and never trimmed:
+# `embedded` and `sync_rel` accumulate for a title forever, and every entry
+# added to them is another comparison per row.
+#
+# That is how a window that used to open in a second became one that took
+# ten without any code changing in between. The scorer got heavier in July;
+# the lists have been growing ever since; at three names nobody notices.
+#
+# 120 is far above any real title -- a film has a few dozen distinct Hebrew
+# releases at most -- so this is a ceiling, not a policy. Newest wins: a name
+# added recently is the one being browsed now.
+_MAX_NAMES = 120
+
+
+def _bounded_union(existing, incoming, cap=_MAX_NAMES, fold_case=True):
+    """`existing` plus anything new in `incoming`, newest kept, capped.
+
+    STRINGS ONLY, and that is not decoration. This reads a JSON file that
+    other processes write, so an entry can be a number or an object without
+    anybody having made a mistake in Python -- and the inline code this
+    replaced would raise on `.lower()` for one, or on hashing a list. Every
+    caller sits inside a try/except that swallows, so the old failure mode
+    was a write silently not happening. Skipping the entry keeps the write.
+    """
+    def _ok(x):
+        return isinstance(x, str) and x.strip()
+
+    out = [x for x in (existing or []) if _ok(x)]
+    seen = set((x.lower() if fold_case else x) for x in out)
+    for x in (incoming or []):
+        if not _ok(x):
+            continue
+        k = x.lower() if fold_case else x
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(x)
+    # `out[-cap:]` is the whole list when cap is 0, which is the opposite of
+    # what a cap of zero should mean. No caller passes one; it is spelled out
+    # so that adding one later cannot quietly disable the bound.
+    if cap <= 0:
+        return []
+    return out[-cap:] if len(out) > cap else out
 # Cross-process memo for _pool_lookup: coalesces repeated signed /lookup calls
 # for the SAME title within a few seconds into ONE Worker request. (The POV
 # source-window used to make its OWN unsigned peek here too, but that always
@@ -592,27 +640,16 @@ def _store_avail(mk, names, embedded, ttl, sync_rel=None):
         # yet) overwrote the list, it would WIPE the just-detected flag -- so the
         # source the user just played loses its BUILT-IN badge while pool-sourced
         # ones keep theirs. Unioning preserves both.
-        _existing_emb = [e for e in ((data.get(mk) or {}).get('embedded') or [])
-                         if e]
-        _emb_seen = set(e.lower() for e in _existing_emb)
-        _merged_emb = list(_existing_emb)
-        for _e in (embedded or []):
-            if _e and _e.lower() not in _emb_seen:
-                _emb_seen.add(_e.lower())
-                _merged_emb.append(_e)
+        _merged_emb = _bounded_union((data.get(mk) or {}).get('embedded'),
+                                     embedded)
         # UNION sync_rel with what's cached, for the same reason as embedded: a
         # CONFIRMED synced release is a durable fact, and a later warm whose pool
         # response happens not to include it (throttle/miss) must not wipe the
         # tick from a release already known-synced.
-        _existing_sr = [s for s in ((data.get(mk) or {}).get('sync_rel') or [])
-                        if s]
-        _sr_seen = set(_existing_sr)
-        _merged_sr = list(_existing_sr)
-        for _s in (sync_rel or []):
-            if _s and _s not in _sr_seen:
-                _sr_seen.add(_s)
-                _merged_sr.append(_s)
-        data[mk] = {'ts': time.time(), 'names': list(names),
+        _merged_sr = _bounded_union((data.get(mk) or {}).get('sync_rel'),
+                                    sync_rel, fold_case=False)
+        data[mk] = {'ts': time.time(),
+                    'names': _bounded_union([], names),
                     'embedded': _merged_emb, 'sync_rel': _merged_sr,
                     'ttl': float(ttl or 0), 'warm': 1}
         if len(data) > 400:
@@ -970,14 +1007,11 @@ def embedded_names(meta):
         p = _media_params(meta)
         if not p:
             return []
-        _emb = _cached_embedded(_media_key(p))
-        try:
-            from resources.lib import kodi_utils as _ku
-            _ku.log('embedded_names {0}: {1}'.format(_media_key(p), _emb),
-                    level='INFO')
-        except Exception:
-            pass
-        return _emb
+        # The line that logged this whole list ran once per source window,
+        # in the stretch the user is already waiting through, on devices
+        # whose Kodi log is on internal flash -- and it grew with the list.
+        # Third diagnostic of the same kind removed from this path.
+        return _cached_embedded(_media_key(p))
     except Exception:
         return []
 
@@ -1012,13 +1046,7 @@ def merge_names(meta, names):
                 data = {}
         ent = data.get(key) or {}
         existing = [n for n in (ent.get('names') or []) if n]
-        seen = set(n.lower() for n in existing)
-        merged = list(existing)
-        for n in clean:
-            low = n.lower()
-            if low not in seen:
-                seen.add(low)
-                merged.append(n)
+        merged = _bounded_union(existing, clean)
         if merged == existing:
             return   # nothing new -- skip the write
         ent['names'] = merged
@@ -1077,19 +1105,12 @@ def merge_embedded(meta, releases):
                 data = {}
         ent = data.get(key) or {}
         existing = [n for n in (ent.get('embedded') or []) if n]
-        seen = set(n.lower() for n in existing)
-        merged = list(existing)
-        for n in clean:
-            low = n.lower()
-            if low not in seen:
-                seen.add(low)
-                merged.append(n)
-        try:
-            from resources.lib import kodi_utils as _ku
-            _ku.log('merge_embedded {0}: existing={1} +{2} -> {3}'.format(
-                key, existing, clean, merged), level='INFO')
-        except Exception:
-            pass
+        merged = _bounded_union(existing, clean)
+        # The line that logged existing/incoming/merged in full on every
+        # merge is gone. It was a diagnostic for the built-in badge going
+        # missing, that question was settled, and what it left behind was
+        # three whole release-name lists written to the Kodi log at every
+        # play -- growing with the very list this cap now bounds.
         if merged == existing:
             return   # nothing new -- skip the write
         ent['embedded'] = merged
@@ -1171,11 +1192,52 @@ def _score(src_release, sub_release):
         return 0
 
 
-def best_score(src_release, names):
+def best_score(src_release, names, stop_at=100, floor=0):
+    """Best % across `names`.
+
+    THIS IS THE HOT LOOP OF THE SOURCE WINDOW. It runs once per name per
+    source ROW -- seventy rows against seventeen names is over a thousand
+    scored pairs before the list can be drawn, and a field log from a webOS TV
+    showed ten seconds of exactly that. So it hands the whole loop to
+    release_match.best_pct, which knows the ceiling of each of its own
+    branches and can skip any pair that provably cannot raise the maximum,
+    without changing the maximum.
+
+    `floor` is for the caller who only needs to know whether anything clears a
+    bar rather than what the best is: below the bar it answers 0. See
+    best_pct's own note for why floor=79 makes the built-in check free.
+
+    The difflib fallback is unchanged -- it only runs where release_match
+    could not be imported, and it has never been the slow path in the field."""
     try:
         if not names or not src_release:
             return 0
-        return max((_score(src_release, n) for n in names), default=0)
+        if not isinstance(src_release, str) or not src_release.strip():
+            return 0
+        rm = _release_match_mod()
+        if rm is not None and hasattr(rm, 'best_pct'):
+            try:
+                return rm.best_pct(src_release, names, stop_at=stop_at,
+                                   floor=floor)
+            except Exception:
+                pass
+        best = 0 if floor <= 0 else floor
+        for n in names:
+            # SKIP WHAT best_pct SKIPS. _score has no type guard -- a truthy
+            # non-string entry raises inside re.sub -- and the old max() over
+            # a generator turned that into a flat 0 for the whole list, which
+            # quietly threw away a genuine match sitting next to it. Stopping
+            # early would have made that ORDER-DEPENDENT instead, which is
+            # worse than either. Review round 11 reproduced it; the two paths
+            # now refuse the same inputs.
+            if not isinstance(n, str) or not n.strip():
+                continue
+            p = _score(src_release, n)
+            if p > best:
+                best = p
+                if best >= stop_at:
+                    break
+        return 0 if best <= floor else best
     except Exception:
         return 0
 
@@ -1214,17 +1276,21 @@ def label_prefix(src_release, names, embedded=None, alt_release='',
         # displayed/scored by URLName, and POV makes those two fields differ --
         # so matching either identifier is what lets a just-played release light
         # up BUILT-IN instead of dropping to the % badge.
+        #
+        # SCORED IN TWO STEPS, WITH AN EARLY EXIT, rather than max() over both:
+        # this whole function runs once per source row, and a row that already
+        # clears 80 on its URLName has no reason to score its name as well.
+        #
+        # There was a per-row log line here -- 'built-in check: emb_best=...' --
+        # left over from working out why a just-played release was not lighting
+        # up. It wrote to the Kodi log for EVERY row of EVERY source list, on
+        # devices where that log is on internal flash. Diagnostics that survive
+        # into the hot path stop being diagnostics.
         if embedded and (src_release or alt_release):
-            emb_best = max(best_score(src_release, embedded),
-                           best_score(alt_release, embedded))
-            if emb_best >= 40:
-                try:
-                    from resources.lib import kodi_utils as _ku
-                    _ku.log('built-in check: emb_best={0} src={1!r} alt={2!r} '
-                            'emb={3}'.format(emb_best, src_release, alt_release,
-                                             embedded), level='INFO')
-                except Exception:
-                    pass
+            emb_best = best_score(src_release, embedded, stop_at=80, floor=79)
+            if emb_best < 80:
+                emb_best = best_score(alt_release, embedded, stop_at=80,
+                                      floor=79)
             if emb_best >= 80:
                 return '[COLOR FF2ECC71][B]HEB BUILT-IN 101%[/B][/COLOR] | '
         # Community-CONFIRMED synced record for this exact release (strongest
