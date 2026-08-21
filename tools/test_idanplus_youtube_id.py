@@ -13,8 +13,15 @@ Five player clients, five identical refusals, because no video has the id
 
 `common.GetYouTube` reads the id out of the URL PATH and truncates at '?',
 which is precisely where the id lives in the ordinary youtube.com/watch?v=
-form. Kan evidently moved from embed links to watch links and nothing on the
-add-on side could read them.
+form.
+
+AND THE ADD-ON BUILDS THAT URL ITSELF. Kan's mobile API returns a BARE id --
+`content.type='youtube-id'`, `content.src='oRFeZUO5GVw'` -- and kan.py's
+_mobStreamFromEntry wraps it into `watch?v=<id>` before handing it to
+GetYouTube, which unwraps it back to 'watch'. A round trip that destroys the
+data. So this is not a regression and not something Kan changed: every Kan
+item of that type has always failed. Verified against the live API -- all five
+episodes of the reported program return 'watch' on stock.
 
 WHAT THIS FILE PINS, beyond "the marker is in the file":
 
