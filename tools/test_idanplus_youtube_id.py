@@ -307,6 +307,7 @@ def _warn_statuses():
     truncate the set silently. An AST is immune to every reformatting of that
     tuple: one line or five, trailing comma, comments anywhere in it.
     """
+    found = []
     for fn in ast.walk(ast.parse(_svc)):
         if not (isinstance(fn, ast.FunctionDef)
                 and fn.name == '_maybe_fix_idanplus_youtube_id'):
@@ -316,8 +317,21 @@ def _warn_statuses():
                     and isinstance(n.left, ast.Name) and n.left.id == 'st'
                     and len(n.ops) == 1 and isinstance(n.ops[0], ast.In)
                     and isinstance(n.comparators[0], ast.Tuple)):
-                return set(e.value for e in n.comparators[0].elts)
-    raise AssertionError('service.py has no `st in (...)` test to read')
+                found.append(n.comparators[0])
+    # EXACTLY ONE, or we do not know which one we read. Round 4 put a decoy
+    # `if st in (...)` earlier in the same function and this returned the
+    # decoy's set without a murmur -- the same wrong-answer-instead-of-raising
+    # failure the AST rewrite was supposed to have ended.
+    if len(found) != 1:
+        raise AssertionError(
+            'service.py has %d `st in (...)` tests inside '
+            '_maybe_fix_idanplus_youtube_id; this can only read one' % len(found))
+    bad = [e for e in found[0].elts
+           if not (isinstance(e, ast.Constant) and isinstance(e.value, str))]
+    if bad:
+        raise AssertionError('that tuple holds something other than string '
+                             'literals, so it cannot be read here')
+    return set(e.value for e in found[0].elts)
 
 
 def _ensure_patched_node():
@@ -330,20 +344,51 @@ def _ensure_patched_node():
 def _returned_statuses():
     """Every string ensure_patched can actually return, by AST.
 
-    Walks INTO each return expression rather than requiring the return value
-    to be a bare constant: the last line of that function is
-    `return 'repatched' if repatch else 'patched'`, and a version of this that
-    only looked at `ast.Return.value` missed both -- which is precisely the
-    kind of quiet undercount the checks below exist to catch.
+    THE SHAPE IS PINNED RATHER THAN SEARCHED, which took three tries to get
+    right. Reading `ast.Return.value` and requiring a bare constant silently
+    missed `return 'repatched' if repatch else 'patched'`. Walking the whole
+    return expression for string constants fixed that and bought two new ways
+    to be wrong: `result = 'write_failed'` then `return result` collects
+    NOTHING, and `return '{0}'.format('x_failed')` collects the format
+    template as if it were a status. Both are undercounts or overcounts in the
+    one function whose entire job is catching them.
+
+    So every return in ensure_patched must BE a status literal, or a choice
+    between two of them, and anything else is refused by name and line number
+    instead of being quietly mis-read. If a future version needs a computed
+    status, this function is what has to change -- deliberately, not by
+    accident.
     """
-    return {c.value for n in ast.walk(_ensure_patched_node())
-            if isinstance(n, ast.Return) and n.value is not None
-            for c in ast.walk(n.value)
-            if isinstance(c, ast.Constant) and isinstance(c.value, str)}
+    out = set()
+    for n in ast.walk(_ensure_patched_node()):
+        if not isinstance(n, ast.Return):
+            continue
+        vals = ([n.value.body, n.value.orelse]
+                if isinstance(n.value, ast.IfExp) else [n.value])
+        for v in vals:
+            if not (isinstance(v, ast.Constant) and isinstance(v.value, str)):
+                raise AssertionError(
+                    'ensure_patched line %d does not return a plain status '
+                    'literal, so the status set cannot be read from source'
+                    % n.lineno)
+            out.add(v.value)
+    return out
 
 
-ALL_ST = _returned_statuses()
-BAD = tuple(sorted(_warn_statuses()))
+# Both readers refuse rather than guess, and a refusal has to arrive as a
+# FAIL line like everything else here -- not as a traceback that takes the
+# rest of the run down with it.
+_read_err = []
+try:
+    ALL_ST = _returned_statuses()
+except AssertionError as e:
+    ALL_ST, _ = set(), _read_err.append('patcher: %s' % e)
+try:
+    BAD = tuple(sorted(_warn_statuses()))
+except AssertionError as e:
+    BAD, _ = (), _read_err.append('service.py: %s' % e)
+check('both status lists could be read from source at all',
+      not _read_err, ' / '.join(_read_err))
 
 # THE RULE, STATED ONCE, RATHER THAN A LIST COPIED TWICE. Review round 3 found
 # the previous version of this check asserted only that a couple of members
@@ -366,8 +411,11 @@ check('service.py warns about exactly the failure statuses, no more, no less',
 check('...and both sides were read from source, not written down here',
       len(ALL_ST) > 5 and 'patched' in ALL_ST and 'no_file' in ALL_ST,
       'ensure_patched returned nothing recognisable: %s' % (sorted(ALL_ST),))
-DOC_ST = set(re.findall(r"'(\w+)'",
-                       ast.get_docstring(_ensure_patched_node()) or ''))
+# Only the part of the docstring AFTER the word "Returns" -- so ordinary
+# prose elsewhere in it can quote whatever it likes without breaking this.
+DOC_ST = set(re.findall(
+    r"'(\w+)'",
+    (ast.get_docstring(_ensure_patched_node()) or '').split('Returns', 1)[-1]))
 check('the docstring lists exactly the statuses ensure_patched returns',
       DOC_ST == ALL_ST,
       'undocumented %s / documented but never returned %s'
@@ -376,17 +424,36 @@ check('no status service.py warns about is a silent stand-down',
       'already_fixed' not in ALL_ST and 'no_function' not in ALL_ST,
       'those two statuses no longer exist; if they are back, so is the bug')
 
-# The patcher must not run anybody else's code to make its decision. Names AND
-# attributes, so `getattr(builtins, "exec")` and `mod.eval` are caught too --
-# this is a regression guard, not a security boundary, but it costs one line
-# to make it cover more than the exact shape round 2 used.
-_bad_names = {n.id for n in ast.walk(ast.parse(_src))
-              if isinstance(n, ast.Name)} & {'exec', 'eval'}
-_bad_attrs = {n.attr for n in ast.walk(ast.parse(_src))
-              if isinstance(n, ast.Attribute)} & {'exec', 'eval'}
-check('NO_EXEC: the patcher never execs or evals',
-      not (_bad_names | _bad_attrs),
-      'found %s' % sorted(_bad_names | _bad_attrs))
+# THE PATCHER MUST NOT RUN ANYBODY ELSE'S CODE TO MAKE ITS DECISION.
+#
+# Three spellings, because a comment on the first version claimed to cover a
+# shape it did not and round 4 executed the counter-example: a bare name
+# (`exec(...)`, round 2's actual shape), an attribute (`mod.eval(...)`), and
+# the STRING 'exec'/'eval' anywhere -- which is what `getattr(builtins,
+# 'exec')` and `builtins.__dict__['exec']` reduce to, and what the first two
+# rules are blind to.
+#
+# `compile(src, path, 'exec')` uses that word legitimately and is the one
+# exemption: the mode argument of a call to compile(). Nothing else.
+#
+# This is a regression guard, not a security boundary. Someone determined to
+# hide an exec can still build the name at runtime. The point is that nobody
+# reintroduces round 2's mechanism by accident.
+_tree = ast.parse(_src)
+_exempt = {id(c.args[2]) for c in ast.walk(_tree)
+           if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
+           and c.func.id == 'compile' and len(c.args) > 2}
+_bad_names = sorted({n.id for n in ast.walk(_tree)
+                     if isinstance(n, ast.Name)} & {'exec', 'eval'})
+_bad_attrs = sorted({n.attr for n in ast.walk(_tree)
+                     if isinstance(n, ast.Attribute)} & {'exec', 'eval'})
+_bad_strs = sorted({n.value for n in ast.walk(_tree)
+                    if isinstance(n, ast.Constant) and n.value in ('exec', 'eval')
+                    and id(n) not in _exempt})
+check('NO_EXEC: the patcher never execs or evals, by any spelling',
+      not (_bad_names or _bad_attrs or _bad_strs),
+      'name %s / attribute %s / string %s'
+      % (_bad_names, _bad_attrs, _bad_strs))
 
 # A GENUINE UPSTREAM FIX: unrecognised shape, file untouched, and REPORTED.
 # Noisy is the intended outcome. We cannot tell a fix from a refactor from a
