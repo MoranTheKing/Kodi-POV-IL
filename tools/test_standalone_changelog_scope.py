@@ -89,16 +89,57 @@ HOSTS = {
     'pov_': 'POV',
     'darksubs_': 'DarkSubs',
     'all_subs_': 'All_Subs',
+    'idanplus_': 'Idan Plus',
 }
-shipped, dropped = set(), set()
+# AND THE OTHER PREFIXES, BY NAME, BECAUSE THE LOOP USED TO SKIP THEM.
+#
+# It said `if host is None: continue` -- so a patcher for a host nobody had
+# added to HOSTS was not checked at all, and the test passed. Release 603
+# found that the hard way: idanplus_youtube_id_patcher.py is not shipped
+# standalone and "Idan Plus" was not a filtered term, so a bullet announcing
+# a Kan 11 fix was about to reach users who do not receive it. That is note
+# 598's defect exactly, walking straight past the guard written to stop it,
+# because the guard's own list of hosts was a second list that had to agree
+# with reality and did not.
+#
+# Every *_patcher.py must now match HOSTS or be named here. Adding a patcher
+# for a NEW host fails this test until somebody decides which it is. These
+# are not third-party add-ons a release note would name -- they are skins,
+# Kodi itself, and parts of the build.
+NOT_A_HOST = {
+    'af3_': 'the AF3 skin',
+    'brand_': "the build's own branding",
+    'build_icons_': "the build's own icons",
+    'change_source_pause_': 'skin-side playback UI',
+    'choose_subs_rewire_': 'skin-side subtitle entry point',
+    'estuary_': 'the Estuary skin',
+    'favourites_': "the build's favourites",
+    'fentastic_': 'the FENtastic skin',
+    'hebrew_build_ui_': "the build's own UI",
+    'kodi_playlist_timeout_': 'Kodi itself',
+    'nox_': 'the Nox skin',
+    'recent_updates_tile_': "the build's home screen",
+    'skin_': 'whichever skin is active',
+    'update_nag_': "the build's updater",
+    'wizard_': 'the Wizard',
+}
+shipped, dropped, unclassified = set(), set(), []
 for fn in sorted(os.listdir(LIB)):
     if not fn.endswith('_patcher.py'):
         continue
     host = next((v for k, v in HOSTS.items() if fn.startswith(k)), None)
     if host is None:
+        if not any(fn.startswith(k) for k in NOT_A_HOST):
+            unclassified.append(fn)
         continue
     rel = Path('resources/lib') / fn
     (shipped if mod.include_standalone(rel) else dropped).add(host)
+
+check('every patcher is classified as a host or knowingly as not-a-host',
+      not unclassified,
+      'no entry in HOSTS or NOT_A_HOST for %s -- if its host is a third-party '
+      'add-on the standalone does not ship, a release note naming it will '
+      'reach users who did not get the fix' % unclassified)
 
 check('the derivation found patchers on both sides of the line',
       bool(shipped) and bool(dropped),

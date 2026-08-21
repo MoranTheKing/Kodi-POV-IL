@@ -845,10 +845,12 @@ STANDALONE_SKIP_TERMS = (
         "Skin",
         "POV search",
         "quickfix",
-        # the three host add-ons the standalone neither ships nor patches
+        # the host add-ons the standalone neither ships nor patches
         "Umbrella",
         "MDBList",
         "POV",
+        "Idan Plus",
+        "Kan 11",
 )
 
 
