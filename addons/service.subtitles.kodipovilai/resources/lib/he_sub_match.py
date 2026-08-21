@@ -57,6 +57,38 @@ _ENGINE_TTL = 7 * 24 * 3600.0   # 7 days; used once HUMAN Hebrew has been found
 # within ~24h, and a 7-day cache would hide it. Balanced at ~daily (was 8h) to
 # cut repeat Worker /lookup traffic while still surfacing next-day Hebrew.
 _AVAIL_TTL_NONE = 24 * 3600.0   # 24 hours
+
+# HOW MANY RELEASE NAMES WE KEEP PER TITLE, and why there is a number here at
+# all. The source-screen badge scores EVERY source row against EVERY name in
+# these lists, so their length is a per-row cost in POV's make_items -- the
+# thing the user waits through between 'sources found' and the list actually
+# appearing. Two of the three lists were union-only and never trimmed:
+# `embedded` and `sync_rel` accumulate for a title forever, and every entry
+# added to them is another comparison per row.
+#
+# That is how a window that used to open in a second became one that took
+# ten without any code changing in between. The scorer got heavier in July;
+# the lists have been growing ever since; at three names nobody notices.
+#
+# 120 is far above any real title -- a film has a few dozen distinct Hebrew
+# releases at most -- so this is a ceiling, not a policy. Newest wins: a name
+# added recently is the one being browsed now.
+_MAX_NAMES = 120
+
+
+def _bounded_union(existing, incoming, cap=_MAX_NAMES, fold_case=True):
+    """`existing` plus anything new in `incoming`, newest kept, capped."""
+    out = [x for x in (existing or []) if x]
+    seen = set((x.lower() if fold_case else x) for x in out)
+    for x in (incoming or []):
+        if not x:
+            continue
+        k = x.lower() if fold_case else x
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(x)
+    return out[-cap:] if len(out) > cap else out
 # Cross-process memo for _pool_lookup: coalesces repeated signed /lookup calls
 # for the SAME title within a few seconds into ONE Worker request. (The POV
 # source-window used to make its OWN unsigned peek here too, but that always
@@ -592,27 +624,16 @@ def _store_avail(mk, names, embedded, ttl, sync_rel=None):
         # yet) overwrote the list, it would WIPE the just-detected flag -- so the
         # source the user just played loses its BUILT-IN badge while pool-sourced
         # ones keep theirs. Unioning preserves both.
-        _existing_emb = [e for e in ((data.get(mk) or {}).get('embedded') or [])
-                         if e]
-        _emb_seen = set(e.lower() for e in _existing_emb)
-        _merged_emb = list(_existing_emb)
-        for _e in (embedded or []):
-            if _e and _e.lower() not in _emb_seen:
-                _emb_seen.add(_e.lower())
-                _merged_emb.append(_e)
+        _merged_emb = _bounded_union((data.get(mk) or {}).get('embedded'),
+                                     embedded)
         # UNION sync_rel with what's cached, for the same reason as embedded: a
         # CONFIRMED synced release is a durable fact, and a later warm whose pool
         # response happens not to include it (throttle/miss) must not wipe the
         # tick from a release already known-synced.
-        _existing_sr = [s for s in ((data.get(mk) or {}).get('sync_rel') or [])
-                        if s]
-        _sr_seen = set(_existing_sr)
-        _merged_sr = list(_existing_sr)
-        for _s in (sync_rel or []):
-            if _s and _s not in _sr_seen:
-                _sr_seen.add(_s)
-                _merged_sr.append(_s)
-        data[mk] = {'ts': time.time(), 'names': list(names),
+        _merged_sr = _bounded_union((data.get(mk) or {}).get('sync_rel'),
+                                    sync_rel, fold_case=False)
+        data[mk] = {'ts': time.time(),
+                    'names': _bounded_union([], names),
                     'embedded': _merged_emb, 'sync_rel': _merged_sr,
                     'ttl': float(ttl or 0), 'warm': 1}
         if len(data) > 400:
@@ -1012,13 +1033,7 @@ def merge_names(meta, names):
                 data = {}
         ent = data.get(key) or {}
         existing = [n for n in (ent.get('names') or []) if n]
-        seen = set(n.lower() for n in existing)
-        merged = list(existing)
-        for n in clean:
-            low = n.lower()
-            if low not in seen:
-                seen.add(low)
-                merged.append(n)
+        merged = _bounded_union(existing, clean)
         if merged == existing:
             return   # nothing new -- skip the write
         ent['names'] = merged
@@ -1077,19 +1092,12 @@ def merge_embedded(meta, releases):
                 data = {}
         ent = data.get(key) or {}
         existing = [n for n in (ent.get('embedded') or []) if n]
-        seen = set(n.lower() for n in existing)
-        merged = list(existing)
-        for n in clean:
-            low = n.lower()
-            if low not in seen:
-                seen.add(low)
-                merged.append(n)
-        try:
-            from resources.lib import kodi_utils as _ku
-            _ku.log('merge_embedded {0}: existing={1} +{2} -> {3}'.format(
-                key, existing, clean, merged), level='INFO')
-        except Exception:
-            pass
+        merged = _bounded_union(existing, clean)
+        # The line that logged existing/incoming/merged in full on every
+        # merge is gone. It was a diagnostic for the built-in badge going
+        # missing, that question was settled, and what it left behind was
+        # three whole release-name lists written to the Kodi log at every
+        # play -- growing with the very list this cap now bounds.
         if merged == existing:
             return   # nothing new -- skip the write
         ent['embedded'] = merged
