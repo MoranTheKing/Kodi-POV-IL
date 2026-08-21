@@ -1171,11 +1171,41 @@ def _score(src_release, sub_release):
         return 0
 
 
-def best_score(src_release, names):
+def best_score(src_release, names, stop_at=100, floor=0):
+    """Best % across `names`.
+
+    THIS IS THE HOT LOOP OF THE SOURCE WINDOW. It runs once per name per
+    source ROW -- seventy rows against seventeen names is over a thousand
+    scored pairs before the list can be drawn, and a field log from a webOS TV
+    showed ten seconds of exactly that. So it hands the whole loop to
+    release_match.best_pct, which knows the ceiling of each of its own
+    branches and can skip any pair that provably cannot raise the maximum,
+    without changing the maximum.
+
+    `floor` is for the caller who only needs to know whether anything clears a
+    bar rather than what the best is: below the bar it answers 0. See
+    best_pct's own note for why floor=79 makes the built-in check free.
+
+    The difflib fallback is unchanged -- it only runs where release_match
+    could not be imported, and it has never been the slow path in the field."""
     try:
         if not names or not src_release:
             return 0
-        return max((_score(src_release, n) for n in names), default=0)
+        rm = _release_match_mod()
+        if rm is not None and hasattr(rm, 'best_pct'):
+            try:
+                return rm.best_pct(src_release, names, stop_at=stop_at,
+                                   floor=floor)
+            except Exception:
+                pass
+        best = 0 if floor <= 0 else floor
+        for n in names:
+            p = _score(src_release, n)
+            if p > best:
+                best = p
+                if best >= stop_at:
+                    break
+        return 0 if best <= floor else best
     except Exception:
         return 0
 
@@ -1214,17 +1244,21 @@ def label_prefix(src_release, names, embedded=None, alt_release='',
         # displayed/scored by URLName, and POV makes those two fields differ --
         # so matching either identifier is what lets a just-played release light
         # up BUILT-IN instead of dropping to the % badge.
+        #
+        # SCORED IN TWO STEPS, WITH AN EARLY EXIT, rather than max() over both:
+        # this whole function runs once per source row, and a row that already
+        # clears 80 on its URLName has no reason to score its name as well.
+        #
+        # There was a per-row log line here -- 'built-in check: emb_best=...' --
+        # left over from working out why a just-played release was not lighting
+        # up. It wrote to the Kodi log for EVERY row of EVERY source list, on
+        # devices where that log is on internal flash. Diagnostics that survive
+        # into the hot path stop being diagnostics.
         if embedded and (src_release or alt_release):
-            emb_best = max(best_score(src_release, embedded),
-                           best_score(alt_release, embedded))
-            if emb_best >= 40:
-                try:
-                    from resources.lib import kodi_utils as _ku
-                    _ku.log('built-in check: emb_best={0} src={1!r} alt={2!r} '
-                            'emb={3}'.format(emb_best, src_release, alt_release,
-                                             embedded), level='INFO')
-                except Exception:
-                    pass
+            emb_best = best_score(src_release, embedded, stop_at=80, floor=79)
+            if emb_best < 80:
+                emb_best = best_score(alt_release, embedded, stop_at=80,
+                                      floor=79)
             if emb_best >= 80:
                 return '[COLOR FF2ECC71][B]HEB BUILT-IN 101%[/B][/COLOR] | '
         # Community-CONFIRMED synced record for this exact release (strongest
