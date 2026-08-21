@@ -146,12 +146,20 @@ def run_fn(source, url):
     third party's module-level code to decide whether to patch it.
     """
     g = {}
-    body = source[source.index('def GetYouTube(url):'):]
-    nxt = body.find('\ndef ', 1)
-    if nxt != -1:
-        body = body[:nxt]
-    exec("import re\nyoutubePlugin = 'plugin://plugin.video.youtube'\n" + body,
-         g)
+    # STOP AT THE FIRST MODULE-LEVEL LINE, not at the next `def`. Round 2's
+    # in-patcher version searched for `\ndef ` and so swallowed whatever sat
+    # between the function and the next one -- on the real 4.0.2 tree that is
+    # a module-level `_cfSession = {...}`, which it would then have executed.
+    # Harmless there and harmless here, but the slice has no business
+    # containing it either way, and review round 3 confirmed it did.
+    lines = source[source.index('def GetYouTube(url):'):].split('\n')
+    body = [lines[0]]
+    for ln in lines[1:]:
+        if ln.strip() and not ln[:1].isspace():
+            break
+        body.append(ln)
+    exec("import re\nyoutubePlugin = 'plugin://plugin.video.youtube'\n"
+         + '\n'.join(body), g)
     return g['GetYouTube'](url).split('video_id=')[1]
 
 
@@ -283,37 +291,102 @@ for label, tree in list(TREES.items()) + [('inline fixture', None)]:
 print()
 print('=== what happens when Idan Plus fixes it upstream ===')
 
-# READ OUT OF service.py, never copied -- and only the TUPLE, not the whole
-# block: an earlier version swept up 'WARNING' from the log call underneath
-# it. Two lists that must agree are how three earlier bugs in this project
-# started.
+_src = io.open(PATCHER, encoding='utf-8').read()
+_svc = io.open(os.path.join(ROOT, 'addons', 'service.subtitles.kodipovilai',
+                            'service.py'), encoding='utf-8').read()
+
+
 def _warn_statuses():
-    with io.open(os.path.join(ROOT, 'addons', 'service.subtitles.kodipovilai',
-                              'service.py'), encoding='utf-8') as f:
-        s = f.read()
-    i = s.index('def _maybe_fix_idanplus_youtube_id():')
-    block = s[i:s.index('\ndef ', i + 1)]
-    tup = block[block.index('if st in (') + len('if st in ('):]
-    return set(re.findall(r"'(\w+)'", tup[:tup.index(')')]))
+    """service.py's warn tuple -- read by AST, never copied and never sliced.
+
+    Two earlier versions of this function got it wrong in the same direction,
+    which is the direction that matters: they returned a WRONG answer instead
+    of raising. The first read to the end of the function and swept up
+    'WARNING' from the log call underneath the tuple. The second sliced to the
+    first ')' -- so a comment containing a bracket between two entries would
+    truncate the set silently. An AST is immune to every reformatting of that
+    tuple: one line or five, trailing comma, comments anywhere in it.
+    """
+    for fn in ast.walk(ast.parse(_svc)):
+        if not (isinstance(fn, ast.FunctionDef)
+                and fn.name == '_maybe_fix_idanplus_youtube_id'):
+            continue
+        for n in ast.walk(fn):
+            if (isinstance(n, ast.Compare)
+                    and isinstance(n.left, ast.Name) and n.left.id == 'st'
+                    and len(n.ops) == 1 and isinstance(n.ops[0], ast.In)
+                    and isinstance(n.comparators[0], ast.Tuple)):
+                return set(e.value for e in n.comparators[0].elts)
+    raise AssertionError('service.py has no `st in (...)` test to read')
 
 
+def _ensure_patched_node():
+    for fn in ast.walk(ast.parse(_src)):
+        if isinstance(fn, ast.FunctionDef) and fn.name == 'ensure_patched':
+            return fn
+    raise AssertionError('no ensure_patched in the patcher')
+
+
+def _returned_statuses():
+    """Every string ensure_patched can actually return, by AST.
+
+    Walks INTO each return expression rather than requiring the return value
+    to be a bare constant: the last line of that function is
+    `return 'repatched' if repatch else 'patched'`, and a version of this that
+    only looked at `ast.Return.value` missed both -- which is precisely the
+    kind of quiet undercount the checks below exist to catch.
+    """
+    return {c.value for n in ast.walk(_ensure_patched_node())
+            if isinstance(n, ast.Return) and n.value is not None
+            for c in ast.walk(n.value)
+            if isinstance(c, ast.Constant) and isinstance(c.value, str)}
+
+
+ALL_ST = _returned_statuses()
 BAD = tuple(sorted(_warn_statuses()))
-check('the warn set was read out of service.py, not copied',
-      'unmatched' in BAD and 'compile_failed' in BAD
-      and 'patched' not in BAD and 'unchanged' not in BAD
-      and 'WARNING' not in BAD,
-      'got %s' % (BAD,))
+
+# THE RULE, STATED ONCE, RATHER THAN A LIST COPIED TWICE. Review round 3 found
+# the previous version of this check asserted only that a couple of members
+# were present and a couple absent -- so quietly dropping 'write_failed' from
+# service.py's tuple, a real regression that would stop write failures being
+# logged, passed. An equality is the only assertion that catches that, and the
+# right-hand side has to be DERIVED or it is just the copied list again.
+#
+# So: warn about exactly the statuses that mean we failed. Every '_failed'
+# name, plus 'unmatched' -- the shape we do not recognise, which is the signal
+# to retire this patcher and therefore the one thing we most want said out
+# loud. Nothing else: 'no_file' and 'no_idanplus' are the ordinary state of
+# every device that simply does not have Idan Plus, and 'unchanged',
+# 'patched' and 'repatched' are success.
+WANT_BAD = tuple(sorted({s for s in ALL_ST if s.endswith('_failed')}
+                        | {'unmatched'}))
+check('service.py warns about exactly the failure statuses, no more, no less',
+      BAD == WANT_BAD,
+      'service.py says %s, the rule says %s' % (BAD, WANT_BAD))
+check('...and both sides were read from source, not written down here',
+      len(ALL_ST) > 5 and 'patched' in ALL_ST and 'no_file' in ALL_ST,
+      'ensure_patched returned nothing recognisable: %s' % (sorted(ALL_ST),))
+DOC_ST = set(re.findall(r"'(\w+)'",
+                       ast.get_docstring(_ensure_patched_node()) or ''))
+check('the docstring lists exactly the statuses ensure_patched returns',
+      DOC_ST == ALL_ST,
+      'undocumented %s / documented but never returned %s'
+      % (sorted(ALL_ST - DOC_ST), sorted(DOC_ST - ALL_ST)))
 check('no status service.py warns about is a silent stand-down',
-      'already_fixed' not in BAD and 'no_function' not in BAD,
+      'already_fixed' not in ALL_ST and 'no_function' not in ALL_ST,
       'those two statuses no longer exist; if they are back, so is the bug')
 
-# The patcher must not run anybody else's code to make its decision.
-_src = io.open(PATCHER, encoding='utf-8').read()
-_calls = [n.func.id for n in ast.walk(ast.parse(_src))
-          if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)]
+# The patcher must not run anybody else's code to make its decision. Names AND
+# attributes, so `getattr(builtins, "exec")` and `mod.eval` are caught too --
+# this is a regression guard, not a security boundary, but it costs one line
+# to make it cover more than the exact shape round 2 used.
+_bad_names = {n.id for n in ast.walk(ast.parse(_src))
+              if isinstance(n, ast.Name)} & {'exec', 'eval'}
+_bad_attrs = {n.attr for n in ast.walk(ast.parse(_src))
+              if isinstance(n, ast.Attribute)} & {'exec', 'eval'}
 check('NO_EXEC: the patcher never execs or evals',
-      not ({'exec', 'eval'} & set(_calls)),
-      'found %s' % sorted({'exec', 'eval'} & set(_calls)))
+      not (_bad_names | _bad_attrs),
+      'found %s' % sorted(_bad_names | _bad_attrs))
 
 # A GENUINE UPSTREAM FIX: unrecognised shape, file untouched, and REPORTED.
 # Noisy is the intended outcome. We cannot tell a fix from a refactor from a
