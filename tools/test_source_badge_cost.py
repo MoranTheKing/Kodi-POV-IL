@@ -43,9 +43,12 @@ Run: python3 tools/test_source_badge_cost.py
 """
 import ast
 import io
+import json
 import os
 import random
+import shutil
 import sys
+import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 LIB = os.path.join(HERE, '..', 'addons', 'service.subtitles.kodipovilai',
@@ -293,6 +296,87 @@ _logs = [f.name for f in _hot for n in ast.walk(f)
               or (isinstance(n.func, ast.Name) and n.func.id == 'log'))]
 check('neither label_prefix nor best_score logs', not _logs,
       'a log call here runs once per row of every source list: %s' % _logs)
+
+# --- 6. the lists that feed the hot loop cannot grow without bound ---------
+# WHY THIS SECTION EXISTS, and it is the answer to 'but it was fast
+# yesterday'. Nothing in the scoring path changed between fast and slow. The
+# LISTS grew. `embedded` and `sync_rel` were union-only and never trimmed --
+# every release ever seen carrying a built-in Hebrew track stayed in a list
+# that the badge walks once per source row, forever. A per-row cost that
+# grows monotonically with use is a slowdown with no event to blame it on,
+# which is exactly how this one arrived.
+print()
+print('=== the per-title lists are bounded ===')
+
+check('_bounded_union dedupes without regard to case',
+      hs._bounded_union(['A.Release-NTb'], ['a.release-ntb', 'Other-FLUX'])
+      == ['A.Release-NTb', 'Other-FLUX'])
+check('...and can be told not to, for the confirmed-sync keys',
+      hs._bounded_union(['abc'], ['ABC'], fold_case=False) == ['abc', 'ABC'])
+_big = [str(i) for i in range(hs._MAX_NAMES + 80)]
+_capped = hs._bounded_union(_big, ['newest'])
+check('the union caps at _MAX_NAMES', len(_capped) == hs._MAX_NAMES,
+      'got %d' % len(_capped))
+check('...and it is the NEWEST that survives the cap',
+      _capped[-1] == 'newest' and _big[0] not in _capped)
+
+_tmp = tempfile.mkdtemp(prefix='avail-')
+_cache = os.path.join(_tmp, 'he_avail.json')
+_real_path = hs._engine_cache_path
+hs._engine_cache_path = lambda: _cache
+try:
+    flood = ['Flood.%d.2024.1080p.WEB-DL-GRP%d' % (i, i) for i in range(500)]
+    hs._store_avail('k', flood, flood, 3600, flood)
+    ent = json.load(io.open(_cache, encoding='utf-8'))['k']
+    for field in ('names', 'embedded', 'sync_rel'):
+        check('_store_avail caps %s' % field,
+              len(ent[field]) <= hs._MAX_NAMES,
+              'stored %d' % len(ent[field]))
+    # A second warm must not be able to grow the unioned fields past the cap.
+    hs._store_avail('k', flood, flood[::-1], 3600, flood[::-1])
+    ent = json.load(io.open(_cache, encoding='utf-8'))['k']
+    check('a second warm cannot push the unioned lists past the cap',
+          len(ent['embedded']) <= hs._MAX_NAMES
+          and len(ent['sync_rel']) <= hs._MAX_NAMES,
+          'embedded=%d sync_rel=%d'
+          % (len(ent['embedded']), len(ent['sync_rel'])))
+
+    _real_enabled, _real_params, _real_key = (hs._enabled, hs._media_params,
+                                              hs._media_key)
+    hs._enabled = lambda: True
+    hs._media_params = lambda meta: {'id': 'x'}
+    hs._media_key = lambda p: 'k'
+    try:
+        for chunk in range(6):
+            hs.merge_names({}, ['Merge.%d.%d-G' % (chunk, i)
+                                for i in range(100)])
+            hs.merge_embedded({}, ['Emb.%d.%d-G' % (chunk, i)
+                                   for i in range(100)])
+        ent = json.load(io.open(_cache, encoding='utf-8'))['k']
+        check('merge_names cannot grow the list without bound',
+              len(ent['names']) <= hs._MAX_NAMES, 'grew to %d'
+              % len(ent['names']))
+        check('merge_embedded cannot either',
+              len(ent['embedded']) <= hs._MAX_NAMES, 'grew to %d'
+              % len(ent['embedded']))
+        check('and the newest merge is the one that survived',
+              any('Merge.5.' in n for n in ent['names'])
+              and any('Emb.5.' in n for n in ent['embedded']))
+    finally:
+        hs._enabled, hs._media_params, hs._media_key = (
+            _real_enabled, _real_params, _real_key)
+finally:
+    hs._engine_cache_path = _real_path
+    shutil.rmtree(_tmp, ignore_errors=True)
+
+_merge_fns = [f for f in ast.walk(_tree) if isinstance(f, ast.FunctionDef)
+              and f.name in ('merge_names', 'merge_embedded')]
+check('both merge functions were found to inspect', len(_merge_fns) == 2)
+_merge_logs = [f.name for f in _merge_fns for n in ast.walk(f)
+               if isinstance(n, ast.Call)
+               and isinstance(n.func, ast.Attribute) and n.func.attr == 'log']
+check('neither merge dumps whole release lists into the Kodi log',
+      not _merge_logs, 'still logging: %s' % _merge_logs)
 
 print()
 print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')
