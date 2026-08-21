@@ -27,16 +27,21 @@ WHAT THIS FILE PINS, beyond "the marker is in the file":
 
   * the STOCK function really does return 'watch', executed, not asserted --
     otherwise this is a fix for a bug nobody has shown;
-  * the patched one returns the id for every URL shape, and returns the SAME
-    ANSWER as stock for every shape stock already got right. That agreement is
-    what makes it safe to leave in place if Idan Plus ever fixes it too;
-  * it retires itself. An upstream fix must produce a quiet 'already_fixed',
-    not an 'unmatched' that logs a WARNING on every boot forever;
+  * the patched one returns the id for every broken URL shape, and returns the
+    SAME ANSWER as stock for every shape stock already got right. That
+    agreement is what makes it safe to leave in place if Idan Plus ever fixes
+    it too;
+  * it stands down on a shape it does not recognise -- WITHOUT running any of
+    the add-on's code to decide, and WITHOUT going quiet. Both cleverer
+    mechanisms were tried and both failed review; this file pins the plain
+    behaviour that replaced them, including that no `exec` survives in the
+    patcher;
   * and it works on BOTH the 3.9.1 the build ships and the 4.0.2 devices
     self-update to, whose GetYouTube is byte-identical.
 
 Run: python3 tools/test_idanplus_youtube_id.py
 """
+import ast
 import importlib.util
 import io
 import re
@@ -50,6 +55,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, '..'))
 LIB = os.path.join(ROOT, 'addons', 'service.subtitles.kodipovilai',
                    'resources', 'lib')
+PATCHER = os.path.join(LIB, 'idanplus_youtube_id_patcher.py')
 SCRATCH = ('/tmp/claude-0/-home-user-Kodi-POV-IL/'
            '70968383-5f01-52a3-afe7-ced1aba28071/scratchpad')
 TREES = {
@@ -109,8 +115,7 @@ def load(home):
     ku.log = lambda *a, **k: None
     sys.modules['resources.lib.kodi_utils'] = ku
     lib.kodi_utils = ku
-    spec = importlib.util.spec_from_file_location(
-        'idan_yt', os.path.join(LIB, 'idanplus_youtube_id_patcher.py'))
+    spec = importlib.util.spec_from_file_location('idan_yt', PATCHER)
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     return m
@@ -132,7 +137,14 @@ def fresh(tree=None, body=None):
 
 
 def run_fn(source, url):
-    """EXECUTE GetYouTube out of that source and return the id it produces."""
+    """EXECUTE GetYouTube out of that source and return the id it produces.
+
+    Only ever called on this file's own fixtures and on the one function the
+    patcher touches -- never as part of the patcher's own decision. That
+    distinction is the whole point of round 2's finding: a test may run a
+    fixture it wrote; a service running on somebody's device may not run a
+    third party's module-level code to decide whether to patch it.
+    """
     g = {}
     body = source[source.index('def GetYouTube(url):'):]
     nxt = body.find('\ndef ', 1)
@@ -142,6 +154,8 @@ def run_fn(source, url):
          g)
     return g['GetYouTube'](url).split('video_id=')[1]
 
+
+IS_ID = re.compile(r'^[0-9A-Za-z_-]{11}$').match
 
 # Every shape a Kan item can carry. The first is the one that breaks.
 BROKEN = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
@@ -159,7 +173,17 @@ ALSO_BROKEN = (
     'https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=30s',
     'https://www.youtube.com/watch?list=PL123&v=dQw4w9WgXcQ',
 )
+# ROUND 2 OF REVIEW FOUND THESE. The first gate was `video_id == 'watch'`, the
+# literal signature of the report. These two are broken in exactly the same
+# way and neither produces 'watch': the first leaves stock with an EMPTY
+# string, the second with 'Watch'. Gating on "what stock produced cannot be an
+# id" covers all three by construction instead of by enumeration.
+ALSO_BROKEN_ROUND2 = (
+    'https://www.youtube.com/watch/?v=dQw4w9WgXcQ',
+    'https://www.youtube.com/Watch?v=dQw4w9WgXcQ',
+)
 WANT = 'dQw4w9WgXcQ'
+ALL_BROKEN = (BROKEN,) + ALSO_BROKEN + ALSO_BROKEN_ROUND2
 
 real = [t for t in TREES.values() if os.path.isdir(t)]
 print('fixture: %s' % ('real Idan Plus trees (%d)' % len(real) if real
@@ -178,33 +202,38 @@ for label, tree in list(TREES.items()) + [('inline fixture', None)]:
           run_fn(before, BROKEN) == 'watch',
           'got %r -- this version does not have the bug being fixed'
           % run_fn(before, BROKEN))
+    for u in ALSO_BROKEN_ROUND2:
+        check('%s: STOCK fails on %s too, without saying "watch"'
+              % (label, u.rsplit('/', 1)[-1]),
+              not IS_ID(run_fn(before, u) or ''),
+              'got %r' % run_fn(before, u))
 
     st = mod.ensure_patched()
     after = io.open(cp, encoding='utf-8', newline='').read()
     check('%s: it patches' % label, st == 'patched', st)
-    check('%s: the fixed url now resolves' % label,
-          run_fn(after, BROKEN) == WANT, 'got %r' % run_fn(after, BROKEN))
-    for u in ALSO_BROKEN:
-        check('%s: %s resolves' % (label, u.split('?')[1]),
+    for u in ALL_BROKEN:
+        check('%s: %s resolves' % (label, u.split('.com/')[-1]),
               run_fn(after, u) == WANT, 'got %r' % run_fn(after, u))
 
     # THE PROPERTY THAT MAKES IT SAFE TO LEAVE IN PLACE, as an invariant over
-    # every shape rather than a sample of five: THE ANSWER MAY ONLY CHANGE
-    # WHERE STOCK RETURNED 'watch'. Stock returning 'watch' IS stock failing --
-    # YouTube ids are eleven characters and 'watch' is five, so no url stock
-    # resolved correctly can reach the injected line.
+    # every shape rather than a sample: THE ANSWER MAY ONLY CHANGE WHERE STOCK
+    # PRODUCED SOMETHING THAT IS NOT A YOUTUBE ID. A YouTube id is eleven
+    # characters of [0-9A-Za-z_-]; anything else is stock having failed. So no
+    # url stock resolved correctly can reach the injected line -- by
+    # construction, not by enumeration.
     #
     # A review broke the first version of this, which scanned the whole url
     # ungated: `youtu.be/<ID>?v=<OTHER>` has a real id in the PATH and a stray
     # v= in the query, and the fix took the wrong one -- changing an answer
-    # stock had got right. Gating on 'watch' removes that class by
-    # construction. The case is in ALREADY_OK below so it can never come back.
-    differ = [u for u in ALREADY_OK + ALSO_BROKEN + (BROKEN,)
+    # stock had got right. That case is in ALREADY_OK so it can never come
+    # back.
+    differ = [u for u in ALREADY_OK + ALL_BROKEN
               if run_fn(before, u) != run_fn(after, u)]
-    check('%s: the answer only ever changes where stock said "watch"' % label,
-          all(run_fn(before, u) == 'watch' for u in differ),
+    check('%s: the answer only ever changes where stock produced a non-id'
+          % label,
+          all(not IS_ID(run_fn(before, u) or '') for u in differ),
           'changed a url stock resolved correctly: %s'
-          % [u for u in differ if run_fn(before, u) != 'watch'])
+          % [u for u in differ if IS_ID(run_fn(before, u) or '')])
     check('%s: every url stock already got right is UNCHANGED' % label,
           all(run_fn(before, u) == run_fn(after, u) for u in ALREADY_OK),
           'changed: %s' % [u for u in ALREADY_OK
@@ -230,16 +259,33 @@ for label, tree in list(TREES.items()) + [('inline fixture', None)]:
     check('%s: and reverts byte-exact' % label,
           crlf_mod._revert(crlf_after, '\r\n') == before.replace('\n', '\r\n'))
 
-# --- IT RETIRES ITSELF ------------------------------------------------------
+# --- WHAT HAPPENS WHEN IDAN PLUS FIXES IT UPSTREAM --------------------------
 # The question this was designed around: if Idan Plus ships its own fix, does
-# this become a problem, or does it just stop? It stops -- and quietly, which
-# matters, because 'unmatched' is a status service.py WARNs about and a patcher
-# that outlives its bug becomes noise on every boot forever.
+# this become a problem? No -- the anchor is the stock buggy body byte for
+# byte, so a changed function simply does not match, nothing is written, and
+# one WARNING per boot says so. That warning is the signal to retire the file.
+#
+# TWO CLEVERER ANSWERS WERE TRIED AND BOTH FAILED REVIEW, and this section
+# pins the ground each of them lost.
+#
+# Round 1 read the function text for `v=|parse_qs|query` and stood down
+# quietly if it matched. A comment saying "query the path", or a variable
+# called search_query, made that true -- so a still-broken version was left
+# broken and reported with a status service.py deliberately does not warn
+# about. Silently. NOT_FIXED below is those exact bodies, and they must now be
+# PATCHED, not stood down.
+#
+# Round 2 EXECUTED the candidate function to decide. The slice handed to exec
+# ran to the next top-level `def`, and on the real 4.0.2 tree that gap already
+# holds a module-level statement -- which would then run inside OUR service on
+# every boot -- and `except Exception` does not catch SystemExit. NO_EXEC
+# below pins that no exec/eval survives anywhere in the patcher.
 print()
 print('=== what happens when Idan Plus fixes it upstream ===')
-# READ OUT OF service.py, never copied. A review found this tuple had already
-# drifted -- service.py warns about 'no_function' too and this did not know --
-# and two lists that must agree are how three earlier bugs in this project
+
+# READ OUT OF service.py, never copied -- and only the TUPLE, not the whole
+# block: an earlier version swept up 'WARNING' from the log call underneath
+# it. Two lists that must agree are how three earlier bugs in this project
 # started.
 def _warn_statuses():
     with io.open(os.path.join(ROOT, 'addons', 'service.subtitles.kodipovilai',
@@ -247,13 +293,32 @@ def _warn_statuses():
         s = f.read()
     i = s.index('def _maybe_fix_idanplus_youtube_id():')
     block = s[i:s.index('\ndef ', i + 1)]
-    return set(re.findall(r"'(\w+)'", block[block.index('if st in ('):]))
+    tup = block[block.index('if st in (') + len('if st in ('):]
+    return set(re.findall(r"'(\w+)'", tup[:tup.index(')')]))
 
 
 BAD = tuple(sorted(_warn_statuses()))
 check('the warn set was read out of service.py, not copied',
-      'unmatched' in BAD and 'no_function' in BAD and 'already_fixed' not in BAD,
+      'unmatched' in BAD and 'compile_failed' in BAD
+      and 'patched' not in BAD and 'unchanged' not in BAD
+      and 'WARNING' not in BAD,
       'got %s' % (BAD,))
+check('no status service.py warns about is a silent stand-down',
+      'already_fixed' not in BAD and 'no_function' not in BAD,
+      'those two statuses no longer exist; if they are back, so is the bug')
+
+# The patcher must not run anybody else's code to make its decision.
+_src = io.open(PATCHER, encoding='utf-8').read()
+_calls = [n.func.id for n in ast.walk(ast.parse(_src))
+          if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)]
+check('NO_EXEC: the patcher never execs or evals',
+      not ({'exec', 'eval'} & set(_calls)),
+      'found %s' % sorted({'exec', 'eval'} & set(_calls)))
+
+# A GENUINE UPSTREAM FIX: unrecognised shape, file untouched, and REPORTED.
+# Noisy is the intended outcome. We cannot tell a fix from a refactor from a
+# different breakage without running their code, and round 2 settled that we
+# will not run their code.
 UPSTREAM = {
     'they parse the v= parameter':
         "import re\nyoutubePlugin = 'x'\n\n"
@@ -268,80 +333,56 @@ UPSTREAM = {
         "\tm = re.search(r'[?&]v=([\\w-]+)', url)\n"
         "\tvideo_id = m.group(1) if m else url.rstrip('/').rsplit('/', 1)[-1]\n"
         "\treturn '{0}/play/?video_id={1}'.format(youtubePlugin, video_id)\n",
+    'an unrecognisable rewrite that fixes nothing':
+        "youtubePlugin = 'x'\n\ndef GetYouTube(url):\n"
+        "\tvideo_id = extract_id(url)\n"
+        "\treturn '{0}/play/?video_id={1}'.format(youtubePlugin, video_id)\n",
+    'GetYouTube deleted outright':
+        "youtubePlugin = 'x'\n\ndef Something():\n\tpass\n",
 }
-# AND THE OTHER DIRECTION, which is the one a review found broken: a version
-# that does NOT fix the bug must NOT make us stand down. The first check was
-# `re.search(r"v=|parse_qs|query", body)`, and a comment saying "query the
-# path" or a variable called search_query made it true while fixing nothing --
-# so the patcher would report 'already_fixed', which service.py deliberately
-# does not warn about, and a still-broken version would leave NO trace in the
-# log at all. Silent is worse than the noise the check exists to prevent.
-_RET = "\treturn '{0}/play/?video_id={1}'.format(youtubePlugin, video_id)\n"
-_STOCK_FN = ("def GetYouTube(url):\n\tif url.endswith('/'):\n\t\turl = url[:-1]\n"
-             "\tvideo_id = url[url.rfind('/')+1:]\n\tif '?' in video_id:\n"
-             "\t\tvideo_id = video_id[:video_id.find('?')]\n" + _RET)
-NOT_FIXED = {
-    'a comment that merely says "query"':
-        _STOCK_FN.replace('def GetYouTube(url):\n',
-                          'def GetYouTube(url):\n\t# query the path\n'),
-    'a variable called search_query':
-        _STOCK_FN.replace('def GetYouTube(url):\n',
-                          'def GetYouTube(url):\n\tsearch_query = 1\n'),
-    'a variable whose name ends in v':
-        _STOCK_FN.replace('def GetYouTube(url):\n',
-                          'def GetYouTube(url):\n\tconv = 1\n'),
-    'one that returns the raw url instead of the plugin path':
-        "def GetYouTube(url):\n\treturn url.rsplit('/',1)[-1]\n",
-}
-_probe_home, _ = fresh(body=FIXTURE)
-_probe = load(_probe_home)
-for label, body in NOT_FIXED.items():
-    check('NOT fixed: %s -> we do NOT stand down' % label,
-          not _probe._already_handles_v(body),
-          'a still-broken version would be left broken, silently')
-check('a body we cannot even run does NOT stand down either',
-      not _probe._already_handles_v(
-          "def GetYouTube(url):\n\tvideo_id = extract_id(url)\n" + _RET),
-      'not being able to tell must fall through to the anchor check, which '
-      'warns -- never to a silent stand-down')
-
 for label, body in UPSTREAM.items():
     home, cp = fresh(body=body)
     before = io.open(cp, encoding='utf-8', newline='').read()
     mod = load(home)
     st = mod.ensure_patched()
     after = io.open(cp, encoding='utf-8', newline='').read()
-    check('%s -> it stands down' % label, st == 'already_fixed', st)
+    check('%s -> refused, not guessed at' % label, st == 'unmatched', st)
     check('%s -> the file is untouched' % label, after == before)
-    check('%s -> and it does NOT log a warning every boot' % label,
-          st not in BAD)
+    check('%s -> and it is REPORTED, never silent' % label, st in BAD)
 
-# An unrecognisable rewrite is a different thing and SHOULD be noisy: we
-# genuinely cannot tell whether it is fixed, and that is worth knowing.
-home, cp = fresh(body="youtubePlugin = 'x'\n\ndef GetYouTube(url):\n"
-                      "\tvideo_id = extract_id(url)\n"
-                      "\treturn '{0}/play/?video_id={1}'.format("
-                      "youtubePlugin, video_id)\n")
-before = io.open(cp, encoding='utf-8', newline='').read()
-mod = load(home)
-st = mod.ensure_patched()
-check('an unrecognisable rewrite is refused, not guessed at',
-      st == 'unmatched', st)
-check('...and reported, because we cannot tell if it is fixed',
-      st in BAD)
-check('...with the file untouched',
-      io.open(cp, encoding='utf-8', newline='').read() == before)
+# AND THE OTHER DIRECTION, which is the one round 1 got wrong: a version that
+# does NOT fix the bug must not make us stand down. These keep the stock shape
+# and merely contain the words the old text-search was looking for.
+_RET = "\treturn '{0}/play/?video_id={1}'.format(youtubePlugin, video_id)\n"
+_STOCK_FN = ("def GetYouTube(url):\n\tif url.endswith('/'):\n\t\turl = url[:-1]\n"
+             "\tvideo_id = url[url.rfind('/')+1:]\n\tif '?' in video_id:\n"
+             "\t\tvideo_id = video_id[:video_id.find('?')]\n" + _RET)
+_HEAD = "import re\nyoutubePlugin = 'plugin://plugin.video.youtube'\n\n"
+NOT_FIXED = {
+    'a comment that merely says "query"': '\t# query the path\n',
+    'a variable called search_query': '\tsearch_query = 1\n',
+    'a variable whose name ends in v': '\tconv = 1\n',
+}
+for label, extra in NOT_FIXED.items():
+    home, cp = fresh(body=_HEAD + _STOCK_FN.replace(
+        'def GetYouTube(url):\n', 'def GetYouTube(url):\n' + extra))
+    mod = load(home)
+    st = mod.ensure_patched()
+    after = io.open(cp, encoding='utf-8', newline='').read()
+    check('STILL BROKEN: %s -> we patch it anyway' % label,
+          st == 'patched', st)
+    check('STILL BROKEN: %s -> and the url resolves' % label,
+          run_fn(after, BROKEN) == WANT, 'got %r' % run_fn(after, BROKEN))
 
-# --- absent / broken installs ----------------------------------------------
+# --- absent installs --------------------------------------------------------
 print()
-print('=== absent and malformed installs ===')
+print('=== absent installs ===')
 home = tempfile.mkdtemp(prefix='noidan-')
 _DIRS.append(home)
 check('no Idan Plus at all is no_file, not a traceback',
       load(home).ensure_patched() == 'no_file')
-home, cp = fresh(body="youtubePlugin = 'x'\n\ndef Something():\n\tpass\n")
-check('a common.py without GetYouTube is no_function',
-      load(home).ensure_patched() == 'no_function')
+check('...and no_file is NOT warned about -- most devices do not have it',
+      'no_file' not in BAD and 'no_idanplus' not in BAD)
 
 # --- SABOTAGE ---------------------------------------------------------------
 print()
