@@ -78,27 +78,80 @@ _NOT_GROUP = set(
 }
 
 
+# PRECOMPUTED ONCE, not per call. parse() used to build seven sets on every
+# invocation -- one per source class plus the PROPER set -- and it is called
+# twice for every scored pair. See the memo note below for why that mattered.
+_SOURCE_SETS = tuple((cls, frozenset(toks)) for cls, toks in _SOURCE_CLASSES)
+_PROPER_SET = frozenset(_PROPER_TOKENS)
+_DOTS_RE = re.compile(r'\.+')
+_GROUP_RE = re.compile(r'[a-z0-9]+')
+
+# MEMOISED BECAUSE THE CALLER'S SHAPE IS QUADRATIC AND CANNOT EASILY STOP
+# BEING SO. POV's source window scores every row against every available
+# Hebrew subtitle name: seventy rows against seventeen names is 1190 scored
+# pairs, and each pair re-derived the same seventeen names from scratch. A
+# field log from a webOS TV showed ten seconds between the scrape finishing
+# and the list appearing, scaling almost exactly with the NUMBER OF NAMES --
+# three names took two seconds, six took four, seventeen took ten.
+#
+# Keyed on the raw string, so a name is normalised, tokenised and parsed once
+# per interpreter no matter how many rows it is compared against. Bounded and
+# cleared wholesale on overflow: this runs inside POV's own long-lived
+# interpreter (reuselanguageinvoker), so an unbounded dict here is a leak in
+# somebody else's process.
+_MEMO_CAP = 4096
+_NORM_MEMO = {}
+_TOKS_MEMO = {}
+_PARSE_MEMO = {}
+
+
+def _memo_put(cache, key, value):
+    if len(cache) >= _MEMO_CAP:
+        cache.clear()
+    cache[key] = value
+    return value
+
+
 def _strip_ext(name):
     return _EXT_RE.sub('', (name or '').strip())
+
+
+def _normalize(name):
+    s = _strip_ext(name).lower()
+    s = _SEPS.sub('.', s)
+    return _DOTS_RE.sub('.', s).strip('.')
 
 
 def normalize(name):
     """Canonical comparison form: lowercase, extension stripped, all
     separators collapsed to single dots."""
-    s = _strip_ext(name).lower()
-    s = _SEPS.sub('.', s)
-    s = re.sub(r'\.+', '.', s).strip('.')
-    return s
+    if not isinstance(name, str):
+        return _normalize(name)
+    cached = _NORM_MEMO.get(name)
+    if cached is None:
+        cached = _memo_put(_NORM_MEMO, name, _normalize(name))
+    return cached
+
+
+def _toks(name):
+    """The token TUPLE, cached. Internal callers use this directly; the
+    public tokens() hands out a fresh list so nobody can mutate the cache."""
+    if not isinstance(name, str):
+        return tuple(t for t in normalize(name).split('.') if t)
+    cached = _TOKS_MEMO.get(name)
+    if cached is None:
+        cached = _memo_put(
+            _TOKS_MEMO, name,
+            tuple(t for t in normalize(name).split('.') if t))
+    return cached
 
 
 def tokens(name):
-    return [t for t in normalize(name).split('.') if t]
+    return list(_toks(name))
 
 
-def parse(name):
-    """Structured fields out of a release name. Every field may be '' when
-    not present -- callers must treat '' as UNKNOWN, never as a mismatch."""
-    toks = tokens(name)
+def _parse(name):
+    toks = _toks(name)
     tokset = set(toks)
     out = {'resolution': '', 'source': '', 'group': '', 'codec': '',
            'edition': '', 'proper': False}
@@ -108,8 +161,8 @@ def parse(name):
         r = m.group(1).lower()
         out['resolution'] = _RES_MAP.get(r, r if r.endswith('p') else '')
 
-    for cls, cls_tokens in _SOURCE_CLASSES:
-        if tokset & set(cls_tokens):
+    for cls, cls_tokens in _SOURCE_SETS:
+        if tokset & cls_tokens:
             out['source'] = cls
             break
     # 'web' + 'dl'/'rip' appear as separate tokens after normalization;
@@ -131,7 +184,7 @@ def parse(name):
             out['edition'] = e
             break
 
-    out['proper'] = bool(tokset & set(_PROPER_TOKENS))
+    out['proper'] = bool(tokset & _PROPER_SET)
 
     # Group: the token after the LAST '-' in the raw name (scene convention
     # "...-NTb"), if it isn't a known technical tag. Fall back to the last
@@ -144,9 +197,30 @@ def parse(name):
     if not cand and toks:
         cand = toks[-1]
     if (cand and cand not in _NOT_GROUP and not cand.isdigit()
-            and 2 <= len(cand) <= 20 and re.fullmatch(r'[a-z0-9]+', cand)):
+            and 2 <= len(cand) <= 20 and _GROUP_RE.fullmatch(cand)):
         out['group'] = cand
     return out
+
+
+def _parse_c(name):
+    """The cached dict itself. Internal, READ-ONLY callers only."""
+    if not isinstance(name, str):
+        return _parse(name)
+    cached = _PARSE_MEMO.get(name)
+    if cached is None:
+        cached = _memo_put(_PARSE_MEMO, name, _parse(name))
+    return cached
+
+
+def parse(name):
+    """Structured fields out of a release name. Every field may be '' when
+    not present -- callers must treat '' as UNKNOWN, never as a mismatch.
+
+    A COPY of the cached dict: the cache is shared across every caller in the
+    process, and one caller assigning into the result would silently rewrite
+    what every other caller sees. Nothing does that today; the copy is what
+    keeps that true."""
+    return dict(_parse_c(name))
 
 
 def _token_ratio(a_tokens, b_tokens):
@@ -158,31 +232,141 @@ def _token_ratio(a_tokens, b_tokens):
         return 0.0
 
 
+_SCORE_MEMO = {}
+
+
 def score(video_name, sub_name):
     """Structured match: (pct 0-100, tier, reasons list). Either name empty
-    -> (0, TIER_FUZZY, [])."""
+    -> (0, TIER_FUZZY, []).
+
+    The pair is memoised as well as its two halves, because the same release
+    routinely appears in a source list several times over -- one row per host
+    offering it -- and each of those rows is scored against the same list of
+    subtitle names. The reasons list is copied out, for the same reason parse()
+    copies its dict."""
     if not (video_name or '').strip() or not (sub_name or '').strip():
         return 0, TIER_FUZZY, []
 
+    memo_key = None
+    if isinstance(video_name, str) and isinstance(sub_name, str):
+        memo_key = (video_name, sub_name)
+        hit = _SCORE_MEMO.get(memo_key)
+        if hit is not None:
+            return hit[0], hit[1], list(hit[2])
+
+    pct, tier, reasons = _score(video_name, sub_name)
+    if memo_key is not None:
+        _memo_put(_SCORE_MEMO, memo_key, (pct, tier, tuple(reasons)))
+    return pct, tier, reasons
+
+
+def best_pct(video_name, sub_names, stop_at=100, floor=0):
+    """max(match_pct(video_name, n) for n in sub_names), computed without
+    doing work that cannot change the answer.
+
+    EXACTLY EQUAL to the max it replaces when floor=0: a pair is skipped only
+    when the branch it lands in provably cannot exceed the running maximum,
+    and a skipped pair cannot be the maximum.
+
+    `floor` starts that running maximum higher, for callers that only care
+    whether anything clears a bar. floor=79 is the useful one: only the exact,
+    containment and same-group branches can return 80 or more, and none of the
+    three needs the token ratio -- so "does any of these releases carry a
+    built-in Hebrew track" costs no difflib passes at all instead of one per
+    candidate. Below the bar it returns 0 rather than the true maximum, which
+    is what asking with a floor means."""
+    # THE SAME EMPTY-NAME GUARD score() APPLIES, because this calls _score()
+    # directly and _score() does not have it. Without this line a whitespace
+    # name scored 10 here and 0 through match_pct -- caught by the randomised
+    # equivalence test, which is the only reason it is not in the shipped
+    # build: eight disagreements in seven hundred trials, all of them a blank.
+    try:
+        if not (video_name or '').strip():
+            return 0
+    except AttributeError:
+        return 0
+    best = 0 if floor <= 0 else floor
+    seen_any = False
+    for n in sub_names or []:
+        try:
+            if not (n or '').strip():
+                continue
+        except AttributeError:
+            continue
+        key = None
+        if isinstance(video_name, str) and isinstance(n, str):
+            key = (video_name, n)
+            hit = _SCORE_MEMO.get(key)
+            if hit is not None:
+                seen_any = True
+                if hit[0] > best:
+                    best = hit[0]
+                    if best >= stop_at:
+                        break
+                continue
+        r = _score(video_name, n, floor=best)
+        if r is None:
+            continue
+        seen_any = True
+        if key is not None:
+            _memo_put(_SCORE_MEMO, key, (r[0], r[1], tuple(r[2])))
+        if r[0] > best:
+            best = r[0]
+            if best >= stop_at:
+                break
+    if not seen_any and floor <= 0:
+        return 0
+    return 0 if best <= floor else best
+
+
+# The most a branch can ever return. Used ONLY to skip work that provably
+# cannot change a maximum -- never to change what a branch returns. Each is
+# read straight off the branch below it: min(25, ...), min(35, ...),
+# min(40, ...); same-source tops out at 55+6+3+15 = 79 before its own cap; and
+# fuzzy at 10 + 55 = 65.
+_CEIL_EDITION = 25
+_CEIL_SOURCE = 35
+_CEIL_PROPER = 40
+_CEIL_SAME_SOURCE = 79
+_CEIL_FUZZY = 65
+
+
+def _score(video_name, sub_name, floor=0):
+    """The scorer. `floor` is a caller's running maximum: any branch that
+    provably cannot exceed it returns None instead of finishing, and the token
+    ratio -- a difflib pass, and by far the most expensive thing here -- is
+    computed only if a branch that needs it is actually reached.
+
+    None means "cannot beat `floor`", never "no match". Only best_pct() passes
+    a floor; score() does not, so the public result is unchanged."""
     va, sa = normalize(video_name), normalize(sub_name)
     if va == sa:
         return 100, TIER_EXACT, ['identical release']
 
-    v, s = parse(video_name), parse(sub_name)
-    vt, st = tokens(video_name), tokens(sub_name)
-    ratio = _token_ratio(vt, st)
+    v, s = _parse_c(video_name), _parse_c(sub_name)
+    vt, st = _toks(video_name), _toks(sub_name)
+    ratio = -1.0
     reasons = []
 
     # HARD contradictions first -- these caps are the whole point: the old
     # token scorer let a WEB sub score 70% against a BluRay source.
     if v['edition'] and s['edition'] and v['edition'] != s['edition']:
+        if floor >= _CEIL_EDITION:
+            return None
+        ratio = _token_ratio(vt, st)
         pct = min(25, int(ratio * 40))
         return pct, TIER_CROSS, ['different edition/cut']
     if v['source'] and s['source'] and v['source'] != s['source']:
+        if floor >= _CEIL_SOURCE:
+            return None
+        ratio = _token_ratio(vt, st)
         pct = min(35, int(ratio * 45))
         return pct, TIER_CROSS, [
             'source mismatch ({0} vs {1})'.format(v['source'], s['source'])]
     if v['proper'] != s['proper'] and (v['source'] and s['source']):
+        if floor >= _CEIL_PROPER:
+            return None
+        ratio = _token_ratio(vt, st)
         pct = min(40, int(ratio * 55))
         return pct, TIER_CROSS, ['PROPER/REPACK mismatch']
 
@@ -218,6 +402,8 @@ def score(video_name, sub_name):
         return min(pct, 99), TIER_GROUP, reasons
 
     if same_source:
+        if floor >= _CEIL_SAME_SOURCE:
+            return None
         pct = 55
         reasons.append('same source class ({0})'.format(v['source']))
         if v['resolution'] and v['resolution'] == s['resolution']:
@@ -228,11 +414,17 @@ def score(video_name, sub_name):
         if v['group'] and s['group'] and v['group'] != s['group']:
             pct -= 8
             reasons.append('different group')
+        if ratio < 0:
+            ratio = _token_ratio(vt, st)
         pct += int(ratio * 15)   # token tie-break WITHIN the tier
         return max(20, min(pct, 84)), TIER_SOURCE, reasons
 
     # Source unknown on at least one side (and groups don't match): token
     # similarity only, bounded so it can never outrank a structural match.
+    if floor >= _CEIL_FUZZY:
+        return None
+    if ratio < 0:
+        ratio = _token_ratio(vt, st)
     pct = int(10 + ratio * 55)
     return min(pct, 79), TIER_FUZZY, reasons
 
