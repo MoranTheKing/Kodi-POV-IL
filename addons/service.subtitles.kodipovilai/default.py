@@ -3279,42 +3279,17 @@ def _handle_logout_telegram(_params):
         pass
 
 
-HE_AVAIL_CACHE = ('special://profile/addon_data/service.subtitles.kodipovilai/'
-                  'he_avail_cache.json')
-
-
-def _he_avail_store(mk, names, embedded=None, ttl=0):
-    """Merge {mk: {ts, names, embedded, ttl}} into the shared he_avail cache that
-    POV's source window reads (he_sub_match._cache_entry). `ttl` is the chosen
-    re-warm interval for this title (short while it's still gaining Hebrew / has
-    none, long once stable). Atomic + size-bounded."""
-    if xbmcvfs is None:
-        return
-    try:
-        import json as _json
-        import time as _time
-        path = xbmcvfs.translatePath(HE_AVAIL_CACHE)
-        data = {}
-        if os.path.isfile(path):
-            try:
-                with open(path, 'r', encoding='utf-8') as f:
-                    data = _json.load(f) or {}
-            except Exception:
-                data = {}
-        data[mk] = {'ts': _time.time(), 'names': list(names),
-                    'embedded': list(embedded or []), 'ttl': float(ttl or 0)}
-        # Keep the newest ~400 titles so the file can't grow without bound.
-        if len(data) > 400:
-            newest = sorted(data.items(), key=lambda kv: kv[1].get('ts', 0),
-                            reverse=True)[:400]
-            data = dict(newest)
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        tmp = path + '.tmp'
-        with open(tmp, 'w', encoding='utf-8') as f:
-            _json.dump(data, f, ensure_ascii=False)
-        os.replace(tmp, path)
-    except Exception as e:
-        _safe_log('he_avail store failed: {0}'.format(e), level='WARNING')
+# _he_avail_store AND ITS HE_AVAIL_CACHE PATH USED TO LIVE HERE. Both were
+# dead -- nothing called the function, nothing read the constant, and the only
+# thing that named either was a comment in he_sub_match pointing here as the
+# other writer of that cache.
+#
+# NOT HARMLESS DEAD CODE. It wrote `names` and `embedded` with no bound, and
+# OVERWROTE the embedded list instead of unioning it: the two bugs the live
+# warm path had to be fixed for, the second of which wiped a built-in-Hebrew
+# flag the device had just detected itself. Anyone reviving it, or copying
+# from it because it looked like the shorter version of the same job, would
+# have brought both back. he_sub_match._store_avail is the one writer.
 
 
 def _handle_he_avail(params):
