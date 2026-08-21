@@ -2027,19 +2027,21 @@ def _maybe_fix_idanplus_youtube_id():
     request with "This video is unavailable", and the id in every one of them
     was the literal string 'watch'. GetYouTube reads the id out of the URL
     PATH and truncates at '?', which is exactly where it lives in the ordinary
-    youtube.com/watch?v= form -- so Kan 11 items stopped resolving when Kan
-    moved from embed links to watch links.
+    youtube.com/watch?v= form.
 
-    Kan does not hand out that url -- its mobile API returns a bare id and
-    kan.py wraps it into watch?v= itself, then fails to unwrap its own
-    construction. So this is not a regression and not something Kan changed:
-    every Kan item of that type has always failed.
+    And the add-on builds that url itself: Kan's mobile API returns a BARE id
+    and kan.py wraps it into watch?v= before handing it over, so GetYouTube
+    fails to unwrap its own construction. This is not a regression and not
+    something Kan changed -- every Kan item of that type has always failed.
 
-    The injected line only fires where the add-on produced the literal string
-    'watch', which is the signature of the failure and cannot be an id, so no
-    url it already resolved can reach it. And it stands down on its own if
-    Idan Plus ships a fix -- _already_handles_v RUNS the function rather than
-    reading it.
+    The injected line only fires where the add-on produced something that
+    cannot be a YouTube id (eleven characters of YouTube's own charset), which
+    is the signature of the failure, so no url it already resolved correctly
+    can reach it. And when Idan Plus fixes this
+    itself, the anchor stops matching, nothing is touched, and the log says so
+    once per boot -- which is the signal to retire the patcher. Two cleverer
+    mechanisms for deciding WHY the shape changed were tried and both failed
+    review; the module records what they were and how.
 
     DELIBERATELY NOT behind _skip_pov_patchers(). That switch says to leave
     plugin.video.pov as its author shipped it; this writes to
@@ -2050,7 +2052,7 @@ def _maybe_fix_idanplus_youtube_id():
         from resources.lib import idanplus_youtube_id_patcher, kodi_utils
         st = idanplus_youtube_id_patcher.ensure_patched()
         if st in ('unmatched', 'compile_failed', 'write_failed',
-                  'revert_failed', 'read_failed', 'no_function'):
+                  'revert_failed', 'read_failed'):
             kodi_utils.log(
                 'idanplus_youtube_id_patcher: ' + st, level='WARNING')
     except Exception as e:

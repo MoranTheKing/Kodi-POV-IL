@@ -74,12 +74,11 @@
 #     implementation would. So if Idan Plus ships its own fix and both end up
 #     running, they cannot disagree.
 #
-# AND IT RETIRES ITSELF. Before anything else, _already_handles_v() looks at
-# the function as it stands: if it has learned to read the query parameter, we
-# report 'already_fixed' and touch nothing -- quietly, because that status is
-# not one service.py warns about. Without that check, an upstream fix would
-# leave this reporting 'unmatched' and logging a WARNING on every boot forever,
-# which is how a patcher outlives its bug and becomes noise.
+# AND WHEN IDAN PLUS FIXES IT, THIS STOPS AND SAYS SO. The anchor is the stock
+# buggy body byte-for-byte: if it matches, the bug is verbatim present and we
+# patch; if it does not, the function has changed and nothing is touched. See
+# the long note above ensure_patched for the two mechanisms that tried to
+# decide WHY it changed, and why neither survived review.
 #
 # VERSION NOTE. The function is byte-identical in the 3.9.1 the build ships and
 # in the 4.0.2 the add-on self-updates to, so one anchor covers both. Checked
@@ -118,16 +117,24 @@ _RETURN = ("\treturn '{0}/play/?video_id={1}'.format(youtubePlugin, "
 # (alphanumeric, dash, underscore); the {6,} floor keeps a stray `v=1` style
 # parameter from being mistaken for one.
 #
-# GATED ON `video_id == 'watch'`, which is the signature of the failure and
-# nothing else. A review found the ungated version could change a url stock had
-# already resolved correctly: `youtu.be/<ID>?v=<OTHER>` has a real id in the
-# path AND a stray v= in the query, and scanning the whole url took the wrong
-# one. Gating removes that whole class by construction rather than by taste --
-# stock returning 'watch' IS stock failing, because YouTube ids are eleven
-# characters and 'watch' is five, so no url stock got right can reach this.
-_FIX = ("\tif video_id == 'watch': video_id = (re.findall("
-        "r'[?&]v=([0-9A-Za-z_-]{6,})', url) or [video_id])[0]  "
-        + MARKER + "\n")
+# GATED ON "what stock extracted cannot be a YouTube id". A review broke the
+# ungated version in one line: `youtu.be/<ID>?v=<OTHER>` has a real id in the
+# PATH and a stray v= in the query, and scanning the whole url took the wrong
+# one -- changing an answer stock had got right, the one thing this must never
+# do.
+#
+# The first gate was `== 'watch'`, the literal signature of the report, and a
+# second round found that too narrow: `watch/?v=<ID>` leaves stock with an
+# EMPTY string and `Watch?v=<ID>` leaves it 'Watch' -- both still broken,
+# neither equal to 'watch'.
+#
+# An eleven-character id from YouTube's own charset is the test, because that
+# is what success looks like and anything else is failure by definition. The
+# line fires exactly when stock produced something that cannot be an id, and
+# so can never touch a url stock resolved correctly.
+_FIX = ("\tif not re.match(r'^[0-9A-Za-z_-]{11}$', video_id or ''): "
+        "video_id = (re.findall(r'[?&]v=([0-9A-Za-z_-]{11})', url) "
+        "or [video_id])[0]  " + MARKER + "\n")
 
 
 def _log(msg, level='INFO'):
@@ -190,66 +197,42 @@ def _idan_path(rel):
     return p if os.path.isfile(p) else ''
 
 
-def _function_body(content):
-    """GetYouTube as it currently stands, or '' if it is not there."""
-    try:
-        start = content.index('def GetYouTube(url):')
-    except ValueError:
-        return ''
-    rest = content[start + 1:]
-    nxt = rest.find('\ndef ')
-    return content[start:start + 1 + nxt] if nxt != -1 else content[start:]
-
-
-_PROBE_URL = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
-_PROBE_ID = 'dQw4w9WgXcQ'
-
-
-def _already_handles_v(body):
-    """Does the function, AS IT STANDS, already resolve a watch?v= url?
-
-    RUN IT. Do not read it.
-
-    This asked `re.search(r"v=|parse_qs|query", body)` first, and a review
-    broke it in one line: a comment saying "query the path", or a variable
-    called search_query, makes that true while fixing nothing. The patcher
-    would then stand down and report 'already_fixed' -- which service.py does
-    NOT warn about, by design -- so a version that still sends YouTube the word
-    'watch' would leave no trace in the log at all. Silent is worse than the
-    noise the retirement check exists to avoid.
-
-    Executing the function is the only honest question, and it is cheap: the
-    body is compiled in a namespace of its own with nothing in scope but `re`
-    and the plugin string it formats with. Anything that raises -- a name we
-    did not provide, an import, a side effect -- lands in the except and
-    returns False, which does NOT stand down: it falls through to the anchor
-    check, and a shape we cannot recognise reports 'unmatched' and warns. The
-    failure direction is loud.
-    """
-    if _MARKER_ANY in body:
-        return False        # that is us, not them
-    try:
-        ns = {'re': re, 'youtubePlugin': 'plugin://plugin.video.youtube'}
-        exec(compile(body, '<idanplus GetYouTube>', 'exec'), ns)
-        fn = ns.get('GetYouTube')
-        if not fn:
-            return False
-        # Read the id back the way the CALLER does, and compare it exactly.
-        # A containment test is not enough: a body that returns the raw
-        # 'watch?v=<ID>' string contains the id while resolving nothing, and
-        # would have stood down.
-        out = str(fn(_PROBE_URL))
-        got = out.split('video_id=')[-1].split('&')[0].strip()
-        return got == _PROBE_ID
-    except Exception:
-        return False
+# THERE WAS A "RETIRE YOURSELF" CHECK HERE. TWO OF THEM. BOTH WERE WRONG.
+#
+# Round 1: it read the function text for `v=|parse_qs|query`. A comment saying
+# "query the path", or a variable called search_query, made that true -- so a
+# still-broken version would be left broken and reported 'already_fixed', a
+# status service.py deliberately does not warn about. Silently.
+#
+# Round 2: the replacement EXECUTED the candidate function instead. That
+# answered the question honestly and bought a blast radius to do it. The slice
+# handed to exec ran from `def GetYouTube` to the next top-level `def`, and on
+# the real 4.0.2 tree that gap ALREADY holds a module-level statement
+# (`_cfSession = {...}`) -- so anything sitting there would run at OUR startup,
+# unconditionally, before the function was even called. And `except Exception`
+# does not catch SystemExit: a `sys.exit()` in that body escaped this function,
+# escaped ensure_patched, escaped service.py's step wrapper, and aborted the
+# whole startup-repair pass. Idan Plus declares reuselanguageinvoker, so its
+# own crashes stay in its own interpreter; running its code inside ours handed
+# it ours.
+#
+# THE ANCHOR ALREADY ANSWERS THE USEFUL HALF. It is the stock buggy body,
+# byte-for-byte. Matching means the bug is verbatim present. Not matching means
+# the function changed, and no honest cheap test tells us whether it was fixed,
+# refactored, or broken differently -- so we touch nothing and say so once, in
+# the log, exactly like every other patcher in this tree.
+#
+# That costs a WARNING line per boot on a device whose Idan Plus has moved on.
+# That is not a problem for the user; it is the signal to retire this file. It
+# is worth more than a clever mechanism that has now been wrong twice, once in
+# the direction of failing silently and once in the direction of running
+# somebody else's code in our process.
 
 
 def ensure_patched():
     """Idempotent. Never raises. Returns 'no_idanplus' | 'no_file' |
-    'no_function' | 'already_fixed' | 'unchanged' | 'patched' | 'repatched' |
-    'unmatched' | 'read_failed' | 'write_failed' | 'compile_failed' |
-    'revert_failed'."""
+    'unchanged' | 'patched' | 'repatched' | 'unmatched' | 'read_failed' |
+    'write_failed' | 'compile_failed' | 'revert_failed'."""
     if xbmcvfs is None:
         return 'no_idanplus'
     path = _idan_path(COMMON_REL)
@@ -268,18 +251,6 @@ def ensure_patched():
     if MARKER in content:
         return 'unchanged'
 
-    body = _function_body(content)
-    if not body:
-        _log('GetYouTube is not in this version of common.py; leaving it alone',
-             level='WARNING')
-        return 'no_function'
-
-    # BEFORE the anchor check, so an upstream fix retires us quietly instead of
-    # reporting a shape we do not recognise every boot.
-    if _already_handles_v(body):
-        _log('Idan Plus reads the v= parameter itself now; standing down')
-        return 'already_fixed'
-
     repatch = False
     if _MARKER_ANY in content:
         content = _revert(content, eol)
@@ -290,8 +261,10 @@ def ensure_patched():
 
     anchor = fit(_TRUNC + _RETURN)
     if content.count(anchor) != 1:
-        _log('GetYouTube does not have the expected shape -- Idan Plus may '
-             'have refactored it; leaving the file alone', level='WARNING')
+        _log('GetYouTube no longer has the shape this fix was written for; '
+             'nothing was changed. If Idan Plus has fixed the v= parsing '
+             'itself then this patcher has done its job and should be '
+             'retired; if not, it needs a new anchor.', level='WARNING')
         return 'unmatched'
 
     new_content = content.replace(
