@@ -4362,6 +4362,81 @@ Raw by a few minutes; poll rather than assume.
   are served from the `gh-pages` branch, not from the release. See
   `APK_RELEASE.md`.
 
+### What shipped 0.2.504 / qf 0.1.549 / build 0.1.117 (note 604)
+
+"Sources load fast but the list takes five to ten seconds to draw, and only
+yesterday it was one." Timed from the line our reorder hook writes at the top
+of POV's `display_results` to the moment `sources_results.xml` loads:
+
+    3 Hebrew subtitle names available ->  2.0 s
+    6                                 ->  4.0 s
+    17                                -> 10.3 s
+
+**Linear in the number of NAMES**, which is the shape of a nested loop, and
+the nested loop is ours. `he_sub_match.label_prefix` runs per source row and
+scores that row against every available name plus twice against every
+embedded-Hebrew name -- seventy rows and seventeen names is 1190 scored pairs
+before one row can be drawn, and every pair re-derived BOTH release names from
+scratch, so those seventeen names were normalised, tokenised and parsed
+seventy times each.
+
+**THE OWNER PUSHED BACK AND WAS RIGHT TO.** `git log` says the scoring path
+last changed on **2026-07-09** (SubSync S1), so nothing changed the day it got
+slow. The answer is that **the length of the loop is not in the code, it is in
+the data**: `embedded` and `sync_rel` were union-only and never trimmed, so
+they grow monotonically with use. July made each comparison several times more
+expensive; the lists have been growing ever since; three names is invisible.
+A slowdown that arrives that way has no event to blame it on.
+
+**FOUR EQUIVALENCES, ~25x less work, byte-identical badge.**
+
+  * names derived once per interpreter, not once per pair, with bounded caches
+    (this runs inside POV's own long-lived interpreter, so an unbounded dict
+    there is a leak in somebody else's process);
+  * the built-in-Hebrew scan costs ZERO difflib passes. Reading the scorer's
+    own branches back, 80+ is reachable only through identical names,
+    containment or the same release group, and none of the three needs the
+    token ratio -- so it is asked with a floor of 79 and answered structurally.
+    That was 62% of the work;
+  * no pair scored that cannot change the maximum: every branch's ceiling
+    falls out of its own `min()` (25, 35, 40, 79, 65 -- stated one high on
+    purpose, since difflib's ratio reaches 1.0 only for equal sequences and
+    rounding a ceiling UP only ever skips less);
+  * and the lists capped at 120, so it cannot creep back.
+
+**FIVE VALIDATION ROUNDS. The pattern to keep: every finding after the first
+was in something I had just added.** The early exit turned a consistent
+fallback bug into an ORDER-DEPENDENT one -- consistent-and-wrong is findable,
+order-dependent is not. A cost check of mine passed with the pair cache
+disabled, because my seventy rows were seventy DISTINCT releases and the cache
+had nothing to do. A comment stated ceilings the measurement contradicted.
+
+**AND A SECOND, DEAD WRITER OF THE SAME CACHE.** `default.py::_he_avail_store`
+had no callers, but it wrote `names`/`embedded` with no bound and OVERWROTE
+the embedded list instead of unioning it -- both of the bugs the live path had
+to be fixed for, one of which wipes a built-in-Hebrew flag the device just
+detected itself. Deleted, with the reason left where it stood; a test now
+requires that cache to have exactly one writer.
+
+**THE PARKED CHANGELOG DEFECT BIT ME DURING THIS VERY RELEASE.** The second
+bullet of 0.2.504 named nothing -- "the lists it walks were never trimmed" --
+and sailed through the standalone filter into the release notes of users who
+have no source screen. Caught only because I looked at the slimmed output by
+hand. See the PARKED section: no term list can catch a bullet that does not
+name its subject, and this is now the second confirmed instance.
+
+**NOT OURS, and stated because a report will come back:** Kan 11 items in Idan
+Plus now request the right id and start, but stall. The log is unambiguous --
+`tv_unplugged` -> UNPLAYABLE 'Please sign in', `tv` -> 'The page needs to be
+reloaded', captions -> 429 "your computer or network may be sending automated
+queries", and the stream itself -> **403 on every segment range**, retried 2-6,
+every eight seconds. YouTube is refusing a signed-out client. The patcher's
+only job is the id and the log shows it correct. The remedy is signing the
+YouTube add-on in. We ship a settings.xml for it whose stream-proxy toggle
+(`youtube.http.stream_redirect`) is the one knob that might change this; it is
+NOT flipped on the strength of one log, because the proxy exists to carry
+headers a redirect cannot.
+
 ### What shipped 0.2.503 / qf 0.1.548 / build 0.1.116 (note 603)
 
 Nothing from Kan 11 played in Idan Plus. The log named the cause without
@@ -4474,6 +4549,15 @@ bullet should say so where it is written, and the filter should read the mark;
 the term list can stay as a backstop that only ever ADDS drops. Retrofitting
 the mark to history is bounded work -- the analysis above already names most of
 the affected bullets -- but it is its own change, with its own review.
+
+**SECOND CONFIRMED INSTANCE, and it was mine, during release 604.** The bullet
+read "the lists it walks were never trimmed, so they grew a little with every
+title watched" -- entirely about POV's source screen, naming nothing, and it
+went straight through the filter into the release notes of standalone users
+who have no source screen. It was caught by reading the slimmed output by
+hand, which is not a process. Reworded to name POV. Until bullets are marked,
+**read the slimmed changelog before every release**; the automated check
+cannot see this class at all.
 
 ### What shipped 0.2.502 / qf 0.1.547 / build 0.1.115 (note 602)
 

@@ -1,3 +1,22 @@
+v0.2.504
+- POV's source list appears the moment the sources are ready again. Someone
+  reported it taking five to ten seconds to draw after the search had clearly
+  finished, where it used to be about one, and the log timed it: two seconds
+  with three Hebrew subtitles available for the title, four with six, ten with
+  seventeen. The Hebrew-match badge on each row was comparing every source
+  against every available subtitle name, and re-deriving both names from
+  scratch every single time -- so seventeen names were taken apart seventy
+  times each before one row could be drawn. Each name is now read once, the
+  built-in-Hebrew check costs nothing at all, and no comparison runs that
+  cannot change the answer: about twenty-five times less work, with every
+  badge coming out identical. Umbrella's source list gets the same.
+- And the reason the POV source screen slowed down out of nowhere, with
+  nothing having changed: the subtitle lists that badge walks were never
+  trimmed, so they grew a little with every title watched until the delay
+  became visible. They are capped now, far above anything a real title has, so
+  it cannot creep back. Three leftover diagnostics that wrote whole lists into
+  the log on every play and every source screen are gone with it.
+
 v0.2.503
 - Kan 11 items in Idan Plus play again. Nothing from that channel would start:
   YouTube answered "This video is unavailable" for every one of them, five
