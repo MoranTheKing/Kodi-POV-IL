@@ -117,8 +117,17 @@ _RETURN = ("\treturn '{0}/play/?video_id={1}'.format(youtubePlugin, "
 # injected line needs nothing new in scope. The id charset is YouTube's own
 # (alphanumeric, dash, underscore); the {6,} floor keeps a stray `v=1` style
 # parameter from being mistaken for one.
-_FIX = ("\tvideo_id = (re.findall(r'[?&]v=([0-9A-Za-z_-]{6,})', url) "
-        "or [video_id])[0]  " + MARKER + "\n")
+#
+# GATED ON `video_id == 'watch'`, which is the signature of the failure and
+# nothing else. A review found the ungated version could change a url stock had
+# already resolved correctly: `youtu.be/<ID>?v=<OTHER>` has a real id in the
+# path AND a stray v= in the query, and scanning the whole url took the wrong
+# one. Gating removes that whole class by construction rather than by taste --
+# stock returning 'watch' IS stock failing, because YouTube ids are eleven
+# characters and 'watch' is five, so no url stock got right can reach this.
+_FIX = ("\tif video_id == 'watch': video_id = (re.findall("
+        "r'[?&]v=([0-9A-Za-z_-]{6,})', url) or [video_id])[0]  "
+        + MARKER + "\n")
 
 
 def _log(msg, level='INFO'):
@@ -192,17 +201,48 @@ def _function_body(content):
     return content[start:start + 1 + nxt] if nxt != -1 else content[start:]
 
 
-def _already_handles_v(body):
-    """True when the function reads the id out of the query string itself.
+_PROBE_URL = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+_PROBE_ID = 'dQw4w9WgXcQ'
 
-    Ours is not the only possible fix, so this asks about the BEHAVIOUR the
-    fix provides rather than looking for our marker: any implementation that
-    mentions the `v` parameter or parses the query is doing the job, and we
-    should stand down rather than add a second opinion.
+
+def _already_handles_v(body):
+    """Does the function, AS IT STANDS, already resolve a watch?v= url?
+
+    RUN IT. Do not read it.
+
+    This asked `re.search(r"v=|parse_qs|query", body)` first, and a review
+    broke it in one line: a comment saying "query the path", or a variable
+    called search_query, makes that true while fixing nothing. The patcher
+    would then stand down and report 'already_fixed' -- which service.py does
+    NOT warn about, by design -- so a version that still sends YouTube the word
+    'watch' would leave no trace in the log at all. Silent is worse than the
+    noise the retirement check exists to avoid.
+
+    Executing the function is the only honest question, and it is cheap: the
+    body is compiled in a namespace of its own with nothing in scope but `re`
+    and the plugin string it formats with. Anything that raises -- a name we
+    did not provide, an import, a side effect -- lands in the except and
+    returns False, which does NOT stand down: it falls through to the anchor
+    check, and a shape we cannot recognise reports 'unmatched' and warns. The
+    failure direction is loud.
     """
-    if MARKER in body or _MARKER_ANY in body:
+    if _MARKER_ANY in body:
         return False        # that is us, not them
-    return bool(re.search(r"v=|parse_qs|query", body))
+    try:
+        ns = {'re': re, 'youtubePlugin': 'plugin://plugin.video.youtube'}
+        exec(compile(body, '<idanplus GetYouTube>', 'exec'), ns)
+        fn = ns.get('GetYouTube')
+        if not fn:
+            return False
+        # Read the id back the way the CALLER does, and compare it exactly.
+        # A containment test is not enough: a body that returns the raw
+        # 'watch?v=<ID>' string contains the id while resolving nothing, and
+        # would have stood down.
+        out = str(fn(_PROBE_URL))
+        got = out.split('video_id=')[-1].split('&')[0].strip()
+        return got == _PROBE_ID
+    except Exception:
+        return False
 
 
 def ensure_patched():
@@ -261,7 +301,7 @@ def ensure_patched():
         # lstrip the BOM for the check only -- see the note in
         # pov_debrid_unbound_guard_patcher; a leading U+FEFF is fine for
         # import and fatal for compile().
-        compile(new_content.lstrip('﻿'), path, 'exec')
+        compile(new_content.lstrip('\ufeff'), path, 'exec')
     except SyntaxError as e:
         _log('compile check failed, not writing: {0}'.format(e),
              level='WARNING')
