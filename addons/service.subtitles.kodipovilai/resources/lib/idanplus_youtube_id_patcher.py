@@ -85,7 +85,6 @@
 # rather than assumed: 4.0.2 was fetched from the Fishenzon repo and diffed.
 
 import os
-import re
 
 try:
     import xbmcvfs
@@ -113,7 +112,9 @@ _RETURN = ("\treturn '{0}/play/?video_id={1}'.format(youtubePlugin, "
            "video_id)\n")
 
 # `re` is imported at the top of common.py (line 3) and used throughout, so the
-# injected line needs nothing new in scope. The id charset is YouTube's own
+# injected line needs nothing new in scope -- and THIS module does not import
+# it at all, because the regex below is text we write into somebody else's
+# file, never a pattern we compile here. The id charset is YouTube's own
 # (alphanumeric, dash, underscore); the {6,} floor keeps a stray `v=1` style
 # parameter from being mistaken for one.
 #
