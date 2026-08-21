@@ -1337,8 +1337,7 @@ v0.2.372
 - New: automatic subtitle search is now SKIPPED for live/IPTV playback --
   PVR channels, streams with no duration, and a configurable addon
   exclusion list (Settings -> engine; default: plugin.video.idanplus), so
-  channel zapping (e.g. Idan Plus) no longer triggers the Hebrew search
-  overlay.
+  channel zapping no longer triggers the Hebrew search overlay.
 
 v0.2.371
 - New: Gemini 3.5 Flash is now available in the model list (Settings ->
