@@ -77,17 +77,33 @@ _MAX_NAMES = 120
 
 
 def _bounded_union(existing, incoming, cap=_MAX_NAMES, fold_case=True):
-    """`existing` plus anything new in `incoming`, newest kept, capped."""
-    out = [x for x in (existing or []) if x]
+    """`existing` plus anything new in `incoming`, newest kept, capped.
+
+    STRINGS ONLY, and that is not decoration. This reads a JSON file that
+    other processes write, so an entry can be a number or an object without
+    anybody having made a mistake in Python -- and the inline code this
+    replaced would raise on `.lower()` for one, or on hashing a list. Every
+    caller sits inside a try/except that swallows, so the old failure mode
+    was a write silently not happening. Skipping the entry keeps the write.
+    """
+    def _ok(x):
+        return isinstance(x, str) and x.strip()
+
+    out = [x for x in (existing or []) if _ok(x)]
     seen = set((x.lower() if fold_case else x) for x in out)
     for x in (incoming or []):
-        if not x:
+        if not _ok(x):
             continue
         k = x.lower() if fold_case else x
         if k in seen:
             continue
         seen.add(k)
         out.append(x)
+    # `out[-cap:]` is the whole list when cap is 0, which is the opposite of
+    # what a cap of zero should mean. No caller passes one; it is spelled out
+    # so that adding one later cannot quietly disable the bound.
+    if cap <= 0:
+        return []
     return out[-cap:] if len(out) > cap else out
 # Cross-process memo for _pool_lookup: coalesces repeated signed /lookup calls
 # for the SAME title within a few seconds into ONE Worker request. (The POV
@@ -991,14 +1007,11 @@ def embedded_names(meta):
         p = _media_params(meta)
         if not p:
             return []
-        _emb = _cached_embedded(_media_key(p))
-        try:
-            from resources.lib import kodi_utils as _ku
-            _ku.log('embedded_names {0}: {1}'.format(_media_key(p), _emb),
-                    level='INFO')
-        except Exception:
-            pass
-        return _emb
+        # The line that logged this whole list ran once per source window,
+        # in the stretch the user is already waiting through, on devices
+        # whose Kodi log is on internal flash -- and it grew with the list.
+        # Third diagnostic of the same kind removed from this path.
+        return _cached_embedded(_media_key(p))
     except Exception:
         return []
 
