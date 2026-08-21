@@ -409,6 +409,16 @@ print('=== the per-title lists are bounded ===')
 check('_bounded_union dedupes without regard to case',
       hs._bounded_union(['A.Release-NTb'], ['a.release-ntb', 'Other-FLUX'])
       == ['A.Release-NTb', 'Other-FLUX'])
+# THIS READS A JSON FILE OTHER PROCESSES WRITE, so an entry can be a number
+# or an object without anyone having written bad Python. The inline code
+# this replaced raised on .lower() for one of those, inside a try/except
+# that swallows -- so the WRITE silently did not happen.
+check('a non-string entry is skipped, not raised on',
+      hs._bounded_union(['keep-me', 7, None, {}, []], [3.5, 'new-one', ' '])
+      == ['keep-me', 'new-one'])
+check('a cap of zero means zero, not everything',
+      hs._bounded_union(['a', 'b'], ['c'], cap=0) == [],
+      'out[-0:] is the whole list -- the guard is what stops that')
 check('...and can be told not to, for the confirmed-sync keys',
       hs._bounded_union(['abc'], ['ABC'], fold_case=False) == ['abc', 'ABC'])
 _big = [str(i) for i in range(hs._MAX_NAMES + 80)]
@@ -475,6 +485,31 @@ _merge_logs = [f.name for f in _merge_fns for n in ast.walk(f)
                and isinstance(n.func, ast.Attribute) and n.func.attr == 'log']
 check('neither merge dumps whole release lists into the Kodi log',
       not _merge_logs, 'still logging: %s' % _merge_logs)
+
+# The third one of these, and the one in the path the user actually waits
+# through: embedded_names runs once per source window, before any row is
+# drawn, and it logged the whole list it had just read.
+_win_fns = [f for f in ast.walk(_tree) if isinstance(f, ast.FunctionDef)
+            and f.name in ('embedded_names', 'release_names',
+                           'confirmed_releases')]
+check('the three once-per-window reads were found', len(_win_fns) == 3,
+      'found %s' % [f.name for f in _win_fns])
+_win_logs = [f.name for f in _win_fns for n in ast.walk(f)
+             if isinstance(n, ast.Call)
+             and isinstance(n.func, ast.Attribute) and n.func.attr == 'log']
+check('embedded_names no longer logs its whole list per window',
+      'embedded_names' not in _win_logs,
+      'still logging from: %s' % sorted(set(_win_logs)))
+
+# AND THE DEAD SECOND WRITER. default.py::_he_avail_store had no callers and
+# wrote the same cache with no bound and an OVERWRITE of the embedded list --
+# the two bugs the live writer had to be fixed for. Copying from it would
+# have brought both back.
+_dflt = io.open(os.path.join(LIB, '..', '..', 'default.py'),
+                encoding='utf-8').read()
+check('there is exactly one writer of the availability cache',
+      'def _he_avail_store' not in _dflt,
+      'default.py still defines a second, unbounded one')
 
 print()
 print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')
