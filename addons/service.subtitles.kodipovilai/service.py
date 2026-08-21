@@ -2037,11 +2037,11 @@ def _maybe_fix_idanplus_youtube_id():
     The injected line only fires where the add-on produced something that
     cannot be a YouTube id (eleven characters of YouTube's own charset), which
     is the signature of the failure, so no url it already resolved correctly
-    can reach it. And when Idan Plus fixes this
-    itself, the anchor stops matching, nothing is touched, and the log says so
-    once per boot -- which is the signal to retire the patcher. Two cleverer
-    mechanisms for deciding WHY the shape changed were tried and both failed
-    review; the module records what they were and how.
+    can reach it. And when Idan Plus fixes this itself, the anchor stops
+    matching, nothing is touched, and the log says so once per boot -- which
+    is the signal to retire the patcher. Two cleverer mechanisms for deciding
+    WHY the shape changed were tried and both failed review; the module
+    records what they were and how.
 
     DELIBERATELY NOT behind _skip_pov_patchers(). That switch says to leave
     plugin.video.pov as its author shipped it; this writes to
