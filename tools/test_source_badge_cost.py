@@ -42,6 +42,7 @@ WHAT THIS FILE PINS:
 Run: python3 tools/test_source_badge_cost.py
 """
 import ast
+import importlib.util
 import io
 import json
 import os
@@ -101,9 +102,13 @@ rnd = random.Random(23)
 pool = [mk(rnd) for _ in range(400)] + ['', None, ' ', '   \t', 'x',
                                         'a.b.c.d-NTb', 0, 5]
 bad_max = bad_floor = bad_shape = 0
+junk_trials = 0
 for _ in range(2500):
     v = rnd.choice(pool)
     names = rnd.sample(pool, rnd.randint(0, 16))
+    if (not isinstance(v, str) or not v.strip()
+            or any(not isinstance(n, str) or not n.strip() for n in names)):
+        junk_trials += 1
     want = max([rm.match_pct(v, n) for n in names], default=0)
     if rm.best_pct(v, names) != want:
         bad_max += 1
@@ -114,8 +119,11 @@ for _ in range(2500):
         bad_shape += 1
 check('best_pct == max(match_pct) over 2500 randomised lists', not bad_max,
       '%d disagreements' % bad_max)
+# The label used to be the only evidence: it re-read the previous check's
+# counter and confirmed the POOL held a non-string, not that any TRIAL did.
 check('...including blanks, None and non-strings',
-      not bad_max and any(not isinstance(p, str) for p in pool))
+      not bad_max and junk_trials >= 100,
+      'only %d of 2500 trials actually involved one' % junk_trials)
 check('the floor answer clears 80 exactly when the true maximum does',
       not bad_floor, '%d disagreements' % bad_floor)
 check('...and is never a number between 1 and 79', not bad_shape,
@@ -241,6 +249,52 @@ check('each release name is parsed once, not once per pair',
       '%d parses for %d distinct names'
       % (n[0], len(set(ROWS)) + len(NAMES) + len(EMB)))
 
+# AND THE PAIR CACHE, which needs its own corpus to be visible at all.
+# Review round 11 disabled _SCORE_MEMO on its own and every cost check above
+# still passed -- because those seventy rows are seventy DISTINCT releases,
+# so no pair ever repeats and the pair cache has nothing to do. The thing it
+# exists for is the ordinary case its own docstring names: one release
+# offered by several hosts, which is most of a real source list.
+DUP_ROWS = [ROWS[i % 12] for i in range(70)]
+
+
+def _score_calls(rows):
+    for c in (rm._NORM_MEMO, rm._TOKS_MEMO, rm._PARSE_MEMO, rm._SCORE_MEMO):
+        c.clear()
+    k = [0]
+    real = rm._score
+
+    def counting(a, b, floor=0):
+        k[0] += 1
+        return real(a, b, floor=floor)
+    rm._score = counting
+    try:
+        for r in rows:
+            hs.label_prefix(r, NAMES, EMB, r.replace('.', ' '), set())
+    finally:
+        rm._score = real
+    return k[0]
+
+
+class _AlwaysMisses(dict):
+    def get(self, *a, **k):
+        return None
+
+
+with_memo = _score_calls(DUP_ROWS)
+_real_memo = rm._SCORE_MEMO
+rm._SCORE_MEMO = _AlwaysMisses()   # stores, never hits
+try:
+    without_memo = _score_calls(DUP_ROWS)
+finally:
+    rm._SCORE_MEMO = _real_memo
+print('     12 releases across 70 rows: %d scored pairs, %d without the pair'
+      ' cache' % (with_memo, without_memo))
+check('the pair cache spares work when a release repeats across rows',
+      with_memo < without_memo,
+      '%d vs %d -- disabling _SCORE_MEMO changed nothing'
+      % (with_memo, without_memo))
+
 
 # --- 4. the caches cannot leak into an answer -------------------------------
 print()
@@ -296,6 +350,50 @@ _logs = [f.name for f in _hot for n in ast.walk(f)
               or (isinstance(n.func, ast.Name) and n.func.id == 'log'))]
 check('neither label_prefix nor best_score logs', not _logs,
       'a log call here runs once per row of every source list: %s' % _logs)
+
+# --- 5b. the difflib fallback refuses what the real scorer refuses ---------
+# Only reachable when release_match cannot be imported, and it had a bug that
+# the early exit turned from consistent into ORDER-DEPENDENT. _score has no
+# type guard, so a truthy non-string entry raises inside re.sub; the old
+# max()-over-a-generator turned that into a flat 0 for the whole list, which
+# threw away a genuine match sitting next to it. Stopping early would have
+# meant the same list answered differently depending on which entry came
+# first. Both paths skip the same inputs now.
+print()
+print('=== the fallback scorer refuses the same inputs ===')
+_fb_dir = tempfile.mkdtemp(prefix='nofallback-')
+shutil.copy(os.path.join(LIB, 'he_sub_match.py'),
+            os.path.join(_fb_dir, 'he_sub_match.py'))
+_saved_path, _saved_mods = list(sys.path), {}
+for _m in ('he_sub_match', 'release_match'):
+    _saved_mods[_m] = sys.modules.pop(_m, None)
+try:
+    sys.path = [_fb_dir] + [q for q in sys.path if q != LIB]
+    _spec = importlib.util.spec_from_file_location(
+        'he_sub_match', os.path.join(_fb_dir, 'he_sub_match.py'))
+    fb = importlib.util.module_from_spec(_spec)
+    sys.modules['he_sub_match'] = fb
+    _spec.loader.exec_module(fb)
+    check('the fallback is the one under test here',
+          fb._release_match_mod() is None,
+          'release_match was importable -- this tested the wrong path')
+    GOOD = 'Movie.X.2024.1080p.BluRay.x264-GRP'
+    _orders = [fb.best_score(GOOD, ns) for ns in
+               ([-1, GOOD], [GOOD, -1], [None, GOOD], [GOOD, None],
+                ['  ', GOOD], [GOOD, '  '], [{}, GOOD], [GOOD, {}])]
+    check('a junk entry never decides the answer, wherever it sits',
+          set(_orders) == {100}, 'got %s' % _orders)
+    check('a non-string source release is refused, not scored',
+          [fb.best_score(v, [GOOD]) for v in (-1, None, '   ', {})]
+          == [0, 0, 0, 0])
+finally:
+    sys.path = _saved_path
+    sys.modules.pop('he_sub_match', None)
+    for _m, _mod in _saved_mods.items():
+        if _mod is not None:
+            sys.modules[_m] = _mod
+    shutil.rmtree(_fb_dir, ignore_errors=True)
+import he_sub_match as hs        # noqa: E402,F811  (restore the real one)
 
 # --- 6. the lists that feed the hot loop cannot grow without bound ---------
 # WHY THIS SECTION EXISTS, and it is the answer to 'but it was fast
