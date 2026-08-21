@@ -296,6 +296,24 @@ _svc = io.open(os.path.join(ROOT, 'addons', 'service.subtitles.kodipovilai',
                             'service.py'), encoding='utf-8').read()
 
 
+def _own(node):
+    """Nodes belonging to this function, NOT to functions defined inside it.
+
+    `ast.walk` descends into nested defs and lambdas, so extracting a small
+    local helper out of ensure_patched would have the HELPER's returns
+    attributed to ensure_patched. Round 5 reproduced that: the refusal below
+    fired with a line number pointing at the wrong function, which is the kind
+    of message that sends the next person to fix the wrong thing.
+    """
+    stack = list(ast.iter_child_nodes(node))
+    while stack:
+        n = stack.pop()
+        yield n
+        if not isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef,
+                              ast.Lambda)):
+            stack.extend(ast.iter_child_nodes(n))
+
+
 def _warn_statuses():
     """service.py's warn tuple -- read by AST, never copied and never sliced.
 
@@ -312,7 +330,7 @@ def _warn_statuses():
         if not (isinstance(fn, ast.FunctionDef)
                 and fn.name == '_maybe_fix_idanplus_youtube_id'):
             continue
-        for n in ast.walk(fn):
+        for n in _own(fn):
             if (isinstance(n, ast.Compare)
                     and isinstance(n.left, ast.Name) and n.left.id == 'st'
                     and len(n.ops) == 1 and isinstance(n.ops[0], ast.In)
@@ -360,7 +378,7 @@ def _returned_statuses():
     accident.
     """
     out = set()
-    for n in ast.walk(_ensure_patched_node()):
+    for n in _own(_ensure_patched_node()):
         if not isinstance(n, ast.Return):
             continue
         vals = ([n.value.body, n.value.orelse]
@@ -434,15 +452,23 @@ check('no status service.py warns about is a silent stand-down',
 # rules are blind to.
 #
 # `compile(src, path, 'exec')` uses that word legitimately and is the one
-# exemption: the mode argument of a call to compile(). Nothing else.
+# exemption: the mode argument of a call to compile(), positional or keyword.
+# Round 5 found the keyword spelling was NOT exempt, so an ordinary refactor
+# to `compile(src, path, mode='exec')` would have failed this check -- a guard
+# that fires on legitimate code is a guard somebody deletes. If the mode is
+# ever passed as a VARIABLE the literal sits somewhere this cannot follow and
+# it will fire; the message below says what to do about it.
 #
 # This is a regression guard, not a security boundary. Someone determined to
 # hide an exec can still build the name at runtime. The point is that nobody
 # reintroduces round 2's mechanism by accident.
 _tree = ast.parse(_src)
-_exempt = {id(c.args[2]) for c in ast.walk(_tree)
-           if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
-           and c.func.id == 'compile' and len(c.args) > 2}
+_compiles = [c for c in ast.walk(_tree)
+             if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
+             and c.func.id == 'compile']
+_exempt = ({id(c.args[2]) for c in _compiles if len(c.args) > 2}
+           | {id(k.value) for c in _compiles for k in c.keywords
+              if k.arg == 'mode'})
 _bad_names = sorted({n.id for n in ast.walk(_tree)
                      if isinstance(n, ast.Name)} & {'exec', 'eval'})
 _bad_attrs = sorted({n.attr for n in ast.walk(_tree)
@@ -452,7 +478,9 @@ _bad_strs = sorted({n.value for n in ast.walk(_tree)
                     and id(n) not in _exempt})
 check('NO_EXEC: the patcher never execs or evals, by any spelling',
       not (_bad_names or _bad_attrs or _bad_strs),
-      'name %s / attribute %s / string %s'
+      'name %s / attribute %s / string %s -- if a string here is the mode '
+      'argument of a legitimate compile() call, exempt it above rather than '
+      'deleting the check'
       % (_bad_names, _bad_attrs, _bad_strs))
 
 # A GENUINE UPSTREAM FIX: unrecognised shape, file untouched, and REPORTED.
