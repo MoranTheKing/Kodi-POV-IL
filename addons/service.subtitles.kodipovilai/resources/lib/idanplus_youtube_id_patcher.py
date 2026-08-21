@@ -30,9 +30,35 @@
 #     youtube.com/live/<ID>         -> <ID>      ok
 #     youtube.com/watch?v=<ID>      -> 'watch'   <- the whole bug
 #
-# The truncation at '?' removes exactly the part that holds the answer. Kan
-# evidently started handing out watch?v= links where it used to hand out embed
-# ones, and nothing on the add-on side could read them.
+# The truncation at '?' removes exactly the part that holds the answer.
+#
+# AND THE ADD-ON BUILDS THAT URL ITSELF, which is the part worth understanding
+# before touching this. Kan does not hand out links at all. Its mobile API
+# returns a BARE ID:
+#
+#     GET https://mobapi.kan.org.il/api/mobile/program?id=1073649
+#     entry[3]: id=1073666  content.type='youtube-id'  content.src='oRFeZUO5GVw'
+#
+# and kan.py's _mobStreamFromEntry wraps it:
+#
+#     if ctype == 'youtube-id' and src:
+#         return 'youtube', 'https://www.youtube.com/watch?v={0}'.format(src)
+#
+# then hands that to GetYouTube, which unwraps it back to 'watch'. The add-on
+# starts with a perfectly good id, constructs a URL around it, and then fails
+# to parse its own construction. A round trip that destroys the data.
+#
+# SO THIS IS NOT A REGRESSION AND NOT SOMETHING KAN CHANGED. Every Kan item of
+# type 'youtube-id' has always failed and always will until this is fixed --
+# verified against the live API: all five episodes of that program resolve to
+# 'watch' on stock and to their real ids once patched. (The trailer in the same
+# program is type 'video/hls' and goes down a different path entirely, which is
+# why one item in a list can play while the rest cannot.)
+#
+# An earlier version of this comment blamed Kan for moving from embed links to
+# watch links. That was wrong, and the owner caught it by pointing at a working
+# youtu.be link and asking why it did not match the diagnosis. The fix was
+# right; the story was not.
 #
 # THE FIX is one line before the return: if the url carries a v= parameter,
 # that is the id. Otherwise leave what was already computed alone.
