@@ -4362,6 +4362,119 @@ Raw by a few minutes; poll rather than assume.
   are served from the `gh-pages` branch, not from the release. See
   `APK_RELEASE.md`.
 
+### What shipped 0.2.503 / qf 0.1.548 / build 0.1.116 (note 603)
+
+Nothing from Kan 11 played in Idan Plus. The log named the cause without
+ambiguity: five YouTube player clients, five identical refusals, and the id in
+every one of them was the literal string `'watch'`.
+
+**Where it comes from.** `plugin.video.idanplus/resources/lib/common.py`'s
+`GetYouTube` reads the id out of the URL PATH and truncates at `'?'` -- which
+is exactly where the id lives in the ordinary `youtube.com/watch?v=` form.
+`youtu.be/<ID>`, `/embed/<ID>` and `/live/<ID>` work; `watch?v=<ID>` yields
+`'watch'`.
+
+**AND THE ADD-ON BUILDS THAT URL ITSELF, which the owner caught me getting
+wrong.** My first write-up said Kan had moved from embed links to watch links.
+The owner pointed at a working `youtu.be/oRFeZUO5GVw` and asked why, if that is
+the link, it did not already work. Decoding the actual request showed Kan hands
+out **no URL at all**: `mobapi.kan.org.il` returns `content.type='youtube-id'`
+with a BARE id in `content.src`, and `kan.py`'s `_mobStreamFromEntry` wraps it
+into `watch?v=<id>` before calling `GetYouTube`, which unwraps it back to
+`'watch'`. The add-on fails to parse its own construction. **The fix was right;
+the story was wrong** -- and the corrected story is stronger: this is not a
+regression and not something Kan changed. Every Kan item of that type has
+always failed.
+
+**The fix** is one inserted line, gated on "what stock extracted cannot be a
+YouTube id" -- eleven characters of YouTube's own charset. Not on
+`video_id == 'watch'`: review round 2 found `watch/?v=` leaves stock with an
+EMPTY string and `Watch?v=` leaves it `'Watch'`, both equally broken. The gate
+as written covers all three by construction and can never touch a url stock
+resolved correctly.
+
+**THE ANSWER TO "WHAT IF IDAN PLUS FIXES IT UPSTREAM": it stops, and says so
+once.** The anchor is the stock buggy body byte-for-byte. Changed function ->
+no match -> nothing written -> one WARNING per boot, which is the signal to
+retire the file. **Two cleverer mechanisms were built and both failed review**,
+and the module records them so the third person to have the idea does not
+rediscover it the hard way:
+
+  * round 1 read the function text for `v=|parse_qs|query`. A comment saying
+    "query the path", or a variable called `search_query`, made that true while
+    fixing nothing -- so a still-broken version was left broken and reported
+    with a status service.py deliberately does not warn about. Silently.
+  * round 2 EXECUTED the candidate function instead. The slice handed to `exec`
+    ran to the next top-level `def`, and on the real 4.0.2 tree that gap holds
+    a module-level statement -- so a third party's code would run inside OUR
+    service on every boot. And `except Exception` does not catch `SystemExit`:
+    a `sys.exit()` there would have aborted the whole startup-repair pass. Idan
+    Plus declares `reuselanguageinvoker`, so its crashes stay in its own
+    interpreter; running its code in ours handed it ours.
+
+**SEVEN VALIDATION ROUNDS, and after round 2 every single finding was in the
+TEST, not the patcher.** The pattern is worth naming because it recurred four
+times in four different guards: **a check that reads as though it verifies
+something and does not.** The warn-set check asserted membership, not equality,
+so dropping `'write_failed'` from service.py passed. Its parser sliced text to
+the first `)`, so a comment with a bracket truncated the set silently. The
+status collector missed `return 'a' if x else 'b'`, then -- after that fix --
+missed `result = 'x'; return result` and swept in a `.format()` template. The
+NO_EXEC comment claimed to cover `getattr(builtins, 'exec')` and did not.
+`ast.walk` descended into nested defs, so a refusal named the wrong function.
+Every one was found by executing a counter-example, never by reading.
+
+**AND THE RELEASE PREP FOUND A YEAR-OLD LEAK.** The build and the standalone
+share one `changelog.txt`, filtered for the standalone by
+`slim_changelog_text()`. This release's bullet names Idan Plus, which the
+standalone does not patch -- note 598's defect exactly -- and
+`test_standalone_changelog_scope.py`, written to prevent that recurrence,
+**passed**: it mapped filenames to host names through a hand-written `HOSTS`
+dict and then `if host is None: continue`, so a patcher for a host nobody had
+listed was never checked. Every `*_patcher.py` must now be classified, and
+`NOT_A_HOST` carries a product name that must itself be a filtered term --
+which immediately caught **NOX**, a skin whose name had never been filtered
+while Estuary, AF3 and FENtastic were, and whose two player bullets (0.2.260,
+0.2.262) had been reaching standalone users for a year.
+
+### PARKED: `slim_changelog_text()` cannot do its job with a term list
+
+Found while shipping 603, **not fixed**, because fixing it properly means
+re-deciding a year of user-visible release notes and doing that inside a
+release is how the opposite error gets made.
+
+The filter drops a bullet containing any of ~30 case-sensitive substrings. That
+mechanism is wrong in both directions and a review reproduced both against the
+real changelog:
+
+  * **Leaks.** `"Wizard"` is capitalised but the prose says "the wizard's
+    parser" -- 59 lowercase occurrences the term never sees, six of them in
+    surviving bullets. `fentastic_widget_patcher` and `pov_source_name_patcher`
+    are cited as lowercase identifiers. And several build-only bullets name
+    nothing at all on purpose, because they are written in plain language for
+    end users: *"The main video add-on no longer loses its background
+    service..."*, *"Two of the bundled add-ons stop offering a newer
+    version..."*, *"You are not asked to reinstall the whole application..."*.
+    **No term list can ever catch those.** ~14 bullets across 8 releases.
+  * **Over-suppression.** `"skin"` matches inside *a-skin-g* and inside
+    `resources/skins/`; `"build"` matches inside *builders* and *rebuilds*.
+    Four confirmed bullets about files the standalone genuinely ships
+    (`embedded_extract.py`, `darksubs_picker_label_patcher.py`, `gemini.py`,
+    `mkv_probe.py`) are hidden from the users who received them.
+
+**Word-boundary case-insensitive matching was measured and is NOT sufficient
+on its own.** It flips 19 bullets: 10 leaks closed and 7 false positives fixed,
+but it also un-drops v0.2.495 and v0.2.464 -- build-only bullets that are
+currently dropped BY ACCIDENT (`asking`, `rebuilds`) -- and newly drops a
+0.2.456 bullet about the extraction pace controller, which is standalone, for
+saying "the real debrid link" in a measurement note.
+
+**The real answer is to mark bullets rather than infer them.** A build-only
+bullet should say so where it is written, and the filter should read the mark;
+the term list can stay as a backstop that only ever ADDS drops. Retrofitting
+the mark to history is bounded work -- the analysis above already names most of
+the affected bullets -- but it is its own change, with its own review.
+
 ### What shipped 0.2.502 / qf 0.1.547 / build 0.1.115 (note 602)
 
 A field report of "AllDebrid says no results for movies and series". The log
