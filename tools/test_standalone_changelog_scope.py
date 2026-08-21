@@ -106,22 +106,38 @@ HOSTS = {
 # for a NEW host fails this test until somebody decides which it is. These
 # are not third-party add-ons a release note would name -- they are skins,
 # Kodi itself, and parts of the build.
+# prefix -> (what it is, the PRODUCT NAME a release note would use or None)
+#
+# THE SECOND HALF IS THE PART THAT MATTERS, and it is here because the first
+# version of this dict did not have it. "Not a third-party add-on" is not the
+# same as "nothing a bullet would name": NOX is a skin, so it landed in this
+# dict, and "NOX" was not among the filtered terms -- unlike Estuary, AF3 and
+# FENtastic, which are. Two bullets about the NOX player, 0.2.260 and 0.2.262,
+# had been reaching standalone users for a year, about a skin they do not
+# have. The review that found it was looking for exactly this and I was not.
+#
+# So anything with a name of its own must have that name filtered, whether it
+# is an add-on or not. None means there is no product name -- it is a part of
+# the build, or Kodi, or whichever skin happens to be running.
 NOT_A_HOST = {
-    'af3_': 'the AF3 skin',
-    'brand_': "the build's own branding",
-    'build_icons_': "the build's own icons",
-    'change_source_pause_': 'skin-side playback UI',
-    'choose_subs_rewire_': 'skin-side subtitle entry point',
-    'estuary_': 'the Estuary skin',
-    'favourites_': "the build's favourites",
-    'fentastic_': 'the FENtastic skin',
-    'hebrew_build_ui_': "the build's own UI",
-    'kodi_playlist_timeout_': 'Kodi itself',
-    'nox_': 'the Nox skin',
-    'recent_updates_tile_': "the build's home screen",
-    'skin_': 'whichever skin is active',
-    'update_nag_': "the build's updater",
-    'wizard_': 'the Wizard',
+    'af3_': ('the AF3 skin', 'AF3'),
+    'brand_': ("the build's own branding", None),
+    'build_icons_': ("the build's own icons", None),
+    'change_source_pause_': ('skin-side playback UI', None),
+    'choose_subs_rewire_': ('skin-side subtitle entry point', None),
+    'estuary_': ('the Estuary skin', 'Estuary'),
+    'favourites_': ("the build's favourites", 'favourites'),
+    'fentastic_': ('the FENtastic skin', 'FENtastic'),
+    'hebrew_build_ui_': ("the build's own UI", None),
+    'kodi_playlist_timeout_': ('Kodi itself', None),
+    'nox_': ('the Nox skin', 'Nox'),
+    'recent_updates_tile_': ("the build's home screen", None),
+    # deliberately None: this one is shipped standalone and patches whichever
+    # skin is running, so it has no product name of its own. 'skin' is in the
+    # terms list for its own reasons, which is a different decision.
+    'skin_': ('whichever skin is active', None),
+    'update_nag_': ("the build's updater", None),
+    'wizard_': ('the Wizard', 'Wizard'),
 }
 shipped, dropped, unclassified = set(), set(), []
 for fn in sorted(os.listdir(LIB)):
@@ -140,6 +156,27 @@ check('every patcher is classified as a host or knowingly as not-a-host',
       'no entry in HOSTS or NOT_A_HOST for %s -- if its host is a third-party '
       'add-on the standalone does not ship, a release note naming it will '
       'reach users who did not get the fix' % unclassified)
+
+# EXACTLY ONE PREFIX PER FILE. `next(...)` over a dict returns the first key
+# that matches, in insertion order, so a later, more specific prefix would be
+# silently absorbed by an earlier general one -- a future `pov_extra_` read as
+# `pov_`. Nothing matches twice today; this is here so nothing starts to.
+_prefixes = list(HOSTS) + list(NOT_A_HOST)
+_ambiguous = {fn: [k for k in _prefixes if fn.startswith(k)]
+              for fn in os.listdir(LIB) if fn.endswith('_patcher.py')}
+_ambiguous = {k: v for k, v in _ambiguous.items() if len(v) > 1}
+check('no patcher filename matches two prefixes', not _ambiguous,
+      'first-match-wins would pick one of these silently: %s' % _ambiguous)
+
+# Anything with a product name of its own must have that name filtered, skin
+# or add-on. This is the check NOX slipped past for a year.
+for _pfx, (_what, _name) in sorted(NOT_A_HOST.items()):
+    if _name is None:
+        continue
+    check('%s is %s, and its name is filtered' % (_pfx, _what),
+          _name in TERMS,
+          'a release note naming %s would reach users who do not have it'
+          % _name)
 
 check('the derivation found patchers on both sides of the line',
       bool(shipped) and bool(dropped),
@@ -179,6 +216,18 @@ check('the newest entry is the version actually being shipped',
 check('the full changelog still has everything (the filter is not in-place)',
       any(t in full for t in TERMS),
       'the BUILD changelog must keep the bullets the standalone drops')
+
+# AND THE OTHER DIRECTION, which the NOX review found by the same pass. Every
+# term added here silences whole bullets, and a term can be right about the
+# host it names and still catch a bullet that was never about that host.
+# Adding "Idan Plus" dropped 0.2.372 -- the live/IPTV autosub skip, an engine
+# feature the standalone genuinely ships -- because the bullet named Idan Plus
+# as the example in its exclusion list. That bullet was reworded; this pins
+# the outcome, so the next term that re-drops it fails instead of quietly
+# hiding a feature those users really did receive.
+check('the live/IPTV autosub skip still reaches standalone users',
+      'SKIPPED for live/IPTV' in slim,
+      'a skip term is hiding an engine feature the standalone ships')
 
 # --- SABOTAGE: the checks must be able to fail -----------------------------
 print()
