@@ -322,6 +322,7 @@ def _run_build_startup_repairs():
         # _maybe_patch_pov_build_content_logger -- RETIRED, see the function.
         _maybe_patch_pov_debrid_status,
         _maybe_guard_pov_debrid_handlers,
+        _maybe_fix_idanplus_youtube_id,
         _maybe_refresh_shared_sdh,
         _maybe_show_af3_first_launch_dialog,
         _maybe_show_debrid_status,
@@ -2014,6 +2015,51 @@ def _maybe_fix_pov_maincache_schema():
         try:
             kodi_utils.log(
                 'pov_maincache_schema_fix failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_fix_idanplus_youtube_id():
+    """Idan Plus hands YouTube the word "watch" instead of a video id.
+
+    A field log showed five YouTube player clients each refusing the same
+    request with "This video is unavailable", and the id in every one of them
+    was the literal string 'watch'. GetYouTube reads the id out of the URL
+    PATH and truncates at '?', which is exactly where it lives in the ordinary
+    youtube.com/watch?v= form.
+
+    And the add-on builds that url itself: Kan's mobile API returns a BARE id
+    and kan.py wraps it into watch?v= before handing it over, so GetYouTube
+    fails to unwrap its own construction. This is not a regression and not
+    something Kan changed -- every Kan item of that type has always failed.
+
+    The injected line only fires where the add-on produced something that
+    cannot be a YouTube id (eleven characters of YouTube's own charset), which
+    is the signature of the failure, so no url it already resolved correctly
+    can reach it. And when Idan Plus fixes this itself, the anchor stops
+    matching, nothing is touched, and the log says so once per boot -- which
+    is the signal to retire the patcher. Two cleverer mechanisms for deciding
+    WHY the shape changed were tried and both failed review; the module
+    records what they were and how.
+
+    DELIBERATELY NOT behind _skip_pov_patchers(). That switch says to leave
+    plugin.video.pov as its author shipped it; this writes to
+    plugin.video.idanplus, a different add-on, and gating it on the POV switch
+    would silently tie two unrelated decisions together.
+    """
+    try:
+        from resources.lib import idanplus_youtube_id_patcher, kodi_utils
+        st = idanplus_youtube_id_patcher.ensure_patched()
+        if st in ('unmatched', 'compile_failed', 'write_failed',
+                  'revert_failed', 'read_failed'):
+            kodi_utils.log(
+                'idanplus_youtube_id_patcher: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'idanplus_youtube_id_patcher failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass

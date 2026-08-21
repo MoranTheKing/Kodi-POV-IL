@@ -845,10 +845,20 @@ STANDALONE_SKIP_TERMS = (
         "Skin",
         "POV search",
         "quickfix",
-        # the three host add-ons the standalone neither ships nor patches
+        # the host add-ons the standalone neither ships nor patches
         "Umbrella",
         "MDBList",
         "POV",
+        "Idan Plus",
+        "Kan 11",
+        # NOX is a skin like Estuary and FENtastic, and unlike them it was
+        # never listed here. Two bullets about the NOX player -- 0.2.260 and
+        # 0.2.262 -- had been reaching standalone users for a year, about a
+        # skin they do not have. All three spellings, because the match is
+        # case-sensitive and the changelog uses all three.
+        "NOX",
+        "Nox",
+        "nox",
 )
 
 

@@ -1,3 +1,17 @@
+v0.2.503
+- Kan 11 items in Idan Plus play again. Nothing from that channel would start:
+  YouTube answered "This video is unavailable" for every one of them, five
+  different player clients in a row, because the id it was being asked for was
+  the literal word "watch". Idan Plus reads the video id out of the address
+  path, and in the ordinary youtube.com/watch?v= form the id is not in the
+  path -- it is in the part that gets cut off. The add-on builds that address
+  itself, from a bare id Kan hands it, and then fails to read back what it just
+  wrote. So this was never a Kan change and never a regression: those items
+  have never played. One line now reads the id from the right place, and only
+  where what was extracted cannot be an id at all, so every link the add-on
+  already opened correctly opens exactly as before. If Idan Plus fixes this on
+  its side, the fix simply stops applying and changes nothing.
+
 v0.2.502
 - AllDebrid sources that refused to play now say why. A report of "no results"
   turned out not to be a no-results condition at all: 70 sources were found,
@@ -1323,8 +1337,7 @@ v0.2.372
 - New: automatic subtitle search is now SKIPPED for live/IPTV playback --
   PVR channels, streams with no duration, and a configurable addon
   exclusion list (Settings -> engine; default: plugin.video.idanplus), so
-  channel zapping (e.g. Idan Plus) no longer triggers the Hebrew search
-  overlay.
+  channel zapping no longer triggers the Hebrew search overlay.
 
 v0.2.371
 - New: Gemini 3.5 Flash is now available in the model list (Settings ->
