@@ -304,8 +304,14 @@ def _own(node):
     attributed to ensure_patched. Round 5 reproduced that: the refusal below
     fired with a line number pointing at the wrong function, which is the kind
     of message that sends the next person to fix the wrong thing.
+
+    The function's BODY only, not its decorators, defaults or annotations --
+    those are code that runs at def time, in the enclosing scope, and have no
+    business being read as part of what the function does.
     """
-    stack = list(ast.iter_child_nodes(node))
+    stack = list(node.body
+                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                 else ast.iter_child_nodes(node))
     while stack:
         n = stack.pop()
         yield n
