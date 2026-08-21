@@ -275,7 +275,10 @@ HOSTS = {
     'skin.povil.nox': ('NOX_STOCK', ''),
     'service.subtitles.All_Subs': ('ALLSUBS_STOCK', ''),
     'plugin.program.kodipovilwizard': ('WIZARD_STOCK', ''),
-    'plugin.video.idanplus': ('IDANPLUS_STOCK', ''),
+    # 4.0.2 is what devices self-update to; GetYouTube is byte-identical
+    # to the 3.9.1 the build ships, so either measures the same verdict.
+    'plugin.video.idanplus': ('IDANPLUS_STOCK',
+                              _SCRATCH + 'idanplus402/plugin.video.idanplus'),
     'service.subtitles.all_subs_plus': ('ALLSUBS_PLUS_STOCK', ''),
 }
 DECLARED_HOSTS = set(HOSTS)
@@ -293,10 +296,19 @@ def host_version(path):
     repository.kodifitzwell, Umbrella through its own repo -- so a verdict is
     only worth what the tree it was measured against is worth. Printing the
     version is how a fixture that has quietly gone stale becomes visible.
+
+    ANCHOR ON `<addon`, NEVER ON A BARE version=. The obvious search finds the
+    `<?xml version="1.0"?>` prologue first and reports the host as 1.0 --
+    HANDOFF.md records that exact mistake being made in build_full_build.py,
+    and this function had it too. It went unnoticed because POV's and
+    Umbrella's addon.xml have no prologue; idanplus's does, and reported 1.0
+    for a 4.0.2 tree the moment it was added.
     """
     try:
-        head = open(os.path.join(path, 'addon.xml'), encoding='utf-8').read(400)
-        return re.search(r'version="([0-9.]+)"', head).group(1)
+        head = open(os.path.join(path, 'addon.xml'),
+                    encoding='utf-8-sig').read(600)
+        m = re.search(r'<addon[^>]*?version="([0-9.]+)"', head, re.S)
+        return m.group(1) if m else '?'
     except Exception:
         return '?'
 
@@ -326,6 +338,8 @@ def pin(stem, verdict, *markers):
 # --- upgrade cleanly: a bump reaches devices already carrying the old one ---
 pin('build_icons_patcher', 'UPGRADES',
     '_tiles_refresh_gen=2')
+pin('idanplus_youtube_id_patcher', 'UPGRADES',
+    'AI_SUBS_IDAN_YT_ID_v1')
 pin('hebrew_build_ui_patcher', 'UPGRADES',
     '_PREFS_SEED_VERSION=v1', '_subtitle_outline_migration_v1',
     '_ui_prefs_seeded=v1')

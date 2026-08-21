@@ -322,6 +322,7 @@ def _run_build_startup_repairs():
         # _maybe_patch_pov_build_content_logger -- RETIRED, see the function.
         _maybe_patch_pov_debrid_status,
         _maybe_guard_pov_debrid_handlers,
+        _maybe_fix_idanplus_youtube_id,
         _maybe_refresh_shared_sdh,
         _maybe_show_af3_first_launch_dialog,
         _maybe_show_debrid_status,
@@ -2014,6 +2015,37 @@ def _maybe_fix_pov_maincache_schema():
         try:
             kodi_utils.log(
                 'pov_maincache_schema_fix failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_fix_idanplus_youtube_id():
+    """Idan Plus hands YouTube the word "watch" instead of a video id.
+
+    A field log showed five YouTube player clients each refusing the same
+    request with "This video is unavailable", and the id in every one of them
+    was the literal string 'watch'. GetYouTube reads the id out of the URL
+    PATH and truncates at '?', which is exactly where it lives in the ordinary
+    youtube.com/watch?v= form -- so Kan 11 items stopped resolving when Kan
+    moved from embed links to watch links.
+
+    The injected line only speaks when there is a v= to read, so every url the
+    add-on already resolved correctly comes out identical. And it stands down
+    on its own if Idan Plus ships a fix: see _already_handles_v in the module.
+    """
+    try:
+        from resources.lib import idanplus_youtube_id_patcher, kodi_utils
+        st = idanplus_youtube_id_patcher.ensure_patched()
+        if st in ('unmatched', 'compile_failed', 'write_failed',
+                  'revert_failed', 'read_failed', 'no_function'):
+            kodi_utils.log(
+                'idanplus_youtube_id_patcher: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'idanplus_youtube_id_patcher failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
