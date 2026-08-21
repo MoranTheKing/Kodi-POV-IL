@@ -322,8 +322,16 @@ def best_pct(video_name, sub_names, stop_at=100, floor=0):
 # The most a branch can ever return. Used ONLY to skip work that provably
 # cannot change a maximum -- never to change what a branch returns. Each is
 # read straight off the branch below it: min(25, ...), min(35, ...),
-# min(40, ...); same-source tops out at 55+6+3+15 = 79 before its own cap; and
-# fuzzy at 10 + 55 = 65.
+# min(40, ...); same-source at 55+6+3+int(ratio*15); fuzzy at
+# int(10 + ratio*55).
+#
+# The last two are stated one HIGHER than they can actually reach, and that
+# is deliberate. difflib's ratio() returns 1.0 only for equal sequences, and
+# by the time either branch runs the identical-name case has already
+# returned -- so the real maxima are 78 and 64, measured over forty thousand
+# adversarial pairs. Rounding a ceiling UP is always safe here (it skips
+# less); rounding one down would silently lose a match. Round 11 measured
+# both, and the constants stay conservative on purpose.
 _CEIL_EDITION = 25
 _CEIL_SOURCE = 35
 _CEIL_PROPER = 40

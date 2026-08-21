@@ -1199,6 +1199,8 @@ def best_score(src_release, names, stop_at=100, floor=0):
     try:
         if not names or not src_release:
             return 0
+        if not isinstance(src_release, str) or not src_release.strip():
+            return 0
         rm = _release_match_mod()
         if rm is not None and hasattr(rm, 'best_pct'):
             try:
@@ -1208,6 +1210,15 @@ def best_score(src_release, names, stop_at=100, floor=0):
                 pass
         best = 0 if floor <= 0 else floor
         for n in names:
+            # SKIP WHAT best_pct SKIPS. _score has no type guard -- a truthy
+            # non-string entry raises inside re.sub -- and the old max() over
+            # a generator turned that into a flat 0 for the whole list, which
+            # quietly threw away a genuine match sitting next to it. Stopping
+            # early would have made that ORDER-DEPENDENT instead, which is
+            # worse than either. Review round 11 reproduced it; the two paths
+            # now refuse the same inputs.
+            if not isinstance(n, str) or not n.strip():
+                continue
             p = _score(src_release, n)
             if p > best:
                 best = p
