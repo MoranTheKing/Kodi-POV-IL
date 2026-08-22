@@ -29,6 +29,22 @@ v0.2.506
   activity means somebody is watching the screen, which makes it the worst
   possible moment. It now gives up instead, records that the switch is still
   owed, and does it at the next start.
+- Sources no longer arrive late, or come back empty when they exist. Two
+  reports on the same evening -- "the results take ages again" and "no sources
+  for a title that definitely has them" -- and two logs that say the same
+  thing in different words. To make a fix take effect the same evening the
+  build switches the video add-on off and on again, and it waits for the home
+  screen to be idle first. But every window that add-on puts up while it works
+  -- the search progress, the list of sources -- FLOATS over the home screen.
+  Start a title from a home-screen row and the home screen is still there
+  underneath, nothing is playing, no row is loading, and somebody reading a
+  list of sources is not pressing buttons. Every test for "idle" said yes
+  while the user was mid-search with a dialog in front of their face. One log
+  shows the switch landing on an open source list and then pulling the focus
+  back to the home screen; the other shows it killing a search seven seconds
+  in -- and that is the search reported as "no results". A dialog on screen is
+  now never a moment to do this, checked again in the last second before it
+  happens.
 - Add-ons that stopped updating themselves update again. Kodi keeps a table of
   add-ons excluded from automatic updates, and it writes rows into it by
   itself: an add-on whose ORIGIN repository stops answering has no version to
@@ -56,12 +72,21 @@ v0.2.506
   anything faster and must not be mistaken for having done so: it puts a
   number and a route on each press, so the next report of a slow build can be
   answered instead of guessed at.
-- A logo that has never once appeared now appears. The skin declares a
-  variable for the poster view's clear-logo whose two conditions are each
-  missing a closing bracket; Kodi cannot parse either, treats both as false,
-  and the variable has no fallback -- so it resolved to nothing, on every
-  device, from the day it was written. The build's own poster-view block is
-  its only user. Two brackets.
+- The logo in the player's on-screen display now draws. Under it, a pair of
+  images: the title's own logo, and the studio logo when the title has none.
+  Each is shown by a condition missing one closing bracket, so Kodi cannot
+  parse either, treats both as false, and draws NEITHER -- on every device, on
+  every title, since the day it was written. One of the two is meant to be
+  showing at all times. Also repaired, and honestly worth less: the same
+  mistake in the skin's poster-view logo variable, which is the line the log
+  actually complains about. That one changes nothing on screen, because the
+  block that would draw it is commented out in the skin -- somebody clearly
+  tried it, saw nothing (for this exact reason), and gave up. Un-commenting it
+  is a visible change nobody asked for, so it is left alone. Nineteen other
+  conditions in the same skin have the same defect and are deliberately not
+  touched: most are compound, where the bracket could close in two places that
+  mean different things, and repairing one blind would make something appear,
+  or something happen, that no user of this build has ever seen.
 - And a line of red that a device without Umbrella collected every sixty
   seconds, forever: asking Kodi whether an add-on is installed by trying to
   open it makes Kodi write "Unknown addon id" at error level before it

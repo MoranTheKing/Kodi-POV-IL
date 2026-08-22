@@ -216,8 +216,19 @@ def _patch_one(rel, anchor, is_error, error_expr):
     fit = _fitter(content)
     eol = '\r\n' if '\r\n' in content else '\n'
 
-    if MARKER in content:
+    # `MARKER in content` alone used to answer this, and it short-circuits: a
+    # file carrying the current block AND an orphan from some other version
+    # was reported unchanged, and the orphan stayed for good, unmentioned.
+    # It cannot arise from this module -- it reverts then injects, or fails
+    # without injecting -- but "cannot happen here" is not the same as "is
+    # not worth noticing in somebody else's file".
+    if MARKER in content and content.count(_MARKER_ANY) == 1:
         return 'unchanged'
+    if MARKER in content:
+        _log('{0}: carries more than one injected block; leaving it alone '
+             'rather than guessing which to remove'.format(rel),
+             level='WARNING')
+        return 'revert_failed'
 
     repatch = False
     if _MARKER_ANY in content:

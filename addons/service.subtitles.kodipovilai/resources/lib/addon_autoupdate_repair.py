@@ -117,6 +117,16 @@ RULE_NAMES = {
 # repository offers -- including when that repository offers nothing at all
 # because it has stopped answering, which is the dead-repo case a field log
 # from this build actually shows.
+#
+# AND ONE CASE THE ARGUMENT DOES NOT COVER, said rather than glossed. Kodi's
+# add-on browser can also install an older version straight from a
+# repository's version list, and that is a deliberate downgrade which also
+# writes rule 2. The table cannot tell the two apart -- both are just
+# (addon_id, 2) -- so somebody who pinned a build add-on to an older version
+# that way has it undone here. Nobody has reported doing it, the log line
+# names every rule it clears so it is never silent, and the alternative is
+# leaving the dead-repo case unfixed for everyone; but it is a real cost, not
+# an imaginary one.
 MACHINE_RULES = (2,)
 
 UPDATE_MODE_SETTING = 'general.addonupdates'
@@ -347,6 +357,7 @@ def _mark_seeded():
 def ensure_repaired():
     """Idempotent. Never raises. Returns a short status string."""
     out = []
+    fixed = False
 
     # -- filter 1: the mode
     #
@@ -378,10 +389,22 @@ def ensure_repaired():
             out.append('mode=%s:left' % mode)
         elif _set_update_mode(0):
             _log('set add-on updates back to "install automatically"')
+            fixed = True
             out.append('mode=%s:fixed' % mode)
         else:
             out.append('mode=%s:failed' % mode)
-    if mode is not None and not _seeded():
+    # SEEDED ONLY WHEN SOMETHING WAS ACTUALLY SETTLED. Two rounds of review
+    # found two different ways this line burned the one-shot for nothing.
+    # First it ran unconditionally, so a JSON-RPC READ that failed counted as
+    # a repair. Then it ran whenever the mode had been read -- so a WRITE that
+    # failed counted too, and a device whose settings store refuses the write
+    # was abandoned after a single attempt and warned at, every boot, forever.
+    #
+    # The marker means "this device has had its one automatic correction".
+    # A device that is already correct has had it. A device we corrected has
+    # had it. A device we could not read, or could not write to, has not, and
+    # gets another try tomorrow.
+    if not _seeded() and (mode == 0 or fixed):
         _mark_seeded()
 
     # -- filter 2: the pins

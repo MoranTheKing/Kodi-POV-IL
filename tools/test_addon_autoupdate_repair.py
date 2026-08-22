@@ -347,6 +347,27 @@ mod9, state9 = load(d9, mode=1, set_ok=False)
 st9 = mod9.ensure_repaired()
 check('a write that does not take is reported as failed, not as fixed',
       'failed' in st9, st9)
+# AND IT DOES NOT COUNT AS THE ONE CORRECTION EITHER. This checked only the
+# status string, so the second way of burning the marker for nothing lived
+# right underneath it: the read succeeded, the WRITE failed, and the marker
+# went down anyway -- a device whose settings store refuses the write was
+# abandoned after one attempt and warned at every boot forever.
+check('...and the one-shot marker is not burned by it',
+      '_addon_update_mode_seeded' not in state9['settings'],
+      str(state9['settings']))
+mod9b, state9b = load(d9, mode=1, settings=dict(state9['settings']))
+st9b = mod9b.ensure_repaired()
+check('...so the next boot tries again', state9b['set_calls'] == [0],
+      '%s / %s' % (state9b['set_calls'], st9b))
+
+# a device that was ALREADY correct has had its one correction; it must not
+# keep re-checking forever.
+d9c, _ = make_db([])
+mod9c, state9c = load(d9c, mode=0)
+mod9c.ensure_repaired()
+check('a device already correct is marked seeded',
+      state9c['settings'].get('_addon_update_mode_seeded') == 'v1',
+      str(state9c['settings']))
 
 
 # --- 4. the managed set is real --------------------------------------------
