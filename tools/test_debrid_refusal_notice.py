@@ -26,6 +26,7 @@ it saves.
 
 Run: python3 tools/test_debrid_refusal_notice.py
 """
+import ast
 import importlib.util
 import io
 import os
@@ -157,6 +158,45 @@ check('the extra request is paid only when there is no number',
 check('...and only for a service the user actually connected',
       _src.index('_is_connected(addon, service)')
       < _src.index('refused = _refusal(service)'))
+
+# --- and none of it may stand in front of the subtitle service -------------
+# THE ONE REAL WEAKNESS THE REVIEW FOUND. This asks four services about the
+# account over the network, through POV's client, and since 0.2.505 asks a
+# second question of any that could not answer the first. POV bounds each
+# request at 10-20s, so it cannot hang outright -- but the arithmetic reaches
+# minutes on a bad night, and it used to run INLINE as a step of the startup
+# repair pass, whose loop has no per-step budget. Everything after it waited,
+# including the step that puts Hebrew subtitles on screen by itself.
+print()
+print('=== a subscription toast never delays the subtitle service ===')
+_svc = io.open(os.path.join(ADDON, 'service.py'), encoding='utf-8').read()
+_tree = ast.parse(_svc)
+_fn = [f for f in ast.walk(_tree) if isinstance(f, ast.FunctionDef)
+       and f.name == '_maybe_show_debrid_status']
+check('the startup step was found', len(_fn) == 1)
+if _fn:
+    _threads = [n for n in ast.walk(_fn[0]) if isinstance(n, ast.Call)
+                and isinstance(n.func, ast.Attribute)
+                and n.func.attr == 'start']
+    check('it starts a thread and returns', len(_threads) == 1)
+    _daemon = [k for n in ast.walk(_fn[0]) if isinstance(n, ast.Call)
+               for k in n.keywords if k.arg == 'daemon']
+    check('...a daemon one, so quitting Kodi is never held up',
+          len(_daemon) == 1)
+    _inline = [n for n in ast.walk(_fn[0]) if isinstance(n, ast.Call)
+               and isinstance(n.func, ast.Attribute)
+               and n.func.attr == 'maybe_notify']
+    _nested = [f.name for f in ast.walk(_fn[0])
+               if isinstance(f, ast.FunctionDef) and f is not _fn[0]]
+    check('the network work happens inside the thread, not before it',
+          len(_inline) == 1 and len(_nested) == 1
+          and any(isinstance(n, ast.Call)
+                  and isinstance(n.func, ast.Attribute)
+                  and n.func.attr == 'maybe_notify'
+                  for f in ast.walk(_fn[0])
+                  if isinstance(f, ast.FunctionDef) and f is not _fn[0]
+                  for n in ast.walk(f)),
+          'a call outside the worker blocks the pass again')
 
 print()
 print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')

@@ -40,6 +40,21 @@ was satisfied, while `reload_if_patched()` read it on a path that ran first.
 The named checks at the bottom cover that one instance; the scan does not
 generalise it, and pretending otherwise would be the same mistake again.
 
+It misses one more, found by the review: CPython runs an implicit `del name`
+at the end of every `except E as name:` block, so reading that name after the
+block is a guaranteed NameError whenever the handler fired -- and symtable
+records it as an ordinary local assignment with no notion of the auto-del. No
+such pattern exists in this tree today.
+
+And it can be WRONG the other way, which is worse, because a false positive
+blocks a legitimate change. A file using `from x import *` and then reading a
+name that star-import provides is flagged as undefined, because symtable
+cannot see through the star. The tree's one star-import lives in the vendored
+pyxbmct, which passes today only because it happens to re-export through
+__all__ string literals rather than reading such a name -- an accident of
+style, not a property. pyxbmct is skipped for that reason, alongside the other
+vendored trees.
+
 WHAT IS EXEMPT, and why each one:
   * vendored third-party under subs_engine/_libs -- not ours to fix;
   * pool.py -- not read by anything here, deliberately;
@@ -71,7 +86,8 @@ ALLOWED = {
         '# pytype: disable=name-error.',
 }
 
-SKIP_DIRS = ('__pycache__', os.path.join('subs_engine', '_libs'))
+SKIP_DIRS = ('__pycache__', os.path.join('subs_engine', '_libs'),
+             'pyxbmct')
 SKIP_FILES = ('pool.py',)
 
 FAIL = []
