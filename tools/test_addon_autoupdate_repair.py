@@ -95,7 +95,8 @@ def origins_in(path):
     return rows
 
 
-def load(db_dir, mode=0, settings=None, set_ok=True):
+def load(db_dir, mode=0, settings=None, set_ok=True,
+         repo='on', disable_ok=True):
     """The module with a fake Kodi. Returns (module, state)."""
     state = {'log': [], 'mode': mode, 'set_calls': [],
              'settings': dict(settings or {})}
@@ -105,9 +106,23 @@ def load(db_dir, mode=0, settings=None, set_ok=True):
         method, params = req.get('method'), req.get('params') or {}
         if method == 'Settings.GetSettingValue':
             return _json.dumps({'result': {'value': state['mode']}})
+        if method == 'Addons.GetAddonDetails':
+            # repo: 'on' installed+enabled | 'off' installed+disabled
+            #       'absent' -> Kodi answers an error, as it does for an
+            #       add-on it does not know
+            state.setdefault('asked', []).append(params.get('addonid'))
+            if repo == 'absent':
+                return _json.dumps(
+                    {'error': {'code': -32602, 'message': 'Invalid params.'}})
+            return _json.dumps({'result': {'addon': {
+                'addonid': params.get('addonid'),
+                'enabled': repo != 'off'}}})
         if method == 'Addons.SetAddonEnabled':
             if params.get('enabled') is False:
                 state.setdefault('disabled', []).append(params.get('addonid'))
+            if not disable_ok:
+                return _json.dumps(
+                    {'error': {'code': -32100, 'message': 'Failed.'}})
             return _json.dumps({'result': 'OK'})
         if method == 'Settings.SetSettingValue':
             state['set_calls'].append(params.get('value'))
@@ -479,6 +494,109 @@ if best:
           not missing,
           'not in MANAGED and not one of the two pinned on purpose: %s'
           % missing)
+
+
+
+# --- the dead repository is switched off, and a failure is not swallowed ----
+# THE REVIEW FINDING. The disable used to live inside the `elif origins:`
+# branch, so it was only attempted while add-ons were STILL registered to the
+# dead repo -- and the clear one line above is what stops that being true. Make
+# SetAddonEnabled fail on the same boot the clear succeeds and the old code
+# logged nothing, never retried, and left Kodi polling a 404 index hourly for
+# ever. These four cases are that finding, pinned.
+print()
+print('=== switching the dead repository off ===')
+
+_d, _p = make_db([], installed=[('skin.fentastic', DEAD),
+                                ('plugin.video.pov', '')])
+_m, _st = load(_d, repo='on', disable_ok=False)
+_out = _m.ensure_repaired()
+check('a disable that FAILS is reported, not swallowed',
+      any('could not switch off' in l and 'WARNING' in l for l in _st['log']),
+      str([l for l in _st['log'] if 'switch' in l]))
+check('...and the origins were still cleared', 'cleared_1' in _out, _out)
+# the next boot: origins are empty now, which is exactly when the old code
+# stopped trying.
+_m2, _st2 = load(_d, repo='on', disable_ok=False)
+_m2.ensure_repaired()
+check('...and the NEXT boot tries the disable again',
+      DEAD in (_st2.get('disabled') or []),
+      'never retried once the origins were clean')
+check('...and warns again, so it cannot rot silently',
+      any('could not switch off' in l for l in _st2['log']))
+
+_m3, _st3 = load(make_db([], installed=[('skin.fentastic', DEAD)])[0],
+                 repo='on', disable_ok=True)
+_m3.ensure_repaired()
+check('a disable that WORKS is reported', DEAD in (_st3.get('disabled') or [])
+      and any('switched off' in l for l in _st3['log']))
+
+_m4, _st4 = load(make_db([], installed=[('skin.fentastic', DEAD)])[0],
+                 repo='absent')
+_m4.ensure_repaired()
+check('a device that never had the repository writes nothing',
+      not _st4.get('disabled'))
+check('...and says nothing about it either',
+      not any('switch' in l for l in _st4['log']), str(_st4['log']))
+
+_m5, _st5 = load(make_db([], installed=[('skin.fentastic', DEAD)])[0],
+                 repo='off')
+_m5.ensure_repaired()
+check('a repository already switched off is left alone',
+      not _st5.get('disabled'))
+check('...silently, because nothing is wrong',
+      not any('switch' in l for l in _st5['log']), str(_st5['log']))
+
+
+# --- a database Kodi is writing to must not hold up the startup pass --------
+# Four connections, each able to burn its own busy-timeout, on the thread that
+# also starts the subtitle service. Bounded to ONE wait: the first read that
+# times out ends the pass, and the next start does the whole thing.
+print()
+print('=== a locked database costs one wait, not four ===')
+import sqlite3 as _sq
+import time as _t
+_d, _p = make_db([('plugin.video.pov', 2)],
+                 installed=[('skin.fentastic', DEAD)])
+_hold = _sq.connect(_p, timeout=1)
+_hold.execute('BEGIN EXCLUSIVE')
+try:
+    _m, _st = load(_d)
+    _t0 = _t.time()
+    _out = _m.ensure_repaired()
+    _took = _t.time() - _t0
+finally:
+    _hold.rollback()
+    _hold.close()
+check('a locked database is reported, not crashed through',
+      'unreadable' in _out, _out)
+check('...and the pass stops there instead of paying the wait again',
+      'rules=' not in _out, _out)
+check('...costing about one timeout, not four',
+      _took < _m._DB_TIMEOUT * 2 + 1,
+      'took %.1fs with _DB_TIMEOUT=%s' % (_took, _m._DB_TIMEOUT))
+check('...and the repair still works once the lock is gone',
+      'cleared_1' in load(_d)[0].ensure_repaired())
+
+
+# --- more than one dead origin ---------------------------------------------
+print()
+print('=== the dead-origin list is a list ===')
+_second = 'repository.somethingElseThatDied'
+_d, _p = make_db([], installed=[('skin.fentastic', DEAD),
+                                ('plugin.video.idanplus', _second),
+                                ('plugin.video.pov', 'repository.kodifitzwell')])
+_m, _st = load(_d)
+_m.DEAD_ORIGINS = (DEAD, _second)
+_out = _m.ensure_repaired()
+check('both dead origins are cleared in one pass', 'cleared_2' in _out, _out)
+check('...and both repositories are switched off',
+      set(_st.get('disabled') or []) == {DEAD, _second},
+      str(_st.get('disabled')))
+_rows = dict(origins_in(_p))
+check('...and a LIVE origin is still untouched',
+      _rows.get('plugin.video.pov') == 'repository.kodifitzwell',
+      str(_rows))
 
 
 for d in _SCRATCH:

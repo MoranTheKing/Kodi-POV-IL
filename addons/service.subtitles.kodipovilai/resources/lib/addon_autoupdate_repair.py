@@ -158,6 +158,23 @@ MACHINE_RULES = (2,)
 # build updates them directly, but all of which are pinned by it.
 DEAD_ORIGINS = ('repository.KodiRealDebridIsrael',)
 
+# HOW LONG TO WAIT FOR A DATABASE KODI IS ALSO USING.
+#
+# This runs INLINE on the service thread, during the startup pass, while
+# Kodi has the same Addons33.db open. Four separate connections are made
+# (read_origins, _clear_origins, read_rules, _clear_rules) and each can
+# independently burn its whole busy-timeout under contention -- a review
+# held a competing write open and measured the full budget being spent, four
+# times over. Nothing corrupts and the status string stays honest, but at 5s
+# each that is a 20-second worst case added to a pass this codebase
+# elsewhere describes as unbudgeted and timing-sensitive.
+#
+# 2s, and the pass gives up for this boot the moment the FIRST read times
+# out. A database that is busy right now will not be less busy three
+# statements later, and the repair is idempotent -- the next start does it.
+# Worst case is now one wait, not four.
+_DB_TIMEOUT = 2
+
 UPDATE_MODE_SETTING = 'general.addonupdates'
 UPDATE_MODE_NAMES = {
     0: 'install automatically',
@@ -321,7 +338,7 @@ def read_rules(path):
         return None
     conn = None
     try:
-        conn = sqlite3.connect(path, timeout=5)
+        conn = sqlite3.connect(path, timeout=_DB_TIMEOUT)
         rows = conn.execute(
             'SELECT addonID, updateRule FROM update_rules').fetchall()
         return [(str(a or ''), int(r or 0)) for a, r in rows]
@@ -348,7 +365,7 @@ def _clear_rules(path, victims):
         return 0
     conn = None
     try:
-        conn = sqlite3.connect(path, timeout=5)
+        conn = sqlite3.connect(path, timeout=_DB_TIMEOUT)
         cur = conn.cursor()
         gone = 0
         for addon_id, rule in victims:
@@ -379,7 +396,7 @@ def read_origins(path, origins):
         return None
     conn = None
     try:
-        conn = sqlite3.connect(path, timeout=5)
+        conn = sqlite3.connect(path, timeout=_DB_TIMEOUT)
         marks = ','.join('?' for _ in origins)
         rows = conn.execute(
             'SELECT addonID, origin FROM installed WHERE origin IN (%s)'
@@ -402,7 +419,7 @@ def _clear_origins(path, origins):
         return 0
     conn = None
     try:
-        conn = sqlite3.connect(path, timeout=5)
+        conn = sqlite3.connect(path, timeout=_DB_TIMEOUT)
         cur = conn.cursor()
         marks = ','.join('?' for _ in origins)
         cur.execute("UPDATE installed SET origin = '' WHERE origin IN (%s)"
@@ -428,13 +445,35 @@ def _disable_addon(addon_id):
     Disabled rather than deleted: deleting somebody else's add-on directory is
     not a repair, it is a decision, and a disabled repository is one click
     from coming back if it ever returns.
+
+    FOUR ANSWERS, NOT TWO, because the caller now runs this on EVERY start,
+    and a two-state answer would make it warn every boot on the very devices
+    where nothing is wrong:
+
+        'absent'    the repository is not installed here -- say nothing
+        'already'   installed and already switched off -- say nothing
+        True        it was on, and this switched it off
+        False       it was on, and the switch failed -- worth a warning
+
+    Asking first also means a device that is already correct performs no
+    write at all, which is the common case from the second boot onward.
     """
+    data = _jsonrpc('Addons.GetAddonDetails',
+                    {'addonid': addon_id, 'properties': ['enabled']})
+    if not isinstance(data, dict) or 'error' in data:
+        # Kodi answers an unknown add-on with an error. That is the normal
+        # state on a device that never had this repository, and it is not a
+        # failure of anything.
+        return 'absent'
+    details = (data.get('result') or {}).get('addon') or {}
+    if details.get('enabled') is False:
+        return 'already'
     data = _jsonrpc('Addons.SetAddonEnabled',
                     {'addonid': addon_id, 'enabled': False})
     if not isinstance(data, dict):
         return False
     result = data.get('result')
-    return result is True or result == 'OK'
+    return True if (result is True or result == 'OK') else False
 
 
 def _seeded():
@@ -520,19 +559,39 @@ def ensure_repaired():
     # Clearing the pins treats the symptom; this is the cause.
     origins = read_origins(path, DEAD_ORIGINS)
     if origins is None:
+        # BUSY OR BROKEN, EITHER WAY NOT NOW. The commonest reason a read of
+        # this database fails is that Kodi is writing to it, and the next
+        # three statements would each pay the same wait for the same reason.
+        # Everything here is idempotent, so the cheapest correct answer is to
+        # stop and let the next start do the whole thing.
         out.append('origins=unreadable')
+        return ', '.join(out)
     elif origins:
         _log('these add-ons are registered to a repository that no longer '
              'answers, which is what keeps pinning them: {0}'.format(
                  ', '.join(sorted(a for a, _o in origins))), level='WARNING')
         cleared = _clear_origins(path, DEAD_ORIGINS)
         out.append('origins=%d:cleared_%d' % (len(origins), cleared))
-        for repo_id in DEAD_ORIGINS:
-            if _disable_addon(repo_id):
-                _log('switched off {0}; Kodi will stop retrying its index '
-                     'every hour'.format(repo_id))
     else:
         out.append('origins=none')
+    # OUTSIDE THE `elif`, ON PURPOSE. This used to sit inside the branch above,
+    # so it was only ever attempted while add-ons were STILL registered to the
+    # dead repository -- and the clear that ran one line earlier is what makes
+    # that stop being true. A review made SetAddonEnabled fail on the same boot
+    # the clear succeeded: the origins were fixed, the disable failure was not
+    # logged at all (every other failure here logs a WARNING; this one had no
+    # else), and from the next boot onward `origins` was empty so it was never
+    # retried. The dead index then gets polled hourly for ever, with nothing in
+    # the log saying why. Retried every boot now, and the failure is named.
+    for repo_id in DEAD_ORIGINS:
+        st = _disable_addon(repo_id)
+        if st is True:
+            _log('switched off {0}; Kodi will stop retrying its index '
+                 'every hour'.format(repo_id))
+        elif st is False:
+            _log('could not switch off {0}; Kodi will keep retrying its dead '
+                 'index, and this will be tried again at the next start'
+                 .format(repo_id), level='WARNING')
     rules = read_rules(path)
     if rules is None:
         out.append('rules=unreadable')

@@ -603,6 +603,93 @@ check('...and only with False, never re-arming itself',
       all(a.value is False for c in _clears for a in c.args
           if isinstance(a, ast.Constant)))
 
+
+# --- switching POV off must be PROVED, not assumed ------------------------
+# _set_enabled read `'"error"' not in reply`, which calls an EMPTY reply a
+# success. That was harmless while nobody looked at the answer; it stopped
+# being harmless when _run_cycle started refusing to claim a cycle on False,
+# because a silent empty reply would then mean "we switched POV off" for a
+# switch that never happened -- POV stays resolvable, the debt is cleared, and
+# the patch never lands, which is the exact bug the return check was added to
+# prevent. Executed against the real function, not read.
+print()
+print('=== a JSON-RPC call that answered nothing did not succeed ===')
+
+
+class _RPC(object):
+    def __init__(self, reply):
+        self.reply, self.seen = reply, []
+
+    def executeJSONRPC(self, payload):
+        self.seen.append(payload)
+        if isinstance(self.reply, Exception):
+            raise self.reply
+        return self.reply
+
+
+_m = load(FakeKodi())
+for label, reply, want in (
+        ('a real success', '{"id":1,"jsonrpc":"2.0","result":"OK"}', True),
+        ('an empty string', '', False),
+        ('None', None, False),
+        ('an error envelope',
+         '{"id":1,"jsonrpc":"2.0","error":{"code":-32602,"message":"no"}}',
+         False),
+        ('a reply with neither member', '{"id":1,"jsonrpc":"2.0"}', False),
+        ('a raising call', RuntimeError('boom'), False)):
+    _m.xbmc = _RPC(reply)
+    got = _m._set_enabled(False)
+    check('%s -> %s' % (label, want), got is want, 'got %r' % got)
+
+_m.xbmc = _RPC('{"id":1,"jsonrpc":"2.0","result":"OK"}')
+_m._set_enabled(True)
+check('...and it asks about POV, with the flag it was given',
+      'plugin.video.pov' in _m.xbmc.seen[0]
+      and '"enabled": true' in _m.xbmc.seen[0].replace('True', 'true'),
+      _m.xbmc.seen[0])
+
+
+# --- a debt that can never be paid must eventually shout ------------------
+# THE REVIEW'S FAIR QUESTION about the new "never over a dialog" rule: what
+# happens on a device where the quiet moment never comes? The cycle is
+# deferred, the next start defers it again, and nothing in the log reads as a
+# problem -- for ever. The owed file now carries a count and the line stops
+# being INFO once it is clearly not a coincidence.
+print()
+print('=== an owed cycle that keeps failing stops whispering ===')
+_dir = tempfile.mkdtemp(prefix='povowed-')
+try:
+    _m = load(FakeKodi())
+    _m._owed_path = lambda: os.path.join(_dir, 'owed.txt')
+    _levels = []
+    _m._log = lambda msg, level='INFO': _levels.append((level, msg))
+    check('a fresh device owes nothing', _m._owed_attempts() == 0)
+    for n in range(1, _m._OWED_SHOUT_AFTER + 2):
+        _levels[:] = []
+        _m._note_owed_attempt('a dialog is on screen')
+        want = 'WARNING' if n >= _m._OWED_SHOUT_AFTER else 'INFO'
+        check('attempt %d is logged at %s' % (n, want),
+              _levels and _levels[-1][0] == want,
+              str(_levels[-1] if _levels else None))
+        check('...and the count survives to the next start',
+              _m._owed_attempts() == n, str(_m._owed_attempts()))
+    check('the warning says how many starts it has been',
+          str(_m._OWED_SHOUT_AFTER) in _levels[-1][1]
+          or str(_m._OWED_SHOUT_AFTER + 1) in _levels[-1][1],
+          _levels[-1][1])
+    check('...and the debt itself is still owed', _m.cycle_owed() is True)
+    # An owed file from a release that did not write a count reads as zero
+    # rather than raising, so an upgrade does not lose the debt.
+    with open(os.path.join(_dir, 'owed.txt'), 'w', encoding='utf-8') as _f:
+        _f.write('plugin.video.pov\n')
+    check('a file from an older release reads as zero, not as an error',
+          _m._owed_attempts() == 0 and _m.cycle_owed() is True)
+    _m._mark_owed(False)
+    check('paying the debt clears the count with it',
+          _m._owed_attempts() == 0 and _m.cycle_owed() is False)
+finally:
+    shutil.rmtree(_dir, ignore_errors=True)
+
 print()
 print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')
 sys.exit(1 if FAIL else 0)

@@ -25,12 +25,19 @@ Both end at an empty screen. POV already draws the distinction that fixes
 this -- Real-Debrid and AllDebrid checks are labelled 'Unchecked', which that
 filter keeps -- it just never applies it to a check that did not happen.
 
-WHAT THIS PINS, and section 2 is the point: the real block is lifted OUT of
-the file on disk, stock and patched, and EXECUTED. Stock must demonstrate the
-bug first -- a late thread in, an empty list out -- before the patched build
-is allowed to claim it fixes it. And every case where the debrid DID answer
-must come out byte-identical to stock, because this is a fix for the failure
-path and nothing else.
+WHAT THIS PINS, and section 2 is the point: the block is lifted OUT of a file
+on disk and EXECUTED. Stock must demonstrate the bug first -- a late thread in,
+an empty list out -- before the patched build is allowed to claim it fixes it.
+And every case where the debrid DID answer must come out byte-identical to
+stock, because this is a fix for the failure path and nothing else.
+
+HOW REAL "REAL" IS, said plainly. The PATCHED side is always the true file the
+patcher just wrote. The STOCK side is the real tree when POV_STOCK is set or the
+session's stock copy exists, and the transcribed FIXTURES otherwise -- and
+section 0 only proves those are verbatim when a real tree IS present. So on a
+machine with no stock POV this suite still executes real code, but its
+guarantee against future POV drift is the weaker one. The banner printed at the
+top says which of the two ran.
 
 Run: python3 tools/test_pov_debrid_timeout.py
 """
@@ -347,14 +354,14 @@ check('...and POV\'s own filter shows every one of them',
 # THE SECOND ROAD TO THE SAME SCREEN. The thread finished -- because the HTTP
 # request timed out INSIDE it and modules/debrid.py swallowed the error -- and
 # said "nothing cached". Stock believes it.
-failed = [Fut('premiumize', result=None)]
+failed = [Fut('premiumize', result=())]
 s_built, s_shown = play(stock_run, [Fut('premiumize', result=[])])
 p_built, p_shown = play(patched_run, failed)
 check('STOCK: a failed check is read as "none of these are cached"',
       marks(s_built) == ['Uncached premiumize'], str(marks(s_built)))
 check('...and the default filter then deletes all of them',
       s_shown == [], '%d shown' % len(s_shown))
-check('PATCHED: a failed check (None) is read as "we could not check"',
+check('PATCHED: a failed check (the sentinel) is "we could not check"',
       marks(p_built) == ['Unchecked premiumize'], str(marks(p_built)))
 check('...and they are shown', len(p_shown) == len(TORRENTS))
 
@@ -498,7 +505,8 @@ for label, boom in (('a refusal envelope (KeyError)', KeyError('response')),
     p = patched_cc(Chk(reply=boom))
     check('STOCK: %s comes back as an empty cached list' % label, s == [],
           repr(s))
-    check('PATCHED: %s comes back as None' % label, p is None, repr(p))
+    check('PATCHED: %s comes back as the empty-tuple sentinel' % label,
+          p == () and isinstance(p, tuple), repr(p))
     check('...and says so in the log, naming the provider',
           len(LOGGED) == 1 and 'pm' in LOGGED[0] and 'KODI_POV_IL' in LOGGED[0],
           str(LOGGED))
@@ -526,32 +534,30 @@ check('the rd/ad branch keeps stock behaviour exactly',
 # AND THE JOIN: a None from cache_check must survive the trip into sources.py.
 built, shown = play(patched_run, [Fut('premiumize',
                                       result=patched_cc(Chk(reply=boom)))])
-check('the None reaches sources.py and becomes a visible source list',
+check('the sentinel reaches sources.py and becomes a visible list',
       marks(built) == ['Unchecked premiumize'] and len(shown) == len(TORRENTS))
 
 
-# --- 4. why the order exists, and what happens when it cannot be kept ------
-# The debrid.py half is not safe on its own, and this proves it rather than
-# asserting it: a None reply through the STOCK block evaluates `i['hash'] in
-# None`, which is a TypeError inside the generator, which in real POV lands in
-# `except: notification(32574)` -- an error toast and an empty list, i.e.
-# worse than the bug. So sources.py goes first, and debrid.py comes back out
-# if sources.py is not carrying the fix.
+# --- 4. the two halves are independent, and that is the point --------------
+# THE FIRST DRAFT WAS NOT. It had cache_check `return None`, which unpatched
+# sources.py evaluates as `i['hash'] in None` -- TypeError, into
+# `except: notification(32574)`: an error toast AND an empty list, worse than
+# the bug. A review reached that state without any bug in the module at all:
+# POV updates, rewriting sources.py's block but not debrid.py's six lines; the
+# next pass gets `unmatched` and is killed before it can revert debrid.py.
+#
+# The sentinel is an empty TUPLE instead, so the half-applied state is not a
+# failure mode at all. This section runs the real patched debrid.py against the
+# real UNPATCHED sources.py and asserts it is byte-identical to stock.
 print()
-print('=== the two halves are ordered, and half-applied is undone ===')
-try:
-    play(stock_run, [Fut('premiumize', result=None)])
-except TypeError:
-    check('a None reply through STOCK sources.py raises -- hence the order',
-          True)
-else:
-    check('a None reply through STOCK sources.py raises -- hence the order',
-          False, 'it did not raise, so the ordering note is wrong')
+print('=== a half-applied pair behaves exactly like no patch at all ===')
 
 STOCK_TEXT = {rel: _read(STOCK, rel) if os.path.isdir(STOCK)
               else FIXTURES[rel]
               for rel in ('resources/lib/modules/sources.py',
                           'resources/lib/modules/debrid.py')}
+SRC_REL = 'resources/lib/modules/sources.py'
+DBR_REL = 'resources/lib/modules/debrid.py'
 
 
 def write(root, rel, text):
@@ -560,55 +566,58 @@ def write(root, rel, text):
         f.write(text)
 
 
-SRC_REL = 'resources/lib/modules/sources.py'
-DBR_REL = 'resources/lib/modules/debrid.py'
+boom = KeyError('response')
+sentinel = patched_cc(Chk(reply=boom))          # what patched debrid.py returns
+legacy = stock_cc(Chk(reply=boom))              # what stock debrid.py returns
+try:
+    half_built, half_shown = play(stock_run, [Fut('premiumize', result=sentinel)])
+    raised = None
+except BaseException as e:                       # noqa: BLE001 - that is the test
+    raised = e
+check('the sentinel through UNPATCHED sources.py does not raise',
+      raised is None, repr(raised))
+if raised is None:
+    was_built, was_shown = play(stock_run, [Fut('premiumize', result=legacy)])
+    check('...and gives byte-identical output to no patch at all',
+          half_built == was_built and half_shown == was_shown)
+    check('...which is the old behaviour: everything Uncached, nothing shown',
+          marks(half_built) == ['Uncached premiumize'] and half_shown == [])
 
+# AND THE VALUE THAT WOULD HAVE BROKEN IT. Pinned so nobody "simplifies" the
+# sentinel back to None, or to a string (where `'' in "SENTINEL"` is True and a
+# source with an empty hash would be reported as cached).
+try:
+    play(stock_run, [Fut('premiumize', result=None)])
+    none_raised = False
+except TypeError:
+    none_raised = True
+check('None WOULD have raised there -- hence the tuple', none_raised)
+check('an empty hash is not "in" the sentinel', '' not in ())
 
-def refactored(text):
-    """POV having moved the debrid phase out from under us.
+# NOT-A-LIST IS THE GUARD, so anything a future POV returns is Unchecked rather
+# than a TypeError. Stock crashes on all of these; patched does not.
+for odd in (0, False, 5, 'x', None, ()):
+    try:
+        built, shown = play(patched_run, [Fut('premiumize', result=odd)])
+        ok = marks(built) == ['Unchecked premiumize'] and len(shown) == len(TORRENTS)
+        err = ''
+    except BaseException as e:                   # noqa: BLE001
+        ok, err = False, repr(e)
+    check('a reply of %r is treated as unchecked, not as a crash' % (odd,),
+          ok, err)
 
-    Note WHICH line is changed. `threads = [i for i in threads if i.done() and
-    not i.exception()]` appears TWICE in sources.py -- once for the provider
-    phase and once for the debrid phase -- so a naive replace lands on the
-    wrong one and the patch still applies. That near-miss is exactly why the
-    anchor is the whole four-line block and not that line; section 5 pins it.
-    """
-    out = text.replace(SOURCES_PHASE, SOURCES_PHASE.replace(
-        "\t\t\t\telse: uncached = '%s %s' % ('Uncached', name)\n",
-        "\t\t\t\telse: uncached = 'Uncached ' + name\n", 1), 1)
-    assert out != text
-    return out
+# ...and a real list is still trusted, in both directions.
+built, _ = play(patched_run, [Fut('premiumize', result=[])])
+check('an empty LIST is still an authoritative "not cached"',
+      marks(built) == ['Uncached premiumize'])
 
-# A. sources.py refactored out from under us, on a fresh tree.
-home2, root2 = fresh_pov()
-mod2 = load(home2)
-write(root2, SRC_REL, refactored(STOCK_TEXT[SRC_REL]))
-st = mod2.ensure_patched()
-check('sources.py unrecognised -> the debrid half is not applied',
-      st == 'sources=unmatched, debrid=skipped:clean', st)
-check('...and debrid.py is left exactly as POV shipped it',
-      _read(root2, DBR_REL) == STOCK_TEXT[DBR_REL])
-
-# B. the dangerous state: debrid.py patched, sources.py no longer patchable.
-home3, root3 = fresh_pov()
-mod3 = load(home3)
-check('(setup) both halves applied', mod3.ensure_patched()
-      == 'sources=patched, debrid=patched')
-write(root3, SRC_REL, refactored(STOCK_TEXT[SRC_REL]))
-st = mod3.ensure_patched()
-check('a half-applied pair is undone, not left standing',
-      st == 'sources=unmatched, debrid=skipped:reverted', st)
-check('...and debrid.py is byte-identical to stock again',
-      _read(root3, DBR_REL) == STOCK_TEXT[DBR_REL])
-check('...which the log says out loud',
-      any('is not carrying the fix' in m for m in LOG), str(LOG[-3:]))
-
-# C. and once sources.py is recognisable again, both go back on.
-write(root3, SRC_REL, STOCK_TEXT[SRC_REL])
-st = mod3.ensure_patched()
-check('and it heals when POV is recognisable again',
-      st == 'sources=patched, debrid=patched', st)
-
+# EMPTY INPUTS. Neither half may invent rows out of nothing.
+built, shown = play(patched_run, [], names=[])
+check('no debrids configured builds nothing', built == [] and shown == [])
+_saved, TORRENTS[:] = list(TORRENTS), []
+built, _ = play(patched_run, [Fut('premiumize', done=False)])
+check('no torrents found builds nothing', built == [])
+TORRENTS[:] = _saved
 
 # --- 5. the things that break patchers ------------------------------------
 print()
@@ -666,8 +675,25 @@ home7, root7 = fresh_pov()
 mod7 = load(home7)
 write(root7, SRC_REL, STOCK_TEXT[SRC_REL] + '\n' + SOURCES_PHASE)
 st = mod7.ensure_patched()
-check('a duplicated shape is refused, and takes the pair with it',
-      st == 'sources=unmatched, debrid=skipped:clean', st)
+check('a duplicated shape is refused, and the other half still applies',
+      st == 'sources=unmatched, debrid=patched', st)
+
+# A BOM-prefixed file. Kodi ships none, but a file that has been through a
+# Windows editor has one, and stripping it on the way in would change bytes
+# this module does not own. The compile CHECK strips it; the write must not.
+home9, root9 = fresh_pov()
+mod9 = load(home9)
+for rel in (SRC_REL, DBR_REL):
+    write(root9, rel, '\ufeff' + STOCK_TEXT[rel])
+st = mod9.ensure_patched()
+check('a BOM tree patches', st == 'sources=patched, debrid=patched', st)
+for rel in (SRC_REL, DBR_REL):
+    body = _read(root9, rel)
+    check('%s keeps its BOM' % rel.split('/')[-1], body.startswith('\ufeff'))
+    check('%s has exactly one BOM' % rel.split('/')[-1],
+          body.count('\ufeff') == 1)
+check('and it is idempotent with a BOM too',
+      mod9.ensure_patched() == 'sources=unchanged, debrid=unchanged')
 
 # A file carrying our current block AND a stray marker is left alone rather
 # than guessed at.

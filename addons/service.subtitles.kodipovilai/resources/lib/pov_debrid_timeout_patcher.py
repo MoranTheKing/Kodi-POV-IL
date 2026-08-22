@@ -71,13 +71,17 @@
 # WHAT THIS CHANGES. Two insertions, one in each file.
 #
 #   debrid.py: the direct provider check is given its own try/except, and a
-#   FAILED check returns None instead of an empty list. Nothing else about it
-#   changes -- a check that honestly returns nothing still returns the empty
-#   cached list, and is still trusted.
+#   FAILED check returns an empty TUPLE instead of an empty list. Nothing else
+#   about it changes -- a check that honestly returns nothing still returns the
+#   empty cached LIST, and is still trusted.
 #
 #   sources.py: a debrid that did not answer in time is put back into the loop
-#   with a None reply instead of being dropped, and a None reply -- from either
-#   cause -- labels its sources Unchecked rather than Uncached.
+#   with the same empty tuple instead of being dropped, and a reply that is not
+#   a list -- from either cause -- labels its sources Unchecked, not Uncached.
+#
+# The tuple is what lets those two ship independently; the long note above
+# _SOURCES_SITE is the whole of why, and it is worth reading before changing
+# either block.
 #
 # So: when the debrid answers, absolutely nothing is different. When it does
 # not, the user sees the sources POV found, sorted to the bottom and honestly
@@ -89,7 +93,8 @@
 # rest, because the failure discards the whole reply. They are still shown --
 # it is a lost badge, not a lost source -- and paying it keeps the patch to a
 # single return statement instead of a second signalling channel between two
-# files.
+# files. (POV throws the whole reply away on a failure today too; the change is
+# only that the caller can now tell that is what happened.)
 #
 # Modelled on pov_debrid_error_log_patcher next door, down to the whole-block
 # revert and the BOM note; read that file first if this one needs changing.
@@ -123,25 +128,38 @@ _MARKER_SLOT = '<<<MARKER>>>'
 _TAG_SLOT = '<<<TAG>>>'
 
 
-# (label, relative path, the block POV ships, the block that replaces it)
+# TWO INDEPENDENT SITES, AND THE SENTINEL THAT MAKES THEM INDEPENDENT.
 #
-# Whole blocks, not anchors-plus-insertion, because both fixes REWRITE a line
-# POV wrote rather than adding one beside it. That rules out the pure-insertion
-# revert its sibling uses, so the revert here matches the entire injected block
-# byte for byte and refuses to touch a file that is not exactly what a version
-# of this module wrote. See _revert.
-# ORDER MATTERS, AND THE TWO HALVES ARE NOT INDEPENDENT.
+# The first draft had debrid.py `return None` on a failed check, which made the
+# two halves COUPLED: against an unpatched sources.py that None reaches
+# `i['hash'] in hashes` and raises TypeError into `except: notification(32574)`
+# -- an error toast AND an empty list, worse than the bug. That draft applied
+# sources.py first and reverted debrid.py if sources.py was not carrying the
+# fix. A review broke it in one move: POV updates, rewriting the block
+# sources.py targets but not the six lines debrid.py targets; the next pass
+# gets `unmatched` for sources.py and is killed (reboot, OOM, abort) in the
+# window before the revert runs. It built that exact on-disk state, ran the
+# real lifted blocks against a real Premiumize refusal, and got the toast and
+# the empty list. Self-healing on the next successful pass, but wrong until
+# then, for exactly the user this fix is for.
 #
-# The sources.py half is safe on its own: against an unpatched debrid.py the
-# `hashes is None` branch simply never fires, and the fix reduces to "a debrid
-# that did not answer still contributes its sources, marked Unchecked".
+# So the signal is not None. **A failed check returns an empty TUPLE.**
 #
-# The debrid.py half is NOT safe on its own. It makes cache_check return None,
-# and POV's shipped line then evaluates `i['hash'] in None`, which raises
-# TypeError inside the generator, which lands in `except: notification(32574)`
-# -- an error toast and an empty list, which is worse than the bug. So
-# ensure_patched applies sources.py first, applies debrid.py only if sources.py
-# is in the shape this module expects, and REVERTS debrid.py if it is not.
+#   * unpatched sources.py: `i['hash'] in ()` is False for every source, so
+#     every row is marked Uncached -- byte for byte what POV did before this
+#     module existed. No crash, no toast, no behaviour change at all.
+#   * patched sources.py: `cache_check` returns a LIST on every success path
+#     (self.cached_list, built in __init__ and only ever extended/appended), so
+#     "not a list" means "we could not check". That covers the tuple, and it
+#     also covers anything a future POV might return that stock would have
+#     crashed on -- the guard is strictly safer than the line it replaces.
+#
+# An empty tuple and not a sentinel string, deliberately: `'' in 'SENTINEL'` is
+# True, so a source with an empty hash would be reported as cached. `'' in ()`
+# is False. The container has no such edge.
+#
+# The two sites are therefore applied independently, in any order, and neither
+# needs the other to be safe. Nothing reverts anything.
 #
 # (label, relative path, the block POV ships, the block that replaces it)
 #
@@ -168,9 +186,9 @@ _SOURCES_SITE = (
     "\t\t\tanswered = [i for i in threads if i.done() and not i.exception()]  <<<MARKER>>>\n"
     "\t\t\treplies = [(fut.name, fut.result()) for fut in answered]  <<<MARKER>>>\n"
     "\t\t\t_answered = {fut.name for fut in answered}  <<<MARKER>>>\n"
-    "\t\t\treplies.extend((i, None) for i in self.debrid_torrents if i not in _answered)  <<<MARKER>>>\n"
+    "\t\t\treplies.extend((i, ()) for i in self.debrid_torrents if i not in _answered)  <<<MARKER>>>\n"
     "\t\t\tfor name, hashes in replies:  <<<MARKER>>>\n"
-    "\t\t\t\tif hashes is None: hashes, unconfirmed = (), True  <<<MARKER>>>\n"
+    "\t\t\t\tif not isinstance(hashes, list): hashes, unconfirmed = (), True  <<<MARKER>>>\n"
     "\t\t\t\telse: unconfirmed = name in ('realdebrid', 'alldebrid')  <<<MARKER>>>\n"
     "\t\t\t\tif unconfirmed: uncached = '%s %s' % ('Unchecked', name)  <<<MARKER>>>\n"
     "\t\t\t\telse: uncached = '%s %s' % ('Uncached', name)\n",
@@ -179,8 +197,10 @@ _SOURCES_SITE = (
 # 2. Tell a failed check apart from an empty one.
 #
 #    `except BaseException`, not `except Exception`: the line this sits inside
-#    is POV's own bare `except:`, which catches BaseException, and narrowing it
-#    here would let a KeyboardInterrupt out of a frame that used to hold it.
+#    is POV's own bare `except:`, which catches BaseException. Narrowing it
+#    would change which exceptions reach that outer handler; keeping it means
+#    the only difference is that a failure now returns the sentinel instead of
+#    an empty cached list.
 #
 #    The log line is wrapped again because a diagnostic is not worth a new way
 #    for cache_check to raise -- and self.debrid, not self.name, since the
@@ -194,10 +214,9 @@ _DEBRID_SITE = (
     "\t\t\t\t\ttry: kodi_utils.logger(__name__, '<<<TAG>>> %s cache check failed,"
     " reporting unchecked -- %s' % (self.debrid, e))  <<<MARKER>>>\n"
     "\t\t\t\t\texcept Exception: pass  <<<MARKER>>>\n"
-    "\t\t\t\t\treturn None  <<<MARKER>>>\n",
+    "\t\t\t\t\treturn ()  <<<MARKER>>>\n",
 )
 
-# In application order. Anything walking this must keep that order.
 _SITES = (_SOURCES_SITE, _DEBRID_SITE)
 
 
@@ -338,112 +357,27 @@ def _patch_one(rel, shipped, injected):
     return 'repatched' if repatch else 'patched'
 
 
-def _revert_one(rel, shipped, injected):
-    """Put POV's own block back. 'clean' when there was nothing to undo.
-
-    Returns 'clean' | 'reverted' | 'no_file' | 'read_failed' | 'write_failed'
-    | 'compile_failed' | 'revert_failed'.
-
-    This exists for one case: debrid.py patched by an earlier pass, and
-    sources.py no longer patchable (POV refactored it, or the write failed).
-    Leaving the pair half-applied turns a late debrid into an error toast, so
-    the half that cannot stand alone comes back out.
-    """
-    path = _pov_path(rel)
-    if not path:
-        return 'no_file'
-    try:
-        with open(path, encoding='utf-8', newline='') as f:
-            content = f.read()
-    except Exception as e:
-        _log('{0}: read failed: {1}'.format(rel, e), level='WARNING')
-        return 'read_failed'
-    marker = _found_marker(content)
-    if not marker:
-        return 'clean'
-    fit = _fitter(content)
-    aged = fit(_shape(injected, marker))
-    if aged not in content:
-        _log('{0}: an injection is not the shape this file wrote; leaving it '
-             'alone'.format(rel), level='WARNING')
-        return 'revert_failed'
-    content = content.replace(aged, fit(shipped), 1)
-    if _MARKER_ANY in content:
-        _log('{0}: more than one injection; leaving it alone'.format(rel),
-             level='WARNING')
-        return 'revert_failed'
-    try:
-        compile(content.lstrip('\ufeff'), path, 'exec')
-    except SyntaxError as e:
-        _log('{0}: compile check failed, not writing: {1}'.format(rel, e),
-             level='WARNING')
-        return 'compile_failed'
-    tmp = path + '.aitmp'
-    try:
-        with open(tmp, 'w', encoding='utf-8', newline='') as f:
-            f.write(content)
-        os.replace(tmp, path)
-    except OSError as e:
-        try:
-            os.remove(tmp)
-        except OSError:
-            pass
-        _log('{0}: write failed: {1}'.format(rel, e), level='WARNING')
-        return 'write_failed'
-    _drop_pycache(path)
-    return 'reverted'
-
-
-# The states that mean "sources.py is carrying the fix right now". no_file is
-# not one of them: it means POV is not installed, and then debrid.py is not
-# there either and its own _patch_one answers no_file anyway.
-_GOOD = ('patched', 'repatched', 'unchanged')
-
-
 def ensure_patched():
     """Idempotent. Never raises. Returns a comma-joined per-file status,
     e.g. 'sources=patched, debrid=patched'.
 
-    ORDERED, NOT PER-FILE INDEPENDENT -- see the note above _SOURCES_SITE.
-    sources.py goes first because it is the half that stands alone; debrid.py
-    is applied only behind it, and is reverted if sources.py is not carrying
-    the fix.
+    PER FILE, AND IN ANY ORDER. See the note above _SOURCES_SITE for why that
+    is true here and was not true of the first draft: a failed check returns an
+    empty tuple, which unpatched sources.py handles as "nothing cached" exactly
+    as it always did. Neither half can hurt anybody without the other, so a POV
+    refactor that moves one is no reason to skip -- or undo -- the other.
     """
     if xbmcvfs is None:
         return 'no_pov'
-    label, rel, shipped, injected = _SOURCES_SITE
-    try:
-        first = _patch_one(rel, shipped, injected)
-    except Exception as e:
-        _log('{0}: unexpected failure: {1}'.format(rel, e), level='WARNING')
-        first = 'read_failed'
-    out = ['%s=%s' % (label, first)]
-
-    label, rel, shipped, injected = _DEBRID_SITE
-    if first in _GOOD:
+    out = []
+    for label, rel, shipped, injected in _SITES:
         try:
-            second = _patch_one(rel, shipped, injected)
+            st = _patch_one(rel, shipped, injected)
         except Exception as e:
             _log('{0}: unexpected failure: {1}'.format(rel, e),
                  level='WARNING')
-            second = 'read_failed'
-    elif first == 'no_file':
-        # POV is not installed. Not a skip and not a warning -- there is
-        # nothing to apply, nothing to revert, and nothing worth a line in
-        # the log of every device that does not have POV.
-        second = 'no_file'
-    else:
-        try:
-            second = 'skipped:' + _revert_one(rel, shipped, injected)
-        except Exception as e:
-            _log('{0}: unexpected failure: {1}'.format(rel, e),
-                 level='WARNING')
-            second = 'skipped:read_failed'
-        _log('sources.py is not carrying the fix ({0}), so the debrid.py half '
-             'is not applied -- on its own it would turn a late debrid into an '
-             'error toast'.format(first), level='WARNING')
-    out.append('%s=%s' % (label, second))
-
+            st = 'read_failed'
+        out.append('%s=%s' % (label, st))
     if any(s.endswith('=patched') or s.endswith('=repatched') for s in out):
         _log('a debrid that answers late or not at all no longer erases the '
              'source list')
