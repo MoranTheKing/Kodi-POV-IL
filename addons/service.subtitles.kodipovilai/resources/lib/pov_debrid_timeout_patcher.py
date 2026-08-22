@@ -71,13 +71,17 @@
 # WHAT THIS CHANGES. Two insertions, one in each file.
 #
 #   debrid.py: the direct provider check is given its own try/except, and a
-#   FAILED check returns an empty TUPLE instead of an empty list. Nothing else
-#   about it changes -- a check that honestly returns nothing still returns the
-#   empty cached LIST, and is still trusted.
+#   FAILED check returns the cached list AS A TUPLE instead of as a list.
+#   Nothing else about it changes -- a check that honestly returns nothing
+#   still returns the empty cached LIST, and is still trusted. The container
+#   type is the whole signal, and the contents are unchanged so that a POV
+#   that has not been patched on the other side behaves exactly as it always
+#   did.
 #
 #   sources.py: a debrid that did not answer in time is put back into the loop
-#   with the same empty tuple instead of being dropped, and a reply that is not
-#   a list -- from either cause -- labels its sources Unchecked, not Uncached.
+#   with an empty tuple instead of being dropped -- it has no cached list to
+#   carry, having never run -- and a reply that is not a list, from either
+#   cause, labels its sources Unchecked rather than Uncached.
 #
 # The tuple is what lets those two ship independently; the long note above
 # _SOURCES_SITE is the whole of why, and it is worth reading before changing
@@ -88,9 +92,10 @@
 # labelled "we could not check these", instead of an empty screen. That is the
 # same treatment POV already gives Real-Debrid and AllDebrid every single time.
 #
-# THE ONE THING IT COSTS. On a failed check the handful of hashes the local
-# DebridCache already knew to be cached lose their cached badge along with the
-# rest, because the failure discards the whole reply. They are still shown --
+# THE ONE THING IT COSTS, and only when BOTH halves are applied. On a failed
+# check the handful of hashes the local DebridCache already knew to be cached
+# lose their cached badge, because the tuple says "could not check" about the
+# whole reply rather than about part of it. They are still shown --
 # it is a lost badge, not a lost source -- and paying it keeps the patch to a
 # single return statement instead of a second signalling channel between two
 # files. (POV throws the whole reply away on a failure today too; the change is
@@ -145,9 +150,19 @@ _TAG_SLOT = '<<<TAG>>>'
 #
 # So the signal is not None. **A failed check returns an empty TUPLE.**
 #
-#   * unpatched sources.py: `i['hash'] in ()` is False for every source, so
-#     every row is marked Uncached -- byte for byte what POV did before this
-#     module existed. No crash, no toast, no behaviour change at all.
+#   * unpatched sources.py: `i['hash'] in tuple(self.cached_list)` gives the
+#     SAME answer for every hash that stock's `in self.cached_list` gave, so
+#     the half-applied state is byte for byte what POV did before this module
+#     existed. No crash, no toast, no behaviour change at all.
+#
+#     A bare `()` was the first attempt and it was WRONG, which a second
+#     review proved by construction: when the local DebridCache already knows
+#     a hash is cached and a DIFFERENT, newly-seen hash then fails its live
+#     check, stock still returns the known one and shows it as cached. `()`
+#     threw it away, so unpatched sources.py marked it Uncached and the
+#     default filter deleted it -- worse than doing nothing, in exactly the
+#     half-applied state the tuple existed to make safe. Carrying the list
+#     THROUGH the tuple costs nothing and closes it.
 #   * patched sources.py: `cache_check` returns a LIST on every success path
 #     (self.cached_list, built in __init__ and only ever extended/appended), so
 #     "not a list" means "we could not check". That covers the tuple, and it
@@ -214,7 +229,7 @@ _DEBRID_SITE = (
     "\t\t\t\t\ttry: kodi_utils.logger(__name__, '<<<TAG>>> %s cache check failed,"
     " reporting unchecked -- %s' % (self.debrid, e))  <<<MARKER>>>\n"
     "\t\t\t\t\texcept Exception: pass  <<<MARKER>>>\n"
-    "\t\t\t\t\treturn ()  <<<MARKER>>>\n",
+    "\t\t\t\t\treturn tuple(self.cached_list)  <<<MARKER>>>\n",
 )
 
 _SITES = (_SOURCES_SITE, _DEBRID_SITE)

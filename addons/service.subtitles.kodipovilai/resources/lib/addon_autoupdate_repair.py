@@ -77,6 +77,7 @@ through JSON-RPC, which Kodi applies immediately.
 
 import os
 import re
+import time
 
 try:
     import xbmc
@@ -169,11 +170,28 @@ DEAD_ORIGINS = ('repository.KodiRealDebridIsrael',)
 # each that is a 20-second worst case added to a pass this codebase
 # elsewhere describes as unbudgeted and timing-sensitive.
 #
-# 2s, and the pass gives up for this boot the moment the FIRST read times
-# out. A database that is busy right now will not be less busy three
-# statements later, and the repair is idempotent -- the next start does it.
-# Worst case is now one wait, not four.
-_DB_TIMEOUT = 2
+# ONE BUDGET FOR THE WHOLE REPAIR, not one per connection. Dropping the
+# per-connection figure from 5s to 2s left a 8-second worst case, which a
+# second review measured and called out on its own: the four calls are
+# independent and each can spend its own allowance. So the budget is now
+# shared -- every connection gets what is LEFT of it -- and the pass also
+# gives up for this boot the moment the first READ times out, since a
+# database that is busy now will not be less busy three statements later.
+# Everything here is idempotent; the next start does the whole thing.
+_DB_BUDGET = 3.0
+_DB_TIMEOUT = 2          # the ceiling for any single connection
+_DB_FLOOR = 0.1          # never zero: a zero timeout fails instantly on a
+                         # database that would have answered in a millisecond
+_db_deadline = [0.0]
+
+
+def _db_timeout():
+    """What is left of the repair's total database budget."""
+    try:
+        left = _db_deadline[0] - time.monotonic()
+    except Exception:
+        return _DB_TIMEOUT
+    return max(_DB_FLOOR, min(_DB_TIMEOUT, left))
 
 UPDATE_MODE_SETTING = 'general.addonupdates'
 UPDATE_MODE_NAMES = {
@@ -338,7 +356,7 @@ def read_rules(path):
         return None
     conn = None
     try:
-        conn = sqlite3.connect(path, timeout=_DB_TIMEOUT)
+        conn = sqlite3.connect(path, timeout=_db_timeout())
         rows = conn.execute(
             'SELECT addonID, updateRule FROM update_rules').fetchall()
         return [(str(a or ''), int(r or 0)) for a, r in rows]
@@ -365,7 +383,7 @@ def _clear_rules(path, victims):
         return 0
     conn = None
     try:
-        conn = sqlite3.connect(path, timeout=_DB_TIMEOUT)
+        conn = sqlite3.connect(path, timeout=_db_timeout())
         cur = conn.cursor()
         gone = 0
         for addon_id, rule in victims:
@@ -396,7 +414,7 @@ def read_origins(path, origins):
         return None
     conn = None
     try:
-        conn = sqlite3.connect(path, timeout=_DB_TIMEOUT)
+        conn = sqlite3.connect(path, timeout=_db_timeout())
         marks = ','.join('?' for _ in origins)
         rows = conn.execute(
             'SELECT addonID, origin FROM installed WHERE origin IN (%s)'
@@ -419,7 +437,7 @@ def _clear_origins(path, origins):
         return 0
     conn = None
     try:
-        conn = sqlite3.connect(path, timeout=_DB_TIMEOUT)
+        conn = sqlite3.connect(path, timeout=_db_timeout())
         cur = conn.cursor()
         marks = ','.join('?' for _ in origins)
         cur.execute("UPDATE installed SET origin = '' WHERE origin IN (%s)"
@@ -544,6 +562,7 @@ def ensure_repaired():
         _mark_seeded()
 
     # -- filter 2: the pins
+    _db_deadline[0] = time.monotonic() + _DB_BUDGET
     path = addons_db()
     if not path:
         out.append('rules=no_db')
@@ -557,7 +576,14 @@ def ensure_repaired():
     # the device that will collect a pin the next time one of these add-ons is
     # installed, because its origin still names a repository that answers 404.
     # Clearing the pins treats the symptom; this is the cause.
-    origins = read_origins(path, DEAD_ORIGINS)
+    # `not DEAD_ORIGINS` FIRST. read_origins short-circuits to None when it is
+    # asked about nothing, which is indistinguishable from "the database would
+    # not answer" -- and the early return below then skips the pin-clearing
+    # this module exists for, on a healthy device, for ever. DEAD_ORIGINS is
+    # non-empty today, so this is dormant; it is also the kind of list that
+    # gets emptied when a repository comes back, which is exactly when nobody
+    # would be looking for this.
+    origins = [] if not DEAD_ORIGINS else read_origins(path, DEAD_ORIGINS)
     if origins is None:
         # BUSY OR BROKEN, EITHER WAY NOT NOW. The commonest reason a read of
         # this database fails is that Kodi is writing to it, and the next
