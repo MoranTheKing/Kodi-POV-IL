@@ -68,6 +68,15 @@ def addon_dir(addon_id):
     """
     if xbmcvfs is None or not addon_id:
         return ''
+    # AN ID IS A NAME, NOT A PATH. os.path.join throws the base away the
+    # moment the second argument is absolute, so `addon_dir('/etc/whatever')`
+    # would resolve OUTSIDE both roots and answer "installed" for anything
+    # with an addon.xml there. Every caller in this build passes a hardcoded
+    # literal, so this is not reachable today -- which is exactly the moment
+    # to close it, rather than after somebody wires a setting to it.
+    if (os.path.isabs(addon_id) or '/' in addon_id or '\\' in addon_id
+            or addon_id in ('.', '..')):
+        return ''
     for root in ADDON_ROOTS:
         try:
             base = xbmcvfs.translatePath(root)

@@ -188,13 +188,39 @@ def _mark_owed(owed, applied=True, attempts=0):
     """
     try:
         import os
+        import threading
         path = _owed_path()
         if owed:
             directory = os.path.dirname(path)
             if directory and not os.path.isdir(directory):
                 os.makedirs(directory)
-            with open(path, 'w', encoding='utf-8') as handle:
-                handle.write('%s\n%d\n' % (POV_ADDON_ID, attempts))
+            # WRITTEN BESIDE AND MOVED INTO PLACE. `open(path, 'w')` truncates
+            # the moment it succeeds, so a write that fails after that -- a
+            # full disk is the ordinary way -- leaves an empty file: the debt
+            # survives, because cycle_owed only asks whether the file exists,
+            # but the attempt count silently resets to zero and the escalation
+            # starts over. os.replace is atomic, so the file on disk is either
+            # the old one or the new one and never a truncated middle.
+            # A UNIQUE TEMP NAME, not `path + '.tmp'`. Two writers CAN meet
+            # here -- request_reload writes the debt on the main thread and
+            # the deferred cycle rewrites it with a new count from its own
+            # thread -- and with one shared name the second `open(..., 'w')`
+            # truncates the first writer's file before its os.replace runs, so
+            # what lands is empty. The atomic rename was added to stop a
+            # truncated file existing; a shared name put one back by another
+            # route. Found because the test for it failed two runs in eight.
+            tmp = '%s.%d.%d.tmp' % (path, os.getpid(),
+                                    threading.current_thread().ident or 0)
+            try:
+                with open(tmp, 'w', encoding='utf-8') as handle:
+                    handle.write('%s\n%d\n' % (POV_ADDON_ID, attempts))
+                os.replace(tmp, path)
+            except Exception:
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+                raise
         elif os.path.exists(path):
             os.remove(path)
         return True
@@ -660,7 +686,15 @@ def request_reload():
     _armed = True
     # WRITTEN BEFORE THE THREAD STARTS, so a Kodi that dies one second later
     # still leaves the debt behind. Cleared only by a cycle that ran.
-    _mark_owed(True)
+    #
+    # CARRYING THE COUNT FORWARD, which the first version of the escalation
+    # did not: this runs at every start, BEFORE the thread that would call
+    # _note_owed_attempt, and a bare _mark_owed(True) defaults attempts to 0.
+    # So every boot reset the tally to zero before anything could add to it,
+    # the count never got past 1, and _OWED_SHOUT_AFTER was unreachable -- a
+    # review drove six simulated boots through the real chain and watched the
+    # warning never fire. The whole feature was dead on arrival.
+    _mark_owed(True, attempts=_owed_attempts())
     try:
         import threading
         threading.Thread(target=_deferred_cycle, daemon=True).start()

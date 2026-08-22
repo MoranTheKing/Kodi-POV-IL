@@ -171,9 +171,93 @@ check('the toast names the service and the reason, in Hebrew',
       'got %r' % msg)
 check('...and not the raw English the API sent',
       'apikey' not in msg, 'got %r' % msg)
-unknown = mod._refusal_message(AD, 'SOMETHING_NEW', 'a new reason')
-check('an unrecognised code still says what the service said',
-      'a new reason' in unknown)
+# AN UNRECOGNISED CODE. This used to assert the provider's English reached the
+# screen. It no longer does, and that is the fix, not a regression: this is a
+# Hebrew build, the only route here is an account-shaped code with no wording
+# yet, and "the account was refused (AUTH_SOMETHING_NEW)" is readable by
+# somebody who does not read English where the provider's sentence is not. The
+# English still goes to the log.
+unknown = mod._refusal_message(AD, 'AUTH_SOMETHING_NEW', 'a new reason')
+check('an unrecognised account code says so in Hebrew',
+      mod._UNKNOWN_CODE_TEXT in unknown)
+check('...and names the code, so a log can be matched to a screenshot',
+      'AUTH_SOMETHING_NEW' in unknown, unknown)
+check('...and does not put the raw English on a Hebrew screen',
+      'a new reason' not in unknown, unknown)
+
+# AND IT MUST REACH THE QUEUE AT ALL. The gate used to require the code be one
+# of the four this build has Hebrew for, so a NEW AllDebrid AUTH_ code produced
+# no toast whatsoever -- the same silence this whole file exists to end.
+check('an account-shaped code this build does not know still counts',
+      mod._unknown_account_code('AUTH_SOMETHING_NEW') is True)
+for _c in ('MUST_BE_PREMIUM_TOO', 'USER_BANNED_X', 'SUB_BLOCKED'):
+    check('...%s too' % _c, mod._unknown_account_code(_c) is True)
+for _c in ('', '   ', 'AUTH_BAD_APIKEY', 'NO_SERVER', 'LINK_ERROR',
+           'MAGNET_INVALID_ID', 'FILE_NOT_FOUND'):
+    check('...but %r is not an account code' % _c,
+          mod._unknown_account_code(_c) is False)
+_src_gate = io.open(os.path.join(LIB, 'debrid_status_notifier.py'),
+                    encoding='utf-8').read()
+check('...and the queue gate actually asks',
+      '_unknown_account_code(refused[0])' in _src_gate)
+
+
+# --- the two-word rule, against the corpus that broke its predecessors -----
+# A FLAT SUBSTRING LIST WAS TRIED TWICE AND FAILED BOTH WAYS. "any message"
+# put three plausible non-refusals on screen; a fourteen-phrase allowlist then
+# matched ten of eleven non-account errors AND missed eight real refusals. The
+# rule now needs a SUBJECT that belongs to the user and a PREDICATE saying what
+# happened to it. This corpus is the review's, verbatim, plus the URL case that
+# survived the first repair of it.
+print()
+print('=== a codeless message: precision on screen, recall in the log ===')
+NOT_REFUSALS = (
+    'Too many requests, please slow down.',
+    'Downloads are temporarily disabled for maintenance.',
+    'Service temporarily suspended for maintenance.',
+    'Your IP has been banned.',
+    'This link has expired.',
+    'Missing parameter customer_id.',
+    'Authentication service is currently down, try later.',
+    '<html><head><title>503 Service Unavailable</title></head></html>',
+    'https://www.premiumize.me/link-expired',
+    'Rate limit exceeded. Retry after 60 seconds.',
+    'Internal server error.',
+    'Transfer failed: source unreachable.',
+    'The file has been deleted from the cloud.',
+    'Torrent not found in cache.',
+)
+REFUSALS = (
+    'Not logged in.',
+    'Your account has been permanently blocked.',
+    'Account locked.',
+    'Account terminated due to ToS violation.',
+    'Invalid session, please log in again.',
+    'No active plan on this account.',
+    'Account not found.',
+    'Access blocked for this account.',
+    'Your account access has been revoked.',
+    'Your premium membership has expired.',
+    'Invalid apikey.',
+    'The api key is invalid.',
+    'Account is not premium.',
+    'Login failed.',
+    'Your subscription is inactive.',
+    'Account suspended.',
+    'Credentials required.',
+)
+_fp = [t for t in NOT_REFUSALS if mod._codeless_reason(t)]
+_fn = [t for t in REFUSALS if not mod._codeless_reason(t)]
+check('no transient failure reaches the screen', not _fp,
+      'these would raise a toast: %s' % _fp)
+check('every real refusal does', not _fn, 'these say nothing: %s' % _fn)
+check('...and every one of them in Hebrew',
+      all(any('֐' <= ch <= 'ת' for ch in mod._codeless_reason(t) or '')
+          for t in REFUSALS))
+check('an unmatched message is written to the log, not simply dropped',
+      'kodi_utils.log(' in _src_gate
+      and 'account refusal, so nothing is shown' in _src_gate,
+      'recall has to live somewhere, and it lives in the log')
 
 _src = io.open(os.path.join(LIB, 'debrid_status_notifier.py'),
                encoding='utf-8').read()

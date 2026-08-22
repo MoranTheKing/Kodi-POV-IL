@@ -151,6 +151,55 @@ def _wizard_map(wizard_zip):
     return out
 
 
+def _unsafe_member(name):
+    """True when a ZIP member name may not be trusted to stay where it says.
+
+    The rules, each one paid for:
+
+      * a backslash ANYWHERE. The ZIP spec makes `/` the one separator, so a
+        backslash is either a Windows-authored bug or somebody routing around
+        a `/`-only check. A review did exactly that and reached the artifact.
+      * an absolute path, in either the POSIX (`/x`) or the Windows (`C:/x`,
+        `\\\\server\\share`) spelling.
+      * any `..` or `.` segment, which is the classic escape.
+      * an empty interior segment (`a//b`), which normalises differently in
+        different extractors.
+      * a NUL or other control character, which truncates a path in C.
+
+    A trailing empty segment is fine and is how a directory entry is spelt.
+    """
+    if not name or not name.strip("/"):
+        return False                      # empty / bare-slash: skipped by caller
+    if "\\" in name:
+        return True
+    if name.startswith("/"):
+        return True
+    if len(name) > 1 and name[1] == ":":
+        return True
+    if any(ch < " " or ch == "\x7f" for ch in name):
+        return True
+    parts = name.rstrip("/").split("/")
+    return any(part in ("..", ".", "") for part in parts)
+
+
+def _is_symlink(zinfo):
+    """True for a member the archive marks as a Unix symbolic link.
+
+    This build's own extractor uses stdlib zipfile, which writes the LINK
+    TARGET into an ordinary file rather than creating a link -- so today such
+    a member is inert rather than dangerous. That is a property of somebody
+    else's extractor, maintained for a different reason, and the same argument
+    that made the `..` guard necessary applies here: refuse it in the tool
+    that makes the promise.
+    """
+    try:
+        if zinfo.create_system != 3:      # 3 = Unix; nothing else stores a mode
+            return False
+        return (zinfo.external_attr >> 16) & 0o170000 == 0o120000
+    except Exception:
+        return False
+
+
 def _refresh_map(specs):
     """{'addons/<id>/<path>': (ZipInfo under the build's path, id)} for every
     member of every refresh package, plus {id: (Path, declared version)}.
@@ -195,22 +244,35 @@ def _refresh_map(specs):
             # which is why this was not already a disaster. That is somebody
             # else's guard, maintained for a different reason, and this tool
             # does not get to lean on it to keep its own promise.
-            escaped = []
-            for name in names:
-                if not name.strip("/"):
-                    continue
-                if name.startswith("/") or name.startswith("\\"):
-                    escaped.append(name)
-                    continue
-                parts = name.split("/")
-                if any(part in ("..", ".") for part in parts):
-                    escaped.append(name)
+            # AND NOT `name.split("/")` EITHER, which is where the second
+            # review got in. A ZIP member name uses `/` and only `/` -- the
+            # spec says so -- so `plugin.video.pov/evil\\..\\..\\..\\outside.txt`
+            # is ONE segment to a `/` split, contains no segment equal to
+            # `..`, and sailed through this check, the `tops` check below, and
+            # both build() and verify(). A review built that zip and found the
+            # member in the output artifact. On Android and Linux a backslash
+            # is an ordinary filename character and the member is inert; the
+            # Windows installer is built from this same artifact, and there it
+            # is a live path separator and a real escape.
+            #
+            # So: a backslash anywhere in a member name is refused outright.
+            # Nothing this build ships legitimately has one, and "refuse what
+            # we do not understand" is the only rule that survives the next
+            # separator somebody thinks of.
+            escaped = [n for n in names if _unsafe_member(n)]
             if escaped:
                 raise SystemExit(
                     "%s has %d member(s) whose path escapes its own "
                     "directory:\n  %s"
                     % (path, len(escaped), "\n  ".join(sorted(escaped)[:10])))
             tops = {n.split("/")[0] for n in names if n.strip("/")}
+            links = sorted(n for n, zi in _members(path).items()
+                           if _is_symlink(zi))
+            if links:
+                raise SystemExit(
+                    "%s has %d symlink member(s), which this tool will not "
+                    "carry into a build:\n  %s"
+                    % (path, len(links), "\n  ".join(links[:10])))
             if tops != {addon_id}:
                 raise SystemExit(
                     "%s does not contain exactly one top-level directory "
@@ -354,6 +416,24 @@ def build(previous: Path, quickfix: Path, output: Path, allow_add: set,
             wiz.close()
         for zf in ref_zips.values():
             zf.close()
+    # THE PROMISE, CHECKED WHERE IT IS MADE. Every gate above guards one
+    # INPUT, and each was added after a review got past the previous one -- a
+    # `..` segment, then a backslash. This checks the OUTPUT: whatever route a
+    # member took to get here, the artifact a fresh install extracts contains
+    # no name that can leave the directory it claims. It costs one pass over
+    # the member list and it is the only check that does not have to be
+    # rewritten the next time somebody thinks of a new separator.
+    with zipfile.ZipFile(output) as done:
+        bad = sorted(n for n in done.namelist() if _unsafe_member(n))
+        links = sorted(n for n in done.infolist() if _is_symlink(n))
+    if bad or links:
+        output.unlink(missing_ok=True)
+        raise SystemExit(
+            "REFUSING THE ARTIFACT and deleting it: %d unsafe name(s) and %d "
+            "symlink(s) reached the output.\n  %s"
+            % (len(bad), len(links),
+               "\n  ".join((bad + [i.filename for i in links])[:10])))
+
     print("wrote %s" % output)
     print("  %d replaced from the quickfix, %d carried from the previous "
           "build, %d new, %d refreshed" % (replaced, carried, new, refreshed))
@@ -370,6 +450,17 @@ def verify(previous: Path, quickfix: Path, output: Path,
     """Prove the result member by member. Nothing here trusts build()."""
     prev_by, qf_by, out_by = (_members(previous), _members(quickfix),
                               _members(output))
+    # FIRST, AND NOT TRUSTING build()'S OWN GATE. Two reviews in a row reached
+    # the artifact through an input check, and each time verify() agreed the
+    # result was fine because it compared the same un-normalised strings the
+    # build did. This asks the artifact directly, before anything else.
+    unsafe = sorted(n for n in out_by if _unsafe_member(n))
+    with zipfile.ZipFile(output) as _out:
+        linked = sorted(i.filename for i in _out.infolist() if _is_symlink(i))
+    if unsafe or linked:
+        raise SystemExit(
+            "the new build contains %d unsafe name(s) and %d symlink(s):\n  %s"
+            % (len(unsafe), len(linked), "\n  ".join((unsafe + linked)[:10])))
     wiz_by = _wizard_map(wizard_zip)
     ref_by, ref_info = _refresh_map(refresh)
     prefixes = _refresh_prefixes(ref_info)

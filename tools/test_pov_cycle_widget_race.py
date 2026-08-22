@@ -48,6 +48,7 @@ import re
 import shutil
 import sys
 import tempfile
+import threading
 import types
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -678,6 +679,40 @@ try:
           or str(_m._OWED_SHOUT_AFTER + 1) in _levels[-1][1],
           _levels[-1][1])
     check('...and the debt itself is still owed', _m.cycle_owed() is True)
+
+    # AND THROUGH THE REAL CHAIN, not just by calling _note_owed_attempt in a
+    # loop. THE BUG A REVIEW FOUND: request_reload() runs at every start,
+    # BEFORE the thread that defers the cycle, and its bare _mark_owed(True)
+    # defaulted attempts to 0 -- so every boot reset the tally before anything
+    # could add to it, the count never got past 1, and the warning was
+    # unreachable. Testing the escalation in isolation could not see it. This
+    # drives whole boots.
+    _levels[:] = []
+    _m._mark_owed(False)
+    _seen = []
+    for boot in range(1, _m._OWED_SHOUT_AFTER + 2):
+        _m._cycled = False              # a fresh process
+        _m._armed = False
+        # request_reload STARTS A THREAD running _deferred_cycle. Calling it
+        # inline as well ran the attempt twice per boot, from two threads, on
+        # one file -- which is how the shared `.tmp` name in _mark_owed was
+        # found. Let the thread be the only one that runs it, and wait.
+        _done = threading.Event()
+
+        def _cycle():
+            try:
+                _m._note_owed_attempt('a dialog is up')
+            finally:
+                _done.set()
+        _m._deferred_cycle = _cycle
+        _m.request_reload()
+        _done.wait(5)
+        _seen.append(_m._owed_attempts())
+    check('the count survives request_reload on every boot',
+          _seen == list(range(1, _m._OWED_SHOUT_AFTER + 2)), str(_seen))
+    check('...so the warning actually fires across real boots',
+          any(lv == 'WARNING' for lv, _msg in _levels),
+          'never escalated across %d boots' % len(_seen))
     # An owed file from a release that did not write a count reads as zero
     # rather than raising, so an upgrade does not lose the debt.
     with open(os.path.join(_dir, 'owed.txt'), 'w', encoding='utf-8') as _f:

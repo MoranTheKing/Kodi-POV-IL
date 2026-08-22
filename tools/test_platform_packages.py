@@ -335,9 +335,21 @@ def test_workflow_package_guards() -> None:
         "build.txt says %s" % build_zip
     )
     # ...and nowhere else may name one, or the single point stops being one.
-    assert "Kodi-POV-IL-FENtastic-test-" not in workflow.split("BUILD_ZIP:", 1)[1], (
-        "a build-zip filename is inlined somewhere below the env block"
+    #
+    # COUNTED, NOT SPLIT. This was `"...-test-" not in workflow.split(
+    # "BUILD_ZIP:", 1)[1]`, and the split point sits MID-LINE: the tail begins
+    # with the rest of the BUILD_ZIP assignment, whose value is a build-zip
+    # filename. So the assertion searched for the very thing it had just
+    # included and failed unconditionally -- masked only because the check
+    # above it fails first whenever build.txt is stale. A review isolated it
+    # and it raises every time. What the rule actually means is "the name
+    # appears once", so count it.
+    inlined = workflow.count("Kodi-POV-IL-FENtastic-test-")
+    assert inlined == 1, (
+        "a build-zip filename should appear exactly once, in the BUILD_ZIP "
+        "env assignment; found it %d time(s)" % inlined
     )
+    assert "BUILD_ZIP: '%s'" % build_zip in workflow
     assert "default: '21.3-povil.49'" in workflow
     assert "default: '2103049'" in workflow
     assert "EXPECTED_RELEASE: '21.3-povil.49'" in workflow

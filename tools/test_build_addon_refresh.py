@@ -250,6 +250,77 @@ p, _ = run('r5c.zip', ['--refresh-addon', 'plugin.video.pov=' + absolute])
 check('...and so is an absolute path', p.returncode != 0,
       (p.stdout + p.stderr)[-300:])
 
+# THE SECOND WAY IN, found by a review after the `..` guard above was written.
+# A ZIP member name uses `/` and only `/`, so a check that splits on `/` sees
+# `plugin.video.pov/evil\..\..\..\outside.txt` as ONE segment containing no
+# `..` -- and the top-level check agrees the first segment is the add-on. The
+# review built this zip and found the member in the finished artifact. On
+# Android the backslash is an ordinary filename character; the WINDOWS
+# INSTALLER is built from the same artifact, and there it is a separator.
+sys.path.insert(0, os.path.join(ROOT, 'tools'))
+import build_full_build as _bfb
+_bfb_probe = _bfb._unsafe_member
+
+_slips = ['a backslash traversal', 'a bare backslash anywhere',
+          'a Windows drive path', 'a UNC path',
+          'an empty interior segment']
+for label, member in (
+        ('a backslash traversal', 'plugin.video.pov/evil\\..\\..\\..\\outside.txt'),
+        ('a bare backslash anywhere', 'plugin.video.pov/sub\\file.py'),
+        ('a Windows drive path', 'C:/Windows/System32/drivers/etc/hosts'),
+        ('a UNC path', '\\\\server\\share\\evil.txt'),
+        ('an empty interior segment', 'plugin.video.pov//..//outside.txt')):
+    _n = _slips.index(label)
+    _z = zip_at('slip_%d.zip' % _n, {
+        'plugin.video.pov/addon.xml': addon_xml('plugin.video.pov', '6.0'),
+        member: 'nope\n'})
+    p, _ = run('r5_%d.zip' % _n,
+               ['--refresh-addon', 'plugin.video.pov=' + _z])
+    check('%s is refused' % label, p.returncode != 0,
+          (p.stdout + p.stderr)[-300:])
+
+# A CONTROL CHARACTER cannot be tested end to end here, and it is worth saying
+# why rather than leaving the guard looking untested: Python's zipfile
+# TRUNCATES a member name at the first NUL on the way back out, so a zip built
+# with `.../ev\x00il.py` reads as `.../ev` and there is nothing left to catch.
+# The guard stays -- another extractor need not truncate -- and is asserted
+# directly in the unit table below.
+check('a control character is unsafe at the unit level',
+      _bfb_probe('plugin.video.pov/ev\x00il.py') is True)
+
+# A SYMLINK MEMBER. This build's extractor writes the link TARGET into an
+# ordinary file rather than making a link, so today it is inert -- which is
+# exactly the argument that was wrong about `..` the first time. Refused in
+# the tool that makes the promise, not left to somebody else's extractor.
+_ln = os.path.join(WORK, 'link.zip')
+with zipfile.ZipFile(_ln, 'w') as _z:
+    _z.writestr('plugin.video.pov/addon.xml', addon_xml('plugin.video.pov', '6.0'))
+    _zi = zipfile.ZipInfo('plugin.video.pov/innocent.txt')
+    _zi.create_system = 3
+    _zi.external_attr = (0o120777 << 16)
+    _z.writestr(_zi, '../../../../etc/passwd')
+p, _ = run('r5e.zip', ['--refresh-addon', 'plugin.video.pov=' + _ln])
+check('a symlink member is refused', p.returncode != 0
+      and 'symlink' in (p.stdout + p.stderr), (p.stdout + p.stderr)[-300:])
+
+# AND THE GATE THAT DOES NOT DEPEND ON GUESSING THE NEXT SEPARATOR: the
+# finished artifact is asked directly, so a member arriving by any route at
+# all -- quickfix, wizard package, a check nobody has thought of yet -- is
+# still caught, and the artifact is deleted rather than left on disk looking
+# finished.
+for _name, _want in (
+        ('addons/plugin.video.pov/ok.py', False),
+        ('addons/plugin.video.pov/../../x', True),
+        ('addons/plugin.video.pov/a\\..\\b', True),
+        ('/abs', True),
+        ('C:/x', True),
+        ('addons//x', True),
+        ('addons/x/', False),
+        ('', False)):
+    check('_unsafe_member(%r) is %s' % (_name, _want),
+          _bfb._unsafe_member(_name) is _want,
+          'got %r' % _bfb._unsafe_member(_name))
+
 # TWO MEMBERS WITH THE SAME NAME. _members is a dict keyed by filename, so one
 # silently wins; an input whose meaning we cannot state is not one to build a
 # release from.

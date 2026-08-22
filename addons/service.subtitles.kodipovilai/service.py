@@ -340,6 +340,41 @@ def _run_build_startup_repairs():
         _maybe_show_debrid_status,
         _maybe_reload_for_tiles,
     )
+    # THE PACING IS A BUDGET NOW, NOT A CONSTANT PER STEP.
+    #
+    # The 0.25s below every step was introduced in b7ce297 ("Prevent quick
+    # update startup freezes") when this tuple had TWENTY-SIX entries -- 6.5
+    # seconds of yielding, which is what that change was tested at. It has 63
+    # now, so the same line costs 15.75 seconds of pure sleeping on every boot
+    # before a single step does any work, and nobody re-derived it as steps
+    # were added. Two independent reviews measured it; one field log shows the
+    # pass still running 53 seconds in.
+    #
+    # What the wait is FOR is not starving Kodi while the pass runs, and that
+    # is a property of the total time yielded, not of the per-step figure. So
+    # spread the same total the original was validated at over however many
+    # steps there are. A short pass is unchanged (the cap is the old value), a
+    # long one stops paying for its own length, and step 64 costs nothing.
+    # THE FLOOR IS A SECOND CONSTRAINT, and it wins. Below ~130 steps the
+    # budget binds and the pass yields 6.5s in total however long the tuple
+    # gets. Above that the floor binds instead and the total starts growing
+    # again -- which is correct, because a yield of nothing is not a yield and
+    # the freeze this line exists to prevent would come back. It is also the
+    # signal that the answer has stopped being "tune the constant": a pass that
+    # long wants splitting, not a smaller sleep. So it says so, once, instead
+    # of quietly costing seconds again the way 0.25 did.
+    _pace = max(0.05, min(0.25, 6.5 / max(1, len(steps))))
+    if _pace * len(steps) > 7.0:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'the startup repair pass has {0} steps and now yields {1:.1f}s '
+                'in total; the per-step floor is binding, so this grows with '
+                'every step added from here -- split the pass rather than '
+                'shrinking the yield'.format(len(steps), _pace * len(steps)),
+                level='WARNING')
+        except Exception:
+            pass
     for step in steps:
         try:
             if monitor and monitor.abortRequested():
@@ -359,9 +394,31 @@ def _run_build_startup_repairs():
                     level='WARNING')
             except Exception:
                 pass
+        except BaseException as e:
+            # SystemExit or KeyboardInterrupt out of a step. `except Exception`
+            # does not catch either, so this used to leave the pass -- and
+            # everything queued behind it, including the step that puts Hebrew
+            # subtitles on screen -- with NOTHING in the log: the run simply
+            # stopped, indistinguishable from a hang. HANDOFF records a patcher
+            # raising SystemExit as a thing that has actually happened here.
+            #
+            # Deliberately re-raised rather than swallowed: an aborted pass must
+            # not reach _publish_repairs_state and look finished, because the
+            # waiter would then reload POV against half-applied patches. The
+            # only thing that changes is that it says so first.
+            try:
+                from resources.lib import kodi_utils
+                kodi_utils.log(
+                    'build startup repair {0} raised {1} and ended the whole '
+                    'pass: {2}'.format(getattr(step, '__name__', 'unknown'),
+                                       type(e).__name__, e),
+                    level='WARNING')
+            except Exception:
+                pass
+            raise
 
         try:
-            if monitor and monitor.waitForAbort(0.25):
+            if monitor and monitor.waitForAbort(_pace):
                 return
         except Exception:
             pass

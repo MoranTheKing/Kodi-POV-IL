@@ -86,14 +86,18 @@ if fn:
     set_calls = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
                  and isinstance(n.func, ast.Attribute)
                  and n.func.attr == 'set_setting']
-    check('the marker is written exactly once', len(set_calls) == 1,
+    # TWO writes now, and they are different promises. One records "installed";
+    # the other records "this user already removed it, stop asking" and is
+    # deliberately BEFORE the install, because on that path there is no install.
+    check('the marker is written exactly twice', len(set_calls) == 2,
           'found %d' % len(set_calls))
-    if set_calls:
-        install_at = src.index('ensure_umbrella_installed()')
-        marker_at = src.index('set_setting')
-        check('...AFTER the install, not before', install_at < marker_at,
-              'a device that was offline would be marked done and never '
-              'retry')
+    install_at = src.index('ok = ensure_umbrella_installed()')
+    marker_at = src.rindex('set_setting')
+    check('...and the one that means "installed" comes AFTER the install',
+          install_at < marker_at,
+          'a device that was offline would be marked done and never retry')
+    check('...while the one that means "already removed" comes before it',
+          src.index('set_setting') < install_at)
 
     # and the early return on failure has to come between them.
     ok_check = src.index('if not ok:')
@@ -131,7 +135,7 @@ print('=== the guards hold when the function actually runs ===')
 
 
 def run_ensure(install_ok, buildname='Kodi POV IL - FENtastic', seeded='',
-               install_raises=None):
+               install_raises=None, was_removed=False):
     """The REAL ensure_umbrella_for_everyone, with fakes around it.
 
     Compiled out of wizard.py by AST so it is the shipped function, not a
@@ -151,6 +155,7 @@ def run_ensure(install_ok, buildname='Kodi POV IL - FENtastic', seeded='',
             get_setting=lambda k: settings.get(k, ''),
             set_setting=lambda k, v: settings.__setitem__(k, v)),
         'ensure_umbrella_installed': _installed,
+        '_umbrella_was_removed': lambda: was_removed,
         'logging': types.SimpleNamespace(
             log=lambda msg, level=None: logged.append(msg)),
         'xbmc': types.SimpleNamespace(
@@ -325,6 +330,71 @@ check('...exactly once', _ssrc.count('ensure_umbrella_for_everyone()') == 1)
 _tail = _ssrc[_umb:_umb + 400]
 check('the call site catches its own exceptions',
       'except Exception' in _tail, _tail[:200])
+
+
+# --- somebody who already said no is not asked again ---------------------
+# THE REVIEW FINDING. Umbrella has been behind a menu entry for several
+# releases and that entry never wrote this setting, so a user who installed it
+# there and then deliberately removed it looked exactly like a user who never
+# had it -- and the new automatic install would put it back. That is the one
+# thing the function's own docstring promises not to do.
+print()
+print('=== a deliberate removal is not undone ===')
+_res, _set, _calls, _logged, _raised = run_ensure(True, was_removed=True)
+check('a device that removed Umbrella is not reinstalled',
+      'install' not in _calls, str(_calls))
+check('...and nothing raised on the way', _raised is None, repr(_raised))
+check('...and is recorded, so it is asked once and never again',
+      _set.get('umbrella_auto') == 'installed', str(_set))
+check('...and says why in the log',
+      any('deliberate removal' in m for m in _logged), str(_logged))
+_res, _set, _calls, _logged, _raised = run_ensure(True, was_removed=False)
+check('a device that never had it still gets it', 'install' in _calls)
+
+# and the evidence the decision rests on
+_ns = {}
+_src_w = io.open(WIZARD_PY, encoding='utf-8').read()
+check('the removal test looks for settings without the add-on',
+      '_umbrella_was_removed' in _src_w
+      and 'addon_data/plugin.video.umbrella' in _src_w)
+check('...and an EMPTY addon_data does not count as having had it',
+      'dirs, files = xbmcvfs.listdir(data)' in _src_w
+      and 'return bool(dirs or files)' in _src_w,
+      'Kodi makes that directory the first time anything asks for a setting')
+check('...and the manual entry records the marker too, so it stops guessing',
+      _src_w.count('CONFIG.set_setting(UMBRELLA_AUTO_SETTING') >= 2)
+
+# --- and a pack is never registered into Kodi unless its files are there ---
+# TWO FINDINGS, ONE SHAPE. The "already current" fast path decides it may skip
+# the download from ONE sentinel file, and a failed EXTRACT used to fall
+# through to the same registration. Both ended with Kodi told that add-ons
+# exist which are not on disk -- and Kodi then resolves dependencies against
+# that lie, which is the silent-fallback-to-Estuary bug this pack code exists
+# to prevent.
+print()
+print('=== an add-on is registered only when its files are on disk ===')
+check('registration filters by what is actually on disk',
+      '_addon_on_disk(i) for i in wanted' in _src_w.replace('[', '').replace(']', '')
+      or 'present = [i for i in wanted if _addon_on_disk(i)]' in _src_w,
+      'the static id list must not be registered unconditionally')
+check('...and reports failure when something is missing',
+      'return not absent' in _src_w)
+check('...and registers nothing at all when NOTHING is there',
+      'if not present:' in _src_w and _src_w.split('if not present:')[1]
+      .lstrip().startswith('return False'))
+# STRUCTURAL, not a character window: the handler around extract.all must end
+# in `continue`, so nothing below it can run for a pack that did not extract.
+_wt = ast.parse(_src_w)
+_ext = [h for n in ast.walk(_wt) if isinstance(n, ast.Try)
+        for h in n.handlers
+        if any(isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)
+               and c.func.attr == 'all'
+               and getattr(c.func.value, 'id', '') == 'extract'
+               for c in ast.walk(n.body[0] if n.body else n))]
+check('the extract.all handler was found', len(_ext) == 1, str(len(_ext)))
+check('a failed extract stops before the registration',
+      bool(_ext) and isinstance(_ext[0].body[-1], ast.Continue),
+      'a truncated download used to end with every id marked installed')
 
 print()
 print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')

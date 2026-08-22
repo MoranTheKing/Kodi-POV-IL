@@ -12,6 +12,7 @@ many days or fewer remaining (for example 3 = only in the last 3 days).
 """
 
 import os
+import re
 import sys
 
 try:
@@ -178,55 +179,125 @@ _REFUSAL_TEXT = {
 }
 
 
-# A SERVICE WITH NO CODES NEEDS AN ALLOWLIST, NOT A PASS.
+# A SERVICE WITH NO CODES: TWO WORDS, NOT ONE PHRASE.
 #
 # Premiumize refuses with {"status":"error","message":"..."} and no code, so
-# the code gate silenced it entirely -- and the first fix for that accepted ANY
-# message from a codeless service. A review fed it three plausible non-refusals
-# ("Too many requests, please slow down.", a bad-request string, a server
-# hiccup) and watched all three reach the screen. That is the toast crying wolf
-# on a flaky night, which this file's own header says costs more trust than the
-# one it saves. POV's _request throws the HTTP status away before returning, so
-# there is no status code left to separate them by; the message is all there is.
+# the code gate silenced it entirely. The first fix accepted ANY message from a
+# codeless service and a review put three plausible non-refusals on screen. The
+# second fix was a list of fourteen substrings, and the same review took it
+# apart in both directions at once: ten of eleven non-account errors matched
+# something (a maintenance notice matched "disabled", an IP ban matched
+# "banned", an expired download link matched "expired", an outage matched
+# "authentication"), while eight real refusals matched nothing at all
+# ("Account locked.", "...permanently blocked.", "No active plan on this
+# account.", "Invalid session, please log in again."). A flat substring list
+# cannot separate "your account is blocked" from "downloads are temporarily
+# disabled", because the distinguishing word is not the one being matched.
 #
-# So: a phrase this build recognises as ACCOUNT-LEVEL, or nothing. Each entry
-# carries its own Hebrew, which fixes the second half of the same finding --
-# a codeless refusal has no code, so _REFUSAL_TEXT could never translate it and
-# the one toast that reached a Hebrew user was raw upstream English.
+# WHAT ACTUALLY SEPARATES THEM is that a refusal names a SUBJECT that belongs
+# to the user -- their account, their key, their membership, their session --
+# AND says something happened to it. A transient failure names a service, a
+# link, a parameter, an IP. So: one word from each column, in any order, with
+# anything in between.
 #
-# Matched case-insensitively as substrings, first match wins, most specific
-# first. A message that matches nothing is NOT a refusal, and is logged at
-# INFO with its text so the next report can widen this list on evidence rather
-# than on a guess.
-_CODELESS_REASONS = (
-    ('not logged in', 'החשבון לא מחובר'),
-    ('apikey', 'המפתח אינו תקף -- צריך לחבר מחדש'),
-    ('api key', 'המפתח אינו תקף -- צריך לחבר מחדש'),
-    ('customer_id', 'המפתח אינו תקף -- צריך לחבר מחדש'),
-    ('not premium', 'החשבון אינו פרימיום'),
-    ('premium membership', 'המנוי אינו פעיל'),
-    ('subscription', 'המנוי אינו פעיל'),
-    ('expired', 'המנוי פג'),
+#     "Your account has been permanently blocked."   account + blocked   -> yes
+#     "Downloads temporarily disabled for maintenance."   no subject     -> no
+#     "Your IP has been banned."                     no subject          -> no
+#     "This link has expired."                       no subject          -> no
+#     "Missing parameter customer_id."               no subject          -> no
+#
+# A few refusals are complete sentences with no predicate ("Not logged in.")
+# and are listed whole.
+#
+# WHAT AN UNMATCHED MESSAGE GETS: the log, not the screen. That is the trade
+# this file has always made -- a toast that cries wolf costs more trust than
+# the one it saves -- and it is affordable precisely because the log line is
+# now the thing that diagnoses (see pov_debrid_error_log_patcher). Precision
+# on the screen, recall in the log.
+
+_URL_RE = re.compile(r'\S+://\S+|\bwww\.\S+')
+
+# Something of the user's. Never a service, a link, a parameter or an IP.
+_ACCOUNT_SUBJECTS = (
+    'account', 'apikey', 'api key', 'api-key', 'membership', 'premium',
+    'subscription', 'session', 'login', 'log in', 'logged in', 'credentials',
+)
+
+# What was done to it, and the Hebrew that says so. Most specific first; the
+# first predicate that matches decides the wording.
+_ACCOUNT_PREDICATES = (
+    ('blocked', 'החשבון חסום'),
     ('banned', 'החשבון מושעה'),
     ('suspended', 'החשבון מושעה'),
-    ('disabled', 'החשבון מושבת'),
+    ('locked', 'החשבון נעול'),
+    ('terminated', 'החשבון נסגר'),
+    ('revoked', 'ההרשאה בוטלה'),
+    ('deleted', 'החשבון נמחק'),
+    ('expired', 'המנוי פג'),
+    ('no active', 'המנוי אינו פעיל'),
+    ('inactive', 'המנוי אינו פעיל'),
+    ('not premium', 'החשבון אינו פרימיום'),
+    ('not found', 'החשבון לא נמצא'),
+    ('invalid', 'הפרטים אינם תקפים -- צריך לחבר מחדש'),
+    ('incorrect', 'הפרטים אינם תקפים -- צריך לחבר מחדש'),
     ('unauthorized', 'הגישה נדחתה'),
-    ('authentication', 'הגישה נדחתה'),
-    ('login failed', 'הגישה נדחתה'),
+    ('denied', 'הגישה נדחתה'),
+    ('forbidden', 'הגישה נדחתה'),
+    ('required', 'החשבון לא מחובר'),
+    ('missing', 'החשבון לא מחובר'),
+    ('failed', 'ההתחברות נכשלה'),
 )
+
+# Complete refusals that carry no predicate of their own.
+_WHOLE_REFUSALS = (
+    ('not logged in', 'החשבון לא מחובר'),
+    ('not authenticated', 'החשבון לא מחובר'),
+    ('login failed', 'ההתחברות נכשלה'),
+    ('not premium', 'החשבון אינו פרימיום'),
+)
+
+
+# A code this build has no Hebrew for, but whose family says "account".
+# Deliberately two prefixes and one word rather than anything cleverer: these
+# are machine-readable identifiers, not prose, so there is nothing to parse.
+_UNKNOWN_CODE_TEXT = 'החשבון נדחה'
+
+_ACCOUNT_CODE_HINTS = ('AUTH_', 'PREMIUM', 'BANNED', 'BLOCKED', 'SUBSCRIPTION')
+
+
+def _unknown_account_code(code):
+    code = (code or '').strip().upper()
+    if not code or code in _REFUSAL_TEXT:
+        return False
+    return any(hint in code for hint in _ACCOUNT_CODE_HINTS)
 
 
 def _codeless_reason(message):
     """The Hebrew for an account-level refusal with no code, or None.
 
     None means "this service said error, but not about the account" -- a rate
-    limit, a hiccup, a shape nobody here recognises. The caller must then say
-    nothing at all.
+    limit, a maintenance window, a shape nobody here recognises. The caller
+    must then say nothing on screen and write the text to the log instead.
     """
-    low = (message or '').lower()
-    if not low.strip():
+    low = ' '.join((message or '').lower().split())
+    # A URL IS CONTEXT, NEVER THE REFUSAL, and it is made of exactly the words
+    # this rule looks for: `https://www.premiumize.me/link-expired` carries the
+    # subject "premium" (inside the brand name) and the predicate "expired",
+    # and read as prose it says the account's subscription has lapsed. It was
+    # the one survivor of the adversarial corpus. Stripped, along with the
+    # service's own name, before anything is matched.
+    low = _URL_RE.sub(' ', low)
+    low = low.replace('premiumize', ' ').replace('alldebrid', ' ')
+    low = low.replace('torbox', ' ').replace('offcloud', ' ')
+    low = ' '.join(low.split())
+    if not low:
         return None
-    for needle, hebrew in _CODELESS_REASONS:
+    for needle, hebrew in _WHOLE_REFUSALS:
+        if needle in low:
+            return hebrew
+    if not any(subject in low for subject in _ACCOUNT_SUBJECTS):
+        return None
+    for needle, hebrew in _ACCOUNT_PREDICATES:
         if needle in low:
             return hebrew
     return None
@@ -295,12 +366,17 @@ def _refusal(service):
 
 def _refusal_message(service, code, message):
     # Hebrew first, from whichever table can supply it: the code table for a
-    # service that sends codes, the phrase table for one that does not. Falling
-    # through to the provider's own English is the last resort and is now only
-    # reachable for a CODED refusal whose code is new -- a codeless message that
-    # matched no phrase never gets here, because _refusal returned None.
-    known = _REFUSAL_TEXT.get(code) or (None if code else _codeless_reason(message))
+    # service that sends codes, the two-word rule for one that does not. The
+    # last resort is a GENERIC Hebrew line rather than the provider's English:
+    # the only way to get here is an account-shaped code this build has no
+    # wording for yet (AUTH_SOMETHING_NEW), and "the account was refused --
+    # AUTH_SOMETHING_NEW" is readable by somebody who does not read English,
+    # where the provider's sentence is not. The raw text still goes to the log.
+    known = _REFUSAL_TEXT.get(code) or (
+        _UNKNOWN_CODE_TEXT if code else _codeless_reason(message))
     detail = known or message or code
+    if known is _UNKNOWN_CODE_TEXT and code:
+        detail = '%s (%s)' % (known, code)
     return '[B]{0}: [COLOR red]{1}[/COLOR][/B]'.format(service['name'], detail)
 
 
@@ -362,11 +438,20 @@ def maybe_notify():
         if days is None:
             # No number is not nothing to say. Ask once why.
             refused = _refusal(service)
-            # A KNOWN CODE, or a service that has no codes and said something.
-            # The first is the narrow rule this started with; the second exists
-            # because Premiumize never sends a code, so the narrow rule alone
-            # meant it could refuse an account in perfect silence.
+            # THREE WAYS THROUGH, and the third was a hole a review found.
+            #
+            #   1. a code this build has Hebrew for;
+            #   2. a code it does NOT know but whose SHAPE says account -- the
+            #      providers that send codes prefix the account-level ones
+            #      AUTH_, and MUST_BE_PREMIUM is the other family. Without
+            #      this, a new AUTH_ code from AllDebrid produced no toast at
+            #      all, not even in English, which is the same silence the
+            #      whole file exists to end -- and a comment two functions
+            #      down claimed the opposite was true;
+            #   3. a service with no codes at all, whose message reads as an
+            #      account refusal (see _codeless_reason).
             if refused and (refused[0] in _REFUSAL_TEXT
+                            or _unknown_account_code(refused[0])
                             or (not refused[0] and refused[1])):
                 queue.append((service, refused))
             continue
