@@ -83,24 +83,29 @@ AD = AD[0] if AD else {'name': 'AllDebrid', 'module': 'alldebrid_api',
 print('=== only an unambiguous account refusal is reported ===')
 
 
-def refusal_from(reply):
+def refusal_from(reply, service=None):
     """Run the real _refusal against a stubbed provider returning `reply`."""
-    fake_dir = os.path.join(HERE, '_no_such_lib')
+    # STUB THE SERVICE BEING ASKED ABOUT, not always AllDebrid. _refusal
+    # imports 'debrids.' + service['module'], so pinning the stub to AllDebrid
+    # made every Premiumize case fail its import and answer None -- which is
+    # the same answer a correct refusal-free reply gives, so the test would
+    # have "passed" for the wrong reason had it expected None.
+    svc = service or AD
     mod._pov_lib_path = lambda: LIB          # any real dir; the import is stubbed
-    api = types.ModuleType('debrids.' + AD['module'])
+    api = types.ModuleType('debrids.' + svc['module'])
 
     class _Api(object):
         def account_info(self):
             if isinstance(reply, Exception):
                 raise reply
             return reply
-    setattr(api, AD['class'], _Api)
+    setattr(api, svc['class'], _Api)
     sys.modules['debrids'] = types.ModuleType('debrids')
-    sys.modules['debrids.' + AD['module']] = api
+    sys.modules['debrids.' + svc['module']] = api
     try:
-        return mod._refusal(AD)
+        return mod._refusal(svc)
     finally:
-        sys.modules.pop('debrids.' + AD['module'], None)
+        sys.modules.pop('debrids.' + svc['module'], None)
         sys.modules.pop('debrids', None)
 
 
@@ -125,6 +130,28 @@ for label, reply in (
         ('an empty code',
          {'status': 'error', 'error': {'code': '   ', 'message': 'x'}})):
     check('%s is not a refusal' % label, refusal_from(reply) is None)
+
+
+# PREMIUMIZE HAS NO CODES AT ALL, and reading only AllDebrid's shape meant a
+# refused Premiumize account said nothing -- on screen or in the log. Its
+# envelope is {"status":"error","message":"..."} at HTTP 200, with no error
+# object. Reported as: "the numbers go up while it searches and then it says
+# no results, and only on Premiumize".
+print()
+print('=== a service that refuses without a code ===')
+PM = [x for x in mod.SERVICES if x['prefix'] == 'pm'][0]
+AD_SVC = [x for x in mod.SERVICES if x['prefix'] == 'ad'][0]
+check('Premiumize is marked as having no codes', PM.get('codeless') is True)
+check('...and AllDebrid is not', not AD_SVC.get('codeless'),
+      'widening the rule for a service that DOES send codes would put an '
+      'arbitrary string on screen the first time it answered oddly')
+check('a bare message from Premiumize is a refusal',
+      refusal_from({'status': 'error', 'message': 'Not logged in.'}, PM)
+      == ('', 'Not logged in.'))
+check('...and the same reply from AllDebrid is still nothing',
+      refusal_from({'status': 'error', 'message': 'Not logged in.'}) is None)
+check('a healthy Premiumize reply still says nothing',
+      refusal_from({'status': 'success', 'customer_id': 1}, PM) is None)
 
 
 # --- the queue: a refusal is shown, an unknown code is not ------------------
@@ -153,6 +180,9 @@ _src = io.open(os.path.join(LIB, 'debrid_status_notifier.py'),
 check('only a KNOWN code reaches the queue',
       'refused[0] in _REFUSAL_TEXT' in _src,
       'an unrecognised code must not raise a toast at startup')
+check('...or a message from a service that has no codes at all',
+      'not refused[0] and refused[1]' in _src,
+      'Premiumize sends no code, so the code-only gate silenced it entirely')
 check('the extra request is paid only when there is no number',
       'if days is None:' in _src and '_refusal(service)' in _src)
 check('...and only for a service the user actually connected',
