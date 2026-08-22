@@ -317,6 +317,7 @@ def _run_build_startup_repairs():
         _maybe_reseed_series_networks,
         _maybe_reseed_genre_folders,
         _maybe_patch_fentastic_widgets,
+        _maybe_fix_fentastic_clearlogo_var,
         _maybe_patch_skin_watched_poster,
         _maybe_patch_favourites_xml,
         _maybe_patch_favourites_personal_tiles,
@@ -329,6 +330,9 @@ def _run_build_startup_repairs():
         # _maybe_patch_pov_build_content_logger -- RETIRED, see the function.
         _maybe_patch_pov_debrid_status,
         _maybe_guard_pov_debrid_handlers,
+        _maybe_log_pov_debrid_errors,
+        _maybe_time_pov_directories,
+        _maybe_repair_addon_autoupdate,
         _maybe_fix_idanplus_youtube_id,
         _maybe_refresh_shared_sdh,
         _maybe_show_af3_first_launch_dialog,
@@ -2122,6 +2126,129 @@ def _maybe_guard_pov_debrid_handlers():
             from resources.lib import kodi_utils
             kodi_utils.log(
                 'pov_debrid_unbound_guard_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_fix_fentastic_clearlogo_var():
+    """Close two brackets that made a whole poster-view feature invisible.
+
+    A user's log carries Kodi refusing the skin's ClearArtLogo condition as
+    unparseable. The variable has no fallback value, so it resolves to nothing
+    on every device, and the one include that uses it -- this build's own
+    Poster_View_Art_Logo -- has therefore never drawn anything. See the module
+    for why it repairs this one condition and not the three dozen others.
+    """
+    try:
+        from resources.lib import fentastic_clearlogo_var_patcher, kodi_utils
+        st = fentastic_clearlogo_var_patcher.ensure_patched()
+        if st in ('unmatched', 'write_failed', 'read_failed'):
+            kodi_utils.log(
+                'fentastic_clearlogo_var_patcher: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'fentastic_clearlogo_var_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_time_pov_directories():
+    """Put a number on the spinner.
+
+    A user reports a wait on every category press; the log they can produce is
+    info level and contains not one POV timing, so the only evidence is Kodi's
+    focus errors and the gaps between them -- which are the user's reading
+    time and the directory build added together. This logs one INFO line per
+    plugin call with the seconds and the route, so the next log answers the
+    question instead of raising it. It makes nothing faster; see the module.
+    """
+    if _skip_pov_patchers():
+        return
+    try:
+        from resources.lib import pov_directory_timing_patcher, kodi_utils
+        st = pov_directory_timing_patcher.ensure_patched()
+        if st in ('unmatched', 'compile_failed', 'write_failed',
+                  'revert_failed', 'read_failed'):
+            kodi_utils.log(
+                'pov_directory_timing_patcher: ' + st, level='WARNING')
+        elif st in ('patched', 'repatched'):
+            try:
+                from resources.lib import pov_reload
+                pov_reload.note_patched()
+            except Exception:
+                pass
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'pov_directory_timing_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_repair_addon_autoupdate():
+    """Un-stick a device where add-ons are found but never installed.
+
+    Two filters sit between "an update exists" and "Kodi installs it": the
+    update mode, and Kodi's update_rules table, whose installer-set pins are
+    invisible at info level and permanent once a repository stops answering.
+    See the module -- this reports both and repairs only what the build owns.
+    """
+    try:
+        from resources.lib import addon_autoupdate_repair, kodi_utils
+        st = addon_autoupdate_repair.ensure_repaired()
+        kodi_utils.log('addon_autoupdate_repair: ' + st, level='INFO')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'addon_autoupdate_repair failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_log_pov_debrid_errors():
+    """Make a debrid refusal visible in the log instead of "no sources".
+
+    AllDebrid and TorBox both answer HTTP 200 and put the refusal in the body,
+    and POV's _request logs only when the status code is bad -- so the reason
+    the provider spelled out is dropped one line after it arrives. One log
+    line, no control-flow change. See the module for the envelopes and for the
+    two providers this deliberately leaves alone.
+    """
+    if _skip_pov_patchers():
+        return
+    try:
+        from resources.lib import pov_debrid_error_log_patcher, kodi_utils
+        st = pov_debrid_error_log_patcher.ensure_patched()
+        bad = [p for p in st.split(', ')
+               if p.split('=')[-1] in ('unmatched', 'compile_failed',
+                                       'write_failed', 'revert_failed',
+                                       'read_failed')]
+        if bad:
+            kodi_utils.log(
+                'pov_debrid_error_log_patcher: ' + st, level='WARNING')
+        elif any(p.endswith('=patched') or p.endswith('=repatched')
+                 for p in st.split(', ')):
+            # A patch into POV's warm interpreter does not take effect until
+            # it re-imports, and the cycle that forces that is armed by this
+            # call. Without it the line would first appear a boot later.
+            try:
+                from resources.lib import pov_reload
+                pov_reload.note_patched()
+            except Exception:
+                pass
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'pov_debrid_error_log_patcher failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass

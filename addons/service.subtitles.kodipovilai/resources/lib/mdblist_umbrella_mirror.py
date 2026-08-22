@@ -61,6 +61,11 @@ except Exception:
     kodi_utils = None
 
 try:
+    from resources.lib import addon_presence
+except Exception:
+    addon_presence = None
+
+try:
     from resources.lib import addon_settings_safe
 except Exception:
     addon_settings_safe = None
@@ -109,12 +114,19 @@ def _reader(addon_id):
     refreshed in the background.
 
     Returns None for every key when the add-on is not installed or cannot be
-    opened -- which is not the same as ''."""
+    opened -- which is not the same as ''.
+
+    ASKED THROUGH addon_presence, not by construction. On a device without
+    Umbrella the bare construction wrote `EXCEPTION: Unknown addon id
+    'plugin.video.umbrella'` at ERROR level -- Kodi writes it BEFORE raising,
+    so catching it does not unwrite it -- and this runs every sixty seconds
+    for as long as Kodi is up. A field log shows exactly that, one red line a
+    minute, on a device whose only fault was not having an optional add-on."""
     if xbmcaddon is None:
         return lambda _key: None
-    try:
-        addon = xbmcaddon.Addon(addon_id)
-    except Exception:
+    addon = (addon_presence.addon(addon_id)
+             if addon_presence is not None else None)
+    if addon is None:
         return lambda _key: None
 
     def _get(key):

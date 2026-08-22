@@ -1,3 +1,73 @@
+v0.2.506
+- Umbrella and its scraper module now arrive on every device instead of
+  waiting behind a menu entry nobody had to find. Half the build already
+  assumed they were there: the home screen carries Umbrella tiles, the search
+  wiring has an Umbrella branch, the account manager pushes debrid accounts
+  into it, and a dozen small repairs exist for no other reason than to make it
+  speak Hebrew. On a device without it every one of those quietly did nothing,
+  and the screen looked identical either way -- which is exactly why it should
+  not have been left to chance. It installs once, in the background, and its
+  own repositories come with it, so from that moment the developers publish
+  its updates rather than us. A tile you remove stays removed.
+- An update no longer throws away settings you changed that evening. The
+  wizard closed Kodi by killing it, which skips the save Kodi does on a normal
+  shutdown -- correct after a full build install, where a save would overwrite
+  the guisettings.xml that was just extracted, and wrong after a quick update,
+  where nothing of the kind was written. Audio passthrough turning itself back
+  off is what made it visible, because that is a setting people set once and
+  notice immediately, but every setting was affected. The quick update now
+  asks Kodi to close properly and falls back to the kill only if that does not
+  take; the build install and the skin switch keep the kill they need.
+- Pressing a tile in the second and a half after an update no longer drops you
+  into an empty video screen. To make a fix take effect the same evening the
+  build switches the video add-on off and on again, and it waits for the home
+  screen to settle first -- but if the screen never settled it used to go
+  ahead anyway. A log showed exactly what that costs: three minutes of
+  browsing without a pause, the switch fired at the deadline, and 1.2 seconds
+  later a press on the Disney+ tile landed in the bare Videos list because
+  Kodi could not resolve the add-on it points at. Three minutes of continuous
+  activity means somebody is watching the screen, which makes it the worst
+  possible moment. It now gives up instead, records that the switch is still
+  owed, and does it at the next start.
+- Add-ons that stopped updating themselves update again. Kodi keeps a table of
+  add-ons excluded from automatic updates, and it writes rows into it by
+  itself: an add-on whose ORIGIN repository stops answering has no version to
+  be compared against, so it is marked "not the latest" and excluded for good.
+  This build has such a repository -- a field log catches it returning 404 --
+  and five of the add-ons registered to it are ones the build ships. The
+  excluded add-on still appears in the manual "available updates" list, which
+  is why updating by hand worked and made the fault look random. The build now
+  clears those automatic exclusions for the add-ons it ships, never touches
+  one somebody set by hand or a version somebody installed from a zip on
+  purpose, and names every one it finds in the log. It also checks the
+  "install updates automatically" setting itself, puts it back once if it has
+  drifted, and says so at every start if it has not.
+- A debrid service that refuses your account now says why in the log instead
+  of turning into "no sources". AllDebrid and TorBox both answer normally --
+  HTTP 200 -- and put the refusal in the body, and the video add-on only
+  records a problem when the status code is bad, so the reason the provider
+  spelled out in words was dropped one line after it arrived. Nothing about
+  what happens on screen changes; the difference is that the next log somebody
+  sends says which refusal it was.
+- Every category POV opens now records how long it took. A report of a spinner
+  on each press came with a log that contains no POV timing at all, so the
+  only evidence was the gaps between unrelated errors -- reading time and
+  loading time added together, and impossible to separate. This does not make
+  anything faster and must not be mistaken for having done so: it puts a
+  number and a route on each press, so the next report of a slow build can be
+  answered instead of guessed at.
+- A logo that has never once appeared now appears. The skin declares a
+  variable for the poster view's clear-logo whose two conditions are each
+  missing a closing bracket; Kodi cannot parse either, treats both as false,
+  and the variable has no fallback -- so it resolved to nothing, on every
+  device, from the day it was written. The build's own poster-view block is
+  its only user. Two brackets.
+- And a line of red that a device without Umbrella collected every sixty
+  seconds, forever: asking Kodi whether an add-on is installed by trying to
+  open it makes Kodi write "Unknown addon id" at error level before it
+  answers, and the background job that keeps Umbrella's accounts in step with
+  POV's asked exactly that way, once a minute, for as long as Kodi was up.
+
 v0.2.505
 - Right after an update, the POV home tiles could come back empty and the
   error log could fill with red -- and it was this build doing it. When a fix
