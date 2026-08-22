@@ -176,7 +176,16 @@ def _owed_path():
 
 
 def _mark_owed(owed):
-    """Record -- or clear -- "a cycle is still owed". Never raises."""
+    """Record -- or clear -- "a cycle is still owed". Never raises.
+
+    A FAILURE HERE IS SAID OUT LOUD, like its sibling _mark_cycle_pending.
+    This used to return False and log nothing, which was survivable while the
+    only way to miss a cycle was Kodi shutting down mid-wait. It stopped being
+    survivable when running out of patience became an ordinary outcome: a
+    read-only profile or a full disk at the wrong second now loses the debt,
+    the next start finds every patch already written and arms nothing, and POV
+    keeps the pre-patch code with no line anywhere saying why.
+    """
     try:
         import os
         path = _owed_path()
@@ -189,7 +198,10 @@ def _mark_owed(owed):
         elif os.path.exists(path):
             os.remove(path)
         return True
-    except Exception:
+    except Exception as exc:
+        _log('could not {0} the owed-cycle record ({1}); a patch may not '
+             'take effect until some later release touches it again'.format(
+                 'write' if owed else 'clear', exc), level='WARNING')
         return False
 
 
@@ -592,9 +604,10 @@ def _wait_until_idle(timeout=180):
     at least _MIN_AGE_SECONDS old -- the first widget pass is the thing being
     waited out and it happens once, at the beginning.
 
-    Still returns True at the timeout. Waiting forever would mean the patch
-    never takes effect this session, which is the outcome the cycle exists to
-    avoid; the cap is just far enough out now that the first pass is over.
+    Returns False at the cap. It used to return True there -- see the comment
+    at the bottom for the field log that settled it. The debt on disk is what
+    makes giving up safe: the patch waits for the next start instead of
+    landing on top of whatever the user is doing right now.
     """
     try:
         monitor = xbmc.Monitor()
@@ -634,9 +647,32 @@ def _wait_until_idle(timeout=180):
         if monitor.waitForAbort(2):
             return False
         waited += 2
-    _log('home never settled in {0}s; cycling anyway'.format(timeout),
+    # WE DO NOT CYCLE ANYWAY. This used to, on the reasoning that never
+    # cycling means the patch never lands -- which was true until the owed
+    # record existed. It does now: not cycling here costs the patch one
+    # session, and the next start picks the debt up.
+    #
+    # A field log settled it on the first device that reached the cap. An
+    # NVIDIA Shield, three minutes of a user browsing without pause, so the
+    # screen was never quiet for twenty seconds together -- and then:
+    #
+    #     19:56:29.507  home never settled in 180s; cycling anyway
+    #     19:56:30.672  Unable to find plugin plugin.video.pov
+    #     19:56:30.673  GetDirectory - Error getting plugin://...Disney+...
+    #     19:56:31.037  cycled POV -- resolvable=True
+    #
+    # He pressed a tile 1.2 seconds into the window and Kodi dropped him in
+    # the bare Videos root, because it could not resolve the add-on the tile
+    # points at. The cap did not protect anyone; it just moved the damage to
+    # the one moment the user was certainly watching.
+    #
+    # 'Never quiet' is a property of a SESSION, not of a device -- it means
+    # somebody was using it. The next start has its own chance, and most
+    # starts settle in the first minute.
+    _log('home never settled in {0}s; NOT cycling this session -- the debt '
+         'is recorded and the next start will'.format(timeout),
          level='WARNING')
-    return True
+    return False
 
 
 def _capture_home_focus():
@@ -756,7 +792,16 @@ def _deferred_cycle():
 def _run_cycle():
     global _cycling
     if not _wait_until_idle():
-        _log('aborted before cycle', level='WARNING')
+        # Abort, or a screen that never settled. Either way the cycle did not
+        # run, so the owed record stays and the next start tries again.
+        #
+        # A LINE EITHER WAY. _wait_until_idle speaks for itself at the cap but
+        # not when Kodi is shutting down, and this function used to log for
+        # both. A cycle that silently did not happen is the thing hardest to
+        # diagnose from a user's log, which is the whole reason the near-miss
+        # telemetry above exists.
+        _log('cycle deferred (Kodi is closing, or the screen never settled); '
+             'the debt is recorded')
         return
     try:
         if xbmc.getCondVisibility('Player.HasMedia'):
@@ -787,7 +832,20 @@ def _run_cycle():
             _log('could not record the cycle; not disabling POV',
                  level='WARNING')
             return
-        _set_enabled(False)
+        # THE RETURN VALUE IS READ NOW. It used to be discarded, and that is
+        # the one way this function could clear the debt without having done
+        # anything: if Addons.SetAddonEnabled never lands -- the RPC errors,
+        # xbmc raises, the method is refused -- POV is never taken down, so
+        # its interpreter never tears down and never re-imports the patch. And
+        # then _is_resolvable() below answers True on the very first try,
+        # because POV was up the whole time. ok=True, "cycled POV --
+        # resolvable=True" in the log, debt paid, patch not applied. Every
+        # sign of success and none of the substance.
+        if not _set_enabled(False):
+            _log('POV would not switch off (the request was refused); not '
+                 'claiming a cycle -- the debt stays and the next start '
+                 'tries again', level='WARNING')
+            return
         try:
             xbmc.sleep(1500)
         except Exception:

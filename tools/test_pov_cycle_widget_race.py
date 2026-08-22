@@ -26,8 +26,9 @@ anything; both just shift startup timing.
 WHAT THIS PINS:
 
   * the wait now needs the home screen to be QUIET, continuously, and the
-    service to be old enough that the first widget pass is behind it -- and it
-    still gives up and cycles rather than never applying the patch;
+    service to be old enough that the first widget pass is behind it -- and
+    when it runs out of patience it gives up instead of cycling anyway, on the
+    strength of the owed record that makes the next start try again;
   * the repair: when the captured container comes back empty, one skin reload,
     and ONLY once POV is resolvable again. This file's own history records
     that same reload fired 0.6s inside the window taking POV's service down
@@ -44,7 +45,9 @@ import importlib.util
 import io
 import os
 import re
+import shutil
 import sys
+import tempfile
 import types
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -168,10 +171,50 @@ mod = load(fake)
 mod._wait_until_idle(timeout=60)
 check('and so does playback', fake.now >= 60)
 
-fake = FakeKodi(updating=True)
-mod = load(fake)
-check('it gives up and cycles rather than never applying the patch',
-      mod._wait_until_idle(timeout=60) is True)
+# THE CAP DOES NOT FIRE INTO THE USER'S HANDS. It used to return True here --
+# 'never cycling means the patch never lands' -- and that was a real argument
+# until the owed record existed. The first device to actually reach the cap
+# showed what it costs. An NVIDIA Shield, three minutes of a user browsing
+# without a pause long enough to count as settled, and then:
+#
+#     19:56:29.507  home never settled in 180s; cycling anyway
+#     19:56:30.672  Unable to find plugin plugin.video.pov
+#     19:56:30.673  GetDirectory - Error getting plugin://...Disney+...
+#     19:56:31.037  cycled POV -- resolvable=True
+#
+# He pressed a tile 1.2 seconds into the window and Kodi dropped him in the
+# bare Videos root, because it could not resolve the add-on the tile points
+# at. The cap did not protect anyone; it just moved the damage to the one
+# moment the user was certainly watching -- three minutes of continuous
+# activity is the definition of a user who is looking at the screen.
+#
+# So the cap gives up, and the debt on disk is what makes that safe: the
+# patch costs one session, not forever.
+_cap_dir = tempfile.mkdtemp(prefix='cap-')
+try:
+    fake = FakeKodi(updating=True)
+    mod = load(fake)
+    mod._owed_path = lambda: os.path.join(_cap_dir, 'owed.txt')
+    mod._mark_owed(True)
+    check('the cap gives up rather than cycling into a busy screen',
+          mod._wait_until_idle(timeout=60) is False,
+          'a True here is a 1.5s hole punched under whatever the user is '
+          'pressing right now')
+
+    # and the half that makes giving up affordable: the run leaves without
+    # touching POV, and the debt it did not pay is still on disk.
+    _touched = []
+    mod._set_enabled = lambda on: _touched.append(on)
+    mod._capture_home_focus = lambda: _touched.append('captured')
+    mod._wait_until_idle = lambda timeout=180: False
+    mod._run_cycle()
+    check('...without disabling POV on the way out', not _touched,
+          'reached %s after a wait that said no' % _touched)
+    check('...and the debt it did not pay is still owed',
+          mod.cycle_owed() is True,
+          'a forgotten debt means POV keeps the pre-patch code for good')
+finally:
+    shutil.rmtree(_cap_dir, ignore_errors=True)
 
 fake = FakeKodi(abort_at=20)
 mod = load(fake)
@@ -284,11 +327,21 @@ check('...and never constructs an Addon',
            and isinstance(n.func, ast.Attribute) and n.func.attr == 'Addon'],
       'Kodi logs the failure before it raises; that is the whole point')
 
+# THE SIXTH AND SEVENTH SITES, found a release later and in the worst place.
+# The two mirrors ask POV and Umbrella for their tokens through a shared
+# _reader(addon_id), and the keeper thread calls them EVERY SIXTY SECONDS for
+# as long as Kodi is up. On a device without Umbrella that was one
+# `EXCEPTION: Unknown addon id 'plugin.video.umbrella'` per minute, at ERROR,
+# forever -- a field log carries them a minute apart, 19:54:55 and 19:55:55,
+# on a device whose only fault was not having an optional add-on. The five
+# below were startup-only; these two never stop.
 SITES = {
     'favourites_personal_tiles_patcher.py': ('_umbrella_installed',),
     'af3_home_patcher.py': ('_umbrella_installed',),
     'umbrella_setup_patcher.py': ('_addon', 'ensure_coco_providers'),
     'umbrella_language_patcher.py': ('_umbrella_addon',),
+    'mdblist_umbrella_mirror.py': ('_reader',),
+    'trakt_umbrella_mirror.py': ('_reader',),
 }
 for fn, names in sorted(SITES.items()):
     src = io.open(os.path.join(LIB, fn), encoding='utf-8').read()
@@ -321,6 +374,29 @@ for root, _dirs, files in os.walk(LIB):
                 leaks.append('%s:%s' % (fn, n.lineno))
 check('no optional add-on is probed by constructing an Addon anywhere',
       not leaks, 'still doing it at %s' % leaks)
+
+# The scan above only sees a LITERAL add-on id. Both mirrors take the id as a
+# parameter, so a bare construction there is invisible to it -- which is
+# exactly how the per-minute error line survived the first pass. Name them.
+for fn in ('mdblist_umbrella_mirror.py', 'trakt_umbrella_mirror.py'):
+    src = io.open(os.path.join(LIB, fn), encoding='utf-8').read()
+    tree = ast.parse(src)
+    reader = [f for f in ast.walk(tree) if isinstance(f, ast.FunctionDef)
+              and f.name == '_reader']
+    check('%s: _reader was found' % fn, len(reader) == 1)
+    if reader:
+        check('%s: it asks through addon_presence' % fn,
+              [n for n in ast.walk(reader[0]) if isinstance(n, ast.Call)
+               and isinstance(n.func, ast.Attribute)
+               and n.func.attr == 'addon'
+               and isinstance(n.func.value, ast.Name)
+               and n.func.value.id == 'addon_presence'],
+              'a bare Addon(addon_id) here is an ERROR line every 60 seconds '
+              'for the whole time Kodi is up')
+        check('%s: and never constructs one itself' % fn,
+              not [n for n in ast.walk(reader[0]) if isinstance(n, ast.Call)
+                   and isinstance(n.func, ast.Attribute)
+                   and n.func.attr == 'Addon'])
 
 # --- 4. the longer wait must not starve the callers that block on it -------
 # ARMING RAISES A FLAG OTHER CODE WAITS ON. Three of wait_until_settled's four
@@ -415,9 +491,6 @@ for _label, _kw in (('while the user is on another window', {'home': False}),
 # The answer is not to freeze the screen until it works. It is to not forget.
 print()
 print('=== an owed cycle survives a quit ===')
-import shutil
-import tempfile
-
 _owed_dir = tempfile.mkdtemp(prefix='owed-')
 fake = FakeKodi()
 mod = load(fake)

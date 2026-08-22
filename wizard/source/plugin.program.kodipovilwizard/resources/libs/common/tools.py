@@ -410,7 +410,12 @@ def id_generator(size=6, chars=string.ascii_uppercase + string.digits):
     return ''.join(random.choice(chars) for _ in range(size))
 
 
-def kill_kodi(msg=None, over=None):
+def kill_kodi(msg=None, over=None, graceful=False):
+    """Close Kodi. `graceful` asks Kodi to shut down instead of shooting it.
+
+    See the comment on the hard kill below for why the default is the hard
+    one, and `force_close_kodi_in_5_seconds` for who passes graceful=True.
+    """
     if over:
         choice = 1
     else:
@@ -424,15 +429,83 @@ def kill_kodi(msg=None, over=None):
                                   nolabel='[B][COLOR red] No Cancel[/COLOR][/B]',
                                   yeslabel='[B][COLOR springgreen]Force Close Kodi[/COLOR][/B]')
     if choice == 1:
-        from resources.libs.common import logging
-        logging.log("Force Closing Kodi: Platform[{0}]".format(str(platform())))
-        # HARD kill, on purpose. A graceful Quit makes Kodi write its
-        # in-memory settings on shutdown, which overwrites the
-        # guisettings.xml / Addons33.db a build install just extracted
-        # (skin reverts to Estuary, addons stay disabled). os._exit()
-        # skips Kodi's shutdown save so the extracted files survive.
-        # Quick updates were unaffected (their zips carry no
-        # guisettings), which is why only fresh installs broke.
+        # NOTHING BETWEEN HERE AND THE CLOSE MAY RAISE. This log line was the
+        # first statement in the block and was not guarded; the wizard's
+        # logger writes a file, startup.py already carries a comment about a
+        # handler that fails because writing that file is what went wrong, and
+        # an exception here left Kodi running after the user had watched a
+        # five-second countdown telling them it would close. Found by a test
+        # that executes this function rather than reading it.
+        try:
+            from resources.libs.common import logging
+            logging.log(
+                "Force Closing Kodi: Platform[{0}] graceful[{1}]".format(
+                    str(platform()), graceful))
+        except BaseException:
+            pass
+        # THE HARD KILL IS THE DEFAULT, ON PURPOSE. A graceful Quit makes Kodi
+        # write its in-memory settings on shutdown, which overwrites the
+        # guisettings.xml / Addons33.db a build install just extracted (skin
+        # reverts to Estuary, addons stay disabled). os._exit() skips Kodi's
+        # shutdown save so the extracted files survive. Same for the skin
+        # switch, which edits guisettings.xml on disk under a running Kodi.
+        #
+        # WHAT THE SAVE ACTUALLY TOUCHES, checked in Kodi's own source rather
+        # than inferred from the symptom. guisettings.xml is written from
+        # memory on a clean shutdown, so a freshly extracted one loses. The
+        # add-on database is a different story: CAddonMgr::DeInit only closes
+        # it, enable state is written row by row the moment it changes
+        # (CAddonDatabase::EnableAddon is a single UPDATE), and m_disabled is
+        # only ever RELOADED from the file. Nothing is flushed back at exit.
+        # What a build install has to fear there is sqlite itself: Kodi holds
+        # the file open, and closing it cleanly can write a journal over the
+        # database that was just extracted underneath it. Either way the
+        # answer for a build install is the same, which is why it kept the
+        # kill.
+        #
+        # AND THAT SAME SAVE IS THE ONE THE USER WANTS on the quick-update
+        # path, where nothing was extracted that a save could clobber -- the
+        # quickfix zip carries addons/, media/, userdata/keymaps/ and the
+        # wizard, and no guisettings.xml or .db at all. Killing there threw
+        # away every setting the user had changed since Kodi started; the
+        # report that found it was audio passthrough switching itself off
+        # after an update, because that is a setting people change once and
+        # notice immediately.
+        #
+        # THE KILL BELOW MUST BE REACHABLE FROM EVERY OUTCOME OF THIS BLOCK.
+        # An earlier shape logged from inside the except handler, so a logger
+        # that was itself the thing failing -- and this wizard's logger writes
+        # a file, which startup.py already has a comment about -- raised
+        # straight out of kill_kodi and past os._exit, leaving Kodi running
+        # after the user was told it would close. Nothing here may raise: the
+        # whole attempt is one BaseException guard, and the log line is a
+        # separate, individually guarded afterthought.
+        if graceful:
+            quit_taken, why = False, ''
+            try:
+                monitor = xbmc.Monitor()
+                xbmc.executebuiltin('Quit')
+                # waitForAbort goes True the moment Kodi ACCEPTS the shutdown,
+                # not when it has finished one, so returning here hands the
+                # rest to Kodi -- including the settings write. Blocking longer
+                # would only delay the very shutdown we asked for. Callers must
+                # therefore treat a return as "Kodi is going down" and stop.
+                quit_taken = bool(monitor.waitForAbort(20))
+                if not quit_taken:
+                    why = 'did not take in 20s'
+            except BaseException as err:
+                why = 'failed ({0})'.format(err)
+            if not quit_taken:
+                try:
+                    # imported again, on purpose: the import above is inside a
+                    # guard, so `logging` may simply not be bound here.
+                    from resources.libs.common import logging as _lg
+                    _lg.log('Graceful quit {0}; killing'.format(why),
+                            level=xbmc.LOGWARNING)
+                except BaseException:
+                    pass
+            else:
+                return
         os._exit(1)
 
 

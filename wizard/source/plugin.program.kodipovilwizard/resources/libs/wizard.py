@@ -364,7 +364,13 @@ class Wizard:
                 # the user is sitting in front of Kodi right now.
                 outcome = self.hot_reload()
                 if not outcome:
-                    self.force_close_kodi_in_5_seconds(dialog_header="עדכון מהיר הסתיים בהצלחה")
+                    # graceful: the quickfix extracted no guisettings.xml and
+                    # no .db, so letting Kodi save on the way out costs
+                    # nothing and keeps the settings the user changed this
+                    # session (audio passthrough, subtitle sizes, ...).
+                    self.force_close_kodi_in_5_seconds(
+                        dialog_header="עדכון מהיר הסתיים בהצלחה",
+                        graceful=True)
                 elif outcome == self.HOT_RELOAD_DEFERRED:
                     # Postponed because something is playing. Saying "applied"
                     # here would be a lie the user can catch: nothing changed
@@ -1165,17 +1171,26 @@ class Wizard:
 
     #####################################################
     # KODI-RD-IL
-    def force_close_kodi_in_5_seconds(self, dialog_header):
+    def force_close_kodi_in_5_seconds(self, dialog_header, graceful=False):
+        """Count down, then close Kodi.
+
+        graceful=True asks Kodi to shut down normally so it SAVES the user's
+        settings on the way out. Pass it from any path that did not just
+        extract a guisettings.xml or an Addons33.db over the running Kodi --
+        in practice the quick update, whose zip carries neither. Everything
+        else (build install, guifix, skin switch) has to keep the hard kill,
+        because there a settings save would overwrite what was just written.
+        """
         self.dialogProgress.create(f"[COLOR yellow][B]{dialog_header}[/B][/COLOR]", "[B]קודי ייסגר בעוד 5 שניות[/B]")
         for s in range(5, -1, -1):
             self.dialogProgress.update(int((5 - s) / 5.0 * 100), f"[B]קודי ייסגר בעוד {s} שניות[/B]")
             xbmc.sleep(1000)
-        self.restart_kodi()
+        self.restart_kodi(graceful=graceful)
     #####################################################
 
     #####################################################
     # KODI-RD-IL
-    def restart_kodi(self):
+    def restart_kodi(self, graceful=False):
         # if tools.platform() == 'windows':
             # try:
                 # import subprocess, xbmcvfs
@@ -1187,7 +1202,7 @@ class Wizard:
                 # subprocess.Popen(kodi_full_path, shell=True)
             # except:
                 # pass
-        tools.kill_kodi(over=True)
+        tools.kill_kodi(over=True, graceful=graceful)
     #####################################################
 
 
@@ -1578,7 +1593,7 @@ NOX_PACKS = [
 # updating straight from their developers -- the same trust model POV has via
 # repository.kodifitzwell. Nothing here runs unless the user explicitly picks
 # the wizard menu entry; no tile, no search wiring, no change for anyone else.
-UMBRELLA_PACK_VERSION = '6.7.81'
+UMBRELLA_PACK_VERSION = '6.7.85'
 UMBRELLA_PACKS = [
     {
         'name': 'Umbrella + CocoScrapers',
@@ -1735,11 +1750,72 @@ def ensure_umbrella_installed():
             CONFIG.COLOR1))
 
 
+# KODI-POV-IL - UMBRELLA FOR EVERYONE. Same marker-once pattern as Account
+# Manager above; see ensure_acctmgr_for_everyone for the reasoning behind each
+# guard, which is identical here.
+UMBRELLA_AUTO_SETTING = 'umbrella_auto'
+UMBRELLA_AUTO_DONE = 'installed'
+
+
+def ensure_umbrella_for_everyone():
+    """Put Umbrella and CocoScrapers on every device, existing installs
+    included, exactly once.
+
+    Why it stopped being a pilot: half the build already assumes it. The home
+    screen has Umbrella tiles, the search wiring has an Umbrella branch, the
+    account manager pushes debrid accounts into it, and a dozen patchers in
+    the AI add-on exist only to make it behave in Hebrew. On a device without
+    it, every one of those quietly does nothing -- and the screen looks the
+    same either way, which is exactly why the difference must not be left to
+    whether somebody found a menu entry.
+
+    ONCE per device, recorded in a wizard setting. Somebody who then removes
+    Umbrella on purpose is not fought with at every boot.
+
+    THE PACK CARRIES ITS OWN REPOSITORIES (repository.umbrella and
+    repository.cocoscrapers), so from the moment this runs the developers are
+    the update channel, not us -- which is the point. We are not taking on
+    shipping Umbrella releases; we are making sure the first one is there.
+
+    Silent when there is nothing to do: the sentinel + version gate inside
+    _ensure_packs_installed turns an already-current install into a file
+    check rather than an 11 MB download. Never raises."""
+    try:
+        if CONFIG.get_setting(UMBRELLA_AUTO_SETTING) == UMBRELLA_AUTO_DONE:
+            return False
+        if not CONFIG.get_setting('buildname'):
+            return False            # build not installed yet -- too early
+        ok = ensure_umbrella_installed()
+        if not ok:
+            # No marker: a device that was offline (or where the pack host was
+            # down) tries again on the next boot instead of never again.
+            logging.log(
+                '[Umbrella] auto-install did not complete; will retry on the '
+                'next startup', level=xbmc.LOGINFO)
+            return False
+        CONFIG.set_setting(UMBRELLA_AUTO_SETTING, UMBRELLA_AUTO_DONE)
+        xbmc.sleep(500)
+        try:
+            xbmc.executebuiltin('UpdateLocalAddons')
+        except Exception:
+            pass
+        logging.log('[Umbrella] auto-installed {0}'.format(
+            UMBRELLA_PACK_VERSION), level=xbmc.LOGINFO)
+        return True
+    except Exception as e:
+        logging.log('[Umbrella] auto-install failed: {0}'.format(e),
+                    level=xbmc.LOGERROR)
+        return False
+
+
 def install_umbrella_pilot():
-    """Opt-in flow behind the wizard menu entry: confirm, install, and tell
-    the user where to find it. Deliberately does NOT touch the home screen,
-    the search wiring or any default -- the pilot's whole point is zero
-    impact on anyone who didn't ask for it."""
+    """Manual (re)install behind the wizard menu entry.
+
+    Umbrella now arrives by itself on every device
+    (ensure_umbrella_for_everyone), so this is the repair path for somebody
+    who removed it, or whose auto-install never completed because the device
+    was offline at the wrong moment. It still touches nothing else: no home
+    screen change, no default, no existing setting."""
     dialog = xbmcgui.Dialog()
     yes_pressed = dialog.yesno(
         CONFIG.ADDONTITLE,
