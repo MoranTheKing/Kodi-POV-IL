@@ -74,6 +74,33 @@ v0.2.506
   never visible because the reason was destroyed two steps before anyone could
   read it. It now says so, on screen and in the log -- and the refusal itself
   is the account's, not something this build can fix for you.
+- And a third cause of it, which is the one that was doing most of the damage.
+  Once the scrapers have found their torrents, POV asks the debrid service
+  which of them it already holds -- and it builds the list it shows you
+  entirely out of the answers that came back in time. One debrid configured
+  means one answer, so a debrid that is a second late leaves nothing to build
+  from and the whole search is discarded unread: three hundred sources found,
+  "no results" on screen. Worse, a check that FAILED -- timed out, refused,
+  answered nonsense -- is recorded as a definite "none of these are cached",
+  and the default setting then deletes every one of those from the list. Both
+  roads end at an empty screen after the counters climbed.
+  Why Premiumize and not TorBox on the same build: one number, "Scraper/Debrid
+  Timeout", is both how long POV waits for the answer and how long the
+  Premiumize request itself is allowed to take, so a slow request always
+  finishes at or after the moment POV stopped waiting -- and raising the
+  number raises both halves equally, which is why raising it in the last
+  update helped some people and not others. TorBox sends its request in a form
+  that answers in well under a second and never comes near the deadline.
+  Premiumize sends every torrent as a separate field -- hundreds on a popular
+  title -- and sits right on it. And it works on the second try because POV
+  remembers the answers, so a title you just searched skips the request
+  entirely.
+  Now: a debrid that does not answer no longer erases anything. Its sources
+  are kept and marked "not checked" -- which is exactly what POV already does
+  for Real-Debrid and AllDebrid every time -- so you get the list, with the
+  unverified ones at the bottom. A debrid that DOES answer is treated exactly
+  as before, down to the byte; an honest "nothing cached here" is still
+  believed and still hidden.
 - Every category POV opens now records how long it took. A report of a spinner
   on each press came with a log that contains no POV timing at all, so the
   only evidence was the gaps between unrelated errors -- reading time and
