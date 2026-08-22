@@ -86,11 +86,26 @@ TB_IS_CONTROL = (
     "\t\treturn any(i in path for i in ('/control', '/edit'))\n"
 )
 
+# Premiumize's cache check, verbatim. A bare subscript on a reply that is a
+# refusal envelope at HTTP 200 -- and modules/debrid.py's cache_check catches
+# everything with `except: pass` and returns an empty cached list, so every
+# source becomes "uncached", is filtered out, and the user is told there are
+# no results AFTER watching the counters climb.
+PM_CHECK_CACHE = (
+    "\tdef check_cache(self, hashes):\n"
+    "\t\turl = 'cache/check'\n"
+    "\t\tdata = {'items[]': hashes}\n"
+    "\t\tresult = self._post(url, data)\n"
+    "\t\treturn [h for h, cached in zip(hashes, result['response']) if cached]\n"
+)
+
 FIXTURES = {
     'resources/lib/debrids/alldebrid_api.py':
         'class AllDebridAPI(object):\n' + AD_REQUEST,
     'resources/lib/debrids/torbox_api.py':
         'class TorBoxAPI(object):\n' + TB_REQUEST + '\n' + TB_IS_CONTROL,
+    'resources/lib/debrids/premiumize_api.py':
+        'class PremiumizeAPI(object):\n' + PM_CHECK_CACHE,
 }
 
 _SCRATCH = []
@@ -158,7 +173,9 @@ if os.path.isdir(STOCK):
     for rel, slice_ in (('resources/lib/debrids/alldebrid_api.py', AD_REQUEST),
                         ('resources/lib/debrids/torbox_api.py', TB_REQUEST),
                         ('resources/lib/debrids/torbox_api.py',
-                         TB_IS_CONTROL)):
+                         TB_IS_CONTROL),
+                        ('resources/lib/debrids/premiumize_api.py',
+                         PM_CHECK_CACHE)):
         real = _read(STOCK, rel)
         check('FIXTURE slice of %s is verbatim POV' % rel.split('/')[-1],
               real.count(slice_) == 1,
@@ -174,8 +191,9 @@ home, root = fresh_pov()
 mod = load(home)
 status = mod.ensure_patched()
 print('   status: %s' % status)
-check('both sites patch on a stock tree',
-      status == 'alldebrid=patched, torbox=patched', status)
+check('every site patches on a stock tree',
+      status == 'alldebrid=patched, torbox=patched, premiumize=patched',
+      status)
 
 for rel in ('resources/lib/debrids/alldebrid_api.py',
             'resources/lib/debrids/torbox_api.py'):
@@ -190,7 +208,8 @@ for rel in ('resources/lib/debrids/alldebrid_api.py',
         check('%s still compiles' % rel.split('/')[-1], True)
 
 check('running it again changes nothing',
-      mod.ensure_patched() == 'alldebrid=unchanged, torbox=unchanged')
+      mod.ensure_patched()
+      == 'alldebrid=unchanged, torbox=unchanged, premiumize=unchanged')
 
 
 # --- 2. IT ACTUALLY REPORTS THE REFUSAL ------------------------------------
@@ -272,8 +291,8 @@ STOCK_TB_RETURN = val
 home2, root2 = fresh_pov(FIXTURES)
 mod2 = load(home2)
 st2 = mod2.ensure_patched()
-check('the fixtures patch too', st2 == 'alldebrid=patched, torbox=patched',
-      st2)
+check('the fixtures patch too',
+      st2 == 'alldebrid=patched, torbox=patched, premiumize=patched', st2)
 
 PATCHED_AD = _read(root2, 'resources/lib/debrids/alldebrid_api.py')
 PATCHED_TB = _read(root2, 'resources/lib/debrids/torbox_api.py')
@@ -379,6 +398,67 @@ for label, src, cls in (('AllDebrid', PATCHED_AD, 'AllDebridAPI'),
           'patched raised %r, stock raised %r, log %s' % (err, serr, _l))
 
 
+# --- 2c. Premiumize: the numbers go up and the list is empty ---------------
+# "Sometimes the count of sources found goes up and sometimes it does not, but
+# it ALWAYS says no results and never shows the list -- and only on
+# Premiumize." Both halves are `result['response']` with no guard: Premiumize
+# refuses at HTTP 200 with {"status":"error","message":...}, which has no
+# 'response' key, so this raises KeyError into a bare `except: pass` two
+# frames up. Every source is then uncached, filtered out, and gone.
+print()
+print('=== Premiumize refuses at 200 and POV subscripts the refusal ===')
+PATCHED_PM = _read(root2, 'resources/lib/debrids/premiumize_api.py')
+STOCK_PM = FIXTURES['resources/lib/debrids/premiumize_api.py']
+
+PM_REFUSAL = {'status': 'error', 'message': 'Not logged in.'}
+PM_OK = {'status': 'success', 'response': [True, False]}
+
+
+def run_check_cache(source, payload):
+    logged = []
+    ns = {'kodi_utils': types.SimpleNamespace(
+              logger=lambda name, msg: logged.append(msg)),
+          '__name__': 'premiumize_api'}
+    exec(compile(source, 'premiumize_api.py', 'exec'), ns)
+    api = ns['PremiumizeAPI']()
+    api._post = lambda url, data: payload
+    try:
+        return api.check_cache(['h1', 'h2']), None, logged
+    except BaseException as e:
+        return None, e, logged
+
+
+sval, serr, slog = run_check_cache(STOCK_PM, PM_REFUSAL)
+check('STOCK raises on a refusal', isinstance(serr, KeyError), repr(serr))
+check('...and says nothing about why', not slog,
+      'then this patch has no reason to exist')
+
+pval, perr, plog = run_check_cache(PATCHED_PM, PM_REFUSAL)
+check('PATCHED logs the refusal', len(plog) == 1, str(plog))
+check('...naming what Premiumize actually said',
+      plog and 'Not logged in.' in plog[0], str(plog))
+check('...and which call it was', plog and 'cache/check' in plog[0], str(plog))
+check('AND IT STILL RAISES EXACTLY WHAT STOCK RAISED -- the caller catches '
+      'it either way, so POV behaves identically',
+      type(perr) is type(serr) and str(perr) == str(serr),
+      '%r vs %r' % (perr, serr))
+
+sval, serr, slog = run_check_cache(STOCK_PM, PM_OK)
+pval, perr, plog = run_check_cache(PATCHED_PM, PM_OK)
+check('a healthy reply returns the same cached list as stock',
+      pval == sval == ['h1'], '%r vs %r' % (pval, sval))
+check('...and logs nothing', not plog, str(plog))
+
+# a reply that is not a dict at all -- isinstance is what keeps the guard
+# from becoming a second way to raise
+for label, odd in (('a list', [1, 2]), ('None', None), ('a string', 'nope')):
+    pv, pe, pl = run_check_cache(PATCHED_PM, odd)
+    sv, se, sl = run_check_cache(STOCK_PM, odd)
+    check('a %s reply behaves exactly as stock does' % label,
+          type(pe) is type(se) and not pl,
+          'patched %r, stock %r, log %s' % (pe, se, pl))
+
+
 # --- 3. the awkward trees ---------------------------------------------------
 print()
 print('=== the trees that are not the happy one ===')
@@ -388,8 +468,8 @@ crlf = {rel: body.replace('\n', '\r\n') for rel, body in FIXTURES.items()}
 home3, root3 = fresh_pov(crlf)
 mod3 = load(home3)
 st3 = mod3.ensure_patched()
-check('a CRLF tree still patches', st3 == 'alldebrid=patched, torbox=patched',
-      st3)
+check('a CRLF tree still patches',
+      st3 == 'alldebrid=patched, torbox=patched, premiumize=patched', st3)
 src3 = _read(root3, 'resources/lib/debrids/alldebrid_api.py')
 check('...without introducing a bare LF', '\n' not in src3.replace('\r\n', ''))
 
@@ -446,8 +526,8 @@ os.remove(os.path.join(root5, 'resources', 'lib', 'debrids',
                        'alldebrid_api.py'))
 mod5 = load(home5)
 st5 = mod5.ensure_patched()
-check('a missing file is reported, and the other site still patches',
-      st5 == 'alldebrid=no_file, torbox=patched', st5)
+check('a missing file is reported, and the other sites still patch',
+      st5 == 'alldebrid=no_file, torbox=patched, premiumize=patched', st5)
 
 # a shape POV changed: leave the file completely alone
 home6, root6 = fresh_pov({
@@ -459,7 +539,7 @@ home6, root6 = fresh_pov({
 mod6 = load(home6)
 st6 = mod6.ensure_patched()
 check('a refactored shape is left untouched, not guessed at',
-      st6 == 'alldebrid=unmatched, torbox=patched', st6)
+      st6.startswith('alldebrid=unmatched, torbox=patched'), st6)
 check('...and the file is byte-identical to what was there',
       _read(root6, 'resources/lib/debrids/alldebrid_api.py')
       == 'class AllDebridAPI(object):\n\tdef _request(self, m, p):\n'
@@ -475,7 +555,7 @@ _dup = _read(root7, 'resources/lib/debrids/alldebrid_api.py')
 mod7 = load(home7)
 st7 = mod7.ensure_patched()
 check('a duplicated shape is refused rather than patched at the first copy',
-      st7 == 'alldebrid=unmatched, torbox=patched', st7)
+      st7.startswith('alldebrid=unmatched, torbox=patched'), st7)
 check('...and that file is untouched too',
       _read(root7, 'resources/lib/debrids/alldebrid_api.py') == _dup)
 

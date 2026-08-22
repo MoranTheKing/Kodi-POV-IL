@@ -56,6 +56,9 @@ SERVICES = (
     {
         'name': 'Premiumize',
         'title': 'Premiumize',
+        # Its refusals are {"status":"error","message":"..."} at HTTP 200 --
+        # no error object, no code. See _refusal.
+        'codeless': True,
         'prefix': 'pm',
         'enabled': 'pm.enabled',
         'connected': ('pm.account_id', 'pm.token'),
@@ -196,9 +199,28 @@ def _refusal(service):
             return None
         err = info.get('error') or {}
         if not isinstance(err, dict):
-            return None
+            # PREMIUMIZE PUTS THE REASON SOMEWHERE ELSE, and reading only
+            # AllDebrid's shape meant a refused Premiumize account said
+            # nothing at all -- on screen or in the log. Its envelope is
+            # {"status":"error","message":"..."} at HTTP 200, with no `error`
+            # object and no code, so this used to return None here and the
+            # user was left with a search that found sources and then showed
+            # an empty list.
+            err = {}
         code = (err.get('code') or '').strip()
-        return (code, (err.get('message') or '').strip()) if code else None
+        message = (err.get('message') or info.get('message') or '').strip()
+        if code:
+            return (code, message)
+        # A BARE MESSAGE COUNTS ONLY WHERE THE SERVICE HAS NO CODES, and that
+        # is one service. AllDebrid always sends a code, so a coded envelope
+        # arriving without one from AllDebrid is a shape nobody recognises and
+        # is still nothing -- widening the rule for everyone would put an
+        # arbitrary string on screen the first time a provider answered oddly.
+        # Premiumize never sends a code at all; the narrow rule alone let it
+        # refuse an account in perfect silence.
+        if service.get('codeless') and message:
+            return ('', message)
+        return None
     except Exception:
         return None
     finally:
@@ -273,7 +295,12 @@ def maybe_notify():
         if days is None:
             # No number is not nothing to say. Ask once why.
             refused = _refusal(service)
-            if refused and refused[0] in _REFUSAL_TEXT:
+            # A KNOWN CODE, or a service that has no codes and said something.
+            # The first is the narrow rule this started with; the second exists
+            # because Premiumize never sends a code, so the narrow rule alone
+            # meant it could refuse an account in perfect silence.
+            if refused and (refused[0] in _REFUSAL_TEXT
+                            or (not refused[0] and refused[1])):
                 queue.append((service, refused))
             continue
         threshold = _threshold(addon, service)

@@ -100,6 +100,45 @@ _SITES = (
      "(response.get('error'), response.get('detail'))"),
 )
 
+# A THIRD SITE, AND A DIFFERENT SHAPE, so it has its own anchor and its own
+# block rather than being forced into the table above.
+#
+# THE REPORT: "sometimes the numbers go up while it searches, and it still says
+# no results and never shows the list -- and only on Premiumize". Both halves
+# of that are explained by five lines of POV:
+#
+#     def check_cache(self, hashes):
+#         result = self._post('cache/check', data)
+#         return [h for h, cached in zip(hashes, result['response']) if cached]
+#
+# A bare subscript. Premiumize refuses with HTTP 200 and
+# {"status":"error","message":...}, which has no 'response' key, so this is a
+# KeyError -- and modules/debrid.py's cache_check wraps the whole thing in
+# `except: pass` and returns an empty cached list. Every source is then
+# "uncached", a build set to show cached sources filters them all out, and the
+# user gets "no results" AFTER watching the counters climb.
+#
+# WHY ONLY PREMIUMIZE, which is the question that makes this a second cause
+# and not the same one: it is not that the other providers are written more
+# carefully -- TorBox's line has the same shape of fragility. It is that this
+# user's Premiumize is actually saying no. Nobody could see that, because the
+# refusal was destroyed by a bare except two frames up.
+#
+# LOG ONLY. The KeyError still happens and is still swallowed exactly as
+# before; POV behaves identically. What changes is that the next log says
+# which refusal it was instead of showing an empty list with no explanation.
+_PREMIUMIZE = (
+    'premiumize', 'resources/lib/debrids/premiumize_api.py',
+    "\t\tresult = self._post(url, data)\n"
+    "\t\treturn [h for h, cached in zip(hashes, result['response']) if cached]\n",
+    "\t\tresult = self._post(url, data)\n"
+    "\t\tif isinstance(result, dict) and 'response' not in result:  {marker}\n"
+    "\t\t\ttry: kodi_utils.logger(__name__, '{tag} refused cache/check -- %s'"
+    " % (result,))\n"
+    "\t\t\texcept Exception: pass\n"
+    "\t\treturn [h for h, cached in zip(hashes, result['response']) if cached]\n",
+)
+
 
 def _log(msg, level='INFO'):
     if kodi_utils is None:
@@ -280,6 +319,63 @@ def _patch_one(rel, anchor, is_error, error_expr):
     return 'repatched' if repatch else 'patched'
 
 
+def _patch_block(rel, broken, fixed):
+    """Replace one whole block with another. Same guards as _patch_one.
+
+    A second function rather than a third column on _SITES: those two share an
+    anchor shape and this one does not, and bending the table to hold both
+    would make every future reader work out which columns apply.
+    """
+    path = _pov_path(rel)
+    if not path:
+        return 'no_file'
+    try:
+        with open(path, encoding='utf-8', newline='') as f:
+            content = f.read()
+    except Exception as e:
+        _log('{0}: read failed: {1}'.format(rel, e), level='WARNING')
+        return 'read_failed'
+    fit = _fitter(content)
+    marker = _found_marker(content)
+    want = fit(fixed.format(marker=MARKER, tag=_TAG))
+    if want in content and content.count(_MARKER_ANY) == 1:
+        return 'unchanged'
+    if marker and marker != MARKER:
+        aged = fit(fixed.format(marker=marker, tag=_TAG))
+        if aged in content:
+            content = content.replace(aged, fit(broken), 1)
+        else:
+            _log('{0}: an older injection is not the shape this file wrote; '
+                 'leaving it alone'.format(rel), level='WARNING')
+            return 'revert_failed'
+    if content.count(fit(broken)) != 1:
+        _log('{0}: the expected shape is not there exactly once -- POV may '
+             'have refactored it; leaving the file alone'.format(rel),
+             level='WARNING')
+        return 'unmatched'
+    new_content = content.replace(fit(broken), want, 1)
+    try:
+        compile(new_content.lstrip('\ufeff'), path, 'exec')
+    except SyntaxError as e:
+        _log('{0}: compile check failed, not writing: {1}'.format(rel, e),
+             level='WARNING')
+        return 'compile_failed'
+    tmp = path + '.aitmp'
+    try:
+        with open(tmp, 'w', encoding='utf-8', newline='') as f:
+            f.write(new_content)
+        os.replace(tmp, path)
+    except OSError as e:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        _log('{0}: write failed: {1}'.format(rel, e), level='WARNING')
+        return 'write_failed'
+    _drop_pycache(path)
+    return 'repatched' if marker and marker != MARKER else 'patched'
+
+
 def ensure_patched():
     """Idempotent. Never raises. Returns a comma-joined per-file status,
     e.g. 'alldebrid=patched, torbox=patched'.
@@ -298,6 +394,13 @@ def ensure_patched():
                  level='WARNING')
             st = 'read_failed'
         out.append('%s=%s' % (label, st))
+    label, rel, broken, fixed = _PREMIUMIZE
+    try:
+        st = _patch_block(rel, broken, fixed)
+    except Exception as e:
+        _log('{0}: unexpected failure: {1}'.format(rel, e), level='WARNING')
+        st = 'read_failed'
+    out.append('%s=%s' % (label, st))
     if any(s.endswith('=patched') or s.endswith('=repatched') for s in out):
         _log('a debrid that refuses the account now says so in the log '
              'instead of turning into "no sources"')

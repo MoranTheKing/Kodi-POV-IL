@@ -129,6 +129,35 @@ RULE_NAMES = {
 # an imaginary one.
 MACHINE_RULES = (2,)
 
+# A REPOSITORY THAT NO LONGER ANSWERS, AND THE ADD-ONS REGISTERED TO IT.
+#
+# Kodi records which repository each add-on came from, and CAddonInstallJob
+# compares the installed version against the newest THAT REPOSITORY offers:
+#
+#     if (m_addon->Version() == latestVersionOfItsOrigin) unpin;
+#     else AddUpdateRuleToList(id, PIN_OLD_VERSION);
+#
+# A repository that has stopped answering offers nothing, so the comparison is
+# against an empty version, so the add-on is "not the latest" and is pinned --
+# and pinned again on every future install, forever.
+#
+# THE SAME CODE SAYS WHAT TO DO ABOUT IT. An add-on with an EMPTY origin takes
+# the other branch, which looks for the newest version in ANY repository and
+# pins only if the installed one is older. With no repository offering it at
+# all, that comparison is `installed < 0.0.0`, which is false -- so an empty
+# origin UNPINS where a dead origin pins. Clearing the record is not tidying
+# up; it is the difference between the two branches.
+#
+# NAMED, NOT GUESSED. There is no way to ask a database whether a URL still
+# answers, and a heuristic that clears an origin because a repository looks
+# unhealthy today would break somebody whose network is merely down. So a dead
+# origin gets on this list only after somebody checks. This one was checked:
+# its index answers 404, a field log shows a device getting that 404, and the
+# owner confirms the repository was taken down months ago. Seven add-ons name
+# it, including the build's own skin -- none of which are starved, because the
+# build updates them directly, but all of which are pinned by it.
+DEAD_ORIGINS = ('repository.KodiRealDebridIsrael',)
+
 UPDATE_MODE_SETTING = 'general.addonupdates'
 UPDATE_MODE_NAMES = {
     0: 'install automatically',
@@ -340,6 +369,74 @@ def _clear_rules(path, victims):
                 pass
 
 
+def read_origins(path, origins):
+    """[(addonID, origin)] for every add-on registered to one of `origins`.
+
+    None when the table cannot be read -- which is not the same as none found,
+    and the caller says so rather than reporting a repair it did not make.
+    """
+    if sqlite3 is None or not path or not os.path.isfile(path) or not origins:
+        return None
+    conn = None
+    try:
+        conn = sqlite3.connect(path, timeout=5)
+        marks = ','.join('?' for _ in origins)
+        rows = conn.execute(
+            'SELECT addonID, origin FROM installed WHERE origin IN (%s)'
+            % marks, tuple(origins)).fetchall()
+        return [(str(a or ''), str(o or '')) for a, o in rows]
+    except Exception as exc:
+        _log('could not read add-on origins: {0}'.format(exc), level='WARNING')
+        return None
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def _clear_origins(path, origins):
+    """Empty the origin of every add-on registered to a dead repository."""
+    if sqlite3 is None or not path or not os.path.isfile(path):
+        return 0
+    conn = None
+    try:
+        conn = sqlite3.connect(path, timeout=5)
+        cur = conn.cursor()
+        marks = ','.join('?' for _ in origins)
+        cur.execute("UPDATE installed SET origin = '' WHERE origin IN (%s)"
+                    % marks, tuple(origins))
+        gone = cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+        conn.commit()
+        return gone
+    except Exception as exc:
+        _log('could not clear add-on origins: {0}'.format(exc),
+             level='WARNING')
+        return 0
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def _disable_addon(addon_id):
+    """Switch a dead repository off, so Kodi stops asking it every hour.
+
+    Disabled rather than deleted: deleting somebody else's add-on directory is
+    not a repair, it is a decision, and a disabled repository is one click
+    from coming back if it ever returns.
+    """
+    data = _jsonrpc('Addons.SetAddonEnabled',
+                    {'addonid': addon_id, 'enabled': False})
+    if not isinstance(data, dict):
+        return False
+    result = data.get('result')
+    return result is True or result == 'OK'
+
+
 def _seeded():
     try:
         return kodi_utils.get_setting(_MODE_SEED_FLAG, '') == _MODE_SEED_VERSION
@@ -412,6 +509,30 @@ def ensure_repaired():
     if not path:
         out.append('rules=no_db')
         return ', '.join(out)
+
+    # -- and the thing that KEEPS WRITING those pins.
+    #
+    # BEFORE the rules, and not after, because this is the half a clean device
+    # still needs. A device with no rows in update_rules today returns from
+    # the rules block below without reading another line -- and it is exactly
+    # the device that will collect a pin the next time one of these add-ons is
+    # installed, because its origin still names a repository that answers 404.
+    # Clearing the pins treats the symptom; this is the cause.
+    origins = read_origins(path, DEAD_ORIGINS)
+    if origins is None:
+        out.append('origins=unreadable')
+    elif origins:
+        _log('these add-ons are registered to a repository that no longer '
+             'answers, which is what keeps pinning them: {0}'.format(
+                 ', '.join(sorted(a for a, _o in origins))), level='WARNING')
+        cleared = _clear_origins(path, DEAD_ORIGINS)
+        out.append('origins=%d:cleared_%d' % (len(origins), cleared))
+        for repo_id in DEAD_ORIGINS:
+            if _disable_addon(repo_id):
+                _log('switched off {0}; Kodi will stop retrying its index '
+                     'every hour'.format(repo_id))
+    else:
+        out.append('origins=none')
     rules = read_rules(path)
     if rules is None:
         out.append('rules=unreadable')

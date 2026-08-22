@@ -5891,6 +5891,188 @@ place that asserted the false reason was corrected in `bfdd288`. The lesson is
 narrower than "read the docs": this file is the record, and re-deriving
 something it already answers is how a settled question gets unsettled wrongly.
 
+## The POV cycle has been wrong three times, each correction narrower
+
+The build switches POV off and on so a patch takes effect the same evening.
+Every version of the "is it safe to do this now" test has been wrong, and each
+correction was smaller than the last -- which is the tell that the question was
+never the threshold, it was what "idle" means.
+
+| | test | what broke |
+|---|---|---|
+| v1 | home visible, nothing playing | true on a cold start WHILE the home screen loads its widgets. Every widget that asked POV in the 1.5s window died, and because the REBUILD is triggered by the disable, nothing rebuilt them |
+| v2 | + settled 20s continuously, service 45s old, 180s cap | wrong AT THE CAP: a Shield reached it after three minutes of browsing, cycled anyway, and 1.2s later a Disney+ tile landed in the bare Videos root |
+| v3 | + give up at the cap, record the debt, let the next start do it | still wrong -- see below |
+| v4 | + no modal dialog, asked again in the last second | |
+
+v3's hole is the one worth remembering. **Every window POV puts up while it
+works is an `xbmcgui.WindowXMLDialog`, and those FLOAT over the home screen.**
+Start a title from a home widget and home is still visible, nothing is playing,
+no container is updating, and a user reading a list of sources presses nothing.
+All four conditions say "idle" while POV is mid-scrape with a dialog in the
+user's face. Two logs on one evening, one on each route in:
+
+```
+21:16:06  sources_results.xml   (his source list is open)
+21:16:11  cycled POV
+21:16:12  restored home focus -> control 2000
+
+21:41:44  progress_media.xml    (a scrape starts)
+21:41:51  home never settled in 180s; cycling anyway
+21:41:52  cycled POV
+```
+
+The first took POV away from a user choosing a source and then yanked his focus
+back to the home screen. The second killed a scrape seven seconds in -- and
+that is the scrape reported as "no sources for a title that definitely has
+them". Both reached the maintainer as "POV is slow and unreliable again".
+
+THE SHAPE: every version tested the SCREEN and none tested the ADD-ON. If this
+ever needs a v5, the honest fix is a signal from POV itself, not a fifth
+condition about windows.
+
+## Kodi pins an add-on whose repository has died, and never unpins it
+
+The maintainer asked why some devices never auto-install an add-on update
+although the manual "available updates" list shows it and updating by hand
+works. That description rules out most answers by itself: the update is found,
+and installing it works. Something filters the list between the two.
+
+`CAddonMgr::GetAddonUpdateCandidates` is that filter:
+
+```cpp
+updates = GetAvailableUpdates();                                // manual list
+updates.erase(... !IsAutoUpdateable(addon->ID()) ...);          // auto list
+```
+
+and `CAddonUpdateRules::IsAutoUpdateable` is false for an add-on with ANY row
+in the `update_rules` table. Three rule types exist: `USER_DISABLED_AUTO_UPDATE`
+(1), `PIN_OLD_VERSION` (2) and `PIN_ZIP_INSTALL` (3). **Types 2 and 3 are
+written by `CAddonInstallJob` itself**, at the end of every install:
+
+```cpp
+if (m_addon->Version() == latestVersionOfItsOriginRepo) unpin;
+else AddUpdateRuleToList(id, PIN_OLD_VERSION);
+```
+
+Read that against a repository that has gone away. It offers no version, so
+`latestVersionOfItsOriginRepo` stays empty, so the installed version is "not
+the latest", so the add-on is pinned. Permanently. Kodi logs the pinning at
+`LOGDEBUG`, so a user's info-level log shows nothing at all.
+
+`repository.KodiRealDebridIsrael` is such a repository: its index
+(`kodi7rd/repository`) has answered 404 for months and the maintainer confirms
+it was taken down. **Seven add-ons in the shipped `Addons33.db` name it as
+their origin, `skin.fentastic` among them.** They are not starved — the
+quickfix updates them directly — but every install of them is pinned by it,
+and Kodi retries the dead index hourly for ever.
+
+### The fix is a column, not a repository
+
+The obvious answer is to publish those add-ons in our own repo channel so the
+origin resolves again. That costs about 23 MB of zips per release
+(`skin.fentastic` is 22.5 of it), requires shipping `repository.kodipovilai`
+inside the build, which it currently is not, and creates a **second** update
+channel racing the quickfix for the skin.
+
+Kodi's own installer gives a cheaper one. The branch above is for an add-on
+that HAS an origin; an add-on with an EMPTY origin takes the other:
+
+```cpp
+// manually installed add-ons
+if (m_addon->Version() < latestVersionOfAnyRepo) AddUpdateRuleToList(PIN_ZIP_INSTALL);
+else                                             RemoveUpdateRuleFromList(PIN_ZIP_INSTALL);
+```
+
+With nothing offering the add-on, `latestVersionOfAnyRepo` is `0.0.0` and
+`installed < 0.0.0` is false — so it UNPINS. **An empty origin is strictly
+better than a dead one**, which is the opposite of how it reads.
+
+`resources/lib/addon_autoupdate_repair.py` therefore clears the origin of every
+add-on registered to a named dead repository, disables that repository so Kodi
+stops asking, clears installer-set pins for the add-ons this build ships, and
+names every rule it finds in the log. It runs BEFORE the pin-clearing block: a
+device with no pins yet is exactly the device that will collect one.
+
+Two deliberate limits. Rule 1 is never touched — it means somebody said no, and
+the build ships it on `resource.language.he_il` and `skin.estuary` on purpose.
+Rule 3 is never touched either: only Kodi's own "Install from zip file" writes
+it, so it marks a version somebody chose. Rule 2 can also come from picking an
+older version out of a repository's version list, and the table cannot tell
+that apart from the dead-repo case — a real, unresolvable cost, which is why
+every cleared rule is named in the log.
+
+Dead origins are a NAMED list. There is no way to ask a database whether a URL
+still answers, and a heuristic that clears an origin because a repository looks
+unhealthy today would punish somebody whose network is merely down.
+
+See also *Account Manager forces Kodi's global auto-update on, every boot*
+above: on a Trakt-connected device that add-on already sets
+`general.addonupdates` to 0 every start. This repair sets it once and then
+reports rather than fights, so the two do not argue.
+
+## Refreshing a bundled third-party add-on, and the deletion that permits
+
+`tools/build_full_build.py --refresh-addon ID=package.zip` replaces one bundled
+add-on's whole `addons/<id>/` subtree with an upstream release. It exists
+because "carried over untouched" had quietly become "a year out of date": the
+build shipped POV 5.12.04 while every device in the field was already on
+6.08.13, because Kodi's auto-update takes a fresh install there within a day.
+The old bundle protected nobody — it only made a new install spend its first
+hour downloading what it should have arrived with, and ran this build's own
+patchers against a POV nobody runs.
+
+That is also the safety case, and it is the same one the tool's header makes
+about itself: shipping the version every existing device already runs is not a
+new configuration, it is the one already in the field, reached sooner.
+
+This is the ONE place the tool may DROP a member of the previous build — an
+upstream release removes files, and keeping their predecessors ships a mixture
+of two versions of somebody else's add-on. The permission is scoped to
+`addons/<id>/` and to nothing else, and three things had to be added before
+that sentence was true:
+
+* **the top-level check read only the first path segment.** A member named
+  `plugin.video.pov/../../userdata/guisettings.xml` passed it and was carried
+  verbatim into the artifact a fresh install depends on — and the prefix checks
+  downstream agreed it was "inside the add-on", because they compare the same
+  un-normalised string. A review built that package and watched `build()` AND
+  `verify()` accept it. The wizard's extractor happens to strip `..` on the way
+  to disk, which is why it was not already a disaster; that is somebody else's
+  guard, maintained for a different reason, and this tool does not get to lean
+  on it to keep its own promise;
+* **the scoping is one trailing slash.** Without it `plugin.video.pov` also
+  matches `plugin.video.povextra/...`. The test fixture now contains such a
+  sibling, because the previous one (`plugin.video.somethingelse`) shared no
+  prefix in either direction and could not see the regression;
+* **refresh replaces; it does not introduce.** Every new file under a refreshed
+  add-on is exempt from `--allow-add`, which is right for an upstream release
+  that added a module and wrong as a way to add a whole unreviewed add-on. An
+  id the previous build does not carry is now refused.
+
+## A staleness guard that compares versions answers the wrong question
+
+`test_quickfix_package_scope.py` checked that the packages' add-on and wizard
+versions were not BEHIND the worktree. That answers "was a rebuild done since
+the last bump", not "was a rebuild done since the last edit" — and the gap has
+a history: a package was built, `service.py` was then edited to fold in a
+review finding, and every version check still agreed while the shipped bytes
+were a draft nobody had reviewed.
+
+It now also compares BYTES: every `.py` the full build and the quickfix carry
+for this add-on must be byte-identical to its worktree source, and a file added
+since the package was built must not be missing from it. Measured against the
+last shipped pair, all 187 members matched exactly, so this is what the
+packagers already produce. `pool.py` is excluded and stays excluded — its
+shipped copy carries a credential injected at build time and is deliberately
+not the worktree file.
+
+The same principle applied to `build-apk.yml`, which had the full build's
+filename typed out in three shell steps while the wizard's was an env var. It
+is one `BUILD_ZIP` now, and `test_platform_packages.py` derives both names from
+`wizard/assets/build.txt` — the source a device actually reads — rather than
+asserting on literals that were true the day they were typed.
+
 ## Working style
 
 - Be certain before shipping: read the code, reproduce with a unit test.

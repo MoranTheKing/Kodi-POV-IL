@@ -58,13 +58,22 @@ v0.2.506
   purpose, and names every one it finds in the log. It also checks the
   "install updates automatically" setting itself, puts it back once if it has
   drifted, and says so at every start if it has not.
-- A debrid service that refuses your account now says why in the log instead
-  of turning into "no sources". AllDebrid and TorBox both answer normally --
+- A debrid service that refuses your account now says why, instead of turning
+  into "no sources". AllDebrid, TorBox and Premiumize all answer normally --
   HTTP 200 -- and put the refusal in the body, and the video add-on only
   records a problem when the status code is bad, so the reason the provider
-  spelled out in words was dropped one line after it arrived. Nothing about
-  what happens on screen changes; the difference is that the next log somebody
-  sends says which refusal it was.
+  spelled out in words was dropped one line after it arrived.
+- And Premiumize had a second, worse version of it, which explains a report
+  that read as nonsense: "the count of sources found goes up while it
+  searches, and then it says no results and never shows the list -- only on
+  Premiumize". The add-on's Premiumize cache check reads one field of the
+  reply without checking it is there. A refusal has no such field, so that
+  line fails, and the caller catches every error and returns an empty list of
+  cached sources. Every source found is then marked uncached and filtered
+  away: the counters really did climb, and the list really was empty. It was
+  never visible because the reason was destroyed two steps before anyone could
+  read it. It now says so, on screen and in the log -- and the refusal itself
+  is the account's, not something this build can fix for you.
 - Every category POV opens now records how long it took. A report of a spinner
   on each press came with a log that contains no POV timing at all, so the
   only evidence was the gaps between unrelated errors -- reading time and
