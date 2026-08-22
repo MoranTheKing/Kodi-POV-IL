@@ -1,0 +1,307 @@
+#!/usr/bin/env python3
+"""Taking POV away must not land on a home screen that is still loading.
+
+TWO FIELD REPORTS, one a photo of the wizard's error viewer and one a log,
+both `RuntimeError: Unknown addon id 'plugin.video.pov'` raised at module
+import inside the add-on's own control.py -- and the timestamps put both
+tracebacks inside the window this build opens on purpose:
+
+    14:59:25.736  traceback (the movies widget)
+    14:59:25.786  traceback (the tv shows widget)
+    14:59:26.271  pov_reload: cycled POV -- resolvable=True
+
+When a patcher writes, POV's warm interpreter still holds the old code, so the
+fix would not take effect until the next Kodi start. Cycling the add-on makes
+it re-import the same session. The cost is a second and a half in which Kodi
+does not know the add-on -- and the old wait let that land whenever "home is
+visible and nothing is playing", which on a COLD start is true immediately,
+while the home screen is running its first pass of widget queries.
+
+Every widget that asked POV during that window died. And because the rebuild
+is triggered by the DISABLE, nothing rebuilt them afterwards: the widgets stay
+empty for the session. Both reporters found their own workaround -- one
+cleared the cache, the other moved to the 64-bit build -- and neither fixed
+anything; both just shift startup timing.
+
+WHAT THIS PINS:
+
+  * the wait now needs the home screen to be QUIET, continuously, and the
+    service to be old enough that the first widget pass is behind it -- and it
+    still gives up and cycles rather than never applying the patch;
+  * the repair: when the captured container comes back empty, one skin reload,
+    and ONLY once POV is resolvable again. This file's own history records
+    that same reload fired 0.6s inside the window taking POV's service down
+    with it, so the ordering is the whole point;
+  * and the noise that made both users open the error viewer in the first
+    place: asking "is Umbrella installed?" by constructing an Addon writes
+    `EXCEPTION: Unknown addon id` at ERROR level before it raises. Catching it
+    does not unwrite the line.
+
+Run: python3 tools/test_pov_cycle_widget_race.py
+"""
+import ast
+import importlib.util
+import io
+import os
+import sys
+import types
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.normpath(os.path.join(HERE, '..'))
+LIB = os.path.join(ROOT, 'addons', 'service.subtitles.kodipovilai',
+                   'resources', 'lib')
+
+FAIL = []
+
+
+def check(label, cond, detail=''):
+    print('%-4s %s%s' % ('ok' if cond else 'FAIL', label,
+                         ('  -- ' + detail) if detail and not cond else ''))
+    if not cond:
+        FAIL.append(label)
+
+
+# --- a Kodi that answers whatever the test needs ----------------------------
+class FakeKodi(object):
+    """Just enough xbmc, on a virtual clock so a 3-minute wait costs nothing."""
+
+    def __init__(self, **state):
+        self.now = 0.0
+        self.state = {'home': True, 'playing': False, 'updating': False,
+                      'idle': 999, 'abort_at': None, 'numitems': '0'}
+        self.state.update(state)
+        self.builtins = []
+        self.log = []
+        test = self
+
+        class Monitor(object):
+            def waitForAbort(self, secs):
+                test.now += secs
+                a = test.state['abort_at']
+                return a is not None and test.now >= a
+        self.Monitor = Monitor
+
+    # -- the xbmc surface pov_reload uses
+    def getCondVisibility(self, cond):
+        if 'Window.IsVisible(home)' in cond:
+            return bool(self.state['home'])
+        if 'Player.HasMedia' in cond:
+            return bool(self.state['playing'])
+        if 'Container.IsUpdating' in cond:
+            return bool(self.state['updating'])
+        return False
+
+    def getGlobalIdleTime(self):
+        return self.state['idle']
+
+    def getInfoLabel(self, label):
+        if '.NumItems' in label:
+            return self.state['numitems']
+        return ''
+
+    def executebuiltin(self, cmd):
+        self.builtins.append(cmd)
+
+    def sleep(self, ms):
+        self.now += ms / 1000.0
+
+
+def load(fake):
+    """pov_reload with our fake xbmc and a clock it cannot outrun."""
+    for n in list(sys.modules):
+        if n.split('.')[0] in ('resources', 'xbmc', 'xbmcvfs', 'xbmcaddon'):
+            sys.modules.pop(n, None)
+    sys.modules['xbmc'] = fake
+    sys.modules['xbmcvfs'] = types.ModuleType('xbmcvfs')
+    pkg = types.ModuleType('resources')
+    lib = types.ModuleType('resources.lib')
+    lib.__path__ = [LIB]
+    sys.modules['resources'] = pkg
+    sys.modules['resources.lib'] = lib
+    ku = types.ModuleType('resources.lib.kodi_utils')
+    ku.log = lambda *a, **k: fake.log.append(a[0] if a else '')
+    sys.modules['resources.lib.kodi_utils'] = ku
+    lib.kodi_utils = ku
+    spec = importlib.util.spec_from_file_location(
+        'pov_reload_t', os.path.join(LIB, 'pov_reload.py'))
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    # the module's clock is the fake one, so the age floor is testable
+    clock = types.ModuleType('time')
+    clock.time = lambda: fake.now
+    m.time = clock
+    m._IMPORTED_AT = 0.0
+    return m
+
+
+# --- 1. the wait ------------------------------------------------------------
+print('=== the wait needs a settled home, not a visible one ===')
+fake = FakeKodi()
+mod = load(fake)
+check('the module declares both halves of the floor',
+      mod._MIN_AGE_SECONDS >= 30 and mod._SETTLE_SECONDS >= 10,
+      'age=%s settle=%s' % (mod._MIN_AGE_SECONDS, mod._SETTLE_SECONDS))
+
+fake = FakeKodi()          # home up, quiet, from the first instant
+mod = load(fake)
+mod._wait_until_idle()
+check('a home that is merely VISIBLE does not release the cycle',
+      fake.now >= mod._MIN_AGE_SECONDS,
+      'returned after %.0fs, the age floor is %s'
+      % (fake.now, mod._MIN_AGE_SECONDS))
+
+fake = FakeKodi(updating=True)
+mod = load(fake)
+mod._wait_until_idle(timeout=60)
+check('a container mid-update holds it off to the timeout', fake.now >= 60,
+      'returned after %.0fs' % fake.now)
+
+fake = FakeKodi(idle=0)    # the user is pressing buttons
+mod = load(fake)
+mod._wait_until_idle(timeout=60)
+check('so does a user who is actively navigating', fake.now >= 60,
+      'returned after %.0fs' % fake.now)
+
+fake = FakeKodi(playing=True)
+mod = load(fake)
+mod._wait_until_idle(timeout=60)
+check('and so does playback', fake.now >= 60)
+
+fake = FakeKodi(updating=True)
+mod = load(fake)
+check('it gives up and cycles rather than never applying the patch',
+      mod._wait_until_idle(timeout=60) is True)
+
+fake = FakeKodi(abort_at=20)
+mod = load(fake)
+check('an abort stops it', mod._wait_until_idle() is False)
+
+# The quiet stretch has to be CONTINUOUS: a screen that goes quiet, twitches,
+# and goes quiet again has not settled.
+fake = FakeKodi()
+mod = load(fake)
+_real_cond = fake.getCondVisibility
+
+
+def _flapping(cond):
+    if 'Container.IsUpdating' in cond:
+        return int(fake.now) % 10 < 4      # busy 4s in every 10
+    return _real_cond(cond)
+
+
+fake.getCondVisibility = _flapping
+mod._wait_until_idle(timeout=200)
+check('a screen that keeps twitching never counts as settled',
+      fake.now >= 200, 'returned after %.0fs' % fake.now)
+
+
+# --- 2. the repair ----------------------------------------------------------
+print()
+print('=== the repair, and its ordering ===')
+fake = FakeKodi(numitems='0')
+mod = load(fake)
+check('an empty container after the cycle is reported as empty',
+      mod._restore_home_focus((9000, 2)) is False)
+fake = FakeKodi(numitems='7')
+mod = load(fake)
+check('a container that refilled is reported as refilled',
+      mod._restore_home_focus((9000, 2)) is True)
+check('...and focus is restored either way',
+      any('SetFocus' in c for c in fake.builtins))
+fake = FakeKodi()
+mod = load(fake)
+check('nothing captured means nothing claimed',
+      mod._restore_home_focus(None) is None)
+
+fake = FakeKodi(numitems='7')
+mod = load(fake)
+mod._is_resolvable = lambda: True
+check('the repair reloads the skin when POV is resolvable',
+      mod._repair_home_widgets((9000, 2)) is True
+      and any('ReloadSkin' in c for c in fake.builtins))
+check('...exactly once', sum('ReloadSkin' in c for c in fake.builtins) == 1)
+
+fake = FakeKodi(numitems='7')
+mod = load(fake)
+mod._is_resolvable = lambda: False
+check('THE ORDERING: it refuses to reload while POV is unresolvable',
+      mod._repair_home_widgets((9000, 2)) is False
+      and not any('ReloadSkin' in c for c in fake.builtins),
+      'this exact reload, fired inside the window, is what took POV down')
+
+# and the wiring: the repair must be reached only from the empty answer.
+_src = io.open(os.path.join(LIB, 'pov_reload.py'), encoding='utf-8').read()
+_tree = ast.parse(_src)
+_run = [f for f in ast.walk(_tree) if isinstance(f, ast.FunctionDef)
+        and f.name == '_run_cycle']
+check('_run_cycle was found to inspect', len(_run) == 1)
+_calls = [n for n in ast.walk(_run[0]) if isinstance(n, ast.Call)
+          and isinstance(n.func, ast.Name)
+          and n.func.id == '_repair_home_widgets']
+check('the cycle calls the repair', len(_calls) == 1)
+_guarded = [n for n in ast.walk(_run[0]) if isinstance(n, ast.If)
+            and any(isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
+                    and c.func.id == '_repair_home_widgets'
+                    for c in ast.walk(n))
+            and any(isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
+                    and c.func.id == '_restore_home_focus'
+                    for c in ast.walk(n.test))]
+check('...only on the empty answer, never unconditionally', len(_guarded) == 1,
+      'an unconditional reload flashes the home screen for every user whose '
+      'widgets were fine')
+
+
+# --- 3. the error lines nobody needed ---------------------------------------
+print()
+print('=== asking "is it installed?" without writing an error line ===')
+_ap = io.open(os.path.join(LIB, 'addon_presence.py'), encoding='utf-8').read()
+_ap_tree = ast.parse(_ap)
+_inst = [f for f in ast.walk(_ap_tree) if isinstance(f, ast.FunctionDef)
+         and f.name == 'installed']
+check('addon_presence.installed exists', len(_inst) == 1)
+check('...and never constructs an Addon',
+      not [n for n in ast.walk(_inst[0]) if isinstance(n, ast.Call)
+           and isinstance(n.func, ast.Attribute) and n.func.attr == 'Addon'],
+      'Kodi logs the failure before it raises; that is the whole point')
+
+SITES = {
+    'favourites_personal_tiles_patcher.py': ('_umbrella_installed',),
+    'af3_home_patcher.py': ('_umbrella_installed',),
+    'umbrella_setup_patcher.py': ('_addon', 'ensure_coco_providers'),
+    'umbrella_language_patcher.py': ('_umbrella_addon',),
+}
+for fn, names in sorted(SITES.items()):
+    src = io.open(os.path.join(LIB, fn), encoding='utf-8').read()
+    tree = ast.parse(src)
+    found = [f for f in ast.walk(tree) if isinstance(f, ast.FunctionDef)
+             and f.name in names]
+    check('%s: the presence tests were found' % fn,
+          len(found) == len(names),
+          'looked for %s, found %s' % (list(names), [f.name for f in found]))
+    bad = [f.name for f in found for n in ast.walk(f)
+           if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+           and n.func.attr == 'Addon']
+    check('%s: none of them constructs an Addon to ask' % fn, not bad,
+          'still constructing in: %s' % bad)
+
+# The whole tree: no OPTIONAL add-on is probed by construction any more.
+OPTIONAL = ('plugin.video.umbrella', 'script.module.cocoscrapers')
+leaks = []
+for root, _dirs, files in os.walk(LIB):
+    for fn in files:
+        if not fn.endswith('.py') or fn == 'pool.py':
+            continue
+        src = io.open(os.path.join(root, fn), encoding='utf-8').read()
+        for n in ast.walk(ast.parse(src)):
+            if (isinstance(n, ast.Call)
+                    and isinstance(n.func, ast.Attribute)
+                    and n.func.attr == 'Addon' and n.args
+                    and isinstance(n.args[0], ast.Constant)
+                    and n.args[0].value in OPTIONAL):
+                leaks.append('%s:%s' % (fn, n.lineno))
+check('no optional add-on is probed by constructing an Addon anywhere',
+      not leaks, 'still doing it at %s' % leaks)
+
+print()
+print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')
+sys.exit(1 if FAIL else 0)
