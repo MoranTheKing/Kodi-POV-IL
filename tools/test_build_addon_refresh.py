@@ -66,6 +66,16 @@ OURS = 'addons/service.subtitles.kodipovilai'
 WIZ = 'addons/plugin.program.kodipovilwizard'
 
 PREV = {
+    # A SIBLING WHOSE ID IS A PREFIX OF THE REFRESHED ONE. The scoping that
+    # keeps a refresh inside its own add-on is one trailing slash in
+    # _refresh_prefixes; without it, `addons/plugin.video.pov` also matches
+    # `addons/plugin.video.povextra/...`. A review dropped that slash and
+    # watched build() delete this add-on and verify() report success -- and
+    # the old fixture could not see it, because `plugin.video.somethingelse`
+    # shares no prefix with `plugin.video.pov` in either direction.
+    'addons/plugin.video.povextra/addon.xml': addon_xml(
+        'plugin.video.povextra', '1.0'),
+    'addons/plugin.video.povextra/lib.py': 'A SIBLING, NOT A SUBDIRECTORY\n',
     OURS + '/addon.xml': addon_xml('service.subtitles.kodipovilai', '0.2.500'),
     OURS + '/service.py': 'old service\n',
     WIZ + '/addon.xml': addon_xml('plugin.program.kodipovilwizard', '0.1.40'),
@@ -160,6 +170,12 @@ if p.returncode == 0:
         check('userdata is still carried over untouched',
               z.read('userdata/guisettings.xml') == b'<settings/>\n'
               and 'userdata/Database/Addons33.db' in names)
+        check('AN ADD-ON WHOSE ID STARTS WITH THE REFRESHED ONE IS UNTOUCHED',
+              z.read('addons/plugin.video.povextra/lib.py')
+              == b'A SIBLING, NOT A SUBDIRECTORY\n',
+              'plugin.video.povextra was caught by plugin.video.pov\'s '
+              'prefix -- the trailing slash in _refresh_prefixes is the only '
+              'thing separating them')
     check('the run says what it refreshed',
           'refreshed plugin.video.pov -> 6.08.13' in p.stdout, p.stdout[-600:])
     check('...and says what it dropped', 'dropped 1 member' in p.stdout,
@@ -212,6 +228,61 @@ wizupstream = zip_at('wizup.zip', {
 p, _ = run('r5.zip',
            ['--refresh-addon', 'plugin.program.kodipovilwizard=' + wizupstream])
 check('...and so is one the wizard package carries', p.returncode != 0,
+      (p.stdout + p.stderr)[-400:])
+
+# A PATH THAT ESCAPES ITS OWN DIRECTORY. The top-level check reads the FIRST
+# segment only, so `plugin.video.pov/../../userdata/guisettings.xml` passed it
+# and was carried verbatim into the artifact a fresh install depends on -- and
+# the prefix checks downstream agreed it was inside the add-on, because they
+# compare the same un-normalised string.
+slip = zip_at('slip.zip', {
+    'plugin.video.pov/addon.xml': addon_xml('plugin.video.pov', '6.0'),
+    'plugin.video.pov/../../userdata/guisettings.xml': '<pwned/>\n'})
+p, _ = run('r5b.zip', ['--refresh-addon', 'plugin.video.pov=' + slip])
+check('a member whose path escapes the add-on is refused',
+      p.returncode != 0 and 'escapes' in (p.stdout + p.stderr),
+      (p.stdout + p.stderr)[-500:])
+
+absolute = zip_at('abs.zip', {
+    'plugin.video.pov/addon.xml': addon_xml('plugin.video.pov', '6.0'),
+    '/etc/passwd': 'nope\n'})
+p, _ = run('r5c.zip', ['--refresh-addon', 'plugin.video.pov=' + absolute])
+check('...and so is an absolute path', p.returncode != 0,
+      (p.stdout + p.stderr)[-300:])
+
+# TWO MEMBERS WITH THE SAME NAME. _members is a dict keyed by filename, so one
+# silently wins; an input whose meaning we cannot state is not one to build a
+# release from.
+import io as _io
+_dup_path = os.path.join(WORK, 'dup.zip')
+with zipfile.ZipFile(_dup_path, 'w') as _z:
+    _z.writestr('plugin.video.pov/addon.xml', addon_xml('plugin.video.pov', '6.0'))
+    _z.writestr('plugin.video.pov/entry.py', 'FIRST\n')
+    _z.writestr('plugin.video.pov/entry.py', 'SECOND\n')
+p, _ = run('r5d.zip', ['--refresh-addon', 'plugin.video.pov=' + _dup_path])
+check('a duplicated member name is refused', p.returncode != 0
+      and 'duplicated' in (p.stdout + p.stderr), (p.stdout + p.stderr)[-300:])
+
+# NOT A ZIP AT ALL -- a one-line refusal, like every other one, not a traceback
+_txt = os.path.join(WORK, 'notazip.txt')
+with open(_txt, 'w') as fh:
+    fh.write('this is not a zip\n')
+p, _ = run('r5e.zip', ['--refresh-addon', 'plugin.video.pov=' + _txt])
+check('a file that is not a zip is refused by name, not by traceback',
+      p.returncode != 0 and 'not a readable zip' in (p.stdout + p.stderr)
+      and 'Traceback' not in (p.stdout + p.stderr),
+      (p.stdout + p.stderr)[-400:])
+
+# REFRESH REPLACES, IT DOES NOT INTRODUCE. Every new file under a refreshed
+# add-on skips --allow-add, which is right for an upstream release that added
+# a module and wrong as a way to add a whole add-on nobody reviewed.
+newpkg = zip_at('newaddon.zip', {
+    'plugin.video.totallynew/addon.xml': addon_xml('plugin.video.totallynew',
+                                                   '1.0'),
+    'plugin.video.totallynew/default.py': 'brand new\n'})
+p, _ = run('r5f.zip', ['--refresh-addon', 'plugin.video.totallynew=' + newpkg])
+check('refreshing an add-on the build does not carry is refused',
+      p.returncode != 0 and 'does not contain' in (p.stdout + p.stderr),
       (p.stdout + p.stderr)[-400:])
 
 # a malformed flag

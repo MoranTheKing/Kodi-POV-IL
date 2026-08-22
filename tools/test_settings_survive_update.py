@@ -372,6 +372,24 @@ _body = _auto[_at:_auto.index('\ndef ', _at + 10)]
 check('auto_quick_update reports that it closed Kodi',
       _body.rstrip().endswith('return True'),
       'it closes and then returns None, so its caller cannot tell')
+# EVERY OTHER RETURN HAS TO BE FALSY, and "the last line says return True" did
+# not check that. The caller is `if auto_quick_update(): sys.exit()`, so a
+# truthy return from any of the nine paths that did NOT close Kodi ends the
+# startup script early -- skipping the hooks below it -- while this check
+# still passed.
+_fn = [n for n in ast.walk(ast.parse(_auto))
+       if isinstance(n, ast.FunctionDef) and n.name == 'auto_quick_update']
+check('auto_quick_update was found to inspect', len(_fn) == 1)
+if _fn:
+    _returns = [n for n in ast.walk(_fn[0]) if isinstance(n, ast.Return)]
+    _truthy = [n.lineno for n in _returns
+               if n.value is not None
+               and not (isinstance(n.value, ast.Constant)
+                        and not n.value.value)]
+    check('exactly one return is truthy, and it is the last line',
+          len(_truthy) == 1 and _truthy[0] == max(n.lineno for n in _returns),
+          'truthy returns at lines %s of %d returns' % (_truthy,
+                                                        len(_returns)))
 # the CALL site, not the def -- `sync_quickfix_build_version()` appears first
 # as a definition two hundred lines earlier, and anchoring on it found that
 # instead and reported a fix that was in place as missing.

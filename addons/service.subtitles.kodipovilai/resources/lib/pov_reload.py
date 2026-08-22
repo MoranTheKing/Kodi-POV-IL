@@ -199,9 +199,19 @@ def _mark_owed(owed):
             os.remove(path)
         return True
     except Exception as exc:
-        _log('could not {0} the owed-cycle record ({1}); a patch may not '
-             'take effect until some later release touches it again'.format(
-                 'write' if owed else 'clear', exc), level='WARNING')
+        # TWO FAILURES, TWO CONSEQUENCES, and one message used to claim the
+        # worse one for both. _mark_owed(False) is only reached after
+        # _is_resolvable() has proved POV re-imported the patch, so a failed
+        # CLEAR costs one redundant cycle next boot -- the patch already
+        # landed. Saying it may not take effect is simply untrue there.
+        if owed:
+            _log('could not record that a cycle is owed ({0}); a patch may '
+                 'not take effect until some later release touches it '
+                 'again'.format(exc), level='WARNING')
+        else:
+            _log('could not clear the owed-cycle record ({0}); the patch DID '
+                 'take effect, but the next start will cycle POV once more '
+                 'for nothing'.format(exc), level='WARNING')
         return False
 
 
@@ -594,6 +604,31 @@ def request_reload():
         return False
 
 
+def _dialog_up():
+    """Is any modal dialog on screen right now?
+
+    Asked as a separate function because the answer must be the SAME in the
+    polling loop and in the last-second re-check before the disable -- there
+    are two seconds between them, and a scrape can start in two seconds.
+
+    Both conditions, not one. HasVisibleModalDialog covers a dialog that is on
+    screen; HasActiveModalDialog covers one that is taking input. They are
+    usually the same dialog and occasionally are not, and either one means the
+    user has something in front of them.
+
+    Raises nothing: an unreadable screen answers True here, which is the
+    cautious direction -- it costs a deferral, never a cycle into somebody's
+    source list.
+    """
+    if xbmc is None:
+        return True
+    try:
+        return bool(xbmc.getCondVisibility('System.HasVisibleModalDialog')
+                    or xbmc.getCondVisibility('System.HasActiveModalDialog'))
+    except Exception:
+        return True
+
+
 def _wait_until_idle(timeout=180):
     """Wait for the home screen to have SETTLED, not merely appeared.
 
@@ -621,6 +656,34 @@ def _wait_until_idle(timeout=180):
             quiet = (xbmc.getCondVisibility('Window.IsVisible(home)')
                      and not xbmc.getCondVisibility('Player.HasMedia')
                      and not xbmc.getCondVisibility('Container.IsUpdating')
+                     # A DIALOG ON TOP IS NOT AN IDLE SCREEN, and the first
+                     # four conditions cannot see one. Every window POV puts
+                     # up while it works -- its scrape progress and its source
+                     # list -- is an xbmcgui.WindowXMLDialog, which FLOATS
+                     # over whatever is beneath it. Start a title from a home
+                     # widget and home stays visible, nothing is playing, no
+                     # container is updating, and a user reading a list of
+                     # sources is not pressing anything: all four say "idle"
+                     # while POV is mid-scrape with a dialog in front of the
+                     # user's face.
+                     #
+                     # Two logs, one on each route into it:
+                     #
+                     #   21:16:06  sources_results.xml   (the list is up)
+                     #   21:16:11  cycled POV
+                     #   21:16:12  restored home focus -> control 2000
+                     #
+                     #   21:41:44  progress_media.xml    (a scrape starts)
+                     #   21:41:51  home never settled in 180s; cycling anyway
+                     #   21:41:52  cycled POV
+                     #
+                     # The first took POV away from a user choosing a source
+                     # and then yanked his focus back to the home screen. The
+                     # second killed a scrape seven seconds in, and that is
+                     # the scrape he reported as "no results, and there are
+                     # definitely results". Both were reported as POV being
+                     # slow and unreliable; both were us.
+                     and not _dialog_up()
                      and xbmc.getGlobalIdleTime() >= 3)
         except Exception:
             # NOT quiet. A screen we cannot read is not a screen we know is
@@ -810,6 +873,13 @@ def _run_cycle():
             return
     except Exception:
         pass
+    # ASKED AGAIN, HERE. The loop's last look was up to two seconds ago, and
+    # two seconds is long enough for somebody to press a title and start a
+    # scrape. The whole cost of being wrong is one deferred cycle.
+    if _dialog_up():
+        _log('a dialog is on screen; skipping POV cycle (the debt is '
+             'recorded and the next start will)', level='INFO')
+        return
     saved_focus = _capture_home_focus()
     try:
         # Raised BEFORE the disable and lowered only once POV can be

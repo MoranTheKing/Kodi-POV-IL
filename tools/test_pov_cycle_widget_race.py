@@ -72,7 +72,8 @@ class FakeKodi(object):
     def __init__(self, **state):
         self.now = 0.0
         self.state = {'home': True, 'playing': False, 'updating': False,
-                      'idle': 999, 'abort_at': None, 'numitems': '0'}
+                      'idle': 999, 'abort_at': None, 'numitems': '0',
+                      'dialog': False}
         self.state.update(state)
         self.builtins = []
         self.log = []
@@ -93,6 +94,8 @@ class FakeKodi(object):
             return bool(self.state['playing'])
         if 'Container.IsUpdating' in cond:
             return bool(self.state['updating'])
+        if 'ModalDialog' in cond:
+            return bool(self.state['dialog'])
         return False
 
     def getGlobalIdleTime(self):
@@ -171,6 +174,49 @@ mod = load(fake)
 mod._wait_until_idle(timeout=60)
 check('and so does playback', fake.now >= 60)
 
+# A DIALOG ON TOP IS NOT AN IDLE SCREEN, and the four conditions above cannot
+# see one. Every window POV puts up while it works -- its scrape progress, its
+# source list -- is a WindowXMLDialog, which floats over what is beneath. Start
+# a title from a home widget and home is still visible, nothing is playing, no
+# container is updating, and somebody reading a list of sources presses
+# nothing. All four say idle while POV is mid-scrape in front of the user.
+#
+# Two field logs, one on each route in:
+#
+#     21:16:06  sources_results.xml   (the list is up)
+#     21:16:11  cycled POV
+#     21:16:12  restored home focus -> control 2000
+#
+#     21:41:44  progress_media.xml    (a scrape starts)
+#     21:41:51  home never settled in 180s; cycling anyway
+#     21:41:52  cycled POV
+#
+# The first took POV away from a user choosing a source and then yanked his
+# focus to the home screen. The second killed a scrape seven seconds in -- the
+# one he reported as "no results, and there are definitely results".
+fake = FakeKodi(dialog=True)
+mod = load(fake)
+check('a dialog on screen is never a moment to take POV away',
+      mod._wait_until_idle(timeout=100) is False,
+      'released after %.0fs -- straight into somebody\'s source list'
+      % fake.now)
+check('...and it waited the whole budget rather than releasing early',
+      fake.now >= 100, 'returned after %.0fs' % fake.now)
+
+# AND ASKED AGAIN AT THE LAST MOMENT. The poll's last look is up to two
+# seconds before the disable, and two seconds is enough to press a title.
+fake = FakeKodi()
+mod = load(fake)
+mod._owed_path = lambda: os.path.join(tempfile.mkdtemp(prefix='dlg-'), 'o.txt')
+mod._wait_until_idle = lambda timeout=180: True     # the poll said yes...
+fake.state['dialog'] = True                          # ...and then this opened
+_touched = []
+mod._set_enabled = lambda on: _touched.append(on)
+mod._capture_home_focus = lambda: _touched.append('captured')
+mod._run_cycle()
+check('a dialog that opens after the wait still stops the cycle',
+      not _touched, 'reached %s' % _touched)
+
 # THE CAP DOES NOT FIRE INTO THE USER'S HANDS. It used to return True here --
 # 'never cycling means the patch never lands' -- and that was a real argument
 # until the owed record existed. The first device to actually reach the cap
@@ -238,6 +284,9 @@ mod._wait_until_idle(timeout=60)
 check('a screen that cannot be read is treated as NOT quiet', fake.now >= 60,
       'released after %.0fs -- an unreadable screen was assumed safe'
       % fake.now)
+check('...and the dialog question answers the cautious way too',
+      mod._dialog_up() is True,
+      'a box that cannot say whether a dialog is up must not be cycled')
 
 # The quiet stretch has to be CONTINUOUS: a screen that goes quiet, twitches,
 # and goes quiet again has not settled.
