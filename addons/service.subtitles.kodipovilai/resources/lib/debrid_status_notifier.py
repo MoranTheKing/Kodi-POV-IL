@@ -142,6 +142,79 @@ def _days_remaining(service):
                 pass
 
 
+# WHY A REFUSED ACCOUNT USED TO SHOW NOTHING AT ALL.
+#
+# A field report: every AllDebrid source failed to resolve. The log showed no
+# reason, and three separate layers were why. POV's alldebrid_api._request
+# logs only when the HTTP STATUS is bad -- and AllDebrid answers 200 with the
+# error inside the body, the way its API has always worked. POV's
+# days_remaining() wraps the lot in a bare `except: days = None`. And this
+# file then read None as 'no number, so say nothing'. Three swallows in a row,
+# and the one field that holds the answer never reached anyone.
+#
+# Verified against the live API, without the reporter's log or credentials:
+#
+#     GET v4/magnet/upload  ->  200  {"status":"error",
+#                                     "error":{"code":"AUTH_...",
+#                                              "message":"..."}}
+#
+# and v4/magnet/instant answers 404, so the endpoints are alive and it is not
+# an API generation problem: AllDebrid is refusing THIS account, and naming
+# which refusal in a field nobody read.
+#
+# NARROW ON PURPOSE. This speaks only for an unambiguous error envelope with
+# one of the codes below -- reasons about the ACCOUNT, which a user can act
+# on. A timeout, a dropped connection or an unrecognised shape says nothing,
+# because a toast that cries wolf on a flaky night is worse than silence.
+_REFUSAL_TEXT = {
+    'AUTH_MISSING_APIKEY': 'החשבון לא מחובר',
+    'AUTH_BAD_APIKEY': 'המפתח אינו תקף -- צריך לחבר מחדש',
+    'AUTH_BLOCKED': 'הגישה חסומה',
+    'AUTH_USER_BANNED': 'החשבון מושעה',
+    'MUST_BE_PREMIUM': 'החשבון אינו פרימיום',
+}
+
+
+def _refusal(service):
+    """(code, message) when the service refuses the account, else None.
+
+    Costs one extra request, and only for a service that is connected and
+    already failed to report its days -- so nobody who is fine pays for it.
+    """
+    lib_path = _pov_lib_path()
+    if not lib_path or not os.path.isdir(lib_path):
+        return None
+    inserted = False
+    if lib_path not in sys.path:
+        sys.path.insert(0, lib_path)
+        inserted = True
+    try:
+        module = __import__(
+            'debrids.' + service['module'], fromlist=[service['class']])
+        info = getattr(module, service['class'])().account_info()
+        if not isinstance(info, dict) or info.get('status') != 'error':
+            return None
+        err = info.get('error') or {}
+        if not isinstance(err, dict):
+            return None
+        code = (err.get('code') or '').strip()
+        return (code, (err.get('message') or '').strip()) if code else None
+    except Exception:
+        return None
+    finally:
+        if inserted:
+            try:
+                sys.path.remove(lib_path)
+            except ValueError:
+                pass
+
+
+def _refusal_message(service, code, message):
+    known = _REFUSAL_TEXT.get(code)
+    detail = known or message or code
+    return '[B]{0}: [COLOR red]{1}[/COLOR][/B]'.format(service['name'], detail)
+
+
 def _threshold(addon, service):
     raw = _setting(addon, service['expires'], '0')
     try:
@@ -197,6 +270,12 @@ def maybe_notify():
         if not _is_connected(addon, service):
             continue
         days = _days_remaining(service)
+        if days is None:
+            # No number is not nothing to say. Ask once why.
+            refused = _refusal(service)
+            if refused and refused[0] in _REFUSAL_TEXT:
+                queue.append((service, refused))
+            continue
         threshold = _threshold(addon, service)
         if _should_show(days, threshold):
             queue.append((service, days))
@@ -212,8 +291,10 @@ def maybe_notify():
     for idx, (service, days) in enumerate(queue):
         if idx and monitor.waitForAbort(4.8):
             return 'aborted'
+        text = (_refusal_message(service, days[0], days[1])
+                if isinstance(days, tuple) else _message(service, days))
         kodi_utils.notify(
-            _message(service, days),
+            text,
             title=service['title'],
             icon=_media_icon(service['icon']),
             time_ms=4500)

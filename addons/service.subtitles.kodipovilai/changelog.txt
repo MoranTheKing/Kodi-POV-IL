@@ -1,3 +1,38 @@
+v0.2.505
+- Right after an update, the POV home tiles could come back empty and the
+  error log could fill with red -- and it was this build doing it. When a fix
+  lands, the video add-on is holding the old code in memory, so we switch it
+  off and on again to make it pick the fix up the same evening. For the second
+  and a half it is off, Kodi does not know it. On a cold start the home screen
+  is still loading its rows in exactly those seconds, so the rows asked an
+  add-on that was not there, failed, and -- because it is the switching OFF
+  that triggers the rebuild -- nothing rebuilt them afterwards. They stayed
+  empty for the session. Clearing the cache appeared to fix it; so did moving
+  to the 64-bit build. Neither fixed anything: both just shifted the timing.
+  Now the switch waits for the home screen to be genuinely settled, and if the
+  rows still come back empty it redraws them once. None of the waiting happens
+  where anyone can feel it, and startup is in fact a little faster than before.
+- The error screen also filled with "Unknown addon id" for Umbrella and its
+  scraper module on devices that simply do not have them. Asking "is this
+  installed?" the obvious way makes Kodi write that line before it answers, so
+  a device without them collected a handful of red on every start for a
+  question whose answer was "no, and that is fine" -- and the one line that
+  mattered scrolled past unnoticed. It reads the disk now and says nothing.
+- A debrid service that refuses your account now says so, on screen, instead of
+  failing every source in silence. AllDebrid reports that kind of refusal
+  inside a normal reply rather than as an error, so three separate layers threw
+  it away and the log ended up with no reason at all. If the key is not valid,
+  the access is blocked, the account is suspended or it is not premium, you get
+  told which, in Hebrew. Nothing is said for a timeout or a bad connection --
+  only for an answer the service actually gave.
+- Subtitle sync learns from you again. While one of our subtitles is playing,
+  the amount you shift it by hand is meant to be the strongest possible
+  evidence about whether it is in sync -- it is the only thing that resolves
+  files no automatic method can. That measurement was reading zero every time,
+  and the watch never started at all, because of three missing lines that each
+  failed quietly into a handler that swallowed them. It has never once
+  reported. It does now.
+
 v0.2.504
 - POV's source list appears the moment the sources are ready again. Someone
   reported it taking five to ten seconds to draw after the search had clearly
