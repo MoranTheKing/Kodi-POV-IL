@@ -12,6 +12,7 @@
 # never get POV cycled.
 
 import json
+import time
 
 try:
     import xbmc
@@ -25,6 +26,38 @@ except Exception:
 
 
 POV_ADDON_ID = 'plugin.video.pov'
+
+# WHEN THE HOME SCREEN IS ACTUALLY SAFE TO TAKE POV AWAY FROM.
+#
+# Two field reports, one screenshot of the wizard's error viewer and one log,
+# both of them RuntimeError: Unknown addon id 'plugin.video.pov' raised at
+# module import inside magneto/modules/control.py -- and the timestamps put
+# both tracebacks INSIDE the window this file opens:
+#
+#     14:59:25.736  traceback (the movies widget)
+#     14:59:25.786  traceback (the tv shows widget)
+#     14:59:26.271  pov_reload: cycled POV -- resolvable=True
+#
+# The old wait was `home visible and nothing playing`, eight seconds in. On a
+# COLD start those are true almost immediately -- and they are true precisely
+# WHILE the home screen is running its first pass of widget queries. Every
+# widget that asked POV for content during the disable died, and since the
+# rebuild is triggered by the disable, nothing rebuilt them afterwards.
+#
+# Both reporters 'fixed' it themselves -- one by clearing the cache, one by
+# moving to the 64-bit build -- and neither fixed anything: both just move
+# startup timing so the widgets finish before we cycle. That is what this
+# does deliberately instead of by luck.
+#
+# There is no infolabel for 'the home widgets have finished'. Container
+# .IsUpdating covers only the focused container, and on the home screen that
+# is the menu, not a widget. So this is a floor and a quiet stretch, chosen
+# against the observed traces, and it is a heuristic -- which is why the
+# repair after the cycle exists as well.
+_MIN_AGE_SECONDS = 45      # since this module was first imported = service start
+_SETTLE_SECONDS = 20       # of continuous quiet before we take POV away
+_IMPORTED_AT = time.time()
+
 _cycled = False
 _pending = False
 # The one disk-probe thread. Not a cached answer -- a handle, so a probe that
@@ -113,10 +146,59 @@ def _is_resolvable():
 CYCLE_PENDING_FILE = ('special://profile/addon_data/'
                       'service.subtitles.kodipovilai/pov_cycle_pending.txt')
 
+# A SECOND RECORD, ANSWERING A DIFFERENT QUESTION. The one above means "POV
+# is switched off RIGHT NOW" and exists so a process killed mid-cycle leaves
+# evidence that switches it back on. This one means "a cycle is OWED", and it
+# exists because the wait can now be minutes long.
+#
+# Without it, a user who quits Kodi during the wait loses the cycle entirely
+# -- and does not get it back, because the next start finds every patch
+# already on disk, writes nothing, and therefore never arms. POV would keep
+# running the pre-patch code until some future release happened to touch it
+# again. The old wait was about ten seconds, so that hole was narrow enough
+# to be invisible; at three minutes it is not.
+#
+# So the guarantee is not "hold the user still until it works". It is "do not
+# forget": armed writes this, a cycle that actually ran clears it, and a start
+# that finds it arms again even though nothing was patched this time.
+CYCLE_OWED_FILE = ('special://profile/addon_data/'
+                   'service.subtitles.kodipovilai/pov_cycle_owed.txt')
+
 
 def _cycle_pending_path():
     import xbmcvfs
     return xbmcvfs.translatePath(CYCLE_PENDING_FILE)
+
+
+def _owed_path():
+    import xbmcvfs
+    return xbmcvfs.translatePath(CYCLE_OWED_FILE)
+
+
+def _mark_owed(owed):
+    """Record -- or clear -- "a cycle is still owed". Never raises."""
+    try:
+        import os
+        path = _owed_path()
+        if owed:
+            directory = os.path.dirname(path)
+            if directory and not os.path.isdir(directory):
+                os.makedirs(directory)
+            with open(path, 'w', encoding='utf-8') as handle:
+                handle.write(POV_ADDON_ID + '\n')
+        elif os.path.exists(path):
+            os.remove(path)
+        return True
+    except Exception:
+        return False
+
+
+def cycle_owed():
+    try:
+        import os
+        return os.path.isfile(_owed_path())
+    except Exception:
+        return False
 
 
 def _mark_cycle_pending(pending):
@@ -422,9 +504,25 @@ def note_patched():
 
 
 def reload_if_patched():
+    """Cycle if something was patched this run -- or if one is still owed.
+
+    The second half is what makes the long wait safe. A cycle that never got
+    to run leaves a record, and this is the question that reads it: without
+    that, a start where every patch is already on disk writes nothing, arms
+    nothing, and the owed cycle is lost for good.
+    """
     if _pending:
         return request_reload()
-    return False
+    if not cycle_owed():
+        return False
+    # A DEBT TO SOMETHING THAT IS GONE IS NOT A DEBT. If POV has been
+    # uninstalled since the record was written, clearing it here is what stops
+    # a background thread waiting three minutes for it on every boot, forever.
+    if _is_installed() is False:
+        _mark_owed(False)
+        _log('a cycle was owed but POV is gone; forgetting it', level='INFO')
+        return False
+    return request_reload()
 
 
 def _log(msg, level='INFO'):
@@ -471,6 +569,9 @@ def request_reload():
         return False
     _cycled = True
     _armed = True
+    # WRITTEN BEFORE THE THREAD STARTS, so a Kodi that dies one second later
+    # still leaves the debt behind. Cleared only by a cycle that ran.
+    _mark_owed(True)
     try:
         import threading
         threading.Thread(target=_deferred_cycle, daemon=True).start()
@@ -481,25 +582,60 @@ def request_reload():
         return False
 
 
-def _wait_until_idle(timeout=120):
+def _wait_until_idle(timeout=180):
+    """Wait for the home screen to have SETTLED, not merely appeared.
+
+    Four conditions, and the last two are the ones the old version lacked:
+    the home is up, nothing is playing, the focused container is not mid-
+    update, and the user has not pressed anything for a few seconds. All four
+    have to hold continuously for _SETTLE_SECONDS, and the service has to be
+    at least _MIN_AGE_SECONDS old -- the first widget pass is the thing being
+    waited out and it happens once, at the beginning.
+
+    Still returns True at the timeout. Waiting forever would mean the patch
+    never takes effect this session, which is the outcome the cycle exists to
+    avoid; the cap is just far enough out now that the first pass is over.
+    """
     try:
         monitor = xbmc.Monitor()
     except Exception:
         return False
     if monitor.waitForAbort(8):
         return False
-    waited = 8
+    waited, quiet_for = 8, 0
     while waited < timeout:
         try:
-            home_up = xbmc.getCondVisibility('Window.IsVisible(home)')
-            playing = xbmc.getCondVisibility('Player.HasMedia')
+            quiet = (xbmc.getCondVisibility('Window.IsVisible(home)')
+                     and not xbmc.getCondVisibility('Player.HasMedia')
+                     and not xbmc.getCondVisibility('Container.IsUpdating')
+                     and xbmc.getGlobalIdleTime() >= 3)
         except Exception:
-            home_up, playing = True, False
-        if home_up and not playing:
+            # NOT quiet. A screen we cannot read is not a screen we know is
+            # safe to take POV away from, and the old body's equivalent line
+            # guessed the other way. Guessing 'quiet' here would re-open the
+            # exact race this function was rewritten to close, on precisely
+            # the devices too confused to answer. The cap still applies, so
+            # the cycle happens either way -- just later, which is the
+            # direction that cannot break anything.
+            quiet = False
+        quiet_for = quiet_for + 2 if quiet else 0
+        if (quiet_for >= _SETTLE_SECONDS
+                and time.time() - _IMPORTED_AT >= _MIN_AGE_SECONDS):
+            # HOW CLOSE THIS RAN, when it was close. The floor is a heuristic
+            # fitted to one field trace, and nothing tells us whether a slower
+            # box needed more -- a near-miss looks exactly like a comfortable
+            # win in the log. Anything past half the budget is worth a line,
+            # because the next report of empty widgets should be able to say
+            # whether the floor was the problem.
+            if waited > timeout // 2:
+                _log('home took {0}s to settle, of a {1}s budget'.format(
+                    waited, timeout), level='WARNING')
             return True
         if monitor.waitForAbort(2):
             return False
         waited += 2
+    _log('home never settled in {0}s; cycling anyway'.format(timeout),
+         level='WARNING')
     return True
 
 
@@ -526,19 +662,30 @@ def _capture_home_focus():
 
 
 def _restore_home_focus(saved):
+    """Put focus back, and REPORT whether the container refilled.
+
+    The return value is the only evidence available that the cycle's own
+    widget rebuild survived. It is best-effort on purpose: the captured
+    container is whichever one had focus, which on the home screen is usually
+    the menu rather than a widget, so False is strong evidence of trouble and
+    True is weak evidence of health. The repair it gates is cheap and the
+    waiting in _wait_until_idle is the actual fix; this is the second line.
+    """
     if not saved or xbmc is None:
-        return
+        return None
     cid, pos = saved
+    refilled = False
     try:
         monitor = xbmc.Monitor()
         # Wait (bounded) for home + that container to repopulate after the cycle.
         for _ in range(20):
             if monitor.waitForAbort(0.5):
-                return
+                return None
             if not xbmc.getCondVisibility('Window.IsVisible(home)'):
                 continue
             n = (xbmc.getInfoLabel('Container(%s).NumItems' % cid) or '').strip()
             if n and n != '0':
+                refilled = True
                 break
         # Restore by ABSOLUTE index so it round-trips on Estuary's home
         # fixedlist (where the on-screen slot is pinned) as well as regular
@@ -548,7 +695,45 @@ def _restore_home_focus(saved):
         _log('restored home focus -> control %s item %s' % (cid, pos),
              level='INFO')
     except Exception:
-        pass
+        return None
+    return refilled
+
+
+def _repair_home_widgets(saved):
+    """One skin reload, for the case the widgets rebuilt into a dead add-on.
+
+    THE REBUILD IS TRIGGERED BY THE DISABLE, not by the enable -- which is why
+    a widget that asked POV for content during the window stays empty for the
+    rest of the session and a user has to clear the cache to get it back. This
+    runs only when the captured container came back EMPTY, and only after POV
+    is resolvable again.
+
+    That last condition is not a detail. This file's own history records a
+    skin reload fired 0.6 s INTO the window: the home screen rebuilt, every
+    POV widget raised Unknown addon id, and POV's service had to be killed for
+    not stopping. Same operation, opposite outcome, decided entirely by when.
+    """
+    if xbmc is None:
+        return False
+    try:
+        if not _is_resolvable():
+            _log('widgets look empty but POV is not resolvable; not reloading',
+                 level='WARNING')
+            return False
+        _log('home widgets did not come back; reloading the skin once',
+             level='WARNING')
+        xbmc.executebuiltin('ReloadSkin()')
+        monitor = xbmc.Monitor()
+        for _ in range(20):
+            if monitor.waitForAbort(0.5):
+                return False
+            if xbmc.getCondVisibility('Window.IsVisible(home)'):
+                break
+        _restore_home_focus(saved)
+        return True
+    except Exception as e:
+        _log('widget repair failed: {0}'.format(e), level='WARNING')
+        return False
 
 
 def _deferred_cycle():
@@ -632,11 +817,17 @@ def _run_cycle():
             # actually been constructed -- not when the enable call returned,
             # which it does whether or not the enable took.
             _mark_cycle_pending(False)
+            # The debt is paid: POV has re-imported. Every other exit from
+            # this function -- aborted, playback, POV never came back, Kodi
+            # killed mid-wait -- leaves it standing, and the next start picks
+            # it up.
+            _mark_owed(False)
         else:
             _set_enabled(True)
             _log('POV did not come back; the cycle record stays so the next '
                  'start switches it on', level='WARNING')
-        _restore_home_focus(saved_focus)
+        if _restore_home_focus(saved_focus) is False:
+            _repair_home_widgets(saved_focus)
     except Exception as e:
         _log('cycle failed: {0}'.format(e), level='WARNING')
         try:
