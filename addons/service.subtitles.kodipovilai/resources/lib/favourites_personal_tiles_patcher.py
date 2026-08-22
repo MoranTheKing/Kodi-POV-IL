@@ -557,10 +557,13 @@ _DEBRID_NOTICE_TILE_NAME = '[B][COLOR orange]הגדרת התראות מנוי[/C
 
 
 def _umbrella_installed():
+    # Not xbmcaddon.Addon(): Kodi writes "EXCEPTION: Unknown addon id"
+    # at ERROR level before it raises, so asking that way leaves a red
+    # line in the log of every device that simply does not have it. See
+    # addon_presence.
     try:
-        import xbmcaddon
-        xbmcaddon.Addon(UMBRELLA_ADDON_ID)
-        return True
+        from resources.lib import addon_presence
+        return addon_presence.installed(UMBRELLA_ADDON_ID)
     except Exception:
         return False
 

@@ -174,9 +174,13 @@ def _log(msg, level='INFO'):
 
 
 def _addon():
+    # Not xbmcaddon.Addon(): Kodi writes "EXCEPTION: Unknown addon id"
+    # at ERROR level before it raises, so asking that way leaves a red
+    # line in the log of every device that simply does not have it. See
+    # addon_presence.
     try:
-        import xbmcaddon
-        return xbmcaddon.Addon(UMBRELLA_ADDON_ID)
+        from resources.lib import addon_presence
+        return addon_presence.addon(UMBRELLA_ADDON_ID)
     except Exception:
         return None
 
@@ -255,8 +259,9 @@ def ensure_coco_providers():
     """Switch on the extra CocoScrapers providers, once each. Returns a short
     status string; never raises."""
     try:
-        import xbmcaddon
-        xbmcaddon.Addon(COCO_MODULE)
+        from resources.lib import addon_presence
+        if not addon_presence.installed(COCO_MODULE):
+            return 'not_installed'
     except Exception:
         return 'not_installed'
     if addon_settings_safe is None:
