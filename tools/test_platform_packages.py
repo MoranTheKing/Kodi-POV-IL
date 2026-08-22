@@ -304,16 +304,19 @@ def test_workflow_package_guards() -> None:
     workflow = (ROOT / ".github/workflows/build-apk.yml").read_text(
         encoding="utf-8"
     )
-    # THE TWO ARTIFACT NAMES THE PACKAGE IS BUILT FROM, and both have to be
-    # what a device would actually download -- not a literal that agreed with
-    # reality on the day it was typed. The build zip was three copies of one
-    # filename inlined in three shell steps; a release that bumped the build
-    # left all three pointing at a file that no longer existed, and the two
-    # that feed a script would have shipped the PREVIOUS build inside a new
-    # package rather than failing loudly. Derived from build.txt, which is the
-    # same source test_quickfix_package_scope.py checks the packages against,
-    # so there is one answer to "which build is being shipped" and everything
-    # is measured against it.
+    # THE TWO ARTIFACT NAMES THE PACKAGE IS BUILT FROM, derived rather than
+    # typed. The wizard's was a literal here -- correct on the day it was
+    # written and needing a hand edit every release since.
+    #
+    # The build zip's staleness is ALREADY watched, by
+    # tools/test_installer_pins_current.py, which greps the filename out of
+    # this workflow and compares it with build.txt. That guard exists because
+    # the pin really did rot, twice. What it cannot see is WHERE the name
+    # lives: it was three copies inlined in three shell steps, so a release
+    # could correct one and leave two. So this adds the half that guard has
+    # no opinion about -- the name is in the env block, once, and nowhere
+    # below it -- and derives both names from the same build.txt, which is
+    # what a device actually reads.
     served = {}
     for line in (ROOT / "wizard/assets/build.txt").read_text(
             encoding="utf-8").splitlines():
