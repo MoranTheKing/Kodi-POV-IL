@@ -55,7 +55,15 @@ def addon_dir(addon_id):
 
 
 def installed(addon_id):
-    """True when the add-on's files are on disk. Never raises, never logs."""
+    """True when the add-on's files are on disk. Never raises, never logs.
+
+    USER add-ons only. special://home/addons is where Kodi installs what a
+    user or a build put there, which is every caller this has today --
+    Umbrella and CocoScrapers are always third-party. An add-on bundled inside
+    the Kodi APK lives under special://xbmc/addons and would be reported
+    absent here. Nothing asks that yet; anything that starts to has to widen
+    this rather than assume it already covers them.
+    """
     d = addon_dir(addon_id)
     if not d:
         return False

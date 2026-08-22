@@ -610,10 +610,26 @@ def _wait_until_idle(timeout=180):
                      and not xbmc.getCondVisibility('Container.IsUpdating')
                      and xbmc.getGlobalIdleTime() >= 3)
         except Exception:
-            quiet = True
+            # NOT quiet. A screen we cannot read is not a screen we know is
+            # safe to take POV away from, and the old body's equivalent line
+            # guessed the other way. Guessing 'quiet' here would re-open the
+            # exact race this function was rewritten to close, on precisely
+            # the devices too confused to answer. The cap still applies, so
+            # the cycle happens either way -- just later, which is the
+            # direction that cannot break anything.
+            quiet = False
         quiet_for = quiet_for + 2 if quiet else 0
         if (quiet_for >= _SETTLE_SECONDS
                 and time.time() - _IMPORTED_AT >= _MIN_AGE_SECONDS):
+            # HOW CLOSE THIS RAN, when it was close. The floor is a heuristic
+            # fitted to one field trace, and nothing tells us whether a slower
+            # box needed more -- a near-miss looks exactly like a comfortable
+            # win in the log. Anything past half the budget is worth a line,
+            # because the next report of empty widgets should be able to say
+            # whether the floor was the problem.
+            if waited > timeout // 2:
+                _log('home took {0}s to settle, of a {1}s budget'.format(
+                    waited, timeout), level='WARNING')
             return True
         if monitor.waitForAbort(2):
             return False

@@ -177,6 +177,25 @@ fake = FakeKodi(abort_at=20)
 mod = load(fake)
 check('an abort stops it', mod._wait_until_idle() is False)
 
+# A SCREEN WE CANNOT READ IS NOT A SCREEN WE KNOW IS QUIET. The old body
+# guessed 'quiet' when the infolabel calls raised, and this rewrite inherited
+# it -- which would re-open the very race it exists to close, on exactly the
+# devices too confused to answer. Guessing the other way costs only time, and
+# the cap means the cycle still happens.
+fake = FakeKodi()
+mod = load(fake)
+
+
+def _raises(cond):
+    raise RuntimeError('this box cannot answer')
+
+
+fake.getCondVisibility = _raises
+mod._wait_until_idle(timeout=60)
+check('a screen that cannot be read is treated as NOT quiet', fake.now >= 60,
+      'released after %.0fs -- an unreadable screen was assumed safe'
+      % fake.now)
+
 # The quiet stretch has to be CONTINUOUS: a screen that goes quiet, twitches,
 # and goes quiet again has not settled.
 fake = FakeKodi()
