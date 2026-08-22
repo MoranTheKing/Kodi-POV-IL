@@ -344,6 +344,46 @@ check('wait_until_settled reports NOT SAFE when it runs out of time',
       mod.wait_until_settled(timeout=2) is False,
       'a bound that reports safe is a guard that fails open')
 
+# --- 5. NOBODY WAITS FOR ANY OF THIS ---------------------------------------
+# The wait got three times longer, so the question that matters is who pays
+# for it. The answer has to be nobody: the whole deferral runs on a daemon
+# thread, and the only thing on the service's own thread is starting it.
+# A version that ever ran the cycle inline would turn a patch into a minute
+# of a Kodi that looks stuck -- which is how a build gets a reputation.
+print()
+print('=== the wait costs the user nothing ===')
+_req = [f for f in ast.walk(_tree) if isinstance(f, ast.FunctionDef)
+        and f.name == 'request_reload']
+check('request_reload was found', len(_req) == 1)
+if _req:
+    _starts = [n for n in ast.walk(_req[0]) if isinstance(n, ast.Call)
+               and isinstance(n.func, ast.Attribute)
+               and n.func.attr == 'start']
+    check('it starts a thread and returns', len(_starts) == 1)
+    _inline = [n for n in ast.walk(_req[0]) if isinstance(n, ast.Call)
+               and isinstance(n.func, ast.Name)
+               and n.func.id in ('_deferred_cycle', '_run_cycle',
+                                 '_wait_until_idle')]
+    check('and never runs the cycle or the wait on the caller\'s thread',
+          not _inline,
+          'the service thread would block for the whole settle window')
+    _daemon = [k for n in ast.walk(_req[0]) if isinstance(n, ast.Call)
+               for k in n.keywords if k.arg == 'daemon']
+    check('...on a daemon thread, so quitting Kodi is never held up',
+          len(_daemon) == 1)
+
+# And the cycle only ever lands while the user is sitting still on the home
+# screen: not mid-navigation, not on another window. The rebuild it causes is
+# visible, and this is what keeps it out of the user's way.
+for _label, _kw in (('while the user is on another window', {'home': False}),
+                    ('while the user is pressing keys', {'idle': 0}),
+                    ('while something is playing', {'playing': True})):
+    fake = FakeKodi(**_kw)
+    mod = load(fake)
+    mod._wait_until_idle(timeout=100)
+    check('the rebuild is never sprung %s' % _label, fake.now >= 100,
+          'released after %.0fs' % fake.now)
+
 print()
 print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')
 sys.exit(1 if FAIL else 0)
