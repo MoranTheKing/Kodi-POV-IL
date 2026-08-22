@@ -331,6 +331,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_debrid_status,
         _maybe_guard_pov_debrid_handlers,
         _maybe_log_pov_debrid_errors,
+        _maybe_keep_sources_when_debrid_is_late,
         _maybe_time_pov_directories,
         _maybe_repair_addon_autoupdate,
         _maybe_fix_idanplus_youtube_id,
@@ -2252,6 +2253,51 @@ def _maybe_log_pov_debrid_errors():
             from resources.lib import kodi_utils
             kodi_utils.log(
                 'pov_debrid_error_log_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_keep_sources_when_debrid_is_late():
+    """Stop a slow or refused debrid from erasing the whole source list.
+
+    POV builds final_sources only inside the loop over the debrid cache-check
+    threads that finished in time, so with one debrid configured a single late
+    answer discards every torrent the scrapers found -- and a check that failed
+    outright is recorded as an authoritative "not cached", which the default
+    "Display Uncached Torrents = off" filter then deletes. Both roads end at
+    "no results" on a title with hundreds of sources.
+
+    Two coupled edits, applied in order by the module. See it for why the
+    debrid.py half must never be applied without the sources.py half.
+    """
+    if _skip_pov_patchers():
+        return
+    try:
+        from resources.lib import pov_debrid_timeout_patcher, kodi_utils
+        st = pov_debrid_timeout_patcher.ensure_patched()
+        bad = [p for p in st.split(', ')
+               if p.split('=')[-1] in ('unmatched', 'compile_failed',
+                                       'write_failed', 'revert_failed',
+                                       'read_failed')
+               or p.split('=')[-1].startswith('skipped:')]
+        if bad:
+            kodi_utils.log(
+                'pov_debrid_timeout_patcher: ' + st, level='WARNING')
+        if any(p.endswith('=patched') or p.endswith('=repatched')
+               for p in st.split(', ')):
+            # A patch into POV's warm interpreter does not take effect until
+            # it re-imports, and the cycle that forces that is armed here.
+            try:
+                from resources.lib import pov_reload
+                pov_reload.note_patched()
+            except Exception:
+                pass
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'pov_debrid_timeout_patcher failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
