@@ -4457,26 +4457,46 @@ def _maybe_show_debrid_status():
     This intentionally lives outside POV so it applies consistently in
     Estuary, FENtastic and Arctic Fuse 3, while the build_mode gate keeps
     standalone AI-subtitle installs from changing user navigation/state.
+
+    OFF THE MAIN THREAD, and that is not tidiness. It asks each connected
+    debrid service about the account, over the network, through POV's own
+    client -- four services, and since 0.2.505 a second question for any that
+    could not answer the first. POV bounds each request at 10 to 20 seconds,
+    so it cannot hang outright, but on a bad night the arithmetic reaches
+    minutes -- and this runs INLINE as a step of the startup repair pass,
+    whose loop has no per-step budget. Everything after it waits, including
+    _maybe_start_autosub_player, which is the thing that puts Hebrew
+    subtitles on the screen by itself.
+
+    A toast about a subscription has no business standing in front of that.
+    The review that found it called it a doubling of a risk that predates it;
+    a daemon thread removes both halves rather than only the half I added.
     """
-    try:
-        from resources.lib import debrid_status_notifier, kodi_utils
-    except Exception:
-        return
-    try:
-        status = debrid_status_notifier.maybe_notify()
-        if status.startswith('shown:'):
-            kodi_utils.log('Debrid startup subscription status shown: {0}'
-                           .format(status.split(':', 1)[1]),
-                           level='INFO')
-        elif status not in ('no_pov', 'nothing_to_show', 'already_shown'):
-            kodi_utils.log('Debrid startup status: {0}'.format(status),
-                           level='INFO')
-    except Exception as e:
+    def _work():
         try:
-            kodi_utils.log('Debrid startup status failed: {0}'.format(e),
-                           level='WARNING')
+            from resources.lib import debrid_status_notifier, kodi_utils
         except Exception:
-            pass
+            return
+        try:
+            status = debrid_status_notifier.maybe_notify()
+            if status.startswith('shown:'):
+                kodi_utils.log(
+                    'Debrid startup subscription status shown: {0}'.format(
+                        status.split(':', 1)[1]), level='INFO')
+            elif status not in ('no_pov', 'nothing_to_show', 'already_shown'):
+                kodi_utils.log('Debrid startup status: {0}'.format(status),
+                               level='INFO')
+        except Exception as e:
+            try:
+                kodi_utils.log('Debrid startup status failed: {0}'.format(e),
+                               level='WARNING')
+            except Exception:
+                pass
+
+    try:
+        threading.Thread(target=_work, daemon=True).start()
+    except Exception:
+        pass
 
 
 def _maybe_patch_pov_debrid_status():
