@@ -304,7 +304,37 @@ def test_workflow_package_guards() -> None:
     workflow = (ROOT / ".github/workflows/build-apk.yml").read_text(
         encoding="utf-8"
     )
-    assert "WIZARD_VERSION: '0.1.47'" in workflow
+    # THE TWO ARTIFACT NAMES THE PACKAGE IS BUILT FROM, and both have to be
+    # what a device would actually download -- not a literal that agreed with
+    # reality on the day it was typed. The build zip was three copies of one
+    # filename inlined in three shell steps; a release that bumped the build
+    # left all three pointing at a file that no longer existed, and the two
+    # that feed a script would have shipped the PREVIOUS build inside a new
+    # package rather than failing loudly. Derived from build.txt, which is the
+    # same source test_quickfix_package_scope.py checks the packages against,
+    # so there is one answer to "which build is being shipped" and everything
+    # is measured against it.
+    served = {}
+    for line in (ROOT / "wizard/assets/build.txt").read_text(
+            encoding="utf-8").splitlines():
+        key, _, value = line.partition("=")
+        if value.strip().startswith('"'):
+            served.setdefault(key.strip(), value.strip().strip('"'))
+    build_zip = served["url"].rsplit("/", 1)[-1]
+    wizard_zip = served["zip"].rsplit("/", 1)[-1]
+    wizard_version = wizard_zip[len("plugin.program.kodipovilwizard-"):-len(".zip")]
+    assert "WIZARD_VERSION: '%s'" % wizard_version in workflow, (
+        "the workflow builds against a wizard build.txt does not serve; "
+        "build.txt says %s" % wizard_version
+    )
+    assert "BUILD_ZIP: '%s'" % build_zip in workflow, (
+        "the workflow builds against a full build build.txt does not serve; "
+        "build.txt says %s" % build_zip
+    )
+    # ...and nowhere else may name one, or the single point stops being one.
+    assert "Kodi-POV-IL-FENtastic-test-" not in workflow.split("BUILD_ZIP:", 1)[1], (
+        "a build-zip filename is inlined somewhere below the env block"
+    )
     assert "default: '21.3-povil.49'" in workflow
     assert "default: '2103049'" in workflow
     assert "EXPECTED_RELEASE: '21.3-povil.49'" in workflow
