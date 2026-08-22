@@ -4437,6 +4437,87 @@ YouTube add-on in. We ship a settings.xml for it whose stream-proxy toggle
 NOT flipped on the strength of one log, because the proxy exists to carry
 headers a redirect cannot.
 
+### What shipped 0.2.505 / qf 0.1.550 / build 0.1.118 (note 605)
+
+**WE WERE BREAKING THE HOME SCREEN OURSELVES.** Two reports, a photo of the
+wizard's error viewer and a log, both `RuntimeError: Unknown addon id
+'plugin.video.pov'` at module import inside POV's own control.py. The
+timestamps close it:
+
+    14:59:25.736  traceback (the movies widget)
+    14:59:25.786  traceback (the tv shows widget)
+    14:59:26.271  pov_reload: cycled POV -- resolvable=True
+
+Both are inside the window `pov_reload` opens on purpose. POV holds a warm
+interpreter, so a patch does not take effect until it is cycled; the cost is
+~1.5s in which Kodi does not know the add-on. The old wait released on "home
+visible and nothing playing", which on a COLD start is true immediately and is
+true PRECISELY WHILE the home screen runs its first pass of widget queries.
+And the rebuild is triggered by the DISABLE, so a widget that failed there
+stays empty for the session.
+
+**Both reporters' workarounds were placebos.** One cleared the cache, one moved
+to 64-bit. Both only shift startup timing, which is what the fix now does
+deliberately: four conditions held continuously for 20s, a 45s floor since the
+service started, and a cap that cycles anyway rather than never applying the
+patch. Plus a second line: an empty container after the cycle buys ONE
+ReloadSkin, and only once POV is resolvable -- this file's own history records
+that same reload fired 0.6s INSIDE the window taking POV's service down.
+
+**THE REGRESSION I ALMOST SHIPPED, found before the review.** Arming raises a
+flag `wait_until_settled()` blocks on, and three of its four callers are steps
+INSIDE `_run_build_startup_repairs`, inline, 30s budget each, not shared. The
+arming was on the line before that pass. The review measured the new floor at
+46 virtual seconds against those 30s budgets: every guarded step would have
+burned its budget on a cycle that had not started and deferred its work. Moved
+to after the pass -- which also closes a gap that predates all of this, since
+`note_patched()` calls after that line were never seen by anything.
+
+**THE LINE THAT COMPILED AND MEANT NOTHING.** An edit of mine glued two
+assignments into `_cycled = False_pending = False` -- a legal chained
+assignment to a dead name `False_pending`. `_pending` ceased to exist,
+`reload_if_patched` raised NameError into service.py's bare except, and THE
+CYCLE SILENTLY NEVER HAPPENED AGAIN. It passed a compile check, a 30-check
+test file and a full sweep, because none of them CALLED it. Found by the first
+test that did.
+
+**AND THE SCAN THAT CAME OUT OF IT FOUND A FEATURE THAT HAD NEVER WORKED.**
+`tools/test_no_undefined_names.py` walks the add-on with CPython's `symtable`
+and reports any name read that nothing defines. Three more, all in the SubSync
+S3 human-delay watch: `json` in two nested functions (service.py imported os,
+threading, time -- never json) and `kodi_utils` in a third. Each failed into
+its own swallowing handler, so the manual-delay probe returned 0.0 for ever
+and the watch never started. **`pool.report_sync(origin='human')` has never
+fired once.** The algorithmic half (`origin='auto'`) was always fine.
+
+The scan states what it CANNOT catch: a global assigned only inside a function
+counts as defined, and is -- once that function runs. Read earlier and it is a
+NameError symtable cannot see, which is exactly what `_pending` was. Named
+checks cover that instance; claiming the scan generalises it would be the same
+mistake it exists to catch.
+
+**Noise, and why it mattered.** The same log carried `Unknown addon id` for
+Umbrella three times and cocoscrapers once, from OUR service thread, on a
+device that has neither. Five sites asked "is it installed?" by constructing
+an `Addon` and catching -- Kodi writes that line at ERROR level BEFORE it
+raises. Users open the error viewer, see red, and report a broken build; the
+real defect was a sixth line nobody noticed. `addon_presence` reads the disk.
+
+**A refused debrid account now says so on screen.** Established without the
+reporter's log and with no credential, by asking the public API with none:
+`v4/magnet/upload` and `v4/user` answer 200 with
+`{"status":"error","error":{"code":...}}`, `v4/magnet/instant` answers 404. So
+the endpoint is alive, Bearer is accepted, `agent` is not required -- what is
+left is an account-level refusal AllDebrid names in a field three layers threw
+away. The notice is deliberately narrow: only an unambiguous envelope with a
+known account code, never a timeout or an unrecognised shape.
+
+**Not done:** the matching line in POV's own `_request`, so the reason reaches
+the log too. The anchor must be written against POV 6.08.13; this build ships
+5.12.04, and the field log proves they differ (6.08.13's logger heading is not
+what 5.12.04's code produces). Guessing an anchor against a file I cannot read
+is how a patcher ships that never matches.
+
 ### What shipped 0.2.503 / qf 0.1.548 / build 0.1.116 (note 603)
 
 Nothing from Kan 11 played in Idan Plus. The log named the cause without
