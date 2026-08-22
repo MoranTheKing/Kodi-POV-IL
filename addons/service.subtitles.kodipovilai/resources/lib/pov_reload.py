@@ -58,7 +58,8 @@ _MIN_AGE_SECONDS = 45      # since this module was first imported = service star
 _SETTLE_SECONDS = 20       # of continuous quiet before we take POV away
 _IMPORTED_AT = time.time()
 
-_cycled = False_pending = False
+_cycled = False
+_pending = False
 # The one disk-probe thread. Not a cached answer -- a handle, so a probe that
 # never returns is never started twice. See _probe_path.
 _probe_thread = None
@@ -145,10 +146,59 @@ def _is_resolvable():
 CYCLE_PENDING_FILE = ('special://profile/addon_data/'
                       'service.subtitles.kodipovilai/pov_cycle_pending.txt')
 
+# A SECOND RECORD, ANSWERING A DIFFERENT QUESTION. The one above means "POV
+# is switched off RIGHT NOW" and exists so a process killed mid-cycle leaves
+# evidence that switches it back on. This one means "a cycle is OWED", and it
+# exists because the wait can now be minutes long.
+#
+# Without it, a user who quits Kodi during the wait loses the cycle entirely
+# -- and does not get it back, because the next start finds every patch
+# already on disk, writes nothing, and therefore never arms. POV would keep
+# running the pre-patch code until some future release happened to touch it
+# again. The old wait was about ten seconds, so that hole was narrow enough
+# to be invisible; at three minutes it is not.
+#
+# So the guarantee is not "hold the user still until it works". It is "do not
+# forget": armed writes this, a cycle that actually ran clears it, and a start
+# that finds it arms again even though nothing was patched this time.
+CYCLE_OWED_FILE = ('special://profile/addon_data/'
+                   'service.subtitles.kodipovilai/pov_cycle_owed.txt')
+
 
 def _cycle_pending_path():
     import xbmcvfs
     return xbmcvfs.translatePath(CYCLE_PENDING_FILE)
+
+
+def _owed_path():
+    import xbmcvfs
+    return xbmcvfs.translatePath(CYCLE_OWED_FILE)
+
+
+def _mark_owed(owed):
+    """Record -- or clear -- "a cycle is still owed". Never raises."""
+    try:
+        import os
+        path = _owed_path()
+        if owed:
+            directory = os.path.dirname(path)
+            if directory and not os.path.isdir(directory):
+                os.makedirs(directory)
+            with open(path, 'w', encoding='utf-8') as handle:
+                handle.write(POV_ADDON_ID + '\n')
+        elif os.path.exists(path):
+            os.remove(path)
+        return True
+    except Exception:
+        return False
+
+
+def cycle_owed():
+    try:
+        import os
+        return os.path.isfile(_owed_path())
+    except Exception:
+        return False
 
 
 def _mark_cycle_pending(pending):
@@ -454,9 +504,25 @@ def note_patched():
 
 
 def reload_if_patched():
+    """Cycle if something was patched this run -- or if one is still owed.
+
+    The second half is what makes the long wait safe. A cycle that never got
+    to run leaves a record, and this is the question that reads it: without
+    that, a start where every patch is already on disk writes nothing, arms
+    nothing, and the owed cycle is lost for good.
+    """
     if _pending:
         return request_reload()
-    return False
+    if not cycle_owed():
+        return False
+    # A DEBT TO SOMETHING THAT IS GONE IS NOT A DEBT. If POV has been
+    # uninstalled since the record was written, clearing it here is what stops
+    # a background thread waiting three minutes for it on every boot, forever.
+    if _is_installed() is False:
+        _mark_owed(False)
+        _log('a cycle was owed but POV is gone; forgetting it', level='INFO')
+        return False
+    return request_reload()
 
 
 def _log(msg, level='INFO'):
@@ -503,6 +569,9 @@ def request_reload():
         return False
     _cycled = True
     _armed = True
+    # WRITTEN BEFORE THE THREAD STARTS, so a Kodi that dies one second later
+    # still leaves the debt behind. Cleared only by a cycle that ran.
+    _mark_owed(True)
     try:
         import threading
         threading.Thread(target=_deferred_cycle, daemon=True).start()
@@ -732,6 +801,11 @@ def _run_cycle():
             # actually been constructed -- not when the enable call returned,
             # which it does whether or not the enable took.
             _mark_cycle_pending(False)
+            # The debt is paid: POV has re-imported. Every other exit from
+            # this function -- aborted, playback, POV never came back, Kodi
+            # killed mid-wait -- leaves it standing, and the next start picks
+            # it up.
+            _mark_owed(False)
         else:
             _set_enabled(True)
             _log('POV did not come back; the cycle record stays so the next '
