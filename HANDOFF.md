@@ -6073,6 +6073,116 @@ is one `BUILD_ZIP` now, and `test_platform_packages.py` derives both names from
 `wizard/assets/build.txt` — the source a device actually reads — rather than
 asserting on literals that were true the day they were typed.
 
+## One number is POV's wait AND its request timeout, so raising it fixes nothing
+
+Two field reports, one evening: "the results take ages again" and "no sources
+for a title that definitely has them". Both on Premiumize. Neither reproduces
+on TorBox on the same build. The provider-specific part is what makes this
+worth a section, because it looked like an account problem for a week and was
+not.
+
+`ExternalManager.results` runs two phases, and spends `scrapers.timeout.1` on
+each. Phase 2 asks every configured debrid which of the found torrents it
+holds, and then:
+
+```python
+self.thread_monitor(threads, ls(32579), True)          # waits timeout + 1
+threads = [i for i in threads if i.done() and not i.exception()]
+for name, hashes in ((fut.name, fut.result()) for fut in threads):
+    if name in ('realdebrid', 'alldebrid'): uncached = 'Unchecked %s' % name
+    else: uncached = 'Uncached %s' % name
+    self.final_sources.extend(... for i in torrent_sources)
+```
+
+**`final_sources` is built exclusively inside that loop.** One debrid
+configured is one thread; a second late and every torrent phase 1 found is
+discarded unread. The counters really did climb and the list really was empty.
+
+**And a second road to the same screen.** `DebridCheck.cache_check` in
+`modules/debrid.py` wraps everything in a bare `except: pass` and returns the
+empty cached list, so a check that timed out, was refused, or came back
+malformed is indistinguishable from an honest "none of these are cached". POV
+already knows those two are different — for rd/ad it asks third-party indexes,
+so a miss is `Unchecked`; for pm/tb/oc it asks the provider, so a miss is
+`Uncached` — and that word decides whether the source is ever seen:
+
+```python
+# ResultsProcessor.sort_uncached_torrents, sources.py:546
+return [i for i in results if 'Uncached' not in i.get('cache_provider', '')]
+```
+
+"Display Uncached Torrents" is off by default. `Uncached` rows are DELETED;
+`Unchecked` rows are kept and sorted last. A failed check therefore deletes
+the entire list, silently.
+
+### Why the setting could never fix it
+
+`scrapers.timeout.1` is not only the monitor's budget. `premiumize_api`,
+`torbox_api` and `offcloud_api` each take it as their per-request HTTP timeout:
+
+```
+debrids/premiumize_api.py:17   self.timeout = int(get_setting('scrapers.timeout.1') or 10)
+```
+
+So the deadline the monitor enforces and the deadline the request obeys are the
+same number, and a request that uses its whole allowance always finishes at or
+after the moment the monitor gave up. This build raised the setting 10 → 20 on
+1 August (`7b98f81`) for exactly this symptom, reasoning correctly about the
+two-phase budget. It widened the window; it could not close it, and it raised
+the failure's cost with it.
+
+That is worth generalising: **when a timeout guards a thing and also bounds the
+thing, tuning it moves both walls.** The fix has to be structural.
+
+### Why Premiumize and not TorBox
+
+Not carelessness on one side. TorBox posts its hashes as one compact JSON array
+(`json=data`) and answers in well under a second. Premiumize posts every hash
+as a separate `items[]` field in a form body — hundreds on a popular title —
+and sits right on the deadline. Same code path, same setting, two different
+places on the clock.
+
+And the intermittency is POV's own `DebridCache`: `cache_check` consults it
+first and skips the network entirely when every hash is already known, so a
+title searched recently answers instantly and works. "It works on the second
+try" was never randomness.
+
+### The fix (`pov_debrid_timeout_patcher.py`)
+
+Two textual patches, and they are COUPLED — the order matters and the module
+enforces it.
+
+* `sources.py`: a debrid with no surviving future is put back into the loop
+  with a `None` reply instead of being dropped, and a `None` reply labels its
+  sources `Unchecked`. Safe on its own.
+* `debrid.py`: the direct-provider branch gets its own `try/except
+  BaseException` and a failure returns `None` instead of an empty list. **Not
+  safe on its own** — against unpatched `sources.py` that `None` reaches
+  `i['hash'] in hashes`, raises `TypeError` into `except: notification(32574)`,
+  and produces an error toast and an empty list, i.e. worse than the bug.
+
+So `ensure_patched` applies `sources.py` first, applies `debrid.py` only behind
+it, and REVERTS `debrid.py` if `sources.py` is not carrying the fix (POV
+refactored, write failed, older marker unrecognised). `test_pov_debrid_timeout.py`
+pins that: it patches both, refactors `sources.py` underneath, and asserts
+`debrid.py` comes back byte-identical to stock.
+
+One anchor detail worth keeping: `threads = [i for i in threads if i.done() and
+not i.exception()]` appears TWICE in `sources.py` — once per phase. An anchor
+of that line alone patches the wrong phase and every behavioural test still
+passes. The anchor is the whole four-line block, and the test asserts the line
+is non-unique and the block is unique, so a future refactor cannot quietly
+make the narrow anchor look safe.
+
+### What it costs
+
+On a failed check the handful of hashes the local `DebridCache` already knew to
+be cached lose their cached badge along with the rest, because the failure
+discards the whole reply. They are still shown — a lost badge, not a lost
+source — and paying it keeps the patch to one `return` statement instead of a
+second signalling channel between two files.
+
+
 ## Working style
 
 - Be certain before shipping: read the code, reproduce with a unit test.
