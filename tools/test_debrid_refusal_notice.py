@@ -1,0 +1,163 @@
+#!/usr/bin/env python3
+"""A debrid service that refuses the account must say so, on the screen.
+
+THE REPORT: every AllDebrid source failed to resolve, and the log gave no
+reason. Three layers swallowed it in a row.
+
+  1. POV's alldebrid_api._request logs only `if not response.ok` -- and
+     AllDebrid answers HTTP 200 with the error INSIDE the body, which is how
+     its API has always worked.
+  2. POV's days_remaining() wraps the whole lookup in a bare `except:` and
+     returns None.
+  3. and this file read None as "no number, so show nothing".
+
+Verified against the live API, with no credentials and without asking the
+reporter for another log: v4/magnet/upload answers 200 with
+{"status":"error","error":{"code":...,"message":...}} and v4/magnet/instant
+answers 404 -- so the endpoints are alive, the auth style is accepted, and
+AllDebrid is refusing THIS account while naming which refusal in a field
+nobody read.
+
+WHAT THIS PINS. The notice is narrow on purpose: only an unambiguous error
+envelope carrying one of the account-level codes gets a toast. A timeout, a
+dropped connection, a Response object or an unrecognised shape says nothing --
+because a toast that cries wolf on a flaky night costs more trust than the one
+it saves.
+
+Run: python3 tools/test_debrid_refusal_notice.py
+"""
+import importlib.util
+import io
+import os
+import sys
+import types
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.normpath(os.path.join(HERE, '..'))
+ADDON = os.path.join(ROOT, 'addons', 'service.subtitles.kodipovilai')
+LIB = os.path.join(ADDON, 'resources', 'lib')
+
+FAIL = []
+
+
+def check(label, cond, detail=''):
+    print('%-4s %s%s' % ('ok' if cond else 'FAIL', label,
+                         ('  -- ' + detail) if detail and not cond else ''))
+    if not cond:
+        FAIL.append(label)
+
+
+def load():
+    for n in list(sys.modules):
+        if n.split('.')[0] in ('resources', 'xbmc', 'xbmcgui', 'xbmcaddon',
+                               'xbmcvfs'):
+            sys.modules.pop(n, None)
+    for name in ('xbmc', 'xbmcgui', 'xbmcaddon', 'xbmcvfs'):
+        sys.modules[name] = types.ModuleType(name)
+    pkg = types.ModuleType('resources')
+    lib = types.ModuleType('resources.lib')
+    lib.__path__ = [LIB]
+    sys.modules['resources'] = pkg
+    sys.modules['resources.lib'] = lib
+    ku = types.ModuleType('resources.lib.kodi_utils')
+    ku.log = lambda *a, **k: None
+    ku.notify = lambda *a, **k: None
+    sys.modules['resources.lib.kodi_utils'] = ku
+    lib.kodi_utils = ku
+    spec = importlib.util.spec_from_file_location(
+        'dsn', os.path.join(LIB, 'debrid_status_notifier.py'))
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+mod = load()
+AD = [s for s in mod.SERVICES if s['module'] == 'alldebrid_api']
+check('AllDebrid is one of the services this watches', len(AD) == 1)
+AD = AD[0] if AD else {'name': 'AllDebrid', 'module': 'alldebrid_api',
+                       'class': 'AllDebridAPI'}
+
+
+# --- what _refusal accepts, and what it refuses to speak about --------------
+print('=== only an unambiguous account refusal is reported ===')
+
+
+def refusal_from(reply):
+    """Run the real _refusal against a stubbed provider returning `reply`."""
+    fake_dir = os.path.join(HERE, '_no_such_lib')
+    mod._pov_lib_path = lambda: LIB          # any real dir; the import is stubbed
+    api = types.ModuleType('debrids.' + AD['module'])
+
+    class _Api(object):
+        def account_info(self):
+            if isinstance(reply, Exception):
+                raise reply
+            return reply
+    setattr(api, AD['class'], _Api)
+    sys.modules['debrids'] = types.ModuleType('debrids')
+    sys.modules['debrids.' + AD['module']] = api
+    try:
+        return mod._refusal(AD)
+    finally:
+        sys.modules.pop('debrids.' + AD['module'], None)
+        sys.modules.pop('debrids', None)
+
+
+REAL = {'status': 'error',
+        'error': {'code': 'AUTH_BAD_APIKEY',
+                  'message': 'The auth apikey is invalid'}}
+check('the live envelope is read', refusal_from(REAL)
+      == ('AUTH_BAD_APIKEY', 'The auth apikey is invalid'))
+check('a healthy account says nothing',
+      refusal_from({'user': {'premiumUntil': 99999999}}) is None)
+for label, reply in (
+        ('a timeout', TimeoutError('timed out')),
+        ('an exception of any kind', RuntimeError('boom')),
+        ('None', None),
+        ('a Response-ish object', object()),
+        ('a list', [1, 2]),
+        ('an envelope with no error block', {'status': 'error'}),
+        ('an error block that is not a dict',
+         {'status': 'error', 'error': 'nope'}),
+        ('an error block with no code',
+         {'status': 'error', 'error': {'message': 'x'}}),
+        ('an empty code',
+         {'status': 'error', 'error': {'code': '   ', 'message': 'x'}})):
+    check('%s is not a refusal' % label, refusal_from(reply) is None)
+
+
+# --- the queue: a refusal is shown, an unknown code is not ------------------
+print()
+print('=== what actually reaches the screen ===')
+codes = set(mod._REFUSAL_TEXT)
+check('the account-level codes are the ones AllDebrid documents',
+      {'AUTH_BAD_APIKEY', 'AUTH_BLOCKED', 'AUTH_USER_BANNED',
+       'MUST_BE_PREMIUM'} <= codes,
+      'got %s' % sorted(codes))
+check('every one of them has Hebrew a user can act on',
+      all(v.strip() and any('֐' <= ch <= 'ת' for ch in v)
+          for v in mod._REFUSAL_TEXT.values()))
+msg = mod._refusal_message(AD, 'AUTH_BAD_APIKEY', 'The auth apikey is invalid')
+check('the toast names the service and the reason, in Hebrew',
+      AD['name'] in msg and mod._REFUSAL_TEXT['AUTH_BAD_APIKEY'] in msg,
+      'got %r' % msg)
+check('...and not the raw English the API sent',
+      'apikey' not in msg, 'got %r' % msg)
+unknown = mod._refusal_message(AD, 'SOMETHING_NEW', 'a new reason')
+check('an unrecognised code still says what the service said',
+      'a new reason' in unknown)
+
+_src = io.open(os.path.join(LIB, 'debrid_status_notifier.py'),
+               encoding='utf-8').read()
+check('only a KNOWN code reaches the queue',
+      'refused[0] in _REFUSAL_TEXT' in _src,
+      'an unrecognised code must not raise a toast at startup')
+check('the extra request is paid only when there is no number',
+      'if days is None:' in _src and '_refusal(service)' in _src)
+check('...and only for a service the user actually connected',
+      _src.index('_is_connected(addon, service)')
+      < _src.index('refused = _refusal(service)'))
+
+print()
+print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')
+sys.exit(1 if FAIL else 0)
