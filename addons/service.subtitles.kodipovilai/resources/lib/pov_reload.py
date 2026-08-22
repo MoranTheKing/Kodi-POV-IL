@@ -12,6 +12,7 @@
 # never get POV cycled.
 
 import json
+import time
 
 try:
     import xbmc
@@ -25,8 +26,39 @@ except Exception:
 
 
 POV_ADDON_ID = 'plugin.video.pov'
-_cycled = False
-_pending = False
+
+# WHEN THE HOME SCREEN IS ACTUALLY SAFE TO TAKE POV AWAY FROM.
+#
+# Two field reports, one screenshot of the wizard's error viewer and one log,
+# both of them RuntimeError: Unknown addon id 'plugin.video.pov' raised at
+# module import inside magneto/modules/control.py -- and the timestamps put
+# both tracebacks INSIDE the window this file opens:
+#
+#     14:59:25.736  traceback (the movies widget)
+#     14:59:25.786  traceback (the tv shows widget)
+#     14:59:26.271  pov_reload: cycled POV -- resolvable=True
+#
+# The old wait was `home visible and nothing playing`, eight seconds in. On a
+# COLD start those are true almost immediately -- and they are true precisely
+# WHILE the home screen is running its first pass of widget queries. Every
+# widget that asked POV for content during the disable died, and since the
+# rebuild is triggered by the disable, nothing rebuilt them afterwards.
+#
+# Both reporters 'fixed' it themselves -- one by clearing the cache, one by
+# moving to the 64-bit build -- and neither fixed anything: both just move
+# startup timing so the widgets finish before we cycle. That is what this
+# does deliberately instead of by luck.
+#
+# There is no infolabel for 'the home widgets have finished'. Container
+# .IsUpdating covers only the focused container, and on the home screen that
+# is the menu, not a widget. So this is a floor and a quiet stretch, chosen
+# against the observed traces, and it is a heuristic -- which is why the
+# repair after the cycle exists as well.
+_MIN_AGE_SECONDS = 45      # since this module was first imported = service start
+_SETTLE_SECONDS = 20       # of continuous quiet before we take POV away
+_IMPORTED_AT = time.time()
+
+_cycled = False_pending = False
 # The one disk-probe thread. Not a cached answer -- a handle, so a probe that
 # never returns is never started twice. See _probe_path.
 _probe_thread = None
@@ -481,25 +513,44 @@ def request_reload():
         return False
 
 
-def _wait_until_idle(timeout=120):
+def _wait_until_idle(timeout=180):
+    """Wait for the home screen to have SETTLED, not merely appeared.
+
+    Four conditions, and the last two are the ones the old version lacked:
+    the home is up, nothing is playing, the focused container is not mid-
+    update, and the user has not pressed anything for a few seconds. All four
+    have to hold continuously for _SETTLE_SECONDS, and the service has to be
+    at least _MIN_AGE_SECONDS old -- the first widget pass is the thing being
+    waited out and it happens once, at the beginning.
+
+    Still returns True at the timeout. Waiting forever would mean the patch
+    never takes effect this session, which is the outcome the cycle exists to
+    avoid; the cap is just far enough out now that the first pass is over.
+    """
     try:
         monitor = xbmc.Monitor()
     except Exception:
         return False
     if monitor.waitForAbort(8):
         return False
-    waited = 8
+    waited, quiet_for = 8, 0
     while waited < timeout:
         try:
-            home_up = xbmc.getCondVisibility('Window.IsVisible(home)')
-            playing = xbmc.getCondVisibility('Player.HasMedia')
+            quiet = (xbmc.getCondVisibility('Window.IsVisible(home)')
+                     and not xbmc.getCondVisibility('Player.HasMedia')
+                     and not xbmc.getCondVisibility('Container.IsUpdating')
+                     and xbmc.getGlobalIdleTime() >= 3)
         except Exception:
-            home_up, playing = True, False
-        if home_up and not playing:
+            quiet = True
+        quiet_for = quiet_for + 2 if quiet else 0
+        if (quiet_for >= _SETTLE_SECONDS
+                and time.time() - _IMPORTED_AT >= _MIN_AGE_SECONDS):
             return True
         if monitor.waitForAbort(2):
             return False
         waited += 2
+    _log('home never settled in {0}s; cycling anyway'.format(timeout),
+         level='WARNING')
     return True
 
 
@@ -526,19 +577,30 @@ def _capture_home_focus():
 
 
 def _restore_home_focus(saved):
+    """Put focus back, and REPORT whether the container refilled.
+
+    The return value is the only evidence available that the cycle's own
+    widget rebuild survived. It is best-effort on purpose: the captured
+    container is whichever one had focus, which on the home screen is usually
+    the menu rather than a widget, so False is strong evidence of trouble and
+    True is weak evidence of health. The repair it gates is cheap and the
+    waiting in _wait_until_idle is the actual fix; this is the second line.
+    """
     if not saved or xbmc is None:
-        return
+        return None
     cid, pos = saved
+    refilled = False
     try:
         monitor = xbmc.Monitor()
         # Wait (bounded) for home + that container to repopulate after the cycle.
         for _ in range(20):
             if monitor.waitForAbort(0.5):
-                return
+                return None
             if not xbmc.getCondVisibility('Window.IsVisible(home)'):
                 continue
             n = (xbmc.getInfoLabel('Container(%s).NumItems' % cid) or '').strip()
             if n and n != '0':
+                refilled = True
                 break
         # Restore by ABSOLUTE index so it round-trips on Estuary's home
         # fixedlist (where the on-screen slot is pinned) as well as regular
@@ -548,7 +610,45 @@ def _restore_home_focus(saved):
         _log('restored home focus -> control %s item %s' % (cid, pos),
              level='INFO')
     except Exception:
-        pass
+        return None
+    return refilled
+
+
+def _repair_home_widgets(saved):
+    """One skin reload, for the case the widgets rebuilt into a dead add-on.
+
+    THE REBUILD IS TRIGGERED BY THE DISABLE, not by the enable -- which is why
+    a widget that asked POV for content during the window stays empty for the
+    rest of the session and a user has to clear the cache to get it back. This
+    runs only when the captured container came back EMPTY, and only after POV
+    is resolvable again.
+
+    That last condition is not a detail. This file's own history records a
+    skin reload fired 0.6 s INTO the window: the home screen rebuilt, every
+    POV widget raised Unknown addon id, and POV's service had to be killed for
+    not stopping. Same operation, opposite outcome, decided entirely by when.
+    """
+    if xbmc is None:
+        return False
+    try:
+        if not _is_resolvable():
+            _log('widgets look empty but POV is not resolvable; not reloading',
+                 level='WARNING')
+            return False
+        _log('home widgets did not come back; reloading the skin once',
+             level='WARNING')
+        xbmc.executebuiltin('ReloadSkin()')
+        monitor = xbmc.Monitor()
+        for _ in range(20):
+            if monitor.waitForAbort(0.5):
+                return False
+            if xbmc.getCondVisibility('Window.IsVisible(home)'):
+                break
+        _restore_home_focus(saved)
+        return True
+    except Exception as e:
+        _log('widget repair failed: {0}'.format(e), level='WARNING')
+        return False
 
 
 def _deferred_cycle():
@@ -636,7 +736,8 @@ def _run_cycle():
             _set_enabled(True)
             _log('POV did not come back; the cycle record stays so the next '
                  'start switches it on', level='WARNING')
-        _restore_home_focus(saved_focus)
+        if _restore_home_focus(saved_focus) is False:
+            _repair_home_widgets(saved_focus)
     except Exception as e:
         _log('cycle failed: {0}'.format(e), level='WARNING')
         try:
