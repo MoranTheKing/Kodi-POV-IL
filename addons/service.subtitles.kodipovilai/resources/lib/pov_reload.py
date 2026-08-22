@@ -175,7 +175,7 @@ def _owed_path():
     return xbmcvfs.translatePath(CYCLE_OWED_FILE)
 
 
-def _mark_owed(owed):
+def _mark_owed(owed, applied=True, attempts=0):
     """Record -- or clear -- "a cycle is still owed". Never raises.
 
     A FAILURE HERE IS SAID OUT LOUD, like its sibling _mark_cycle_pending.
@@ -194,25 +194,83 @@ def _mark_owed(owed):
             if directory and not os.path.isdir(directory):
                 os.makedirs(directory)
             with open(path, 'w', encoding='utf-8') as handle:
-                handle.write(POV_ADDON_ID + '\n')
+                handle.write('%s\n%d\n' % (POV_ADDON_ID, attempts))
         elif os.path.exists(path):
             os.remove(path)
         return True
     except Exception as exc:
-        # TWO FAILURES, TWO CONSEQUENCES, and one message used to claim the
-        # worse one for both. _mark_owed(False) is only reached after
-        # _is_resolvable() has proved POV re-imported the patch, so a failed
-        # CLEAR costs one redundant cycle next boot -- the patch already
-        # landed. Saying it may not take effect is simply untrue there.
+        # THREE FAILURES, THREE CONSEQUENCES, and one message used to claim
+        # the worst of them for all. A failed WRITE means a patch may never
+        # land. A failed CLEAR after a real cycle costs one redundant cycle
+        # next boot -- the patch already landed, so saying it may not take
+        # effect is untrue. And a failed clear on the "POV is gone" path is
+        # neither: no cycle ran, nothing landed, and the debt outlives the
+        # add-on it was owed to. A review found the middle message being
+        # printed for the third case, which is the one place it is a lie.
+        #
+        # `applied` is what separates them, and it defaults to the common
+        # case rather than to the safe-sounding one, so a new caller that
+        # forgets it gets the message that matches where _mark_owed(False)
+        # is actually called from: after a cycle.
         if owed:
             _log('could not record that a cycle is owed ({0}); a patch may '
                  'not take effect until some later release touches it '
                  'again'.format(exc), level='WARNING')
-        else:
+        elif applied:
             _log('could not clear the owed-cycle record ({0}); the patch DID '
                  'take effect, but the next start will cycle POV once more '
                  'for nothing'.format(exc), level='WARNING')
+        else:
+            _log('could not clear the owed-cycle record ({0}); no cycle ran, '
+                 'so every start will keep trying to pay a debt to an add-on '
+                 'that is not here'.format(exc), level='WARNING')
         return False
+
+
+def _owed_attempts():
+    """How many starts in a row have failed to pay the owed cycle.
+
+    A review asked the fair question about the new "never over a dialog"
+    rule: what happens on a device where the quiet moment simply never
+    comes? The debt is recorded, the next start tries again, and the answer
+    is the same -- for ever, with one INFO line a boot and nothing that
+    reads as a problem. Nobody would find that except by reading logs.
+
+    The owed FILE carries the count on a second line. The first line is
+    still the add-on id and cycle_owed() still only asks whether the file
+    exists, so a file written by an older release reads as zero rather than
+    breaking anything.
+    """
+    try:
+        import os
+        path = _owed_path()
+        if not os.path.isfile(path):
+            return 0
+        with open(path, encoding='utf-8') as handle:
+            lines = handle.read().splitlines()
+        return int(lines[1]) if len(lines) > 1 else 0
+    except Exception:
+        return 0
+
+
+# After this many consecutive starts that could not pay the debt, the line
+# stops being INFO. Three is "twice was a coincidence": a device restarted
+# three times with somebody browsing through the whole window every time is
+# no longer a coincidence, it is a device where this will never happen by
+# itself and somebody has to look.
+_OWED_SHOUT_AFTER = 3
+
+
+def _note_owed_attempt(why):
+    """Record one more failed attempt, and say so louder as they pile up."""
+    n = _owed_attempts() + 1
+    _mark_owed(True, attempts=n)
+    if n >= _OWED_SHOUT_AFTER:
+        _log('{0}; that is {1} starts in a row now. The patch POV is waiting '
+             'for has still not taken effect on this device'.format(why, n),
+             level='WARNING')
+    else:
+        _log('{0}; it stays owed and the next start tries again'.format(why))
 
 
 def cycle_owed():
@@ -541,7 +599,7 @@ def reload_if_patched():
     # uninstalled since the record was written, clearing it here is what stops
     # a background thread waiting three minutes for it on every boot, forever.
     if _is_installed() is False:
-        _mark_owed(False)
+        _mark_owed(False, applied=False)
         _log('a cycle was owed but POV is gone; forgetting it', level='INFO')
         return False
     return request_reload()
@@ -564,9 +622,18 @@ def _set_enabled(enabled):
         'params': {'addonid': POV_ADDON_ID, 'enabled': bool(enabled)},
     })
     try:
-        return '"error"' not in (xbmc.executeJSONRPC(payload) or '')
+        reply = xbmc.executeJSONRPC(payload) or ''
     except Exception:
         return False
+    # A POSITIVE TEST, NOT THE ABSENCE OF A NEGATIVE. This read
+    # `'"error"' not in (reply or '')`, which calls an EMPTY reply a success --
+    # and since the caller now acts on this answer (a False return means "do
+    # not claim the cycle"), a silent empty reply would let _run_cycle believe
+    # it switched POV off when it never did, find POV perfectly resolvable a
+    # moment later, and clear the owed debt for a cycle that did not happen.
+    # Kodi answers a successful Addons.SetAddonEnabled with a "result" member,
+    # so require it.
+    return '"result"' in reply and '"error"' not in reply
 
 
 def _is_enabled():
@@ -863,13 +930,12 @@ def _run_cycle():
         # both. A cycle that silently did not happen is the thing hardest to
         # diagnose from a user's log, which is the whole reason the near-miss
         # telemetry above exists.
-        _log('cycle deferred (Kodi is closing, or the screen never settled); '
-             'the debt is recorded')
+        _note_owed_attempt('cycle deferred (Kodi is closing, or the screen '
+                           'never settled)')
         return
     try:
         if xbmc.getCondVisibility('Player.HasMedia'):
-            _log('media playing; skipping POV cycle (applies next launch)',
-                 level='INFO')
+            _note_owed_attempt('media playing; skipping POV cycle')
             return
     except Exception:
         pass
@@ -877,8 +943,7 @@ def _run_cycle():
     # two seconds is long enough for somebody to press a title and start a
     # scrape. The whole cost of being wrong is one deferred cycle.
     if _dialog_up():
-        _log('a dialog is on screen; skipping POV cycle (the debt is '
-             'recorded and the next start will)', level='INFO')
+        _note_owed_attempt('a dialog is on screen; skipping POV cycle')
         return
     saved_focus = _capture_home_focus()
     try:

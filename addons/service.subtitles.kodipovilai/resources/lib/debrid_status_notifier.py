@@ -178,6 +178,60 @@ _REFUSAL_TEXT = {
 }
 
 
+# A SERVICE WITH NO CODES NEEDS AN ALLOWLIST, NOT A PASS.
+#
+# Premiumize refuses with {"status":"error","message":"..."} and no code, so
+# the code gate silenced it entirely -- and the first fix for that accepted ANY
+# message from a codeless service. A review fed it three plausible non-refusals
+# ("Too many requests, please slow down.", a bad-request string, a server
+# hiccup) and watched all three reach the screen. That is the toast crying wolf
+# on a flaky night, which this file's own header says costs more trust than the
+# one it saves. POV's _request throws the HTTP status away before returning, so
+# there is no status code left to separate them by; the message is all there is.
+#
+# So: a phrase this build recognises as ACCOUNT-LEVEL, or nothing. Each entry
+# carries its own Hebrew, which fixes the second half of the same finding --
+# a codeless refusal has no code, so _REFUSAL_TEXT could never translate it and
+# the one toast that reached a Hebrew user was raw upstream English.
+#
+# Matched case-insensitively as substrings, first match wins, most specific
+# first. A message that matches nothing is NOT a refusal, and is logged at
+# INFO with its text so the next report can widen this list on evidence rather
+# than on a guess.
+_CODELESS_REASONS = (
+    ('not logged in', 'החשבון לא מחובר'),
+    ('apikey', 'המפתח אינו תקף -- צריך לחבר מחדש'),
+    ('api key', 'המפתח אינו תקף -- צריך לחבר מחדש'),
+    ('customer_id', 'המפתח אינו תקף -- צריך לחבר מחדש'),
+    ('not premium', 'החשבון אינו פרימיום'),
+    ('premium membership', 'המנוי אינו פעיל'),
+    ('subscription', 'המנוי אינו פעיל'),
+    ('expired', 'המנוי פג'),
+    ('banned', 'החשבון מושעה'),
+    ('suspended', 'החשבון מושעה'),
+    ('disabled', 'החשבון מושבת'),
+    ('unauthorized', 'הגישה נדחתה'),
+    ('authentication', 'הגישה נדחתה'),
+    ('login failed', 'הגישה נדחתה'),
+)
+
+
+def _codeless_reason(message):
+    """The Hebrew for an account-level refusal with no code, or None.
+
+    None means "this service said error, but not about the account" -- a rate
+    limit, a hiccup, a shape nobody here recognises. The caller must then say
+    nothing at all.
+    """
+    low = (message or '').lower()
+    if not low.strip():
+        return None
+    for needle, hebrew in _CODELESS_REASONS:
+        if needle in low:
+            return hebrew
+    return None
+
+
 def _refusal(service):
     """(code, message) when the service refuses the account, else None.
 
@@ -219,7 +273,15 @@ def _refusal(service):
         # Premiumize never sends a code at all; the narrow rule alone let it
         # refuse an account in perfect silence.
         if service.get('codeless') and message:
-            return ('', message)
+            if _codeless_reason(message):
+                return ('', message)
+            try:
+                kodi_utils.log(
+                    '{0} answered an error this build does not read as an '
+                    'account refusal, so nothing is shown: {1!r}'.format(
+                        service['name'], message))
+            except Exception:
+                pass
         return None
     except Exception:
         return None
@@ -232,7 +294,12 @@ def _refusal(service):
 
 
 def _refusal_message(service, code, message):
-    known = _REFUSAL_TEXT.get(code)
+    # Hebrew first, from whichever table can supply it: the code table for a
+    # service that sends codes, the phrase table for one that does not. Falling
+    # through to the provider's own English is the last resort and is now only
+    # reachable for a CODED refusal whose code is new -- a codeless message that
+    # matched no phrase never gets here, because _refusal returned None.
+    known = _REFUSAL_TEXT.get(code) or (None if code else _codeless_reason(message))
     detail = known or message or code
     return '[B]{0}: [COLOR red]{1}[/COLOR][/B]'.format(service['name'], detail)
 
