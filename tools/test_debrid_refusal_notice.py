@@ -195,9 +195,15 @@ check('an account-shaped code this build does not know still counts',
 # list had the same two-sided failure: MAINTENANCE_MODE_BANNED_IPS and
 # SUBSCRIPTION_TIER_METADATA_REFRESH both matched (neither is a refusal) while
 # REFRESH_TOKEN_EXPIRED and USER_ACCOUNT_REMOVED matched nothing (both are).
-for _c in ('MUST_BE_PREMIUM_TOO', 'USER_BANNED_X', 'SUBSCRIPTION_BLOCKED',
+# ADJACENCY, NOT ORDER. "Subject first" rejected the job name correctly and
+# rejected EXPIRED_SUBSCRIPTION_NOTICE and BLOCKED_ACCOUNT_REGION with it --
+# real refusals that put the verb in front. What separates them is DISTANCE:
+# an account code says the two things next to each other, a job code has the
+# whole job name in between.
+for _c in ('USER_BANNED_X', 'SUBSCRIPTION_BLOCKED',
            'REFRESH_TOKEN_EXPIRED', 'USER_ACCOUNT_REMOVED',
-           'APIKEY_REVOKED', 'SESSION_INVALID'):
+           'APIKEY_REVOKED', 'SESSION_INVALID',
+           'EXPIRED_SUBSCRIPTION_NOTICE', 'BLOCKED_ACCOUNT_REGION'):
     check('...%s too' % _c, mod._unknown_account_code(_c) is True)
 for _c in ('ACCOUNT_BLOCKED', 'APIKEY_REVOKED', 'SESSION_INVALID'):
     check('...%s too' % _c, mod._unknown_account_code(_c) is True)
@@ -209,7 +215,11 @@ for _c in ('', '   ', 'AUTH_BAD_APIKEY', 'NO_SERVER', 'LINK_ERROR',
            # puts the verb first (FAILED ... SESSION), the account code names
            # the thing first (SESSION_INVALID). Membership alone read this one
            # as a login failure.
-           'TASK_FAILED_TO_START_SESSION', 'JOB_EXPIRED_ACCOUNT_SYNC'):
+           'TASK_FAILED_TO_START_SESSION',
+           # PREMIUM is a SUBJECT and was also listed as a predicate, so a
+           # token that is both satisfied the rule against itself and these
+           # two internal job codes raised "the account was rejected".
+           'CATALOG_PREMIUM_TIER_SYNC_JOB', 'PREMIUM_CACHE_WARM'):
     check('...but %r is not an account code' % _c,
           mod._unknown_account_code(_c) is False)
 

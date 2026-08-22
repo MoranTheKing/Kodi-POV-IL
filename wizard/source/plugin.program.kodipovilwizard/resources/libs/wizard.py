@@ -1174,10 +1174,16 @@ class Wizard:
     def force_close_kodi_in_5_seconds(self, dialog_header, graceful=False):
         """Count down, then close Kodi.
 
-        graceful=True asks Kodi to shut down normally so it SAVES the user's
-        settings on the way out. Pass it from any path that did not just
-        extract a guisettings.xml or an Addons33.db over the running Kodi --
-        in practice the quick update, whose zip carries neither. Everything
+        graceful=True ASKS Kodi to shut down normally, which is what saves the
+        user's settings on the way out. It is a request with a 20-second
+        window, not a guarantee: if Kodi does not go down in that time -- a
+        modal dialog holding the quit, a loaded box -- it falls back to the
+        hard kill and the settings are lost exactly as before, with a
+        WARNING in the log saying which happened.
+
+        Pass it from any path that did not just extract a guisettings.xml or
+        an Addons33.db over the running Kodi -- in practice the quick update,
+        whose zip carries neither. Everything
         else (build install, guifix, skin switch) has to keep the hard kill,
         because there a settings save would overwrite what was just written.
         """
@@ -1619,7 +1625,7 @@ UMBRELLA_PACKS = [
 # accounts up on the next boot. Ships with script.module.acctvwr (a hard
 # dependency of acctmgr, in no repo the build already carries) and with the
 # developer's own repository, so from here on he is its update channel, not us.
-ACCTMGR_PACK_VERSION = '1.1.5a'
+ACCTMGR_PACK_VERSION = '1.1.6'
 ACCTMGR_PACKS = [
     {
         'name': 'Account Manager Lite',

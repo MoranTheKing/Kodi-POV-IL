@@ -303,8 +303,13 @@ _CODE_PREDICATES = frozenset((
     'BANNED', 'BLOCKED', 'LOCKED', 'SUSPENDED', 'TERMINATED', 'REVOKED',
     'EXPIRED', 'INVALID', 'DENIED', 'DISABLED', 'DEACTIVATED', 'REMOVED',
     'DELETED', 'MISSING', 'BAD', 'FAILED', 'REQUIRED', 'UNAUTHORIZED',
-    'FORBIDDEN', 'INACTIVE', 'CANCELLED', 'CANCELED', 'CLOSED', 'PREMIUM',
+    'FORBIDDEN', 'INACTIVE', 'CANCELLED', 'CANCELED', 'CLOSED',
 ))
+# NOT 'PREMIUM' -- it is already a SUBJECT, and a token that is both satisfies
+# any subject-and-predicate rule against itself. CATALOG_PREMIUM_TIER_SYNC_JOB
+# and PREMIUM_CACHE_WARM both produced "the account was rejected" on that
+# alone. MUST_BE_PREMIUM, the real code, is in _REFUSAL_TEXT and never
+# reaches here.
 
 
 def _unknown_account_code(code):
@@ -316,19 +321,26 @@ def _unknown_account_code(code):
     # exactly the case this function exists for.
     if code.startswith('AUTH_'):
         return True
-    # ORDER, NOT JUST PRESENCE. `TASK_FAILED_TO_START_SESSION` is a backend
-    # job name and contains both a subject (SESSION) and a predicate (FAILED),
-    # so membership alone read it as a login failure. But an account code
-    # names the thing FIRST and what happened to it second --
-    # ACCOUNT_BLOCKED, SUBSCRIPTION_EXPIRED, USER_ACCOUNT_REMOVED -- while a
-    # job code puts the verb in front of the noun. That is the whole
-    # difference, and it needs no list of job words to encode.
+    # ADJACENCY, NOT ORDER. The previous rule was "the subject comes first",
+    # which rejected TASK_FAILED_TO_START_SESSION correctly and then rejected
+    # EXPIRED_SUBSCRIPTION_NOTICE and BLOCKED_ACCOUNT_REGION with it -- real
+    # refusals that happen to put the verb in front. Order is not the signal;
+    # DISTANCE is. An account code says the two things next to each other, in
+    # either order:
+    #
+    #     ACCOUNT_BLOCKED        BLOCKED_ACCOUNT_REGION
+    #     SUBSCRIPTION_EXPIRED   EXPIRED_SUBSCRIPTION_NOTICE
+    #     REFRESH_TOKEN_EXPIRED  USER_ACCOUNT_REMOVED
+    #
+    # while a job code has the whole job name in between:
+    #
+    #     TASK_FAILED_TO_START_SESSION      (FAILED ... SESSION, three apart)
     tokens = re.split(r'[^A-Z0-9]+', code)
     subjects = [i for i, t in enumerate(tokens) if t in _CODE_SUBJECTS]
     predicates = [i for i, t in enumerate(tokens) if t in _CODE_PREDICATES]
     if not subjects or not predicates:
         return False
-    return min(subjects) <= min(predicates)
+    return any(abs(a - b) <= 1 for a in subjects for b in predicates)
 
 
 def _codeless_reason(message):

@@ -5937,7 +5937,32 @@ def main():
     _maybe_patch_fentastic_search()
 
     if build_mode:
-        _run_build_startup_repairs()
+        # CONTAINED HERE, NOT IN THE LOOP. The pass re-raises a BaseException
+        # from a step on purpose, so that _publish_repairs_state is not
+        # reached and the pass never looks finished. That is right. What was
+        # wrong is where it landed: nothing on this path catches it, so a
+        # single misbehaving repair step took main() down with it -- and
+        # everything BELOW this line is what actually puts Hebrew subtitles on
+        # screen. SubsFilenamePublisher, the autoplay listener, the pool
+        # drainer and the maintenance loop are not related to any repair, and
+        # none of them ran for the rest of that session.
+        #
+        # HANDOFF records a patcher raising SystemExit as something that has
+        # actually happened here, so this is not hypothetical. Both properties
+        # are kept: the pass still does not publish, and the service still
+        # starts.
+        try:
+            _run_build_startup_repairs()
+        except BaseException as e:
+            try:
+                from resources.lib import kodi_utils
+                kodi_utils.log(
+                    'the startup repair pass ended early ({0}: {1}); the '
+                    'subtitle service is starting anyway and the repairs are '
+                    'not recorded as done'.format(type(e).__name__, e),
+                    level='WARNING')
+            except Exception:
+                pass
 
     # Same idea for POV: if we patched its sources.py and the user opted into
     # remember-source, cycle POV (deferred, idle-only) so it re-imports the

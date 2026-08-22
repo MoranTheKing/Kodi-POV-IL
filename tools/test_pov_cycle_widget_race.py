@@ -463,7 +463,11 @@ _svc = io.open(os.path.join(ROOT, 'addons', 'service.subtitles.kodipovilai',
 _arms = [m for m in re.finditer(r'pov_reload\.reload_if_patched\(\)', _svc)]
 check('the cycle is armed in exactly one place', len(_arms) == 1,
       'found %d' % len(_arms))
-_repairs = [m for m in re.finditer(r'^        _run_build_startup_repairs\(\)',
+# INDENTATION-AGNOSTIC. The call is wrapped in a try/except now -- a repair
+# step raising SystemExit used to take main() down with it, and everything
+# below that line is what starts the subtitle service -- so pinning it to a
+# fixed indent pinned a detail nobody promised.
+_repairs = [m for m in re.finditer(r'^\s*_run_build_startup_repairs\(\)',
                                    _svc, re.M)]
 check('the build repair pass was found', len(_repairs) == 1)
 if _arms and _repairs:

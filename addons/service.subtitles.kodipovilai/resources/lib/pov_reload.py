@@ -305,6 +305,36 @@ def _note_owed_attempt(why):
 _TEMP_STALE_SECONDS = 3600
 
 
+def _temp_owner_pid(name, stem):
+    """The pid encoded in a temp sibling's name, or None if unreadable."""
+    try:
+        rest = name[len(stem):]
+        return int(rest.split('.')[0])
+    except Exception:
+        return None
+
+
+def _pid_alive(pid):
+    """True when a process with this pid still exists. Unknown -> True.
+
+    Answering "yes" when we cannot tell is the safe direction: the cost is a
+    stale file surviving another boot, and the cost of the other answer is
+    deleting a file somebody is writing.
+    """
+    if not pid or pid < 1:
+        return False
+    try:
+        import os
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True          # exists, owned by somebody else
+    except Exception:
+        return True
+
+
 def _sweep_stale_temps(path):
     """Delete temp siblings left behind by a process that was killed.
 
@@ -326,8 +356,24 @@ def _sweep_stale_temps(path):
         directory = os.path.dirname(path) or '.'
         stem = os.path.basename(path) + '.'
         cutoff = time.time() - _TEMP_STALE_SECONDS
+        mine = os.getpid()
         for name in os.listdir(directory):
             if not (name.startswith(stem) and name.endswith('.tmp')):
+                continue
+            # WHOSE IS IT, ASKED BEFORE HOW OLD IT IS. The age test alone
+            # assumed a stable wall clock, and this product ships to Android
+            # boxes with no RTC battery: an NTP step after boot moves the clock
+            # by hours, and a file written one second ago reads as a day old.
+            # A review forced that step and watched the sweep delete a live
+            # writer's file -- the exact regression the age guard was added to
+            # fix, reached by a different road.
+            #
+            # The name carries the pid that wrote it. Our own process is never
+            # swept (the dangerous case is a sibling thread, which shares it),
+            # and neither is a pid that is still running. Only then does age
+            # matter at all, and only as a backstop for a name we cannot read.
+            owner = _temp_owner_pid(name, stem)
+            if owner == mine or _pid_alive(owner):
                 continue
             candidate = os.path.join(directory, name)
             try:
