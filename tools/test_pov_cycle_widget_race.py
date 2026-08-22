@@ -43,6 +43,7 @@ import ast
 import importlib.util
 import io
 import os
+import re
 import sys
 import types
 
@@ -301,6 +302,47 @@ for root, _dirs, files in os.walk(LIB):
                 leaks.append('%s:%s' % (fn, n.lineno))
 check('no optional add-on is probed by constructing an Addon anywhere',
       not leaks, 'still doing it at %s' % leaks)
+
+# --- 4. the longer wait must not starve the callers that block on it -------
+# ARMING RAISES A FLAG OTHER CODE WAITS ON. Three of wait_until_settled's four
+# callers are steps inside _run_build_startup_repairs, run inline on the
+# service thread with a 30s budget each that is NOT shared. Arming before them
+# meant each could spend its whole budget waiting for a cycle that had not
+# started, come back False and leave its work for the next boot -- half a
+# minute apiece, for nothing. Survivable while the cycle waited only for the
+# home window to appear; not once it waits for the home screen to settle.
+print()
+print('=== the cycle is armed after the work that blocks on it ===')
+_svc = io.open(os.path.join(ROOT, 'addons', 'service.subtitles.kodipovilai',
+                            'service.py'), encoding='utf-8').read()
+_arms = [m for m in re.finditer(r'pov_reload\.reload_if_patched\(\)', _svc)]
+check('the cycle is armed in exactly one place', len(_arms) == 1,
+      'found %d' % len(_arms))
+_repairs = [m for m in re.finditer(r'^        _run_build_startup_repairs\(\)',
+                                   _svc, re.M)]
+check('the build repair pass was found', len(_repairs) == 1)
+if _arms and _repairs:
+    check('arming comes AFTER the pass whose steps block on it',
+          _arms[0].start() > _repairs[0].start(),
+          'armed first: every guarded step in the pass pays its full budget '
+          'waiting for a cycle that has not begun')
+    _notes = [m.start() for m in
+              re.finditer(r'pov_reload\.note_patched\(\)', _svc)]
+    check('every note_patched is seen before the one question about it',
+          _notes and all(n < _arms[0].start() for n in _notes),
+          'a patcher that arms after the question is never cycled at all')
+
+# AND THE PROPERTY THAT MAKES THE LONGER WAIT SAFE AT ALL: running out of
+# patience is not evidence that POV came back. If this ever returned True on
+# timeout, a guarded skin reload would fire straight into the window.
+fake = FakeKodi()
+mod = load(fake)
+mod._armed = True
+mod._is_installed = lambda budget=None: True
+mod._is_resolvable = lambda: False
+check('wait_until_settled reports NOT SAFE when it runs out of time',
+      mod.wait_until_settled(timeout=2) is False,
+      'a bound that reports safe is a guard that fails open')
 
 print()
 print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')

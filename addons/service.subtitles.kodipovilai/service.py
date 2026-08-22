@@ -5664,15 +5664,6 @@ def main():
         except Exception:
             pass
 
-    # Same idea for POV: if we patched its sources.py and the user opted into
-    # remember-source, cycle POV (deferred, idle-only) so it re-imports the
-    # patched code this session. No-op unless armed above.
-    try:
-        from resources.lib import pov_reload
-        pov_reload.reload_if_patched()
-    except Exception:
-        pass
-
     # POV's own "My Services" menu -- THE correct place. Inject
     # Gemini + Wyzie entries here on every startup; idempotent.
     _maybe_patch_pov_services()
@@ -5685,6 +5676,29 @@ def main():
 
     if build_mode:
         _run_build_startup_repairs()
+
+    # Same idea for POV: if we patched its sources.py and the user opted into
+    # remember-source, cycle POV (deferred, idle-only) so it re-imports the
+    # patched code this session. No-op unless a patcher armed it.
+    #
+    # ARMED HERE, AFTER THE BUILD REPAIRS, AND THAT POSITION IS THE POINT.
+    # Arming raises a flag that pov_reload.wait_until_settled() blocks on, and
+    # three of its four callers are steps INSIDE _run_build_startup_repairs --
+    # run inline on this thread, each with a 30s budget that is not shared. So
+    # arming first meant every one of them could spend its budget waiting for a
+    # cycle that had not started, come back False, leave its work undone, and
+    # cost the subtitle service half a minute apiece for the privilege. That was
+    # survivable while the cycle waited only for the home window to appear; it
+    # is not now that it waits for the home screen to SETTLE.
+    #
+    # Arming last also closes a gap that was always there: note_patched() calls
+    # made by anything running after this line were simply never seen, because
+    # nothing asks again.
+    try:
+        from resources.lib import pov_reload
+        pov_reload.reload_if_patched()
+    except Exception:
+        pass
 
     # v0.2.9 tried patching FENtastic's notification widget but
     # it broke things; this cleans up the leftover patch on disk
