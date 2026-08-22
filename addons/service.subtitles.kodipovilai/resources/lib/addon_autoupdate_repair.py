@@ -39,7 +39,9 @@ end of every install:
     else AddUpdateRuleToList(id, PIN_OLD_VERSION);
 
 Read that against a repository that has gone away. A field log from this build
-has one -- `repository.709`, whose index answers 404 -- and an add-on whose
+has one -- `repository.KodiRealDebridIsrael`, whose index
+(raw.githubusercontent.com/kodi7rd/repository) answers 404 in every log
+received -- and an add-on whose
 origin is a repo that cannot be read has NO versions to compare against, so
 `latestVersionOfItsOriginRepo` stays empty, the installed version is not equal
 to it, and the add-on is PINNED. Permanently, silently, and only on the
@@ -157,6 +159,14 @@ MACHINE_RULES = (2,)
 # owner confirms the repository was taken down months ago. Seven add-ons name
 # it, including the build's own skin -- none of which are starved, because the
 # build updates them directly, but all of which are pinned by it.
+# SETTLED WITH EVIDENCE, because this file named the wrong repository for two
+# releases. `repository.709` is NOT it: its addon.xml points at
+# github.com/Zaxxon709/zaxxon, it arrives with the Account Manager pack rather
+# than with the build, and no field log contains a single error for that host.
+# `repository.KodiRealDebridIsrael` points at kodi7rd/repository, and that URL
+# is the only repository 404 in any log -- present in all four. Check the
+# addon.xml of the candidate against the 404 in a log before adding one here;
+# a wrong entry disables a repository that works.
 DEAD_ORIGINS = ('repository.KodiRealDebridIsrael',)
 
 # HOW LONG TO WAIT FOR A DATABASE KODI IS ALSO USING.
@@ -178,7 +188,16 @@ DEAD_ORIGINS = ('repository.KodiRealDebridIsrael',)
 # gives up for this boot the moment the first READ times out, since a
 # database that is busy now will not be less busy three statements later.
 # Everything here is idempotent; the next start does the whole thing.
-_DB_BUDGET = 3.0
+# 6.0, NOT 3.0. The first shared budget was set to the same figure as a
+# single old connection, and a review showed what that costs: two SEPARATE
+# 1.6-second lock episodes -- each comfortably inside the old 2s-per-
+# connection allowance, so the previous code completed both repairs -- now
+# starved the second write, and BOTH the origin-clear and the rule-clear
+# failed on a device where nothing was actually wrong. Bounding the worst
+# case is the point; bounding it below what ordinary intermittent contention
+# needs is just a different way to fail. 6s is still a third of the 20s this
+# started at, and four connections at 2s can no longer exceed it.
+_DB_BUDGET = 6.0
 _DB_TIMEOUT = 2          # the ceiling for any single connection
 _DB_FLOOR = 0.1          # never zero: a zero timeout fails instantly on a
                          # database that would have answered in a millisecond
