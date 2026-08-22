@@ -62,7 +62,7 @@ def check(label, cond, detail=''):
 _SCRATCH = []
 
 
-def make_db(rows, table=True):
+def make_db(rows, table=True, installed=()):
     d = tempfile.mkdtemp(prefix='aur-')
     _SCRATCH.append(d)
     path = os.path.join(d, 'Addons33.db')
@@ -74,9 +74,25 @@ def make_db(rows, table=True):
                          'VALUES (?, ?)', rows)
     else:
         conn.execute('CREATE TABLE something_else (x INTEGER)')
+    # Kodi's real shape, because the origin repair reads it.
+    conn.execute('CREATE TABLE installed (id INTEGER PRIMARY KEY, '
+                 'addonID TEXT UNIQUE, enabled BOOLEAN, installDate TEXT, '
+                 'lastUpdated TEXT, lastUsed TEXT, '
+                 "origin TEXT NOT NULL DEFAULT '', "
+                 'disabledReason INTEGER NOT NULL DEFAULT 0)')
+    conn.executemany('INSERT INTO installed (addonID, enabled, installDate, '
+                     'origin) VALUES (?, 1, "", ?)', installed)
     conn.commit()
     conn.close()
     return d, path
+
+
+def origins_in(path):
+    conn = sqlite3.connect(path)
+    rows = sorted(conn.execute(
+        'SELECT addonID, origin FROM installed').fetchall())
+    conn.close()
+    return rows
 
 
 def load(db_dir, mode=0, settings=None, set_ok=True):
@@ -89,6 +105,10 @@ def load(db_dir, mode=0, settings=None, set_ok=True):
         method, params = req.get('method'), req.get('params') or {}
         if method == 'Settings.GetSettingValue':
             return _json.dumps({'result': {'value': state['mode']}})
+        if method == 'Addons.SetAddonEnabled':
+            if params.get('enabled') is False:
+                state.setdefault('disabled', []).append(params.get('addonid'))
+            return _json.dumps({'result': 'OK'})
         if method == 'Settings.SetSettingValue':
             state['set_calls'].append(params.get('value'))
             if set_ok:
@@ -300,6 +320,59 @@ mod7b, _ = load(d7)
 st7b = mod7b.ensure_repaired()
 check('a directory named like a database does not mask the real one',
       rules_in(os.path.join(d7, 'Addons33.db')) == [], st7b)
+
+
+# --- 2b. the dead repository that keeps writing the pins --------------------
+# Clearing pins treats the symptom. The cause is the origin: Kodi compares the
+# installed version against the newest THAT REPOSITORY offers, and one that
+# answers 404 offers nothing, so the add-on is "not the latest" and is pinned
+# again on every future install.
+#
+# Kodi's own code says what to do. An EMPTY origin takes the other branch,
+# which looks for the newest version in ANY repository and pins only if the
+# installed one is older -- with nothing offering it, that is
+# `installed < 0.0.0`, which is false. So an empty origin UNPINS where a dead
+# origin pins. Clearing the record is the fix, not housekeeping.
+print()
+print('=== the origin that keeps writing them ===')
+DEAD = 'repository.KodiRealDebridIsrael'
+d2b, p2b = make_db([], installed=[
+    ('skin.fentastic', DEAD),
+    ('script.fentastic.helper', DEAD),
+    ('plugin.video.pov', 'repository.kodifitzwell'),
+    ('plugin.video.youtube', 'repository.xbmc.org'),
+    ('script.speedtester', ''),
+])
+mod2b, state2b = load(d2b)
+st2b = mod2b.ensure_repaired()
+print('   status: %s' % st2b)
+after = dict(origins_in(p2b))
+check('the dead repository is the one this build actually has',
+      DEAD in mod2b.DEAD_ORIGINS, str(mod2b.DEAD_ORIGINS))
+check('add-ons registered to it lose that origin',
+      after['skin.fentastic'] == '' and after['script.fentastic.helper'] == '',
+      str(after))
+check('...and a LIVE origin is left exactly as it was',
+      after['plugin.video.pov'] == 'repository.kodifitzwell'
+      and after['plugin.video.youtube'] == 'repository.xbmc.org', str(after))
+check('...and an add-on that never had one is untouched',
+      after['script.speedtester'] == '', str(after))
+check('every one is named in the log, so a device says which',
+      any('skin.fentastic' in l and 'script.fentastic.helper' in l
+          for l in state2b['log']), str(state2b['log'])[:300])
+check('...and the dead repository is switched off so Kodi stops asking it',
+      any(c == DEAD for c in state2b.get('disabled', [])),
+      'disabled: %s' % state2b.get('disabled'))
+
+# IT RUNS ON A DEVICE WITH NO PINS AT ALL, which is the device that has not
+# collected one YET. The rules block returns early there, and the origin
+# repair used to sit below that return.
+check('a device with a clean update_rules still gets the origin repair',
+      'origins=2:cleared_2' in st2b, st2b)
+
+# and once cleared, nothing to do
+mod2c, _ = load(d2b)
+check('running it again finds nothing', 'origins=none' in mod2c.ensure_repaired())
 
 
 # --- 3. the mode -----------------------------------------------------------
