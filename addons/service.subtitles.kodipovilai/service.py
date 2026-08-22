@@ -14,9 +14,16 @@
 # Fresh Install builds never ship the marker, so they rely on Kodi's
 # default "new user addons start disabled" behaviour.
 
+import json
 import os
 import threading
 import time
+
+# `json` IS USED, AND WAS NOT IMPORTED. Two nested functions in the SubSync
+# delay watch called json.dumps/json.loads with nothing named json in scope --
+# a NameError, swallowed by their own `except Exception`, on every call. See
+# _start_subsync_delay_watch, and tools/test_no_undefined_names.py, which is
+# what found it.
 
 try:
     import xbmc
@@ -3486,6 +3493,7 @@ def _start_subsync_delay_watch(monitor):
                 return
             from resources.lib import subsync as _ss
             from resources.lib import pool as _pool
+            from resources.lib import kodi_utils
             import xbmcgui
             active, watched, last_delay = None, 0, 0.0
             reported = set()
