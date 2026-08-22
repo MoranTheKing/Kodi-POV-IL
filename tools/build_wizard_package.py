@@ -17,6 +17,31 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "wizard/source/plugin.program.kodipovilwizard"
 DIST = ROOT / "dist"
 WIZARD_PAGE = ROOT / "wizard"
+# THE SAME RULE AS THE BUILD TOOL, imported rather than re-derived.
+#
+# Four review rounds hardened build_full_build._unsafe_member -- `..`, a
+# backslash, `".. "`, fullwidth Unicode -- and none of it applied here, while
+# `pure.is_absolute() or ".." in pure.parts` stayed as it was. A review put
+# all three of the first escapes through both: refused by one, accepted
+# silently by the other.
+#
+# And THIS is the zip that matters most for that: build-apk.yml unpacks the
+# wizard package with `unzip -o` -- Info-ZIP, a real non-Python extractor --
+# straight into the APK's assets. The build zip only ever meets Python's
+# zipfile. The weaker guard was in front of the stronger extractor.
+#
+# The threat model is milder (this zip is built from first-party, reviewed
+# source rather than an upstream download), which is why it went unnoticed --
+# not a reason for the two to disagree.
+try:
+    from build_full_build import _unsafe_member
+except ImportError:                       # run from another directory
+    import os as _os
+    import sys as _sys
+    _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+    from build_full_build import _unsafe_member
+
+
 PREFIX = "plugin.program.kodipovilwizard/"
 
 
@@ -77,6 +102,7 @@ def _member_set(values, label: str) -> set[str]:
         if (
             pure.is_absolute()
             or ".." in pure.parts
+            or _unsafe_member(name)
             or not name.startswith(PREFIX)
         ):
             raise ValueError("unsafe %s path: %s" % (label, name))
@@ -269,7 +295,8 @@ def verify(
         new_by_name = {info.filename: info for info in archive.infolist()}
         for name, canonical in expected.items():
             pure = PurePosixPath(name)
-            if pure.is_absolute() or ".." in pure.parts:
+            if (pure.is_absolute() or ".." in pure.parts
+                    or _unsafe_member(name)):
                 raise AssertionError("unsafe Wizard ZIP path: %s" % name)
             if name in changed:
                 if canonical is None:

@@ -266,7 +266,14 @@ def _refresh_map(specs):
     for addon_id, path in specs:
         try:
             zf = zipfile.ZipFile(path)
-        except (zipfile.BadZipFile, OSError, ValueError) as err:
+        # Exception, not a list of the ones seen so far. Three different
+        # types have now reached here from a single zipfile.ZipFile() call --
+        # BadZipFile, UnicodeDecodeError (an undecodable member name) and
+        # NotImplementedError (a "version needed to extract" byte above
+        # MAX_EXTRACT_VERSION) -- and each was added after a review found the
+        # tool crashing with a traceback instead of its own one-line refusal.
+        # Anything ZipFile raises means the same thing to this tool.
+        except Exception as err:
             # Every other refusal in this tool is one line that names the
             # problem; this one used to be a Python traceback, because the
             # flag checked only that the path was a file.
@@ -317,9 +324,16 @@ def _refresh_map(specs):
                     "%s has %d member(s) whose path escapes its own "
                     "directory:\n  %s"
                     % (path, len(escaped), "\n  ".join(sorted(escaped)[:10])))
+            # casefold(), NOT lower(). GREEK SMALL LETTER FINAL SIGMA and
+            # GREEK SMALL LETTER SIGMA are distinct under lower() and identical
+            # under the upcase table Windows and macOS actually use -- so a
+            # package carrying both `σfile` and `ςfile` passed this check and
+            # produced an artifact where one silently overwrites the other on
+            # extraction, non-deterministically. casefold() is the operation
+            # designed for exactly this comparison; lower() is not.
             folded = {}
             for n in names:
-                folded.setdefault(n.lower(), []).append(n)
+                folded.setdefault(n.casefold(), []).append(n)
             clashes = sorted(v for v in folded.values() if len(v) > 1)
             if clashes:
                 raise SystemExit(
