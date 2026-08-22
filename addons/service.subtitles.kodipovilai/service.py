@@ -2268,8 +2268,10 @@ def _maybe_keep_sources_when_debrid_is_late():
     "Display Uncached Torrents = off" filter then deletes. Both roads end at
     "no results" on a title with hundreds of sources.
 
-    Two coupled edits, applied in order by the module. See it for why the
-    debrid.py half must never be applied without the sources.py half.
+    Two independent edits. A failed check returns an empty tuple, which
+    unpatched POV reads as "nothing cached" exactly as it always did, so
+    neither half needs the other to be safe -- see the module for the crash
+    window that ruled out the obvious `return None`.
     """
     if _skip_pov_patchers():
         return
@@ -2279,8 +2281,7 @@ def _maybe_keep_sources_when_debrid_is_late():
         bad = [p for p in st.split(', ')
                if p.split('=')[-1] in ('unmatched', 'compile_failed',
                                        'write_failed', 'revert_failed',
-                                       'read_failed')
-               or p.split('=')[-1].startswith('skipped:')]
+                                       'read_failed')]
         if bad:
             kodi_utils.log(
                 'pov_debrid_timeout_patcher: ' + st, level='WARNING')
