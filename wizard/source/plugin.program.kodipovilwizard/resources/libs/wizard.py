@@ -1757,6 +1757,29 @@ UMBRELLA_AUTO_SETTING = 'umbrella_auto'
 UMBRELLA_AUTO_DONE = 'installed'
 
 
+def _umbrella_was_removed():
+    """True when Umbrella's settings are on disk but the add-on is not.
+
+    Kodi's uninstall removes addons/<id>/ and leaves
+    userdata/addon_data/<id>/ alone, so this is "it was here and somebody
+    took it away" as distinct from "it was never here". Deliberately narrow:
+    an EMPTY addon_data directory does not count, because Kodi creates one
+    the first time almost anything asks for a setting.
+    """
+    try:
+        import xbmcvfs
+        if _addon_on_disk('plugin.video.umbrella'):
+            return False
+        data = xbmcvfs.translatePath(
+            'special://profile/addon_data/plugin.video.umbrella')
+        if not xbmcvfs.exists(data):
+            return False
+        dirs, files = xbmcvfs.listdir(data)
+        return bool(dirs or files)
+    except Exception:
+        return False
+
+
 def ensure_umbrella_for_everyone():
     """Put Umbrella and CocoScrapers on every device, existing installs
     included, exactly once.
@@ -1785,6 +1808,24 @@ def ensure_umbrella_for_everyone():
             return False
         if not CONFIG.get_setting('buildname'):
             return False            # build not installed yet -- too early
+        # SOMEBODY WHO ALREADY SAID NO. Umbrella has been available behind a
+        # menu entry (install_umbrella_pilot) for several releases, and that
+        # entry never wrote this setting -- so a user who installed it there
+        # and then deliberately removed it looks exactly like a user who never
+        # had it, and this function would put it back. That is the one thing
+        # the docstring above promises it will not do.
+        #
+        # What tells them apart is what an uninstall leaves behind: the add-on
+        # directory goes, its addon_data does not. Files gone plus settings
+        # present is somebody who had it and got rid of it, and the answer is
+        # to record that and never ask again -- not to reinstall.
+        if _umbrella_was_removed():
+            logging.log(
+                '[Umbrella] settings from a previous install are here but the '
+                'add-on is not; treating that as a deliberate removal and not '
+                'installing it again', level=xbmc.LOGINFO)
+            CONFIG.set_setting(UMBRELLA_AUTO_SETTING, UMBRELLA_AUTO_DONE)
+            return False
         ok = ensure_umbrella_installed()
         if not ok:
             # No marker: a device that was offline (or where the pack host was
@@ -1832,25 +1873,65 @@ def install_umbrella_pilot():
             xbmc.executebuiltin('UpdateLocalAddons')
         except Exception:
             pass
+        # RECORDED HERE TOO, so that from now on the automatic install and
+        # the manual one leave the same mark. Without it, anybody using this
+        # entry stays in the population _umbrella_was_removed has to guess
+        # about.
+        try:
+            CONFIG.set_setting(UMBRELLA_AUTO_SETTING, UMBRELLA_AUTO_DONE)
+        except Exception:
+            pass
         logging.log_notify(
             CONFIG.ADDONTITLE,
             '[COLOR {0}]Umbrella הותקן! זמין תחת תוספים -> הרחבות וידאו'
             '[/COLOR]'.format(CONFIG.COLOR1))
 
 
+def _addon_on_disk(addon_id):
+    """True when addons/<id>/addon.xml is really there. Never raises."""
+    try:
+        import xbmcvfs
+        return xbmcvfs.exists(xbmcvfs.translatePath(
+            'special://home/addons/{0}/addon.xml'.format(addon_id)))
+    except Exception:
+        return False
+
+
 def _af3_register_pack_in_db(pack):
     """Register + enable a pack's addons in Kodi's Addons DB. Safe to
-    call repeatedly (INSERT OR IGNORE + UPDATE enabled). This is the
-    retroactive-fix entry point: it works off the static addon_ids
-    list, so it does NOT need the pack zip on disk -- which means we
-    can heal users whose files were already extracted by the old
-    code path."""
-    try:
-        db.addon_database(pack['addon_ids'], 1, True)
+    call repeatedly (INSERT OR IGNORE + UPDATE enabled). It needs no pack
+    ZIP on disk, which is what lets it heal users whose files were already
+    extracted by the old code path.
+
+    IT DOES NEED THE FILES. This used to register the whole static
+    addon_ids list unconditionally, and the "already current" fast path
+    above decides it may skip the download by looking at ONE sentinel file.
+    A review built a device with only the sentinel present and the other
+    three add-ons entirely absent: all four were written into Kodi's DB as
+    installed and enabled, the function reported success, the caller wrote
+    the "done" marker, and the device was never corrected again. Telling
+    Kodi an add-on exists when it does not is worse than telling it
+    nothing -- Kodi then resolves dependencies against a lie.
+
+    So: register what is there, and REPORT FAILURE for anything that is
+    not, so the caller does not mark the job done.
+    """
+    wanted = list(pack.get('addon_ids') or ())
+    present = [i for i in wanted if _addon_on_disk(i)]
+    absent = [i for i in wanted if i not in present]
+    if absent:
         logging.log(
             'DEBUG | ensure_arctic_fuse_3_installed | '
-            'DB enabled (static list): {0}'.format(pack['addon_ids']))
-        return True
+            'NOT registering {0} -- not on disk: {1}'.format(
+                pack['name'], absent))
+    if not present:
+        return False
+    try:
+        db.addon_database(present, 1, True)
+        logging.log(
+            'DEBUG | ensure_arctic_fuse_3_installed | '
+            'DB enabled: {0}'.format(present))
+        return not absent
     except Exception as e:
         logging.log(
             'DEBUG | ensure_arctic_fuse_3_installed | '
@@ -2116,6 +2197,19 @@ def _ensure_packs_installed(packs, downloading_label, ready_label):
                     '[COLOR {0}]כשל בחילוץ חבילת AF3![/COLOR]'.format(
                         CONFIG.COLOR2))
                 all_ok = False
+                # AND STOP. This used to fall through to the registration
+                # below, so a truncated download -- which passes the
+                # size-is-not-zero gate a few lines up -- ended with every
+                # add-on in the pack written into Kodi's DB as installed and
+                # enabled while nothing had been extracted. A review truncated
+                # a real zip in half and watched "extract failed" be followed
+                # immediately by "DB enabled". The two download-stage failures
+                # above both return before reaching here; this one did not.
+                try:
+                    os.remove(lib)
+                except Exception:
+                    pass
+                continue
 
             # CRITICAL: register every addon in this pack in Kodi's
             # Addons DB and mark it enabled. extract.all only writes

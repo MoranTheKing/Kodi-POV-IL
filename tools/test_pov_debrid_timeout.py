@@ -566,9 +566,31 @@ def write(root, rel, text):
         f.write(text)
 
 
+# THE CASE THAT BROKE THE FIRST TUPLE, and the reason the sentinel carries the
+# cached list instead of being bare. A hash the local DebridCache already
+# confirmed, plus a DIFFERENT newly-seen hash whose live check then fails:
+# stock still returns the known one and shows it as cached. A bare `()` threw
+# it away, so unpatched sources.py marked it Uncached and the default filter
+# DELETED it -- worse than doing nothing, in exactly the half-applied state
+# the tuple exists to make safe. Every case below is run with this shape, not
+# with an empty local cache.
+KNOWN = [('h1', 'pm', 'True')]
+
+
+def chk(**kw):
+    kw.setdefault('known', KNOWN)
+    kw.setdefault('hashes', ('h0', 'h1', 'h2'))
+    return Chk(**kw)
+
+
 boom = KeyError('response')
-sentinel = patched_cc(Chk(reply=boom))          # what patched debrid.py returns
-legacy = stock_cc(Chk(reply=boom))              # what stock debrid.py returns
+sentinel = patched_cc(chk(reply=boom))          # what patched debrid.py returns
+legacy = stock_cc(chk(reply=boom))              # what stock debrid.py returns
+check('(setup) stock keeps the locally-known hash on a failed check',
+      list(legacy) == ['h1'], repr(legacy))
+check('the sentinel carries the same contents, only as a tuple',
+      tuple(sentinel) == tuple(legacy) and isinstance(sentinel, tuple),
+      repr(sentinel))
 try:
     half_built, half_shown = play(stock_run, [Fut('premiumize', result=sentinel)])
     raised = None
@@ -580,8 +602,14 @@ if raised is None:
     was_built, was_shown = play(stock_run, [Fut('premiumize', result=legacy)])
     check('...and gives byte-identical output to no patch at all',
           half_built == was_built and half_shown == was_shown)
-    check('...which is the old behaviour: everything Uncached, nothing shown',
-          marks(half_built) == ['Uncached premiumize'] and half_shown == [])
+    check('...INCLUDING the hash the local cache already knew about',
+          marks(half_built) == ['Uncached premiumize', 'premiumize']
+          and len(half_shown) == 1,
+          '%s / %d shown' % (marks(half_built), len(half_shown)))
+    # and the bare tuple the first draft used would have lost it
+    bare_built, bare_shown = play(stock_run, [Fut('premiumize', result=())])
+    check('...which a BARE tuple would have deleted -- hence the contents',
+          bare_shown == [] and half_shown != bare_shown)
 
 # AND THE VALUE THAT WOULD HAVE BROKEN IT. Pinned so nobody "simplifies" the
 # sentinel back to None, or to a string (where `'' in "SENTINEL"` is True and a
