@@ -396,6 +396,77 @@ check('a failed extract stops before the registration',
       bool(_ext) and isinstance(_ext[0].body[-1], ast.Continue),
       'a truncated download used to end with every id marked installed')
 
+
+# --- every pack's DECLARED version must be the one it CONTAINS -----------
+# There was a check like this for Umbrella and for nothing else, and Account
+# Manager was quietly a version behind: the pack shipped script.module.acctmgr
+# 1.1.5a while its own developer's repository published 1.1.6, so a fresh
+# install spent its first day fetching what should have arrived with it.
+#
+# The gate matters in BOTH directions. _af3_pack_current compares the version
+# the SENTINEL file on disk reports against the constant declared here. If the
+# constant is AHEAD of what the pack contains, every device re-downloads the
+# pack on every boot for ever and never satisfies the gate. If it is BEHIND,
+# the pack never refreshes. Either way nothing says so out loud.
+print()
+print('=== each pack declares the version it actually contains ===')
+import zipfile as _zf
+import re as _re
+
+_consts = {}
+for _n in _wtree.body:
+    if isinstance(_n, ast.Assign) and isinstance(getattr(_n, 'value', None),
+                                                 ast.Constant):
+        for _t in _n.targets:
+            if isinstance(_t, ast.Name):
+                _consts[_t.id] = _n.value.value
+
+_FAMILIES = (
+    ('UMBRELLA_PACK_VERSION', 'Kodi-POV-IL-Umbrella-pack.zip',
+     'plugin.video.umbrella'),
+    ('ACCTMGR_PACK_VERSION', 'Kodi-POV-IL-AcctMgr-pack.zip',
+     'script.module.acctmgr'),
+)
+for _const, _zipname, _sentinel in _FAMILIES:
+    _declared = _consts.get(_const)
+    check('%s is declared in wizard.py' % _const, _declared is not None)
+    _path = os.path.join(ROOT, 'dist', _zipname)
+    check('...and %s is in dist/' % _zipname, os.path.isfile(_path))
+    if not (_declared and os.path.isfile(_path)):
+        continue
+    with _zf.ZipFile(_path) as _z:
+        _raw = _z.read('addons/%s/addon.xml' % _sentinel).decode('utf-8',
+                                                                'replace')
+    _at = _raw.find('<addon')
+    _m = _re.search(r'\bversion="([^"]+)"', _raw[_at if _at >= 0 else 0:])
+    check('...and its sentinel carries a version', _m is not None)
+    if _m:
+        check('...which is exactly what %s declares' % _const,
+              _m.group(1) == _declared,
+              'declared %r, pack contains %r -- the gate either never fires '
+              'or fires for ever' % (_declared, _m.group(1)))
+    # and every id the pack claims must really be inside it, or the new
+    # all-ids-present fast path re-downloads on every boot without end
+    _ids = None
+    for _n in ast.walk(_wtree):
+        if isinstance(_n, ast.Assign):
+            for _t in _n.targets:
+                if getattr(_t, 'id', '') == _const.replace('_PACK_VERSION',
+                                                           '_PACKS'):
+                    try:
+                        _ids = ast.literal_eval(_n.value)[0]['addon_ids']
+                    except Exception:
+                        _ids = None
+    if _ids:
+        with _zf.ZipFile(_path) as _z:
+            _present = {_mm.group(1) for _nn in _z.namelist()
+                        for _mm in [_re.match(r'^addons/([^/]+)/addon\.xml$',
+                                              _nn)] if _mm}
+        check('...and every id %s claims is inside its zip'
+              % _const.replace('_PACK_VERSION', '_PACKS'),
+              set(_ids) <= _present,
+              'claimed but absent: %s' % sorted(set(_ids) - _present))
+
 print()
 print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')
 sys.exit(1 if FAIL else 0)
