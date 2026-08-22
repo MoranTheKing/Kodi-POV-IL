@@ -61,6 +61,7 @@ import argparse
 import hashlib
 import re
 import sys
+import unicodedata
 import zipfile
 from pathlib import Path
 
@@ -170,6 +171,26 @@ def _unsafe_member(name):
     """
     if not name or not name.strip("/"):
         return False                      # empty / bare-slash: skipped by caller
+
+    # STOP ENUMERATING ENCODINGS. Four escapes have now been found here, one
+    # per review round -- `..`, a backslash, `".. "`, and finally U+FF0E
+    # FULLWIDTH FULL STOP and U+FF0F FULLWIDTH SOLIDUS, which NFKC folds to
+    # `.` and `/`. Each fix taught this function one more spelling, and the
+    # next round found the next spelling. That is a losing game.
+    #
+    # A name whose NFKC form differs from itself is one where two extractors
+    # can legitimately disagree about what it says. Refuse it, whatever it
+    # spells. Measured before shipping: across all 896 artifacts in dist/ and
+    # 599,447 members, NOT ONE name is NFKC-unstable, so this costs nothing
+    # real and closes the whole class rather than one more instance of it.
+    #
+    # Format and control characters go with it. A zero-width space inside a
+    # `..` segment defeated the dot checks below for the same reason.
+    if unicodedata.normalize("NFKC", name) != name:
+        return True
+    if any(unicodedata.category(ch) in ("Cc", "Cf", "Cs", "Co", "Cn")
+           for ch in name):
+        return True
     if "\\" in name:
         return True
     if name.startswith("/"):
@@ -195,7 +216,18 @@ def _unsafe_member(name):
         if part and not stripped and set(part) <= set(". \t"):
             return True
         if part != part.strip() or part != part.rstrip("."):
-            return True          # a name Windows would silently rewrite
+            # Windows strips TRAILING dots and spaces from a path component.
+            # Leading whitespace goes too, which Windows does not actually
+            # rewrite -- deliberately over-broad, because no member of any
+            # shipped artifact has it and a filename that begins with a space
+            # is not worth defending.
+            #
+            # NOT "any name Windows would silently rewrite", which is what the
+            # commit that added this line claimed and what the next review
+            # falsified with a fullwidth full stop. This rule covers the
+            # trailing-dot-and-space behaviour and nothing more; the NFKC
+            # check above is what covers the rest.
+            return True
     return False
 
 
@@ -234,7 +266,7 @@ def _refresh_map(specs):
     for addon_id, path in specs:
         try:
             zf = zipfile.ZipFile(path)
-        except (zipfile.BadZipFile, OSError) as err:
+        except (zipfile.BadZipFile, OSError, ValueError) as err:
             # Every other refusal in this tool is one line that names the
             # problem; this one used to be a Python traceback, because the
             # flag checked only that the path was a file.

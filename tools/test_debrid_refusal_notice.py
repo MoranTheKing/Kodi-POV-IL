@@ -199,12 +199,36 @@ for _c in ('MUST_BE_PREMIUM_TOO', 'USER_BANNED_X', 'SUBSCRIPTION_BLOCKED',
            'REFRESH_TOKEN_EXPIRED', 'USER_ACCOUNT_REMOVED',
            'APIKEY_REVOKED', 'SESSION_INVALID'):
     check('...%s too' % _c, mod._unknown_account_code(_c) is True)
+for _c in ('ACCOUNT_BLOCKED', 'APIKEY_REVOKED', 'SESSION_INVALID'):
+    check('...%s too' % _c, mod._unknown_account_code(_c) is True)
 for _c in ('', '   ', 'AUTH_BAD_APIKEY', 'NO_SERVER', 'LINK_ERROR',
            'MAGNET_INVALID_ID', 'FILE_NOT_FOUND',
            'MAINTENANCE_MODE_BANNED_IPS', 'SUBSCRIPTION_TIER_METADATA_REFRESH',
-           'TASK_FAILED_TO_START'):
+           'TASK_FAILED_TO_START',
+           # ORDER is what separates a job name from an account code: the job
+           # puts the verb first (FAILED ... SESSION), the account code names
+           # the thing first (SESSION_INVALID). Membership alone read this one
+           # as a login failure.
+           'TASK_FAILED_TO_START_SESSION', 'JOB_EXPIRED_ACCOUNT_SYNC'):
     check('...but %r is not an account code' % _c,
           mod._unknown_account_code(_c) is False)
+
+# AND AN IDENTIFIER THAT IS ITSELF THE REFUSAL. A codeless service whose only
+# human-facing text is `ACCOUNT_BLOCKED` was swallowed by the not-prose guard
+# -- the same silence this file exists to end.
+for _t in ('ACCOUNT_BLOCKED', 'ACCOUNT_SUSPENDED', 'SUBSCRIPTION.CANCELLED'):
+    check('a bare %s message is still a refusal' % _t,
+          mod._codeless_reason(_t) == mod._UNKNOWN_CODE_TEXT,
+          repr(mod._codeless_reason(_t)))
+check('...but a job identifier still is not',
+      mod._codeless_reason('TASK_FAILED_TO_START_SESSION') is None)
+
+# THE BRAND IS NOT A SUBJECT, EXCEPT WHEN IT IS POSSESSED. Blanking it killed
+# the URL false positive and also killed "Your Premiumize has expired."
+check('a possessed brand name reads as the account',
+      mod._codeless_reason('Your Premiumize has expired.') is not None)
+check('...and a bare brand in a URL still does not',
+      mod._codeless_reason('https://www.premiumize.me/link-expired') is None)
 _src_gate = io.open(os.path.join(LIB, 'debrid_status_notifier.py'),
                     encoding='utf-8').read()
 check('...and the queue gate actually asks',

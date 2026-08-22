@@ -797,6 +797,30 @@ try:
           'the concurrency test cannot tell the two apart, so it proves '
           'nothing about the fix')
     _m._mark_owed = _real
+
+    # AND THE SWEEP MUST NOT EAT A LIVE WRITER'S FILE. The first version of
+    # _sweep_stale_temps deleted every temp sibling it recognised -- including
+    # the one another thread was between writing and renaming. That writer's
+    # os.replace then failed, its update was silently lost, and the hammer
+    # above could not see it: nothing raised out of _mark_owed, the record was
+    # never empty, and the temp file ended up DELETED rather than left behind,
+    # so "no temp file left behind" passed BECAUSE of the bug.
+    _m._mark_owed(True, attempts=7)
+    _live = _m._owed_path() + '.999999.1.tmp'
+    with open(_live, 'w', encoding='utf-8') as _f:
+        _f.write('a live writer is mid-flight here\n')
+    _m._sweep_stale_temps(_m._owed_path())
+    check('a temp file written just now is left alone', os.path.exists(_live),
+          'the sweep deleted a file another writer was still using')
+    _old = _m._owed_path() + '.111111.1.tmp'
+    with open(_old, 'w', encoding='utf-8') as _f:
+        _f.write('orphaned by a kill an hour ago\n')
+    os.utime(_old, (0, 0))
+    _m._sweep_stale_temps(_m._owed_path())
+    check('...and one orphaned long ago is swept', not os.path.exists(_old))
+    check('...and the record itself is never touched',
+          _m.cycle_owed() is True and _m._owed_attempts() == 7)
+    os.remove(_live)
 finally:
     shutil.rmtree(_dir, ignore_errors=True)
 

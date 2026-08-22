@@ -300,6 +300,11 @@ def _note_owed_attempt(why):
         _log('{0}; it stays owed and the next start tries again'.format(why))
 
 
+# An hour. A writer takes milliseconds; anything this old was orphaned by
+# a process that died between the write and the rename.
+_TEMP_STALE_SECONDS = 3600
+
+
 def _sweep_stale_temps(path):
     """Delete temp siblings left behind by a process that was killed.
 
@@ -317,14 +322,31 @@ def _sweep_stale_temps(path):
     """
     try:
         import os
+        import time
         directory = os.path.dirname(path) or '.'
         stem = os.path.basename(path) + '.'
+        cutoff = time.time() - _TEMP_STALE_SECONDS
         for name in os.listdir(directory):
-            if name.startswith(stem) and name.endswith('.tmp'):
-                try:
-                    os.remove(os.path.join(directory, name))
-                except OSError:
-                    pass
+            if not (name.startswith(stem) and name.endswith('.tmp')):
+                continue
+            candidate = os.path.join(directory, name)
+            try:
+                # AGE IS WHAT MAKES THIS SAFE. Every temp file shares a
+                # recognisable name, so a sweep that deletes them all deletes
+                # the one ANOTHER THREAD is between writing and renaming --
+                # and that writer's os.replace then fails, its update is lost,
+                # and the stress test cannot see it because the file ends up
+                # deleted rather than left behind. A review forced exactly
+                # that interleaving on the first version of this function.
+                #
+                # A live writer's temp file is milliseconds old. Anything that
+                # has been sitting here for an hour belongs to a process that
+                # is not coming back.
+                if os.path.getmtime(candidate) > cutoff:
+                    continue
+                os.remove(candidate)
+            except OSError:
+                pass
     except Exception:
         pass
 

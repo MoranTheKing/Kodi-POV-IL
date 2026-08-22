@@ -267,7 +267,10 @@ _slips = ['a backslash traversal', 'a bare backslash anywhere',
           'a trailing space after the dots',
           'a segment that is only dots',
           'a trailing dot Windows would strip',
-          'a trailing space Windows would strip']
+          'a trailing space Windows would strip',
+          'fullwidth dots that NFKC folds to ..',
+          'a fullwidth solidus that NFKC folds to /',
+          'a zero-width space inside the dots']
 for label, member in (
         ('a backslash traversal', 'plugin.video.pov/evil\\..\\..\\..\\outside.txt'),
         ('a bare backslash anywhere', 'plugin.video.pov/sub\\file.py'),
@@ -282,7 +285,20 @@ for label, member in (
         ('a segment that is only dots', 'plugin.video.pov/d/.../out.txt'),
         ('a trailing dot Windows would strip', 'plugin.video.pov/d./out.txt'),
         ('a trailing space Windows would strip',
-         'plugin.video.pov/d /out.txt')):
+         'plugin.video.pov/d /out.txt'),
+        # THE FOURTH ESCAPE, one per review round. U+FF0E and U+FF0F are not
+        # `.` and `/` by string comparison, and NFKC folds them to exactly
+        # that -- so a rule that had learnt three spellings had not learnt
+        # these. The answer was to stop learning spellings: a name whose NFKC
+        # form differs from itself is refused whatever it spells. Measured
+        # first: not one of the 599,447 members across all 896 artifacts in
+        # dist/ is NFKC-unstable, so the rule costs nothing real.
+        ('fullwidth dots that NFKC folds to ..',
+         'plugin.video.pov/\uff0e\uff0e/out.txt'),
+        ('a fullwidth solidus that NFKC folds to /',
+         'plugin.video.pov/evil\uff0f..\uff0f..\uff0fout.txt'),
+        ('a zero-width space inside the dots',
+         'plugin.video.pov/..\u200b/out.txt')):
     _n = _slips.index(label)
     _z = zip_at('slip_%d.zip' % _n, {
         'plugin.video.pov/addon.xml': addon_xml('plugin.video.pov', '6.0'),
@@ -357,6 +373,10 @@ for _name, _want in (
         ('addons/plugin.video.pov/d./x', True),
         ('addons/plugin.video.pov/d /x', True),
         ('addons/plugin.video.pov/a..b.py', False),
+        ('addons/plugin.video.pov/\uff0e\uff0e/x', True),
+        ('addons/plugin.video.pov/a\uff0fb', True),
+        ('addons/plugin.video.pov/..\u200b/x', True),
+        ('addons/plugin.video.pov/Espa\xf1a 16.png', False),
         ('addons/plugin.video.pov/v1.2.3/x', False),
         ('/abs', True),
         ('C:/x', True),
@@ -489,6 +509,29 @@ except SystemExit as e:
 check('a refreshed member that does not match the package is refused', caught2)
 
 shutil.rmtree(WORK, ignore_errors=True)
+
+# --- and nothing the build ALREADY ships may be refused -------------------
+# Each round has tightened _unsafe_member, and a rule that is one notch too
+# broad does not leak -- it refuses to build at all. Measured, not sampled:
+# every member of every artifact in dist/, through the real rule.
+print()
+print('=== the tightened rule refuses nothing already shipped ===')
+import glob as _glob
+_seen, _refused = 0, []
+for _z in sorted(_glob.glob(os.path.join(ROOT, 'dist', '*.zip'))):
+    try:
+        _names = zipfile.ZipFile(_z).namelist()
+    except Exception:
+        continue
+    _seen += len(_names)
+    _refused.extend((os.path.basename(_z), n) for n in _names
+                    if _bfb_probe(n))
+check('a dist/ to measure against was found', _seen > 1000,
+      'only %d members seen' % _seen)
+check('no shipped member is refused by the current rule', not _refused,
+      '%d refused, e.g. %s' % (len(_refused), _refused[:3]))
+print('   checked %d members' % _seen)
+
 print()
 print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')
 sys.exit(1 if FAIL else 0)
