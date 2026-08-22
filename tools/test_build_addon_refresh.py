@@ -263,13 +263,26 @@ _bfb_probe = _bfb._unsafe_member
 
 _slips = ['a backslash traversal', 'a bare backslash anywhere',
           'a Windows drive path', 'a UNC path',
-          'an empty interior segment']
+          'an empty interior segment',
+          'a trailing space after the dots',
+          'a segment that is only dots',
+          'a trailing dot Windows would strip',
+          'a trailing space Windows would strip']
 for label, member in (
         ('a backslash traversal', 'plugin.video.pov/evil\\..\\..\\..\\outside.txt'),
         ('a bare backslash anywhere', 'plugin.video.pov/sub\\file.py'),
         ('a Windows drive path', 'C:/Windows/System32/drivers/etc/hosts'),
         ('a UNC path', '\\\\server\\share\\evil.txt'),
-        ('an empty interior segment', 'plugin.video.pov//..//outside.txt')):
+        ('an empty interior segment', 'plugin.video.pov//..//outside.txt'),
+        # THE THIRD ESCAPE, and the one that got past the first two repairs:
+        # `".. " == ".."` is False, and Windows strips the trailing space back
+        # off at extraction time. A review built this and found it in the
+        # artifact, past _refresh_map, build() AND verify().
+        ('a trailing space after the dots', 'plugin.video.pov/d/.. /out.txt'),
+        ('a segment that is only dots', 'plugin.video.pov/d/.../out.txt'),
+        ('a trailing dot Windows would strip', 'plugin.video.pov/d./out.txt'),
+        ('a trailing space Windows would strip',
+         'plugin.video.pov/d /out.txt')):
     _n = _slips.index(label)
     _z = zip_at('slip_%d.zip' % _n, {
         'plugin.video.pov/addon.xml': addon_xml('plugin.video.pov', '6.0'),
@@ -303,6 +316,33 @@ p, _ = run('r5e.zip', ['--refresh-addon', 'plugin.video.pov=' + _ln])
 check('a symlink member is refused', p.returncode != 0
       and 'symlink' in (p.stdout + p.stderr), (p.stdout + p.stderr)[-300:])
 
+# ...INCLUDING ONE THAT LIES ABOUT WHO WROTE IT. The first version gated on
+# create_system == 3 (Unix), so setting it to 0 (FAT) while leaving the Unix
+# symlink mode bits in place walked straight past. The mode bits are the thing
+# being asked about.
+_ln2 = os.path.join(WORK, 'link2.zip')
+with zipfile.ZipFile(_ln2, 'w') as _z:
+    _z.writestr('plugin.video.pov/addon.xml', addon_xml('plugin.video.pov', '6.0'))
+    _zi = zipfile.ZipInfo('plugin.video.pov/innocent2.txt')
+    _zi.create_system = 0                      # claims FAT / Windows
+    _zi.external_attr = (0o120777 << 16)       # but carries a Unix symlink mode
+    _z.writestr(_zi, '../../../../etc/passwd')
+p, _ = run('r5f.zip', ['--refresh-addon', 'plugin.video.pov=' + _ln2])
+check('...even one claiming it was written on Windows', p.returncode != 0
+      and 'symlink' in (p.stdout + p.stderr), (p.stdout + p.stderr)[-300:])
+
+# TWO NAMES THAT DIFFER ONLY BY CASE silently shadow each other wherever the
+# artifact is extracted case-insensitively -- Windows, and macOS by default.
+# Which one wins is not something this tool can state, so it refuses instead.
+_cs = os.path.join(WORK, 'case.zip')
+with zipfile.ZipFile(_cs, 'w') as _z:
+    _z.writestr('plugin.video.pov/addon.xml', addon_xml('plugin.video.pov', '6.0'))
+    _z.writestr('plugin.video.pov/entry.py', 'REAL\n')
+    _z.writestr('plugin.video.pov/ENTRY.PY', 'SHADOW\n')
+p, _ = run('r5g.zip', ['--refresh-addon', 'plugin.video.pov=' + _cs])
+check('two members differing only by case are refused', p.returncode != 0
+      and 'case' in (p.stdout + p.stderr), (p.stdout + p.stderr)[-300:])
+
 # AND THE GATE THAT DOES NOT DEPEND ON GUESSING THE NEXT SEPARATOR: the
 # finished artifact is asked directly, so a member arriving by any route at
 # all -- quickfix, wizard package, a check nobody has thought of yet -- is
@@ -312,6 +352,12 @@ for _name, _want in (
         ('addons/plugin.video.pov/ok.py', False),
         ('addons/plugin.video.pov/../../x', True),
         ('addons/plugin.video.pov/a\\..\\b', True),
+        ('addons/plugin.video.pov/d/.. /x', True),
+        ('addons/plugin.video.pov/d/... /x', True),
+        ('addons/plugin.video.pov/d./x', True),
+        ('addons/plugin.video.pov/d /x', True),
+        ('addons/plugin.video.pov/a..b.py', False),
+        ('addons/plugin.video.pov/v1.2.3/x', False),
         ('/abs', True),
         ('C:/x', True),
         ('addons//x', True),

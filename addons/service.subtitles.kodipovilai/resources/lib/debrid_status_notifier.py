@@ -215,6 +215,15 @@ _REFUSAL_TEXT = {
 # now the thing that diagnoses (see pov_debrid_error_log_patcher). Precision
 # on the screen, recall in the log.
 
+# Sentence and clause boundaries. `but`/`however`/`although` are here
+# because they are exactly how a message says "this part is fine, that
+# part is not", which is the shape that fooled the previous rule.
+_IDENT_RE = re.compile(r'^[A-Z0-9_.\-]{3,}$')
+
+_CLAUSE_RE = re.compile(
+    r'[.;!?\n]+|,\s*(?:but|however|although|though|while|and)\b'
+    r'|\s+(?:but|however|although|though)\b')
+
 _URL_RE = re.compile(r'\S+://\S+|\bwww\.\S+')
 
 # Something of the user's. Never a service, a link, a parameter or an IP.
@@ -238,6 +247,19 @@ _ACCOUNT_PREDICATES = (
     ('inactive', 'המנוי אינו פעיל'),
     ('not premium', 'החשבון אינו פרימיום'),
     ('not found', 'החשבון לא נמצא'),
+    ('no longer exists', 'החשבון לא נמצא'),
+    # 'disabled' WAS DROPPED WHOLESALE after it matched a maintenance notice,
+    # and that reopened "Your account has been disabled." -- one of the
+    # commonest real refusals there is -- as total silence. The subject gate
+    # was already what separated them: "downloads are temporarily disabled"
+    # names no account, no key and no subscription, so it still says nothing.
+    # Dropping the word bought nothing and cost a whole class of refusal.
+    ('disabled', 'החשבון מושבת'),
+    ('deactivated', 'החשבון מושבת'),
+    ('closed', 'החשבון נסגר'),
+    ('frozen', 'החשבון מוקפא'),
+    ('cancelled', 'המנוי בוטל'),
+    ('canceled', 'המנוי בוטל'),
     ('invalid', 'הפרטים אינם תקפים -- צריך לחבר מחדש'),
     ('incorrect', 'הפרטים אינם תקפים -- צריך לחבר מחדש'),
     ('unauthorized', 'הגישה נדחתה'),
@@ -262,14 +284,37 @@ _WHOLE_REFUSALS = (
 # are machine-readable identifiers, not prose, so there is nothing to parse.
 _UNKNOWN_CODE_TEXT = 'החשבון נדחה'
 
-_ACCOUNT_CODE_HINTS = ('AUTH_', 'PREMIUM', 'BANNED', 'BLOCKED', 'SUBSCRIPTION')
+# A code this build has no Hebrew for, but whose family says "account".
+#
+# A flat "does it contain one of these five words" list had the same two-sided
+# problem the prose rule had: MAINTENANCE_MODE_BANNED_IPS and
+# SUBSCRIPTION_TIER_METADATA_REFRESH both matched (neither is an account
+# refusal), while REFRESH_TOKEN_EXPIRED and USER_ACCOUNT_REMOVED matched
+# nothing (both are). A code is underscore-separated tokens, so the same
+# subject-plus-predicate shape works and there is no clause problem to solve.
+_CODE_SUBJECTS = frozenset((
+    'AUTH', 'ACCOUNT', 'USER', 'APIKEY', 'KEY', 'PREMIUM', 'SUBSCRIPTION',
+    'MEMBERSHIP', 'LOGIN', 'SESSION', 'TOKEN', 'CREDENTIALS', 'PLAN',
+))
+_CODE_PREDICATES = frozenset((
+    'BANNED', 'BLOCKED', 'LOCKED', 'SUSPENDED', 'TERMINATED', 'REVOKED',
+    'EXPIRED', 'INVALID', 'DENIED', 'DISABLED', 'DEACTIVATED', 'REMOVED',
+    'DELETED', 'MISSING', 'BAD', 'FAILED', 'REQUIRED', 'UNAUTHORIZED',
+    'FORBIDDEN', 'INACTIVE', 'CANCELLED', 'CANCELED', 'CLOSED', 'PREMIUM',
+))
 
 
 def _unknown_account_code(code):
     code = (code or '').strip().upper()
     if not code or code in _REFUSAL_TEXT:
         return False
-    return any(hint in code for hint in _ACCOUNT_CODE_HINTS)
+    # AUTH_ is the documented account namespace for the providers that send
+    # codes at all, so the prefix alone is enough -- AUTH_SOMETHING_NEW is
+    # exactly the case this function exists for.
+    if code.startswith('AUTH_'):
+        return True
+    tokens = set(re.split(r'[^A-Z0-9]+', code))
+    return bool(tokens & _CODE_SUBJECTS) and bool(tokens & _CODE_PREDICATES)
 
 
 def _codeless_reason(message):
@@ -292,14 +337,37 @@ def _codeless_reason(message):
     low = ' '.join(low.split())
     if not low:
         return None
+    # AN IDENTIFIER IS NOT PROSE. `TASK_FAILED_TO_START_SESSION` is a backend
+    # job name, and reading it as a sentence found "session" and "failed" in
+    # one clause and called it a login failure. Anything with no spaces that is
+    # only caps, digits, underscores and dots is a machine code -- it belongs
+    # to _unknown_account_code, which reads codes, not to a rule that reads
+    # English.
+    if _IDENT_RE.match(message or ''):
+        return None
     for needle, hebrew in _WHOLE_REFUSALS:
         if needle in low:
             return hebrew
-    if not any(subject in low for subject in _ACCOUNT_SUBJECTS):
-        return None
-    for needle, hebrew in _ACCOUNT_PREDICATES:
-        if needle in low:
-            return hebrew
+    # SAME CLAUSE, NOT SAME STRING. Two independent whole-string tests have no
+    # proximity constraint at all, and a review showed that is not an edge
+    # case but the ordinary shape of a status message:
+    #
+    #     "Your account is fine, but the server is blocked for maintenance."
+    #
+    # subject in the first clause, predicate in the second, and the old rule
+    # called it an account refusal. So did a Cloudflare block page that
+    # mentions "account" in its boilerplate, and a benign string with the two
+    # words 2,500 characters apart.
+    #
+    # Splitting on clause boundaries is not linguistics -- it is the one thing
+    # that separates "my account is blocked" from "my account is fine BUT
+    # something else is blocked", which is the whole failure mode.
+    for clause in _CLAUSE_RE.split(low):
+        if not any(subject in clause for subject in _ACCOUNT_SUBJECTS):
+            continue
+        for needle, hebrew in _ACCOUNT_PREDICATES:
+            if needle in clause:
+                return hebrew
     return None
 
 

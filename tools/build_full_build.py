@@ -178,8 +178,25 @@ def _unsafe_member(name):
         return True
     if any(ch < " " or ch == "\x7f" for ch in name):
         return True
-    parts = name.rstrip("/").split("/")
-    return any(part in ("..", ".", "") for part in parts)
+    # NORMALISED BEFORE COMPARING, because the segment does not have to be
+    # spelt `..` to BE `..`. Windows strips trailing dots and spaces from an
+    # unqualified path component, so a member named `dir/.. /outside.txt`
+    # extracts as `dir/../outside.txt` there -- and `".. " == ".."` is False,
+    # so it passed this check, the top-level check, build() AND verify(). A
+    # review built that zip and found the member in the finished artifact.
+    # Third escape found in this one function; the answer is to stop comparing
+    # raw segments.
+    for part in name.rstrip("/").split("/"):
+        stripped = part.strip().rstrip(". ")
+        if part.strip() in ("..", ".", ""):
+            return True
+        # `...` and `.. .` and friends: anything that is only dots and spaces
+        # is a traversal on some filesystem and is never a real filename.
+        if part and not stripped and set(part) <= set(". \t"):
+            return True
+        if part != part.strip() or part != part.rstrip("."):
+            return True          # a name Windows would silently rewrite
+    return False
 
 
 def _is_symlink(zinfo):
@@ -193,8 +210,11 @@ def _is_symlink(zinfo):
     that makes the promise.
     """
     try:
-        if zinfo.create_system != 3:      # 3 = Unix; nothing else stores a mode
-            return False
+        # NOT GATED ON create_system. That field is whatever the writer put
+        # there, and a review set it to 0 (FAT) while leaving Unix symlink
+        # mode bits in external_attr -- which sailed through. The mode bits
+        # are the thing being asked about; if they say symlink, refuse,
+        # whoever claims to have written the file.
         return (zinfo.external_attr >> 16) & 0o170000 == 0o120000
     except Exception:
         return False
@@ -265,6 +285,16 @@ def _refresh_map(specs):
                     "%s has %d member(s) whose path escapes its own "
                     "directory:\n  %s"
                     % (path, len(escaped), "\n  ".join(sorted(escaped)[:10])))
+            folded = {}
+            for n in names:
+                folded.setdefault(n.lower(), []).append(n)
+            clashes = sorted(v for v in folded.values() if len(v) > 1)
+            if clashes:
+                raise SystemExit(
+                    "%s has %d member name(s) that differ only by case, which "
+                    "silently shadow each other on Windows and macOS:\n  %s"
+                    % (path, len(clashes),
+                       "\n  ".join(" vs ".join(c) for c in clashes[:10])))
             tops = {n.split("/")[0] for n in names if n.strip("/")}
             links = sorted(n for n, zi in _members(path).items()
                            if _is_symlink(zi))
@@ -418,21 +448,36 @@ def build(previous: Path, quickfix: Path, output: Path, allow_add: set,
             zf.close()
     # THE PROMISE, CHECKED WHERE IT IS MADE. Every gate above guards one
     # INPUT, and each was added after a review got past the previous one -- a
-    # `..` segment, then a backslash. This checks the OUTPUT: whatever route a
-    # member took to get here, the artifact a fresh install extracts contains
-    # no name that can leave the directory it claims. It costs one pass over
-    # the member list and it is the only check that does not have to be
-    # rewritten the next time somebody thinks of a new separator.
+    # `..` segment, then a backslash, then a trailing space after `..`. This
+    # checks the OUTPUT: whatever ROUTE a member took to get here -- refresh
+    # package, quickfix, wizard zip, or a path nobody has thought of -- the
+    # finished artifact is asked the same question.
+    #
+    # WHAT IT DOES NOT DO, said plainly because an earlier version of this
+    # comment claimed otherwise and a review was right to call it out: it
+    # calls the same _unsafe_member and _is_symlink the input gates call, so a
+    # blind spot in those is a blind spot here too. It closes the ROUTE
+    # problem, not the ENCODING problem. Every new encoding still has to be
+    # taught to _unsafe_member -- three have been so far.
     with zipfile.ZipFile(output) as done:
         bad = sorted(n for n in done.namelist() if _unsafe_member(n))
         links = sorted(n for n in done.infolist() if _is_symlink(n))
     if bad or links:
-        output.unlink(missing_ok=True)
+        try:
+            output.unlink(missing_ok=True)
+            left = ""
+        except OSError as e:
+            # An antivirus lock or a permission race here used to crash with
+            # the OSError instead of the intended refusal, leaving the unsafe
+            # artifact on disk AND losing the message that says why.
+            left = ("\n  THE UNSAFE ARTIFACT IS STILL ON DISK -- could not "
+                    "delete it: %s. Delete %s by hand before shipping."
+                    % (e, output))
         raise SystemExit(
             "REFUSING THE ARTIFACT and deleting it: %d unsafe name(s) and %d "
             "symlink(s) reached the output.\n  %s"
             % (len(bad), len(links),
-               "\n  ".join((bad + [i.filename for i in links])[:10])))
+               "\n  ".join((bad + [i.filename for i in links])[:10])) + left)
 
     print("wrote %s" % output)
     print("  %d replaced from the quickfix, %d carried from the previous "
