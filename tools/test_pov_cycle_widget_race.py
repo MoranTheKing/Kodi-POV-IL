@@ -384,6 +384,84 @@ for _label, _kw in (('while the user is on another window', {'home': False}),
     check('the rebuild is never sprung %s' % _label, fake.now >= 100,
           'released after %.0fs' % fake.now)
 
+# --- 6. A CYCLE THAT DID NOT RUN IS NOT A CYCLE THAT IS FORGIVEN -----------
+# The owner asked the right question about the longer wait: what happens to
+# someone who never sits still, or who quits Kodi during it? The wait itself
+# always ends -- the cap sees to that. The real hole was afterwards: the next
+# start finds every patch already on disk, writes nothing, and therefore never
+# arms, so an owed cycle was lost for good and POV kept the pre-patch code
+# until some future release happened to touch it again. Ten seconds of
+# exposure hid that. Three minutes does not.
+#
+# The answer is not to freeze the screen until it works. It is to not forget.
+print()
+print('=== an owed cycle survives a quit ===')
+import shutil
+import tempfile
+
+_owed_dir = tempfile.mkdtemp(prefix='owed-')
+fake = FakeKodi()
+mod = load(fake)
+mod._owed_path = lambda: os.path.join(_owed_dir, 'owed.txt')
+try:
+        # A LINE THAT COMPILED AND WAS STILL WRONG. An edit glued two module-level
+    # assignments into `_cycled = False_pending = False`, which is a perfectly
+    # legal chained assignment to a variable named False_pending -- so ast
+    # parsed it, the import succeeded, and `_pending` simply never existed.
+    # reload_if_patched raised NameError into service.py's bare except, and
+    # the cycle silently never happened again. Found because this section
+    # calls it; the eight checks above never did.
+    check('every flag the module reads actually exists',
+          all(hasattr(mod, n) for n in
+              ('_pending', '_cycled', '_armed', '_cycling')),
+          'missing: %s' % [n for n in ('_pending', '_cycled', '_armed',
+                                       '_cycling') if not hasattr(mod, n)])
+    check('nothing is owed on a clean device', mod.cycle_owed() is False)
+    check('...so a run that patched nothing does not cycle',
+          mod.reload_if_patched() is False)
+
+    mod._pending = True
+    mod._is_installed = lambda budget=None: True
+    _started = []
+    mod._deferred_cycle = lambda: _started.append(1)
+    mod.request_reload()
+    check('arming writes the debt BEFORE the thread starts',
+          mod.cycle_owed() is True)
+
+    # a Kodi that dies here leaves the record behind: next process, nothing
+    # patched, and it must still cycle.
+    fake2 = FakeKodi()
+    mod2 = load(fake2)
+    mod2._owed_path = lambda: os.path.join(_owed_dir, 'owed.txt')
+    mod2._is_installed = lambda budget=None: True
+    mod2._deferred_cycle = lambda: None
+    check('a fresh process starts with nothing pending', mod2._pending is False)
+    check('...and cycles anyway, because the debt is on disk',
+          mod2.reload_if_patched() is True)
+
+    # paid only by a cycle that ran
+    mod2._mark_owed(False)
+    check('a completed cycle clears it', mod2.cycle_owed() is False)
+
+    # and a debt to an add-on that is gone is not a debt
+    mod2._mark_owed(True)
+    mod3 = load(FakeKodi())
+    mod3._owed_path = lambda: os.path.join(_owed_dir, 'owed.txt')
+    mod3._is_installed = lambda budget=None: False
+    check('POV uninstalled: the debt is forgotten, not retried forever',
+          mod3.reload_if_patched() is False and mod3.cycle_owed() is False)
+finally:
+    shutil.rmtree(_owed_dir, ignore_errors=True)
+
+# The debt is cleared in exactly one place in _run_cycle, and it is the same
+# branch that proves POV came back. Every other exit leaves it standing.
+_clears = [n for n in ast.walk(_run[0]) if isinstance(n, ast.Call)
+           and isinstance(n.func, ast.Name) and n.func.id == '_mark_owed']
+check('_run_cycle clears the debt in exactly one place', len(_clears) == 1)
+check('...and only with False, never re-arming itself',
+      all(a.value is False for c in _clears for a in c.args
+          if isinstance(a, ast.Constant)))
+
 print()
 print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')
 sys.exit(1 if FAIL else 0)
