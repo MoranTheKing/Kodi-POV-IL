@@ -218,6 +218,9 @@ _REFUSAL_TEXT = {
 # Sentence and clause boundaries. `but`/`however`/`although` are here
 # because they are exactly how a message says "this part is fine, that
 # part is not", which is the shape that fooled the previous rule.
+_OWNED_BRAND_RE = re.compile(
+    r'\b(your|my|the)\s+(?:premiumize|alldebrid|torbox|offcloud)\b')
+
 _IDENT_RE = re.compile(r'^[A-Z0-9_.\-]{3,}$')
 
 _CLAUSE_RE = re.compile(
@@ -313,8 +316,19 @@ def _unknown_account_code(code):
     # exactly the case this function exists for.
     if code.startswith('AUTH_'):
         return True
-    tokens = set(re.split(r'[^A-Z0-9]+', code))
-    return bool(tokens & _CODE_SUBJECTS) and bool(tokens & _CODE_PREDICATES)
+    # ORDER, NOT JUST PRESENCE. `TASK_FAILED_TO_START_SESSION` is a backend
+    # job name and contains both a subject (SESSION) and a predicate (FAILED),
+    # so membership alone read it as a login failure. But an account code
+    # names the thing FIRST and what happened to it second --
+    # ACCOUNT_BLOCKED, SUBSCRIPTION_EXPIRED, USER_ACCOUNT_REMOVED -- while a
+    # job code puts the verb in front of the noun. That is the whole
+    # difference, and it needs no list of job words to encode.
+    tokens = re.split(r'[^A-Z0-9]+', code)
+    subjects = [i for i, t in enumerate(tokens) if t in _CODE_SUBJECTS]
+    predicates = [i for i, t in enumerate(tokens) if t in _CODE_PREDICATES]
+    if not subjects or not predicates:
+        return False
+    return min(subjects) <= min(predicates)
 
 
 def _codeless_reason(message):
@@ -323,6 +337,29 @@ def _codeless_reason(message):
     None means "this service said error, but not about the account" -- a rate
     limit, a maintenance window, a shape nobody here recognises. The caller
     must then say nothing on screen and write the text to the log instead.
+
+    WHAT THIS STILL GETS WRONG, written down rather than tuned for a fifth
+    round. Within one clause there is no way to tell WHICH noun the predicate
+    belongs to, so these are misread as refusals:
+
+        "We blocked your account's IP."          (the IP was blocked)
+        "Your account password reset link expired."   (the link expired)
+        "your account is active and downloads are blocked"  (no comma, so no
+                                                             clause split)
+
+    and a refusal whose subject and predicate land in different sentences,
+    joined by a pronoun, is missed:
+
+        "Please review your account. It has been suspended."
+
+    Each of those is fixable with another rule and each new rule has cost a
+    false negative somewhere else -- three rounds have now traded one for the
+    other. The reason it is acceptable to stop here is the GATE this runs
+    behind: the service must be connected, days_remaining() must have already
+    failed, AND a second account lookup must have returned a structured error.
+    Nobody whose account is working ever reaches this function. So the worst a
+    residual false positive does is give a wrong REASON to somebody whose
+    account really is failing -- and the full text is in the log either way.
     """
     low = ' '.join((message or '').lower().split())
     # A URL IS CONTEXT, NEVER THE REFUSAL, and it is made of exactly the words
@@ -332,6 +369,13 @@ def _codeless_reason(message):
     # the one survivor of the adversarial corpus. Stripped, along with the
     # service's own name, before anything is matched.
     low = _URL_RE.sub(' ', low)
+    # THE BRAND IS NOT A SUBJECT, EXCEPT WHEN IT IS. Blanking it outright
+    # removes a false subject ("premiumize" contains "premium") -- which is
+    # what the URL case needed -- but it also removes a real one: "Your
+    # Premiumize has expired" becomes "your has expired" and matches nothing.
+    # Possessed, the brand IS the account being talked about, so it becomes
+    # the word for it; everywhere else it goes.
+    low = _OWNED_BRAND_RE.sub(r'\1 account', low)
     low = low.replace('premiumize', ' ').replace('alldebrid', ' ')
     low = low.replace('torbox', ' ').replace('offcloud', ' ')
     low = ' '.join(low.split())
@@ -344,7 +388,12 @@ def _codeless_reason(message):
     # to _unknown_account_code, which reads codes, not to a rule that reads
     # English.
     if _IDENT_RE.match(message or ''):
-        return None
+        # ...but an identifier can still BE the refusal. A codeless service
+        # whose only human-facing text is `ACCOUNT_BLOCKED` was swallowed
+        # here, which is the same silence this file exists to end. Codes have
+        # their own reader; use it, and fall back to the generic wording since
+        # there is no prose to derive a specific one from.
+        return _UNKNOWN_CODE_TEXT if _unknown_account_code(message) else None
     for needle, hebrew in _WHOLE_REFUSALS:
         if needle in low:
             return hebrew

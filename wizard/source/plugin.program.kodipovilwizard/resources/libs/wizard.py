@@ -2282,6 +2282,15 @@ def _ensure_packs_installed(packs, downloading_label, ready_label):
         except Exception:
             pass
 
+        # ONLY IF IT IS STILL OPEN. The extract-failure branch closes the
+        # dialog and continues, which is right when another pack follows --
+        # the loop head re-opens one -- and wrong when the failing pack was
+        # the LAST, or the only one, which is the real shape of the NOX,
+        # Umbrella and Account Manager lists. A review drove a single-pack
+        # list whose extract fails and watched update() and close() both land
+        # on the closed object.
+        if not dialog_open:
+            return False
         dialog_progress.update(100, ready_label)
         xbmc.sleep(800)
         dialog_progress.close()
