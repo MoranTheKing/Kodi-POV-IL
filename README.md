@@ -148,9 +148,9 @@ Why Premiumize and not TorBox on the same build: one number, "Scraper/Debrid
 Timeout", is both how long POV waits for the answer and how long the Premiumize
 request itself is allowed to take -- so a slow request always finishes at or
 after the moment POV stopped waiting, and raising the number raises both halves
-equally. TorBox sends its request in a form that answers in well under a second
-and never comes near the deadline; Premiumize sends every torrent as a separate
-field, hundreds of them on a popular title, and sits right on it. And it works
+equally. TorBox sends all of its torrents in one compact request; Premiumize
+sends each one as a separate field, hundreds of them on a popular title. And it
+works
 on the second try because POV remembers the answers, so a title you just
 searched skips the request entirely.
 

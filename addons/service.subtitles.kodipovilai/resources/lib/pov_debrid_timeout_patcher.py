@@ -55,11 +55,13 @@
 # both sides equally. (This build raised it from 10 to 20 on 1 August for
 # exactly this symptom. It widened the window; it could not close it.)
 #
-# TorBox posts its hashes as a compact JSON array and answers in well under a
-# second, so it never comes near the deadline. Premiumize posts every hash as
-# a separate items[] field in a form body -- hundreds of them on a popular
-# title -- and is slow enough, often enough, to sit right on it. That is the
-# whole of "why him and not me on the same build".
+# TorBox posts its hashes as one compact JSON array; Premiumize posts every
+# hash as a separate items[] field in a form body, hundreds of them on a
+# popular title. That is the shape difference, and it is the best available
+# explanation of "why him and not me on the same build" -- but it is inference
+# from the code plus the field reports (every reporter is on Premiumize, the
+# maintainer runs TorBox on the same build and has never seen it), NOT a round
+# trip anybody has timed. Do not repeat it as a measurement.
 #
 # And the intermittency is POV's own cache: DebridCheck consults a local
 # DebridCache first and skips the network entirely when every hash is already

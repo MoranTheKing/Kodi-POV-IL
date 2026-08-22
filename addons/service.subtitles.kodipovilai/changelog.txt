@@ -89,10 +89,9 @@ v0.2.506
   Premiumize request itself is allowed to take, so a slow request always
   finishes at or after the moment POV stopped waiting -- and raising the
   number raises both halves equally, which is why raising it in the last
-  update helped some people and not others. TorBox sends its request in a form
-  that answers in well under a second and never comes near the deadline.
-  Premiumize sends every torrent as a separate field -- hundreds on a popular
-  title -- and sits right on it. And it works on the second try because POV
+  update helped some people and not others. TorBox sends all of its torrents in
+  one compact request; Premiumize sends each one as a separate field, hundreds
+  of them on a popular title. And it works on the second try because POV
   remembers the answers, so a title you just searched skips the request
   entirely.
   Now: a debrid that does not answer no longer erases anything. Its sources

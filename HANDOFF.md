@@ -6136,11 +6136,14 @@ thing, tuning it moves both walls.** The fix has to be structural.
 
 ### Why Premiumize and not TorBox
 
-Not carelessness on one side. TorBox posts its hashes as one compact JSON array
-(`json=data`) and answers in well under a second. Premiumize posts every hash
-as a separate `items[]` field in a form body — hundreds on a popular title —
-and sits right on the deadline. Same code path, same setting, two different
-places on the clock.
+Not carelessness on one side, and this is inference from the request shape
+plus the field evidence, NOT a timing I measured. TorBox posts its hashes as
+one compact JSON array (`json=data`); Premiumize posts every hash as a separate
+`items[]` field in a form body, hundreds of them on a popular title. Premiumize
+is also the only provider any reporter has shown this on, and the maintainer
+runs TorBox on the same build and has never seen it. Same code path, same
+setting, two different places on the clock — but if this ever needs to be
+relied on rather than believed, it needs a measured round trip.
 
 And the intermittency is POV's own `DebridCache`: `cache_check` consults it
 first and skips the network entirely when every hash is already known, so a
