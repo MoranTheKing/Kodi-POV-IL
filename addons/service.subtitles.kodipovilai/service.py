@@ -2132,18 +2132,21 @@ def _maybe_guard_pov_debrid_handlers():
 
 
 def _maybe_fix_fentastic_clearlogo_var():
-    """Close two brackets that made a whole poster-view feature invisible.
+    """Close brackets the skin left open, so the OSD logo can draw at all.
 
-    A user's log carries Kodi refusing the skin's ClearArtLogo condition as
-    unparseable. The variable has no fallback value, so it resolves to nothing
-    on every device, and the one include that uses it -- this build's own
-    Poster_View_Art_Logo -- has therefore never drawn anything. See the module
-    for why it repairs this one condition and not the three dozen others.
+    A user's log carries Kodi refusing an unparseable skin condition. The same
+    shape appears twenty-three times in the shipped skin; two of them are the
+    video OSD's clear-logo / studio-logo pair, and because both are false the
+    OSD draws NEITHER, on every device. See the module for why those two and
+    the ClearArtLogo variable are repaired and the rest are not.
     """
     try:
         from resources.lib import fentastic_clearlogo_var_patcher, kodi_utils
         st = fentastic_clearlogo_var_patcher.ensure_patched()
-        if st in ('unmatched', 'write_failed', 'read_failed'):
+        bad = [p for p in st.split(', ')
+               if p.split('=')[-1] in ('unmatched', 'write_failed',
+                                       'read_failed')]
+        if bad:
             kodi_utils.log(
                 'fentastic_clearlogo_var_patcher: ' + st, level='WARNING')
     except Exception as e:

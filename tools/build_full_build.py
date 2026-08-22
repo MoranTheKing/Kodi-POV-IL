@@ -163,8 +163,53 @@ def _refresh_map(specs):
     """
     members, info = {}, {}
     for addon_id, path in specs:
-        with zipfile.ZipFile(path) as zf:
+        try:
+            zf = zipfile.ZipFile(path)
+        except (zipfile.BadZipFile, OSError) as err:
+            # Every other refusal in this tool is one line that names the
+            # problem; this one used to be a Python traceback, because the
+            # flag checked only that the path was a file.
+            raise SystemExit("%s is not a readable zip: %s" % (path, err))
+        with zf:
             names = zf.namelist()
+            # ONE NAME PER MEMBER. _members below is a dict keyed by filename,
+            # so a package with two entries at the same path silently keeps
+            # the last. Whichever one that is, an input we cannot describe is
+            # not one to build a release from.
+            dupes = sorted({n for n in names if names.count(n) > 1})
+            if dupes:
+                raise SystemExit(
+                    "%s has %d duplicated member name(s), so which bytes it "
+                    "means is ambiguous:\n  %s"
+                    % (path, len(dupes), "\n  ".join(dupes[:10])))
+            # NOT `n.split("/")[0]`. That reads the FIRST segment and nothing
+            # else, so `plugin.video.pov/../../userdata/guisettings.xml`
+            # passed it -- first segment `plugin.video.pov` -- and was carried
+            # verbatim into the one artifact a fresh install depends on. The
+            # prefix checks downstream then agreed it was "inside
+            # addons/plugin.video.pov/", because they compare the same
+            # un-normalised string. A review built that package and watched
+            # both build() and verify() accept it.
+            #
+            # The wizard's extractor happens to strip `..` on the way to disk,
+            # which is why this was not already a disaster. That is somebody
+            # else's guard, maintained for a different reason, and this tool
+            # does not get to lean on it to keep its own promise.
+            escaped = []
+            for name in names:
+                if not name.strip("/"):
+                    continue
+                if name.startswith("/") or name.startswith("\\"):
+                    escaped.append(name)
+                    continue
+                parts = name.split("/")
+                if any(part in ("..", ".") for part in parts):
+                    escaped.append(name)
+            if escaped:
+                raise SystemExit(
+                    "%s has %d member(s) whose path escapes its own "
+                    "directory:\n  %s"
+                    % (path, len(escaped), "\n  ".join(sorted(escaped)[:10])))
             tops = {n.split("/")[0] for n in names if n.strip("/")}
             if tops != {addon_id}:
                 raise SystemExit(
@@ -203,6 +248,22 @@ def build(previous: Path, quickfix: Path, output: Path, allow_add: set,
     wiz_by = _wizard_map(wizard_zip)
     ref_by, ref_info = _refresh_map(refresh)
     prefixes = _refresh_prefixes(ref_info)
+
+    # REFRESH REPLACES; IT DOES NOT INTRODUCE. Every new FILE under a
+    # refreshed add-on is exempt from --allow-add, which is right for an
+    # upstream release that added a module and wrong as a way to add a whole
+    # add-on the build has never carried -- hundreds of files, none of them
+    # reviewed, through a flag whose entire purpose elsewhere is to make each
+    # one deliberate.
+    unknown = sorted(addon_id for addon_id in ref_info
+                     if not any(n.startswith("addons/%s/" % addon_id)
+                                for n in prev_by))
+    if unknown:
+        raise SystemExit(
+            "refusing to refresh %d add-on(s) the previous build does not "
+            "contain: %s. Refresh replaces a bundled add-on; adding a new one "
+            "goes through --allow-add, file by file."
+            % (len(unknown), ", ".join(unknown)))
 
     # OURS ARE NOT REFRESHED FROM UPSTREAM. If a refreshed id also appears in
     # the quickfix or the wizard package, two sources claim the same bytes and
@@ -449,7 +510,11 @@ def main() -> int:
         addon_id, _, pkg = spec.partition("=")
         addon_id = addon_id.strip()
         path = Path(pkg.strip())
-        if not addon_id or not path.is_file():
+        if not addon_id:
+            raise SystemExit(
+                "--refresh-addon %r: the add-on id before the = is empty"
+                % spec)
+        if not path.is_file():
             raise SystemExit("--refresh-addon %r: no such package" % spec)
         refresh.append((addon_id, path))
     seen_ids = [i for i, _p in refresh]
