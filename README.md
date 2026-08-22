@@ -114,22 +114,6 @@ not recorded as done, so the next start does it.
 
 ## Choosing the Android app: take 64-bit
 
-Both Android builds work on a 64-bit device, but the 32-bit one opens large 4K
-files much more slowly -- measured on an NVIDIA SHIELD, the same file took 14
-seconds on 32-bit and 3 seconds on 64-bit. The whole difference is in reading
-the file's index, which for anything over 4 GB is work that 32-bit hardware
-does several times over.
-
-**Every SHIELD is 64-bit** (all models, not only the Pro), and so are Fire TV
-Stick 4K and 4K Max, Onn 4K, Chromecast with Google TV and Mi Box S. The
-download page used to send most of these to the 32-bit file; it no longer does.
-Take 32-bit only if 64-bit refuses to install.
-
-Switching is safe: both carry the same app id and signing key, so 64-bit
-installs over 32-bit as an update and your data stays put.
-
-## Choosing the Android app: take 64-bit
-
 Both Android builds run on a 64-bit device, but the 32-bit one opens large 4K
 files much more slowly. Measured on an NVIDIA SHIELD, same file, minutes apart:
 14 seconds on 32-bit against 3 seconds on 64-bit. The whole difference is in
@@ -143,6 +127,200 @@ Take 32-bit only if 64-bit refuses to install.
 
 Switching is safe: both carry the same app id and signing key, so 64-bit
 installs over 32-bit as an update and your data stays where it is.
+
+## Sources no longer come back empty when they exist (from `0.2.506`)
+
+Two reports on one evening: the count of sources found climbs while POV
+searches -- forty, a hundred and twenty, three hundred -- and then the list
+never opens. "No results" on a title that certainly has sources. Intermittent,
+and only for people on Premiumize.
+
+Once the scrapers have found their torrents, POV asks the debrid service which
+of them it already holds, and it builds the list it shows you entirely out of
+the answers that came back in time. One debrid configured means one answer, so
+a debrid that is a second late leaves nothing to build from and the whole
+search is thrown away unread. Worse, a check that FAILED -- timed out, refused,
+answered nonsense -- was recorded as a definite "none of these are cached", and
+the default setting then deletes every one of those from the list. Both roads
+end at an empty screen after the counters climbed.
+
+Why Premiumize and not TorBox on the same build: one number, "Scraper/Debrid
+Timeout", is both how long POV waits for the answer and how long the Premiumize
+request itself is allowed to take -- so a slow request always finishes at or
+after the moment POV stopped waiting, and raising the number raises both halves
+equally. TorBox sends its request in a form that answers in well under a second
+and never comes near the deadline; Premiumize sends every torrent as a separate
+field, hundreds of them on a popular title, and sits right on it. And it works
+on the second try because POV remembers the answers, so a title you just
+searched skips the request entirely.
+
+A debrid that does not answer no longer erases anything. Its sources are kept
+and marked "not checked" -- which is exactly what POV already does for
+Real-Debrid and AllDebrid every time -- so you get the list, with the unverified
+ones at the bottom. A debrid that does answer is treated exactly as before, and
+an honest "nothing cached here" is still believed and still hidden.
+
+## The add-on is never switched off while a dialog is open (from `0.2.506`)
+
+To make a fix take effect the same evening the build switches the video add-on
+off and on again, and it waits for the home screen to be idle first. But every
+window that add-on puts up while it works -- the search progress, the list of
+sources -- floats over the home screen. Start a title from a home-screen row
+and the home screen is still there underneath, nothing is playing, no row is
+loading, and somebody reading a list of sources is not pressing buttons. Every
+test for "idle" said yes while the user was mid-search with a dialog in front
+of their face.
+
+One log shows the switch landing on an open source list and pulling the focus
+back to the home screen; another shows it killing a search seven seconds in --
+and that is the search that was reported as "no results". A dialog on screen is
+now never a moment to do this, checked again in the last second before it
+happens. If the moment never comes, the switch is recorded as still owed and
+done at the next start instead of forced through.
+
+## An update keeps the settings you changed that evening (from `0.2.506`)
+
+The wizard closed Kodi by killing it, which skips the save Kodi does on a normal
+shutdown. That is correct after a full build install, where a save would
+overwrite the settings file that was just extracted -- and wrong after a quick
+update, where nothing of the kind was written. Audio passthrough turning itself
+back off is what made it visible, because that is a setting people set once and
+notice immediately, but every setting was affected.
+
+The quick update now asks Kodi to close properly and falls back to the kill only
+if that does not take. The build install and the skin switch keep the kill they
+need.
+
+## Umbrella arrives on every device (from `0.2.506`)
+
+Half the build already assumed it was there: the home screen carries Umbrella
+tiles, the search wiring has an Umbrella branch, the account manager pushes
+debrid accounts into it, and a dozen small repairs exist for no other reason
+than to make it speak Hebrew. On a device without it every one of those quietly
+did nothing, and the screen looked identical either way.
+
+Umbrella and its scraper module now install once, in the background, on every
+device including one taking a quick update -- and their own repositories come
+with them, so from that moment the developers publish their updates rather than
+us. A tile you remove stays removed.
+
+## Add-ons that stopped updating themselves update again (from `0.2.506`)
+
+Kodi keeps a table of add-ons excluded from automatic updates, and it writes
+rows into that table by itself. An add-on whose ORIGIN repository stops
+answering has no version to be compared against, so Kodi concludes it is not
+the latest and excludes it for good. This build has such a repository -- a
+field log catches it returning 404 -- and several of the add-ons registered to
+it are ones the build ships.
+
+The excluded add-on still appears in the manual "available updates" list, which
+is why updating by hand worked and made the fault look random. The build now
+clears those automatic exclusions for the add-ons it ships, never touches one
+you set by hand or a version you installed from a zip on purpose, and names
+every one it finds in the log.
+
+## The logo in the player's on-screen display draws (from `0.2.506`)
+
+Under the on-screen display, a pair of images: the title's own logo, and the
+studio logo when the title has none. Each was shown by a condition missing one
+closing bracket, so Kodi could not parse either, treated both as false, and drew
+neither -- on every device, on every title, since the day it was written. One of
+the two is meant to be showing at all times.
+
+## Subtitle sync learns from a manual shift again (from `0.2.505`)
+
+While one of our subtitles is playing, the amount you shift it by hand is the
+strongest possible evidence about whether it is in sync -- it is the only thing
+that resolves files no automatic method can. That measurement was reading zero
+every time and the watch never started at all, because of three missing lines
+that each failed quietly into a handler that swallowed them. It had never once
+reported. It does now.
+
+## The home rows no longer come back empty after an update (from `0.2.505`)
+
+For the second and a half the video add-on is switched off, Kodi does not know
+it. On a cold start the home screen is still loading its rows in exactly those
+seconds, so the rows asked for an add-on that was not there, failed, and --
+because it is the switching OFF that triggers the rebuild -- nothing rebuilt
+them afterwards. They stayed empty for the session. Clearing the cache appeared
+to fix it; so did moving to the 64-bit build. Neither fixed anything: both just
+shifted the timing.
+
+The switch now waits for the home screen to be genuinely settled, and if the
+rows still come back empty it redraws them once. None of the waiting happens
+where it can be felt, and startup is in fact slightly faster than before.
+
+## POV's source list draws in about a second again (from `0.2.504`)
+
+Reported as five to ten seconds to appear after the search had clearly
+finished, where it used to be about one. The log timed it: two seconds with
+three Hebrew subtitles available for the title, four with six, ten with
+seventeen. The Hebrew-match badge on each row was comparing every source
+against every available subtitle name and re-deriving both names from scratch
+every time, so seventeen names were taken apart seventy times each before one
+row could be drawn.
+
+Each name is read once now, the built-in-Hebrew check costs nothing, and no
+comparison runs that cannot change the answer -- about twenty-five times less
+work, with every badge coming out identical. Umbrella's source list gets the
+same. And the reason it slowed down out of nowhere with nothing having changed:
+the subtitle lists that badge walks were never trimmed, so they grew a little
+with every title watched. They are capped now.
+
+## Kan 11 items in Idan Plus play (from `0.2.503`)
+
+Nothing from that channel would start: YouTube answered "This video is
+unavailable" for every one of them, five different player clients in a row,
+because the id it was being asked for was the literal word "watch". Idan Plus
+reads the video id out of the address path, and in the ordinary
+youtube.com/watch?v= form the id is not in the path. The add-on builds that
+address itself, from a bare id Kan hands it, and then fails to read back what
+it just wrote -- so this was never a Kan change and never a regression: those
+items have never played.
+
+One line reads the id from the right place now, and only where what was
+extracted cannot be an id at all, so every link the add-on already opened
+correctly opens exactly as before. If Idan Plus fixes this on its side, the fix
+simply stops applying.
+
+## A debrid that refuses your account says why (from `0.2.502`, `0.2.505`, `0.2.506`)
+
+A report of "no results" turned out not to be a no-results condition at all: 70
+sources were found, and all 38 of the AllDebrid ones failed to start with the
+same internal error. POV's own error handler was crashing on a variable it never
+set, and that crash was replacing the message the provider had actually sent.
+
+AllDebrid, TorBox and Premiumize all answer normally -- HTTP 200 -- and put a
+refusal in the body, so an add-on that only records a problem when the status
+code is bad throws the reason away one line after it arrives. If the key is not
+valid, the access is blocked, the account is suspended or it is not premium,
+you are told which, in Hebrew. Nothing is said for a timeout or a bad
+connection -- only for an answer the service actually gave. None of this makes
+a refused account work; it makes the refusal readable.
+
+## Umbrella's "in progress" rows fill themselves in (from `0.2.501`)
+
+An earlier fix cleared the sync cursor for the shows list, and cleared two more
+keys alongside it that were not cursors -- they are the signal Umbrella reads to
+decide whether there is new watched activity worth syncing. Zeroing them meant
+"nothing new, serve the cache" forever, so the episodes list, which had always
+been right, started needing a manual refresh too. Only the fetch cursor is
+cleared now, and devices that took that release are repaired on their next
+start.
+
+Underneath both: the sync wrote "synced up to now" even when the fetch had
+failed, and the cursor only ever moves forward, so anything inside a failed
+request was skipped permanently. It now advances only when the fetch really
+returned a page.
+
+## A quick update writes only the files that differ (from `0.2.500`)
+
+Every quick update was laying down all 1,969 files, 1,330 of them belonging to
+the skin that was on screen at that moment -- and on some devices Kodi
+force-closed partway through, over and over, before the update could finish. It
+writes five files on a typical update now. A device several updates behind still
+receives everything it is missing, because the comparison is against that
+device's own files.
 
 ## The player bar hides itself on every skin that can (from `0.2.499`)
 
