@@ -190,10 +190,19 @@ check('...and does not put the raw English on a Hebrew screen',
 # no toast whatsoever -- the same silence this whole file exists to end.
 check('an account-shaped code this build does not know still counts',
       mod._unknown_account_code('AUTH_SOMETHING_NEW') is True)
-for _c in ('MUST_BE_PREMIUM_TOO', 'USER_BANNED_X', 'SUB_BLOCKED'):
+# A CODE IS UNDERSCORE-SEPARATED TOKENS, so it gets the same subject-plus-
+# predicate shape the prose rule uses -- a flat "contains one of five words"
+# list had the same two-sided failure: MAINTENANCE_MODE_BANNED_IPS and
+# SUBSCRIPTION_TIER_METADATA_REFRESH both matched (neither is a refusal) while
+# REFRESH_TOKEN_EXPIRED and USER_ACCOUNT_REMOVED matched nothing (both are).
+for _c in ('MUST_BE_PREMIUM_TOO', 'USER_BANNED_X', 'SUBSCRIPTION_BLOCKED',
+           'REFRESH_TOKEN_EXPIRED', 'USER_ACCOUNT_REMOVED',
+           'APIKEY_REVOKED', 'SESSION_INVALID'):
     check('...%s too' % _c, mod._unknown_account_code(_c) is True)
 for _c in ('', '   ', 'AUTH_BAD_APIKEY', 'NO_SERVER', 'LINK_ERROR',
-           'MAGNET_INVALID_ID', 'FILE_NOT_FOUND'):
+           'MAGNET_INVALID_ID', 'FILE_NOT_FOUND',
+           'MAINTENANCE_MODE_BANNED_IPS', 'SUBSCRIPTION_TIER_METADATA_REFRESH',
+           'TASK_FAILED_TO_START'):
     check('...but %r is not an account code' % _c,
           mod._unknown_account_code(_c) is False)
 _src_gate = io.open(os.path.join(LIB, 'debrid_status_notifier.py'),
@@ -245,6 +254,32 @@ REFUSALS = (
     'Your subscription is inactive.',
     'Account suspended.',
     'Credentials required.',
+)
+# ROUND FOUR'S CORPUS, which broke the flat two-word rule: the words are in
+# DIFFERENT CLAUSES, which is the ordinary shape of a status message and not
+# an edge case. Plus the identifier that is not prose at all.
+NOT_REFUSALS = NOT_REFUSALS + (
+    'Your account is fine, but the server is blocked for maintenance.',
+    'Your subscription remains active, however one of our mirror servers has '
+    'been banned.',
+    'Attention: your account dashboard is available. Our edge network blocked '
+    'this request.',
+    'Your account works normally. ' + 'x' * 2500 + ' The node is blocked.',
+    'TASK_FAILED_TO_START_SESSION',
+    'Maintenance window: downloads disabled until 04:00 UTC.',
+    'Cloudflare: Access denied. Error 1020. Manage your account at the '
+    'dashboard.',
+    'The torrent was deleted from your cloud, but your account is active.',
+)
+# ...and the refusals the round-three repair had silently dropped by removing
+# a whole word instead of gating it.
+REFUSALS = REFUSALS + (
+    'Your account has been disabled.',
+    'Your account was closed.',
+    'This account is frozen.',
+    'Your membership was cancelled.',
+    'Your api key has been deactivated.',
+    'This account no longer exists.',
 )
 _fp = [t for t in NOT_REFUSALS if mod._codeless_reason(t)]
 _fn = [t for t in REFUSALS if not mod._codeless_reason(t)]

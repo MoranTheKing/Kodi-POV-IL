@@ -6186,6 +6186,79 @@ source — and paying it keeps the patch to one `return` statement instead of a
 second signalling channel between two files.
 
 
+## The Disney tile, measured: it was us, and the log says so to the second
+
+Two field logs, two devices, one signature. slow.log (0.2.505):
+
+    19:56:29.507  pov_reload: home never settled in 180s; cycling anyway
+    19:56:29.533  POV: Main Monitor Service Finished          <- POV is off
+    19:56:30.672  Unable to find plugin plugin.video.pov      <- the tile press
+    19:56:30.673  GetDirectory - Error ...?action=tmdb_tv_networks
+    19:56:31.037  pov_reload: cycled POV; resolvable=True
+
+1.14 seconds between the disable and the press. `tmdb_tv_networks` IS the
+"Disney Series" tile. pov2.log (0.2.504) has the same shape 1.6-2.4s after its
+cycle, taking out two home widgets (trakt_tv_trending, tmdb_movies_popular)
+instead of a tile press.
+
+`cycling anyway` is the v2 behaviour this release removes. Nothing else in
+either log is a POV directory failure.
+
+## What the info-level log CANNOT tell us, and why the timing patch exists
+
+A category that takes two seconds and then works leaves NO line at all. Kodi
+logs GetDirectory only on failure. So "a spinner on every category" has never
+had a measurement, in any log received so far, and could not have had one.
+Every POV directory error in both logs is the cycle. That is the whole case
+for pov_directory_timing_patcher: not that it makes anything faster, but that
+the next report can be answered.
+
+## A stale estimate worth correcting: he_warm's pre-import
+
+service.py's _start_he_warm_drainer says the cold import is "~2-3s". Measured
+in the field, eight samples across five logs: 1.1, 2.8, 4.4, 4.6, 5.4, 6.7,
+12.2, 13.1 seconds. On a SHIELD it is 13.1.
+
+It runs on its own thread at startup and is about Hebrew SUBTITLE availability
+for a specific title -- it is NOT on the path of a category press, and an
+earlier draft of this section wrongly implied it was. The maintainer caught
+that. What it does cost is CPU on a 4-core box during the first half-minute,
+which is when somebody who just restarted is pressing things.
+
+## The startup pass, counted
+
+41 steps on 2026-07-23 (0.2.436) -> 63 now (0.2.506). Each is followed by a
+hard monitor.waitForAbort(0.25), so the pass's floor from sleeping alone went
+from ~10.3s to ~15.8s, before any of the work. Measured pass span in the field:
+~53s (pov2.log), with one step (_maybe_fix_pov_torbox_url) flagged by the
+pass's own >4s warning at 5.8s.
+
+Worth a decision next release: the 0.25s is a yield, not a requirement, and
+63 x 0.25 is now a real number.
+
+
+## The startup pass's pacing was a constant chosen for a pass half this size
+
+`monitor.waitForAbort(0.25)` after every step was introduced in `b7ce297`
+(2026-06-05, "Prevent quick update startup freezes") when the tuple had
+TWENTY-SIX entries: 6.5 seconds of yielding, which is what that change was
+tested at. It reached 41 by 23 July and 63 by 0.2.506 -- 15.75 seconds of
+pure sleeping on every boot, before a single step does any work. Nobody
+re-derived it; there was no reason to think of it as a number that grows.
+
+What the wait is FOR is not starving Kodi while the pass runs, and that is a
+property of the TOTAL time yielded, not the per-step figure. It is a budget
+now -- 6.5s spread over however many steps there are, so a short pass is
+unchanged and a long one stops paying for its own length.
+
+The per-step FLOOR (0.05s) still wins below about 130 steps' worth, and past
+that the total grows again. That is deliberate: a yield of nothing is not a
+yield, and a pass that long wants splitting rather than a smaller sleep. What
+must never happen again is that it grows SILENTLY, so it logs a WARNING when
+the floor starts binding. `test_repair_order.py` pins the formula at 26, 63,
+120 and 130 steps and asserts the warning exists.
+
+
 ## Working style
 
 - Be certain before shipping: read the code, reproduce with a unit test.

@@ -1982,6 +1982,20 @@ def _version_tuple(ver):
 def _af3_pack_current(pack):
     if not _af3_pack_installed(pack['sentinel']):
         return False
+    # THE SENTINEL VOUCHES FOR ITSELF, NOT FOR THE PACK. This checked one file
+    # and skipped the download for all of them, which is how a device could
+    # end up with the sentinel present, the other three add-ons absent, and
+    # nothing that would ever repair it: the registration step correctly
+    # refused to vouch for what was not there, and then the fast path skipped
+    # the re-download on the NEXT boot too, for the same reason it skipped it
+    # on this one. Correctly-reported failure that never self-corrects is
+    # still never self-correcting.
+    missing = [i for i in (pack.get('addon_ids') or ()) if not _addon_on_disk(i)]
+    if missing:
+        logging.log(
+            'AF3 pack is incomplete, forcing reinstall: {0} missing={1}'.format(
+                pack['name'], missing))
+        return False
     expected = pack.get('expected_version')
     if not expected:
         return True
@@ -2094,7 +2108,32 @@ def _ensure_packs_installed(packs, downloading_label, ready_label):
         dialog_progress = xbmcgui.DialogProgress()
         dialog_progress.create(CONFIG.ADDONTITLE, downloading_label)
 
+        # A DIALOG THAT WAS CLOSED MID-LIST IS NOT REUSED. The failure
+        # branches below close the progress dialog so the Hebrew error
+        # notification is not hidden behind it -- which was right while every
+        # one of them also returned. The extract branch now `continue`s
+        # instead (so one bad pack does not abandon the others), and that left
+        # the NEXT iteration calling iscanceled()/update() on a closed dialog.
+        # Kodi's own behaviour there is undefined enough that a stale
+        # iscanceled() would silently abandon the rest of the list -- the exact
+        # thing the `continue` was added to prevent.
+        dialog_open = True
+
+        def _reopen():
+            """Put a working progress dialog back, once."""
+            try:
+                d = xbmcgui.DialogProgress()
+                d.create(CONFIG.ADDONTITLE, downloading_label)
+                return d
+            except Exception:
+                return None
+
         for i, pack in enumerate(packs, start=1):
+            if not dialog_open:
+                _new = _reopen()
+                if _new is None:
+                    return False
+                dialog_progress, dialog_open = _new, True
             if dialog_progress.iscanceled():
                 dialog_progress.close()
                 return False
@@ -2205,6 +2244,7 @@ def _ensure_packs_installed(packs, downloading_label, ready_label):
                 # a real zip in half and watched "extract failed" be followed
                 # immediately by "DB enabled". The two download-stage failures
                 # above both return before reaching here; this one did not.
+                dialog_open = False
                 try:
                     os.remove(lib)
                 except Exception:

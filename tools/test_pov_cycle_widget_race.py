@@ -725,6 +725,81 @@ try:
 finally:
     shutil.rmtree(_dir, ignore_errors=True)
 
+
+# --- two writers at once, which the boot-loop test CANNOT see --------------
+# THE REVIEW'S POINT, and it was right: the loop above waits for each boot's
+# thread to finish before starting the next, so the two writers never overlap
+# and the test passes against the SHARED-tmp version that the fix replaced. It
+# is a good test of the count-carrying-forward bug and no test at all of the
+# race. This is the race: real threads, one barrier, one file.
+print()
+print('=== the owed record survives two writers at the same instant ===')
+_dir = tempfile.mkdtemp(prefix='povrace-')
+try:
+    _m = load(FakeKodi())
+    _m._owed_path = lambda: os.path.join(_dir, 'owed.txt')
+    _m._log = lambda msg, level='INFO': None
+
+    def hammer(mod, rounds=250, workers=6):
+        """Every worker writes the same record at the same moment."""
+        gate = threading.Barrier(workers)
+        errors, empties = [], []
+
+        def work(w):
+            gate.wait()
+            for r in range(rounds):
+                try:
+                    mod._mark_owed(True, attempts=w * 1000 + r)
+                except Exception as e:      # noqa: BLE001 - that is the test
+                    errors.append(repr(e))
+                try:
+                    with open(mod._owed_path(), encoding='utf-8') as f:
+                        body = f.read()
+                    if not body.strip():
+                        empties.append(r)
+                except FileNotFoundError:
+                    empties.append('missing')
+                except Exception as e:      # noqa: BLE001
+                    errors.append(repr(e))
+        ts = [threading.Thread(target=work, args=(w,)) for w in range(workers)]
+        for t in ts:
+            t.start()
+        for t in ts:
+            t.join(60)
+        strays = [n for n in os.listdir(_dir) if n.endswith('.tmp')]
+        return errors, empties, strays
+
+    _err, _empty, _stray = hammer(_m)
+    check('no writer raised', not _err, str(_err[:3]))
+    check('the record is never empty or missing under concurrency',
+          not _empty, '%d bad reads' % len(_empty))
+    check('...and no temp file is left behind', not _stray, str(_stray[:5]))
+    check('...and what is left is a readable record',
+          _m.cycle_owed() is True and isinstance(_m._owed_attempts(), int))
+
+    # SABOTAGE: the shared name this replaced must FAIL the same check, or the
+    # test above is proving nothing. Reinstate it and watch it break.
+    _real = _m._mark_owed
+
+    def _shared_tmp(owed, applied=True, attempts=0):
+        path = _m._owed_path()
+        if not owed:
+            return _real(owed, applied, attempts)
+        tmp = path + '.tmp'                      # the bug: one name for all
+        with open(tmp, 'w', encoding='utf-8') as h:
+            h.write('%s\n%d\n' % (_m.POV_ADDON_ID, attempts))
+        os.replace(tmp, path)
+        return True
+    _m._mark_owed = _shared_tmp
+    _e2, _empty2, _s2 = hammer(_m)
+    check('SABOTAGE: the shared temp name really does lose writes',
+          bool(_e2 or _empty2),
+          'the concurrency test cannot tell the two apart, so it proves '
+          'nothing about the fix')
+    _m._mark_owed = _real
+finally:
+    shutil.rmtree(_dir, ignore_errors=True)
+
 print()
 print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')
 sys.exit(1 if FAIL else 0)

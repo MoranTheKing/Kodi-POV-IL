@@ -221,6 +221,7 @@ def _mark_owed(owed, applied=True, attempts=0):
                 except OSError:
                     pass
                 raise
+            _sweep_stale_temps(path)
         elif os.path.exists(path):
             os.remove(path)
         return True
@@ -297,6 +298,35 @@ def _note_owed_attempt(why):
              level='WARNING')
     else:
         _log('{0}; it stays owed and the next start tries again'.format(why))
+
+
+def _sweep_stale_temps(path):
+    """Delete temp siblings left behind by a process that was killed.
+
+    The write is `open(tmp) -> os.replace(tmp, path)`, and a kill between the
+    two leaves the tmp file for ever: nothing else looks for it, and the name
+    carries a pid and a thread id so the next boot picks a different one. Each
+    leak is a few bytes and needs a kill inside a millisecond-wide window, so
+    this is slow accumulation rather than a problem -- but "nothing ever
+    cleans it up" is not a sentence worth leaving true when the sweep is six
+    lines and runs where a successful write has just proved the directory is
+    writable.
+
+    Never raises, and never touches the record itself: only siblings whose
+    name is the record's plus a .tmp suffix, and never the one just renamed.
+    """
+    try:
+        import os
+        directory = os.path.dirname(path) or '.'
+        stem = os.path.basename(path) + '.'
+        for name in os.listdir(directory):
+            if name.startswith(stem) and name.endswith('.tmp'):
+                try:
+                    os.remove(os.path.join(directory, name))
+                except OSError:
+                    pass
+    except Exception:
+        pass
 
 
 def cycle_owed():
