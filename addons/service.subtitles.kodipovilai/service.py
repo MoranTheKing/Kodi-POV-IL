@@ -324,6 +324,11 @@ def _run_build_startup_repairs():
         _maybe_reseed_genre_folders,
         _maybe_patch_fentastic_widgets,
         _maybe_fix_fentastic_clearlogo_var,
+        # POV's cache databases: a read in one invocation blocks a write in
+        # another for five seconds while journal_mode is OFF. Ordering is not
+        # sensitive -- it edits POV's source on disk, which POV re-reads on its
+        # next invocation, not this pass.
+        _maybe_patch_pov_cache_wal,
         _maybe_patch_skin_watched_poster,
         _maybe_patch_favourites_xml,
         _maybe_patch_favourites_personal_tiles,
@@ -2191,6 +2196,36 @@ def _maybe_guard_pov_debrid_handlers():
             kodi_utils.log(
                 'pov_debrid_unbound_guard_patcher failed: {0}'.format(e),
                 level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_cache_wal():
+    """Stop POV's own cache reads freezing its cache writes for five seconds.
+
+    Measured on a reporter's device: calls that ran alone never exceeded 1.78s,
+    calls that overlapped another had a median of 4.22s and a maximum of 11.19s,
+    and every single call over three seconds was an overlapping one. Five
+    seconds is Python's default sqlite busy timeout, which BaseCache never
+    overrides. See pov_cache_wal_patcher for the reproduction and for why the
+    keep-list site must be written before either pragma site.
+
+    Not gated on pov_fast_navigation: the contention is between separate POV
+    processes and happens either way.
+    """
+    try:
+        from resources.lib import pov_cache_wal_patcher, kodi_utils
+        st = pov_cache_wal_patcher.ensure_patched()
+        bad = [p for p in st.split(', ')
+               if p.split('=')[-1] in ('unmatched', 'write_failed',
+                                       'read_failed')]
+        if bad:
+            kodi_utils.log('pov_cache_wal_patcher: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log('pov_cache_wal_patcher failed: {0}'.format(e),
+                           level='WARNING')
         except Exception:
             pass
 
