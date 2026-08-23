@@ -1902,6 +1902,53 @@ def main():
     # holds sixteen versioned settings markers gating boot migrations, and
     # three lib modules carry markers with no ensure_*/heal_* at all. None of
     # them were even pinned -- so no tripwire, not merely no measurement.
+    # A MODULE THIS HARNESS CANNOT SEE AT ALL, which is the failure the whole
+    # file exists to prevent and which it was itself blind to.
+    #
+    # Discovery is by marker SHAPE -- `_MARKER_RES` wants `..._v<digits>`. A
+    # patcher whose marker does not fit that shape yields no markers, so
+    # `patchers()` never yields it, so it is not pinned, not measured, and not
+    # even counted as unproven. It simply is not in the report. That happened:
+    # a POV cache patcher written with `MARK = 'KODI_POV_IL wal v1'` -- spaces,
+    # no underscore-v -- was invisible here while carrying a real bug this
+    # harness is built to catch (a version bump that can never reach a patched
+    # device, because the version-stamped marker means an already-patched file
+    # never matches the new marker either).
+    #
+    # So the rule is stated the other way round, on the module rather than on
+    # the marker: a runnable patcher that declares a VERSIONED constant must be
+    # pinned. It cannot hide by spelling its version in a shape the regex above
+    # does not know. Zero modules in the tree violate this today, and the
+    # module that did was deleted before release.
+    _unseen = []
+    for _fn in sorted(os.listdir(LIB)):
+        if not _fn.endswith('.py') or _fn.startswith('__'):
+            continue
+        _stem = _fn[:-3]
+        _src = open(os.path.join(LIB, _fn), encoding='utf-8').read()
+        if not re.search(r'(?m)^def (ensure|heal)\w*\(', _src):
+            continue
+        try:
+            _tree = ast.parse(_src)
+        except Exception:
+            continue
+        for _node in _tree.body:
+            if not isinstance(_node, ast.Assign):
+                continue
+            for _t in _node.targets:
+                _n = getattr(_t, 'id', '')
+                _v = _node.value
+                if (re.search(r'MARK|MARKER|STAMP|VERSION|SENTINEL', _n, re.I)
+                        and isinstance(_v, ast.Constant)
+                        and isinstance(_v.value, str)
+                        and re.search(r'(?:\bv\d+\b|_v\d+)', _v.value, re.I)
+                        and _stem not in PINS):
+                    _unseen.append('%s: %s = %r' % (_stem, _n, _v.value))
+    check('a runnable patcher with a versioned marker is always pinned',
+          not _unseen,
+          'invisible to this harness -- not pinned, not unproven, absent: '
+          + '; '.join(_unseen))
+
     check('SABOTAGE: markers outside the patcher shape are still pinned',
           '_gemini_model_bump_v2' in PINS.get('service', ('', ()))[1]
           and '_embedded_mode_v1' in PINS.get('kodi_utils', ('', ()))[1]
