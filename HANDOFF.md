@@ -4437,6 +4437,65 @@ YouTube add-on in. We ship a settings.xml for it whose stream-proxy toggle
 NOT flipped on the strength of one log, because the proxy exists to carry
 headers a redirect cannot.
 
+### What shipped 0.2.508 / qf 0.1.553 / build 0.1.121 (note 608)
+
+Wizard unchanged at 0.1.48. One real fix, and two corrections to 0.2.507 that
+the first field log with the switch ON forced.
+
+**ESTUARY'S POSTER LOGO.** `fentastic_clearlogo_var_patcher` rooted every path
+under `skin.fentastic`, so `skin.estuary/xml/Variables.xml` -- same
+`ClearArtLogo` variable, same two unclosed brackets, byte-for-byte the same
+shape -- was never touched. And it is the WORSE of the two, for exactly the
+reason that module's header gives for not bothering with FENtastic's: there
+the only consumer is commented out. Estuary's is live at
+`View_51_Poster.xml:256`, so both branches false meant the texture drew
+nothing, in the default poster view, on every Estuary device. `SITES` now
+carries the skin per entry; `no_skin` for the other skin is the healthy answer,
+not a failure. The repair changes exactly two lines and two bytes, proved by
+diff. Three sabotages (site dropped, payloads exchanged, per-site skin ignored)
+all caught.
+
+The module keeps its now-too-narrow name on purpose: it is the prefix every
+field log carries.
+
+**THE SWITCH NEEDS ONE RESTART, NOT TWO.** 0.2.507 said two, in both languages'
+help text, the README and service.py's log line. The log shows POV noticing the
+mismatch, offering a profile reload, and applying it in the same session. One
+dialog, asked once -- after the reload both halves agree, so there is nothing
+left to warn about. The dialog in the user's screenshot is POV working
+correctly, not a fault.
+
+**AND THE SAVING IS ~0.6s A PRESS, NOT ~1.75s.** This is the correction that
+matters most, because 0.2.507's whole write-up rested on the forecast. What
+`mods=` actually reported:
+
+```
+7.22s  mods=81->355    trakt_tv_trending   fresh interpreter
+1.08s  mods=355->355   trakt_tv_trending   SAME route, reused
+0.01s  mods=361->361   navigator.genres    local menu, reused
+```
+
+`mods=A->A` is proof of reuse -- zero modules loaded. But like-for-like on
+`tmdb_tv_networks` the floor went 1.72s -> 1.09s. The import cost was about a
+third of that floor, not all of it; the rest is TMDb/Trakt network, which no
+interpreter setting can touch. "Close to instant after the first press" was
+true only for local menus, and the README and help strings were corrected to
+say what is known.
+
+**REUSE IS PER-INTERPRETER, NOT PER-DEVICE**, which the same log shows the hard
+way: eight fresh starts at `mods=81` in three minutes, because Kodi spawns
+another interpreter whenever a press lands while the current one is busy. At
+12:00:14-12:00:33 three were alive at once. Nothing crashed -- no Python
+exception, no SIGSEGV anywhere in 741 lines -- but that IS the concurrent-
+invocation state this guard exists to prevent, now reached by design on a
+device that opted in. Worth saying to anyone who turns it on.
+
+**Considered and rejected: pre-warming POV's interpreter at startup** the way
+`he_warm` pre-imports the subtitle engine. It would fire an extra POV
+invocation exactly while the home-screen widgets are loading theirs -- adding
+concurrent invocations to buy a second, on the one setting whose entire risk IS
+concurrent invocations.
+
 ### What shipped 0.2.507 / qf 0.1.552 / build 0.1.120 (note 607)
 
 Wizard unchanged at 0.1.48; nothing in its subtree moved. One user-facing
