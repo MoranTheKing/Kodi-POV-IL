@@ -439,6 +439,87 @@ check('a route that imports one module reports one more module',
       ' | '.join(_ilog) or 'nothing was logged')
 
 
+# --- 2c. route= and exit= are separated, which is why v3 exists ------------
+# v2 timed `with self: return routing(sys)` as ONE number, and `Router.__exit__`
+# is inside that `with`. POV's __exit__ calls get_property('pov_rli_fix') ->
+# xbmcgui.Window.getProperty, a GUI call that takes Kodi's graphics lock. So a
+# call whose POV work finished in a second but whose __exit__ then waited on a
+# busy GUI thread was reported as a slow POV call.
+#
+# That is not hypothetical. It sent a real diagnosis into a ditch: a field log
+# was read as sqlite lock contention between concurrent POV invocations, and a
+# patch to POV's cache layer was written and nearly shipped, before an
+# independent re-analysis showed every slow call had already blown past its
+# baseline WHILE RUNNING ALONE, and that six of eight ended within 1-56 ms of a
+# rival call's end -- the signature of waiting on a handoff, not on a database.
+#
+# So the split is the point of the instrument now, and these checks execute the
+# injected block rather than reading it.
+_SPLIT_RE = re.compile(r'([\d.]+)s route=([\d.]+)s exit=([\d.]+)s')
+
+check('the timing line separates route= from exit=',
+      _SPLIT_RE.search(joined) is not None,
+      joined or 'nothing was logged')
+
+_SLOW_EXIT = (
+    "class Router:\n"
+    "\tdef __enter__(self):\n"
+    "\t\treturn self\n"
+    "\n"
+    "\tdef __exit__(self, exc_type, exc_value, traceback):\n"
+    "\t\t_t.sleep(%s)\n"
+    "\n"
+    "\tdef run(self, sys):\n"
+    "\t\twith self: return routing(sys)\n"
+) % (_ROUTING_SECONDS * 4)
+
+_home8, _entry8 = fresh_pov(PRELUDE + _SLOW_EXIT)
+load(_home8).ensure_patched()
+_, _, _slog = run_router(read(_entry8), ARGV)
+_sm = _SPLIT_RE.search(' | '.join(_slog))
+check('a slow __exit__ is charged to exit=, not to route=',
+      _sm is not None and float(_sm.group(3)) > float(_sm.group(2)) * 2,
+      ' | '.join(_slog) or 'nothing was logged')
+if _sm:
+    check('...and route= still reports the real routing time',
+          abs(float(_sm.group(2)) - _ROUTING_SECONDS) < _ROUTING_SECONDS,
+          'route=%s for a route that slept %s' % (_sm.group(2),
+                                                  _ROUTING_SECONDS))
+    check('...and the total is still the sum of the two',
+          abs(float(_sm.group(1))
+              - (float(_sm.group(2)) + float(_sm.group(3)))) < 0.05,
+          ' | '.join(_slog))
+
+# The converse, so nobody can satisfy the above by charging everything to exit.
+_sm2 = _SPLIT_RE.search(joined)
+check('a slow ROUTE is charged to route=, not to exit=',
+      _sm2 is not None and float(_sm2.group(2)) > float(_sm2.group(3)) * 2,
+      joined)
+
+
+# --- 2d. a device carrying v2 is brought forward to v3 ---------------------
+# Not reinstalled ON TOP of: two nested wrappers would double-count and the
+# inner one would never be revertible again.
+_home9, _entry9 = fresh_pov(PRELUDE + ROUTER)
+_mod9 = load(_home9)
+_v2_block = _mod9._V2.replace(_mod9._MARKER_SLOT,
+                              '# AI_SUBS_POV_DIRTIMING_v2')
+_orig9 = read(_entry9)
+with io.open(_entry9, 'w', encoding='utf-8', newline='') as _f:
+    _f.write(_orig9.replace(_mod9.ANCHOR, _v2_block, 1))
+check('the v2 shape really was installed for this check',
+      'DIRTIMING_v2' in read(_entry9))
+_st9 = _mod9.ensure_patched()
+_after9 = read(_entry9)
+check('a v2 device upgrades to v3', 'DIRTIMING_v3' in _after9, _st9)
+check('...and v2 is gone, not nested inside v3',
+      'DIRTIMING_v2' not in _after9
+      and _after9.count('DIRTIMING_v') == 1,
+      'markers left: %s' % re.findall(r'# AI_SUBS_POV_DIRTIMING_v\d+', _after9))
+check('...and the upgraded file still measures',
+      _SPLIT_RE.search(' | '.join(run_router(_after9, ARGV)[2])) is not None)
+
+
 # --- 2b. it never raises, whatever the filesystem does ---------------------
 # The docstring has always said "Never raises". It was not true: _drop_pycache
 # ends the happy path with a bare os.listdir, and a __pycache__ it cannot read

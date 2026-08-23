@@ -1,3 +1,38 @@
+0.2.509
+- Measurement only. Nothing about how the build behaves changes in this
+  version; one instrument gets more honest.
+
+- The timing line now reads `1.50s route=0.30s exit=1.20s` instead of one
+  number. v1 and v2 timed `with self: return routing(sys)`, and POV's
+  Router.__exit__ sits inside that `with` -- it calls get_property(), which is
+  a Kodi GUI call that takes the graphics lock. So a call that finished its POV
+  work in a second and then waited on a busy GUI thread was reported as a slow
+  POV call.
+
+  That is not academic: it sent a diagnosis into a ditch. A field log was read
+  as database lock contention between concurrent POV calls, a patch to POV's
+  cache layer was written, tested and nearly shipped. An independent
+  re-analysis then showed every slow call had already blown past its own
+  baseline by 1.25-4.11s WHILE RUNNING ALONE, and that six of eight finished
+  within 1-56 ms of a rival call's end -- the signature of waiting on a
+  handoff, not on a database. The patch was deleted unreleased. A second review
+  found it would also have raised inside POV's own cache constructor, turning a
+  slow category into one that does not load at all.
+
+- Recorded, not acted on: three of our modules justify themselves with "POV
+  ships reuselanguageinvoker=true, so concurrent invocations share ONE Python
+  interpreter." Measured on a device with reuse on: 11 concurrent pairs, none
+  sharing an invoker, and all 8 second-arrivals started cold. Kodi declines
+  reuse for a concurrent caller and builds a fresh sub-interpreter. The crash
+  those modules address is real; the mechanism written above it is not what
+  happens. Nothing was loosened on the strength of that -- the headers now
+  carry the correction so the next person re-derives it.
+
+- The upgrade harness could not see a patcher whose version marker was spelled
+  in a shape its regex did not know, so the module was absent from the report
+  rather than listed as unproven. It now requires any runnable patcher with a
+  versioned constant to be pinned.
+
 0.2.508
 - The poster view's logo comes back on Estuary, and it was never FENtastic's
   bug. 0.2.507's write-up credited a clearlogo error in a field log to
