@@ -340,7 +340,19 @@ def _unknown_account_code(code):
     predicates = [i for i, t in enumerate(tokens) if t in _CODE_PREDICATES]
     if not subjects or not predicates:
         return False
-    return any(abs(a - b) <= 1 for a in subjects for b in predicates)
+    # ...OR THE SUBJECT LEADS. Adjacency alone was too tight, which the next
+    # review caught: ACCOUNT_HAS_BEEN_SUSPENDED, YOUR_SESSION_HAS_EXPIRED and
+    # USER_IS_CURRENTLY_BANNED all put filler between the two and were
+    # dropped -- the silent screen this file exists to end, reintroduced by a
+    # fix for the opposite problem.
+    #
+    # What a job code cannot do is NAME THE ACCOUNT FIRST.
+    # TASK_FAILED_TO_START_SESSION leads with TASK and mentions the session
+    # last, because the session is what the job was operating on, not what the
+    # message is about. Two tokens of slack for a leading possessive
+    # (YOUR_SESSION..., USER_ACCOUNT...).
+    return (any(abs(a - b) <= 1 for a in subjects for b in predicates)
+            or min(subjects) <= 1)
 
 
 def _codeless_reason(message):

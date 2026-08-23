@@ -822,6 +822,17 @@ try:
     os.utime(_old, (0, 0))
     _m._sweep_stale_temps(_m._owed_path())
     check('...and one orphaned long ago is swept', not os.path.exists(_old))
+    # A PID IS REUSED EVENTUALLY. "Alive" alone made a stale file immortal the
+    # moment the OS handed its pid to any unrelated process, so "alive" only
+    # protects a file that is also RECENT.
+    _zombie = _m._owed_path() + '.%d.1.tmp' % os.getppid()
+    with open(_zombie, 'w', encoding='utf-8') as _f:
+        _f.write('written by a pid that has since been reused\n')
+    os.utime(_zombie, (0, 0))
+    _m._sweep_stale_temps(_m._owed_path())
+    check('...and so is one whose pid was recycled by a live process',
+          not os.path.exists(_zombie),
+          'a live pid must not make a day-old file immortal')
     check('...and the record itself is never touched',
           _m.cycle_owed() is True and _m._owed_attempts() == 7)
     os.remove(_live)

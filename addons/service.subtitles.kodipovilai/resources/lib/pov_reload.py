@@ -303,6 +303,22 @@ def _note_owed_attempt(why):
 # An hour. A writer takes milliseconds; anything this old was orphaned by
 # a process that died between the write and the rename.
 _TEMP_STALE_SECONDS = 3600
+# The point past which a temp file is abandoned whatever its pid says.
+_TEMP_ABANDON_SECONDS = 82800          # 23h on top of the hour above
+
+
+def candidate_path(directory, name):
+    import os
+    return os.path.join(directory, name)
+
+
+def _mtime(path):
+    """The file's mtime, or 0 when it cannot be read (so it sweeps)."""
+    try:
+        import os
+        return os.path.getmtime(path)
+    except OSError:
+        return 0
 
 
 def _temp_owner_pid(name, stem):
@@ -373,7 +389,16 @@ def _sweep_stale_temps(path):
             # and neither is a pid that is still running. Only then does age
             # matter at all, and only as a backstop for a name we cannot read.
             owner = _temp_owner_pid(name, stem)
-            if owner == mine or _pid_alive(owner):
+            if owner == mine:
+                continue
+            # A PID IS REUSED EVENTUALLY, and then a stale file's pid belongs
+            # to some unrelated live process and this would never sweep it
+            # again. So "alive" only protects a file that is also RECENT: a
+            # real writer's is milliseconds old, and a day is far beyond any
+            # clock skew worth respecting. The leak is a few bytes either way;
+            # what matters is that neither test alone can make it permanent.
+            if _pid_alive(owner) and _mtime(candidate_path(directory, name)) > (
+                    cutoff - _TEMP_ABANDON_SECONDS):
                 continue
             candidate = os.path.join(directory, name)
             try:
