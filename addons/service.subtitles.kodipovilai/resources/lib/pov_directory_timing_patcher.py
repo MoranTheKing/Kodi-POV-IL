@@ -33,13 +33,49 @@
 # mistaken for having done so. It turns "the spinner feels long" into a number
 # that says which route and how long, which is the thing that has been missing.
 #
-# v2 ADDS `mods=A->B`, AND IT IS THERE TO SETTLE AN ARGUMENT v1 COULD NOT.
+# v3 SPLITS THE NUMBER IN TWO, AND IT IS HERE BECAUSE v2's SINGLE NUMBER SENT
+# A DIAGNOSIS INTO A DITCH. v1 and v2 both timed this:
+#
+#     with self: return routing(sys)
+#
+# `self` is POV's Router, and its __exit__ is INSIDE that `with`:
+#
+#     def __exit__(self, exc_type, exc_value, traceback):
+#         if get_property('pov_rli_fix') != 'true' or ...: return
+#
+# `get_property` is `xbmcgui.Window.getProperty` -- a GUI call that takes
+# Kodi's graphics lock. So every invocation ended with a GUI round-trip inside
+# the timed region, and a call whose POV work finished in a second but whose
+# __exit__ then waited on a busy GUI thread was reported as a slow POV call.
+#
+# What that cost: a field log was read as sqlite lock contention between
+# concurrent POV invocations, a patch to POV's cache layer was written, tested
+# and nearly shipped -- and an independent re-analysis then showed every slow
+# call had already blown past its own baseline by 1.25-4.11s WHILE RUNNING
+# ALONE, and that six of eight ended within 1-56 ms of a rival call's end. That
+# is the signature of waiting on a handoff, not on a database. The whole chain
+# of reasoning rested on believing "Router.run took 6.57s" meant POV spent
+# 6.57s doing POV work.
+#
+# So the line now reads `1.50s route=0.30s exit=1.20s`: total, the part inside
+# routing(), and the part spent in __exit__. tools/test_pov_directory_timing.py
+# executes the injected block with a slow route and again with a slow __exit__
+# and asserts the cost lands in the right field both ways, because a split that
+# can be silently swapped is worse than no split at all.
+#
+# v2 ADDED `mods=A->B`, AND IT SETTLED AN ARGUMENT v1 COULD NOT.
 # v1 answered the first report: five unrelated routes with floors between
 # 1.72s and 1.89s, and a revisit no faster than the first visit. That
 # says "fixed per-invocation cost" but not WHICH cost, and the leading
-# explanation -- POV re-importing itself because we turned
+# explanation -- POV re-importing itself because we had turned
 # `reuse_language_invoker` off -- stayed an inference, because no log in hand
 # had a warm-interpreter sample to compare against.
+#
+# IT IS ANSWERED NOW, and the answer was smaller than the guess. With reuse on:
+# warm calls 1.12-1.22s (n=17), cold calls 1.76-1.85s (n=7). The re-import
+# surcharge is about 0.6s, not the whole ~1.75s floor. Whatever the rest of
+# that floor is, it is not imports, and v3 is the instrument that can start to
+# say where it goes.
 #
 # A and B are len(sys.modules) either side of the call, and between them they
 # answer it outright:
@@ -81,7 +117,7 @@ except Exception:
 POV_ADDON_ID = 'plugin.video.pov'
 REL = 'resources/lib/entry.py'
 
-MARKER = '# AI_SUBS_POV_DIRTIMING_v2'
+MARKER = '# AI_SUBS_POV_DIRTIMING_v3'
 _MARKER_ANY = '# AI_SUBS_POV_DIRTIMING_v'
 
 # The tag every timing line carries, so a log can be grepped for it and so
@@ -103,6 +139,30 @@ _MARKER_SLOT = '<<<MARKER>>>'
 REPLACEMENT = (
     "\tdef run(self, sys):\n"
     "\t\timport time as _kpi_time  " + MARKER + "\n"
+    "\t\timport sys as _kpi_sys\n"
+    "\t\t_kpi_t0 = _kpi_time.time()\n"
+    "\t\t_kpi_t1 = _kpi_t0\n"
+    "\t\ttry: _kpi_m0 = len(_kpi_sys.modules)\n"
+    "\t\texcept Exception: _kpi_m0 = -1\n"
+    "\t\ttry:\n"
+    "\t\t\twith self:\n"
+    "\t\t\t\ttry: return routing(sys)\n"
+    "\t\t\t\tfinally: _kpi_t1 = _kpi_time.time()\n"
+    "\t\tfinally:\n"
+    "\t\t\t_kpi_t2 = _kpi_time.time()\n"
+    "\t\t\ttry: logger('" + TAG + "', "
+    "'%.2fs route=%.2fs exit=%.2fs mods=%s->%s %s' % "
+    "(_kpi_t2 - _kpi_t0, _kpi_t1 - _kpi_t0, _kpi_t2 - _kpi_t1, "
+    "_kpi_m0, len(_kpi_sys.modules), "
+    "(sys.argv[2] if len(sys.argv) > 2 else '')[:180]))\n"
+    "\t\t\texcept Exception: pass\n"
+)
+
+# v2: the same wrapper, but timing ROUTING AND __exit__ AS ONE NUMBER, which
+# is the bug v3 exists to fix. See the header.
+_V2 = (
+    "\tdef run(self, sys):\n"
+    "\t\timport time as _kpi_time  " + _MARKER_SLOT + "\n"
     "\t\timport sys as _kpi_sys\n"
     "\t\t_kpi_t0 = _kpi_time.time()\n"
     "\t\ttry: _kpi_m0 = len(_kpi_sys.modules)\n"
@@ -161,6 +221,7 @@ def _fitter(content):
 # raises on its own template is a revert that never runs.
 _SHAPES = (
     REPLACEMENT.replace(MARKER, _MARKER_SLOT),
+    _V2,
     _V1,
 )
 
