@@ -203,7 +203,13 @@ check('an account-shaped code this build does not know still counts',
 for _c in ('USER_BANNED_X', 'SUBSCRIPTION_BLOCKED',
            'REFRESH_TOKEN_EXPIRED', 'USER_ACCOUNT_REMOVED',
            'APIKEY_REVOKED', 'SESSION_INVALID',
-           'EXPIRED_SUBSCRIPTION_NOTICE', 'BLOCKED_ACCOUNT_REGION'):
+           'EXPIRED_SUBSCRIPTION_NOTICE', 'BLOCKED_ACCOUNT_REGION',
+           # ADJACENCY ALONE WAS TOO TIGHT and dropped every refusal with
+           # filler between the two words -- the silent screen this file
+           # exists to end, reintroduced by the fix for the opposite problem.
+           # What a job code cannot do is name the account FIRST.
+           'ACCOUNT_HAS_BEEN_SUSPENDED', 'YOUR_SESSION_HAS_EXPIRED',
+           'USER_IS_CURRENTLY_BANNED', 'LOGIN_ATTEMPT_DENIED'):
     check('...%s too' % _c, mod._unknown_account_code(_c) is True)
 for _c in ('ACCOUNT_BLOCKED', 'APIKEY_REVOKED', 'SESSION_INVALID'):
     check('...%s too' % _c, mod._unknown_account_code(_c) is True)
