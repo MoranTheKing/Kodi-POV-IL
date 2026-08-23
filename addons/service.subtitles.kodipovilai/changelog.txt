@@ -1,3 +1,58 @@
+v0.2.507
+- POV's menus have felt heavy since 14 August, and this release says why and
+  hands the choice over. The cause is ours: pov_language_invoker_guard turns
+  POV's reuse-language-invoker flag off, because concurrent POV invocations
+  sharing one Python interpreter is a native crash that closes the whole
+  application. That fix is real and it is staying on by default. What nobody
+  had was its price.
+  Now measured, from a reporter's device on 0.2.506 running Estuary, using the
+  per-navigation timing line 0.2.506 itself shipped. Sixteen navigations, and
+  five unrelated route families -- tmdb_tv_networks, tmdb_movies_popular,
+  trakt_tv_trending, tmdb_tv_premieres and tmdb_movies_latest_releases -- all
+  landing between 1.72s and 1.89s. That is a spread of 0.17s across different
+  modules talking to different companies' servers; tmdb_movies_popular and
+  trakt_tv_trending both took 1.77s, to the hundredth. Repeat visits do not move it: FOX 2.46s then 1.78s,
+  Amazon 2.24s then 1.73s, so roughly 0.6s of a first visit is cacheable
+  network and the floor beneath it is not.
+  A route-independent, cache-immune floor is a fixed per-invocation cost, and
+  POV pays it somewhere unusually visible: every route defers its weight into
+  the call itself. Counted over top-level imports, POV's entry.py loads 4 of
+  its own modules and 10 stdlib ones before the call begins -- and reaching
+  menus.tvshows then adds twenty more of its own, 210KB, and twenty-seven more
+  stdlib packages, requests and concurrent.futures and unicodedata among them.
+  A reused interpreter pays that once per session. A fresh one pays it per
+  press.
+- So there is now a switch: "POV: fast navigation", in the add-on's settings
+  under Advanced, at Expert level. Off out of the box, which is exactly what
+  every device has been doing since August.
+  Turning it on gives POV its reused interpreter back -- the first press after
+  each Kodi start still pays the imports, everything after it does not -- and
+  accepts the crash with it. It takes two Kodi restarts to activate: one for
+  the add-on to write POV's flag, one for Kodi to read it.
+- The idea this release deliberately did NOT ship, recorded so it is not tried
+  again: the crash was reported on Arctic Fuse 3, so keeping the guard on only
+  for that skin and giving everyone else their speed looks obvious. The same
+  log kills it. That device is on Estuary, with one person pressing buttons,
+  and it still produced two overlapping POV invocations -- one route stuck at
+  7.31s while the next press started underneath it. Concurrency is not a
+  property of a skin; it is a property of a call being slow enough for the
+  next one to land inside it, which turning reuse off makes more likely, not
+  less.
+- The timing line itself gained a field, so the next log settles this instead
+  of arguing about it. It now reads `1.75s mods=64->431 ?action=...`: the two
+  numbers are how many Python modules were loaded before and after the call.
+  The first says whether the interpreter arrived cold or warm at a glance, and
+  the difference is what that route had to load for itself. On the reading
+  above it should be hundreds today and zero with the switch on -- same route,
+  same work, different starting point. If it is not, the diagnosis is wrong and
+  the log will say so.
+- The test that pinned the old behaviour was replaced rather than deleted. It
+  used to assert that the guard could never re-enable the flag; it now asserts
+  the property that still protects people, which is that OFF is the
+  destination of every failure -- no kodi_utils, a settings store that throws,
+  a setting nobody has ever touched -- and that the only route to ON is an
+  explicit true. Unlike the regex it replaces, it is executed.
+
 v0.2.506
 - Umbrella and its scraper module now arrive on every device instead of
   waiting behind a menu entry nobody had to find. Half the build already
