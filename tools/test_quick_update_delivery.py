@@ -152,8 +152,10 @@ def _run_startup_case(install_result=True, install_error=None,
                 raise install_error
             return install_result
 
-        def force_close_kodi_in_5_seconds(self, dialog_header):
-            events.append(("close", dialog_header, list(config.settings)))
+        def force_close_kodi_in_5_seconds(self, dialog_header,
+                                          graceful=False):
+            events.append(("close", dialog_header, list(config.settings),
+                           graceful))
 
     resources = types.ModuleType("resources")
     libs = types.ModuleType("resources.libs")
@@ -238,6 +240,17 @@ def test_success_advances_after_install_then_closes():
         ("quick_update_notedismiss", "false"),
     ]
     assert events[1][0] == "close"
+    # A GRACEFUL CLOSE, NOT A KILL. The quickfix zip carries addons/, media/,
+    # userdata/keymaps/ and the wizard -- no guisettings.xml and no .db -- so
+    # there is nothing here that Kodi's shutdown save could overwrite, and
+    # everything the user changed since Kodi started is lost without it. The
+    # hard kill belongs to the build install and the skin switch, which DO
+    # write those files under a running Kodi.
+    assert events[1][3] is True, (
+        "the quick update force-killed Kodi; every setting the user touched "
+        "this session (audio passthrough is the one that got reported) is "
+        "discarded unsaved"
+    )
     assert config.QUICK_UPDATE_NOTEID == "537"
     assert config.QUICK_UPDATE_NOTEDISMISS == "false"
     # The attempt counter is only cleared once the record is proven to have

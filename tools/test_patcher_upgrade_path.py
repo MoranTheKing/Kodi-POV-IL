@@ -347,6 +347,14 @@ pin('pov_addon_window_patcher', 'UPGRADES',
     'AI_SUBS_POV_ADDON_WINDOW_v1', 'AI_SUBS_POV_IMPORT_WINDOW_v1')
 pin('pov_aiostreams_patcher', 'UPGRADES',
     'AI_SUBS_POV_AIOSTREAMS_v2')
+pin('pov_debrid_error_log_patcher', 'UPGRADES',
+    'AI_SUBS_POV_DEBRID_ERRLOG_v1')
+pin('pov_directory_timing_patcher', 'UPGRADES',
+    'AI_SUBS_POV_DIRTIMING_v1')
+pin('pov_debrid_timeout_patcher', 'UPGRADES',
+    'AI_SUBS_POV_DEBRID_TIMEOUT_v1')
+pin('addon_autoupdate_repair', 'UPGRADES',
+    '_MODE_SEED_VERSION=v1', '_addon_update_mode_seeded=v1')
 pin('pov_debrid_unbound_guard_patcher', 'UPGRADES',
     'AI_SUBS_POV_DEBRID_UNBOUND_v1')
 pin('pov_mdblist_like_patcher', 'UPGRADES',

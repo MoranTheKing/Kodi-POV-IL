@@ -364,7 +364,13 @@ class Wizard:
                 # the user is sitting in front of Kodi right now.
                 outcome = self.hot_reload()
                 if not outcome:
-                    self.force_close_kodi_in_5_seconds(dialog_header="עדכון מהיר הסתיים בהצלחה")
+                    # graceful: the quickfix extracted no guisettings.xml and
+                    # no .db, so letting Kodi save on the way out costs
+                    # nothing and keeps the settings the user changed this
+                    # session (audio passthrough, subtitle sizes, ...).
+                    self.force_close_kodi_in_5_seconds(
+                        dialog_header="עדכון מהיר הסתיים בהצלחה",
+                        graceful=True)
                 elif outcome == self.HOT_RELOAD_DEFERRED:
                     # Postponed because something is playing. Saying "applied"
                     # here would be a lie the user can catch: nothing changed
@@ -1165,17 +1171,32 @@ class Wizard:
 
     #####################################################
     # KODI-RD-IL
-    def force_close_kodi_in_5_seconds(self, dialog_header):
+    def force_close_kodi_in_5_seconds(self, dialog_header, graceful=False):
+        """Count down, then close Kodi.
+
+        graceful=True ASKS Kodi to shut down normally, which is what saves the
+        user's settings on the way out. It is a request with a 20-second
+        window, not a guarantee: if Kodi does not go down in that time -- a
+        modal dialog holding the quit, a loaded box -- it falls back to the
+        hard kill and the settings are lost exactly as before, with a
+        WARNING in the log saying which happened.
+
+        Pass it from any path that did not just extract a guisettings.xml or
+        an Addons33.db over the running Kodi -- in practice the quick update,
+        whose zip carries neither. Everything
+        else (build install, guifix, skin switch) has to keep the hard kill,
+        because there a settings save would overwrite what was just written.
+        """
         self.dialogProgress.create(f"[COLOR yellow][B]{dialog_header}[/B][/COLOR]", "[B]קודי ייסגר בעוד 5 שניות[/B]")
         for s in range(5, -1, -1):
             self.dialogProgress.update(int((5 - s) / 5.0 * 100), f"[B]קודי ייסגר בעוד {s} שניות[/B]")
             xbmc.sleep(1000)
-        self.restart_kodi()
+        self.restart_kodi(graceful=graceful)
     #####################################################
 
     #####################################################
     # KODI-RD-IL
-    def restart_kodi(self):
+    def restart_kodi(self, graceful=False):
         # if tools.platform() == 'windows':
             # try:
                 # import subprocess, xbmcvfs
@@ -1187,7 +1208,7 @@ class Wizard:
                 # subprocess.Popen(kodi_full_path, shell=True)
             # except:
                 # pass
-        tools.kill_kodi(over=True)
+        tools.kill_kodi(over=True, graceful=graceful)
     #####################################################
 
 
@@ -1578,7 +1599,7 @@ NOX_PACKS = [
 # updating straight from their developers -- the same trust model POV has via
 # repository.kodifitzwell. Nothing here runs unless the user explicitly picks
 # the wizard menu entry; no tile, no search wiring, no change for anyone else.
-UMBRELLA_PACK_VERSION = '6.7.81'
+UMBRELLA_PACK_VERSION = '6.7.85'
 UMBRELLA_PACKS = [
     {
         'name': 'Umbrella + CocoScrapers',
@@ -1604,7 +1625,7 @@ UMBRELLA_PACKS = [
 # accounts up on the next boot. Ships with script.module.acctvwr (a hard
 # dependency of acctmgr, in no repo the build already carries) and with the
 # developer's own repository, so from here on he is its update channel, not us.
-ACCTMGR_PACK_VERSION = '1.1.5a'
+ACCTMGR_PACK_VERSION = '1.1.6'
 ACCTMGR_PACKS = [
     {
         'name': 'Account Manager Lite',
@@ -1735,11 +1756,113 @@ def ensure_umbrella_installed():
             CONFIG.COLOR1))
 
 
+# KODI-POV-IL - UMBRELLA FOR EVERYONE. Same marker-once pattern as Account
+# Manager above; see ensure_acctmgr_for_everyone for the reasoning behind each
+# guard, which is identical here.
+UMBRELLA_AUTO_SETTING = 'umbrella_auto'
+UMBRELLA_AUTO_DONE = 'installed'
+
+
+def _umbrella_was_removed():
+    """True when Umbrella's settings are on disk but the add-on is not.
+
+    Kodi's uninstall removes addons/<id>/ and leaves
+    userdata/addon_data/<id>/ alone, so this is "it was here and somebody
+    took it away" as distinct from "it was never here". Deliberately narrow:
+    an EMPTY addon_data directory does not count, because Kodi creates one
+    the first time almost anything asks for a setting.
+    """
+    try:
+        import xbmcvfs
+        if _addon_on_disk('plugin.video.umbrella'):
+            return False
+        data = xbmcvfs.translatePath(
+            'special://profile/addon_data/plugin.video.umbrella')
+        if not xbmcvfs.exists(data):
+            return False
+        dirs, files = xbmcvfs.listdir(data)
+        return bool(dirs or files)
+    except Exception:
+        return False
+
+
+def ensure_umbrella_for_everyone():
+    """Put Umbrella and CocoScrapers on every device, existing installs
+    included, exactly once.
+
+    Why it stopped being a pilot: half the build already assumes it. The home
+    screen has Umbrella tiles, the search wiring has an Umbrella branch, the
+    account manager pushes debrid accounts into it, and a dozen patchers in
+    the AI add-on exist only to make it behave in Hebrew. On a device without
+    it, every one of those quietly does nothing -- and the screen looks the
+    same either way, which is exactly why the difference must not be left to
+    whether somebody found a menu entry.
+
+    ONCE per device, recorded in a wizard setting. Somebody who then removes
+    Umbrella on purpose is not fought with at every boot.
+
+    THE PACK CARRIES ITS OWN REPOSITORIES (repository.umbrella and
+    repository.cocoscrapers), so from the moment this runs the developers are
+    the update channel, not us -- which is the point. We are not taking on
+    shipping Umbrella releases; we are making sure the first one is there.
+
+    Silent when there is nothing to do: the sentinel + version gate inside
+    _ensure_packs_installed turns an already-current install into a file
+    check rather than an 11 MB download. Never raises."""
+    try:
+        if CONFIG.get_setting(UMBRELLA_AUTO_SETTING) == UMBRELLA_AUTO_DONE:
+            return False
+        if not CONFIG.get_setting('buildname'):
+            return False            # build not installed yet -- too early
+        # SOMEBODY WHO ALREADY SAID NO. Umbrella has been available behind a
+        # menu entry (install_umbrella_pilot) for several releases, and that
+        # entry never wrote this setting -- so a user who installed it there
+        # and then deliberately removed it looks exactly like a user who never
+        # had it, and this function would put it back. That is the one thing
+        # the docstring above promises it will not do.
+        #
+        # What tells them apart is what an uninstall leaves behind: the add-on
+        # directory goes, its addon_data does not. Files gone plus settings
+        # present is somebody who had it and got rid of it, and the answer is
+        # to record that and never ask again -- not to reinstall.
+        if _umbrella_was_removed():
+            logging.log(
+                '[Umbrella] settings from a previous install are here but the '
+                'add-on is not; treating that as a deliberate removal and not '
+                'installing it again', level=xbmc.LOGINFO)
+            CONFIG.set_setting(UMBRELLA_AUTO_SETTING, UMBRELLA_AUTO_DONE)
+            return False
+        ok = ensure_umbrella_installed()
+        if not ok:
+            # No marker: a device that was offline (or where the pack host was
+            # down) tries again on the next boot instead of never again.
+            logging.log(
+                '[Umbrella] auto-install did not complete; will retry on the '
+                'next startup', level=xbmc.LOGINFO)
+            return False
+        CONFIG.set_setting(UMBRELLA_AUTO_SETTING, UMBRELLA_AUTO_DONE)
+        xbmc.sleep(500)
+        try:
+            xbmc.executebuiltin('UpdateLocalAddons')
+        except Exception:
+            pass
+        logging.log('[Umbrella] auto-installed {0}'.format(
+            UMBRELLA_PACK_VERSION), level=xbmc.LOGINFO)
+        return True
+    except Exception as e:
+        logging.log('[Umbrella] auto-install failed: {0}'.format(e),
+                    level=xbmc.LOGERROR)
+        return False
+
+
 def install_umbrella_pilot():
-    """Opt-in flow behind the wizard menu entry: confirm, install, and tell
-    the user where to find it. Deliberately does NOT touch the home screen,
-    the search wiring or any default -- the pilot's whole point is zero
-    impact on anyone who didn't ask for it."""
+    """Manual (re)install behind the wizard menu entry.
+
+    Umbrella now arrives by itself on every device
+    (ensure_umbrella_for_everyone), so this is the repair path for somebody
+    who removed it, or whose auto-install never completed because the device
+    was offline at the wrong moment. It still touches nothing else: no home
+    screen change, no default, no existing setting."""
     dialog = xbmcgui.Dialog()
     yes_pressed = dialog.yesno(
         CONFIG.ADDONTITLE,
@@ -1756,25 +1879,65 @@ def install_umbrella_pilot():
             xbmc.executebuiltin('UpdateLocalAddons')
         except Exception:
             pass
+        # RECORDED HERE TOO, so that from now on the automatic install and
+        # the manual one leave the same mark. Without it, anybody using this
+        # entry stays in the population _umbrella_was_removed has to guess
+        # about.
+        try:
+            CONFIG.set_setting(UMBRELLA_AUTO_SETTING, UMBRELLA_AUTO_DONE)
+        except Exception:
+            pass
         logging.log_notify(
             CONFIG.ADDONTITLE,
             '[COLOR {0}]Umbrella הותקן! זמין תחת תוספים -> הרחבות וידאו'
             '[/COLOR]'.format(CONFIG.COLOR1))
 
 
+def _addon_on_disk(addon_id):
+    """True when addons/<id>/addon.xml is really there. Never raises."""
+    try:
+        import xbmcvfs
+        return xbmcvfs.exists(xbmcvfs.translatePath(
+            'special://home/addons/{0}/addon.xml'.format(addon_id)))
+    except Exception:
+        return False
+
+
 def _af3_register_pack_in_db(pack):
     """Register + enable a pack's addons in Kodi's Addons DB. Safe to
-    call repeatedly (INSERT OR IGNORE + UPDATE enabled). This is the
-    retroactive-fix entry point: it works off the static addon_ids
-    list, so it does NOT need the pack zip on disk -- which means we
-    can heal users whose files were already extracted by the old
-    code path."""
-    try:
-        db.addon_database(pack['addon_ids'], 1, True)
+    call repeatedly (INSERT OR IGNORE + UPDATE enabled). It needs no pack
+    ZIP on disk, which is what lets it heal users whose files were already
+    extracted by the old code path.
+
+    IT DOES NEED THE FILES. This used to register the whole static
+    addon_ids list unconditionally, and the "already current" fast path
+    above decides it may skip the download by looking at ONE sentinel file.
+    A review built a device with only the sentinel present and the other
+    three add-ons entirely absent: all four were written into Kodi's DB as
+    installed and enabled, the function reported success, the caller wrote
+    the "done" marker, and the device was never corrected again. Telling
+    Kodi an add-on exists when it does not is worse than telling it
+    nothing -- Kodi then resolves dependencies against a lie.
+
+    So: register what is there, and REPORT FAILURE for anything that is
+    not, so the caller does not mark the job done.
+    """
+    wanted = list(pack.get('addon_ids') or ())
+    present = [i for i in wanted if _addon_on_disk(i)]
+    absent = [i for i in wanted if i not in present]
+    if absent:
         logging.log(
             'DEBUG | ensure_arctic_fuse_3_installed | '
-            'DB enabled (static list): {0}'.format(pack['addon_ids']))
-        return True
+            'NOT registering {0} -- not on disk: {1}'.format(
+                pack['name'], absent))
+    if not present:
+        return False
+    try:
+        db.addon_database(present, 1, True)
+        logging.log(
+            'DEBUG | ensure_arctic_fuse_3_installed | '
+            'DB enabled: {0}'.format(present))
+        return not absent
     except Exception as e:
         logging.log(
             'DEBUG | ensure_arctic_fuse_3_installed | '
@@ -1824,6 +1987,20 @@ def _version_tuple(ver):
 
 def _af3_pack_current(pack):
     if not _af3_pack_installed(pack['sentinel']):
+        return False
+    # THE SENTINEL VOUCHES FOR ITSELF, NOT FOR THE PACK. This checked one file
+    # and skipped the download for all of them, which is how a device could
+    # end up with the sentinel present, the other three add-ons absent, and
+    # nothing that would ever repair it: the registration step correctly
+    # refused to vouch for what was not there, and then the fast path skipped
+    # the re-download on the NEXT boot too, for the same reason it skipped it
+    # on this one. Correctly-reported failure that never self-corrects is
+    # still never self-correcting.
+    missing = [i for i in (pack.get('addon_ids') or ()) if not _addon_on_disk(i)]
+    if missing:
+        logging.log(
+            'AF3 pack is incomplete, forcing reinstall: {0} missing={1}'.format(
+                pack['name'], missing))
         return False
     expected = pack.get('expected_version')
     if not expected:
@@ -1937,7 +2114,32 @@ def _ensure_packs_installed(packs, downloading_label, ready_label):
         dialog_progress = xbmcgui.DialogProgress()
         dialog_progress.create(CONFIG.ADDONTITLE, downloading_label)
 
+        # A DIALOG THAT WAS CLOSED MID-LIST IS NOT REUSED. The failure
+        # branches below close the progress dialog so the Hebrew error
+        # notification is not hidden behind it -- which was right while every
+        # one of them also returned. The extract branch now `continue`s
+        # instead (so one bad pack does not abandon the others), and that left
+        # the NEXT iteration calling iscanceled()/update() on a closed dialog.
+        # Kodi's own behaviour there is undefined enough that a stale
+        # iscanceled() would silently abandon the rest of the list -- the exact
+        # thing the `continue` was added to prevent.
+        dialog_open = True
+
+        def _reopen():
+            """Put a working progress dialog back, once."""
+            try:
+                d = xbmcgui.DialogProgress()
+                d.create(CONFIG.ADDONTITLE, downloading_label)
+                return d
+            except Exception:
+                return None
+
         for i, pack in enumerate(packs, start=1):
+            if not dialog_open:
+                _new = _reopen()
+                if _new is None:
+                    return False
+                dialog_progress, dialog_open = _new, True
             if dialog_progress.iscanceled():
                 dialog_progress.close()
                 return False
@@ -2040,6 +2242,20 @@ def _ensure_packs_installed(packs, downloading_label, ready_label):
                     '[COLOR {0}]כשל בחילוץ חבילת AF3![/COLOR]'.format(
                         CONFIG.COLOR2))
                 all_ok = False
+                # AND STOP. This used to fall through to the registration
+                # below, so a truncated download -- which passes the
+                # size-is-not-zero gate a few lines up -- ended with every
+                # add-on in the pack written into Kodi's DB as installed and
+                # enabled while nothing had been extracted. A review truncated
+                # a real zip in half and watched "extract failed" be followed
+                # immediately by "DB enabled". The two download-stage failures
+                # above both return before reaching here; this one did not.
+                dialog_open = False
+                try:
+                    os.remove(lib)
+                except Exception:
+                    pass
+                continue
 
             # CRITICAL: register every addon in this pack in Kodi's
             # Addons DB and mark it enabled. extract.all only writes
@@ -2072,6 +2288,15 @@ def _ensure_packs_installed(packs, downloading_label, ready_label):
         except Exception:
             pass
 
+        # ONLY IF IT IS STILL OPEN. The extract-failure branch closes the
+        # dialog and continues, which is right when another pack follows --
+        # the loop head re-opens one -- and wrong when the failing pack was
+        # the LAST, or the only one, which is the real shape of the NOX,
+        # Umbrella and Account Manager lists. A review drove a single-pack
+        # list whose extract fails and watched update() and close() both land
+        # on the closed object.
+        if not dialog_open:
+            return False
         dialog_progress.update(100, ready_label)
         xbmc.sleep(800)
         dialog_progress.close()

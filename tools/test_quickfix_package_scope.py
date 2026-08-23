@@ -164,6 +164,74 @@ def test_quickfix_carries_the_current_wizard():
     )
 
 
+def test_the_packages_carry_the_current_addon_BYTES():
+    """Version equality is not freshness. Compare the files.
+
+    The two checks around this one compare version NUMBERS, which answers
+    "was a rebuild done since the last bump" and not "was a rebuild done since
+    the last edit". Those are different questions and the gap between them has
+    a history: a package was built, service.py was then edited to fold in a
+    review finding, and every version check still agreed while the shipped
+    bytes were a draft nobody had reviewed. Nothing said a word, because
+    nothing was looking at bytes.
+
+    So this looks at bytes. Every .py the packages carry for this add-on has
+    to be byte-identical to the worktree file it came from -- which is exactly
+    what the packagers produce: measured against the last shipped pair, all
+    187 of them matched their source exactly.
+
+    pool.py is excluded and stays excluded. Its shipped copy carries a
+    credential injected at build time and is DELIBERATELY not the worktree
+    file; comparing it would fail forever, and reporting the difference would
+    be worse than that.
+    """
+    ADDON_DIR = ROOT / "addons/service.subtitles.kodipovilai"
+    PREFIX = "addons/service.subtitles.kodipovilai/"
+    problems = []
+    for label, package in (("full build", _shipped_full_build()),
+                           ("quickfix", _latest_quickfix())):
+        try:
+            with zipfile.ZipFile(package) as archive:
+                members = {n for n in archive.namelist()
+                           if n.startswith(PREFIX) and n.endswith(".py")
+                           and not n.endswith("/pool.py")}
+                stale = []
+                for name in sorted(members):
+                    source = ROOT / name
+                    if not source.is_file():
+                        stale.append(name + " (not in the worktree at all)")
+                        continue
+                    if archive.read(name) != source.read_bytes():
+                        stale.append(name)
+        except Exception as exc:
+            problems.append("{0} {1} unreadable -- {2}: {3}".format(
+                label, package.name, type(exc).__name__,
+                str(exc).rstrip(".")))
+            continue
+
+        # ...and the other direction: a file added to the add-on since the
+        # package was built is missing from it entirely, which no comparison
+        # of the files that ARE there can see.
+        on_disk = {("addons/service.subtitles.kodipovilai/"
+                    + p.relative_to(ADDON_DIR).as_posix())
+                   for p in ADDON_DIR.rglob("*.py")
+                   if "__pycache__" not in p.parts and p.name != "pool.py"}
+        absent = sorted(on_disk - members)
+        if stale or absent:
+            problems.append(
+                "{0} {1} is stale: {2} file(s) differ from the worktree{3}"
+                "{4}".format(
+                    label, package.name, len(stale),
+                    ", {0} missing entirely".format(len(absent))
+                    if absent else "",
+                    "\n    " + "\n    ".join((stale + absent)[:8])))
+    assert not problems, (
+        "\n".join(problems)
+        + "\n  Rebuild before releasing. A package whose version matches the "
+          "worktree but whose bytes do not is the exact failure the version "
+          "checks cannot see.")
+
+
 def test_the_full_build_carries_the_current_addons():
     """The same rule for the artifact a FRESH install gets, and for both
     add-ons in it rather than just the wizard.

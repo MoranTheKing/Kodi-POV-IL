@@ -5891,6 +5891,374 @@ place that asserted the false reason was corrected in `bfdd288`. The lesson is
 narrower than "read the docs": this file is the record, and re-deriving
 something it already answers is how a settled question gets unsettled wrongly.
 
+## The POV cycle has been wrong three times, each correction narrower
+
+The build switches POV off and on so a patch takes effect the same evening.
+Every version of the "is it safe to do this now" test has been wrong, and each
+correction was smaller than the last -- which is the tell that the question was
+never the threshold, it was what "idle" means.
+
+| | test | what broke |
+|---|---|---|
+| v1 | home visible, nothing playing | true on a cold start WHILE the home screen loads its widgets. Every widget that asked POV in the 1.5s window died, and because the REBUILD is triggered by the disable, nothing rebuilt them |
+| v2 | + settled 20s continuously, service 45s old, 180s cap | wrong AT THE CAP: a Shield reached it after three minutes of browsing, cycled anyway, and 1.2s later a Disney+ tile landed in the bare Videos root |
+| v3 | + give up at the cap, record the debt, let the next start do it | still wrong -- see below |
+| v4 | + no modal dialog, asked again in the last second | |
+
+v3's hole is the one worth remembering. **Every window POV puts up while it
+works is an `xbmcgui.WindowXMLDialog`, and those FLOAT over the home screen.**
+Start a title from a home widget and home is still visible, nothing is playing,
+no container is updating, and a user reading a list of sources presses nothing.
+All four conditions say "idle" while POV is mid-scrape with a dialog in the
+user's face. Two logs on one evening, one on each route in:
+
+```
+21:16:06  sources_results.xml   (his source list is open)
+21:16:11  cycled POV
+21:16:12  restored home focus -> control 2000
+
+21:41:44  progress_media.xml    (a scrape starts)
+21:41:51  home never settled in 180s; cycling anyway
+21:41:52  cycled POV
+```
+
+The first took POV away from a user choosing a source and then yanked his focus
+back to the home screen. The second killed a scrape seven seconds in -- and
+that is the scrape reported as "no sources for a title that definitely has
+them". Both reached the maintainer as "POV is slow and unreliable again".
+
+THE SHAPE: every version tested the SCREEN and none tested the ADD-ON. If this
+ever needs a v5, the honest fix is a signal from POV itself, not a fifth
+condition about windows.
+
+## Kodi pins an add-on whose repository has died, and never unpins it
+
+The maintainer asked why some devices never auto-install an add-on update
+although the manual "available updates" list shows it and updating by hand
+works. That description rules out most answers by itself: the update is found,
+and installing it works. Something filters the list between the two.
+
+`CAddonMgr::GetAddonUpdateCandidates` is that filter:
+
+```cpp
+updates = GetAvailableUpdates();                                // manual list
+updates.erase(... !IsAutoUpdateable(addon->ID()) ...);          // auto list
+```
+
+and `CAddonUpdateRules::IsAutoUpdateable` is false for an add-on with ANY row
+in the `update_rules` table. Three rule types exist: `USER_DISABLED_AUTO_UPDATE`
+(1), `PIN_OLD_VERSION` (2) and `PIN_ZIP_INSTALL` (3). **Types 2 and 3 are
+written by `CAddonInstallJob` itself**, at the end of every install:
+
+```cpp
+if (m_addon->Version() == latestVersionOfItsOriginRepo) unpin;
+else AddUpdateRuleToList(id, PIN_OLD_VERSION);
+```
+
+Read that against a repository that has gone away. It offers no version, so
+`latestVersionOfItsOriginRepo` stays empty, so the installed version is "not
+the latest", so the add-on is pinned. Permanently. Kodi logs the pinning at
+`LOGDEBUG`, so a user's info-level log shows nothing at all.
+
+`repository.KodiRealDebridIsrael` is such a repository: its index
+(`kodi7rd/repository`) has answered 404 for months and the maintainer confirms
+it was taken down. **Seven add-ons in the shipped `Addons33.db` name it as
+their origin, `skin.fentastic` among them.** They are not starved — the
+quickfix updates them directly — but every install of them is pinned by it,
+and Kodi retries the dead index hourly for ever.
+
+### The fix is a column, not a repository
+
+The obvious answer is to publish those add-ons in our own repo channel so the
+origin resolves again. That costs about 23 MB of zips per release
+(`skin.fentastic` is 22.5 of it), requires shipping `repository.kodipovilai`
+inside the build, which it currently is not, and creates a **second** update
+channel racing the quickfix for the skin.
+
+Kodi's own installer gives a cheaper one. The branch above is for an add-on
+that HAS an origin; an add-on with an EMPTY origin takes the other:
+
+```cpp
+// manually installed add-ons
+if (m_addon->Version() < latestVersionOfAnyRepo) AddUpdateRuleToList(PIN_ZIP_INSTALL);
+else                                             RemoveUpdateRuleFromList(PIN_ZIP_INSTALL);
+```
+
+With nothing offering the add-on, `latestVersionOfAnyRepo` is `0.0.0` and
+`installed < 0.0.0` is false — so it UNPINS. **An empty origin is strictly
+better than a dead one**, which is the opposite of how it reads.
+
+`resources/lib/addon_autoupdate_repair.py` therefore clears the origin of every
+add-on registered to a named dead repository, disables that repository so Kodi
+stops asking, clears installer-set pins for the add-ons this build ships, and
+names every rule it finds in the log. It runs BEFORE the pin-clearing block: a
+device with no pins yet is exactly the device that will collect one.
+
+Two deliberate limits. Rule 1 is never touched — it means somebody said no, and
+the build ships it on `resource.language.he_il` and `skin.estuary` on purpose.
+Rule 3 is never touched either: only Kodi's own "Install from zip file" writes
+it, so it marks a version somebody chose. Rule 2 can also come from picking an
+older version out of a repository's version list, and the table cannot tell
+that apart from the dead-repo case — a real, unresolvable cost, which is why
+every cleared rule is named in the log.
+
+Dead origins are a NAMED list. There is no way to ask a database whether a URL
+still answers, and a heuristic that clears an origin because a repository looks
+unhealthy today would punish somebody whose network is merely down.
+
+See also *Account Manager forces Kodi's global auto-update on, every boot*
+above: on a Trakt-connected device that add-on already sets
+`general.addonupdates` to 0 every start. This repair sets it once and then
+reports rather than fights, so the two do not argue.
+
+## Refreshing a bundled third-party add-on, and the deletion that permits
+
+`tools/build_full_build.py --refresh-addon ID=package.zip` replaces one bundled
+add-on's whole `addons/<id>/` subtree with an upstream release. It exists
+because "carried over untouched" had quietly become "a year out of date": the
+build shipped POV 5.12.04 while every device in the field was already on
+6.08.13, because Kodi's auto-update takes a fresh install there within a day.
+The old bundle protected nobody — it only made a new install spend its first
+hour downloading what it should have arrived with, and ran this build's own
+patchers against a POV nobody runs.
+
+That is also the safety case, and it is the same one the tool's header makes
+about itself: shipping the version every existing device already runs is not a
+new configuration, it is the one already in the field, reached sooner.
+
+This is the ONE place the tool may DROP a member of the previous build — an
+upstream release removes files, and keeping their predecessors ships a mixture
+of two versions of somebody else's add-on. The permission is scoped to
+`addons/<id>/` and to nothing else, and three things had to be added before
+that sentence was true:
+
+* **the top-level check read only the first path segment.** A member named
+  `plugin.video.pov/../../userdata/guisettings.xml` passed it and was carried
+  verbatim into the artifact a fresh install depends on — and the prefix checks
+  downstream agreed it was "inside the add-on", because they compare the same
+  un-normalised string. A review built that package and watched `build()` AND
+  `verify()` accept it. The wizard's extractor happens to strip `..` on the way
+  to disk, which is why it was not already a disaster; that is somebody else's
+  guard, maintained for a different reason, and this tool does not get to lean
+  on it to keep its own promise;
+* **the scoping is one trailing slash.** Without it `plugin.video.pov` also
+  matches `plugin.video.povextra/...`. The test fixture now contains such a
+  sibling, because the previous one (`plugin.video.somethingelse`) shared no
+  prefix in either direction and could not see the regression;
+* **refresh replaces; it does not introduce.** Every new file under a refreshed
+  add-on is exempt from `--allow-add`, which is right for an upstream release
+  that added a module and wrong as a way to add a whole unreviewed add-on. An
+  id the previous build does not carry is now refused.
+
+## A staleness guard that compares versions answers the wrong question
+
+`test_quickfix_package_scope.py` checked that the packages' add-on and wizard
+versions were not BEHIND the worktree. That answers "was a rebuild done since
+the last bump", not "was a rebuild done since the last edit" — and the gap has
+a history: a package was built, `service.py` was then edited to fold in a
+review finding, and every version check still agreed while the shipped bytes
+were a draft nobody had reviewed.
+
+It now also compares BYTES: every `.py` the full build and the quickfix carry
+for this add-on must be byte-identical to its worktree source, and a file added
+since the package was built must not be missing from it. Measured against the
+last shipped pair, all 187 members matched exactly, so this is what the
+packagers already produce. `pool.py` is excluded and stays excluded — its
+shipped copy carries a credential injected at build time and is deliberately
+not the worktree file.
+
+The same principle applied to `build-apk.yml`, which had the full build's
+filename typed out in three shell steps while the wizard's was an env var. It
+is one `BUILD_ZIP` now, and `test_platform_packages.py` derives both names from
+`wizard/assets/build.txt` — the source a device actually reads — rather than
+asserting on literals that were true the day they were typed.
+
+## One number is POV's wait AND its request timeout, so raising it fixes nothing
+
+Two field reports, one evening: "the results take ages again" and "no sources
+for a title that definitely has them". Both on Premiumize. Neither reproduces
+on TorBox on the same build. The provider-specific part is what makes this
+worth a section, because it looked like an account problem for a week and was
+not.
+
+`ExternalManager.results` runs two phases, and spends `scrapers.timeout.1` on
+each. Phase 2 asks every configured debrid which of the found torrents it
+holds, and then:
+
+```python
+self.thread_monitor(threads, ls(32579), True)          # waits timeout + 1
+threads = [i for i in threads if i.done() and not i.exception()]
+for name, hashes in ((fut.name, fut.result()) for fut in threads):
+    if name in ('realdebrid', 'alldebrid'): uncached = 'Unchecked %s' % name
+    else: uncached = 'Uncached %s' % name
+    self.final_sources.extend(... for i in torrent_sources)
+```
+
+**`final_sources` is built exclusively inside that loop.** One debrid
+configured is one thread; a second late and every torrent phase 1 found is
+discarded unread. The counters really did climb and the list really was empty.
+
+**And a second road to the same screen.** `DebridCheck.cache_check` in
+`modules/debrid.py` wraps everything in a bare `except: pass` and returns the
+empty cached list, so a check that timed out, was refused, or came back
+malformed is indistinguishable from an honest "none of these are cached". POV
+already knows those two are different — for rd/ad it asks third-party indexes,
+so a miss is `Unchecked`; for pm/tb/oc it asks the provider, so a miss is
+`Uncached` — and that word decides whether the source is ever seen:
+
+```python
+# ResultsProcessor.sort_uncached_torrents, sources.py:546
+return [i for i in results if 'Uncached' not in i.get('cache_provider', '')]
+```
+
+"Display Uncached Torrents" is off by default. `Uncached` rows are DELETED;
+`Unchecked` rows are kept and sorted last. A failed check therefore deletes
+the entire list, silently.
+
+### Why the setting could never fix it
+
+`scrapers.timeout.1` is not only the monitor's budget. `premiumize_api`,
+`torbox_api` and `offcloud_api` each take it as their per-request HTTP timeout:
+
+```
+debrids/premiumize_api.py:17   self.timeout = int(get_setting('scrapers.timeout.1') or 10)
+```
+
+So the deadline the monitor enforces and the deadline the request obeys are the
+same number, and a request that uses its whole allowance always finishes at or
+after the moment the monitor gave up. This build raised the setting 10 → 20 on
+1 August (`7b98f81`) for exactly this symptom, reasoning correctly about the
+two-phase budget. It widened the window; it could not close it, and it raised
+the failure's cost with it.
+
+That is worth generalising: **when a timeout guards a thing and also bounds the
+thing, tuning it moves both walls.** The fix has to be structural.
+
+### Why Premiumize and not TorBox
+
+Not carelessness on one side, and this is inference from the request shape
+plus the field evidence, NOT a timing I measured. TorBox posts its hashes as
+one compact JSON array (`json=data`); Premiumize posts every hash as a separate
+`items[]` field in a form body, hundreds of them on a popular title. Premiumize
+is also the only provider any reporter has shown this on, and the maintainer
+runs TorBox on the same build and has never seen it. Same code path, same
+setting, two different places on the clock — but if this ever needs to be
+relied on rather than believed, it needs a measured round trip.
+
+And the intermittency is POV's own `DebridCache`: `cache_check` consults it
+first and skips the network entirely when every hash is already known, so a
+title searched recently answers instantly and works. "It works on the second
+try" was never randomness.
+
+### The fix (`pov_debrid_timeout_patcher.py`)
+
+Two textual patches, and they are COUPLED — the order matters and the module
+enforces it.
+
+* `sources.py`: a debrid with no surviving future is put back into the loop
+  with a `None` reply instead of being dropped, and a `None` reply labels its
+  sources `Unchecked`. Safe on its own.
+* `debrid.py`: the direct-provider branch gets its own `try/except
+  BaseException` and a failure returns `None` instead of an empty list. **Not
+  safe on its own** — against unpatched `sources.py` that `None` reaches
+  `i['hash'] in hashes`, raises `TypeError` into `except: notification(32574)`,
+  and produces an error toast and an empty list, i.e. worse than the bug.
+
+So `ensure_patched` applies `sources.py` first, applies `debrid.py` only behind
+it, and REVERTS `debrid.py` if `sources.py` is not carrying the fix (POV
+refactored, write failed, older marker unrecognised). `test_pov_debrid_timeout.py`
+pins that: it patches both, refactors `sources.py` underneath, and asserts
+`debrid.py` comes back byte-identical to stock.
+
+One anchor detail worth keeping: `threads = [i for i in threads if i.done() and
+not i.exception()]` appears TWICE in `sources.py` — once per phase. An anchor
+of that line alone patches the wrong phase and every behavioural test still
+passes. The anchor is the whole four-line block, and the test asserts the line
+is non-unique and the block is unique, so a future refactor cannot quietly
+make the narrow anchor look safe.
+
+### What it costs
+
+On a failed check the handful of hashes the local `DebridCache` already knew to
+be cached lose their cached badge along with the rest, because the failure
+discards the whole reply. They are still shown — a lost badge, not a lost
+source — and paying it keeps the patch to one `return` statement instead of a
+second signalling channel between two files.
+
+
+## The Disney tile, measured: it was us, and the log says so to the second
+
+Two field logs, two devices, one signature. slow.log (0.2.505):
+
+    19:56:29.507  pov_reload: home never settled in 180s; cycling anyway
+    19:56:29.533  POV: Main Monitor Service Finished          <- POV is off
+    19:56:30.672  Unable to find plugin plugin.video.pov      <- the tile press
+    19:56:30.673  GetDirectory - Error ...?action=tmdb_tv_networks
+    19:56:31.037  pov_reload: cycled POV; resolvable=True
+
+1.14 seconds between the disable and the press. `tmdb_tv_networks` IS the
+"Disney Series" tile. pov2.log (0.2.504) has the same shape 1.6-2.4s after its
+cycle, taking out two home widgets (trakt_tv_trending, tmdb_movies_popular)
+instead of a tile press.
+
+`cycling anyway` is the v2 behaviour this release removes. Nothing else in
+either log is a POV directory failure.
+
+## What the info-level log CANNOT tell us, and why the timing patch exists
+
+A category that takes two seconds and then works leaves NO line at all. Kodi
+logs GetDirectory only on failure. So "a spinner on every category" has never
+had a measurement, in any log received so far, and could not have had one.
+Every POV directory error in both logs is the cycle. That is the whole case
+for pov_directory_timing_patcher: not that it makes anything faster, but that
+the next report can be answered.
+
+## A stale estimate worth correcting: he_warm's pre-import
+
+service.py's _start_he_warm_drainer says the cold import is "~2-3s". Measured
+in the field, eight samples across five logs: 1.1, 2.8, 4.4, 4.6, 5.4, 6.7,
+12.2, 13.1 seconds. On a SHIELD it is 13.1.
+
+It runs on its own thread at startup and is about Hebrew SUBTITLE availability
+for a specific title -- it is NOT on the path of a category press, and an
+earlier draft of this section wrongly implied it was. The maintainer caught
+that. What it does cost is CPU on a 4-core box during the first half-minute,
+which is when somebody who just restarted is pressing things.
+
+## The startup pass, counted
+
+41 steps on 2026-07-23 (0.2.436) -> 63 now (0.2.506). Each is followed by a
+hard monitor.waitForAbort(0.25), so the pass's floor from sleeping alone went
+from ~10.3s to ~15.8s, before any of the work. Measured pass span in the field:
+~53s (pov2.log), with one step (_maybe_fix_pov_torbox_url) flagged by the
+pass's own >4s warning at 5.8s.
+
+Worth a decision next release: the 0.25s is a yield, not a requirement, and
+63 x 0.25 is now a real number.
+
+
+## The startup pass's pacing was a constant chosen for a pass half this size
+
+`monitor.waitForAbort(0.25)` after every step was introduced in `b7ce297`
+(2026-06-05, "Prevent quick update startup freezes") when the tuple had
+TWENTY-SIX entries: 6.5 seconds of yielding, which is what that change was
+tested at. It reached 41 by 23 July and 63 by 0.2.506 -- 15.75 seconds of
+pure sleeping on every boot, before a single step does any work. Nobody
+re-derived it; there was no reason to think of it as a number that grows.
+
+What the wait is FOR is not starving Kodi while the pass runs, and that is a
+property of the TOTAL time yielded, not the per-step figure. It is a budget
+now -- 6.5s spread over however many steps there are, so a short pass is
+unchanged and a long one stops paying for its own length.
+
+The per-step FLOOR (0.05s) still wins below about 130 steps' worth, and past
+that the total grows again. That is deliberate: a yield of nothing is not a
+yield, and a pass that long wants splitting rather than a smaller sleep. What
+must never happen again is that it grows SILENTLY, so it logs a WARNING when
+the floor starts binding. `test_repair_order.py` pins the formula at 26, 63,
+120 and 130 steps and asserts the warning exists.
+
+
 ## Working style
 
 - Be certain before shipping: read the code, reproduce with a unit test.

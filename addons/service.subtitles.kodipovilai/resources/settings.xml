@@ -569,6 +569,18 @@
             <allowempty>true</allowempty>
           </constraints>
         </setting>
+        <!-- Hidden one-shot marker: the add-on update mode was put back to
+             "install automatically" once on this device. After that the
+             setting is the user's, and addon_autoupdate_repair only reports
+             it. -->
+        <setting id="_addon_update_mode_seeded" type="string" label="30000">
+          <level>4</level>
+          <visible>false</visible>
+          <default></default>
+          <constraints>
+            <allowempty>true</allowempty>
+          </constraints>
+        </setting>
       </group>
     </category>
 
