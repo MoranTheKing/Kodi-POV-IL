@@ -99,16 +99,26 @@
 #
 # A route-independent, cache-immune floor is a fixed per-invocation cost. And
 # POV pays it in an unusually visible place, which is worth writing down
-# because it is why POV feels this and other add-ons do not. Its entry.py
-# imports almost nothing at module level -- 2 local modules, 19KB -- while
-# every route defers the real weight into the call itself:
+# because it is why POV feels this and other add-ons do not. Every route
+# defers the real weight into the call itself:
 #
 #     'build_tvshow_list': lambda p: _import('menus.tvshows', 'Menu')(p).run()
 #
-# menus.tvshows' import closure is 20 local modules and 218KB, and it drags in
-# requests, sqlite3, concurrent.futures, xml.etree and unicodedata behind it.
-# With the invoker reused that is paid once for the session. Without it, it is
-# paid on every single press. Same-device calibration from the same log: our
+# Counted over top-level imports on POV 6.08.13, entry.py's own module-level
+# closure is 4 local modules / 53KB and 10 external ones. Reaching that route
+# then adds TWENTY MORE local modules and 210KB, and twenty-seven more
+# externals -- requests, concurrent.futures, xml.etree, unicodedata, hashlib,
+# html, importlib, pkgutil, queue, gzip, urllib.request among them. With the
+# invoker reused that is paid once for the session. Without it, on every press.
+#
+# (Two corrections here, both caught by a fact-check before release and both
+# worth leaving visible. The figures first written were "2 local modules,
+# 19KB" and "20 modules, 218KB": 19597 is entry.py's OWN file size, not the
+# size of what it imports, and the walk behind both numbers never followed
+# `from modules import kodi_utils` through to the submodule, so it was
+# crediting an empty package __init__ instead of the 18KB module. And sqlite3
+# was listed among what the route drags in -- entry.py already imports it at
+# module level, so it is paid either way and proves nothing here.) Same-device calibration from the same log: our
 # own he_warm line reports 3.7 SECONDS to pre-import one engine on that box.
 #
 # SO THIS IS NOW A SWITCH, AND SAFE IS STILL THE DEFAULT. The owner's call:
