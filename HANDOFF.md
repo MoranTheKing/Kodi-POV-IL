@@ -4437,6 +4437,58 @@ YouTube add-on in. We ship a settings.xml for it whose stream-proxy toggle
 NOT flipped on the strength of one log, because the proxy exists to carry
 headers a redirect cannot.
 
+### What shipped 0.2.509 / qf 0.1.554 / build 0.1.122 (note 609)
+
+Measurement only; no behaviour changes. Six payload files, four of them
+corrected comments.
+
+**THE INSTRUMENT WAS PART OF THE ILLUSION.** v1 and v2 of the timing patch
+wrapped `with self: return routing(sys)`. POV's `Router.__exit__` is inside that
+`with` and calls `get_property('pov_rli_fix')` -> `xbmcgui.Window.getProperty`,
+a GUI call that takes Kodi's graphics lock. Every invocation ended with a GUI
+round-trip inside the timed region. v3 splits it: `1.50s route=0.30s exit=1.20s`.
+
+**WHAT THAT COST, WRITTEN DOWN SO IT IS NOT REPEATED.** The 15:09 log was read
+as sqlite lock contention between concurrent POV invocations. A patcher was
+written, tested with 47 assertions and 7 sabotages, and staged. Two independent
+reviews killed it:
+
+* The field attribution was wrong. Scored against each call's OWN baseline
+  (cold 1.80s / warm 1.18s, which `mods=` separates), all 8 slow calls had
+  already exceeded it by 1.25-4.11s WHILE RUNNING ALONE. The overlap did not
+  exist when the slowdown began. Six of eight ended within 1-56 ms of a rival
+  call's end -- waiting on a handoff, not a database. My "excess in multiples of
+  5s" was numerology: the +10.00s was 11.19-1.19 on a call whose baseline is
+  1.80s.
+* Independently, it was unshippable. Entering WAL raises when another
+  invocation is mid-scan, and `BaseCache.__init__` has no try -- `navigator_cache`
+  constructs at module level, so it would raise at import. Leaving WAL raises
+  whenever a second connection exists, and POV leaves WAL constantly
+  (`purge_database`, `limit_metacache_database`, every self-update). It would
+  have uninstalled itself every 3 days and re-entered through the raising path.
+  Slow categories would have become categories that do not load.
+
+The lab block matrix in that patch was CORRECT and reproduces
+(OFF: reader-mid-scan blocks a writer 5.01s; WAL: 0.00s). Only the attribution
+was wrong. Keep those apart if the idea returns.
+
+**AND THE HARNESS COULD NOT SEE IT.** `test_patcher_upgrade_path` exists to
+catch a version bump that reaches nobody, and the WAL patcher had exactly that
+bug -- but discovery is by marker SHAPE (`..._v<digits>`) and its marker was
+`KODI_POV_IL wal v1`, with spaces. Not pinned, not measured, not even counted as
+unproven: absent. The rule is now on the module -- a runnable patcher declaring
+a versioned constant must be pinned. Zero violations today; restoring the
+deleted file fails the check by name.
+
+**RECORDED, NOT ACTED ON:** `pov_widget_crash_guard`,
+`pov_container_refresh_crash_fix` and `pov_language_invoker_guard` all state
+that reuse=true makes concurrent invocations share one interpreter. Measured
+with reuse on: 11 concurrent pairs, none sharing an invoker, all 8
+second-arrivals cold. Kodi declines reuse for a concurrent caller. The crash is
+real; the stated mechanism is not what happens, and the better candidate is
+sequential (a thread POV started in call N still alive when call N+1 reuses that
+interpreter) -- an inference, not a measurement. Nothing loosened.
+
 ### What shipped 0.2.508 / qf 0.1.553 / build 0.1.121 (note 608)
 
 Wizard unchanged at 0.1.48. One real fix, and two corrections to 0.2.507 that
