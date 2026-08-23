@@ -6298,10 +6298,19 @@ the first log taken on 0.2.506 -- a device on POV 6.08.13, wizard 0.1.48, and
 running **Estuary**, not FENtastic and not AF3. Sixteen `>> KODI_POV_IL timing
 <<` lines between 08:38:31 and 08:39:32.
 
-**Reading the cadence.** `Control 51 in window 10025 has been asked to focus,
-but it can't` is not a fault here, it is the CLOCK: Kodi activates MyVideoNav
-and tries to restore focus before the directory exists, so that line marks the
-moment of the press. Then:
+**What is measured, and what is read into it.** MEASURED: the plugin call
+takes 1.72-1.89s, and the spinner is on screen for the whole of it. That alone
+is the report answered, and nothing below is needed for it.
+
+READ INTO IT, and worth separating out because it is an interpretation:
+`Control 51 in window 10025 has been asked to focus, but it can't` appears
+between one timing line and the next -- 14 of them for 16 timing lines --
+0.13s before the next call starts and 1.35s after the previous one returned.
+(Not "once between every pair": the missing one is the overlapping-invocation
+case at 08:39:29, where two calls finish 0.1s apart, which is consistent with
+this reading rather than a counterexample to it.) Taking it as the moment of the press --
+Kodi activating MyVideoNav and trying to restore focus before the directory
+exists -- gives:
 
 ```
 press (Control 51)   08:38:53.277
@@ -6310,8 +6319,12 @@ plugin call returns  08:38:55.130   (1.72s)
 next press           08:38:56.477   (+1.35s of the user reading)
 ```
 
-So the user-visible spinner is **~1.85s on every press**, and the 1.35s gap is
-a human, not the machine.
+The alternative -- that the line fires when the finished directory is rendered
+-- requires the user to decide and press within 0.13s of seeing the list, on
+every one of a dozen navigations, which is not a person. Hence the reading
+above. But note how little rests on it: the headline is ~1.85s per press if it
+is right and ~1.75s if it is wrong, because the plugin call dominates either
+way. Do not let a later argument about this line reopen the diagnosis.
 
 **The floor, and why it is not data.** Grouped by route family, every
 measurement in the log:
@@ -6335,19 +6348,38 @@ SAME tile revisited drops back to the floor (FOX 1.78, Amazon 1.73). Roughly
 0.6s of a first visit is cacheable network; the floor underneath it never
 improves. Route-independent and cache-immune is a fixed per-invocation cost.
 
-**Where the cost is, in POV's own source.** `entry.py` imports 2 local modules
-(19KB) at module level, and every route defers the weight into the call:
+**Where the cost is, in POV's own source.** Every route defers its weight into
+the call:
 
 ```python
 'build_tvshow_list': lambda p: _import('menus.tvshows', 'Menu')(p).run(),
 ```
 
 `_import` is `__import__(path, fromlist=[attr])` -- a `sys.modules` hit on a
-warm interpreter, a full load on a cold one. `menus.tvshows`' transitive
-top-level closure is **20 local modules / 218KB**, plus `requests`, `sqlite3`,
-`concurrent.futures`, `xml.etree.ElementTree`, `unicodedata`, `hashlib`,
-`html`. `menus.movies` is within 600 bytes of it with an identical external
-set -- which is why the two routes time identically.
+warm interpreter, a full load on a cold one. Counted over top-level imports on
+POV 6.08.13:
+
+| | local modules | bytes | external |
+|---|---|---|---|
+| `entry.py`, module level | 4 | 53,524 | 10 |
+| `menus.tvshows`, whole closure | 23 | 244,306 | 37 |
+| **what reaching the route adds** | **20** | **210,379** | **27** |
+
+The 27 the route adds include `requests`, `concurrent.futures`,
+`xml.etree.ElementTree`, `unicodedata`, `hashlib`, `html`, `importlib`,
+`pkgutil`, `queue`, `gzip` and `urllib.request`. `menus.movies` is 598 bytes
+larger with a byte-identical external set -- which is why the two routes time
+identically.
+
+**Two corrections in that table, both from a pre-release fact-check.** It first
+read "2 local modules / 19KB" for entry.py and "20 modules / 218KB" for the
+route. 19,597 is entry.py's OWN file size, not the size of what it imports; and
+the walk behind both figures never followed `from modules import kodi_utils`
+through to the submodule, so it credited an empty package `__init__.py` instead
+of the 18KB module. A second walk that resolves `from A import B` to `A.B`
+gives the numbers above. `sqlite3` was also listed among what the route drags
+in -- entry.py imports it at module level, so it is paid either way and proves
+nothing here.
 
 That closure sits INSIDE `Router.run`, which is what the timing patch wraps.
 So `reuse_language_invoker = false` -- our own guard, since 2026-08-14 -- moves
@@ -6421,10 +6453,52 @@ skin.
 **Also from this log, for the record.** `addon_autoupdate_repair: mode=ok,
 origins=none, rules=2:none_ours` -- the two pinned add-ons are
 `resource.language.he_il` and `skin.estuary`, both rule 1 (user turned
-auto-update off by hand), neither ours. The single `unmatched parentheses in
-string.isempty(listitem.art(clearlogo)` is one of the nineteen sites
-`fentastic_clearlogo_var_patcher` deliberately leaves alone. Nothing else in
-the 626 lines is ours.
+auto-update off by hand), neither ours. Our own twenty-odd
+`[service.subtitles.kodipovilai]` lines are all in the pass and all healthy --
+`wizard_self_healer: already_healed`, `pov_combined_discover_patcher:
+api=already_patched, menu=already_patched`, and so on. Nothing in the 626 lines
+is a failure of ours.
+
+### ...except one, which was found by writing that sentence down wrongly
+
+The single `unmatched parentheses in string.isempty(listitem.art(clearlogo)`
+was first written up here as "one of the nineteen sites
+`fentastic_clearlogo_var_patcher` deliberately leaves alone". That is wrong,
+and a fact-check caught it: that module is `SKIN_ADDON_ID = 'skin.fentastic'`
+and every path it touches is under `special://home/addons/skin.fentastic/`.
+This device runs ESTUARY, and the error fires 25 ms after `Loading skin file:
+MyVideoNav.xml`.
+
+Scanning the shipped build for the defect rather than assuming where it lives:
+
+```
+addons/skin.fentastic/xml/Includes_VideoOsd4.xml   2   (patched at runtime)
+addons/skin.fentastic/xml/Variables.xml            2   (patched at runtime)
+addons/skin.estuary/xml/Variables.xml              2   (NOTHING PATCHES THESE)
+```
+
+And Estuary's is the worse of the two, for a reason the FENtastic write-up
+records as the reason NOT to bother there. In FENtastic, `ClearArtLogo`'s only
+consumer is commented out, so repairing it changes nothing on screen. In
+Estuary the consumer is live:
+
+```
+skin.estuary/xml/Variables.xml     <value condition="!String.IsEmpty(ListItem.Art(clearlogo)">...
+                                   <value condition="String.IsEmpty(ListItem.Art(clearlogo)">...
+skin.estuary/xml/View_51_Poster.xml    <texture>$VAR[ClearArtLogo]</texture>
+```
+
+Both conditions are unparseable, so both are FALSE, so the texture draws
+nothing -- on every Estuary device, in the default poster view. The fix is the
+same one Site 1 already justifies: the two conditions are logical complements,
+one of them must hold, so closing the bracket restores the author's own
+alternative with nothing to decide.
+
+NOT SHIPPED IN 0.2.507, deliberately. It is a different bug from the one this
+release is about, it needs the patcher taught a second skin, and this release's
+artifacts are already built and validated. It is the first thing to pick up
+next, and it is a visible one: somebody's poster art has been blank this whole
+time.
 
 ## A stale estimate worth correcting: he_warm's pre-import
 

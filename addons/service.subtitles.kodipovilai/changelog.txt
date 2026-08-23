@@ -15,11 +15,13 @@ v0.2.507
   Amazon 2.24s then 1.73s, so roughly 0.6s of a first visit is cacheable
   network and the floor beneath it is not.
   A route-independent, cache-immune floor is a fixed per-invocation cost, and
-  POV pays it somewhere unusually visible. Its entry.py imports almost nothing
-  at module level, while every route defers the weight into the call itself --
-  menus.tvshows alone is 20 modules and 218KB and pulls requests, sqlite3,
-  concurrent.futures, xml.etree and unicodedata behind it. A reused
-  interpreter pays that once per session. A fresh one pays it per press.
+  POV pays it somewhere unusually visible: every route defers its weight into
+  the call itself. Counted over top-level imports, POV's entry.py loads 4 of
+  its own modules and 10 stdlib ones before the call begins -- and reaching
+  menus.tvshows then adds twenty more of its own, 210KB, and twenty-seven more
+  stdlib packages, requests and concurrent.futures and unicodedata among them.
+  A reused interpreter pays that once per session. A fresh one pays it per
+  press.
 - So there is now a switch: "POV: fast navigation", in the add-on's settings
   under Advanced, at Expert level. Off out of the box, which is exactly what
   every device has been doing since August.

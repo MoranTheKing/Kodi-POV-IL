@@ -34,8 +34,8 @@
 # that says which route and how long, which is the thing that has been missing.
 #
 # v2 ADDS `mods=A->B`, AND IT IS THERE TO SETTLE AN ARGUMENT v1 COULD NOT.
-# v1 answered the first report: every navigation between 1.72s and 1.89s
-# across five unrelated routes, and no faster on a repeat visit. That
+# v1 answered the first report: five unrelated routes with floors between
+# 1.72s and 1.89s, and a revisit no faster than the first visit. That
 # says "fixed per-invocation cost" but not WHICH cost, and the leading
 # explanation -- POV re-importing itself because we turned
 # `reuse_language_invoker` off -- stayed an inference, because no log in hand
