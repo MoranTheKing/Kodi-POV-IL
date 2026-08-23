@@ -6259,6 +6259,46 @@ the floor starts binding. `test_repair_order.py` pins the formula at 26, 63,
 120 and 130 steps and asserts the warning exists.
 
 
+## The download page can lag a package rebuild indefinitely (2026-08-23)
+
+`deploy-pages.yml` is what puts the current APKs at
+`morantheking.github.io/Kodi-POV-IL/downloads/Kodi-POV-IL-{64,32}bit.apk`: it
+runs `gh release download --pattern "Kodi-POV-IL-64bit.apk" --clobber` against
+the latest release. Everything public uses those fixed filenames, so no page
+ever names a version -- which is right, and which is also why nobody looks at
+this.
+
+It woke only on a push to `main`. And `build-apk.yml` does NOT push to main
+when it rebuilds an EXISTING version: its "Update version pointer files" step
+writes the version into `latest_apk_version.txt`, sees no diff, and exits
+before committing. So:
+
+    02:41  build-apk dispatched at 21.3-povil.49 (already published)
+    02:49  release recreated, new APKs uploaded, build 0.1.119 inside
+    02:49  pointer step: "already up to date" -> no commit, no push
+     ...   deploy-pages never wakes
+           download page keeps serving the PREVIOUS build's APKs
+
+Measured, not theorised: the release asset was 75,020,054 bytes and the live
+page was still serving 75,011,862 afterwards.
+
+Nothing was scheduled to ever fix that -- the next unrelated push to main
+would have, whenever that happened to be. Anyone installing from the site in
+between gets an APK carrying an older build, silently. It self-heals on first
+launch (the wizard quick-updates), so it is invisible rather than broken,
+which is the worst shape for a gap like this.
+
+`deploy-pages.yml` now also triggers on `release: [published, edited]`.
+`test_pages_sync_follows_a_release` pins both halves: the trigger, and the
+fact that build-apk's pointer step short-circuits -- so if that ever starts
+pushing unconditionally, whoever changes it is told why the trigger exists.
+
+THE GENERAL SHAPE, worth remembering: a publish step that is correct in
+isolation, gated on an event that the thing it depends on does not always
+emit. The gate was "did main change", the dependency was "did a release
+change", and those are only usually the same.
+
+
 ## Working style
 
 - Be certain before shipping: read the code, reproduce with a unit test.
