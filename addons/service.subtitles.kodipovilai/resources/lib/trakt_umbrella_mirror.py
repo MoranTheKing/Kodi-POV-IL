@@ -70,6 +70,11 @@ except Exception:
     kodi_utils = None
 
 try:
+    from resources.lib import addon_presence
+except Exception:
+    addon_presence = None
+
+try:
     from resources.lib import addon_settings_safe
 except Exception:
     addon_settings_safe = None
@@ -147,12 +152,16 @@ def _reader(addon_id):
     keys, and it now runs every minute. Not cached between passes -- noticing
     a token POV refreshed in the background is the entire point of the timer.
 
-    Returns None for every key when the add-on is not installed."""
+    Returns None for every key when the add-on is not installed.
+
+    Through addon_presence rather than by construction, for the reason spelt
+    out in the MDBList mirror: asking Kodi about an add-on it does not have
+    leaves an ERROR line in the log every single pass."""
     if xbmcaddon is None:
         return lambda _key: None
-    try:
-        addon = xbmcaddon.Addon(addon_id)
-    except Exception:
+    addon = (addon_presence.addon(addon_id)
+             if addon_presence is not None else None)
+    if addon is None:
         return lambda _key: None
 
     def _get(key):
