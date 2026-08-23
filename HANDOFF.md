@@ -4437,6 +4437,64 @@ YouTube add-on in. We ship a settings.xml for it whose stream-proxy toggle
 NOT flipped on the strength of one log, because the proxy exists to carry
 headers a redirect cannot.
 
+### What shipped 0.2.507 / qf 0.1.552 / build 0.1.120 (note 607)
+
+Wizard unchanged at 0.1.48; nothing in its subtree moved. One user-facing
+change, one instrumentation change, and an unusual number of corrections to
+this session's own prose -- which is the part worth reading.
+
+**THE CHANGE.** `pov_fast_navigation`, a boolean in MoranSubs' settings
+(Advanced, level 3), default FALSE. `pov_language_invoker_guard` no longer
+hard-codes `WANTED = 'false'`; it reads `_wanted()` ONCE per pass and threads
+that value through both halves POV keeps `reuse_language_invoker` in. OFF is
+not merely the default, it is the destination of every failure -- no
+kodi_utils, a settings store that raises, a setting nobody has touched. Only an
+explicit true reaches FAST. Full write-up and the measurement above; the short
+version is that our own August crash fix costs a fixed ~1.75s of Python import
+time on every POV menu press, and the owner decided that trade should be
+somebody's to make rather than ours to impose.
+
+**THE INSTRUMENTATION.** `pov_directory_timing_patcher` v2 adds `mods=A->B` to
+its line -- `len(sys.modules)` either side of the call -- so the next log says
+cold-or-warm outright instead of leaving the diagnosis an inference. It imports
+`sys` by name rather than trusting `Router.run`'s parameter; the first draft
+used the argument and silently logged nothing under the module's own test
+harness, which is precisely the failure a timing patch must not have.
+
+**SIX CLAIMS IN THIS RELEASE'S OWN PROSE WERE WRONG, AND A FACT-CHECK CAUGHT
+ALL SIX BEFORE THEY SHIPPED.** Recorded because the pattern matters more than
+any one of them:
+
+* The import-closure figures were wrong twice over -- entry.py's own file size
+  used as the size of what it imports, and an AST walk that never followed
+  `from modules import kodi_utils` through to the submodule. Corrected numbers
+  in the table above; they argue the case better than the wrong ones did.
+* `sqlite3` was listed among what the route defers. entry.py imports it at
+  module level.
+* README and settings.xml still claimed EVERY navigation landed in 1.72-1.89s
+  after that had been corrected in three other places. Five of sixteen are
+  outside it.
+* README and the help string in both languages promised menus would be
+  "close to instant" / "near-instant" with the switch on -- in a release whose
+  own HANDOFF section states plainly that no warm-interpreter sample exists.
+* README still said the switch sat next to the other POV escape hatch after it
+  was moved to Advanced.
+* The Control-51 line was said to appear "once between every pair of timing
+  lines"; there are 14 for 16.
+
+A separate code review, run in parallel, found five more in the code and
+comments -- including a comment in `service.py`'s steps tuple still promising
+"this can only ever turn the flag OFF" directly above the step this release
+taught to do the opposite, and `_wanted()` using plain truthiness where a
+`get_bool` returning Kodi's raw string would have handed it `'false'` and
+turned reuse on everywhere.
+
+**AND ONE FALSE CLAIM THAT WAS HIDING A REAL BUG** -- see the clearlogo section
+above. `skin.estuary/xml/Variables.xml` has two unparseable conditions nothing
+patches, and unlike FENtastic's copy its consumer is live, so the poster view's
+logo has been blank on every Estuary device. Not fixed here, deliberately.
+First thing to pick up next.
+
 ### What shipped 0.2.506 / qf 0.1.551 / wizard 0.1.48 / build 0.1.119 (note 606)
 
 Plus platform packages rebuilt in place at `21.3-povil.49` (Wizard 0.1.46 →
