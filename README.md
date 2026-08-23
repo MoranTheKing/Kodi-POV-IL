@@ -38,7 +38,7 @@
 
 - עץ קבצים מסודר של המיגרציה.
 - מסמך diff של `Twilight -> POV`.
-- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.120.zip`.
+- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.121.zip`.
 - הוראות התקנה ובדיקת smoke test לטלפון: `ANDROID_TESTING.md`.
 
 ## חבילת בדיקה (גרסה נוכחית)
@@ -155,8 +155,9 @@ will not land on it. Turn it on and POV keeps one interpreter again. The first
 press after each Kodi start still pays the loading; the presses after it should
 be much faster -- how much faster has not been measured yet, because nobody has
 sent a log with the switch on. What is certain is the cost you take back: the
-crash, which is why this is off by default. It needs two Kodi restarts to take
-effect -- one for the add-on to write the flag, one for Kodi to read it.
+crash, which is why this is off by default. It takes effect after ONE Kodi restart: on that
+restart POV notices the change and offers to reload your profile, and saying OK
+makes it active straight away. It asks once.
 
 If you turn it on and Kodi starts closing on you, turn it off again and restart
 twice; nothing else needs undoing.
