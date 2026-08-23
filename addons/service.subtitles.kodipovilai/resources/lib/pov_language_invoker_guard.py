@@ -15,6 +15,33 @@
 #     "POV ships <reuselanguageinvoker>true</reuselanguageinvoker>, so those
 #      concurrent invocations share ONE Python interpreter. The concurrent
 #      access corrupts CPython dict internals ... -> the whole Kodi app dies."
+
+# THE "ONE SHARED INTERPRETER" STEP ABOVE IS NOT WHAT KODI DOES, measured
+# 2026-08-23 on a device running with reuse ON. Across 32 timed invocations
+# there were 11 concurrent pairs and NOT ONE of them shared an invoker thread;
+# all 8 threads that ever arrived as the second caller started cold, at
+# len(sys.modules)==81. Kodi does not hand a busy reusable invoker to a second
+# concurrent caller -- it declines reuse and builds a fresh sub-interpreter.
+# Warm reuse only ever appears sequentially, down one thread.
+#
+# WHAT THAT DOES AND DOES NOT OVERTURN. It does NOT make the crash imaginary:
+# the 2026-07-16 log is a real SystemError in dictobject.c and Kodi's Python
+# sub-interpreters share one GIL and a great deal of runtime state, so a
+# concurrency-induced fault across them stays entirely possible. What it
+# overturns is the stated MECHANISM, and therefore the confidence that turning
+# reuse off addresses it -- because concurrent callers get separate
+# interpreters either way, so that setting does not change the concurrency
+# picture at all. The one difference it does make is sequential: with reuse ON
+# an interpreter is not torn down between calls, so any thread POV started
+# during call N is still running inside it when call N+1 is handed the same
+# interpreter. That is a shared-interpreter race, it only exists with reuse on,
+# and it is a better candidate than the one written above -- but it is an
+# inference, not a measurement, and nobody should treat it as settled either.
+#
+# NOT ACTED ON HERE. The mitigation in this file does not depend on which of
+# those is right, and a crash nobody can reproduce on demand is the worst
+# possible thing to go loosening on the strength of a corrected footnote. This
+# note exists so the next person re-derives it instead of inheriting it.
 #
 # WHY A THIRD TRIGGER-SPECIFIC GUARD WOULD BE THE WRONG FIX. Two triggers have
 # been closed one at a time already: the container_refresh() ping we injected
