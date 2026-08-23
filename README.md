@@ -191,6 +191,20 @@ The quick update now asks Kodi to close properly and falls back to the kill only
 if that does not take. The build install and the skin switch keep the kill they
 need.
 
+## Account Manager arrives current (from `0.2.506`)
+
+The installer pack carried version 1.1.5a while its own developer's repository
+was already publishing 1.1.6, so a new device spent its first day downloading
+what should have come with it. Umbrella, the scraper module and the account
+viewer were checked against their own repositories in the same pass and were
+already current.
+
+A pack whose files are only half there now repairs itself, too. The check for
+"already installed" looked at ONE file and skipped the download for the whole
+pack, so a device missing the rest stayed missing them indefinitely. It looks
+at all of them now, and a download that fails to extract no longer tells Kodi
+the add-ons are present when they are not.
+
 ## Umbrella arrives on every device (from `0.2.506`)
 
 Half the build already assumed it was there: the home screen carries Umbrella
@@ -779,6 +793,6 @@ See `SECURITY.md` for the GitHub settings that should be enabled to prevent acci
 ## APK Downloads
 
 The current Android, Windows and LG webOS packages are published as
-[`21.3-povil.48`](https://github.com/MoranTheKing/Kodi-POV-IL/releases/tag/v21.3-povil.48).
+[`21.3-povil.49`](https://github.com/MoranTheKing/Kodi-POV-IL/releases/tag/v21.3-povil.49).
 Use the platform download pages under `downloads/`; see `APK_RELEASE.md` for
 update behavior, verified package identities and release evidence.
