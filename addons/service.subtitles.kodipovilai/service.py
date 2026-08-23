@@ -317,6 +317,7 @@ def _run_build_startup_repairs():
         _maybe_reseed_series_networks,
         _maybe_reseed_genre_folders,
         _maybe_patch_fentastic_widgets,
+        _maybe_fix_fentastic_clearlogo_var,
         _maybe_patch_skin_watched_poster,
         _maybe_patch_favourites_xml,
         _maybe_patch_favourites_personal_tiles,
@@ -329,12 +330,51 @@ def _run_build_startup_repairs():
         # _maybe_patch_pov_build_content_logger -- RETIRED, see the function.
         _maybe_patch_pov_debrid_status,
         _maybe_guard_pov_debrid_handlers,
+        _maybe_log_pov_debrid_errors,
+        _maybe_keep_sources_when_debrid_is_late,
+        _maybe_time_pov_directories,
+        _maybe_repair_addon_autoupdate,
         _maybe_fix_idanplus_youtube_id,
         _maybe_refresh_shared_sdh,
         _maybe_show_af3_first_launch_dialog,
         _maybe_show_debrid_status,
         _maybe_reload_for_tiles,
     )
+    # THE PACING IS A BUDGET NOW, NOT A CONSTANT PER STEP.
+    #
+    # The 0.25s below every step was introduced in b7ce297 ("Prevent quick
+    # update startup freezes") when this tuple had TWENTY-SIX entries -- 6.5
+    # seconds of yielding, which is what that change was tested at. It has 63
+    # now, so the same line costs 15.75 seconds of pure sleeping on every boot
+    # before a single step does any work, and nobody re-derived it as steps
+    # were added. Two independent reviews measured it; one field log shows the
+    # pass still running 53 seconds in.
+    #
+    # What the wait is FOR is not starving Kodi while the pass runs, and that
+    # is a property of the total time yielded, not of the per-step figure. So
+    # spread the same total the original was validated at over however many
+    # steps there are. A short pass is unchanged (the cap is the old value), a
+    # long one stops paying for its own length, and step 64 costs nothing.
+    # THE FLOOR IS A SECOND CONSTRAINT, and it wins. Below ~130 steps the
+    # budget binds and the pass yields 6.5s in total however long the tuple
+    # gets. Above that the floor binds instead and the total starts growing
+    # again -- which is correct, because a yield of nothing is not a yield and
+    # the freeze this line exists to prevent would come back. It is also the
+    # signal that the answer has stopped being "tune the constant": a pass that
+    # long wants splitting, not a smaller sleep. So it says so, once, instead
+    # of quietly costing seconds again the way 0.25 did.
+    _pace = max(0.05, min(0.25, 6.5 / max(1, len(steps))))
+    if _pace * len(steps) > 7.0:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'the startup repair pass has {0} steps and now yields {1:.1f}s '
+                'in total; the per-step floor is binding, so this grows with '
+                'every step added from here -- split the pass rather than '
+                'shrinking the yield'.format(len(steps), _pace * len(steps)),
+                level='WARNING')
+        except Exception:
+            pass
     for step in steps:
         try:
             if monitor and monitor.abortRequested():
@@ -354,9 +394,31 @@ def _run_build_startup_repairs():
                     level='WARNING')
             except Exception:
                 pass
+        except BaseException as e:
+            # SystemExit or KeyboardInterrupt out of a step. `except Exception`
+            # does not catch either, so this used to leave the pass -- and
+            # everything queued behind it, including the step that puts Hebrew
+            # subtitles on screen -- with NOTHING in the log: the run simply
+            # stopped, indistinguishable from a hang. HANDOFF records a patcher
+            # raising SystemExit as a thing that has actually happened here.
+            #
+            # Deliberately re-raised rather than swallowed: an aborted pass must
+            # not reach _publish_repairs_state and look finished, because the
+            # waiter would then reload POV against half-applied patches. The
+            # only thing that changes is that it says so first.
+            try:
+                from resources.lib import kodi_utils
+                kodi_utils.log(
+                    'build startup repair {0} raised {1} and ended the whole '
+                    'pass: {2}'.format(getattr(step, '__name__', 'unknown'),
+                                       type(e).__name__, e),
+                    level='WARNING')
+            except Exception:
+                pass
+            raise
 
         try:
-            if monitor and monitor.waitForAbort(0.25):
+            if monitor and monitor.waitForAbort(_pace):
                 return
         except Exception:
             pass
@@ -2122,6 +2184,178 @@ def _maybe_guard_pov_debrid_handlers():
             from resources.lib import kodi_utils
             kodi_utils.log(
                 'pov_debrid_unbound_guard_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_fix_fentastic_clearlogo_var():
+    """Close brackets the skin left open, so the OSD logo can draw at all.
+
+    A user's log carries Kodi refusing an unparseable skin condition. The same
+    shape appears twenty-three times in the shipped skin; two of them are the
+    video OSD's clear-logo / studio-logo pair, and because both are false the
+    OSD draws NEITHER, on every device. See the module for why those two and
+    the ClearArtLogo variable are repaired and the rest are not.
+    """
+    try:
+        from resources.lib import fentastic_clearlogo_var_patcher, kodi_utils
+        st = fentastic_clearlogo_var_patcher.ensure_patched()
+        bad = [p for p in st.split(', ')
+               if p.split('=')[-1] in ('unmatched', 'write_failed',
+                                       'read_failed')]
+        if bad:
+            kodi_utils.log(
+                'fentastic_clearlogo_var_patcher: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'fentastic_clearlogo_var_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_time_pov_directories():
+    """Put a number on the spinner.
+
+    A user reports a wait on every category press; the log they can produce is
+    info level and contains not one POV timing, so the only evidence is Kodi's
+    focus errors and the gaps between them -- which are the user's reading
+    time and the directory build added together. This logs one INFO line per
+    plugin call with the seconds and the route, so the next log answers the
+    question instead of raising it. It makes nothing faster; see the module.
+    """
+    if _skip_pov_patchers():
+        return
+    try:
+        from resources.lib import pov_directory_timing_patcher, kodi_utils
+        st = pov_directory_timing_patcher.ensure_patched()
+        if st in ('unmatched', 'compile_failed', 'write_failed',
+                  'revert_failed', 'read_failed'):
+            kodi_utils.log(
+                'pov_directory_timing_patcher: ' + st, level='WARNING')
+        elif st in ('patched', 'repatched'):
+            try:
+                from resources.lib import pov_reload
+                pov_reload.note_patched()
+            except Exception:
+                pass
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'pov_directory_timing_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_repair_addon_autoupdate():
+    """Un-stick a device where add-ons are found but never installed.
+
+    Two filters sit between "an update exists" and "Kodi installs it": the
+    update mode, and Kodi's update_rules table, whose installer-set pins are
+    invisible at info level and permanent once a repository stops answering.
+    See the module -- this reports both and repairs only what the build owns.
+    """
+    try:
+        from resources.lib import addon_autoupdate_repair, kodi_utils
+        st = addon_autoupdate_repair.ensure_repaired()
+        kodi_utils.log('addon_autoupdate_repair: ' + st, level='INFO')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'addon_autoupdate_repair failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_log_pov_debrid_errors():
+    """Make a debrid refusal visible in the log instead of "no sources".
+
+    AllDebrid and TorBox both answer HTTP 200 and put the refusal in the body,
+    and POV's _request logs only when the status code is bad -- so the reason
+    the provider spelled out is dropped one line after it arrives. One log
+    line, no control-flow change. See the module for the envelopes and for the
+    two providers this deliberately leaves alone.
+    """
+    if _skip_pov_patchers():
+        return
+    try:
+        from resources.lib import pov_debrid_error_log_patcher, kodi_utils
+        st = pov_debrid_error_log_patcher.ensure_patched()
+        bad = [p for p in st.split(', ')
+               if p.split('=')[-1] in ('unmatched', 'compile_failed',
+                                       'write_failed', 'revert_failed',
+                                       'read_failed')]
+        if bad:
+            kodi_utils.log(
+                'pov_debrid_error_log_patcher: ' + st, level='WARNING')
+        elif any(p.endswith('=patched') or p.endswith('=repatched')
+                 for p in st.split(', ')):
+            # A patch into POV's warm interpreter does not take effect until
+            # it re-imports, and the cycle that forces that is armed by this
+            # call. Without it the line would first appear a boot later.
+            try:
+                from resources.lib import pov_reload
+                pov_reload.note_patched()
+            except Exception:
+                pass
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'pov_debrid_error_log_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_keep_sources_when_debrid_is_late():
+    """Stop a slow or refused debrid from erasing the whole source list.
+
+    POV builds final_sources only inside the loop over the debrid cache-check
+    threads that finished in time, so with one debrid configured a single late
+    answer discards every torrent the scrapers found -- and a check that failed
+    outright is recorded as an authoritative "not cached", which the default
+    "Display Uncached Torrents = off" filter then deletes. Both roads end at
+    "no results" on a title with hundreds of sources.
+
+    Two independent edits. A failed check returns an empty tuple, which
+    unpatched POV reads as "nothing cached" exactly as it always did, so
+    neither half needs the other to be safe -- see the module for the crash
+    window that ruled out the obvious `return None`.
+    """
+    if _skip_pov_patchers():
+        return
+    try:
+        from resources.lib import pov_debrid_timeout_patcher, kodi_utils
+        st = pov_debrid_timeout_patcher.ensure_patched()
+        bad = [p for p in st.split(', ')
+               if p.split('=')[-1] in ('unmatched', 'compile_failed',
+                                       'write_failed', 'revert_failed',
+                                       'read_failed')]
+        if bad:
+            kodi_utils.log(
+                'pov_debrid_timeout_patcher: ' + st, level='WARNING')
+        if any(p.endswith('=patched') or p.endswith('=repatched')
+               for p in st.split(', ')):
+            # A patch into POV's warm interpreter does not take effect until
+            # it re-imports, and the cycle that forces that is armed here.
+            try:
+                from resources.lib import pov_reload
+                pov_reload.note_patched()
+            except Exception:
+                pass
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'pov_debrid_timeout_patcher failed: {0}'.format(e),
                 level='WARNING')
         except Exception:
             pass
@@ -5703,7 +5937,32 @@ def main():
     _maybe_patch_fentastic_search()
 
     if build_mode:
-        _run_build_startup_repairs()
+        # CONTAINED HERE, NOT IN THE LOOP. The pass re-raises a BaseException
+        # from a step on purpose, so that _publish_repairs_state is not
+        # reached and the pass never looks finished. That is right. What was
+        # wrong is where it landed: nothing on this path catches it, so a
+        # single misbehaving repair step took main() down with it -- and
+        # everything BELOW this line is what actually puts Hebrew subtitles on
+        # screen. SubsFilenamePublisher, the autoplay listener, the pool
+        # drainer and the maintenance loop are not related to any repair, and
+        # none of them ran for the rest of that session.
+        #
+        # HANDOFF records a patcher raising SystemExit as something that has
+        # actually happened here, so this is not hypothetical. Both properties
+        # are kept: the pass still does not publish, and the service still
+        # starts.
+        try:
+            _run_build_startup_repairs()
+        except BaseException as e:
+            try:
+                from resources.lib import kodi_utils
+                kodi_utils.log(
+                    'the startup repair pass ended early ({0}: {1}); the '
+                    'subtitle service is starting anyway and the repairs are '
+                    'not recorded as done'.format(type(e).__name__, e),
+                    level='WARNING')
+            except Exception:
+                pass
 
     # Same idea for POV: if we patched its sources.py and the user opted into
     # remember-source, cycle POV (deferred, idle-only) so it re-imports the

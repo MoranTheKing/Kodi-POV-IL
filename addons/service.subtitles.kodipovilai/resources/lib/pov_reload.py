@@ -175,22 +175,251 @@ def _owed_path():
     return xbmcvfs.translatePath(CYCLE_OWED_FILE)
 
 
-def _mark_owed(owed):
-    """Record -- or clear -- "a cycle is still owed". Never raises."""
+def _mark_owed(owed, applied=True, attempts=0):
+    """Record -- or clear -- "a cycle is still owed". Never raises.
+
+    A FAILURE HERE IS SAID OUT LOUD, like its sibling _mark_cycle_pending.
+    This used to return False and log nothing, which was survivable while the
+    only way to miss a cycle was Kodi shutting down mid-wait. It stopped being
+    survivable when running out of patience became an ordinary outcome: a
+    read-only profile or a full disk at the wrong second now loses the debt,
+    the next start finds every patch already written and arms nothing, and POV
+    keeps the pre-patch code with no line anywhere saying why.
+    """
     try:
         import os
+        import threading
         path = _owed_path()
         if owed:
             directory = os.path.dirname(path)
             if directory and not os.path.isdir(directory):
                 os.makedirs(directory)
-            with open(path, 'w', encoding='utf-8') as handle:
-                handle.write(POV_ADDON_ID + '\n')
+            # WRITTEN BESIDE AND MOVED INTO PLACE. `open(path, 'w')` truncates
+            # the moment it succeeds, so a write that fails after that -- a
+            # full disk is the ordinary way -- leaves an empty file: the debt
+            # survives, because cycle_owed only asks whether the file exists,
+            # but the attempt count silently resets to zero and the escalation
+            # starts over. os.replace is atomic, so the file on disk is either
+            # the old one or the new one and never a truncated middle.
+            # A UNIQUE TEMP NAME, not `path + '.tmp'`. Two writers CAN meet
+            # here -- request_reload writes the debt on the main thread and
+            # the deferred cycle rewrites it with a new count from its own
+            # thread -- and with one shared name the second `open(..., 'w')`
+            # truncates the first writer's file before its os.replace runs, so
+            # what lands is empty. The atomic rename was added to stop a
+            # truncated file existing; a shared name put one back by another
+            # route. Found because the test for it failed two runs in eight.
+            tmp = '%s.%d.%d.tmp' % (path, os.getpid(),
+                                    threading.current_thread().ident or 0)
+            try:
+                with open(tmp, 'w', encoding='utf-8') as handle:
+                    handle.write('%s\n%d\n' % (POV_ADDON_ID, attempts))
+                os.replace(tmp, path)
+            except Exception:
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+                raise
+            _sweep_stale_temps(path)
         elif os.path.exists(path):
             os.remove(path)
         return True
-    except Exception:
+    except Exception as exc:
+        # THREE FAILURES, THREE CONSEQUENCES, and one message used to claim
+        # the worst of them for all. A failed WRITE means a patch may never
+        # land. A failed CLEAR after a real cycle costs one redundant cycle
+        # next boot -- the patch already landed, so saying it may not take
+        # effect is untrue. And a failed clear on the "POV is gone" path is
+        # neither: no cycle ran, nothing landed, and the debt outlives the
+        # add-on it was owed to. A review found the middle message being
+        # printed for the third case, which is the one place it is a lie.
+        #
+        # `applied` is what separates them, and it defaults to the common
+        # case rather than to the safe-sounding one, so a new caller that
+        # forgets it gets the message that matches where _mark_owed(False)
+        # is actually called from: after a cycle.
+        if owed:
+            _log('could not record that a cycle is owed ({0}); a patch may '
+                 'not take effect until some later release touches it '
+                 'again'.format(exc), level='WARNING')
+        elif applied:
+            _log('could not clear the owed-cycle record ({0}); the patch DID '
+                 'take effect, but the next start will cycle POV once more '
+                 'for nothing'.format(exc), level='WARNING')
+        else:
+            _log('could not clear the owed-cycle record ({0}); no cycle ran, '
+                 'so every start will keep trying to pay a debt to an add-on '
+                 'that is not here'.format(exc), level='WARNING')
         return False
+
+
+def _owed_attempts():
+    """How many starts in a row have failed to pay the owed cycle.
+
+    A review asked the fair question about the new "never over a dialog"
+    rule: what happens on a device where the quiet moment simply never
+    comes? The debt is recorded, the next start tries again, and the answer
+    is the same -- for ever, with one INFO line a boot and nothing that
+    reads as a problem. Nobody would find that except by reading logs.
+
+    The owed FILE carries the count on a second line. The first line is
+    still the add-on id and cycle_owed() still only asks whether the file
+    exists, so a file written by an older release reads as zero rather than
+    breaking anything.
+    """
+    try:
+        import os
+        path = _owed_path()
+        if not os.path.isfile(path):
+            return 0
+        with open(path, encoding='utf-8') as handle:
+            lines = handle.read().splitlines()
+        return int(lines[1]) if len(lines) > 1 else 0
+    except Exception:
+        return 0
+
+
+# After this many consecutive starts that could not pay the debt, the line
+# stops being INFO. Three is "twice was a coincidence": a device restarted
+# three times with somebody browsing through the whole window every time is
+# no longer a coincidence, it is a device where this will never happen by
+# itself and somebody has to look.
+_OWED_SHOUT_AFTER = 3
+
+
+def _note_owed_attempt(why):
+    """Record one more failed attempt, and say so louder as they pile up."""
+    n = _owed_attempts() + 1
+    _mark_owed(True, attempts=n)
+    if n >= _OWED_SHOUT_AFTER:
+        _log('{0}; that is {1} starts in a row now. The patch POV is waiting '
+             'for has still not taken effect on this device'.format(why, n),
+             level='WARNING')
+    else:
+        _log('{0}; it stays owed and the next start tries again'.format(why))
+
+
+# An hour. A writer takes milliseconds; anything this old was orphaned by
+# a process that died between the write and the rename.
+_TEMP_STALE_SECONDS = 3600
+# The point past which a temp file is abandoned whatever its pid says.
+_TEMP_ABANDON_SECONDS = 82800          # 23h on top of the hour above
+
+
+def candidate_path(directory, name):
+    import os
+    return os.path.join(directory, name)
+
+
+def _mtime(path):
+    """The file's mtime, or 0 when it cannot be read (so it sweeps)."""
+    try:
+        import os
+        return os.path.getmtime(path)
+    except OSError:
+        return 0
+
+
+def _temp_owner_pid(name, stem):
+    """The pid encoded in a temp sibling's name, or None if unreadable."""
+    try:
+        rest = name[len(stem):]
+        return int(rest.split('.')[0])
+    except Exception:
+        return None
+
+
+def _pid_alive(pid):
+    """True when a process with this pid still exists. Unknown -> True.
+
+    Answering "yes" when we cannot tell is the safe direction: the cost is a
+    stale file surviving another boot, and the cost of the other answer is
+    deleting a file somebody is writing.
+    """
+    if not pid or pid < 1:
+        return False
+    try:
+        import os
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True          # exists, owned by somebody else
+    except Exception:
+        return True
+
+
+def _sweep_stale_temps(path):
+    """Delete temp siblings left behind by a process that was killed.
+
+    The write is `open(tmp) -> os.replace(tmp, path)`, and a kill between the
+    two leaves the tmp file for ever: nothing else looks for it, and the name
+    carries a pid and a thread id so the next boot picks a different one. Each
+    leak is a few bytes and needs a kill inside a millisecond-wide window, so
+    this is slow accumulation rather than a problem -- but "nothing ever
+    cleans it up" is not a sentence worth leaving true when the sweep is six
+    lines and runs where a successful write has just proved the directory is
+    writable.
+
+    Never raises, and never touches the record itself: only siblings whose
+    name is the record's plus a .tmp suffix, and never the one just renamed.
+    """
+    try:
+        import os
+        import time
+        directory = os.path.dirname(path) or '.'
+        stem = os.path.basename(path) + '.'
+        cutoff = time.time() - _TEMP_STALE_SECONDS
+        mine = os.getpid()
+        for name in os.listdir(directory):
+            if not (name.startswith(stem) and name.endswith('.tmp')):
+                continue
+            # WHOSE IS IT, ASKED BEFORE HOW OLD IT IS. The age test alone
+            # assumed a stable wall clock, and this product ships to Android
+            # boxes with no RTC battery: an NTP step after boot moves the clock
+            # by hours, and a file written one second ago reads as a day old.
+            # A review forced that step and watched the sweep delete a live
+            # writer's file -- the exact regression the age guard was added to
+            # fix, reached by a different road.
+            #
+            # The name carries the pid that wrote it. Our own process is never
+            # swept (the dangerous case is a sibling thread, which shares it),
+            # and neither is a pid that is still running. Only then does age
+            # matter at all, and only as a backstop for a name we cannot read.
+            owner = _temp_owner_pid(name, stem)
+            if owner == mine:
+                continue
+            # A PID IS REUSED EVENTUALLY, and then a stale file's pid belongs
+            # to some unrelated live process and this would never sweep it
+            # again. So "alive" only protects a file that is also RECENT: a
+            # real writer's is milliseconds old, and a day is far beyond any
+            # clock skew worth respecting. The leak is a few bytes either way;
+            # what matters is that neither test alone can make it permanent.
+            if _pid_alive(owner) and _mtime(candidate_path(directory, name)) > (
+                    cutoff - _TEMP_ABANDON_SECONDS):
+                continue
+            candidate = os.path.join(directory, name)
+            try:
+                # AGE IS WHAT MAKES THIS SAFE. Every temp file shares a
+                # recognisable name, so a sweep that deletes them all deletes
+                # the one ANOTHER THREAD is between writing and renaming --
+                # and that writer's os.replace then fails, its update is lost,
+                # and the stress test cannot see it because the file ends up
+                # deleted rather than left behind. A review forced exactly
+                # that interleaving on the first version of this function.
+                #
+                # A live writer's temp file is milliseconds old. Anything that
+                # has been sitting here for an hour belongs to a process that
+                # is not coming back.
+                if os.path.getmtime(candidate) > cutoff:
+                    continue
+                os.remove(candidate)
+            except OSError:
+                pass
+    except Exception:
+        pass
 
 
 def cycle_owed():
@@ -519,7 +748,7 @@ def reload_if_patched():
     # uninstalled since the record was written, clearing it here is what stops
     # a background thread waiting three minutes for it on every boot, forever.
     if _is_installed() is False:
-        _mark_owed(False)
+        _mark_owed(False, applied=False)
         _log('a cycle was owed but POV is gone; forgetting it', level='INFO')
         return False
     return request_reload()
@@ -542,9 +771,18 @@ def _set_enabled(enabled):
         'params': {'addonid': POV_ADDON_ID, 'enabled': bool(enabled)},
     })
     try:
-        return '"error"' not in (xbmc.executeJSONRPC(payload) or '')
+        reply = xbmc.executeJSONRPC(payload) or ''
     except Exception:
         return False
+    # A POSITIVE TEST, NOT THE ABSENCE OF A NEGATIVE. This read
+    # `'"error"' not in (reply or '')`, which calls an EMPTY reply a success --
+    # and since the caller now acts on this answer (a False return means "do
+    # not claim the cycle"), a silent empty reply would let _run_cycle believe
+    # it switched POV off when it never did, find POV perfectly resolvable a
+    # moment later, and clear the owed debt for a cycle that did not happen.
+    # Kodi answers a successful Addons.SetAddonEnabled with a "result" member,
+    # so require it.
+    return '"result"' in reply and '"error"' not in reply
 
 
 def _is_enabled():
@@ -571,7 +809,15 @@ def request_reload():
     _armed = True
     # WRITTEN BEFORE THE THREAD STARTS, so a Kodi that dies one second later
     # still leaves the debt behind. Cleared only by a cycle that ran.
-    _mark_owed(True)
+    #
+    # CARRYING THE COUNT FORWARD, which the first version of the escalation
+    # did not: this runs at every start, BEFORE the thread that would call
+    # _note_owed_attempt, and a bare _mark_owed(True) defaults attempts to 0.
+    # So every boot reset the tally to zero before anything could add to it,
+    # the count never got past 1, and _OWED_SHOUT_AFTER was unreachable -- a
+    # review drove six simulated boots through the real chain and watched the
+    # warning never fire. The whole feature was dead on arrival.
+    _mark_owed(True, attempts=_owed_attempts())
     try:
         import threading
         threading.Thread(target=_deferred_cycle, daemon=True).start()
@@ -580,6 +826,31 @@ def request_reload():
         _armed = False
         _log('could not start reload thread: {0}'.format(e), level='WARNING')
         return False
+
+
+def _dialog_up():
+    """Is any modal dialog on screen right now?
+
+    Asked as a separate function because the answer must be the SAME in the
+    polling loop and in the last-second re-check before the disable -- there
+    are two seconds between them, and a scrape can start in two seconds.
+
+    Both conditions, not one. HasVisibleModalDialog covers a dialog that is on
+    screen; HasActiveModalDialog covers one that is taking input. They are
+    usually the same dialog and occasionally are not, and either one means the
+    user has something in front of them.
+
+    Raises nothing: an unreadable screen answers True here, which is the
+    cautious direction -- it costs a deferral, never a cycle into somebody's
+    source list.
+    """
+    if xbmc is None:
+        return True
+    try:
+        return bool(xbmc.getCondVisibility('System.HasVisibleModalDialog')
+                    or xbmc.getCondVisibility('System.HasActiveModalDialog'))
+    except Exception:
+        return True
 
 
 def _wait_until_idle(timeout=180):
@@ -592,9 +863,10 @@ def _wait_until_idle(timeout=180):
     at least _MIN_AGE_SECONDS old -- the first widget pass is the thing being
     waited out and it happens once, at the beginning.
 
-    Still returns True at the timeout. Waiting forever would mean the patch
-    never takes effect this session, which is the outcome the cycle exists to
-    avoid; the cap is just far enough out now that the first pass is over.
+    Returns False at the cap. It used to return True there -- see the comment
+    at the bottom for the field log that settled it. The debt on disk is what
+    makes giving up safe: the patch waits for the next start instead of
+    landing on top of whatever the user is doing right now.
     """
     try:
         monitor = xbmc.Monitor()
@@ -608,6 +880,34 @@ def _wait_until_idle(timeout=180):
             quiet = (xbmc.getCondVisibility('Window.IsVisible(home)')
                      and not xbmc.getCondVisibility('Player.HasMedia')
                      and not xbmc.getCondVisibility('Container.IsUpdating')
+                     # A DIALOG ON TOP IS NOT AN IDLE SCREEN, and the first
+                     # four conditions cannot see one. Every window POV puts
+                     # up while it works -- its scrape progress and its source
+                     # list -- is an xbmcgui.WindowXMLDialog, which FLOATS
+                     # over whatever is beneath it. Start a title from a home
+                     # widget and home stays visible, nothing is playing, no
+                     # container is updating, and a user reading a list of
+                     # sources is not pressing anything: all four say "idle"
+                     # while POV is mid-scrape with a dialog in front of the
+                     # user's face.
+                     #
+                     # Two logs, one on each route into it:
+                     #
+                     #   21:16:06  sources_results.xml   (the list is up)
+                     #   21:16:11  cycled POV
+                     #   21:16:12  restored home focus -> control 2000
+                     #
+                     #   21:41:44  progress_media.xml    (a scrape starts)
+                     #   21:41:51  home never settled in 180s; cycling anyway
+                     #   21:41:52  cycled POV
+                     #
+                     # The first took POV away from a user choosing a source
+                     # and then yanked his focus back to the home screen. The
+                     # second killed a scrape seven seconds in, and that is
+                     # the scrape he reported as "no results, and there are
+                     # definitely results". Both were reported as POV being
+                     # slow and unreliable; both were us.
+                     and not _dialog_up()
                      and xbmc.getGlobalIdleTime() >= 3)
         except Exception:
             # NOT quiet. A screen we cannot read is not a screen we know is
@@ -634,9 +934,32 @@ def _wait_until_idle(timeout=180):
         if monitor.waitForAbort(2):
             return False
         waited += 2
-    _log('home never settled in {0}s; cycling anyway'.format(timeout),
+    # WE DO NOT CYCLE ANYWAY. This used to, on the reasoning that never
+    # cycling means the patch never lands -- which was true until the owed
+    # record existed. It does now: not cycling here costs the patch one
+    # session, and the next start picks the debt up.
+    #
+    # A field log settled it on the first device that reached the cap. An
+    # NVIDIA Shield, three minutes of a user browsing without pause, so the
+    # screen was never quiet for twenty seconds together -- and then:
+    #
+    #     19:56:29.507  home never settled in 180s; cycling anyway
+    #     19:56:30.672  Unable to find plugin plugin.video.pov
+    #     19:56:30.673  GetDirectory - Error getting plugin://...Disney+...
+    #     19:56:31.037  cycled POV -- resolvable=True
+    #
+    # He pressed a tile 1.2 seconds into the window and Kodi dropped him in
+    # the bare Videos root, because it could not resolve the add-on the tile
+    # points at. The cap did not protect anyone; it just moved the damage to
+    # the one moment the user was certainly watching.
+    #
+    # 'Never quiet' is a property of a SESSION, not of a device -- it means
+    # somebody was using it. The next start has its own chance, and most
+    # starts settle in the first minute.
+    _log('home never settled in {0}s; NOT cycling this session -- the debt '
+         'is recorded and the next start will'.format(timeout),
          level='WARNING')
-    return True
+    return False
 
 
 def _capture_home_focus():
@@ -756,15 +1079,29 @@ def _deferred_cycle():
 def _run_cycle():
     global _cycling
     if not _wait_until_idle():
-        _log('aborted before cycle', level='WARNING')
+        # Abort, or a screen that never settled. Either way the cycle did not
+        # run, so the owed record stays and the next start tries again.
+        #
+        # A LINE EITHER WAY. _wait_until_idle speaks for itself at the cap but
+        # not when Kodi is shutting down, and this function used to log for
+        # both. A cycle that silently did not happen is the thing hardest to
+        # diagnose from a user's log, which is the whole reason the near-miss
+        # telemetry above exists.
+        _note_owed_attempt('cycle deferred (Kodi is closing, or the screen '
+                           'never settled)')
         return
     try:
         if xbmc.getCondVisibility('Player.HasMedia'):
-            _log('media playing; skipping POV cycle (applies next launch)',
-                 level='INFO')
+            _note_owed_attempt('media playing; skipping POV cycle')
             return
     except Exception:
         pass
+    # ASKED AGAIN, HERE. The loop's last look was up to two seconds ago, and
+    # two seconds is long enough for somebody to press a title and start a
+    # scrape. The whole cost of being wrong is one deferred cycle.
+    if _dialog_up():
+        _note_owed_attempt('a dialog is on screen; skipping POV cycle')
+        return
     saved_focus = _capture_home_focus()
     try:
         # Raised BEFORE the disable and lowered only once POV can be
@@ -787,7 +1124,20 @@ def _run_cycle():
             _log('could not record the cycle; not disabling POV',
                  level='WARNING')
             return
-        _set_enabled(False)
+        # THE RETURN VALUE IS READ NOW. It used to be discarded, and that is
+        # the one way this function could clear the debt without having done
+        # anything: if Addons.SetAddonEnabled never lands -- the RPC errors,
+        # xbmc raises, the method is refused -- POV is never taken down, so
+        # its interpreter never tears down and never re-imports the patch. And
+        # then _is_resolvable() below answers True on the very first try,
+        # because POV was up the whole time. ok=True, "cycled POV --
+        # resolvable=True" in the log, debt paid, patch not applied. Every
+        # sign of success and none of the substance.
+        if not _set_enabled(False):
+            _log('POV would not switch off (the request was refused); not '
+                 'claiming a cycle -- the debt stays and the next start '
+                 'tries again', level='WARNING')
+            return
         try:
             xbmc.sleep(1500)
         except Exception:

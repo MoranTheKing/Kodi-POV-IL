@@ -7,6 +7,8 @@ import ast
 import hashlib
 import importlib.util
 import json
+import zipfile
+import os
 import re
 import shutil
 import subprocess
@@ -304,7 +306,52 @@ def test_workflow_package_guards() -> None:
     workflow = (ROOT / ".github/workflows/build-apk.yml").read_text(
         encoding="utf-8"
     )
-    assert "WIZARD_VERSION: '0.1.47'" in workflow
+    # THE TWO ARTIFACT NAMES THE PACKAGE IS BUILT FROM, derived rather than
+    # typed. The wizard's was a literal here -- correct on the day it was
+    # written and needing a hand edit every release since.
+    #
+    # The build zip's staleness is ALREADY watched, by
+    # tools/test_installer_pins_current.py, which greps the filename out of
+    # this workflow and compares it with build.txt. That guard exists because
+    # the pin really did rot, twice. What it cannot see is WHERE the name
+    # lives: it was three copies inlined in three shell steps, so a release
+    # could correct one and leave two. So this adds the half that guard has
+    # no opinion about -- the name is in the env block, once, and nowhere
+    # below it -- and derives both names from the same build.txt, which is
+    # what a device actually reads.
+    served = {}
+    for line in (ROOT / "wizard/assets/build.txt").read_text(
+            encoding="utf-8").splitlines():
+        key, _, value = line.partition("=")
+        if value.strip().startswith('"'):
+            served.setdefault(key.strip(), value.strip().strip('"'))
+    build_zip = served["url"].rsplit("/", 1)[-1]
+    wizard_zip = served["zip"].rsplit("/", 1)[-1]
+    wizard_version = wizard_zip[len("plugin.program.kodipovilwizard-"):-len(".zip")]
+    assert "WIZARD_VERSION: '%s'" % wizard_version in workflow, (
+        "the workflow builds against a wizard build.txt does not serve; "
+        "build.txt says %s" % wizard_version
+    )
+    assert "BUILD_ZIP: '%s'" % build_zip in workflow, (
+        "the workflow builds against a full build build.txt does not serve; "
+        "build.txt says %s" % build_zip
+    )
+    # ...and nowhere else may name one, or the single point stops being one.
+    #
+    # COUNTED, NOT SPLIT. This was `"...-test-" not in workflow.split(
+    # "BUILD_ZIP:", 1)[1]`, and the split point sits MID-LINE: the tail begins
+    # with the rest of the BUILD_ZIP assignment, whose value is a build-zip
+    # filename. So the assertion searched for the very thing it had just
+    # included and failed unconditionally -- masked only because the check
+    # above it fails first whenever build.txt is stale. A review isolated it
+    # and it raises every time. What the rule actually means is "the name
+    # appears once", so count it.
+    inlined = workflow.count("Kodi-POV-IL-FENtastic-test-")
+    assert inlined == 1, (
+        "a build-zip filename should appear exactly once, in the BUILD_ZIP "
+        "env assignment; found it %d time(s)" % inlined
+    )
+    assert "BUILD_ZIP: '%s'" % build_zip in workflow
     assert "default: '21.3-povil.49'" in workflow
     assert "default: '2103049'" in workflow
     assert "EXPECTED_RELEASE: '21.3-povil.49'" in workflow
@@ -324,24 +371,71 @@ def test_workflow_package_guards() -> None:
     assert "povil.ico" in workflow
 
 
+def _wizard_version() -> str:
+    """The version the worktree's wizard source actually declares."""
+    raw = (WIZARD_ROOT / "addon.xml").read_text(encoding="utf-8")
+    at = raw.find("<addon")
+    match = re.search(r'\bversion="([^"]+)"', raw[at if at >= 0 else 0:])
+    assert match, "no version in the wizard addon.xml"
+    return match.group(1)
+
+
 def test_wizard_rebuild_from_clean_checkout() -> None:
-    """The surgical Wizard release must rebuild after its source is committed."""
+    """The surgical Wizard release must rebuild after its source is committed.
+
+    DERIVED, NOT DECLARED. This named 0.1.46 and 0.1.47 in five places and
+    rebuilt 0.1.47 out of a checkout of the CURRENT source -- so it passed
+    only while the worktree still WAS 0.1.47, and failed on every release
+    that bumps the wizard, with a message about a version mismatch that has
+    nothing to do with what the test is for. It rebuilds whatever version the
+    source declares, from whatever the manifest names as its predecessor.
+    """
+    version = _wizard_version()
     manifest_path = (
         ROOT
-        / "wizard/release_manifests/plugin.program.kodipovilwizard-0.1.47.json"
+        / ("wizard/release_manifests/plugin.program.kodipovilwizard-%s.json"
+           % version)
+    )
+    assert manifest_path.is_file(), (
+        "wizard source is %s but there is no release manifest for it" % version
     )
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    # Every member listed here has a change in this release, and nothing else
-    # does -- the point of pinning the set is that an over-broad replace list
-    # cannot slip through, so it moves per release rather than being loosened.
-    assert set(manifest["replace"]) == {
-        "plugin.program.kodipovilwizard/addon.xml",
-        "plugin.program.kodipovilwizard/changelog.txt",
-        # 0.1.47's whole payload: the extractor stops rewriting members that
-        # are already byte-for-byte correct on the device.
-        "plugin.program.kodipovilwizard/resources/libs/extract.py",
-    }
-    assert manifest["add"] == []
+    previous = manifest["previous_version"]
+    previous_zip = (
+        ROOT / ("dist/plugin.program.kodipovilwizard-%s.zip" % previous)
+    )
+    assert previous_zip.is_file(), "no %s to build %s from" % (previous,
+                                                              version)
+    # The replace list must name every source file that really differs from
+    # the previous release and nothing else -- an over-broad list is how an
+    # unreviewed file ships, and a short one is how a reviewed one does not.
+    # Computed against the previous ZIP rather than pinned to a literal set,
+    # so it cannot go stale into a false pass.
+    with zipfile.ZipFile(previous_zip) as prev:
+        prev_by = {i.filename: prev.read(i.filename)
+                   for i in prev.infolist() if not i.filename.endswith("/")}
+    changed, absent = set(), set()
+    for path in sorted(WIZARD_ROOT.rglob("*")):
+        if not path.is_file() or "__pycache__" in path.parts:
+            continue
+        member = "plugin.program.kodipovilwizard/" + str(
+            path.relative_to(WIZARD_ROOT)
+        ).replace(os.sep, "/")
+        if member not in prev_by:
+            absent.add(member)
+        elif prev_by[member] != path.read_bytes():
+            changed.add(member)
+    assert set(manifest["replace"]) == changed, (
+        "manifest replace list does not match what actually changed;\n"
+        "  missing from the manifest: %s\n"
+        "  listed but unchanged:      %s"
+        % (sorted(changed - set(manifest["replace"])),
+           sorted(set(manifest["replace"]) - changed))
+    )
+    assert set(manifest["add"]) == absent, (
+        "manifest add list does not match the new files: %s vs %s"
+        % (sorted(manifest["add"]), sorted(absent))
+    )
     builder_source = (ROOT / "tools/build_wizard_package.py").read_text(
         encoding="utf-8"
     )
@@ -357,9 +451,10 @@ def test_wizard_rebuild_from_clean_checkout() -> None:
             ROOT / "tools/build_wizard_package.py",
             clean / "tools/build_wizard_package.py",
         )
+        shutil.copy2(previous_zip, clean / "dist" / previous_zip.name)
         shutil.copy2(
-            ROOT / "dist/plugin.program.kodipovilwizard-0.1.46.zip",
-            clean / "dist/plugin.program.kodipovilwizard-0.1.46.zip",
+            ROOT / "tools/build_full_build.py",
+            clean / "tools/build_full_build.py",
         )
         shutil.copy2(
             manifest_path,
@@ -401,14 +496,15 @@ def test_wizard_rebuild_from_clean_checkout() -> None:
             sys.executable,
             "tools/build_wizard_package.py",
             "--previous",
-            "dist/plugin.program.kodipovilwizard-0.1.46.zip",
+            "dist/" + previous_zip.name,
             "--manifest",
-            "wizard/release_manifests/"
-            "plugin.program.kodipovilwizard-0.1.47.json",
+            "wizard/release_manifests/" + manifest_path.name,
             "--version",
-            "0.1.47",
+            version,
         )
-        rebuilt = clean / "dist/plugin.program.kodipovilwizard-0.1.47.zip"
+        rebuilt = (
+            clean / ("dist/plugin.program.kodipovilwizard-%s.zip" % version)
+        )
         assert hashlib.sha256(rebuilt.read_bytes()).hexdigest() == (
             manifest["output_sha256"]
         )
@@ -432,7 +528,13 @@ def test_phase_one_artifacts() -> None:
         / ("Kodi-POV-IL-FENtastic-quickfix-%s.zip"
            % quickfix_match.group(1))
     ).is_file()
-    assert "kodipovilwizard-0.1.47.zip" in build
+    wizard_match = re.search(r"kodipovilwizard-([0-9.]+)\.zip", build)
+    assert wizard_match, "build.txt names no wizard zip"
+    wizard_version = wizard_match.group(1)
+    assert wizard_version == _wizard_version(), (
+        "build.txt serves wizard %s but the source declares %s"
+        % (wizard_version, _wizard_version())
+    )
 
     # Accept both legal publication states:
     #   phase 1 -> artifacts/snapshot N are live while note N-1 remains live;
@@ -443,14 +545,24 @@ def test_phase_one_artifacts() -> None:
     note_id = int(note.split("|||", 1)[0])
     assert note_id in (snapshot_id - 1, snapshot_id)
 
-    # Each release against its OWN predecessor. This pair used to be pinned
-    # to a historical one and drifted into asserting a file list that had
-    # nothing to do with the version being shipped.
-    old_wizard = ROOT / "dist/plugin.program.kodipovilwizard-0.1.46.zip"
-    new_wizard = ROOT / "dist/plugin.program.kodipovilwizard-0.1.47.zip"
+    # Each release against its OWN predecessor -- DERIVED, not named. The
+    # comment here already said this pair "used to be pinned to a historical
+    # one and drifted"; it was then pinned to a newer one, and drifted again
+    # the moment the wizard was bumped. The versions come from build.txt and
+    # from the manifest's own previous_version now, so there is nothing left
+    # to go stale.
+    _manifest = json.loads((
+        ROOT / ("wizard/release_manifests/"
+                "plugin.program.kodipovilwizard-%s.json" % wizard_version)
+    ).read_text(encoding="utf-8"))
+    old_wizard = ROOT / ("dist/plugin.program.kodipovilwizard-%s.zip"
+                         % _manifest["previous_version"])
+    new_wizard = ROOT / ("dist/plugin.program.kodipovilwizard-%s.zip"
+                         % wizard_version)
     latest_wizard = ROOT / "dist/plugin.program.kodipovilwizard-latest.zip"
     assert new_wizard.read_bytes() == latest_wizard.read_bytes()
-    page_wizard = ROOT / "wizard/plugin.program.kodipovilwizard-0.1.47.zip"
+    page_wizard = ROOT / ("wizard/plugin.program.kodipovilwizard-%s.zip"
+                          % wizard_version)
     page_latest = ROOT / "wizard/plugin.program.kodipovilwizard-latest.zip"
     assert new_wizard.read_bytes() == page_wizard.read_bytes()
     assert new_wizard.read_bytes() == page_latest.read_bytes()
@@ -467,14 +579,15 @@ def test_phase_one_artifacts() -> None:
             for name in old_crc.keys() & new_crc
             if old_crc[name] != new_crc[name]
         }
-        # Same set the manifest declares: what the package actually changed,
-        # proven from the two ZIPs rather than from the manifest that asked
-        # for it.
-        assert changed == {
-            "plugin.program.kodipovilwizard/addon.xml",
-            "plugin.program.kodipovilwizard/changelog.txt",
-            "plugin.program.kodipovilwizard/resources/libs/extract.py",
-        }
+        # Exactly what the manifest declared, proven from the two ZIPs rather
+        # than from the manifest that asked for it. Not circular: the rebuild
+        # test above proves the manifest matches the SOURCE, and this proves
+        # the shipped bytes match the manifest -- source to manifest to zip,
+        # with no literal in the middle to go stale on the next bump.
+        assert changed == set(_manifest["replace"]), (
+            "the package changed %s but the manifest declared %s"
+            % (sorted(changed), sorted(_manifest["replace"]))
+        )
         assert not (set(new_crc) - set(old_crc))
         assert not (set(old_crc) - set(new_crc))
 

@@ -26,8 +26,9 @@ anything; both just shift startup timing.
 WHAT THIS PINS:
 
   * the wait now needs the home screen to be QUIET, continuously, and the
-    service to be old enough that the first widget pass is behind it -- and it
-    still gives up and cycles rather than never applying the patch;
+    service to be old enough that the first widget pass is behind it -- and
+    when it runs out of patience it gives up instead of cycling anyway, on the
+    strength of the owed record that makes the next start try again;
   * the repair: when the captured container comes back empty, one skin reload,
     and ONLY once POV is resolvable again. This file's own history records
     that same reload fired 0.6s inside the window taking POV's service down
@@ -44,7 +45,10 @@ import importlib.util
 import io
 import os
 import re
+import shutil
 import sys
+import tempfile
+import threading
 import types
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -69,7 +73,8 @@ class FakeKodi(object):
     def __init__(self, **state):
         self.now = 0.0
         self.state = {'home': True, 'playing': False, 'updating': False,
-                      'idle': 999, 'abort_at': None, 'numitems': '0'}
+                      'idle': 999, 'abort_at': None, 'numitems': '0',
+                      'dialog': False}
         self.state.update(state)
         self.builtins = []
         self.log = []
@@ -90,6 +95,8 @@ class FakeKodi(object):
             return bool(self.state['playing'])
         if 'Container.IsUpdating' in cond:
             return bool(self.state['updating'])
+        if 'ModalDialog' in cond:
+            return bool(self.state['dialog'])
         return False
 
     def getGlobalIdleTime(self):
@@ -168,10 +175,93 @@ mod = load(fake)
 mod._wait_until_idle(timeout=60)
 check('and so does playback', fake.now >= 60)
 
-fake = FakeKodi(updating=True)
+# A DIALOG ON TOP IS NOT AN IDLE SCREEN, and the four conditions above cannot
+# see one. Every window POV puts up while it works -- its scrape progress, its
+# source list -- is a WindowXMLDialog, which floats over what is beneath. Start
+# a title from a home widget and home is still visible, nothing is playing, no
+# container is updating, and somebody reading a list of sources presses
+# nothing. All four say idle while POV is mid-scrape in front of the user.
+#
+# Two field logs, one on each route in:
+#
+#     21:16:06  sources_results.xml   (the list is up)
+#     21:16:11  cycled POV
+#     21:16:12  restored home focus -> control 2000
+#
+#     21:41:44  progress_media.xml    (a scrape starts)
+#     21:41:51  home never settled in 180s; cycling anyway
+#     21:41:52  cycled POV
+#
+# The first took POV away from a user choosing a source and then yanked his
+# focus to the home screen. The second killed a scrape seven seconds in -- the
+# one he reported as "no results, and there are definitely results".
+fake = FakeKodi(dialog=True)
 mod = load(fake)
-check('it gives up and cycles rather than never applying the patch',
-      mod._wait_until_idle(timeout=60) is True)
+check('a dialog on screen is never a moment to take POV away',
+      mod._wait_until_idle(timeout=100) is False,
+      'released after %.0fs -- straight into somebody\'s source list'
+      % fake.now)
+check('...and it waited the whole budget rather than releasing early',
+      fake.now >= 100, 'returned after %.0fs' % fake.now)
+
+# AND ASKED AGAIN AT THE LAST MOMENT. The poll's last look is up to two
+# seconds before the disable, and two seconds is enough to press a title.
+fake = FakeKodi()
+mod = load(fake)
+mod._owed_path = lambda: os.path.join(tempfile.mkdtemp(prefix='dlg-'), 'o.txt')
+mod._wait_until_idle = lambda timeout=180: True     # the poll said yes...
+fake.state['dialog'] = True                          # ...and then this opened
+_touched = []
+mod._set_enabled = lambda on: _touched.append(on)
+mod._capture_home_focus = lambda: _touched.append('captured')
+mod._run_cycle()
+check('a dialog that opens after the wait still stops the cycle',
+      not _touched, 'reached %s' % _touched)
+
+# THE CAP DOES NOT FIRE INTO THE USER'S HANDS. It used to return True here --
+# 'never cycling means the patch never lands' -- and that was a real argument
+# until the owed record existed. The first device to actually reach the cap
+# showed what it costs. An NVIDIA Shield, three minutes of a user browsing
+# without a pause long enough to count as settled, and then:
+#
+#     19:56:29.507  home never settled in 180s; cycling anyway
+#     19:56:30.672  Unable to find plugin plugin.video.pov
+#     19:56:30.673  GetDirectory - Error getting plugin://...Disney+...
+#     19:56:31.037  cycled POV -- resolvable=True
+#
+# He pressed a tile 1.2 seconds into the window and Kodi dropped him in the
+# bare Videos root, because it could not resolve the add-on the tile points
+# at. The cap did not protect anyone; it just moved the damage to the one
+# moment the user was certainly watching -- three minutes of continuous
+# activity is the definition of a user who is looking at the screen.
+#
+# So the cap gives up, and the debt on disk is what makes that safe: the
+# patch costs one session, not forever.
+_cap_dir = tempfile.mkdtemp(prefix='cap-')
+try:
+    fake = FakeKodi(updating=True)
+    mod = load(fake)
+    mod._owed_path = lambda: os.path.join(_cap_dir, 'owed.txt')
+    mod._mark_owed(True)
+    check('the cap gives up rather than cycling into a busy screen',
+          mod._wait_until_idle(timeout=60) is False,
+          'a True here is a 1.5s hole punched under whatever the user is '
+          'pressing right now')
+
+    # and the half that makes giving up affordable: the run leaves without
+    # touching POV, and the debt it did not pay is still on disk.
+    _touched = []
+    mod._set_enabled = lambda on: _touched.append(on)
+    mod._capture_home_focus = lambda: _touched.append('captured')
+    mod._wait_until_idle = lambda timeout=180: False
+    mod._run_cycle()
+    check('...without disabling POV on the way out', not _touched,
+          'reached %s after a wait that said no' % _touched)
+    check('...and the debt it did not pay is still owed',
+          mod.cycle_owed() is True,
+          'a forgotten debt means POV keeps the pre-patch code for good')
+finally:
+    shutil.rmtree(_cap_dir, ignore_errors=True)
 
 fake = FakeKodi(abort_at=20)
 mod = load(fake)
@@ -195,6 +285,9 @@ mod._wait_until_idle(timeout=60)
 check('a screen that cannot be read is treated as NOT quiet', fake.now >= 60,
       'released after %.0fs -- an unreadable screen was assumed safe'
       % fake.now)
+check('...and the dialog question answers the cautious way too',
+      mod._dialog_up() is True,
+      'a box that cannot say whether a dialog is up must not be cycled')
 
 # The quiet stretch has to be CONTINUOUS: a screen that goes quiet, twitches,
 # and goes quiet again has not settled.
@@ -284,11 +377,21 @@ check('...and never constructs an Addon',
            and isinstance(n.func, ast.Attribute) and n.func.attr == 'Addon'],
       'Kodi logs the failure before it raises; that is the whole point')
 
+# THE SIXTH AND SEVENTH SITES, found a release later and in the worst place.
+# The two mirrors ask POV and Umbrella for their tokens through a shared
+# _reader(addon_id), and the keeper thread calls them EVERY SIXTY SECONDS for
+# as long as Kodi is up. On a device without Umbrella that was one
+# `EXCEPTION: Unknown addon id 'plugin.video.umbrella'` per minute, at ERROR,
+# forever -- a field log carries them a minute apart, 19:54:55 and 19:55:55,
+# on a device whose only fault was not having an optional add-on. The five
+# below were startup-only; these two never stop.
 SITES = {
     'favourites_personal_tiles_patcher.py': ('_umbrella_installed',),
     'af3_home_patcher.py': ('_umbrella_installed',),
     'umbrella_setup_patcher.py': ('_addon', 'ensure_coco_providers'),
     'umbrella_language_patcher.py': ('_umbrella_addon',),
+    'mdblist_umbrella_mirror.py': ('_reader',),
+    'trakt_umbrella_mirror.py': ('_reader',),
 }
 for fn, names in sorted(SITES.items()):
     src = io.open(os.path.join(LIB, fn), encoding='utf-8').read()
@@ -322,6 +425,29 @@ for root, _dirs, files in os.walk(LIB):
 check('no optional add-on is probed by constructing an Addon anywhere',
       not leaks, 'still doing it at %s' % leaks)
 
+# The scan above only sees a LITERAL add-on id. Both mirrors take the id as a
+# parameter, so a bare construction there is invisible to it -- which is
+# exactly how the per-minute error line survived the first pass. Name them.
+for fn in ('mdblist_umbrella_mirror.py', 'trakt_umbrella_mirror.py'):
+    src = io.open(os.path.join(LIB, fn), encoding='utf-8').read()
+    tree = ast.parse(src)
+    reader = [f for f in ast.walk(tree) if isinstance(f, ast.FunctionDef)
+              and f.name == '_reader']
+    check('%s: _reader was found' % fn, len(reader) == 1)
+    if reader:
+        check('%s: it asks through addon_presence' % fn,
+              [n for n in ast.walk(reader[0]) if isinstance(n, ast.Call)
+               and isinstance(n.func, ast.Attribute)
+               and n.func.attr == 'addon'
+               and isinstance(n.func.value, ast.Name)
+               and n.func.value.id == 'addon_presence'],
+              'a bare Addon(addon_id) here is an ERROR line every 60 seconds '
+              'for the whole time Kodi is up')
+        check('%s: and never constructs one itself' % fn,
+              not [n for n in ast.walk(reader[0]) if isinstance(n, ast.Call)
+                   and isinstance(n.func, ast.Attribute)
+                   and n.func.attr == 'Addon'])
+
 # --- 4. the longer wait must not starve the callers that block on it -------
 # ARMING RAISES A FLAG OTHER CODE WAITS ON. Three of wait_until_settled's four
 # callers are steps inside _run_build_startup_repairs, run inline on the
@@ -337,7 +463,11 @@ _svc = io.open(os.path.join(ROOT, 'addons', 'service.subtitles.kodipovilai',
 _arms = [m for m in re.finditer(r'pov_reload\.reload_if_patched\(\)', _svc)]
 check('the cycle is armed in exactly one place', len(_arms) == 1,
       'found %d' % len(_arms))
-_repairs = [m for m in re.finditer(r'^        _run_build_startup_repairs\(\)',
+# INDENTATION-AGNOSTIC. The call is wrapped in a try/except now -- a repair
+# step raising SystemExit used to take main() down with it, and everything
+# below that line is what starts the subtitle service -- so pinning it to a
+# fixed indent pinned a detail nobody promised.
+_repairs = [m for m in re.finditer(r'^\s*_run_build_startup_repairs\(\)',
                                    _svc, re.M)]
 check('the build repair pass was found', len(_repairs) == 1)
 if _arms and _repairs:
@@ -415,9 +545,6 @@ for _label, _kw in (('while the user is on another window', {'home': False}),
 # The answer is not to freeze the screen until it works. It is to not forget.
 print()
 print('=== an owed cycle survives a quit ===')
-import shutil
-import tempfile
-
 _owed_dir = tempfile.mkdtemp(prefix='owed-')
 fake = FakeKodi()
 mod = load(fake)
@@ -480,6 +607,237 @@ check('_run_cycle clears the debt in exactly one place', len(_clears) == 1)
 check('...and only with False, never re-arming itself',
       all(a.value is False for c in _clears for a in c.args
           if isinstance(a, ast.Constant)))
+
+
+# --- switching POV off must be PROVED, not assumed ------------------------
+# _set_enabled read `'"error"' not in reply`, which calls an EMPTY reply a
+# success. That was harmless while nobody looked at the answer; it stopped
+# being harmless when _run_cycle started refusing to claim a cycle on False,
+# because a silent empty reply would then mean "we switched POV off" for a
+# switch that never happened -- POV stays resolvable, the debt is cleared, and
+# the patch never lands, which is the exact bug the return check was added to
+# prevent. Executed against the real function, not read.
+print()
+print('=== a JSON-RPC call that answered nothing did not succeed ===')
+
+
+class _RPC(object):
+    def __init__(self, reply):
+        self.reply, self.seen = reply, []
+
+    def executeJSONRPC(self, payload):
+        self.seen.append(payload)
+        if isinstance(self.reply, Exception):
+            raise self.reply
+        return self.reply
+
+
+_m = load(FakeKodi())
+for label, reply, want in (
+        ('a real success', '{"id":1,"jsonrpc":"2.0","result":"OK"}', True),
+        ('an empty string', '', False),
+        ('None', None, False),
+        ('an error envelope',
+         '{"id":1,"jsonrpc":"2.0","error":{"code":-32602,"message":"no"}}',
+         False),
+        ('a reply with neither member', '{"id":1,"jsonrpc":"2.0"}', False),
+        ('a raising call', RuntimeError('boom'), False)):
+    _m.xbmc = _RPC(reply)
+    got = _m._set_enabled(False)
+    check('%s -> %s' % (label, want), got is want, 'got %r' % got)
+
+_m.xbmc = _RPC('{"id":1,"jsonrpc":"2.0","result":"OK"}')
+_m._set_enabled(True)
+check('...and it asks about POV, with the flag it was given',
+      'plugin.video.pov' in _m.xbmc.seen[0]
+      and '"enabled": true' in _m.xbmc.seen[0].replace('True', 'true'),
+      _m.xbmc.seen[0])
+
+
+# --- a debt that can never be paid must eventually shout ------------------
+# THE REVIEW'S FAIR QUESTION about the new "never over a dialog" rule: what
+# happens on a device where the quiet moment never comes? The cycle is
+# deferred, the next start defers it again, and nothing in the log reads as a
+# problem -- for ever. The owed file now carries a count and the line stops
+# being INFO once it is clearly not a coincidence.
+print()
+print('=== an owed cycle that keeps failing stops whispering ===')
+_dir = tempfile.mkdtemp(prefix='povowed-')
+try:
+    _m = load(FakeKodi())
+    _m._owed_path = lambda: os.path.join(_dir, 'owed.txt')
+    _levels = []
+    _m._log = lambda msg, level='INFO': _levels.append((level, msg))
+    check('a fresh device owes nothing', _m._owed_attempts() == 0)
+    for n in range(1, _m._OWED_SHOUT_AFTER + 2):
+        _levels[:] = []
+        _m._note_owed_attempt('a dialog is on screen')
+        want = 'WARNING' if n >= _m._OWED_SHOUT_AFTER else 'INFO'
+        check('attempt %d is logged at %s' % (n, want),
+              _levels and _levels[-1][0] == want,
+              str(_levels[-1] if _levels else None))
+        check('...and the count survives to the next start',
+              _m._owed_attempts() == n, str(_m._owed_attempts()))
+    check('the warning says how many starts it has been',
+          str(_m._OWED_SHOUT_AFTER) in _levels[-1][1]
+          or str(_m._OWED_SHOUT_AFTER + 1) in _levels[-1][1],
+          _levels[-1][1])
+    check('...and the debt itself is still owed', _m.cycle_owed() is True)
+
+    # AND THROUGH THE REAL CHAIN, not just by calling _note_owed_attempt in a
+    # loop. THE BUG A REVIEW FOUND: request_reload() runs at every start,
+    # BEFORE the thread that defers the cycle, and its bare _mark_owed(True)
+    # defaulted attempts to 0 -- so every boot reset the tally before anything
+    # could add to it, the count never got past 1, and the warning was
+    # unreachable. Testing the escalation in isolation could not see it. This
+    # drives whole boots.
+    _levels[:] = []
+    _m._mark_owed(False)
+    _seen = []
+    for boot in range(1, _m._OWED_SHOUT_AFTER + 2):
+        _m._cycled = False              # a fresh process
+        _m._armed = False
+        # request_reload STARTS A THREAD running _deferred_cycle. Calling it
+        # inline as well ran the attempt twice per boot, from two threads, on
+        # one file -- which is how the shared `.tmp` name in _mark_owed was
+        # found. Let the thread be the only one that runs it, and wait.
+        _done = threading.Event()
+
+        def _cycle():
+            try:
+                _m._note_owed_attempt('a dialog is up')
+            finally:
+                _done.set()
+        _m._deferred_cycle = _cycle
+        _m.request_reload()
+        _done.wait(5)
+        _seen.append(_m._owed_attempts())
+    check('the count survives request_reload on every boot',
+          _seen == list(range(1, _m._OWED_SHOUT_AFTER + 2)), str(_seen))
+    check('...so the warning actually fires across real boots',
+          any(lv == 'WARNING' for lv, _msg in _levels),
+          'never escalated across %d boots' % len(_seen))
+    # An owed file from a release that did not write a count reads as zero
+    # rather than raising, so an upgrade does not lose the debt.
+    with open(os.path.join(_dir, 'owed.txt'), 'w', encoding='utf-8') as _f:
+        _f.write('plugin.video.pov\n')
+    check('a file from an older release reads as zero, not as an error',
+          _m._owed_attempts() == 0 and _m.cycle_owed() is True)
+    _m._mark_owed(False)
+    check('paying the debt clears the count with it',
+          _m._owed_attempts() == 0 and _m.cycle_owed() is False)
+finally:
+    shutil.rmtree(_dir, ignore_errors=True)
+
+
+# --- two writers at once, which the boot-loop test CANNOT see --------------
+# THE REVIEW'S POINT, and it was right: the loop above waits for each boot's
+# thread to finish before starting the next, so the two writers never overlap
+# and the test passes against the SHARED-tmp version that the fix replaced. It
+# is a good test of the count-carrying-forward bug and no test at all of the
+# race. This is the race: real threads, one barrier, one file.
+print()
+print('=== the owed record survives two writers at the same instant ===')
+_dir = tempfile.mkdtemp(prefix='povrace-')
+try:
+    _m = load(FakeKodi())
+    _m._owed_path = lambda: os.path.join(_dir, 'owed.txt')
+    _m._log = lambda msg, level='INFO': None
+
+    def hammer(mod, rounds=250, workers=6):
+        """Every worker writes the same record at the same moment."""
+        gate = threading.Barrier(workers)
+        errors, empties = [], []
+
+        def work(w):
+            gate.wait()
+            for r in range(rounds):
+                try:
+                    mod._mark_owed(True, attempts=w * 1000 + r)
+                except Exception as e:      # noqa: BLE001 - that is the test
+                    errors.append(repr(e))
+                try:
+                    with open(mod._owed_path(), encoding='utf-8') as f:
+                        body = f.read()
+                    if not body.strip():
+                        empties.append(r)
+                except FileNotFoundError:
+                    empties.append('missing')
+                except Exception as e:      # noqa: BLE001
+                    errors.append(repr(e))
+        ts = [threading.Thread(target=work, args=(w,)) for w in range(workers)]
+        for t in ts:
+            t.start()
+        for t in ts:
+            t.join(60)
+        strays = [n for n in os.listdir(_dir) if n.endswith('.tmp')]
+        return errors, empties, strays
+
+    _err, _empty, _stray = hammer(_m)
+    check('no writer raised', not _err, str(_err[:3]))
+    check('the record is never empty or missing under concurrency',
+          not _empty, '%d bad reads' % len(_empty))
+    check('...and no temp file is left behind', not _stray, str(_stray[:5]))
+    check('...and what is left is a readable record',
+          _m.cycle_owed() is True and isinstance(_m._owed_attempts(), int))
+
+    # SABOTAGE: the shared name this replaced must FAIL the same check, or the
+    # test above is proving nothing. Reinstate it and watch it break.
+    _real = _m._mark_owed
+
+    def _shared_tmp(owed, applied=True, attempts=0):
+        path = _m._owed_path()
+        if not owed:
+            return _real(owed, applied, attempts)
+        tmp = path + '.tmp'                      # the bug: one name for all
+        with open(tmp, 'w', encoding='utf-8') as h:
+            h.write('%s\n%d\n' % (_m.POV_ADDON_ID, attempts))
+        os.replace(tmp, path)
+        return True
+    _m._mark_owed = _shared_tmp
+    _e2, _empty2, _s2 = hammer(_m)
+    check('SABOTAGE: the shared temp name really does lose writes',
+          bool(_e2 or _empty2),
+          'the concurrency test cannot tell the two apart, so it proves '
+          'nothing about the fix')
+    _m._mark_owed = _real
+
+    # AND THE SWEEP MUST NOT EAT A LIVE WRITER'S FILE. The first version of
+    # _sweep_stale_temps deleted every temp sibling it recognised -- including
+    # the one another thread was between writing and renaming. That writer's
+    # os.replace then failed, its update was silently lost, and the hammer
+    # above could not see it: nothing raised out of _mark_owed, the record was
+    # never empty, and the temp file ended up DELETED rather than left behind,
+    # so "no temp file left behind" passed BECAUSE of the bug.
+    _m._mark_owed(True, attempts=7)
+    _live = _m._owed_path() + '.999999.1.tmp'
+    with open(_live, 'w', encoding='utf-8') as _f:
+        _f.write('a live writer is mid-flight here\n')
+    _m._sweep_stale_temps(_m._owed_path())
+    check('a temp file written just now is left alone', os.path.exists(_live),
+          'the sweep deleted a file another writer was still using')
+    _old = _m._owed_path() + '.111111.1.tmp'
+    with open(_old, 'w', encoding='utf-8') as _f:
+        _f.write('orphaned by a kill an hour ago\n')
+    os.utime(_old, (0, 0))
+    _m._sweep_stale_temps(_m._owed_path())
+    check('...and one orphaned long ago is swept', not os.path.exists(_old))
+    # A PID IS REUSED EVENTUALLY. "Alive" alone made a stale file immortal the
+    # moment the OS handed its pid to any unrelated process, so "alive" only
+    # protects a file that is also RECENT.
+    _zombie = _m._owed_path() + '.%d.1.tmp' % os.getppid()
+    with open(_zombie, 'w', encoding='utf-8') as _f:
+        _f.write('written by a pid that has since been reused\n')
+    os.utime(_zombie, (0, 0))
+    _m._sweep_stale_temps(_m._owed_path())
+    check('...and so is one whose pid was recycled by a live process',
+          not os.path.exists(_zombie),
+          'a live pid must not make a day-old file immortal')
+    check('...and the record itself is never touched',
+          _m.cycle_owed() is True and _m._owed_attempts() == 7)
+    os.remove(_live)
+finally:
+    shutil.rmtree(_dir, ignore_errors=True)
 
 print()
 print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')

@@ -412,9 +412,23 @@ def auto_quick_update():
         logging.log(
             '[QUICK-UPDATE] Hot reload raised, restarting instead: '
             '{0}'.format(reload_err), level=xbmc.LOGWARNING)
+    # graceful: nothing in the quickfix zip is a file Kodi's shutdown save
+    # could overwrite (no guisettings.xml, no .db), so the save is pure gain --
+    # it keeps whatever the user changed since this Kodi started. The hard kill
+    # here is what was silently resetting audio passthrough after an update.
     wizard.force_close_kodi_in_5_seconds(
-        dialog_header="עדכון מהיר הסתיים בהצלחה"
+        dialog_header="עדכון מהיר הסתיים בהצלחה",
+        graceful=True,
     )
+    # AND IT COMES BACK NOW, which it never used to. Every close was os._exit,
+    # so no caller could have anything after it; a graceful close returns as
+    # soon as Kodi ACCEPTS the shutdown, which is nearly immediate and long
+    # before Kodi has finished. Everything below the call site in this file
+    # would then run against a Kodi that is tearing itself down -- two network
+    # checks, an 11 MB pack install, and an ActivateWindow. Saying so lets the
+    # caller stop, exactly as fresh_build_auto_install_if_needed's own caller
+    # already does.
+    return True
 
 
 def sync_quickfix_build_version():
@@ -946,7 +960,10 @@ except Exception as _autoset_err:
 # KODI-RD-IL - AUTO QUICK UPDATE
 if CONFIG.get_setting('buildname'):
     sync_quickfix_build_version()
-    auto_quick_update()
+    # sys.exit when it closed Kodi -- see the comment at the return. The same
+    # guard fresh_build_auto_install_if_needed has above, for the same reason.
+    if auto_quick_update():
+        sys.exit()
 ######################################
     
 # KOD-RD-IL - New Kodi ANDROID/WINDOWS version check on startup
@@ -1028,6 +1045,20 @@ try:
     _wiz_am.ensure_acctmgr_for_everyone()
 except Exception as _am_err:
     logging.log("[Account Manager] startup hook failed: {0}".format(_am_err),
+                level=xbmc.LOGERROR)
+
+# KODI-POV-IL - Umbrella + CocoScrapers for everyone, once per device, on the
+# same terms. Half the build already assumes Umbrella is there -- the home
+# tiles, the search wiring, the account manager's push, and a dozen Hebrew
+# patchers in the AI add-on -- and on a device without it every one of those
+# silently does nothing. AFTER the Account Manager hook on purpose: both are
+# one-time downloads and doing them in a fixed order keeps a first boot
+# predictable instead of racing two progress dialogs.
+try:
+    from resources.libs import wizard as _wiz_umb
+    _wiz_umb.ensure_umbrella_for_everyone()
+except Exception as _umb_err:
+    logging.log("[Umbrella] startup hook failed: {0}".format(_umb_err),
                 level=xbmc.LOGERROR)
 
 # SAVE TRAKT

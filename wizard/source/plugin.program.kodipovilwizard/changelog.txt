@@ -1,3 +1,29 @@
+v0.1.48
+- A quick update no longer discards the settings you changed that evening.
+  Kodi was being killed rather than closed, which skips the save it does on a
+  normal shutdown. That is correct after a full build install, where the save
+  would overwrite the guisettings.xml just extracted, and wrong after a quick
+  update, where nothing of the kind was written. Audio passthrough switching
+  itself back off is what made it visible; every setting was affected. The
+  quick update now asks Kodi to close properly and falls back to the kill only
+  if that does not take within twenty seconds.
+- Umbrella and its scraper module now install themselves on every device,
+  once, in the background, instead of waiting behind a menu entry. Their own
+  repositories come with them, so their developers publish the updates from
+  then on. Removing Umbrella afterwards is respected -- it is not reinstalled
+  at the next start.
+- Account Manager arrives current on a new install. The pack carried 1.1.5a
+  while its own developer's repository was publishing 1.1.6, so a fresh device
+  spent its first day downloading what should have come with it -- the same
+  thing that had happened to the video add-on. Umbrella, the scraper module
+  and the account viewer were checked against their own repositories in the
+  same pass and were already current.
+- A pack whose files are only half there now repairs itself. The check for
+  "already installed" looked at ONE file and skipped the download for the
+  whole pack, so a device missing the rest stayed missing them for ever. It
+  looks at all of them, and a download that fails to extract no longer tells
+  Kodi the add-ons are there when they are not.
+
 v0.1.47
 - A quick update now writes only the files that actually changed. It used to
   lay down all 1,969 files of the build every time -- including 1,330 belonging

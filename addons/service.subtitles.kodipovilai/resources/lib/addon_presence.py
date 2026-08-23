@@ -24,16 +24,26 @@
 # log was a sixth line that scrolled past unnoticed.
 #
 # THE DISK IS THE ANSWER. An add-on Kodi knows about has a directory with an
-# addon.xml under special://home/addons. Reading that is silent, needs no
+# addon.xml under one of the add-on roots. Reading that is silent, needs no
 # add-on manager lookup, and cannot raise.
 #
 # WHAT THIS DELIBERATELY DOES NOT ANSWER: whether the add-on is ENABLED, or
-# usable right now. A disabled add-on is still on disk. Callers that need the
-# Addon object still construct it -- they just do it only after this says the
-# files are there, which is what removes the noise for the ordinary
-# not-installed case. For "is it usable this instant", see pov_reload
-# ._is_resolvable, which exists because during a disable/enable cycle the
-# answer changes twice in two seconds.
+# usable right now. A disabled add-on is still on disk, so a device with
+# Umbrella installed and switched off still gets the error line from a caller
+# that goes on to construct the Addon. For "is it usable this instant", see
+# pov_reload._is_resolvable, which exists because during a disable/enable
+# cycle the answer changes twice in two seconds.
+#
+# BOTH ROOTS, NOT ONE. This checked only special://home/addons, with a note
+# saying that anything asking about an add-on that could live in the Kodi
+# package "has to widen this rather than assume it already covers them". Two
+# callers then did exactly that -- the MDBList and Trakt mirrors ask about POV
+# -- and pov_reload._is_installed has walked BOTH roots for that same id since
+# it was written. Left narrow, a device with POV under special://xbmc/addons
+# would answer "not installed" and both mirrors would return 'no_pov' on every
+# pass, forever, without a single log line: the caller says nothing for that
+# answer. A silent, permanent feature loss in a helper added to remove log
+# noise.
 
 import os
 
@@ -43,34 +53,44 @@ except Exception:
     xbmcvfs = None
 
 
+# In lookup order. special://home is where a user or a build installs; the
+# second is where the Kodi package's own bundled add-ons live.
+ADDON_ROOTS = ('special://home/addons/', 'special://xbmc/addons/')
+
+
 def addon_dir(addon_id):
-    """The add-on's directory under special://home/addons, or '' if unknown."""
+    """The directory the add-on's files are in, or '' if it is not there.
+
+    Returns the FIRST root that actually has an addon.xml, so callers get a
+    path they can read rather than a path that may not exist. '' means "not
+    found in any root", which is also what an unreadable filesystem gives --
+    both answers mean the same thing to every caller here.
+    """
     if xbmcvfs is None or not addon_id:
         return ''
-    try:
-        base = xbmcvfs.translatePath('special://home/addons/')
-    except Exception:
+    # AN ID IS A NAME, NOT A PATH. os.path.join throws the base away the
+    # moment the second argument is absolute, so `addon_dir('/etc/whatever')`
+    # would resolve OUTSIDE both roots and answer "installed" for anything
+    # with an addon.xml there. Every caller in this build passes a hardcoded
+    # literal, so this is not reachable today -- which is exactly the moment
+    # to close it, rather than after somebody wires a setting to it.
+    if (os.path.isabs(addon_id) or '/' in addon_id or '\\' in addon_id
+            or addon_id in ('.', '..')):
         return ''
-    return os.path.join(base, addon_id)
+    for root in ADDON_ROOTS:
+        try:
+            base = xbmcvfs.translatePath(root)
+            candidate = os.path.join(base, addon_id)
+            if os.path.isfile(os.path.join(candidate, 'addon.xml')):
+                return candidate
+        except Exception:
+            continue
+    return ''
 
 
 def installed(addon_id):
-    """True when the add-on's files are on disk. Never raises, never logs.
-
-    USER add-ons only. special://home/addons is where Kodi installs what a
-    user or a build put there, which is every caller this has today --
-    Umbrella and CocoScrapers are always third-party. An add-on bundled inside
-    the Kodi APK lives under special://xbmc/addons and would be reported
-    absent here. Nothing asks that yet; anything that starts to has to widen
-    this rather than assume it already covers them.
-    """
-    d = addon_dir(addon_id)
-    if not d:
-        return False
-    try:
-        return os.path.isfile(os.path.join(d, 'addon.xml'))
-    except Exception:
-        return False
+    """True when the add-on's files are on disk. Never raises, never logs."""
+    return bool(addon_dir(addon_id))
 
 
 def addon(addon_id):
