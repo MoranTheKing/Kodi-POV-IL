@@ -38,7 +38,7 @@
 
 - עץ קבצים מסודר של המיגרציה.
 - מסמך diff של `Twilight -> POV`.
-- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.119.zip`.
+- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.120.zip`.
 - הוראות התקנה ובדיקת smoke test לטלפון: `ANDROID_TESTING.md`.
 
 ## חבילת בדיקה (גרסה נוכחית)
@@ -144,17 +144,19 @@ request gets its own interpreter instead, which makes that impossible.
 The cost, now measured on a real device rather than guessed at: POV loads its
 own code at the start of each request, so with a private interpreter it reloads
 it on every single press. Sixteen navigations were timed, across five unrelated
-sections and two different services, and every one of them landed between 1.72
-and 1.89 seconds -- a fifth of a second apart, whatever was being fetched. Opening the same category a second time did not
-help -- that floor is not data, so there is nothing there to cache.
+sections and two different services. Whatever was being fetched, none of them
+ever got below about a second and three quarters -- 1.72 to 1.89 seconds
+depending on the section, and no faster the second time you opened the same
+category. That floor is not data, so there is nothing there to cache.
 
 So there is now a switch, and it is off unless you turn it on: **settings ->
-Advanced -> "POV: fast navigation"**, at Expert level. Turn it on and POV keeps
-one interpreter again. The first press after each Kodi start still pays the
-loading; everything after it is close to instant. You also take the crash back,
-which is why it is off by default and why it sits next to the other POV escape
-hatch rather than out in the open. It needs two Kodi restarts to take effect --
-one for the add-on to write the flag, one for Kodi to read it.
+Advanced -> "POV: fast navigation"**, at Expert level, where a casual browse
+will not land on it. Turn it on and POV keeps one interpreter again. The first
+press after each Kodi start still pays the loading; the presses after it should
+be much faster -- how much faster has not been measured yet, because nobody has
+sent a log with the switch on. What is certain is the cost you take back: the
+crash, which is why this is off by default. It needs two Kodi restarts to take
+effect -- one for the add-on to write the flag, one for Kodi to read it.
 
 If you turn it on and Kodi starts closing on you, turn it off again and restart
 twice; nothing else needs undoing.
