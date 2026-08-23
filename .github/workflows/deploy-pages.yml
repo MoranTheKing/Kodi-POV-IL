@@ -13,9 +13,20 @@ name: Deploy GitHub Pages
 # Requires GitHub Pages settings:
 #   Source = "Deploy from a branch", Branch = "gh-pages", Folder = "/".
 
+# ...AND ON A PUBLISHED RELEASE. The step below republishes the latest
+# release's APKs into downloads/, but this workflow only ever woke on a push
+# to main -- and build-apk.yml does NOT push to main when it rebuilds an
+# existing version, because its pointer-file step sees the version is already
+# recorded and exits without a commit. So on 2026-08-23 the packages were
+# rebuilt at 02:49 carrying build 0.1.119, landed on the GitHub Release, and
+# the download page went on serving the previous APKs with nothing scheduled
+# to ever replace them. Anyone installing from the site would have got the old
+# build, silently, until the next unrelated push happened along.
 on:
   push:
     branches: [main]
+  release:
+    types: [published, edited]
   workflow_dispatch:
 
 permissions:
