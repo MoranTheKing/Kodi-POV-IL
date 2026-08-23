@@ -4437,6 +4437,48 @@ YouTube add-on in. We ship a settings.xml for it whose stream-proxy toggle
 NOT flipped on the strength of one log, because the proxy exists to carry
 headers a redirect cannot.
 
+### The debug log answers it: the spikes were work nobody was waiting for
+
+Log `kodi_1_28`, DEBUG level, 27 v3 timing lines. Kodi logs `CAndroidKey: key
+down` for every remote press, which is what finally made the calls separable.
+
+Split by whether a key was pressed EARLY in the call -- i.e. whether the user
+was still waiting for that list or had already left:
+
+```
+the user WAITED and saw this list      n=19   median 1.26s   max 5.50s
+   ...warm                             n=11   median 1.23s   max 2.20s
+   ...cold (first press / widget)      n=8    median 1.29s   max 5.50s
+ABANDONED, user pressed Back mid-call  n=4    median 2.91s   max 10.43s
+```
+
+**Every slow call in the log is an abandoned one.** All four: the user pressed
+Back at +0.4s to +0.8s, got their previous screen immediately, and POV ran on
+for another 2.1 to 9.7 seconds building a directory that was never displayed.
+The 10.43s call is the clearest -- `AKEYCODE_BACK` at 17:17:15.564, 0.8s into a
+call that did not finish until 17:17:25.222, with the user's actual Back
+serviced by a different thread in 1.26s.
+
+So the spikes chased across three dead theories were never user-visible latency.
+Not one call the user actually waited on exceeded 2.20s warm.
+
+**The one real cost of impatient navigation, and it is small.** An orphaned call
+still holds the reusable invoker, so the next press cannot reuse it and Kodi
+builds a fresh interpreter -- every second-arrival in this log starts at
+`mods=81`. That is the ~0.6s cold surcharge, once per abandoned call. Not
+seconds.
+
+**What is genuinely visible and worth a look someday:** the two home-screen
+widget rows at boot, 5.50s and 5.43s, both cold, both at 17:16:23. That is the
+only multi-second wait in this log a person actually sat through, and it happens
+once per Kodi start.
+
+**Conclusion: there is no navigation bug here.** Warm ~1.2s, cold ~1.8s, ceiling
+2.2s. The fast-navigation switch did what it promised and the remaining floor is
+POV fetching from TMDb. Four theories died getting to that sentence -- sqlite
+contention, the GUI lock, concurrency, and finally the premise that the spikes
+were latency at all.
+
 ### The v3 measurement came back, and it killed the third theory too
 
 Log `kodi_1_27`, 2026-08-23 17:09-17:10, add-on 0.2.509. The patch landed at
