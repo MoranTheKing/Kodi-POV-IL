@@ -6291,11 +6291,222 @@ Every POV directory error in both logs is the cycle. That is the whole case
 for pov_directory_timing_patcher: not that it makes anything faster, but that
 the next report can be answered.
 
+## And what the timing patch then told us (log `ahebuyagos`, 2026-08-23)
+
+The section above says the measurement had never existed. It exists now, from
+the first log taken on 0.2.506 -- a device on POV 6.08.13, wizard 0.1.48, and
+running **Estuary**, not FENtastic and not AF3. Sixteen `>> KODI_POV_IL timing
+<<` lines between 08:38:31 and 08:39:32.
+
+**What is measured, and what is read into it.** MEASURED: the plugin call
+takes 1.72-1.89s, and the spinner is on screen for the whole of it. That alone
+is the report answered, and nothing below is needed for it.
+
+READ INTO IT, and worth separating out because it is an interpretation:
+`Control 51 in window 10025 has been asked to focus, but it can't` appears
+between one timing line and the next -- 14 of them for 16 timing lines --
+0.13s before the next call starts and 1.35s after the previous one returned.
+(Not "once between every pair": the missing one is the overlapping-invocation
+case at 08:39:29, where two calls finish 0.1s apart, which is consistent with
+this reading rather than a counterexample to it.) Taking it as the moment of the press --
+Kodi activating MyVideoNav and trying to restore focus before the directory
+exists -- gives:
+
+```
+press (Control 51)   08:38:53.277
+plugin call starts   08:38:53.41    (+0.13s)
+plugin call returns  08:38:55.130   (1.72s)
+next press           08:38:56.477   (+1.35s of the user reading)
+```
+
+The alternative -- that the line fires when the finished directory is rendered
+-- requires the user to decide and press within 0.13s of seeing the list, on
+every one of a dozen navigations, which is not a person. Hence the reading
+above. But note how little rests on it: the headline is ~1.85s per press if it
+is right and ~1.75s if it is wrong, because the plugin call dominates either
+way. Do not let a later argument about this line reopen the diagnosis.
+
+**The floor, and why it is not data.** Grouped by route family, every
+measurement in the log:
+
+```
+tmdb_tv_networks             1.72 1.73 1.73 1.74 1.76 1.77 1.78 | 2.24 2.28 2.30 2.46 | 7.31
+tmdb_movies_popular          1.77
+trakt_tv_trending            1.77
+tmdb_movies_latest_releases  1.82
+tmdb_tv_premieres            1.89
+```
+
+Five families inside a 0.17s band. `tmdb_movies_popular` and
+`trakt_tv_trending` are different modules hitting different companies' servers
+and agree to the hundredth. (An earlier draft of this section called it "a
+1.72-1.78s floor under all of them" -- the two single-sample families at 1.82
+and 1.89 are outside that, and the claim was recounted and corrected before it
+shipped.) First
+visits sit higher -- FOX 2.46, Amazon 2.24, Hulu 2.30, The CW 2.28 -- and the
+SAME tile revisited drops back to the floor (FOX 1.78, Amazon 1.73). Roughly
+0.6s of a first visit is cacheable network; the floor underneath it never
+improves. Route-independent and cache-immune is a fixed per-invocation cost.
+
+**Where the cost is, in POV's own source.** Every route defers its weight into
+the call:
+
+```python
+'build_tvshow_list': lambda p: _import('menus.tvshows', 'Menu')(p).run(),
+```
+
+`_import` is `__import__(path, fromlist=[attr])` -- a `sys.modules` hit on a
+warm interpreter, a full load on a cold one. Counted over top-level imports on
+POV 6.08.13:
+
+| | local modules | bytes | external |
+|---|---|---|---|
+| `entry.py`, module level | 4 | 53,524 | 10 |
+| `menus.tvshows`, whole closure | 23 | 244,306 | 37 |
+| **what reaching the route adds** | **20** | **210,379** | **27** |
+
+The 27 the route adds include `requests`, `concurrent.futures`,
+`xml.etree.ElementTree`, `unicodedata`, `hashlib`, `html`, `importlib`,
+`pkgutil`, `queue`, `gzip` and `urllib.request`. `menus.movies` is 598 bytes
+larger with a byte-identical external set -- which is why the two routes time
+identically.
+
+**Two corrections in that table, both from a pre-release fact-check.** It first
+read "2 local modules / 19KB" for entry.py and "20 modules / 218KB" for the
+route. 19,597 is entry.py's OWN file size, not the size of what it imports; and
+the walk behind both figures never followed `from modules import kodi_utils`
+through to the submodule, so it credited an empty package `__init__.py` instead
+of the 18KB module. A second walk that resolves `from A import B` to `A.B`
+gives the numbers above. `sqlite3` was also listed among what the route drags
+in -- entry.py imports it at module level, so it is paid either way and proves
+nothing here.
+
+That closure sits INSIDE `Router.run`, which is what the timing patch wraps.
+So `reuse_language_invoker = false` -- our own guard, since 2026-08-14 -- moves
+POV's whole import cost into the measured window on every press.
+
+**Same-device calibration.** The ninth field sample of `he_warm`'s cold import
+is in this same log: `drainer engine pre-imported in 3.7s`. Imports cost
+seconds on this hardware; 1.75s for POV's closure is the expected magnitude.
+
+**What was NOT proven, and how 0.2.507 closes it.** No warm-interpreter sample
+exists, so "the floor is import cost" is an inference from a route-independent,
+cache-immune floor plus the closure above -- not a measurement of reuse being
+ON. So `pov_directory_timing_patcher` went to v2 and the line now carries
+`mods=A->B`, `len(sys.modules)` either side of the call. A says cold or warm
+without arithmetic (a fresh interpreter arrives with a few dozen modules, a
+reused one with hundreds); B - A is what the route itself loaded, which on this
+reading should be hundreds today and zero with `pov_fast_navigation` on. One
+log from a device with the switch on now proves or disproves the whole thing.
+
+The wrapper imports `sys` by name rather than using Router.run's `sys`
+parameter. POV's router.py does pass the module, but nothing in the signature
+promises it, and a caller passing anything else makes `len(sys.modules)` raise
+inside the finally block -- where the existing except would swallow it and lose
+the timing line entirely. The first draft of v2 did exactly that and logged
+nothing under this file's own test harness.
+
+## The switch, and the narrowing that must not be tried (0.2.507)
+
+The owner's decision: `pov_fast_navigation`, a boolean in MoranSubs' own
+settings -- category `advanced`, group `experimental`, level 3. Default FALSE,
+which is byte-for-byte the behaviour every device has had since 14 August.
+
+It was first filed next to `_pov_patching_off`, the other POV escape hatch, on
+the assumption that they belonged together. A review caught that
+`_pov_patching_off` is not under Advanced at all -- it sits in category
+`cache`, historically -- so three shipped documents would have sent users to a
+tab the control was not on. Moved rather than re-documented: Advanced is where
+a POV navigation switch belongs, and it is what the docs already said.
+`pov_language_invoker_guard` no longer hard-codes `WANTED = 'false'`; it reads
+`_wanted()` ONCE per `ensure_patched()` and threads that value through both
+writes, so the two halves can never disagree.
+
+**The safety property, and it is the one the tests pin.** OFF is not merely the
+default, it is the destination of every failure: `kodi_utils` absent, the
+settings store raising, the setting undeclared or empty. The only route to ON
+is a setting that reads back as an explicit true. `test_repair_order.py` used
+to assert `WANTED == 'false'` by regex; it now EXECUTES the guard's source in a
+throwaway module with a stubbed `kodi_utils` and checks all five states, plus
+two sabotages (widening the `get_bool` default to True; flipping the
+no-kodi_utils path to FAST).
+
+**Two Kodi restarts, not one.** Boot B: the guard writes POV's setting and
+addon.xml, but Kodi read addon.xml during its add-on scan long before the
+repair pass ran, so session B still uses the old value. Boot C is the first
+session that actually reuses. Forcing it live means POV's `LoadProfile`, which
+restarts every service and drops the user at the home screen -- ruled out for
+an unattended startup pass in the module header, and still ruled out.
+
+**THE NARROWING THAT LOOKS OBVIOUS AND IS WRONG.** The crash was reported on
+Arctic Fuse 3 (2026-08-14 minidump, returning from `Custom_1101_Hub.xml`), so
+"keep the guard on for AF3 only and give every other skin its speed back" is
+the first idea anybody has. This release nearly shipped it. The `ahebuyagos`
+log kills it: that device is on **Estuary**, with **one person pressing
+buttons**, and it still produced two overlapping POV invocations -- 08:39:22 to
+08:39:29, Netflix stuck at 7.31s (thread 9330) while the next press started
+underneath it (thread 9354, 1.89s). Concurrency is not a property of a skin. It
+is a property of a call being slow enough for the next one to land inside it,
+which turning reuse OFF makes MORE likely, not less. Do not narrow this by
+skin.
+
+**Also from this log, for the record.** `addon_autoupdate_repair: mode=ok,
+origins=none, rules=2:none_ours` -- the two pinned add-ons are
+`resource.language.he_il` and `skin.estuary`, both rule 1 (user turned
+auto-update off by hand), neither ours. Our own twenty-odd
+`[service.subtitles.kodipovilai]` lines are all in the pass and all healthy --
+`wizard_self_healer: already_healed`, `pov_combined_discover_patcher:
+api=already_patched, menu=already_patched`, and so on. Nothing in the 626 lines
+is a failure of ours.
+
+### ...except one, which was found by writing that sentence down wrongly
+
+The single `unmatched parentheses in string.isempty(listitem.art(clearlogo)`
+was first written up here as "one of the nineteen sites
+`fentastic_clearlogo_var_patcher` deliberately leaves alone". That is wrong,
+and a fact-check caught it: that module is `SKIN_ADDON_ID = 'skin.fentastic'`
+and every path it touches is under `special://home/addons/skin.fentastic/`.
+This device runs ESTUARY, and the error fires 25 ms after `Loading skin file:
+MyVideoNav.xml`.
+
+Scanning the shipped build for the defect rather than assuming where it lives:
+
+```
+addons/skin.fentastic/xml/Includes_VideoOsd4.xml   2   (patched at runtime)
+addons/skin.fentastic/xml/Variables.xml            2   (patched at runtime)
+addons/skin.estuary/xml/Variables.xml              2   (NOTHING PATCHES THESE)
+```
+
+And Estuary's is the worse of the two, for a reason the FENtastic write-up
+records as the reason NOT to bother there. In FENtastic, `ClearArtLogo`'s only
+consumer is commented out, so repairing it changes nothing on screen. In
+Estuary the consumer is live:
+
+```
+skin.estuary/xml/Variables.xml     <value condition="!String.IsEmpty(ListItem.Art(clearlogo)">...
+                                   <value condition="String.IsEmpty(ListItem.Art(clearlogo)">...
+skin.estuary/xml/View_51_Poster.xml    <texture>$VAR[ClearArtLogo]</texture>
+```
+
+Both conditions are unparseable, so both are FALSE, so the texture draws
+nothing -- on every Estuary device, in the default poster view. The fix is the
+same one Site 1 already justifies: the two conditions are logical complements,
+one of them must hold, so closing the bracket restores the author's own
+alternative with nothing to decide.
+
+NOT SHIPPED IN 0.2.507, deliberately. It is a different bug from the one this
+release is about, it needs the patcher taught a second skin, and this release's
+artifacts are already built and validated. It is the first thing to pick up
+next, and it is a visible one: somebody's poster art has been blank this whole
+time.
+
 ## A stale estimate worth correcting: he_warm's pre-import
 
 service.py's _start_he_warm_drainer says the cold import is "~2-3s". Measured
-in the field, eight samples across five logs: 1.1, 2.8, 4.4, 4.6, 5.4, 6.7,
-12.2, 13.1 seconds. On a SHIELD it is 13.1.
+in the field, nine samples across six logs: 1.1, 2.8, 3.7, 4.4, 4.6, 5.4, 6.7,
+12.2, 13.1 seconds. On a SHIELD it is 13.1. The 3.7 is from `ahebuyagos`
+(2026-08-23) and doubles as the calibration for the POV import measurement
+above -- imports cost SECONDS on this class of hardware.
 
 It runs on its own thread at startup and is about Hebrew SUBTITLE availability
 for a specific title -- it is NOT on the path of a category press, and an

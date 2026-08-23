@@ -350,7 +350,7 @@ pin('pov_aiostreams_patcher', 'UPGRADES',
 pin('pov_debrid_error_log_patcher', 'UPGRADES',
     'AI_SUBS_POV_DEBRID_ERRLOG_v1')
 pin('pov_directory_timing_patcher', 'UPGRADES',
-    'AI_SUBS_POV_DIRTIMING_v1')
+    'AI_SUBS_POV_DIRTIMING_v2')
 pin('pov_debrid_timeout_patcher', 'UPGRADES',
     'AI_SUBS_POV_DEBRID_TIMEOUT_v1')
 pin('addon_autoupdate_repair', 'UPGRADES',

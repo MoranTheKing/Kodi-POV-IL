@@ -39,6 +39,7 @@ import importlib.util
 import io
 import os
 import shutil
+import re
 import sys
 import tempfile
 import types
@@ -303,9 +304,139 @@ check('a short argv does not break the line', len(short[2]) == 1
 longq = '?action=x&' + 'y' * 4000
 lval, lerr, llog = run_router(PATCHED_SRC,
                               ['plugin://plugin.video.pov/', '7', longq])
+# The detail string is built from llog[0] BEFORE check() decides whether it
+# is needed, so an empty llog used to raise TypeError here and take the whole
+# run down instead of reporting a failure. Found when a change to the injected
+# block stopped it logging at all -- the test could not say so.
 check('a huge query is truncated rather than dumped into the log',
-      llog and len(llog[0]) < 400, 'line is %d chars' % len(llog[0] if llog
-                                                           else 0))
+      bool(llog) and len(llog[0]) < 400,
+      'line is %d chars' % len(llog[0]) if llog else 'nothing was logged')
+
+
+# --- 1b. the shape v1 actually wrote, taken from history --------------------
+# _revert matches a WHOLE BLOCK, so upgrading a device from v1 to v2 works only
+# if _SHAPES carries v1 byte for byte. Nothing else here can check that: the
+# "an older injection is replaced" case above fakes an old version by RENAMING
+# the current shape's marker, so it would pass with a _SHAPES entry that bore
+# no resemblance to what v1 shipped -- and the device would be left on v1
+# forever, still logging the old line, with ensure_patched returning
+# 'revert_failed' into a log nobody reads.
+#
+# The only non-circular source for "what v1 wrote" is git. If git is not there
+# (a packaged checkout), say so rather than pretending the check ran.
+def _shipped_shapes():
+    """{marker: REPLACEMENT} for every version of this patcher in history."""
+    import subprocess
+    rel = ('addons/service.subtitles.kodipovilai/resources/lib/'
+           'pov_directory_timing_patcher.py')
+    root = os.path.normpath(os.path.join(HERE, '..'))
+    try:
+        revs = subprocess.run(
+            ['git', '-C', root, 'log', '--format=%H', '--', rel],
+            capture_output=True, text=True, timeout=60)
+    except Exception:
+        return None
+    if revs.returncode:
+        return None
+    out = {}
+    for rev in revs.stdout.split():
+        blob = subprocess.run(['git', '-C', root, 'show', '%s:%s' % (rev, rel)],
+                              capture_output=True, text=True, timeout=60)
+        if blob.returncode:
+            continue
+        ns = {'__file__': rel}
+        try:
+            exec(compile(blob.stdout, rel, 'exec'), ns)
+        except Exception:
+            continue
+        if 'MARKER' in ns and 'REPLACEMENT' in ns:
+            out.setdefault(ns['MARKER'], ns['REPLACEMENT'])
+    return out
+
+
+_hist = _shipped_shapes()
+if _hist is None:
+    print('SKIP git is unavailable -- cannot check the recorded old shapes')
+else:
+    _slot = mod5._MARKER_SLOT
+    _checked = 0
+    for _marker, _shape in sorted(_hist.items()):
+        if _marker == mod5.MARKER:
+            continue
+        _checked += 1
+        check('%s is recorded byte-for-byte in _SHAPES' % _marker.strip('# '),
+              _shape.replace(_marker, _slot) in mod5._SHAPES,
+              'a device on this version cannot be upgraded')
+
+        # and prove it end to end: inject the OLD block, then upgrade for real
+        _homeh, _entryh = fresh_pov(PRELUDE + ROUTER)
+        with open(_entryh, encoding='utf-8', newline='') as _f:
+            _stock = _f.read()
+        with open(_entryh, 'w', encoding='utf-8', newline='') as _f:
+            _f.write(_stock.replace(mod5.ANCHOR, _shape, 1))
+        _st = load(_homeh).ensure_patched()
+        _after = read(_entryh)
+        check('...and a device carrying it upgrades cleanly',
+              _st == 'repatched', _st)
+        check('...leaving only the current marker',
+              mod5.MARKER in _after and _marker not in _after,
+              'markers left: %s' % re.findall(r'# AI_SUBS_POV_DIRTIMING_v\d+',
+                                              _after))
+        check('...and the result still compiles',
+              compile(_after, 'entry.py', 'exec') is not None)
+
+    # The loop must have had something to do. Only COMMITTED versions are in
+    # history, so while a bump is still uncommitted the current marker is
+    # absent from _hist and every entry is an old one -- which is the case
+    # this guards: an empty loop would report four silent passes.
+    check('at least one superseded version was actually checked', _checked,
+          'history held %s and the loop did nothing' % sorted(_hist))
+
+
+# --- 2a. the module counters say cold or warm ------------------------------
+# v2 of the wrapper adds `mods=A->B`, the size of sys.modules before and after
+# the call. It exists to settle a question the seconds alone cannot: whether
+# the ~1.75s floor measured in the field is POV re-importing itself on a fresh
+# interpreter, or real work. A is the discriminator (a reused interpreter
+# arrives with hundreds of modules already loaded, a fresh one with a fraction
+# of that) and B - A is how many the route itself had to load.
+#
+# So the field has to actually track imports, not be a decorative constant.
+_MODS_RE = re.compile(r'mods=(-?\d+)->(-?\d+)')
+
+check('the timing line carries the module counts',
+      _MODS_RE.search(joined) is not None, joined)
+
+_m = _MODS_RE.search(joined)
+if _m:
+    _a, _b = int(_m.group(1)), int(_m.group(2))
+    check('...as two real counts, not the -1 fallback', _a > 0 and _b > 0,
+          '%s->%s' % (_a, _b))
+    check('...and a route that imports nothing does not move them', _a == _b,
+          '%s->%s -- this route only sleeps' % (_a, _b))
+
+# and now a route that DOES import something, to prove the field moves at all
+_VICTIM = 'colorsys'
+check('the module used to prove this is genuinely not loaded yet',
+      _VICTIM not in sys.modules,
+      'pick a different stdlib module or the next check proves nothing')
+
+_IMPORTING = (
+    "import time as _t\n"
+    "def routing(sys):\n"
+    "\timport %s\n"
+    "\t_t.sleep(%s)\n"
+    "\treturn ('directory', '')\n"
+    "\n"
+) % (_VICTIM, _ROUTING_SECONDS)
+
+_home7, _entry7 = fresh_pov(_IMPORTING + ROUTER)
+load(_home7).ensure_patched()
+_, _, _ilog = run_router(read(_entry7), ARGV)
+_im = _MODS_RE.search(' | '.join(_ilog))
+check('a route that imports one module reports one more module',
+      _im is not None and int(_im.group(2)) - int(_im.group(1)) == 1,
+      ' | '.join(_ilog) or 'nothing was logged')
 
 
 # --- 2b. it never raises, whatever the filesystem does ---------------------

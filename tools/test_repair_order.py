@@ -31,6 +31,7 @@ import ast
 import os
 import re
 import sys
+import types
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SERVICE = os.path.normpath(os.path.join(
@@ -100,21 +101,84 @@ check('the two schema repairs keep their documented order',
       < STEPS.index('_maybe_repair_pov_cache_schema'))
 
 # --------------------------------------------------------------------------
-# the guard can only ever turn the flag OFF
+# the guard reaches ON only by an explicit 'true', and OFF by everything else
 # --------------------------------------------------------------------------
-# Not an ordering property, but it is the thing the owner asked to be certain
-# of when this step moved, and it is one line to keep certain.
+# THIS CHECK USED TO SAY SOMETHING STRONGER, and the change is deliberate.
+# It asserted `WANTED == 'false'` -- the guard could never re-enable the flag,
+# full stop. Since 0.2.507 it can, because `pov_fast_navigation` lets a person
+# buy POV's speed back knowingly (the module header carries the measurement:
+# a fixed ~1.75s per navigation with reuse off).
+#
+# What survives is the property that actually protects anyone: OFF is not the
+# default so much as the DESTINATION OF EVERY FAILURE. kodi_utils missing, the
+# settings store throwing, the setting undeclared or empty -- all of them land
+# on SAFE. The only route to FAST is a setting that reads back exactly true.
+# That is behavioural, so unlike the regex it replaces, it is executed.
 GUARD_MOD = os.path.normpath(os.path.join(
     HERE, '..', 'addons', 'service.subtitles.kodipovilai', 'resources', 'lib',
     'pov_language_invoker_guard.py'))
 with open(GUARD_MOD, encoding='utf-8') as f:
     GSRC = f.read()
-wanted = re.findall(r"^WANTED\s*=\s*'([^']*)'", GSRC, re.M)
-check('the guard has exactly one target value', len(wanted) == 1,
-      'found %s' % wanted)
-check("and that value is 'false' -- it can never re-enable the flag",
-      wanted == ['false'],
-      'reuse-language-invoker being ON is the Arctic Fuse 3 native crash')
+
+
+class _KU(object):
+    """Stand-in for resources.lib.kodi_utils. RAISE means the settings store
+    is unavailable; UNSET returns whatever default the guard passes in, which
+    is how Kodi answers for a setting nobody has ever touched."""
+
+    RAISE = object()
+    UNSET = object()
+
+    def __init__(self, value):
+        self.value = value
+        self.asked = []
+
+    def get_bool(self, key, default=False):
+        self.asked.append((key, default))
+        if self.value is _KU.RAISE:
+            raise RuntimeError('settings store unavailable')
+        if self.value is _KU.UNSET:
+            return default
+        return self.value
+
+    def log(self, *a, **k):
+        pass
+
+
+def load_guard(src=None, ku=None):
+    """Execute the guard's source with no Kodi present. Its own imports of
+    xbmcvfs and kodi_utils fail and land on None, so kodi_utils is assigned
+    afterwards -- _wanted() reads the module global at call time."""
+    mod = types.ModuleType('_guard_under_test')
+    mod.__file__ = GUARD_MOD
+    exec(compile(src or GSRC, GUARD_MOD, 'exec'), mod.__dict__)
+    mod.kodi_utils = ku
+    return mod
+
+
+G = load_guard()
+check("SAFE is 'false' -- reuse off", G.SAFE == 'false', repr(G.SAFE))
+check("FAST is 'true' -- reuse on", G.FAST == 'true', repr(G.FAST))
+check('the switch is named pov_fast_navigation',
+      G.SETTING_FAST == 'pov_fast_navigation', repr(G.SETTING_FAST))
+
+check('no kodi_utils at all -> SAFE',
+      load_guard(ku=None)._wanted() == 'false')
+check('a settings store that throws -> SAFE',
+      load_guard(ku=_KU(_KU.RAISE))._wanted() == 'false')
+check('a setting nobody has ever touched -> SAFE',
+      load_guard(ku=_KU(_KU.UNSET))._wanted() == 'false',
+      'the guard must ask for it with default False')
+check('the setting explicitly off -> SAFE',
+      load_guard(ku=_KU(False))._wanted() == 'false')
+check('the setting explicitly on -> FAST',
+      load_guard(ku=_KU(True))._wanted() == 'true',
+      'the switch has to actually do something')
+
+_spy = _KU(_KU.UNSET)
+load_guard(ku=_spy)._wanted()
+check('it reads exactly one setting, and asks for it with default False',
+      _spy.asked == [('pov_fast_navigation', False)], repr(_spy.asked))
 
 # --------------------------------------------------------------------------
 # SABOTAGE -- the checks must be able to fail
@@ -127,11 +191,21 @@ check('SABOTAGE: removing the first entry changes the source', moved != SRC)
 check('SABOTAGE: the guard no longer running first is caught',
       steps_of(moved)[0] != GUARD)
 
-flipped = GSRC.replace("WANTED = 'false'", "WANTED = 'true'", 1)
-check('SABOTAGE: flipping the target value changes the source',
-      flipped != GSRC)
-check('SABOTAGE: a guard that would re-enable the flag is caught',
-      re.findall(r"^WANTED\s*=\s*'([^']*)'", flipped, re.M) != ['false'])
+# Two ways to turn "OFF unless asked" into "ON unless asked", and the checks
+# above have to notice both.
+lenient = GSRC.replace('get_bool(SETTING_FAST, False)',
+                       'get_bool(SETTING_FAST, True)', 1)
+check('SABOTAGE: widening the fallback default changes the source',
+      lenient != GSRC)
+check('SABOTAGE: an untouched setting turning reuse ON is caught',
+      load_guard(lenient, _KU(_KU.UNSET))._wanted() != 'false')
+
+blind = GSRC.replace('    if kodi_utils is None:\n        return SAFE',
+                     '    if kodi_utils is None:\n        return FAST', 1)
+check('SABOTAGE: flipping the no-settings path changes the source',
+      blind != GSRC)
+check('SABOTAGE: a device with no settings store defaulting to ON is caught',
+      load_guard(blind, None)._wanted() != 'false')
 
 
 # --- the pass's own cost, which nobody was re-deriving -------------------

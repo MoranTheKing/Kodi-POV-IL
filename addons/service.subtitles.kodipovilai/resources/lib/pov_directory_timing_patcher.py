@@ -33,6 +33,35 @@
 # mistaken for having done so. It turns "the spinner feels long" into a number
 # that says which route and how long, which is the thing that has been missing.
 #
+# v2 ADDS `mods=A->B`, AND IT IS THERE TO SETTLE AN ARGUMENT v1 COULD NOT.
+# v1 answered the first report: five unrelated routes with floors between
+# 1.72s and 1.89s, and a revisit no faster than the first visit. That
+# says "fixed per-invocation cost" but not WHICH cost, and the leading
+# explanation -- POV re-importing itself because we turned
+# `reuse_language_invoker` off -- stayed an inference, because no log in hand
+# had a warm-interpreter sample to compare against.
+#
+# A and B are len(sys.modules) either side of the call, and between them they
+# answer it outright:
+#   * A is cold-or-warm. A fresh interpreter arrives with a few dozen modules;
+#     a reused one arrives with hundreds. No arithmetic needed, just the size.
+#   * B - A is what the ROUTE had to load. POV defers its weight into the route
+#     (`_import('menus.tvshows', 'Menu')`), so on a cold interpreter this is
+#     hundreds and on a warm one it is zero -- the same route, the same work,
+#     the difference being only what was already in sys.modules.
+# One log from a device with `pov_fast_navigation` on now proves or disproves
+# the whole diagnosis, instead of arguing about it.
+#
+# `import sys as _kpi_sys` RATHER THAN THE ARGUMENT. Router.run takes a
+# parameter named `sys`, and in the real add-on POV's router.py passes the sys
+# module -- but nothing in the signature promises that, and a caller passing
+# anything else turns len(sys.modules) into an AttributeError inside the
+# finally block, whose own except would swallow it and take the timing line
+# with it. A patch whose entire purpose is a line that always appears must not
+# lose that line to an assumption about its caller. (Not hypothetical: this
+# file's own test harness calls run() with a stand-in, and the first version
+# of v2 silently logged nothing under it.)
+#
 # Modelled on pov_debrid_unbound_guard_patcher next door; read that first if
 # this needs changing.
 
@@ -52,7 +81,7 @@ except Exception:
 POV_ADDON_ID = 'plugin.video.pov'
 REL = 'resources/lib/entry.py'
 
-MARKER = '# AI_SUBS_POV_DIRTIMING_v1'
+MARKER = '# AI_SUBS_POV_DIRTIMING_v2'
 _MARKER_ANY = '# AI_SUBS_POV_DIRTIMING_v'
 
 # The tag every timing line carries, so a log can be grepped for it and so
@@ -67,9 +96,33 @@ ANCHOR = (
     "\t\twith self: return routing(sys)\n"
 )
 
+# The stand-in for the marker inside _SHAPES. Defined up here
+# because _V1 below is written with it already substituted in.
+_MARKER_SLOT = '<<<MARKER>>>'
+
 REPLACEMENT = (
     "\tdef run(self, sys):\n"
     "\t\timport time as _kpi_time  " + MARKER + "\n"
+    "\t\timport sys as _kpi_sys\n"
+    "\t\t_kpi_t0 = _kpi_time.time()\n"
+    "\t\ttry: _kpi_m0 = len(_kpi_sys.modules)\n"
+    "\t\texcept Exception: _kpi_m0 = -1\n"
+    "\t\ttry:\n"
+    "\t\t\twith self: return routing(sys)\n"
+    "\t\tfinally:\n"
+    "\t\t\ttry: logger('" + TAG + "', '%.2fs mods=%s->%s %s' % "
+    "(_kpi_time.time() - _kpi_t0, _kpi_m0, len(_kpi_sys.modules), "
+    "(sys.argv[2] if len(sys.argv) > 2 else '')[:180]))\n"
+    "\t\t\texcept Exception: pass\n"
+)
+
+# v1: the same wrapper without the two module counts. Kept here because
+# _SHAPES is the ONLY description of a block this file no longer writes, and
+# a device carrying v1 has to be reverted forward rather than ending up with
+# both wrappers nested.
+_V1 = (
+    "\tdef run(self, sys):\n"
+    "\t\timport time as _kpi_time  " + _MARKER_SLOT + "\n"
     "\t\t_kpi_t0 = _kpi_time.time()\n"
     "\t\ttry:\n"
     "\t\t\twith self: return routing(sys)\n"
@@ -106,9 +159,9 @@ def _fitter(content):
 # A literal placeholder and str.replace, NOT str.format: the block contains
 # percent formatting and could one day contain a brace, and a revert that
 # raises on its own template is a revert that never runs.
-_MARKER_SLOT = '<<<MARKER>>>'
 _SHAPES = (
     REPLACEMENT.replace(MARKER, _MARKER_SLOT),
+    _V1,
 )
 
 

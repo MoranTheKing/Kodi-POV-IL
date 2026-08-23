@@ -908,6 +908,32 @@
           <default>true</default>
           <control type="toggle"/>
         </setting>
+        <!-- POV's reused Python interpreter: speed against stability.
+             OFF is the safe side and the default, and it is what every
+             device has been running since 2026 08 14.
+             Measured on a reporter's device 2026 08 23: with it OFF, five
+             unrelated POV routes all cost between 1.72s and 1.89s at their
+             floor, and revisiting a category is no faster than opening it the
+             first time. POV defers most of its import work into the call
+             itself (about 210KB and twenty of its own modules on top of what
+             starting up already loaded, plus requests and
+             concurrent.futures), so a fresh interpreter repays all of it on
+             every press. ON pays it once per session instead.
+             What ON costs: concurrent POV invocations then share one
+             interpreter, and that is the native crash that takes all of Kodi
+             down. See pov_language_invoker_guard.py, which enforces whichever
+             side this names, in both places POV keeps the flag.
+             Level 3 on purpose: this is an informed choice, not a
+             preference. It lives under Advanced rather than beside
+             _pov_patching_off, which is the other POV escape hatch but
+             sits under Cache for historical reasons; three shipped
+             documents already told users to look under Advanced, and
+             Advanced is also where it belongs. -->
+        <setting id="pov_fast_navigation" type="boolean" label="32554" help="32555">
+          <level>3</level>
+          <default>false</default>
+          <control type="toggle"/>
+        </setting>
         <!-- Hidden marker: which Umbrella watch-source keys we have had
              our one say about, and what we wrote. See umbrella_watch_source.py.
              v2 on purpose: the new id spends one more claim on every device,

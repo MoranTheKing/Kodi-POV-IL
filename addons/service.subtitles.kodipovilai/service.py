@@ -260,9 +260,15 @@ def _run_build_startup_repairs():
         # The guard logs how far ahead it got, so a field log can say whether
         # the margin holds rather than leaving it assumed.
         #
-        # This can only ever turn the flag OFF -- it is the fix for the Arctic
-        # Fuse 3 native crash, and running it EARLIER applies that fix sooner.
-        # There is no ordering in which it turns the flag back on.
+        # WHICH DIRECTION IT WRITES IS NO LONGER FIXED, and this comment used
+        # to say the opposite -- "it can only ever turn the flag OFF" -- which
+        # was true until 0.2.507 gave the direction to the
+        # `pov_fast_navigation` setting. It is still OFF for anyone who has
+        # not deliberately turned that on, and OFF is still the fix for the
+        # Arctic Fuse 3 native crash. What running it EARLIER buys is the same
+        # either way: it settles both halves before POV's own check looks at
+        # them, so POV never shows its mismatch dialog. Do not move it down on
+        # the strength of the old sentence.
         _maybe_patch_pov_language_invoker,
         # FIRST: heal Idan Plus before the user can navigate to it (a corrupt
         # displayChannels.json otherwise crashes every channel load). Cheap,
@@ -304,7 +310,7 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_widget_crash_guard,
         # _maybe_patch_pov_language_invoker used to sit here. Moved to the
         # very front of this tuple -- see the note there. It is idempotent
-        # ('already_off' writes nothing), so the move is a reordering, not a
+        # ('already_set' writes nothing), so the move is a reordering, not a
         # second run.
         _maybe_patch_pov_favorites_refresh,
         _maybe_patch_pov_bookmark_refresh,
@@ -2734,15 +2740,23 @@ def _maybe_fix_pov_torbox_url():
 
 
 def _maybe_patch_pov_language_invoker():
-    """Close the crash class the two guards above only narrow.
+    """Hold POV's reuse-language-invoker flag where this device wants it.
 
-    Both of them remove a TRIGGER for "many POV widgets refresh at once"; this
-    removes what makes that burst fatal. POV ships
+    BY DEFAULT that is OFF, which closes the crash class the two guards above
+    only narrow. Both of them remove a TRIGGER for "many POV invocations at
+    once"; this removes what makes that burst fatal. POV ships
     <reuselanguageinvoker>true</reuselanguageinvoker>, so concurrent
     invocations share one Python interpreter and corrupt CPython's internals
     (a NULL refcount write inside python3.8.dll in the 2026-08-14 minidump,
     on a thread the Kodi log identifies as POV's). With the flag off, each
     invocation gets its own interpreter and the same burst is merely slower.
+
+    SLOWER TURNED OUT TO BE MEASURABLE, so since 0.2.507 the direction is the
+    `pov_fast_navigation` setting rather than a constant -- off out of the
+    box, so this step does exactly what it always did unless somebody has
+    deliberately asked for the speed back. The module header carries the
+    measurement and the reason the obvious "narrow it to Arctic Fuse 3"
+    shortcut is wrong.
 
     POV keeps this flag in TWO places -- a hidden `reuse_language_invoker`
     setting and its own addon.xml -- and runs a service that rewrites the xml
@@ -2756,7 +2770,15 @@ def _maybe_patch_pov_language_invoker():
     except Exception:
         return
     try:
-        status = pov_language_invoker_guard.ensure_patched()
+        # Read the direction ONCE, here, and hand the same value to the write
+        # and to the line that reports it. Reading it again for the log would
+        # be a second answer to a question the module's own docstring calls
+        # load-bearing, spent on prose.
+        try:
+            _dir = pov_language_invoker_guard._wanted()
+        except Exception:
+            _dir = None      # ensure_patched then decides for itself
+        status = pov_language_invoker_guard.ensure_patched(_dir)
         try:
             _since = ('%.2fs into the repair pass'
                       % (time.time() - _REPAIRS_STARTED)
@@ -2765,12 +2787,14 @@ def _maybe_patch_pov_language_invoker():
             _since = 'unknown'
         if status == 'patched':
             kodi_utils.log(
-                'pov_language_invoker_guard: reuse-language-invoker turned '
-                'OFF (setting + addon.xml) at %s -- prevents the '
-                'concurrent-widget native crash; takes effect at the next '
-                'Kodi start. POV runs its own check a few seconds into its '
+                'pov_language_invoker_guard: reuse-language-invoker set to '
+                '%s (setting + addon.xml) at %s -- %s; takes effect at the '
+                'SECOND Kodi start from now, because Kodi read POV\'s '
+                'addon.xml while building its add-on list, long before this '
+                'pass ran. POV runs its own check a few seconds into its '
                 'service start, so this number is the margin we beat it by'
-                % _since, level='INFO')
+                % (_dir, _since, pov_language_invoker_guard.describe(_dir)),
+                level='INFO')
         elif status == 'setting_only':
             kodi_utils.log(
                 'pov_language_invoker_guard: setting written, addon.xml was '
