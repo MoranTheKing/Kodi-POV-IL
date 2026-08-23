@@ -121,6 +121,29 @@
 # module level, so it is paid either way and proves nothing here.) Same-device calibration from the same log: our
 # own he_warm line reports 3.7 SECONDS to pre-import one engine on that box.
 #
+# WHAT THE FIRST FIELD LOG WITH THE SWITCH ON ACTUALLY SHOWED (2026-08-23,
+# same device, reuse ON). The mods= counter added in v2 of the timing patch
+# settles what the 0.2.507 write-up could only infer:
+#
+#   7.22s  mods=81->355   trakt_tv_trending      <- fresh interpreter
+#   1.08s  mods=355->355  trakt_tv_trending      <- SAME route, reused
+#   0.01s  mods=361->361  navigator.genres       <- a local menu, reused
+#
+# Reuse works, and `mods=A->A` is the proof: zero modules loaded. But the
+# saving is SMALLER than this header first claimed. Like-for-like on
+# tmdb_tv_networks, the floor went 1.72s (reuse off) -> 1.09s (reuse on):
+# about 0.6s per press, not the whole 1.75s. The rest is TMDb/Trakt network,
+# which no interpreter setting can touch. The claim that everything after the
+# first press would be "close to instant" was true only for local menus.
+#
+# AND REUSE IS PER-INTERPRETER, NOT PER-DEVICE, which the same log shows the
+# hard way: eight fresh starts at mods=81 in three minutes. Kodi keeps ONE
+# POV interpreter and spawns another whenever a press arrives while that one
+# is still working, so a user pressing every two seconds pays the cold cost
+# again and again. At 12:00:14-12:00:33 three interpreters were alive at once.
+# Nothing crashed -- but that is exactly the concurrent-invocation state this
+# guard exists to prevent, now reached by design on this device.
+#
 # SO THIS IS NOW A SWITCH, AND SAFE IS STILL THE DEFAULT. The owner's call:
 # SETTING_FAST below, off out of the box, so nothing changes for anyone who
 # does not go looking. Turning it on is choosing the July behaviour and the

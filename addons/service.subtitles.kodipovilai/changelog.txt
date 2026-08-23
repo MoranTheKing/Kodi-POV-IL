@@ -1,3 +1,33 @@
+0.2.508
+- The poster view's logo comes back on Estuary, and it was never FENtastic's
+  bug. 0.2.507's write-up credited a clearlogo error in a field log to
+  fentastic_clearlogo_var_patcher; a fact-check caught that the module only
+  ever touches skin.fentastic and the device was running Estuary. Scanning the
+  shipped build instead of assuming: skin.estuary/xml/Variables.xml has the
+  same two unclosed brackets in the same ClearArtLogo variable -- and unlike
+  FENtastic's copy, whose only consumer is commented out, Estuary's is live at
+  View_51_Poster.xml:256. Both conditions unparseable means both are false,
+  the variable resolves to nothing, and that texture has been drawing nothing
+  in the default poster view on every Estuary device. The patcher now carries
+  the skin per site and repairs all four; a device has one of the two skins, so
+  the other reporting no_skin is the healthy answer. Exactly two lines and two
+  bytes change in the file, and the test proves it by diff.
+
+- The fast-navigation switch needs ONE restart, not two, and the release that
+  shipped it said two. The first field log with it on shows POV noticing the
+  change, offering a profile reload, and applying it in that same session --
+  one dialog, once. Corrected in the help text (both languages), the README
+  and the line service.py logs.
+
+- What the switch actually bought, now measured rather than predicted. The
+  mods= counter added in 0.2.507 reports len(sys.modules) either side of each
+  call, and it settles it: the same route ran 7.22s at mods=81->355 and 1.08s
+  at mods=355->355, and a local menu is 0.01s reused. Like-for-like on
+  tmdb_tv_networks the floor went 1.72s -> 1.09s. That is about 0.6s a press,
+  NOT the whole 1.75s that release predicted -- the rest is TMDb and Trakt
+  network, which no interpreter setting can touch. Recorded in the guard's
+  header so the next person reads the measurement, not the forecast.
+
 v0.2.507
 - POV's menus have felt heavy since 14 August, and this release says why and
   hands the choice over. The cause is ours: pov_language_invoker_guard turns

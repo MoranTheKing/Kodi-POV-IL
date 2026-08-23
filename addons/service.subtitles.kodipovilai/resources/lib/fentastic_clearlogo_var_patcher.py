@@ -49,6 +49,35 @@
 # variable is now right if that decision is ever made, and because it is the
 # line the user's log actually complains about.
 #
+# AND THEN ESTUARY, WHICH IS WHY THE MODULE NAME IS NOW TOO NARROW. A
+# fact-check on release 0.2.507 caught this file being credited with a
+# clearlogo error in a field log it could not possibly have produced: the log
+# was from a device running ESTUARY, and everything here was rooted under
+# skin.fentastic. Scanning the shipped build for the defect instead of
+# assuming where it lived:
+#
+#     skin.fentastic/xml/Includes_VideoOsd4.xml   2   sites 1 and 2 below
+#     skin.fentastic/xml/Variables.xml            2   site 3 below
+#     skin.estuary/xml/Variables.xml              2   NOTHING TOUCHED THESE
+#
+# Estuary's is the same `ClearArtLogo` variable with the same two unclosed
+# brackets -- byte-for-byte the same shape, CRLF and all. But it is the WORSE
+# of the two, for precisely the reason given above for not bothering with
+# FENtastic's: there the only consumer is commented out, so repairing it
+# changes nothing on screen. Estuary's consumer is live.
+#
+#     skin.estuary/xml/View_51_Poster.xml:256   <texture>$VAR[ClearArtLogo]</texture>
+#
+# Both conditions unparseable, both therefore false, the variable resolves to
+# nothing, and that texture has been drawing nothing -- in the default poster
+# view, on every Estuary device, for as long as the skin has shipped. Site 4
+# repairs it. The fix is the same fact-not-guess the OSD pair is: two
+# complementary conditions, one of them must hold.
+#
+# The name stays `fentastic_clearlogo_var_patcher` on purpose. It is the
+# prefix every field log carries, and being able to grep a year of logs for
+# one string is worth more than a file name that reads correctly.
+#
 # THE OTHER NINETEEN ARE LEFT ALONE, and not for lack of noticing. Some are
 # compound (`!String.IsEmpty(A(b) + String.IsEqual(C,d)`), where the bracket
 # could close after `b` or at the end and the two mean different things.
@@ -76,29 +105,50 @@ except Exception:
     kodi_utils = None
 
 
-SKIN_ADDON_ID = 'skin.fentastic'
-
-# (label, file relative to the skin, the broken block, the repaired block)
+# (label, skin add-on id, file relative to that skin, broken block, repaired
+# block)
+#
+# The skin is per-SITE and not a module-level constant, because two different
+# skins ship the same defect and a device has only one of them installed. A
+# site whose skin is absent reports `no_skin` and costs nothing.
 #
 # Whole blocks, not the two attributes alone: a skin somebody has edited into
 # another shape is one this must not touch, and matching the block is what
 # says so.
 SITES = (
-    ('video OSD logo', 'xml/Includes_VideoOsd4.xml',
+    ('video OSD logo', 'skin.fentastic', 'xml/Includes_VideoOsd4.xml',
      '\t\t\t<texture>$VAR[PlayerClearLogoVar]</texture>\n'
      '\t\t\t<aspectratio>keep</aspectratio>\n'
      '\t\t\t<visible>!String.IsEmpty(Player.Art(clearlogo)</visible>\n',
      '\t\t\t<texture>$VAR[PlayerClearLogoVar]</texture>\n'
      '\t\t\t<aspectratio>keep</aspectratio>\n'
      '\t\t\t<visible>!String.IsEmpty(Player.Art(clearlogo))</visible>\n'),
-    ('video OSD studio logo', 'xml/Includes_VideoOsd4.xml',
+    ('video OSD studio logo', 'skin.fentastic',
+     'xml/Includes_VideoOsd4.xml',
      '\t\t\t<texture>$VAR[StudiologoShortCutPath]$VAR[Studiologotextureinfo]'
      '</texture>\n'
      '\t\t\t<visible>String.IsEmpty(Player.Art(clearlogo)</visible>\n',
      '\t\t\t<texture>$VAR[StudiologoShortCutPath]$VAR[Studiologotextureinfo]'
      '</texture>\n'
      '\t\t\t<visible>String.IsEmpty(Player.Art(clearlogo))</visible>\n'),
-    ('poster-view clear-logo variable', 'xml/Variables.xml',
+    ('poster-view clear-logo variable', 'skin.fentastic',
+     'xml/Variables.xml',
+     '\t<variable name="ClearArtLogo">\r\n'
+     '\t\t<value condition="!String.IsEmpty(ListItem.Art(clearlogo)">'
+     '$INFO[ListItem.Art(clearlogo)]</value>\r\n'
+     '\t\t<value condition="String.IsEmpty(ListItem.Art(clearlogo)">'
+     '$INFO[ListItem.Art(clearart)]</value>\r\n'
+     '\t</variable>',
+     '\t<variable name="ClearArtLogo">\r\n'
+     '\t\t<value condition="!String.IsEmpty(ListItem.Art(clearlogo))">'
+     '$INFO[ListItem.Art(clearlogo)]</value>\r\n'
+     '\t\t<value condition="String.IsEmpty(ListItem.Art(clearlogo))">'
+     '$INFO[ListItem.Art(clearart)]</value>\r\n'
+     '\t</variable>'),
+    # The one that is actually on screen. Same variable, same defect, live
+    # consumer -- see the Estuary paragraph in the header.
+    ('estuary poster-view clear-logo variable', 'skin.estuary',
+     'xml/Variables.xml',
      '\t<variable name="ClearArtLogo">\r\n'
      '\t\t<value condition="!String.IsEmpty(ListItem.Art(clearlogo)">'
      '$INFO[ListItem.Art(clearlogo)]</value>\r\n'
@@ -123,12 +173,11 @@ def _log(msg, level='INFO'):
         pass
 
 
-def _path(rel):
+def _path(skin, rel):
     if xbmcvfs is None:
         return ''
     try:
-        base = xbmcvfs.translatePath(
-            'special://home/addons/' + SKIN_ADDON_ID + '/')
+        base = xbmcvfs.translatePath('special://home/addons/' + skin + '/')
     except Exception:
         return ''
     full = os.path.join(base, *rel.split('/'))
@@ -148,10 +197,10 @@ def _fit(text, block):
     return block.replace('\r\n', '\n')
 
 
-def _patch_one(rel, broken, fixed):
+def _patch_one(skin, rel, broken, fixed):
     """'no_skin' | 'unchanged' | 'patched' | 'unmatched' | 'read_failed'
     | 'write_failed'."""
-    path = _path(rel)
+    path = _path(skin, rel)
     if not path:
         return 'no_skin'
     try:
@@ -191,13 +240,15 @@ def _patch_one(rel, broken, fixed):
 def ensure_patched():
     """Idempotent. Never raises. A comma-joined per-site status.
 
-    Per SITE, not all-or-none: three independent conditions, and a skin update
-    that moves one is no reason to leave the other two broken.
+    Per SITE, not all-or-none: four independent conditions across two skins,
+    and a skin update that moves one is no reason to leave the rest broken.
+    Only one of the two skins is installed on any given device, so `no_skin`
+    for the other is the normal, healthy answer -- not a failure.
     """
     out = []
-    for label, rel, broken, fixed in SITES:
+    for label, skin, rel, broken, fixed in SITES:
         try:
-            st = _patch_one(rel, broken, fixed)
+            st = _patch_one(skin, rel, broken, fixed)
         except Exception as exc:
             _log('{0}: unexpected failure: {1}'.format(rel, exc),
                  level='WARNING')
