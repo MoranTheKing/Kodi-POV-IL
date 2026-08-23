@@ -46,13 +46,23 @@
 #
 # ORDER MATTERS, AND IT IS SETTING FIRST. If the second write is lost (a
 # read-only filesystem, a device pulled at the wrong second) the two halves
-# disagree, and only one of the two orders converges on what we want:
-#   setting first -> (setting=false, xml=true): POV's own check rewrites the
-#       xml to false for us. Right outcome, at the cost of one POV dialog.
-#   xml first     -> (setting=true, xml=false): POV's check reverts the xml to
-#       TRUE, and does it again after every boot until we win.
+# disagree, and only one of the two orders converges on what we want. POV's
+# check is what decides that, and it always copies THE SETTING onto the xml,
+# so:
+#   setting first -> the half that survived is the one POV believes. It
+#       rewrites the xml from it and lands on our value, at the cost of one
+#       POV dialog.
+#   xml first     -> the half that survived is the one POV OVERWRITES. It puts
+#       the xml back to the stale setting, and does it again after every boot
+#       until we win.
 # Writing the xml second also means the common path never shows that dialog:
 # both halves already agree, so POV's check finds nothing to do.
+# (An earlier version of this passage spelled the two cases out as
+# (setting=false, xml=true) and (setting=true, xml=false). That was correct
+# only while the target was always 'false'; with pov_fast_navigation on, the
+# literals swap and the passage read as if the right outcome were the wrong
+# one. The rule never depended on which value we were writing, so it is stated
+# without them now.)
 #
 # WHEN IT TAKES EFFECT: the NEXT Kodi start. Kodi parses addon.xml while it
 # builds its add-on list, which is long before this repair pass runs, so the
@@ -72,6 +82,64 @@
 # because the failure it replaces is the whole application dying, but if POV
 # starts feeling heavy after this release, this is the first thing to suspect.
 #
+# AND IT DID, AND HERE IS THE NUMBER. Field log 2026-08-23, a device on
+# 0.2.506 running Estuary, instrumented by pov_directory_timing_patcher next
+# door. Sixteen navigations, and the shape of them is the answer:
+#
+#   * five unrelated routes inside a 0.17s band -- tmdb_tv_networks 1.72s
+#     (its floor over twelve samples), tmdb_movies_popular 1.77s,
+#     trakt_tv_trending 1.77s, tmdb_movies_latest_releases 1.82s,
+#     tmdb_tv_premieres 1.89s. popular and trending are different modules
+#     hitting different companies' servers and agree to the hundredth. Stated
+#     as the band and not as "a 1.72-1.78s floor under all of them", which is
+#     what this passage said first and which the last two figures contradict.
+#   * repeat visits do not move it. FOX 2.46s then 1.78s; Amazon 2.24s then
+#     1.73s. Roughly 0.6s of each first visit is cacheable network; the floor
+#     underneath is not, and never improves.
+#
+# A route-independent, cache-immune floor is a fixed per-invocation cost. And
+# POV pays it in an unusually visible place, which is worth writing down
+# because it is why POV feels this and other add-ons do not. Every route
+# defers the real weight into the call itself:
+#
+#     'build_tvshow_list': lambda p: _import('menus.tvshows', 'Menu')(p).run()
+#
+# Counted over top-level imports on POV 6.08.13, entry.py's own module-level
+# closure is 4 local modules / 53KB and 10 external ones. Reaching that route
+# then adds TWENTY MORE local modules and 210KB, and twenty-seven more
+# externals -- requests, concurrent.futures, xml.etree, unicodedata, hashlib,
+# html, importlib, pkgutil, queue, gzip, urllib.request among them. With the
+# invoker reused that is paid once for the session. Without it, on every press.
+#
+# (Two corrections here, both caught by a fact-check before release and both
+# worth leaving visible. The figures first written were "2 local modules,
+# 19KB" and "20 modules, 218KB": 19597 is entry.py's OWN file size, not the
+# size of what it imports, and the walk behind both numbers never followed
+# `from modules import kodi_utils` through to the submodule, so it was
+# crediting an empty package __init__ instead of the 18KB module. And sqlite3
+# was listed among what the route drags in -- entry.py already imports it at
+# module level, so it is paid either way and proves nothing here.) Same-device calibration from the same log: our
+# own he_warm line reports 3.7 SECONDS to pre-import one engine on that box.
+#
+# SO THIS IS NOW A SWITCH, AND SAFE IS STILL THE DEFAULT. The owner's call:
+# SETTING_FAST below, off out of the box, so nothing changes for anyone who
+# does not go looking. Turning it on is choosing the July behaviour and the
+# July crash together, knowingly, on one device.
+#
+# WHAT THE SWITCH DOES NOT DO, SAID BEFORE SOMEBODY ASSUMES IT: it does not
+# make reuse safe. Nothing here fixes the crash; it only lets a person decide
+# to accept it.
+#
+# AND THE NARROWING THAT LOOKS OBVIOUS AND IS WRONG. The crash was reported on
+# Arctic Fuse 3, so "keep this off for AF3 only and give everyone else their
+# speed back" is the first idea anybody has, and this file nearly shipped it.
+# The 2026-08-23 log kills it: that device is on ESTUARY, with one person
+# pressing buttons, and it still produced two overlapping POV invocations
+# (08:39:22-08:39:29, one route stuck at 7.31s while the next press started
+# underneath it). Concurrency is not a property of a skin. It is a property of
+# a call being slow enough for the next one to land inside it -- which turning
+# reuse OFF makes MORE likely, not less. Do not narrow this by skin.
+#
 # POV'S OWN SERVICE CAN RACE US, AND THAT IS TOLERATED, NOT PREVENTED.
 # reuseLanguageInvokerCheck() runs when POV's service starts; this runs from
 # our repair pass, which is ~29 steps and several seconds later, so in practice
@@ -82,14 +150,19 @@
 # what is wrong, so the next boot repairs it. The cost of losing that race is
 # one more restart, not a wrong state that persists.
 #
-# UNDOING IT IS NOT THE USUAL REMEDY. Every other POV patcher here is undone
-# by switching POV patching off and reinstalling POV. That does NOT undo this
-# one: `reuse_language_invoker` lives in POV's per-profile settings, which a
-# reinstall does not touch, and POV's own check then rewrites addon.xml from
-# it regardless of our switch. To genuinely revert, set POV's
-# `reuse_language_invoker` back to `true` -- POV's own menu can do it -- and
-# switch POV patching off, or this will turn it straight back around at the
-# next start.
+# UNDOING IT IS NOT THE USUAL REMEDY, AND THAT IS WHY THE SWITCH IS HERE.
+# Every other POV patcher in this add-on is undone by switching POV patching
+# off and reinstalling POV. That does NOT undo this one: `reuse_language_
+# invoker` lives in POV's per-profile settings, which a reinstall does not
+# touch, and POV's own check then rewrites addon.xml from it regardless of our
+# switch. Flipping it by hand in POV's own menu does not last either -- this
+# pass turns it straight back around at the next start.
+#
+# So the remedy is SETTING_FAST, and it is the only one that holds: this
+# module enforces whichever side it names, at every boot, in both halves. A
+# user who wants POV's reused interpreter turns that on and gets it kept; a
+# user who wants it back off turns it off and gets THAT kept. Neither has to
+# fight anything.
 #
 # Self-healing: runs every startup and WRITES ONLY WHAT IS WRONG, so a device
 # that is already safe is a pure no-op, and a POV self-update that restores
@@ -111,7 +184,17 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 SETTING_ID = 'reuse_language_invoker'
-WANTED = 'false'
+
+# The two values POV's flag can take, named for what they buy rather than for
+# the boolean, because the boolean reads backwards: 'false' -- reuse OFF -- is
+# the SAFE side, and it is the one this module used to hard-code.
+SAFE = 'false'
+FAST = 'true'
+
+# Our own setting, added after the measurement in the header. OFF by default,
+# so a device nobody has touched behaves exactly as it did before the switch
+# existed.
+SETTING_FAST = 'pov_fast_navigation'
 
 # Matched on BYTES, and deliberately tolerant about the element's inner
 # whitespace: POV's own check writes this file with ElementTree, which is free
@@ -148,6 +231,55 @@ def _addon_xml_path():
         return ''
 
 
+def _wanted():
+    """Which side of the trade this device has asked for.
+
+    SAFE unless our own setting says otherwise, and SAFE through every way of
+    failing to find out -- kodi_utils absent, the settings store unreadable,
+    the setting undeclared, empty, or holding something that is neither. The
+    asymmetry is the whole point. The value we fall back to is the one whose
+    failure mode is a slow menu; the value we only ever reach by an explicit
+    'true' is the one whose failure mode is the application dying. Nothing
+    here may ever be widened into "assume FAST when unsure".
+
+    `is True`, NOT PLAIN TRUTHINESS, and the difference is not pedantry.
+    kodi_utils.get_bool returns a real bool today, so both spellings agree --
+    but the guarantee above is about what happens when something ELSE breaks,
+    and a get_bool that one day returned Kodi's raw string would hand us
+    'false', which is truthy, and turn reuse ON on every device on earth. A
+    promise that depends on another module keeping its contract is not the
+    promise this docstring makes.
+    """
+    if kodi_utils is None:
+        return SAFE
+    try:
+        return FAST if kodi_utils.get_bool(SETTING_FAST, False) is True \
+            else SAFE
+    except Exception:
+        return SAFE
+
+
+def describe(wanted):
+    """Why this device is on the side it is on, as a log-line clause.
+
+    Here rather than at the call site because the call site is service.py,
+    which needs a whole Kodi to import and therefore cannot be tested. A
+    ternary over SAFE/FAST written there is a coin-flip nobody would notice
+    landing wrong -- and a log that confidently explains the OPPOSITE of what
+    was written is worse than no log at all, in a project that reads field
+    logs to decide what shipped.
+
+    Tolerant of a value it does not recognise, because a caller that could not
+    work out the direction still deserves a line.
+    """
+    if wanted == SAFE:
+        return 'prevents the concurrent-invocation native crash'
+    if wanted == FAST:
+        return ('the owner turned on %s and accepted that crash risk'
+                % SETTING_FAST)
+    return 'direction not recognised'
+
+
 def _read_setting():
     """POV's stored flag, lowercased. Returns None when it cannot be read.
 
@@ -171,10 +303,10 @@ def _read_setting():
     return cur or 'true'
 
 
-def _write_setting():
+def _write_setting(wanted):
     try:
         import xbmcaddon
-        xbmcaddon.Addon(POV_ADDON_ID).setSetting(SETTING_ID, WANTED)
+        xbmcaddon.Addon(POV_ADDON_ID).setSetting(SETTING_ID, wanted)
         return True
     except Exception as exc:
         _log('could not write POV\'s {0} setting: {1}'.format(SETTING_ID, exc),
@@ -201,13 +333,18 @@ def _xml_state(raw):
 
     THE TWO EMPTY FORMS ARE TREATED DIFFERENTLY, AND THAT IS DELIBERATE.
     `<reuselanguageinvoker></reuselanguageinvoker>` is matchable, so it gets
-    rewritten to `false`; a self-closing `<reuselanguageinvoker />` -- which
+    rewritten to whichever value we want; a self-closing
+    `<reuselanguageinvoker />` -- which
     ElementTree emits whenever the text is empty -- is not, so it is left
     alone. They are XML-equivalent, so the asymmetry needs a reason, and it is
     NOT "one is already off": Kodi reads both empty forms as not-true, so
     reuse is already off in both. The reason we rewrite at all is to make
-    POV's own check silent, because that check is an exact string compare and
-    anything other than `false` leaves it re-showing its dialog every boot.
+    POV's own check silent, because that check is an exact string compare --
+    the xml's text against POV's OWN SETTING, not against any fixed word -- so
+    an xml that does not spell out exactly what the setting says leaves POV
+    re-showing its dialog every boot. (This sentence used to name `false` as
+    the value in question. That was only ever true because the target was
+    hard-coded to `false`.)
     Only the pair form can be given that text without inventing structure the
     file does not have; the self-closing one is left for POV to reconcile from
     the setting we have just corrected, which costs one dialog and settles.
@@ -225,10 +362,10 @@ def _xml_state(raw):
     return found[0][2], _TAG_RE.search(raw)
 
 
-def _write_xml(path, raw, match):
+def _write_xml(path, raw, match, wanted):
     """Replace only the tag's text, atomically. True on success."""
     out = (raw[:match.start()]
-           + match.group(1) + WANTED.encode('ascii') + match.group(5)
+           + match.group(1) + wanted.encode('ascii') + match.group(5)
            + raw[match.end():])
 
     # The same rule the .py patchers in this add-on follow -- they compile()
@@ -273,13 +410,21 @@ def _write_xml(path, raw, match):
         return False
 
 
-def ensure_patched():
-    """Force POV's reuse-language-invoker flag off, in both places POV keeps
-    it. Returns one of:
+def ensure_patched(wanted=None):
+    """Hold POV's reuse-language-invoker flag at the value this device has
+    asked for, in both places POV keeps it.
+
+    `wanted` lets a caller that has ALREADY read the direction pass it in, so
+    the setting is read once for the whole step instead of once here and once
+    again to write a log line about it. Anything that is not exactly SAFE or
+    FAST is ignored and the direction is worked out here -- a caller must not
+    be able to widen the answer by passing something odd.
+
+    Returns one of:
       'no_pov'        POV is not installed -> nothing to do
       'unreadable'    POV's setting could not be read -> nothing written
-      'already_off'   both halves already say false -> nothing written
-      'patched'       setting and addon.xml now both say false
+      'already_set'   both halves already agree with us -> nothing written
+      'patched'       setting and addon.xml now both say what we want
       'setting_only'  the setting was written, addon.xml was not (POV's own
                       check will finish the job, with its dialog)
       'no_tag'        addon.xml has no single REWRITABLE reuselanguageinvoker
@@ -287,10 +432,19 @@ def ensure_patched():
                       document that does not parse. The setting is still
                       written, and POV reconciles the xml from it.
       'write_failed'  nothing was written
-    Never raises."""
+    Never raises.
+
+    ONE VALUE, DECIDED ONCE, AT THE TOP. _wanted() is read a single time and
+    threaded through every write below. Reading it again per half would let a
+    setting changed mid-pass leave the two halves disagreeing -- which is the
+    one state POV reacts to with a dialog at every boot.
+    """
     path = _addon_xml_path()
     if not path:
         return 'no_pov'
+
+    if wanted not in (SAFE, FAST):
+        wanted = _wanted()
 
     cur = _read_setting()
     if cur is None:
@@ -308,17 +462,17 @@ def ensure_patched():
 
     xml_val, match = (None, None) if raw is None else _xml_state(raw)
 
-    setting_ok = cur == WANTED
+    setting_ok = cur == wanted
     # EXACT BYTES, not a case-folded compare, because POV's check is exact:
     # `item.text != current_addon_setting` in entry.py. An addon.xml reading
     # `False` would satisfy a lenient guard, which would then leave POV
     # detecting a mismatch and re-showing its reload dialog at every single
     # boot, forever, with nothing on either side ever fixing the casing.
-    xml_ok = xml_val == WANTED.encode('ascii')
+    xml_ok = xml_val == wanted.encode('ascii')
     if setting_ok and xml_ok:
-        return 'already_off'
+        return 'already_set'
 
-    wrote_setting = setting_ok or _write_setting()
+    wrote_setting = setting_ok or _write_setting(wanted)
     if not wrote_setting:
         return 'write_failed'
 
@@ -329,6 +483,6 @@ def ensure_patched():
         # correct now, and POV's reuseLanguageInvokerCheck reconciles from the
         # setting, so the outcome still lands -- just not silently.
         return 'no_tag' if raw is not None else 'setting_only'
-    if _write_xml(path, raw, match):
+    if _write_xml(path, raw, match, wanted):
         return 'patched'
     return 'setting_only'
