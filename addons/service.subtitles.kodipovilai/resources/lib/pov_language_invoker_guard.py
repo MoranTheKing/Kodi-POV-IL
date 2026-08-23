@@ -86,11 +86,13 @@
 # 0.2.506 running Estuary, instrumented by pov_directory_timing_patcher next
 # door. Sixteen navigations, and the shape of them is the answer:
 #
-#   * a floor of 1.72-1.78s that five unrelated routes all sit on --
-#     tmdb_tv_networks, tmdb_movies_popular, trakt_tv_trending,
-#     tmdb_tv_premieres, tmdb_movies_latest_releases. tmdb_movies_popular and
-#     trakt_tv_trending are different modules hitting different companies'
-#     servers and both took 1.77s, to the hundredth.
+#   * five unrelated routes inside a 0.17s band -- tmdb_tv_networks 1.72s
+#     (its floor over twelve samples), tmdb_movies_popular 1.77s,
+#     trakt_tv_trending 1.77s, tmdb_movies_latest_releases 1.82s,
+#     tmdb_tv_premieres 1.89s. popular and trending are different modules
+#     hitting different companies' servers and agree to the hundredth. Stated
+#     as the band and not as "a 1.72-1.78s floor under all of them", which is
+#     what this passage said first and which the last two figures contradict.
 #   * repeat visits do not move it. FOX 2.46s then 1.78s; Amazon 2.24s then
 #     1.73s. Roughly 0.6s of each first visit is cacheable network; the floor
 #     underneath is not, and never improves.

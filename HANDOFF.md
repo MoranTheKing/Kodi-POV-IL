@@ -6313,11 +6313,23 @@ next press           08:38:56.477   (+1.35s of the user reading)
 So the user-visible spinner is **~1.85s on every press**, and the 1.35s gap is
 a human, not the machine.
 
-**The floor, and why it is not data.** 1.72 / 1.73 / 1.73 / 1.74 / 1.76 / 1.77
-/ 1.77 / 1.77 / 1.78s, across `tmdb_tv_networks`, `tmdb_movies_popular`,
-`trakt_tv_trending`, `tmdb_tv_premieres` and `tmdb_movies_latest_releases`.
-`tmdb_movies_popular` and `trakt_tv_trending` are different modules hitting
-different companies' servers and both returned 1.77s to the hundredth. First
+**The floor, and why it is not data.** Grouped by route family, every
+measurement in the log:
+
+```
+tmdb_tv_networks             1.72 1.73 1.73 1.74 1.76 1.77 1.78 | 2.24 2.28 2.30 2.46 | 7.31
+tmdb_movies_popular          1.77
+trakt_tv_trending            1.77
+tmdb_movies_latest_releases  1.82
+tmdb_tv_premieres            1.89
+```
+
+Five families inside a 0.17s band. `tmdb_movies_popular` and
+`trakt_tv_trending` are different modules hitting different companies' servers
+and agree to the hundredth. (An earlier draft of this section called it "a
+1.72-1.78s floor under all of them" -- the two single-sample families at 1.82
+and 1.89 are outside that, and the claim was recounted and corrected before it
+shipped.) First
 visits sit higher -- FOX 2.46, Amazon 2.24, Hulu 2.30, The CW 2.28 -- and the
 SAME tile revisited drops back to the floor (FOX 1.78, Amazon 1.73). Roughly
 0.6s of a first visit is cacheable network; the floor underneath it never

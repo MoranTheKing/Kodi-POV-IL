@@ -912,8 +912,9 @@
              OFF is the safe side and the default, and it is what every
              device has been running since 2026 08 14.
              Measured on a reporter's device 2026 08 23: with it OFF, every
-             POV navigation costs a fixed 1.72s to 1.78s, identical across
-             five unrelated routes and unchanged on a repeat visit, because
+             POV navigation costs a fixed 1.72s to 1.89s whatever it is
+             fetching, across five unrelated routes, and a repeat visit is no
+             faster than the first, because
              POV defers its whole import closure (20 modules, 218KB, plus
              requests / sqlite3 / concurrent.futures) into each call. ON pays
              that once per session instead of once per press.
