@@ -4437,6 +4437,51 @@ YouTube add-on in. We ship a settings.xml for it whose stream-proxy toggle
 NOT flipped on the strength of one log, because the proxy exists to carry
 headers a redirect cannot.
 
+### The v3 measurement came back, and it killed the third theory too
+
+Log `kodi_1_27`, 2026-08-23 17:09-17:10, add-on 0.2.509. The patch landed at
+17:09:15, so the first nine timing lines are still v2 shape and the last
+eighteen carry the split.
+
+**`exit=` IS ZERO. Every line, max 0.01s, 0.01s summed across the whole log.**
+So the GUI-lock reading -- the one that killed the sqlite diagnosis and
+justified v3 -- is itself wrong as an explanation of the slowness. POV's
+`Router.__exit__` costs nothing in practice. Whatever those seconds are, they
+are spent inside `routing()`, doing POV's own work. v3 still earned its keep:
+it removed the doubt, and it removed it by disproving the reason it was built.
+
+**What the eighteen lines show.** A baseline of 1.10-1.31s, and a tight cluster
+of slow calls at 3.04 / 3.09 / 3.14 / 3.34s, plus one at 10.20s. The gap is
+about 1.9s and it repeats to the hundredth -- a discrete extra step, not
+variance.
+
+**Three explanations tested and all three fail:**
+
+* NOT first-visit versus repeat. `Amazon` ran 1.10s on its first visit and
+  **3.14s on its second**, same route, same session, twelve seconds apart.
+  `genre_id=99` went the other way (3.34s then 1.20s). The cache direction does
+  not predict it.
+* NOT cold versus warm. Every slow call is warm; `mods=` shows no imports.
+* NOT concurrency. Slow calls average 2.2 overlapping calls against 0.7 for
+  fast ones, which looks suggestive until you notice `T:18711`'s 3.09s call had
+  **zero** other logged POV navigation overlapping it. Alone, warm, and still
+  2.5x the baseline. One clean counterexample is enough.
+
+**Where this goes next, and it is not more instrumentation.** The question is
+now what inside `routing()` spends the 1.9s, and the honest answer is that this
+project should stop patching POV to find out. Kodi's own DEBUG logging records
+every HTTP request an add-on makes, with URLs and timings. One debug-level log
+would say whether that step is a network round trip without a single line of
+new code. Ask for that before writing anything.
+
+**Scoreboard, kept deliberately.** Three theories have now died against field
+data: sqlite lock contention (refuted on attribution, and the patch was
+independently unshippable), the GUI-lock wait (refuted by `exit=0.00`), and
+concurrency (refuted by one solo slow call). The measurement that survives all
+three is narrow and worth stating on its own: with reuse on, warm navigation
+costs about 1.2s and cold about 1.8s, and something occasionally adds 1.9s to a
+warm call for reasons not yet established.
+
 ### What shipped 0.2.509 / qf 0.1.554 / build 0.1.122 (note 609)
 
 Measurement only; no behaviour changes. Six payload files, four of them
