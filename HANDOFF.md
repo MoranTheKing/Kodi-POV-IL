@@ -219,7 +219,7 @@ tools/build_wizard_quickfix.py          # replaces only the Wizard in a quickfix
     False, exception, partial extraction, corrupt ZIP or a missing versioned
     manifest must preserve the prior id so the next startup retries.
 
-## Android / Windows / webOS package release (21.3-povil.48 baseline)
+## Android / Windows / webOS package release (21.3-povil.49 baseline)
 
 These rules encode the failures found in release `.47`; do not revert to the
 older platform workflow.
@@ -230,7 +230,7 @@ older platform workflow.
   transparent-alpha artwork verifier correction in PR #381 (`198fdaa`) and the
   Android package-metadata guard in PR #383 (`a29b591`). The final clean build
   is workflow run `30137185730`; release:
-  `https://github.com/MoranTheKing/Kodi-POV-IL/releases/tag/v21.3-povil.48`.
+  `https://github.com/MoranTheKing/Kodi-POV-IL/releases/tag/v21.3-povil.49`.
 - An earlier `.48` attempt exposed that apktool's `versionInfo` still carried
   upstream `versionCode=2103000`. That temporary release and tag were deleted,
   its pointer PR #382 was closed unmerged, and the final release was rebuilt
@@ -4437,6 +4437,84 @@ YouTube add-on in. We ship a settings.xml for it whose stream-proxy toggle
 NOT flipped on the strength of one log, because the proxy exists to carry
 headers a redirect cannot.
 
+### What shipped 0.2.506 / qf 0.1.551 / wizard 0.1.48 / build 0.1.119 (note 606)
+
+Plus platform packages rebuilt in place at `21.3-povil.49` (Wizard 0.1.46 →
+0.1.48 in the installer). Seven review rounds; six of them found something
+real, and three of those were regressions introduced by an earlier round of
+the same release. The rounds are the story here, so they are recorded as such.
+
+**THE USER-FACING FIXES.**
+
+* **A late debrid no longer erases the source list.** `final_sources` is built
+  exclusively inside the loop over debrid cache-check threads that finished in
+  time, so with one debrid configured a single late answer discarded every
+  torrent the scrapers found. And a check that FAILED came back as an empty
+  cached list, indistinguishable from an honest "nothing cached" -- which
+  POV stamps `Uncached` and its own default filter then deletes. Two roads to
+  the same empty screen after the counters climbed. Full write-up above:
+  *One number is POV's wait AND its request timeout*.
+* **The POV cycle never lands on a dialog.** Every window POV shows while it
+  works is a `WindowXMLDialog` that FLOATS over home, so all four "is it idle"
+  tests said yes mid-scrape. Measured in the field to the second: 1.14s between
+  our disable and a Disney tile press that then failed. Write-up above.
+* **A quick update stopped killing Kodi**, which skipped the settings save.
+* **Add-ons pinned by a dead origin update again**, and the dead repository is
+  switched off rather than polled hourly for ever.
+* **Umbrella + CocoScrapers on every device**; **Account Manager refreshed to
+  1.1.6** after the maintainer asked whether a fresh install got the newest.
+* **The player OSD logo pair draws** -- one missing bracket, never rendered.
+* **The startup pass sleeps 6.5s instead of 15.75s.** The per-step 0.25s wait
+  was chosen when the pass had 26 steps; it had 63.
+
+**WHAT THE ROUNDS COST, AND WHY THAT IS THE POINT.**
+
+Rounds 2-6 each found a NEW bypass of the same zip-name guard in
+`build_full_build._unsafe_member`: a `..` segment, then a backslash, then
+`".. "` (Windows strips trailing spaces), then fullwidth `．．` and `／` (NFKC
+folds them), then `σ`/`ς` in the case-clash check beside it. Four of the five
+were reached by executing the real `build()` and `verify()` and finding the
+payload in the finished artifact.
+
+**Every fix for the first four taught the rule one more spelling, and the next
+round found the next spelling.** Only round five changed strategy: refuse any
+name whose NFKC form differs from itself, measured first across all 896
+artifacts and 599,447 members to prove it costs nothing real. That is the
+lesson worth keeping -- not the individual escapes.
+
+Rounds 2-6 also each found one OVERSTATED justification, and three of the six
+were mine from the previous round. The worst was "any name Windows would
+silently rewrite is refused outright", falsified by the very next round.
+
+**THREE REGRESSIONS I INTRODUCED AND A LATER ROUND CAUGHT:**
+
+1. `return None` as the failed-check sentinel, which made the two POV patches
+   coupled -- and a crash between them left a device worse off than unpatched.
+   Fixed by returning `tuple(self.cached_list)`: unpatched POV reads it exactly
+   as it always did.
+2. an atomic write with a FIXED temp name, so two writers truncated each
+   other. Found because its own test failed 2 runs in 8.
+3. a temp-file sweep that deleted a live writer's file -- twice: first by
+   deleting everything it recognised, then, after an age guard, by trusting a
+   wall clock on hardware with no RTC battery.
+
+**AND A TEST THAT COULD NOT SEE THE BUG IT WAS WRITTEN FOR.** The concurrency
+test for (2) awaited each writer before starting the next, so it passed against
+the broken version too. It now runs six threads on a barrier, with a sabotage
+check that reinstates the old shape and asserts it FAILS.
+
+**TWO TESTS THAT COULD ONLY PASS ON THE RELEASE THEY WERE WRITTEN FOR** were
+found during phase 1: `test_platform_packages` named 0.1.46/0.1.47 in six
+places and rebuilt 0.1.47 from a checkout of the CURRENT source. One of its own
+comments already said that pair "used to be pinned to a historical one and
+drifted" -- and it had been re-pinned. Both derive from `build.txt`, the
+wizard's `addon.xml` and the manifest's `previous_version` now.
+
+**AND THE PUBLICATION GAP**, which is its own section above: the packages
+rebuilt correctly and the download page kept serving the previous ones,
+because `deploy-pages` woke only on a push to `main` and a same-label rebuild
+does not push. Documented as a manual step since 1 August; skipped anyway.
+
 ### What shipped 0.2.505 / qf 0.1.550 / build 0.1.118 (note 605)
 
 **WE WERE BREAKING THE HOME SCREEN OURSELVES.** Two reports, a photo of the
@@ -6283,10 +6361,24 @@ Measured, not theorised: the release asset was 75,020,054 bytes and the live
 page was still serving 75,011,862 afterwards.
 
 Nothing was scheduled to ever fix that -- the next unrelated push to main
-would have, whenever that happened to be. Anyone installing from the site in
-between gets an APK carrying an older build, silently. It self-heals on first
-launch (the wizard quick-updates), so it is invisible rather than broken,
-which is the worst shape for a gap like this.
+would have, whenever that happened to be.
+
+TWO CORRECTIONS TO THE FIRST VERSION OF THIS ENTRY, both mine:
+
+* it said the stale APK carried "an older build". It does not carry a build at
+  all. `build-apk.yml` lifts exactly six pure-Python modules out of the build
+  zip (requests, six, certifi, urllib3, chardet, idna, for the wizard's import
+  stack) and bundles the WIZARD; POV, this add-on and the skin are not in the
+  package. A fresh install downloads the build from `build.txt`. What a stale
+  page actually costs is the older WIZARD -- which decides how the first
+  extraction behaves, because `startup.py` self-updates it on disk while the
+  running process keeps the `extract` module it already imported.
+
+* it read as a discovery. It was not: `APK_RELEASE.md` has documented this
+  exact failure since 2026-08-01, in bold -- "Always re-run Deploy GitHub Pages
+  as the last step of a package release." A documented manual step, skipped
+  once, three weeks later. That is the finding worth keeping: the fix was never
+  more knowledge, it was removing the step.
 
 `deploy-pages.yml` now also triggers on `release: [published, edited]`.
 `test_pages_sync_follows_a_release` pins both halves: the trigger, and the

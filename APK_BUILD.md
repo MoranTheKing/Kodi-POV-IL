@@ -24,8 +24,8 @@ Neither workflow uses any third-party `actions/*` ג€” just system tools and
 
 4. **Build platform packages.** `Actions → "Build Android, Windows and webOS
    packages" → Run workflow`. Supply a release label such as
-   `version=21.3-povil.48`, a strictly increasing Android `version_code` such as
-   `2103048`, and `kodi_version=21.3`. Release `.47` inherited upstream
+   `version=21.3-povil.49`, a strictly increasing Android `version_code` such as
+   `2103049`, and `kodi_version=21.3`. Release `.47` inherited upstream
    `versionCode=2103000`, so `.48` must stay above it; `21348` would be treated
    by Android as a downgrade and cannot update an existing installation.
 
@@ -83,7 +83,7 @@ unrequested APK/EXE replacement dialog to a legacy installation.
 
 LG webOS keeps the official `org.xbmc.kodi` app id so a newer IPK upgrades the
 existing app. The public POV label is converted to a valid numeric webOS
-version (`21.3-povil.48` → `21.3.48`) in all three package metadata files.
+version (`21.3-povil.49` → `21.3.49`) in all three package metadata files.
 Never write a hyphenated POV label into `appinfo.json`.
 
 ## Bumping a release later
@@ -91,7 +91,7 @@ Never write a hyphenated POV label into `appinfo.json`.
 - Bump the `version_code` integer (Android will refuse downgrade installs).
 - Keep it above the highest value already shipped. The `.48` baseline is
   `2103048`, chosen to exceed the legacy `.47` value `2103000`.
-- Choose a new `version` label (e.g. `21.3-povil.49`).
+- Choose a new `version` label (e.g. `21.3-povil.50`).
 - Bump the workflow's guarded `EXPECTED_RELEASE`,
   `EXPECTED_VERSION_CODE` and `EXPECTED_KODI_VERSION` together with the input
   defaults. The job intentionally stops before downloading anything when an
@@ -176,6 +176,16 @@ If `KEYSTORE_PASSWORD` is lost:
 4. Cut a new release. Android refuses to update an app signed with a different key, so existing installs cannot be upgraded onto the new keystore ג€” existing users have to uninstall the old app first, then install the new one.
 
 This is the same constraint the kodi7rd build operates under.
+
+**Re-running at the SAME label is a supported operation and is what a
+package refresh normally is.** The workflow deletes and recreates the
+release, so the artifacts change while the label and `version_code` do
+not -- no installed client is prompted, and the point is the bundled
+Wizard, which decides how a BRAND-NEW install performs its first
+extraction. Bump the label only when you want existing devices asked to
+reinstall the app; that also means editing the pointer files under
+`wizard/assets/kodi_version_auto_update/` and
+`NO_AUTO_APP_PROMPT_TARGETS` in the wizard's `uservar.py`.
 
 ## Known limitations of the apktool rebrand
 
