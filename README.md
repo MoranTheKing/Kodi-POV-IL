@@ -144,8 +144,8 @@ request gets its own interpreter instead, which makes that impossible.
 The cost, now measured on a real device rather than guessed at: POV loads its
 own code at the start of each request, so with a private interpreter it reloads
 it on every single press. Sixteen navigations were timed, across five unrelated
-sections and two different services, and every one of them sat on the same
-floor of 1.72 to 1.78 seconds. Opening the same category a second time did not
+sections and two different services, and every one of them landed between 1.72
+and 1.89 seconds -- a fifth of a second apart, whatever was being fetched. Opening the same category a second time did not
 help -- that floor is not data, so there is nothing there to cache.
 
 So there is now a switch, and it is off unless you turn it on: **settings ->

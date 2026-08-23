@@ -7,11 +7,11 @@ v0.2.507
   had was its price.
   Now measured, from a reporter's device on 0.2.506 running Estuary, using the
   per-navigation timing line 0.2.506 itself shipped. Sixteen navigations, and
-  a floor of 1.72s to 1.78s underneath all of them -- tmdb_tv_networks,
-  tmdb_movies_popular, trakt_tv_trending, tmdb_tv_premieres and
-  tmdb_movies_latest_releases alike. tmdb_movies_popular and trakt_tv_trending
-  are different modules talking to different companies' servers and both took
-  1.77s, to the hundredth. Repeat visits do not move it: FOX 2.46s then 1.78s,
+  five unrelated route families -- tmdb_tv_networks, tmdb_movies_popular,
+  trakt_tv_trending, tmdb_tv_premieres and tmdb_movies_latest_releases -- all
+  landing between 1.72s and 1.89s. That is a spread of 0.17s across different
+  modules talking to different companies' servers; tmdb_movies_popular and
+  trakt_tv_trending both took 1.77s, to the hundredth. Repeat visits do not move it: FOX 2.46s then 1.78s,
   Amazon 2.24s then 1.73s, so roughly 0.6s of a first visit is cacheable
   network and the floor beneath it is not.
   A route-independent, cache-immune floor is a fixed per-invocation cost, and
