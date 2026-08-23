@@ -510,6 +510,42 @@ def test_wizard_rebuild_from_clean_checkout() -> None:
         )
 
 
+def test_pages_sync_follows_a_release() -> None:
+    """The download page must refresh when the packages are rebuilt.
+
+    deploy-pages.yml republishes the latest release's unversioned APKs into
+    downloads/, and it used to wake ONLY on a push to main. build-apk.yml does
+    not push to main when it rebuilds an EXISTING version -- its pointer-file
+    step sees the version already recorded and exits without committing -- so
+    a rebuild landed on the GitHub Release and the download page went on
+    serving the previous APKs with nothing scheduled to replace them. Measured
+    on 2026-08-23: packages rebuilt at 02:49 carrying build 0.1.119, and the
+    live page still served the bytes from the previous build afterwards.
+    """
+    pages = (ROOT / ".github/workflows/deploy-pages.yml").read_text(
+        encoding="utf-8"
+    )
+    triggers = pages.split("\non:", 1)[1].split("\npermissions:", 1)[0]
+    assert "release:" in triggers, (
+        "deploy-pages must wake on a published release, or a package rebuild "
+        "that does not also push to main never reaches the download page"
+    )
+    assert "published" in triggers
+    # and it must still do the thing that makes that matter
+    assert "gh release download" in pages
+    assert "Kodi-POV-IL-64bit.apk" in pages
+    # the build workflow's own pointer step is what makes the gap possible --
+    # pinned so that if it ever starts pushing unconditionally, whoever
+    # changes it sees why this trigger exists.
+    build = (ROOT / ".github/workflows/build-apk.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "Version pointer files already up to date." in build, (
+        "build-apk no longer short-circuits its pointer commit; re-derive "
+        "whether deploy-pages still needs the release trigger"
+    )
+
+
 def test_phase_one_artifacts() -> None:
     build = (ROOT / "wizard/assets/build.txt").read_text(
         encoding="utf-8"
@@ -630,6 +666,7 @@ def main() -> int:
     test_no_auto_app_prompt_targets()
     test_workflow_package_guards()
     test_wizard_rebuild_from_clean_checkout()
+    test_pages_sync_follows_a_release()
     test_phase_one_artifacts()
     print("platform package guards: OK")
     return 0
