@@ -10,7 +10,7 @@ FROM A USER'S LOG, one line after the video window opened:
 and treats it as FALSE -- and the same shape appears twenty-three times across
 eight files of the shipped skin.
 
-TWO SITES ARE REPAIRED, AND THE POINT OF THIS FILE IS WHICH TWO.
+FOUR SITES ACROSS TWO SKINS, AND THE POINT OF THIS FILE IS WHICH FOUR.
 
 The one anybody will notice is the video OSD, where a complementary pair draws
 the title's clear-logo or, failing that, the studio logo. Both conditions are
@@ -31,6 +31,7 @@ something the user will not see.
 
 Run: python3 tools/test_fentastic_clearlogo_var.py
 """
+import difflib
 import glob
 import importlib.util
 import io
@@ -57,6 +58,27 @@ def check(label, cond, detail=''):
                          ('  -- ' + detail) if detail and not cond else ''))
     if not cond:
         FAIL.append(label)
+
+
+def newest_full_build():
+    """The full build, which is where skin.estuary actually ships.
+
+    The quickfix carries skin.fentastic but NOT skin.estuary -- so a device
+    that quick-updates keeps whatever Estuary it already has, and the only
+    thing that ever repairs it is the runtime patcher this file guards. That
+    asymmetry is the reason the estuary site cannot be verified against the
+    quickfix and needs the full build.
+    """
+    best, best_n = None, ()
+    for path in glob.glob(os.path.join(
+            DIST, 'Kodi-POV-IL-FENtastic-test-*.zip')):
+        m = re.search(r'test-([0-9.]+)\.zip$', path)
+        if not m:
+            continue
+        n = tuple(int(p) for p in m.group(1).split('.'))
+        if n > best_n:
+            best, best_n = path, n
+    return best
 
 
 def newest_quickfix():
@@ -109,8 +131,12 @@ def load(home):
     return m
 
 
-def home_with(files):
+def home_with(files, estuary=None):
     """A fake special://home carrying the named skin xml files.
+
+    `files` go under skin.fentastic, `estuary` under skin.estuary -- a real
+    device has ONE of the two, so most checks below deliberately supply only
+    one and expect `no_skin` for the other.
 
     Returns (home, xml_dir) so a check can read a file back by name.
     """
@@ -120,6 +146,12 @@ def home_with(files):
     os.makedirs(xml_dir, exist_ok=True)
     for name, text in files.items():
         with io.open(os.path.join(xml_dir, name), 'w', encoding='utf-8',
+                     newline='') as f:
+            f.write(text)
+    for name, text in (estuary or {}).items():
+        d = os.path.join(home, 'addons', 'skin.estuary', 'xml')
+        os.makedirs(d, exist_ok=True)
+        with io.open(os.path.join(d, name), 'w', encoding='utf-8',
                      newline='') as f:
             f.write(text)
     return home, xml_dir
@@ -135,15 +167,27 @@ print('=== the defect is in the released package ===')
 qf = newest_quickfix()
 check('a quickfix package was found to inspect', qf is not None)
 SKIN = {}
+EST = {}
 if qf:
     with zipfile.ZipFile(qf) as z:
         for name in ('Variables.xml', 'Includes_VideoOsd4.xml',
                      'View_51_Poster.xml'):
             SKIN[name] = z.read(
                 'addons/skin.fentastic/xml/' + name).decode('utf-8')
+    fb = newest_full_build()
+    check('a full build was found, which is where skin.estuary ships',
+          fb is not None)
+    if fb:
+        with zipfile.ZipFile(fb) as z:
+            for name in ('Variables.xml', 'View_51_Poster.xml'):
+                EST[name] = z.read(
+                    'addons/skin.estuary/xml/' + name).decode('utf-8')
     mod0 = load(tempfile.mkdtemp(prefix='fclv-probe-'))
-    for label, rel, broken, fixed in mod0.SITES:
-        text = SKIN[rel.split('/')[-1]]
+    for label, skin, rel, broken, fixed in mod0.SITES:
+        src = EST if skin == 'skin.estuary' else SKIN
+        if not src:
+            continue
+        text = src[rel.split('/')[-1]]
         check('%s: the shipped skin has exactly the broken block' % label,
               text.count(mod0._fit(text, broken)) == 1,
               'found %d -- if the skin was fixed upstream, delete this repair '
@@ -175,16 +219,37 @@ if qf:
           'if somebody un-commented it, this repair became visible and the '
           'release note may say so')
 
+    # ESTUARY IS THE OPPOSITE CASE, and that is the whole reason it was added.
+    # FENtastic's consumer is commented out, so repairing it is bookkeeping.
+    # Estuary's is live XML, so the variable resolving to nothing means a
+    # texture that draws nothing, in the default poster view, on every device.
+    est_poster = EST.get('View_51_Poster.xml', '')
+    est_vars = EST.get('Variables.xml', '')
+    check('estuary: the ClearArtLogo consumer is LIVE, not commented out',
+          '<texture>$VAR[ClearArtLogo]</texture>' in est_poster
+          and '<!-- <texture>$VAR[ClearArtLogo]</texture>' not in est_poster,
+          'if this became commented out upstream, the estuary site is now '
+          'bookkeeping too and the release note should stop promising a logo')
+    est_conds = [c for c in re.findall(r'condition="([^"]*)"', est_vars)
+                 if 'ListItem.Art(clearlogo' in c]
+    check('estuary: both of its conditions are unparseable as shipped',
+          len(est_conds) == 2 and all(unbalanced(c) for c in est_conds),
+          str(est_conds))
+    check('...so BOTH branches are false and the variable resolves to nothing',
+          len(est_conds) == 2)
+
 
 # --- 1. the repair, on the real files --------------------------------------
 print()
 print('=== the repair ===')
 if SKIN:
-    home, root = home_with(SKIN)
+    home, root = home_with(SKIN, estuary=EST)
+    est_root = os.path.join(home, 'addons', 'skin.estuary', 'xml')
     mod = load(home)
     st = mod.ensure_patched()
     print('   status: %s' % st)
-    check('every site patches', st.count('=patched') == len(mod.SITES), st)
+    check('every site patches when both skins are present',
+          st.count('=patched') == len(mod.SITES), st)
 
     osd_after = read(os.path.join(root, 'Includes_VideoOsd4.xml'))
     conds = [c for c in re.findall(r'<visible>([^<]*)</visible>', osd_after)
@@ -221,6 +286,44 @@ if SKIN:
               '</value>')[1],
           'the clearlogo and clearart payloads were exchanged')
 
+    # ESTUARY, the one that is actually on screen.
+    if EST:
+        est_after = read(os.path.join(est_root, 'Variables.xml'))
+        eblock = re.findall(r'<variable name="ClearArtLogo">(.*?)</variable>',
+                            est_after, re.S)
+        econds = re.findall(r'condition="([^"]*)"', eblock[0]) if eblock \
+            else []
+        check('estuary: the ClearArtLogo conditions now parse',
+              econds == ['!String.IsEmpty(ListItem.Art(clearlogo))',
+                         'String.IsEmpty(ListItem.Art(clearlogo))'],
+              str(econds))
+        check('estuary: ...and each still returns the art it was written for',
+              eblock and '$INFO[ListItem.Art(clearlogo)]'
+              in eblock[0].split('</value>')[0]
+              and '$INFO[ListItem.Art(clearart)]'
+              in eblock[0].split('</value>')[1],
+              'the clearlogo and clearart payloads were exchanged')
+        ebefore = sum(1 for c in re.findall(r'condition="([^"]*)"',
+                                            EST['Variables.xml'])
+                      if unbalanced(c))
+        eafter = sum(1 for c in re.findall(r'condition="([^"]*)"', est_after)
+                     if unbalanced(c))
+        check('estuary: exactly 2 conditions repaired, the rest left alone',
+              eafter == ebefore - 2, '%d before, %d after' % (ebefore, eafter))
+        # EXACTLY two lines, EXACTLY two bytes -- one ')' each. The first
+        # version of this check reverse-substituted the repair and compared
+        # whole files, which also rewrote unrelated conditions that legally
+        # end in `clearlogo))">` and reported a change the repair never made.
+        diff = [l for l in difflib.unified_diff(
+            EST['Variables.xml'].splitlines(), est_after.splitlines(),
+            lineterm='', n=0)
+            if l[:1] in '+-' and not l.startswith(('+++', '---'))]
+        check('estuary: exactly two lines changed, and nothing else',
+              len(diff) == 4
+              and len(est_after) == len(EST['Variables.xml']) + 2,
+              '%d changed line(s), %+d bytes'
+              % (len(diff), len(est_after) - len(EST['Variables.xml'])))
+
     # NOTHING ELSE MOVED. Nineteen other unbalanced conditions in Variables
     # are deliberately untouched, so "the count went down by exactly two" is
     # the check, not "there are none left".
@@ -247,13 +350,15 @@ home3, root3 = home_with({'Variables.xml': '<includes/>\n',
 mod3 = load(home3)
 before3 = read(os.path.join(root3, 'Variables.xml'))
 st3 = mod3.ensure_patched()
+FENT_N = sum(1 for x in mod3.SITES if x[1] == 'skin.fentastic')
 check('a file without the blocks is unmatched',
-      st3.count('=unmatched') == len(mod3.SITES), st3)
+      st3.count('=unmatched') == FENT_N
+      and st3.count('=no_skin') == len(mod3.SITES) - FENT_N, st3)
 check('...and untouched', read(os.path.join(root3, 'Variables.xml')) == before3)
 
 if SKIN:
     twice = dict(SKIN)
-    _b = mod0.SITES[0][2]
+    _b = mod0.SITES[0][3]
     twice['Includes_VideoOsd4.xml'] = SKIN['Includes_VideoOsd4.xml'].replace(
         _b, _b + '\n' + _b, 1)
     home4, root4 = home_with(twice)
@@ -267,8 +372,8 @@ if SKIN:
     # purpose, and asserting the whole file unchanged asserted the opposite.
     after4 = read(os.path.join(root4, 'Includes_VideoOsd4.xml'))
     check('...and both copies of the refused block are left as they were',
-          after4.count(mod4._fit(after4, mod0.SITES[0][2])) == 2
-          and mod4._fit(after4, mod0.SITES[0][3]) not in after4,
+          after4.count(mod4._fit(after4, mod0.SITES[0][3])) == 2
+          and mod4._fit(after4, mod0.SITES[0][4]) not in after4,
           'the ambiguous block was edited anyway')
     check('...while the unambiguous site in the same file still got fixed',
           'video_OSD_studio_logo=patched' in st4, st4)
@@ -283,11 +388,25 @@ if SKIN:
     mod5 = load(home5)
     st5 = mod5.ensure_patched()
     check('both files patch with their line endings swapped',
-          st5.count('=patched') == len(mod5.SITES), st5)
+          st5.count('=patched') == FENT_N, st5)
     check('...and no line ending is changed',
           '\r' not in read(os.path.join(root5, 'Variables.xml'))
           and '\n' not in read(os.path.join(
               root5, 'Includes_VideoOsd4.xml')).replace('\r\n', ''))
+
+if EST:
+    # Estuary's Variables.xml is CRLF like FENtastic's; prove the repair does
+    # not depend on that either, since a device's copy has been through
+    # whatever wrote it.
+    home7, _ = home_with({}, estuary={
+        'Variables.xml': EST['Variables.xml'].replace('\r\n', '\n')})
+    mod7 = load(home7)
+    st7 = mod7.ensure_patched()
+    check('estuary patches with LF line endings too',
+          'estuary_poster-view_clear-logo_variable=patched' in st7, st7)
+    check('...and stays LF',
+          '\r' not in read(os.path.join(
+              home7, 'addons', 'skin.estuary', 'xml', 'Variables.xml')))
 
 home6 = tempfile.mkdtemp(prefix='fclv-none-')
 _SCRATCH.append(home6)
