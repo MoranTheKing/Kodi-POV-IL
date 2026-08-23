@@ -6,52 +6,80 @@ setup, see [APK_BUILD.md](APK_BUILD.md).
 
 ## Current verified release
 
-[`21.3-povil.48`](https://github.com/MoranTheKing/Kodi-POV-IL/releases/tag/v21.3-povil.48)
-was **rebuilt in place on 2026-08-01** at the same version label. The release
-was deleted and recreated with fresh artifacts; the label, versionCode and
-release marker are unchanged, so no installed client is prompted to update.
+[`21.3-povil.49`](https://github.com/MoranTheKing/Kodi-POV-IL/releases/tag/v21.3-povil.49)
+was **rebuilt in place on 2026-08-23** (workflow run 32613503647, assets
+uploaded 02:49 UTC) at the same version label. The release was deleted and
+recreated with fresh artifacts; the label, versionCode and release marker are
+unchanged, so no installed client is prompted to update.
 
 Why it was rebuilt: the packages bundle the Wizard into `assets/`, and the
-Wizard shipped in the previous `.48` build (`0.1.34`) carried the extraction
-bug that skipped the five FENtastic home-widget files on a fresh install. The
-rebuild bundles Wizard `0.1.36`, so a new installation lays those files down on
-its first extraction instead of relying on the add-on to restore them at the
-next startup.
+`.49` build published on 2026-08-14 carried Wizard `0.1.46`. `0.1.48` closes
+the quick-update path that KILLED Kodi rather than closing it -- which skips
+the settings save, so anything changed that session was lost -- and adds the
+Umbrella / Account Manager auto-install and the pack-integrity repairs.
+
+**This matters for a new installation specifically.** `startup.py` self-updates
+the Wizard before it extracts the build, but the update only lands on disk: the
+running process keeps the `extract` module it already imported, so a brand-new
+install extracts with whatever Wizard version the APK shipped. Rebuilding is
+what makes the FIRST extraction use `0.1.48`.
 
 | Package | Size (bytes) | SHA-256 |
 | --- | ---: | --- |
-| Android 32-bit | 74,651,502 | `84f08b944a9a9b5b9f0011f3fb3b3cffc2b2ababbd89cdb3f863196b1e186b32` |
-| Android 64-bit | 74,983,190 | `46f3de4153c250e068083399708f451b37caa71549992e5ff9d659693438e8f2` |
-| Windows | 133,276,916 | `1f22176468ee40b15e93d245dd2beb73058d7de821594d826317b83862ffff0b` |
-| LG webOS | 97,576,916 | `253495b5f7e3deeda17a4270948480330d8bbe124deef810902567a9cb05f8c4` |
+| Android 32-bit | 74,684,270 | `029aa092a14e245166c4a4d71c367c0d97da084ec8a919d17d83945cf0669111` |
+| Android 64-bit | 75,020,054 | `4cf28309a8a6ade1609eba4c3981f1d6b44f152f0811c2fa800321abf70f4c42` |
+| Windows | 142,447,847 | `37fec0970b00d935a0e82b5ae8cc4ed914267fbf93454ec40606746684635165` |
+| LG webOS | 97,611,186 | `246c85ca82d3debb6446cf3df6a69aac64d93a8e6190e5582a9ce108da9dc667` |
 
-Both APKs and the Windows installer were downloaded from the published URLs and
-hashed; each matched the release-reported digest. Each Android package was
-opened and `assets/addons/plugin.program.kodipovilwizard/addon.xml` confirmed to
-read `0.1.36`, with the corrected `preserve_widget_layout` rule present in
-`resources/libs/extract.py`. The Windows installer's NSIS block was decompressed
-and the same `addon.xml` read `0.1.36` there too. The webOS row is the
-release-reported digest; that package was not re-downloaded.
+The 64-bit APK was downloaded **from the live download page** (not from the
+release) and hashed: `4cf28309...f70f4c42`, byte-identical to the release
+asset. Opened, it reports `assets/system/povil-release.txt` =
+`21.3-povil.49` and `assets/addons/plugin.program.kodipovilwizard/addon.xml` =
+`0.1.48`. The 32-bit page copy was matched by size only (74,684,270); the
+Windows and webOS rows are the release-reported digests and were not
+re-downloaded.
 
-`assets/system/povil-release.txt` still reads `21.3-povil.48`, and both version
-pointer files (`wizard/assets/kodi_version_auto_update/{apk,windows}/`) were
-confirmed unchanged at `21.3-povil.48` on `main` and on Raw. The workflow's
-pointer step is a no-op when the label does not change, so no PR was opened and
-no client sees a newer version. Version comparison is strictly-newer
-(`release_version.is_newer_release`), so an equal label never prompts.
+### WHAT THE APK DOES NOT CONTAIN, because it is easy to assume otherwise
+
+**The build is not in the package.** `build-apk.yml` bundles Kodi's own
+add-ons plus the Wizard (62 add-ons in the 64-bit APK), and lifts exactly six
+pure-Python modules out of the build zip -- `script.module.requests`, `six`,
+`certifi`, `urllib3`, `chardet`, `idna` -- because the Wizard imports
+`requests` at startup. `plugin.video.pov`, `service.subtitles.kodipovilai`,
+`skin.fentastic` and the rest are NOT there. A fresh install downloads the
+build from `wizard/assets/build.txt` on first launch, which is why a new
+device lands on whatever build.txt currently serves rather than on whatever
+was current when the APK was built.
+
+So a package rebuild changes exactly two things: the bundled Wizard, and those
+six modules. It does not "ship a newer build".
 
 **The APK download links are NOT served from the release.** `downloads/index.html`
 points at `https://morantheking.github.io/Kodi-POV-IL/downloads/Kodi-POV-IL-{32,64}bit.apk`,
 which are files on the `gh-pages` branch. `deploy-pages.yml` copies them there
 with `gh release download`, so **a Pages deploy must run AFTER the release
 assets are uploaded** — otherwise the site keeps serving the previous APK while
-the release holds the new one. That is exactly what happened on 2026-08-01: the
-Pages deploy ran at 12:35 and the assets landed at 12:52, so the site served
-Wizard `0.1.34` APKs until `deploy-pages.yml` was dispatched again at 13:06.
-Both files were then re-downloaded from the live page and matched the release
-digests byte-for-byte. **Always re-run Deploy GitHub Pages as the last step of
-a package release.** The Windows and webOS links use
-`releases/latest/download/...` and are not affected.
+the release holds the new one.
+
+This happened twice. On 2026-08-01 the Pages deploy ran at 12:35 and the assets
+landed at 12:52, so the site served Wizard `0.1.34` APKs until
+`deploy-pages.yml` was dispatched again at 13:06. This document then said, in
+bold, to always re-run Deploy GitHub Pages as the last step of a package
+release — and on 2026-08-23 that manual step was missed, so the packages
+rebuilt at 02:49 sat on the release while the site kept serving the previous
+ones. Measured: the release asset was 75,020,054 bytes and the live page was
+still 75,011,862.
+
+A documented manual step that is skipped once is a documented manual step that
+will be skipped again. **`deploy-pages.yml` now also triggers on
+`release: [published, edited]`**, so the sync follows the packages by itself.
+`test_pages_sync_follows_a_release` pins the trigger AND the reason it is
+needed — that `build-apk.yml`'s pointer step exits without committing when the
+version label has not changed, which is why a rebuild at an unchanged label
+produces no push to `main` and therefore used to produce no Pages deploy.
+
+The Windows and webOS links use `releases/latest/download/...` and are not
+affected.
 
 The earlier `.48` build (workflow run 30137185730, Wizard `0.1.34`, build
 `0.1.101`) recorded these hashes, kept for reference: Android 32-bit
@@ -64,14 +92,14 @@ The earlier `.48` build (workflow run 30137185730, Wizard `0.1.34`, build
 `f82ab46528450f5ade730604683985ab2fb0d8a726503a820d36d864cf7ee6c9`
 (97,576,242).
 
-Both APKs report package `org.xbmc.povi`, versionCode `2103048`,
-versionName `21.3-povil.48`, the expected ABI and the POV IL label. They are
+Both APKs report package `org.xbmc.povi`, versionCode `2103049`,
+versionName `21.3-povil.49`, the expected ABI and the POV IL label. They are
 zip-aligned, carry valid v1/v2/v3 signatures and use the same signing
-certificate as the actual `.47` APK, so they can update it in place. The
+certificate as the `.47` and `.48` APKs, so they can update either in place. The
 certificate SHA-256 is
 `b69d63b652d991ca78bbbf8aca3f034491696a4c36d6468c3a5a4685a65b5417`.
 
-The webOS IPK reports app id `org.xbmc.kodi` with numeric version `21.3.48`.
+The webOS IPK reports app id `org.xbmc.kodi` with numeric version `21.3.49`.
 The outer Windows EXE is not Authenticode-signed, so SmartScreen can still show
 an unknown-publisher warning. Keep the clean-Windows standard-user launch smoke
 test in the release checklist rather than claiming it was run on the
@@ -87,7 +115,7 @@ artifact and cache gates.
 
 `build-apk.yml` refuses to run unless the dispatch inputs exactly match
 `EXPECTED_RELEASE` / `EXPECTED_VERSION_CODE` / `EXPECTED_KODI_VERSION`
-(currently `21.3-povil.48` / `2103048` / `21.3`). Dispatching any other value
+(currently `21.3-povil.49` / `2103049` / `21.3`). Dispatching any other value
 fails in the first step, in about 12 seconds, before anything is built — so a
 mistyped version cannot produce a release. To ship a genuinely new version,
 bump those constants in the workflow deliberately, in the same commit as
@@ -117,7 +145,7 @@ bump those constants in the workflow deliberately, in the same commit as
   installer.
 - The webOS package keeps app id `org.xbmc.kodi` for in-place updates. Its
   control file, `appinfo.json` and `packageinfo.json` all use the same numeric
-  version (for example POV release `21.3-povil.48` becomes webOS `21.3.48`).
+  version (for example POV release `21.3-povil.49` becomes webOS `21.3.49`).
   The builder preserves original tar member order and metadata, changes only
   declared branding/manifest/version files, adds the Wizard dependencies, and
   performs an independent structural and byte-level verification.
