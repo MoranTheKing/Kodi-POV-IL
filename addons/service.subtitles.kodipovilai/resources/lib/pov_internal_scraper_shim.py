@@ -36,10 +36,32 @@
 #         append(('internal', loader.find_spec(module_name)
 #                 .loader.load_module(module_name).source, module_name))
 #
-# Any .py in the folder POV currently scans is loaded by module name and asked
-# for its `source` attribute. That contract did not change between 6.08.13 and
-# 6.08.14. So a file that lands in the folder works, and the only problem is
-# WHICH folder.
+# READ THE LINE ABOVE IT, THOUGH, BECAUSE THE FIRST VERSION OF THIS FILE DID
+# NOT AND SAID SOMETHING FALSE. It claimed "any .py in the folder POV scans is
+# loaded". It is not. `active_internal_scrapers()` in modules/settings.py is a
+# HARDCODED whitelist built from POV's own `provider.*` settings --
+# aiostreams, external, easynews, pm_cloud, oc_cloud, tb_cloud, rd_cloud,
+# ad_cloud -- and `thirdparty` cannot appear in it. Executing POV's own loader
+# over a folder containing thirdparty.py confirms it: iter_modules sees the
+# file, the gate skips it, POV never loads it. That is true of 6.08.13 too --
+# the function is identical in both but for the order of two lines.
+#
+# SO ITS SCRAPER NEVER LOADED FROM THAT FOLDER ON ITS OWN, in any version, and
+# the source add-on must be registering the name inside POV as well. Its log prefix is
+# literally "patch error". We do not ship the source add-on, it is not on this disk, and
+# nobody here has read it.
+#
+# WHAT THAT MEANS FOR THIS FILE, stated plainly rather than glossed:
+#   * Creating the folder is a real fix for a real, logged error. the source add-on's
+#     write fails at ENOENT; whatever it does after that write never runs.
+#     Unblocking it is the only part of this supported by evidence.
+#   * The mirror is a HEDGE, not a proven fix. It covers exactly one case:
+#     the source add-on registers the name successfully but writes the file to the old
+#     folder. If instead its registration patch is also stale against 6.08.14,
+#     the mirror changes nothing and its scraper stays gone until the source add-on's
+#     author updates it.
+# Neither step is claimed to restore its scraper, and the release note must not
+# say that it does.
 #
 # WHAT THIS DOES, in that order and for that reason:
 #   1. Re-creates the legacy folder (with the __init__.py POV's own copy had),
@@ -162,6 +184,25 @@ def _ensure_legacy_dir(root):
         return 'failed'
 
 
+def _inside(root, path):
+    """True only if `path` really is under POV's own folder.
+
+    POV's kodi_utils is the input to _internal_rel, and POV is a third-party
+    add-on that auto-updates from someone else's repository -- its
+    restructuring is the reason this file exists at all. A declared path
+    containing `..` walked straight out of the add-on and, two levels up,
+    into `addons/`, where Kodi executes whatever Python it finds. A review
+    demonstrated it writing to `<home>/addons/evil/thirdparty.py`. realpath on
+    both sides, because a symlinked folder defeats a string comparison.
+    """
+    try:
+        r = os.path.realpath(root)
+        p = os.path.realpath(path)
+    except Exception:
+        return False
+    return p == r or p.startswith(r + os.sep)
+
+
 def _mirror(root, internal_rel):
     """Copy third-party scrapers from the legacy folder into the live one.
 
@@ -170,6 +211,10 @@ def _mirror(root, internal_rel):
     """
     src = os.path.join(root, *LEGACY_REL.split('/'))
     dst = os.path.join(root, *internal_rel.split('/'))
+    if not _inside(root, dst) or not _inside(root, src):
+        _log('refusing to mirror outside the add-on: {0}'.format(internal_rel),
+             level='WARNING')
+        return 'outside_addon'
     if os.path.normpath(src) == os.path.normpath(dst):
         return 'same_dir'
     if not os.path.isdir(src):
@@ -202,6 +247,10 @@ def _mirror(root, internal_rel):
             os.replace(tmp, d)
             moved.append(stem)
         except Exception as exc:
+            # Appended to `failed`, never silently skipped: a mirror that
+            # reports success after the copy raised is worse than one that
+            # reports nothing, because service.py greps this string to decide
+            # whether to warn.
             failed.append(stem)
             _log('could not mirror {0}: {1}'.format(name, exc), level='WARNING')
     if failed:
