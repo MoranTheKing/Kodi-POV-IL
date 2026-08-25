@@ -90,13 +90,44 @@ def _log(msg, level='INFO'):
 
 
 def _pov_path(rel):
+    """POV's file, wherever this version of POV keeps it.
+
+    6.08.14 moved the debrid API clients from debrids/ to indexers/. Unlike the
+    other relocated patchers this one returns a path for a file that may not
+    exist yet -- it restores a DAMAGED or missing file -- so it prefers a
+    candidate that is actually there and falls back to the first one otherwise,
+    which keeps "where should it go" answerable on both layouts.
+    """
     if xbmcvfs is None:
         return ''
     try:
         base = xbmcvfs.translatePath('special://home/addons/' + POV_ADDON_ID + '/')
     except Exception:
         return ''
-    return os.path.join(base, *rel.split('/'))
+    cands = [os.path.join(base, *c.split('/')) for c in _relocations(rel)]
+    for p in cands:
+        if os.path.isfile(p):
+            return p
+    # Nothing on disk: pick the folder POV actually ships, so a restore lands
+    # where this POV would look rather than re-creating the old layout.
+    for p in cands:
+        if os.path.isdir(os.path.dirname(p)):
+            return p
+    return cands[0]
+
+
+_MOVED = (('resources/lib/debrids/', 'resources/lib/indexers/'),
+          ('resources/lib/indexers/', 'resources/lib/debrids/'))
+
+
+def _relocations(rel):
+    out = [rel]
+    for a, b in _MOVED:
+        if rel.startswith(a):
+            alt = b + rel[len(a):]
+            if alt not in out:
+                out.append(alt)
+    return out
 
 
 def _read_bytes(path):

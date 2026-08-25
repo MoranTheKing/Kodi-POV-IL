@@ -103,6 +103,17 @@
 # One line per site, inserted between the existing import and `try:`. Pure
 # insertions, never an edit to a line POV wrote, so _revert stays byte-exact.
 
+
+# POV 6.08.14 MOVED THESE FILES AND THE DEFECTS CAME WITH THEM. The debrid API
+# clients were relocated from resources/lib/debrids/ to resources/lib/indexers/
+# (the debrids/ name was reused for the cloud scrapers that used to live in
+# scrapers/). The anchors below still match, byte for byte, in the new
+# location -- so this patch did not become unnecessary, it silently stopped
+# being applied, on a device where the thing it prevents still happens.
+#
+# `_pov_path` therefore tries the recorded folder first and then the other one,
+# rather than pinning either. Both layouts are live in the field right now.
+
 import os
 
 try:
@@ -196,6 +207,13 @@ def _revert(content, eol='\n'):
 
 
 def _pov_path(rel):
+    """POV's file, wherever this version of POV keeps it.
+
+    6.08.14 moved the debrid API clients from debrids/ to indexers/ without
+    changing them, so a path recorded against one layout has to be tried
+    against the other. Returns '' when neither exists, which every caller
+    already treats as "not this device's POV".
+    """
     if xbmcvfs is None:
         return ''
     try:
@@ -203,8 +221,27 @@ def _pov_path(rel):
             'special://home/addons/' + POV_ADDON_ID + '/')
     except Exception:
         return ''
-    p = os.path.join(base, *rel.split('/'))
-    return p if os.path.isfile(p) else ''
+    for candidate in _relocations(rel):
+        p = os.path.join(base, *candidate.split('/'))
+        if os.path.isfile(p):
+            return p
+    return ''
+
+
+# The one rename, and its inverse. A list rather than a string swap so a path
+# that mentions neither folder is returned untouched and exactly once.
+_MOVED = (('resources/lib/debrids/', 'resources/lib/indexers/'),
+          ('resources/lib/indexers/', 'resources/lib/debrids/'))
+
+
+def _relocations(rel):
+    out = [rel]
+    for a, b in _MOVED:
+        if rel.startswith(a):
+            alt = b + rel[len(a):]
+            if alt not in out:
+                out.append(alt)
+    return out
 
 
 def _drop_pycache(path):
