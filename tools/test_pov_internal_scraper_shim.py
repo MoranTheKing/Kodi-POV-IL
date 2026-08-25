@@ -213,7 +213,109 @@ check('...POV\'s own rd_cloud.py is untouched', 'SABOTAGE' not in live, live)
 init = io.open(os.path.join(pov2, 'resources/lib/debrids/__init__.py'.replace(
     '/', os.sep)), encoding='utf-8').read()
 check('...POV\'s own __init__.py is untouched', 'SABOTAGE' not in init, init)
-check('non-python files are ignored', True)
+# NOT a bare `check(..., True)`, which is what this line used to be -- the
+# only cover for the .py filter, and a mutant that removed the filter passed.
+put_legacy(pov2, 'notes.txt', 'not python at all\n')
+put_legacy(pov2, 'thirdparty.pyc', 'compiled\n')
+mod2.ensure_patched()
+check('a non-python file is not mirrored',
+      not exists(pov2, 'resources/lib/debrids/notes.txt')
+      and not exists(pov2, 'resources/lib/debrids/thirdparty.pyc'))
+
+# The SOURCE must survive: the source add-on rewrites it on its own schedule, and a
+# mirror that consumed it would make the next install look already-done.
+check('the file is copied, never moved',
+      exists(pov2, 'resources/lib/scrapers/thirdparty.py'))
+
+# Subdirectories are not walked. A folder the source add-on happens to leave behind
+# must not have its contents flattened into POV's package.
+import os as _os
+_sub = _os.path.join(pov2, 'resources', 'lib', 'scrapers', 'nested')
+_os.makedirs(_sub, exist_ok=True)
+with io.open(_os.path.join(_sub, 'deep.py'), 'w', encoding='utf-8') as _f:
+    _f.write('source = 1\n')
+mod2.ensure_patched()
+check('subdirectories of the legacy folder are not flattened in',
+      not exists(pov2, 'resources/lib/debrids/deep.py'))
+
+
+print()
+print('=== the failure modes service.py greps for ===')
+# no_internal: POV names a folder that is not there. service.py keys its
+# warning off this exact string, and nothing exercised it.
+home8, pov8 = make_home('debrids', legacy_exists=False)
+import shutil as _sh
+_sh.rmtree(os.path.join(pov8, 'resources', 'lib', 'debrids'))
+put_legacy(pov8, 'thirdparty.py')
+st8 = load(home8).ensure_patched()
+check('a missing destination is reported, not crashed',
+      'mirror=no_internal' in st8, st8)
+
+# A copy that raises must be reported as failed, not as mirrored.
+home9, pov9 = make_home('debrids', legacy_exists=False)
+mod9 = load(home9)
+mod9.ensure_patched()
+put_legacy(pov9, 'thirdparty.py')
+_real_copy = mod9.shutil.copyfile
+mod9.shutil.copyfile = lambda *a, **k: (_ for _ in ()).throw(OSError('disk full'))
+st9 = mod9.ensure_patched()
+mod9.shutil.copyfile = _real_copy
+check('a copy that fails reports failed, never mirrored',
+      'mirror=failed:thirdparty' in st9, st9)
+
+# CONTAINMENT. POV's kodi_utils is third-party input, and a declared path with
+# `..` walked out of the add-on entirely -- two levels up is addons/, where
+# Kodi executes whatever Python it finds.
+for _evil in ('../evil/', '../../evil/', 'resources/lib/../../../evil/'):
+    home10, pov10 = make_home('debrids', legacy_exists=False)
+    with io.open(os.path.join(pov10, 'resources', 'lib', 'modules',
+                              'kodi_utils.py'), 'w', encoding='utf-8') as _f:
+        _f.write("internal_path = 'special://home/addons/plugin.video.pov/"
+                 "%s'\n" % _evil)
+    put_legacy(pov10, 'thirdparty.py')
+    st10 = load(home10).ensure_patched()
+    check('a path escaping the add-on is refused (%s)' % _evil,
+          'mirror=outside_addon' in st10, st10)
+
+# A legacy path that is a FILE, not a folder.
+home11, pov11 = make_home('debrids', legacy_exists=False)
+with io.open(os.path.join(pov11, 'resources', 'lib', 'scrapers'), 'w',
+             encoding='utf-8') as _f:
+    _f.write('not a directory\n')
+st11 = load(home11).ensure_patched()
+check('a legacy path that is a FILE is reported, not crashed',
+      'legacy=failed' in st11, st11)
+check('...and the file is left exactly as it was',
+      io.open(os.path.join(pov11, 'resources', 'lib', 'scrapers'),
+              encoding='utf-8').read() == 'not a directory\n')
+
+# A legacy folder that exists but is NOT a package. the source add-on's write can
+# succeed into a bare directory, but POV's own copy of this folder shipped an
+# __init__.py and a mutant that only checked isdir() passed every other test
+# here -- so the folder would be left un-importable on exactly the devices
+# where an earlier boot created it before this check existed.
+home13, pov13 = make_home('debrids', legacy_exists=True)
+_init13 = os.path.join(pov13, 'resources', 'lib', 'scrapers', '__init__.py')
+check('the fixture really has no __init__.py yet', not os.path.isfile(_init13))
+st13 = load(home13).ensure_patched()
+check('an existing legacy folder without __init__.py gets one',
+      os.path.isfile(_init13), st13)
+check('...and that is reported as work done, not as already fine',
+      'legacy=created' in st13, st13)
+
+# Both names declared: internal_path must win, because that is the one 6.08.14
+# actually reads. Nothing tested this precedence.
+home12, pov12 = make_home('debrids', legacy_exists=False)
+with io.open(os.path.join(pov12, 'resources', 'lib', 'modules',
+                          'kodi_utils.py'), 'w', encoding='utf-8') as _f:
+    _f.write("scrapers_path  = 'special://home/addons/plugin.video.pov/"
+             "resources/lib/scrapers/'\n"
+             "internal_path  = 'special://home/addons/plugin.video.pov/"
+             "resources/lib/debrids/'\n")
+st12 = load(home12).ensure_patched()
+check('when POV declares BOTH names, internal_path wins',
+      'scans=debrids' in st12,
+      'reading scrapers_path first would send every mirror to a dead folder')
 
 
 # --- 3. an older POV, where the legacy folder IS the live one ------------

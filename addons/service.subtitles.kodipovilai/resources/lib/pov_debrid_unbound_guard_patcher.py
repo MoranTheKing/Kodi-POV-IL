@@ -221,7 +221,7 @@ def _pov_path(rel):
             'special://home/addons/' + POV_ADDON_ID + '/')
     except Exception:
         return ''
-    for candidate in _relocations(rel):
+    for candidate in _relocations(rel, base):
         p = os.path.join(base, *candidate.split('/'))
         if os.path.isfile(p):
             return p
@@ -234,13 +234,46 @@ _MOVED = (('resources/lib/debrids/', 'resources/lib/indexers/'),
           ('resources/lib/indexers/', 'resources/lib/debrids/'))
 
 
-def _relocations(rel):
+def _live_pkg(base):
+    """Which package POV ITSELF imports these clients from, or ''.
+
+    ORDER MATTERS AND EXISTENCE IS NOT ENOUGH, which the first version of this
+    got wrong. Both folders ship in 6.08.14 -- debrids/ holds the cloud
+    scrapers now -- so "try the recorded path, then the other" happily patches
+    a stale debrids/torbox_api.py left behind by an earlier layout while the
+    file POV actually imports, indexers/torbox_api.py, is never touched. The
+    patch then reports `patched` having fixed nothing, which is worse than
+    reporting `no_file`.
+
+    POV states the answer in one line of modules/debrid.py:
+        6.08.13   from debrids  import alldebrid_api, ... torbox_api, ...
+        6.08.14   from indexers import alldebrid_api, ... torbox_api, ...
+    """
+    p = os.path.join(base, 'resources', 'lib', 'modules', 'debrid.py')
+    try:
+        with open(p, encoding='utf-8', errors='replace') as fh:
+            text = fh.read()
+    except Exception:
+        return ''
+    for line in text.splitlines():
+        s = line.strip()
+        for pkg in ('indexers', 'debrids'):
+            if s.startswith('from %s import ' % pkg) and '_api' in s:
+                return pkg
+    return ''
+
+
+def _relocations(rel, base=''):
     out = [rel]
     for a, b in _MOVED:
         if rel.startswith(a):
             alt = b + rel[len(a):]
             if alt not in out:
                 out.append(alt)
+    pkg = _live_pkg(base) if base else ''
+    if pkg:
+        # Put the folder POV imports from first, whatever we recorded.
+        out.sort(key=lambda c: 0 if '/%s/' % pkg in c else 1)
     return out
 
 
