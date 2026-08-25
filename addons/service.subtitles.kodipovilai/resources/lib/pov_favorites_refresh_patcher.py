@@ -99,9 +99,23 @@ _FAV_V2 = ('container_refresh()  # AI_SUBS_FAV_REFRESH_v2'
 # dropped_choice() that 6.08.12 added is NOT touched: it calls
 # container_refresh() unconditionally already, so it needs nothing from us --
 # and requiring `if refresh:` in the pattern is what keeps us out of it.
+#
+# AND THEN POV 6.08.14 CHANGED THE NOTIFY CALLS, which is the second time this
+# line has moved and exactly what the paragraph above predicted:
+#
+#   6.08.13  notification(32576) if action(...) else notification(32574)
+#   6.08.14  kodi_utils.notify_success() if action(...) else kodi_utils.notify_error()
+#
+# The identifying shape is unchanged -- a success/failure expression over one
+# action(...) call, with the gated refresh underneath at the same indentation.
+# So the notify halves are matched loosely (any call that is not `action(`)
+# and the STRUCTURE carries the identification, which is what the pattern was
+# for. The `if refresh: container_refresh()` line underneath is what actually
+# pins it: nothing else in dialogs.py has it.
 _FAV_CHOICE_RE = _re.compile(
-    r'^(?P<ind>[ \t]+)notification\(32576\) if action\((?P<args>[^\n()]*)\)'
-    r' else notification\(32574\)\n'
+    r'^(?P<ind>[ \t]+)(?P<ok>[A-Za-z_][A-Za-z0-9_.]*\([^\n()]*\))'
+    r' if action\((?P<args>[^\n()]*)\) else '
+    r'(?P<bad>[A-Za-z_][A-Za-z0-9_.]*\([^\n()]*\))\n'
     r'(?P=ind)if refresh: container_refresh\(\)$', _re.M)
 
 
