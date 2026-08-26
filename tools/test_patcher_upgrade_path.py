@@ -357,6 +357,16 @@ pin('addon_autoupdate_repair', 'UPGRADES',
     '_MODE_SEED_VERSION=v1', '_addon_update_mode_seeded=v1')
 pin('pov_debrid_unbound_guard_patcher', 'UPGRADES',
     'AI_SUBS_POV_DEBRID_UNBOUND_v1')
+# NEVER-UPGRADES on purpose, for BOTH of its edits: there is no v2 to migrate
+# to, and each refuses to touch a file carrying an older marker of its own
+# rather than guessing at a block it no longer describes. Measured, not assumed
+# -- `legacy=exists, scan=patched, rank=patched` then `scan=unchanged,
+# rank=unchanged` on a second run. The rank guard reported `unmatched` there
+# until it grew the same older-marker check the scan edit already had; the
+# outcome was the same either way, but "unmatched" reads as a POV refactor and
+# would send the next maintainer after a change POV never made.
+pin('pov_internal_scraper_shim', 'NEVER-UPGRADES',
+    'AI_SUBS_POV_INTERNAL_DIRS_v1', 'AI_SUBS_POV_RANK_MISS_v1')
 pin('pov_mdblist_like_patcher', 'UPGRADES',
     'AI_SUBS_MDBL_LIKE_v3')
 pin('pov_prewarm_patcher', 'UPGRADES',
