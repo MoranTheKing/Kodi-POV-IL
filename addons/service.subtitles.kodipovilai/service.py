@@ -324,6 +324,10 @@ def _run_build_startup_repairs():
         _maybe_reseed_genre_folders,
         _maybe_patch_fentastic_widgets,
         _maybe_fix_fentastic_clearlogo_var,
+        # POV 6.08.14 renamed the folder third-party scrapers install into, so
+        # CoreSync's DirectSync write fails and the user loses those sources.
+        # Creates the old folder and mirrors into the new one.
+        _maybe_shim_pov_internal_scrapers,
         _maybe_patch_skin_watched_poster,
         _maybe_patch_favourites_xml,
         _maybe_patch_favourites_personal_tiles,
@@ -2191,6 +2195,32 @@ def _maybe_guard_pov_debrid_handlers():
             kodi_utils.log(
                 'pov_debrid_unbound_guard_patcher failed: {0}'.format(e),
                 level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_shim_pov_internal_scrapers():
+    """Put third-party scrapers where POV 6.08.14 now looks for them.
+
+    CoreSync writes DirectSync into resources/lib/scrapers/, which 6.08.14
+    renamed to resources/lib/debrids/. Its install fails with ENOENT and the
+    user loses every source from the private streaming add-on. See
+    pov_internal_scraper_shim for the log line and why the fix is a shim rather
+    than a patch to either add-on.
+    """
+    try:
+        from resources.lib import pov_internal_scraper_shim, kodi_utils
+        st = pov_internal_scraper_shim.ensure_patched()
+        bad = [p for p in st.split(', ')
+               if p.split('=')[-1].startswith(('failed', 'no_internal',
+                                               'list_failed'))]
+        if bad:
+            kodi_utils.log('pov_internal_scraper_shim: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log('pov_internal_scraper_shim failed: {0}'.format(e),
+                           level='WARNING')
         except Exception:
             pass
 

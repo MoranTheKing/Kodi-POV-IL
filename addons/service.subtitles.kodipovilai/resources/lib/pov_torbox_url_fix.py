@@ -47,6 +47,17 @@
 # the next start. Marker-gated, compile-checked, atomic, .pyc dropped, and a
 # no-op on any POV that does not have the anchor. Never raises.
 
+
+# POV 6.08.14 MOVED THIS FILE AND THE DEFECT CAME WITH IT. The debrid API
+# clients were relocated from resources/lib/debrids/ to resources/lib/indexers/
+# (the debrids/ name was reused for the cloud scrapers that used to live in
+# scrapers/). The anchor below still matches, byte for byte, in the new
+# location -- so this patch did not become unnecessary, it silently stopped
+# being applied, on a device where the outage it prevents still happens.
+#
+# `_pov_path` therefore tries the recorded folder first and then the other one,
+# rather than pinning either. Both layouts are live in the field right now.
+
 import os
 
 try:
@@ -111,15 +122,74 @@ def _log(msg, level='INFO'):
 
 
 def _pov_path(rel):
+    """POV's file, wherever this version of POV keeps it.
+
+    6.08.14 moved the debrid API clients from debrids/ to indexers/ without
+    changing them, so a path recorded against one layout has to be tried
+    against the other. Returns '' when neither exists, which every caller
+    already treats as "not this device's POV".
+    """
     if xbmcvfs is None:
         return ''
     try:
         base = xbmcvfs.translatePath(
             'special://home/addons/' + POV_ADDON_ID + '/')
-        p = os.path.join(base, *rel.split('/'))
-        return p if os.path.isfile(p) else ''
     except Exception:
         return ''
+    for candidate in _relocations(rel, base):
+        p = os.path.join(base, *candidate.split('/'))
+        if os.path.isfile(p):
+            return p
+    return ''
+
+
+# The one rename, and its inverse. A list rather than a string swap so a path
+# that mentions neither folder is returned untouched and exactly once.
+_MOVED = (('resources/lib/debrids/', 'resources/lib/indexers/'),
+          ('resources/lib/indexers/', 'resources/lib/debrids/'))
+
+
+def _live_pkg(base):
+    """Which package POV ITSELF imports these clients from, or ''.
+
+    ORDER MATTERS AND EXISTENCE IS NOT ENOUGH, which the first version of this
+    got wrong. Both folders ship in 6.08.14 -- debrids/ holds the cloud
+    scrapers now -- so "try the recorded path, then the other" happily patches
+    a stale debrids/torbox_api.py left behind by an earlier layout while the
+    file POV actually imports, indexers/torbox_api.py, is never touched. The
+    patch then reports `patched` having fixed nothing, which is worse than
+    reporting `no_file`.
+
+    POV states the answer in one line of modules/debrid.py:
+        6.08.13   from debrids  import alldebrid_api, ... torbox_api, ...
+        6.08.14   from indexers import alldebrid_api, ... torbox_api, ...
+    """
+    p = os.path.join(base, 'resources', 'lib', 'modules', 'debrid.py')
+    try:
+        with open(p, encoding='utf-8', errors='replace') as fh:
+            text = fh.read()
+    except Exception:
+        return ''
+    for line in text.splitlines():
+        s = line.strip()
+        for pkg in ('indexers', 'debrids'):
+            if s.startswith('from %s import ' % pkg) and '_api' in s:
+                return pkg
+    return ''
+
+
+def _relocations(rel, base=''):
+    out = [rel]
+    for a, b in _MOVED:
+        if rel.startswith(a):
+            alt = b + rel[len(a):]
+            if alt not in out:
+                out.append(alt)
+    pkg = _live_pkg(base) if base else ''
+    if pkg:
+        # Put the folder POV imports from first, whatever we recorded.
+        out.sort(key=lambda c: 0 if '/%s/' % pkg in c else 1)
+    return out
 
 
 def _drop_pyc(path):
