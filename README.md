@@ -38,7 +38,7 @@
 
 - עץ קבצים מסודר של המיגרציה.
 - מסמך diff של `Twilight -> POV`.
-- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.125.zip`.
+- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.126.zip`.
 - הוראות התקנה ובדיקת smoke test לטלפון: `ANDROID_TESTING.md`.
 
 ## חבילת בדיקה (גרסה נוכחית)
