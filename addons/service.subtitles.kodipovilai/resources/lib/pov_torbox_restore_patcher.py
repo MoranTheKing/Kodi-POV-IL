@@ -90,13 +90,75 @@ def _log(msg, level='INFO'):
 
 
 def _pov_path(rel):
+    """POV's file, wherever THIS POV keeps it.
+
+    6.08.14 moved the debrid API clients from debrids/ to indexers/, so a path
+    recorded against one layout has to be tried against the other -- and the
+    order is decided by POV's own import line, not by which file happens to
+    exist. Both folders ship in 6.08.14, so "first one present" would have
+    rewritten a stale debrids/torbox_api.py and reported a repair that fixed
+    nothing while the live indexers/ copy went untouched.
+
+    An earlier version of this docstring claimed the function had to return a
+    path for a MISSING file because this patcher restores one. It does not:
+    ensure_patched and _remove_orphan both re-check os.path.isfile and treat a
+    missing file exactly as they treat '', so the extra branch was dead code
+    that only served to pick the wrong folder.
+    """
     if xbmcvfs is None:
         return ''
     try:
         base = xbmcvfs.translatePath('special://home/addons/' + POV_ADDON_ID + '/')
     except Exception:
         return ''
-    return os.path.join(base, *rel.split('/'))
+    for candidate in _relocations(rel, base):
+        p = os.path.join(base, *candidate.split('/'))
+        if os.path.isfile(p):
+            return p
+    return ''
+
+
+_MOVED = (('resources/lib/debrids/', 'resources/lib/indexers/'),
+          ('resources/lib/indexers/', 'resources/lib/debrids/'))
+
+
+def _live_pkg(base):
+    """Which package POV ITSELF imports these clients from, or ''."""
+    p = os.path.join(base, 'resources', 'lib', 'modules', 'debrid.py')
+    try:
+        with open(p, encoding='utf-8', errors='replace') as fh:
+            text = fh.read()
+    except Exception:
+        return ''
+    for line in text.splitlines():
+        s = line.strip()
+        for pkg in ('indexers', 'debrids'):
+            if s.startswith('from %s import ' % pkg) and '_api' in s:
+                return pkg
+    return ''
+
+
+def _relocations(rel, base=''):
+    out = [rel]
+    for a, b in _MOVED:
+        if rel.startswith(a):
+            alt = b + rel[len(a):]
+            if alt not in out:
+                out.append(alt)
+    pkg = _live_pkg(base) if base else ''
+    if pkg:
+        out.sort(key=lambda c: 0 if '/%s/' % pkg in c else 1)
+    return out
+
+
+def _relocations(rel):
+    out = [rel]
+    for a, b in _MOVED:
+        if rel.startswith(a):
+            alt = b + rel[len(a):]
+            if alt not in out:
+                out.append(alt)
+    return out
 
 
 def _read_bytes(path):
