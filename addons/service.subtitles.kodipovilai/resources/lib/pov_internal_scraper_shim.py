@@ -6,9 +6,9 @@
 # in one line, six seconds into the boot:
 #
 #     warning <general>: [the source add-on] patch error: [Errno 2] No such file or
-#     directory: '.../plugin.video.pov/resources/lib/scrapers/thirdparty.py.tmp'
+#     directory: '.../plugin.video.pov/resources/lib/scrapers/<scraper>.py.tmp'
 #
-# the source add-on installs its scraper by writing `thirdparty.py.tmp` into POV's
+# the source add-on installs its scraper by writing `<scraper>.py.tmp` into POV's
 # internal-scraper folder and renaming it into place. POV 6.08.14 deleted that
 # folder. It was not restructured -- it was RENAMED, with a byte-identical file
 # list:
@@ -21,7 +21,7 @@
 #     6.08.13  scrapers_path = '.../resources/lib/scrapers/'
 #     6.08.14  internal_path = '.../resources/lib/debrids/'
 #
-# So the source add-on's write fails, no thirdparty.py exists anywhere, and POV finds
+# So the source add-on's write fails, no <scraper>.py exists anywhere, and POV finds
 # nothing to load. Nothing is broken inside either add-on; they simply
 # disagree about one path.
 #
@@ -41,8 +41,8 @@
 # loaded". It is not. `active_internal_scrapers()` in modules/settings.py is a
 # HARDCODED whitelist built from POV's own `provider.*` settings --
 # aiostreams, external, easynews, pm_cloud, oc_cloud, tb_cloud, rd_cloud,
-# ad_cloud -- and `thirdparty` cannot appear in it. Executing POV's own loader
-# over a folder containing thirdparty.py confirms it: iter_modules sees the
+# ad_cloud -- and `that scraper` cannot appear in it. Executing POV's own loader
+# over a folder containing <scraper>.py confirms it: iter_modules sees the
 # file, the gate skips it, POV never loads it. That is true of 6.08.13 too --
 # the function is identical in both but for the order of two lines.
 #
@@ -192,7 +192,7 @@ def _inside(root, path):
     restructuring is the reason this file exists at all. A declared path
     containing `..` walked straight out of the add-on and, two levels up,
     into `addons/`, where Kodi executes whatever Python it finds. A review
-    demonstrated it writing to `<home>/addons/evil/thirdparty.py`. realpath on
+    demonstrated it writing to `<home>/addons/evil/<scraper>.py`. realpath on
     both sides, because a symlinked folder defeats a string comparison.
     """
     try:
