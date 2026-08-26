@@ -1,90 +1,69 @@
-# POV renamed the folder third-party scrapers install into, and the source add-on's
-# its scraper stopped arriving.
+# POV renamed the folder it loads internal scrapers from, so anything a
+# third-party add-on installed there stopped being scraped at all.
 #
-# THE FIELD SYMPTOM, reported 2026-08-26: "the private streaming add-on's
-# sources should show at the top, and they are gone entirely." The log says it
-# in one line, six seconds into the boot:
+# THE FIELD SYMPTOM, 2026-08-26: "it does not show the internal sources any
+# more, only the external ones." A source add-on installs itself into POV by
+# writing a scraper module into POV's internal-scraper folder and registering
+# its name in POV's settings. The log names the first half in one line, six
+# seconds into the boot:
 #
-#     warning <general>: [the source add-on] patch error: [Errno 2] No such file or
+#     warning <general>: [<addon>] patch error: [Errno 2] No such file or
 #     directory: '.../plugin.video.pov/resources/lib/scrapers/<scraper>.py.tmp'
 #
-# the source add-on installs its scraper by writing `<scraper>.py.tmp` into POV's
-# internal-scraper folder and renaming it into place. POV 6.08.14 deleted that
-# folder. It was not restructured -- it was RENAMED, with a byte-identical file
-# list:
+# POV 6.08.14 did not restructure that folder, it RENAMED it, with a
+# byte-identical file list, and moved its own pointer with it:
 #
-#     6.08.13  resources/lib/scrapers/   ad_cloud aiostreams easynews oc_cloud
-#     6.08.14  resources/lib/debrids/    pm_cloud rd_cloud tb_cloud __init__
+#     6.08.13  resources/lib/scrapers/   scrapers_path
+#     6.08.14  resources/lib/debrids/    internal_path
 #
-# and POV's own pointer moved with it:
+# and the one line in modules/sources.py that reads it is otherwise unchanged:
 #
-#     6.08.13  scrapers_path = '.../resources/lib/scrapers/'
-#     6.08.14  internal_path = '.../resources/lib/debrids/'
+#     6.08.13  source_path = translate_path(kodi_utils.scrapers_path)
+#     6.08.14  source_path = translate_path(kodi_utils.internal_path)
+#     both     for loader, module_name, is_pkg in
+#                  pkgutil.iter_modules([source_path]):
 #
-# So the source add-on's write fails, no <scraper>.py exists anywhere, and POV finds
-# nothing to load. Nothing is broken inside either add-on; they simply
-# disagree about one path.
+# So POV scans exactly ONE folder, and after 6.08.14 it is not the folder
+# third-party installers write to. Their module is never even looked at. That
+# is the whole of "internal sources stopped appearing".
 #
-# WHY A SHIM AND NOT A PATCH TO EITHER SIDE. Patching POV to look in the old
-# folder would fight the direction its author is going. Patching the source add-on would
-# need an anchor in a private add-on we do not ship, cannot test against, and
-# which will move the moment its author notices. What both versions DO agree on
-# is the loader:
+# TWO THINGS ARE THEREFORE NEEDED, AND THIS FILE DOES BOTH.
 #
-#     for loader, module_name, is_pkg in pkgutil.iter_modules([source_path]):
-#         if module_name not in self.source.active_internal_scrapers: continue
-#         append(('internal', loader.find_spec(module_name)
-#                 .loader.load_module(module_name).source, module_name))
+#   1. The old folder has to EXIST, or the installer's write raises ENOENT.
+#      That matters more than it looks: such an installer writes its module as
+#      the FIRST of several edits, so the exception aborts everything after it
+#      -- including the settings edit that registers the name. That is why the
+#      feature vanished outright instead of degrading, and why re-creating an
+#      empty folder is a real fix rather than housekeeping.
 #
-# READ THE LINE ABOVE IT, THOUGH, BECAUSE THE FIRST VERSION OF THIS FILE DID
-# NOT AND SAID SOMETHING FALSE. It claimed "any .py in the folder POV scans is
-# loaded". It is not. `active_internal_scrapers()` in modules/settings.py is a
-# HARDCODED whitelist built from POV's own `provider.*` settings --
-# aiostreams, external, easynews, pm_cloud, oc_cloud, tb_cloud, rd_cloud,
-# ad_cloud -- and `that scraper` cannot appear in it. Executing POV's own loader
-# over a folder containing <scraper>.py confirms it: iter_modules sees the
-# file, the gate skips it, POV never loads it. That is true of 6.08.13 too --
-# the function is identical in both but for the order of two lines.
+#   2. POV has to LOOK in it. `pkgutil.iter_modules` already takes a LIST of
+#      directories, so one edit to that line makes POV scan its own folder and
+#      the legacy one together.
 #
-# SO ITS SCRAPER NEVER LOADED FROM THAT FOLDER ON ITS OWN, in any version, and
-# the source add-on must be registering the name inside POV as well. Its log prefix is
-# literally "patch error". We do not ship the source add-on, it is not on this disk, and
-# nobody here has read it.
+# WHY THIS REPLACED A MIRROR. The first version copied files from the legacy
+# folder into POV's, which only works if our startup pass happens to run after
+# the other add-on's service that boot -- and that add-on re-checks on its own
+# timer, not ours, so a device could sit for an hour with the file written and
+# never copied. Teaching POV to scan both folders removes the race entirely:
+# whenever the file appears, the next scrape sees it. It also stops us writing
+# into somebody else's add-on directory, which a review had already caught
+# escaping POV's tree through a `..` in POV's own declared path.
 #
-# WHAT THAT MEANS FOR THIS FILE, stated plainly rather than glossed:
-#   * Creating the folder is a real fix for a real, logged error. the source add-on's
-#     write fails at ENOENT; whatever it does after that write never runs.
-#     Unblocking it is the only part of this supported by evidence.
-#   * The mirror is a HEDGE, not a proven fix. It covers exactly one case:
-#     the source add-on registers the name successfully but writes the file to the old
-#     folder. If instead its registration patch is also stale against 6.08.14,
-#     the mirror changes nothing and its scraper stays gone until the source add-on's
-#     author updates it.
-# Neither step is claimed to restore its scraper, and the release note must not
-# say that it does.
+# ORDER IS LOAD-BEARING AND IT IS POV'S FOLDER FIRST. iter_modules dedupes by
+# module name and the first directory wins, so a stale `rd_cloud.py` left in
+# the legacy folder can never shadow POV's own. Verified rather than assumed:
+# iter_modules over two directories holding an overlapping name yields it once,
+# from the first.
 #
-# WHAT THIS DOES, in that order and for that reason:
-#   1. Re-creates the legacy folder (with the __init__.py POV's own copy had),
-#      so the source add-on's write SUCCEEDS instead of erroring. It does not matter
-#      that POV no longer reads it -- the source add-on needs somewhere to land.
-#   2. Copies anything third-party that appears there into the folder POV
-#      actually scans, read from POV's own kodi_utils rather than guessed, so
-#      this keeps working when the name changes again.
-#
-# It therefore takes TWO Kodi starts on a device that has already failed once:
-# the first creates the folder, the source add-on writes into it on the next boot, and
-# that same pass mirrors it. Nothing can be done about the first one -- by the
-# time our repair pass runs, the source add-on's service has already tried and failed.
-#
-# WHAT IT REFUSES TO COPY. Only files POV does not ship itself. The legacy
-# folder is one we create empty, so in practice everything in it is
-# third-party -- but the shipped names are excluded by name anyway, because
-# copying POV's own ad_cloud.py over POV's own ad_cloud.py is the kind of
-# harmless-looking thing that stops being harmless the day the two versions
-# differ.
+# WHAT THIS STILL DOES NOT DO. POV gates loading with active_internal_scrapers()
+# in modules/settings.py -- a hardcoded whitelist built from its own provider.*
+# settings -- so a module in the folder is loaded only if something has put its
+# name in that list. That registration belongs to the installer, and its own
+# edit for it still matches 6.08.14. If a future POV changes THAT function, the
+# name stops being registered and no amount of folder-scanning here will help.
+# Said plainly so the next person does not assume this file is the whole path.
 
 import os
-import shutil
 
 try:
     import xbmcvfs
@@ -99,20 +78,37 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 
-# The folder the source add-on (and anything else written against POV <= 6.08.13) still
-# writes into.
+# The folder third-party installers written against POV <= 6.08.13 still use.
 LEGACY_REL = 'resources/lib/scrapers'
 
-# Where POV looked before it started telling us. Only used if its kodi_utils
-# cannot be read at all.
-FALLBACK_INTERNAL_REL = 'resources/lib/debrids'
+SOURCES_REL = 'resources/lib/modules/sources.py'
 
-# POV's own internal scrapers, by module name. Identical in both folders across
-# 6.08.13 and 6.08.14, which is what makes the rename a rename.
-POV_OWN = frozenset((
-    '__init__', 'ad_cloud', 'aiostreams', 'easynews', 'oc_cloud', 'pm_cloud',
-    'rd_cloud', 'tb_cloud',
-))
+MARKER = '# AI_SUBS_POV_INTERNAL_DIRS_v1'
+_MARKER_ANY = '# AI_SUBS_POV_INTERNAL_DIRS_v'
+
+# The line POV reads its internal-scraper folder from. Matched together with
+# the `for` beneath it, so it cannot land on another translate_path call, and
+# with the pointer name left as a placeholder so BOTH POV versions match.
+_ANCHOR_TMPL = (
+    "\t\tsource_path = kodi_utils.translate_path(kodi_utils.%s)\n"
+    "\t\tfor loader, module_name, is_pkg in "
+    "__import__('pkgutil').iter_modules([source_path]):"
+)
+_POINTER_NAMES = ('internal_path', 'scrapers_path')
+
+_REPLACEMENT_TMPL = (
+    "\t\tsource_path = kodi_utils.translate_path(kodi_utils.%s)  " + MARKER
+    + "\n"
+    "\t\t_ai_dirs = [source_path]\n"
+    "\t\ttry:\n"
+    "\t\t\t_ai_legacy = kodi_utils.translate_path('special://home/addons/"
+    + POV_ADDON_ID + "/" + LEGACY_REL + "/')\n"
+    "\t\t\tif __import__('os').path.isdir(_ai_legacy) and _ai_legacy "
+    "not in _ai_dirs: _ai_dirs.append(_ai_legacy)\n"
+    "\t\texcept Exception: pass\n"
+    "\t\tfor loader, module_name, is_pkg in "
+    "__import__('pkgutil').iter_modules(_ai_dirs):"
+)
 
 
 def _log(msg, level='INFO'):
@@ -135,36 +131,8 @@ def _pov_root():
     return base if os.path.isdir(base) else ''
 
 
-def _internal_rel(root):
-    """The folder POV CURRENTLY scans, read out of POV's own source.
-
-    Parsed, not assumed: POV states it as a one-line assignment in
-    modules/kodi_utils.py, and reading it there means the next rename needs no
-    change here. `internal_path` is 6.08.14's name and `scrapers_path` was
-    6.08.13's; whichever is present wins, newest first.
-    """
-    ku = os.path.join(root, 'resources', 'lib', 'modules', 'kodi_utils.py')
-    try:
-        with open(ku, encoding='utf-8', errors='replace') as fh:
-            text = fh.read()
-    except Exception:
-        return FALLBACK_INTERNAL_REL
-    for name in ('internal_path', 'scrapers_path'):
-        for line in text.splitlines():
-            s = line.strip()
-            if not s.startswith(name):
-                continue
-            if '=' not in s:
-                continue
-            val = s.split('=', 1)[1].strip().strip('\'"')
-            marker = 'addons/' + POV_ADDON_ID + '/'
-            if marker in val:
-                return val.split(marker, 1)[1].strip('/')
-    return FALLBACK_INTERNAL_REL
-
-
 def _ensure_legacy_dir(root):
-    """'exists' | 'created' | 'failed' -- somewhere for the source add-on to land."""
+    """'exists' | 'created' | 'failed' -- somewhere the installer can land."""
     d = os.path.join(root, *LEGACY_REL.split('/'))
     init = os.path.join(d, '__init__.py')
     if os.path.isdir(d) and os.path.isfile(init):
@@ -173,8 +141,8 @@ def _ensure_legacy_dir(root):
         if not os.path.isdir(d):
             os.makedirs(d)
         if not os.path.isfile(init):
-            # POV's own copy of this folder carried one; a package without it
-            # is not importable on every Python path configuration.
+            # POV's own copy of this folder shipped one, and a package without
+            # it is not importable on every Python path configuration.
             with open(init, 'w', encoding='utf-8') as fh:
                 fh.write('')
         return 'created'
@@ -184,111 +152,96 @@ def _ensure_legacy_dir(root):
         return 'failed'
 
 
-def _inside(root, path):
-    """True only if `path` really is under POV's own folder.
-
-    POV's kodi_utils is the input to _internal_rel, and POV is a third-party
-    add-on that auto-updates from someone else's repository -- its
-    restructuring is the reason this file exists at all. A declared path
-    containing `..` walked straight out of the add-on and, two levels up,
-    into `addons/`, where Kodi executes whatever Python it finds. A review
-    demonstrated it writing to `<home>/addons/evil/<scraper>.py`. realpath on
-    both sides, because a symlinked folder defeats a string comparison.
-    """
+def _drop_pyc(path):
+    """A stale .pyc would keep the one-folder scan alive after the rewrite."""
+    stem = os.path.basename(path)[:-3] + '.'
+    cache = os.path.join(os.path.dirname(path), '__pycache__')
     try:
-        r = os.path.realpath(root)
-        p = os.path.realpath(path)
+        for name in os.listdir(cache):
+            if name.startswith(stem) and name.endswith('.pyc'):
+                os.remove(os.path.join(cache, name))
     except Exception:
-        return False
-    return p == r or p.startswith(r + os.sep)
+        pass
 
 
-def _mirror(root, internal_rel):
-    """Copy third-party scrapers from the legacy folder into the live one.
-
-    Returns a status naming what moved, so a field log says whether its scraper
-    is actually present rather than whether this ran.
-    """
-    src = os.path.join(root, *LEGACY_REL.split('/'))
-    dst = os.path.join(root, *internal_rel.split('/'))
-    if not _inside(root, dst) or not _inside(root, src):
-        _log('refusing to mirror outside the add-on: {0}'.format(internal_rel),
-             level='WARNING')
-        return 'outside_addon'
-    if os.path.normpath(src) == os.path.normpath(dst):
-        return 'same_dir'
-    if not os.path.isdir(src):
-        return 'no_legacy'
-    if not os.path.isdir(dst):
-        _log('POV scans {0}, which does not exist'.format(internal_rel),
-             level='WARNING')
-        return 'no_internal'
-    moved, failed = [], []
+def _teach_pov_both_dirs(root):
+    """'unchanged' | 'patched' | 'unmatched' | 'read_failed'
+    | 'compile_failed' | 'write_failed' | 'no_file'."""
+    path = os.path.join(root, *SOURCES_REL.split('/'))
+    if not os.path.isfile(path):
+        return 'no_file'
     try:
-        names = sorted(os.listdir(src))
+        with open(path, encoding='utf-8', newline='') as fh:
+            content = fh.read()
     except Exception as exc:
-        _log('could not list {0}: {1}'.format(LEGACY_REL, exc),
+        _log('read failed: {0}'.format(exc), level='WARNING')
+        return 'read_failed'
+
+    if MARKER in content:
+        return 'unchanged'
+    if _MARKER_ANY in content:
+        _log('carries an older version of this patch; leaving it alone',
              level='WARNING')
-        return 'list_failed'
-    for name in names:
-        if not name.endswith('.py'):
+        return 'unchanged'
+
+    eol = '\r\n' if '\r\n' in content[:8192] else '\n'
+    fit = (lambda t: t.replace('\n', eol)) if eol != '\n' else (lambda t: t)
+
+    for name in _POINTER_NAMES:
+        anchor = fit(_ANCHOR_TMPL % name)
+        if content.count(anchor) != 1:
             continue
-        stem = name[:-3]
-        if stem in POV_OWN:
-            continue
-        s, d = os.path.join(src, name), os.path.join(dst, name)
+        new_content = content.replace(
+            anchor, fit(_REPLACEMENT_TMPL % name), 1)
         try:
-            if os.path.isfile(d) and os.path.getsize(d) == os.path.getsize(s):
-                with open(s, 'rb') as a, open(d, 'rb') as b:
-                    if a.read() == b.read():
-                        continue
-            tmp = d + '.aitmp'
-            shutil.copyfile(s, tmp)
-            os.replace(tmp, d)
-            moved.append(stem)
+            compile(new_content.replace('\r\n', '\n'), path, 'exec')
+        except SyntaxError as exc:
+            _log('patched sources.py would not compile -- skipping '
+                 '({0})'.format(exc), level='WARNING')
+            return 'compile_failed'
+        tmp = path + '.aitmp'
+        try:
+            with open(tmp, 'w', encoding='utf-8', newline='') as fh:
+                fh.write(new_content)
+            os.replace(tmp, path)
         except Exception as exc:
-            # Appended to `failed`, never silently skipped: a mirror that
-            # reports success after the copy raised is worse than one that
-            # reports nothing, because service.py greps this string to decide
-            # whether to warn.
-            failed.append(stem)
-            _log('could not mirror {0}: {1}'.format(name, exc), level='WARNING')
-    if failed:
-        return 'failed:' + '+'.join(failed)
-    if moved:
-        _log('mirrored %s into %s -- POV will load %s on its next invocation'
-             % ('+'.join(moved), internal_rel, '+'.join(moved)))
-        return 'mirrored:' + '+'.join(moved)
-    return 'nothing_to_mirror'
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            _log('write failed: {0}'.format(exc), level='WARNING')
+            return 'write_failed'
+        _drop_pyc(path)
+        _log('POV now scans both internal-scraper folders; third-party '
+             'scrapers are seen again at its next scrape')
+        return 'patched'
+
+    _log('sources.py does not read its scraper folder in the shape this '
+         'patches; leaving it alone', level='WARNING')
+    return 'unmatched'
 
 
 def ensure_patched():
-    """Idempotent. Never raises. Returns a comma-joined status.
+    """Idempotent. Never raises. A comma-joined status.
 
-    Order matters and is the one thing to preserve: the legacy folder is
-    created FIRST, because the mirror has nothing to do until the source add-on has been
-    given somewhere its write can succeed.
+    The folder is created FIRST. The scan edit alone would find nothing, and
+    the installer whose write it unblocks needs somewhere to put its module
+    before its own next run.
     """
     root = _pov_root()
     if not root:
         return 'no_pov'
-    try:
-        internal_rel = _internal_rel(root)
-    except Exception as exc:
-        _log('could not read POV\'s internal path: {0}'.format(exc),
-             level='WARNING')
-        internal_rel = FALLBACK_INTERNAL_REL
-    out = ['scans=' + internal_rel.rsplit('/', 1)[-1]]
+    out = []
     try:
         out.append('legacy=' + _ensure_legacy_dir(root))
     except Exception as exc:
         _log('unexpected failure creating the legacy folder: {0}'.format(exc),
              level='WARNING')
         out.append('legacy=failed')
-        return ', '.join(out)
     try:
-        out.append('mirror=' + _mirror(root, internal_rel))
+        out.append('scan=' + _teach_pov_both_dirs(root))
     except Exception as exc:
-        _log('unexpected failure mirroring: {0}'.format(exc), level='WARNING')
-        out.append('mirror=failed')
+        _log('unexpected failure teaching POV both folders: {0}'.format(exc),
+             level='WARNING')
+        out.append('scan=failed')
     return ', '.join(out)
