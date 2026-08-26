@@ -119,6 +119,35 @@ def _media_icon(filename):
     except Exception:
         return None
 
+def _import_client(service):
+    """POV's debrid client, from whichever package THIS POV keeps it in.
+
+    POV 6.08.14 moved these from `debrids` to `indexers` -- `debrids` still
+    exists, it holds the cloud scrapers now -- so a hardcoded
+    `__import__('debrids.' + name)` raises ModuleNotFoundError on every
+    account check. It did, in the field:
+
+        [service.subtitles.kodipovilai] AllDebrid status lookup failed:
+        No module named 'debrids.alldebrid_api'
+
+    and because the caller logs and returns None, every AllDebrid account read
+    silently reported nothing at all.
+
+    The file-path patchers were taught this rename first and this import was
+    missed, which is the lesson: a rename has to be chased through IMPORTS as
+    well as paths. Newest package first; the loop is what makes the next one
+    survivable.
+    """
+    last = None
+    for pkg in ('indexers', 'debrids'):
+        try:
+            return __import__('%s.%s' % (pkg, service['module']),
+                              fromlist=[service['class']])
+        except ImportError as exc:
+            last = exc
+    raise last if last is not None else ImportError(service['module'])
+
+
 
 def _days_remaining(service):
     lib_path = _pov_lib_path()
@@ -130,8 +159,7 @@ def _days_remaining(service):
         sys.path.insert(0, lib_path)
         inserted = True
     try:
-        module = __import__(
-            'debrids.' + service['module'], fromlist=[service['class']])
+        module = _import_client(service)
         cls = getattr(module, service['class'])
         return cls().days_remaining()
     except Exception as exc:
@@ -458,8 +486,7 @@ def _refusal(service):
         sys.path.insert(0, lib_path)
         inserted = True
     try:
-        module = __import__(
-            'debrids.' + service['module'], fromlist=[service['class']])
+        module = _import_client(service)
         info = getattr(module, service['class'])().account_info()
         if not isinstance(info, dict) or info.get('status') != 'error':
             return None
