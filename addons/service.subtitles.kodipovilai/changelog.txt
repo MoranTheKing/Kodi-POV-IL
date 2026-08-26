@@ -1,3 +1,55 @@
+0.2.512
+- Internal sources are found again. POV 6.08.14 did not restructure the folder
+  it loads internal scrapers from, it RENAMED it, with a byte-identical file
+  list, and moved its own pointer with it:
+
+      6.08.13   resources/lib/scrapers/   kodi_utils.scrapers_path
+      6.08.14   resources/lib/debrids/    kodi_utils.internal_path
+
+  POV scans exactly ONE folder, so after 6.08.14 any scraper a third-party
+  add-on had installed there was never looked at -- "it shows the external
+  sources only" in the field. Worse, the installer writes its module as the
+  FIRST of several edits, so the missing folder raised ENOENT and aborted
+  everything after it, including the settings edit that registers the name.
+  That is why the feature vanished outright instead of degrading.
+
+  Two edits, and both are needed. The old folder is re-created with its
+  __init__.py, so the installer's write succeeds. And the one line in
+  modules/sources.py that reads the folder is taught to scan BOTH --
+  pkgutil.iter_modules already takes a list of directories. POV's own folder
+  goes FIRST, so a stale copy of one of POV's own modules left behind in the
+  legacy folder can never shadow it; iter_modules dedupes by module name and
+  the first directory wins. Verified by running POV's own patched line through
+  pkgutil against both real trees, not by reading the text.
+
+  An earlier attempt mirrored files between the folders instead. It only works
+  if our pass happens to run after the other add-on's service that boot, and
+  that add-on re-checks on its own timer, so a device could sit for an hour
+  with the file written and never copied. Teaching POV to scan both removes the
+  race: whenever the file appears, the next scrape sees it. It also stops us
+  writing inside somebody else's add-on directory.
+
+- And a third edit, which is what makes the other two safe rather than
+  dangerous. Once a module POV does not know about is loaded, its rows flow
+  into POV's sorter, and modules/sources.py does this for every row of every
+  result set:
+
+      def get_provider_rank(self, account_type):
+          return self.source.provider_sort_ranks[account_type] or 11
+
+  A bare subscript. A provider name that is not in that dict raises KeyError
+  out of sort_results, which process() -> get_sources() -> source_select()
+  calls unguarded, so the WHOLE list dies -- POV's own sources included.
+  Reproduced against POV's own function: `rd_cloud` ranks 2, an unregistered
+  name raises. The fix is one token, `.get(account_type)`, and it changes
+  nothing for a name that is registered, because POV already treats a falsy
+  rank as 11 and .get returns None for a miss. It also protects POV from every
+  future provider it does not know, not just this one.
+
+  Both edits refuse rather than guess: two copies of either line, a shape that
+  does not match, or a result that would not compile leaves POV byte-for-byte
+  as it was, and says so in the log.
+
 0.2.511
 - AllDebrid plays again. POV 6.08.14 shipped a one-line regression that broke
   playback for every AllDebrid user: indexers/alldebrid_api.py torrent_info()
