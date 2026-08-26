@@ -302,13 +302,24 @@ def live_markers(markers, source):
 
     So: group by family, keep the highest version, drop the rest.
 
-    AND REFUSE THE FAMILY OUTRIGHT when the live marker is CONSTRUCTED. Three
-    patchers here build theirs as '# ..._v{0}'.format(INJECT_VERSION), so the
-    live string appears nowhere in the source and the highest LITERAL is a
-    retired one. Reporting on that literal would be worse than saying nothing:
-    it is guaranteed absent, so it would read as a permanent failure of a
-    patcher that is working. Detected by a _VERSION constant whose value is
-    higher than any literal in its family, and reported as unmeasurable.
+    AND RECONSTRUCT THE FAMILY when the live marker is CONSTRUCTED. Three
+    patchers build theirs as '# ..._v{0}'.format(INJECT_VERSION), so the live
+    string appears nowhere in the source and the highest LITERAL is a retired
+    one. Searching for that literal would be worse than silence -- guaranteed
+    absent forever, against a patcher that works.
+
+    But the live marker is not unknowable: the family head comes from the
+    retired literals and the number from the _VERSION constant, so it can be
+    rebuilt. Rebuilt is not proven, though, so such a marker starts life
+    UNVERIFIED: if the host turns out to contain it, the reconstruction was
+    right and it is treated as any other marker from then on -- history makes
+    it alarmable. If it is never found, it stays unverified and never raises,
+    because "absent" and "I guessed the name wrong" are indistinguishable and
+    only one of them is worth waking anybody for.
+
+    This matters more than three patchers sounds. One of the three is what
+    builds the Connect Services window, which is the single most visible thing
+    this add-on injects into POV.
     """
     fams = {}
     for m in markers:
@@ -320,16 +331,16 @@ def live_markers(markers, source):
         fams.setdefault((head, tail), []).append((num, m))
     consts = {n: int(v) for n, v in _VERSION_CONST_RE.findall(source)}
     highest_const = max(consts.values()) if consts else None
-    live, unmeasurable = set(), set()
+    live, rebuilt = set(), set()
     for (head, tail), items in fams.items():
         items.sort()
         top_num, top = items[-1]
         if (highest_const is not None and top_num >= 0
                 and highest_const > top_num):
-            unmeasurable.add('%s_v%d%s' % (head, highest_const, tail))
+            rebuilt.add('%s_v%d%s' % (head, highest_const, tail))
             continue
         live.add(top)
-    return live, unmeasurable
+    return live, rebuilt
 
 
 def _looks_ours_only(marker):
@@ -362,14 +373,10 @@ def collect(lib_dir='', addons_root=''):
         except Exception:
             continue
         markers, hosts = markers_and_hosts(src)
-        markers, unmeasurable = live_markers(markers, src)
+        markers, rebuilt = live_markers(markers, src)
         if not hosts:
             continue
-        for marker in sorted(unmeasurable):
-            rows.append({'patcher': stem, 'marker': marker,
-                         'host': sorted(hosts)[0], 'host_version': '',
-                         'installed': False, 'present': False,
-                         'unmeasurable': True})
+        markers = markers | rebuilt
         if not markers:
             continue
         for host in sorted(hosts):
@@ -385,6 +392,7 @@ def collect(lib_dir='', addons_root=''):
                     'host_version': version,
                     'installed': bool(version),
                     'present': bool(version) and marker in text,
+                    'rebuilt': marker in rebuilt,
                 })
     return rows
 
@@ -401,13 +409,16 @@ def classify(rows, state):
         key = '{0}|{1}|{2}'.format(r['patcher'], r['host'], r['marker'])
         prior = seen.get(key) or {}
         was = prior.get('last_ok_version')
-        if r.get('unmeasurable'):
-            status = 'unmeasurable'
-        elif not r['installed']:
+        if not r['installed']:
             status = 'not_installed'
         elif r['present']:
             status = 'ok'
             seen[key] = {'last_ok_version': r['host_version']}
+        elif r.get('rebuilt') and not was:
+            # Rebuilt, never confirmed. Absent here is as likely to mean the
+            # reconstruction is wrong as that the repair broke, and only one of
+            # those is worth an alarm.
+            status = 'unverified'
         elif was:
             status = 'lapsed'
             # The record is KEPT, deliberately. Clearing it would make the
@@ -429,7 +440,7 @@ def classify(rows, state):
 
 
 def _render(rows):
-    order = {'lapsed': 0, 'unknown': 1, 'unmeasurable': 2, 'ok': 3,
+    order = {'lapsed': 0, 'unknown': 1, 'unverified': 2, 'ok': 3,
              'not_installed': 4}
     rows = sorted(rows, key=lambda r: (order.get(r['status'], 9),
                                        r['patcher'], r['marker']))
