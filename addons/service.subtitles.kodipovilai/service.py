@@ -212,6 +212,35 @@ def _other_addon_version(addon_id):
         return ''
 
 
+def _report_patcher_health():
+    """Say which of our repairs are applied right now, and which stopped.
+
+    RUNS LAST in the tuple below, and that is load-bearing: it reads the host
+    add-ons AFTER the pass has finished writing to them, so a repair that just
+    applied reads as applied. Anywhere earlier and it would report the state
+    the pass had not reached yet.
+
+    Why it exists: the loop at the end of _run_build_startup_repairs calls
+    `step()` and DISCARDS the return value, and all 123 step functions return
+    None anyway. An anchor that stops matching is not an exception, so it never
+    reaches the WARNING branch either -- it is a silent, ordinary-looking boot.
+    That is exactly how five repairs died on POV 6.08.14 with nobody the wiser
+    for days. patcher_health asks the host add-ons what they actually contain
+    instead of trusting any of that.
+    """
+    try:
+        from resources.lib import patcher_health, kodi_utils
+        st = patcher_health.run()
+        kodi_utils.log('patcher health: {0}'.format(st))
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log('patcher health check unavailable: {0}'.format(e),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _run_build_startup_repairs():
     """Run build-only UI/POV repairs early in Kodi startup.
 
@@ -352,6 +381,9 @@ def _run_build_startup_repairs():
         _maybe_show_af3_first_launch_dialog,
         _maybe_show_debrid_status,
         _maybe_reload_for_tiles,
+        # LAST on purpose: it reports on the pass above, so it has
+        # to run after everything it reports on.
+        _report_patcher_health,
     )
     # THE PACING IS A BUDGET NOW, NOT A CONSTANT PER STEP.
     #

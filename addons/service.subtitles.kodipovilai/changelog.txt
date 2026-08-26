@@ -1,3 +1,50 @@
+0.2.513
+- A repair that stops applying now says so, on the next boot, by name.
+
+  Every repair this add-on makes to another add-on is a text edit gated on a
+  versioned marker. When the other add-on refactors, the anchor stops matching
+  and the repair stops applying. That is expected and it is handled -- the
+  patchers refuse rather than guess. What was NOT handled is that it happened
+  in complete silence.
+
+  The mechanism, exactly: the startup pass runs `step()` and DISCARDS the
+  return value, and all 123 step functions return None anyway. A no-longer-
+  matching anchor is not an exception, so it never reaches the WARNING branch
+  either. POV 6.08.14 broke five repairs this way and the first anyone knew was
+  a user reporting a symptom days later. One of the five had been dead even
+  longer, from a duplicate `def` in our own file.
+
+  So a new last step asks the host add-ons what they actually contain, rather
+  than trusting what anything returned -- a patcher that reported success and
+  whose write silently failed would still have read green. Marker present, the
+  repair is applied; absent, it is not.
+
+  THE HARD PART IS SILENCE, NOT DETECTION. Most devices do not have most hosts,
+  and a repair for a skin nobody installed is absent forever; reporting that
+  every boot trains everyone to ignore the report. So absence is only news
+  against history: a marker seen applied before and missing now is LAPSED and
+  is named at WARNING. Never once seen applied is quiet. A host that was
+  patched and has since been UNINSTALLED is quiet too.
+
+  Two findings from running it against the real tree rather than reasoning
+  about it. A patcher keeps its own superseded markers so it can strip its
+  previous work, and looking for those reported eleven false absences from one
+  module -- so each marker family is collapsed to the one live version. And
+  three patchers BUILD their live marker from an integer constant, so it exists
+  nowhere in the source and the highest literal is a retired one; those are
+  reported as unmeasurable and named, rather than as permanently broken.
+
+  The full table is written to addon_data/.../patcher_health.txt every boot.
+  The WARNING lines are always logged, so any log a user uploads now carries
+  the diagnosis instead of just the symptom. The on-screen popup appears only
+  where the log level is DEBUG -- a viewer cannot act on this, and telling them
+  the build is broken would be alarming and useless.
+
+  Measured, not assumed: 0.15s per boot, reading 1.1 MB of host text, against a
+  pass that already runs for tens of seconds. It covers 68 patchers across 10
+  host add-ons, and it never raises into the boot -- every failure path returns
+  less information instead.
+
 0.2.512
 - Internal sources are found again. POV 6.08.14 did not restructure the folder
   it loads internal scrapers from, it RENAMED it, with a byte-identical file
