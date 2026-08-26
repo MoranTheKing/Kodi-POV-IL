@@ -4246,6 +4246,7 @@ Raw by a few minutes; poll rather than assume.
 | 0.2.499 / qf 0.1.544 / build 0.1.112 / note 599 | the player bar auto-hides on any capable skin, not just FENtastic; Umbrella's MDBList watched-sync stops skipping windows forever |
 | 0.2.512 / qf 0.1.557 / build 0.1.125 / note 612 | POV 6.08.14 renamed the one folder it scans for internal scrapers, so third-party internal sources stopped being looked at; an unknown provider name no longer takes the whole result list down with it; the TorBox restore patcher, dead since a duplicate `def`, runs again |
 | 0.2.513 / qf 0.1.558 / build 0.1.126 / note 613 | a repair that stops applying is named at WARNING on the next boot instead of dying in silence; 44 of 51 POV markers verified present, 0 false alarms |
+| 0.2.514 / qf 0.1.559 / build 0.1.127 / note 614 | the three constructed-marker patchers join the health report by rebuilding the live marker from its _VERSION constant and proving it against the host -- one of them builds Connect Services; 45 of 51 verified |
 
 ### Things worth not rediscovering
 
@@ -4665,6 +4666,21 @@ is broken would be alarming and useless.
 that already runs for tens of seconds. Runs LAST so it reads the state the pass
 just produced. Never raises into the boot; every failure path returns less
 information instead.
+
+**0.2.514 CLOSED THE unmeasurable HOLE, and it was worth closing.** Three
+patchers build their marker as `'# ..._v{0}'.format(INJECT_VERSION)`, so the
+live name is in no literal and the highest literal is RETIRED. 0.2.513 refused
+to guess. But one of the three is `pov_services_patcher` -- Connect Services,
+the most visible thing injected into POV -- so "outside the report" was the
+wrong place for it.
+
+The name is recoverable: family head from the retired literals, number from the
+constant. Confirmed against a real tree, not assumed -- the patcher writes
+`AI_SUBS_MYSERVICES_INJECT_v12` into `myservices.py`, exactly what the
+reconstruction produces. Rebuilt is not proven, so it starts `unverified`:
+found in the host once and it is alarmable forever after; never found and it
+stays quiet, because a wrong guess and a real lapse look identical from outside
+and only one deserves an alarm. 44 -> 45 of 51.
 
 **A trap worth knowing.** Its own docstring quoted a real marker, and the
 upgrade harness -- which discovers by SHAPE, on purpose -- classified this
