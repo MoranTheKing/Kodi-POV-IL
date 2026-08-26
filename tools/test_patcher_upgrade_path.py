@@ -357,6 +357,12 @@ pin('addon_autoupdate_repair', 'UPGRADES',
     '_MODE_SEED_VERSION=v1', '_addon_update_mode_seeded=v1')
 pin('pov_debrid_unbound_guard_patcher', 'UPGRADES',
     'AI_SUBS_POV_DEBRID_UNBOUND_v1')
+# NEVER-UPGRADES on purpose: there is no v2 to migrate to, and the module
+# refuses to touch a file carrying an older marker of its own rather than
+# guessing at a block it no longer describes. Measured, not assumed --
+# `legacy=exists, scan=patched` then `scan=unchanged` on a second run.
+pin('pov_internal_scraper_shim', 'NEVER-UPGRADES',
+    'AI_SUBS_POV_INTERNAL_DIRS_v1')
 pin('pov_mdblist_like_patcher', 'UPGRADES',
     'AI_SUBS_MDBL_LIKE_v3')
 pin('pov_prewarm_patcher', 'UPGRADES',

@@ -324,9 +324,9 @@ def _run_build_startup_repairs():
         _maybe_reseed_genre_folders,
         _maybe_patch_fentastic_widgets,
         _maybe_fix_fentastic_clearlogo_var,
-        # POV 6.08.14 renamed the folder third-party scrapers install into, so
-        # the source add-on's its scraper write fails and the user loses those sources.
-        # Creates the old folder and mirrors into the new one.
+        # POV scans one folder for internal scrapers and 6.08.14 renamed it,
+        # so third-party ones stopped being seen at all. Creates the old
+        # folder and teaches POV to scan both.
         _maybe_shim_pov_internal_scrapers,
         # POV 6.08.14 broke AllDebrid playback outright: torrent_info()
         # subscripts a dict with [0]. Every magnet resolve raises KeyError(0).
@@ -2226,13 +2226,15 @@ def _maybe_fix_pov_alldebrid_status():
 
 
 def _maybe_shim_pov_internal_scrapers():
-    """Put third-party scrapers where POV 6.08.14 now looks for them.
+    """Make POV look for internal scrapers where third-party ones land.
 
-    the source add-on writes its scraper into resources/lib/scrapers/, which 6.08.14
-    renamed to resources/lib/debrids/. Its install fails with ENOENT and the
-    user loses every source from the private streaming add-on. See
-    pov_internal_scraper_shim for the log line and why the fix is a shim rather
-    than a patch to either add-on.
+    POV scans exactly ONE folder for them, and 6.08.14 renamed it from
+    resources/lib/scrapers/ to resources/lib/debrids/. An installer written
+    against the old name fails with ENOENT -- and POV would not have looked
+    there anyway -- so those sources stop appearing entirely. This creates the
+    old folder so the write succeeds, and edits the one line in POV's
+    sources.py so pkgutil scans both. POV's own folder stays first, so nothing
+    stale can shadow its modules. See pov_internal_scraper_shim.
     """
     try:
         from resources.lib import pov_internal_scraper_shim, kodi_utils
