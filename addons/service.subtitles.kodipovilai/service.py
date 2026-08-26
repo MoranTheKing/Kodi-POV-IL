@@ -325,7 +325,7 @@ def _run_build_startup_repairs():
         _maybe_patch_fentastic_widgets,
         _maybe_fix_fentastic_clearlogo_var,
         # POV 6.08.14 renamed the folder third-party scrapers install into, so
-        # CoreSync's DirectSync write fails and the user loses those sources.
+        # the source add-on's its scraper write fails and the user loses those sources.
         # Creates the old folder and mirrors into the new one.
         _maybe_shim_pov_internal_scrapers,
         # POV 6.08.14 broke AllDebrid playback outright: torrent_info()
@@ -2228,7 +2228,7 @@ def _maybe_fix_pov_alldebrid_status():
 def _maybe_shim_pov_internal_scrapers():
     """Put third-party scrapers where POV 6.08.14 now looks for them.
 
-    CoreSync writes DirectSync into resources/lib/scrapers/, which 6.08.14
+    the source add-on writes its scraper into resources/lib/scrapers/, which 6.08.14
     renamed to resources/lib/debrids/. Its install fails with ENOENT and the
     user loses every source from the private streaming add-on. See
     pov_internal_scraper_shim for the log line and why the fix is a shim rather

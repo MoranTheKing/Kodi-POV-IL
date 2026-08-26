@@ -4524,6 +4524,66 @@ three is narrow and worth stating on its own: with reuse on, warm navigation
 costs about 1.2s and cold about 1.8s, and something occasionally adds 1.9s to a
 warm call for reasons not yet established.
 
+### What shipped 0.2.511 / qf 0.1.556 / build 0.1.124 (note 611)
+
+**POV 6.08.14 broke AllDebrid playback for everyone, in one line.**
+`indexers/alldebrid_api.py torrent_info()` went from `result['magnets']` to
+`result['magnets'][0]`. `v4.1/magnet/status` with an id returns a single
+object, so that raises `KeyError(0)` -- the literal `0` in two field logs'
+`>> resolve_external_sources exception <<: 0`, once per source tried. It fails
+inside `parse_magnet_pack` before a file is chosen, so POV moves to the next
+source and fails identically. That is both reported symptoms at once: "goes
+through every source and plays nothing", and "no results" on titles whose
+sources are all external.
+
+The same line appears twice in that file; `create_transfer()` calls
+`v4/magnet/upload`, which does return a list, and had `[0]` in 6.08.13 too. The
+patch matches the whole method body, and the test asserts create_transfer comes
+out byte-identical. It does not revert -- it uses what the API returned and
+indexes only if it is a list, because `user_folder()` routes a folder id
+through the same function and nobody here can test that shape.
+
+**And one of ours:** `debrid_status_notifier` hardcoded
+`__import__('debrids.' + module)`. 0.2.510 chased the debrids/->indexers/
+rename through file PATHS and missed the runtime IMPORT. Every AllDebrid
+account read logged `No module named 'debrids.alldebrid_api'` and returned
+None silently.
+
+**Also repaired:** `pov_mdblist_patcher` logged `no mdblist_api anchors
+matched` every boot -- 6.08.14 renamed `notification(32574)` to
+`notify_failed()` on the three one-liners it guards. Anchors now match on the
+HEAD and preserve whatever POV calls afterwards.
+
+### the source add-on/its scraper: the source arrived, and here is the whole picture
+
+Its `pov_that scraper_patcher.py` makes EIGHT edits to POV, not one. Tested every
+anchor against both trees:
+
+```
+scrapers/<scraper>.py write                6.08.13 ok   6.08.14 ENOENT  <-- aborts patch()
+settings active_internal_scrapers list      ok           ok
+settings default_internal_scrapers = (*..   ok           STALE (became a function)
+settings provider.easynews gate list        ok           ok
+settings provider_sort_ranks return {..     ok           STALE
+sources  sort_first_scrapers = []           ok           ok
+debrid   else: url = self.url_dl            ok           ok
+debrid   url += '|seekable=0'               ok           ok
+```
+
+**The folder write is FIRST in `patch()` and `_atomic_write` raises**, so on
+6.08.14 none of the other seven edits ever ran. That is why the whole feature
+vanished rather than degrading. 0.2.510 creating the folder unblocks the
+sequence; our mirror then puts `<scraper>.py` where 6.08.14 actually loads
+from. the source add-on's own `active_internal_scrapers` edit -- which is what gets the
+name past POV's whitelist, answering the question the shim's header raised --
+still matches, so the essential path is complete.
+
+It needs TWO restarts: the source add-on's service and ours race at boot, and the source add-on
+only retries every 1800s.
+
+The two stale anchors cost ranking and pre-scrape gating, not presence, and
+they belong to the source add-on's author -- not patched from here.
+
 ### What shipped 0.2.510 / qf 0.1.555 / build 0.1.123 (note 610)
 
 POV auto-updated to 6.08.14 and restructured itself. **Five of our repairs
