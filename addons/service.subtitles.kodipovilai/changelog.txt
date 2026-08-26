@@ -1,3 +1,28 @@
+0.2.514
+- The health report now covers the Connect Services window too, which was the
+  most visible thing it did not cover.
+
+  Three patchers BUILD their marker from an integer constant -- '# ..._v{0}'
+  .format(INJECT_VERSION) -- so the live name exists nowhere in the source and
+  the highest literal in the file is a RETIRED one. 0.2.513 refused to guess
+  and reported those as unmeasurable. One of the three is the patcher that
+  builds Connect Services.
+
+  The name is not unknowable: the family comes from the retired literals and
+  the number from the constant. Verified rather than assumed -- running the
+  patcher against a real POV 6.08.14 writes exactly the name this
+  reconstruction produces.
+
+  Rebuilt is not proven, so such a marker starts UNVERIFIED. If the host is
+  seen carrying it, the guess was right and it is alarmable from then on like
+  any other. If it is never found it stays unverified and never raises: "the
+  repair is gone" and "I guessed the name wrong" look identical from outside,
+  and only one of them is worth an alarm.
+
+  45 of 51 POV markers now verified present on a real 6.08.14, up from 44 with
+  Connect Services outside the count entirely. The remaining six are each
+  explained and none is an alarm.
+
 0.2.513
 - A repair that stops applying now says so, on the next boot, by name.
 
