@@ -1,14 +1,14 @@
-# POV renamed the folder third-party scrapers install into, and CoreSync's
-# DirectSync stopped arriving.
+# POV renamed the folder third-party scrapers install into, and the source add-on's
+# its scraper stopped arriving.
 #
 # THE FIELD SYMPTOM, reported 2026-08-26: "the private streaming add-on's
 # sources should show at the top, and they are gone entirely." The log says it
 # in one line, six seconds into the boot:
 #
-#     warning <general>: [coresync] patch error: [Errno 2] No such file or
-#     directory: '.../plugin.video.pov/resources/lib/scrapers/directsync.py.tmp'
+#     warning <general>: [the source add-on] patch error: [Errno 2] No such file or
+#     directory: '.../plugin.video.pov/resources/lib/scrapers/<scraper>.py.tmp'
 #
-# CoreSync installs its scraper by writing `directsync.py.tmp` into POV's
+# the source add-on installs its scraper by writing `<scraper>.py.tmp` into POV's
 # internal-scraper folder and renaming it into place. POV 6.08.14 deleted that
 # folder. It was not restructured -- it was RENAMED, with a byte-identical file
 # list:
@@ -21,12 +21,12 @@
 #     6.08.13  scrapers_path = '.../resources/lib/scrapers/'
 #     6.08.14  internal_path = '.../resources/lib/debrids/'
 #
-# So CoreSync's write fails, no directsync.py exists anywhere, and POV finds
+# So the source add-on's write fails, no <scraper>.py exists anywhere, and POV finds
 # nothing to load. Nothing is broken inside either add-on; they simply
 # disagree about one path.
 #
 # WHY A SHIM AND NOT A PATCH TO EITHER SIDE. Patching POV to look in the old
-# folder would fight the direction its author is going. Patching CoreSync would
+# folder would fight the direction its author is going. Patching the source add-on would
 # need an anchor in a private add-on we do not ship, cannot test against, and
 # which will move the moment its author notices. What both versions DO agree on
 # is the loader:
@@ -41,40 +41,40 @@
 # loaded". It is not. `active_internal_scrapers()` in modules/settings.py is a
 # HARDCODED whitelist built from POV's own `provider.*` settings --
 # aiostreams, external, easynews, pm_cloud, oc_cloud, tb_cloud, rd_cloud,
-# ad_cloud -- and `directsync` cannot appear in it. Executing POV's own loader
-# over a folder containing directsync.py confirms it: iter_modules sees the
+# ad_cloud -- and `that scraper` cannot appear in it. Executing POV's own loader
+# over a folder containing <scraper>.py confirms it: iter_modules sees the
 # file, the gate skips it, POV never loads it. That is true of 6.08.13 too --
 # the function is identical in both but for the order of two lines.
 #
-# SO DIRECTSYNC NEVER LOADED FROM THAT FOLDER ON ITS OWN, in any version, and
-# CoreSync must be registering the name inside POV as well. Its log prefix is
-# literally "patch error". We do not ship CoreSync, it is not on this disk, and
+# SO ITS SCRAPER NEVER LOADED FROM THAT FOLDER ON ITS OWN, in any version, and
+# the source add-on must be registering the name inside POV as well. Its log prefix is
+# literally "patch error". We do not ship the source add-on, it is not on this disk, and
 # nobody here has read it.
 #
 # WHAT THAT MEANS FOR THIS FILE, stated plainly rather than glossed:
-#   * Creating the folder is a real fix for a real, logged error. CoreSync's
+#   * Creating the folder is a real fix for a real, logged error. the source add-on's
 #     write fails at ENOENT; whatever it does after that write never runs.
 #     Unblocking it is the only part of this supported by evidence.
 #   * The mirror is a HEDGE, not a proven fix. It covers exactly one case:
-#     CoreSync registers the name successfully but writes the file to the old
+#     the source add-on registers the name successfully but writes the file to the old
 #     folder. If instead its registration patch is also stale against 6.08.14,
-#     the mirror changes nothing and DirectSync stays gone until CoreSync's
+#     the mirror changes nothing and its scraper stays gone until the source add-on's
 #     author updates it.
-# Neither step is claimed to restore DirectSync, and the release note must not
+# Neither step is claimed to restore its scraper, and the release note must not
 # say that it does.
 #
 # WHAT THIS DOES, in that order and for that reason:
 #   1. Re-creates the legacy folder (with the __init__.py POV's own copy had),
-#      so CoreSync's write SUCCEEDS instead of erroring. It does not matter
-#      that POV no longer reads it -- CoreSync needs somewhere to land.
+#      so the source add-on's write SUCCEEDS instead of erroring. It does not matter
+#      that POV no longer reads it -- the source add-on needs somewhere to land.
 #   2. Copies anything third-party that appears there into the folder POV
 #      actually scans, read from POV's own kodi_utils rather than guessed, so
 #      this keeps working when the name changes again.
 #
 # It therefore takes TWO Kodi starts on a device that has already failed once:
-# the first creates the folder, CoreSync writes into it on the next boot, and
+# the first creates the folder, the source add-on writes into it on the next boot, and
 # that same pass mirrors it. Nothing can be done about the first one -- by the
-# time our repair pass runs, CoreSync's service has already tried and failed.
+# time our repair pass runs, the source add-on's service has already tried and failed.
 #
 # WHAT IT REFUSES TO COPY. Only files POV does not ship itself. The legacy
 # folder is one we create empty, so in practice everything in it is
@@ -99,7 +99,7 @@ except Exception:
 
 POV_ADDON_ID = 'plugin.video.pov'
 
-# The folder CoreSync (and anything else written against POV <= 6.08.13) still
+# The folder the source add-on (and anything else written against POV <= 6.08.13) still
 # writes into.
 LEGACY_REL = 'resources/lib/scrapers'
 
@@ -164,7 +164,7 @@ def _internal_rel(root):
 
 
 def _ensure_legacy_dir(root):
-    """'exists' | 'created' | 'failed' -- somewhere for CoreSync to land."""
+    """'exists' | 'created' | 'failed' -- somewhere for the source add-on to land."""
     d = os.path.join(root, *LEGACY_REL.split('/'))
     init = os.path.join(d, '__init__.py')
     if os.path.isdir(d) and os.path.isfile(init):
@@ -192,7 +192,7 @@ def _inside(root, path):
     restructuring is the reason this file exists at all. A declared path
     containing `..` walked straight out of the add-on and, two levels up,
     into `addons/`, where Kodi executes whatever Python it finds. A review
-    demonstrated it writing to `<home>/addons/evil/directsync.py`. realpath on
+    demonstrated it writing to `<home>/addons/evil/<scraper>.py`. realpath on
     both sides, because a symlinked folder defeats a string comparison.
     """
     try:
@@ -206,7 +206,7 @@ def _inside(root, path):
 def _mirror(root, internal_rel):
     """Copy third-party scrapers from the legacy folder into the live one.
 
-    Returns a status naming what moved, so a field log says whether DirectSync
+    Returns a status naming what moved, so a field log says whether its scraper
     is actually present rather than whether this ran.
     """
     src = os.path.join(root, *LEGACY_REL.split('/'))
@@ -266,7 +266,7 @@ def ensure_patched():
     """Idempotent. Never raises. Returns a comma-joined status.
 
     Order matters and is the one thing to preserve: the legacy folder is
-    created FIRST, because the mirror has nothing to do until CoreSync has been
+    created FIRST, because the mirror has nothing to do until the source add-on has been
     given somewhere its write can succeed.
     """
     root = _pov_root()

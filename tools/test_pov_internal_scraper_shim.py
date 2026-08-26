@@ -2,12 +2,12 @@
 
 The field failure, from a 2026-08-26 log six seconds into boot:
 
-    [coresync] patch error: [Errno 2] No such file or directory:
-    '.../plugin.video.pov/resources/lib/scrapers/directsync.py.tmp'
+    [the source add-on] patch error: [Errno 2] No such file or directory:
+    '.../plugin.video.pov/resources/lib/scrapers/thirdparty.py.tmp'
 
 POV 6.08.14 renamed resources/lib/scrapers/ to resources/lib/debrids/ with a
 byte-identical file list, and moved its own pointer from `scrapers_path` to
-`internal_path`. CoreSync still writes to the old name, so DirectSync never
+`internal_path`. the source add-on still writes to the old name, so its scraper never
 lands and the user loses every source from the private streaming add-on.
 
 The checks below run against BOTH real POV trees where they are available, not
@@ -91,7 +91,7 @@ def make_home(internal_dir, legacy_exists, ku_name='internal_path'):
     return home, pov
 
 
-def put_legacy(pov, name, body='source = "directsync"\n'):
+def put_legacy(pov, name, body='source = "thirdparty"\n'):
     d = os.path.join(pov, 'resources', 'lib', 'scrapers')
     os.makedirs(d, exist_ok=True)
     with io.open(os.path.join(d, name), 'w', encoding='utf-8') as f:
@@ -140,7 +140,7 @@ if fb:
           {'rd_cloud', 'tb_cloud', 'aiostreams', '__init__'} <= mod0.POV_OWN)
 
 
-# --- 1. a 6.08.14 device: the folder is gone, CoreSync has failed ---------
+# --- 1. a 6.08.14 device: the folder is gone, the source add-on has failed ---------
 print()
 print('=== POV 6.08.14: legacy folder gone, nothing written yet ===')
 home, pov = make_home('debrids', legacy_exists=False)
@@ -148,7 +148,7 @@ mod = load(home)
 st = mod.ensure_patched()
 print('   status: %s' % st)
 check('it reports which folder POV actually scans', 'scans=debrids' in st, st)
-check('it creates the folder CoreSync writes into', 'legacy=created' in st, st)
+check('it creates the folder the source add-on writes into', 'legacy=created' in st, st)
 check('...and it really exists on disk now',
       os.path.isdir(os.path.join(pov, 'resources', 'lib', 'scrapers')))
 check('...with the __init__.py POV\'s own copy had',
@@ -156,42 +156,42 @@ check('...with the __init__.py POV\'s own copy had',
 check('nothing to mirror yet, and it says so',
       'mirror=nothing_to_mirror' in st, st)
 
-# now CoreSync succeeds, as it would on the next boot
-put_legacy(pov, 'directsync.py')
+# now the source add-on succeeds, as it would on the next boot
+put_legacy(pov, 'thirdparty.py')
 st2 = mod.ensure_patched()
-print('   status after CoreSync writes: %s' % st2)
-check('the next pass mirrors DirectSync into the folder POV scans',
-      'mirror=mirrored:directsync' in st2, st2)
+print('   status after the source add-on writes: %s' % st2)
+check('the next pass mirrors its scraper into the folder POV scans',
+      'mirror=mirrored:thirdparty' in st2, st2)
 check('...and the file is really there',
-      exists(pov, 'resources/lib/debrids/directsync.py'))
+      exists(pov, 'resources/lib/debrids/thirdparty.py'))
 check('...with the same bytes',
-      io.open(os.path.join(pov, 'resources/lib/debrids/directsync.py'.replace(
-          '/', os.sep)), encoding='utf-8').read() == 'source = "directsync"\n')
+      io.open(os.path.join(pov, 'resources/lib/debrids/thirdparty.py'.replace(
+          '/', os.sep)), encoding='utf-8').read() == 'source = "thirdparty"\n')
 check('running again does not copy it twice',
       'mirror=nothing_to_mirror' in mod.ensure_patched())
 
-# AN UPDATED DIRECTSYNC IS PICKED UP -- and the same-LENGTH case is the one
+# AN UPDATED ITS SCRAPER IS PICKED UP -- and the same-LENGTH case is the one
 # that matters. The cheap skip is `same size, then compare bytes`, so a test
 # that only changes the length is answered by the size check and never
 # exercises the comparison at all. A sabotage that replaced the byte compare
 # with an unconditional skip passed this file until this case was added.
-put_legacy(pov, 'directsync.py', 'source = "directsync v2"\n')
+put_legacy(pov, 'thirdparty.py', 'source = "thirdparty v2"\n')
 check('a CHANGED scraper of a different length is re-mirrored',
-      'mirror=mirrored:directsync' in mod.ensure_patched())
+      'mirror=mirrored:thirdparty' in mod.ensure_patched())
 check('...and the new bytes won',
       'v2' in io.open(os.path.join(
-          pov, 'resources/lib/debrids/directsync.py'.replace('/', os.sep)),
+          pov, 'resources/lib/debrids/thirdparty.py'.replace('/', os.sep)),
           encoding='utf-8').read())
 
-_same_len = 'source = "directsync V2"\n'      # same length, different bytes
-assert len(_same_len) == len('source = "directsync v2"\n')
-put_legacy(pov, 'directsync.py', _same_len)
+_same_len = 'source = "thirdparty V2"\n'      # same length, different bytes
+assert len(_same_len) == len('source = "thirdparty v2"\n')
+put_legacy(pov, 'thirdparty.py', _same_len)
 check('a CHANGED scraper of the SAME length is re-mirrored too',
-      'mirror=mirrored:directsync' in mod.ensure_patched(),
+      'mirror=mirrored:thirdparty' in mod.ensure_patched(),
       'the size shortcut is being trusted instead of the bytes')
 check('...and those bytes won as well',
       'V2' in io.open(os.path.join(
-          pov, 'resources/lib/debrids/directsync.py'.replace('/', os.sep)),
+          pov, 'resources/lib/debrids/thirdparty.py'.replace('/', os.sep)),
           encoding='utf-8').read())
 
 
@@ -203,10 +203,10 @@ mod2 = load(home2)
 mod2.ensure_patched()
 put_legacy(pov2, 'rd_cloud.py', 'source = "SABOTAGE"\n')
 put_legacy(pov2, '__init__.py', 'SABOTAGE\n')
-put_legacy(pov2, 'directsync.py')
+put_legacy(pov2, 'thirdparty.py')
 st3 = mod2.ensure_patched()
 check('only the third-party module is mirrored',
-      'mirror=mirrored:directsync' in st3, st3)
+      'mirror=mirrored:thirdparty' in st3, st3)
 live = io.open(os.path.join(pov2, 'resources/lib/debrids/rd_cloud.py'.replace(
     '/', os.sep)), encoding='utf-8').read()
 check('...POV\'s own rd_cloud.py is untouched', 'SABOTAGE' not in live, live)
@@ -216,18 +216,18 @@ check('...POV\'s own __init__.py is untouched', 'SABOTAGE' not in init, init)
 # NOT a bare `check(..., True)`, which is what this line used to be -- the
 # only cover for the .py filter, and a mutant that removed the filter passed.
 put_legacy(pov2, 'notes.txt', 'not python at all\n')
-put_legacy(pov2, 'directsync.pyc', 'compiled\n')
+put_legacy(pov2, 'thirdparty.pyc', 'compiled\n')
 mod2.ensure_patched()
 check('a non-python file is not mirrored',
       not exists(pov2, 'resources/lib/debrids/notes.txt')
-      and not exists(pov2, 'resources/lib/debrids/directsync.pyc'))
+      and not exists(pov2, 'resources/lib/debrids/thirdparty.pyc'))
 
-# The SOURCE must survive: CoreSync rewrites it on its own schedule, and a
+# The SOURCE must survive: the source add-on rewrites it on its own schedule, and a
 # mirror that consumed it would make the next install look already-done.
 check('the file is copied, never moved',
-      exists(pov2, 'resources/lib/scrapers/directsync.py'))
+      exists(pov2, 'resources/lib/scrapers/thirdparty.py'))
 
-# Subdirectories are not walked. A folder CoreSync happens to leave behind
+# Subdirectories are not walked. A folder the source add-on happens to leave behind
 # must not have its contents flattened into POV's package.
 import os as _os
 _sub = _os.path.join(pov2, 'resources', 'lib', 'scrapers', 'nested')
@@ -246,7 +246,7 @@ print('=== the failure modes service.py greps for ===')
 home8, pov8 = make_home('debrids', legacy_exists=False)
 import shutil as _sh
 _sh.rmtree(os.path.join(pov8, 'resources', 'lib', 'debrids'))
-put_legacy(pov8, 'directsync.py')
+put_legacy(pov8, 'thirdparty.py')
 st8 = load(home8).ensure_patched()
 check('a missing destination is reported, not crashed',
       'mirror=no_internal' in st8, st8)
@@ -255,13 +255,13 @@ check('a missing destination is reported, not crashed',
 home9, pov9 = make_home('debrids', legacy_exists=False)
 mod9 = load(home9)
 mod9.ensure_patched()
-put_legacy(pov9, 'directsync.py')
+put_legacy(pov9, 'thirdparty.py')
 _real_copy = mod9.shutil.copyfile
 mod9.shutil.copyfile = lambda *a, **k: (_ for _ in ()).throw(OSError('disk full'))
 st9 = mod9.ensure_patched()
 mod9.shutil.copyfile = _real_copy
 check('a copy that fails reports failed, never mirrored',
-      'mirror=failed:directsync' in st9, st9)
+      'mirror=failed:thirdparty' in st9, st9)
 
 # CONTAINMENT. POV's kodi_utils is third-party input, and a declared path with
 # `..` walked out of the add-on entirely -- two levels up is addons/, where
@@ -272,7 +272,7 @@ for _evil in ('../evil/', '../../evil/', 'resources/lib/../../../evil/'):
                               'kodi_utils.py'), 'w', encoding='utf-8') as _f:
         _f.write("internal_path = 'special://home/addons/plugin.video.pov/"
                  "%s'\n" % _evil)
-    put_legacy(pov10, 'directsync.py')
+    put_legacy(pov10, 'thirdparty.py')
     st10 = load(home10).ensure_patched()
     check('a path escaping the add-on is refused (%s)' % _evil,
           'mirror=outside_addon' in st10, st10)
@@ -289,7 +289,7 @@ check('...and the file is left exactly as it was',
       io.open(os.path.join(pov11, 'resources', 'lib', 'scrapers'),
               encoding='utf-8').read() == 'not a directory\n')
 
-# A legacy folder that exists but is NOT a package. CoreSync's write can
+# A legacy folder that exists but is NOT a package. the source add-on's write can
 # succeed into a bare directory, but POV's own copy of this folder shipped an
 # __init__.py and a mutant that only checked isdir() passed every other test
 # here -- so the folder would be left un-importable on exactly the devices
@@ -329,8 +329,8 @@ print('   status: %s' % st4)
 check('it reads the OLD name out of POV too', 'scans=scrapers' in st4, st4)
 check('...and does not copy a folder onto itself', 'mirror=same_dir' in st4,
       st4)
-put_legacy(pov3, 'directsync.py')
-check('...still a no-op once DirectSync is there',
+put_legacy(pov3, 'thirdparty.py')
+check('...still a no-op once its scraper is there',
       'mirror=same_dir' in mod3.ensure_patched())
 
 
@@ -360,10 +360,10 @@ st7 = load(home7).ensure_patched()
 check('a FUTURE rename is followed, not hardcoded around',
       'scans=somewhere_new' in st7,
       'the point of reading POV\'s own kodi_utils instead of assuming')
-put_legacy(pov7, 'directsync.py')
-check('...and DirectSync lands in that folder too',
-      'mirror=mirrored:directsync' in load(home7).ensure_patched()
-      and exists(pov7, 'resources/lib/somewhere_new/directsync.py'))
+put_legacy(pov7, 'thirdparty.py')
+check('...and its scraper lands in that folder too',
+      'mirror=mirrored:thirdparty' in load(home7).ensure_patched()
+      and exists(pov7, 'resources/lib/somewhere_new/thirdparty.py'))
 
 
 # --- 5. it is wired in, and actually runs -------------------------------
