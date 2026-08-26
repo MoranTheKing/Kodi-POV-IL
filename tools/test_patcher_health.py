@@ -275,19 +275,35 @@ with io.open(os.path.join(libC, 'built_marker_patcher.py'), 'w',
             "OLD_MARKERS = ('# AI_SUBS_BUILT_v5', '# AI_SUBS_BUILT_v6')\n"
             "MARKER = '# AI_SUBS_BUILT_v{0}'.format(INJECT_VERSION)\n")
 mc = load(profC)
-sc = mc.run(libC, hostR)
+sc = mc.run(libC, hostR)          # host holds _v4, not the rebuilt _v7
 rowsC = mc.classify(mc.collect(libC, hostR), {})[0]
 st = {r['status'] for r in rowsC}
-print('   constructed marker -> %s (statuses %s)' % (sc, sorted(st)))
-check('a constructed live marker is called unmeasurable, not missing',
-      st == {'unmeasurable'}, str(sorted(st)))
-check('...so it can never raise a false alarm', 'lapsed=0' in sc, sc)
-check('...and it names the version it could not check',
-      any('_v7' in r['marker'] for r in rowsC),
+print('   rebuilt marker, not in host -> %s (statuses %s)' % (sc, sorted(st)))
+check('the live version is REBUILT from the constant, not read as a literal',
+      any(r['marker'].endswith('_v7') for r in rowsC),
       str([r['marker'] for r in rowsC]))
-check('...and says so in the report rather than passing for healthy',
-      'unmeasurable' in io.open(os.path.join(profC, 'patcher_health.txt'),
-                                encoding='utf-8').read())
+check('a rebuilt name that the host does not carry is unverified, not lapsed',
+      st == {'unverified'}, str(sorted(st)))
+check('...so a wrong guess can never raise a false alarm',
+      'lapsed=0' in sc, sc)
+check('...and it says unverified rather than passing for healthy',
+      'unverified' in io.open(os.path.join(profC, 'patcher_health.txt'),
+                              encoding='utf-8').read())
+
+# ONCE THE HOST IS SEEN CARRYING IT, the reconstruction is PROVEN -- and from
+# then on it is alarmable like any other marker. This is what puts the Connect
+# Services window under the report instead of permanently outside it.
+profC2 = tmp('ph-profC2-')
+hasV7 = addons_root(
+    {'plugin.video.pov': ('6.08.14', '# AI_SUBS_BUILT_v7\n', None)})
+mc2 = load(profC2)
+sc2 = mc2.run(libC, hasV7)
+check('a rebuilt name the host DOES carry reads ok, proving the guess',
+      'ok=1' in sc2, sc2)
+mc3 = load(profC2)
+sc3 = mc3.run(libC, addons_root(
+    {'plugin.video.pov': ('6.08.15', 'gone\n', None)}))
+check('...and once proven, losing it IS a lapse', 'lapsed=1' in sc3, sc3)
 
 # THE WHOLE POINT OF THE COLLAPSE is that it must not hide a real regression.
 mr2 = load(profR)
