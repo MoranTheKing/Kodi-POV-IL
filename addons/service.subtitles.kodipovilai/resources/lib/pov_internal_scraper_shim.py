@@ -55,6 +55,33 @@
 # iter_modules over two directories holding an overlapping name yields it once,
 # from the first.
 #
+# AND A THIRD EDIT, WHICH IS THE ONE THAT MAKES THE OTHER TWO SAFE TO MAKE.
+# Getting a third-party module LOADED is not enough; its rows then flow into
+# POV's sorter, and modules/sources.py does this for every row of every result
+# set:
+#
+#     def sort_results(self, results):
+#         for item in results:
+#             ...
+#             item['provider_rank'] = self.get_provider_rank(account_type)
+#
+#     def get_provider_rank(self, account_type):
+#         return self.source.provider_sort_ranks[account_type] or 11
+#
+# A BARE SUBSCRIPT. A provider name that is not in that dict raises KeyError
+# out of sort_results, which is called unguarded from process() -> get_sources()
+# -> source_select(), so the whole list dies -- including POV's own sources.
+# Reproduced against POV's own function: `rd_cloud` ranks 2, an unregistered
+# name raises.
+#
+# Registering the rank is the installer's job and its edit for it is stale on
+# 6.08.14, so without this the shim would turn "some sources missing" into
+# "nothing plays at all", which is far worse than the bug being fixed. The fix
+# is one token -- `.get(account_type)` instead of `[account_type]` -- and it
+# changes nothing for a name that IS registered, because POV already treats a
+# falsy rank as 11 and `.get` returns None for a miss. It also protects POV
+# from every future provider it does not know about, not just this one.
+#
 # WHAT THIS STILL DOES NOT DO. POV gates loading with active_internal_scrapers()
 # in modules/settings.py -- a hardcoded whitelist built from its own provider.*
 # settings -- so a module in the folder is loaded only if something has put its
@@ -82,6 +109,15 @@ POV_ADDON_ID = 'plugin.video.pov'
 LEGACY_REL = 'resources/lib/scrapers'
 
 SOURCES_REL = 'resources/lib/modules/sources.py'
+
+# Identical in 6.08.13 and 6.08.14, so one anchor covers both.
+_RANK_ANCHOR = (
+    "\t\treturn self.source.provider_sort_ranks[account_type] or 11")
+_RANK_REPLACEMENT = (
+    "\t\treturn self.source.provider_sort_ranks.get(account_type) or 11  "
+    + "# AI_SUBS_POV_RANK_MISS_v1")
+_RANK_MARKER = '# AI_SUBS_POV_RANK_MISS_v1'
+_RANK_MARKER_ANY = '# AI_SUBS_POV_RANK_MISS_v'
 
 MARKER = '# AI_SUBS_POV_INTERNAL_DIRS_v1'
 _MARKER_ANY = '# AI_SUBS_POV_INTERNAL_DIRS_v'
@@ -221,6 +257,66 @@ def _teach_pov_both_dirs(root):
     return 'unmatched'
 
 
+def _guard_unknown_provider(root):
+    """Stop one unknown provider name taking every source down with it.
+
+    'unchanged' | 'patched' | 'unmatched' | 'read_failed' | 'compile_failed'
+    | 'write_failed' | 'no_file'. See the header: this is what makes scanning
+    a second folder safe rather than dangerous.
+    """
+    path = os.path.join(root, *SOURCES_REL.split('/'))
+    if not os.path.isfile(path):
+        return 'no_file'
+    try:
+        with open(path, encoding='utf-8', newline='') as fh:
+            content = fh.read()
+    except Exception as exc:
+        _log('read failed: {0}'.format(exc), level='WARNING')
+        return 'read_failed'
+    if _RANK_MARKER in content:
+        return 'unchanged'
+    if _RANK_MARKER_ANY in content:
+        # A bump to v2 finds its own v1 in place and the anchor already gone.
+        # Without this it falls through to the count check and reports a shape
+        # mismatch -- which reads as "POV refactored" when POV did nothing, and
+        # sends the next maintainer looking for a change that never happened.
+        # This module is pinned NEVER-UPGRADES for exactly that reason: it
+        # refuses a block it no longer describes rather than guessing at it.
+        _log('carries an older version of this guard; leaving it alone',
+             level='WARNING')
+        return 'unchanged'
+    eol = '\r\n' if '\r\n' in content[:8192] else '\n'
+    fit = (lambda t: t.replace('\n', eol)) if eol != '\n' else (lambda t: t)
+    anchor = fit(_RANK_ANCHOR)
+    if content.count(anchor) != 1:
+        _log('the provider-rank lookup is not the shape this guards '
+             '({0} match(es)); leaving it alone'.format(content.count(anchor)),
+             level='WARNING')
+        return 'unmatched'
+    new_content = content.replace(anchor, fit(_RANK_REPLACEMENT), 1)
+    try:
+        compile(new_content.replace('\r\n', '\n'), path, 'exec')
+    except SyntaxError as exc:
+        _log('guarded sources.py would not compile -- skipping '
+             '({0})'.format(exc), level='WARNING')
+        return 'compile_failed'
+    tmp = path + '.aitmp'
+    try:
+        with open(tmp, 'w', encoding='utf-8', newline='') as fh:
+            fh.write(new_content)
+        os.replace(tmp, path)
+    except Exception as exc:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        _log('write failed: {0}'.format(exc), level='WARNING')
+        return 'write_failed'
+    _drop_pyc(path)
+    _log('an unknown provider name no longer raises out of POV\'s sorter')
+    return 'patched'
+
+
 def ensure_patched():
     """Idempotent. Never raises. A comma-joined status.
 
@@ -244,4 +340,10 @@ def ensure_patched():
         _log('unexpected failure teaching POV both folders: {0}'.format(exc),
              level='WARNING')
         out.append('scan=failed')
+    try:
+        out.append('rank=' + _guard_unknown_provider(root))
+    except Exception as exc:
+        _log('unexpected failure guarding the provider rank: {0}'.format(exc),
+             level='WARNING')
+        out.append('rank=failed')
     return ', '.join(out)

@@ -151,16 +151,6 @@ def _relocations(rel, base=''):
     return out
 
 
-def _relocations(rel):
-    out = [rel]
-    for a, b in _MOVED:
-        if rel.startswith(a):
-            alt = b + rel[len(a):]
-            if alt not in out:
-                out.append(alt)
-    return out
-
-
 def _read_bytes(path):
     try:
         with open(path, 'rb') as f:
