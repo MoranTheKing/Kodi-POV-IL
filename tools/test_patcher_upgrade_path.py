@@ -389,6 +389,14 @@ pin('umbrella_subtitle_match_patcher', 'UPGRADES',
 # SORT_RECENT_DEFAULT) reach nobody. Run --pins for the breakdown.
 pin('kodi_playlist_timeout_patcher', 'NEVER-UPGRADES',
     'AI_SUBS_PLAYLIST_TIMEOUT_v1')
+# UNPROVEN because the simulation's stock POV is 6.08.12, which does not carry
+# the 6.08.14 line this repairs -- so the harness has no host and reports
+# `unmatched` rather than a verdict. The behaviour IS proven, in
+# tools/test_pov_alldebrid_status.py, which executes POV's own torrent_info
+# before and after the patch against a single-object, a list and an empty-list
+# response. Pinned anyway so a version bump stops here and asks.
+pin('pov_alldebrid_status_fix', 'UNPROVEN',
+    'AI_SUBS_POV_AD_STATUS_v1')
 pin('pov_bookmark_refresh_patcher', 'NEVER-UPGRADES',
     'AI_SUBS_BOOKMARK_REFRESH_LAST_v1')
 pin('pov_favorites_refresh_patcher', 'NEVER-UPGRADES',
