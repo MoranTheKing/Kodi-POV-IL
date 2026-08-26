@@ -128,6 +128,45 @@ _NEW_FOLDER = (
     "\t\texcept: return []"
 )
 
+# POV 6.08.14 REWROTE BOTH READERS -- same jsloads, same defect, different
+# shape. It moved the `return` inside the `try` and dropped the temporary,
+# which is a tidy-up with no behaviour change and no effect on the bug: rows
+# are still stored as Python reprs and json.loads still raises on every one.
+# So the patch is still needed and only its anchors went stale. It stopped
+# applying silently, which is the part worth avoiding next time.
+#
+# Both shapes are carried rather than the newest only, because 6.08.13 is
+# still on devices that have not auto-updated.
+_OLD_GET_LIST_14 = (
+    "\tdef get_list(self, list_name, list_type):\n"
+    "\t\ttry: return self.jsloads(self.dbcur.execute(GET_LIST, "
+    "(list_name, list_type)).fetchone()[0])\n"
+    "\t\texcept: return None"
+)
+_OLD_FOLDER_14 = (
+    "\tdef get_shortcut_folder_contents(self, list_name):\n"
+    "\t\ttry:\n"
+    "\t\t\tcontents = self.dbcur.execute(GET_FOLDER_CONTENTS, "
+    "(list_name, 'shortcut_folder')).fetchone()[0]\n"
+    "\t\t\treturn self.jsloads(contents)\n"
+    "\t\texcept: return []"
+)
+
+# (old shape, replacement) newest first. The replacements are the SAME text in
+# both cases -- the fixed method does not care which shape it replaced.
+_GET_LIST_SHAPES = ((_OLD_GET_LIST_14, _NEW_GET_LIST),
+                    (_OLD_GET_LIST, _NEW_GET_LIST))
+_FOLDER_SHAPES = ((_OLD_FOLDER_14, _NEW_FOLDER),
+                  (_OLD_FOLDER, _NEW_FOLDER))
+
+
+def _pick(content, shapes):
+    """The (old, new) pair whose old shape this POV actually has, or None."""
+    for old, new in shapes:
+        if old in content:
+            return old, new
+    return None
+
 
 def _log(msg, level='INFO'):
     if kodi_utils is None:
@@ -169,18 +208,21 @@ def ensure_patched():
     # Both readers must be present. Patching only one would leave half the
     # menus readable and half not, which is harder to reason about than
     # leaving POV exactly as it is and saying so in the log.
-    missing = [n for n, a in (('get_list', _OLD_GET_LIST),
-                              ('get_shortcut_folder_contents', _OLD_FOLDER),
-                              ('class NavigatorCache', _HELPER_ANCHOR))
-               if a not in content]
+    get_list_pair = _pick(content, _GET_LIST_SHAPES)
+    folder_pair = _pick(content, _FOLDER_SHAPES)
+    missing = [n for n, ok in (('get_list', get_list_pair),
+                               ('get_shortcut_folder_contents', folder_pair),
+                               ('class NavigatorCache',
+                                _HELPER_ANCHOR in content))
+               if not ok]
     if missing:
-        _log('navigator_cache.py does not look like 6.08.01 (no match for: '
-             '{0}) -- leaving alone'.format(', '.join(missing)),
+        _log('navigator_cache.py matches neither shape this repairs (no match '
+             'for: {0}) -- leaving alone'.format(', '.join(missing)),
              level='WARNING')
         return 'unmatched'
 
-    new_content = content.replace(_OLD_GET_LIST, _NEW_GET_LIST, 1)
-    new_content = new_content.replace(_OLD_FOLDER, _NEW_FOLDER, 1)
+    new_content = content.replace(get_list_pair[0], get_list_pair[1], 1)
+    new_content = new_content.replace(folder_pair[0], folder_pair[1], 1)
     new_content = new_content.replace(
         _HELPER_ANCHOR, _HELPER + _HELPER_ANCHOR, 1)
     # Drop any superseded marker so an upgraded file carries exactly one.
