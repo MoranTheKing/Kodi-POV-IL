@@ -4594,6 +4594,61 @@ a race, not of a fix. 0.2.512 replaces the mirror with one edit to POV's scan
 line, which removes the race instead of narrowing it. Read that section, not
 this one, for what runs today.
 
+### A PRIVATE NAME REACHED PUBLIC PACKAGES, AND WHAT IT TOOK TO GET IT OUT
+
+A private third-party add-on's id was written into two of our source files and
+shipped. The source was scrubbed the same day; **that was not the fix, and
+believing it was cost several hours.** A review found the name still present in
+SEVEN tracked packages -- built before the scrub, still on the default branch,
+still downloadable -- and in one `__pycache__` file. My own failing test had
+named two of them and I had dismissed it as stale artefacts.
+
+**THE LESSON, stated as a rule.** Scrubbing a source file does not scrub a
+release. Anything built from it is a separate copy with its own lifetime, and in
+this repo those copies are TRACKED, so they are also in history. A privacy scrub
+is not finished until it has been proven against the packages and against every
+blob in the range, not just the worktree. The command that answers it:
+
+```
+git ls-files | grep -E '\.(zip|pyc)$' | while read p; do
+  python3 - "$p" <<'EOF'
+import sys, zipfile
+z = sys.argv[1]
+...open every member and search the bytes...
+EOF
+done
+```
+
+`git grep` cannot see inside a zip, which is exactly why the first pass missed
+them.
+
+**HOW IT WAS REMOVED.** In order, and the order is the whole point:
+
+1. Rebuild every package from the scrubbed tree and release normally
+   (0.2.512 / qf 0.1.557 / build 0.1.125, note 612), so the leaking artefacts
+   are superseded rather than yanked out from under devices resolving them.
+2. Only after the note moved to 612 AND the raw cache window elapsed -- while
+   611 was live, `build_versions/611.txt` still pointed at qf 0.1.556, and
+   deleting it would have 404'd a real device mid-update.
+3. `git filter-branch --index-filter` over `e3a90c88^..HEAD`, unstaging by BLOB
+   SHA, not by path. Six blobs. Path-based removal would also have taken
+   `build-latest.zip`, which must keep existing and whose current blob is clean.
+   `--index-filter`, never `--tree-filter`: an earlier `--tree-filter` attempt
+   on this repo filled the disk, because it checks out every tree and this one
+   holds ~10GB of packages.
+4. Force-push `main` and the working branch. `gh-pages` needed nothing --
+   `deploy-pages.yml` excludes `dist/` from what it publishes, which is also why
+   Pages 404s those URLs and always has.
+
+**WHAT IS STILL TRUE AFTERWARDS, and it is not nothing.** The rewritten commits
+are unreachable, so a fresh clone gets none of it and nothing in the UI or API
+lists them -- but GitHub keeps unreachable objects until it garbage-collects,
+and `raw.githubusercontent.com/<repo>/<old-40-char-sha>/dist/...` still answers
+200 for someone who has the old SHA. Old SHAs are not secret: the public Events
+API records pushed commit SHAs for about 90 days. **Only GitHub Support can
+force the GC**, and only the repo owner can ask. Rewriting is necessary and it
+is not sufficient; say so rather than reporting the leak closed.
+
 ### What shipped 0.2.512 / qf 0.1.557 / build 0.1.125 (note 612)
 
 **POV scans exactly ONE folder for internal scrapers, and 6.08.14 renamed it.**
