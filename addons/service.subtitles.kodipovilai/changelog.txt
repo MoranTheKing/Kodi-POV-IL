@@ -1,3 +1,36 @@
+0.2.510
+- POV 6.08.14 compatibility. POV restructured itself and several of our repairs
+  stopped applying -- silently, with no error, reporting "no file" as if that
+  were healthy. The defects they prevent did NOT go away; they moved with the
+  files.
+
+  What moved: the debrid API clients went from resources/lib/debrids/ to
+  resources/lib/indexers/, and resources/lib/scrapers/ was renamed to
+  resources/lib/debrids/. Four repairs were looking in the old place and one
+  more had its anchor shifted by a refactor.
+
+  Re-pointed, and the folder is now decided by POV's own import line rather
+  than by which file happens to exist -- both folders ship in 6.08.14, so
+  "first one found" would rewrite a dead copy and report success while the file
+  POV actually imports went untouched. Verified on a deliberately mixed tree.
+
+  Two of the five guard the PLAY path specifically: one prevents POV's debrid
+  error handlers from crashing in a way that deletes the real error, the other
+  keeps TorBox links legal. Both had lapsed.
+
+- Every repair we ship was run against both POV versions, file by file. Seven
+  behaved differently on 6.08.14; five are fixed here, one is a difference by
+  design, one was an artefact of the test harness. After all repairs are
+  applied to a real 6.08.14 tree, POV still compiles with zero errors, and no
+  repair injects a reference to anything 6.08.14 removed.
+
+- A third-party add-on that installs a scraper into POV was writing to the
+  folder that got renamed and failing with "no such file or directory". The
+  folder is re-created so its installer can complete. Whether that alone is
+  enough is not established -- POV gates which scrapers it loads by a fixed
+  list, so the rest depends on that add-on's own author. Said plainly here
+  rather than claimed as fixed.
+
 0.2.509
 - Measurement only. Nothing about how the build behaves changes in this
   version; one instrument gets more honest.
