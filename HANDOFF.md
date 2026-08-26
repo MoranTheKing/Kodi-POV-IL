@@ -4245,6 +4245,7 @@ Raw by a few minutes; poll rather than assume.
 | 0.2.462 / wizard 0.1.36 / qf 0.1.504 / build 0.1.105 | FENtastic widget includes; DialogSeekBar; POV reads the shortcut folders the build ships |
 | 0.2.499 / qf 0.1.544 / build 0.1.112 / note 599 | the player bar auto-hides on any capable skin, not just FENtastic; Umbrella's MDBList watched-sync stops skipping windows forever |
 | 0.2.512 / qf 0.1.557 / build 0.1.125 / note 612 | POV 6.08.14 renamed the one folder it scans for internal scrapers, so third-party internal sources stopped being looked at; an unknown provider name no longer takes the whole result list down with it; the TorBox restore patcher, dead since a duplicate `def`, runs again |
+| 0.2.513 / qf 0.1.558 / build 0.1.126 / note 613 | a repair that stops applying is named at WARNING on the next boot instead of dying in silence; 44 of 51 POV markers verified present, 0 false alarms |
 
 ### Things worth not rediscovering
 
@@ -4593,6 +4594,85 @@ written and never copied. "It needs TWO restarts" was the honest description of
 a race, not of a fix. 0.2.512 replaces the mirror with one edit to POV's scan
 line, which removes the race instead of narrowing it. Read that section, not
 this one, for what runs today.
+
+### What shipped 0.2.513 / qf 0.1.558 / build 0.1.126 (note 613)
+
+**A repair that stops applying now says so, by name, on the next boot.**
+
+THE GAP, quoted rather than described. `_run_build_startup_repairs` ends in:
+
+```
+for step in steps:
+    try: step()
+    except Exception as e: log('... failed: %s' % e, 'WARNING')
+```
+
+`step()`. The return value is discarded -- and all 123 step functions compute a
+verdict and return None anyway (checked: 123 step-shaped defs, 0 with a
+`return <value>`). An anchor that no longer matches is not an exception, so it
+never reaches the WARNING branch either. That is the whole mechanism by which
+POV 6.08.14 killed five repairs in silence.
+
+**IT DOES NOT INTERCEPT THE CALLS, and that is deliberate.** Making 123
+functions return their verdict is a large diff through the most
+safety-critical file here, and it measures the wrong thing: what a patcher
+RETURNED, not what the host contains. A patcher returning 'patched' whose write
+silently failed still reads green. `patcher_health` asks the host add-ons what
+they actually hold, using the same marker invariant
+`test_patcher_upgrade_path.py` already enforces tree-wide -- so the two files
+hold each other honest.
+
+**THE HARD PART IS SILENCE.** Ten hosts are patched here and most devices have
+few of them; a skin patcher for an uninstalled skin is absent forever, and
+reporting that every boot is how a report gets ignored. Absence is news only
+against history:
+
+| reading | verdict |
+| --- | --- |
+| marker present | `ok`, and remember the host version |
+| absent, never once seen present | `unknown` -- quiet, probably not applicable |
+| absent, seen present before | **`lapsed`** -- named at WARNING |
+| host not installed at all | `not_installed` -- quiet |
+
+The fourth row is not obvious and was found by a MUTANT that survived: delete
+the not-installed branch and everything else still passed, because the only
+uninstalled host under test had never been healthy. Somebody switching away
+from a skin must not be told their build is broken. The test now covers it.
+
+**TWO FINDINGS FROM RUNNING IT, not from reasoning about it.**
+
+- `pov_services_patcher` keeps ELEVEN superseded markers of one family so it
+  can strip its own previous work. Looking for those produced twelve of the
+  twenty-two "absent" rows in the first real run -- one module, most of the
+  noise. Families are now collapsed to their live version.
+- Three patchers BUILD their live marker from an integer constant, so it exists
+  nowhere in the source and the highest LITERAL is a retired one. Reporting on
+  that literal is worse than silence: guaranteed absent forever, against a
+  patcher that works. Detected by a `_VERSION` constant exceeding every literal
+  in its family, reported `unmeasurable`, and named.
+
+After both: **44 of 51 POV markers present** on a real 6.08.14 after the pass,
+**zero false alarms**, and every remaining absence explained (a retired
+patcher; a fix whose bug 6.08.14 does not have; markers written to settings
+rather than files; a revert marker that is supposed to be absent).
+
+**WHO SEES IT.** WARNING lines ALWAYS, so any log a user uploads now carries the
+diagnosis instead of only the symptom. The on-screen popup only where
+`log_level` is DEBUG -- a viewer cannot act on this and telling them the build
+is broken would be alarming and useless.
+
+**Cost, measured:** 0.15s per boot reading 1.1 MB of host text, against a pass
+that already runs for tens of seconds. Runs LAST so it reads the state the pass
+just produced. Never raises into the boot; every failure path returns less
+information instead.
+
+**A trap worth knowing.** Its own docstring quoted a real marker, and the
+upgrade harness -- which discovers by SHAPE, on purpose -- classified this
+module as a patcher and demanded a pin for it. The docstring changed, not the
+rule. Any file in `resources/lib` that mentions a marker in a STRING (a comment
+is fine; `literal_markers` walks the AST) will do the same.
+
+11 mutants of the module were written; all 11 are caught.
 
 ### A PRIVATE NAME REACHED PUBLIC PACKAGES, AND WHAT IT TOOK TO GET IT OUT
 
