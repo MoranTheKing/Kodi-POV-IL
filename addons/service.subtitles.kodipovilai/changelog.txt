@@ -1,3 +1,34 @@
+0.2.511
+- AllDebrid plays again. POV 6.08.14 shipped a one-line regression that broke
+  playback for every AllDebrid user: indexers/alldebrid_api.py torrent_info()
+  went from `result['magnets']` to `result['magnets'][0]`. Queried with an id
+  that endpoint returns a single object, so indexing it with [0] raises
+  KeyError(0) -- which is exactly what two field logs show, dozens of times
+  each, once per source tried:
+
+      >> resolve_external_sources exception <<: 0
+         {'debrid': 'alldebrid', 'cache_provider': 'Unchecked alldebrid', ...}
+
+  It fails inside parse_magnet_pack, before any file is chosen, so POV moves to
+  the next source and fails the same way. To a user that is "it goes through
+  every source and plays nothing", and on a title whose sources are all
+  external it looks like "no results" instead.
+
+  The identical line appears twice in that file and only one is wrong --
+  create_transfer() calls an endpoint that really does return a list and
+  carried [0] in 6.08.13 too. The patch matches the whole torrent_info body so
+  it cannot land on the other one, and it does not simply revert: it uses what
+  the API returned and indexes only if it is a list, so it is right under
+  either response shape. Verified by executing POV's own method before and
+  after against a single object, a list, and an empty list.
+
+- Our own account check was importing a module POV moved. `debrids.alldebrid_api`
+  became `indexers.alldebrid_api` in 6.08.14, and the log said so plainly --
+  "AllDebrid status lookup failed: No module named 'debrids.alldebrid_api'" --
+  on every account read, on both devices. The file-path patchers were taught
+  this rename in 0.2.510 and this runtime import was missed. It now tries the
+  new package first and falls back.
+
 0.2.510
 - POV 6.08.14 compatibility. POV restructured itself and several of our repairs
   stopped applying -- silently, with no error, reporting "no file" as if that

@@ -328,6 +328,9 @@ def _run_build_startup_repairs():
         # the source add-on's its scraper write fails and the user loses those sources.
         # Creates the old folder and mirrors into the new one.
         _maybe_shim_pov_internal_scrapers,
+        # POV 6.08.14 broke AllDebrid playback outright: torrent_info()
+        # subscripts a dict with [0]. Every magnet resolve raises KeyError(0).
+        _maybe_fix_pov_alldebrid_status,
         _maybe_patch_skin_watched_poster,
         _maybe_patch_favourites_xml,
         _maybe_patch_favourites_personal_tiles,
@@ -2195,6 +2198,29 @@ def _maybe_guard_pov_debrid_handlers():
             kodi_utils.log(
                 'pov_debrid_unbound_guard_patcher failed: {0}'.format(e),
                 level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_fix_pov_alldebrid_status():
+    """POV 6.08.14 indexes a dict with [0] and every AllDebrid play fails.
+
+    indexers/alldebrid_api.py torrent_info() does `result['magnets'][0]` on a
+    call that returns a single object, so parse_magnet_pack raises KeyError(0)
+    and resolve_external_sources gives up on every source in turn. Two field
+    logs show it dozens of times each. See pov_alldebrid_status_fix.
+    """
+    try:
+        from resources.lib import pov_alldebrid_status_fix, kodi_utils
+        st = pov_alldebrid_status_fix.ensure_patched()
+        if st in ('unmatched', 'read_failed', 'write_failed',
+                  'compile_failed'):
+            kodi_utils.log('pov_alldebrid_status_fix: ' + st, level='WARNING')
+    except Exception as e:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log('pov_alldebrid_status_fix failed: {0}'.format(e),
+                           level='WARNING')
         except Exception:
             pass
 

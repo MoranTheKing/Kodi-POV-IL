@@ -106,10 +106,45 @@ MANAGER_MARKER = '# AI_SUBS_MDBL_WATCHLIST_ONLY_v2'
 # (Self-idempotent: the guarded line no longer contains the raw anchor.)
 # Match the FULL one-liner (incl. the inline `return`) so the marker lands at the
 # end of the line, not before the return (which would comment the return out).
-_ADDLIST_ANCHOR = "if result['added']['movies'] + result['added']['shows'] == 0: return kodi_utils.notification(32574)"
-_ADDLIST_GUARDED = "if not result or result['added']['movies'] + result['added']['shows'] == 0: return kodi_utils.notification(32574)  " + NONE_GUARD_MARKER
-_ADDCOLL_ANCHOR = "if result['updated']['movies'] + result['updated']['shows'] == 0: return kodi_utils.notification(32574)"
-_ADDCOLL_GUARDED = "if not result or result['updated']['movies'] + result['updated']['shows'] == 0: return kodi_utils.notification(32574)  " + NONE_GUARD_MARKER
+# THE TAIL OF THESE LINES IS NOT PINNED, and 6.08.14 is why. POV changed
+# `kodi_utils.notification(32574)` to `kodi_utils.notify_failed()` on all three
+# of these one-liners, and the literal anchors stopped matching -- the device
+# log said `no mdblist_api anchors matched -- POV version differs` on every
+# boot while the None-guard quietly went missing.
+#
+# What identifies the line is its HEAD: `if result['<key>']['movies'] +
+# result['<key>']['shows'] == 0: return `. The rest is whatever POV currently
+# calls to say "that failed", and is preserved verbatim rather than rewritten,
+# so this survives the next rename of the notify helpers too.
+_ADDLIST_HEAD = ("if result['added']['movies'] + result['added']['shows'] "
+                 "== 0: return ")
+_ADDCOLL_HEAD = ("if result['updated']['movies'] + result['updated']['shows'] "
+                 "== 0: return ")
+
+
+def _guard_none(content, head):
+    """Prepend `not result or` to the one-liner starting with `head`.
+
+    Returns (content, changed). Idempotent: the guarded line no longer starts
+    with the bare head, because `if not result or ...` does.
+    """
+    at = content.find('\t' + head)
+    if at < 0:
+        at = content.find('\n' + head)
+        if at < 0:
+            return content, False
+        at += 1
+    else:
+        at += 1
+    end = content.find('\n', at)
+    if end < 0:
+        return content, False
+    line = content[at:end]
+    if line.startswith('if not result or'):
+        return content, False
+    guarded = ('if not result or ' + line[len('if '):] + '  '
+               + NONE_GUARD_MARKER)
+    return content[:at] + guarded + content[end:], True
 
 # --- Fix D: Watchlist-only list manager (menus/mdblist.py) ------------------
 # POV's list manager offers Watchlist + Collection. We drop Collection here for
@@ -390,11 +425,11 @@ def ensure_patched():
 
     # Fix C -- None-guard add_to_list / add_to_collection (no crash on a 404).
     if not already_guard:
-        if _ADDLIST_ANCHOR in new_content:
-            new_content = new_content.replace(_ADDLIST_ANCHOR, _ADDLIST_GUARDED, 1)
+        new_content, _did_addlist = _guard_none(new_content, _ADDLIST_HEAD)
+        if _did_addlist:
             applied.append('none_guard_list')
-        if _ADDCOLL_ANCHOR in new_content:
-            new_content = new_content.replace(_ADDCOLL_ANCHOR, _ADDCOLL_GUARDED, 1)
+        new_content, _did_addcoll = _guard_none(new_content, _ADDCOLL_HEAD)
+        if _did_addcoll:
             applied.append('none_guard_coll')
 
     # Fix E -- guard mdbl_sync_activities against a corrupt cached value.
