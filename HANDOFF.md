@@ -4244,6 +4244,7 @@ Raw by a few minutes; poll rather than assume.
 | 0.2.461 / qf 0.1.503 | Kodi's own Hebrew strings self-heal; 43 dropped settings; two revived POV patchers; MDBList QR title |
 | 0.2.462 / wizard 0.1.36 / qf 0.1.504 / build 0.1.105 | FENtastic widget includes; DialogSeekBar; POV reads the shortcut folders the build ships |
 | 0.2.499 / qf 0.1.544 / build 0.1.112 / note 599 | the player bar auto-hides on any capable skin, not just FENtastic; Umbrella's MDBList watched-sync stops skipping windows forever |
+| 0.2.512 / qf 0.1.557 / build 0.1.125 / note 612 | POV 6.08.14 renamed the one folder it scans for internal scrapers, so third-party internal sources stopped being looked at; an unknown provider name no longer takes the whole result list down with it; the TorBox restore patcher, dead since a duplicate `def`, runs again |
 
 ### Things worth not rediscovering
 
@@ -4583,6 +4584,85 @@ only retries every 1800s.
 
 The two stale anchors cost ranking and pre-scrape gating, not presence, and
 they belong to the source add-on's author -- not patched from here.
+
+**SUPERSEDED BY 0.2.512, and the paragraph above is why.** "Our mirror then
+puts the module where 6.08.14 actually loads from" was true only if our pass
+ran AFTER the source add-on's service that boot -- and that add-on re-checks on
+its own 1800s timer, not ours, so a device could sit for an hour with the file
+written and never copied. "It needs TWO restarts" was the honest description of
+a race, not of a fix. 0.2.512 replaces the mirror with one edit to POV's scan
+line, which removes the race instead of narrowing it. Read that section, not
+this one, for what runs today.
+
+### What shipped 0.2.512 / qf 0.1.557 / build 0.1.125 (note 612)
+
+**POV scans exactly ONE folder for internal scrapers, and 6.08.14 renamed it.**
+Not restructured -- renamed, with a byte-identical file list, pointer moved with
+it:
+
+```
+6.08.13   resources/lib/scrapers/   kodi_utils.scrapers_path
+6.08.14   resources/lib/debrids/    kodi_utils.internal_path
+both      for loader, module_name, is_pkg in pkgutil.iter_modules([source_path]):
+```
+
+So after 6.08.14 the folder POV reads is not the folder third-party installers
+write to, and their module is never even looked at. Field symptom: "it shows the
+external sources only."
+
+**Three edits, and the third is what makes the first two safe.**
+
+1. `_ensure_legacy_dir` re-creates `resources/lib/scrapers/` with its
+   `__init__.py`. Not housekeeping: such an installer writes its module as the
+   FIRST of several edits, so ENOENT aborts everything after it -- including the
+   settings edit that registers the name. That is why the feature vanished
+   outright instead of degrading.
+2. `_teach_pov_both_dirs` rewrites POV's scan line to pass a LIST to
+   `iter_modules`. **POV's own folder is FIRST**: iter_modules dedupes by module
+   name and the first directory wins, so a stale `rd_cloud.py` in the legacy
+   folder can never shadow POV's own.
+3. `_guard_unknown_provider` changes `provider_sort_ranks[account_type]` to
+   `.get(account_type)`. **This is the one that matters most.** A provider name
+   POV does not know raises KeyError out of `sort_results`, which
+   `process() -> get_sources() -> source_select()` calls unguarded, so the WHOLE
+   list dies -- POV's own sources included. Reproduced against POV's own
+   function: `rd_cloud` ranks 2, an unregistered name raises. Without it, this
+   release would have turned "some sources missing" into "nothing plays at all".
+   `.get` changes nothing for a registered name, because POV already treats a
+   falsy rank as 11 and `.get` returns None for a miss.
+
+**TWO TEST FINDINGS WORTH KEEPING, both about assertions that could not fail.**
+
+- The ordering check BUILT ITS OWN directory list, in the correct order, and
+  asked pkgutil about that. Flipping `append` to `insert(0, ...)` in the shim
+  left the file printing ALL PASS while POV would have loaded the sabotaged
+  copy. It now EXECUTES the block the shim injected and reads `_ai_dirs` back
+  out. The general shape: a test that reconstructs what the code should have
+  written is testing itself.
+- The stale-`.pyc` check ran against a freshly extracted POV, which has no
+  `__pycache__` at all, so a mutant that deleted `_drop_pyc` passed. The fixture
+  now plants one before patching -- which is what a real device always has.
+
+**Both edits are pinned NEVER-UPGRADES, with both markers.** Each recognises an
+older marker of its own and returns `unchanged` rather than hunting an anchor it
+already consumed. The rank guard reported `unmatched` there until it grew the
+same check the scan edit already had; same outcome, but "unmatched" reads as a
+POV refactor and would send the next maintainer after a change POV never made.
+
+**WHAT THIS STILL DOES NOT DO.** POV gates loading with
+`active_internal_scrapers()` -- a hardcoded whitelist built from its own
+`provider.*` settings. A module in the folder is loaded only if something put
+its name in that list, and that registration belongs to the installer. Said
+plainly so the next person does not assume this file is the whole path.
+
+**AND A REAL BUG THIS RELEASE ALSO CARRIES.**
+`pov_torbox_restore_patcher` shipped TWO top-level `def _relocations`, and the
+second, one-argument copy shadowed the two-argument one the call site uses.
+`TypeError` on every boot, swallowed by `service.py`'s WARNING handler, so the
+patcher had simply stopped running. `tools/test_no_duplicate_definitions.py`
+now AST-scans all 196 add-on modules for a top-level `def`/`class` name defined
+twice, and carries the exact shape that shipped as a sabotage probe. Python
+does not warn about this and no linter in this tree was catching it.
 
 ### What shipped 0.2.510 / qf 0.1.555 / build 0.1.123 (note 610)
 
