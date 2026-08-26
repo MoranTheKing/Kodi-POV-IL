@@ -4524,6 +4524,54 @@ three is narrow and worth stating on its own: with reuse on, warm navigation
 costs about 1.2s and cold about 1.8s, and something occasionally adds 1.9s to a
 warm call for reasons not yet established.
 
+### What shipped 0.2.510 / qf 0.1.555 / build 0.1.123 (note 610)
+
+POV auto-updated to 6.08.14 and restructured itself. **Five of our repairs
+stopped applying silently** -- `no_file`, no error, on devices where the defects
+they prevent still happen. That is the release; the reported symptom was only
+what led me to look.
+
+**What moved.** `resources/lib/scrapers/` renamed to `resources/lib/debrids/`;
+the debrid API clients moved from `debrids/` to `indexers/`;
+`kodi_utils.scrapers_path` -> `internal_path`. Plus refactors of
+`caches/navigator_cache.py` and `modules/dialogs.py` that shifted two anchors.
+
+**The defects survived the move, and I checked rather than assumed** -- the
+anchor text is present byte-for-byte in the new locations, and `jsloads` is
+still applied to Python-repr rows. Two of the five guard the PLAY path:
+`pov_debrid_unbound_guard_patcher` (POV's debrid error handlers crash in a way
+that DELETES the real error -- its header records 70 sources found and every
+play failing) and `pov_torbox_url_fix`. A plausible cause of the "goes through
+every source and does not play" report, though not proven to be it.
+
+**Folder choice now comes from POV's own import line**
+(`modules/debrid.py`: `from indexers import ... torbox_api ...` on 6814,
+`from debrids import ...` on 6813), not from which file exists. Both folders
+ship in 6.08.14, so first-found rewrote a dead copy and reported `patched` while
+the imported file went untouched. Verified on a deliberately mixed tree.
+
+**Method that is worth reusing:** every POV-touching module run against fresh
+copies of BOTH trees, statuses diffed. 7 differed; 5 fixed, 1 by design, 1 a
+harness artefact. Then all repairs applied to a real 6.08.14 tree and the whole
+add-on compiled -- 0 errors -- with no injected reference to anything 6.08.14
+removed.
+
+**THE SHIM, AND WHAT IT DOES NOT DO.** A third-party add-on installs a scraper
+by writing into the renamed folder and now fails with ENOENT. The folder is
+re-created so its installer can complete. But POV gates loading with
+`active_internal_scrapers()`, a HARDCODED whitelist of its own `provider.*`
+settings -- that name cannot appear in it, in 6.08.14 or 6.08.13. So that
+add-on always registered itself inside POV some other way, and we have never
+read its source. Creating the folder is evidence-backed; the mirror is a hedge
+for one case. **Not claimed as a fix**, and note 610 does not mention it at all,
+at the owner's explicit instruction.
+
+A first version of the shim claimed the opposite in its header and a review
+disproved it by running POV's loader. It also found the shim could write outside
+`plugin.video.pov` via a `..` in POV's declared path -- POV being a third-party
+add-on that auto-updates from someone else's repository, which is exactly the
+input class not to trust. realpath-guarded now.
+
 ### What shipped 0.2.509 / qf 0.1.554 / build 0.1.122 (note 609)
 
 Measurement only; no behaviour changes. Six payload files, four of them
