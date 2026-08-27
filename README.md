@@ -814,6 +814,60 @@ From MoranSubs `0.2.462` / Wizard `0.1.36` / quickfix `0.1.504` / build
   said so; the same mismatch also made POV quietly replace the build's menus
   with its own defaults. Nothing in the database changes.
 
+## A repair that stops applying says so (from `0.2.513`)
+
+Every repair this build makes to another add-on is a text edit gated on a
+versioned marker. When that add-on refactors, the anchor stops matching and the
+repair stops applying. That is expected and handled -- the patchers refuse
+rather than guess. What was not handled is that it happened in silence: the
+startup pass calls each step and discards its return value, all 123 step
+functions return `None`, and a no-longer-matching anchor is not an exception,
+so it never reached the warning path either. POV 6.08.14 killed five repairs
+this way and the first anyone knew was a symptom report days later.
+
+A last step now asks the host add-ons what they actually contain, rather than
+trusting what anything returned -- a patcher that reported success and whose
+write silently failed would still have read green. Marker present, the repair is
+applied; absent, it is not.
+
+Absence alone is not news, or the report would be noise: most devices have few
+of the ten hosts this build patches. So it is judged against history.
+
+| reading | verdict |
+| --- | --- |
+| marker present | healthy; the host version is remembered |
+| absent, never once seen present | quiet -- probably not applicable here |
+| absent, but seen present before | **reported by name, at WARNING** |
+| host not installed at all | quiet |
+
+Warnings are always written to the log, so any log a user uploads carries the
+diagnosis rather than only the symptom. The on-screen popup appears only where
+the log level is `DEBUG`. The full table is written to
+`addon_data/service.subtitles.kodipovilai/patcher_health.txt` on every boot.
+
+Coverage: 68 patchers across 10 host add-ons, 45 of 51 markers verified present
+against a real POV 6.08.14. Measured cost, 0.15s per boot. `0.2.514` extended it
+to the three patchers that build their marker from a version constant -- one of
+them is the Connect Services window.
+
+## Tooling
+
+Everything under `tools/` is runnable with no arguments.
+
+- `tools/test_*.py` -- 51 test files. Each is standalone; run one directly or
+  loop the glob. Several carry deliberate sabotage cases, so a test that stops
+  being able to fail is itself a failure.
+- `tools/test_patcher_upgrade_path.py --pins` -- re-measures every patcher's
+  upgrade behaviour and prints a fresh pin table. Any patcher carrying a
+  versioned marker must be pinned, so a new one fails the suite until measured.
+- `tools/skin_customisation_inventory.py` -- what this build does to each skin:
+  which files carry our work, how much of it is Hebrew, which patchers bind to
+  it, and how many `plugin://` references would need repointing if the video
+  add-on changed. Written because a port cannot preserve what nobody listed.
+- `tools/test_no_duplicate_definitions.py` -- AST scan for a top-level `def` or
+  `class` defined twice in one module. Python does not warn about this, and a
+  shadowed definition silently killed a shipped repair.
+
 ## Upstream POV Watch
 
 `.github/workflows/check-upstream-pov.yml` checks the original kodi7rd build metadata every 6 hours and opens an issue if upstream POV changes.
