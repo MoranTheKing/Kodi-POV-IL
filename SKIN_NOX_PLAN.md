@@ -154,3 +154,56 @@ have no idanplus equivalent.
 - Nexus-based Estuary on Omega may need per-control fixes.
 - POV network browsing path per-row needs verification (movies vs tv).
 - RTL correctness can only be confirmed on a real device.
+
+## Kodi 22 "Piers" readiness (checked 2026-08-27)
+
+NOX IS OURS, and that is the thing worth being clear about before any port
+discussion: `skin.povil.nox` v1.0.11 is a rebranded, scrubbed Estuary MOD that
+this project hosts itself as `dist/Kodi-POV-IL-NOX-skin-pack.zip` (24.4 MB,
+1647 files). Its Kodi 22 support is therefore OUR call, not a third party's --
+unlike Arctic Fuse 3, which belongs to jurialmunkey and whose Piers support has
+to come from upstream.
+
+WHAT WAS CHECKED, from Kodi's own source at tags `21.3-Omega` and
+`22.0b1-Piers` -- not from forum posts, which are unreachable from CI:
+
+```
+xbmc.gui            5.17.0 -> 5.18.0
+                    <backwards-compatibility abi="5.17.0"/>   <-- decisive
+control types       28 -> 28      nothing removed, nothing added
+builtin commands    nothing removed; loadskin and playplaylist added
+info labels         6 removed, 62 added
+```
+
+The back-compat line is the answer to "will it even load": Piers declares
+itself compatible down to 5.17.0, and NOX, FENtastic, Estuary and Arctic Fuse 3
+are all 5.17.0. Team Kodi did bump their own Estuary to 4.1.0 / gui 5.18.0, but
+that is them tracking their own release, not a floor for anyone else.
+
+Of the six info labels dropped, none reaches us: two are internal range markers
+with no skin spelling, `ADDON_INFOS` was RENAMED to `ADDON_INFOS_START` (same
+value, same derived constants), and of `PLAYER_CUTLIST`, `PLAYER_PROCESS` and
+`SLIDESHOW_EXIF_SOFTWARE` our skins use none in a way that breaks --
+`Player.Process(...)` is still translated and its family grew from 14 members
+to 21. All 305 skin XML files were scanned.
+
+TWO MEASUREMENT ERRORS WERE MADE AND CAUGHT while doing this, both worth
+recording because they would have produced confident nonsense:
+
+- A first pass reported "913 info labels removed". Piers changed the
+  declaration style from `#define NAME 361` to
+  `constexpr uint32_t NAME = 361;` and the regex only matched the former. The
+  real number is 6.
+- A first pass reported `ADDON_INFOS` "in use in 29 skin files". The pattern
+  was `Addon\.\w+`, which matches every ordinary `Addon.Name` in a skin.
+
+WHAT THIS DOES NOT PROVE. Kodi 22 could not be run here -- the Team Kodi PPAs
+are stale (newest is a Kodi 21 nightly from 2023, nothing for Ubuntu 24.04) and
+building from source is not viable in CI. So nothing above tests RENDERING or
+runtime behaviour, which is exactly where the reports of "some skins leave the
+interface unresponsive" live. Structurally nothing blocks these skins; only a
+real device closes the rest.
+
+STAGE 5 (device render/RTL test) therefore still stands, and now has a second
+job: do it on Kodi 22 with a separate 13-character package id so it installs
+beside both stock Kodi and the current build.
