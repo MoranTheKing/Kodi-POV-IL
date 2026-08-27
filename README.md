@@ -850,6 +850,51 @@ against a real POV 6.08.14. Measured cost, 0.15s per boot. `0.2.514` extended it
 to the three patchers that build their marker from a version constant -- one of
 them is the Connect Services window.
 
+## The lab (experimental, separate repository)
+
+A parallel line of work lives at
+[Kodi-POV-IL-RedLight](https://github.com/MoranTheKing/Kodi-POV-IL-RedLight)
+and ships to nobody. It exists to answer two questions in order:
+
+1. does Kodi 22 "Piers" work for us, and do FENtastic, Estuary and NOX render
+   on it?
+2. could Red Light replace POV as the video add-on?
+
+Nothing here depends on it and nothing there can reach this build's update
+channel -- which is the main reason it is a separate repository. `build.txt` is
+a single file at a fixed path, so sharing a repository would mean an
+experimental device and a production device resolving the same target. The
+other two reasons are size (`dist/` here is 928 files and 10.65 GB, 1.72 GiB
+packed, already past what GitHub recommends) and blast radius.
+
+Its test APK uses package id `org.xbmc.povr`, a third 13-character id, so it
+installs beside stock Kodi (`org.xbmc.kodi`) AND beside this build
+(`org.xbmc.povi`) rather than replacing either.
+
+**What is already known**, measured against Kodi's own source at tags
+`21.3-Omega` and `22.0b1-Piers`:
+
+| | |
+| --- | --- |
+| `xbmc.gui` | 5.17.0 -> 5.18.0, but declaring `backwards-compatibility abi="5.17.0"` |
+| control types | 28 -> 28, nothing removed |
+| builtins | nothing removed; `loadskin` and `playplaylist` added |
+| info labels | 6 removed, 62 added -- none of the 6 reaches our skins |
+
+The back-compat line is what decides whether a 5.17.0 skin loads at all, and
+all four skins are 5.17.0. Nothing *structurally* blocks them. What that does
+not cover is rendering, which is the entire reason the test APK exists.
+
+**And a correction worth carrying:** `skin.povil.nox` is OURS -- a rebranded,
+scrubbed Estuary MOD hosted here as `dist/Kodi-POV-IL-NOX-skin-pack.zip`. Its
+Kodi 22 support is our call. Only Arctic Fuse 3 belongs to an upstream author.
+
+If Red Light ever does replace POV, `tools/skin_customisation_inventory.py`
+prints what would have to survive: 48 files, 965 Hebrew lines, and 132
+`plugin://plugin.video.pov` references across five skins -- 28 of which sit
+inside FENtastic's existing search-provider switch and 59 of which are the NOX
+Hebrew main menu alone.
+
 ## Tooling
 
 Everything under `tools/` is runnable with no arguments.
