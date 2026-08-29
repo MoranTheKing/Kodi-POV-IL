@@ -1,6 +1,6 @@
 <favourites>
     <favourite name="[B]POV[/B]" thumb="special://home/media/build_icons/POV/Logo_POV_IL.png">RunAddon("plugin.video.pov")</favourite>
-    <favourite name="[B][COLOR orange]חיבור שירותים להרחבת POV[/COLOR][/B]" thumb="special://home/media/build_icons/POV/Connect_Services.png">ActivateWindow(10025,"plugin://plugin.video.pov/?external_list_item=True&amp;iconImage=folder.png&amp;mode=navigator.build_shortcut_folder_list&amp;name=%5bB%5d%d7%97%d7%99%d7%91%d7%95%d7%a8%20%d7%a9%d7%99%d7%a8%d7%95%d7%aa%d7%99%d7%9d%5b%2fB%5d&amp;shortcut_folder=True",return)</favourite>
+    <favourite name="[B][COLOR orange]חיבור שירותים להרחבת POV[/COLOR][/B]" thumb="special://home/media/build_icons/POV/Connect_Services.png">RunPlugin("plugin://plugin.video.pov/?mode=myservices")</favourite>
     <favourite name="[B][COLOR orange]הגדרת התראות מנוי[/COLOR][/B]" thumb="special://home/media/build_icons/POV/Connect_Services.png">RunScript(service.subtitles.kodipovilai,action=debrid_notice_settings)</favourite>
     <favourite name="[B][COLOR orange]מנוע החיפוש - POV / Umbrella[/COLOR][/B]" thumb="special://home/addons/plugin.video.pov/resources/skins/Default/media/search.png">RunScript(service.subtitles.kodipovilai,action=search_provider)</favourite>
     <favourite name="[B][COLOR orange]Umbrella[/COLOR][/B]" thumb="special://home/addons/plugin.video.umbrella/icon.png">RunAddon("plugin.video.umbrella")</favourite>

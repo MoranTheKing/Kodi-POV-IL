@@ -616,6 +616,82 @@ def _fix_existing_send_log_action(content):
     return new_content, True
 
 
+# The "חיבור שירותים" tile used to reach POV's My Services screen the long way
+# round: ActivateWindow(10025, plugin://...?mode=navigator.build_shortcut_folder
+# _list&name=[B]חיבור שירותים[/B]) -- a POV "shortcut folder" whose ONE row is
+# {'mode': 'myservices'}. The folder is a row in POV's navigator.db, and a row
+# is a thing that can go missing.
+#
+# Field report, with the log: the tile opens a screen with nothing on it, and
+# then POV's own English root menu (Movies / TV Shows / Anime / Popular
+# People / ...). The log says it exactly --
+#
+#     0.03s route=0.03s mode=navigator.build_shortcut_folder_list
+#                       &name=[B]חיבור שירותים[/B]
+#     ... Control 50 in window 10025 has been asked to focus, but it can't
+#     ... Unable to find plugin / GetDirectory - Error getting plugin://
+#
+# 0.03 seconds is POV returning an empty directory: get_shortcut_folder_contents
+# found no row, so `except: return []`. Kodi then walks UP from the empty
+# folder -- the parent of a plugin path is the plugin root, which is POV's
+# stock menu, and one Back further is the bare `plugin://` in those errors.
+# The screenshot people send is that root menu, which is why the report reads
+# as "POV opens instead of the services screen".
+#
+# The same device's OTHER shortcut folders (both FENtastic personal areas, both
+# networks rows) rendered fine seconds earlier in the same log, so this is not
+# the reader: pov_navigator_read_patcher is doing its job. It is this one row.
+# It is also the only custom row in the shipped navigator.db that no reseeder
+# of ours restores -- the networks and genre rows have one, the personal areas
+# are rewritten on every startup -- so it is the only one that stays gone.
+#
+# THE FOLDER WAS NEVER NEEDED. It holds a single item pointing at
+# mode=myservices, so the whole indirection buys one extra keypress and one
+# extra thing to lose. Arctic Fuse 3, which does not use Kodi's favourites,
+# has always gone straight there (see af3_home_patcher: RunPlugin(...
+# ?mode=myservices)), and it has never had this report. mode=myservices is a
+# dialog, not a directory -- ActivateWindow was the wrong verb for it from the
+# start, which is what the folder was papering over.
+#
+# So the tile now calls it directly, on every skin, exactly as AF3 does. No
+# navigator.db row in the path, no window to leave empty, nothing to walk up
+# out of. Name and icon are left exactly as the user has them.
+_OLD_CONNECT_SERVICES = b'mode=navigator.build_shortcut_folder_list'
+_NEW_CONNECT_SERVICES = b'RunPlugin("plugin://plugin.video.pov/?mode=myservices")'
+# The name is matched percent-encoded, the way it sits in favourites.xml. Kodi
+# has written it lower-case ever since the tile was authored; the pattern is
+# case-insensitive on the escapes only so a file re-encoded by anything else
+# still matches. Matching the NAME and not just the mode is what keeps this off
+# any OTHER shortcut folder: the build ships exactly one such tile, but POV's
+# own context menu lets anyone add their own, and those are theirs.
+_CONNECT_SERVICES_NAME_ENC = (
+    rb'%5bB%5d%d7%97%d7%99%d7%91%d7%95%d7%a8%20%d7%a9%d7%99%d7%a8%d7%95'
+    rb'%d7%aa%d7%99%d7%9d%5b%2fB%5d')
+_CONNECT_SERVICES_RE = re.compile(
+    rb'(<favourite\b(?:(?!</favourite>).)*?>)'
+    rb'((?:(?!</favourite>).)*?mode=navigator\.build_shortcut_folder_list'
+    rb'(?:(?!</favourite>).)*?'
+    + _CONNECT_SERVICES_NAME_ENC
+    + rb'(?:(?!</favourite>).)*?)(</favourite>)',
+    re.DOTALL | re.IGNORECASE,
+)
+
+
+def _fix_existing_connect_services_action(content):
+    """Repoint an existing "חיבור שירותים" tile straight at POV's My Services
+    dialog. Returns (content, changed). Touches only that one element's action;
+    the tile's name and icon are left exactly as the user has them."""
+    if _OLD_CONNECT_SERVICES not in content:
+        return content, False
+    new_content, n = _CONNECT_SERVICES_RE.subn(
+        lambda m: m.group(1) + _NEW_CONNECT_SERVICES + m.group(3), content)
+    if not n:
+        return content, False
+    _log('repointed the "חיבור שירותים" tile straight at POV My Services '
+         '({0} tile(s))'.format(n))
+    return new_content, True
+
+
 def _insert_umbrella_tiles(content, fixture_text):
     """One-time, opt-in insert of the Umbrella + search-engine-switch tiles for
     an existing install (clean installs get them from the shipped fixture).
@@ -725,6 +801,64 @@ def _seed_umbrella_tiles(fixture_text):
     if updated:
         _log('added the Umbrella / search-engine tiles to {0} favourites '
              'seed(s), so a skin switch keeps them'.format(updated))
+    return updated
+
+
+# The action fixes above repair the user's OWN favourites.xml. The seeds are
+# copied OVER that file on every skin switch, so a tile repaired only in the
+# user's copy comes back broken the first time somebody switches skin -- and
+# the report reads as "you fixed it and it broke again". The seeds need the
+# same repairs, and they need them whether or not the user's file needed any.
+#
+# Add-only is not the rule here, unlike _seed_umbrella_tiles: these rewrite one
+# element's ACTION and leave its name, icon and position alone, so there is no
+# user choice to respect. A seed we cannot read or that has no </favourites> is
+# skipped and retried on a later startup.
+_SEED_ACTION_FIXES = (
+    ('חיבור שירותים', _fix_existing_connect_services_action),
+    ('send log', _fix_existing_send_log_action),
+)
+
+
+def _fix_favourites_seeds():
+    """Apply the tile ACTION repairs to the per-skin favourites seeds. Returns
+    the number of seeds rewritten. Never raises."""
+    updated = 0
+    for seed in _FAVOURITES_SEEDS:
+        try:
+            path = xbmcvfs.translatePath(seed)
+        except Exception:
+            continue
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, 'rb') as f:
+                seed_content = f.read()
+        except OSError:
+            continue
+        if b'</favourites>' not in seed_content:
+            continue                     # torn or mid-write -> leave it alone
+        new_seed = seed_content
+        for _label, fix in _SEED_ACTION_FIXES:
+            new_seed, _changed = fix(new_seed)
+        if new_seed == seed_content:
+            continue
+        tmp = path + '.aitmp'
+        try:
+            with open(tmp, 'wb') as f:
+                f.write(new_seed)
+            os.replace(tmp, path)
+            updated += 1
+        except OSError as e:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            _log('could not update favourites seed {0}: {1}'.format(seed, e),
+                 level='WARNING')
+    if updated:
+        _log('repaired tile actions in {0} favourites seed(s), so a skin '
+             'switch keeps the fix'.format(updated))
     return updated
 
 
@@ -1192,6 +1326,8 @@ def ensure_patched():
     content, umbrella_tiles_added = _insert_umbrella_tiles(
         content, fixture_text)
     content, send_log_fixed = _fix_existing_send_log_action(content)
+    content, connect_services_fixed = (
+        _fix_existing_connect_services_action(content))
     # Independent of the user's own file: the seeds are what a skin switch
     # copies over it, so they need the tiles whether or not the user's file
     # got them this time round.
@@ -1199,6 +1335,11 @@ def ensure_patched():
         _seed_umbrella_tiles(fixture_text)
     except Exception as e:
         _log('favourites seed update failed: {0}'.format(e), level='WARNING')
+    try:
+        _fix_favourites_seeds()
+    except Exception as e:
+        _log('favourites seed action repair failed: {0}'.format(e),
+             level='WARNING')
     content, service_position_fixed = (
         _move_existing_service_tile_after_torbox(content))
 
@@ -1266,6 +1407,7 @@ def ensure_patched():
                 and not service_position_fixed and not force_premiumize
                 and not force_personal and not mdblist_restored
                 and not umbrella_tiles_added and not send_log_fixed
+                and not connect_services_fixed
                 and (not missing_service or had_service_marker)
                 ):
             return 'user_removed_tiles'
@@ -1331,6 +1473,7 @@ def ensure_patched():
             and not fixed_torbox_status and not service_marker_added
             and not debrid_notice_restored and not mdblist_restored
             and not umbrella_tiles_added and not send_log_fixed
+            and not connect_services_fixed
             and not service_position_fixed and not full_marker_added
             and not reseed_marker_added and not personal_reseed_added
             and not full_reseed_added
