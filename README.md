@@ -38,7 +38,7 @@
 
 - עץ קבצים מסודר של המיגרציה.
 - מסמך diff של `Twilight -> POV`.
-- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.127.zip`.
+- חבילת בדיקה ל־Kodi: `dist/Kodi-POV-IL-FENtastic-test-0.1.128.zip`.
 - הוראות התקנה ובדיקת smoke test לטלפון: `ANDROID_TESTING.md`.
 
 ## חבילת בדיקה (גרסה נוכחית)
@@ -813,6 +813,105 @@ From MoranSubs `0.2.462` / Wizard `0.1.36` / quickfix `0.1.504` / build
   spelling and were read in another, so POV saw them all as empty and never
   said so; the same mismatch also made POV quietly replace the build's menus
   with its own defaults. Nothing in the database changes.
+
+## A repair that stops applying says so (from `0.2.513`)
+
+Every repair this build makes to another add-on is a text edit gated on a
+versioned marker. When that add-on refactors, the anchor stops matching and the
+repair stops applying. That is expected and handled -- the patchers refuse
+rather than guess. What was not handled is that it happened in silence: the
+startup pass calls each step and discards its return value, all 123 step
+functions return `None`, and a no-longer-matching anchor is not an exception,
+so it never reached the warning path either. POV 6.08.14 killed five repairs
+this way and the first anyone knew was a symptom report days later.
+
+A last step now asks the host add-ons what they actually contain, rather than
+trusting what anything returned -- a patcher that reported success and whose
+write silently failed would still have read green. Marker present, the repair is
+applied; absent, it is not.
+
+Absence alone is not news, or the report would be noise: most devices have few
+of the ten hosts this build patches. So it is judged against history.
+
+| reading | verdict |
+| --- | --- |
+| marker present | healthy; the host version is remembered |
+| absent, never once seen present | quiet -- probably not applicable here |
+| absent, but seen present before | **reported by name, at WARNING** |
+| host not installed at all | quiet |
+
+Warnings are always written to the log, so any log a user uploads carries the
+diagnosis rather than only the symptom. The on-screen popup appears only where
+the log level is `DEBUG`. The full table is written to
+`addon_data/service.subtitles.kodipovilai/patcher_health.txt` on every boot.
+
+Coverage: 68 patchers across 10 host add-ons, 45 of 51 markers verified present
+against a real POV 6.08.14. Measured cost, 0.15s per boot. `0.2.514` extended it
+to the three patchers that build their marker from a version constant -- one of
+them is the Connect Services window.
+
+## The lab (experimental, separate repository)
+
+A parallel line of work lives at
+[Kodi-POV-IL-RedLight](https://github.com/MoranTheKing/Kodi-POV-IL-RedLight)
+and ships to nobody. It exists to answer two questions in order:
+
+1. does Kodi 22 "Piers" work for us, and do FENtastic, Estuary and NOX render
+   on it?
+2. could Red Light replace POV as the video add-on?
+
+Nothing here depends on it and nothing there can reach this build's update
+channel -- which is the main reason it is a separate repository. `build.txt` is
+a single file at a fixed path, so sharing a repository would mean an
+experimental device and a production device resolving the same target. The
+other two reasons are size (`dist/` here is 928 files and 10.65 GB, 1.72 GiB
+packed, already past what GitHub recommends) and blast radius.
+
+Its test APK uses package id `org.xbmc.povr`, a third 13-character id, so it
+installs beside stock Kodi (`org.xbmc.kodi`) AND beside this build
+(`org.xbmc.povi`) rather than replacing either.
+
+**What is already known**, measured against Kodi's own source at tags
+`21.3-Omega` and `22.0b1-Piers`:
+
+| | |
+| --- | --- |
+| `xbmc.gui` | 5.17.0 -> 5.18.0, but declaring `backwards-compatibility abi="5.17.0"` |
+| control types | 28 -> 28, nothing removed |
+| builtins | nothing removed; `loadskin` and `playplaylist` added |
+| info labels | 6 removed, 62 added -- none of the 6 reaches our skins |
+
+The back-compat line is what decides whether a 5.17.0 skin loads at all, and
+all four skins are 5.17.0. Nothing *structurally* blocks them. What that does
+not cover is rendering, which is the entire reason the test APK exists.
+
+**And a correction worth carrying:** `skin.povil.nox` is OURS -- a rebranded,
+scrubbed Estuary MOD hosted here as `dist/Kodi-POV-IL-NOX-skin-pack.zip`. Its
+Kodi 22 support is our call. Only Arctic Fuse 3 belongs to an upstream author.
+
+If Red Light ever does replace POV, `tools/skin_customisation_inventory.py`
+prints what would have to survive: 48 files, 965 Hebrew lines, and 132
+`plugin://plugin.video.pov` references across five skins -- 28 of which sit
+inside FENtastic's existing search-provider switch and 59 of which are the NOX
+Hebrew main menu alone.
+
+## Tooling
+
+Everything under `tools/` is runnable with no arguments.
+
+- `tools/test_*.py` -- 51 test files. Each is standalone; run one directly or
+  loop the glob. Several carry deliberate sabotage cases, so a test that stops
+  being able to fail is itself a failure.
+- `tools/test_patcher_upgrade_path.py --pins` -- re-measures every patcher's
+  upgrade behaviour and prints a fresh pin table. Any patcher carrying a
+  versioned marker must be pinned, so a new one fails the suite until measured.
+- `tools/skin_customisation_inventory.py` -- what this build does to each skin:
+  which files carry our work, how much of it is Hebrew, which patchers bind to
+  it, and how many `plugin://` references would need repointing if the video
+  add-on changed. Written because a port cannot preserve what nobody listed.
+- `tools/test_no_duplicate_definitions.py` -- AST scan for a top-level `def` or
+  `class` defined twice in one module. Python does not warn about this, and a
+  shadowed definition silently killed a shipped repair.
 
 ## Upstream POV Watch
 
