@@ -1,3 +1,48 @@
+0.2.515
+- "חיבור שירותים" opened an empty screen, and then POV's own English menu.
+
+  The tile did not go to POV's services screen. It opened a POV "shortcut
+  folder" -- a row in POV's navigator.db holding exactly one item,
+  {'mode': 'myservices'} -- and the row was gone. The log says it plainly:
+
+      0.03s route=0.03s mode=navigator.build_shortcut_folder_list
+                        &name=[B]חיבור שירותים[/B]
+      Control 50 in window 10025 has been asked to focus, but it can't
+      Unable to find plugin / GetDirectory - Error getting plugin://
+
+  0.03 seconds is POV returning an empty directory (get_shortcut_folder_contents
+  finds no row -> `except: return []`). Kodi then walks UP out of the empty
+  folder, and the parent of a plugin path is the plugin ROOT -- POV's stock
+  English menu. That root menu is the screenshot people send, which is why the
+  report reads as "POV opens instead of the services screen"; one Back further
+  is the bare `plugin://` in those two errors.
+
+  Not the reader. Seconds earlier in the same log, every OTHER shortcut folder
+  loaded normally -- both FENtastic personal areas, both networks rows -- so
+  pov_navigator_read_patcher is doing its job. It is this one row, and it is
+  the only custom row in the shipped navigator.db that no reseeder of ours
+  restores: the networks and genre rows have one, the personal areas are
+  rewritten on every startup. So it is the only one that stays gone.
+
+  THE FOLDER WAS NEVER NEEDED. It holds a single item, so the indirection
+  bought one keypress and one thing to lose. Arctic Fuse 3 has always called
+  mode=myservices directly and has never had this report -- and myservices is
+  a DIALOG, not a directory, so ActivateWindow was the wrong verb for it from
+  the start. The tile now calls it directly on every skin. No database row in
+  the path, no window left empty, nothing to walk up out of. Name, icon and
+  position stay exactly as each user has them.
+
+  The per-skin favourites SEEDS are repaired too, not just the user's own file.
+  The wizard copies a seed OVER favourites.xml on every skin switch, so a fix
+  that lives only in the user's copy comes back broken the first time somebody
+  changes skin. The same pass also carries the older "send log" action fix into
+  the seeds, which had the same hole.
+
+  tools/test_connect_services_tile.py replays it: the old tile is rewritten and
+  only that one element changes, a shortcut folder the USER added themselves is
+  left alone, both seeds are repaired, a torn seed is never written back, and
+  five mutants of the repair are each caught.
+
 0.2.514
 - The health report now covers the Connect Services window too, which was the
   most visible thing it did not cover.
