@@ -4247,6 +4247,7 @@ Raw by a few minutes; poll rather than assume.
 | 0.2.512 / qf 0.1.557 / build 0.1.125 / note 612 | POV 6.08.14 renamed the one folder it scans for internal scrapers, so third-party internal sources stopped being looked at; an unknown provider name no longer takes the whole result list down with it; the TorBox restore patcher, dead since a duplicate `def`, runs again |
 | 0.2.513 / qf 0.1.558 / build 0.1.126 / note 613 | a repair that stops applying is named at WARNING on the next boot instead of dying in silence; 44 of 51 POV markers verified present, 0 false alarms |
 | 0.2.514 / qf 0.1.559 / build 0.1.127 / note 614 | the three constructed-marker patchers join the health report by rebuilding the live marker from its _VERSION constant and proving it against the host -- one of them builds Connect Services; 45 of 51 verified |
+| 0.2.515 / qf 0.1.560 / build 0.1.128 / note 615 | the "חיבור שירותים" tile stopped going through a POV shortcut-folder row in navigator.db -- when the row went missing POV returned an empty directory and Kodi walked up to POV's own root menu -- and now calls `?mode=myservices` directly on every skin, as Arctic Fuse 3 always has; the per-skin favourites seeds are repaired too, so a skin switch cannot bring the old tile back |
 
 ### Things worth not rediscovering
 
@@ -4595,6 +4596,84 @@ written and never copied. "It needs TWO restarts" was the honest description of
 a race, not of a fix. 0.2.512 replaces the mirror with one edit to POV's scan
 line, which removes the race instead of narrowing it. Read that section, not
 this one, for what runs today.
+
+### What shipped 0.2.515 / qf 0.1.560 / build 0.1.128 (note 615)
+
+**"חיבור שירותים" opened an empty screen, then POV's own English menu.**
+
+The report came with a screenshot of POV's stock root list (Movies / TV Shows
+/ Anime / Popular People / Discover / ...) and a log. The relevant lines:
+
+```
+0.03s route=0.03s mode=navigator.build_shortcut_folder_list
+                  &name=[B]חיבור שירותים[/B]
+Control 50 in window 10025 has been asked to focus, but it can't
+Unable to find plugin / GetDirectory - Error getting plugin://
+```
+
+THE CHAIN. The tile was
+`ActivateWindow(10025, plugin://plugin.video.pov/?mode=navigator.
+build_shortcut_folder_list&name=[B]חיבור שירותים[/B]&shortcut_folder=True)`
+-- a POV "shortcut folder", which is a row in POV's `navigator.db` whose
+`list_contents` here is a single item: `{'mode': 'myservices', 'isFolder':
+'false', ...}`. The row was gone, so `get_shortcut_folder_contents()` hit its
+`except: return []` and POV ended the directory with nothing in it, in 0.03s.
+
+Kodi then walks UP out of an empty plugin directory, and **the parent of a
+plugin path is the plugin ROOT** -- which for POV is its stock English menu.
+That is the screenshot. One Back further is the bare `plugin://` in the two
+GetDirectory errors. Nothing in the chain logs a word about the missing row.
+
+WHAT IT WAS NOT. `pov_navigator_read_patcher` was the obvious suspect (the
+rows are Python reprs and POV reads them with `json.loads`), and it is not
+this: seconds earlier in the SAME log, both FENtastic personal areas and both
+networks rows -- all repr-spelled shortcut folders -- rendered normally. The
+reader is fine. It is this one row, and it is the only custom row the shipped
+`navigator.db` carries that no reseeder of ours restores: the networks and
+genre rows have one, the personal areas are rewritten on every startup.
+
+THE FIX, and why it is not a reseeder. The folder holds ONE item, so the
+indirection bought a keypress and a thing to lose. Arctic Fuse 3 -- which
+drives its home from `af3_home_patcher`, not from Kodi favourites -- has
+always used `RunPlugin("plugin://plugin.video.pov/?mode=myservices")` and has
+never produced this report. `mode=myservices` routes to
+`modules.myservices.authorize()`, which is a `dialog.select`: a DIALOG, not a
+directory, so `ActivateWindow(10025, ...)` was the wrong verb for it from the
+start and the folder was papering over that. The tile now calls it directly on
+every skin, which also puts all four skins on the same one action.
+
+Reseeding the row instead would have restored a dependency worth removing, and
+it would only have helped if the missing row is the whole story -- which the
+log supports but cannot prove from outside. Removing the folder from the path
+fixes the symptom under either cause.
+
+THE SEEDS, which is the half that is easy to miss. `favourites_personal_tiles
+_patcher` repaired the user's own `userdata/favourites.xml`. The wizard copies
+`media/builds_favourites_xml/<skin>/favourites.xml` OVER that file on every
+skin switch (`update_favourites_xml_file`), so a repair living only in the
+user's copy comes back broken the first time somebody changes skin -- and
+reads as "you fixed it and it broke again". `_fix_favourites_seeds()` now
+applies the ACTION repairs to both seeds as well. It carries the older
+"send log" fix with it, which had exactly the same hole and nobody had noticed.
+
+Add-only is deliberately NOT the rule there, unlike `_seed_umbrella_tiles`:
+these rewrite one element's action and leave its name, icon and position
+alone, so there is no user choice to respect. A seed with no `</favourites>`
+is skipped and retried later rather than written back torn.
+
+`tools/test_connect_services_tile.py` replays the report against the real
+shipped `favourites.xml`: the old tile is rewritten and only that one element
+changes, a shortcut folder the USER added is left alone (the match is on the
+percent-encoded NAME, not just the mode), both seeds are repaired, a torn seed
+is never written back, and five mutants of the repair are each caught.
+
+**A note for next time.** The health report ran on that device and said
+`checked=100, ok=53, lapsed=0` -- which could not answer "is
+`AI_SUBS_POV_NAVREAD_v1` present?", because a marker that has never been seen
+present is `unknown`, not `lapsed`, and the summary line only prints three of
+the five statuses. The full per-marker table IS on the device, at
+`<addon profile>/patcher_health.txt`. Ask for that file, not just the log,
+when the question is whether a specific repair is applied.
 
 ### What shipped 0.2.513 / qf 0.1.558 / build 0.1.126 (note 613)
 
