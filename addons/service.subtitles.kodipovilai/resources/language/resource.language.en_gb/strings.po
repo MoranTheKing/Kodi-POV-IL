@@ -151,8 +151,8 @@ msgid "Model Top-P"
 msgstr "Model Top-P"
 
 msgctxt "#32408"
-msgid "Controls nucleus sampling. Higher values are more varied; lower values are more focused."
-msgstr "Controls nucleus sampling. Higher values are more varied; lower values are more focused."
+msgid "Controls nucleus sampling. Higher values are more varied; lower values are more focused. Only affects Gemini 2.5 and 3.1. Google deprecated this parameter from Gemini 3.5 on, so it is hidden and not sent for newer models."
+msgstr "Controls nucleus sampling. Higher values are more varied; lower values are more focused. Only affects Gemini 2.5 and 3.1. Google deprecated this parameter from Gemini 3.5 on, so it is hidden and not sent for newer models."
 
 msgctxt "#32409"
 msgid "Thinking"
@@ -313,6 +313,10 @@ msgstr "2.5 Flash (fallback)"
 msgctxt "#32234"
 msgid "3.7 Flash (newest, heavier quota use)"
 msgstr "3.7 Flash (newest, heavier quota use)"
+
+msgctxt "#32235"
+msgid "Only affects Gemini 2.5 and 3.1. Google deprecated this parameter from Gemini 3.5 on, so it is hidden and not sent for newer models."
+msgstr "Only affects Gemini 2.5 and 3.1. Google deprecated this parameter from Gemini 3.5 on, so it is hidden and not sent for newer models."
 
 msgctxt "#32254"
 msgid "Test Wyzie connection"

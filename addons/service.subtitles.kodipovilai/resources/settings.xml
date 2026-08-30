@@ -1216,8 +1216,29 @@
           <default>true</default>
           <control type="toggle"/>
         </setting>
-        <setting id="temperature" type="number" label="32403"> <!-- Model temperature -->
+        <setting id="temperature" type="number" label="32403" help="32235"> <!-- Model temperature -->
           <level>0</level>
+          <!-- SAMPLING KNOBS: SHOWN ONLY WHERE THEY DO SOMETHING.
+               Google's Gemini docs: "temperature, top_p, and top_k are
+               deprecated and ignored. In future model generations, supplying
+               these parameters returns an HTTP 400 error." So from 3.5 up the
+               add-on stops sending them (gemini.sampling_params_supported)
+               and a slider here would be a control that changes nothing.
+               This is a WHITELIST of the models that still honour them, not a
+               blacklist of the ones that do not: add a newer model to the
+               picker above and forget this list, and the slider correctly
+               stays hidden, which is the way round that cannot mislead.
+               tools/test_gemini_sampling_params.py fails if this list and the
+               code's rule ever disagree, so they cannot drift apart. -->
+          <dependencies>
+            <dependency type="visible">
+              <or>
+                <condition setting="model" operator="is">gemini-3.1-flash</condition>
+                <condition setting="model" operator="is">gemini-2.5-flash-lite</condition>
+                <condition setting="model" operator="is">gemini-2.5-flash</condition>
+              </or>
+            </dependency>
+          </dependencies>
           <default>1.0</default>
           <constraints>
             <minimum>0.0</minimum>
@@ -1230,6 +1251,27 @@
         </setting>
         <setting id="top_p" type="number" label="32407" help="32408"> <!-- Model Top-P -->
           <level>0</level>
+          <!-- SAMPLING KNOBS: SHOWN ONLY WHERE THEY DO SOMETHING.
+               Google's Gemini docs: "temperature, top_p, and top_k are
+               deprecated and ignored. In future model generations, supplying
+               these parameters returns an HTTP 400 error." So from 3.5 up the
+               add-on stops sending them (gemini.sampling_params_supported)
+               and a slider here would be a control that changes nothing.
+               This is a WHITELIST of the models that still honour them, not a
+               blacklist of the ones that do not: add a newer model to the
+               picker above and forget this list, and the slider correctly
+               stays hidden, which is the way round that cannot mislead.
+               tools/test_gemini_sampling_params.py fails if this list and the
+               code's rule ever disagree, so they cannot drift apart. -->
+          <dependencies>
+            <dependency type="visible">
+              <or>
+                <condition setting="model" operator="is">gemini-3.1-flash</condition>
+                <condition setting="model" operator="is">gemini-2.5-flash-lite</condition>
+                <condition setting="model" operator="is">gemini-2.5-flash</condition>
+              </or>
+            </dependency>
+          </dependencies>
           <default>0.95</default>
           <constraints>
             <minimum>0.0</minimum>

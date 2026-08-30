@@ -147,8 +147,8 @@ msgid "Model Top-P"
 msgstr "Top-P של המודל"
 
 msgctxt "#32408"
-msgid "Controls nucleus sampling. Higher values are more varied; lower values are more focused."
-msgstr "שולט בדגימת התוצאה: ערך גבוה יותר מגוון, ערך נמוך יותר ממוקד."
+msgid "Controls nucleus sampling. Higher values are more varied; lower values are more focused. Only affects Gemini 2.5 and 3.1. Google deprecated this parameter from Gemini 3.5 on, so it is hidden and not sent for newer models."
+msgstr "שולט בדגימת התוצאה: ערך גבוה יותר מגוון, ערך נמוך יותר ממוקד. משפיע רק על Gemini 2.5 ו-3.1. גוגל ביטלה את הפרמטר הזה מ-Gemini 3.5 והלאה, ולכן במודלים חדשים יותר הוא מוסתר ולא נשלח."
 
 msgctxt "#32409"
 msgid "Thinking"
@@ -301,6 +301,10 @@ msgstr "2.5 Flash (fallback)"
 msgctxt "#32234"
 msgid "3.7 Flash (newest, heavier quota use)"
 msgstr "3.7 Flash (החדש ביותר, צורך יותר מכסה)"
+
+msgctxt "#32235"
+msgid "Only affects Gemini 2.5 and 3.1. Google deprecated this parameter from Gemini 3.5 on, so it is hidden and not sent for newer models."
+msgstr "משפיע רק על Gemini 2.5 ו-3.1. גוגל ביטלה את הפרמטר הזה מ-Gemini 3.5 והלאה, ולכן במודלים חדשים יותר הוא מוסתר ולא נשלח."
 
 msgctxt "#32254"
 msgid "Test Wyzie connection"

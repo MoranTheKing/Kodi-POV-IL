@@ -43,7 +43,7 @@ env:
   # ship the previous build inside a new package. One name, one place, and a
   # test that requires it to be the build wizard/assets/build.txt actually
   # serves, so it cannot drift from what devices download.
-  BUILD_ZIP: 'Kodi-POV-IL-FENtastic-test-0.1.128.zip'
+  BUILD_ZIP: 'Kodi-POV-IL-FENtastic-test-0.1.129.zip'
   EXPECTED_RELEASE: '21.3-povil.49'
   EXPECTED_VERSION_CODE: '2103049'
   EXPECTED_KODI_VERSION: '21.3'

@@ -1,3 +1,48 @@
+0.2.516
+- temperature and Top-P are no longer sent to the models that stopped
+  accepting them.
+
+  Google's Gemini API docs, verbatim: "temperature, top_p, and top_k are
+  deprecated and ignored. In future model generations, supplying these
+  parameters returns an HTTP 400 error. Remove these parameters from all
+  requests."
+
+  Ignored today, a hard 400 tomorrow -- and a 400 on a translation chunk is
+  not a worse translation, it is no translation: the request raises and the
+  chunk is lost. But the parameters are NOT simply removed, because on Gemini
+  2.5 and 3.1 they still do real work, and the build's 1.0 / 0.95 defaults
+  were measured on exactly those models. So the rule is per model: 3.5 and up
+  send neither, 2.5 and 3.1 keep both.
+
+  ONE PLACE DECIDES. gemini.sampling_params_supported() reads the generation
+  out of the model id and both request builders consult it, so a caller may
+  keep passing temperature= and top_p= without knowing the rule and a caller
+  added later cannot forget it. That matters more than it sounds: the audio
+  call SubSync makes for speech intervals lives in subsync.py with a hardcoded
+  temperature=0.0, nowhere near the translation code, and is precisely the
+  site an if-per-call-site would have missed. It is covered now by
+  construction. (top_k is in Google's list too; this add-on has never sent it
+  and has no setting for it, so there was nothing to gate.)
+
+  A model id with no readable generation -- an alias like
+  'gemini-flash-latest' -- also sends neither. That direction is chosen: such
+  an alias resolves to whatever is newest, which is where the parameters are
+  going away; omitting them is a valid request on every model that ever took
+  them; and guessing the other way costs a 400.
+
+  THE TWO SLIDERS ARE GONE FROM THE SETTINGS SCREEN on a model that ignores
+  them -- a control that changes nothing is worse than no control. They come
+  back on 2.5 and 3.1 with the user's own numbers intact, because the settings
+  are still stored and still read; only the request changes. The default model
+  is 3.5 Flash Lite, so out of the box neither slider shows.
+
+  The visibility list in settings.xml is a WHITELIST of the models that still
+  honour the parameters, not a blacklist of the ones that do not: add a newer
+  model to the picker and forget the list, and the slider correctly stays
+  hidden. tools/test_gemini_sampling_params.py fails if the list and the code
+  ever disagree, builds real payloads through a stubbed requests to prove what
+  each model's request actually carries, and catches eight mutants of the rule.
+
 0.2.515
 - "חיבור שירותים" opened an empty screen, and then POV's own English menu.
 
