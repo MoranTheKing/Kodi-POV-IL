@@ -3272,17 +3272,33 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         return None
     model = kodi_utils.get_setting('model', 'gemini-3.5-flash-lite') \
             or 'gemini-3.5-flash-lite'
-    # Gemini 3 tuning (validated A/B): keep temperature at Google's recommended
-    # default 1.0 (lowering it degrades Gemini 3 reasoning), use thinking_level
-    # MEDIUM (HIGH burns the output budget -> truncation + garbling and is no
-    # more accurate; MEDIUM finishes clean, ~8x cheaper, best gender accuracy).
-    # top_p: always send the configured value (default 0.95). It has NO effect on
-    # the prompt-level safety block (verified live: a blocked prompt blocks
-    # identically with top_p unset / 0.9 / 0.95 -- the block is decided on the
-    # INPUT, before sampling) but it does shape output quality, so we keep it
-    # explicit and consistent across models instead of leaving it to the default.
+    # Gemini tuning (validated A/B on 2.5/3.1): keep temperature at Google's
+    # recommended default 1.0 (lowering it degrades Gemini 3 reasoning), use
+    # thinking_level MEDIUM (HIGH burns the output budget -> truncation +
+    # garbling and is no more accurate; MEDIUM finishes clean, ~8x cheaper,
+    # best gender accuracy). top_p (default 0.95) has NO effect on the
+    # prompt-level safety block -- verified live: a blocked prompt blocks
+    # identically with top_p unset / 0.9 / 0.95, because the block is decided
+    # on the INPUT, before sampling -- but it does shape output quality.
+    #
+    # BOTH ARE READ UNCONDITIONALLY AND PASSED UNCONDITIONALLY. Whether they
+    # reach Google is gemini.sampling_params_supported()'s call, made per
+    # model in the one place that builds the request: Google deprecated
+    # temperature / top_p / top_k from Gemini 3.5 on ("ignored" now, HTTP 400
+    # in a future generation), so from 3.5 up the request carries neither.
+    # Reading them here anyway keeps the stored settings intact for a user who
+    # switches back to 2.5 or 3.1, and keeps this function ignorant of a rule
+    # that belongs next to the payload.
     temperature = kodi_utils.get_float('temperature', 1.0)
     top_p = kodi_utils.get_float('top_p', 0.95)
+    if gemini.sampling_params_supported(model):
+        kodi_utils.log('gemini sampling: temperature={0} top_p={1} (model {2} '
+                       'still honours them)'.format(temperature, top_p, model),
+                       level='INFO')
+    else:
+        kodi_utils.log('gemini sampling: temperature/top_p NOT sent -- {0} is '
+                       'Gemini 3.5 or newer, where Google deprecated them'
+                       .format(model), level='INFO')
     thinking_raw = (kodi_utils.get_setting('thinking_budget', 'medium')
                     or 'medium').strip().lower()
     thinking_level = None
