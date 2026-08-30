@@ -4248,6 +4248,7 @@ Raw by a few minutes; poll rather than assume.
 | 0.2.513 / qf 0.1.558 / build 0.1.126 / note 613 | a repair that stops applying is named at WARNING on the next boot instead of dying in silence; 44 of 51 POV markers verified present, 0 false alarms |
 | 0.2.514 / qf 0.1.559 / build 0.1.127 / note 614 | the three constructed-marker patchers join the health report by rebuilding the live marker from its _VERSION constant and proving it against the host -- one of them builds Connect Services; 45 of 51 verified |
 | 0.2.515 / qf 0.1.560 / build 0.1.128 / note 615 | the "חיבור שירותים" tile stopped going through a POV shortcut-folder row in navigator.db -- when the row went missing POV returned an empty directory and Kodi walked up to POV's own root menu -- and now calls `?mode=myservices` directly on every skin, as Arctic Fuse 3 always has; the per-skin favourites seeds are repaired too, so a skin switch cannot bring the old tile back |
+| 0.2.516 / qf 0.1.561 / build 0.1.129 / note 616 | Gemini's `temperature` / `top_p` are sent only to the models that still honour them (2.5, 3.1) and never to 3.5 and up, where Google deprecated them and a future generation answers HTTP 400; the two sliders are hidden where they do nothing, and one function in gemini.py decides it for every request builder |
 
 ### Things worth not rediscovering
 
@@ -4596,6 +4597,62 @@ written and never copied. "It needs TWO restarts" was the honest description of
 a race, not of a fix. 0.2.512 replaces the mirror with one edit to POV's scan
 line, which removes the race instead of narrowing it. Read that section, not
 this one, for what runs today.
+
+### What shipped 0.2.516 / qf 0.1.561 / build 0.1.129 (note 616)
+
+**Gemini's sampling knobs now go only to the models that still take them.**
+
+Google's Gemini API docs, verbatim:
+
+> temperature, top_p, and top_k are deprecated and ignored. In future model
+> generations, supplying these parameters returns an HTTP 400 error. Remove
+> these parameters from all requests.
+
+Ignored today, a hard 400 tomorrow. A 400 on a translation chunk is not a worse
+translation, it is no translation: `gemini.generate()` raises and the chunk is
+lost. Removing them outright would be wrong too -- on 2.5 and 3.1 they still do
+real work, and this build's validated 1.0 / 0.95 defaults were measured on
+exactly those models. So the rule is per MODEL: **3.5 and up send neither, 2.5
+and 3.1 keep both.**
+
+ONE PLACE DECIDES. `gemini.sampling_params_supported()` reads the generation
+out of the model id, and both request builders consult it -- so a caller may
+keep passing `temperature=` and `top_p=` without knowing the rule, and a caller
+added later cannot forget it. That is not tidiness. `subsync.py` makes a
+`generate_media()` call for speech intervals with a hardcoded
+`temperature=0.0`, from a file nowhere near `translate.py`, and it is exactly
+the site an `if` per call site would have missed. It is covered by construction
+and needed no edit at all. (`top_k` is in Google's list too; this add-on has
+never sent it and has no setting for it, so there was nothing to gate -- noted
+so the next reader does not go looking for a missing third branch.)
+
+An id with no readable generation -- an alias like `gemini-flash-latest` --
+also sends neither. Chosen, not accidental: such an alias resolves to whatever
+is newest, which is where the parameters are going away; omitting them is a
+valid request on every model that ever accepted them; and guessing the other
+way costs a 400.
+
+THE UI FOLLOWS THE REQUEST. Both sliders are hidden on a model that ignores
+them, because a control that changes nothing is worse than no control. They
+come back on 2.5 / 3.1 with the user's own numbers intact -- the settings are
+still declared, still stored and still read; only the payload changes, so
+switching back restores what the user chose rather than a default. The default
+model is 3.5 Flash Lite, so out of the box neither slider shows.
+
+The visibility rule in `settings.xml` is a **whitelist** of the models that
+still honour the parameters, not a blacklist of the ones that do not. Add a
+newer model to the picker and forget the list, and the slider correctly stays
+hidden -- the direction that cannot mislead. Kodi supports `<or>` inside a
+`<dependency>` (verified against 21.3-Omega's `CBooleanLogicOperation::
+Deserialize`, which parses `and`/`or` children, with `<condition setting=...
+operator="is">` as the value tag), so the whitelist is expressible directly.
+
+`tools/test_gemini_sampling_params.py` builds REAL payloads through a stubbed
+`requests` -- it asserts what is SENT, not what the source looks like -- pins
+the media builder as well as the text one, and requires `settings.xml`'s
+whitelist and the code's rule to agree for every model in the picker, which is
+the drift that would otherwise go unnoticed until a user asked why a slider did
+nothing. Eight mutants, all caught.
 
 ### What shipped 0.2.515 / qf 0.1.560 / build 0.1.128 (note 615)
 
