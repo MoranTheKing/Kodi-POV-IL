@@ -3,6 +3,7 @@
 # test. Bring your own API key.
 
 import json
+import re
 import urllib.parse
 
 try:
@@ -13,6 +14,66 @@ except ImportError:
 API_BASE = 'https://generativelanguage.googleapis.com/v1beta'
 
 REQUEST_TIMEOUT = 90
+
+
+# ---------------------------------------------------------------------------
+# The sampling knobs, and which models still take them.
+#
+# Google's own words, from the Gemini API docs:
+#
+#     temperature, top_p, and top_k are deprecated and ignored. In future
+#     model generations, supplying these parameters returns an HTTP 400
+#     error. Remove these parameters from all requests.
+#
+# "Ignored" today, a hard 400 tomorrow -- and a 400 on a translation chunk is
+# not a degraded translation, it is no translation at all. So the rule is
+# applied by MODEL, not globally: everything from 3.5 up gets a request with
+# no sampling fields in it, and 2.5 / 3.1 keep them, where they still do real
+# work (they are what the build's validated 1.0 / 0.95 tuning was measured on).
+#
+# THIS IS THE ONLY PLACE THAT DECIDES. Both request builders below consult it,
+# so a caller may keep passing temperature= and top_p= without knowing the
+# rule, and a caller added later cannot forget it. That is deliberate: the
+# alternative -- an `if` at every call site -- is how one of them ends up
+# missed, and subsync.py's audio call (a hardcoded temperature=0.0, nowhere
+# near translate.py) is exactly the site that would have been.
+#
+# top_k is in Google's list too. We have never sent it and there is no setting
+# for it, so there is nothing to gate -- noted here so the next reader does not
+# go looking for the missing third branch.
+_SAMPLING_RETIRED_FROM = (3, 5)
+
+# The generation out of a model id: 'gemini-3.5-flash-lite' -> (3, 5). Written
+# as a search rather than a full match so the dated preview ids Google hands
+# out ('gemini-2.5-flash-lite-preview-06-17') still resolve -- the trailing
+# 06-17 has no dot, so the first X.Y in the string is the generation.
+_GENERATION_RE = re.compile(r'(?:^|[^0-9.])(\d+)\.(\d+)')
+
+
+def model_generation(model):
+    """(major, minor) for a Gemini model id, or None when it carries no
+    version -- an alias like 'gemini-flash-latest', say."""
+    m = _GENERATION_RE.search((model or '').strip().lower())
+    if not m:
+        return None
+    try:
+        return (int(m.group(1)), int(m.group(2)))
+    except (TypeError, ValueError):
+        return None
+
+
+def sampling_params_supported(model):
+    """True when this model still honours temperature / top_p / top_k.
+
+    An id we cannot read a generation out of answers False. That direction is
+    chosen, not accidental: an unversioned alias resolves to whatever is newest
+    (which is where the parameters are going away), omitting them is a valid
+    request on every model that ever accepted them, and the cost of guessing
+    wrong the other way is an HTTP 400 that kills the whole translation."""
+    generation = model_generation(model)
+    if generation is None:
+        return False
+    return generation < _SAMPLING_RETIRED_FROM
 
 
 class GeminiError(Exception):
@@ -171,6 +232,9 @@ def generate_media(api_key, model, prompt, media_bytes, mime,
     import base64 as _b64
     url = '{0}/models/{1}:generateContent'.format(
         API_BASE, urllib.parse.quote(model, safe=''))
+    media_config = {'maxOutputTokens': max_output_tokens}
+    if sampling_params_supported(model):
+        media_config['temperature'] = temperature
     payload = {
         'contents': [{'parts': [
             {'text': prompt},
@@ -179,10 +243,7 @@ def generate_media(api_key, model, prompt, media_bytes, mime,
                 'data': _b64.b64encode(media_bytes).decode('ascii'),
             }},
         ]}],
-        'generationConfig': {
-            'temperature': temperature,
-            'maxOutputTokens': max_output_tokens,
-        },
+        'generationConfig': media_config,
     }
     try:
         r = requests.post(url, data=json.dumps(payload),
@@ -232,12 +293,14 @@ def generate(api_key, model, prompt, temperature=0.2,
     url = '{0}/models/{1}:generateContent'.format(
         API_BASE, urllib.parse.quote(model, safe=''))
 
-    generation_config = {
-        'temperature': temperature,
-        'maxOutputTokens': max_output_tokens,
-    }
-    if top_p is not None:
-        generation_config['topP'] = top_p
+    generation_config = {'maxOutputTokens': max_output_tokens}
+    # See sampling_params_supported(): from Gemini 3.5 on these are deprecated
+    # and ignored, and a future generation answers 400 to a request carrying
+    # them. The arguments stay in the signature so callers need not know that.
+    if sampling_params_supported(model):
+        generation_config['temperature'] = temperature
+        if top_p is not None:
+            generation_config['topP'] = top_p
     if thinking_level:
         generation_config['thinkingConfig'] = {
             'thinkingLevel': thinking_level,
