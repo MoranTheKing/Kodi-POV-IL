@@ -4249,6 +4249,7 @@ Raw by a few minutes; poll rather than assume.
 | 0.2.514 / qf 0.1.559 / build 0.1.127 / note 614 | the three constructed-marker patchers join the health report by rebuilding the live marker from its _VERSION constant and proving it against the host -- one of them builds Connect Services; 45 of 51 verified |
 | 0.2.515 / qf 0.1.560 / build 0.1.128 / note 615 | the "חיבור שירותים" tile stopped going through a POV shortcut-folder row in navigator.db -- when the row went missing POV returned an empty directory and Kodi walked up to POV's own root menu -- and now calls `?mode=myservices` directly on every skin, as Arctic Fuse 3 always has; the per-skin favourites seeds are repaired too, so a skin switch cannot bring the old tile back |
 | 0.2.516 / qf 0.1.561 / build 0.1.129 / note 616 | Gemini's `temperature` / `top_p` are sent only to the models that still honour them (2.5, 3.1) and never to 3.5 and up, where Google deprecated them and a future generation answers HTTP 400; the two sliders are hidden where they do nothing, and one function in gemini.py decides it for every request builder |
+| 0.2.517 / qf 0.1.562 / build 0.1.130 / note 617 | Gemini 3.8 Flash replaces 3.7 in the picker (verified against ai.google.dev: stable, and identical rate limits), with a one-shot migration on BOTH channels for anyone on 3.5 / 3.6 / 3.7; the quota table keeps its 3.7 row because a stored id outlives a dropdown; new `test_gemini_model_table.py` holds the picker, the daily caps, the RPM pacing and the migrations to one list of models |
 
 ### Things worth not rediscovering
 
@@ -4597,6 +4598,65 @@ written and never copied. "It needs TWO restarts" was the honest description of
 a race, not of a fix. 0.2.512 replaces the mirror with one edit to POV's scan
 line, which removes the race instead of narrowing it. Read that section, not
 this one, for what runs today.
+
+### What shipped 0.2.517 / qf 0.1.562 / build 0.1.130 (note 617)
+
+**Gemini 3.8 Flash replaces 3.7 Flash in the model picker.**
+
+VERIFIED BEFORE SHIPPING, not recalled. A wrong model id is not a degraded
+translation, it is an API error on every request, so the id was checked against
+`ai.google.dev/gemini-api/docs/models` first: 3.8 Flash is listed **Stable**,
+its endpoint is `gemini-3.8-flash`, Google calls it "our most intelligent Flash
+model" and now describes 3.7 as "our previous-generation Flash model". The
+rate-limit page lists 3.8 and 3.7 on identical numbers in every table -- same
+TPM, same TPD, same free RPD -- which is what makes this a drop-in swap rather
+than a change of quota behaviour. `_gemini_free_rpm_cap()` needed no edit at
+all: it matches on `flash-lite` / `flash` rather than on a version, so 3.8
+paces at the regular-Flash cap by construction.
+
+THE MIGRATION, AND WHY IT RUNS TWICE OVER. 3.7 still answers, so nothing here
+was urgent -- but a stored model id the picker no longer lists leaves the
+settings screen showing a blank where the model should be. So a one-shot
+migration moves a stored 3.7 to 3.8.
+
+**It had to go into both channels.** The build edition runs the repo's
+`service.py`; the standalone (repo channel) runs `SLIM_SERVICE`, a template
+inside `tools/build_ai_subtitles_packages.py`. `changelog.txt` is shared. So a
+sentence like "anyone already on 3.5, 3.6 or 3.7 Flash is moved across once,
+automatically" can be true for one channel and a lie to the other -- which is
+precisely what happened in 0.2.494, where the 3.7 migration reached the build,
+never reached the standalone, and survived three releases until a user found it
+by reading the shipped zip. `tools/test_channels_agree.py` exists for that, it
+caught this release's half-done version while it was still half done, and both
+services got the migration in the same commit.
+
+Each bump owns its OWN marker (`_gemini_model_bump_v3`), never a reused one:
+the previous marker is already `1` on every device that took the previous bump,
+so reusing it would skip the migration for exactly the users who need it.
+
+The v3 retired set is `(3.7-flash, 3.6-flash, 3.5-flash)`, not just 3.7. That
+is not redundancy with v2 -- it is what makes v3 correct **on its own** rather
+than correct only because it happens to be called after v2 in the same boot.
+Ordering is a fact about one file; a complete set is a fact about the
+migration. v2's own map was repointed at 3.8 for the same reason: it used to
+land a device on 3.7, an id the picker no longer offers, and rely on the next
+function to move it again.
+
+THE QUOTA TABLE KEEPS ITS 3.7 ROW even though the picker dropped it. **A stored
+id outlives a dropdown.** A device that has not booted since the update, or one
+whose settings came back from a backup, still asks `MODEL_LIMITS` for a number;
+with the row gone it falls through to `DEFAULT_LIMIT = 500`, the Flash-Lite
+figure, against a real free cap of 20 -- 25x wrong, on the model where the cap
+is tightest, and discovered only as a hard daily 429.
+
+`tools/test_gemini_model_table.py` (new) holds FOUR tables to one list of
+models: the `<option>` list in settings.xml, `gemini_quota.MODEL_LIMITS`,
+`translate._gemini_free_rpm_cap()`, and what the bump migrations write.
+`MODEL_LIMITS` had carried a comment asking the next person to keep them in
+sync; a comment is not a check. The test was written before the change and
+immediately caught two defects in it -- a migration still writing 3.7, and a
+marker assertion pinned to a magic number rather than to the number of
+migrations. Both were fixed rather than the test relaxed.
 
 ### What shipped 0.2.516 / qf 0.1.561 / build 0.1.129 (note 616)
 
