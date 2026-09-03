@@ -299,8 +299,8 @@ msgid "2.5 Flash (fallback)"
 msgstr "2.5 Flash (fallback)"
 
 msgctxt "#32234"
-msgid "3.7 Flash (newest, heavier quota use)"
-msgstr "3.7 Flash (החדש ביותר, צורך יותר מכסה)"
+msgid "3.8 Flash (newest, heavier quota use)"
+msgstr "3.8 Flash (החדש ביותר, צורך יותר מכסה)"
 
 msgctxt "#32235"
 msgid "Only affects Gemini 2.5 and 3.1. Google deprecated this parameter from Gemini 3.5 on, so it is hidden and not sent for newer models."

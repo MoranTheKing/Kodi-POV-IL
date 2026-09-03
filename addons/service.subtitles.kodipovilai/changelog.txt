@@ -1,3 +1,46 @@
+0.2.517
+- The AI translation add-on moves to Gemini 3.8 Flash. Anyone already on 3.5,
+  3.6 or 3.7 Flash is moved across once, automatically.
+
+  Google published 3.8 Flash as the current regular-Flash model ("our most
+  intelligent Flash model") and reclassified 3.7 as previous-generation. It sits
+  on identical rate limits in every table Google publishes -- same tokens per
+  minute, same tokens per day, same free requests per day -- so this is a
+  drop-in swap exactly like the 3.5/3.6 -> 3.7 move before it, with no change
+  to quota use or pacing.
+
+  3.7 still answers, so nothing here was urgent. What is not fine is leaving a
+  stored model id the picker no longer lists: the settings screen then shows a
+  blank where the model should be. Hence the one-shot migration.
+
+  IT RUNS ON BOTH CHANNELS. The build edition and the standalone (repo-channel)
+  add-on do NOT run the same service file, and changelog text is shared between
+  them -- so a promise like the one at the top of this entry can be true for one
+  and a lie for the other. That is not hypothetical: the 3.7 migration in
+  0.2.494 reached the build and never reached the standalone, and survived three
+  releases before a user found it by reading the zip. tools/test_channels_agree
+  .py now checks this claim against both services, and the 3.8 migration was
+  written into both at the same time.
+
+  Each bump gets its OWN marker (`_gemini_model_bump_v3`), never a reused one.
+  The previous marker is already set on every device that took the previous
+  bump, so reusing it would skip the migration for precisely the users who need
+  it. The retired set covers 3.6 and 3.5 Flash too, so the migration is correct
+  on its own rather than correct only because of the order two functions happen
+  to run in.
+
+  The free-tier daily counter keeps its row for 3.7 even though the picker has
+  dropped it. A stored id outlives a dropdown -- a device that has not booted
+  since the update, or one restored from a backup, still asks that table for a
+  number, and a missing row would silently hand it the Flash-Lite figure of 500
+  a day against a real free cap of 20.
+
+  tools/test_gemini_model_table.py is new and holds four tables to one list of
+  models: the picker, the daily-cap table, the requests-per-minute pacing and
+  what the migrations write. It was written before the change and immediately
+  caught two defects in it -- a migration still pointing at 3.7, which the
+  picker no longer offers, and a marker count that only looked right.
+
 0.2.516
 - temperature and Top-P are no longer sent to the models that stopped
   accepting them.
