@@ -3,9 +3,9 @@
 # Free-tier daily request caps differ a lot by model family, so the
 # number we display has to follow the selected model:
 #   * gemini-3.5-flash-lite / 3.1-flash-lite / 2.5-flash-lite -> ~500 requests/day
-#   * gemini-3.7-flash / 3.6-flash / 3.5-flash / 3.1-flash / 2.5-flash (regular Flash) -> only
-#     ~20 requests/day (a very tight free cap; regular Flash on the free
-#     tier is really a paid-key model).
+#   * gemini-3.8-flash / 3.7-flash / 3.6-flash / 3.5-flash / 3.1-flash /
+#     2.5-flash (regular Flash) -> only ~20 requests/day (a very tight free
+#     cap; regular Flash on the free tier is really a paid-key model).
 # The count resets at UTC midnight. We persist it in hidden addon
 # settings alongside the model it belongs to, and surface it in two
 # places: appended to the end-of-translation toast, and as a dedicated
@@ -42,6 +42,13 @@ MODEL_LIMITS = {
     'gemini-3.5-flash-lite': 500,
     'gemini-3.1-flash-lite': 500,
     'gemini-2.5-flash-lite': 500,
+    'gemini-3.8-flash':      20,
+    # 3.7 stays listed although the picker no longer offers it. A stored id
+    # outlives a dropdown: a device that has not yet run the 3.8 migration, or
+    # whose settings were restored from a backup, still asks this table for a
+    # number, and dropping the row would silently hand it the 500/day
+    # Flash-Lite fallback -- 25x the real free cap, on the one model where the
+    # cap is tightest. Google lists 3.8 and 3.7 on identical limits.
     'gemini-3.7-flash':      20,
     'gemini-3.6-flash':      20,
     'gemini-3.5-flash':      20,
