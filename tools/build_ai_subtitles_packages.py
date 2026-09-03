@@ -438,9 +438,11 @@ def _maybe_default_builtin_engine():
 
 def _maybe_bump_gemini_model():
     """One-shot: move existing users off superseded default Gemini models --
-    3.1-flash-lite -> 3.5-flash-lite and 3.5/3.6-flash -> 3.7-flash. Drop-in
+    3.1-flash-lite -> 3.5-flash-lite and 3.5/3.6-flash -> 3.8-flash. Drop-in
     upgrades, identical free-tier quota. Marker-gated, so a later manual pick
-    sticks.
+    sticks. (The regular-Flash target was 3.7 until Google superseded that too;
+    this map points at the CURRENT pick rather than at one the picker no longer
+    offers.)
 
     THIS IS A COPY OF THE BUILD EDITION'S MIGRATION, AND THAT IS THE BUG IT
     FIXES. The standalone runs this SLIM_SERVICE template, not the repo's
@@ -463,13 +465,50 @@ def _maybe_bump_gemini_model():
             return
         cur = (kodi_utils.get_setting('model', '') or '').strip()
         new = {'gemini-3.1-flash-lite': 'gemini-3.5-flash-lite',
-               'gemini-3.5-flash': 'gemini-3.7-flash',
-               'gemini-3.6-flash': 'gemini-3.7-flash'}.get(cur)
+               'gemini-3.5-flash': 'gemini-3.8-flash',
+               'gemini-3.6-flash': 'gemini-3.8-flash'}.get(cur)
         if new:
             kodi_utils.set_setting('model', new)
             kodi_utils.log('Gemini model bumped {0} -> {1} (migration v2)'.format(
                 cur, new), level='INFO')
         kodi_utils.set_setting('_gemini_model_bump_v2', '1')
+    except Exception:
+        pass
+
+
+def _maybe_bump_gemini_model_38():
+    """One-shot: move existing users off gemini-3.7-flash to gemini-3.8-flash.
+
+    Google shipped 3.8 Flash as the current regular-Flash model and reclassified
+    3.7 as previous-generation; the two sit on identical rate limits, so this is
+    a drop-in upgrade like the bump above. 3.7 keeps working -- but the picker
+    no longer offers it, and a stored id the list cannot show is how a settings
+    screen ends up displaying a blank model.
+
+    A NEW marker id: _gemini_model_bump_v2 is already '1' on every device that
+    took the previous bump, so reusing it would no-op this migration for exactly
+    the users who need it.
+
+    The retired set covers 3.6 and 3.5 Flash as well, so this is correct on its
+    own rather than correct only because it runs after the v2 bump in the same
+    boot. THIS IS THE STANDALONE'S COPY: the build edition has its own in
+    service.py, and tools/test_channels_agree.py requires both to exist -- a
+    shared changelog over two different services can tell one channel the truth
+    and the other a lie, which is precisely what happened with the 3.7 bump."""
+    try:
+        from resources.lib import kodi_utils
+    except Exception:
+        return
+    try:
+        if kodi_utils.get_setting('_gemini_model_bump_v3', '') == '1':
+            return
+        retired = ('gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash')
+        cur = (kodi_utils.get_setting('model', '') or '').strip()
+        if cur in retired:
+            kodi_utils.set_setting('model', 'gemini-3.8-flash')
+            kodi_utils.log('Gemini model bumped {0} -> gemini-3.8-flash '
+                           '(migration v3)'.format(cur), level='INFO')
+        kodi_utils.set_setting('_gemini_model_bump_v3', '1')
     except Exception:
         pass
 
@@ -654,6 +693,7 @@ def main():
     # come back). Mirrors the full build.
     _maybe_default_builtin_engine()
     _maybe_bump_gemini_model()
+    _maybe_bump_gemini_model_38()
     _ensure_darksubs_enabled()
     _maybe_set_default_subtitle_service()
     _run('hebrew subtitle prefs', _maybe_seed_hebrew_subtitle_prefs)
