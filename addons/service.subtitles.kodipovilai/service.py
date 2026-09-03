@@ -5018,8 +5018,12 @@ def _maybe_tune_gemini3_defaults():
 def _maybe_bump_gemini_model():
     """One-shot: move existing users off the superseded default Gemini models to
     their newer, same-quota successors -- gemini-3.1-flash-lite -> 3.5-flash-lite
-    (the free 500/day default) and 3.5-flash / 3.6-flash -> 3.7-flash (the paid
-    regular-Flash pick). Both are drop-in upgrades (identical free-tier quota,
+    (the free 500/day default) and 3.5-flash / 3.6-flash -> 3.8-flash (the paid
+    regular-Flash pick; it was 3.7 until Google superseded that too, and this
+    map points at the CURRENT pick rather than at a model the picker no longer
+    offers -- landing a device on a dropped id and relying on the next
+    migration to move it again is a correctness argument that depends on the
+    order two functions happen to be called in). Both are drop-in upgrades (identical free-tier quota,
     better quality), so we rewrite the STORED model once. Only those two exact
     old ids are bumped; any other deliberate choice (3.1-flash, 2.5-*) is left
     alone, and an empty setting is left empty (translate falls back to the new
@@ -5038,8 +5042,8 @@ def _maybe_bump_gemini_model():
             return
         cur = (kodi_utils.get_setting('model', '') or '').strip()
         new = {'gemini-3.1-flash-lite': 'gemini-3.5-flash-lite',
-               'gemini-3.5-flash': 'gemini-3.7-flash',
-               'gemini-3.6-flash': 'gemini-3.7-flash'}.get(cur)
+               'gemini-3.5-flash': 'gemini-3.8-flash',
+               'gemini-3.6-flash': 'gemini-3.8-flash'}.get(cur)
         if new:
             kodi_utils.set_setting('model', new)
             kodi_utils.log('Gemini model bumped {0} -> {1} (migration v2)'.format(
@@ -5049,6 +5053,54 @@ def _maybe_bump_gemini_model():
         try:
             kodi_utils.log('gemini model bump migration failed: {0}'.format(e),
                            level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_bump_gemini_model_38():
+    """One-shot: move existing users off gemini-3.7-flash to gemini-3.8-flash.
+
+    Google shipped 3.8 Flash as the current regular-Flash model and reclassified
+    3.7 as "previous-generation"; the two sit on identical rate limits in every
+    table on Google's own page (same TPM, same TPD, same free RPD), so this is a
+    drop-in upgrade exactly like the 3.5/3.6 -> 3.7 bump before it. 3.7 keeps
+    working, so nothing here is urgent -- but the picker no longer offers it,
+    and leaving a stored id the list cannot show is how a settings screen ends
+    up displaying a blank model.
+
+    A NEW marker id, never a reused one: `_gemini_model_bump_v2` is already '1'
+    on every device that took the previous bump, so reusing it would no-op this
+    migration for precisely the users who need it. That mistake is written up in
+    _maybe_bump_gemini_model() above; this is the same rule applied again.
+
+    RETIRED, not "everything newer". The set below is every regular-Flash id
+    the picker no longer offers. 3.6 and 3.5 Flash are in it because they were
+    v2's job and v2 only fires once: a device that already ran v2 has left them,
+    but listing them here means this migration is correct on its own rather than
+    correct only because it happens to run after v2 in the same boot. Ordering
+    is a fact about one file; a complete set is a fact about the migration.
+
+    Every choice the picker still shows -- 3.5-flash-lite, 3.1-flash, either
+    2.5 -- is a deliberate pick and is left alone, and an empty setting stays
+    empty so translate.py's own default applies."""
+    try:
+        from resources.lib import kodi_utils
+    except Exception:
+        return
+    try:
+        if kodi_utils.get_setting('_gemini_model_bump_v3', '') == '1':
+            return
+        retired = ('gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash')
+        cur = (kodi_utils.get_setting('model', '') or '').strip()
+        if cur in retired:
+            kodi_utils.set_setting('model', 'gemini-3.8-flash')
+            kodi_utils.log('Gemini model bumped {0} -> gemini-3.8-flash '
+                           '(migration v3)'.format(cur), level='INFO')
+        kodi_utils.set_setting('_gemini_model_bump_v3', '1')
+    except Exception as e:
+        try:
+            kodi_utils.log('gemini 3.8 model bump migration failed: {0}'
+                           .format(e), level='WARNING')
         except Exception:
             pass
 
@@ -6135,9 +6187,14 @@ def main():
     # settings (temperature 1.0 + thinking medium). Marker-gated; respects a
     # deliberate manual choice.
     _maybe_tune_gemini3_defaults()
-    # One-shot: bump the two superseded default models to their same-quota
-    # successors (3.1-flash-lite -> 3.5-flash-lite, 3.5-flash -> 3.6-flash).
+    # One-shot: bump the superseded default models to their same-quota
+    # successors (3.1-flash-lite -> 3.5-flash-lite, 3.5/3.6-flash -> 3.7-flash).
     _maybe_bump_gemini_model()
+    # And again for 3.8, which replaced 3.7 in the picker. Runs after the line
+    # above so a device still on 3.5-flash lands on 3.8 in ONE boot rather than
+    # two; it does not DEPEND on that order, because its retired set covers the
+    # older ids as well.
+    _maybe_bump_gemini_model_38()
     # Lower chunk size to 50 (block-avoidance), one-shot for existing installs.
     _maybe_lower_chunk_lines()
 

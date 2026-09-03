@@ -62,8 +62,13 @@ slim = slim_service()
 check('the SLIM_SERVICE template can be extracted', len(slim) > 2000,
       '%d chars' % len(slim))
 
-# --- the Gemini 3.7 promise, the one that shipped broken -------------------
-promised = 'Gemini 3.7 Flash' in changelog and 'automatically' in changelog
+# --- the Gemini model-bump promise, the one that shipped broken ------------
+# The regular-Flash target moves with Google: 3.7 in 0.2.494, 3.8 from 0.2.517.
+# The CLAIM is what is being checked, not a particular version, so this pair
+# moves when the picker does -- and the SLIM_SERVICE half is the part that was
+# missing for three releases the first time.
+TARGET = 'gemini-3.8-flash'
+promised = 'Gemini 3.8 Flash' in changelog and 'automatically' in changelog
 check('changelog promises the automatic Gemini move', promised,
       'the claim is gone -- delete this case or update it')
 
@@ -76,13 +81,26 @@ if promised:
               re.search(r'^\s*_maybe_bump_gemini_model\(\)\s*$', src, re.M)
               is not None,
               'defined but never called is the same as absent')
-        check('%s maps 3.6 -> 3.7' % name,
-              "'gemini-3.6-flash': 'gemini-3.7-flash'" in src)
-        check('%s maps 3.5 -> 3.7' % name,
-              "'gemini-3.5-flash': 'gemini-3.7-flash'" in src)
+        check('%s maps 3.6 -> %s' % (name, TARGET),
+              "'gemini-3.6-flash': '%s'" % TARGET in src)
+        check('%s maps 3.5 -> %s' % (name, TARGET),
+              "'gemini-3.5-flash': '%s'" % TARGET in src)
         check('%s gates on the v2 marker, not v1' % name,
               '_gemini_model_bump_v2' in src and '_gemini_model_bump_v1' not in src,
               'reusing v1 makes it a no-op for exactly the 3.6 users')
+        # The 3.7 -> 3.8 move is a SECOND migration with its own marker, and it
+        # has to exist on both channels for the same reason the first one did.
+        check('%s defines the 3.8 migration' % name,
+              '_maybe_bump_gemini_model_38' in src)
+        check('%s CALLS the 3.8 migration' % name,
+              re.search(r'^\s*_maybe_bump_gemini_model_38\(\)\s*$', src, re.M)
+              is not None,
+              'defined but never called is the same as absent')
+        check('%s moves a stored 3.7 to %s' % (name, TARGET),
+              "'gemini-3.7-flash'" in src and TARGET in src)
+        check('%s gates the 3.8 migration on its own marker' % name,
+              '_gemini_model_bump_v3' in src,
+              'reusing v2 makes it a no-op for exactly the 3.7 users')
 
 # --- SABOTAGE: the check must be able to fail ------------------------------
 # Without this, "standalone has it" passes just as happily on a test that is
