@@ -402,7 +402,16 @@ if pov8:
     mod8 = load(home8)
     p8 = os.path.join(pov8, 'resources', 'lib', 'modules', 'sources.py')
     before8 = io.open(p8, encoding='utf-8', newline='').read()
-    mod8._REPLACEMENT_TMPL = '\t\tsource_path = ((( %s'
+    # Sabotage the SHAPE TABLE, not a name that no longer exists. When this
+    # read `mod8._REPLACEMENT_TMPL = ...` it was setting an attribute the
+    # module had stopped having, so the real replacement still applied, the
+    # scan reported `patched`, and the check "a replacement that would not
+    # compile is refused" was passing against an edit that compiled fine.
+    # A sabotage that misses its target is worse than no sabotage: it reports
+    # a guard as proven while proving nothing.
+    assert mod8._SHAPES, 'the shape table is what carries the replacements'
+    mod8._SHAPES = tuple((anchor, '\t\tsource_path = ((( %s')
+                         for anchor, _repl in mod8._SHAPES)
     mod8._RANK_REPLACEMENT = '\t\treturn ((('
     st8 = mod8.ensure_patched()
     check('a scan replacement that would not compile is refused',

@@ -1,3 +1,59 @@
+0.2.518
+- POV 6.09.01 broke two repairs. Both are fixed, and the other 56 were
+  checked rather than assumed.
+
+  POV jumped 6.08.15 -> 6.09.01 (a minor release, ~45 files). Every patcher
+  this add-on has for POV was run against a real 6.09.01 tree and a real
+  6.08.15 tree, a FRESH copy per patcher, and the verdicts compared. Exactly
+  two differ.
+
+  1) THE INTERNAL-SCRAPER SHIM, and this one is subtler than it looks. POV
+  changed two things in the same loop:
+
+      -   for loader, module_name, is_pkg in __import__('pkgutil').iter_modules([source_path]):
+      +   for loader, module_name, is_pkg in pkgutil.iter_modules([source_path]):
+      ...
+      -   append(('internal', loader.find_spec(module_name).loader.load_module(module_name).source, module_name))
+      +   try: module_source = importlib.import_module('.' + module_name, package='debrids').source
+
+  The first is cosmetic (pkgutil moved to a top-level import) and is what made
+  the anchor stop matching. THE SECOND IS THE ONE THAT MATTERS: loading now
+  resolves through POV's own `debrids` package instead of through the folder a
+  module was discovered in, so a scraper anywhere else is FOUND by the scan and
+  then fails to import. Repairing only the scan line would have moved the
+  failure two lines down and left the symptom identical -- the add-on's
+  internal sources missing, exactly as before.
+
+  So the repair now covers scan and load together: POV's own import is tried
+  first and unchanged, and only when it raises does the module load from the
+  file it was actually discovered in. POV's own scrapers take the first branch
+  and behave exactly as upstream wrote them.
+
+  2) THE DEBRID UNBOUND-NAME GUARD. POV renamed
+  `indexers/real_debrid_api.py` -> `realdebrid_api.py`, and the guard reported
+  `realdebrid=no_file` -- silently not applying, on the client that carries the
+  very crash it exists to stop. It already knew how to follow a FOLDER move
+  (debrids/ <-> indexers/); it now follows file renames too, first existing
+  name wins, so one build serves both POV versions.
+
+  NOT A REGRESSION, though it reads like one: `pov_alldebrid_status_fix` is
+  `unmatched`, and that is correct. It repaired a `result['magnets'][0]`
+  subscript that POV itself fixed in 6.08.15. The bug is gone, so the repair
+  has nothing to do. Left alone deliberately rather than re-anchored onto code
+  that is already right.
+
+  UMBRELLA was checked the same way. It has moved 6.7.85 -> 6.7.86, and all
+  seven Umbrella repairs apply cleanly on both -- zero regressions. That also
+  retires a long-standing "never verified against current Umbrella" note: they
+  are now measured against the shipped version and the newest upstream.
+
+  tools/test_pov_internal_scraper_loads.py is new and does not trust a return
+  value. It pulls the patched block out of the real sources.py, runs it, and
+  requires a scraper in the legacy folder to arrive at POV's own `append` as a
+  LOADED object -- which is the difference between the two POV versions and
+  the thing `ensure_patched() == 'patched'` cannot see. Two mutants, both
+  caught.
+
 0.2.517
 - The AI translation add-on moves to Gemini 3.8 Flash. Anyone already on 3.5,
   3.6 or 3.7 Flash is moved across once, automatically.
