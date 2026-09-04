@@ -1,3 +1,57 @@
+0.2.519
+- Standalone installs were reading the wrong changelog, and had been for
+  eleven releases.
+
+  The release notes shipped in the standalone package are the shared notes with
+  every entry that does not apply to you filtered out. The code that cuts them
+  into sections looked for a version line spelled "v0.2.500"; the leading "v"
+  was dropped from the file at 0.2.508. So eleven releases collapsed into one
+  block headed by the newest number, and the filter ran across the pile: you
+  opened the notes, saw the current version, and under it a paragraph from an
+  older release about machinery this add-on does not contain -- with three
+  releases missing entirely.
+
+  Fixed, and made narrower at the same time: a version line only starts a
+  section when a note actually follows it, so a version number quoted inside a
+  paragraph can no longer cut it in half and drop the rest.
+
+- Two releases that DID apply to standalone installs had been filtered out of
+  those notes by the sentence that said so.
+
+  The filter drops any note mentioning something this package does not ship.
+  Six of the words it looks for are ordinary English -- "build", "home",
+  "skin" -- meant to catch a note ABOUT those things. They also match the
+  phrase "the build edition and the standalone", which is exactly what a note
+  promising both editions get a change has to say. The Gemini 3.8 move and the
+  sampling-parameter change both run here, and both were deleted from these
+  notes by the sentence promising they would.
+
+  A note that names the standalone now outranks those six words -- and only
+  those six. Anything naming a component this package does not carry is still
+  dropped, absolutely.
+
+- The rest of this release is build-only: a repair to the per-skin favourites
+  seeds that never ran on a fresh install, and a debrid client patcher that
+  could pick a stale file.
+
+  The seed repair added in 0.2.515 sat after eight early returns in its own
+  function. On a device with no favourites.xml yet, the canonical home screen
+  is written and the function returns before reaching it -- so the tile worked
+  while the per-skin seed files still held the old action, and the first skin
+  switch in that session brought the empty window back. It healed on the next
+  boot, which is the kind of "it came back" nobody can reproduce on demand. The
+  repair now runs first, and the test drives the real entry point on all three
+  shapes a device arrives in instead of calling the helper directly.
+
+  The debrid unbound-name guard chose its target file by existence alone, so
+  two spellings of the Real-Debrid client in one tree would have had it patch
+  the stale copy and report success. It now sorts on one key: the folder POV
+  imports from first, then the filename POV's own import line names.
+
+  This entry exists because a review of the four releases before it found all
+  of the above. The reviewer is a step the release procedure has always
+  required and those four skipped.
+
 0.2.518
 - POV 6.09.01 broke two repairs. Both are fixed, and the other 56 were
   checked rather than assumed.
@@ -122,6 +176,13 @@
   site an if-per-call-site would have missed. It is covered now by
   construction. (top_k is in Google's list too; this add-on has never sent it
   and has no setting for it, so there was nothing to gate.)
+
+  THIS RUNS ON THE STANDALONE TOO. gemini.py and settings.xml are both in the
+  repo-channel package, so the gate and the two hidden sliders reach those
+  users exactly as they reach the build. Said out loud because the changelog is
+  shared between the two editions and a note that does not mention the
+  standalone gets filtered out of its package -- which is how a change that
+  DID run there ends up announced nowhere.
 
   A model id with no readable generation -- an alias like
   'gemini-flash-latest' -- also sends neither. That direction is chosen: such

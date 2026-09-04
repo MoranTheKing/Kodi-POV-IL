@@ -276,6 +276,22 @@ def _live_pkg(base):
     return ''
 
 
+def _live_modules(base):
+    """The client module names POV's modules/debrid.py actually imports."""
+    p = os.path.join(base, 'resources', 'lib', 'modules', 'debrid.py')
+    try:
+        with open(p, encoding='utf-8', errors='replace') as fh:
+            text = fh.read()
+    except Exception:
+        return set()
+    for line in text.splitlines():
+        s = line.strip()
+        for pkg in ('indexers', 'debrids'):
+            if s.startswith('from %s import ' % pkg) and '_api' in s:
+                return {n.strip() for n in s.split(' import ', 1)[1].split(',')}
+    return set()
+
+
 def _relocations(rel, base=''):
     out = [rel]
     for a, b in _MOVED:
@@ -294,9 +310,16 @@ def _relocations(rel, base=''):
                 if alt not in out:
                     out.append(alt)
     pkg = _live_pkg(base) if base else ''
-    if pkg:
-        # Put the folder POV imports from first, whatever we recorded.
-        out.sort(key=lambda c: 0 if '/%s/' % pkg in c else 1)
+    mods = _live_modules(base) if base else set()
+    if pkg or mods:
+        # ONE composite key, folder FIRST. Two successive sorts would make the
+        # basename primary -- the last sort wins -- which inverts the priority
+        # _live_pkg exists to establish and can resolve to a stale file in the
+        # wrong folder while the one POV imports goes unpatched. Same failure
+        # its docstring already describes, arrived at from the other side.
+        out.sort(key=lambda c: (
+            0 if (pkg and '/%s/' % pkg in c) else 1,
+            0 if (mods and c.rsplit('/', 1)[-1][:-3] in mods) else 1))
     return out
 
 
