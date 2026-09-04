@@ -1,55 +1,56 @@
 0.2.519
-- Three defects a release review found in the four releases before it, one of
-  which had been shipping the wrong changelog to standalone users for eleven
-  releases.
+- Standalone installs were reading the wrong changelog, and had been for
+  eleven releases.
 
-  THIS RELEASE EXISTS BECAUSE A STEP WAS SKIPPED. The release procedure has
-  always required a separate read-only reviewer over the diff before shipping;
-  615 to 618 ran the test suite instead and called that the review. The suite
-  checks the invariants somebody already thought of. Everything below is what
-  it was never going to find.
+  The release notes shipped in the standalone package are the shared notes with
+  every entry that does not apply to you filtered out. The code that cuts them
+  into sections looked for a version line spelled "v0.2.500"; the leading "v"
+  was dropped from the file at 0.2.508. So eleven releases collapsed into one
+  block headed by the newest number, and the filter ran across the pile: you
+  opened the notes, saw the current version, and under it a paragraph from an
+  older release about machinery this add-on does not contain -- with three
+  releases missing entirely.
 
-  1) THE STANDALONE CHANGELOG WAS SPLIT ON A `v` THAT NO LONGER EXISTS. The
-  section splitter matched `^v\d+\.\d+\.\d+`, and the `v` prefix was dropped
-  from this file at 0.2.508. So eleven releases -- 0.2.508 through 0.2.518 --
-  collapsed into ONE section headed by the newest version, and the per-bullet
-  filter ran across the pool. Standalone users opened their changelog and read
-  `0.2.518` followed by a bullet from 0.2.509 about the patcher-upgrade
-  harness, machinery the standalone does not carry, with 0.2.515 to 0.2.517
-  absent entirely. Version headers jumped 0.2.518 -> 0.2.508.
+  Fixed, and made narrower at the same time: a version line only starts a
+  section when a note actually follows it, so a version number quoted inside a
+  paragraph can no longer cut it in half and drop the rest.
 
-  2) AND THE FILTER DROPPED TWO RELEASES THAT DID RUN THERE. Six entries in the
-  skip list are ordinary English words -- build, home, skin and their capitals
-  -- there to catch a bullet ABOUT the build or a skin. They also catch "the
-  build edition and the standalone", which is precisely the sentence a parity
-  announcement has to contain. 0.2.516 and 0.2.517 were deleted from the
-  standalone changelog by the very sentence promising they applied to it. Both
-  changes really do run there: gemini.py and settings.xml are in that package.
+- Two releases that DID apply to standalone installs had been filtered out of
+  those notes by the sentence that said so.
 
-  A bullet that NAMES the standalone now outranks those six words, and only
-  those six. Every other entry is a proper noun for an add-on, skin or feature
-  those users do not have, and nothing overrides those -- the first attempt let
-  the override beat the whole list, and the existing test caught POV, Umbrella,
-  AF3, Estuary, FENtastic, TorBox, Real-Debrid and Wizard all returning to the
-  standalone changelog. That test now pins the rule instead of a blanket.
+  The filter drops any note mentioning something this package does not ship.
+  Six of the words it looks for are ordinary English -- "build", "home",
+  "skin" -- meant to catch a note ABOUT those things. They also match the
+  phrase "the build edition and the standalone", which is exactly what a note
+  promising both editions get a change has to say. The Gemini 3.8 move and the
+  sampling-parameter change both run here, and both were deleted from these
+  notes by the sentence promising they would.
 
-  3) THE FAVOURITES SEED REPAIR NEVER RAN ON A FRESH INSTALL. 0.2.515 repaired
-  the per-skin seed files so a skin switch could not bring back the old
-  "חיבור שירותים" tile -- but the repair sat after eight early returns. On a
-  device with no favourites.xml yet, the canonical home is written and the
-  function returns before reaching it. The tile worked, the seeds still held
-  the old action, and the first skin switch in that session put the empty
-  window back. It healed on the next boot, which is the kind of "it came back"
-  nobody can reproduce on demand. The repair now runs first, before every
-  early return, and the test exercises the real entry point on all three
-  shapes a device arrives in rather than calling the helper directly.
+  A note that names the standalone now outranks those six words -- and only
+  those six. Anything naming a component this package does not carry is still
+  dropped, absolutely.
 
-  Also, smaller: the debrid unbound-name guard picked its file by existence
-  alone, so if both spellings of the Real-Debrid client ever sat in the live
-  folder at once -- a restore, a manual upgrade -- it would have patched the
-  stale one and reported success. It now prefers the basename POV's own import
-  line names, which is the rule the same file's docstring already stated one
-  level up.
+- The rest of this release is build-only: a repair to the per-skin favourites
+  seeds that never ran on a fresh install, and a debrid client patcher that
+  could pick a stale file.
+
+  The seed repair added in 0.2.515 sat after eight early returns in its own
+  function. On a device with no favourites.xml yet, the canonical home screen
+  is written and the function returns before reaching it -- so the tile worked
+  while the per-skin seed files still held the old action, and the first skin
+  switch in that session brought the empty window back. It healed on the next
+  boot, which is the kind of "it came back" nobody can reproduce on demand. The
+  repair now runs first, and the test drives the real entry point on all three
+  shapes a device arrives in instead of calling the helper directly.
+
+  The debrid unbound-name guard chose its target file by existence alone, so
+  two spellings of the Real-Debrid client in one tree would have had it patch
+  the stale copy and report success. It now sorts on one key: the folder POV
+  imports from first, then the filename POV's own import line names.
+
+  This entry exists because a review of the four releases before it found all
+  of the above. The reviewer is a step the release procedure has always
+  required and those four skipped.
 
 0.2.518
 - POV 6.09.01 broke two repairs. Both are fixed, and the other 56 were
