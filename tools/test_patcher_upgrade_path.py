@@ -357,16 +357,30 @@ pin('addon_autoupdate_repair', 'UPGRADES',
     '_MODE_SEED_VERSION=v1', '_addon_update_mode_seeded=v1')
 pin('pov_debrid_unbound_guard_patcher', 'UPGRADES',
     'AI_SUBS_POV_DEBRID_UNBOUND_v1')
-# NEVER-UPGRADES on purpose, for BOTH of its edits: there is no v2 to migrate
-# to, and each refuses to touch a file carrying an older marker of its own
-# rather than guessing at a block it no longer describes. Measured, not assumed
-# -- `legacy=exists, scan=patched, rank=patched` then `scan=unchanged,
-# rank=unchanged` on a second run. The rank guard reported `unmatched` there
-# until it grew the same older-marker check the scan edit already had; the
-# outcome was the same either way, but "unmatched" reads as a POV refactor and
-# would send the next maintainer after a change POV never made.
+# NEVER-UPGRADES on purpose, and STILL harmless now that a v2 exists -- but
+# the reason has changed, so the old one ("there is no v2 to migrate to") is
+# gone rather than left standing next to a v2.
+#
+# WHY A v1 DEVICE IS NOT STRANDED. The marker lives inside POV's own
+# sources.py. A device reaches the shape v2 is for by POV AUTO-UPDATING, and
+# that replaces sources.py wholesale -- so the v1 marker leaves with the file
+# and v2 applies to a clean copy. The only device that keeps v1 is one still on
+# POV <= 6.08.15, where the v1 edit is the CORRECT one for the shape it has.
+# Nobody is left carrying a patch that does not fit their POV.
+#
+# Re-measured for 6.09.01, not assumed:
+#   6.09.01 run 1  -> legacy=created, scan=patched,   rank=patched
+#   6.09.01 run 2  -> legacy=exists,  scan=unchanged, rank=unchanged
+#   6.08.15 already carrying v1 -> scan=unchanged (left alone, not upgraded)
+#
+# Each edit still refuses to touch a file carrying an older marker of its own
+# rather than guessing at a block it no longer describes. The rank guard
+# reported `unmatched` there until it grew the same older-marker check the scan
+# edit already had; the outcome was the same either way, but "unmatched" reads
+# as a POV refactor and would send the next maintainer after a change POV never
+# made.
 pin('pov_internal_scraper_shim', 'NEVER-UPGRADES',
-    'AI_SUBS_POV_INTERNAL_DIRS_v1', 'AI_SUBS_POV_RANK_MISS_v1')
+    'AI_SUBS_POV_INTERNAL_DIRS_v2', 'AI_SUBS_POV_RANK_MISS_v1')
 pin('pov_mdblist_like_patcher', 'UPGRADES',
     'AI_SUBS_MDBL_LIKE_v3')
 pin('pov_prewarm_patcher', 'UPGRADES',
