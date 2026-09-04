@@ -902,10 +902,76 @@ STANDALONE_SKIP_TERMS = (
 )
 
 
+# A bullet that NAMES the standalone is written for standalone users, whatever
+# else it mentions, and that has to outrank the blacklist.
+#
+# The blacklist is substring matching over prose, and several of its entries are
+# ordinary English words -- "build", "home", "skin". They are there to catch a
+# bullet ABOUT the build or a skin, and they do. They also catch a bullet whose
+# only sin is the phrase "the build edition and the standalone", which is the
+# exact sentence a parity announcement has to contain. 0.2.516 and 0.2.517 were
+# dropped from the standalone changelog for precisely that reason: both changes
+# RAN on standalone devices, and the sentence promising they would is what
+# deleted the announcement.
+#
+# So an explicit mention of the standalone is a positive signal that wins. A
+# bullet saying "the build does X, the standalone does not" is kept too, and
+# that is correct rather than a leak: note 598's lesson is that these users
+# should be told what does and does not reach them, not left to guess.
+_STANDALONE_KEEP_TERMS = ("standalone", "Standalone", "STANDALONE",
+                          "repo channel", "repo-channel",
+                          "from the repository")
+# STANDALONE in capitals and "from the repository" are here because the
+# matching is case-sensitive and the house style for emphasis is a capitalised
+# lead-in. 0.2.516's heading is literally "THIS RUNS ON THE STANDALONE TOO."
+# and matched nothing -- it survived only on an incidental lowercase mention
+# later in the same bullet. v0.2.498, the note-598 fix itself and addressed
+# word-for-word to these users, says "on its own, from the repository" and was
+# dropped outright. The style that triggers the bug is the style used to fix it.
+
+# ...but it only outranks the AMBIGUOUS entries. These six are ordinary English
+# words; the rest of STANDALONE_SKIP_TERMS are proper nouns for add-ons, skins
+# and features the standalone does not have, and NOTHING may override those.
+#
+# The first version of this let "standalone" outrank the whole list, and
+# test_standalone_changelog_scope.py caught it immediately: POV, Umbrella, AF3,
+# Estuary, FENtastic, TorBox, Real-Debrid and Wizard all reached the standalone
+# changelog again. That is note 598's defect restored, from the fix meant to
+# address it. A bullet mentioning the standalone ONCE is not thereby a bullet
+# about the standalone.
+_STANDALONE_SOFT_TERMS = ("Home", "home", "build", "Build", "skin", "Skin")
+
+
+def _standalone_keeps(bullet: str, skip_terms) -> bool:
+    hits = [term for term in skip_terms if term in bullet]
+    if not hits:
+        return True
+    if any(term not in _STANDALONE_SOFT_TERMS for term in hits):
+        return False        # a host/skin/feature name -- never overridable
+    return any(term in bullet for term in _STANDALONE_KEEP_TERMS)
+
+
 def slim_changelog_text(text: str) -> str:
     """Keep standalone release notes focused on subtitle-addon changes."""
     skip_terms = STANDALONE_SKIP_TERMS
-    sections = re.split(r"(?=^v\d+\.\d+\.\d+\n)", text, flags=re.M)
+    # The `v` is OPTIONAL, and it has to be. changelog.txt carries `v0.2.507`
+    # and older, then bare `0.2.508` and newer -- the prefix was dropped at
+    # 0.2.508 and nobody told this regex. For eleven releases it therefore
+    # found no boundary at all above 0.2.507, pooled 0.2.508..0.2.518 into ONE
+    # section headed by the newest version, and ran the bullet filter across
+    # the pool. The shipped standalone changelog jumped 0.2.518 -> 0.2.508 and
+    # attributed a 0.2.509 bullet about the patcher-upgrade harness -- machinery
+    # the standalone does not carry -- to 0.2.518.
+    # ...and a header is a version line THAT STARTS A SECTION -- i.e. one
+    # followed by a bullet. Making the `v` optional without that is a trade of
+    # one silent bug for another: `^v?\d+\.\d+\.\d+$` also matches an
+    # unindented line INSIDE a bullet that happens to be a bare version, which
+    # splits the bullet in two and drops its tail (the phantom section has no
+    # bullets, so it is filtered out whole). Demonstrated: a bullet reading
+    # "...The version was\n0.2.400\nand everything since is affected." lost its
+    # last two lines. All 481 real headers in changelog.txt are followed by a
+    # bullet, so this costs nothing and closes that door.
+    sections = re.split(r"(?=^v?\d+\.\d+\.\d+\n- )", text, flags=re.M)
     kept = []
     for section in sections:
         if not section.strip():
@@ -925,7 +991,7 @@ def slim_changelog_text(text: str) -> str:
             bullets.append("\n".join(current))
         filtered = [
             bullet for bullet in bullets
-            if not any(term in bullet for term in skip_terms)
+            if _standalone_keeps(bullet, skip_terms)
         ]
         if filtered:
             kept.append(header + "\n" + "\n".join(filtered).rstrip() + "\n")
@@ -937,7 +1003,16 @@ def slim_changelog_text(text: str) -> str:
     # Umbrella or POV left the standalone shipping 0.2.501 with a changelog
     # topping out at 0.2.497 -- true, but it reads as a stale package rather
     # than as "nothing in those releases was for you". Say the second thing.
-    if not kept[0].startswith("v{0}\n".format(version())):
+    # BOTH SPELLINGS. This line carried the identical stale assumption the
+    # splitter above did -- it expected `v0.2.519` while the file has written
+    # bare `0.2.519` since 0.2.508 -- so once the splitter was fixed the head
+    # was prepended UNCONDITIONALLY and every release shipped its top entry
+    # twice, once as a real section and once as the "maintenance update" stub.
+    # It did not show on 0.2.519 only because that release's own section was
+    # filtered out for other reasons. Fixing one and not the other is how a
+    # stale assumption survives the release that was meant to remove it.
+    if not kept[0].startswith(("v{0}\n".format(version()),
+                               "{0}\n".format(version()))):
         kept.insert(0, head)
     return "\n".join(kept).rstrip() + "\n"
 
@@ -1227,9 +1302,19 @@ def assert_no_standalone_build_payload(zip_path: Path) -> None:
             # THE SAME tuple slim_changelog_text() filters on, never a
             # hand-copied subset of it: a subset can only ever be wrong in the
             # direction of letting something through.
+            #
+            # Minus the six ordinary English words, for the same reason the
+            # filter itself excepts them: "build", "home" and "skin" appear in
+            # prose that is ABOUT the standalone ("the build edition and the
+            # standalone both get this"), and a bullet naming the standalone is
+            # allowed to keep them. The host names -- POV, Umbrella, every skin
+            # -- stay absolute here exactly as they do there, so this still
+            # refuses to ship a package announcing an add-on those users do not
+            # have. That is the half of note 598 worth guarding.
             bad_changelog = [
                 token for token in STANDALONE_SKIP_TERMS
-                if token in changelog_text
+                if token not in _STANDALONE_SOFT_TERMS
+                and token in changelog_text
             ]
             if bad_changelog:
                 raise RuntimeError(
