@@ -4250,6 +4250,7 @@ Raw by a few minutes; poll rather than assume.
 | 0.2.515 / qf 0.1.560 / build 0.1.128 / note 615 | the "חיבור שירותים" tile stopped going through a POV shortcut-folder row in navigator.db -- when the row went missing POV returned an empty directory and Kodi walked up to POV's own root menu -- and now calls `?mode=myservices` directly on every skin, as Arctic Fuse 3 always has; the per-skin favourites seeds are repaired too, so a skin switch cannot bring the old tile back |
 | 0.2.516 / qf 0.1.561 / build 0.1.129 / note 616 | Gemini's `temperature` / `top_p` are sent only to the models that still honour them (2.5, 3.1) and never to 3.5 and up, where Google deprecated them and a future generation answers HTTP 400; the two sliders are hidden where they do nothing, and one function in gemini.py decides it for every request builder |
 | 0.2.517 / qf 0.1.562 / build 0.1.130 / note 617 | Gemini 3.8 Flash replaces 3.7 in the picker (verified against ai.google.dev: stable, and identical rate limits), with a one-shot migration on BOTH channels for anyone on 3.5 / 3.6 / 3.7; the quota table keeps its 3.7 row because a stored id outlives a dropdown; new `test_gemini_model_table.py` holds the picker, the daily caps, the RPM pacing and the migrations to one list of models |
+| 0.2.518 / qf 0.1.563 / build 0.1.131 / note 618 | POV 6.09.01 broke two repairs and the other 56 were measured, not assumed: the internal-scraper shim (POV now loads scrapers through its own `debrids` package, so extending the scan alone would have fixed nothing) and the debrid unbound-name guard (`real_debrid_api.py` renamed); Umbrella 6.7.86 breaks none of its seven |
 
 ### Things worth not rediscovering
 
@@ -4598,6 +4599,94 @@ written and never copied. "It needs TWO restarts" was the honest description of
 a race, not of a fix. 0.2.512 replaces the mirror with one edit to POV's scan
 line, which removes the race instead of narrowing it. Read that section, not
 this one, for what runs today.
+
+### What shipped 0.2.518 / qf 0.1.563 / build 0.1.131 (note 618)
+
+**POV 6.09.01 broke two repairs. The other 56 were checked, not assumed.**
+
+POV jumped 6.08.15 -> 6.09.01 -- a minor release, ~45 files, and two renames
+(`indexers/real_debrid_api.py` -> `realdebrid_api.py`, `magneto/dmm.py` gone).
+The device's own patcher-health report named the first regression on the boot
+it happened (`pov_internal_scraper_shim -> plugin.video.pov 6.09.01 (was
+applied at 6.08.15)`), which is the whole point of 0.2.513.
+
+**1. The internal-scraper shim, and why the obvious fix would have fixed
+nothing.** POV changed two things in the same loop:
+
+```
+-  for loader, module_name, is_pkg in __import__('pkgutil').iter_modules([source_path]):
++  for loader, module_name, is_pkg in pkgutil.iter_modules([source_path]):
+...
+-  append(('internal', loader.find_spec(name).loader.load_module(name).source, name))
++  try: module_source = importlib.import_module('.' + name, package='debrids').source
+```
+
+The first is cosmetic -- pkgutil moved to a top-level import -- and is merely
+what made the anchor miss. **The second is the one that matters.**
+`import_module('.name', package='debrids')` resolves through POV's OWN debrids
+package, not through the directory the module was discovered in. So a scraper
+in any other folder is now found by the scan and then fails to import: POV logs
+`Error: Loading module` and carries on with its own sources only. Patching just
+the scan line would have moved the failure two lines down and left the symptom
+byte-for-byte identical.
+
+The repair therefore anchors on the whole block, scan and load together. POV's
+own import is tried first and unchanged -- its own scrapers take that branch
+and behave exactly as upstream wrote them -- and only when it raises does the
+module load from the file it was actually discovered in.
+
+**2. The debrid unbound-name guard.** POV renamed the Real-Debrid client and
+the guard reported `realdebrid=no_file`: silently not applying, on the client
+carrying the very unbound-name crash it exists to stop. It already followed the
+`debrids/` <-> `indexers/` FOLDER move; it now follows file renames as well,
+first existing name wins, so one build serves both POV versions.
+
+**Correct, not broken:** `pov_alldebrid_status_fix` reports `unmatched` on both
+6.08.15 and 6.09.01. It repaired a `result['magnets'][0]` subscript that POV
+itself fixed in 6.08.15 -- the bug is gone, so the repair has nothing to do. It
+was deliberately left alone rather than re-anchored onto code that is already
+right. Same healthy category as `pov_torbox_restore_patcher: not_damaged`.
+
+**Umbrella moved too** -- 6.7.85 -> 6.7.86 -- and all seven Umbrella repairs
+apply on both, zero regressions. That retires the standing "Umbrella patchers
+never verified against current Umbrella" note: they are now measured against
+the version the build ships AND the newest upstream.
+
+**TWO HARNESS ERRORS OF MY OWN, worth more than the fix.** Both were caught
+because a check failed where it should not have, and both would otherwise have
+produced a confident wrong answer:
+
+* The first audit copied ONE POV tree and ran all 58 patchers against it, so an
+  earlier patcher's edit changed what a later one saw. It reported
+  `realdebrid=no_file` on BOTH versions -- making a real regression look
+  pre-existing. Redone with a fresh tree per patcher, and the comparison
+  changed. **An audit that mutates its own subject measures the wrong thing.**
+* The new test's `translate_path` stub returned `special://` unresolved, so the
+  patched code's legacy-folder lookup never found a directory. It reported the
+  fix broken on the KNOWN-GOOD 6.08.15 baseline, and that -- not the 6.09.01
+  result -- is what gave the harness away. **A baseline that fails is the
+  cheapest way to find out the instrument is wrong.**
+
+`tools/test_pov_internal_scraper_loads.py` (new) does not trust a return value.
+It pulls the patched block out of the real `sources.py`, executes it against a
+real legacy folder, and requires the module to reach POV's own `append()` as a
+LOADED object with its `source` attribute. `ensure_patched() == 'patched'` was
+true on 6.09.01 the whole time the scraper could not load. Two mutants -- only
+the old shape carried, and the extra directory never added -- both caught.
+
+**The pin was re-measured, not re-assumed.** `pov_internal_scraper_shim` stays
+NEVER-UPGRADES, and its old rationale ("there is no v2 to migrate to") is gone
+rather than left standing next to a v2. A v1 device is not stranded: the marker
+lives inside POV's `sources.py`, and a device only reaches the shape v2 is for
+by POV auto-updating, which replaces that file and takes the marker with it.
+
+**From the same log, reported and NOT changed.** `pov_reload` has deferred its
+POV cycle 11 starts in a row on that device (`home never settled in 180s`).
+That is the guard working: it refuses to take POV away while somebody is using
+the box, and two field incidents in its header are what cycling eagerly cost.
+The consequence is that on that device a freshly written patch lands one Kodi
+restart later instead of the same session -- not that it never lands. Changing
+a settle heuristic on one device's log would be a guess.
 
 ### What shipped 0.2.517 / qf 0.1.562 / build 0.1.130 (note 617)
 
