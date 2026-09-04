@@ -4264,6 +4264,7 @@ Raw by a few minutes; poll rather than assume.
 | 0.2.516 / qf 0.1.561 / build 0.1.129 / note 616 | Gemini's `temperature` / `top_p` are sent only to the models that still honour them (2.5, 3.1) and never to 3.5 and up, where Google deprecated them and a future generation answers HTTP 400; the two sliders are hidden where they do nothing, and one function in gemini.py decides it for every request builder |
 | 0.2.517 / qf 0.1.562 / build 0.1.130 / note 617 | Gemini 3.8 Flash replaces 3.7 in the picker (verified against ai.google.dev: stable, and identical rate limits), with a one-shot migration on BOTH channels for anyone on 3.5 / 3.6 / 3.7; the quota table keeps its 3.7 row because a stored id outlives a dropdown; new `test_gemini_model_table.py` holds the picker, the daily caps, the RPM pacing and the migrations to one list of models |
 | 0.2.518 / qf 0.1.563 / build 0.1.131 / note 618 | POV 6.09.01 broke two repairs and the other 56 were measured, not assumed: the internal-scraper shim (POV now loads scrapers through its own `debrids` package, so extending the scan alone would have fixed nothing) and the debrid unbound-name guard (`real_debrid_api.py` renamed); Umbrella 6.7.86 breaks none of its seven |
+| 0.2.519 / qf 0.1.564 / build 0.1.132 / note 619 | the review that 615-618 skipped, run late and then properly: the standalone changelog had been split on a `v` dropped at 0.2.508, pooling eleven releases and mis-attributing a bullet; two releases that DO run there were filtered out by the sentence saying so; and the favourites seed repair sat behind eight early returns so it never ran on a fresh install |
 
 ### Things worth not rediscovering
 
@@ -4612,6 +4613,67 @@ written and never copied. "It needs TWO restarts" was the honest description of
 a race, not of a fix. 0.2.512 replaces the mirror with one edit to POV's scan
 line, which removes the race instead of narrowing it. Read that section, not
 this one, for what runs today.
+
+### What shipped 0.2.519 / qf 0.1.564 / build 0.1.132 (note 619)
+
+**Everything here was found by the reviewer that 615-618 skipped.** Nothing in
+it came from the 54-file test suite, which was green throughout. That is the
+argument for step 5, and it is why the checklist now says so in the checklist.
+
+**1. The standalone changelog had been split on a `v` dropped eleven releases
+ago.** `slim_changelog_text()` matched `^v\d+\.\d+\.\d+`; the prefix left
+changelog.txt at 0.2.508. So 0.2.508-0.2.518 pooled into ONE section headed by
+the newest version and the per-bullet filter ran across the pile. Verified
+inside the shipped 0.2.518 package: it reads `0.2.518`, then a 0.2.509 bullet
+about the patcher-upgrade harness -- machinery the standalone does not carry --
+then jumps to `0.2.508`, with 515/516/517 absent entirely.
+
+**2. And the filter deleted two releases that DO run there, using the sentence
+that said so.** Six skip terms are ordinary English words (`build`, `home`,
+`skin` and capitals), there to catch a bullet ABOUT the build. They also match
+"the build edition and the standalone" -- exactly what a parity announcement
+must say. 0.2.516 and 0.2.517 were dropped by the promise that they applied.
+
+A bullet naming the standalone now outranks those six words **and only those
+six**. The first attempt let it outrank the whole list, and
+`test_standalone_changelog_scope.py` caught POV, Umbrella, AF3, Estuary,
+FENtastic, TorBox, Real-Debrid and Wizard all returning to that changelog --
+note 598's defect restored by the fix meant to prevent it.
+
+**3. The favourites seed repair never ran on a fresh install.** 0.2.515 added
+it so a skin switch could not restore the old tile, but the call sat after
+**eight** early returns. With no favourites.xml yet, `_install_canonical_home()`
+writes the fixture and returns first: tile fine, seeds stale, and the first skin
+switch that session brings the empty window back. It healed next boot, which is
+the kind of "it came back" nobody can reproduce on demand.
+
+**THREE OF THE FIVE FINDINGS WERE DEFECTS THE FIX ITSELF INTRODUCED**, and each
+is a general lesson:
+
+* **Fix a stale assumption and its twin, or the twin survives the release meant
+  to remove it.** The head check `kept[0].startswith("v...")` carried the same
+  dropped `v`. With the splitter fixed and this not, the stub head would have
+  been prepended unconditionally and every future release would ship its top
+  version twice.
+* **Loosening a regex can trade one silent bug for another.** `^v?\d+\.\d+\.\d+$`
+  also matches an unindented bare version INSIDE a bullet, splitting it and
+  dropping the tail. A header is now a version line *followed by a bullet* --
+  all 481 real headers, no phantom.
+* **Two successive `sort()`s make the LAST key primary.** The guard's basename
+  sort inverted the folder priority `_live_pkg` exists to establish. One
+  composite key now.
+
+**And a dead check came alive.** While the code carried the stale `v`,
+`check(slim.startswith('v%s' % ver))` could never fail. Fixed, it failed --
+on a changelog that was finally correct. **A check that can only pass while the
+code is wrong is not a check.** It now accepts both spellings and additionally
+requires the version to head the file exactly once.
+
+The release entry itself was the fifth finding: written as one bullet naming a
+dozen build components, so the standalone filter dropped it and those users
+would have read "AI subtitle addon maintenance update" for a release whose first
+two fixes exist entirely for them. Split into four bullets, the standalone-facing
+two naming no build component.
 
 ### What shipped 0.2.518 / qf 0.1.563 / build 0.1.131 (note 618)
 
