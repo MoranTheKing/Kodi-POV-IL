@@ -228,10 +228,23 @@ def _pov_path(rel):
     return ''
 
 
-# The one rename, and its inverse. A list rather than a string swap so a path
+# The folder move, and its inverse. A list rather than a string swap so a path
 # that mentions neither folder is returned untouched and exactly once.
 _MOVED = (('resources/lib/debrids/', 'resources/lib/indexers/'),
           ('resources/lib/indexers/', 'resources/lib/debrids/'))
+
+# POV also renames FILES, not just folders. 6.09.01 renamed the Real-Debrid
+# client `real_debrid_api.py` -> `realdebrid_api.py` (its import line in
+# modules/debrid.py moved with it), and the guard reported `realdebrid=no_file`
+# -- a repair silently not applying, on the client that carries the very
+# unbound-name crash this exists to stop.
+#
+# Basenames are tried in order and the first file that EXISTS wins, so this is
+# safe in both directions: a device still on 6.08.15 finds the old name, a
+# device on 6.09.01 finds the new one, and neither has to know which POV it is
+# running. Each rename is listed with its inverse for the same reason _MOVED is.
+_RENAMED = (('real_debrid_api.py', 'realdebrid_api.py'),
+            ('realdebrid_api.py', 'real_debrid_api.py'))
 
 
 def _live_pkg(base):
@@ -270,6 +283,16 @@ def _relocations(rel, base=''):
             alt = b + rel[len(a):]
             if alt not in out:
                 out.append(alt)
+    # Renamed FILES, applied to every folder candidate above -- POV has moved
+    # the folder and renamed the file in separate releases, so a device can
+    # need either, or both at once.
+    for cand in list(out):
+        head, _, tail = cand.rpartition('/')
+        for a, b in _RENAMED:
+            if tail == a:
+                alt = '%s/%s' % (head, b) if head else b
+                if alt not in out:
+                    out.append(alt)
     pkg = _live_pkg(base) if base else ''
     if pkg:
         # Put the folder POV imports from first, whatever we recorded.
