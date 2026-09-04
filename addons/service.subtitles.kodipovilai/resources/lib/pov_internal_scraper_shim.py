@@ -119,22 +119,51 @@ _RANK_REPLACEMENT = (
 _RANK_MARKER = '# AI_SUBS_POV_RANK_MISS_v1'
 _RANK_MARKER_ANY = '# AI_SUBS_POV_RANK_MISS_v'
 
-MARKER = '# AI_SUBS_POV_INTERNAL_DIRS_v1'
+MARKER = '# AI_SUBS_POV_INTERNAL_DIRS_v2'
 _MARKER_ANY = '# AI_SUBS_POV_INTERNAL_DIRS_v'
 
-# The line POV reads its internal-scraper folder from. Matched together with
-# the `for` beneath it, so it cannot land on another translate_path call, and
-# with the pointer name left as a placeholder so BOTH POV versions match.
-_ANCHOR_TMPL = (
-    "\t\tsource_path = kodi_utils.translate_path(kodi_utils.%s)\n"
-    "\t\tfor loader, module_name, is_pkg in "
-    "__import__('pkgutil').iter_modules([source_path]):"
-)
+# ---------------------------------------------------------------------------
+# TWO SHAPES, because POV 6.09.01 changed both halves of this loop.
+#
+# SHAPE A (6.08.13 - 6.08.15). Discovery and loading both go through the
+# `loader` that pkgutil hands back for the directory the module was found in:
+#
+#     for loader, module_name, is_pkg in __import__('pkgutil').iter_modules([source_path]):
+#         ...
+#         append(('internal', loader.find_spec(module_name).loader.load_module(module_name).source, module_name))
+#
+# Adding a directory to that list is enough: whatever is found there is loaded
+# from there. That is all v1 did, and it worked.
+#
+# SHAPE B (6.09.01+). Two edits upstream, and only the first is cosmetic:
+#
+#     for loader, module_name, is_pkg in pkgutil.iter_modules([source_path]):   <- pkgutil now imported at the top
+#         ...
+#         try: module_source = importlib.import_module('.' + module_name, package='debrids').source
+#
+# THE SECOND EDIT IS THE ONE THAT MATTERS, and patching only the scan line
+# would have looked like a fix while fixing nothing. `import_module('.name',
+# package='debrids')` resolves through POV's OWN debrids package, not through
+# the directory the module was discovered in. So a scraper in the legacy folder
+# is now FOUND by the scan and then fails to import -- POV logs
+# 'Error: Loading module' and carries on with its own sources only. Extending
+# the scan alone would move the failure two lines down and leave the symptom
+# identical.
+#
+# So shape B is anchored on the WHOLE block, scan and load together, and the
+# replacement keeps POV's import first and falls back to loading from the
+# discovered file only when that raises. POV's own scrapers live in `debrids`,
+# take the first branch, and behave exactly as upstream wrote them; nothing
+# else can reach the fallback, because a name that imports cleanly never gets
+# there.
+#
+# Both shapes are carried rather than the newest only: 6.08.15 is still on
+# devices that have not auto-updated, and it is still the shape our own test
+# fixtures pin.
 _POINTER_NAMES = ('internal_path', 'scrapers_path')
 
-_REPLACEMENT_TMPL = (
-    "\t\tsource_path = kodi_utils.translate_path(kodi_utils.%s)  " + MARKER
-    + "\n"
+# The extra-directory prologue, shared by both shapes.
+_DIRS_PROLOGUE = (
     "\t\t_ai_dirs = [source_path]\n"
     "\t\ttry:\n"
     "\t\t\t_ai_legacy = kodi_utils.translate_path('special://home/addons/"
@@ -142,9 +171,61 @@ _REPLACEMENT_TMPL = (
     "\t\t\tif __import__('os').path.isdir(_ai_legacy) and _ai_legacy "
     "not in _ai_dirs: _ai_dirs.append(_ai_legacy)\n"
     "\t\texcept Exception: pass\n"
+)
+
+# --- shape A -----------------------------------------------------------
+_ANCHOR_A_TMPL = (
+    "\t\tsource_path = kodi_utils.translate_path(kodi_utils.%s)\n"
     "\t\tfor loader, module_name, is_pkg in "
+    "__import__('pkgutil').iter_modules([source_path]):"
+)
+_REPLACEMENT_A_TMPL = (
+    "\t\tsource_path = kodi_utils.translate_path(kodi_utils.%s)  " + MARKER
+    + "\n"
+    + _DIRS_PROLOGUE
+    + "\t\tfor loader, module_name, is_pkg in "
     "__import__('pkgutil').iter_modules(_ai_dirs):"
 )
+
+# --- shape B -----------------------------------------------------------
+_ANCHOR_B_TMPL = (
+    "\t\tsource_path = kodi_utils.translate_path(kodi_utils.%s)\n"
+    "\t\tfor loader, module_name, is_pkg in "
+    "pkgutil.iter_modules([source_path]):\n"
+    "\t\t\tif is_pkg: continue\n"
+    "\t\t\tif module_name not in self.source.active_internal_scrapers: "
+    "continue\n"
+    "\t\t\tif prescrape and not check_prescrape_sources(module_name, "
+    "self.source.mediatype): continue\n"
+    "\t\t\ttry: module_source = importlib.import_module('.' + module_name, "
+    "package='debrids').source"
+)
+_REPLACEMENT_B_TMPL = (
+    "\t\tsource_path = kodi_utils.translate_path(kodi_utils.%s)  " + MARKER
+    + "\n"
+    + _DIRS_PROLOGUE
+    + "\t\tfor loader, module_name, is_pkg in "
+    "pkgutil.iter_modules(_ai_dirs):\n"
+    "\t\t\tif is_pkg: continue\n"
+    "\t\t\tif module_name not in self.source.active_internal_scrapers: "
+    "continue\n"
+    "\t\t\tif prescrape and not check_prescrape_sources(module_name, "
+    "self.source.mediatype): continue\n"
+    "\t\t\ttry:\n"
+    "\t\t\t\ttry: module_source = importlib.import_module('.' + "
+    "module_name, package='debrids').source\n"
+    "\t\t\t\texcept Exception:\n"
+    "\t\t\t\t\t_ai_spec = loader.find_spec(module_name)\n"
+    "\t\t\t\t\t_ai_mod = __import__('importlib.util').util."
+    "module_from_spec(_ai_spec)\n"
+    "\t\t\t\t\t_ai_spec.loader.exec_module(_ai_mod)\n"
+    "\t\t\t\t\tmodule_source = _ai_mod.source"
+)
+
+# (anchor template, replacement template) newest first. Each is tried against
+# every pointer name; the first pair that matches EXACTLY once wins.
+_SHAPES = ((_ANCHOR_B_TMPL, _REPLACEMENT_B_TMPL),
+           (_ANCHOR_A_TMPL, _REPLACEMENT_A_TMPL))
 
 
 def _log(msg, level='INFO'):
@@ -200,6 +281,22 @@ def _drop_pyc(path):
         pass
 
 
+def _pick(content, fit):
+    """The (anchor, replacement) this POV actually has, or None.
+
+    Newest shape first, and each shape is tried against every pointer name POV
+    has used for the folder. A shape must match EXACTLY once: two matches means
+    the block is not the unique thing this describes, and patching the first
+    would be a guess.
+    """
+    for anchor_tmpl, replacement_tmpl in _SHAPES:
+        for name in _POINTER_NAMES:
+            anchor = fit(anchor_tmpl % name)
+            if content.count(anchor) == 1:
+                return anchor, fit(replacement_tmpl % name)
+    return None
+
+
 def _teach_pov_both_dirs(root):
     """'unchanged' | 'patched' | 'unmatched' | 'read_failed'
     | 'compile_failed' | 'write_failed' | 'no_file'."""
@@ -223,38 +320,35 @@ def _teach_pov_both_dirs(root):
     eol = '\r\n' if '\r\n' in content[:8192] else '\n'
     fit = (lambda t: t.replace('\n', eol)) if eol != '\n' else (lambda t: t)
 
-    for name in _POINTER_NAMES:
-        anchor = fit(_ANCHOR_TMPL % name)
-        if content.count(anchor) != 1:
-            continue
-        new_content = content.replace(
-            anchor, fit(_REPLACEMENT_TMPL % name), 1)
+    pair = _pick(content, fit)
+    if pair is None:
+        _log('sources.py does not read its scraper folder in the shape this '
+             'patches; leaving it alone', level='WARNING')
+        return 'unmatched'
+    anchor, replacement = pair
+    new_content = content.replace(anchor, replacement, 1)
+    try:
+        compile(new_content.replace('\r\n', '\n'), path, 'exec')
+    except SyntaxError as exc:
+        _log('patched sources.py would not compile -- skipping '
+             '({0})'.format(exc), level='WARNING')
+        return 'compile_failed'
+    tmp = path + '.aitmp'
+    try:
+        with open(tmp, 'w', encoding='utf-8', newline='') as fh:
+            fh.write(new_content)
+        os.replace(tmp, path)
+    except Exception as exc:
         try:
-            compile(new_content.replace('\r\n', '\n'), path, 'exec')
-        except SyntaxError as exc:
-            _log('patched sources.py would not compile -- skipping '
-                 '({0})'.format(exc), level='WARNING')
-            return 'compile_failed'
-        tmp = path + '.aitmp'
-        try:
-            with open(tmp, 'w', encoding='utf-8', newline='') as fh:
-                fh.write(new_content)
-            os.replace(tmp, path)
-        except Exception as exc:
-            try:
-                os.remove(tmp)
-            except OSError:
-                pass
-            _log('write failed: {0}'.format(exc), level='WARNING')
-            return 'write_failed'
-        _drop_pyc(path)
-        _log('POV now scans both internal-scraper folders; third-party '
-             'scrapers are seen again at its next scrape')
-        return 'patched'
-
-    _log('sources.py does not read its scraper folder in the shape this '
-         'patches; leaving it alone', level='WARNING')
-    return 'unmatched'
+            os.remove(tmp)
+        except OSError:
+            pass
+        _log('write failed: {0}'.format(exc), level='WARNING')
+        return 'write_failed'
+    _drop_pyc(path)
+    _log('POV now scans both internal-scraper folders; third-party '
+         'scrapers are seen again at its next scrape')
+    return 'patched'
 
 
 def _guard_unknown_provider(root):
