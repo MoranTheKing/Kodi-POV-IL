@@ -918,8 +918,16 @@ STANDALONE_SKIP_TERMS = (
 # bullet saying "the build does X, the standalone does not" is kept too, and
 # that is correct rather than a leak: note 598's lesson is that these users
 # should be told what does and does not reach them, not left to guess.
-_STANDALONE_KEEP_TERMS = ("standalone", "Standalone", "repo channel",
-                          "repo-channel")
+_STANDALONE_KEEP_TERMS = ("standalone", "Standalone", "STANDALONE",
+                          "repo channel", "repo-channel",
+                          "from the repository")
+# STANDALONE in capitals and "from the repository" are here because the
+# matching is case-sensitive and the house style for emphasis is a capitalised
+# lead-in. 0.2.516's heading is literally "THIS RUNS ON THE STANDALONE TOO."
+# and matched nothing -- it survived only on an incidental lowercase mention
+# later in the same bullet. v0.2.498, the note-598 fix itself and addressed
+# word-for-word to these users, says "on its own, from the repository" and was
+# dropped outright. The style that triggers the bug is the style used to fix it.
 
 # ...but it only outranks the AMBIGUOUS entries. These six are ordinary English
 # words; the rest of STANDALONE_SKIP_TERMS are proper nouns for add-ons, skins
@@ -954,7 +962,16 @@ def slim_changelog_text(text: str) -> str:
     # the pool. The shipped standalone changelog jumped 0.2.518 -> 0.2.508 and
     # attributed a 0.2.509 bullet about the patcher-upgrade harness -- machinery
     # the standalone does not carry -- to 0.2.518.
-    sections = re.split(r"(?=^v?\d+\.\d+\.\d+\n)", text, flags=re.M)
+    # ...and a header is a version line THAT STARTS A SECTION -- i.e. one
+    # followed by a bullet. Making the `v` optional without that is a trade of
+    # one silent bug for another: `^v?\d+\.\d+\.\d+$` also matches an
+    # unindented line INSIDE a bullet that happens to be a bare version, which
+    # splits the bullet in two and drops its tail (the phantom section has no
+    # bullets, so it is filtered out whole). Demonstrated: a bullet reading
+    # "...The version was\n0.2.400\nand everything since is affected." lost its
+    # last two lines. All 481 real headers in changelog.txt are followed by a
+    # bullet, so this costs nothing and closes that door.
+    sections = re.split(r"(?=^v?\d+\.\d+\.\d+\n- )", text, flags=re.M)
     kept = []
     for section in sections:
         if not section.strip():
@@ -986,7 +1003,16 @@ def slim_changelog_text(text: str) -> str:
     # Umbrella or POV left the standalone shipping 0.2.501 with a changelog
     # topping out at 0.2.497 -- true, but it reads as a stale package rather
     # than as "nothing in those releases was for you". Say the second thing.
-    if not kept[0].startswith("v{0}\n".format(version())):
+    # BOTH SPELLINGS. This line carried the identical stale assumption the
+    # splitter above did -- it expected `v0.2.519` while the file has written
+    # bare `0.2.519` since 0.2.508 -- so once the splitter was fixed the head
+    # was prepended UNCONDITIONALLY and every release shipped its top entry
+    # twice, once as a real section and once as the "maintenance update" stub.
+    # It did not show on 0.2.519 only because that release's own section was
+    # filtered out for other reasons. Fixing one and not the other is how a
+    # stale assumption survives the release that was meant to remove it.
+    if not kept[0].startswith(("v{0}\n".format(version()),
+                               "{0}\n".format(version()))):
         kept.insert(0, head)
     return "\n".join(kept).rstrip() + "\n"
 
