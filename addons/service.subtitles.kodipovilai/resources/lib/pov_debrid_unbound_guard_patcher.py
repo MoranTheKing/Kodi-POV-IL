@@ -276,6 +276,22 @@ def _live_pkg(base):
     return ''
 
 
+def _live_modules(base):
+    """The client module names POV's modules/debrid.py actually imports."""
+    p = os.path.join(base, 'resources', 'lib', 'modules', 'debrid.py')
+    try:
+        with open(p, encoding='utf-8', errors='replace') as fh:
+            text = fh.read()
+    except Exception:
+        return set()
+    for line in text.splitlines():
+        s = line.strip()
+        for pkg in ('indexers', 'debrids'):
+            if s.startswith('from %s import ' % pkg) and '_api' in s:
+                return {n.strip() for n in s.split(' import ', 1)[1].split(',')}
+    return set()
+
+
 def _relocations(rel, base=''):
     out = [rel]
     for a, b in _MOVED:
@@ -297,6 +313,17 @@ def _relocations(rel, base=''):
     if pkg:
         # Put the folder POV imports from first, whatever we recorded.
         out.sort(key=lambda c: 0 if '/%s/' % pkg in c else 1)
+    # ...and the BASENAME POV imports first, for the same reason. _live_pkg
+    # settles the folder from POV's own import line and stops there, so within
+    # the live folder the order was whatever _RENAMED happened to list. If both
+    # spellings ever coexist there -- a manual upgrade, a restore, an installer
+    # that does not clear the directory -- the stale file gets patched and this
+    # module reports `patched` having fixed nothing. That is the exact bug
+    # _live_pkg's own docstring warns about, one level down: existence is not
+    # enough, and the import line already names the file.
+    mods = _live_modules(base) if base else set()
+    if mods:
+        out.sort(key=lambda c: 0 if c.rsplit('/', 1)[-1][:-3] in mods else 1)
     return out
 
 

@@ -1251,6 +1251,25 @@ def ensure_patched():
     | 'write_failed' | 'restored'."""
     if xbmcvfs is None:
         return 'no_kodi'
+    # THE SEEDS FIRST, BEFORE ANY EARLY RETURN. They do not depend on the
+    # user's favourites.xml -- they are the per-skin files the wizard copies
+    # OVER it on a skin switch -- and every `return` below used to skip them.
+    #
+    # The path that matters is a fresh install: no favourites.xml yet (or a
+    # nearly-empty one), so _install_canonical_home() lays down the fixture and
+    # returns at once. The fixture is correct, so the tile works -- and the two
+    # seeds still hold the OLD action. Switch skin in that same session and the
+    # seed is copied over the good file, and "חיבור שירותים" opens an empty
+    # window followed by POV's English root menu again. It self-healed on the
+    # next boot, which is exactly the kind of "it came back" nobody can
+    # reproduce on demand.
+    #
+    # Running it here costs two stat calls on a run that changes nothing.
+    try:
+        _fix_favourites_seeds()
+    except Exception as e:
+        _log('favourites seed action repair failed: {0}'.format(e),
+             level='WARNING')
     fav_path = _favourites_path()
     if not fav_path:
         return 'no_favourites'
@@ -1335,11 +1354,8 @@ def ensure_patched():
         _seed_umbrella_tiles(fixture_text)
     except Exception as e:
         _log('favourites seed update failed: {0}'.format(e), level='WARNING')
-    try:
-        _fix_favourites_seeds()
-    except Exception as e:
-        _log('favourites seed action repair failed: {0}'.format(e),
-             level='WARNING')
+    # (the seed repair ran at the top of this function, before the early
+    # returns that used to skip it)
     content, service_position_fixed = (
         _move_existing_service_tile_after_torbox(content))
 

@@ -1,3 +1,56 @@
+0.2.519
+- Three defects a release review found in the four releases before it, one of
+  which had been shipping the wrong changelog to standalone users for eleven
+  releases.
+
+  THIS RELEASE EXISTS BECAUSE A STEP WAS SKIPPED. The release procedure has
+  always required a separate read-only reviewer over the diff before shipping;
+  615 to 618 ran the test suite instead and called that the review. The suite
+  checks the invariants somebody already thought of. Everything below is what
+  it was never going to find.
+
+  1) THE STANDALONE CHANGELOG WAS SPLIT ON A `v` THAT NO LONGER EXISTS. The
+  section splitter matched `^v\d+\.\d+\.\d+`, and the `v` prefix was dropped
+  from this file at 0.2.508. So eleven releases -- 0.2.508 through 0.2.518 --
+  collapsed into ONE section headed by the newest version, and the per-bullet
+  filter ran across the pool. Standalone users opened their changelog and read
+  `0.2.518` followed by a bullet from 0.2.509 about the patcher-upgrade
+  harness, machinery the standalone does not carry, with 0.2.515 to 0.2.517
+  absent entirely. Version headers jumped 0.2.518 -> 0.2.508.
+
+  2) AND THE FILTER DROPPED TWO RELEASES THAT DID RUN THERE. Six entries in the
+  skip list are ordinary English words -- build, home, skin and their capitals
+  -- there to catch a bullet ABOUT the build or a skin. They also catch "the
+  build edition and the standalone", which is precisely the sentence a parity
+  announcement has to contain. 0.2.516 and 0.2.517 were deleted from the
+  standalone changelog by the very sentence promising they applied to it. Both
+  changes really do run there: gemini.py and settings.xml are in that package.
+
+  A bullet that NAMES the standalone now outranks those six words, and only
+  those six. Every other entry is a proper noun for an add-on, skin or feature
+  those users do not have, and nothing overrides those -- the first attempt let
+  the override beat the whole list, and the existing test caught POV, Umbrella,
+  AF3, Estuary, FENtastic, TorBox, Real-Debrid and Wizard all returning to the
+  standalone changelog. That test now pins the rule instead of a blanket.
+
+  3) THE FAVOURITES SEED REPAIR NEVER RAN ON A FRESH INSTALL. 0.2.515 repaired
+  the per-skin seed files so a skin switch could not bring back the old
+  "חיבור שירותים" tile -- but the repair sat after eight early returns. On a
+  device with no favourites.xml yet, the canonical home is written and the
+  function returns before reaching it. The tile worked, the seeds still held
+  the old action, and the first skin switch in that session put the empty
+  window back. It healed on the next boot, which is the kind of "it came back"
+  nobody can reproduce on demand. The repair now runs first, before every
+  early return, and the test exercises the real entry point on all three
+  shapes a device arrives in rather than calling the helper directly.
+
+  Also, smaller: the debrid unbound-name guard picked its file by existence
+  alone, so if both spellings of the Real-Debrid client ever sat in the live
+  folder at once -- a restore, a manual upgrade -- it would have patched the
+  stale one and reported success. It now prefers the basename POV's own import
+  line names, which is the rule the same file's docstring already stated one
+  level up.
+
 0.2.518
 - POV 6.09.01 broke two repairs. Both are fixed, and the other 56 were
   checked rather than assumed.
@@ -122,6 +175,13 @@
   site an if-per-call-site would have missed. It is covered now by
   construction. (top_k is in Google's list too; this add-on has never sent it
   and has no setting for it, so there was nothing to gate.)
+
+  THIS RUNS ON THE STANDALONE TOO. gemini.py and settings.xml are both in the
+  repo-channel package, so the gate and the two hidden sliders reach those
+  users exactly as they reach the build. Said out loud because the changelog is
+  shared between the two editions and a note that does not mention the
+  standalone gets filtered out of its package -- which is how a change that
+  DID run there ends up announced nowhere.
 
   A model id with no readable generation -- an alias like
   'gemini-flash-latest' -- also sends neither. That direction is chosen: such
