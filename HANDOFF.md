@@ -131,6 +131,19 @@ tools/build_wizard_quickfix.py          # replaces only the Wizard in a quickfix
    HTTP 200. Never print the credential while testing.
 5. Get a separate read-only reviewer to inspect the source diff, ZIP member/CRC
    diff, credential preservation and privacy boundary. Do not ship a blocker.
+
+   **THIS IS "THE VALIDATOR", AND IT IS NOT `tools/test_*.py`.** The two get
+   confused, and confusing them cost releases 615-618 this step: the session
+   ran the 54-file test suite, reported "54/54 green", and shipped. The test
+   suite is the step ABOVE -- it checks the invariants somebody already thought
+   of. This step exists to find what the author did not think to test, which is
+   why the project's history is full of "six adversarial review rounds" and
+   "seven review rounds; six of them found something". A green test suite is
+   not a substitute and must not be described as one.
+
+   It runs BEFORE the phase 1 push, not after. Order for every release:
+   bump -> build -> test suite -> reviewer over the diff -> fix blockers ->
+   phase 1 -> verify live -> phase 2.
 5b. **Read the STANDALONE changelog, not just the build one.** They are one
    file filtered by `slim_changelog_text()`, and the standalone ships no
    `pov_*`, no Umbrella patcher, and `SLIM_SERVICE` rather than the startup
