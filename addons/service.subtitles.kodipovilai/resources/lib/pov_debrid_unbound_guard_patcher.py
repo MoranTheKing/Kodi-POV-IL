@@ -310,20 +310,16 @@ def _relocations(rel, base=''):
                 if alt not in out:
                     out.append(alt)
     pkg = _live_pkg(base) if base else ''
-    if pkg:
-        # Put the folder POV imports from first, whatever we recorded.
-        out.sort(key=lambda c: 0 if '/%s/' % pkg in c else 1)
-    # ...and the BASENAME POV imports first, for the same reason. _live_pkg
-    # settles the folder from POV's own import line and stops there, so within
-    # the live folder the order was whatever _RENAMED happened to list. If both
-    # spellings ever coexist there -- a manual upgrade, a restore, an installer
-    # that does not clear the directory -- the stale file gets patched and this
-    # module reports `patched` having fixed nothing. That is the exact bug
-    # _live_pkg's own docstring warns about, one level down: existence is not
-    # enough, and the import line already names the file.
     mods = _live_modules(base) if base else set()
-    if mods:
-        out.sort(key=lambda c: 0 if c.rsplit('/', 1)[-1][:-3] in mods else 1)
+    if pkg or mods:
+        # ONE composite key, folder FIRST. Two successive sorts would make the
+        # basename primary -- the last sort wins -- which inverts the priority
+        # _live_pkg exists to establish and can resolve to a stale file in the
+        # wrong folder while the one POV imports goes unpatched. Same failure
+        # its docstring already describes, arrived at from the other side.
+        out.sort(key=lambda c: (
+            0 if (pkg and '/%s/' % pkg in c) else 1,
+            0 if (mods and c.rsplit('/', 1)[-1][:-3] in mods) else 1))
     return out
 
 

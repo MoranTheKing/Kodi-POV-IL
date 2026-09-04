@@ -249,10 +249,21 @@ check('a bullet naming no channel is still dropped on a soft term',
       not mod._standalone_keeps('- Rebuilt the home screen tiles.\n', TERMS))
 
 ver = mod.version()
+# BOTH SPELLINGS, because the file stopped writing the `v` at 0.2.508 and this
+# check did not notice. While slim_changelog_text() carried the same stale
+# assumption the two agreed and this passed; the moment the code was fixed, the
+# stub head stopped being prepended unconditionally, a real section reached the
+# top, and this check failed on a changelog that was finally correct. A check
+# that can only pass while the code is wrong is not a check.
 check('the newest entry is the version actually being shipped',
-      slim.startswith('v%s\n' % ver),
+      slim.startswith(('v%s\n' % ver, '%s\n' % ver)),
       'ships %s, changelog starts %r -- reads as a stale package'
       % (ver, slim.split('\n', 1)[0]))
+# ...and it must appear ONCE. The stub head and a real section for the same
+# version both reaching the top is what the unconditional prepend produced.
+_tops = [l for l in slim.splitlines() if l in ('v%s' % ver, ver)]
+check('...and exactly once, not as a stub above its own section',
+      len(_tops) == 1, 'the version heads the changelog %d times' % len(_tops))
 check('the full changelog still has everything (the filter is not in-place)',
       any(t in full for t in TERMS),
       'the BUILD changelog must keep the bullets the standalone drops')
