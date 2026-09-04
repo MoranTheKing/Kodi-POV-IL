@@ -204,9 +204,49 @@ with open(CHANGELOG, encoding='utf-8') as f:
     full = f.read()
 slim = mod.slim_changelog_text(full)
 
-leaked = sorted({t for t in TERMS if t in slim})
-check('the filtered changelog contains none of the terms', not leaked,
+# THE ASSERTION IS ABOUT HOST NAMES, NOT ABOUT EVERY WORD IN THE LIST.
+# Six entries -- Home/home/build/Build/skin/Skin -- are ordinary English words,
+# there to catch a bullet ABOUT the build or a skin. They also catch prose like
+# "the build edition and the standalone", which is the exact sentence a parity
+# announcement has to contain: 0.2.516 and 0.2.517 were dropped from the
+# standalone changelog for that reason alone, while both changes RAN on
+# standalone devices. So a bullet that names the standalone now outranks those
+# six, and only those six.
+#
+# Everything else in the list is a proper noun for an add-on, skin or feature
+# the standalone does not have, and NOTHING may override those -- that is note
+# 598's lesson and it is not negotiable. The first attempt at the override let
+# "standalone" beat the whole list and this check caught it with POV, Umbrella,
+# AF3, Estuary, FENtastic, TorBox, Real-Debrid and Wizard all back in the
+# standalone changelog.
+HARD = tuple(t for t in TERMS if t not in mod._STANDALONE_SOFT_TERMS)
+check('every soft term is in the full term list', 
+      all(t in TERMS for t in mod._STANDALONE_SOFT_TERMS),
+      'a soft term that is not a skip term overrides nothing')
+check('the soft list is only ordinary words, no host names',
+      not [t for t in mod._STANDALONE_SOFT_TERMS
+           if t in ('POV', 'Umbrella', 'MDBList', 'AF3', 'Arctic', 'Estuary',
+                    'FENtastic', 'NOX', 'Nox', 'nox', 'Wizard', 'TorBox',
+                    'Premiumize', 'AllDebrid', 'Real-Debrid', 'Real Debrid',
+                    'Idan Plus', 'Kan 11', 'quickfix', 'favourites')],
+      'a host name in the soft list would let note 598 back in')
+
+leaked = sorted({t for t in HARD if t in slim})
+check('no host/skin/feature name reaches the standalone changelog', not leaked,
       'leaked: %s' % leaked)
+
+# ...and the override must actually work, or the two Gemini releases silently
+# vanish from the standalone package again.
+_soft_only = ('- The build edition and the standalone both get this. '
+              'It changes the subtitle engine and nothing else.\n')
+_soft_host = ('- The build edition and the standalone both get this, and it '
+              'also fixes POV.\n')
+check('a bullet naming the standalone survives a soft term',
+      mod._standalone_keeps(_soft_only, TERMS))
+check('...but not when it also names a host add-on',
+      not mod._standalone_keeps(_soft_host, TERMS))
+check('a bullet naming no channel is still dropped on a soft term',
+      not mod._standalone_keeps('- Rebuilt the home screen tiles.\n', TERMS))
 
 ver = mod.version()
 check('the newest entry is the version actually being shipped',
