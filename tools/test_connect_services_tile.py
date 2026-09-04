@@ -97,7 +97,10 @@ def load(src=None, home=None):
     if home is None:
         xv.translatePath = lambda p: p
     else:
-        xv.translatePath = lambda p: p.replace('special://home/', home + os.sep)
+        xv.translatePath = lambda p: (
+            p.replace('special://home/', home + os.sep)
+             .replace('special://profile/', os.path.join(home, 'userdata') + os.sep)
+             .replace('special://userdata/', os.path.join(home, 'userdata') + os.sep))
     sys.modules['xbmcvfs'] = xv
     pkg = types.ModuleType('resources')
     lib = types.ModuleType('resources.lib')
@@ -219,6 +222,62 @@ mod = load()
 fixture_text = open(FIXTURE, encoding='utf-8').read()
 check('end to end: the fixture and the repair agree on one action',
       fixture_text.count(NEW_ACTION) == 1)
+
+
+# ------------------------------- 6. the seeds through ensure_patched()
+# The seed checks above call _fix_favourites_seeds() DIRECTLY, which proves the
+# function works and proves nothing about whether it runs. It did not, on the
+# path that matters most: a fresh install has no favourites.xml, so
+# _install_canonical_home() laid down the fixture and returned -- before the
+# seed repair, which sat after eight early returns. The tile worked, the seeds
+# still held the old action, and the first skin switch in that session put it
+# back. It self-healed next boot, which is the kind of "it came back" nobody
+# can reproduce on demand.
+#
+# So this exercises the REAL entry point on the three shapes a device shows up
+# with, and requires the seeds repaired in every one.
+print()
+print('=== the seeds are repaired through ensure_patched(), not just directly ===')
+
+
+def device(case):
+    """A throwaway special://home + userdata; returns (module, seed paths)."""
+    home = tmpdir()
+    ud = os.path.join(home, 'userdata')
+    os.makedirs(ud)
+    seeds = []
+    for skin in ('skin.fentastic', 'skin.estuary'):
+        d = os.path.join(home, 'media', 'builds_favourites_xml', skin)
+        os.makedirs(d)
+        sp = os.path.join(d, 'favourites.xml')
+        with open(sp, 'wb') as f:
+            f.write(doc(OLD_TILE))
+        seeds.append(sp)
+    fav = os.path.join(ud, 'favourites.xml')
+    if case == 'normal':
+        with open(fav, 'wb') as f:
+            f.write(b'<favourites>\n'
+                    + b'    <favourite name="t">Quit()</favourite>\n' * 11
+                    + OLD_TILE.encode('utf-8') + b'\n</favourites>\n')
+    elif case == 'missing':
+        pass                                  # fresh install, nothing written
+    elif case == 'torn':                      # caught mid-write, no closing tag
+        with open(fav, 'wb') as f:
+            f.write(b'<favourites>\n    ' + OLD_TILE.encode('utf-8') + b'\n')
+    mod = load(home=home)
+    mod._fixture_path = lambda: FIXTURE
+    return mod, seeds
+
+
+for case in ('normal', 'missing', 'torn'):
+    mod, seeds = device(case)
+    status = mod.ensure_patched()
+    broken = [p for p in seeds
+              if b'build_shortcut_folder_list' in open(p, 'rb').read()]
+    check('seeds repaired on a %s favourites.xml (status %s)'
+          % (case, status), not broken,
+          '%d of %d seed(s) still carry the old action -- a skin switch would '
+          'put the broken tile back' % (len(broken), len(seeds)))
 
 
 # ------------------------------------------------------------- sabotage

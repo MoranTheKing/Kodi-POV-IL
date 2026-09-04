@@ -6188,7 +6188,7 @@ def main():
     # deliberate manual choice.
     _maybe_tune_gemini3_defaults()
     # One-shot: bump the superseded default models to their same-quota
-    # successors (3.1-flash-lite -> 3.5-flash-lite, 3.5/3.6-flash -> 3.7-flash).
+    # successors (3.1-flash-lite -> 3.5-flash-lite, 3.5/3.6-flash -> 3.8-flash).
     _maybe_bump_gemini_model()
     # And again for 3.8, which replaced 3.7 in the picker. Runs after the line
     # above so a device still on 3.5-flash lands on 3.8 in ONE boot rather than
