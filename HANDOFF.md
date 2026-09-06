@@ -4265,6 +4265,7 @@ Raw by a few minutes; poll rather than assume.
 | 0.2.517 / qf 0.1.562 / build 0.1.130 / note 617 | Gemini 3.8 Flash replaces 3.7 in the picker (verified against ai.google.dev: stable, and identical rate limits), with a one-shot migration on BOTH channels for anyone on 3.5 / 3.6 / 3.7; the quota table keeps its 3.7 row because a stored id outlives a dropdown; new `test_gemini_model_table.py` holds the picker, the daily caps, the RPM pacing and the migrations to one list of models |
 | 0.2.518 / qf 0.1.563 / build 0.1.131 / note 618 | POV 6.09.01 broke two repairs and the other 56 were measured, not assumed: the internal-scraper shim (POV now loads scrapers through its own `debrids` package, so extending the scan alone would have fixed nothing) and the debrid unbound-name guard (`real_debrid_api.py` renamed); Umbrella 6.7.86 breaks none of its seven |
 | 0.2.519 / qf 0.1.564 / build 0.1.132 / note 619 | the review that 615-618 skipped, run late and then properly: the standalone changelog had been split on a `v` dropped at 0.2.508, pooling eleven releases and mis-attributing a bullet; two releases that DO run there were filtered out by the sentence saying so; and the favourites seed repair sat behind eight early returns so it never ran on a fresh install |
+| 0.2.520 / qf 0.1.565 / build 0.1.133 / note 620 | "why did it fail to extract the embedded subtitle?" -- it had not: a BluRay remux carries picture subtitles and this extractor reads text, but one log line covered three different causes; it now prints the track inventory and names which one, and asserts only what it tested ("no S_TEXT/*" is not "all bitmap") |
 
 ### Things worth not rediscovering
 
@@ -4613,6 +4614,59 @@ written and never copied. "It needs TWO restarts" was the honest description of
 a race, not of a fix. 0.2.512 replaces the mirror with one edit to POV's scan
 line, which removes the race instead of narrowing it. Read that section, not
 this one, for what runs today.
+
+### What shipped 0.2.520 / qf 0.1.565 / build 0.1.133 (note 620)
+
+**"Why did it fail to extract the embedded subtitle?" It had not failed.**
+
+The file was `...1080p.BluRay.REMUX...mkv`. A BluRay carries its subtitles as
+PICTURES, so the three tracks the player listed were images of text and this
+extractor reads only `S_TEXT/*`. Falling through to the ordinary subtitle search
+was the correct outcome. The log could not say that -- it said
+
+    embedded_extract: no matching text track (num=None lang=en)
+
+and **three different situations produce that line word for word**: every track
+is a picture format, the only match is flagged `forced` (signs-only, refused on
+purpose), or the language really is absent. Confirmed by running all three
+against the real selector -- identical output. So the reader's first question is
+always "is our extractor broken?", when usually the answer is "that file has no
+text subtitles". It now prints the inventory (number, codec, language, forced)
+and names which of the three it is.
+
+**AND THE FIRST VERSION OF THE FIX TOLD A LIE OF ITS OWN.** It gated the "all
+bitmap" sentence on `not any(_is_text_codec(...))` -- i.e. it treated **"no
+`S_TEXT/*` track" as "every track is a picture"**, and those are different
+claims. Matroska has text subtitle codecs outside that naming: `S_ASS`, `S_SSA`,
+`S_USF` (what pre-`S_TEXT` muxers wrote, still in older rips), `S_HDMV/TEXTST`
+(BluRay *Text* subs), `S_KATE`. On such a file the line would have said there
+was nothing but pictures and the external search was right "not a fallback from
+a failure" -- steering the reader away from a real gap, **in the release whose
+entire purpose is to stop the log giving a confident wrong answer.**
+
+There is now an explicit `_BITMAP_CODECS` list, and a track in neither set gets
+its own line naming it as text this extractor does not read yet. Every codec
+class was run through it.
+
+The general rule, which is the reusable part: **a diagnostic may only assert
+what it actually tested.** `not any(is_text)` and `all(is_bitmap)` differ
+exactly on the codecs nobody thought about, and a diagnostic is read by someone
+who has already stopped thinking about them.
+
+Smaller: a language the file does not declare now prints as `[eng?]`. The parser
+substitutes `eng` for a missing Language element, and showing that as declared
+makes the line disagree with `mkvinfo` and read as a parser bug.
+
+**KNOWN GAP, recorded not fixed.** `S_ASS` / `S_SSA` are handled nowhere in the
+module -- `_decode_frame` tests only `S_TEXT/ASS` and `S_TEXT/SSA` -- so a
+legacy-muxed file has an extractable text track that is skipped. That is a
+behaviour change wanting its own release and its own tests. The new log line is
+what will point at it.
+
+The reviewer proved the change is log-only twice: AST-identical to HEAD after
+stripping log statements, and identical return values across eight differential
+runs. It also confirmed the changelog quotes only the two sanitised log lines --
+never the reported filename, never the debrid URL from the log.
 
 ### What shipped 0.2.519 / qf 0.1.564 / build 0.1.132 (note 619)
 
