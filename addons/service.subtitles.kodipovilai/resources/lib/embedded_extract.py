@@ -410,6 +410,20 @@ _UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
 
 _TEXT_CODEC_PREFIX = 'S_TEXT'
 
+# The codecs that really are pictures. NOT the complement of _TEXT_CODEC_PREFIX:
+# Matroska has text subtitle codecs that predate the S_TEXT/* naming and sit
+# outside it -- S_ASS, S_SSA and S_USF (what pre-2010 muxers wrote, still found
+# in older anime rips), S_HDMV/TEXTST (BluRay TEXT subtitles), S_KATE, S_ARIBSUB.
+# Calling "no S_TEXT/* track" the same thing as "all bitmap" would say the file
+# has nothing but pictures when it actually has a text track this extractor
+# simply does not read -- and that is a message that sends the next reader AWAY
+# from a real gap. Whatever we assert has to be what we actually tested.
+_BITMAP_CODECS = ('S_HDMV/PGS', 'S_VOBSUB', 'S_DVBSUB', 'S_IMAGE')
+
+
+def _is_bitmap_codec(codec):
+    return (codec or '').upper().startswith(_BITMAP_CODECS)
+
 
 def _noop(_m):
     return None
@@ -2083,7 +2097,42 @@ def extract_srt(url_or_path, track_num=None, lang=None,
         # NOT prefer SDH -- there the track is only a timing skeleton.)
         track = _pick_track(subs, track_num, lang, prefer_sdh=True)
         if track is None:
-            _log('no matching text track (num=%s lang=%s)' % (track_num, lang))
+            # SAY WHAT WAS ACTUALLY THERE. "no matching text track" reads as a
+            # defect in this parser, and on the report that prompted this it was
+            # nothing of the kind: a BluRay REMUX whose three subtitle tracks
+            # were all bitmap. Three different situations produce this same line
+            # -- every track is a bitmap codec, the only match is flagged forced,
+            # or the language genuinely is not present -- and the reader cannot
+            # tell them apart, so the next question is always "is our extractor
+            # broken?" when usually the answer is "that file has no text subs".
+            # The inventory is already parsed at this point; printing it costs
+            # one line and settles it from the log alone.
+            _log('no matching text track (num=%s lang=%s); the file has: %s'
+                 % (track_num, lang,
+                    ', '.join('#%s %s%s%s' % (
+                        t['num'], t['codec'] or '?',
+                        # A '?' marks a language we DEFAULTED to rather than
+                        # read: _parse_track_entry substitutes 'eng' when the
+                        # TrackEntry carries no Language element. Without the
+                        # mark this line disagrees with mkvinfo and reads as a
+                        # parser bug, in a line whose only job is to be honest.
+                        ' [%s%s]' % (t['lang'],
+                                     '' if t.get('lang_explicit', True)
+                                     else '?') if t['lang'] else '',
+                        ' forced' if t['forced'] else '')
+                        for t in subs)))
+            if subs and all(_is_bitmap_codec(t['codec']) for t in subs):
+                _log('every subtitle track in this file is a bitmap format '
+                     '(image subs, as BluRay remuxes carry) -- there is no text '
+                     'to extract, so the external subtitle search is the right '
+                     'path here, not a fallback from a failure')
+            elif not any(_is_text_codec(t['codec']) for t in subs):
+                # Text, but spelled in a way this extractor does not read. Say
+                # exactly that: it is worth a look, not a shrug.
+                _log('none of these is an S_TEXT/* track, but they are not all '
+                     'picture formats either -- at least one is a text codec '
+                     'this extractor does not read yet. Worth investigating '
+                     'rather than treating as "this file has no text subs"')
             return None
         if not _is_text_codec(track['codec']):
             _log('track #%s is %s (not text) -- skipping'
