@@ -1,3 +1,51 @@
+0.2.520
+- When there is no embedded subtitle to extract, the log now says WHY instead
+  of looking like a failure.
+
+  A report: "why did it fail to extract the embedded subtitle?" The log said
+
+      embedded_extract: no matching text track (num=None lang=en)
+      embedded: no usable text track for en
+
+  and nothing else. It had not failed. The file was a BluRay remux, and a
+  BluRay carries its subtitles as PICTURES, not text -- so the three subtitle
+  tracks the player listed were images of text, and there was nothing for a
+  text extractor to take. Falling through to the ordinary subtitle search was
+  the correct outcome, not a fallback from an error.
+
+  THE LINE COULD NOT SAY THAT, and three different situations produced it word
+  for word: every track is a picture format, the only matching track is flagged
+  "forced" (signs only, which is deliberately refused), or the language really
+  is absent. Verified by running all of them against the real selector -- same
+  line every time. So the reader's next question is always "is our extractor
+  broken?", and usually the answer is "that file has no text subtitles".
+
+  It now prints what the file actually contains -- track number, codec,
+  language, forced flag -- and then says which of the three it is. The
+  inventory is already parsed at that point, so this costs one line and no
+  work. Behaviour is unchanged; only the log is.
+
+  AND IT ASSERTS ONLY WHAT IT TESTED, which the first version of this did not.
+  It began by treating "no S_TEXT/* track" as "every track is a picture", and
+  those are different claims: Matroska has text subtitle codecs that predate
+  the S_TEXT/* naming and sit outside it -- S_ASS, S_SSA, S_USF (what older
+  muxers wrote), S_HDMV/TEXTST, S_KATE. On such a file the new line would have
+  said there was nothing but pictures and that the external search was correct
+  "not a fallback from a failure" -- steering the reader away from a real gap,
+  in the release whose entire purpose is to stop the log giving a confident
+  wrong answer. There is now a list of the codecs that genuinely are pictures,
+  and a track outside both sets gets its own line saying it is text this
+  extractor does not read yet and is worth investigating. Checked by running
+  every codec class through it.
+
+  A language the file does not declare is also marked. The parser substitutes
+  'eng' when a track carries no Language element, and printing that as though
+  it were declared makes this line disagree with mkvinfo and read as a parser
+  bug. It now shows [eng?].
+
+  This one applies to the standalone add-on as well, which ships the same
+  extractor.
+
 0.2.519
 - Standalone installs were reading the wrong changelog, and had been for
   eleven releases.
