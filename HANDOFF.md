@@ -4266,6 +4266,7 @@ Raw by a few minutes; poll rather than assume.
 | 0.2.518 / qf 0.1.563 / build 0.1.131 / note 618 | POV 6.09.01 broke two repairs and the other 56 were measured, not assumed: the internal-scraper shim (POV now loads scrapers through its own `debrids` package, so extending the scan alone would have fixed nothing) and the debrid unbound-name guard (`real_debrid_api.py` renamed); Umbrella 6.7.86 breaks none of its seven |
 | 0.2.519 / qf 0.1.564 / build 0.1.132 / note 619 | the review that 615-618 skipped, run late and then properly: the standalone changelog had been split on a `v` dropped at 0.2.508, pooling eleven releases and mis-attributing a bullet; two releases that DO run there were filtered out by the sentence saying so; and the favourites seed repair sat behind eight early returns so it never ran on a fresh install |
 | 0.2.520 / qf 0.1.565 / build 0.1.133 / note 620 | "why did it fail to extract the embedded subtitle?" -- it had not: a BluRay remux carries picture subtitles and this extractor reads text, but one log line covered three different causes; it now prints the track inventory and names which one, and asserts only what it tested ("no S_TEXT/*" is not "all bitmap") |
+| 0.2.521 / qf 0.1.566 / build 0.1.134 / note 621 | POV 6.09.02 and Umbrella 6.7.87 each stopped one repair from anchoring, and in both cases because the upstream author fixed the bug -- neither is re-anchored, both are kept for devices on older hosts; the health report gained `superseded` so a retired repair is no longer a WARNING, three patchers declare `HOST_FIXED_IN`, and a comment quoting the host's own key had invented a phantom healthy repair |
 
 ### Things worth not rediscovering
 
@@ -4614,6 +4615,104 @@ written and never copied. "It needs TWO restarts" was the honest description of
 a race, not of a fix. 0.2.512 replaces the mirror with one edit to POV's scan
 line, which removes the race instead of narrowing it. Read that section, not
 this one, for what runs today.
+
+### What shipped 0.2.521 / qf 0.1.566 / build 0.1.134 (note 621)
+
+**Both add-ons moved in the same week, and in both cases the one patcher that
+stopped anchoring stopped because THE UPSTREAM AUTHOR FIXED THE BUG.**
+
+POV 6.09.01 -> 6.09.02, Umbrella 6.7.86 -> 6.7.87. Every patcher was run against
+real trees of the new and the previous version, **a fresh copy per patcher**,
+and the verdicts sorted and diffed. Exactly one changed on each side.
+
+* `pov_resume_cancel_patcher` -- POV rewrote its own cancel line to call
+  `progress_media()`, and `progress_media` is bound to the resolving dialog's
+  `kill` method at `sources.py:253`. Checked at the call site, not assumed from
+  the name. The modal that used to be left open is now closed by POV.
+* `umbrella_mdblist_sync_patcher` -- Umbrella's watched-sync cursor now stores
+  `getServerTime()` instead of the device clock, refuses to advance when a fetch
+  failed, and moved to a new cursor key that backfills from scratch on upgrade.
+  That is all three parts of our patch, two of them done better than ours, and
+  their own comment names the same defect ours does.
+
+**NEITHER IS RE-ANCHORED.** Fitting an edit onto a correct implementation buys
+nothing and can only break at the next refactor. Both are KEPT, because devices
+still on the older host versions genuinely have the bugs.
+
+**The health report learned the difference (`superseded`).** A repair whose bug
+the host fixed is not a repair that stopped working, but until this release both
+read as `lapsed` -- a WARNING. Two in one week would have taught everyone to
+ignore the one status that means something. A patcher may now declare
+`HOST_FIXED_IN` (a bare string, or a dict keyed by host add-on id), and an
+absent marker at or above that version reports `superseded`. Below it, still a
+lapse -- a device on an older host really does need the repair, so a rollback
+re-alarms. `last_ok_version` is left untouched for the same reason. An
+unparseable version fails CLOSED and keeps the warning.
+
+Two limits, written down at the decision rather than left to be discovered: the
+gate is **MONOTONE** (once the host is at or above the declared version this
+marker never warns again, including if upstream reintroduces the bug), and the
+declaration is **PER-MODULE**, so a multi-marker patcher must use the per-host
+form or be split before declaring one.
+
+**A PHANTOM REPAIR, found by reading the report instead of the diff.** Markers
+are harvested BY SHAPE -- any identifier ending `_v<digits>` -- from the whole
+patcher source, comments included. The comment I wrote explaining Umbrella's fix
+quoted Umbrella's own new cursor key, which invented a marker this add-on never
+writes; the report then found it in Umbrella (they do write it) and reported a
+healthy repair that does not exist. **A phantom `ok` is worse than a phantom
+lapse, because it MASKS.** The comment was fixed, never the rule -- and there is
+now a check that no harvested marker may already exist in a clean host,
+demonstrated to fail on the exact mistake that produced it. This is the SECOND
+time this trap has caught me (the first was a docstring inside `patcher_health`
+itself): **anything in a patcher's source that looks like a marker IS one.**
+
+**THREE, NOT TWO -- the review caught the fix leaving a third alarm standing**,
+on `pov_alldebrid_status_fix`, the very patcher this release cites as its
+precedent. Its bug exists in POV 6.08.14 and nowhere else (measured across every
+version on disk), so every device that ran 0.2.513-0.2.517 while still on
+6.08.14 has been warning about it ever since. Declared too. Removing two and
+leaving the third would have taught exactly the habit this change exists to
+prevent.
+
+**Three more from the same round, each a way for an alarm to go quiet:**
+
+* A version segment that is not a number no longer ranks at all. Stripping
+  non-digits INVERTED the order -- `6.7.9~rc2` became `(6,7,92)` and compared
+  above `6.7.87`, silencing a repair a device still needed.
+* The declaration is read with `ast`, not a regex, so it cannot be picked up out
+  of a docstring, a string, or a commented-out line. That is the phantom-marker
+  trap pointed the other way: there it invented a repair, here it would have
+  silenced one.
+* The one-line boot summary counts `superseded`. It was added without touching
+  that line, so `ok` silently dropped with nothing to account for it -- and that
+  line, not the report file, is what reaches a pasted log.
+
+**Round 2, and it caught the fix for the last of those.**
+
+* **The test proving the summary line counts `superseded` was VACUOUS.** It
+  asserted on `_render()`, which already counted correctly *before* the fix; the
+  three lines actually changed were never executed by it. Proved by deleting
+  them and finding the 54-file suite still green. There is now `_run_summary()`,
+  which drives the real `run()` against real trees, and the same deletion fails
+  it. **Third vacuous test caught this session** -- a test that cannot fail is
+  worse than no test, because it is counted.
+* Reading the declaration with `ast` costs a parse of every module in the add-on
+  -- **measured at 234ms over 152 files** at boot, to read a literal present in
+  four of them. A substring test now runs first.
+
+**Nothing else moved.** POV's route table is byte-identical between 6.09.01 and
+6.09.02 (67 routes), so no menu the build points at can have broken; Umbrella's
+settings keys are unchanged. POV also RESTORED the `provider.dmm` source it
+dropped in 6.09.01, so that provider works again on its own.
+
+**The audit method is the reusable part.** An earlier batch audit shared ONE
+mutated POV tree across all 58 patchers, so an earlier patcher's edit changed
+what a later one saw -- it reported `realdebrid=no_file` on BOTH versions,
+hiding a real regression behind a false negative. `audit2.py` / `audit_umb.py`
+(kept beside the private docs) take a fresh copy per patcher and sort the
+verdicts for diffing. **An audit that mutates its own subject measures the wrong
+thing.**
 
 ### What shipped 0.2.520 / qf 0.1.565 / build 0.1.133 (note 620)
 
