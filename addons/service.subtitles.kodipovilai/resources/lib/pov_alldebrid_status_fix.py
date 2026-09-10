@@ -64,6 +64,20 @@ except Exception:
 POV_ADDON_ID = 'plugin.video.pov'
 
 MARKER = '# AI_SUBS_POV_AD_STATUS_v1'
+
+# POV FIXED THIS ITSELF IN 6.08.15. The bug -- `result['magnets'][0]` on a
+# response whose `magnets` is a dict -- exists in 6.08.14 and NOWHERE ELSE:
+# measured against every tree on disk, 6.08.13 unmatched, 6.08.14 patched,
+# 6.08.15 / 6.09.01 / 6.09.02 unmatched.
+#
+# This declaration is the one 0.2.521 forgot. That release removed two
+# standing false LAPSED warnings and cited THIS patcher as the precedent for
+# the judgement -- while leaving its own alarm live on every device that ran
+# 0.2.513-0.2.517 while still on POV 6.08.14, which recorded a
+# last_ok_version and has been warning ever since. Removing two false alarms
+# and leaving the third teaches exactly the habit the change was meant to
+# prevent.
+HOST_FIXED_IN = '6.08.15'
 _MARKER_ANY = '# AI_SUBS_POV_AD_STATUS_v'
 
 # 6.08.14 moved the debrid clients from debrids/ to indexers/. Both are tried,
