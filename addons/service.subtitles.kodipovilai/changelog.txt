@@ -62,6 +62,19 @@
       touching that line, so `ok` silently dropped with nothing to account for
       it -- and that line, not the report file, is what reaches a pasted log.
 
+  A SECOND REVIEW ROUND, and it caught the fix for the third of those:
+    * The test written to prove the summary line counts superseded was
+      VACUOUS. It asserted on the renderer, which already counted correctly
+      before the fix; the three lines that were actually changed were never
+      executed by it. Proved by deleting them and finding the suite still
+      green. It now drives the real boot summary against real trees, and the
+      same deletion now fails it. Third vacuous test caught this way -- a test
+      that cannot fail is worse than no test, because it is counted.
+    * Reading the declaration with ast costs a parse of every module in the
+      add-on -- 234ms over 152 files at boot, to read a literal that exists in
+      four of them. A substring test now runs first, so the parse only happens
+      where there is something to parse.
+
   Two limits are now written down where the decision is made rather than left
   to be discovered: the gate is MONOTONE (once the host is at or above the
   declared version this marker never warns again, including if upstream
