@@ -32,6 +32,25 @@ POV_ADDON_ID = 'plugin.video.pov'
 PLAYER_REL_PATH = 'resources/lib/modules/player.py'
 MARKER = 'AI_POV_RESUME_CANCEL_v1'
 
+# POV FIXED THIS ITSELF IN 6.09.02. Its cancel line went from
+#     if bookmark == 'cancel': return
+# to
+#     if bookmark == 'cancel': return progress_media() if callable(...) else None
+# and `progress_media` is bound to `self.progress_dialog.kill` at the call site
+# in modules/sources.py -- so the modal resolving window this exists to close is
+# now closed by POV on the cancel path. Checked at the call site, not assumed.
+#
+# What POV did NOT copy is the `close_all_dialog()` half, which the success path
+# still runs one line later. That is belt-and-braces for OTHER dialogs, not for
+# the reported symptom, so this is deliberately NOT re-anchored: adding an edit
+# to a correct implementation buys nothing and can only break on the next
+# refactor. Same judgement as pov_alldebrid_status_fix.
+#
+# Kept, not deleted, because devices on POV <= 6.09.01 still have the bug and
+# still need the patch. The declaration below is what stops the health report
+# calling this a LAPSE on the devices that have moved past it.
+HOST_FIXED_IN = '6.09.02'
+
 # The original single-line cancel-return (any indentation).
 _TARGET_RE = re.compile(
     r"^(?P<indent>[ \t]*)if bookmark == 'cancel': return[ \t]*$",

@@ -1,3 +1,52 @@
+0.2.521
+- POV 6.09.02 and Umbrella 6.7.87 both fixed a bug we were patching. Neither
+  repair is re-anchored, and neither will cry wolf.
+
+  Both add-ons moved in the same week. Every patcher was run against real trees
+  of the new and previous versions, a FRESH copy per patcher, and the verdicts
+  compared. Exactly one changed on each side, and in both cases for the same
+  reason: THE UPSTREAM AUTHOR FIXED THE BUG.
+
+  POV 6.09.02 rewrote its resume-cancel line to call progress_media() itself,
+  and progress_media is bound to the resolving dialog's own kill method at the
+  call site -- so the modal window that used to be left open is now closed by
+  POV. Checked at the call site rather than assumed.
+
+  Umbrella 6.7.87 rewrote its MDBList watched-sync cursor to store the SERVER's
+  checkpoint instead of the device's wall clock, to refuse to advance when a
+  fetch failed, and to move to a new cursor key that backfills from scratch on
+  upgrade. That is all three parts of our patch, and two of them done better
+  than we did -- their own comment names the same defect ours does.
+
+  NEITHER IS RE-ANCHORED. Fitting an edit onto a correct implementation buys
+  nothing and can only break at the next refactor. Both are KEPT, because
+  devices still on the older versions genuinely have the bugs.
+
+  AND THE HEALTH REPORT LEARNED THE DIFFERENCE. A repair whose bug the host
+  fixed is not a repair that stopped working, but until now both read as
+  LAPSED -- a WARNING. Two of them in one week would have taught everyone to
+  ignore the one status that means something. A patcher can now declare the
+  host version from which its bug is gone, and an absent marker at or above
+  that version is reported as `superseded` instead. Below it, it is still a
+  lapse, because a device on an older host really does need the repair -- so a
+  rollback starts warning again. Unreadable versions fail CLOSED, keeping the
+  warning rather than going quiet.
+
+  A PHANTOM REPAIR, found by reading the report instead of the diff. Markers
+  are harvested by SHAPE -- any identifier ending in _v<digits> -- from the
+  whole patcher source, comments included. The comment explaining Umbrella's
+  fix quoted Umbrella's own new cursor key, which invented a marker this
+  add-on never writes; the report then found it in Umbrella (they do write it)
+  and called it a healthy repair. A phantom `ok` is worse than a phantom
+  lapse, because it MASKS. The comment was fixed, never the rule -- and there
+  is now a check that no harvested marker may already exist in a clean host,
+  demonstrated to fail on the exact mistake that produced it.
+
+  Nothing else moved: POV's route table is identical between the two versions,
+  so no menu the build points at can have broken, and Umbrella's settings keys
+  are unchanged. POV also RESTORED the DMM source it dropped in 6.09.01, so
+  that provider works again on its own.
+
 0.2.520
 - When there is no embedded subtitle to extract, the log now says WHY instead
   of looking like a failure.
