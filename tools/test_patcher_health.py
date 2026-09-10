@@ -412,6 +412,53 @@ check('an unreadable host version does not silence the alarm',
 check('an unreadable declaration does not silence the alarm',
       not _ph._at_or_above('6.09.02', ''))
 
+# The review of 0.2.521 found the suppression correct but incomplete, and every
+# one of these is a case it constructed. They are pinned because each is a way
+# for an alarm to go quiet, and a quiet alarm is invisible by definition.
+
+# (a) A version segment we cannot read as a number must NOT rank. Stripping
+#     non-digits inverted the order -- '6.7.9~rc2' became (6,7,92) and compared
+#     ABOVE 6.7.87, silencing a repair a device still needed.
+for _have, _want in (('6.7.9~rc2', '6.7.87'), ('6.09.01a2', '6.09.02'),
+                     ('6.7.87~beta1', '6.7.87'), ('6.7.9-1', '6.7.87')):
+    check('a pre-release version does not rank: %s vs %s' % (_have, _want),
+          not _ph._at_or_above(_have, _want))
+check('...while real versions still rank correctly',
+      _ph._at_or_above('6.10.0', '6.9.9')
+      and _ph._at_or_above('6.7.87', '6.7.87')
+      and not _ph._at_or_above('6.7.86', '6.7.87'))
+
+# (b) The declaration is read with ast, so it cannot be picked up out of a
+#     string, a docstring or a comment. Same trap as the phantom marker, aimed
+#     the other way: there it invented a repair, here it would silence one.
+check('a declaration at column 0 inside a docstring is NOT read',
+      _ph.host_fixed_in('"""\nHOST_FIXED_IN = \'6.09.02\'\n"""\n') == {})
+check('a commented-out declaration is NOT read',
+      _ph.host_fixed_in("# HOST_FIXED_IN = '1.0'\n") == {})
+check('a commented-out pair inside the dict is NOT read',
+      _ph.host_fixed_in("HOST_FIXED_IN = {  # 'plugin.video.pov': '1.0'\n"
+                        "    'plugin.video.umbrella': '6.7.87'}\n")
+      == {'plugin.video.umbrella': '6.7.87'})
+check('a file that will not parse declares nothing',
+      _ph.host_fixed_in("HOST_FIXED_IN = '6.0'\ndef (\n") == {})
+check('a real assignment still is read',
+      _ph.host_fixed_in("HOST_FIXED_IN = '6.09.02'\n") == {'*': '6.09.02'})
+
+# (c) EVERY patcher whose bug the host fixed must declare it. 0.2.521 removed
+#     two false alarms and left a third standing on the patcher it cited as the
+#     precedent -- which teaches exactly the habit the change was meant to stop.
+check('pov_alldebrid_status_fix declares 6.08.15 (its bug is 6.08.14 only)',
+      _ph.host_fixed_in(LIBSRC('pov_alldebrid_status_fix'))
+      == {'*': '6.08.15'})
+
+# (d) The summary line -- the one that reaches a pasted log -- must not drop a
+#     status. superseded was added without touching it, so `ok` silently fell
+#     by two with nothing to account for it.
+_rows_sup, _ = _ph.classify([_row('6.09.02')], _seen())
+_txt = _ph._render(_rows_sup)
+check('the report table counts superseded', 'superseded=1' in _txt, _txt.split(chr(10))[0])
+
+
 print()
 print('-- sabotage: the suppression must be able to fail --')
 _SRC = io.open(MODULE, encoding='utf-8').read()
