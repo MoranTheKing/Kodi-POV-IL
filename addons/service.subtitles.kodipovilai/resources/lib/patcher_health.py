@@ -59,6 +59,7 @@
 # can itself break the boot is not a health report. Every failure path here
 # ends in returning less information, never in an exception escaping.
 
+import ast
 import io
 import json
 import os
@@ -137,33 +138,56 @@ _OURS_ONLY_HINT = ('_seeded', '_done', '_migrated', '_bump')
 # because a device on an older host genuinely does need the repair. The gate is
 # the version, not a boolean: retiring a patcher outright would strand everyone
 # who has not updated yet.
-_HOST_FIXED_RE = re.compile(
-    r"(?m)^HOST_FIXED_IN\s*=\s*(?:"
-    r"['\"]([0-9][0-9.]*)['\"]"                      # a bare version string
-    r"|\{([^}]*)\})")                                 # or a per-host dict
-_HOST_FIXED_PAIR_RE = re.compile(
-    r"['\"]([A-Za-z0-9_.]+)['\"]\s*:\s*['\"]([0-9][0-9.]*)['\"]")
-
-
+# READ WITH ast, NOT A REGEX. A regex anchored at column 0 also matches inside
+# a triple-quoted string whose content starts there, and scans commented-out
+# pairs inside the braces -- so a docstring quoting this constant could silence
+# a real alarm. That is the same trap as the phantom marker this file already
+# guards against, pointed the other way, and here it is avoidable: a
+# module-level constant is exactly what ast reads exactly. A file that will not
+# parse yields {}, which keeps the warning.
 def host_fixed_in(src):
     """{host_id: version} a patcher declares its bug fixed from, or {}.
 
     A bare string applies to every host the module names, which is the common
     case -- these patchers each target one add-on."""
-    m = _HOST_FIXED_RE.search(src or '')
-    if not m:
+    try:
+        tree = ast.parse(src or '')
+    except Exception:
         return {}
-    if m.group(1):
-        return {'*': m.group(1)}
-    return {h: v for h, v in _HOST_FIXED_PAIR_RE.findall(m.group(2) or '')}
+    for node in tree.body:                    # module level only, by construction
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(isinstance(t, ast.Name) and t.id == 'HOST_FIXED_IN'
+                   for t in node.targets):
+            continue
+        val = node.value
+        if isinstance(val, ast.Constant) and isinstance(val.value, str):
+            return {'*': val.value}
+        if isinstance(val, ast.Dict):
+            out = {}
+            for k, v in zip(val.keys, val.values):
+                if (isinstance(k, ast.Constant) and isinstance(k.value, str)
+                        and isinstance(v, ast.Constant)
+                        and isinstance(v.value, str)):
+                    out[k.value] = v.value
+            return out
+        return {}
+    return {}
 
 
 def _version_tuple(v):
+    """(ints,) or None when any segment is not purely numeric.
+
+    Stripping non-digits INVERTS the order on pre-release strings: '6.7.9~rc2'
+    became (6, 7, 92) and compared ABOVE 6.7.87, silencing a repair a device
+    still needed. Refusing to rank what we cannot read keeps the warning, which
+    is the only safe direction for a suppression gate."""
     out = []
     for part in (v or '').split('.'):
-        digits = ''.join(c for c in part if c.isdigit())
-        out.append(int(digits) if digits else 0)
-    return tuple(out)
+        if not part.isdigit():
+            return None
+        out.append(int(part))
+    return tuple(out) if out else None
 
 
 def _at_or_above(have, want):
@@ -172,6 +196,8 @@ def _at_or_above(have, want):
     if not have or not want:
         return False
     a, b = _version_tuple(have), _version_tuple(want)
+    if a is None or b is None:
+        return False
     n = max(len(a), len(b))
     a = a + (0,) * (n - len(a))
     b = b + (0,) * (n - len(b))
@@ -488,6 +514,23 @@ def classify(rows, state):
             # record is left untouched, so a user who rolls the host BACK below
             # the fixed-in version gets a real `lapsed` again rather than a
             # patcher that has quietly forgiven itself forever.
+            #
+            # TWO LIMITS, both accepted, both worth stating rather than
+            # discovering:
+            #
+            # 1. THE GATE IS MONOTONE. Once the host is at or above the
+            #    declared version this marker can never warn again -- not if
+            #    upstream REINTRODUCES the defect, and not if a later refactor
+            #    breaks the patcher for some unrelated reason. Only a rollback
+            #    re-alarms. Narrowing it to an exact range would mean
+            #    predicting which future version re-breaks, which is not
+            #    knowable; a declaration is a statement about the past.
+            # 2. THE DECLARATION IS PER-MODULE, not per-marker. A bare string
+            #    suppresses EVERY marker in the file on every host it names.
+            #    Fine for the three patchers that declare it today (one marker,
+            #    one host each) and wrong for a multi-marker patcher, which
+            #    would silence repairs that are still needed. Use the per-host
+            #    dict, or split the module, before declaring one of those.
             status = 'superseded'
         elif r.get('rebuilt') and not was:
             # Rebuilt, never confirmed. Absent here is as likely to mean the
@@ -584,8 +627,18 @@ def run(lib_dir='', addons_root='', notify=True):
                 except Exception:
                     pass
         n_ok = sum(1 for r in rows if r['status'] == 'ok')
-        return 'checked={0}, ok={1}, lapsed={2}'.format(
-            len(rows), n_ok, len(bad))
+        # `superseded` is counted here too. It was introduced without touching
+        # this line, so `ok` silently dropped by two with no replacement -- and
+        # THIS is the line people grep; the full table in the report file is
+        # not what reaches a pasted log. A status that exists but never appears
+        # in the summary reads as repairs going missing.
+        n_sup = sum(1 for r in rows if r['status'] == 'superseded')
+        out = 'checked={0}, ok={1}, lapsed={2}'.format(len(rows), n_ok,
+                                                       len(bad))
+        if n_sup:
+            out += ', superseded={0} (the host fixed those itself)'.format(
+                n_sup)
+        return out
     except Exception as exc:
         # A health report that breaks the boot is worse than no health report.
         _log('health check failed: {0}'.format(exc), level='WARNING')

@@ -42,6 +42,33 @@
   is now a check that no harvested marker may already exist in a clean host,
   demonstrated to fail on the exact mistake that produced it.
 
+  THREE, NOT TWO. The review of this release caught it removing two false
+  alarms and leaving a third standing -- on pov_alldebrid_status_fix, the very
+  patcher this entry cites as the precedent for the judgement. Its bug exists
+  in POV 6.08.14 and nowhere else (measured across every version on disk), so
+  every device that ran 0.2.513-0.2.517 while still on 6.08.14 has been warning
+  about it ever since. Declared too. Removing two and leaving the third would
+  have taught exactly the habit this change exists to prevent.
+
+  Three more the review found, each a way for an alarm to go quiet:
+    * A version segment that is not a number no longer ranks at all. Stripping
+      non-digits INVERTED the order -- '6.7.9~rc2' became (6,7,92) and compared
+      above 6.7.87, silencing a repair a device still needed.
+    * The declaration is now read with ast rather than a regex, so it cannot be
+      picked up out of a docstring, a string or a commented-out line. That is
+      the phantom-marker trap pointed the other way: there it invented a
+      repair, here it would have silenced one.
+    * The one-line boot summary counts superseded. It was added without
+      touching that line, so `ok` silently dropped with nothing to account for
+      it -- and that line, not the report file, is what reaches a pasted log.
+
+  Two limits are now written down where the decision is made rather than left
+  to be discovered: the gate is MONOTONE (once the host is at or above the
+  declared version this marker never warns again, including if upstream
+  reintroduces the bug -- only a rollback re-alarms), and the declaration is
+  PER-MODULE, so a multi-marker patcher must use the per-host form or be split
+  before declaring one.
+
   Nothing else moved: POV's route table is identical between the two versions,
   so no menu the build points at can have broken, and Umbrella's settings keys
   are unchanged. POV also RESTORED the DMM source it dropped in 6.09.01, so
