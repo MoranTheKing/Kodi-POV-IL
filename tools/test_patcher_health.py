@@ -359,6 +359,21 @@ print('=== "the host fixed it itself" is reported, never warned about ===')
 _ph = load('probe-hf')
 
 
+def _run_summary(mod):
+    """The string run() actually returns, against the real hosts. This is what
+    reaches a pasted log; the report file does not."""
+    root = tmp('hf-root-')
+    for _hid, _v in (('plugin.video.pov', '6902'),
+                     ('plugin.video.umbrella', '787')):
+        _src = os.path.join(SC, ('pov' if 'pov' in _hid else 'umb') + _v, _hid)
+        if not os.path.isdir(_src):
+            return ''
+        shutil.copytree(_src, os.path.join(root, _hid))
+    prof = tmp('hf-prof-')
+    mod.kodi_utils.addon_profile_path = lambda: prof
+    return mod.run(LIB, root, notify=False)
+
+
 def _row(hv, fixed_in='6.09.02', present=False, patcher='p', marker='M'):
     return {'patcher': patcher, 'marker': marker, 'host': 'plugin.video.pov',
             'host_version': hv, 'installed': True, 'present': present,
@@ -454,9 +469,24 @@ check('pov_alldebrid_status_fix declares 6.08.15 (its bug is 6.08.14 only)',
 # (d) The summary line -- the one that reaches a pasted log -- must not drop a
 #     status. superseded was added without touching it, so `ok` silently fell
 #     by two with nothing to account for it.
+#
+#     THE FIRST VERSION OF THIS CHECK WAS VACUOUS and a review caught it: it
+#     asserted on _render(), which builds its header by counting EVERY status
+#     and so already printed `superseded=N` before the fix existed. Deleting the
+#     three lines that actually changed left the whole suite green. The summary
+#     comes from run(), so run() is what has to be asserted on -- the third time
+#     this session a check has been written against the wrong function, and the
+#     tell is always the same: it passes on the code from before the fix.
 _rows_sup, _ = _ph.classify([_row('6.09.02')], _seen())
-_txt = _ph._render(_rows_sup)
-check('the report table counts superseded', 'superseded=1' in _txt, _txt.split(chr(10))[0])
+check('the report TABLE counts superseded',
+      'superseded=1' in _ph._render(_rows_sup))
+
+_real = _run_summary(_ph)
+check('the SUMMARY LINE names superseded', 'superseded=' in _real, _real)
+check('...with the count, and says why', 'superseded=3' in _real
+      and 'host fixed' in _real, _real)
+check('...and still reports checked/ok/lapsed',
+      all(k in _real for k in ('checked=', 'ok=', 'lapsed=')), _real)
 
 
 print()
