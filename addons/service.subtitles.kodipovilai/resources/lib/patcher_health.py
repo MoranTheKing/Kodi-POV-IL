@@ -150,6 +150,14 @@ def host_fixed_in(src):
 
     A bare string applies to every host the module names, which is the common
     case -- these patchers each target one add-on."""
+    # CHEAP TEST FIRST. ast.parse of every module on every boot cost 234ms
+    # across the 152 files here -- roughly doubling collect() -- and four of
+    # them contain this constant. The substring test can only SKIP, never
+    # accept: any file carrying the literal anywhere, comment or docstring
+    # included, still goes to ast, so none of the traps the ast walk exists to
+    # close is reopened. Verified result-identical across all 152 files.
+    if 'HOST_FIXED_IN' not in (src or ''):
+        return {}
     try:
         tree = ast.parse(src or '')
     except Exception:
@@ -525,6 +533,10 @@ def classify(rows, state):
             #    re-alarms. Narrowing it to an exact range would mean
             #    predicting which future version re-breaks, which is not
             #    knowable; a declaration is a statement about the past.
+            # 0. TWO SPELLINGS, AND ONLY TWO: a bare string, or a dict of
+            #    host id -> version. `HOST_FIXED_IN: str = '6.0'` is an
+            #    annotated assignment and is silently ignored, which fails
+            #    safe (the warning stays) but looks like it worked.
             # 2. THE DECLARATION IS PER-MODULE, not per-marker. A bare string
             #    suppresses EVERY marker in the file on every host it names.
             #    Fine for the three patchers that declare it today (one marker,
