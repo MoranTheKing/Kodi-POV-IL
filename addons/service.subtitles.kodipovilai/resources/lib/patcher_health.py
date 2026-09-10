@@ -115,6 +115,69 @@ _VERSION_CONST_RE = re.compile(
 # set_setting is not written into anybody's source.
 _OURS_ONLY_HINT = ('_seeded', '_done', '_migrated', '_bump')
 
+# A repair whose BUG THE HOST FIXED is not a repair that stopped working, and
+# reporting it as one destroys the only thing this file is for. `lapsed` is a
+# WARNING and it means "something is wrong"; the moment it also means "upstream
+# fixed it, nothing to do", nobody reads it.
+#
+# Two arrived in the same week. POV 6.09.02 rewrote its resume-cancel path to
+# call progress_media() itself, and Umbrella 6.7.87 rewrote its MDBList sync
+# cursor to store the SERVER's checkpoint instead of the device wall clock --
+# both are the defects our patchers were written for, fixed at the root by the
+# people who own the code. Re-anchoring onto a correct implementation would be
+# adding redundant edits to working code; leaving them silent would be crying
+# wolf on every device that ever had them applied.
+#
+# So a patcher may declare the host version from which its bug is gone:
+#
+#     HOST_FIXED_IN = '6.09.02'          # or {'plugin.video.pov': '6.09.02'}
+#
+# and an absent marker on a host AT OR ABOVE that version is `superseded` --
+# reported, never warned about. BELOW it, an absent marker is still `lapsed`,
+# because a device on an older host genuinely does need the repair. The gate is
+# the version, not a boolean: retiring a patcher outright would strand everyone
+# who has not updated yet.
+_HOST_FIXED_RE = re.compile(
+    r"(?m)^HOST_FIXED_IN\s*=\s*(?:"
+    r"['\"]([0-9][0-9.]*)['\"]"                      # a bare version string
+    r"|\{([^}]*)\})")                                 # or a per-host dict
+_HOST_FIXED_PAIR_RE = re.compile(
+    r"['\"]([A-Za-z0-9_.]+)['\"]\s*:\s*['\"]([0-9][0-9.]*)['\"]")
+
+
+def host_fixed_in(src):
+    """{host_id: version} a patcher declares its bug fixed from, or {}.
+
+    A bare string applies to every host the module names, which is the common
+    case -- these patchers each target one add-on."""
+    m = _HOST_FIXED_RE.search(src or '')
+    if not m:
+        return {}
+    if m.group(1):
+        return {'*': m.group(1)}
+    return {h: v for h, v in _HOST_FIXED_PAIR_RE.findall(m.group(2) or '')}
+
+
+def _version_tuple(v):
+    out = []
+    for part in (v or '').split('.'):
+        digits = ''.join(c for c in part if c.isdigit())
+        out.append(int(digits) if digits else 0)
+    return tuple(out)
+
+
+def _at_or_above(have, want):
+    """True when host version `have` is >= `want`. Unreadable -> False, which
+    keeps the old `lapsed` behaviour rather than silencing a real regression."""
+    if not have or not want:
+        return False
+    a, b = _version_tuple(have), _version_tuple(want)
+    n = max(len(a), len(b))
+    a = a + (0,) * (n - len(a))
+    b = b + (0,) * (n - len(b))
+    return a >= b
+
+
 
 def _popup_wanted():
     """Whether to put a toast on screen, as opposed to only in the log.
@@ -373,6 +436,7 @@ def collect(lib_dir='', addons_root=''):
         except Exception:
             continue
         markers, hosts = markers_and_hosts(src)
+        fixed = host_fixed_in(src)
         markers, rebuilt = live_markers(markers, src)
         if not hosts:
             continue
@@ -385,6 +449,7 @@ def collect(lib_dir='', addons_root=''):
             for marker in sorted(markers):
                 if _looks_ours_only(marker):
                     continue
+                fixed_in = fixed.get(host) or fixed.get('*') or ''
                 rows.append({
                     'patcher': stem,
                     'marker': marker,
@@ -393,6 +458,9 @@ def collect(lib_dir='', addons_root=''):
                     'installed': bool(version),
                     'present': bool(version) and marker in text,
                     'rebuilt': marker in rebuilt,
+                    'fixed_in': fixed_in,
+                    'host_fixed': bool(version)
+                                  and _at_or_above(version, fixed_in),
                 })
     return rows
 
@@ -414,6 +482,13 @@ def classify(rows, state):
         elif r['present']:
             status = 'ok'
             seen[key] = {'last_ok_version': r['host_version']}
+        elif r.get('host_fixed'):
+            # The host shipped the fix itself. Absent is EXPECTED here, so this
+            # is reported and never warned about -- and the `last_ok_version`
+            # record is left untouched, so a user who rolls the host BACK below
+            # the fixed-in version gets a real `lapsed` again rather than a
+            # patcher that has quietly forgiven itself forever.
+            status = 'superseded'
         elif r.get('rebuilt') and not was:
             # Rebuilt, never confirmed. Absent here is as likely to mean the
             # reconstruction is wrong as that the repair broke, and only one of
@@ -440,8 +515,8 @@ def classify(rows, state):
 
 
 def _render(rows):
-    order = {'lapsed': 0, 'unknown': 1, 'unverified': 2, 'ok': 3,
-             'not_installed': 4}
+    order = {'lapsed': 0, 'unknown': 1, 'unverified': 2, 'superseded': 3,
+             'ok': 4, 'not_installed': 5}
     rows = sorted(rows, key=lambda r: (order.get(r['status'], 9),
                                        r['patcher'], r['marker']))
     lines = []
@@ -461,6 +536,9 @@ def _render(rows):
         extra = ''
         if r['status'] == 'lapsed':
             extra = '  (was applied at %s %s)' % (r['host'], r['was_ok_at'])
+        elif r['status'] == 'superseded':
+            extra = '  (%s fixed this itself in %s)' % (r['host'],
+                                                        r.get('fixed_in', '?'))
         lines.append('%-13s %-38s %-30s %s%s' % (
             r['status'], r['patcher'], r['marker'], r['host'], extra))
     return '\n'.join(lines)
