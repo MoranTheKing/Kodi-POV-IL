@@ -70,6 +70,35 @@
 # decide whether to bother, and that reasoning is sound. Only the WINDOW and
 # the UNCONDITIONAL cursor write were wrong.
 
+# UMBRELLA FIXED THIS ITSELF IN 6.7.87, and fixed it better than this patch did.
+# All three parts above are covered at the root:
+#   1. "do not advance the cursor on a failed fetch" -> `if data is None: return`
+#      before the loop breaks, so a failed page no longer reaches the tail.
+#   2. the clock-skew window -> the cursor is now
+#      `checkpoint = getServerTime(activities) or api_last`, i.e. MDBLIST'S OWN
+#      clock instead of the device's `datetime.utcnow()`. That removes the skew
+#      this patch could only paper over with a 30-day overlap.
+#   3. repairing the damage already done -> the cursor moved to a NEW key
+#      (`last_watched_sync_at`, second generation), which is empty on upgrade
+#      and therefore backfills from 1970 for everyone automatically -- what
+#      part 3 did once, for every user, without anyone pressing the force
+#      button.
+#
+#      That key is deliberately NOT written here with its version suffix.
+#      patcher_health harvests markers by SHAPE -- any identifier ending in
+#      _v<digits> -- so quoting somebody else's versioned name in a comment
+#      invents a marker that this add-on never writes, finds it in the host
+#      (they do write it), and reports a phantom repair as healthy. Caught by
+#      reading the report rather than the diff; the same trap took a docstring
+#      in patcher_health itself once already. Fix the comment, never the rule.
+# Their own comment names the same defect this file's header does: "Legacy
+# builds stored a device wall-clock value which could be ahead of MDBList
+# forever."
+#
+# So this is NOT re-anchored onto the rewritten function. Kept for devices still
+# on <= 6.7.86, which genuinely have the bug.
+HOST_FIXED_IN = '6.7.87'
+
 import os
 import re
 
