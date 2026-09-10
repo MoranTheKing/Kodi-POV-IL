@@ -341,6 +341,262 @@ check('a maintainer device DOES get the popup', len(mp3._ku.notified) == 1,
       str(mp3._ku.notified))
 
 
+# --- 2d. A REPAIR THE HOST ADOPTED IS NOT A REPAIR THAT BROKE -------------
+print()
+print('=== "the host fixed it itself" is reported, never warned about ===')
+
+# THIS SECTION GUARDS AN ALARM-SUPPRESSION PATH, which is the most dangerous
+# kind of code in this file: a bug here does not break a feature, it makes a
+# real regression silent. So every check below has its mirror -- suppressed
+# when it should be, and STILL WARNING when it should be.
+#
+# Two arrived in one week: POV 6.09.02 rewrote its resume-cancel path to call
+# progress_media() itself, and Umbrella 6.7.87 rewrote its MDBList sync cursor
+# to store the server's checkpoint instead of the device wall clock. Both are
+# the defects those patchers were written for. Without this, every device that
+# had them applied and then updated reports two LAPSED repairs at WARNING --
+# and a warning that means "nothing is wrong" is a warning nobody reads.
+_ph = load('probe-hf')
+
+
+def _run_summary(mod):
+    """The string run() actually returns, against the real hosts. This is what
+    reaches a pasted log; the report file does not."""
+    root = tmp('hf-root-')
+    for _hid, _v in (('plugin.video.pov', '6902'),
+                     ('plugin.video.umbrella', '787')):
+        _src = os.path.join(SC, ('pov' if 'pov' in _hid else 'umb') + _v, _hid)
+        if not os.path.isdir(_src):
+            return ''
+        shutil.copytree(_src, os.path.join(root, _hid))
+    prof = tmp('hf-prof-')
+    mod.kodi_utils.addon_profile_path = lambda: prof
+    return mod.run(LIB, root, notify=False)
+
+
+def _row(hv, fixed_in='6.09.02', present=False, patcher='p', marker='M'):
+    return {'patcher': patcher, 'marker': marker, 'host': 'plugin.video.pov',
+            'host_version': hv, 'installed': True, 'present': present,
+            'rebuilt': False, 'fixed_in': fixed_in,
+            'host_fixed': _ph._at_or_above(hv, fixed_in)}
+
+
+def _seen(patcher='p', marker='M', at='6.09.01'):
+    return {'seen': {'%s|plugin.video.pov|%s' % (patcher, marker):
+                     {'last_ok_version': at}}}
+
+
+st = lambda hv, **kw: _ph.classify([_row(hv, **kw)], _seen())[0][0]['status']
+
+check('on the host that FIXED it -> superseded', st('6.09.02') == 'superseded',
+      st('6.09.02'))
+check('on a LATER host -> still superseded', st('6.09.03') == 'superseded',
+      st('6.09.03'))
+check('on a host that still HAS the bug -> lapsed, as before',
+      st('6.09.01') == 'lapsed', st('6.09.01'))
+check('a rollback below the fixed version alarms again',
+      st('6.08.15') == 'lapsed', st('6.08.15'))
+check('a patcher with NO declaration is untouched by any of this',
+      st('6.09.02', fixed_in='') == 'lapsed', st('6.09.02', fixed_in=''))
+check('still present in the host -> plain ok, not superseded',
+      st('6.09.02', present=True) == 'ok', st('6.09.02', present=True))
+
+# superseded must not be counted or announced as a lapse
+rows, _ = _ph.classify([_row('6.09.02')], _seen())
+check('superseded is not in lapsed()', _ph.lapsed(rows) == [])
+text = _ph._render(rows)
+check('...and the report names the version that fixed it',
+      'superseded' in text and '6.09.02' in text, text.splitlines()[-1])
+
+# The declaration is parsed out of the real files, both spellings.
+LIBSRC = lambda n: io.open(os.path.join(LIB, n + '.py'), encoding='utf-8').read()
+check('the real POV patcher declares 6.09.02',
+      _ph.host_fixed_in(LIBSRC('pov_resume_cancel_patcher')) == {'*': '6.09.02'})
+check('the real Umbrella patcher declares 6.7.87',
+      _ph.host_fixed_in(LIBSRC('umbrella_mdblist_sync_patcher')) == {'*': '6.7.87'})
+check('a patcher without one declares nothing',
+      _ph.host_fixed_in(LIBSRC('pov_navigator_read_patcher')) == {})
+check('the per-host dict spelling parses too',
+      _ph.host_fixed_in("HOST_FIXED_IN = {'plugin.video.pov': '6.09.02',\n"
+                        "                 'plugin.video.umbrella': '6.7.87'}")
+      == {'plugin.video.pov': '6.09.02', 'plugin.video.umbrella': '6.7.87'})
+
+# An unreadable version must fail CLOSED -- keep warning rather than go quiet.
+check('an unreadable host version does not silence the alarm',
+      st('') in ('lapsed', 'not_installed') and not _ph._at_or_above('', '6.0'))
+check('an unreadable declaration does not silence the alarm',
+      not _ph._at_or_above('6.09.02', ''))
+
+# The review of 0.2.521 found the suppression correct but incomplete, and every
+# one of these is a case it constructed. They are pinned because each is a way
+# for an alarm to go quiet, and a quiet alarm is invisible by definition.
+
+# (a) A version segment we cannot read as a number must NOT rank. Stripping
+#     non-digits inverted the order -- '6.7.9~rc2' became (6,7,92) and compared
+#     ABOVE 6.7.87, silencing a repair a device still needed.
+for _have, _want in (('6.7.9~rc2', '6.7.87'), ('6.09.01a2', '6.09.02'),
+                     ('6.7.87~beta1', '6.7.87'), ('6.7.9-1', '6.7.87')):
+    check('a pre-release version does not rank: %s vs %s' % (_have, _want),
+          not _ph._at_or_above(_have, _want))
+check('...while real versions still rank correctly',
+      _ph._at_or_above('6.10.0', '6.9.9')
+      and _ph._at_or_above('6.7.87', '6.7.87')
+      and not _ph._at_or_above('6.7.86', '6.7.87'))
+
+# (b) The declaration is read with ast, so it cannot be picked up out of a
+#     string, a docstring or a comment. Same trap as the phantom marker, aimed
+#     the other way: there it invented a repair, here it would silence one.
+check('a declaration at column 0 inside a docstring is NOT read',
+      _ph.host_fixed_in('"""\nHOST_FIXED_IN = \'6.09.02\'\n"""\n') == {})
+check('a commented-out declaration is NOT read',
+      _ph.host_fixed_in("# HOST_FIXED_IN = '1.0'\n") == {})
+check('a commented-out pair inside the dict is NOT read',
+      _ph.host_fixed_in("HOST_FIXED_IN = {  # 'plugin.video.pov': '1.0'\n"
+                        "    'plugin.video.umbrella': '6.7.87'}\n")
+      == {'plugin.video.umbrella': '6.7.87'})
+check('a file that will not parse declares nothing',
+      _ph.host_fixed_in("HOST_FIXED_IN = '6.0'\ndef (\n") == {})
+check('a real assignment still is read',
+      _ph.host_fixed_in("HOST_FIXED_IN = '6.09.02'\n") == {'*': '6.09.02'})
+
+# (c) EVERY patcher whose bug the host fixed must declare it. 0.2.521 removed
+#     two false alarms and left a third standing on the patcher it cited as the
+#     precedent -- which teaches exactly the habit the change was meant to stop.
+check('pov_alldebrid_status_fix declares 6.08.15 (its bug is 6.08.14 only)',
+      _ph.host_fixed_in(LIBSRC('pov_alldebrid_status_fix'))
+      == {'*': '6.08.15'})
+
+# (d) The summary line -- the one that reaches a pasted log -- must not drop a
+#     status. superseded was added without touching it, so `ok` silently fell
+#     by two with nothing to account for it.
+#
+#     THE FIRST VERSION OF THIS CHECK WAS VACUOUS and a review caught it: it
+#     asserted on _render(), which builds its header by counting EVERY status
+#     and so already printed `superseded=N` before the fix existed. Deleting the
+#     three lines that actually changed left the whole suite green. The summary
+#     comes from run(), so run() is what has to be asserted on -- the third time
+#     this session a check has been written against the wrong function, and the
+#     tell is always the same: it passes on the code from before the fix.
+_rows_sup, _ = _ph.classify([_row('6.09.02')], _seen())
+check('the report TABLE counts superseded',
+      'superseded=1' in _ph._render(_rows_sup))
+
+_real = _run_summary(_ph)
+check('the SUMMARY LINE names superseded', 'superseded=' in _real, _real)
+check('...with the count, and says why', 'superseded=3' in _real
+      and 'host fixed' in _real, _real)
+check('...and still reports checked/ok/lapsed',
+      all(k in _real for k in ('checked=', 'ok=', 'lapsed=')), _real)
+
+
+print()
+print('-- sabotage: the suppression must be able to fail --')
+_SRC = io.open(MODULE, encoding='utf-8').read()
+for label, old, new in (
+        ('S1 suppression ignores the version and always fires',
+         "        elif r.get('host_fixed'):",
+         "        elif True:"),
+        ('S2 the version compare is inverted',
+         "    return a >= b",
+         "    return a <= b"),
+        ('S3 a missing declaration counts as fixed',
+         "    if not have or not want:\n        return False",
+         "    if not have or not want:\n        return True"),
+):
+    if _SRC.count(old) != 1:
+        check(label, False, 'mutation target not found once (%d)'
+              % _SRC.count(old))
+        continue
+    mut = load('probe-hf-mut', src=_SRC.replace(old, new, 1))
+    caught = False
+    try:
+        r_old = dict(_row('6.09.01'))
+        r_old['host_fixed'] = mut._at_or_above('6.09.01', '6.09.02')
+        if mut.classify([r_old], _seen())[0][0]['status'] != 'lapsed':
+            caught = True          # a device that still needs the patch went quiet
+        r_none = dict(_row('6.09.02', fixed_in=''))
+        r_none['host_fixed'] = mut._at_or_above('6.09.02', '')
+        if mut.classify([r_none], _seen())[0][0]['status'] != 'lapsed':
+            caught = True          # an undeclared patcher went quiet
+    except Exception:
+        caught = True
+    check(label + ' -> caught', caught,
+          'mutant SURVIVED -- a real regression would be silenced')
+
+
+# --- 2e. NO MARKER MAY BE A STRING THE HOST ALREADY CONTAINS -------------
+print()
+print('=== the report cannot invent a repair we never made ===')
+
+# HOW THIS BIT ME, twice now. Markers are harvested by SHAPE -- any identifier
+# ending in _v<digits> -- from the patcher's whole source, comments included.
+# Writing somebody else's versioned name in a comment therefore invents a
+# marker this add-on never writes; the health report then finds it in the host
+# (they DO write it) and reports a phantom repair as `ok`.
+#
+# The first time it was a docstring in patcher_health itself. The second was a
+# comment naming Umbrella's own new sync cursor while explaining that Umbrella
+# had fixed the bug -- and the report cheerfully called it a healthy repair.
+# Both times the fix was the comment, never the rule: the shape rule is what
+# lets a constructed marker be found at all.
+#
+# A phantom `ok` is worse than a phantom `lapsed`: it MASKS. It says a repair is
+# applied when nothing of ours is there. So this checks every patcher against
+# real host trees -- if a harvested marker already exists in a CLEAN host, it
+# was never ours.
+_hosts_on_disk = {}
+for _hid, _vers in (('plugin.video.pov', ('6902', '6901', '6815')),
+                    ('plugin.video.umbrella', ('787', '786'))):
+    for _v in _vers:
+        _d = os.path.join(SC, ('pov' if 'pov' in _hid else 'umb') + _v, _hid)
+        if os.path.isdir(_d):
+            _hosts_on_disk[_hid] = _d
+            break
+
+if not _hosts_on_disk:
+    check('a clean host tree is on disk to check against', False,
+          'this check proves nothing without one')
+else:
+    _text = {}
+    for _hid, _d in _hosts_on_disk.items():
+        _buf = []
+        for _dp, _dn, _fn in os.walk(_d):
+            for _f in _fn:
+                if _f.endswith('.py'):
+                    try:
+                        _buf.append(io.open(os.path.join(_dp, _f),
+                                            encoding='utf-8',
+                                            errors='replace').read())
+                    except Exception:
+                        pass
+        _text[_hid] = '\n'.join(_buf)
+    _ph2 = load('probe-phantom')
+    _phantoms = []
+    for _name in sorted(n for n in os.listdir(LIB) if n.endswith('.py')):
+        if _name in ('__init__.py', 'patcher_health.py'):
+            continue
+        try:
+            _src = io.open(os.path.join(LIB, _name), encoding='utf-8',
+                           errors='replace').read()
+        except Exception:
+            continue
+        _mk, _hs = _ph2.markers_and_hosts(_src)
+        _live, _reb = _ph2.live_markers(_mk, _src)
+        for _h in _hs:
+            if _h not in _text:
+                continue
+            for _k in (_live | _reb):
+                if _k in _text[_h]:
+                    _phantoms.append('%s: %r already in a clean %s'
+                                     % (_name[:-3], _k, _h))
+    check('no harvested marker already exists in a clean host',
+          not _phantoms,
+          'phantom repair(s) would be reported as healthy:\n      '
+          + '\n      '.join(_phantoms))
+    check('...and the check had real hosts to look at',
+          len(_hosts_on_disk) >= 1, repr(sorted(_hosts_on_disk)))
+
+
 # --- 3. IT SURVIVES A BAD DAY --------------------------------------------
 print()
 print('=== it never breaks the boot ===')
