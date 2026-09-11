@@ -1,3 +1,8 @@
+0.2.522
+- POV: restore navigation timing on 6.09.03 and preserve metadata timeout repairs after Windows patchers.
+- Umbrella: reject malformed watched-sync pages, freeze the server checkpoint before forced refresh, and backfill skipped history once.
+- Build: current-host integration and portable regression tests now cover these failures.
+
 0.2.521
 - POV 6.09.02 and Umbrella 6.7.87 both fixed a bug we were patching. Neither
   repair is re-anchored, and neither will cry wolf.

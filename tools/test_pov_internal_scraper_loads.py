@@ -63,9 +63,7 @@ def tmp(prefix):
     return d
 
 
-def pov_tree(ver):
-    src = os.path.join(SC, 'pov%s' % ver, 'plugin.video.pov')
-    return src if os.path.isdir(src) else None
+from pov_scraper_test_tree import pov_tree
 
 
 def patched_tree(ver, mutate=None):
@@ -117,7 +115,7 @@ def extract_block(sources_path):
     """The patched activate_internal body, dedented to module level."""
     text = io.open(sources_path, encoding='utf-8').read()
     start = text.index('\t\tsource_path = kodi_utils.translate_path')
-    end = text.index('\n\n\tdef activate_external', start)
+    end = re.search(r'\n\n\tdef ', text[start:]).start() + start
     block = text[start:end]
     return textwrap.dedent(block.replace('\t', '    '))
 
@@ -177,7 +175,7 @@ def make_module(folder, name, tag):
         f.write('class _S(object):\n    tag = %r\nsource = _S\n' % tag)
 
 
-for ver, label in (('6901', 'POV 6.09.01'), ('6815', 'POV 6.08.15')):
+for ver, label in (('6903', 'POV 6.09.03 current/fixture'), ('6813', 'POV 6.08.13 fixture')):
     print('\n=== %s ===' % label)
     tree, verdict, addons_root = patched_tree(ver)
     if tree is None:
@@ -263,14 +261,14 @@ def _no_extra_dir(shim):
                          for a, r in shim._SHAPES)
 
 
-print('\n-- sabotage (against POV 6.09.01) --')
+print('\n-- sabotage (against POV 6.09.03) --')
 for label, mutate in (
         ('M1 only the pre-6.09.01 shape is carried', _only_old_shape),
         ('M2 the legacy folder is never added to the scan', _no_extra_dir)):
     caught = False
     detail = ''
     try:
-        tree, verdict, addons_root = patched_tree('6901', mutate=mutate)
+        tree, verdict, addons_root = patched_tree('6903', mutate=mutate)
         if tree is None:
             detail = 'no tree'
         else:
