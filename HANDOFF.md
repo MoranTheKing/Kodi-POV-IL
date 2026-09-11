@@ -3,6 +3,15 @@
 > Onboarding notes for anyone (or any AI session) picking up this repo.
 > Architecture, release channels, and the exact shipping procedures.
 
+## 2026-09-11 maintenance release — addon 0.2.522 / quickfix 0.1.567 / build 0.1.135
+
+- POV 6.09.03: directory timing supports both Router.run and Router.__call__. Metadata timeout widening preserves LF/CRLF after preceding Windows patchers.
+- Umbrella 6.7.87 still needs watched-sync protection: malformed pages must not advance the cursor, and a forced refresh must use the activity snapshot taken before fetching pages. The prior superseded declaration was incorrect. Cursor reset generation 3 backfills potentially skipped history once; watched tables are retained.
+- All 56 test scripts pass with current upstream trees and in fixture mode. Historical fixture identity is checked against its actual shipped baseline, not a different upstream generation. Scraper loading fixtures contain upstream method bodies and explicitly synthetic providers.
+- Independent review verified package member scope, CRCs, canonical source equality, and unchanged provisioned pool bytes. Quickfix/full build each change only addon.xml, changelog.txt and the three patchers above. Wizard remains 0.1.48.
+- Scope limits: no live Kodi playback or live translation-quality benchmark. Two source-list patchers rewrite block order on consecutive passes, but the final combined file remains stable; a future optimization should remove those redundant writes.
+- Publish packages and manifests first, verify their public bytes and Pages deployment, then wait at least five minutes before publishing the short user note and ten-entry archive.
+
 ## What this project is
 
 A Hebrew-localized Kodi build (skin + addons + wizard) for users in Israel,

@@ -318,7 +318,8 @@ def _refresh_map(specs):
             # Nothing this build ships legitimately has one, and "refuse what
             # we do not understand" is the only rule that survives the next
             # separator somebody thinks of.
-            escaped = [n for n in names if _unsafe_member(n)]
+            escaped = [i.orig_filename for i in zf.infolist()
+                       if _unsafe_member(i.orig_filename)]
             if escaped:
                 raise SystemExit(
                     "%s has %d member(s) whose path escapes its own "

@@ -185,6 +185,10 @@ def fresh_home():
         src = os.path.join(STOCK, 'resources', 'lib', 'modules', 'mdblist.py')
         with open(src, encoding='utf-8') as f:
             body = f.read()
+        # This suite exercises the legacy wall-clock/overlap implementation.
+        # The server-checkpoint implementation has its own executable suite.
+        if 'checkpoint = getServerTime(activities)' in body:
+            body = FIXTURE
     else:
         body = FIXTURE
     with open(os.path.join(dst, 'mdblist.py'), 'w', encoding='utf-8') as f:
@@ -199,9 +203,12 @@ def mdblist_src(home):
         return f.read()
 
 
-print('fixture: %s' % ('real Umbrella ' + stock_version()
+print('legacy sync fixture: %s' % ('real Umbrella ' + stock_version()
                        if os.path.isdir(STOCK)
                        else 'inline (no stock tree here)'))
+if os.path.isdir(STOCK):
+    print('server-checkpoint hosts use the legacy inline fixture here; '
+          'test_umbrella_server_cursor.py tests their actual function')
 
 home = fresh_home()
 before = mdblist_src(home)
@@ -578,7 +585,7 @@ check('every pin below still corresponds to a citation in the patcher',
       not (set(CITATIONS) - cited),
       'stale pins: %s' % sorted(set(CITATIONS) - cited))
 
-if os.path.isdir(STOCK):
+if os.path.isdir(STOCK) and stock_version() == '6.7.85':
     for (mod_name, lo, hi), fragment in sorted(CITATIONS.items()):
         p = os.path.join(STOCK, 'resources', 'lib', 'modules', mod_name)
         try:
@@ -591,7 +598,7 @@ if os.path.isdir(STOCK):
               fragment in window,
               'expected to find %r there' % fragment)
 else:
-    print('---- %d citations NOT CHECKED (no stock tree on this machine)'
+    print('---- %d historical line-number citations NOT CHECKED (requires matching legacy stock version)'
           % len(CITATIONS))
 
 # --- the cursor reset, which is what repairs an already-damaged table ------

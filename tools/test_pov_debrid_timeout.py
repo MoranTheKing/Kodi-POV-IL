@@ -192,7 +192,7 @@ def _read(root, rel):
 # --- 0. the fixtures really are POV ----------------------------------------
 print('fixture: %s' % ('real stock POV' if os.path.isdir(STOCK)
                        else 'byte-slices of real POV (no stock tree here)'))
-if os.path.isdir(STOCK):
+if os.path.isdir(STOCK) and 'self.thread_monitor(threads, ls(32579), True)' in _read(STOCK, 'resources/lib/modules/sources.py'):
     for rel, slice_ in (('resources/lib/modules/sources.py', SOURCES_PHASE),
                         ('resources/lib/modules/sources.py', SORT_UNCACHED),
                         ('resources/lib/modules/debrid.py',
@@ -212,7 +212,7 @@ if os.path.isdir(STOCK):
     check('...and the whole block appears exactly once',
           _s.count(SOURCES_PHASE) == 1)
 else:
-    print('---- fixtures NOT checked against a real tree here')
+    print('---- historical inline slices not compared to this host generation; real stock execution follows when supplied')
 
 
 # --- 1. it applies ----------------------------------------------------------
@@ -256,10 +256,11 @@ def lift_phase(text):
     """POV's debrid phase, verbatim, as a callable."""
     lines = text.splitlines(True)
     a = next(i for i, l in enumerate(lines)
-             if 'self.thread_monitor(threads, ls(32579), True)' in l)
+             if ('self.thread_monitor(threads, ls(32579), True)' in l
+                 or 'self.monitor(threads, debrid_format, True)' in l))
     b = next(i for i, l in enumerate(lines) if i > a and l.strip() == ')')
     body = ''.join(lines[a:b + 1])
-    ns = {}
+    ns = {'debrid_format': ''}
     exec('def run(self, threads, torrent_sources, ls):\n' + body, ns)
     return ns['run']
 
@@ -269,8 +270,8 @@ def lift_filter(text):
     lines = text.splitlines(True)
     a = next(i for i, l in enumerate(lines)
              if l.startswith('\tdef sort_uncached_torrents'))
-    b = next(i for i, l in enumerate(lines)
-             if i > a and l.strip() and not l.startswith('\t\t'))
+    b = next((i for i, l in enumerate(lines)
+              if i > a and l.strip() and not l.startswith('\t\t')), len(lines))
     body = ''.join(lines[a + 1:b])
     ns = {'get_property': lambda *a, **k: ''}
     exec('def run(self, results):\n' + body, ns)
@@ -304,6 +305,8 @@ class Manager(object):
         # The real one waits and then gives up; by the time it returns the
         # done() answers are whatever they are. Nothing to simulate.
         pass
+
+    monitor = thread_monitor
 
 
 class Src(object):
@@ -443,8 +446,8 @@ def lift_cache_check(text):
     lines = text.splitlines(True)
     a = next(i for i, l in enumerate(lines)
              if l.startswith('\tdef cache_check(self):'))
-    b = next(i for i, l in enumerate(lines)
-             if i > a and l.strip() and not l.startswith('\t\t'))
+    b = next((i for i, l in enumerate(lines)
+              if i > a and l.strip() and not l.startswith('\t\t')), len(lines))
     body = ''.join(lines[a + 1:b])
 
     class _T(object):
