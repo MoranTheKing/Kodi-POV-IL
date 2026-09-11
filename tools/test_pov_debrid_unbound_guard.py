@@ -381,12 +381,28 @@ def risky_names(src):
 
 # The four files the patcher touches, plus the rest of the debrid directory,
 # so a new provider with the same shape is not silently outside the scan.
+def client_dir(root):
+    """Where THIS tree keeps the debrid clients. POV has used both names."""
+    for d in ('debrids', 'indexers'):
+        p = os.path.join(root, 'resources', 'lib', d)
+        if os.path.isdir(p) and any(
+                f.endswith('_api.py') and 'debrid' in f or f == 'torbox_api.py'
+                for f in os.listdir(p)):
+            return p
+    return os.path.join(root, 'resources', 'lib', 'debrids')
+
+
 def debrid_sources(root):
+    # POV keeps its debrid clients in debrids/ and its metadata clients in
+    # indexers/, and it has moved files between the two more than once. Scanning
+    # only one of them made this harness miss the very files the patcher targets.
     out = {}
+    subdirs = [d for d in ('indexers', 'debrids')
+               if os.path.isdir(os.path.join(root, 'resources', 'lib', d))]
     for rel in ['resources/lib/modules/debrid.py'] + [
-            'resources/lib/indexers/' + f
-            for f in sorted(os.listdir(os.path.join(root, 'resources', 'lib',
-                                                    'indexers')))
+            'resources/lib/' + d + '/' + f
+            for d in subdirs
+            for f in sorted(os.listdir(os.path.join(root, 'resources', 'lib', d)))
             if f.endswith('.py')]:
         p = os.path.join(root, *rel.split('/'))
         with io.open(p, encoding='utf-8', newline='') as f:
@@ -447,7 +463,7 @@ def fresh_pov():
     # the scan walks the whole debrids directory; give it the clean providers
     # too, so "was already clean and NOT touched" is not vacuous here either
     for name in ('easynews_api.py', 'premiumize_api.py'):
-        p = os.path.join(root, 'resources', 'lib', 'indexers', name)
+        p = os.path.join(client_dir(root), name)
         with io.open(p, 'w', encoding='utf-8', newline='') as f:
             f.write('class Clean(object):\n\tdef go(self):\n'
                     '\t\ttry:\n\t\t\tx = 1\n'
@@ -636,6 +652,21 @@ else:
     print('---- %d fixture(s) NOT CHECKED against a real tree here'
           % len(FIXTURES))
 
+def _client(*basenames):
+    """POV keeps moving these files between debrids/ and indexers/, and it has
+    renamed real_debrid_api.py -> realdebrid_api.py along the way. The patcher
+    copes (see _live_modules / _RENAMED); pinning one spelling in the test did
+    not, so the suite went red for a layout the product handles. Ask the tree."""
+    for d in ('debrids', 'indexers'):
+        for b in basenames:
+            k = 'resources/lib/%s/%s' % (d, b)
+            if k in before:
+                return k
+    raise AssertionError('none of %s found in %s'
+                         % (basenames, sorted(before)))
+
+
+
 # --- 1. the scan: before it finds the bug, after it finds nothing ----------
 found_before = {rel: risky_names(t) for rel, t in before.items()}
 found_after = {rel: risky_names(t) for rel, t in after.items()}
@@ -647,7 +678,7 @@ check('the scan finds the defect in stock POV, in more than one provider',
       % sorted(hits))
 check('and the reported one is among them',
       ('parse_magnet_pack', ('torrent_id',))
-      in found_before.get('resources/lib/indexers/alldebrid_api.py', set()))
+      in found_before.get(_client('alldebrid_api.py'), set()))
 # The caller has the identical defect and is NOT this patcher's job:
 # pov_debrid_resolve_patcher.py, months older, already binds files and
 # torrent_id at the top of resolve_external_sources. The first draft of this
@@ -735,7 +766,12 @@ def run_parse(src, args=(True,)):
         return e
 
 
-AD = 'resources/lib/indexers/alldebrid_api.py'
+# POV has moved the debrid clients between debrids/ and indexers/ more than
+# once and _live_modules() in the patcher tries both. Pinning one spelling
+# here made this test go red for a layout the product handles fine -- and a
+# release gate that fails on the product's non-problem is a gate people wave
+# through. Take whichever spelling the tree in hand actually used.
+AD = _client('alldebrid_api.py')
 print()
 print('=== executing the real function ===')
 stock_exc = run_parse(before[AD])
@@ -762,8 +798,8 @@ check('PATCHED: and it is not swallowed into a bare None either',
 # so the crash goes away but the provider's reason does not arrive. That is a
 # real asymmetry, it is documented in the patcher, and it is pinned here so it
 # cannot drift into a silent surprise.
-RD = 'resources/lib/indexers/realdebrid_api.py'
-TB = 'resources/lib/indexers/torbox_api.py'
+RD = _client('realdebrid_api.py', 'real_debrid_api.py')
+TB = _client('torbox_api.py')
 
 check('STOCK real_debrid also loses the cause to an UnboundLocalError',
       isinstance(run_parse(before[RD]), (UnboundLocalError, NameError)))
@@ -837,14 +873,14 @@ check('reverting a CRLF file is byte-exact',
 # _patch_one could have broken it silently. Three shapes: one file gone, the
 # whole directory gone, POV not installed at all.
 home7, root7 = fresh_pov()
-os.remove(os.path.join(root7, 'resources', 'lib', 'indexers', 'alldebrid_api.py'))
+os.remove(os.path.join(client_dir(root7), 'alldebrid_api.py'))
 mod7 = load(home7)
 st7 = mod7.ensure_patched()
 check('one missing file is no_file, and the others still patch',
       st7 == 'alldebrid=no_file, realdebrid=patched, torbox=patched', st7)
 
 home8, root8 = fresh_pov()
-shutil.rmtree(os.path.join(root8, 'resources', 'lib', 'indexers'))
+shutil.rmtree(client_dir(root8))
 mod8 = load(home8)
 st8 = mod8.ensure_patched()
 check('the whole directory missing is three no_file, not a traceback',
@@ -930,7 +966,7 @@ check('...and the other two sites still patch, being independent files',
       st10.count('=patched') == 2, st10)
 
 home11, root11 = fresh_pov()
-_pyc_dir = os.path.join(root11, 'resources', 'lib', 'indexers', '__pycache__')
+_pyc_dir = os.path.join(client_dir(root11), '__pycache__')
 os.makedirs(_pyc_dir, exist_ok=True)
 _stale = os.path.join(_pyc_dir, 'alldebrid_api.cpython-311.pyc')
 _other = os.path.join(_pyc_dir, 'premiumize_api.cpython-311.pyc')

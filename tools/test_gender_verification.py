@@ -367,6 +367,62 @@ check('a malformed block costs no request either',
 check('...confirmed', len(_engine.calls), 0)
 
 print()
+print('== the reference readers, on the forms real subtitles actually write ==')
+
+# ARABIC. Every pattern this module shipped with needed harakat, and real
+# subtitles carry none -- so the whole Arabic branch returned None for every
+# line of a full human episode while Arabic was the most-used reference we had.
+# The 2fs present suffix is consonantal and always written; these cases pin
+# both what it must read and the two noun classes it must refuse.
+for _w in (u'\u062a\u0639\u0631\u0641\u064a\u0646 \u0630\u0644\u0643', u'\u062a\u0641\u062a\u062d\u064a\u0646 \u0627\u0644\u0628\u0627\u0628', u'\u062a\u0646\u062a\u0638\u0631\u064a\u0646 \u0647\u0646\u0627\u0643',
+           u'\u062a\u0633\u062a\u064a\u0642\u0638\u064a\u0646 \u0628\u0627\u0643\u0631\u0627', u'\u062a\u062f\u0631\u0643\u064a\u0646 \u0630\u0644\u0643'):
+    check('arabic 2fs present reads F: %s' % _w.split()[0],
+          ag.reference_addressee_gender(_w, 'ar'), 'F')
+
+# The \u062a\u0641\u0639\u064a\u0644 verbal noun and the feminine sound dual end the same way and
+# are NOT an addressee. A false F here spends a request rewriting a line that
+# was already correct, so precision wins over recall by design.
+for _w in (u'\u0647\u0630\u0627 \u062a\u0645\u0631\u064a\u0646', u'\u0645\u0648\u0639\u062f \u0627\u0644\u062a\u0639\u064a\u064a\u0646', u'\u062a\u062d\u0633\u064a\u0646 \u0643\u0628\u064a\u0631',
+           u'\u0627\u0644\u062a\u062f\u062e\u064a\u0646 \u0645\u0645\u0646\u0648\u0639', u'\u062a\u0641\u0635\u064a\u0644\u062a\u064a\u0646 \u0641\u0642\u0637', u'\u0633\u0646\u062a\u064a\u0646', u'\u0645\u0631\u062a\u064a\u0646'):
+    check('arabic noun is NOT an addressee: %s' % _w.split()[-1],
+          ag.reference_addressee_gender(_w, 'ar'), None)
+
+# and the masculine 2ms forms carry no suffix at all -> nothing to read
+for _w in (u'\u062a\u0639\u0631\u0641 \u0630\u0644\u0643', u'\u062a\u0641\u062a\u062d \u0627\u0644\u0628\u0627\u0628'):
+    check('arabic 2ms is unreadable, not F: %s' % _w.split()[0],
+          ag.reference_addressee_gender(_w, 'ar'), None)
+
+# HEBREW. _HE_MASC has carried the proclitic alternation since it was written;
+# _HE_REF_FEM did not, so the reader was better at finding a MALE addressee
+# than a female one -- in a check whose whole purpose is catching
+# masculine-where-feminine.
+for _w in (u'\u05d5\u05d0\u05ea \u05d1\u05d8\u05e2\u05d5\u05ea \u05de\u05e2\u05de\u05d9\u05d3\u05d4 \u05e4\u05e0\u05d9\u05dd', u'\u05db\u05e4\u05d9 \u05e9\u05d0\u05ea \u05d5\u05d3\u05d0\u05d9 \u05d9\u05d5\u05d3\u05e2\u05ea', u'\u05db\u05e9\u05d0\u05ea \u05d7\u05d5\u05d6\u05e8\u05ea'):
+    check('hebrew feminine survives a proclitic: %s' % _w.split()[0],
+          ag.reference_addressee_gender(_w, 'he'), 'F')
+# the guard against the definite-object marker must still hold
+check('hebrew object marker is still not an addressee',
+      ag.reference_addressee_gender(u'\u05e8\u05d0\u05d9\u05ea\u05d9 \u05d0\u05ea \u05d4\u05db\u05dc\u05d1', 'he'), None)
+
+# _ADDRESSEE_MARKERS languages -- the docstring used to deny these existed.
+check('the reader really does cover nine more languages',
+      sorted(ag._ADDRESSEE_MARKERS), ['bg', 'cs', 'hi', 'hr', 'pl', 'ru', 'sk', 'sr', 'uk'])
+
+# begin() is documented as never raising. It has to be true, not aspirational.
+_orig_cands = ag._reference_candidates
+_SRC = u'1\n00:00:01,000 --> 00:00:02,000\nhello\n'
+for _bad, _label in ((['not-a-dict'], 'a candidate that is a bare string'),
+                     ([{'language': ['x']}], "a candidate whose language is a list"),
+                     ([None], 'a candidate that is None')):
+    ag._reference_candidates = (lambda info, _b=_bad: _b)
+    try:
+        _plan, _diag = ag.begin({'title': 'x'}, _SRC)
+        check('begin() survives %s' % _label, (_plan, _diag.get('reason')),
+              (None, 'crash'))
+    except Exception as _e:
+        check('begin() survives %s' % _label, 'raised %r' % (_e,), 'no raise')
+ag._reference_candidates = _orig_cands
+
+print()
 if FAILED:
     print('FAILED (%d): %s' % (len(FAILED), ', '.join(FAILED)))
     sys.exit(1)

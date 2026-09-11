@@ -160,9 +160,27 @@ def load(home):
     return m
 
 
+def _resolve(root, rel):
+    """POV has moved the debrid clients between resources/lib/debrids/ and
+    resources/lib/indexers/ more than once, and the PATCHER tries both (see
+    _MOVED in pov_debrid_error_log_patcher.py). The test hardcoded one of them,
+    so it went red the moment the real tree used the other -- a release gate
+    that fails for a reason the product does not have is a gate everyone learns
+    to wave through. Resolve it the same way the patcher does."""
+    direct = os.path.join(root, *rel.split('/'))
+    if os.path.exists(direct):
+        return direct
+    for a, b in (('resources/lib/debrids/', 'resources/lib/indexers/'),
+                 ('resources/lib/indexers/', 'resources/lib/debrids/')):
+        if rel.startswith(a):
+            alt = os.path.join(root, *(b + rel[len(a):]).split('/'))
+            if os.path.exists(alt):
+                return alt
+    return direct
+
+
 def _read(root, rel):
-    with io.open(os.path.join(root, *rel.split('/')),
-                 encoding='utf-8', newline='') as f:
+    with io.open(_resolve(root, rel), encoding='utf-8', newline='') as f:
         return f.read()
 
 
