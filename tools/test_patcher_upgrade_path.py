@@ -392,7 +392,7 @@ pin('pov_source_quality_patcher', 'UPGRADES',
 pin('pov_subtitle_match_patcher', 'UPGRADES',
     'AI_SUBS_MATCH_v7')
 pin('umbrella_mdblist_sync_patcher', 'UPGRADES',
-    'AI_SUBS_UMB_MDBL_SINCE_v2', '_umb_mdbl_cursor_reset=2')
+    'AI_SUBS_UMB_MDBL_SINCE_v2', '_umb_mdbl_cursor_reset=3')
 pin('umbrella_source_ux_patcher', 'UPGRADES',
     'AI_SUBS_UMB_PREWARM_v1', 'AI_SUBS_UMB_QUIETCANCEL_v1')
 pin('umbrella_subtitle_match_patcher', 'UPGRADES',
@@ -1506,7 +1506,15 @@ def simulate_bump(stem, src, override=None):
                     os.symlink(os.path.join(LIB, entry),
                                os.path.join(d, entry))
                 except OSError:
-                    pass
+                    # Windows commonly has no symlink privilege. Missing
+                    # media_assets then makes a valid bump look like a no-op.
+                    src_entry = os.path.join(LIB, entry)
+                    dst_entry = os.path.join(d, entry)
+                    if os.path.isdir(src_entry):
+                        shutil.copytree(src_entry, dst_entry,
+                                        ignore=shutil.ignore_patterns('__pycache__'))
+                    else:
+                        shutil.copy2(src_entry, dst_entry)
             return d
         try:
             use = variant()

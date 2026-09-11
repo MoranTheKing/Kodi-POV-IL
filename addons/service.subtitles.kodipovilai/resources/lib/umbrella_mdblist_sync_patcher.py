@@ -70,34 +70,13 @@
 # decide whether to bother, and that reasoning is sound. Only the WINDOW and
 # the UNCONDITIONAL cursor write were wrong.
 
-# UMBRELLA FIXED THIS ITSELF IN 6.7.87, and fixed it better than this patch did.
-# All three parts above are covered at the root:
-#   1. "do not advance the cursor on a failed fetch" -> `if data is None: return`
-#      before the loop breaks, so a failed page no longer reaches the tail.
-#   2. the clock-skew window -> the cursor is now
-#      `checkpoint = getServerTime(activities) or api_last`, i.e. MDBLIST'S OWN
-#      clock instead of the device's `datetime.utcnow()`. That removes the skew
-#      this patch could only paper over with a 30-day overlap.
-#   3. repairing the damage already done -> the cursor moved to a NEW key
-#      (`last_watched_sync_at`, second generation), which is empty on upgrade
-#      and therefore backfills from 1970 for everyone automatically -- what
-#      part 3 did once, for every user, without anyone pressing the force
-#      button.
-#
-#      That key is deliberately NOT written here with its version suffix.
-#      patcher_health harvests markers by SHAPE -- any identifier ending in
-#      _v<digits> -- so quoting somebody else's versioned name in a comment
-#      invents a marker that this add-on never writes, finds it in the host
-#      (they do write it), and reports a phantom repair as healthy. Caught by
-#      reading the report rather than the diff; the same trap took a docstring
-#      in patcher_health itself once already. Fix the comment, never the rule.
-# Their own comment names the same defect this file's header does: "Legacy
-# builds stored a device wall-clock value which could be ahead of MDBList
-# forever."
-#
-# So this is NOT re-anchored onto the rewritten function. Kept for devices still
-# on <= 6.7.86, which genuinely have the bug.
-HOST_FIXED_IN = '6.7.87'
+# Umbrella 6.7.87 fixed the clock skew and introduced a fresh server cursor,
+# but its `if data is None: return` guard misses get_request's {} fallback
+# after a JSON decode failure, as well as non-page response envelopes. Those
+# still commit the checkpoint without ingesting the requested window.
+# The modern branch validates pages and freezes the activity snapshot; the server checkpoint
+# and pagination remain intact. Older hosts keep the overlap implementation.
+# Do not declare HOST_FIXED_IN until every failure case is handled upstream.
 
 import os
 import re
@@ -150,7 +129,13 @@ _RESET_FLAG = '_umb_mdbl_cursor_reset'
 # reset once more on exactly those devices; the sync it forces then writes all
 # three keys back itself (modules/mdblist.py:983-985), so the signals it
 # destroyed are restored by the same pass that backfills the table.
-_RESET_GEN = '2'
+_RESET_GEN = '3'
+
+# A malformed response on the server-checkpoint implementation may already
+# have skipped history. Clear its fetch cursor once as well. Split the host's
+# versioned key so marker discovery cannot mistake it for a marker we inject.
+def _server_cursor():
+    return 'last_watched_sync_at_' + 'v2'
 
 # 30 days. Long enough to cover an outage or a clock that disagrees, short
 # enough that the incremental sync stays incremental.
@@ -226,6 +211,45 @@ def _injections(fit):
          fit(_OFFSET + '\t\tif not %s: return  %s\n' % (_FLAG, MARKER)
              + _FIRST_WRITE)),
     ]
+
+
+def _server_injections(content, fit):
+    """The page and snapshot guards for the server-checkpoint implementation.
+
+    Match inside the actual sync function. The checkpoint and pagination
+    implementation stay upstream-owned; the inserted early return only
+    prevents a malformed response from reaching either cursor write.
+    """
+    import ast
+    try:
+        tree = ast.parse(content)
+        funcs = [n for n in tree.body if isinstance(n, ast.FunctionDef)
+                 and n.name == 'sync_watchedProgress']
+        if len(funcs) != 1:
+            return None
+        fn = funcs[0]
+        lines = content.splitlines(True)
+        body = ''.join(lines[fn.lineno - 1:fn.end_lineno])
+    except Exception:
+        return None
+    start = fit('def sync_watchedProgress(activities=None, forced=False):\n\ttry:\n')
+    if ("checkpoint = getServerTime(activities) or api_last or None" not in body
+            or "db_last = mdbsync.last_sync('%s')" % _server_cursor() not in body
+            or body.count(start) != 1
+            or body.count(fit(_FETCH)) != 1
+            or body.count(fit('\t\t\tif data is None: return\n')) != 1):
+        return None
+    replacement = body.replace(fit(_FETCH), fit(
+        _FETCH + '\t\t\tif %s: return  %s\n' % (_NOT_A_PAGE, MARKER)), 1)
+    # Forced refresh passes no activities. Freeze the server snapshot BEFORE
+    # reading pages; fetching a newer checkpoint afterwards can skip a watch
+    # event that arrived during pagination. Missing timestamps must not fall
+    # back to update_last_watched_at's device wall clock.
+    replacement = replacement.replace(start, start + fit(
+        '\t\tactivities = _activities_dict(activities)  %s\n'
+        '\t\tif not activities or not (getServerTime(activities) or '
+        'getWatchedActivity(activities)): return  %s\n' % (MARKER, MARKER)), 1)
+    return [(body, replacement)]
 
 
 def _log(msg, level='INFO'):
@@ -330,7 +354,7 @@ def _reset_sync_cursor():
             "SELECT name FROM sqlite_master WHERE type='table' "
             "AND name='service'").fetchone()
         if row:
-            # ONLY last_watched_at. This was three keys and that was a
+            # The two fetch cursors only. Older releases cleared three keys; that was a
             # REGRESSION, reported from the field: the episodes list, which
             # had always been right, started needing a manual refresh too.
             #
@@ -349,8 +373,8 @@ def _reset_sync_cursor():
             # the key made that comparison permanently true: serve the 12-hour
             # cache instead of re-syncing. The refresh the user pressed then
             # did nothing. One stale list became two.
-            cur.execute(
-                "DELETE FROM service WHERE setting = 'last_watched_at'")
+            cur.execute("DELETE FROM service WHERE setting IN (?, ?)",
+                        ('last_watched_at', _server_cursor()))
             _log('cleared the watched-sync cursor; the next MDBList sync '
                  'backfills the episodes the old one skipped')
         cur.close()
@@ -430,7 +454,7 @@ def ensure_patched():
     # sync down with it. `count != 1` rather than `not in`, so a refactor that
     # DUPLICATED one of these shapes is treated as unrecognised too, instead of
     # being patched at whichever copy happens to come first.
-    injections = _injections(fit)
+    injections = _server_injections(content, fit) or _injections(fit)
     if any(content.count(anchor) != 1 for anchor, _ in injections):
         _log('sync_watchedProgress does not have the expected shape -- '
              'Umbrella may have refactored it; leaving the file alone',
@@ -470,8 +494,6 @@ def ensure_patched():
                 except OSError:
                     pass
 
-    _log('MDBList watched-sync: the cursor now advances only when the fetch '
-         'succeeded, and the window overlaps by %d days, so a failed or '
-         'skipped page is no longer lost forever'
-         % (_OVERLAP_SECONDS // 86400))
+    _log('MDBList watched-sync: a failed or malformed page cannot advance '
+         'the sync cursor')
     return 'repatched' if repatch else 'patched'
