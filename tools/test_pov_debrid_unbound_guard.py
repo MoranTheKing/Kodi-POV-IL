@@ -58,7 +58,7 @@ STOCK = os.environ.get('POV_STOCK') or (
 # test is worse than no test: it teaches people to scroll past red. The
 # same reasoning, and the same remedy, as tools/test_mdblist_search_nav.py.
 FIXTURES = {
-    'resources/lib/debrids/alldebrid_api.py': (
+    'resources/lib/indexers/alldebrid_api.py': (
         'class AllDebridAPI(object):\n'
         '\tdef parse_magnet_pack(self, magnet_url, info_hash, errors=False):\n'
         '\t\tfrom modules.source_utils import supported_video_extensions\n'
@@ -83,7 +83,7 @@ FIXTURES = {
         '\t\t\tif torrent_id: self.delete_torrent(torrent_id)\n'
         '\t\t\tif errors: raise\n'
     ),
-    'resources/lib/debrids/real_debrid_api.py': (
+    'resources/lib/indexers/realdebrid_api.py': (
         'class RealDebridAPI(object):\n'
         '\tdef parse_magnet_pack(self, magnet_url, info_hash, errors=False):\n'
         '\t\tfrom modules.source_utils import supported_video_extensions\n'
@@ -109,7 +109,7 @@ FIXTURES = {
         '\t\t\tif torrent_id: self.delete_torrent(torrent_id)\n'
         '\t\t\tif errors: raise\n'
     ),
-    'resources/lib/debrids/torbox_api.py': (
+    'resources/lib/indexers/torbox_api.py': (
         'class TorBoxAPI(object):\n'
         '\tdef parse_magnet_pack(self, magnet_url, info_hash):\n'
         '\t\tfrom modules.source_utils import supported_video_extensions\n'
@@ -384,9 +384,9 @@ def risky_names(src):
 def debrid_sources(root):
     out = {}
     for rel in ['resources/lib/modules/debrid.py'] + [
-            'resources/lib/debrids/' + f
+            'resources/lib/indexers/' + f
             for f in sorted(os.listdir(os.path.join(root, 'resources', 'lib',
-                                                    'debrids')))
+                                                    'indexers')))
             if f.endswith('.py')]:
         p = os.path.join(root, *rel.split('/'))
         with io.open(p, encoding='utf-8', newline='') as f:
@@ -447,7 +447,7 @@ def fresh_pov():
     # the scan walks the whole debrids directory; give it the clean providers
     # too, so "was already clean and NOT touched" is not vacuous here either
     for name in ('easynews_api.py', 'premiumize_api.py'):
-        p = os.path.join(root, 'resources', 'lib', 'debrids', name)
+        p = os.path.join(root, 'resources', 'lib', 'indexers', name)
         with io.open(p, 'w', encoding='utf-8', newline='') as f:
             f.write('class Clean(object):\n\tdef go(self):\n'
                     '\t\ttry:\n\t\t\tx = 1\n'
@@ -617,7 +617,7 @@ check('...with or without `as`', not risky_names(_IMPORT_PLAIN))
 # one POV does.
 check('SELF-CHECK: the scan still finds the actual reported defect',
       ('parse_magnet_pack', ('torrent_id',)) in risky_names(FIXTURES[
-          'resources/lib/debrids/alldebrid_api.py']),
+          'resources/lib/indexers/alldebrid_api.py']),
       'the rebuild lost the finding the whole file exists for')
 
 # --- 0b. the embedded fixtures really are real POV -------------------------
@@ -626,9 +626,8 @@ check('SELF-CHECK: the scan still finds the actual reported defect',
 # the suite still green on every machine without a stock tree.
 if os.path.isdir(STOCK):
     for rel, body in FIXTURES.items():
-        with io.open(os.path.join(STOCK, *rel.split('/')),
-                     encoding='utf-8', newline='') as f:
-            real = f.read()
+        from pov_scraper_test_tree import historical_pov_source
+        real = historical_pov_source(rel)
         slice_only = body.split('\n', 1)[1]      # drop the class header
         check('FIXTURE %s is a byte-slice of real POV' % rel.split('/')[-1],
               slice_only in real,
@@ -648,7 +647,7 @@ check('the scan finds the defect in stock POV, in more than one provider',
       % sorted(hits))
 check('and the reported one is among them',
       ('parse_magnet_pack', ('torrent_id',))
-      in found_before.get('resources/lib/debrids/alldebrid_api.py', set()))
+      in found_before.get('resources/lib/indexers/alldebrid_api.py', set()))
 # The caller has the identical defect and is NOT this patcher's job:
 # pov_debrid_resolve_patcher.py, months older, already binds files and
 # torrent_id at the top of resolve_external_sources. The first draft of this
@@ -667,9 +666,9 @@ check('...and this patcher does NOT touch it',
 
 left = {rel: v for rel, v in found_after.items() if v}
 check('AFTER patching, no PROVIDER handler reads an unbound name',
-      not [r for r in left if '/debrids/' in r],
+      not [r for r in left if '/indexers/' in r],
       'still risky: %s' % sorted((r, v) for r, v in left.items()
-                                 if '/debrids/' in r))
+                                 if '/indexers/' in r))
 
 for rel in before:
     if not found_before[rel]:
@@ -736,7 +735,7 @@ def run_parse(src, args=(True,)):
         return e
 
 
-AD = 'resources/lib/debrids/alldebrid_api.py'
+AD = 'resources/lib/indexers/alldebrid_api.py'
 print()
 print('=== executing the real function ===')
 stock_exc = run_parse(before[AD])
@@ -763,8 +762,8 @@ check('PATCHED: and it is not swallowed into a bare None either',
 # so the crash goes away but the provider's reason does not arrive. That is a
 # real asymmetry, it is documented in the patcher, and it is pinned here so it
 # cannot drift into a silent surprise.
-RD = 'resources/lib/debrids/real_debrid_api.py'
-TB = 'resources/lib/debrids/torbox_api.py'
+RD = 'resources/lib/indexers/realdebrid_api.py'
+TB = 'resources/lib/indexers/torbox_api.py'
 
 check('STOCK real_debrid also loses the cause to an UnboundLocalError',
       isinstance(run_parse(before[RD]), (UnboundLocalError, NameError)))
@@ -800,6 +799,7 @@ check('and the files did not move on that second run',
 # for any input. The real property for that file -- that it is left alone --
 # is checked above, by name.
 for rel, _, _ in mod._SITES:
+    rel = next(c for c in mod._relocations(rel, root) if c in after)
     check('revert(%s) is byte-exact' % rel.split('/')[-1],
           mod._revert(after[rel]) == before[rel])
     check('...and it really was patched, so that revert had work to do',
@@ -837,14 +837,14 @@ check('reverting a CRLF file is byte-exact',
 # _patch_one could have broken it silently. Three shapes: one file gone, the
 # whole directory gone, POV not installed at all.
 home7, root7 = fresh_pov()
-os.remove(os.path.join(root7, 'resources', 'lib', 'debrids', 'alldebrid_api.py'))
+os.remove(os.path.join(root7, 'resources', 'lib', 'indexers', 'alldebrid_api.py'))
 mod7 = load(home7)
 st7 = mod7.ensure_patched()
 check('one missing file is no_file, and the others still patch',
       st7 == 'alldebrid=no_file, realdebrid=patched, torbox=patched', st7)
 
 home8, root8 = fresh_pov()
-shutil.rmtree(os.path.join(root8, 'resources', 'lib', 'debrids'))
+shutil.rmtree(os.path.join(root8, 'resources', 'lib', 'indexers'))
 mod8 = load(home8)
 st8 = mod8.ensure_patched()
 check('the whole directory missing is three no_file, not a traceback',
@@ -912,6 +912,8 @@ try:
     rel, anchor, _names = _real_sites[0]
     # a "name" that cannot compile, so the injected line is a syntax error
     mod10._SITES = ((rel, anchor, ('1invalid',)),) + _real_sites[1:]
+    rel = next(c for c in mod10._relocations(rel, root10)
+               if os.path.isfile(os.path.join(root10, *c.split('/'))))
     before10 = io.open(os.path.join(root10, *rel.split('/')),
                        encoding='utf-8', newline='').read()
     st10 = mod10.ensure_patched()
@@ -928,7 +930,7 @@ check('...and the other two sites still patch, being independent files',
       st10.count('=patched') == 2, st10)
 
 home11, root11 = fresh_pov()
-_pyc_dir = os.path.join(root11, 'resources', 'lib', 'debrids', '__pycache__')
+_pyc_dir = os.path.join(root11, 'resources', 'lib', 'indexers', '__pycache__')
 os.makedirs(_pyc_dir, exist_ok=True)
 _stale = os.path.join(_pyc_dir, 'alldebrid_api.cpython-311.pyc')
 _other = os.path.join(_pyc_dir, 'premiumize_api.cpython-311.pyc')

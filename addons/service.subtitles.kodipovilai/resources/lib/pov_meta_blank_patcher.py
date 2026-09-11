@@ -244,9 +244,15 @@ def _widen_tmdb_timeout():
         return
     if _TMDB_TIMEOUT_NEW.strip() in content:
         return  # already widened
-    if _TMDB_TIMEOUT_OLD not in content:
-        return  # POV changed the line; leave it alone
-    new_content = content.replace(_TMDB_TIMEOUT_OLD, _TMDB_TIMEOUT_NEW, 1)
+    # Earlier patchers can write CRLF on Windows. Match either line ending
+    # without changing the rest of the host file or silently missing this fix.
+    variants = [(_TMDB_TIMEOUT_OLD.replace(b'\n', eol),
+                 _TMDB_TIMEOUT_NEW.replace(b'\n', eol))
+                for eol in (b'\n', b'\r\n')]
+    if sum(content.count(old) for old, _ in variants) != 1:
+        return  # changed or ambiguous upstream line; leave it alone
+    old, new = next((old, new) for old, new in variants if old in content)
+    new_content = content.replace(old, new, 1)
     tmp_path = path + '.aitmp'
     try:
         with open(tmp_path, 'wb') as f:

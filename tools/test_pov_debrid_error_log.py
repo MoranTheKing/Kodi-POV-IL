@@ -100,11 +100,11 @@ PM_CHECK_CACHE = (
 )
 
 FIXTURES = {
-    'resources/lib/debrids/alldebrid_api.py':
+    'resources/lib/indexers/alldebrid_api.py':
         'class AllDebridAPI(object):\n' + AD_REQUEST,
-    'resources/lib/debrids/torbox_api.py':
+    'resources/lib/indexers/torbox_api.py':
         'class TorBoxAPI(object):\n' + TB_REQUEST + '\n' + TB_IS_CONTROL,
-    'resources/lib/debrids/premiumize_api.py':
+    'resources/lib/indexers/premiumize_api.py':
         'class PremiumizeAPI(object):\n' + PM_CHECK_CACHE,
 }
 
@@ -170,13 +170,14 @@ def _read(root, rel):
 print('fixture: %s' % ('real stock POV' if os.path.isdir(STOCK)
                        else 'byte-slices of real POV (no stock tree here)'))
 if os.path.isdir(STOCK):
-    for rel, slice_ in (('resources/lib/debrids/alldebrid_api.py', AD_REQUEST),
-                        ('resources/lib/debrids/torbox_api.py', TB_REQUEST),
-                        ('resources/lib/debrids/torbox_api.py',
+    for rel, slice_ in (('resources/lib/indexers/alldebrid_api.py', AD_REQUEST),
+                        ('resources/lib/indexers/torbox_api.py', TB_REQUEST),
+                        ('resources/lib/indexers/torbox_api.py',
                          TB_IS_CONTROL),
-                        ('resources/lib/debrids/premiumize_api.py',
+                        ('resources/lib/indexers/premiumize_api.py',
                          PM_CHECK_CACHE)):
-        real = _read(STOCK, rel)
+        from pov_scraper_test_tree import historical_pov_source
+        real = historical_pov_source(rel)
         check('FIXTURE slice of %s is verbatim POV' % rel.split('/')[-1],
               real.count(slice_) == 1,
               'found %d times -- the anchor has drifted' % real.count(slice_))
@@ -195,8 +196,8 @@ check('every site patches on a stock tree',
       status == 'alldebrid=patched, torbox=patched, premiumize=patched',
       status)
 
-for rel in ('resources/lib/debrids/alldebrid_api.py',
-            'resources/lib/debrids/torbox_api.py'):
+for rel in ('resources/lib/indexers/alldebrid_api.py',
+            'resources/lib/indexers/torbox_api.py'):
     src = _read(root, rel)
     check('%s carries the marker exactly once' % rel.split('/')[-1],
           src.count(mod.MARKER) == 1, 'found %d' % src.count(mod.MARKER))
@@ -270,8 +271,8 @@ def run_request(source, cls_name, payload, path='v4/user'):
     return obj._request('get', path), logged
 
 
-STOCK_AD = FIXTURES['resources/lib/debrids/alldebrid_api.py']
-STOCK_TB = FIXTURES['resources/lib/debrids/torbox_api.py']
+STOCK_AD = FIXTURES['resources/lib/indexers/alldebrid_api.py']
+STOCK_TB = FIXTURES['resources/lib/indexers/torbox_api.py']
 
 # -- stock: the bug
 val, logged = run_request(STOCK_AD, 'AllDebridAPI', AD_REFUSAL)
@@ -294,8 +295,8 @@ st2 = mod2.ensure_patched()
 check('the fixtures patch too',
       st2 == 'alldebrid=patched, torbox=patched, premiumize=patched', st2)
 
-PATCHED_AD = _read(root2, 'resources/lib/debrids/alldebrid_api.py')
-PATCHED_TB = _read(root2, 'resources/lib/debrids/torbox_api.py')
+PATCHED_AD = _read(root2, 'resources/lib/indexers/alldebrid_api.py')
+PATCHED_TB = _read(root2, 'resources/lib/indexers/torbox_api.py')
 
 val, logged = run_request(PATCHED_AD, 'AllDebridAPI', AD_REFUSAL)
 joined = ' | '.join(logged)
@@ -407,8 +408,8 @@ for label, src, cls in (('AllDebrid', PATCHED_AD, 'AllDebridAPI'),
 # frames up. Every source is then uncached, filtered out, and gone.
 print()
 print('=== Premiumize refuses at 200 and POV subscripts the refusal ===')
-PATCHED_PM = _read(root2, 'resources/lib/debrids/premiumize_api.py')
-STOCK_PM = FIXTURES['resources/lib/debrids/premiumize_api.py']
+PATCHED_PM = _read(root2, 'resources/lib/indexers/premiumize_api.py')
+STOCK_PM = FIXTURES['resources/lib/indexers/premiumize_api.py']
 
 PM_REFUSAL = {'status': 'error', 'message': 'Not logged in.'}
 PM_OK = {'status': 'success', 'response': [True, False]}
@@ -470,7 +471,7 @@ mod3 = load(home3)
 st3 = mod3.ensure_patched()
 check('a CRLF tree still patches',
       st3 == 'alldebrid=patched, torbox=patched, premiumize=patched', st3)
-src3 = _read(root3, 'resources/lib/debrids/alldebrid_api.py')
+src3 = _read(root3, 'resources/lib/indexers/alldebrid_api.py')
 check('...without introducing a bare LF', '\n' not in src3.replace('\r\n', ''))
 
 # AN OLDER INJECTION, aged from a REAL one rather than hand-written. The
@@ -478,10 +479,10 @@ check('...without introducing a bare LF', '\n' not in src3.replace('\r\n', ''))
 # can be recognised -- which is the point, and a hand-drawn approximation
 # would test the opposite of what ships.
 home4, root4 = fresh_pov(FIXTURES)
-p4 = os.path.join(root4, 'resources', 'lib', 'debrids', 'alldebrid_api.py')
+p4 = os.path.join(root4, 'resources', 'lib', 'indexers', 'alldebrid_api.py')
 mod4a = load(home4)
 mod4a.ensure_patched()
-aged = _read(root4, 'resources/lib/debrids/alldebrid_api.py').replace(
+aged = _read(root4, 'resources/lib/indexers/alldebrid_api.py').replace(
     mod4a.MARKER, '# AI_SUBS_POV_DEBRID_ERRLOG_v0')
 with io.open(p4, 'w', encoding='utf-8', newline='') as f:
     f.write(aged)
@@ -489,11 +490,11 @@ mod4 = load(home4)
 st4 = mod4.ensure_patched()
 check('an older injection is removed and replaced',
       'alldebrid=repatched' in st4, st4)
-src4 = _read(root4, 'resources/lib/debrids/alldebrid_api.py')
+src4 = _read(root4, 'resources/lib/indexers/alldebrid_api.py')
 check('...leaving exactly one marker', src4.count('ERRLOG_v') == 1,
       'found %d' % src4.count('ERRLOG_v'))
 check('...and the file is what a clean patch would have produced',
-      src4 == _read(root2, 'resources/lib/debrids/alldebrid_api.py'),
+      src4 == _read(root2, 'resources/lib/indexers/alldebrid_api.py'),
       'a repatch has to land on the same bytes as a first patch')
 
 # A BLOCK NOBODY HERE WROTE IS NOT REMOVED, IT IS REFUSED. The sibling
@@ -503,8 +504,8 @@ check('...and the file is what a clean patch would have produced',
 # somebody else's line out of somebody else's add-on is worse than declining
 # to upgrade.
 home4b, root4b = fresh_pov(FIXTURES)
-p4b = os.path.join(root4b, 'resources', 'lib', 'debrids', 'alldebrid_api.py')
-tampered = _read(root4b, 'resources/lib/debrids/alldebrid_api.py').replace(
+p4b = os.path.join(root4b, 'resources', 'lib', 'indexers', 'alldebrid_api.py')
+tampered = _read(root4b, 'resources/lib/indexers/alldebrid_api.py').replace(
     "\t\tif 'data' in response",
     "\t\tif False:  # AI_SUBS_POV_DEBRID_ERRLOG_v0\n"
     "\t\t\tsomebody_elses_line = 1\n"
@@ -517,12 +518,12 @@ check('a block this module did not write is refused, not swept away',
       'alldebrid=revert_failed' in st4b, st4b)
 check('...and the intruder is still there',
       'somebody_elses_line' in _read(
-          root4b, 'resources/lib/debrids/alldebrid_api.py'),
+          root4b, 'resources/lib/indexers/alldebrid_api.py'),
       'an unrelated line was deleted out of POV')
 
 # a file POV refactored away
 home5, root5 = fresh_pov(FIXTURES)
-os.remove(os.path.join(root5, 'resources', 'lib', 'debrids',
+os.remove(os.path.join(root5, 'resources', 'lib', 'indexers',
                        'alldebrid_api.py'))
 mod5 = load(home5)
 st5 = mod5.ensure_patched()
@@ -531,33 +532,33 @@ check('a missing file is reported, and the other sites still patch',
 
 # a shape POV changed: leave the file completely alone
 home6, root6 = fresh_pov({
-    'resources/lib/debrids/alldebrid_api.py':
+    'resources/lib/indexers/alldebrid_api.py':
         'class AllDebridAPI(object):\n\tdef _request(self, m, p):\n'
         '\t\treturn None\n',
-    'resources/lib/debrids/torbox_api.py': STOCK_TB,
+    'resources/lib/indexers/torbox_api.py': STOCK_TB,
 })
 mod6 = load(home6)
 st6 = mod6.ensure_patched()
 check('a refactored shape is left untouched, not guessed at',
       st6.startswith('alldebrid=unmatched, torbox=patched'), st6)
 check('...and the file is byte-identical to what was there',
-      _read(root6, 'resources/lib/debrids/alldebrid_api.py')
+      _read(root6, 'resources/lib/indexers/alldebrid_api.py')
       == 'class AllDebridAPI(object):\n\tdef _request(self, m, p):\n'
          '\t\treturn None\n')
 
 # and a DUPLICATED shape: two copies means we do not know which one matters
 home7, root7 = fresh_pov({
-    'resources/lib/debrids/alldebrid_api.py':
+    'resources/lib/indexers/alldebrid_api.py':
         STOCK_AD + '\n' + AD_REQUEST.replace('_request', '_request2'),
-    'resources/lib/debrids/torbox_api.py': STOCK_TB,
+    'resources/lib/indexers/torbox_api.py': STOCK_TB,
 })
-_dup = _read(root7, 'resources/lib/debrids/alldebrid_api.py')
+_dup = _read(root7, 'resources/lib/indexers/alldebrid_api.py')
 mod7 = load(home7)
 st7 = mod7.ensure_patched()
 check('a duplicated shape is refused rather than patched at the first copy',
       st7.startswith('alldebrid=unmatched, torbox=patched'), st7)
 check('...and that file is untouched too',
-      _read(root7, 'resources/lib/debrids/alldebrid_api.py') == _dup)
+      _read(root7, 'resources/lib/indexers/alldebrid_api.py') == _dup)
 
 print()
 print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')
