@@ -158,6 +158,20 @@ REPLACEMENT = (
     "\t\t\texcept Exception: pass\n"
 )
 
+# POV 6.09.03 made Router callable and imports sys at the call site. Keep
+# the older entry point for older hosts, and use the same timing body for both.
+# The existing marker stays valid: a previously instrumented Router still does
+# the right thing; an upstream replacement removes it before this runs.
+_CALL_ANCHOR = (
+    "\tdef __call__(self):\n"
+    "\t\twith self: return routing(__import__('sys'))\n"
+)
+_CALL_REPLACEMENT = (REPLACEMENT
+    .replace('def run(self, sys):', 'def __call__(self):')
+    .replace('routing(sys)', 'routing(_kpi_sys)')
+    .replace('sys.argv', '_kpi_sys.argv'))
+_VARIANTS = ((ANCHOR, REPLACEMENT), (_CALL_ANCHOR, _CALL_REPLACEMENT))
+
 # v2: the same wrapper, but timing ROUTING AND __exit__ AS ONE NUMBER, which
 # is the bug v3 exists to fix. See the header.
 _V2 = (
@@ -245,10 +259,13 @@ def _revert(content, eol='\n'):
     marker = _found_marker(content)
     if not marker:
         return content
-    for shape in _SHAPES:
-        injected = fit(shape.replace(_MARKER_SLOT, marker))
-        if injected in content:
-            return content.replace(injected, fit(ANCHOR), 1)
+    for anchor, shapes in (
+            (ANCHOR, _SHAPES),
+            (_CALL_ANCHOR, (_CALL_REPLACEMENT.replace(MARKER, _MARKER_SLOT),))):
+        for shape in shapes:
+            injected = fit(shape.replace(_MARKER_SLOT, marker))
+            if injected in content:
+                return content.replace(injected, fit(anchor), 1)
     return content
 
 
@@ -344,12 +361,15 @@ def _ensure_patched():
 
     # count, not `in`: a refactor that duplicated this shape is unrecognised
     # rather than patched at whichever copy comes first.
-    if content.count(fit(ANCHOR)) != 1:
-        _log('Router.run is not the expected shape -- POV may have '
+    matches = [(anchor, replacement) for anchor, replacement in _VARIANTS
+               for _ in range(content.count(fit(anchor)))]
+    if len(matches) != 1:
+        _log('Router entry point is not the expected shape -- POV may have '
              'refactored it; leaving the file alone', level='WARNING')
         return 'unmatched'
 
-    new_content = content.replace(fit(ANCHOR), fit(REPLACEMENT), 1)
+    anchor, replacement = matches[0]
+    new_content = content.replace(fit(anchor), fit(replacement), 1)
 
     try:
         # lstrip the BOM for the CHECK only -- see the long note on the same

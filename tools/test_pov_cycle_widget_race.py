@@ -757,8 +757,15 @@ try:
                 except Exception as e:      # noqa: BLE001 - that is the test
                     errors.append(repr(e))
                 try:
-                    with open(mod._owed_path(), encoding='utf-8') as f:
-                        body = f.read()
+                    for read_attempt in range(20):
+                        try:
+                            with open(mod._owed_path(), encoding='utf-8') as f:
+                                body = f.read()
+                            break
+                        except PermissionError:
+                            if os.name != 'nt' or read_attempt == 19:
+                                raise
+                            __import__('time').sleep(0.001)
                     if not body.strip():
                         empties.append(r)
                 except FileNotFoundError:

@@ -9,7 +9,7 @@ name, so its write fails with ENOENT and POV would not have looked there anyway.
 
 The shim creates the old folder so the write succeeds, and edits the one line in
 modules/sources.py so POV scans BOTH. The checks below run POV's own patched
-line through pkgutil, against both real POV trees, because "would POV find it"
+line through pkgutil, against current stock / verbatim method fixtures, because "would POV find it"
 is the only question that matters and text cannot answer it.
 
 Run: python3 tools/test_pov_internal_scraper_shim.py
@@ -69,7 +69,8 @@ def load(home):
 
 def real_pov(ver):
     """A throwaway copy of a real POV tree, or None if it is not on disk."""
-    src = os.path.join(SC, 'pov%s' % ver, 'plugin.video.pov')
+    from pov_scraper_test_tree import pov_tree
+    src = pov_tree(ver)
     if not os.path.isdir(src):
         return None, None
     home = tempfile.mkdtemp(prefix='shim-')
@@ -148,10 +149,10 @@ def put_legacy(pov, name, body='source = 1\n'):
 
 
 # --- 0. the rename is real, and both shapes are handled ------------------
-print('=== against both real POV trees ===')
+print('=== against current stock / verbatim method fixtures ===')
 seen_any = False
-for ver, label, internal in (('6813', '6.08.13', 'scrapers'),
-                             ('6814', '6.08.14', 'debrids')):
+for ver, label, internal in (('6813', '6.08.13 fixture', 'scrapers'),
+                             ('6903', '6.09.03 current/fixture', 'debrids')):
     home, pov = real_pov(ver)
     if not pov:
         print('   (POV %s not on disk -- skipped)' % label)
@@ -264,7 +265,7 @@ for ver, label, internal in (('6813', '6.08.13', 'scrapers'),
     check('POV %s: running again is a no-op' % label,
           'scan=unchanged' in _again and 'rank=unchanged' in _again, _again)
 
-check('at least one real POV tree was available to test against', seen_any,
+check('at least one upstream method tree was exercised', seen_any,
       'this file proves nothing without one')
 
 
@@ -290,13 +291,13 @@ check('a sources.py with no rank lookup is reported, not forced',
 # TWO matches must be refused, not half-patched. A POV somebody has edited, or
 # a future POV with the scan in two places, is one we must not guess at -- and
 # loosening the count from `!= 1` to `< 1` passed every other check here.
-home2b, pov2b = real_pov('6814')
+home2b, pov2b = real_pov('6903')
 if pov2b:
     _p = os.path.join(pov2b, 'resources', 'lib', 'modules', 'sources.py')
     _t = io.open(_p, encoding='utf-8', newline='').read()
-    _blk = ("\t\tsource_path = kodi_utils.translate_path("
-            "kodi_utils.internal_path)\n\t\tfor loader, module_name, is_pkg "
-            "in __import__('pkgutil').iter_modules([source_path]):")
+    _start = _t.index('\t\tsource_path = kodi_utils.translate_path')
+    _end = _t.index('\n\n\tdef ', _start)
+    _blk = _t[_start:_end]
     check('the fixture really has the block once', _t.count(_blk) == 1)
     with io.open(_p, 'w', encoding='utf-8', newline='') as f:
         f.write(_t.replace(_blk, _blk + '\n\t\tpass\n' + _blk, 1))
@@ -309,7 +310,7 @@ if pov2b:
 # The same refusal for the rank lookup, on its own fixture. Two of them means a
 # POV somebody has edited or a shape we do not understand, and guessing which
 # one to rewrite is how a patcher silently half-applies.
-home2c, pov2c = real_pov('6814')
+home2c, pov2c = real_pov('6903')
 if pov2c:
     _pc = os.path.join(pov2c, 'resources', 'lib', 'modules', 'sources.py')
     _tc = io.open(_pc, encoding='utf-8', newline='').read()
@@ -330,7 +331,7 @@ if pov2c:
 # as "POV refactored" and sends the next maintainer hunting a change POV never
 # made. The rank guard reported exactly that before it grew the same check the
 # scan edit already had.
-home2d, pov2d = real_pov('6814')
+home2d, pov2d = real_pov('6903')
 if pov2d:
     mod2d = load(home2d)
     st_first = mod2d.ensure_patched()
@@ -350,7 +351,7 @@ _SCRATCH.append(home3)
 check('no POV installed is reported, not crashed',
       load(home3).ensure_patched() == 'no_pov')
 
-home4, pov4 = real_pov('6814')
+home4, pov4 = real_pov('6903')
 if pov4:
     os.remove(os.path.join(pov4, 'resources', 'lib', 'modules', 'sources.py'))
     st4 = load(home4).ensure_patched()
@@ -358,7 +359,7 @@ if pov4:
           'scan=no_file' in st4, st4)
 
 # A legacy path that is a FILE.
-home5, pov5 = real_pov('6814')
+home5, pov5 = real_pov('6903')
 if pov5:
     with io.open(os.path.join(pov5, 'resources', 'lib', 'scrapers'), 'w',
                  encoding='utf-8') as f:
@@ -369,7 +370,7 @@ if pov5:
     check('...and the scan edit still applies', 'scan=patched' in st5, st5)
 
 # An existing legacy folder without __init__.py gets one.
-home6, pov6 = real_pov('6814')
+home6, pov6 = real_pov('6903')
 if pov6:
     os.makedirs(os.path.join(pov6, 'resources', 'lib', 'scrapers'),
                 exist_ok=True)
@@ -381,7 +382,7 @@ if pov6:
           os.path.isfile(init6), st6)
 
 # CRLF, because a device's copy has been through whatever wrote it.
-home7, pov7 = real_pov('6814')
+home7, pov7 = real_pov('6903')
 if pov7:
     p7 = os.path.join(pov7, 'resources', 'lib', 'modules', 'sources.py')
     t7 = io.open(p7, encoding='utf-8', newline='').read().replace('\n', '\r\n')
@@ -397,7 +398,7 @@ if pov7:
 # elsewhere. BOTH edits are sabotaged in the same run, because they write to
 # the same file: sabotaging only one leaves the other free to rewrite it, and
 # the byte-for-byte assertion below would then be measuring the wrong edit.
-home8, pov8 = real_pov('6814')
+home8, pov8 = real_pov('6903')
 if pov8:
     mod8 = load(home8)
     p8 = os.path.join(pov8, 'resources', 'lib', 'modules', 'sources.py')
