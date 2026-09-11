@@ -82,6 +82,11 @@ ROUTER = (
     "\t\twith self: return routing(sys)\n"
 )
 
+# Verbatim entry point from 6.09.03, independent of the patcher's templates.
+CALL_ROUTER = ROUTER.replace(
+    "\tdef run(self, sys):\n\t\twith self: return routing(sys)\n",
+    "\tdef __call__(self):\n\t\twith self: return routing(__import__('sys'))\n")
+
 # enough of a module around it to import and call. `routing`, `logger`,
 # `get_property` and `kodi_utils` are module globals in the real entry.py too.
 # routing() SLEEPS, so the logged number can be checked against real elapsed
@@ -152,8 +157,9 @@ print('fixture: %s' % ('real stock POV' if os.path.isdir(STOCK)
                        else 'a byte-slice of real POV (no stock tree here)'))
 if os.path.isdir(STOCK):
     real = read(os.path.join(STOCK, 'resources', 'lib', 'entry.py'))
-    check('the Router fixture is verbatim POV', real.count(ROUTER) == 1,
-          'found %d times -- the anchor has drifted' % real.count(ROUTER))
+    check('one Router fixture is verbatim POV',
+          sum(real.count(r) for r in (ROUTER, CALL_ROUTER)) == 1,
+          'neither supported Router matches the supplied stock tree')
 
 
 # --- 1. it applies ---------------------------------------------------------
@@ -242,10 +248,16 @@ def run_router(source, argv, exit_raises=None):
     }
     exec(compile(source, 'entry.py', 'exec'), ns)
     router = ns['Router']()
+    old_argv = sys.argv
     try:
+        if callable(router):
+            sys.argv = argv
+            return router(), None, logged
         return router.run(fake_sys), None, logged
     except BaseException as e:      # SystemExit is not an Exception
         return None, e, logged
+    finally:
+        sys.argv = old_argv
 
 
 STOCK_SRC = PRELUDE + ROUTER
@@ -294,6 +306,41 @@ check('stock still raises SystemExit from __exit__',
 check('patched raises the SAME thing', isinstance(perr2, SystemExit)
       and str(perr2) == str(serr2), '%r vs %r' % (perr2, serr2))
 check('...and times it anyway', len(plog2) == 1, str(plog2))
+
+# The caller really invokes __call__, including its real sys module. Merely
+# checking for a marker would miss a wrapper still trying to read an argument.
+for _ending in ('\n', '\r\n'):
+    _call_stock = (PRELUDE + CALL_ROUTER).replace('\n', _ending)
+    _ch, _ce = fresh_pov(_call_stock)
+    _cm = load(_ch)
+    check('callable Router applies (%r)' % _ending,
+          _cm.ensure_patched() == 'patched')
+    _cp = read(_ce)
+    check('callable Router is byte-idempotent',
+          _cm.ensure_patched() == 'unchanged' and read(_ce) == _cp)
+    if _ending == '\r\n':
+        check('callable Router preserves CRLF', '\n' not in _cp.replace('\r\n', ''))
+    for _raises in (False, True):
+        _sv, _se, _sl = run_router(_call_stock, ARGV, exit_raises=_raises)
+        _pv, _pe, _pl = run_router(_cp, ARGV, exit_raises=_raises)
+        check('callable Router preserves return/exception (%s)' % _raises,
+              _pv == _sv and type(_pe) is type(_se) and str(_pe) == str(_se))
+        check('callable Router logs actual route and split time (%s)' % _raises,
+              not _sl and len(_pl) == 1 and 'tmdb_tv_networks' in _pl[0]
+              and 'route=' in _pl[0] and 'exit=' in _pl[0], str(_pl))
+    # A future marker bump must revert to __call__, never to the old run API.
+    with io.open(_ce, 'w', encoding='utf-8', newline='') as _f:
+        _f.write(_cp.replace(_cm.MARKER, '# AI_SUBS_POV_DIRTIMING_v0'))
+    _cu = load(_ch)
+    check('callable Router upgrades without reverting its API',
+          _cu.ensure_patched() == 'repatched' and read(_ce) == _cp)
+
+_mh, _me = fresh_pov(PRELUDE + ROUTER + '\n' + CALL_ROUTER.replace(
+    'class Router:', 'class AnotherRouter:'))
+_mm = load(_mh)
+_mb = read(_me)
+check('two different supported entry points are refused as ambiguous',
+      _mm.ensure_patched() == 'unmatched' and read(_me) == _mb)
 
 # an argv shorter than Kodi's usual three (some entry points pass two)
 short = run_router(PATCHED_SRC, ['plugin://plugin.video.pov/', '7'])

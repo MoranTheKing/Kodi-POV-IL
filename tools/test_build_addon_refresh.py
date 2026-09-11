@@ -52,7 +52,13 @@ def zip_at(name, members):
     path = os.path.join(WORK, name)
     with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as z:
         for member, data in members.items():
-            z.writestr(member, data)
+            # ZipInfo normalizes backslashes on Windows. Preserve the hostile
+            # name exactly or this test silently tests a different archive.
+            info = zipfile.ZipInfo(member)
+            info.filename = info.orig_filename = member
+            z.writestr(info, data)
+    with zipfile.ZipFile(path) as z:
+        assert [i.orig_filename for i in z.infolist()] == list(members), 'fixture changed a member name'
     return path
 
 
@@ -119,7 +125,7 @@ def run(out_name, extra=(), expect_ok=True):
            '--wizard-zip', wizpkg, '--output', out,
            '--addon-version', '0.2.510', '--wizard-version', '0.1.50']
     cmd += list(extra)
-    p = subprocess.run(cmd, capture_output=True, text=True)
+    p = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8')
     return p, out
 
 
