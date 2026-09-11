@@ -232,7 +232,11 @@ def align_one(src_text, src_blocks, ar_text):
     # D1 no_align overlap distribution) showed ~65% of rejections sat in this
     # 65-79% band WITH a correct map, so the old 0.80 coverage floor was throwing
     # away usable oracles. vote>=0.65 + the framerate band stay the real guards
-    # against a spurious alignment (a random pairing votes ~0.30).
+    # against a spurious alignment. MEASURED, not assumed: a true pair votes
+    # 0.742; twenty references with randomised starts vote 0.417-0.441, and
+    # nine time-REVERSED real references (same cue density, no correspondence)
+    # vote 0.439-0.441. So the floor is ~0.43, not the ~0.30 this comment
+    # used to claim -- the gate still clears it, by less than we said.
     if not (0.90 <= a <= 1.11) or vote < 0.65 or ov < 0.65:
         return None, 'gate FAILED (' + diag + ')'
     return _arabic_for_blocks(src_blocks, ar, a, b), 'gate OK (' + diag + ')'
@@ -505,16 +509,44 @@ class ReferencePlan(object):
 # 24 gender errors in the file a viewer reported was masculine-where-feminine,
 # which is exactly what an unhinted translation defaulting to masculine looks
 # like. The direction that can be checked safely is the direction that fails.
+# EVERY pattern above the blank line needs HARAKAT, and real subtitles do not
+# carry it. Measured on a full human Arabic episode: 7,415 Arabic letters, TWO
+# diacritics, zero vocalised \u0623\u0646\u062a\u064e/\u0623\u0646\u062a\u0650 -- so the whole Arabic branch read
+# F=0 M=0 None=370. Arabic anchors the largest share of real jobs, which made
+# it the emptiest reader we had.
+#
+# The 2fs PRESENT suffix is different: \u062a...\u064a\u0646 is consonantal and is always
+# written. Two noun classes wear the same ending and must not be read as an
+# addressee:
+#   * the \u062a\u0641\u0639\u064a\u0644 verbal noun -- \u062a\u0645\u0631\u064a\u0646, \u062a\u0639\u064a\u064a\u0646, \u062a\u062d\u0633\u064a\u0646, \u062a\u062f\u062e\u064a\u0646 -- which is
+#     FIVE letters and structurally identical to a real 5-letter verb like
+#     \u062a\u0628\u062f\u064a\u0646. Nothing short of a lexicon separates them, so the floor is
+#     six letters and \u062a\u0628\u062f\u064a\u0646 / \u062a\u0638\u0646\u064a\u0646 / \u062a\u0642\u0636\u064a\u0646 are given up on purpose.
+#   * the feminine sound dual -- \u062a\u0641\u0635\u064a\u0644\u0629 -> \u062a\u0641\u0635\u064a\u0644\u062a\u064a\u0646 -- so the letter before
+#     the suffix may not be \u062a.
+# Recall loses a little, precision wins, and that is the right way round: this
+# reader feeds a repair pass, and a false F spends a request rewriting a line
+# that was already correct. Measured on the same episode: 19 of 370 cues
+# (5.1%), eleven distinct forms, every one a genuine 2fs verb, and twelve
+# noun controls (\u062a\u0645\u0631\u064a\u0646, \u0633\u0646\u062a\u064a\u0646, \u0645\u0631\u062a\u064a\u0646, ...) all correctly refused.
+_AR_2FS_PRESENT = u'(?<![\u0621-\u064a])\u062a[\u0621-\u064a]{2,5}[\u0621-\u0629\u062b-\u064a]\u064a\u0646(?![\u0621-\u064a])'
+
 _AR_FEM = tuple(re.compile(p) for p in (
     u'\u0623\u0646\u062a\u0650', u'\u0644\u0643\u0650', u'\u0628\u0643\u0650', u'\u0639\u0644\u064a\u0643\u0650', u'\u0645\u0639\u0643\u0650', u'\u0625\u0644\u064a\u0643\u0650', u'\u0645\u0646\u0643\u0650',
     u'\u0643\u0650\\s', u'\u0643\u0650$', u'\u062a\u0650\\s', u'\u062a\u0650$', u'\u064a\u0627 \u0633\u064a\u062f\u062a\u064a',
+    _AR_2FS_PRESENT,
 ))
 _AR_MASC = tuple(re.compile(p) for p in (
     u'\u0623\u0646\u062a\u064e', u'\u0644\u0643\u064e', u'\u0628\u0643\u064e', u'\u0639\u0644\u064a\u0643\u064e', u'\u0645\u0639\u0643\u064e', u'\u0625\u0644\u064a\u0643\u064e', u'\u0645\u0646\u0643\u064e',
     u'\u0643\u064e\\s', u'\u0643\u064e$', u'\u062a\u064e\\s', u'\u062a\u064e$',
 ))
 # Hebrew reference: read the pronoun straight off it.
-_HE_REF_FEM = re.compile(u'(?<![\u05d0-\u05ea])\u05d0\u05ea(?![\u05d0-\u05ea])(?!\\s*\u05d4)')
+# The SAME proclitic alternation _HE_MASC carries below. Without it we looked
+# for \u05d5\u05d0\u05ea\u05d4/\u05e9\u05d0\u05ea\u05d4 but never for \u05d5\u05d0\u05ea/\u05e9\u05d0\u05ea -- an asymmetry that made the
+# reader better at finding a MALE addressee than a female one, in a check whose
+# whole purpose is catching masculine-where-feminine.
+_HE_REF_FEM = re.compile(
+    u'(?<![\u05d0-\u05ea])(?:\u05d5|\u05e9|\u05db\u05e9|\u05d5\u05e9|\u05d5\u05db\u05e9)?\u05d0\u05ea(?![\u05d0-\u05ea])(?!\\s*\u05d4)')
 # The proclitics Hebrew glues straight onto a pronoun: ו (and), ש (that),
 # כש (when) and their combinations. Without them "ואתה", "שאתה" and
 # "כשאתה" -- ordinary, high-frequency Hebrew -- read as no pronoun at all,
@@ -575,10 +607,13 @@ _ADDRESSEE_MARKERS = {
 def reference_addressee_gender(ref_text, lang):
     """'F', 'M', or None when the reference does not mark it unambiguously.
 
-    Only 'ar' and 'he' are read. They are the top two of the chain and cover
-    almost every job; for any other language this returns None, so the
-    verification pass simply does not fire rather than guessing from a
-    language whose marking has not been validated here.
+    'he' and 'ar' are read directly; every language in _ADDRESSEE_MARKERS
+    (ru, uk, bg, pl, cs, sk, sr, hr, hi) is read from its own validated
+    pattern pair. Anything else returns None, so the verification pass does
+    not fire rather than guessing from a marking nobody checked here.
+    (This used to say only he/ar were read, which stopped being true when
+    _ADDRESSEE_MARKERS landed -- tools/test_gender_verification.py exercises
+    all nine against both genders plus a must-not-match control.)
     """
     if not ref_text:
         return None
@@ -667,11 +702,23 @@ def begin(info, src_text):
 
     # Bucket by chain language, preserving the engine's own ranking (it sorts
     # by release-match %, so earlier candidates align more often).
+    #
+    # GUARDED because the docstring promises it. Everything from here down used
+    # to sit outside every handler, so a candidate the source engine handed back
+    # in an unexpected shape -- a bare string, or one whose 'language' is a list
+    # -- left this function as an AttributeError. The single caller does wrap the
+    # call, so the user outcome was always the correct silent fallback; but a
+    # module documented as never raising has to actually never raise, or the next
+    # caller inherits a promise the code does not keep.
     by_lang = {}
-    for c in all_cands:
-        lang = _chain_lang_of(c)
-        if lang and len(by_lang.setdefault(lang, [])) < _PER_LANG_LIMIT:
-            by_lang[lang].append(c)
+    try:
+        for c in all_cands:
+            lang = _chain_lang_of(c)
+            if lang and len(by_lang.setdefault(lang, [])) < _PER_LANG_LIMIT:
+                by_lang[lang].append(c)
+    except Exception as e:
+        _log('bucketing crashed: {0}'.format(e), level='WARNING')
+        return None, {'reason': 'crash'}
 
     # NOTE on Hebrew-first: the user reached AI translation, so any Hebrew sub
     # here is out-of-sync / unmatched for their release -- but as a GENDER

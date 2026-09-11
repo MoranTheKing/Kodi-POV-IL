@@ -1,3 +1,56 @@
+0.2.523
+- The Arabic gender reference could not read Arabic.
+
+  Arabic anchors more real jobs than any other reference language -- 41% of
+  every job that got one, measured on 5,708 of them. And every pattern this
+  module used to read it required HARAKAT. Real subtitles carry none: a full
+  human episode has 7,415 Arabic letters and TWO diacritics, and not one
+  vocalised anta/anti. So reference_addressee_gender(line, 'ar') returned
+  F=0, M=0, None=370 across that entire file. The most-used reader we had was
+  the emptiest.
+
+  The 2fs PRESENT suffix is consonantal and always written, so it can be read
+  from the text real people actually get. Two noun classes wear the same
+  ending and had to be refused: the tafʿil verbal noun (tamrin, taʿyin,
+  tahsin, tadkhin) and the feminine sound dual (tafsila -> tafsilatayn). The
+  first is FIVE letters and structurally identical to a real five-letter verb,
+  so the floor is six letters and three genuine verbs are given up on purpose.
+  Recall loses a little; precision wins, and that is the right way round --
+  this reader feeds a repair pass, and a false feminine spends a request
+  rewriting a line that was already correct.
+
+  Measured on that episode: 0 -> 19 of 370 cues (5.1%), eleven distinct forms,
+  every one a genuine second-person feminine verb, with twelve noun controls
+  all correctly refused.
+
+- The Hebrew reader was better at finding a MALE addressee than a female one.
+
+  _HE_MASC has always carried the proclitic alternation -- it matches ve-ata,
+  she-ata, kshe-ata. _HE_REF_FEM did not, so ve-at, she-at and kshe-at read as
+  no pronoun at all. An asymmetry in exactly the wrong direction, in a check
+  whose entire purpose is catching masculine-where-feminine. Three more cues
+  on the same episode, and the object-marker guard is untouched.
+
+- A guard that was promised and not kept. begin() is documented "Fully
+  guarded; never raises" and everything after the candidate fetch sat outside
+  every handler, so a candidate the source engine returned in an unexpected
+  shape left the function as an AttributeError. The single caller does wrap
+  it, so the user outcome was always the correct silent fallback -- but a
+  module documented as never raising has to actually never raise.
+
+- Two statements in our own code that were not true. The docstring on
+  reference_addressee_gender said only 'ar' and 'he' were read; nine more
+  languages have been read from _ADDRESSEE_MARKERS since it landed, and our
+  own test exercises all of them. And the alignment comment claimed a random
+  pairing votes ~0.30: measured, a true pair votes 0.742, twenty randomised
+  starts vote 0.417-0.441, and nine time-reversed references 0.439-0.441. The
+  floor is ~0.43. The gate still clears it, by less than we said.
+
+- Two tests had been red for a layout the product handles fine. POV keeps
+  moving its debrid clients between resources/lib/debrids/ and indexers/; the
+  patchers try both, the tests pinned one. A release gate that fails on a
+  non-problem is a gate people learn to wave through. Both now ask the tree.
+
 0.2.522
 - POV: restore navigation timing on 6.09.03 and preserve metadata timeout repairs after Windows patchers.
 - Umbrella: reject malformed watched-sync pages, freeze the server checkpoint before forced refresh, and backfill skipped history once.
