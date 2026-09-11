@@ -160,7 +160,7 @@ def main() -> int:
                 % (', '.join(str(i) for i in holes), min(expected)))
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(text, encoding='utf-8')
+    OUT.write_bytes(text.encode('utf-8'))
 
     print('recent_updates.txt: %d note(s) of %d available -> %s'
           % (len(kept), len(notes), ', '.join(str(i) for i in expected)))
