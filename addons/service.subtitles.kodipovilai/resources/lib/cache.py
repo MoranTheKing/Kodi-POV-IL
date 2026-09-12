@@ -124,10 +124,37 @@ def save_json(path, data):
         return False
 
 
+# Zero-byte markers written NEXT TO a translation, not standing on their own.
+# '.google' says the file is machine translation and must never reach the
+# community pool; '.emb2' marks an embedded-source pool entry; '.release'
+# carries the source release name.
+_SIDECARS = ('.google', '.emb2', '.release')
+
+
+def _sidecar_parent(path):
+    """The translation a marker belongs to, or '' when this is not a marker."""
+    for suf in _SIDECARS:
+        if path.endswith(suf):
+            return path[:-len(suf)]
+    return ''
+
+
 def _walk_cache_files():
     """Yield (full_path, atime_or_mtime, size_bytes) for every file
-    under the cache root."""
+    under the cache root.
+
+    A SIDECAR INHERITS ITS PARENT'S RECENCY. load_text() touches only the
+    translation, so a marker sitting beside a file that is read every week
+    still ages out on its own mtime. For '.google' that is a correctness bug,
+    not a tidiness one: once the marker is gone _is_google_translated() answers
+    False, and the next cache hit backfills machine translation into the
+    community pool -- the one thing translate.py:1595 and srt.py:1701 both say
+    must never happen. Ageing a marker with the file it describes removes the
+    whole class; it also stops a marker outliving its parent, which would leave
+    a stray zero-byte file behind forever.
+    """
     root = kodi_utils.cache_dir()
+    stats = {}
     for dirpath, _dirnames, filenames in os.walk(root):
         for fn in filenames:
             p = os.path.join(dirpath, fn)
@@ -135,10 +162,14 @@ def _walk_cache_files():
                 st = os.stat(p)
             except OSError:
                 continue
-            # Use the more recent of atime/mtime so LRU works even
-            # on filesystems that don't update atime.
-            recency = max(st.st_atime, st.st_mtime)
-            yield p, recency, st.st_size
+            stats[p] = (max(st.st_atime, st.st_mtime), st.st_size)
+    for p, (recency, size) in stats.items():
+        parent = _sidecar_parent(p)
+        if parent:
+            prec = stats.get(parent)
+            # No parent left -> recency 0, so the orphan is evicted next pass.
+            recency = prec[0] if prec else 0.0
+        yield p, recency, size
 
 
 def prune():

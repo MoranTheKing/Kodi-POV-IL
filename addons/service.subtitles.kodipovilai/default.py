@@ -1017,13 +1017,26 @@ def _handle_bg_translate_picker(params):
                 _canonical_swap_succeeded = False
                 if payload.get('success'):
                     try:
-                        from resources.lib import cache as _cache
-                        canonical = _cache.translated_path(
-                            (info.get('imdb_id') or '').strip(),
-                            info.get('season') or '',
-                            info.get('episode') or '',
-                            'en',
-                            source_id=payload['source_id'])
+                        # USE THE PATH resolve() REPORTS. Recomputing it here
+                        # was wrong twice over: translated_path() was called
+                        # without tier=, while resolve() writes with tier='ar'
+                        # whenever a gender reference was found (the default,
+                        # and force-enabled by migration), and the source
+                        # language was hardcoded 'en'. So this file did not
+                        # exist on most jobs, the swap below was skipped, and
+                        # the viewer kept the last progressive SLOT file --
+                        # partly source text if the translation was
+                        # interrupted. The recompute stays only as a fallback
+                        # for a payload from an older resolve().
+                        canonical = payload.get('path') or ''
+                        if not canonical:
+                            from resources.lib import cache as _cache
+                            canonical = _cache.translated_path(
+                                (info.get('imdb_id') or '').strip(),
+                                info.get('season') or '',
+                                info.get('episode') or '',
+                                'en',
+                                source_id=payload['source_id'])
                         if os.path.isfile(canonical):
                             # Name the delivered file after the source RELEASE so
                             # Kodi shows the full release name (not a hash); fall
@@ -2771,13 +2784,26 @@ def _handle_translate_file(params):
                 _canonical_swap_succeeded = False
                 if payload.get('success'):
                     try:
-                        from resources.lib import cache as _cache
-                        canonical = _cache.translated_path(
-                            (info.get('imdb_id') or '').strip(),
-                            info.get('season') or '',
-                            info.get('episode') or '',
-                            'en',
-                            source_id=payload['source_id'])
+                        # USE THE PATH resolve() REPORTS. Recomputing it here
+                        # was wrong twice over: translated_path() was called
+                        # without tier=, while resolve() writes with tier='ar'
+                        # whenever a gender reference was found (the default,
+                        # and force-enabled by migration), and the source
+                        # language was hardcoded 'en'. So this file did not
+                        # exist on most jobs, the swap below was skipped, and
+                        # the viewer kept the last progressive SLOT file --
+                        # partly source text if the translation was
+                        # interrupted. The recompute stays only as a fallback
+                        # for a payload from an older resolve().
+                        canonical = payload.get('path') or ''
+                        if not canonical:
+                            from resources.lib import cache as _cache
+                            canonical = _cache.translated_path(
+                                (info.get('imdb_id') or '').strip(),
+                                info.get('season') or '',
+                                info.get('episode') or '',
+                                'en',
+                                source_id=payload['source_id'])
                         if os.path.isfile(canonical):
                             # Name the delivered file after the source RELEASE so
                             # Kodi shows the full release name (not a hash); fall
