@@ -933,11 +933,13 @@ def share_cache(progress_cb=None, should_cancel=None):
         # compare entry counts, so this is the Hebrew-content check only.
         try:
             from . import srt as _srt
-            if not _srt.looks_hebrew(text):
+            if _srt.is_google_translated(fp) or not _srt.looks_hebrew(text):
                 skipped += 1
                 continue
         except Exception:
-            pass
+            # An unavailable provenance/quality gate cannot authorize sharing.
+            skipped += 1
+            continue
         tmdb_id, title, year = '', '', ''
         if _tmdb is not None:
             try:

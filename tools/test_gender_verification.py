@@ -274,6 +274,8 @@ _sspec = importlib.util.spec_from_file_location(
 _srt = importlib.util.module_from_spec(_sspec)
 _sspec.loader.exec_module(_srt)
 _ns['srt'] = _srt
+_ns.update(src_text='1\n00:00:01,000 --> 00:00:02,000\nYou really scare me.',
+           _ar_map={1: 'أنتِ تخيفينني حقاً.'}, _ref_lang='ar')
 
 for _d in sorted(_defs, key=lambda n: n.name):
     _d.col_offset = 0
@@ -462,6 +464,46 @@ for _bad, _label in ((['not-a-dict'], 'a candidate that is a bare string'),
     except Exception as _e:
         check('begin() survives %s' % _label, 'raised %r' % (_e,), 'no raise')
 ag._reference_candidates = _orig_cands
+
+# Synthetic regression set: these are authored controls, not a live-model
+# quality percentage. Keep uncertain morphology from forcing a repair.
+for text in ('זה תפקידי.', 'הוא תורכי.', 'תלמידי הגיע.', 'תנאי שבי קשים.',
+             'ראיתי את דני.', 'אין צורך להזכיר לי את תפקידי.'):
+    check('noun/object does not trigger repair: ' + text,
+          ag.reference_addressee_gender(text, 'he'), None)
+
+_ns.update(src_text='1\n00:00:01,000 --> 00:00:02,000\nYou really scare me.\n\n'
+                   '2\n00:00:03,000 --> 00:00:04,000\nMary, I mean you.',
+           _ar_map={1: 'أنتِ تخيفينني حقاً.'}, _ref_lang='ar')
+reply_with(ONE[0])
+check('KEEP is valid and preserves the original', regender(ONE, [1]), ONE)
+import json
+_prompt = _engine.calls[0]['prompt']
+_evidence = json.loads(_prompt.split('\n\n', 1)[1])
+check('repair gets original source, not just translated Hebrew',
+      _evidence[0]['source'].split('\n')[2], 'You really scare me.')
+check('repair gets aligned reference', _evidence[0]['reference'], 'أنتِ تخيفينني حقاً.')
+check('repair gets neighbouring speaker context',
+      _evidence[0]['source_context'][1].split('\n')[2], 'Mary, I mean you.')
+ok('uncertainty and separate gender axes are explicit',
+   'KEEP' in _prompt and 'speaker, listener and a third person' in _prompt
+   and 'can be WRONG' in _prompt)
+reply_with('')
+check('omission means KEEP, not deletion', regender(ONE, [1]), ONE)
+_ns['_ar_map'] = {}
+reply_with('1\n00:00:01,000 --> 00:00:02,000\nאת ממש מבהילה אותי.')
+check('no aligned evidence means no forced correction', regender(ONE, [1]), ONE)
+check('no evidence spends no request', len(_engine.calls), 0)
+_ns['_ar_map'] = {1: 'أنتِ تخيفينني حقاً.'}
+_ns['src_text'] = '1\n00:00:01,000 --> 00:00:02,000\nYou do not scare me.'
+negative = ['1\n00:00:01,000 --> 00:00:02,000\nאתה לא מפחיד אותי.']
+reply_with('1\n00:00:01,000 --> 00:00:02,000\nאת מפחידה אותי.')
+check('a gender repair cannot delete negation', regender(negative, [1]), negative)
+numeric = ['1\n00:00:01,000 --> 00:00:02,000\nאתה חייב לי 25 שקלים.']
+reply_with('1\n00:00:01,000 --> 00:00:02,000\nאת חייבת לי 50 שקלים.')
+check('a gender repair cannot change a number', regender(numeric, [1]), numeric)
+reply_with('1\n00:00:01,000 --> 00:00:02,000\nמחר נצא לטיול רחוק בירושלים.')
+check('an unrelated Hebrew rewrite is refused', regender(ONE, [1]), ONE)
 
 print()
 if FAILED:

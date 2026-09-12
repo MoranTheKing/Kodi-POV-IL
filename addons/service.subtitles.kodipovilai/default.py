@@ -909,6 +909,26 @@ def _try_fast_download(handle, link, info):
     return True
 
 
+def _new_translation_job():
+    import uuid
+    token = uuid.uuid4().hex
+    win = xbmcgui.Window(10000)
+    win.setProperty('ai_subs.live_translate_job', token)
+    return token
+
+
+def _owns_translation_job(token):
+    return xbmcgui.Window(10000).getProperty('ai_subs.live_translate_job') == token
+
+
+def _clear_translation_job(token):
+    if _owns_translation_job(token):
+        win = xbmcgui.Window(10000)
+        win.clearProperty('ai_subs.live_translate_active')
+        win.clearProperty('ai_subs.live_translate_source')
+        win.clearProperty('ai_subs.live_translate_job')
+
+
 def _handle_bg_translate_picker(params):
     """Fired by _handle_download after delivering the English
     fallback subtitle to Kodi. Calls translate.resolve() with a
@@ -950,6 +970,7 @@ def _handle_bg_translate_picker(params):
     xbmcgui.Window(10000).setProperty(
         'ai_subs.live_translate_source', expected_source_id)
 
+    _job_token = _new_translation_job()
     _ver = {'n': 0}
 
     # Corner progress bar for the (long) embedded-extraction phase. Created
@@ -984,6 +1005,15 @@ def _handle_bg_translate_picker(params):
 
     def on_phase(phase, payload):
         try:
+            if not _owns_translation_job(_job_token):
+                return
+            if phase in ('chunk_ready', 'done'):
+                win = xbmcgui.Window(10000)
+                if (win.getProperty('ai_subs.live_translate_active') != '1'
+                        or not payload.get('source_id')
+                        or win.getProperty('ai_subs.live_translate_source')
+                        != payload['source_id']):
+                    return
             # embedded_ai: we fired bg WITHOUT a pre-extracted source id, so
             # adopt the id resolve() computed (the first phase that carries one)
             # -- setting the live prop makes the chunk_ready gate below match, so
@@ -1037,6 +1067,8 @@ def _handle_bg_translate_picker(params):
                 os.replace(_tmp, ver_path)
                 try:
                     if xbmc.Player().isPlayingVideo():
+                        if not _owns_translation_job(_job_token):
+                            return
                         xbmc.Player().setSubtitles(ver_path)
                         xbmc.Player().showSubtitles(True)
                 except Exception as _e:
@@ -1120,6 +1152,8 @@ def _handle_bg_translate_picker(params):
                                             p.getAvailableSubtitleStreams() or [])
                                     except Exception:
                                         _before = -1
+                                    if not _owns_translation_job(_job_token):
+                                        return
                                     p.setSubtitles(_final_path)
                                     p.showSubtitles(True)
                                     _grew = False
@@ -1139,6 +1173,8 @@ def _handle_bg_translate_picker(params):
                                                 # a pre-existing Hebrew
                                                 # SRT.
                                                 try:
+                                                    if not _owns_translation_job(_job_token):
+                                                        return
                                                     p.setSubtitleStream(
                                                         len(_streams) - 1)
                                                 except Exception:
@@ -1172,7 +1208,7 @@ def _handle_bg_translate_picker(params):
                             'swap failed: {0}'.format(_e),
                             level='DEBUG')
                 # Cleanup ONLY when the canonical swap succeeded.
-                if _canonical_swap_succeeded:
+                if _canonical_swap_succeeded and _owns_translation_job(_job_token):
                     try:
                         import glob as _glob
                         # Patterns cover legacy (_v*), the hash-named
@@ -1193,10 +1229,7 @@ def _handle_bg_translate_picker(params):
                                     pass
                     except Exception:
                         pass
-                xbmcgui.Window(10000).clearProperty(
-                    'ai_subs.live_translate_active')
-                xbmcgui.Window(10000).clearProperty(
-                    'ai_subs.live_translate_source')
+                _clear_translation_job(_job_token)
                 return
         except Exception as _e:
             _safe_log(
@@ -1219,10 +1252,7 @@ def _handle_bg_translate_picker(params):
         # still up (e.g. extraction failed -> no translation phase fired).
         _close_ebar()
         try:
-            xbmcgui.Window(10000).clearProperty(
-                'ai_subs.live_translate_active')
-            xbmcgui.Window(10000).clearProperty(
-                'ai_subs.live_translate_source')
+            _clear_translation_job(_job_token)
         except Exception:
             pass
     # The picker/chooser already closed, so a failed background job would
@@ -2757,15 +2787,27 @@ def _handle_translate_file(params):
     #                   files for TTL prune to clean up later --
     #                   we explicitly do NOT save a partial Hebrew
     #                   file to canonical cache.
+    _job_token = _new_translation_job()
     _ver = {'n': 0, 'last_path': None}
 
     def on_phase(phase, payload):
         try:
+            if not _owns_translation_job(_job_token):
+                return
+            if phase in ('chunk_ready', 'done'):
+                win = xbmcgui.Window(10000)
+                if (win.getProperty('ai_subs.live_translate_active') != '1'
+                        or not payload.get('source_id')
+                        or win.getProperty('ai_subs.live_translate_source')
+                        != payload['source_id']):
+                    return
             if phase == 'first_ready':
                 _tmp = out_path + '.aitmp'
                 with open(_tmp, 'w', encoding='utf-8') as _f:
                     _f.write(payload['fallback_text'])
                 os.replace(_tmp, out_path)
+                if not _owns_translation_job(_job_token):
+                    return
                 xbmcgui.Window(10000).setProperty(
                     'ai_subs.live_translate_active', '1')
                 xbmcgui.Window(10000).setProperty(
@@ -2796,6 +2838,8 @@ def _handle_translate_file(params):
                 try:
                     _attempts = 0
                     while _attempts < 12:
+                        if not _owns_translation_job(_job_token):
+                            return
                         if xbmc.Player().isPlayingVideo():
                             xbmc.Player().setSubtitles(out_path)
                             xbmc.Player().showSubtitles(True)
@@ -2843,6 +2887,8 @@ def _handle_translate_file(params):
                 _ver['last_path'] = ver_path
                 try:
                     if xbmc.Player().isPlayingVideo():
+                        if not _owns_translation_job(_job_token):
+                            return
                         xbmc.Player().setSubtitles(ver_path)
                         xbmc.Player().showSubtitles(True)
                 except Exception as e:
@@ -2933,6 +2979,8 @@ def _handle_translate_file(params):
                                             p.getAvailableSubtitleStreams() or [])
                                     except Exception:
                                         _before = -1
+                                    if not _owns_translation_job(_job_token):
+                                        return
                                     p.setSubtitles(_final_path)
                                     p.showSubtitles(True)
                                     # Explicit stream selection: when
@@ -2960,6 +3008,8 @@ def _handle_translate_file(params):
                                             if len(_streams) > _before:
                                                 _grew = True
                                                 try:
+                                                    if not _owns_translation_job(_job_token):
+                                                        return
                                                     p.setSubtitleStream(
                                                         len(_streams) - 1)
                                                 except Exception:
@@ -2998,7 +3048,7 @@ def _handle_translate_file(params):
                 # at a removed file = no subtitles for the rest of
                 # playback. The 180-day TTL prune sweeps them up
                 # eventually if we don't.
-                if _canonical_swap_succeeded:
+                if _canonical_swap_succeeded and _owns_translation_job(_job_token):
                     try:
                         import glob as _glob
                         # Patterns cover legacy (_v*), the hash-named
@@ -3019,10 +3069,7 @@ def _handle_translate_file(params):
                                     pass
                     except Exception:
                         pass
-                xbmcgui.Window(10000).clearProperty(
-                    'ai_subs.live_translate_active')
-                xbmcgui.Window(10000).clearProperty(
-                    'ai_subs.live_translate_source')
+                _clear_translation_job(_job_token)
         except Exception as _e:
             _safe_log(
                 'translate_file fast on_phase({0}) raised: {1}'.format(
@@ -3094,10 +3141,7 @@ def _handle_translate_file(params):
             except Exception:
                 pass
         try:
-            xbmcgui.Window(10000).clearProperty(
-                'ai_subs.live_translate_active')
-            xbmcgui.Window(10000).clearProperty(
-                'ai_subs.live_translate_source')
+            _clear_translation_job(_job_token)
         except Exception:
             pass
 
