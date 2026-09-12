@@ -480,6 +480,17 @@ def _sanitise_sub_name(name):
     return cleaned
 
 
+def _playing_now():
+    """True when Kodi still has a video player. Used to decide whether a failed
+    canonical swap is dangerous. With a player up, deleting the progressive
+    slots can strand the viewer on a removed file; with no player there is
+    nothing pointing at them and the cleanup should proceed."""
+    try:
+        return bool(xbmc.Player().isPlayingVideo())
+    except Exception:
+        return False
+
+
 def _progressive_slot_path(cache_dir, source_id, slot, release=''):
     """Path for a transient progressive-translation slot file. Kodi
     turns the basename into the subtitle label shown in the picker, so
@@ -520,8 +531,15 @@ def _progressive_cleanup_patterns(source_id, release=''):
     except Exception:
         rel = ''
     if rel:
-        pats.append('{0}.a.he.srt'.format(rel))
-        pats.append('{0}.b.he.srt'.format(rel))
+        # safe_release_filename deliberately KEEPS brackets, and glob reads
+        # '[YTS.MX]' as a character class -- so the literal slot file for a
+        # bracketed release matched nothing and was never deleted. Escaping
+        # makes the release part literal; the '*' in the hash-named patterns
+        # above is ours and stays a wildcard.
+        import glob as _g
+        rel_lit = _g.escape(rel)
+        pats.append('{0}.a.he.srt'.format(rel_lit))
+        pats.append('{0}.b.he.srt'.format(rel_lit))
     return pats
 
 
@@ -766,14 +784,20 @@ def _try_fast_download(handle, link, info):
     # zero AI work.
     if source_id:
         try:
-            # Any tier -- see cache.find_translated. Guessing the plain slot
-            # meant a title that HAD a gender reference missed its own cached
-            # translation here, which is why a second entry did not load it
-            # automatically and the subtitle had to be picked by hand again.
-            cached = _cache.find_translated(
+            # DELIBERATELY tier-pinned, and deliberately allowed to miss.
+            # This branch hands a file straight to Kodi without any of the
+            # checks resolve() applies on a cache hit -- the _is_mostly_hebrew
+            # self-heal that deletes an empty/source-echoed file, the mtime
+            # refresh that keeps a file in use from ageing out, the RTL
+            # re-apply, and the one-shot pool backfill. Making it find a
+            # translation it used to miss would turn a rare shortcut into the
+            # normal path and skip all four. resolve() now does the
+            # tier-agnostic lookup instead, WITH those guards, so a miss here
+            # costs nothing but a few milliseconds.
+            cached = _cache.translated_path(
                 imdb_id, season, episode, source_lang,
                 source_id=source_id)
-            if cached:
+            if os.path.isfile(cached):
                 listitem = xbmcgui.ListItem(label=cached)
                 xbmcplugin.addDirectoryItem(
                     handle=handle, url=cached,
@@ -1111,7 +1135,15 @@ def _handle_bg_translate_picker(params):
                                                 except Exception:
                                                     pass
                                                 break
-                                    if not _grew:
+                                    if not _grew and not _playing_now():
+                                        # Nobody to strand: with no player
+                                        # there is no stream pointing at a
+                                        # slot file, so deleting is safe --
+                                        # and is the outcome we want, or the
+                                        # slots pile up on every job that
+                                        # outlives playback.
+                                        _grew = True
+                                    elif not _grew:
                                         _safe_log(
                                             'bg_translate_picker: Kodi did not '
                                             'register the final subtitle '
@@ -2924,7 +2956,15 @@ def _handle_translate_file(params):
                                                 except Exception:
                                                     pass
                                                 break
-                                    if not _grew:
+                                    if not _grew and not _playing_now():
+                                        # Nobody to strand: with no player
+                                        # there is no stream pointing at a
+                                        # slot file, so deleting is safe --
+                                        # and is the outcome we want, or the
+                                        # slots pile up on every job that
+                                        # outlives playback.
+                                        _grew = True
+                                    elif not _grew:
                                         _safe_log(
                                             'translate_file: Kodi did not '
                                             'register the final subtitle '

@@ -162,8 +162,21 @@ _tr = io.open(os.path.join(ADDON, 'resources', 'lib', 'translate.py'),
 _df = io.open(os.path.join(ADDON, 'default.py'), encoding='utf-8').read()
 check('the [CACHE] marker asks for any tier',
       'cache.find_translated(' in _tr, True)
-check('the cache-hit fast path asks for any tier',
-      '_cache.find_translated(' in _df, True)
+# The fast path stays TIER-PINNED on purpose. It hands a file to Kodi without
+# any of the checks resolve() applies on a cache hit -- the _is_mostly_hebrew
+# self-heal, the mtime refresh, the RTL re-apply, the pool backfill -- so
+# widening it would turn a rare shortcut into the normal path and skip all
+# four. resolve() does the tier-agnostic lookup instead, with the guards.
+check('the fast path does NOT widen: the guards live in resolve()',
+      '_cache.find_translated(' not in _df, True)
+check('resolve() is the one that looks across tiers',
+      'cache.find_translated(' in _tr, True)
+_early = _tr[_tr.index('early_source_id = _source_id_for_ai(payload)'):]
+_early = _early[:_early.index('# Only honour the cache')]
+check('...and it is the EARLY cache lookup that was widened',
+      'find_translated(' in _early, True)
+check('the self-heal still guards whatever that lookup returns',
+      '_is_mostly_hebrew(' in _tr.split('Only honour the cache')[1][:600], True)
 # and neither may go back to guessing one
 check('the [CACHE] marker no longer guesses the plain slot',
       'translated = cache.translated_path(' not in _tr.split('is_cached')[0][-800:], True)

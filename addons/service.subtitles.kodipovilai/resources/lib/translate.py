@@ -2953,9 +2953,19 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     #     byte-identical SRTs.
     early_source_id = _source_id_for_ai(payload)
     if early_source_id:
-        translated = cache.translated_path(
+        # ANY tier. resolve() writes to the '.ar' slot when a gender reference
+        # aligned and to the plain slot when none did, and the setting's value
+        # TODAY says nothing about which happened for this title back then --
+        # so pinning the lookup to _tier missed real translations and silently
+        # re-translated them. Everything below (the self-heal, the mtime
+        # refresh, the RTL re-apply, the pool backfill) still runs on whatever
+        # it finds; find_translated only widens WHERE we look.
+        translated = (cache.find_translated(
             imdb_id, season, episode, source_lang,
-            source_id=early_source_id, tier=_tier)
+            source_id=early_source_id)
+            or cache.translated_path(
+                imdb_id, season, episode, source_lang,
+                source_id=early_source_id, tier=_tier))
         # Only honour the cache if it's a REAL Hebrew translation. Older buggy
         # versions could cache an empty / source-echoed file and then serve it
         # forever as "from cache (previous translation)" -- blank or foreign
@@ -4606,6 +4616,23 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             gpath = _google_translate_and_save(
                 src_text, source_lang, translated, info)
             if gpath:
+                # This path returned WITHOUT a 'done', so the canonical swap
+                # never ran and the viewer was left on the last progressive
+                # slot -- which holds the non-Hebrew output we just rejected.
+                # That is the "it plays the original language" report, on the
+                # one path nobody had wired.
+                if progressive_cb is not None:
+                    try:
+                        progressive_cb('done', {
+                            'success': True,
+                            'source_id': _progressive_source_id,
+                            'release': _src_release,
+                            'path': gpath,
+                        })
+                    except Exception as e:
+                        kodi_utils.log(
+                            'progressive_cb done(google-rescue) raised: '
+                            + str(e), level='WARNING')
                 _emit(True, 'google')
                 return gpath
         kodi_utils.notify(

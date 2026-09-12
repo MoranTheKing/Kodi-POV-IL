@@ -40,7 +40,12 @@ emissions = re.findall(r"progressive_cb\('done', \{(.*?)\}\)", tr, re.S)
 check('both progressive done sites are still found', len(emissions) >= 4,
       'found %d' % len(emissions))
 success = [e for e in emissions if "'success': True" in e]
-check('there are exactly two success emissions', len(success) == 2,
+# THREE. The Google-rescue path (AI output was not Hebrew) used to return
+# without emitting 'done' at all, so the canonical swap never ran and the
+# viewer was left on the progressive slot holding the rejected output. This
+# assertion said TWO, which would have failed the moment anyone wired the
+# third -- the test was holding the bug in place.
+check('all three success paths emit done', len(success) == 3,
       'found %d' % len(success))
 for i, e in enumerate(success):
     check('success emission %d carries a path' % (i + 1), "'path':" in e,
@@ -62,10 +67,15 @@ for m in re.finditer(r"canonical = payload\.get\('path'\) or ''\n(.*?)if os\.pat
 recomputes = df.count('canonical = _cache.translated_path(')
 check('the recompute survives only as a fallback, twice', recomputes == 2,
       'found %d' % recomputes)
-check('no recompute smuggles in a tier= (it is a fallback, not the answer)',
-      'translated_path(' in df and 'tier=' not in df.split(
-          'canonical = _cache.translated_path(')[1].split(')')[0],
-      'a recompute now passes a tier and will guess wrong the other way')
+# (the previous version of this check sliced 34 characters that could not
+# contain 'tier=' -- it could not fail. Look at the whole call instead.)
+_recompute_calls = [
+    df[m:df.index('source_id=', m) + 60]
+    for m in [df.index('canonical = _cache.translated_path('),
+              df.index('canonical = _cache.translated_path(',
+                       df.index('canonical = _cache.translated_path(') + 1)]]
+check('neither recompute passes a tier= (it is a fallback, not the answer)',
+      not any('tier=' in c for c in _recompute_calls), True)
 
 # --- and the swap may not claim success it did not verify ------------------
 # setSubtitles() posts to the VideoPlayer thread, so it returning is not
@@ -82,8 +92,13 @@ check('both read the stream count BEFORE adding', df.count('_before = len(') == 
 check('both wait for the count to grow rather than reading it once',
       df.count('if len(_streams) > _before:') == 2,
       'found %d' % df.count('if len(_streams) > _before:'))
+# (the previous version counted the phrase "did not", which occurs twice in
+# COMMENTS -- deleting both warning blocks left it passing. Count the call.)
 check('a failed swap is reported, not silent',
-      df.count('did not\n') + df.count('did not ') >= 2, 'no warning on the failure path')
+      df.count("_safe_log(\n                                            'bg_translate_picker: Kodi did not ")
+      + df.count("_safe_log(\n                                            'translate_file: Kodi did not "), 2)
+check('and "no player" is treated as safe-to-clean, not as failure',
+      df.count('if not _grew and not _playing_now():'), 2)
 
 print()
 if FAILED:
