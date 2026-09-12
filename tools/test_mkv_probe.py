@@ -224,6 +224,12 @@ class RangeHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(mkv_bytes)
             return
         a, b = int(m.group(1)), min(int(m.group(2)), len(mkv_bytes) - 1)
+        if a >= len(mkv_bytes):
+            self.send_response(416)
+            self.send_header('Content-Range', 'bytes */%d' % len(mkv_bytes))
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+            return
         chunk = mkv_bytes[a:b + 1]
         self.send_response(206)
         self.send_header('Content-Range',
@@ -248,6 +254,11 @@ if res2:
           set(c['start'] for c in res2['cues'])
           == set(c['start'] for c in res['cues']))
     check('budget accounted', res2['bytes'] > 0)
+eof_source = mp._Source(url)
+check('real HTTP EOF is an empty range, not invalid 206',
+      eof_source.read(len(mkv_bytes), 64) == b'')
+check('HTTP EOF reports the actual file size', eof_source.total == len(mkv_bytes))
+eof_source.close()
 srv.shutdown()
 
 print('== probe cues as sync reference (closing the loop) ==')
