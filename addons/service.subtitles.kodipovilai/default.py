@@ -3693,7 +3693,10 @@ def main():
     action = (params.get('action') or 'search').lower()
 
     try:
-        if action == 'search':
+        if action == 'tonight':
+            from resources.lib.tonight.ui import run
+            run()
+        elif action == 'search':
             _handle_search(handle, params)
         elif action == 'manualsearch':
             _handle_manualsearch(handle, params)

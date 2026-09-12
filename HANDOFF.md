@@ -7747,3 +7747,10 @@ change", and those are only usually the same.
 - Iterate on real Kodi logs; SubSync's `verdict for ...` diag line is the
   primary tuning signal.
 - Communicate with the maintainer in Hebrew; keep docs in English.
+# Integrated evening feature — development branch, not released
+
+The existing build-edition MoranSubs now has `action=tonight`; there is no separate add-on. `resources/lib/tonight` contains the local preference store, explicit-feedback ranking, read-only POV watched-movie adapter, bounded catalog retrieval and standard-dialog flow. Favourite entry provisioning covers the build's Estuary/FENtastic/NOX approach; AF3 receives a HOME_SUBMENU entry. Live skin navigation is not yet verified.
+
+Selection opens visible actions before any playback. Catalog recommendations can use up to two explicitly liked anchors; explanations use actual provenance. Shared POV cached watched state is only applied to the household profile, never silently attributed to a named viewer. Basic genre inference is not a mature semantic taste model. The first catalog page, incomplete history, absent source availability checks and no episode-progress adapter limit the prototype.
+
+25 new tests pass, with independent read-only review and build/standalone staging checks. Standalone packaging excludes the feature and strips its dispatch route. No version/manifests/public notes have been bumped. Remaining release gates: live four-skin/remote behavior, favourites cache/skin-switch behavior, actual catalog latency/cancellation and recommendation usefulness. Do not describe this as shipped or fully validated.
