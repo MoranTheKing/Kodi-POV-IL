@@ -92,6 +92,52 @@ check('a translation past its TTL is still evicted', os.path.isfile(stale), Fals
 check('...and its marker goes with it', os.path.isfile(stale_marker), False)
 
 
+# ---- find_translated: a lookup must not guess which tier was written -------
+# resolve() writes tier='ar' when a gender reference was found and '' when none
+# was. A lookup cannot know which happened for THIS title, so guessing one tier
+# missed real translations -- which is why a second entry did not auto-load and
+# the subtitle had to be picked by hand again.
+tier_dir = os.path.join(TMP, 'translated')
+os.makedirs(tier_dir, exist_ok=True)
+ARGS = ('tt1234567', '', '', 'en')
+plain = cache.translated_path(*ARGS, source_id='sid1')
+tiered = cache.translated_path(*ARGS, source_id='sid1', tier='ar')
+check('the two tiers really are different files', plain != tiered, True)
+
+check('nothing cached -> empty', cache.find_translated(*ARGS, source_id='sid1'), '')
+
+with io.open(tiered, 'w', encoding='utf-8') as f:
+    f.write('shalom')
+check('a gender-referenced translation IS found',
+      cache.find_translated(*ARGS, source_id='sid1'), tiered)
+
+os.remove(tiered)
+with io.open(plain, 'w', encoding='utf-8') as f:
+    f.write('shalom')
+check('a plain translation is found too',
+      cache.find_translated(*ARGS, source_id='sid1'), plain)
+
+with io.open(tiered, 'w', encoding='utf-8') as f:
+    f.write('better')
+check('with both present the gender-referenced one wins',
+      cache.find_translated(*ARGS, source_id='sid1'), tiered)
+
+check('a different source_id is not confused with this one',
+      cache.find_translated(*ARGS, source_id='sid2'), '')
+
+# and the callers must actually use it
+_tr = io.open(os.path.join(ADDON, 'resources', 'lib', 'translate.py'),
+              encoding='utf-8').read()
+_df = io.open(os.path.join(ADDON, 'default.py'), encoding='utf-8').read()
+check('the [CACHE] marker asks for any tier',
+      'cache.find_translated(' in _tr, True)
+check('the cache-hit fast path asks for any tier',
+      '_cache.find_translated(' in _df, True)
+# and neither may go back to guessing one
+check('the [CACHE] marker no longer guesses the plain slot',
+      'translated = cache.translated_path(' not in _tr.split('is_cached')[0][-800:], True)
+
+
 # ---- the dropdown may not advertise a quota the table contradicts ----------
 _qs = importlib.util.spec_from_file_location(
     'gq_under_test', os.path.join(LIB, 'gemini_quota.py'))
