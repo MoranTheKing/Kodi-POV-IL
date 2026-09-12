@@ -73,11 +73,42 @@ check('a translation still in use is kept', os.path.isfile(fresh), True)
 check('...and its .google marker is NOT evicted out from under it',
       os.path.isfile(marker), True)
 
+# The markers that ACTUALLY exist. '.emb2' is only a marker KEY -- pool writes
+# '<path>.emb2.shared' -- so protecting '.emb2' protected nothing while
+# '.shared', which governs whether a file is re-uploaded, was left exposed.
+check('the real pool markers are covered',
+      all(x in cache._SIDECARS for x in ('.shared', '.emb2.shared', '.google', '.release')),
+      True)
+check('.emb2.shared strips WHOLE (its parent is the translation, not <p>.emb2)',
+      cache._sidecar_parent('/c/movie.he.srt.emb2.shared'), '/c/movie.he.srt')
+check('.shared resolves to its translation',
+      cache._sidecar_parent('/c/movie.he.srt.shared'), '/c/movie.he.srt')
+check('an ordinary translation is not mistaken for a marker',
+      cache._sidecar_parent('/c/movie.he.srt'), '')
+
+shared = fresh + '.shared'
+open(shared, 'w').close()
+os.utime(shared, (old, old))
+cache.prune()
+check('a .shared marker is not evicted from under a file still in use',
+      os.path.isfile(shared), True)
+
+# A sidecar is sometimes written BEFORE its parent: '.release' lands when the
+# reference is chosen, minutes before the translation exists. A prune() in that
+# window must not delete it.
+early = os.path.join(sub, 'not-yet-translated.he.srt.release')
+with io.open(early, 'w', encoding='utf-8') as f:
+    f.write('Some.Release.1080p')
+cache.prune()
+check('a fresh marker whose parent does not exist YET survives',
+      os.path.isfile(early), True)
+
 # The inverse: a marker whose parent is gone must not linger forever.
 orphan = os.path.join(sub, 'vanished.he.srt.google')
 open(orphan, 'w').close()
+os.utime(orphan, (old, old))
 cache.prune()
-check('an orphaned marker is collected', os.path.isfile(orphan), False)
+check('an OLD orphaned marker is collected', os.path.isfile(orphan), False)
 
 # And a genuinely stale pair still goes.
 stale = os.path.join(sub, 'old.he.srt')
