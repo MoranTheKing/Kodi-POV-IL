@@ -1,3 +1,8 @@
+0.2.528
+- SubSync HTTP probing validates returned byte ranges and resumes interrupted
+  reads from the missing position using smaller ranges. Probe byte/time
+  budgets cover all stages, and older cached sync verdicts are rechecked.
+
 0.2.527
 - Safer AI subtitle corrections use the original dialogue and nearby context,
   preserve uncertain lines, and reject changes to negation or numbers.
