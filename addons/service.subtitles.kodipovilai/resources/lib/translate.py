@@ -1331,6 +1331,12 @@ def list_candidates(info, modal_progress=True):
         try:
             src_id = _source_id_for_ai(payload)
             if src_id:
+                # Same tier as the DOWNLOAD path uses (_try_fast_download,
+                # also untiered) -- deliberately, and NOT the same tier as
+                # resolve(), which pins to _tier and is usually 'ar'. Marking
+                # an entry [CACHE] that the download path then cannot serve is
+                # worse than not marking it: the label would promise an
+                # instant result and the user would get the English fallback.
                 translated = cache.translated_path(
                     imdb_id, season, episode,
                     payload.get('source_lang') or 'en',
@@ -2949,6 +2955,25 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     #     byte-identical SRTs.
     early_source_id = _source_id_for_ai(payload)
     if early_source_id:
+        # TIER-PINNED, and left that way ON PURPOSE after three review rounds.
+        #
+        # Widening this to find a translation in EITHER tier looks obviously
+        # right and is not. Two things break:
+        #   * This early return fires BEFORE the first progressive_cb (see
+        #     first_ready below), so nothing downstream is told. The picker
+        #     handler reads the return only as `if not _resolved:` to decide
+        #     whether to toast a failure -- a cache HIT is truthy, so it does
+        #     nothing at all and the viewer keeps the English fallback. Turning
+        #     a miss (which falls through to the full path and delivers via
+        #     'done') into a hit is therefore a straight REGRESSION.
+        #   * _backfill_pool_async below is told the tier by _ar_on, the
+        #     setting's value today -- not by the file we found. A plain file
+        #     found while the setting is on would upload as the ai_ar variant,
+        #     which :3414 says must never happen, and the Worker dedup makes it
+        #     permanent for every other user.
+        # Fixing the auto-load symptom properly means wiring these early
+        # returns to progressive_cb. That is its own change with its own
+        # review, not a one-line lookup swap.
         translated = cache.translated_path(
             imdb_id, season, episode, source_lang,
             source_id=early_source_id, tier=_tier)
@@ -4287,6 +4312,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                             'success': True,
                             'source_id': _progressive_source_id,
                             'release': _src_release,
+                            # The file we ACTUALLY wrote. The handler used to
+                            # recompute this path and did so without the tier,
+                            # so it looked in the wrong slot on every job that
+                            # found a gender reference -- see the note on the
+                            # main success emission below.
+                            'path': gpath,
                         })
                     except Exception:
                         pass
@@ -4596,6 +4627,23 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             gpath = _google_translate_and_save(
                 src_text, source_lang, translated, info)
             if gpath:
+                # This path returned WITHOUT a 'done', so the canonical swap
+                # never ran and the viewer was left on the last progressive
+                # slot -- which holds the non-Hebrew output we just rejected.
+                # That is the "it plays the original language" report, on the
+                # one path nobody had wired.
+                if progressive_cb is not None:
+                    try:
+                        progressive_cb('done', {
+                            'success': True,
+                            'source_id': _progressive_source_id,
+                            'release': _src_release,
+                            'path': gpath,
+                        })
+                    except Exception as e:
+                        kodi_utils.log(
+                            'progressive_cb done(google-rescue) raised: '
+                            + str(e), level='WARNING')
                 _emit(True, 'google')
                 return gpath
         kodi_utils.notify(
@@ -4680,6 +4728,18 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 'success': True,
                 'source_id': _progressive_source_id,
                 'release': _src_release,
+                # TELL the handler where the translation is, do not make it
+                # guess. It recomputed the path with cache.translated_path()
+                # and NO tier=, while resolve() writes with tier='ar' whenever
+                # a gender reference was found -- which is the normal case,
+                # since the setting defaults on and is force-enabled by
+                # migration. So os.path.isfile(canonical) was False on most
+                # jobs, the canonical swap never ran, and the viewer was left
+                # holding the last PROGRESSIVE SLOT file instead of the
+                # finished translation. If that translation had been
+                # interrupted, the slot is partly source text -- which is
+                # exactly the "it plays the original language" report.
+                'path': translated,
             })
         except Exception as e:
             kodi_utils.log(

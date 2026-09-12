@@ -1,3 +1,64 @@
+0.2.525
+- The final subtitle swap claimed success it had not verified, and then
+  deleted the file the player was still on.
+
+  When a translation finishes, the add-on copies the result to a clean
+  <release>.he.srt, hands it to Kodi, and deletes the transient per-chunk slot
+  files. It marked that swap successful because setSubtitles() had not raised.
+  But setSubtitles POSTS to the video-player thread and returns before the
+  stream is registered -- so the stream list read on the next line was the list
+  from BEFORE the add, and "select the most recently added stream" selected the
+  last SLOT instead. The cleanup then deleted exactly that file. The viewer was
+  pinned to a stream whose file no longer existed: no subtitles for the rest of
+  playback, and toggling them off and on did not help.
+
+  This was reachable only on a minority of jobs until now, because the path it
+  looked for was computed without the quality-tier suffix and therefore usually
+  did not exist, which skipped the whole block. Making the finished file
+  actually get delivered would have turned that rare failure into the normal
+  one. So the swap now counts the streams, waits up to a second for the count
+  to really grow, and only then claims success and pins the stream. If the
+  count never grows the slot files are KEPT and a warning is logged -- worst
+  case a few stale files the cache prune sweeps up, instead of a viewer with no
+  subtitles.
+
+  "No player at all" is treated as safe to clean rather than as a failure,
+  otherwise every job that outlives playback left its slots behind. And the
+  cleanup now escapes glob characters: release names keep their brackets on
+  purpose, and glob reads [YTS.MX] as a character class, so for those releases
+  it had been silently deleting nothing.
+
+- One success path never reported at all. When the model returns empty or
+  echoes the source, the add-on falls back to Google Translate and returns the
+  result -- but it returned WITHOUT telling the caller it was done, so the swap
+  above never ran and the viewer was left on the slot file holding the very
+  output that had just been rejected as not-Hebrew. That is the same "it plays
+  the original language" symptom, on the one path nobody had wired.
+
+- A cache marker could be evicted out from under the file it describes. The
+  zero-byte '.google' marker says a translation is machine output and must
+  never reach the community pool, and '.shared' records that a file was already
+  uploaded. Reading a translation refreshed only the translation, so on a file
+  watched for years the markers aged out on their own and were deleted while
+  the file stayed. After that the add-on no longer knew, and the next play
+  could have pushed machine translation into the shared pool. A marker now
+  counts as being as recent as the file it belongs to.
+
+- Two labels in the model picker were wrong. "3.1 Flash (premium, 250/day)"
+  and "3.8 Flash (newest, heavier quota use)" both have a real free cap of 20 a
+  day, so the quota panel would have said "24 of 20 (120%)" on the first film.
+  Both now state 20, and a test reads the add-on's own quota table so the two
+  cannot drift apart again.
+
+- KNOWN AND NOT FIXED HERE: a second entry to the same title does not always
+  load the cached translation automatically, and the subtitle has to be picked
+  by hand. The cause is understood and written down at the exact line someone
+  will try to change -- the cache lookup is pinned to one quality tier, and
+  simply widening it makes things worse, because the early cache return happens
+  before anything is listening and a hit is then delivered to nobody. Fixing it
+  properly means wiring those returns into the progress callback, which is its
+  own change.
+
 0.2.524
 - The gender check could rewrite a CORRECT line into a wrong one.
 
