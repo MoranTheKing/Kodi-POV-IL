@@ -1199,6 +1199,64 @@ def inherit_pool_credential(addon_dst: Path, previous_zip: Path) -> bool:
     return True
 
 
+def carry_pool_key_block(addon_dst: Path, previous_zip: Path) -> bool:
+    """Carry ONLY the credential block over from a previously shipped zip, so a
+    DELIBERATE pool.py logic change can be released without the maintainer's
+    local packaging helper.
+
+    This is the narrow middle between the two existing flows.
+    inherit_pool_credential() takes pool.py WHOLE, so it would silently discard
+    a logic change and refuses when it sees one -- correctly.
+    inject_pool_secret() re-derives the block from $POOL_SECRET, which needs
+    `pkgkey`, which only the maintainer has. A container with neither could
+    therefore not ship a pool.py fix at all.
+
+    What this does instead: splice the shipped file's key block, BYTE FOR BYTE,
+    into the staged file, and change nothing else. The credential is never
+    decoded, re-derived or guessed at -- it is copied -- so it cannot be got
+    subtly wrong, and the check below proves it: after the splice the staged
+    file's block must equal the shipped one exactly, and everything outside the
+    block must still equal what was staged.
+
+    It is opt-in via $POOL_CARRY_BLOCK_FROM and it prints what it did, because
+    the failure this whole area exists to prevent -- 0.2.438 / quickfix 0.1.477
+    shipped the placeholder and silently broke the community pool for everyone
+    who took the update -- is silent by nature.
+    """
+    if not previous_zip or not previous_zip.is_file():
+        return False
+    pool_py = addon_dst / "resources" / "lib" / "pool.py"
+    staged = pool_py.read_text(encoding="utf-8")
+    member = f"{ADDON_ID}/resources/lib/pool.py"
+    with zipfile.ZipFile(previous_zip) as zf:
+        if member not in zf.namelist():
+            raise RuntimeError(f"{previous_zip.name} has no {member}")
+        shipped = zf.read(member).decode("utf-8")
+    if not _key_block_is_provisioned(shipped):
+        raise RuntimeError(
+            f"{previous_zip.name} carries the credential PLACEHOLDER -- "
+            "nothing to carry"
+        )
+    sm = _KEY_BLOCK_RE.search(shipped)
+    if not _KEY_BLOCK_RE.search(staged):
+        raise RuntimeError("staged pool.py has no credential block to fill")
+    logic_before = _pool_py_outside_key_block(staged)
+    out = _KEY_BLOCK_RE.sub(lambda _m: sm.group(0), staged, count=1)
+    # PROVE it, rather than assume: the block came across intact, and nothing
+    # outside it moved.
+    om = _KEY_BLOCK_RE.search(out)
+    if om.group(0) != sm.group(0):
+        raise RuntimeError("carried credential block does not match the source")
+    if not _key_block_is_provisioned(out):
+        raise RuntimeError("carried block is not provisioned -- refusing")
+    if _pool_py_outside_key_block(out) != logic_before:
+        raise RuntimeError("the splice changed pool.py outside the key block")
+    pool_py.write_text(out, encoding="utf-8")
+    print(f"  pool credential block CARRIED from {previous_zip.name} "
+          "(pool.py logic changed deliberately; block copied byte-for-byte)")
+    return True
+
+
 def inject_pool_secret(addon_dst: Path) -> None:
     """Set the build-time pool credential in the shipped pool.py from the
     $POOL_SECRET env var, via the local packaging helper. A distributable
@@ -1218,6 +1276,10 @@ def inject_pool_secret(addon_dst: Path) -> None:
     if not secret:
         inherit = os.environ.get("POOL_INHERIT_FROM", "").strip()
         if inherit and inherit_pool_credential(addon_dst, Path(inherit)):
+            return
+        # Deliberate pool.py logic change, no packaging helper available.
+        carry = os.environ.get("POOL_CARRY_BLOCK_FROM", "").strip()
+        if carry and carry_pool_key_block(addon_dst, Path(carry)):
             return
         raise RuntimeError(
             "$POOL_SECRET not set -- refusing to build a package with the "

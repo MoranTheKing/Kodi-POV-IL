@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import re
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
@@ -129,8 +130,31 @@ def verify(previous: Path, output: Path, changed: list[str],
                 "payload changed on files that were not part of the update:\n"
                 f"  expected: {sorted(changed)}\n  actual:   {sorted(actually)}")
         if old.read(POOL_MEMBER) != new.read(POOL_MEMBER):
-            raise SystemExit("pool.py changed -- the community-pool credential "
-                             "must be inherited untouched")
+            # pool.py carries the community-pool credential, and a quickfix
+            # that ships a placeholder silently breaks the pool for everyone
+            # who takes it (0.2.438 / quickfix 0.1.477). Refusing any change at
+            # all was the cheap way to guarantee that -- but it also made a
+            # deliberate pool.py FIX unshippable, which is its own kind of
+            # broken. So check the property that actually matters: the
+            # credential block must have come across byte for byte. The logic
+            # around it may change; the credential may not.
+            _key = re.compile(rb'__POOL_KEY_BEGIN__.*?__POOL_KEY_END__', re.S)
+            _o = _key.search(old.read(POOL_MEMBER))
+            _n = _key.search(new.read(POOL_MEMBER))
+            if not (_o and _n):
+                raise SystemExit(
+                    "pool.py changed and its credential markers are missing -- "
+                    "refusing")
+            if _o.group(0) != _n.group(0):
+                raise SystemExit(
+                    "pool.py's CREDENTIAL changed, not just its logic -- "
+                    "refusing. Carry the block across with "
+                    "$POOL_CARRY_BLOCK_FROM, or rebuild with $POOL_SECRET.")
+            if b'b64decode' not in _n.group(0):
+                raise SystemExit(
+                    "pool.py's credential block is the PLACEHOLDER -- this is "
+                    "the failure that broke the pool in 0.2.438; refusing")
+            print("    pool.py logic changed, credential block carried intact")
         outside = [n for n in actually if not n.startswith(QUICKFIX_PREFIX)]
         if outside:
             raise SystemExit(f"changes outside the add-on subtree: {outside}")

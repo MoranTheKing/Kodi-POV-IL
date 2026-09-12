@@ -1,3 +1,34 @@
+0.2.526
+- "Share my cached translations" was uploading nothing at all.
+
+  The action walks the translation cache, parses each filename for the title
+  and language, and contributes it to the community pool. The pattern it parsed
+  with had no slot for the quality-tier suffix -- and a translation that used a
+  gender reference is saved as "<key>.ar.he.srt", which is the NORMAL case,
+  since the gender reference is on by default and was force-enabled for every
+  device. So the pattern matched almost nothing: every file was counted as
+  skipped, and the action reported success having sent nothing.
+
+  Fixed, and the tier is now read from the filename rather than assumed. That
+  second half matters as much as the first: the tier decides which variant the
+  pool records, and the setting's value TODAY says nothing about whether a
+  reference actually aligned for that title back then. Taking it from the
+  filename means a gender-boosted translation is recorded as one, and a plain
+  one is not recorded as boosted -- which would have served everyone else a
+  weaker file labelled as the better one.
+
+  Releasing this needed a new packaging path, because pool.py carries the pool
+  credential and the two existing flows could not cover a deliberate change to
+  its logic: one takes the file whole and would have discarded the fix, the
+  other re-derives the credential with a tool only the maintainer has. The new
+  one copies the credential BLOCK byte for byte and changes nothing else, then
+  proves both halves of that before writing -- the block is identical to the
+  shipped one, and nothing outside it moved. The credential is never decoded or
+  re-derived, so it cannot be got subtly wrong. It is opt-in and it says so in
+  the build log, because the failure this guards against -- shipping the
+  placeholder and silently breaking the pool for everyone who updates, which
+  happened in 0.2.438 -- is silent by nature.
+
 0.2.525
 - The final subtitle swap claimed success it had not verified, and then
   deleted the file the player was still on.
