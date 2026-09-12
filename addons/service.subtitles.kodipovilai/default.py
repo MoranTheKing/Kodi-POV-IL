@@ -1069,24 +1069,57 @@ def _handle_bg_translate_picker(params):
                             if _final_path:
                                 try:
                                     p = xbmc.Player()
+                                    # setSubtitles() POSTS to the
+                                    # VideoPlayer thread and returns
+                                    # before the stream is registered,
+                                    # so "it did not raise" is not
+                                    # evidence anything happened. The
+                                    # stream list read on the next line
+                                    # was the PRE-add list, so picking
+                                    # its last entry selected the last
+                                    # progressive SLOT -- which the
+                                    # cleanup below then deleted,
+                                    # pinning the viewer to a stream
+                                    # whose file is gone. Count first,
+                                    # wait for it to grow, then claim.
+                                    try:
+                                        _before = len(
+                                            p.getAvailableSubtitleStreams() or [])
+                                    except Exception:
+                                        _before = -1
                                     p.setSubtitles(_final_path)
                                     p.showSubtitles(True)
-                                    # Force-pick our newly-added
-                                    # stream so Kodi doesn't auto-
-                                    # revert to a pre-existing
-                                    # Hebrew subtitle (user-reported
-                                    # "jumps back to Hebrew" bug
-                                    # when an existing he-SRT was
-                                    # already loaded before picking
-                                    # English for AI translation).
-                                    try:
-                                        _streams = p.getAvailableSubtitleStreams()
-                                        if _streams:
-                                            p.setSubtitleStream(
-                                                len(_streams) - 1)
-                                    except Exception:
-                                        pass
-                                    _canonical_swap_succeeded = True
+                                    _grew = False
+                                    if _before >= 0:
+                                        for _ in range(20):      # <= 1s
+                                            xbmc.sleep(50)
+                                            try:
+                                                _streams = (
+                                                    p.getAvailableSubtitleStreams()
+                                                    or [])
+                                            except Exception:
+                                                break
+                                            if len(_streams) > _before:
+                                                _grew = True
+                                                # Pin our stream so Kodi
+                                                # does not auto-revert to
+                                                # a pre-existing Hebrew
+                                                # SRT.
+                                                try:
+                                                    p.setSubtitleStream(
+                                                        len(_streams) - 1)
+                                                except Exception:
+                                                    pass
+                                                break
+                                    if not _grew:
+                                        _safe_log(
+                                            'bg_translate_picker: Kodi did not '
+                                            'register the final subtitle '
+                                            'stream -- keeping the progressive '
+                                            'slots rather than deleting a file '
+                                            'the player may still be on',
+                                            level='WARNING')
+                                    _canonical_swap_succeeded = _grew
                                 except Exception as _se:
                                     _safe_log(
                                         'bg_translate_picker done '
@@ -2837,10 +2870,28 @@ def _handle_translate_file(params):
                                 # NOT gated on isPlayingVideo -- if
                                 # the user paused mid-translation,
                                 # setSubtitles is still useful for
-                                # the resume. try/except is the only
-                                # guard we need.
+                                # the resume.
+                                #
+                                # try/except is NOT the only guard we
+                                # need, which is what this comment used
+                                # to claim. setSubtitles() posts to the
+                                # VideoPlayer thread and returns before
+                                # the stream is registered, so it not
+                                # raising proves nothing -- and reading
+                                # the stream list on the next line
+                                # returned the PRE-add list, so the
+                                # "most-recently-added stream" picked
+                                # below was really the last progressive
+                                # SLOT, which the cleanup then deleted.
+                                # Count before, wait for the count to
+                                # grow, and only then claim success.
                                 try:
                                     p = xbmc.Player()
+                                    try:
+                                        _before = len(
+                                            p.getAvailableSubtitleStreams() or [])
+                                    except Exception:
+                                        _before = -1
                                     p.setSubtitles(_final_path)
                                     p.showSubtitles(True)
                                     # Explicit stream selection: when
@@ -2855,14 +2906,33 @@ def _handle_translate_file(params):
                                     # (always ours) pins the active
                                     # selection to the translation we
                                     # just produced.
-                                    try:
-                                        _streams = p.getAvailableSubtitleStreams()
-                                        if _streams:
-                                            p.setSubtitleStream(
-                                                len(_streams) - 1)
-                                    except Exception:
-                                        pass
-                                    _canonical_swap_succeeded = True
+                                    _grew = False
+                                    if _before >= 0:
+                                        for _ in range(20):      # <= 1s
+                                            xbmc.sleep(50)
+                                            try:
+                                                _streams = (
+                                                    p.getAvailableSubtitleStreams()
+                                                    or [])
+                                            except Exception:
+                                                break
+                                            if len(_streams) > _before:
+                                                _grew = True
+                                                try:
+                                                    p.setSubtitleStream(
+                                                        len(_streams) - 1)
+                                                except Exception:
+                                                    pass
+                                                break
+                                    if not _grew:
+                                        _safe_log(
+                                            'translate_file: Kodi did not '
+                                            'register the final subtitle '
+                                            'stream -- keeping the progressive '
+                                            'slots rather than deleting a file '
+                                            'the player may still be on',
+                                            level='WARNING')
+                                    _canonical_swap_succeeded = _grew
                                 except Exception as _se:
                                     _safe_log(
                                         'translate_file fast done '

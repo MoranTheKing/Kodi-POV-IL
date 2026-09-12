@@ -156,10 +156,16 @@ def save_json(path, data):
 
 
 # Zero-byte markers written NEXT TO a translation, not standing on their own.
-# '.google' says the file is machine translation and must never reach the
-# community pool; '.emb2' marks an embedded-source pool entry; '.release'
-# carries the source release name.
-_SIDECARS = ('.google', '.emb2', '.release')
+# Longest first: '.emb2.shared' has to be stripped whole, because '<path>.emb2'
+# is only a marker KEY (translate._pool_marker) and no such file is ever
+# written -- taking it as the parent would make every embedded marker look
+# orphaned.
+#   .shared        pool.
+#   .emb2.shared   pool._marker_path(translate._pool_marker(p, 'ai_emb')).
+#   .google        srt.is_google_translated -- this file is machine
+#                  translation and must never reach the community pool.
+#   .release       the source release name, used to tag a pool upload.
+_SIDECARS = ('.emb2.shared', '.shared', '.google', '.release')
 
 
 def _sidecar_parent(path):
@@ -174,15 +180,30 @@ def _walk_cache_files():
     """Yield (full_path, atime_or_mtime, size_bytes) for every file
     under the cache root.
 
-    A SIDECAR INHERITS ITS PARENT'S RECENCY. load_text() touches only the
-    translation, so a marker sitting beside a file that is read every week
-    still ages out on its own mtime. For '.google' that is a correctness bug,
-    not a tidiness one: once the marker is gone _is_google_translated() answers
-    False, and the next cache hit backfills machine translation into the
-    community pool -- the one thing translate.py:1595 and srt.py:1701 both say
-    must never happen. Ageing a marker with the file it describes removes the
-    whole class; it also stops a marker outliving its parent, which would leave
-    a stray zero-byte file behind forever.
+    A SIDECAR IS AS RECENT AS THE FILE IT DESCRIBES. load_text() touches only
+    the translation, so a marker beside a file that is read every week still
+    ages out on its own mtime. For '.google' that is a correctness bug rather
+    than untidiness: once the marker is gone is_google_translated() answers
+    False and the next cache hit backfills machine translation into the
+    community pool, which translate.py and srt.py both say must never happen.
+    '.shared' has the same shape -- lose it and the file is re-uploaded.
+
+    A marker with NO parent keeps its own recency. That is what matters for
+    '.release', which is written when the reference is chosen -- one to three
+    minutes before cache.save_text() creates the translation -- so a prune() in
+    that window must not treat it as an orphan and delete it mid-job. Once it
+    IS old and still parentless, it is collected normally.
+
+    max() rather than plain inheritance is defensive only: it would keep a
+    freshly-rewritten marker beside a parent that is already past its TTL. No
+    test covers that because no caller currently produces it -- the distinction
+    is not load-bearing today, and it is written here so the next reader does
+    not mistake it for a behaviour that is being relied on.
+
+    Note this materialises the file table before yielding, where it used to
+    stream: a sidecar cannot be scored without its parent's stat, and the
+    parent may come later in the walk. At the 200 MB default that is a few MB;
+    at the 2000 MB maximum roughly 35 MB, briefly, on a background thread.
     """
     root = kodi_utils.cache_dir()
     stats = {}
@@ -198,8 +219,8 @@ def _walk_cache_files():
         parent = _sidecar_parent(p)
         if parent:
             prec = stats.get(parent)
-            # No parent left -> recency 0, so the orphan is evicted next pass.
-            recency = prec[0] if prec else 0.0
+            if prec:
+                recency = max(recency, prec[0])
         yield p, recency, size
 
 

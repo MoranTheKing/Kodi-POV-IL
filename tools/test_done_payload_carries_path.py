@@ -59,15 +59,31 @@ for m in re.finditer(r"canonical = payload\.get\('path'\) or ''\n(.*?)if os\.pat
           'if not canonical:' in body, body.strip()[:120])
 
 # --- the bug this replaces must not creep back -----------------------------
-bare = re.findall(r"canonical = _cache\.translated_path\(\s*\n(?:[^)]*\n)*?\s*source_id=payload\['source_id'\]\)",
-                  df)
-for b in bare:
-    check('a recompute never passes tier= (it is a fallback, not the answer)',
-          'tier=' not in b, b[:100])
-check('no handler computes the canonical path unconditionally',
-      "canonical = _cache.translated_path" not in df.split(
-          "canonical = payload.get('path') or ''")[0],
-      'an ungated recompute still runs before the payload is consulted')
+recomputes = df.count('canonical = _cache.translated_path(')
+check('the recompute survives only as a fallback, twice', recomputes == 2,
+      'found %d' % recomputes)
+check('no recompute smuggles in a tier= (it is a fallback, not the answer)',
+      'translated_path(' in df and 'tier=' not in df.split(
+          'canonical = _cache.translated_path(')[1].split(')')[0],
+      'a recompute now passes a tier and will guess wrong the other way')
+
+# --- and the swap may not claim success it did not verify ------------------
+# setSubtitles() posts to the VideoPlayer thread, so it returning is not
+# evidence the stream was registered. Claiming success anyway meant the
+# cleanup deleted the progressive slots while Kodi was still pointing at one.
+check('neither handler claims the swap worked unconditionally',
+      '_canonical_swap_succeeded = True' not in df,
+      'a handler still trusts "setSubtitles did not raise"')
+check('both handlers gate success on the stream count growing',
+      df.count('_canonical_swap_succeeded = _grew') == 2,
+      'found %d' % df.count('_canonical_swap_succeeded = _grew'))
+check('both read the stream count BEFORE adding', df.count('_before = len(') == 2,
+      'found %d' % df.count('_before = len('))
+check('both wait for the count to grow rather than reading it once',
+      df.count('if len(_streams) > _before:') == 2,
+      'found %d' % df.count('if len(_streams) > _before:'))
+check('a failed swap is reported, not silent',
+      df.count('did not\n') + df.count('did not ') >= 2, 'no warning on the failure path')
 
 print()
 if FAILED:
