@@ -373,6 +373,12 @@ HOME_WIDGETS = [
 
 HOME_SUBMENU = [
     {
+        'label': 'הערב שלי — התנסות',
+        'icon': 'special://home/addons/service.subtitles.kodipovilai/icon.png',
+        'path': 'RunScript(service.subtitles.kodipovilai,action=tonight)',
+        'target': '',
+    },
+    {
         # The other three skins carry this as a favourites tile. AF3 does not
         # read favourites for its home at all -- which is the whole reason this
         # module exists -- so the same entry has to arrive here, or "on all

@@ -363,6 +363,7 @@ def _run_build_startup_repairs():
         _maybe_patch_skin_watched_poster,
         _maybe_patch_favourites_xml,
         _maybe_patch_favourites_personal_tiles,
+        _maybe_add_tonight_entry,
         _maybe_seed_recent_updates_tile,
         _maybe_patch_pov_torbox_usage,
         _maybe_patch_pov_cache_empty,
@@ -1820,6 +1821,14 @@ def _maybe_seed_recent_updates_tile():
                            level='WARNING')
         except Exception:
             pass
+
+
+def _maybe_add_tonight_entry():
+    try:
+        from resources.lib.tonight.entrypoints import ensure
+        ensure()
+    except Exception:
+        pass  # An optional home shortcut must not interrupt startup repairs.
 
 
 def _maybe_patch_favourites_personal_tiles():
