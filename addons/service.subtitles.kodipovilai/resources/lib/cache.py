@@ -62,6 +62,37 @@ def translated_path(imdb_id, season, episode, source_lang,
         suffix + '.he.srt')
 
 
+# The tiers a translation can have been written under, best first. '' is the
+# plain slot used when no gender reference was found.
+TRANSLATED_TIERS = ('ar', '')
+
+
+def find_translated(imdb_id, season, episode, source_lang, source_id=None):
+    """The cached translation for this source, whichever tier it landed in.
+
+    WHY THIS EXISTS. resolve() writes with tier='ar' whenever a gender
+    reference was found and with '' when none was, and a LOOKUP cannot know
+    which happened last time -- the setting's value today says nothing about
+    whether a reference aligned for that particular title. Every caller that
+    guessed a single tier was therefore wrong for some share of jobs: the
+    [CACHE] marker and the cache-hit fast path both guessed '', so on a title
+    that DID get a reference they missed a translation that was sitting right
+    there, and the user had to re-pick the subtitle by hand on the next entry
+    instead of it loading straight from cache.
+
+    Returns the path, or '' when nothing is cached.
+    """
+    for tier in TRANSLATED_TIERS:
+        p = translated_path(imdb_id, season, episode, source_lang,
+                            source_id=source_id, tier=tier)
+        try:
+            if os.path.isfile(p):
+                return p
+        except OSError:
+            pass
+    return ''
+
+
 def source_path(imdb_id, season, episode, source_lang,
                 source_id=None):
     return os.path.join(

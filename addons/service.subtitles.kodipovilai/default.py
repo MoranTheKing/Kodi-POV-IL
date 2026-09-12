@@ -766,10 +766,14 @@ def _try_fast_download(handle, link, info):
     # zero AI work.
     if source_id:
         try:
-            cached = _cache.translated_path(
+            # Any tier -- see cache.find_translated. Guessing the plain slot
+            # meant a title that HAD a gender reference missed its own cached
+            # translation here, which is why a second entry did not load it
+            # automatically and the subtitle had to be picked by hand again.
+            cached = _cache.find_translated(
                 imdb_id, season, episode, source_lang,
                 source_id=source_id)
-            if os.path.isfile(cached):
+            if cached:
                 listitem = xbmcgui.ListItem(label=cached)
                 xbmcplugin.addDirectoryItem(
                     handle=handle, url=cached,
