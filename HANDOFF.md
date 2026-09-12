@@ -12,6 +12,15 @@
 - Scope limits: no live Kodi playback or live translation-quality benchmark. Two source-list patchers rewrite block order on consecutive passes, but the final combined file remains stable; a future optimization should remove those redundant writes.
 - Publish packages and manifests first, verify their public bytes and Pages deployment, then wait at least five minutes before publishing the short user note and ten-entry archive.
 
+## Translation safety update — addon 0.2.527 / quickfix 0.1.572 / build 0.1.140
+
+- Hebrew repair candidates use reviewed words and predicates; noun-shaped and object-marker counterexamples abstain. Repair receives original source, aligned reference and two neighbouring cues on each side, bounded to 24 KB. KEEP/omission is allowed; cue structure, negation and numbers have mechanical guards. These guards do not prove semantic equivalence.
+- Per-invocation translation ownership protects both progressive handlers, final selection, first-ready waits and cleanup from stale jobs.
+- Bulk sharing excludes Google-marked files and fails closed if provenance checks fail. Cache eviction groups translations with sidecars and removes the parent first.
+- Windows packaging carries credential bytes without newline conversion and verifies persisted identity. No credential values are stored in source.
+- New tests execute the runtime gates, 30 synthetic linguistic controls and blind-pair scoring. Synthetic controls and model doubles are not a live translation-quality score. The quality tool refuses incomplete ratings and reports newly harmed cases separately.
+- The proposed evening planner is a design only; no skin or recommendation feature is shipped in this update. Native-dialog flow requires separate AF3 home nodes and favourites integration for the other skins, plus live four-skin acceptance testing.
+
 ## What this project is
 
 A Hebrew-localized Kodi build (skin + addons + wizard) for users in Israel,

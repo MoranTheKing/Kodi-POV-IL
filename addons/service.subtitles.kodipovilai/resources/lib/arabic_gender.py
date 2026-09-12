@@ -557,61 +557,38 @@ _HE_PRO = u'(?:\u05d5|\u05e9|\u05db\u05e9|\u05d5\u05e9|\u05d5\u05db\u05e9)?'
 _HE_REF_FEM = re.compile(
     u'(?<![\u05d0-\u05ea])' + _HE_PRO + u'\u05d0\u05ea(?![\u05d0-\u05ea])(?!\\s*\u05d4)')
 
-# READ THE VERB, NOT JUST THE PRONOUN.
-#
-# WHY THIS MATTERS MORE THAN IT LOOKS. A feminine verdict here does not merely
-# fail to help -- it ACTS. wrong_gender_entries flags the entry, and
-# translate._regender_blocks then hands the model the Hebrew alone with the flat
-# assertion "these address a FEMALE listener, but they were written addressing a
-# male". Its only acceptance test is that the rewrite no longer says \u05d0\u05ea\u05d4. So a
-# false feminine does not degrade gracefully: it rewrites a CORRECT masculine
-# line into a wrong feminine one, and nothing downstream can veto it.
-#
-# \u05d0\u05ea is Hebrew's definite-object marker as well as the feminine pronoun, and
-# the old (?!\s*\u05d4) guard only refuses it before a \u05d4-definite noun. Definiteness
-# is an open class -- \u05d0\u05ea \u05d6\u05d4, \u05d0\u05ea \u05db\u05dc, \u05d0\u05ea \u05e2\u05e6\u05de\u05d9, \u05d0\u05ea \u05de\u05d4 -- so no closed list ever
-# finishes the job. Measured on a full human episode, 13 of 60 feminine verdicts
-# were ordinary object marking ("\u05dc\u05d0 \u05e2\u05e9\u05d9\u05ea\u05d9 \u05d0\u05ea \u05d6\u05d4", "\u05d0\u05e0\u05d9 \u05e9\u05d5\u05e0\u05d0\u05ea \u05d0\u05ea \u05e2\u05e6\u05de\u05d9"), one of
-# them on a line whose speaker is explicitly male.
-#
-# Hebrew MORPHOLOGY has no such ambiguity: the 2fs future/imperative \u05ea...\u05d9 and a
-# short list of bare imperatives can only address a woman. Reading those adds 23
-# cues the pronoun alone missed (\u05d0\u05dc \u05ea\u05d2\u05d9\u05d3\u05d9, \u05dc\u05db\u05d9, \u05ea\u05e1\u05de\u05db\u05d9, \u05ea\u05e9\u05de\u05e8\u05d9). Net on that
-# episode: 60 -> 70 verdicts, with the 13 false ones gone. Precision and recall
-# both improve, which is why this replaces the guard rather than extending it.
-#
-# The (?<!\u05ea) before the final \u05d9 is load-bearing: without it the 1sg past \u05ea\u05d9
-# ending matches (\u05ea\u05d9\u05d0\u05e8\u05ea\u05d9, \u05ea\u05de\u05d5\u05e0\u05ea\u05d9). \u05d4\u05d9\u05d9 is deliberately NOT in the imperative
-# list -- it is the interjection "hey" far more often than "be".
+# A letter shape is not morphology: תפקידי, תורכי and תלמידי are
+# ordinary nouns/adjectives, not commands. Use a small reviewed vocabulary
+# for repair candidates; unknown forms abstain. These are hints, not proof.
 _HE_FEM_VERB = re.compile(
-    u'(?<![\u05d0-\u05ea])' + _HE_PRO + u'\u05ea[\u05d0-\u05ea]{2,6}(?<!\u05ea)\u05d9(?![\u05d0-\u05ea])')
+    u'(?<![א-ת])' + _HE_PRO +
+    u'(?:תגידי|תסמכי|תשמרי|תעשי|תבואי|תלכי|תחכי|תקחי|תתני|תדברי|תראי|תשמעי)(?![א-ת])')
 _HE_FEM_IMPER = re.compile(
-    u'(?<![\u05d0-\u05ea])' + _HE_PRO +
-    u'(?:\u05d1\u05d5\u05d0\u05d9|\u05dc\u05db\u05d9|\u05d7\u05db\u05d9|\u05e7\u05d7\u05d9|\u05ea\u05e0\u05d9|\u05e9\u05d1\u05d9|\u05e1\u05dc\u05d7\u05d9|\u05e2\u05d6\u05e8\u05d9)(?![\u05d0-\u05ea])')
-# an \u05d0\u05ea followed by something that can only be a definite object
+    u'(?<![א-ת])' + _HE_PRO +
+    u'(?:בואי|לכי|חכי|קחי|תני|סלחי|עזרי)(?![א-ת])')
+# Bare את is also an object marker, even before a name (ראיתי את דני).
+# Admit only a clause-leading pronoun or an explicit subordinating clitic.
+_HE_FEM_CLAUSE = re.compile(
+    r'(?:^|[.!?\n,:;—-])\s*(?:ו)?את(?![א-ת])|'
+    u'(?<![א-ת])(?:ש|כש|וש|וכש)את(?![א-ת])')
 _HE_AT_OBJ = re.compile(
-    u'(?<![\u05d0-\u05ea])' + _HE_PRO + u'\u05d0\u05ea(?![\u05d0-\u05ea])\\s+'
-    u'(?:\u05d4[\u05d0-\u05ea]|\u05d6\u05d4|\u05d6\u05d0\u05ea|\u05d6\u05d5|\u05d0\u05dc\u05d4|\u05d0\u05dc\u05d5|\u05db\u05dc(?!\\s*\u05db\u05da)|\u05de\u05d4|\u05de\u05d9|\u05e2\u05e6\u05de|\u05d0\u05d5\u05ea|\u05db\u05da|\u05e9\u05dc)')
-# \u05db\u05dc \u05db\u05da is "so/very", not an object -- "\u05d0\u05ea \u05db\u05dc \u05db\u05da \u05d9\u05e4\u05d4" addresses a woman.
-_HE_AT_ANY = re.compile(
-    u'(?<![\u05d0-\u05ea])' + _HE_PRO + u'\u05d0\u05ea(?![\u05d0-\u05ea])')
+    r'\s+(?:זה|זאת|זו|אלה|אלו|כל(?!\s+כך)|מה|מי|עצמ|אות|כך|של|ה[א-ת])')
+# Clause position alone is insufficient: "את דני ראיתי" fronts an object.
+# Require a reviewed predicate too; unseen predicates remain prompt-only hints.
+_HE_AT_PREDICATE = re.compile(
+    r'\s+(?:(?:כל\s+כך|מאוד|ממש|ודאי|בטעות|כבר|עדיין|לא)\s+){0,3}'
+    r'(?:יפה|מוכנה|מבהילה|מפחידה|מעמידה|יודעת|חוזרת|צריכה|יכולה|רוצה|'
+    r'חייבת|בטוחה|עייפה|צודקת|טועה|מבינה|מקשיבה|מדברת|הולכת|נראית)(?![א-ת])')
 
 
 def _he_addresses_female(text):
-    """True when the Hebrew can only be addressing a woman.
-
-    Verb morphology is decisive on its own. The pronoun counts only when at
-    least one of its occurrences is NOT followed by an unmistakable definite
-    object -- otherwise the line is using the object marker, not the pronoun.
-    """
+    """Conservative candidate evidence; uncertain Hebrew does not trigger repair."""
     try:
         if _HE_FEM_VERB.search(text) or _HE_FEM_IMPER.search(text):
             return True
-        occ = [m.start() for m in _HE_AT_ANY.finditer(text)]
-        if not occ:
-            return False
-        obj = set(m.start() for m in _HE_AT_OBJ.finditer(text))
-        return any(o not in obj for o in occ) and bool(_HE_REF_FEM.search(text))
+        return any(not _HE_AT_OBJ.match(text[m.end():])
+                   and _HE_AT_PREDICATE.match(text[m.end():])
+                   for m in _HE_FEM_CLAUSE.finditer(text))
     except Exception:
         return False
 # The proclitics Hebrew glues straight onto a pronoun: ו (and), ש (that),

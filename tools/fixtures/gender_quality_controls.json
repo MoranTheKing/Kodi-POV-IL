@@ -1,0 +1,242 @@
+[
+  {
+    "id": "role",
+    "source": "This is my role.",
+    "reference": "זה תפקידי.",
+    "language": "he",
+    "expected_candidate": null,
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "nationality",
+    "source": "He is Turkish.",
+    "reference": "הוא תורכי.",
+    "language": "he",
+    "expected_candidate": null,
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "pupil",
+    "source": "My pupil arrived.",
+    "reference": "תלמידי הגיע.",
+    "language": "he",
+    "expected_candidate": null,
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "captivity",
+    "source": "The conditions of captivity are harsh.",
+    "reference": "תנאי שבי קשים.",
+    "language": "he",
+    "expected_candidate": null,
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "named_object",
+    "source": "I saw Danny.",
+    "reference": "ראיתי את דני.",
+    "language": "he",
+    "expected_candidate": null,
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "fronted_object",
+    "source": "Danny is the one I saw yesterday.",
+    "reference": "את דני ראיתי אתמול.",
+    "language": "he",
+    "expected_candidate": null,
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "subordinate_object",
+    "source": "I said that I saw Danny.",
+    "reference": "אמרתי שאת דני ראיתי.",
+    "language": "he",
+    "expected_candidate": null,
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "self",
+    "source": "I hate myself.",
+    "reference": "אני שונאת את עצמי.",
+    "language": "he",
+    "expected_candidate": null,
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "book",
+    "source": "I saw the book.",
+    "reference": "ראיתי את הספר.",
+    "language": "he",
+    "expected_candidate": null,
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "picture",
+    "source": "My picture is pretty.",
+    "reference": "תמונתי יפה.",
+    "language": "he",
+    "expected_candidate": null,
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "past",
+    "source": "I described it to myself.",
+    "reference": "תיארתי לעצמי.",
+    "language": "he",
+    "expected_candidate": null,
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "hey",
+    "source": "Hey, what is going on?",
+    "reference": "היי, מה קורה?",
+    "language": "he",
+    "expected_candidate": null,
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "surname",
+    "source": "Mr Tishbi arrived.",
+    "reference": "מר תשבי הגיע.",
+    "language": "he",
+    "expected_candidate": null,
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "plural",
+    "source": "You are ready.",
+    "reference": "אתם מוכנים.",
+    "language": "he",
+    "expected_candidate": null,
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "third_person",
+    "source": "She is ready.",
+    "reference": "היא מוכנה.",
+    "language": "he",
+    "expected_candidate": null,
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "speaker",
+    "source": "I am ready.",
+    "reference": "אני מוכנה.",
+    "language": "he",
+    "expected_candidate": null,
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "neutral",
+    "source": "Good morning.",
+    "reference": "בוקר טוב.",
+    "language": "he",
+    "expected_candidate": null,
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "object_all",
+    "source": "I love all the films.",
+    "reference": "אני אוהב את כל הסרטים.",
+    "language": "he",
+    "expected_candidate": null,
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "mixed",
+    "source": "You and you are ready.",
+    "reference": "את מוכנה ואתה מוכן.",
+    "language": "he",
+    "expected_candidate": null,
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "unknown_predicate",
+    "source": "You are the chairperson.",
+    "reference": "את היושבת ראש.",
+    "language": "he",
+    "expected_candidate": null,
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "go",
+    "source": "Please go.",
+    "reference": "לכי בבקשה.",
+    "language": "he",
+    "expected_candidate": "F",
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "come",
+    "source": "Come here.",
+    "reference": "בואי הנה.",
+    "language": "he",
+    "expected_candidate": "F",
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "wait",
+    "source": "Wait here.",
+    "reference": "חכי כאן.",
+    "language": "he",
+    "expected_candidate": "F",
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "tell",
+    "source": "Do not say anything.",
+    "reference": "אל תגידי כלום.",
+    "language": "he",
+    "expected_candidate": "F",
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "trust",
+    "source": "Trust me.",
+    "reference": "תסמכי עליי.",
+    "language": "he",
+    "expected_candidate": "F",
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "pretty",
+    "source": "You are so pretty.",
+    "reference": "את כל כך יפה.",
+    "language": "he",
+    "expected_candidate": "F",
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "ready",
+    "source": "And you are ready.",
+    "reference": "ואת מוכנה.",
+    "language": "he",
+    "expected_candidate": "F",
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "return",
+    "source": "When you return.",
+    "reference": "כשאת חוזרת.",
+    "language": "he",
+    "expected_candidate": "F",
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "male_ready",
+    "source": "You are ready.",
+    "reference": "אתה מוכן.",
+    "language": "he",
+    "expected_candidate": "M",
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  },
+  {
+    "id": "male_clitic",
+    "source": "And you are ready.",
+    "reference": "ואתה מוכן.",
+    "language": "he",
+    "expected_candidate": "M",
+    "scope": "Synthetic detector safety control, not human-rated translation accuracy"
+  }
+]
