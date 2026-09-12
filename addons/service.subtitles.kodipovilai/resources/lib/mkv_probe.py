@@ -62,16 +62,21 @@ DEFAULT_MAX_WINDOWS = 10
 DEFAULT_MAX_BYTES = 40 * 1024 * 1024
 DEFAULT_DEADLINE_S = 25.0
 _HTTP_TIMEOUT = 10
+_HTTP_BODY_IDLE_TIMEOUT = 3
+_HTTP_RANGE_BYTES = 256 * 1024
 
 
 class _Source(object):
     """Byte source with .read(offset, size) -- local file or HTTP Range."""
 
-    def __init__(self, url_or_path):
+    def __init__(self, url_or_path, max_bytes=DEFAULT_MAX_BYTES, deadline_s=DEFAULT_DEADLINE_S):
         self.url = url_or_path
         self.is_http = bool(re.match(r'^https?://', url_or_path or '', re.I))
         self.total = None
         self.fetched = 0
+        self._range_bytes = _HTTP_RANGE_BYTES
+        self.max_bytes = max(0, int(max_bytes))
+        self.deadline = time.monotonic() + max(0, float(deadline_s))
         self._fh = None
         if not self.is_http:
             self._fh = open(url_or_path, 'rb')
@@ -85,38 +90,131 @@ class _Source(object):
         except Exception:
             pass
 
+    def _timeout(self):
+        remaining = self.deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError('probe deadline reached')
+        return min(_HTTP_TIMEOUT, remaining)
+
     def read(self, offset, size):
+        """Read a bounded, verified range. Never label file-head bytes as a seek."""
+        offset, size = int(offset), int(size)
+        if offset < 0:
+            raise ValueError('negative probe offset')
+        size = min(size, self.max_bytes - self.fetched)
+        if self.total is not None:
+            size = min(size, self.total - offset)
         if size <= 0:
             return b''
+        self._timeout()
         if not self.is_http:
             self._fh.seek(offset)
             data = self._fh.read(size)
             self.fetched += len(data)
             return data
+        # Keep individual responses small and re-check budget between them.
+        # This also avoids large-response stalls observed on Windows loopback.
+        pieces = []
+        remaining = size
+        while remaining > 0:
+            self._timeout()
+            request_size = min(remaining, self._range_bytes)
+            piece = self._http_range(offset, request_size)
+            if not piece:
+                break
+            pieces.append(piece)
+            offset += len(piece)
+            remaining -= len(piece)
+            if self.total is not None and offset >= self.total:
+                break
+        return b''.join(pieces)
+
+    def _http_range(self, offset, size):
         import urllib.request
+        import urllib.error
         req = urllib.request.Request(self.url, headers={
             'Range': 'bytes={0}-{1}'.format(offset, offset + size - 1),
+            'Accept-Encoding': 'identity',
             'User-Agent': 'Kodi-MoranSubs-SubSync/1.0',
         })
-        resp = urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT)
         try:
-            if self.total is None:
-                cr = resp.headers.get('Content-Range') or ''
-                m = re.search(r'/(\d+)\s*$', cr)
-                if m:
-                    self.total = int(m.group(1))
-            if resp.status not in (200, 206):
-                return b''
-            # A 200 means the server ignored Range -- read only what we asked
-            # for and never more (protects the budget on broken servers).
-            data = resp.read(size)
-            self.fetched += len(data)
-            return data
-        finally:
+            resp = urllib.request.urlopen(req, timeout=self._timeout())
+        except urllib.error.HTTPError as error:
             try:
-                resp.close()
-            except Exception:
-                pass
+                if error.code == 416:
+                    match = re.fullmatch(r'bytes \*/(\d+)',
+                                         (error.headers.get('Content-Range') or '').strip())
+                    if match:
+                        total = int(match.group(1))
+                        if ((self.total is None or self.total == total)
+                                and offset >= total):
+                            self.total = total
+                            return b''
+                raise
+            finally:
+                error.close()
+        try:
+            if (resp.headers.get('Content-Encoding') or 'identity').lower() != 'identity':
+                raise ValueError('encoded range cannot be mapped to file bytes')
+            length = resp.headers.get('Content-Length')
+            length = int(length) if length is not None else None
+            if resp.status == 206:
+                match = re.fullmatch(r'bytes (\d+)-(\d+)/(\d+)',
+                                     (resp.headers.get('Content-Range') or '').strip())
+                if not match:
+                    raise ValueError('missing or invalid Content-Range')
+                start, end, total = map(int, match.groups())
+                if (start != offset or end < start or end >= offset + size
+                        or total <= end or (self.total is not None and total != self.total)):
+                    raise ValueError('response does not match requested file range')
+                expected = end - start + 1
+                if length is not None and length != expected:
+                    raise ValueError('range length disagrees with Content-Length')
+                self.total = total
+            elif resp.status == 200 and offset == 0:
+                # The head of a server without Range support is still the head.
+                # A later nonzero request MUST fail, rather than invent an offset.
+                if length is not None and length < 0:
+                    raise ValueError('negative Content-Length')
+                if self.total is not None and length is not None and length != self.total:
+                    raise ValueError('file size changed during probe')
+                self.total = length
+                expected = min(size, length) if length is not None else size
+            else:
+                raise ValueError('server did not honor the requested byte range')
+            pieces = []
+            remaining = expected
+            while remaining:
+                timeout = self._timeout()
+                if pieces:
+                    # A stalled tail must leave time to request its suffix.
+                    # Connection setup/first byte keep their longer timeout.
+                    timeout = min(timeout, _HTTP_BODY_IDLE_TIMEOUT)
+                # HTTPResponse.read1 returns after one socket read, so a slow
+                # trickle cannot hide the deadline inside a multi-MB read().
+                sock = getattr(getattr(getattr(resp, 'fp', None), 'raw', None), '_sock', None)
+                if sock is not None:
+                    sock.settimeout(timeout)
+                try:
+                    piece = resp.read1(min(65536, remaining))
+                except (TimeoutError, ConnectionResetError):
+                    if not pieces:
+                        raise
+                    self._timeout()  # Resuming must not extend the total deadline.
+                    # Retain only bytes from a validated range. The caller
+                    # requests the missing suffix before returning any data to
+                    # the parser. Smaller subsequent ranges avoid repeating a
+                    # large-response stall; there is no restart from file zero.
+                    self._range_bytes = min(self._range_bytes, 64 * 1024)
+                    return b''.join(pieces)
+                if not piece:
+                    raise ValueError('truncated byte-range body')
+                pieces.append(piece)
+                self.fetched += len(piece)
+                remaining -= len(piece)
+            return b''.join(pieces)
+        finally:
+            resp.close()
 
 
 class _Buf(object):
@@ -482,7 +580,7 @@ def subtitle_reference(url_or_path,
     _log = log or (lambda m: None)
     src = None
     try:
-        src = _Source(url_or_path)
+        src = _Source(url_or_path, max_bytes=max_bytes, deadline_s=deadline_s)
         t0 = time.time()
         seg_start, ts_scale, tracks, duration_s = _parse_head(
             src, head_bytes, _log)
@@ -738,7 +836,7 @@ def audio_segments(url_or_path, seg_seconds=20, positions=(0.22, 0.50, 0.78),
     _log = log or (lambda m: None)
     src = None
     try:
-        src = _Source(url_or_path)
+        src = _Source(url_or_path, max_bytes=max_bytes, deadline_s=deadline_s)
         t0 = time.time()
         seg_start, ts_scale, tracks, _dur = _parse_head(
             src, DEFAULT_HEAD_BYTES, _log)
