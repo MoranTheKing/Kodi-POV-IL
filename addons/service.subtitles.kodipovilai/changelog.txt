@@ -1,3 +1,10 @@
+0.2.527
+- Safer AI subtitle corrections use the original dialogue and nearby context,
+  preserve uncertain lines, and reject changes to negation or numbers.
+- Finishing an older translation no longer overrides a newer selection.
+- Google translations are excluded from AI sharing; cache cleanup keeps
+  translations and their provenance markers together.
+
 0.2.526
 - "Share my cached translations" was uploading nothing at all.
 

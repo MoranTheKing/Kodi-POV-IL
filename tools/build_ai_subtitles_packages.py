@@ -1251,7 +1251,12 @@ def carry_pool_key_block(addon_dst: Path, previous_zip: Path) -> bool:
         raise RuntimeError("carried block is not provisioned -- refusing")
     if _pool_py_outside_key_block(out) != logic_before:
         raise RuntimeError("the splice changed pool.py outside the key block")
-    pool_py.write_text(out, encoding="utf-8")
+    # Path.write_text translates LF to CRLF on Windows, including the block
+    # we just proved identical. Persist exact bytes and verify the disk result.
+    pool_py.write_bytes(out.encode("utf-8"))
+    persisted = pool_py.read_bytes().decode("utf-8")
+    if _KEY_BLOCK_RE.search(persisted).group(0) != sm.group(0):
+        raise RuntimeError("persisted credential block changed during writing")
     print(f"  pool credential block CARRIED from {previous_zip.name} "
           "(pool.py logic changed deliberately; block copied byte-for-byte)")
     return True
