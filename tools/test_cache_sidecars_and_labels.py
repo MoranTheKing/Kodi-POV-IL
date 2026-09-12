@@ -123,64 +123,25 @@ check('a translation past its TTL is still evicted', os.path.isfile(stale), Fals
 check('...and its marker goes with it', os.path.isfile(stale_marker), False)
 
 
-# ---- find_translated: a lookup must not guess which tier was written -------
-# resolve() writes tier='ar' when a gender reference was found and '' when none
-# was. A lookup cannot know which happened for THIS title, so guessing one tier
-# missed real translations -- which is why a second entry did not auto-load and
-# the subtitle had to be picked by hand again.
-tier_dir = os.path.join(TMP, 'translated')
-os.makedirs(tier_dir, exist_ok=True)
-ARGS = ('tt1234567', '', '', 'en')
-plain = cache.translated_path(*ARGS, source_id='sid1')
-tiered = cache.translated_path(*ARGS, source_id='sid1', tier='ar')
-check('the two tiers really are different files', plain != tiered, True)
-
-check('nothing cached -> empty', cache.find_translated(*ARGS, source_id='sid1'), '')
-
-with io.open(tiered, 'w', encoding='utf-8') as f:
-    f.write('shalom')
-check('a gender-referenced translation IS found',
-      cache.find_translated(*ARGS, source_id='sid1'), tiered)
-
-os.remove(tiered)
-with io.open(plain, 'w', encoding='utf-8') as f:
-    f.write('shalom')
-check('a plain translation is found too',
-      cache.find_translated(*ARGS, source_id='sid1'), plain)
-
-with io.open(tiered, 'w', encoding='utf-8') as f:
-    f.write('better')
-check('with both present the gender-referenced one wins',
-      cache.find_translated(*ARGS, source_id='sid1'), tiered)
-
-check('a different source_id is not confused with this one',
-      cache.find_translated(*ARGS, source_id='sid2'), '')
-
-# and the callers must actually use it
+# ---- the lookups stay tier-pinned, on purpose ------------------------------
+# Widening them looked right and is not: resolve()'s early cache return fires
+# BEFORE the first progressive_cb, so on the picker path a HIT is delivered to
+# nobody and the viewer keeps the English fallback -- a miss, which falls
+# through to the full path, is what actually delivers. And the pool backfill
+# takes its tier from the SETTING, not from the file found, so a plain file
+# found while the setting is on would upload as the ai_ar variant permanently.
 _tr = io.open(os.path.join(ADDON, 'resources', 'lib', 'translate.py'),
               encoding='utf-8').read()
 _df = io.open(os.path.join(ADDON, 'default.py'), encoding='utf-8').read()
-check('the [CACHE] marker asks for any tier',
-      'cache.find_translated(' in _tr, True)
-# The fast path stays TIER-PINNED on purpose. It hands a file to Kodi without
-# any of the checks resolve() applies on a cache hit -- the _is_mostly_hebrew
-# self-heal, the mtime refresh, the RTL re-apply, the pool backfill -- so
-# widening it would turn a rare shortcut into the normal path and skip all
-# four. resolve() does the tier-agnostic lookup instead, with the guards.
-check('the fast path does NOT widen: the guards live in resolve()',
-      '_cache.find_translated(' not in _df, True)
-check('resolve() is the one that looks across tiers',
-      'cache.find_translated(' in _tr, True)
-_early = _tr[_tr.index('early_source_id = _source_id_for_ai(payload)'):]
-_early = _early[:_early.index('# Only honour the cache')]
-check('...and it is the EARLY cache lookup that was widened',
-      'find_translated(' in _early, True)
-check('the self-heal still guards whatever that lookup returns',
-      '_is_mostly_hebrew(' in _tr.split('Only honour the cache')[1][:600], True)
-# and neither may go back to guessing one
-check('the [CACHE] marker no longer guesses the plain slot',
-      'translated = cache.translated_path(' not in _tr.split('is_cached')[0][-800:], True)
-
+_ca = io.open(os.path.join(LIB, 'cache.py'), encoding='utf-8').read()
+check('no caller looks across tiers behind an unwired early return',
+      'find_translated' not in _tr and 'find_translated' not in _df, True)
+check('and the helper is gone rather than left for someone to wire up',
+      'find_translated' not in _ca, True)
+check('the early lookup is still pinned to _tier',
+      'source_id=early_source_id, tier=_tier)' in _tr, True)
+check('the [CACHE] marker does not promise what the download path cannot serve',
+      _tr.count('translated = cache.translated_path(') >= 1, True)
 
 # ---- the dropdown may not advertise a quota the table contradicts ----------
 _qs = importlib.util.spec_from_file_location(
