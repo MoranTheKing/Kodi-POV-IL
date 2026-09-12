@@ -529,7 +529,15 @@ class ReferencePlan(object):
 # that was already correct. Measured on the same episode: 19 of 370 cues
 # (5.1%), eleven distinct forms, every one a genuine 2fs verb, and twelve
 # noun controls (\u062a\u0645\u0631\u064a\u0646, \u0633\u0646\u062a\u064a\u0646, \u0645\u0631\u062a\u064a\u0646, ...) all correctly refused.
-_AR_2FS_PRESENT = u'(?<![\u0621-\u064a])\u062a[\u0621-\u064a]{2,5}[\u0621-\u0629\u062b-\u064a]\u064a\u0646(?![\u0621-\u064a])'
+# Arabic glues object pronouns straight onto the verb -- \u062a\u062e\u064a\u0641\u064a\u0646\u0646\u064a, \u062a\u0631\u064a\u062f\u064a\u0646\u0647,
+# \u062a\u0639\u0631\u0641\u064a\u0646\u0647\u0627 -- and a suffix-must-end-the-word rule misses all of them. The
+# clitic set is closed, so allowing it costs no precision against the noun
+# classes above: those are blocked by the six-letter floor whatever follows.
+# It DOES open one new class, a 6+ letter broken plural in \u064a\u0646 carrying a
+# possessive (\u062a\u0645\u0627\u0631\u064a\u0646\u0647\u0627, \u062a\u0646\u0627\u0646\u064a\u0646\u0647\u0627); those are pinned as controls in
+# tools/test_gender_verification.py so the trade is made with eyes open.
+_AR_2FS_PRESENT = (u'(?<![\u0621-\u064a])\u062a[\u0621-\u064a]{2,5}[\u0621-\u0629\u062b-\u064a]\u064a\u0646'
+                   u'(?:\u0646\u064a|\u0647\u0645\u0627|\u0647\u0627|\u0647\u0645|\u0647\u0646|\u0643\u0645|\u0647|\u0643)?(?![\u0621-\u064a])')
 
 _AR_FEM = tuple(re.compile(p) for p in (
     u'\u0623\u0646\u062a\u0650', u'\u0644\u0643\u0650', u'\u0628\u0643\u0650', u'\u0639\u0644\u064a\u0643\u0650', u'\u0645\u0639\u0643\u0650', u'\u0625\u0644\u064a\u0643\u0650', u'\u0645\u0646\u0643\u0650',
@@ -545,8 +553,67 @@ _AR_MASC = tuple(re.compile(p) for p in (
 # for \u05d5\u05d0\u05ea\u05d4/\u05e9\u05d0\u05ea\u05d4 but never for \u05d5\u05d0\u05ea/\u05e9\u05d0\u05ea -- an asymmetry that made the
 # reader better at finding a MALE addressee than a female one, in a check whose
 # whole purpose is catching masculine-where-feminine.
+_HE_PRO = u'(?:\u05d5|\u05e9|\u05db\u05e9|\u05d5\u05e9|\u05d5\u05db\u05e9)?'
 _HE_REF_FEM = re.compile(
-    u'(?<![\u05d0-\u05ea])(?:\u05d5|\u05e9|\u05db\u05e9|\u05d5\u05e9|\u05d5\u05db\u05e9)?\u05d0\u05ea(?![\u05d0-\u05ea])(?!\\s*\u05d4)')
+    u'(?<![\u05d0-\u05ea])' + _HE_PRO + u'\u05d0\u05ea(?![\u05d0-\u05ea])(?!\\s*\u05d4)')
+
+# READ THE VERB, NOT JUST THE PRONOUN.
+#
+# WHY THIS MATTERS MORE THAN IT LOOKS. A feminine verdict here does not merely
+# fail to help -- it ACTS. wrong_gender_entries flags the entry, and
+# translate._regender_blocks then hands the model the Hebrew alone with the flat
+# assertion "these address a FEMALE listener, but they were written addressing a
+# male". Its only acceptance test is that the rewrite no longer says \u05d0\u05ea\u05d4. So a
+# false feminine does not degrade gracefully: it rewrites a CORRECT masculine
+# line into a wrong feminine one, and nothing downstream can veto it.
+#
+# \u05d0\u05ea is Hebrew's definite-object marker as well as the feminine pronoun, and
+# the old (?!\s*\u05d4) guard only refuses it before a \u05d4-definite noun. Definiteness
+# is an open class -- \u05d0\u05ea \u05d6\u05d4, \u05d0\u05ea \u05db\u05dc, \u05d0\u05ea \u05e2\u05e6\u05de\u05d9, \u05d0\u05ea \u05de\u05d4 -- so no closed list ever
+# finishes the job. Measured on a full human episode, 13 of 60 feminine verdicts
+# were ordinary object marking ("\u05dc\u05d0 \u05e2\u05e9\u05d9\u05ea\u05d9 \u05d0\u05ea \u05d6\u05d4", "\u05d0\u05e0\u05d9 \u05e9\u05d5\u05e0\u05d0\u05ea \u05d0\u05ea \u05e2\u05e6\u05de\u05d9"), one of
+# them on a line whose speaker is explicitly male.
+#
+# Hebrew MORPHOLOGY has no such ambiguity: the 2fs future/imperative \u05ea...\u05d9 and a
+# short list of bare imperatives can only address a woman. Reading those adds 23
+# cues the pronoun alone missed (\u05d0\u05dc \u05ea\u05d2\u05d9\u05d3\u05d9, \u05dc\u05db\u05d9, \u05ea\u05e1\u05de\u05db\u05d9, \u05ea\u05e9\u05de\u05e8\u05d9). Net on that
+# episode: 60 -> 70 verdicts, with the 13 false ones gone. Precision and recall
+# both improve, which is why this replaces the guard rather than extending it.
+#
+# The (?<!\u05ea) before the final \u05d9 is load-bearing: without it the 1sg past \u05ea\u05d9
+# ending matches (\u05ea\u05d9\u05d0\u05e8\u05ea\u05d9, \u05ea\u05de\u05d5\u05e0\u05ea\u05d9). \u05d4\u05d9\u05d9 is deliberately NOT in the imperative
+# list -- it is the interjection "hey" far more often than "be".
+_HE_FEM_VERB = re.compile(
+    u'(?<![\u05d0-\u05ea])' + _HE_PRO + u'\u05ea[\u05d0-\u05ea]{2,6}(?<!\u05ea)\u05d9(?![\u05d0-\u05ea])')
+_HE_FEM_IMPER = re.compile(
+    u'(?<![\u05d0-\u05ea])' + _HE_PRO +
+    u'(?:\u05d1\u05d5\u05d0\u05d9|\u05dc\u05db\u05d9|\u05d7\u05db\u05d9|\u05e7\u05d7\u05d9|\u05ea\u05e0\u05d9|\u05e9\u05d1\u05d9|\u05e1\u05dc\u05d7\u05d9|\u05e2\u05d6\u05e8\u05d9)(?![\u05d0-\u05ea])')
+# an \u05d0\u05ea followed by something that can only be a definite object
+_HE_AT_OBJ = re.compile(
+    u'(?<![\u05d0-\u05ea])' + _HE_PRO + u'\u05d0\u05ea(?![\u05d0-\u05ea])\\s+'
+    u'(?:\u05d4[\u05d0-\u05ea]|\u05d6\u05d4|\u05d6\u05d0\u05ea|\u05d6\u05d5|\u05d0\u05dc\u05d4|\u05d0\u05dc\u05d5|\u05db\u05dc(?!\\s*\u05db\u05da)|\u05de\u05d4|\u05de\u05d9|\u05e2\u05e6\u05de|\u05d0\u05d5\u05ea|\u05db\u05da|\u05e9\u05dc)')
+# \u05db\u05dc \u05db\u05da is "so/very", not an object -- "\u05d0\u05ea \u05db\u05dc \u05db\u05da \u05d9\u05e4\u05d4" addresses a woman.
+_HE_AT_ANY = re.compile(
+    u'(?<![\u05d0-\u05ea])' + _HE_PRO + u'\u05d0\u05ea(?![\u05d0-\u05ea])')
+
+
+def _he_addresses_female(text):
+    """True when the Hebrew can only be addressing a woman.
+
+    Verb morphology is decisive on its own. The pronoun counts only when at
+    least one of its occurrences is NOT followed by an unmistakable definite
+    object -- otherwise the line is using the object marker, not the pronoun.
+    """
+    try:
+        if _HE_FEM_VERB.search(text) or _HE_FEM_IMPER.search(text):
+            return True
+        occ = [m.start() for m in _HE_AT_ANY.finditer(text)]
+        if not occ:
+            return False
+        obj = set(m.start() for m in _HE_AT_OBJ.finditer(text))
+        return any(o not in obj for o in occ) and bool(_HE_REF_FEM.search(text))
+    except Exception:
+        return False
 # The proclitics Hebrew glues straight onto a pronoun: ו (and), ש (that),
 # כש (when) and their combinations. Without them "ואתה", "שאתה" and
 # "כשאתה" -- ordinary, high-frequency Hebrew -- read as no pronoun at all,
@@ -619,7 +686,7 @@ def reference_addressee_gender(ref_text, lang):
         return None
     try:
         if lang == 'he':
-            f = bool(_HE_REF_FEM.search(ref_text))
+            f = _he_addresses_female(ref_text)
             m = bool(_HE_MASC.search(ref_text))
         elif lang == 'ar':
             f = any(p.search(ref_text) for p in _AR_FEM)

@@ -1,3 +1,42 @@
+0.2.524
+- The gender check could rewrite a CORRECT line into a wrong one.
+
+  A feminine verdict on a reference does not merely fail to help -- it ACTS.
+  wrong_gender_entries flags the entry, and _regender_blocks then hands the
+  model the Hebrew alone with the flat assertion "these address a FEMALE
+  listener, but they were written addressing a male". Its only acceptance test
+  is that the rewrite no longer says "ata". So a false feminine does not
+  degrade gracefully: it rewrites a correct masculine line into a wrong
+  feminine one, and nothing downstream can veto it.
+
+  "at" is Hebrew's definite-object marker as well as the feminine pronoun, and
+  the old guard only refused it before a he-definite noun. Definiteness is an
+  OPEN class -- "at ze", "at kol", "at atzmi", "at ma" -- so no list of
+  exceptions ever finishes the job. Measured on a full human episode, 13 of 60
+  feminine verdicts were ordinary object marking, one of them on a line whose
+  speaker is explicitly male.
+
+  Hebrew MORPHOLOGY has no such ambiguity. The 2fs future/imperative and a
+  short list of bare imperatives can only address a woman, and reading those
+  adds 23 cues the pronoun alone missed. The pronoun still counts, but only
+  when at least one of its occurrences is not followed by an unmistakable
+  definite object. Net on that episode: 57 -> 69 verdicts with the 13 false
+  ones gone -- precision and recall both improve, which is why this replaces
+  the guard rather than extending it.
+
+  Two details that took a measurement to get right: the 1sg past ending -ti
+  must not be read as a 2fs imperative, and "kol kach" is "so/very", not an
+  object, so "at kol kach yafa" does address a woman.
+
+- Arabic verbs carrying an object pronoun are now read too. Arabic glues the
+  object straight onto the verb, and a suffix-must-end-the-word rule missed
+  every one of them. The clitic set is closed, so the noun classes refused in
+  0.2.523 stay refused -- the six-letter floor blocks those whatever follows.
+  It does open one new class, a broken plural carrying a possessive, which is
+  structurally identical to a real verb and cannot be separated without a
+  lexicon; it is pinned as a test so the trade stays visible rather than being
+  rediscovered later as a surprise.
+
 0.2.523
 - The Arabic gender reference could not read Arabic.
 
