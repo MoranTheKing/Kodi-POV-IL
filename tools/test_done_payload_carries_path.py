@@ -37,7 +37,7 @@ df = io.open(DEFAULT, encoding='utf-8').read()
 
 # --- every SUCCESS 'done' must report the path it actually wrote ------------
 emissions = re.findall(r"progressive_cb\('done', \{(.*?)\}\)", tr, re.S)
-check('both progressive done sites are still found', len(emissions) >= 4,
+check('every progressive done site is still found', len(emissions) == 6,
       'found %d' % len(emissions))
 success = [e for e in emissions if "'success': True" in e]
 # THREE. The Google-rescue path (AI output was not Hebrew) used to return
@@ -94,11 +94,16 @@ check('both wait for the count to grow rather than reading it once',
       'found %d' % df.count('if len(_streams) > _before:'))
 # (the previous version counted the phrase "did not", which occurs twice in
 # COMMENTS -- deleting both warning blocks left it passing. Count the call.)
-check('a failed swap is reported, not silent',
-      df.count("_safe_log(\n                                            'bg_translate_picker: Kodi did not ")
-      + df.count("_safe_log(\n                                            'translate_file: Kodi did not "), 2)
-check('and "no player" is treated as safe-to-clean, not as failure',
-      df.count('if not _grew and not _playing_now():'), 2)
+# check() here is check(name, cond, detail) -- passing a count as `cond` made
+# these truthy for 1 as well as 2, so they could not see the two handlers
+# drifting apart, which is the only thing they exist for. Compare explicitly.
+_warn = (df.count("'bg_translate_picker: Kodi did not ")
+         + df.count("'translate_file: Kodi did not "))
+check('a failed swap is reported in BOTH handlers, not silent', _warn == 2,
+      'found %d warning sites' % _warn)
+_noplayer = df.count('if not _grew and not _playing_now():')
+check('and BOTH treat "no player" as safe-to-clean, not as failure',
+      _noplayer == 2, 'found %d' % _noplayer)
 
 print()
 if FAILED:

@@ -1331,15 +1331,15 @@ def list_candidates(info, modal_progress=True):
         try:
             src_id = _source_id_for_ai(payload)
             if src_id:
-                # Ask for the translation in ANY tier. This used to guess the
-                # plain slot, so on every title that found a gender reference
-                # -- the normal case -- the marker never appeared and a
-                # returning user saw no sign their translation already existed.
-                translated = cache.find_translated(
+                # Same tier as resolve() uses, deliberately. Marking an entry
+                # [CACHE] that the download path then cannot serve is worse
+                # than not marking it: the label would promise an instant
+                # result and the user would get the English fallback instead.
+                translated = cache.translated_path(
                     imdb_id, season, episode,
                     payload.get('source_lang') or 'en',
                     source_id=src_id)
-                if translated:
+                if os.path.isfile(translated):
                     entry['is_cached'] = True
                     entry['rating'] = '5'
                     entry['sync'] = 'true'
@@ -2953,19 +2953,28 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     #     byte-identical SRTs.
     early_source_id = _source_id_for_ai(payload)
     if early_source_id:
-        # ANY tier. resolve() writes to the '.ar' slot when a gender reference
-        # aligned and to the plain slot when none did, and the setting's value
-        # TODAY says nothing about which happened for this title back then --
-        # so pinning the lookup to _tier missed real translations and silently
-        # re-translated them. Everything below (the self-heal, the mtime
-        # refresh, the RTL re-apply, the pool backfill) still runs on whatever
-        # it finds; find_translated only widens WHERE we look.
-        translated = (cache.find_translated(
+        # TIER-PINNED, and left that way ON PURPOSE after three review rounds.
+        #
+        # Widening this to find a translation in EITHER tier looks obviously
+        # right and is not. Two things break:
+        #   * This early return fires BEFORE the first progressive_cb (see
+        #     first_ready below), so nothing downstream is told. The picker
+        #     handler reads the return only as `if not _resolved:` to decide
+        #     whether to toast a failure -- a cache HIT is truthy, so it does
+        #     nothing at all and the viewer keeps the English fallback. Turning
+        #     a miss (which falls through to the full path and delivers via
+        #     'done') into a hit is therefore a straight REGRESSION.
+        #   * _backfill_pool_async below is told the tier by _ar_on, the
+        #     setting's value today -- not by the file we found. A plain file
+        #     found while the setting is on would upload as the ai_ar variant,
+        #     which :3414 says must never happen, and the Worker dedup makes it
+        #     permanent for every other user.
+        # Fixing the auto-load symptom properly means wiring these early
+        # returns to progressive_cb. That is its own change with its own
+        # review, not a one-line lookup swap.
+        translated = cache.translated_path(
             imdb_id, season, episode, source_lang,
-            source_id=early_source_id)
-            or cache.translated_path(
-                imdb_id, season, episode, source_lang,
-                source_id=early_source_id, tier=_tier))
+            source_id=early_source_id, tier=_tier)
         # Only honour the cache if it's a REAL Hebrew translation. Older buggy
         # versions could cache an empty / source-echoed file and then serve it
         # forever as "from cache (previous translation)" -- blank or foreign
