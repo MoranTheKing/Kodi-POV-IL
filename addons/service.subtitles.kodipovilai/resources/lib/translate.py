@@ -1331,10 +1331,12 @@ def list_candidates(info, modal_progress=True):
         try:
             src_id = _source_id_for_ai(payload)
             if src_id:
-                # Same tier as resolve() uses, deliberately. Marking an entry
-                # [CACHE] that the download path then cannot serve is worse
-                # than not marking it: the label would promise an instant
-                # result and the user would get the English fallback instead.
+                # Same tier as the DOWNLOAD path uses (_try_fast_download,
+                # also untiered) -- deliberately, and NOT the same tier as
+                # resolve(), which pins to _tier and is usually 'ar'. Marking
+                # an entry [CACHE] that the download path then cannot serve is
+                # worse than not marking it: the label would promise an
+                # instant result and the user would get the English fallback.
                 translated = cache.translated_path(
                     imdb_id, season, episode,
                     payload.get('source_lang') or 'en',

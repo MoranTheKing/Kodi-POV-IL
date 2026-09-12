@@ -1,4 +1,4 @@
-"""Three fixes that each had the same shape: a fact stated in one place and
+"""Fixes that each had the same shape: a fact stated in one place and
 contradicted in another.
 
   * A '.google' marker aged on its OWN mtime while load_text() touched only the
@@ -140,8 +140,16 @@ check('and the helper is gone rather than left for someone to wire up',
       'find_translated' not in _ca, True)
 check('the early lookup is still pinned to _tier',
       'source_id=early_source_id, tier=_tier)' in _tr, True)
-check('the [CACHE] marker does not promise what the download path cannot serve',
-      _tr.count('translated = cache.translated_path(') >= 1, True)
+# '>= 1' on a string that occurs FOUR times in translate.py tested nothing:
+# it passed with the [CACHE] block deleted outright. Pin the actual call.
+_marker = _tr[_tr.index('for entry in ai_entries:'):]
+_marker = _marker[:_marker.index('cache marker check failed')]
+check('the [CACHE] marker block is still there',
+      'translated = cache.translated_path(' in _marker, True)
+check('...and is pinned to the same tier the download path uses',
+      'tier=' not in _marker, True)
+check('...and only marks an entry when the file really exists',
+      'if os.path.isfile(translated):' in _marker, True)
 
 # ---- the dropdown may not advertise a quota the table contradicts ----------
 _qs = importlib.util.spec_from_file_location(
