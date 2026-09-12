@@ -52,30 +52,36 @@ for i, e in enumerate(success):
           e.strip()[:160])
 
 # --- and the handlers must PREFER it ---------------------------------------
-uses = df.count("canonical = payload.get('path') or ''")
-check('both done handlers read the reported path', uses == 2,
-      'found %d' % uses)
+# Structural checks over source text are fragile: three earlier versions of
+# this section passed with the bug fully restored, because a regex stopped
+# matching (registering ZERO checks instead of failing), because a count that
+# is also true of the pre-diff code was used, and because a fixed-width slice
+# landed in whitespace. Each check below is written so that it FAILS rather
+# than disappears, and every one was verified against a full revert.
 
-# The recompute may remain only as a fallback for an older resolve().
-for m in re.finditer(r"canonical = payload\.get\('path'\) or ''\n(.*?)if os\.path\.isfile\(canonical\)",
-                     df, re.S):
-    body = m.group(1)
-    check('the recompute is gated behind "if not canonical"',
-          'if not canonical:' in body, body.strip()[:120])
+# The gate itself. Two handlers, so two gates, and the pre-diff code has none.
+gates = df.count('canonical = payload.get(\'path\') or \'\'')
+check('both handlers read the reported path first', gates == 2,
+      'found %d' % gates)
+guards = df.count('if not canonical:')
+check('...and both fall back only when it is absent', guards == 2,
+      'found %d' % guards)
 
-# --- the bug this replaces must not creep back -----------------------------
-recomputes = df.count('canonical = _cache.translated_path(')
-check('the recompute survives only as a fallback, twice', recomputes == 2,
-      'found %d' % recomputes)
-# (the previous version of this check sliced 34 characters that could not
-# contain 'tier=' -- it could not fail. Look at the whole call instead.)
-_recompute_calls = [
-    df[m:df.index('source_id=', m) + 60]
-    for m in [df.index('canonical = _cache.translated_path('),
-              df.index('canonical = _cache.translated_path(',
-                       df.index('canonical = _cache.translated_path(') + 1)]]
-check('neither recompute passes a tier= (it is a fallback, not the answer)',
-      not any('tier=' in c for c in _recompute_calls), True)
+# ORDER matters: the payload must be consulted BEFORE the recompute, or the
+# recompute overwrites it. Check each handler's own slice, not the whole file.
+_h = [m for m in range(len(df)) if df.startswith('_canonical_swap_succeeded = False', m)]
+check('both swap handlers are still found', len(_h) == 2, 'found %d' % len(_h))
+for _n, _start in enumerate(_h):
+    _end = df.index('if os.path.isfile(canonical)', _start)
+    _blk = df[_start:_end]
+    check('handler %d consults the payload before recomputing' % (_n + 1),
+          _blk.index("payload.get('path')") < _blk.index('_cache.translated_path('),
+          'the recompute comes first and would overwrite the reported path')
+    # slice the WHOLE call, to its closing paren, not a fixed width
+    _c0 = _blk.index('_cache.translated_path(')
+    _call = _blk[_c0:_blk.index(')', _blk.index("source_id=payload['source_id']", _c0))]
+    check('handler %d fallback is untiered (it is a fallback, not the answer)'
+          % (_n + 1), 'tier=' not in _call, _call[-90:])
 
 # --- and the swap may not claim success it did not verify ------------------
 # setSubtitles() posts to the VideoPlayer thread, so it returning is not
