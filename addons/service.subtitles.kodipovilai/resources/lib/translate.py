@@ -4287,6 +4287,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                             'success': True,
                             'source_id': _progressive_source_id,
                             'release': _src_release,
+                            # The file we ACTUALLY wrote. The handler used to
+                            # recompute this path and did so without the tier,
+                            # so it looked in the wrong slot on every job that
+                            # found a gender reference -- see the note on the
+                            # main success emission below.
+                            'path': gpath,
                         })
                     except Exception:
                         pass
@@ -4680,6 +4686,18 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 'success': True,
                 'source_id': _progressive_source_id,
                 'release': _src_release,
+                # TELL the handler where the translation is, do not make it
+                # guess. It recomputed the path with cache.translated_path()
+                # and NO tier=, while resolve() writes with tier='ar' whenever
+                # a gender reference was found -- which is the normal case,
+                # since the setting defaults on and is force-enabled by
+                # migration. So os.path.isfile(canonical) was False on most
+                # jobs, the canonical swap never ran, and the viewer was left
+                # holding the last PROGRESSIVE SLOT file instead of the
+                # finished translation. If that translation had been
+                # interrupted, the slot is partly source text -- which is
+                # exactly the "it plays the original language" report.
+                'path': translated,
             })
         except Exception as e:
             kodi_utils.log(
