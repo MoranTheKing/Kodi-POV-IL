@@ -21,6 +21,14 @@
 - New tests execute the runtime gates, 30 synthetic linguistic controls and blind-pair scoring. Synthetic controls and model doubles are not a live translation-quality score. The quality tool refuses incomplete ratings and reports newly harmed cases separately.
 - The proposed evening planner is a design only; no skin or recommendation feature is shipped in this update. Native-dialog flow requires separate AF3 home nodes and favourites integration for the other skins, plus live four-skin acceptance testing.
 
+## SubSync HTTP reliability — addon 0.2.528 / quickfix 0.1.573 / build 0.1.141
+
+- HTTP probe responses must match their requested byte range and consistent file size. A 200 response is valid only at offset zero; contradictory 206/416, encoded and truncated responses are rejected.
+- Partial timeout/reset retains validated bytes, resumes the exact missing suffix and lowers subsequent requests to 64 KiB. Ordinary requests are capped at 256 KiB. After body progress, a three-second idle timeout leaves time to request a stalled suffix; connection setup and first byte retain their longer timeout. The byte budget applies in all probe stages; body reads recheck the global deadline and remaining socket timeout. DNS/TLS/header handling still relies on urlopen's timeout and is not a universal hard wall-clock limit.
+- SubSync verdict version 14 invalidates cached results from the old probe. Pool and translation logic are unchanged from 627.
+- The real local HTTP test that failed in 627 now passes and agrees with local-file cue times, including a known +9s synchronization correction. Nineteen deterministic HTTP tests cover recovery, invalid ranges, EOF, truncation, limits and deadlines. The specific Windows transport cause of stalled large response tails has not been identified; it also reproduces with plain synthetic text independent of the MKV parser.
+- Same-length remote file replacement is not detected by total length alone; ETag/If-Range would be a separate enhancement. No live Kodi playback is claimed.
+
 ## What this project is
 
 A Hebrew-localized Kodi build (skin + addons + wizard) for users in Israel,
