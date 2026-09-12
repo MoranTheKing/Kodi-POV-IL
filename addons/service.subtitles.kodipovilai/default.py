@@ -480,6 +480,17 @@ def _sanitise_sub_name(name):
     return cleaned
 
 
+def _playing_now():
+    """True when Kodi still has a video player. Used to decide whether a failed
+    canonical swap is dangerous. With a player up, deleting the progressive
+    slots can strand the viewer on a removed file; with no player there is
+    nothing pointing at them and the cleanup should proceed."""
+    try:
+        return bool(xbmc.Player().isPlayingVideo())
+    except Exception:
+        return False
+
+
 def _progressive_slot_path(cache_dir, source_id, slot, release=''):
     """Path for a transient progressive-translation slot file. Kodi
     turns the basename into the subtitle label shown in the picker, so
@@ -520,8 +531,15 @@ def _progressive_cleanup_patterns(source_id, release=''):
     except Exception:
         rel = ''
     if rel:
-        pats.append('{0}.a.he.srt'.format(rel))
-        pats.append('{0}.b.he.srt'.format(rel))
+        # safe_release_filename deliberately KEEPS brackets, and glob reads
+        # '[YTS.MX]' as a character class -- so the literal slot file for a
+        # bracketed release matched nothing and was never deleted. Escaping
+        # makes the release part literal; the '*' in the hash-named patterns
+        # above is ours and stays a wildcard.
+        import glob as _g
+        rel_lit = _g.escape(rel)
+        pats.append('{0}.a.he.srt'.format(rel_lit))
+        pats.append('{0}.b.he.srt'.format(rel_lit))
     return pats
 
 
@@ -766,6 +784,25 @@ def _try_fast_download(handle, link, info):
     # zero AI work.
     if source_id:
         try:
+            # DELIBERATELY tier-pinned, and deliberately allowed to miss.
+            # This branch hands a file straight to Kodi without any of the
+            # checks resolve() applies on a cache hit -- the _is_mostly_hebrew
+            # self-heal that deletes an empty/source-echoed file, the mtime
+            # refresh that keeps a file in use from ageing out, the RTL
+            # re-apply, and the one-shot pool backfill. Making it find a
+            # translation it used to miss would turn a rare shortcut into the
+            # normal path and skip all four.
+            #
+            # A MISS HERE IS NOT FREE, and nothing downstream rescues it:
+            # resolve()'s early cache return fires before the first
+            # progressive_cb, and the picker handler reads the return only to
+            # decide whether to toast a failure. So a cached translation this
+            # lookup misses is found by resolve() and then delivered to
+            # nobody. That is the "a second entry does not load it
+            # automatically" report, and it is NOT fixed -- fixing it means
+            # wiring those early returns to progressive_cb, which is its own
+            # change. Widening THIS lookup is not the fix; it was tried and
+            # reverted, because a hit here skips the four guards above.
             cached = _cache.translated_path(
                 imdb_id, season, episode, source_lang,
                 source_id=source_id)
@@ -1017,13 +1054,26 @@ def _handle_bg_translate_picker(params):
                 _canonical_swap_succeeded = False
                 if payload.get('success'):
                     try:
-                        from resources.lib import cache as _cache
-                        canonical = _cache.translated_path(
-                            (info.get('imdb_id') or '').strip(),
-                            info.get('season') or '',
-                            info.get('episode') or '',
-                            'en',
-                            source_id=payload['source_id'])
+                        # USE THE PATH resolve() REPORTS. Recomputing it here
+                        # was wrong twice over: translated_path() was called
+                        # without tier=, while resolve() writes with tier='ar'
+                        # whenever a gender reference was found (the default,
+                        # and force-enabled by migration), and the source
+                        # language was hardcoded 'en'. So this file did not
+                        # exist on most jobs, the swap below was skipped, and
+                        # the viewer kept the last progressive SLOT file --
+                        # partly source text if the translation was
+                        # interrupted. The recompute stays only as a fallback
+                        # for a payload from an older resolve().
+                        canonical = payload.get('path') or ''
+                        if not canonical:
+                            from resources.lib import cache as _cache
+                            canonical = _cache.translated_path(
+                                (info.get('imdb_id') or '').strip(),
+                                info.get('season') or '',
+                                info.get('episode') or '',
+                                'en',
+                                source_id=payload['source_id'])
                         if os.path.isfile(canonical):
                             # Name the delivered file after the source RELEASE so
                             # Kodi shows the full release name (not a hash); fall
@@ -1052,24 +1102,65 @@ def _handle_bg_translate_picker(params):
                             if _final_path:
                                 try:
                                     p = xbmc.Player()
+                                    # setSubtitles() POSTS to the
+                                    # VideoPlayer thread and returns
+                                    # before the stream is registered,
+                                    # so "it did not raise" is not
+                                    # evidence anything happened. The
+                                    # stream list read on the next line
+                                    # was the PRE-add list, so picking
+                                    # its last entry selected the last
+                                    # progressive SLOT -- which the
+                                    # cleanup below then deleted,
+                                    # pinning the viewer to a stream
+                                    # whose file is gone. Count first,
+                                    # wait for it to grow, then claim.
+                                    try:
+                                        _before = len(
+                                            p.getAvailableSubtitleStreams() or [])
+                                    except Exception:
+                                        _before = -1
                                     p.setSubtitles(_final_path)
                                     p.showSubtitles(True)
-                                    # Force-pick our newly-added
-                                    # stream so Kodi doesn't auto-
-                                    # revert to a pre-existing
-                                    # Hebrew subtitle (user-reported
-                                    # "jumps back to Hebrew" bug
-                                    # when an existing he-SRT was
-                                    # already loaded before picking
-                                    # English for AI translation).
-                                    try:
-                                        _streams = p.getAvailableSubtitleStreams()
-                                        if _streams:
-                                            p.setSubtitleStream(
-                                                len(_streams) - 1)
-                                    except Exception:
-                                        pass
-                                    _canonical_swap_succeeded = True
+                                    _grew = False
+                                    if _before >= 0:
+                                        for _ in range(20):      # <= 1s
+                                            xbmc.sleep(50)
+                                            try:
+                                                _streams = (
+                                                    p.getAvailableSubtitleStreams()
+                                                    or [])
+                                            except Exception:
+                                                break
+                                            if len(_streams) > _before:
+                                                _grew = True
+                                                # Pin our stream so Kodi
+                                                # does not auto-revert to
+                                                # a pre-existing Hebrew
+                                                # SRT.
+                                                try:
+                                                    p.setSubtitleStream(
+                                                        len(_streams) - 1)
+                                                except Exception:
+                                                    pass
+                                                break
+                                    if not _grew and not _playing_now():
+                                        # Nobody to strand: with no player
+                                        # there is no stream pointing at a
+                                        # slot file, so deleting is safe --
+                                        # and is the outcome we want, or the
+                                        # slots pile up on every job that
+                                        # outlives playback.
+                                        _grew = True
+                                    elif not _grew:
+                                        _safe_log(
+                                            'bg_translate_picker: Kodi did not '
+                                            'register the final subtitle '
+                                            'stream -- keeping the progressive '
+                                            'slots rather than deleting a file '
+                                            'the player may still be on',
+                                            level='WARNING')
+                                    _canonical_swap_succeeded = _grew
                                 except Exception as _se:
                                     _safe_log(
                                         'bg_translate_picker done '
@@ -2771,13 +2862,26 @@ def _handle_translate_file(params):
                 _canonical_swap_succeeded = False
                 if payload.get('success'):
                     try:
-                        from resources.lib import cache as _cache
-                        canonical = _cache.translated_path(
-                            (info.get('imdb_id') or '').strip(),
-                            info.get('season') or '',
-                            info.get('episode') or '',
-                            'en',
-                            source_id=payload['source_id'])
+                        # USE THE PATH resolve() REPORTS. Recomputing it here
+                        # was wrong twice over: translated_path() was called
+                        # without tier=, while resolve() writes with tier='ar'
+                        # whenever a gender reference was found (the default,
+                        # and force-enabled by migration), and the source
+                        # language was hardcoded 'en'. So this file did not
+                        # exist on most jobs, the swap below was skipped, and
+                        # the viewer kept the last progressive SLOT file --
+                        # partly source text if the translation was
+                        # interrupted. The recompute stays only as a fallback
+                        # for a payload from an older resolve().
+                        canonical = payload.get('path') or ''
+                        if not canonical:
+                            from resources.lib import cache as _cache
+                            canonical = _cache.translated_path(
+                                (info.get('imdb_id') or '').strip(),
+                                info.get('season') or '',
+                                info.get('episode') or '',
+                                'en',
+                                source_id=payload['source_id'])
                         if os.path.isfile(canonical):
                             # Name the delivered file after the source RELEASE so
                             # Kodi shows the full release name (not a hash); fall
@@ -2807,10 +2911,28 @@ def _handle_translate_file(params):
                                 # NOT gated on isPlayingVideo -- if
                                 # the user paused mid-translation,
                                 # setSubtitles is still useful for
-                                # the resume. try/except is the only
-                                # guard we need.
+                                # the resume.
+                                #
+                                # try/except is NOT the only guard we
+                                # need, which is what this comment used
+                                # to claim. setSubtitles() posts to the
+                                # VideoPlayer thread and returns before
+                                # the stream is registered, so it not
+                                # raising proves nothing -- and reading
+                                # the stream list on the next line
+                                # returned the PRE-add list, so the
+                                # "most-recently-added stream" picked
+                                # below was really the last progressive
+                                # SLOT, which the cleanup then deleted.
+                                # Count before, wait for the count to
+                                # grow, and only then claim success.
                                 try:
                                     p = xbmc.Player()
+                                    try:
+                                        _before = len(
+                                            p.getAvailableSubtitleStreams() or [])
+                                    except Exception:
+                                        _before = -1
                                     p.setSubtitles(_final_path)
                                     p.showSubtitles(True)
                                     # Explicit stream selection: when
@@ -2825,14 +2947,41 @@ def _handle_translate_file(params):
                                     # (always ours) pins the active
                                     # selection to the translation we
                                     # just produced.
-                                    try:
-                                        _streams = p.getAvailableSubtitleStreams()
-                                        if _streams:
-                                            p.setSubtitleStream(
-                                                len(_streams) - 1)
-                                    except Exception:
-                                        pass
-                                    _canonical_swap_succeeded = True
+                                    _grew = False
+                                    if _before >= 0:
+                                        for _ in range(20):      # <= 1s
+                                            xbmc.sleep(50)
+                                            try:
+                                                _streams = (
+                                                    p.getAvailableSubtitleStreams()
+                                                    or [])
+                                            except Exception:
+                                                break
+                                            if len(_streams) > _before:
+                                                _grew = True
+                                                try:
+                                                    p.setSubtitleStream(
+                                                        len(_streams) - 1)
+                                                except Exception:
+                                                    pass
+                                                break
+                                    if not _grew and not _playing_now():
+                                        # Nobody to strand: with no player
+                                        # there is no stream pointing at a
+                                        # slot file, so deleting is safe --
+                                        # and is the outcome we want, or the
+                                        # slots pile up on every job that
+                                        # outlives playback.
+                                        _grew = True
+                                    elif not _grew:
+                                        _safe_log(
+                                            'translate_file: Kodi did not '
+                                            'register the final subtitle '
+                                            'stream -- keeping the progressive '
+                                            'slots rather than deleting a file '
+                                            'the player may still be on',
+                                            level='WARNING')
+                                    _canonical_swap_succeeded = _grew
                                 except Exception as _se:
                                     _safe_log(
                                         'translate_file fast done '
