@@ -1331,11 +1331,15 @@ def list_candidates(info, modal_progress=True):
         try:
             src_id = _source_id_for_ai(payload)
             if src_id:
-                translated = cache.translated_path(
+                # Ask for the translation in ANY tier. This used to guess the
+                # plain slot, so on every title that found a gender reference
+                # -- the normal case -- the marker never appeared and a
+                # returning user saw no sign their translation already existed.
+                translated = cache.find_translated(
                     imdb_id, season, episode,
                     payload.get('source_lang') or 'en',
                     source_id=src_id)
-                if os.path.isfile(translated):
+                if translated:
                     entry['is_cached'] = True
                     entry['rating'] = '5'
                     entry['sync'] = 'true'
