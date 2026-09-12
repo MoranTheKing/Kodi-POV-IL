@@ -791,9 +791,18 @@ def _try_fast_download(handle, link, info):
             # refresh that keeps a file in use from ageing out, the RTL
             # re-apply, and the one-shot pool backfill. Making it find a
             # translation it used to miss would turn a rare shortcut into the
-            # normal path and skip all four. resolve() now does the
-            # tier-agnostic lookup instead, WITH those guards, so a miss here
-            # costs nothing but a few milliseconds.
+            # normal path and skip all four.
+            #
+            # A MISS HERE IS NOT FREE, and nothing downstream rescues it:
+            # resolve()'s early cache return fires before the first
+            # progressive_cb, and the picker handler reads the return only to
+            # decide whether to toast a failure. So a cached translation this
+            # lookup misses is found by resolve() and then delivered to
+            # nobody. That is the "a second entry does not load it
+            # automatically" report, and it is NOT fixed -- fixing it means
+            # wiring those early returns to progressive_cb, which is its own
+            # change. Widening THIS lookup is not the fix; it was tried and
+            # reverted, because a hit here skips the four guards above.
             cached = _cache.translated_path(
                 imdb_id, season, episode, source_lang,
                 source_id=source_id)
