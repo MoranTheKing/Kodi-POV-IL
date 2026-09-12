@@ -204,39 +204,55 @@ def prune():
     removed = 0
     freed   = 0
 
-    # Pass 1: TTL eviction.
-    survivors = []
+    # A translation and its provenance are one eviction unit. Delete the
+    # parent first: if removal fails, keep its markers as well. Group recency
+    # preserves fresh sidecars and parentless in-flight release markers.
+    groups = {}
     for path, recency, size in _walk_cache_files():
-        if recency < cutoff:
+        parent = _sidecar_parent(path) or path
+        groups.setdefault(parent, []).append((path, recency, size))
+
+    def evict(parent, members):
+        count = amount = 0
+        ordered = sorted(members, key=lambda row: row[0] != parent)
+        for path, _recency, size in ordered:
             try:
                 os.remove(path)
-                removed += 1
-                freed += size
+                count += 1
+                amount += size
             except OSError:
-                pass
+                if path == parent and os.path.exists(parent):
+                    break  # Never strip provenance from a surviving parent.
+        return count, amount
+
+    survivors = []
+    for parent, members in groups.items():
+        recency = max(row[1] for row in members)
+        size = sum(row[2] for row in members)
+        if recency < cutoff:
+            n, amount = evict(parent, members)
+            removed += n
+            freed += amount
+            if amount < size:
+                # Keep failed deletions accounted for in the size budget.
+                remaining = [row for row in members if os.path.exists(row[0])]
+                if remaining:
+                    survivors.append((parent, recency, remaining))
         else:
-            survivors.append((path, recency, size))
+            survivors.append((parent, recency, members))
 
-    # Pass 2: size cap. Sort by oldest-access first and drop until
-    # we're under 80% of the cap.
-    total = sum(s for _, _, s in survivors)
+    total = sum(row[2] for _, _, members in survivors for row in members)
     target = int(cap_bytes * 0.8)
-    if total <= cap_bytes:
-        return removed, freed
-
-    survivors.sort(key=lambda t: t[1])  # oldest first
-    for path, _recency, size in survivors:
-        if total <= target:
-            break
-        try:
-            os.remove(path)
-            removed += 1
-            freed += size
-            total -= size
-        except OSError:
-            pass
-
+    if total > cap_bytes:
+        for parent, _recency, members in sorted(survivors, key=lambda row: row[1]):
+            if total <= target:
+                break
+            n, amount = evict(parent, members)
+            removed += n
+            freed += amount
+            total -= amount
     return removed, freed
+
 
 
 def clear_all():
