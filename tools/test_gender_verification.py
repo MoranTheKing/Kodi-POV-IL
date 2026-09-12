@@ -392,6 +392,22 @@ for _w in (u'\u062a\u0639\u0631\u0641 \u0630\u0644\u0643', u'\u062a\u0641\u062a\
     check('arabic 2ms is unreadable, not F: %s' % _w.split()[0],
           ag.reference_addressee_gender(_w, 'ar'), None)
 
+# Arabic glues object pronouns onto the verb; without the clitic alternation the
+# suffix-ends-the-word rule missed all of these.
+for _w in (u'\u062a\u062e\u064a\u0641\u064a\u0646\u0646\u064a', u'\u062a\u0633\u0645\u0639\u064a\u0646\u0646\u064a', u'\u062a\u0631\u064a\u062f\u064a\u0646\u0647', u'\u062a\u0639\u0631\u0641\u064a\u0646\u0647\u0627', u'\u062a\u0633\u0627\u0639\u062f\u064a\u0646\u0647\u0645'):
+    check('arabic 2fs + object clitic reads F: %s' % _w,
+          ag.reference_addressee_gender(_w, 'ar'), 'F')
+
+# KNOWN COST, pinned so it is not rediscovered as a surprise: a 6+ letter broken
+# plural in \u064a\u0646 carrying a possessive is structurally identical to a 2fs verb
+# with an object clitic (\u062a\u0633\u0627\u0639\u062f\u064a\u0646\u0647\u0645 vs \u062a\u0645\u0627\u0631\u064a\u0646\u0647\u0627 -- both \u062a + 4 + \u064a\u0646 + suffix,
+# both with a long alif). Nothing short of a lexicon separates them. These read F
+# and should not; the trade was made because the verb forms above are ordinary
+# dialogue and this class is not.
+for _w in (u'\u062a\u0645\u0627\u0631\u064a\u0646\u0647\u0627', u'\u062a\u0646\u0627\u0646\u064a\u0646\u0647\u0627'):
+    check('KNOWN COST -- broken plural + possessive still reads F: %s' % _w,
+          ag.reference_addressee_gender(_w, 'ar'), 'F')
+
 # HEBREW. _HE_MASC has carried the proclitic alternation since it was written;
 # _HE_REF_FEM did not, so the reader was better at finding a MALE addressee
 # than a female one -- in a check whose whole purpose is catching
@@ -402,6 +418,31 @@ for _w in (u'\u05d5\u05d0\u05ea \u05d1\u05d8\u05e2\u05d5\u05ea \u05de\u05e2\u05d
 # the guard against the definite-object marker must still hold
 check('hebrew object marker is still not an addressee',
       ag.reference_addressee_gender(u'\u05e8\u05d0\u05d9\u05ea\u05d9 \u05d0\u05ea \u05d4\u05db\u05dc\u05d1', 'he'), None)
+
+# THE OBJECT MARKER MUST NOT ACT. A feminine verdict does not merely fail to
+# help -- wrong_gender_entries flags the line and _regender_blocks tells the
+# model "these address a FEMALE listener", with no veto but "the rewrite no
+# longer says \u05d0\u05ea\u05d4". So a false feminine rewrites a CORRECT masculine line.
+for _w in (u'\u05dc\u05d0 \u05e2\u05e9\u05d9\u05ea\u05d9 \u05d0\u05ea \u05d6\u05d4.', u'\u05d0\u05e0\u05d9 \u05e9\u05d5\u05e0\u05d0\u05ea \u05d0\u05ea \u05e2\u05e6\u05de\u05d9.', u'\u05d4\u05e4\u05dc\u05ea \u05d0\u05ea \u05d6\u05d4.',
+           u'\u05d0\u05e0\u05d9 \u05e6\u05e8\u05d9\u05da \u05dc\u05e9\u05de\u05d5\u05e2 \u05d0\u05ea \u05d6\u05d4.', u'\u05e8\u05d0\u05d9\u05ea\u05d9 \u05d0\u05ea \u05d4\u05db\u05dc\u05d1', u'\u05e7\u05d9\u05d1\u05dc\u05ea \u05d0\u05ea \u05db\u05dc \u05d6\u05d4 \u05de\u05d0\u05d9\u05de\u05d0 \u05e9\u05dc\u05da.',
+           u'\u05d0\u05e0\u05d9 \u05d0\u05d5\u05d4\u05d1 \u05d0\u05ea \u05db\u05dc \u05d4\u05e1\u05e8\u05d8\u05d9\u05dd', u'\u05d0\u05d6 \u05d7\u05e9\u05d1\u05ea\u05d9 \u05dc\u05dc\u05d1\u05d5\u05e9 \u05d0\u05ea \u05de\u05d4 \u05e9\u05dc\u05d1\u05e9\u05ea\u05d9.'):
+    check('object marker is not an addressee: %s' % _w[:22],
+          ag.reference_addressee_gender(_w, 'he'), None)
+
+# ...while the verb morphology, which has no such ambiguity, must read F.
+for _w in (u'\u05d0\u05dc \u05ea\u05d2\u05d9\u05d3\u05d9 \u05db\u05dc\u05d5\u05dd.', u'\u05dc\u05db\u05d9 \u05d1\u05d1\u05e7\u05e9\u05d4.', u'\u05ea\u05e1\u05de\u05db\u05d9 \u05e2\u05dc\u05d9\u05d9.', u'\u05d1\u05d5\u05d0\u05d9 \u05d4\u05e0\u05d4.',
+           u'\u05ea\u05e9\u05de\u05e8\u05d9 \u05e2\u05dc \u05e2\u05e6\u05de\u05da.', u'\u05db\u05e9\u05ea\u05e2\u05e9\u05d9 \u05de\u05e9\u05d4\u05d5 \u05d8\u05d5\u05d1 \u05d9\u05d5\u05ea\u05e8.'):
+    check('2fs morphology reads F: %s' % _w[:20],
+          ag.reference_addressee_gender(_w, 'he'), 'F')
+
+# the pronoun still counts when it is genuinely the pronoun
+check('bare pronoun still reads F', ag.reference_addressee_gender(u'\u05d0\u05ea \u05d9\u05e4\u05d4', 'he'), 'F')
+check('"\u05db\u05dc \u05db\u05da" is "so", not an object',
+      ag.reference_addressee_gender(u'\u05d0\u05ea \u05db\u05dc \u05db\u05da \u05d9\u05e4\u05d4', 'he'), 'F')
+# traps that must stay silent
+for _w in (u'\u05d4\u05d9\u05d9, \u05de\u05d4 \u05e7\u05d5\u05e8\u05d4', u'\u05ea\u05de\u05d5\u05e0\u05ea\u05d9 \u05d9\u05e4\u05d4', u'\u05ea\u05d9\u05d0\u05e8\u05ea\u05d9 \u05dc\u05e2\u05e6\u05de\u05d9'):
+    check('not a feminine addressee: %s' % _w[:14],
+          ag.reference_addressee_gender(_w, 'he'), None)
 
 # _ADDRESSEE_MARKERS languages -- the docstring used to deny these existed.
 check('the reader really does cover nine more languages',
