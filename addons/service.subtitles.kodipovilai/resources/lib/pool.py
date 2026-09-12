@@ -878,9 +878,19 @@ def share_cache(progress_cb=None, should_cancel=None):
     except Exception:
         _tmdb = None
     if _CACHE_NAME_RE is None:
+        # The TIER SUFFIX. cache.translated_path() writes '<key>.ar.he.srt'
+        # whenever a gender reference aligned, and that is the normal case --
+        # the setting defaults on and is force-enabled by migration. Without
+        # the optional '.<tier>' group this pattern matched almost nothing, so
+        # "share my cached translations" counted every file as `skipped` and
+        # uploaded NOTHING. The group is captured because the tier decides the
+        # `kind` below: an Arabic-boosted file has to go up as 'ai_ar', not as
+        # plain 'ai'. Taking that from the filename rather than from the
+        # setting's value today is deliberate -- the setting says nothing about
+        # whether a reference actually aligned for THIS title back then.
         _CACHE_NAME_RE = re.compile(
             r'^(?P<imdb>.+?)_S(?P<s>\d+)E(?P<e>\d+)_(?P<lang>[a-z]+)_'
-            r'[0-9a-f]+\.he\.srt$')
+            r'[0-9a-f]+(?:\.(?P<tier>[a-z0-9]+))?\.he\.srt$')
 
     base = os.path.join(kodi_utils.cache_dir(), 'translated')
     try:
@@ -954,7 +964,16 @@ def share_cache(progress_cb=None, should_cancel=None):
                 rel_override = (_rf.read().strip() or None)
         except OSError:
             rel_override = None
-        body = _build_body(info, '', lang, text, release_override=rel_override)
+        # Kind from the TIER we just parsed, never from a default. Uploading a
+        # gender-boosted translation as plain 'ai' understates it (a client
+        # with the feature on would re-translate to upgrade, wasting quota);
+        # the reverse would be worse, serving a non-boosted file to everyone as
+        # the boosted variant. Only 'ar' is a known tier today; anything else
+        # stays plain rather than being guessed at.
+        _tier = (m.group('tier') or '')
+        body = _build_body(info, '', lang, text,
+                           kind=('ai_ar' if _tier == 'ar' else 'ai'),
+                           release_override=rel_override)
         if body is None:
             skipped += 1
             continue
