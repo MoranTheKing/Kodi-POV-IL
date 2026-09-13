@@ -1,3 +1,7 @@
+0.2.530
+- Protect streaming playback by skipping automatic remote video/audio sync probes.
+- Keep cached timing references, subtitle-reference synchronization and local-file probing.
+
 0.2.529
 - Preserve subtitle negation, numbers, quoted text and markup during cleanup and gender repair.
 - Prefer explicit source facts over conflicting Hebrew reference gender.

@@ -288,9 +288,13 @@ def _probe_enabled():
 
 
 def _playing_url(info):
-    """The URL/path of the file being played -- a direct http(s) stream
-    (debrid) or a local file. '' when unavailable or not probeable (HLS,
-    plugin:// etc.)."""
+    """Return a local playing file suitable for automatic probing.
+
+    Never open extra HTTP media connections alongside Kodi playback: range
+    probes can exhaust a host's request/connection allowance and interrupt
+    the player itself. Cached references are consulted before this gate.
+    Subtitle-provider oracle downloads do not use this media path.
+    """
     url = ''
     try:
         import xbmc
@@ -303,9 +307,8 @@ def _playing_url(info):
     if not low:
         return ''
     if low.startswith(('http://', 'https://')):
-        if '.m3u8' in low or 'manifest' in low:
-            return ''
-        return url.split('|')[0]
+        _log('remote media probing skipped to protect playback')
+        return ''
     if os.path.isfile(url):
         return url
     return ''
@@ -388,7 +391,7 @@ def _audio_probe_reference(info, playing, second_pass=False):
                     return prior or None   # already extended once -- done
         url = _playing_url(info)
         if not url:
-            return None
+            return prior or None
         try:
             from resources.lib import mkv_probe
             from resources.lib import gemini
