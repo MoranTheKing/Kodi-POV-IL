@@ -1,3 +1,9 @@
+0.2.533
+- Broaden Tonight discovery across rotating history and liked titles with bounded incremental loading.
+- Match available creator, cast and catalog-topic metadata alongside explicit preferences.
+- Offer distinct recommendation lanes, saved picks, reversible refinements and optional paired feedback.
+- Preserve useful partial catalog results on timeout and keep provider routing isolated.
+
 0.2.532
 - Use connected viewing history to seed evening recommendations, including series exposure.
 - Keep explicit preferences stronger than inferred viewing signals and preserve watched status.

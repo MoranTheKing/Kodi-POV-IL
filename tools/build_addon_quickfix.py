@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import re
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
@@ -33,6 +34,8 @@ ADDON_ID = "service.subtitles.kodipovilai"
 QUICKFIX_PREFIX = f"addons/{ADDON_ID}/"
 ADDON_ZIP_PREFIX = f"{ADDON_ID}/"
 POOL_MEMBER = QUICKFIX_PREFIX + "resources/lib/pool.py"
+SEEK_MEMBER = "addons/skin.fentastic/xml/DialogSeekBar.xml"
+SEEK_REPAIR = QUICKFIX_PREFIX + "resources/skin_repair/fentastic_xml/DialogSeekBar.xml"
 
 
 def build(previous: Path, addon_zip: Path, output: Path,
@@ -72,6 +75,19 @@ def build(previous: Path, addon_zip: Path, output: Path,
                 if info.filename in new_payload:
                     replacement = new_payload[info.filename]
                     if replacement != data:
+                        changed.append(info.filename)
+                        data = replacement
+                # The startup patcher already repairs this malformed upstream
+                # seekbar. Ship that same known-good repair before first startup,
+                # only if the skin member exists and is actually malformed.
+                # Never install a missing skin or overwrite valid customization.
+                if info.filename == SEEK_MEMBER and SEEK_REPAIR in new_payload:
+                    try:
+                        ET.fromstring(data)
+                    except ET.ParseError:
+                        replacement = new_payload[SEEK_REPAIR]
+                        if ET.fromstring(replacement).tag != 'window':
+                            raise SystemExit('seekbar repair must have a window root')
                         changed.append(info.filename)
                         data = replacement
                 # the ORIGINAL ZipInfo: same order, timestamp, compression and
@@ -156,10 +172,17 @@ def verify(previous: Path, output: Path, changed: list[str],
                     "the failure that broke the pool in 0.2.438; refusing")
             print("    pool.py logic changed, credential block carried intact")
         outside = [n for n in actually if not n.startswith(QUICKFIX_PREFIX)]
+        if SEEK_MEMBER in outside:
+            try:
+                ET.fromstring(old.read(SEEK_MEMBER))
+            except ET.ParseError:
+                if (new.read(SEEK_MEMBER) == new.read(SEEK_REPAIR)
+                        and ET.fromstring(new.read(SEEK_MEMBER)).tag == 'window'):
+                    outside.remove(SEEK_MEMBER)
         if outside:
-            raise SystemExit(f"changes outside the add-on subtree: {outside}")
+            raise SystemExit(f"changes outside the approved add-on/seekbar scope: {outside}")
         print(f"verified {len(ni)} members; {len(actually)} payload change(s), "
-              "all inside the add-on subtree:")
+              "inside the add-on subtree or validated seekbar repair:")
         for n in sorted(actually):
             print("   ", n)
         print("    pool.py sha256 =",
