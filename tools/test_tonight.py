@@ -43,6 +43,39 @@ class Tonight(unittest.TestCase):
         movie['kind']='tvshow'
         self.assertIn('סדרה',ui._item(types.SimpleNamespace(ListItem=LI),movie).label)
 
+    def test_empty_recovery_preserves_preferences_and_restores_candidates(self):
+        import types
+        state=engine.initial_state();state['catalog']=[item()]
+        state['session'].update(kind='tvshow',max_runtime=1200)
+        saved=[];notices=[];steps=iter(['פתח מחדש',-1])
+        class ListItem:
+            def __init__(self,label='',**kwargs):self.label=label
+            def setArt(self,*args):pass
+            def setInfo(self,*args):pass
+        class Dialog:
+            def select(self,title,rows,**kwargs):
+                choice=next(steps)
+                if isinstance(choice,str):return next(i for i,row in enumerate(rows) if choice in (row if isinstance(row,str) else row.label))
+                return choice
+            def ok(self,*args):notices.append(args)
+        class Monitor:
+            def abortRequested(self):return False
+        with tempfile.TemporaryDirectory() as folder:
+            class Addon:
+                def __init__(self,*args):pass
+                def getAddonInfo(self,*args):return folder
+            def no_play(*args):raise AssertionError('Unexpected playback')
+            fake=dict(xbmc=types.SimpleNamespace(Monitor=Monitor,executebuiltin=no_play),
+                      xbmcaddon=types.SimpleNamespace(Addon=Addon),
+                      xbmcgui=types.SimpleNamespace(Dialog=Dialog,ListItem=ListItem),
+                      xbmcvfs=types.SimpleNamespace(translatePath=lambda path:path))
+            with patch.dict(sys.modules,fake), patch.object(storage,'load',return_value=copy.deepcopy(state)), patch.object(storage,'save',side_effect=lambda path,value:saved.append(copy.deepcopy(value))), patch.object(providers,'current',return_value='pov'), patch.object(providers,'fallback_notice',return_value=''), patch.object(ui,'_history',return_value=dict(keys=[])):
+                ui.run()
+        self.assertNotIn('kind',saved[-1]['session'])
+        self.assertNotIn('max_runtime',saved[-1]['session'])
+        self.assertEqual(saved[-1]['profiles'],state['profiles'])
+        self.assertEqual(len(engine.rank(saved[-1]['catalog'],[saved[-1]['profiles']['household']],saved[-1]['session'])),1)
+
     def test_run_tv_then_time_switches_to_movies_and_clears_shorter_cap(self):
         import types
         state=engine.initial_state();state['catalog']=[item()]
