@@ -123,4 +123,20 @@ class ResidualRepair(unittest.TestCase):
         out,c=m.repair(before,before,'en',lambda p:keep)
         self.assertEqual(out,before);self.assertEqual(c['repaired'],0);self.assertEqual(c['rejected'],0)
 
+    def test_backtick_literal_never_requested(self):
+        before=[block('We call it `ABC`')];request=Mock()
+        out,c=m.repair(before,before,'en',request)
+        self.assertEqual(out,before);self.assertEqual(c['selected'],0);request.assert_not_called()
+
+    def test_new_latin_name_rejected_but_existing_casefold_name_allowed(self):
+        before,out,c,request=self.run_case('We will follow Maui','אנחנו נלך בעקבות John')
+        self.assertEqual(out,before);self.assertEqual(c['repaired'],0)
+        self.assertEqual(self.run_case('We will follow Maui','אנחנו נלך בעקבות MAUI')[2]['repaired'],1)
+
+    def test_hebrew_in_attribute_does_not_count_as_visible_hebrew(self):
+        source='<font face="שלום">We know the way</font>'
+        result='<font face="שלום">We know the way, we know</font>'
+        before,out,c,request=self.run_case(source,result)
+        self.assertEqual(c['selected'],1);self.assertEqual(c['repaired'],0);self.assertEqual(out,before)
+
 if __name__=='__main__':unittest.main()

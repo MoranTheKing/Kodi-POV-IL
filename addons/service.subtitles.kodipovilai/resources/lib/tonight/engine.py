@@ -120,7 +120,35 @@ def refine(state,item,choice):
     return state
 
 
-def rank(catalog, profiles, session, watched=()):
+def history_anchors(state, seed_keys, limit=2):
+    """Sample shared viewing evidence; watching is never recorded as liking."""
+    if 'household' not in state['viewers'] or limit <= 0:
+        return []
+    disliked = {k for viewer in state['viewers']
+                for k, f in state['profiles'][viewer].get('feedback', {}).items()
+                if f['value'] < 0}
+    groups = {'movie': [], 'tvshow': []}
+    seen = set()
+    for key in seed_keys:
+        if not isinstance(key, str) or key in seen or key in disliked:
+            continue
+        try:
+            kind, tmdb = key.split(':', 1)
+            identity(kind, tmdb)
+        except ValueError:
+            continue
+        seen.add(key)
+        groups[kind].append(dict(key=key, kind=kind, tmdb=tmdb))
+    result = []
+    # One movie and one series when both exist; input order is reader recency.
+    while len(result) < min(limit, 2) and any(groups.values()):
+        for kind in ('movie', 'tvshow'):
+            if groups[kind] and len(result) < min(limit, 2):
+                result.append(groups[kind].pop(0))
+    return result
+
+
+def rank(catalog, profiles, session, watched=(), history_seeds=()):
     """Hard exclusion then conservative genre inference; group score protects least satisfied viewer.
 
     Genres are the available first-stage evidence, NOT an implemented fine-grained taste model.
@@ -160,6 +188,9 @@ def rank(catalog, profiles, session, watched=()):
                 reasons.append('קשר ז׳אנרי ל־%s שסימנת באהבתי — זו הערכה ראשונית' % pos[0]['title'])
         # No popular rating can override explicit dislike or watch/time exclusions.
         score = 2*min(scores or [0]) + sum(scores)/max(1,len(scores)) + item['rating']/10
+        if set(item.get('recommended_from', [])) & set(history_seeds):
+            score += 0.6
+            reasons.append('בהשראת כותרים מהיסטוריית הצפייה בבית')
         if session.get('anchor') in item.get('recommended_from',[]):
             score+=2;reasons.append('המלצת קטלוג בעקבות הכותר שבחרת לדייק ממנו הערב')
         elif set(item['genres']) & set(session.get('anchor_genres',[])):
