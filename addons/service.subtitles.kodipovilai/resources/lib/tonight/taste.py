@@ -50,4 +50,35 @@ def refinement(item,session):
         if labels & {'comedy','קומדיה'}:
             score+=1;reasons.append('כיוון קומי יותר לפי סיווג הקטלוג')
         if labels & {'horror','אימה'}:score-=1.5
+    vibe=session.get('vibe','')
+    labels=genres(item.get('genres',[]))
+    wanted={
+        'light':{'comedy','family','music','קומדיה','משפחה','מוזיקה'},
+        'tense':{'thriller','crime','mystery','action','war','מתח','פשע','מסתורין','אקשן','מלחמה'},
+        'moving':{'drama','romance','music','history','דרמה','רומנטיקה','מוזיקה','היסטוריה'},
+    }.get(vibe,set())
+    avoided={
+        'light':{'horror','thriller','war','אימה','מתח','מלחמה'},
+        'tense':{'family','kids','משפחה','ילדים'},
+        'moving':{'horror','אימה'},
+    }.get(vibe,set())
+    if labels & wanted:
+        score+=1.6
+        reasons.append({'light':'כיוון קומי או משפחתי יותר לפי סיווג הקטלוג',
+                        'tense':'כיוון מותח לפי סיווג הקטלוג',
+                        'moving':'כיוון רגשי לפי סיווג הקטלוג'}[vibe])
+    if labels & avoided:score-=1.2
     return score,reasons
+
+
+def surprise(item,feedback):
+    """A bounded novelty nudge. It never overrides explicit dislike or hard filters."""
+    liked=[f for f in feedback.values() if f.get('value',0)>0]
+    if not liked:return 0,[]
+    known_genres=set().union(*(genres(f.get('genres',[])) for f in liked))
+    known_directors={name.casefold() for f in liked for name in f.get('traits',{}).get('directors',[])}
+    item_genres=genres(item.get('genres',[]))
+    directors={name.casefold() for name in item.get('traits',{}).get('directors',[])}
+    if item_genres and not item_genres & known_genres and not directors & known_directors:
+        return .9,['בחירה פחות צפויה ביחס למה שסימנת עד עכשיו']
+    return -.25,[]

@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Skin-independent living-room hub. Populated by tonight/hub.py. -->
+<window type="dialog">
+  <defaultcontrol always="true">206</defaultcontrol>
+  <controls>
+    <control type="image">
+      <left>0</left><top>0</top><width>1920</width><height>1080</height>
+      <texture colordiffuse="FF080D12">white.png</texture>
+    </control>
+    <control type="image">
+      <left>0</left><top>0</top><width>1920</width><height>1080</height>
+      <texture fallback="white.png">$INFO[Container(100).ListItem.Art(fanart)]</texture>
+      <aspectratio>scale</aspectratio><fadetime>300</fadetime><colordiffuse>80FFFFFF</colordiffuse>
+    </control>
+    <control type="image">
+      <left>0</left><top>0</top><width>1920</width><height>1080</height>
+      <texture colordiffuse="DD080D12">white.png</texture>
+    </control>
+    <control type="image">
+      <left>0</left><top>0</top><width>1920</width><height>6</height>
+      <texture colordiffuse="FF55D6A5">white.png</texture>
+    </control>
+
+    <control type="label">
+      <left>70</left><top>38</top><width>1780</width><height>58</height>
+      <font>font14</font><label>[B]מה רואים הערב?[/B]</label><textcolor>FFFFFFFF</textcolor>
+      <align>right</align><aligny>center</aligny>
+    </control>
+    <control type="label">
+      <left>70</left><top>94</top><width>1780</width><height>36</height>
+      <font>font12</font><label>$INFO[Window.Property(tonight.history)]  •  מקור: $INFO[Window.Property(tonight.provider)]</label>
+      <textcolor>FFAAC0CC</textcolor><align>right</align><aligny>center</aligny>
+    </control>
+    <control type="button" id="209">
+      <left>28</left><top>32</top><width>105</width><height>54</height>
+      <texturefocus colordiffuse="4455D6A5">white.png</texturefocus><texturenofocus colordiffuse="22000000">white.png</texturenofocus>
+      <label>סגור</label><font>font12</font><align>center</align>
+      <onright>110</onright><ondown>206</ondown>
+    </control>
+
+    <control type="list" id="110">
+      <left>70</left><top>145</top><width>1780</width><height>68</height>
+      <orientation>horizontal</orientation><scrolltime tween="cubic">250</scrolltime>
+      <onup>209</onup><ondown>100</ondown>
+      <itemlayout width="218" height="60">
+        <control type="image"><left>4</left><top>4</top><width>204</width><height>50</height><texture colordiffuse="332C3943">white.png</texture></control>
+        <control type="label"><left>10</left><top>4</top><width>192</width><height>50</height><font>font12</font><label>$INFO[ListItem.Label]</label><align>center</align><aligny>center</aligny><textcolor>FFD4E1E8</textcolor></control>
+      </itemlayout>
+      <focusedlayout width="218" height="60">
+        <control type="image"><left>4</left><top>4</top><width>204</width><height>50</height><texture colordiffuse="FF55D6A5">white.png</texture></control>
+        <control type="label"><left>10</left><top>4</top><width>192</width><height>50</height><font>font12</font><label>$INFO[ListItem.Label]</label><align>center</align><aligny>center</aligny><textcolor>FF07110E</textcolor></control>
+      </focusedlayout>
+    </control>
+
+    <control type="list" id="100">
+      <left>70</left><top>235</top><width>1030</width><height>650</height>
+      <orientation>horizontal</orientation><scrolltime tween="cubic">300</scrolltime>
+      <onup>110</onup><ondown>200</ondown>
+      <itemlayout width="340" height="630">
+        <control type="image"><left>18</left><top>12</top><width>292</width><height>438</height><texture colordiffuse="FF111A21">white.png</texture></control>
+        <control type="image"><left>18</left><top>12</top><width>292</width><height>438</height><texture fallback="special://home/addons/service.subtitles.kodipovilai/resources/media/tonight.png">$INFO[ListItem.Art(poster)]</texture><aspectratio>keep</aspectratio><colordiffuse>AAFFFFFF</colordiffuse></control>
+        <control type="label"><left>18</left><top>468</top><width>292</width><height>38</height><font>font12</font><label>$INFO[ListItem.Label2]</label><align>right</align><textcolor>FF55D6A5</textcolor></control>
+        <control type="label"><left>18</left><top>508</top><width>292</width><height>70</height><font>font13</font><label>$INFO[ListItem.Label]</label><align>right</align><wrapmultiline>true</wrapmultiline><textcolor>FFCCD6DC</textcolor></control>
+      </itemlayout>
+      <focusedlayout width="340" height="630">
+        <control type="image"><left>5</left><top>0</top><width>318</width><height>464</height><texture colordiffuse="FF55D6A5">white.png</texture></control>
+        <control type="image"><left>12</left><top>7</top><width>304</width><height>450</height><texture colordiffuse="FF111A21">white.png</texture></control>
+        <control type="image"><left>12</left><top>7</top><width>304</width><height>450</height><texture fallback="special://home/addons/service.subtitles.kodipovilai/resources/media/tonight.png">$INFO[ListItem.Art(poster)]</texture><aspectratio>keep</aspectratio></control>
+        <control type="label"><left>12</left><top>468</top><width>304</width><height>38</height><font>font12</font><label>$INFO[ListItem.Label2]</label><align>right</align><textcolor>FF55D6A5</textcolor></control>
+        <control type="label"><left>12</left><top>508</top><width>304</width><height>74</height><font>font13</font><label>$INFO[ListItem.Label]</label><align>right</align><wrapmultiline>true</wrapmultiline><textcolor>FFFFFFFF</textcolor></control>
+      </focusedlayout>
+    </control>
+
+    <control type="group">
+      <visible>Integer.IsGreater(Container(100).NumItems,0)</visible>
+      <control type="label"><left>1160</left><top>245</top><width>690</width><height>46</height><font>font13</font><label>[COLOR FF55D6A5][B]$INFO[Container(100).ListItem.Property(role)][/B][/COLOR]</label><align>right</align></control>
+      <control type="label"><left>1160</left><top>298</top><width>690</width><height>88</height><font>font14</font><label>$INFO[Container(100).ListItem.Label]</label><align>right</align><wrapmultiline>true</wrapmultiline><textcolor>FFFFFFFF</textcolor></control>
+      <control type="label"><left>1160</left><top>396</top><width>690</width><height>36</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(meta)]</label><align>right</align><textcolor>FFB6C5CD</textcolor></control>
+      <control type="label"><left>1160</left><top>452</top><width>690</width><height>76</height><font>font13</font><label>$INFO[Container(100).ListItem.Property(reason)]</label><align>right</align><wrapmultiline>true</wrapmultiline><textcolor>FF8FE0FF</textcolor></control>
+      <control type="textbox"><left>1160</left><top>540</top><width>690</width><height>195</height><font>font12</font><label>$INFO[Container(100).ListItem.Property(plot)]</label><align>right</align><textcolor>FFBEC9CF</textcolor><autoscroll time="4000" delay="7000" repeat="7000">true</autoscroll></control>
+    </control>
+    <control type="label">
+      <left>1160</left><top>380</top><width>690</width><height>120</height><font>font13</font>
+      <label>$INFO[Window.Property(tonight.empty)]</label><align>right</align><wrapmultiline>true</wrapmultiline><textcolor>FFC3D1D8</textcolor>
+      <visible>!Integer.IsGreater(Container(100).NumItems,0)</visible>
+    </control>
+
+    <control type="button" id="200"><left>1160</left><top>770</top><width>330</width><height>66</height><texturefocus colordiffuse="FF55D6A5">white.png</texturefocus><texturenofocus colordiffuse="3355D6A5">white.png</texturenofocus><label>[B]צפייה עכשיו[/B]</label><font>font13</font><align>center</align><onup>100</onup><onright>201</onright><ondown>202</ondown><enable>Integer.IsGreater(Container(100).NumItems,0)</enable></control>
+    <control type="button" id="201"><left>1515</left><top>770</top><width>335</width><height>66</height><texturefocus colordiffuse="FF8FE0FF">white.png</texturefocus><texturenofocus colordiffuse="338FE0FF">white.png</texturenofocus><label>טריילר</label><font>font13</font><align>center</align><onup>100</onup><onleft>200</onleft><ondown>203</ondown><enable>Integer.IsGreater(Container(100).NumItems,0)</enable></control>
+    <control type="button" id="202"><left>1160</left><top>850</top><width>330</width><height>62</height><texturefocus colordiffuse="FFEEB95D">white.png</texturefocus><texturenofocus colordiffuse="33EEB95D">white.png</texturenofocus><label>החלף הצעה</label><font>font12</font><align>center</align><onup>200</onup><onright>203</onright><ondown>204</ondown><enable>Integer.IsGreater(Container(100).NumItems,0)</enable></control>
+    <control type="button" id="203"><left>1515</left><top>850</top><width>335</width><height>62</height><texturefocus colordiffuse="FF8FE0FF">white.png</texturefocus><texturenofocus colordiffuse="338FE0FF">white.png</texturenofocus><label>$INFO[Container(100).ListItem.Property(save_label)]</label><font>font12</font><align>center</align><onup>201</onup><onleft>202</onleft><ondown>205</ondown><enable>Integer.IsGreater(Container(100).NumItems,0)</enable></control>
+    <control type="button" id="204"><left>1160</left><top>926</top><width>330</width><height>62</height><texturefocus colordiffuse="FFEA6F91">white.png</texturefocus><texturenofocus colordiffuse="33EA6F91">white.png</texturenofocus><label>$INFO[Container(100).ListItem.Property(like_label)]</label><font>font12</font><align>center</align><onup>202</onup><onright>205</onright><ondown>207</ondown><enable>Integer.IsGreater(Container(100).NumItems,0)</enable></control>
+    <control type="button" id="205"><left>1515</left><top>926</top><width>335</width><height>62</height><texturefocus colordiffuse="FF8A96A0">white.png</texturefocus><texturenofocus colordiffuse="338A96A0">white.png</texturenofocus><label>עוד בכיוון הזה</label><font>font12</font><align>center</align><onup>203</onup><onleft>204</onleft><ondown>207</ondown><enable>Integer.IsGreater(Container(100).NumItems,0)</enable></control>
+
+    <control type="button" id="206"><left>70</left><top>972</top><width>260</width><height>62</height><texturefocus colordiffuse="FF55D6A5">white.png</texturefocus><texturenofocus colordiffuse="3355D6A5">white.png</texturenofocus><label>רענן הצעות</label><font>font12</font><align>center</align><onup>100</onup><onright>207</onright></control>
+    <control type="button" id="207"><left>350</left><top>972</top><width>260</width><height>62</height><texturefocus colordiffuse="FF8A96A0">white.png</texturefocus><texturenofocus colordiffuse="338A96A0">white.png</texturenofocus><label>עוד אפשרויות</label><font>font12</font><align>center</align><onup>100</onup><onleft>206</onleft><onright>200</onright></control>
+    <control type="label"><left>650</left><top>982</top><width>460</width><height>42</height><font>font12</font><label>$INFO[Window.Property(tonight.hint)]</label><align>right</align><textcolor>FF91A1AA</textcolor></control>
+  </controls>
+</window>
