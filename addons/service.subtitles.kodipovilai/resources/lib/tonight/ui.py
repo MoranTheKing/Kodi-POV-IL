@@ -218,7 +218,11 @@ def run():
             rows=[_item(xbmcgui,r['item'],r['reasons'][0]) for r in picks]
             options=['טען הצעות מ־'+providers.NAMES[provider], 'מי צופה: '+names, 'מה מתאים לערב — זמן וסוג צפייה', 'היכרות — מה אהבתם?', 'השמורים שלי', 'עוד אפשרויות']
             rows += [xbmcgui.ListItem(label=s) for s in options]
-            chosen=dialog.select(TITLE,rows,useDetails=True)
+            heading=TITLE
+            if not picks:
+                heading+=' — '+('צריך לטעון הצעות' if not current_catalog else 'אין התאמה לבחירות הנוכחיות')
+                if current_catalog:rows.append(xbmcgui.ListItem(label='פתח מחדש את הבחירות לערב',label2='בטל סינון זמני; הטעם, השמורים וסימוני הצפייה יישמרו'))
+            chosen=dialog.select(heading,rows,useDetails=True)
             if chosen<0:return
             before=engine.checkpoint(state)
             if chosen<len(picks):
@@ -228,6 +232,9 @@ def run():
                 if playing:return
                 continue
             action=chosen-len(picks)
+            if not picks and current_catalog and action==6:
+                state['session']=dict(minutes=0,excluded=[],started=time.time())
+                undo=(undo+[before])[-5:];storage.save(state_path,state);continue
             if action in (2,3,5):
                 menus={2:('מה מתאים לערב?', [('כמה זמן יש?',2),('סרט, סדרה או שניהם?',7)]),
                        3:('איך נכיר את הטעם?', [('חיפוש כותר שאהבתם',10),('כמה אהובים בבת אחת',8),('עיון בכותרים שכבר נטענו',3)]),
