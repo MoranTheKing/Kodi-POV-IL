@@ -6,16 +6,29 @@ import xml.etree.ElementTree as ET
 
 ACTION='RunScript(service.subtitles.kodipovilai,action=tonight)'
 MARKER='<!-- MORAN_TONIGHT_SEEN_V1 -->'
+OLD_NAME='הערב שלי — התנסות'
+NAME='הערב שלי'
+LEGACY_ICON='special://home/addons/service.subtitles.kodipovilai/icon.png'
+ICON=('special://home/addons/service.subtitles.kodipovilai/'
+      'resources/media/tonight.png')
 
 
 def insert(content):
-    if MARKER in content:return content
     try:
         root=ET.fromstring(content)
         if root.tag!='favourites':return content
     except ET.ParseError:return content
+    # Upgrade only our exact generated shortcut. Custom names/thumbs and a
+    # shortcut the user deleted remain owned by the user.
+    replacement=('name="'+NAME+'" thumb="'+ICON+'">'+ACTION)
+    for generated_name in (OLD_NAME,NAME):
+        legacy=('name="'+generated_name+'" thumb="'+LEGACY_ICON+'">'+ACTION)
+        content=content.replace(legacy,replacement)
+    content=content.replace(
+        'name="'+OLD_NAME+'" thumb="'+ICON+'">'+ACTION,replacement)
+    if MARKER in content:return content
     exists=any((f.text or '').strip()==ACTION for f in root.findall('favourite'))
-    snippet='' if exists else ('  <favourite name="הערב שלי — התנסות" thumb="special://home/addons/service.subtitles.kodipovilai/icon.png">'+ACTION+'</favourite>\n')
+    snippet='' if exists else ('  <favourite name="'+NAME+'" thumb="'+ICON+'">'+ACTION+'</favourite>\n')
     if not list(root) and not (root.text or '').strip():
         content=re.sub(r'<favourites\s*/>', '<favourites></favourites>',content,count=1)
     # Preserve all existing bytes, names and custom actions.

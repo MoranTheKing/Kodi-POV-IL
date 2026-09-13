@@ -30,7 +30,7 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-06-01-pov-home-v21'
+PATCH_VERSION = '2026-09-13-pov-home-v22'
 # Must track wizard.py's AF3_CE_SKIN_VERSION, which is the version actually
 # shipped in the pack. It did not: the wizard went to 6.3.2.14 and this stayed
 # at 6.3.2.9, so every AF3 user already ON the correct pack was told to
@@ -373,8 +373,9 @@ HOME_WIDGETS = [
 
 HOME_SUBMENU = [
     {
-        'label': 'הערב שלי — התנסות',
-        'icon': 'special://home/addons/service.subtitles.kodipovilai/icon.png',
+        'label': 'הערב שלי',
+        'icon': ('special://home/addons/service.subtitles.kodipovilai/'
+                 'resources/media/tonight.png'),
         'path': 'RunScript(service.subtitles.kodipovilai,action=tonight)',
         'target': '',
     },
