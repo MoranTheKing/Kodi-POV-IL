@@ -73,7 +73,8 @@ class Tonight(unittest.TestCase):
         state=engine.feedback(state,'household',old,'like')
         dialog=types.SimpleNamespace(select=lambda title,labels:labels.index('אהבתי את הכותר הזה'),ok=lambda *a:None,notification=lambda *a,**k:None)
         calls=[]
-        def fetch(xbmc,gui,folder,anchors,provider):
+        def fetch(xbmc,gui,folder,anchors,provider,**kwargs):
+            self.assertEqual(kwargs['planned']['queries'][0]['anchor']['key'],new['key'])
             calls.append([a['key'] for a in anchors]);return [found]
         with patch.object(ui,'_load_catalog',side_effect=fetch),patch.object(providers,'current',return_value='pov'):
             changed,playing=ui._act_and_refresh(dialog,None,None,new,[],state,'unused')
