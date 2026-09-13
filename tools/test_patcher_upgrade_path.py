@@ -177,7 +177,7 @@ separate assumptions each hid live, shipping patchers:
     every device that already has it, forever. The whole add-on is walked now,
     and a payload's source is read as raw text.
   * not "written anywhere at all" -- af3_home_patcher's
-    PATCH_VERSION = '2026-06-01-pov-home-v21' is a gate in its own right,
+    PATCH_VERSION = '2026-09-13-pov-home-v22' is a gate in its own right,
     written into marker FILES whose entire content is the version. A
     module-level NAME_VERSION with digits in it counts on sight.
 
@@ -534,7 +534,7 @@ pin('af3_discover_pov_patcher', 'UNPROVEN',
     'AI_SUBS_POV_DISCOVER_v6_unified')
 pin('af3_home_patcher', 'UNPROVEN',
     'AF3_CE_VERSION=6.3.2.14', 'JURIALMUNKEY_MIN_VERSION=0.2.35',
-    'PATCH_VERSION=2026-06-01-pov-home-v21',
+    'PATCH_VERSION=2026-09-13-pov-home-v22',
     'POV_AF3_PLOT_AUTOSCROLL_v2', 'POV_AF3_TOUCH_CLEANUP_v1')
 pin('af3_search_pov_patcher', 'UNPROVEN',
     'AI_SUBS_POV_SEARCH_v1', 'AI_SUBS_POV_SEARCH_v2',
@@ -832,7 +832,7 @@ def version_constants(src):
     """Module-level NAME_VERSION = '<value with a digit>'.
 
     A third way to spell a gate, and af3_home_patcher shows why it has to be
-    caught on its own: PATCH_VERSION = '2026-06-01-pov-home-v21' is written
+    caught on its own: PATCH_VERSION = '2026-09-13-pov-home-v22' is written
     into marker FILES (_LAYOUT_MARKER, _SPOTLIGHT_MARKER) whose whole content
     IS the version, so neither the string search nor the settings-pair search
     can see it. darksubs_hook_diagnostics' NAG_VERSION is the same shape with
@@ -877,7 +877,7 @@ def bump_marker(m):
     if h:
         return m[:h.start(2)] + str(int(h.group(2)) + 1) + m[h.end(2):]
     # Last resort: bump the final run of digits. af3_home_patcher's gate is
-    # PATCH_VERSION = '2026-06-01-pov-home-v21' -- a date, a name and a
+    # PATCH_VERSION = '2026-09-13-pov-home-v22' -- a date, a name and a
     # version in one string -- and a rule that only knows "digits right after
     # the =" cannot move it at all.
     h = None
@@ -1895,10 +1895,10 @@ def main():
     # A version constant can be a gate on its own, written into a marker FILE
     # whose whole content is the version.
     check('SABOTAGE: a bare version constant is a marker',
-          'PATCH_VERSION=2026-06-01-pov-home-v21'
+          'PATCH_VERSION=2026-09-13-pov-home-v22'
           in PINS.get('af3_home_patcher', ('', ()))[1]
-          and bump_marker('PATCH_VERSION=2026-06-01-pov-home-v21')
-          == 'PATCH_VERSION=2026-06-01-pov-home-v22',
+          and bump_marker('PATCH_VERSION=2026-09-13-pov-home-v22')
+          == 'PATCH_VERSION=2026-09-13-pov-home-v23',
           'af3_home_patcher writes PATCH_VERSION into _LAYOUT_MARKER and '
           '_SPOTLIGHT_MARKER; neither the string nor the settings-pair search '
           'can see it')
