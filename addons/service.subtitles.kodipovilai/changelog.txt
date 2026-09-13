@@ -1,3 +1,6 @@
+0.2.537
+- Fix Tonight launch when a recommendation combines liked and unrated viewing-history origins.
+
 0.2.536
 - Prevent missing or malformed viewing-history counts from blocking Tonight at launch.
 - Treat invalid legacy catalog timestamps as stale data that can be refreshed safely.
