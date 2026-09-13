@@ -96,12 +96,29 @@ def card(row, catalog=(), history_seeds=()):
     elif lane == 'כיוון קצת אחר':
         role = 'משהו חדש בשבילך'
         reason = 'קרוב מספיק לטעם שלך, עם כיוון קצת אחר'
+    elif lane == 'עוד התאמה בשבילך':
+        role = 'עוד התאמה בשבילך'
+        reason = ''
+    elif lane == 'עוד כיוון לגלות':
+        role = 'כיוון נוסף לגלות'
+        reason = ''
     else:
         role = 'עוד אפשרות טובה'
         reason = ''
     if not reason:
         candidates = row.get('reasons', [])[1:]
-        for candidate in candidates:
+        def display_priority(candidate):
+            # Explain the user's active mode first, then automatic household
+            # evidence.  A manual like remains useful but should not make the
+            # whole screen look as though it depends on one title.
+            if any(token in candidate for token in
+                   ('כיוון קומי','כיוון מותח','כיוון רגשי','פחות צפויה')):return 0
+            if 'דפוס שחוזר' in candidate:return 1
+            if 'היסטוריית הצפייה' in candidate:return 2
+            if 'אותו במאי:' in candidate or 'יוצר משותף בתסריט:' in candidate:return 3
+            if 'קשר ז׳אנרי ל־' in candidate:return 4
+            return 5
+        for candidate in sorted(candidates,key=display_priority):
             if 'אותו במאי:' in candidate and ', כמו ב־' in candidate:
                 title = candidate.split(', כמו ב־', 1)[1].split(' שאהבת', 1)[0]
                 reason = 'מאותו במאי של %s' % title
@@ -128,6 +145,9 @@ def card(row, catalog=(), history_seeds=()):
                 break
             if 'היסטוריית הצפייה' in candidate:
                 reason = 'בהשראת מה שכבר ראית'
+                break
+            if 'דפוס שחוזר' in candidate:
+                reason = 'מתאים לדפוסים שחוזרים בצפייה וברשימות שלך'
                 break
         if not reason:
             reason = 'הצעה חדשה מתוך הקטלוג שלך'

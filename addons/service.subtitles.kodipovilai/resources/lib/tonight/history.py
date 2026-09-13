@@ -49,13 +49,14 @@ def read_umbrella_local(path):
 def _snapshot(rows, path, ordered=True):
     # One watched episode proves exposure to a show, not that the entire show
     # is complete or enjoyed. Keep show seeds separate from watched exclusions.
-    movies, shows, seeds, seen = [], [], [], set()
+    movies, shows, seeds, seen, strengths = [], [], [], set(), {}
     for kind, tmdb in rows:
         kind = 'tvshow' if kind in ('episode', 'tvshow') else kind
         try:
             key = identity(kind, tmdb)
         except ValueError:
             continue
+        strengths[key]=min(1000,strengths.get(key,0)+1)
         if key in seen:
             continue
         seen.add(key)
@@ -63,4 +64,5 @@ def _snapshot(rows, path, ordered=True):
         (movies if kind == 'movie' else shows).append(key)
     return dict(status='cached_history', keys=movies, seed_keys=seeds,
                 observed_series=shows, reason='viewing_is_not_liking',
+                seed_strengths=strengths,
                 absence_is_unknown=True, order='recent_first' if ordered else 'unknown', mtime=Path(path).stat().st_mtime)

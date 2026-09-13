@@ -54,7 +54,7 @@
 
     <control type="list" id="100">
       <left>70</left><top>235</top><width>1030</width><height>650</height>
-      <orientation>horizontal</orientation><scrolltime tween="cubic">300</scrolltime>
+      <orientation>horizontal</orientation><scrolltime tween="cubic">300</scrolltime><preloaditems>2</preloaditems>
       <onup>110</onup><ondown>200</ondown>
       <itemlayout width="340" height="630">
         <control type="image"><left>18</left><top>12</top><width>292</width><height>438</height><texture colordiffuse="FF111A21">white.png</texture></control>
@@ -69,6 +69,12 @@
         <control type="label"><left>12</left><top>468</top><width>304</width><height>38</height><font>font12</font><label>$INFO[ListItem.Label2]</label><align>right</align><textcolor>FF55D6A5</textcolor></control>
         <control type="label"><left>12</left><top>508</top><width>304</width><height>74</height><font>font13</font><label>$INFO[ListItem.Label]</label><align>right</align><wrapmultiline>true</wrapmultiline><textcolor>FFFFFFFF</textcolor></control>
       </focusedlayout>
+    </control>
+    <control type="label">
+      <left>70</left><top>885</top><width>1030</width><height>38</height><font>font12</font>
+      <label>הצעה $INFO[Container(100).CurrentItem] מתוך $INFO[Container(100).NumItems]  •  המשך בחצים</label>
+      <align>right</align><textcolor>FF8FE0FF</textcolor>
+      <visible>Integer.IsGreater(Container(100).NumItems,3)</visible>
     </control>
 
     <control type="group">
