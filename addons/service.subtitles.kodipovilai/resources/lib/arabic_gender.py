@@ -577,8 +577,10 @@ _HE_FEM_IMPER = re.compile(
 _HE_FEM_CLAUSE = re.compile(
     r'(?:^|[.!?\n,:;—-])\s*(?:ו)?את(?![א-ת])|'
     u'(?<![א-ת])(?:ש|כש|וש|וכש)את(?![א-ת])')
+# A narrow verbal continuation avoids treating הולכת בלי/איתי as a
+# definite noun. Bare הולכת and הולכת הרגל remain ambiguous and abstain.
 _HE_AT_OBJ = re.compile(
-    r'\s+(?:זה|זאת|זו|אלה|אלו|כל(?!\s+כך)|מה|מי|עצמ|אות|כך|של|ה[א-ת])')
+    r'\s+(?:זה|זאת|זו|אלה|אלו|כל(?!\s+כך)|מה|מי|עצמ|אות|כך|של|ה(?!ולכת\s+(?:בלי|איתי)(?![א-ת]))[א-ת])')
 # Clause position alone is insufficient: "את דני ראיתי" fronts an object.
 # Require a reviewed predicate too; unseen predicates remain prompt-only hints.
 _HE_AT_PREDICATE = re.compile(
