@@ -1,3 +1,11 @@
+0.2.531
+- Keep Hebrew punctuation and phrase order correct across subtitle style boundaries.
+- Deliver validated cached AI subtitles to the player after a background cache hit.
+- Preserve playback and subtitle selection ownership during final delivery.
+- Retry clearly copied English lines with source context, preserving subtitles on failure.
+- Clarify translation of understandable lyrics and mixed-language dialogue.
+- Report the actual reference language in script-cleanup diagnostics.
+
 0.2.530
 - Protect streaming playback by skipping automatic remote video/audio sync probes.
 - Keep cached timing references, subtitle-reference synchronization and local-file probing.

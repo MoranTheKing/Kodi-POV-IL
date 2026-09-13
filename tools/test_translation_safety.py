@@ -109,7 +109,8 @@ for callback in callbacks:
             setProperty=lambda k, v: props.update({k: v}),
             clearProperty=lambda k: props.pop(k, None))
         ns = dict(xbmcgui=types.SimpleNamespace(Window=lambda _: window),
-                  _job_token='old-token', _safe_log=lambda *a, **k: None)
+                  _job_token='old-token', _completion={'seen': False},
+                  _safe_log=lambda *a, **k: None)
         selected(ADDON / 'default.py',
                  {'_owns_translation_job', '_clear_translation_job'}, ns)
         # Any stale handler reaching IO fails rather than disappearing in its catch.
