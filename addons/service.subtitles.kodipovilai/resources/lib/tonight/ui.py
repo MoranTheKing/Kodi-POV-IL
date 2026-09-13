@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from . import engine, storage, catalog, history, providers
 
 TITLE='הערב שלי — גרסת התנסות'
+_CANCELLED=object()
 
 
 @contextmanager
@@ -68,7 +69,7 @@ def _load_catalog(xbmc,xbmcgui,folder,anchors=(),provider='pov',query=None):
     start=time.monotonic();monitor=xbmc.Monitor()
     try:
         while time.monotonic()-start<20:
-            if progress.iscanceled() or monitor.abortRequested():return None
+            if progress.iscanceled() or monitor.abortRequested():return _CANCELLED
             try:
                 items,error=replies.get(timeout=.1)
                 return items if not error and providers.current()==provider else None
@@ -124,12 +125,13 @@ def _refresh(state,xbmc,xbmcgui,folder,provider,dialog,preferred=None):
         if match:anchors.append(match)
         if len(anchors)>=2:break
     items=_load_catalog(xbmc,xbmcgui,folder,anchors,provider)
+    if items is _CANCELLED:return state
     if items:
         saved={k for p in state['profiles'].values() for k in p['saved']} | liked | ({anchor_key} if anchor_key else set())
         present={x['key'] for x in items}
         state['catalog']=items+[x for x in state['catalog'] if x['key'] in saved and x['key'] not in present]
         state['catalog_fetched']=time.time()
-    else:dialog.ok(TITLE,'הקטלוג לא נטען או בוטל. ההצעות הקודמות נשמרו. אפשר לנסות שוב.')
+    else:dialog.ok(TITLE,'הקטלוג לא נטען. ההצעות הקודמות נשמרו. אפשר לנסות שוב.')
     return state
 
 
@@ -149,8 +151,12 @@ def _actions(dialog,xbmc,xbmcgui,item,reasons,state):
     while True:
         active=providers.current()
         labels=['צפייה' if item['kind']=='movie' else 'בחירת פרק', 'פרטים ולמה בחרנו', 'לא הערב — הצעה אחרת', 'אהבתי את הכותר הזה', 'לא מתאים לטעם שלי', 'כבר ראיתי', 'שמור לערב אחר','כמעט, אבל…','בחר טריילר' if active=='umbrella' else 'טריילר ותוספות ב־POV','שינוי הסימונים שלי']
-        choice=dialog.select(item['title'],labels)
+        # Keep common discovery actions within two Down presses; map display
+        # positions explicitly so moving a label cannot change its action.
+        display_order=(0,1,8,2,7,6,3,4,5,9)
+        choice=dialog.select(item['title'],[labels[i] for i in display_order])
         if choice<0:return state,False
+        choice=display_order[choice]
         if choice==0:
             # Construct only allowlisted POV routes from validated numeric identity.
             route=providers.playback_route(providers.current(),item)
@@ -177,7 +183,10 @@ def _actions(dialog,xbmc,xbmcgui,item,reasons,state):
                 dialog.ok(TITLE,'אין סימון אישי לבטל עבור הצופה הזה.');continue
             selected=dialog.select('שינוי הסימונים שלי',[c[1] for c in choices])
             if selected<0:continue
-            return engine.feedback(state,viewer,item,choices[selected][0]),False
+            action=choices[selected][0]
+            changed=engine.feedback(state,viewer,item,action)
+            _feedback_notice(dialog,changed,viewer,action)
+            return changed,False
         if choice==8:
             route=providers.trailer_route(providers.current(),item)
             xbmc.executebuiltin('RunPlugin("%s")'%route)
@@ -185,7 +194,28 @@ def _actions(dialog,xbmc,xbmcgui,item,reasons,state):
         action={2:'not_tonight',3:'like',4:'dislike',5:'seen',6:'save'}[choice]
         viewer=state['viewers'][0] if action=='not_tonight' else _viewer(dialog,state)
         if viewer is None:continue
-        return engine.feedback(state,viewer,item,action),False
+        changed=engine.feedback(state,viewer,item,action)
+        _feedback_notice(dialog,changed,viewer,action)
+        return changed,False
+
+
+def _feedback_notice(dialog,state,viewer,action):
+    messages={'like':'נוסף לאהובים','dislike':'הטעם עודכן','seen':'סומן ככבר נצפה',
+              'save':'נוסף לשמורים','unsave':'הוסר מהשמורים',
+              'clear_feedback':'דירוג הטעם בוטל','unseen':'סימון הצפייה בוטל',
+              'not_tonight':'הכותר הוסר מההצעות להערב'}
+    message=messages[action]
+    if action!='not_tonight':message+=' · '+state['profiles'][viewer]['name']
+    dialog.notification(TITLE,message,time=2500,sound=False)
+
+
+def _session_summary(session):
+    kind={'all':'סרטים וסדרות','movie':'סרטים','tvshow':'סדרות'}.get(session.get('kind','all'),'סרטים וסדרות')
+    minutes=session.get('minutes',0);shorter=session.get('max_runtime')
+    if shorter and (not minutes or shorter<minutes*60):
+        duration='עד כ־%s דקות'%((shorter+59)//60)
+    else:duration=('עד %s דקות'%minutes) if minutes else 'ללא מגבלת זמן'
+    return kind+' · '+duration
 
 
 def run():
@@ -216,8 +246,8 @@ def run():
             picks=engine.choose_three(engine.rank(current_catalog,profiles,state['session'],seen))
             names=' + '.join(p['name'] for p in profiles)
             rows=[_item(xbmcgui,r['item'],r['reasons'][0]) for r in picks]
-            options=['טען הצעות מ־'+providers.NAMES[provider], 'מי צופה: '+names, 'מה מתאים לערב — זמן וסוג צפייה', 'היכרות — מה אהבתם?', 'השמורים שלי', 'עוד אפשרויות']
-            rows += [xbmcgui.ListItem(label=s) for s in options]
+            options=['טען הצעות מ־'+providers.NAMES[provider], 'מי צופה: '+names, 'מה מתאים לערב — '+_session_summary(state['session']), 'היכרות — מה אהבתם?', 'השמורים שלי', 'עוד אפשרויות']
+            rows += [xbmcgui.ListItem(label=s,label2='שלוש הצעות להתחלה; סמנו מה אהבתם כדי לדייק' if i==0 and not current_catalog else '') for i,s in enumerate(options)]
             heading=TITLE
             if not picks:
                 heading+=' — '+('צריך לטעון הצעות' if not current_catalog else 'אין התאמה לבחירות הנוכחיות')
@@ -246,10 +276,11 @@ def run():
                 state=_refresh(state,xbmc,xbmcgui,folder,providers.current(),dialog)
             elif action==1:
                 keys=list(state['profiles'])
-                selected=dialog.multiselect('מי צופה? אפשר לבחור יחד', [state['profiles'][k]['name'] for k in keys]+['הוסף צופה'],preselect=[keys.index(k) for k in state['viewers']])
+                can_add=len(keys)<8
+                selected=dialog.multiselect('מי צופה? אפשר לבחור יחד', [state['profiles'][k]['name'] for k in keys]+(['הוסף צופה'] if can_add else []),preselect=[keys.index(k) for k in state['viewers']])
                 if selected is not None:
                     viewers=[keys[i] for i in selected if i<len(keys)]
-                    if len(keys) in selected:
+                    if can_add and len(keys) in selected:
                         name=dialog.input('שם הצופה').strip()[:40]
                         if name and len(keys)<8:
                             key=uuid.uuid4().hex
@@ -297,7 +328,8 @@ def run():
                 query=dialog.input('שם סרט או סדרה שאהבתם').strip()[:200]
                 if query:
                     items=_load_catalog(xbmc,xbmcgui,folder,provider=providers.current(),query=query)
-                    if not items:dialog.ok(TITLE,'החיפוש לא החזיר כותרים או בוטל. אפשר לנסות שם מקורי או לבדוק את הספק הפעיל.')
+                    if items is _CANCELLED:continue
+                    if not items:dialog.ok(TITLE,'החיפוש לא החזיר כותרים. אפשר לנסות שם מקורי או לבדוק את הספק הפעיל.')
                     else:
                         i=dialog.select('בחרו את הכותר והפעולה',[_item(xbmcgui,x) for x in items],useDetails=True)
                         if i>=0:
