@@ -25,7 +25,7 @@
 </addon>
 <addon id="service.subtitles.kodipovilai"
        name="MoranSubs"
-       version="0.2.529"
+       version="0.2.530"
        provider-name="MoranTheKing">
   <requires>
     <import addon="xbmc.python" version="3.0.0"/>
