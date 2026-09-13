@@ -3,6 +3,7 @@ import copy
 import math
 import re
 import time
+from . import taste
 from urllib.parse import urlparse, parse_qs, urlencode
 
 
@@ -65,7 +66,7 @@ def normalize(row):
     imdb=str(imdb);tvdb=str(tvdb)
     original=query.get('title',query.get('tvshowtitle',['']))[0] or row.get('originaltitle') or title
     if not isinstance(original,str):original=title
-    return dict(key=key, kind=kind, tmdb=tmdb, title=title[:300], year=year,provider=provider,
+    return dict(key=key, kind=kind, tmdb=tmdb, title=title[:300], year=year,provider=provider,traits=taste.metadata(row),
                 originaltitle=original[:300],imdb=imdb if re.fullmatch(r'tt[0-9]{5,12}',imdb) else '',tvdb=tvdb if re.fullmatch(r'[1-9][0-9]{0,11}',tvdb) else '',
                 watched=type(row.get('playcount')) is int and row['playcount']>0,
                 runtime=runtime if 0 < runtime < 24*3600 else None,
@@ -87,7 +88,7 @@ def feedback(state, viewer, item, action):
     profile = state['profiles'][viewer]
     key = item['key']
     if action in ('like','dislike'):
-        profile['feedback'][key] = dict(value=1 if action=='like' else -1, genres=item['genres'], title=item['title'])
+        profile['feedback'][key] = dict(value=1 if action=='like' else -1, genres=item['genres'], title=item['title'],traits=copy.deepcopy(item.get('traits',{})))
     elif action == 'seen':
         profile['seen'] = sorted(set(profile['seen']) | {key})
     elif action == 'save':
@@ -106,8 +107,13 @@ def feedback(state, viewer, item, action):
 
 
 def refine(state,item,choice):
+    if choice not in ('shorter','similar','different','lighter','less_familiar'):
+        raise ValueError('Unknown refinement')
     state=copy.deepcopy(state);session=state['session']
     session['excluded']=sorted(set(session.get('excluded',[]))|{item['key']})
+    if choice!='shorter':
+        for key in ('anchor','anchor_genres','avoid_genres','discovery_mode','avoid_creators'):
+            session.pop(key,None)
     if choice=='shorter':
         if item['kind']!='movie' or not item['runtime']:raise ValueError('No verified duration')
         session['max_runtime']=max(1,item['runtime']-1)
@@ -116,7 +122,11 @@ def refine(state,item,choice):
         session.pop('avoid_genres',None)
     elif choice=='different':
         session['avoid_genres']=item['genres'];session.pop('anchor',None);session.pop('anchor_genres',None)
-    else:raise ValueError('Unknown refinement')
+    elif choice=='lighter':
+        session['discovery_mode']='lighter'
+    elif choice=='less_familiar':
+        session['discovery_mode']='less_familiar'
+        session['avoid_creators']=list(item.get('traits',{}).get('directors',[]))[:12]
     return state
 
 
@@ -174,7 +184,7 @@ def rank(catalog, profiles, session, watched=(), history_seeds=()):
         for p in profiles:
             pos, neg = [], []
             for f in p.get('feedback', {}).values():
-                common = set(item['genres']) & set(f['genres'])
+                common = taste.genres(item['genres']) & taste.genres(f['genres'])
                 if common:
                     (pos if f['value']>0 else neg).append(f)
             score = min(3,len(pos)) - min(3,len(neg))
@@ -183,6 +193,9 @@ def rank(catalog, profiles, session, watched=(), history_seeds=()):
             if anchors:
                 score+=2
                 reasons.append('מומלץ בקטלוג בעקבות %s שסימנת באהבתי' % anchors[0]['title'])
+            metadata_score,metadata_reasons=taste.affinity(item,p.get('feedback',{}))
+            score+=metadata_score
+            reasons.extend(metadata_reasons)
             scores.append(score)
             if pos and score>0:
                 reasons.append('קשר ז׳אנרי ל־%s שסימנת באהבתי — זו הערכה ראשונית' % pos[0]['title'])
@@ -193,28 +206,58 @@ def rank(catalog, profiles, session, watched=(), history_seeds=()):
             reasons.append('בהשראת כותרים מהיסטוריית הצפייה בבית')
         if session.get('anchor') in item.get('recommended_from',[]):
             score+=2;reasons.append('המלצת קטלוג בעקבות הכותר שבחרת לדייק ממנו הערב')
-        elif set(item['genres']) & set(session.get('anchor_genres',[])):
+        elif taste.genres(item['genres']) & taste.genres(session.get('anchor_genres',[])):
             score+=.5;reasons.append('קשר ז׳אנרי לכותר שבחרת לדייק ממנו הערב')
-        if set(item['genres']) & set(session.get('avoid_genres',[])):
+        if taste.genres(item['genres']) & taste.genres(session.get('avoid_genres',[])):
             score-=2
+        mood_score,mood_reasons=taste.refinement(item,session)
+        score+=mood_score;reasons.extend(mood_reasons)
         if not reasons:
             reasons.append('עדיין לומדים את הטעם; זו הצעה מהקטלוג, לא התאמה עמוקה')
         if cap<86400:
             reasons.append('משך הקטלוג מתאים לזמן שבחרת')
-        candidates.append(dict(item=item, score=score, reasons=list(dict.fromkeys(reasons))))
+        candidates.append(dict(item=item, score=score, reasons=list(dict.fromkeys(reasons)), saved=any(item['key'] in p.get('saved',[]) for p in profiles)))
     return sorted(candidates, key=lambda r:(-r['score'],r['item']['key']))
 
 
 def choose_three(ranked):
-    """Keep a stable first choice, diversify subsequent choices without breaking hard filters."""
+    """Three distinct lanes with honest fallback labels and all hard filters retained."""
+    if not ranked:return []
     remaining=list(ranked);selected=[]
-    while remaining and len(selected)<3:
-        def value(r):
-            a=set(r['item']['genres'])
-            overlap=max([len(a & set(s['item']['genres']))/max(1,len(a | set(s['item']['genres']))) for s in selected] or [0])
-            return r['score'] - .5*overlap
-        best=max(remaining,key=value);remaining.remove(best);selected.append(best)
-    return selected
+    def add(row,lane):
+        remaining.remove(row)
+        result=dict(row);result['lane']=lane
+        result['reasons']=[lane]+list(row['reasons'])
+        selected.append(result)
+    add(remaining[0],'קרוב לטעם שלך' if any('אהבת' in r or 'היסטוריית' in r for r in remaining[0]['reasons']) else 'בחירה מהקטלוג')
+    saved=next((r for r in remaining if r.get('saved')),None)
+    pool=[r for r in remaining if r is not saved]
+    if pool:
+        reference=selected[0]['item']
+        def discovery_value(r):
+            g=taste.genres(r['item']['genres']);base=taste.genres(reference['genres'])
+            overlap=len(g&base)/max(1,len(g|base))
+            return r['score']-1.0*overlap
+        pick=max(pool,key=discovery_value)
+        different=taste.genres(pick['item']['genres'])!=taste.genres(reference['genres']) or pick['item'].get('traits',{}).get('directors',[])!=reference.get('traits',{}).get('directors',[])
+        add(pick,'כיוון קצת אחר' if different else 'עוד התאמה אפשרית')
+    if saved:add(saved,'מהשמורים שלך')
+    elif remaining:add(remaining[0],'עוד אפשרות לערב')
+    return selected[:3]
+
+
+def quick_pair(state,viewer,history_seeds=()):
+    """Optional two-title feedback; only known viewing evidence, never forced ratings."""
+    profile=state['profiles'][viewer]
+    known=set(profile.get('seen',[]))
+    if viewer=='household':known.update(history_seeds)
+    chosen=[];seen=set()
+    for item in state['catalog']:
+        key=item['key']
+        if key in seen or key not in known or key in profile.get('feedback',{}):continue
+        seen.add(key);chosen.append(item)
+        if len(chosen)==2:break
+    return chosen
 
 
 def checkpoint(state):
