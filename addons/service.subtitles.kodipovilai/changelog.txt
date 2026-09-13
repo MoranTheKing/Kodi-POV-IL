@@ -1,3 +1,11 @@
+0.2.529
+- Preserve subtitle negation, numbers, quoted text and markup during cleanup and gender repair.
+- Prefer explicit source facts over conflicting Hebrew reference gender.
+- Add integrated evening discovery with per-viewer preferences and active-provider routing.
+- Make trailers easier to reach, confirm personal markings and quietly cancel catalog loading.
+- Supply complete season artwork metadata when opening Umbrella series.
+- Avoid destructive process probing on Windows.
+
 0.2.528
 - SubSync HTTP probing validates returned byte ranges and resumes interrupted
   reads from the missing position using smaller ranges. Probe byte/time
