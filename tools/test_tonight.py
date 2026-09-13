@@ -1,9 +1,11 @@
 """Integrated evening prototype: real pure modules, SQLite, persistence and action boundary."""
 import copy,hashlib,importlib.util,json,os,sqlite3,sys,tempfile,unittest
+from unittest.mock import patch
+from urllib.parse import urlparse,parse_qs
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'addons/service.subtitles.kodipovilai'))
-from resources.lib.tonight import engine,history,storage,entrypoints,catalog,ui
+from resources.lib.tonight import engine,history,storage,entrypoints,catalog,ui,providers
 
 
 def item(n=1,genres=('Mystery',),runtime=5400):
@@ -11,6 +13,93 @@ def item(n=1,genres=('Mystery',),runtime=5400):
 
 
 class Tonight(unittest.TestCase):
+    def test_refinement_refreshes_shared_action_path(self):
+        state=engine.initial_state()
+        changed=engine.refine(state,item(),'similar')
+        with patch.object(ui,'_actions',return_value=(changed,False)), patch.object(ui,'_refresh',return_value=changed) as refresh, patch.object(providers,'current',return_value='umbrella'):
+            result,playing=ui._act_and_refresh(None,None,None,item(),[],state,'folder')
+            refresh.assert_called_once_with(changed,None,None,'folder','umbrella',None)
+            self.assertFalse(playing)
+
+    def test_provider_catalog_routes_are_distinct(self):
+        for p,mode in [('pov','mode'),('umbrella','action')]:
+            for kind in ('movie','tvshow'):
+                url=providers.catalog_route(p,kind)
+                self.assertEqual(urlparse(url).netloc,'plugin.video.'+p)
+                self.assertIn(mode,parse_qs(urlparse(url).query))
+
+    def test_umbrella_anchor_key_stays_internal(self):
+        url=providers.catalog_route('umbrella','movie',item(7))
+        inner=parse_qs(urlparse(url).query)['url'][0]
+        self.assertEqual(inner,'https://api.themoviedb.org/3/movie/7/recommendations?api_key=%s&language=en-US&page=1')
+
+    def test_same_movie_identity_survives_provider_change(self):
+        a=item(9)
+        b=engine.normalize(dict(file='plugin://plugin.video.umbrella/?action=play_Item&tmdb=9&imdb=tt1234567&title=Original',title='Translated',playcount=1))
+        self.assertEqual(a['key'],b['key']);self.assertEqual(b['provider'],'umbrella');self.assertTrue(b['watched'])
+        self.assertEqual(b['originaltitle'],'Original')
+
+    def test_umbrella_episode_not_mistaken_for_movie(self):
+        self.assertIsNone(engine.normalize(dict(file='plugin://plugin.video.umbrella/?action=play_Item&tmdb=9&season=1&episode=2',title='Episode')))
+
+    def test_umbrella_playback_reconstructed_with_metadata(self):
+        x=item();x.update(originaltitle='A, "title" & more',imdb='tt1234567',year=2020)
+        parsed=parse_qs(urlparse(providers.playback_route('umbrella',x)).query)
+        self.assertEqual(parsed['action'],['play_Item']);self.assertEqual(parsed['title'],[x['originaltitle']])
+        self.assertEqual(json.loads(parsed['meta'][0])['tmdb'],'1')
+        self.assertNotIn('mode',parsed)
+        self.assertEqual((50/100)*json.loads(parsed['meta'][0])['duration'],45)
+
+    def test_umbrella_seasons_and_trailer_native_types(self):
+        x=item();x.update(kind='tvshow',key='tvshow:1',tvdb='99')
+        parsed=parse_qs(urlparse(providers.playback_route('umbrella',x)).query)
+        self.assertEqual(parsed['action'],['seasons']);self.assertEqual(parsed['tvdb'],['99'])
+        self.assertEqual(parse_qs(urlparse(providers.trailer_route('umbrella',x)).query)['type'],['show'])
+
+    def test_provider_rechecked_at_play_click(self):
+        class D:
+            def select(self,*a):return 0
+        class X:
+            def __init__(self):self.calls=[]
+            def executebuiltin(self,v):self.calls.append(v)
+        x=X()
+        with patch.object(providers,'current',side_effect=['pov','umbrella']):ui._actions(D(),x,None,item(),[],engine.initial_state())
+        self.assertIn('plugin.video.umbrella',x.calls[0]);self.assertNotIn('play_media',x.calls[0])
+
+    def test_catalog_rejects_wrong_provider_rows(self):
+        def rpc(_):return json.dumps(dict(result=dict(files=[dict(file=engine.provider_route('movie',1),title='POV')])))
+        self.assertEqual(catalog.fetch(rpc,provider='umbrella'),[])
+
+    def test_umbrella_remote_history_never_uses_local_cache(self):
+        for value in ('1','2','3','5','6','99',''):
+            self.assertFalse(history.umbrella_local_selected({'indicators.alt':value}))
+        self.assertFalse(history.umbrella_local_selected({'indicators.alt':'4','dev.enable.custom':'true'}))
+        self.assertTrue(history.umbrella_local_selected({'indicators.alt':'4','dev.enable.custom':'false'}))
+
+    def test_umbrella_watched_readonly_and_overlay(self):
+        with tempfile.TemporaryDirectory() as t:
+            p=Path(t)/'watched.db';db=sqlite3.connect(p)
+            db.execute('CREATE TABLE watched (media_type TEXT,tmdb_id TEXT,overlay INTEGER)')
+            db.executemany('INSERT INTO watched VALUES (?,?,?)',[('movie','1',5),('movie','2',4),('episode','3',5)])
+            db.commit();db.close();before=p.read_bytes()
+            self.assertEqual(history.read_umbrella_local(p)['keys'],['movie:1']);self.assertEqual(p.read_bytes(),before)
+
+    def test_shorter_is_strict_and_temporary(self):
+        old=engine.initial_state();state=engine.refine(old,item(),'shorter')
+        rows=engine.rank([item(2,runtime=5399),item(3,runtime=5400)],[state['profiles']['household']],state['session'])
+        self.assertEqual([r['item']['key'] for r in rows],['movie:2'])
+        self.assertEqual(state['profiles'],old['profiles']);storage.validate(state)
+
+    def test_similar_tonight_does_not_invent_permanent_like(self):
+        state=engine.refine(engine.initial_state(),item(),'similar');x=item(2);x['recommended_from']=['movie:1']
+        ranked=engine.rank([x],[state['profiles']['household']],state['session'])
+        self.assertTrue(any('בחרת לדייק' in r for r in ranked[0]['reasons']))
+        self.assertFalse(state['profiles']['household']['feedback'])
+
+    def test_different_direction_is_session_only(self):
+        before=engine.initial_state();state=engine.refine(before,item(),'different')
+        self.assertEqual(state['profiles'],before['profiles'])
+        self.assertEqual(state['session']['avoid_genres'],item()['genres'])
     def test_ids_and_routes(self):
         for malicious in ('1,Quit()', '../2', '-1', '0', 'NaN', '1&mode=delete'):
             with self.assertRaises(ValueError):engine.provider_route('movie',malicious)

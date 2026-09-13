@@ -26,16 +26,22 @@ def normalize(row):
         url = urlparse(row.get('file', ''))
     except ValueError:
         return None
-    if url.scheme != 'plugin' or url.netloc != 'plugin.video.pov':
+    if url.scheme != 'plugin' or url.netloc not in ('plugin.video.pov','plugin.video.umbrella'):
         return None
     query = parse_qs(url.query)
     if any(len(v) != 1 for v in query.values()):
         return None
-    mode = query.get('mode', [''])[0]
-    kind = 'tvshow' if mode == 'build_season_list' else query.get('mediatype', [''])[0]
-    if mode not in ('play_media', 'extras_menu_choice', 'build_season_list'):
-        return None
-    tmdb = query.get('tmdb_id', [''])[0]
+    provider='umbrella' if url.netloc.endswith('.umbrella') else 'pov'
+    if provider=='pov':
+        mode = query.get('mode', [''])[0]
+        kind = 'tvshow' if mode == 'build_season_list' else query.get('mediatype', [''])[0]
+        if mode not in ('play_media', 'extras_menu_choice', 'build_season_list'):return None
+        tmdb=query.get('tmdb_id',[''])[0]
+    else:
+        action=query.get('action',[''])[0]
+        if action not in ('play_Item','seasons'):return None
+        kind='movie' if action=='play_Item' else 'tvshow';tmdb=query.get('tmdb',[''])[0]
+        if any(query.get(k,[''])[0] not in ('','None') for k in ('episode','season')):return None
     try:
         key = identity(kind, tmdb)
         runtime = int(row.get('runtime') or 0)
@@ -52,7 +58,16 @@ def normalize(row):
     art = row.get('art') or {}
     if not isinstance(art, dict):
         art = {}
-    return dict(key=key, kind=kind, tmdb=tmdb, title=title[:300], year=year,
+    unique=row.get('uniqueid',{})
+    if not isinstance(unique,dict):unique={}
+    imdb=query.get('imdb',[''])[0] or unique.get('imdb') or row.get('imdbnumber') or ''
+    tvdb=query.get('tvdb',[''])[0] or unique.get('tvdb') or ''
+    imdb=str(imdb);tvdb=str(tvdb)
+    original=query.get('title',query.get('tvshowtitle',['']))[0] or row.get('originaltitle') or title
+    if not isinstance(original,str):original=title
+    return dict(key=key, kind=kind, tmdb=tmdb, title=title[:300], year=year,provider=provider,
+                originaltitle=original[:300],imdb=imdb if re.fullmatch(r'tt[0-9]{5,12}',imdb) else '',tvdb=tvdb if re.fullmatch(r'[1-9][0-9]{0,11}',tvdb) else '',
+                watched=type(row.get('playcount')) is int and row['playcount']>0,
                 runtime=runtime if 0 < runtime < 24*3600 else None,
                 rating=max(0, min(10, rating)) if math.isfinite(rating) else 0,
                 genres=sorted(set(g.strip()[:80] for g in genres if isinstance(g, str) and g.strip()))[:100],
@@ -84,6 +99,21 @@ def feedback(state, viewer, item, action):
     return state
 
 
+def refine(state,item,choice):
+    state=copy.deepcopy(state);session=state['session']
+    session['excluded']=sorted(set(session.get('excluded',[]))|{item['key']})
+    if choice=='shorter':
+        if item['kind']!='movie' or not item['runtime']:raise ValueError('No verified duration')
+        session['max_runtime']=max(1,item['runtime']-1)
+    elif choice=='similar':
+        session['anchor']=item['key'];session['anchor_genres']=item['genres']
+        session.pop('avoid_genres',None)
+    elif choice=='different':
+        session['avoid_genres']=item['genres'];session.pop('anchor',None);session.pop('anchor_genres',None)
+    else:raise ValueError('Unknown refinement')
+    return state
+
+
 def rank(catalog, profiles, session, watched=()):
     """Hard exclusion then conservative genre inference; group score protects least satisfied viewer.
 
@@ -94,6 +124,7 @@ def rank(catalog, profiles, session, watched=()):
         excluded.update(p.get('seen', []))
         excluded.update(k for k,v in p.get('feedback',{}).items() if v['value']<0)
     minutes = session.get('minutes', 0)
+    cap=min(minutes*60 if minutes else 86400,session.get('max_runtime',86400))
     candidates = []
     used = set()
     for item in catalog:
@@ -101,7 +132,7 @@ def rank(catalog, profiles, session, watched=()):
             continue
         used.add(item['key'])
         # A TV series duration does not establish the next episode length.
-        if minutes and (item['kind'] != 'movie' or not item['runtime'] or item['runtime'] > minutes*60):
+        if cap<86400 and (item['kind'] != 'movie' or not item['runtime'] or item['runtime'] > cap):
             continue
         scores, reasons = [], []
         for p in profiles:
@@ -121,9 +152,15 @@ def rank(catalog, profiles, session, watched=()):
                 reasons.append('קשר ז׳אנרי ל־%s שסימנת באהבתי — זו הערכה ראשונית' % pos[0]['title'])
         # No popular rating can override explicit dislike or watch/time exclusions.
         score = 2*min(scores or [0]) + sum(scores)/max(1,len(scores)) + item['rating']/10
+        if session.get('anchor') in item.get('recommended_from',[]):
+            score+=2;reasons.append('המלצת קטלוג בעקבות הכותר שבחרת לדייק ממנו הערב')
+        elif set(item['genres']) & set(session.get('anchor_genres',[])):
+            score+=.5;reasons.append('קשר ז׳אנרי לכותר שבחרת לדייק ממנו הערב')
+        if set(item['genres']) & set(session.get('avoid_genres',[])):
+            score-=2
         if not reasons:
             reasons.append('עדיין לומדים את הטעם; זו הצעה מהקטלוג, לא התאמה עמוקה')
-        if minutes:
+        if cap<86400:
             reasons.append('משך הקטלוג מתאים לזמן שבחרת')
         candidates.append(dict(item=item, score=score, reasons=list(dict.fromkeys(reasons))))
     return sorted(candidates, key=lambda r:(-r['score'],r['item']['key']))
