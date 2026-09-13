@@ -143,6 +143,21 @@ class HubTests(unittest.TestCase):
         self.assertGreater(scores[series['key']],scores[movie['key']])
         self.assertLess(scores[series['key']]-scores[movie['key']],.3)
 
+    def test_nullable_or_malformed_history_strength_never_blocks_the_hub(self):
+        profile=engine.initial_state()['profiles']['household'];seed=media(90)
+        candidate=media(1);candidate['recommended_from']=[seed['key']]
+        baseline=engine.rank([seed,candidate],[profile],dict(minutes=0),
+            watched=[seed['key']],history_seeds=[seed['key']],
+            history_strengths={seed['key']:1})
+        for malformed in (None,'8',True,0,-4,float('nan'),[],{}):
+            with self.subTest(value=malformed):
+                ranked=engine.rank([seed,candidate],[profile],dict(minutes=0),
+                    watched=[seed['key']],history_seeds=[seed['key']],
+                    history_strengths={seed['key']:malformed})
+                self.assertEqual([(x['item']['key'],x['score']) for x in ranked],
+                                 [(x['item']['key'],x['score']) for x in baseline])
+                self.assertTrue(engine.choose_shelf(ranked,9))
+
     def test_personal_routes_are_active_provider_allowlists(self):
         self.assertIn('action=mdblist_watchlist',providers.personal_route('pov','movie','mdblist'))
         self.assertIn('action=mdbUserWatchListTVShows',providers.personal_route('umbrella','tvshow','mdblist'))
@@ -216,6 +231,16 @@ class HubTests(unittest.TestCase):
             personal=['mdblist:movie','mdblist:tvshow'],sources=['mdblist'])}
         self.assertFalse(ui._personal_refresh_needed(state,'pov',['mdblist']))
         self.assertTrue(ui._personal_refresh_needed(state,'pov',['mdblist','trakt']))
+
+    def test_nullable_legacy_catalog_timestamp_requests_refresh_without_crashing(self):
+        state=engine.initial_state()
+        for malformed in (None,'old',True,float('nan'),float('inf'),[],{}):
+            with self.subTest(value=malformed):
+                state['catalog_fetched']=malformed
+                self.assertTrue(ui._catalog_is_stale(state,True,now=100000))
+        state['catalog_fetched']=100000
+        self.assertFalse(ui._catalog_is_stale(state,True,now=100000))
+        self.assertFalse(ui._catalog_is_stale(state,False,now=100000))
 
     def test_undo_restore_is_not_recorded_as_a_new_action(self):
         state=engine.initial_state();changed=engine.feedback(state,'household',media(),'like')
