@@ -63,7 +63,15 @@ def playback_route(provider,item):
             meta=dict(title=title,originaltitle=title,year=item['year'],imdb=imdb,tmdb=item['tmdb'],mediatype='movie',duration=(item.get('runtime') or 0)//60)
             params.update(action='play_Item',title=title,meta=json.dumps(meta,ensure_ascii=False))
         else:
-            params.update(action='seasons',tvshowtitle=title,tvdb=tvdb,art=json.dumps(item.get('art',{}),ensure_ascii=False))
+            # Umbrella Seasons.tmdb_list indexes these keys whenever art is
+            # truthy; passing only Kodi's poster/fanart/thumb drops every season.
+            supplied=item.get('art') or {}
+            poster=supplied.get('poster','')
+            art=dict(poster=poster,fanart=supplied.get('fanart',''),
+                     thumb=supplied.get('thumb') or poster,icon=poster,
+                     banner='',clearlogo='',clearart='')
+            art['tvshow.poster']=poster
+            params.update(action='seasons',tvshowtitle=title,tvdb=tvdb,art=json.dumps(art,ensure_ascii=False))
     else:raise ValueError('Unknown provider')
     return 'plugin://plugin.video.'+provider+'/?'+urlencode(params)
 
