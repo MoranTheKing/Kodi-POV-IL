@@ -75,7 +75,10 @@ def playback_route(provider,item):
         if tvdb and not re.fullmatch(r'[1-9][0-9]{0,11}',tvdb):raise ValueError('Invalid TVDB ID')
         params=dict(year=item['year'],imdb=imdb,tmdb=item['tmdb'])
         if item['kind']=='movie':
-            meta=dict(title=title,originaltitle=title,year=item['year'],imdb=imdb,tmdb=item['tmdb'],mediatype='movie',duration=(item.get('runtime') or 0)//60)
+            # Kodi and Umbrella both store duration in seconds. Passing
+            # minutes here made Umbrella's optional size-by-duration filter
+            # treat a 90-minute film as 90 seconds and discard valid sources.
+            meta=dict(title=title,originaltitle=title,year=item['year'],imdb=imdb,tmdb=item['tmdb'],mediatype='movie',duration=item.get('runtime') or 0)
             params.update(action='play_Item',title=title,meta=json.dumps(meta,ensure_ascii=False))
         else:
             # Umbrella Seasons.tmdb_list indexes these keys whenever art is
