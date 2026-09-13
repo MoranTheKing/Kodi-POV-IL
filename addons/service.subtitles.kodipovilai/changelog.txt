@@ -1,3 +1,6 @@
+0.2.538
+- Read original subtitle text for AI reference analysis instead of the player-rendered RTL copy.
+
 0.2.537
 - Fix Tonight launch when a recommendation combines liked and unrated viewing-history origins.
 
