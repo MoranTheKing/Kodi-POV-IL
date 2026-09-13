@@ -7747,3 +7747,14 @@ change", and those are only usually the same.
 - Iterate on real Kodi logs; SubSync's `verdict for ...` diag line is the
   primary tuning signal.
 - Communicate with the maintainer in Hebrew; keep docs in English.
+# Release candidate 0.2.529 / quickfix 0.1.574 / build 0.1.142
+
+The build edition integrates `action=tonight`; standalone excludes its modules and dispatch. Preferences and saved titles are local and viewer-specific. Catalog, recommendations, trailers and playback follow the home POV/Umbrella setting. Ordinary OK opens explicit actions; no long press is required. This is an experimental recommendation feature based on explicit likes, provider recommendations, genre, time and diversity, not deep semantic taste understanding.
+
+Live isolated Kodi 21.3 validation covered menu/action rendering in Estuary, FENtastic, NOX and Arctic Fuse 3; ordinary selection and Back; the favourites entry; real popular catalogs from POV6.09.03 and Umbrella6.7.87; preservation of saved identity across provider change. A live Umbrella series test found incomplete artwork caused an empty season list. The route now supplies the native consumer's required artwork keys; the same known series returns five seasons after the fix, matching POV. This does not claim source availability or successful full playback on every device.
+
+UX refinements put trailers third, acknowledge personal markings without another modal, return quietly on intentional catalog cancellation, show active time/type choices, and hide profile creation at the eight-profile limit. 59 feature tests pass. The wider 69-file suite passed before these bounded UI/provider refinements; relevant tests and final package verification are rerun afterwards.
+
+Translation changes protect negation, numbers, quoted literals and markup; repair requests carry source/reference/adjacent cues and permit KEEP; explicit source facts take priority over contradictory Hebrew reference gender. Narrow Arabic noun exclusions and Hebrew feminine-address recognition reduce specific detector mistakes. Live samples support bounded benefits, not universal improvement. Source lookahead, unconditional second-pass judging, broad ES/PT evidence readers and full speaker memory remain experiments and are not enabled.
+
+A Windows PID probe no longer sends os.kill(pid,0), which can terminate a process on Windows. Runtime QA uses a portable profile and does not touch the user's normal Kodi profile. Publication status must be checked against remote manifests and public note; local packaging alone is not publication.

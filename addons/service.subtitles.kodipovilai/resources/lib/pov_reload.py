@@ -341,6 +341,11 @@ def _pid_alive(pid):
         return False
     try:
         import os
+        # Windows implements non-console signals with TerminateProcess;
+        # signal 0 is NOT a harmless existence probe there. Unknown means
+        # alive: the sweep still expires sufficiently old abandoned files.
+        if os.name == 'nt':
+            return True
         os.kill(pid, 0)
         return True
     except ProcessLookupError:

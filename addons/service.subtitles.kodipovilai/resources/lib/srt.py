@@ -1574,8 +1574,53 @@ def _transliterate_glued_run(run, before, after, ate_space):
         return None
 
 
+# Markup and explicitly quoted literals are data, not alphabet-slip evidence.
+_PROTECTED_RE = re.compile(
+    r"<!--.*?-->|</?[A-Za-z][A-Za-z0-9:_-]*(?:[^<>\"']|\"[^\"]*\"|'[^']*')*>"
+    r'|"[^"\n]*"|“[^”\n]*”|«[^»\n]*»', re.DOTALL)
+
+
+def _map_unprotected(text, transform):
+    """Keep protected bytes and node-boundary whitespace exactly as supplied."""
+    out=[];start=0
+    for match in _PROTECTED_RE.finditer(text):
+        part=text[start:match.start()]
+        if part.strip():
+            left=part[:len(part)-len(part.lstrip())]
+            right=part[len(part.rstrip()):]
+            out.append(left+transform(part.strip())+right)
+        else:out.append(part)
+        out.append(match.group(0));start=match.end()
+    part=text[start:]
+    if part.strip():
+        left=part[:len(part)-len(part.lstrip())];right=part[len(part.rstrip()):]
+        out.append(left+transform(part.strip())+right)
+    else:out.append(part)
+    return ''.join(out)
+
+
+def _self_contained_markup(text):
+    """Removing a prefix may not strand an opening/closing tag elsewhere."""
+    from html.parser import HTMLParser
+    class Balance(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=False);self.stack=[];self.valid=True
+        def handle_starttag(self,tag,attrs):
+            if tag not in ('br','hr','wbr','img','meta','link','input'):self.stack.append(tag)
+        def handle_startendtag(self,tag,attrs):pass
+        def handle_endtag(self,tag):
+            if not self.stack or self.stack[-1]!=tag:self.valid=False
+            else:self.stack.pop()
+    parser=Balance()
+    try:parser.feed(text);parser.close()
+    except Exception:return False
+    return parser.valid and not parser.stack
+
+
 def _clean_arabic_from_line(body):
-    """Arabic runs removed from one text line, tidied."""
+    """Repair visible unquoted text; preserve markup and quoted literals."""
+    if _PROTECTED_RE.search(body):
+        return _map_unprotected(body, _clean_arabic_from_line)
     # Replace a run with a SPACE when it stood between words, but with NOTHING
     # when it sat INSIDE one. A field report showed a single Arabic letter glued
     # into the middle of a Hebrew word ("להא<lam>ל"); substituting a space there
@@ -1658,6 +1703,8 @@ def fold_foreign_in_hebrew_word(text):
     """
     if not text:
         return text
+    if _PROTECTED_RE.search(text):
+        return _map_unprotected(text, fold_foreign_in_hebrew_word)
     try:
         if not _FOREIGN_RUN_RE.search(text):
             return text
@@ -1767,11 +1814,16 @@ def strip_leaked_arabic(text):
     shared a cue with a contaminated line, and it was reverted for this reason.
     That residual is accepted, and it is the ONLY case this does not cover.
 
+    Markup (including multiline attributes) and paired double-quoted literals
+    are preserved byte-for-byte. This can deliberately leave a real defect
+    inside a quotation rather than risk deleting intended content.
     Index and timecode lines have no Hebrew, so they can never match. Never
     raises into the caller.
     """
     if not text:
         return text
+    if _PROTECTED_RE.search(text):
+        return _map_unprotected(text, strip_leaked_arabic)
     try:
         if not _HAS_ARABIC_RE.search(text):
             return text            # overwhelmingly the common case: no-op
@@ -1953,7 +2005,8 @@ def strip_source_echo(text):
       * a leading line that is legitimately not Hebrew and not a duplicate --
         a brand name ('STARBUCKS'), an on-screen clock ('12:00 PM'), a chyron.
 
-    In those the leading line is deleted and only the Hebrew is kept. The bet
+    Numeric values absent from the Hebrew and quoted literals now veto deletion.
+    Unquoted nonnumeric names can still be indistinguishable from an echo. The bet
     is that inside OUR OWN model's output -- which is all this ever sees, via
     the ai_output gate -- a non-Hebrew line sitting directly above a Hebrew one
     is overwhelmingly the echo defect rather than any of the above. Cues with
@@ -2007,6 +2060,15 @@ def strip_source_echo(text):
             # a candidate; only the empty ones veto the cue.
             lead = body[:first_heb]
             if lead and all(_MARKUP_RE.sub('', l).strip() for l in lead):
+                removed='\n'.join(lead);kept='\n'.join(body[first_heb:])
+                if not _self_contained_markup(removed):return cue, False
+                # A clock, amount or identifier is content, even above Hebrew.
+                from collections import Counter
+                numbers=lambda value:Counter(re.findall(r'\d+(?:[.,:/-]\d+)*',value))
+                if numbers(removed)-numbers(kept):return cue, False
+                # Quoted foreign text may be a literal/password, not an echo.
+                if any(m.group(0)[:1] in ('"','“','«') for m in _PROTECTED_RE.finditer(removed)):
+                    return cue, False
                 return cue[:head] + body[first_heb:], True
             return cue, False
 

@@ -813,6 +813,13 @@ def slim_default_text(text: str) -> str:
     search/download and AI settings actions, but it must not expose build
     shortcuts such as POV service thresholds or TorBox home-tile status.
     """
+    text = text.replace(
+        "        if action == 'tonight':\n"
+        "            from resources.lib.tonight.ui import run\n"
+        "            run()\n"
+        "        elif action == 'search':",
+        "        if action == 'search':",
+    )
     text = re.sub(
         r"\ndef _handle_open_pov_settings\(_params\):.*?(?=\ndef main\(\):)",
         "\n",
