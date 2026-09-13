@@ -16,7 +16,7 @@ class Discovery(unittest.TestCase):
     def test_initial_popular_then_rotated_anchors_and_no_input_mutation(self):
         state=self.state();seeds=['tvshow:'+str(i) for i in range(10,16)]
         p=discovery.plan(state,seeds,'pov')
-        self.assertEqual(len(p['anchors']),8);self.assertEqual(len(p['queries']),4)
+        self.assertEqual(len(p['anchors']),10);self.assertEqual(len(p['queries']),4)
         self.assertEqual([q['kind'] for q in p['queries'][2:]],['movie','tvshow'])
         self.assertNotIn('discovery',state)
         state['discovery']={'pov':discovery.advance(p,[0,1,2,3])}
@@ -24,6 +24,18 @@ class Discovery(unittest.TestCase):
         self.assertTrue(all(x['anchor'] for x in q['queries']))
         self.assertNotEqual(p['queries'][0]['anchor'],q['queries'][0]['anchor'])
         self.assertTrue(discovery.plan(state,seeds,'umbrella')['initial'])
+    def test_large_history_rotates_far_beyond_one_explicit_like(self):
+        state=engine.initial_state()
+        state['profiles']['household']['feedback']['movie:900']={'value':1}
+        seeds=['movie:'+str(i) for i in range(1,43)]
+        planned=discovery.plan(state,seeds,'pov')
+        self.assertEqual(len(planned['anchors']),43)
+        self.assertEqual(planned['anchors'][0],'movie:900')
+        self.assertEqual(set(seeds).issubset(set(planned['anchors'])),True)
+        state['discovery']={'pov':discovery.advance(planned,range(len(planned['queries'])))}
+        following=discovery.plan(state,seeds,'pov')
+        self.assertNotEqual(planned['queries'][0].get('anchor'),following['queries'][0].get('anchor'))
+        self.assertEqual(following['version'],2)
     def test_dislikes_and_private_profiles_exclude_household_history(self):
         state=self.state();state['profiles']['household']['feedback']['tvshow:10']={'value':-1}
         p=discovery.plan(state,['tvshow:10','tvshow:11'],'pov');self.assertNotIn('tvshow:10',p['anchors'])

@@ -13,16 +13,16 @@ def show(xbmc, xbmcgui, addon_path, picks, state, provider, watched, selected_in
                                 for source in watched.get('personal_sources',[]))
             count=len(watched.get('seed_keys',watched.get('keys',[])))
             if count and personal:
-                summary='מבוסס על %s צפיות ועל הרשימות שלך ב־%s' % (count,personal)
+                summary='לומד אוטומטית מ־%s צפיות ומהרשימות שלך ב־%s' % (count,personal)
             elif count:
-                summary='מבוסס על %s צפיות ב־%s' % (count,sources or 'היסטוריית הבית')
+                summary='לומד אוטומטית מ־%s צפיות ב־%s' % (count,sources or 'היסטוריית הבית')
             elif personal:
-                summary='משלב את הרשימות שלך ב־'+personal
+                summary='לומד אוטומטית מהרשימות שלך ב־'+personal
             else:
                 summary='אפשר להתחיל מיד ולדייק תוך כדי'
             self.setProperty('tonight.history',summary)
-            self.setProperty('tonight.hint','← → לבחירה  •  OK לצפייה  •  ↓ לפעולות')
-            self.setProperty('tonight.empty','אין כרגע שלוש הצעות. בחרו רענון או מצב ערב אחר.')
+            self.setProperty('tonight.hint','← → עוד  •  OK לצפייה  •  ↓ פעולות')
+            self.setProperty('tonight.empty','אין כרגע הצעות למצב הזה. בחרו רענון או מצב ערב אחר.')
             profile=state['profiles']['household']
             saved=set(profile.get('saved',[]));feedback=profile.get('feedback',{})
             rows=[]
@@ -34,8 +34,8 @@ def show(xbmc, xbmcgui, addon_path, picks, state, provider, watched, selected_in
                 li.setProperty('reason',display['reason'])
                 li.setProperty('meta',display['meta'])
                 li.setProperty('plot',item.get('plot') or 'אין תקציר זמין כרגע.')
-                li.setProperty('save_label','✓ נשמר' if item['key'] in saved or item.get('personal_source') or item.get('personal_sources') else 'שמור')
-                li.setProperty('like_label','✓ אהבתי' if feedback.get(item['key'],{}).get('value')==1 else 'אהבתי')
+                li.setProperty('save_label','נשמר ברשימה' if item['key'] in saved or item.get('personal_source') or item.get('personal_sources') else 'שמור')
+                li.setProperty('like_label','מסומן כאהוב' if feedback.get(item['key'],{}).get('value')==1 else 'אהבתי')
                 rows.append(li)
             self.getControl(100).addItems(rows)
             modes=self.getControl(110);modes.addItems(experience.mode_rows(xbmcgui,state['session']))

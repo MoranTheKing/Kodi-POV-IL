@@ -10,6 +10,17 @@ def _anchor(key):
         return None
 
 
+def seed_signature(keys, limit=16):
+    """Small stable fingerprint of the most recent valid household evidence."""
+    result=[];used=set()
+    for key in keys:
+        anchor=_anchor(key)
+        if anchor and anchor['key'] not in used:
+            result.append(anchor['key']);used.add(anchor['key'])
+        if len(result)>=limit:break
+    return result
+
+
 def _diverse(keys):
     groups = {'movie': [], 'tvshow': []}
     for key in dict.fromkeys(keys):
@@ -21,6 +32,19 @@ def _diverse(keys):
         for kind in ('movie', 'tvshow'):
             if groups[kind]:
                 result.append(groups[kind].pop(0))
+    return result
+
+
+def _interleave(groups, limit=64):
+    """Round-robin independent evidence so no one source owns discovery."""
+    groups=[list(group) for group in groups];result=[];used=set()
+    while len(result)<limit and any(groups):
+        progressed=False
+        for group in groups:
+            while group and group[0]['key'] in used:group.pop(0)
+            if group and len(result)<limit:
+                anchor=group.pop(0);result.append(anchor);used.add(anchor['key']);progressed=True
+        if not progressed:break
     return result
 
 
@@ -41,11 +65,14 @@ def plan(state, seed_keys, provider, preferred=None, personal_sources=(), refres
         likes.sort(key=lambda a: a['key'] != preferred)
     history = _diverse([k for k in seed_keys if k not in disliked and k not in liked]
                        if 'household' in state['viewers'] else [])
-    # Preserve explicit preferences while reserving breadth for viewing history.
-    anchors = likes[:4] + history[:4]
-    used = {a['key'] for a in anchors}
-    anchors += [a for a in likes[4:] + history[4:] if a['key'] not in used][:8-len(anchors)]
-    anchors = anchors[:8]
+    personal_keys=[item.get('key') for item in state.get('catalog',[])
+                   if item.get('provider','pov')==provider and
+                   (item.get('personal_source') or item.get('personal_sources')) and
+                   item.get('key') not in disliked]
+    personal_anchors=_diverse(personal_keys)
+    # A like remains useful, but history and connected lists receive equal turns.
+    # The wider pool rotates over visits instead of getting stuck on four views.
+    anchors=_interleave((likes,history,personal_anchors),64)
     sources=[x for x in dict.fromkeys(personal_sources) if x in ('mdblist','trakt')]
     old = state.get('discovery', {}).get(provider, {})
     signature = [a['key'] for a in anchors]
@@ -84,7 +111,8 @@ def plan(state, seed_keys, provider, preferred=None, personal_sources=(), refres
     return dict(provider=provider, queries=queries[:4], anchors=signature,
                 cursor=cursor, popular=popular, personal=personal_done,
                 sources=sources,personal_cursor=personal_cursor,
-                refresh_source=refresh_source,
+                refresh_source=refresh_source,version=2,
+                seed_head=seed_signature(seed_keys),
                 initial=bool(missing or personal_missing))
 
 
@@ -106,4 +134,5 @@ def advance(planned, completed_indices):
     if planned.get('refresh_source') and sources:
         personal_cursor=(personal_cursor+1)%len(sources)
     return dict(anchors=list(planned['anchors']), cursor=cursor, popular=popular,
-                personal=personal,sources=sources,personal_cursor=personal_cursor)
+                personal=personal,sources=sources,personal_cursor=personal_cursor,
+                version=planned.get('version',2),seed_head=list(planned.get('seed_head',[])))

@@ -115,14 +115,16 @@ def _history(xbmcaddon,xbmcvfs,provider='pov'):
             if enabled and cache_name not in names:names.append(cache_name)
         snapshots=[(name,selected)]
         snapshots += [(n,history.read_watched(os.path.join(base,n))) for n in names if n!=name]
-        seeds=[];seen_seeds=set();sources=[]
+        seeds=[];seen_seeds=set();sources=[];strengths={}
         labels={'watched.db':'POV','mdblcache.db':'MDBList','traktcache.db':'Trakt'}
         for n,snapshot in snapshots:
             evidence=snapshot.get('seed_keys',snapshot.get('keys',[]))
             if evidence:sources.append(labels.get(n,'POV'))
             for key in evidence:
                 if key not in seen_seeds:seeds.append(key);seen_seeds.add(key)
+                strengths[key]=max(strengths.get(key,0),snapshot.get('seed_strengths',{}).get(key,1))
         selected['seed_keys']=seeds
+        selected['seed_strengths']=strengths
         selected['signal_sources']=sources
         selected['personal_sources']=[source for source,enabled in
                                       (('mdblist',config.get('mdblist_user')),
@@ -320,11 +322,12 @@ def _legacy_run():
             # Imported shared cache is not assigned to a named person's history.
             seen=(watched['keys']+[x['key'] for x in current_catalog if x.get('watched')]) if 'household' in state['viewers'] else []
             seeds=watched.get('seed_keys',watched['keys']) if 'household' in state['viewers'] else []
-            picks=engine.choose_three(engine.rank(current_catalog,profiles,state['session'],seen,seeds))
+            picks=engine.choose_three(engine.rank(current_catalog,profiles,state['session'],seen,seeds,
+                                                   watched.get('seed_strengths',{})))
             names=' + '.join(p['name'] for p in profiles)
             rows=[_item(xbmcgui,r['item'],' · '.join(r['reasons'][:2])) for r in picks]
             options=['רענן הצעות לפי הצפייה והטעם מ־'+providers.NAMES[provider], 'מי צופה: '+names, 'מה מתאים לערב — '+_session_summary(state['session']), 'היכרות — מה אהבתם?', 'השמורים שלי', 'עוד אפשרויות']
-            rows += [xbmcgui.ListItem(label=s,label2=(('%s כותרים מהיסטוריית %s; סמנו אהבתי כדי לדייק' % (len(seeds),' / '.join(watched.get('signal_sources',[])) or 'הבית')) if seeds else ('היסטוריית הבית לא משויכת לפרופיל אישי' if 'household' not in state['viewers'] else 'שלוש הצעות להתחלה; לא זוהתה היסטוריה זמינה — סמנו אהובים כדי לדייק')) if i==0 else '') for i,s in enumerate(options)]
+            rows += [xbmcgui.ListItem(label=s,label2=(('%s כותרים מהיסטוריית %s; ההתאמה אוטומטית ו„אהבתי” אופציונלי' % (len(seeds),' / '.join(watched.get('signal_sources',[])) or 'הבית')) if seeds else ('היסטוריית הבית לא משויכת לפרופיל אישי' if 'household' not in state['viewers'] else 'שלוש הצעות להתחלה; „אהבתי” הוא קיצור דרך אופציונלי לדיוק')) if i==0 else '') for i,s in enumerate(options)]
             heading=TITLE
             if not picks:
                 heading+=' — '+('צריך לטעון הצעות' if not current_catalog else 'אין התאמה לבחירות הנוכחיות')
@@ -469,13 +472,19 @@ def _rich_run(xbmc,xbmcaddon,xbmcgui,xbmcvfs):
             current_catalog=[x for x in state['catalog'] if x.get('provider','pov')==provider]
             seen=watched.get('keys',[])+[x['key'] for x in current_catalog if x.get('watched')]
             seeds=watched.get('seed_keys',watched.get('keys',[]))
-            ranked=engine.rank(current_catalog,profiles,state['session'],seen,seeds)
-            picks=engine.choose_three(ranked)
+            ranked=engine.rank(current_catalog,profiles,state['session'],seen,seeds,
+                               watched.get('seed_strengths',{}))
+            picks=engine.choose_shelf(ranked,9)
             needs_personal=_personal_refresh_needed(
                 state,provider,watched.get('personal_sources',[]))
-            if provider not in autoloaded and (not current_catalog or len(picks)<3 or needs_personal):
+            learned=state.get('discovery',{}).get(provider,{})
+            needs_learning=bool(seeds) and (learned.get('version',0)<2 or
+                learned.get('seed_head',[])!=discovery.seed_signature(seeds))
+            stale=bool(seeds or watched.get('personal_sources',[])) and time.time()-state.get('catalog_fetched',0)>12*3600
+            if provider not in autoloaded and (not current_catalog or len(picks)<6 or needs_personal or needs_learning or stale):
                 autoloaded.add(provider)
-                state=_refresh(state,xbmc,xbmcgui,folder,provider,dialog)
+                state=_refresh(state,xbmc,xbmcgui,folder,provider,dialog,
+                               personal_refresh=stale and bool(watched.get('personal_sources',[])))
                 watched=_history(xbmcaddon,xbmcvfs,provider);storage.save(state_path,state)
                 continue
             try:
@@ -513,6 +522,7 @@ def _rich_run(xbmc,xbmcaddon,xbmcgui,xbmcvfs):
                                preferred=selected['key'])
             elif event=='mode':
                 state=experience.apply_mode(state,value)
+                focus_index=0
             elif event=='refresh':
                 state=_refresh(state,xbmc,xbmcgui,folder,provider,dialog,
                                personal_refresh=True)
@@ -581,7 +591,7 @@ def _rich_more(dialog,xbmc,xbmcgui,folder,state,item,seeds,undo):
         state=dict(state);state['session']=dict(minutes=0,excluded=[],started=time.time())
         return state,False,True
     if choice==6:
-        dialog.textviewer(TITLE,'בכניסה אחת מקבלים שלוש הצעות ברורות: בחירה בטוחה, כיוון חדש והצעה מהרשימות שלך כשהיא זמינה.\n\nהפיצ׳ר משתמש בהיסטוריית הצפייה המקומית ובקטלוג של POV או Umbrella, ומשלב רק מידע שקיים בפועל: כותרים שאהבת, ז׳אנרים, יוצרים ורשימות צפייה מחוברות.\n\nלחיצה על מצב ערב למעלה משנה מיד את שלוש ההצעות. OK על פוסטר מתחיל צפייה; למטה נמצאות הפעולות הנוספות. המידע נשמר מקומית ולא נשלח למודל AI.')
+        dialog.textviewer(TITLE,'בכניסה אחת מתקבל מדף קצר ומדורג: הבחירות החזקות ראשונות, ואחריהן כיוונים נוספים שאפשר לעבור ביניהם בחצים.\n\nההתאמה נבנית אוטומטית מהיסטוריית הצפייה, מהרשימות המחוברות ומהמלצות הקטלוג של POV או Umbrella. דפוס מקבל משקל רק כשהוא חוזר בכמה כותרים, ולכן צפייה אחת או לחיצה אחת על „אהבתי” אינן אמורות להשתלט על המדף. „אהבתי” הוא קיצור דרך אופציונלי לדיוק נוסף.\n\nמצבי הערב למעלה מסדרים את המדף מחדש לפי סוג, זמן או אווירה. OK על פוסטר מתחיל צפייה; למטה נמצאות הפעולות הנוספות. המידע נשמר מקומית ולא נשלח למודל AI.')
     elif choice==7 and item is not None:
         display=experience.card(dict(item=item,lane='',reasons=[]),state['catalog'],seeds)
         dialog.textviewer(item['title'],display['reason']+'\n\n'+(item.get('plot') or 'אין תקציר זמין כרגע.'))

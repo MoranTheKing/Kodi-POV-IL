@@ -158,17 +158,23 @@ def history_anchors(state, seed_keys, limit=2):
     return result
 
 
-def rank(catalog, profiles, session, watched=(), history_seeds=()):
-    """Hard exclusion then conservative genre inference; group score protects least satisfied viewer.
-
-    Genres are the available first-stage evidence, NOT an implemented fine-grained taste model.
-    """
+def rank(catalog, profiles, session, watched=(), history_seeds=(), history_strengths=None):
+    """Rank with explicit choices plus weak, repeated household evidence."""
     excluded = set(session.get('excluded', [])) | set(watched)
+    disliked_evidence=set();positive_keys=set()
     for p in profiles:
         excluded.update(p.get('seen', []))
-        excluded.update(k for k,v in p.get('feedback',{}).items() if v['value']<0)
+        disliked={k for k,v in p.get('feedback',{}).items() if v['value']<0}
+        disliked_evidence.update(disliked);excluded.update(disliked)
+        positive_keys.update(k for k,v in p.get('feedback',{}).items() if v['value']>0)
     minutes = session.get('minutes', 0)
     cap=min(minutes*60 if minutes else 86400,session.get('max_runtime',86400))
+    history_seeds=list(dict.fromkeys(history_seeds))
+    history_set=set(history_seeds);history_order={key:index for index,key in enumerate(history_seeds)}
+    history_strengths=history_strengths or {}
+    automatic=taste.implicit_profile(
+        [item for item in catalog if item.get('key') not in disliked_evidence],
+        history_seeds,history_strengths)
     candidates = []
     used = set()
     for item in catalog:
@@ -181,29 +187,47 @@ def rank(catalog, profiles, session, watched=(), history_seeds=()):
         if cap<86400 and (item['kind'] != 'movie' or not item['runtime'] or item['runtime'] > cap):
             continue
         scores, reasons = [], []
+        explicit_origins=[]
         for p in profiles:
             pos, neg = [], []
             for f in p.get('feedback', {}).values():
                 common = taste.genres(item['genres']) & taste.genres(f['genres'])
                 if common:
                     (pos if f['value']>0 else neg).append(f)
-            score = min(3,len(pos)) - min(3,len(neg))
+            # One explicit title should help, but must not define every card.
+            score = .65*min(2,len(pos)) - .8*min(2,len(neg))
             anchors=[p.get('feedback',{}).get(k) for k in item.get('recommended_from',[])]
             anchors=[a for a in anchors if a and a['value']>0]
             if anchors:
-                score+=2
+                score+=1.35
+                explicit_origins.extend(k for k in item.get('recommended_from',[])
+                                        if p.get('feedback',{}).get(k,{}).get('value')>0)
                 reasons.append('מומלץ בקטלוג בעקבות %s שסימנת באהבתי' % anchors[0]['title'])
             metadata_score,metadata_reasons=taste.affinity(item,p.get('feedback',{}))
-            score+=metadata_score
+            score+=.65*metadata_score
             reasons.extend(metadata_reasons)
+            # With only one positive example, genre/creator resemblance is the
+            # same fragile origin as direct recommendation provenance.  Mark it
+            # so shelf diversity can cap the whole influence, not just routes.
+            if len(positive_keys)==1 and (pos or anchors or metadata_score>0):
+                explicit_origins.extend(positive_keys)
             scores.append(score)
             if pos and score>0:
                 reasons.append('קשר ז׳אנרי ל־%s שסימנת באהבתי — זו הערכה ראשונית' % pos[0]['title'])
         # No popular rating can override explicit dislike or watch/time exclusions.
-        score = 2*min(scores or [0]) + sum(scores)/max(1,len(scores)) + item['rating']/10
-        if set(item.get('recommended_from', [])) & set(history_seeds):
-            score += 0.6
-            reasons.append('בהשראת כותרים מהיסטוריית הצפייה בבית')
+        score = 1.25*min(scores or [0]) + sum(scores)/max(1,len(scores)) + item['rating']/10
+        history_origins=[key for key in item.get('recommended_from',[]) if key in history_set]
+        if history_origins:
+            # Several independent watched anchors are stronger than one, while
+            # every single view remains much weaker than an explicit like.
+            ordered=sorted(set(history_origins),key=lambda key:history_order[key])
+            recency=sum(1.0/(1.0+history_order[key]/8.0) for key in ordered)/len(ordered)
+            repeat_support=sum(min(5,max(1,history_strengths.get(key,1)))-1 for key in ordered)
+            score+=min(1.25,.45+.18*(len(ordered)-1)+.15*recency+.04*repeat_support)
+            reasons.append('כמה כותרים מהיסטוריית הצפייה הובילו לכיוון הזה' if len(ordered)>1
+                           else 'בהשראת כותר מהיסטוריית הצפייה בבית')
+        implicit_score,implicit_reasons=taste.implicit_affinity(item,automatic)
+        score+=implicit_score;reasons.extend(implicit_reasons)
         if session.get('anchor') in item.get('recommended_from',[]):
             score+=2;reasons.append('המלצת קטלוג בעקבות הכותר שבחרת לדייק ממנו הערב')
         elif taste.genres(item['genres']) & taste.genres(session.get('anchor_genres',[])):
@@ -212,11 +236,13 @@ def rank(catalog, profiles, session, watched=(), history_seeds=()):
             score-=2
         mood_score,mood_reasons=taste.refinement(item,session)
         score+=mood_score;reasons.extend(mood_reasons)
+        mode_fit=taste.vibe_fit(item,session.get('vibe',''))
         if session.get('vibe')=='surprise':
-            novelty=[taste.surprise(item,p.get('feedback',{})) for p in profiles]
+            novelty=[taste.surprise(item,p.get('feedback',{}),automatic) for p in profiles]
             if novelty:
                 score+=sum(x[0] for x in novelty)/len(novelty)
                 reasons.extend(r for x in novelty for r in x[1])
+                mode_fit=1 if any(x[0]>0 for x in novelty) else (-1 if any(x[0]<0 for x in novelty) else 0)
         if not reasons:
             reasons.append('עדיין לומדים את הטעם; זו הצעה מהקטלוג, לא התאמה עמוקה')
         if cap<86400:
@@ -227,34 +253,93 @@ def rank(catalog, profiles, session, watched=(), history_seeds=()):
         if personal:
             score+=.75
             reasons.append('ברשימת הצפייה האישית שלך ב־%s' % personal_label)
-        candidates.append(dict(item=item, score=score, reasons=list(dict.fromkeys(reasons)), saved=personal or any(item['key'] in p.get('saved',[]) for p in profiles)))
-    return sorted(candidates, key=lambda r:(-r['score'],r['item']['key']))
+        candidates.append(dict(item=item, score=score, reasons=list(dict.fromkeys(reasons)),
+            saved=personal or any(item['key'] in p.get('saved',[]) for p in profiles),
+            explicit_origins=list(dict.fromkeys(explicit_origins)),
+            history_origins=list(dict.fromkeys(history_origins)),mode_fit=mode_fit))
+    vibe=session.get('vibe','')
+    return sorted(candidates,key=lambda r:(-(r['mode_fit'] if vibe else 0),-r['score'],r['item']['key']))
 
 
-def choose_three(ranked):
-    """Three distinct lanes with honest fallback labels and all hard filters retained."""
-    if not ranked:return []
-    remaining=list(ranked);selected=[]
+def choose_shelf(ranked, limit=9):
+    """Build a TV shelf with relevance, mode fit and origin diversity."""
+    if not ranked or limit<=0:return []
+    remaining=list(ranked);selected=[];origin_counts={}
+
+    def overlap(a,b,field='genres'):
+        left=taste.genres(a['item'].get(field,[]));right=taste.genres(b['item'].get(field,[]))
+        return len(left&right)/max(1,len(left|right))
+
     def add(row,lane):
         remaining.remove(row)
         result=dict(row);result['lane']=lane
         result['reasons']=[lane]+list(row['reasons'])
         selected.append(result)
-    add(remaining[0],'קרוב לטעם שלך' if any('אהבת' in r or 'היסטוריית' in r for r in remaining[0]['reasons']) else 'בחירה מהקטלוג')
-    saved=next((r for r in remaining if r.get('saved')),None)
-    pool=[r for r in remaining if r is not saved]
-    if pool:
-        reference=selected[0]['item']
-        def discovery_value(r):
-            g=taste.genres(r['item']['genres']);base=taste.genres(reference['genres'])
-            overlap=len(g&base)/max(1,len(g|base))
-            return r['score']-1.0*overlap
-        pick=max(pool,key=discovery_value)
-        different=taste.genres(pick['item']['genres'])!=taste.genres(reference['genres']) or pick['item'].get('traits',{}).get('directors',[])!=reference.get('traits',{}).get('directors',[])
-        add(pick,'כיוון קצת אחר' if different else 'עוד התאמה אפשרית')
-    if saved:add(saved,'מהשמורים שלך')
-    elif remaining:add(remaining[0],'עוד אפשרות לערב')
-    return selected[:3]
+        for key in row.get('explicit_origins',[]):origin_counts[key]=origin_counts.get(key,0)+1
+
+    def candidates_for_slot():
+        pool=list(remaining)
+        if not pool:return []
+        cap=1 if len(selected)<3 else 2
+        under_cap=[r for r in pool if all(origin_counts.get(key,0)<cap
+                   for key in r.get('explicit_origins',[]))]
+        if not under_cap and len(selected)==1:
+            # A sparse brand-new catalog may contain only one like's route.
+            # Keep a second useful option, then wait for automatic discovery
+            # instead of presenting an entire shelf as learned taste.
+            under_cap=[r for r in pool if all(origin_counts.get(key,0)<2
+                       for key in r.get('explicit_origins',[]))]
+        if not under_cap:return []
+        # Among origins that are still allowed, exhaust real mode matches
+        # before neutral fallbacks and keep known contradictions for last.
+        best_fit=max(r.get('mode_fit',0) for r in under_cap)
+        if best_fit>=0:
+            under_cap=[r for r in under_cap if r.get('mode_fit',0)==best_fit]
+        return under_cap
+
+    def value(row):
+        if not selected:return row['score']
+        genre=max(overlap(row,old) for old in selected)
+        provenance=max((bool(set(row.get('explicit_origins',[]))&set(old.get('explicit_origins',[])))
+                        for old in selected),default=False)
+        history=max((bool(set(row.get('history_origins',[]))&set(old.get('history_origins',[])))
+                     for old in selected),default=False)
+        return row['score']-.9*genre-1.25*provenance-.35*history
+
+    first=remaining[0]
+    learned=any(('אהבת' in reason or 'היסטוריית' in reason or 'דפוס שחוזר' in reason)
+                for reason in first['reasons'])
+    add(first,'קרוב לטעם שלך' if learned else 'בחירה מהקטלוג')
+
+    if remaining and len(selected)<limit:
+        pool=candidates_for_slot()
+        if pool:
+            pick=max(pool,key=lambda r:(value(r),-ranked.index(r)))
+            different=(taste.genres(pick['item']['genres'])!=taste.genres(selected[0]['item']['genres']) or
+                       pick['item'].get('traits',{}).get('directors',[])!=selected[0]['item'].get('traits',{}).get('directors',[]))
+            add(pick,'כיוון קצת אחר' if different else 'עוד התאמה אפשרית')
+
+    if remaining and len(selected)<limit:
+        pool=candidates_for_slot()
+        if pool:
+            saved=[row for row in pool if row.get('saved')]
+            pick=max(saved or pool,key=lambda r:(value(r),-ranked.index(r)))
+            add(pick,'מהשמורים שלך' if pick.get('saved') else 'עוד אפשרות לערב')
+
+    while remaining and len(selected)<limit:
+        pool=candidates_for_slot()
+        if not pool:break
+        pick=max(pool,key=lambda r:(value(r),-ranked.index(r)))
+        if pick.get('saved'):lane='מהשמורים שלך'
+        elif pick.get('history_origins') or pick.get('explicit_origins'):lane='עוד התאמה בשבילך'
+        else:lane='עוד כיוון לגלות'
+        add(pick,lane)
+    return selected
+
+
+def choose_three(ranked):
+    """Compatibility wrapper for the compact/legacy interface."""
+    return choose_shelf(ranked,3)
 
 
 def quick_pair(state,viewer,history_seeds=()):
