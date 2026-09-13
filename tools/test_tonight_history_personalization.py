@@ -154,4 +154,15 @@ class HistoryPersonalization(unittest.TestCase):
         self.assertEqual(out['seed_keys'],['movie:7','movie:2'])
         self.assertEqual([n for n,path in queries],['traktcache.db','mdblcache.db'])
 
+    def test_nullable_snapshot_strength_is_kept_as_one_safe_view(self):
+        config=dict(watched_indicators='2',mdblist_user='connected',trakt_user='connected')
+        snapshots={
+            'mdblcache.db':dict(status='available',keys=['movie:1'],
+                seed_keys=['movie:1','tvshow:2'],seed_strengths={'movie:1':None,'tvshow:2':None}),
+            'traktcache.db':dict(status='available',keys=['movie:3'],
+                seed_keys=['tvshow:2','movie:3'],seed_strengths={'tvshow:2':7,'movie:3':'bad'}),
+        }
+        out,_=self._aggregated_snapshot(config,snapshots)
+        self.assertEqual(out['seed_strengths'],{'movie:1':1,'tvshow:2':7,'movie:3':1})
+
 if __name__=='__main__':unittest.main()
