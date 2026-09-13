@@ -400,15 +400,23 @@ for _w in (u'\u062a\u062e\u064a\u0641\u064a\u0646\u0646\u064a', u'\u062a\u0633\u
     check('arabic 2fs + object clitic reads F: %s' % _w,
           ag.reference_addressee_gender(_w, 'ar'), 'F')
 
-# KNOWN COST, pinned so it is not rediscovered as a surprise: a 6+ letter broken
-# plural in \u064a\u0646 carrying a possessive is structurally identical to a 2fs verb
-# with an object clitic (\u062a\u0633\u0627\u0639\u062f\u064a\u0646\u0647\u0645 vs \u062a\u0645\u0627\u0631\u064a\u0646\u0647\u0627 -- both \u062a + 4 + \u064a\u0646 + suffix,
-# both with a long alif). Nothing short of a lexicon separates them. These read F
-# and should not; the trade was made because the verb forms above are ordinary
-# dialogue and this class is not.
+# Previously accepted false positives are now lexical exceptions. Preserve
+# actual verb evidence while declining these known noun stems and possessives.
 for _w in (u'\u062a\u0645\u0627\u0631\u064a\u0646\u0647\u0627', u'\u062a\u0646\u0627\u0646\u064a\u0646\u0647\u0627'):
-    check('KNOWN COST -- broken plural + possessive still reads F: %s' % _w,
-          ag.reference_addressee_gender(_w, 'ar'), 'F')
+    check('known noun + possessive is not female-address evidence: %s' % _w,
+          ag.reference_addressee_gender(_w, 'ar'), None)
+
+for _noun in ('تمارين', 'تنانين'):
+    for _suffix in ('', 'ها', 'هما', 'هم', 'هن', 'ه', 'كم', 'كن', 'ك', 'نا', 'ي'):
+        _line = 'هذه ' + _noun + _suffix + '.'
+        check('noun evidence declines: '+_noun+_suffix,
+              ag.reference_addressee_gender(_line, 'ar'), None)
+        check('noun evidence never schedules a gender repair: '+_noun+_suffix,
+              ag.wrong_gender_entries(['1\n00:00:01,000 --> 00:00:02,000\nאתה רואה אותם?'],{1:_line},'ar'), [])
+check('noun exclusion preserves a real verb elsewhere in the cue',
+      ag.reference_addressee_gender('هذه تمارينها. هل تعرفين ذلك؟', 'ar'), 'F')
+check('noun exclusion preserves a real masculine marker',
+      ag.reference_addressee_gender('هذه تمارينها وأنتَ هنا.', 'ar'), 'M')
 
 # HEBREW. _HE_MASC has carried the proclitic alternation since it was written;
 # _HE_REF_FEM did not, so the reader was better at finding a MALE addressee
