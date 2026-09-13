@@ -793,16 +793,9 @@ def _try_fast_download(handle, link, info):
             # translation it used to miss would turn a rare shortcut into the
             # normal path and skip all four.
             #
-            # A MISS HERE IS NOT FREE, and nothing downstream rescues it:
-            # resolve()'s early cache return fires before the first
-            # progressive_cb, and the picker handler reads the return only to
-            # decide whether to toast a failure. So a cached translation this
-            # lookup misses is found by resolve() and then delivered to
-            # nobody. That is the "a second entry does not load it
-            # automatically" report, and it is NOT fixed -- fixing it means
-            # wiring those early returns to progressive_cb, which is its own
-            # change. Widening THIS lookup is not the fix; it was tried and
-            # reverted, because a hit here skips the four guards above.
+            # A miss is handled by resolve() in the background. Its validated
+            # early return is delivered by the background handler's completion
+            # path, with the same ownership and player safeguards as fresh work.
             cached = _cache.translated_path(
                 imdb_id, season, episode, source_lang,
                 source_id=source_id)
@@ -972,6 +965,11 @@ def _handle_bg_translate_picker(params):
 
     _job_token = _new_translation_job()
     _ver = {'n': 0}
+    _completion = {'seen': False}
+    try:
+        _initial_media = xbmc.Player().getPlayingFile() or ''
+    except Exception:
+        _initial_media = ''
 
     # Corner progress bar for the (long) embedded-extraction phase. Created
     # lazily on the first extract-progress tick and closed when translation
@@ -1004,6 +1002,8 @@ def _handle_bg_translate_picker(params):
             pass
 
     def on_phase(phase, payload):
+        if phase == 'done':
+            _completion['seen'] = True
         try:
             if not _owns_translation_job(_job_token):
                 return
@@ -1154,6 +1154,12 @@ def _handle_bg_translate_picker(params):
                                         _before = -1
                                     if not _owns_translation_job(_job_token):
                                         return
+                                    if payload.get('_cached_media'):
+                                        # Copying the final file can race a
+                                        # movie change. Re-check at delivery,
+                                        # not only before entering done.
+                                        if (p.getPlayingFile() or '') != payload['_cached_media']:
+                                            return
                                     p.setSubtitles(_final_path)
                                     p.showSubtitles(True)
                                     _grew = False
@@ -1174,6 +1180,9 @@ def _handle_bg_translate_picker(params):
                                                 # SRT.
                                                 try:
                                                     if not _owns_translation_job(_job_token):
+                                                        return
+                                                    if (payload.get('_cached_media')
+                                                            and (p.getPlayingFile() or '') != payload['_cached_media']):
                                                         return
                                                     p.setSubtitleStream(
                                                         len(_streams) - 1)
@@ -1240,6 +1249,32 @@ def _handle_bg_translate_picker(params):
     try:
         _resolved = translate.resolve(link, info, progressive_cb=on_phase,
                                       extract_progress_cb=_extract_progress)
+        # Cache and community early returns do not emit progressive phases.
+        # Deliver their validated result through the same final-swap path,
+        # before clearing this job's ownership. Never replace a newer pick or
+        # attach a completed result to a different movie.
+        if (_resolved and not _completion['seen']
+                and os.path.isfile(_resolved)
+                and _owns_translation_job(_job_token)):
+            try:
+                _current_media = xbmc.Player().getPlayingFile() or ''
+            except Exception:
+                _current_media = ''
+            _win = xbmcgui.Window(10000)
+            _source = _win.getProperty('ai_subs.live_translate_source') or ''
+            if (_initial_media and _current_media == _initial_media
+                    and _win.getProperty('ai_subs.live_translate_active') == '1'
+                    and (not expected_source_id or _source == expected_source_id)):
+                if not _source:
+                    # Embedded cache hits have no extracted source id yet.
+                    # This identifier belongs only to the delivery job; it
+                    # never changes a translation cache key or pool tier.
+                    import hashlib as _hashlib
+                    _source = 'cached_' + _hashlib.sha256(
+                        _resolved.encode('utf-8')).hexdigest()[:16]
+                    _win.setProperty('ai_subs.live_translate_source', _source)
+                on_phase('done', {'success': True, 'path': _resolved,
+                                  'source_id': _source, '_cached_media': _initial_media})
     except Exception as e:
         _safe_log(
             'bg_translate_picker resolve crashed: {0}'.format(e),

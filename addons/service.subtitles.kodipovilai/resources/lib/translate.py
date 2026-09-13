@@ -4583,6 +4583,60 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             kodi_utils.log('gender check skipped: {0}'.format(e),
                            level='WARNING')
 
+    # Repair only verbatim English leftovers, never general semantic wording.
+    # Source/output counts may differ after annotation filtering: pair unique
+    # cue IDs, not positional offsets into the complete source subtitle.
+    try:
+        from resources.lib import english_residual
+        _source_by_id = {}
+        _duplicate_ids = set()
+        for _block in srt.parse_blocks(src_text):
+            _id = _block.splitlines()[0].strip()
+            if _id in _source_by_id:
+                _duplicate_ids.add(_id)
+            _source_by_id[_id] = _block
+        _current_ids = [b.splitlines()[0].strip() for b in out_blocks]
+        _current_id_counts = {}
+        for _id in _current_ids:
+            _current_id_counts[_id] = _current_id_counts.get(_id, 0) + 1
+        _aligned_source = [
+            _source_by_id.get(i, '') if i not in _duplicate_ids
+            and _current_id_counts[i] == 1 else '' for i in _current_ids]
+        def _residual_cancelled():
+            try:
+                import xbmc
+                if xbmc.Monitor().abortRequested():
+                    return True
+                if progressive_cb is not None:
+                    import xbmcgui
+                    _win = xbmcgui.Window(10000)
+                    return (_win.getProperty('ai_subs.live_translate_active') != '1'
+                            or _win.getProperty('ai_subs.live_translate_source')
+                            != _progressive_source_id)
+            except Exception:
+                return True
+            return False
+        def _residual_request(prompt_text):
+            _gemini_rate_gate(_rpm_interval)
+            # A user can cancel or choose another subtitle while pacing waits.
+            if _residual_cancelled():
+                raise RuntimeError('residual repair cancelled')
+            return gemini.generate(
+                api_key=api_key, model=model, prompt=prompt_text,
+                temperature=0.0, max_output_tokens=min(max_output_tokens, 4096),
+                top_p=top_p, thinking_budget=thinking_budget,
+                thinking_level=thinking_level,
+                timeout=min(gemini_timeout or gemini.REQUEST_TIMEOUT, 60))
+        out_blocks, _residual_counts = english_residual.repair(
+            _aligned_source, out_blocks, source_lang, _residual_request,
+            cancelled=_residual_cancelled)
+        if _residual_counts['selected']:
+            kodi_utils.log('English residual repair: {0}/{1} lines repaired'.format(
+                _residual_counts['repaired'], _residual_counts['selected']), level='INFO')
+    except Exception:
+        kodi_utils.log('English residual repair skipped; existing translation retained',
+                       level='WARNING')
+
     final = srt.stitch_blocks(out_blocks)
     # Timing backstop. restore_block_timings above pairs positionally and so
     # cannot act when a chunk legitimately came back with a different entry
@@ -4638,8 +4692,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             _n = sum(1 for a, b in zip(_pre_ar.split('\n'), final.split('\n'))
                      if a != b)
             kodi_utils.log(
-                'leaked Arabic stripped from {0} line(s) -- gender reference '
-                'echoed into the Hebrew'.format(_n), level='WARNING')
+                'Arabic-script cleanup changed {0} line(s); '
+                'reference_language={1}'.format(_n, _ref_lang if _ar_map else 'none'),
+                level='WARNING')
         except Exception:
             pass
     # Same class again, one step out: the model sometimes returns the SOURCE
