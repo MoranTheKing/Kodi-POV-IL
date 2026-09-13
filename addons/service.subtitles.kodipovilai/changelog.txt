@@ -1,3 +1,9 @@
+0.2.532
+- Use connected viewing history to seed evening recommendations, including series exposure.
+- Keep explicit preferences stronger than inferred viewing signals and preserve watched status.
+- Show imported history counts and use the active playback provider for catalog requests.
+- Tighten subtitle repair guards for literals, Latin names and visible Hebrew.
+
 0.2.531
 - Keep Hebrew punctuation and phrase order correct across subtitle style boundaries.
 - Deliver validated cached AI subtitles to the player after a background cache hit.

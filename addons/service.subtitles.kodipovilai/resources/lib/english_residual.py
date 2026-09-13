@@ -34,7 +34,7 @@ def _lines(block):
 
 def _candidate(text):
     visible = _visible(text)
-    if _HE.search(visible) or re.search(r'["“”«»]', visible):
+    if _HE.search(visible) or re.search(r'["“”«»`]', visible):
         return False
     if re.search(r'https?://|www\.|@|[/\\]|\b\w+:', visible, re.I):
         return False
@@ -140,7 +140,10 @@ def repair(source_blocks, current_blocks, source_lang, request, cancelled=None, 
                 continue  # Explicit KEEP is neither a repair nor a rejection.
             if (not isinstance(after, str) or not after.strip()
                     or any(c in after for c in '\r\n\v\f\x1c\x1d\x1e\x85\u2028\u2029\x00')
-                    or not _HE.search(after) or _inventory(after) != _inventory(before)
+                    or not _HE.search(_visible(after))
+                    or not {w.casefold() for w in _WORDS.findall(_visible(after))}.issubset(
+                        {w.casefold() for w in _WORDS.findall(_visible(before))})
+                    or _inventory(after) != _inventory(before)
                     or (bool(_NEG_EN.search(_visible(before))) != bool(_NEG_HE.search(_visible(after))))):
                 counts['rejected'] += 1
                 continue
