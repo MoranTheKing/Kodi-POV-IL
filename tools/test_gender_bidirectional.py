@@ -21,6 +21,14 @@ def repair(source,refs,reply):
     return ns['_regender_blocks'],calls
 
 class Bidirectional(unittest.TestCase):
+    def test_walking_requires_reviewed_verbal_continuation(self):
+        for line in ['את הולכת בלי המפתח.', 'את הולכת איתי?', 'אמרתי שאת הולכת בלי מים.']:
+            self.assertTrue(ag.addresses_female(line),line)
+        for line in ['את הולכת הרגל ראיתי.', 'את הולכת הרגליים ראיתי.', 'את הילדה ראיתי.', 'את הולכת.', 'ראיתי את הולכת הרגל.', 'אני הולכת בלי המפתח.']:
+            self.assertFalse(ag.addresses_female(line),line)
+        original=[block(1,'את הולכת בלי המפתח, דניאל.')]
+        self.assertEqual(ag.wrong_gender_entries(original,{1:'אתה הולך בלי המפתח, דניאל.'},'he',both_directions=True),[1])
+
     def test_attached_negation_cannot_be_removed_or_added(self):
         for negative,positive in [('שלא כדאי','שכדאי'),('שאין מספיק','שיש מספיק'),
                                   ('ושלא כדאי','ושכדאי'),('כשלא כדאי','כשכדאי'),
