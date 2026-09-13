@@ -167,7 +167,7 @@ class Tonight(unittest.TestCase):
     def test_run_search_like_refresh_undo_preserves_refreshed_catalog(self):
         import types
         state=engine.initial_state();found=item(77);refreshed=item(88);refresh_calls=[]
-        saved=[];notices=[];steps=iter(['היכרות —',0,'Query',0,'אהבתי את','עוד אפשרויות',0,-1])
+        saved=[];notices=[];steps=iter(['היכרות —',0,'Query',0,'אהבתי את','עוד אפשרויות',1,-1])
         class ListItem:
             def __init__(self,label='',**kwargs):self.label=label
             def setArt(self,*args):pass
@@ -358,7 +358,8 @@ class Tonight(unittest.TestCase):
         self.assertEqual(parsed['action'],['play_Item']);self.assertEqual(parsed['title'],[x['originaltitle']])
         self.assertEqual(json.loads(parsed['meta'][0])['tmdb'],'1')
         self.assertNotIn('mode',parsed)
-        self.assertEqual((50/100)*json.loads(parsed['meta'][0])['duration'],45)
+        self.assertEqual(json.loads(parsed['meta'][0])['duration'],5400)
+        self.assertEqual((50/100)*json.loads(parsed['meta'][0])['duration'],2700)
 
     def test_umbrella_seasons_and_trailer_native_types(self):
         x=item();x.update(kind='tvshow',key='tvshow:1',tvdb='99')
@@ -450,6 +451,28 @@ class Tonight(unittest.TestCase):
         x=engine.normalize(dict(file=engine.provider_route('movie',1),title='one',rating=float('nan')))
         self.assertEqual(x['rating'],0)
 
+    def test_known_future_premiere_is_not_offered_for_tonight(self):
+        future=engine.normalize(dict(file=engine.provider_route('movie',91),title='Future',
+            premiered='2999-12-31',rating=10))
+        released=engine.normalize(dict(file=engine.provider_route('movie',92),title='Released',
+            premiered='2020-01-01',rating=1))
+        self.assertFalse(engine.available_now(future))
+        self.assertEqual([row['item']['key'] for row in engine.rank(
+            [future,released],[engine.initial_state()['profiles']['household']],{})],
+            [released['key']])
+
+    def test_old_catalog_upgrade_forces_refresh_but_keeps_user_choices(self):
+        state=engine.initial_state();liked=item(1);ordinary=item(2)
+        state.pop('catalog_format');state['catalog']=[liked,ordinary]
+        state=engine.feedback(state,'household',liked,'like')
+        upgraded=engine.upgrade_catalog(state)
+        self.assertEqual(upgraded['catalog_format'],2)
+        self.assertEqual([x['key'] for x in upgraded['catalog']],[liked['key']])
+        self.assertFalse(upgraded['catalog'][0]['availability_checked'])
+        self.assertFalse(engine.rank(upgraded['catalog'],
+            [upgraded['profiles']['household']],upgraded['session']))
+        storage.validate(upgraded)
+
     def test_normalized_catalog_satisfies_storage_contract(self):
         state=engine.initial_state()
         state['catalog']=[engine.normalize(dict(file=engine.provider_route('movie',1),title='One',genre=['','  ',None,' Mystery ']))]
@@ -510,6 +533,16 @@ class Tonight(unittest.TestCase):
             def executebuiltin(self,x):self.calls.append(x)
         x=X();_,playing=ui._actions(D(),x,None,item(),[],engine.initial_state())
         self.assertTrue(playing);self.assertEqual(x.calls,['RunPlugin("'+engine.provider_route('movie',1)+'")'])
+
+    def test_umbrella_movie_uses_native_playmedia_context(self):
+        class X:
+            def __init__(self):self.calls=[]
+            def executebuiltin(self,value):self.calls.append(value)
+        candidate=item();x=X()
+        command=ui._start_playback(x,'umbrella',candidate)
+        self.assertEqual(x.calls,[command])
+        self.assertTrue(command.startswith('PlayMedia("plugin://plugin.video.umbrella/'))
+        self.assertIn('action=play_Item',command)
 
     def test_catalog_rpc_read_only(self):
         requests=[]
