@@ -2,6 +2,13 @@
 from collections import defaultdict
 import re
 
+
+def repeat_strength(value):
+    """Return a bounded count for nullable/legacy viewing-cache values."""
+    if type(value) is not int or value < 1:
+        return 1
+    return min(1000, value)
+
 def genres(values):
     """Kodi providers may return slash-joined genres, including in old caches."""
     if isinstance(values,str):values=[values]
@@ -35,7 +42,7 @@ def implicit_profile(catalog, history_seeds=(), history_strengths=None):
     """
     order={key:index for index,key in enumerate(dict.fromkeys(history_seeds))
            if isinstance(key,str)}
-    history_strengths=history_strengths or {}
+    history_strengths=history_strengths if isinstance(history_strengths,dict) else {}
     genre_weight=defaultdict(float);genre_titles=defaultdict(set)
     trait_weight={field:defaultdict(float) for field in
                   ('directors','writers','cast','tags','studios')}
@@ -47,7 +54,7 @@ def implicit_profile(catalog, history_seeds=(), history_strengths=None):
         processed.add(key)
         if key in order:
             # Input order is recency.  Older viewing remains useful, but less so.
-            repeats=max(1,history_strengths.get(key,1))
+            repeats=repeat_strength(history_strengths.get(key))
             repeat_factor=1+min(.35,.08*max(0,repeats-1))
             weight=max(.28,.72-.018*min(order[key],24))*repeat_factor;history_count+=1
         elif item.get('watched'):
