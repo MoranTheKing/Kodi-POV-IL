@@ -13,6 +13,75 @@ def item(n=1,genres=('Mystery',),runtime=5400):
 
 
 class Tonight(unittest.TestCase):
+    def test_run_tv_then_time_switches_to_movies_and_clears_shorter_cap(self):
+        import types
+        state=engine.initial_state();state['catalog']=[item()]
+        state['session'].update(kind='tvshow',max_runtime=1200)
+        saved=[];notices=[];steps=iter(['מה מתאים',0,3,-1])
+        class ListItem:
+            def __init__(self,label='',**kwargs):self.label=label
+            def setArt(self,*args):pass
+            def setInfo(self,*args):pass
+        class Dialog:
+            def select(self,title,rows,**kwargs):
+                choice=next(steps)
+                if isinstance(choice,str):return next(i for i,row in enumerate(rows) if choice in (row if isinstance(row,str) else row.label))
+                return choice
+            def ok(self,*args):notices.append(args)
+        class Monitor:
+            def abortRequested(self):return False
+        with tempfile.TemporaryDirectory() as folder:
+            class Addon:
+                def __init__(self,*args):pass
+                def getAddonInfo(self,*args):return folder
+            def no_play(*args):raise AssertionError('Unexpected playback')
+            fake=dict(xbmc=types.SimpleNamespace(Monitor=Monitor,executebuiltin=no_play),
+                      xbmcaddon=types.SimpleNamespace(Addon=Addon),
+                      xbmcgui=types.SimpleNamespace(Dialog=Dialog,ListItem=ListItem),
+                      xbmcvfs=types.SimpleNamespace(translatePath=lambda path:path))
+            with patch.dict(sys.modules,fake), patch.object(storage,'load',return_value=copy.deepcopy(state)), patch.object(storage,'save',side_effect=lambda path,value:saved.append(copy.deepcopy(value))), patch.object(providers,'current',return_value='pov'), patch.object(providers,'fallback_notice',return_value=''), patch.object(ui,'_history',return_value=dict(keys=[])):
+                ui.run()
+        self.assertEqual(saved[-1]['session']['kind'],'movie')
+        self.assertEqual(saved[-1]['session']['minutes'],90)
+        self.assertNotIn('max_runtime',saved[-1]['session'])
+        self.assertTrue(notices)
+        self.assertEqual(len(engine.rank(saved[-1]['catalog'],[saved[-1]['profiles']['household']],saved[-1]['session'])),1)
+
+    def test_run_search_like_refresh_undo_preserves_refreshed_catalog(self):
+        import types
+        state=engine.initial_state();found=item(77);refreshed=item(88);refresh_calls=[]
+        saved=[];notices=[];steps=iter(['היכרות —',0,'Query',0,'אהבתי את','עוד אפשרויות',0,-1])
+        class ListItem:
+            def __init__(self,label='',**kwargs):self.label=label
+            def setArt(self,*args):pass
+            def setInfo(self,*args):pass
+        class Dialog:
+            def input(self,*args):return next(steps)
+            def select(self,title,rows,**kwargs):
+                choice=next(steps)
+                if isinstance(choice,str):return next(i for i,row in enumerate(rows) if choice in (row if isinstance(row,str) else row.label))
+                return choice
+            def ok(self,*args):notices.append(args)
+        class Monitor:
+            def abortRequested(self):return False
+        with tempfile.TemporaryDirectory() as folder:
+            class Addon:
+                def __init__(self,*args):pass
+                def getAddonInfo(self,*args):return folder
+            def no_play(*args):raise AssertionError('Unexpected playback')
+            fake=dict(xbmc=types.SimpleNamespace(Monitor=Monitor,executebuiltin=no_play),
+                      xbmcaddon=types.SimpleNamespace(Addon=Addon),
+                      xbmcgui=types.SimpleNamespace(Dialog=Dialog,ListItem=ListItem),
+                      xbmcvfs=types.SimpleNamespace(translatePath=lambda path:path))
+            def refresh(value,*args):
+                refresh_calls.append(args[-2]);value['catalog']=[refreshed];return value
+            with patch.object(ui,'_load_catalog',return_value=[found]), patch.object(ui,'_refresh',side_effect=refresh), patch.dict(sys.modules,fake), patch.object(storage,'load',return_value=copy.deepcopy(state)), patch.object(storage,'save',side_effect=lambda path,value:saved.append(copy.deepcopy(value))), patch.object(providers,'current',return_value='pov'), patch.object(providers,'fallback_notice',return_value=''), patch.object(ui,'_history',return_value=dict(keys=[])):
+                ui.run()
+        self.assertEqual(saved[-1]['profiles'],state['profiles'])
+        self.assertEqual(saved[-1]['catalog'],[refreshed])
+        self.assertEqual(refresh_calls,['pov'])
+        self.assertTrue(any(value['profiles']['household']['feedback'].get('movie:77',{}).get('value')==1 for value in saved))
+
     def test_refinement_refreshes_shared_action_path(self):
         state=engine.initial_state()
         changed=engine.refine(state,item(),'similar')
@@ -20,6 +89,75 @@ class Tonight(unittest.TestCase):
             result,playing=ui._act_and_refresh(None,None,None,item(),[],state,'folder')
             refresh.assert_called_once_with(changed,None,None,'folder','umbrella',None)
             self.assertFalse(playing)
+
+    def test_clear_feedback_restores_eligibility_without_erasing_seen(self):
+        state=engine.feedback(engine.initial_state(),'household',item(),'dislike')
+        self.assertFalse(engine.rank([item()],[state['profiles']['household']],state['session']))
+        changed=engine.feedback(state,'household',item(),'clear_feedback')
+        self.assertTrue(engine.rank([item()],[changed['profiles']['household']],changed['session']))
+        self.assertIn(item()['key'],state['profiles']['household']['feedback'])
+        changed=engine.feedback(changed,'household',item(),'seen')
+        changed=engine.feedback(changed,'household',item(),'clear_feedback')
+        self.assertFalse(engine.rank([item()],[changed['profiles']['household']],changed['session']))
+
+    def test_unsave_and_unseen_do_not_edit_other_viewers(self):
+        state=engine.initial_state();state['profiles']['other']=copy.deepcopy(state['profiles']['household'])
+        for viewer in state['profiles']:
+            for action in ('save','seen'):state=engine.feedback(state,viewer,item(),action)
+        for action in ('unsave','unseen'):state=engine.feedback(state,'household',item(),action)
+        self.assertEqual(state['profiles']['household']['saved'],[])
+        self.assertEqual(state['profiles']['household']['seen'],[])
+        self.assertEqual(state['profiles']['other']['saved'],['movie:1'])
+        self.assertEqual(state['profiles']['other']['seen'],['movie:1'])
+
+    def test_undo_restores_decisions_not_provider_catalog(self):
+        state=engine.initial_state();snap=engine.checkpoint(state)
+        changed=engine.feedback(state,'household',item(),'like')
+        changed['catalog']=[item(2)];changed['catalog_fetched']=123
+        restored=engine.restore_checkpoint(changed,snap)
+        self.assertEqual(restored['profiles'],state['profiles'])
+        self.assertEqual(restored['catalog'],changed['catalog'])
+        self.assertEqual(restored['catalog_fetched'],123)
+        restored['profiles']['household']['name']='new'
+        self.assertNotEqual(snap['profiles']['household']['name'],'new')
+
+    def test_format_filter_preserves_seen_and_time_boundaries(self):
+        tv=item(2);tv.update(kind='tvshow',key='tvshow:2')
+        state=engine.initial_state();profiles=[state['profiles']['household']]
+        self.assertEqual([r['item']['key'] for r in engine.rank([item(),tv],profiles,dict(kind='movie'))],['movie:1'])
+        self.assertEqual([r['item']['key'] for r in engine.rank([item(),tv],profiles,dict(kind='tvshow'))],['tvshow:2'])
+        self.assertFalse(engine.rank([tv],profiles,dict(kind='tvshow',minutes=90)))
+        self.assertFalse(engine.rank([tv],profiles,dict(kind='tvshow'),['tvshow:2']))
+        state['session']['kind']='invalid'
+        with self.assertRaises(storage.StateError):storage.validate(state)
+
+    def test_remove_saved_action_uses_regular_select(self):
+        state=engine.feedback(engine.initial_state(),'household',item(),'save')
+        class D:
+            def __init__(self):self.choices=iter([9,0])
+            def select(self,*a):return next(self.choices)
+        class X:
+            def executebuiltin(self,*a):raise AssertionError('Unexpected playback')
+        changed,playing=ui._actions(D(),X(),None,item(),[],state)
+        self.assertFalse(playing);self.assertEqual(changed['profiles']['household']['saved'],[])
+
+    def test_search_term_is_encoded_and_provider_native(self):
+        query='שם & action=play_Item / "hello"'
+        for provider,kind,action,parameter in [('pov','movie','tmdb_movies_search','query'),('pov','tvshow','tmdb_tv_search','query'),('umbrella','movie','movieSearchterm','name'),('umbrella','tvshow','tvSearchterm','name')]:
+            parsed=urlparse(providers.search_route(provider,kind,query));params=parse_qs(parsed.query)
+            self.assertEqual(parsed.netloc,'plugin.video.'+provider)
+            self.assertEqual(params['action'],[action]);self.assertEqual(params[parameter],[query])
+        for query in ('',None,'x'*201):
+            with self.assertRaises(ValueError):providers.search_route('pov','movie',query)
+
+    def test_search_results_do_not_claim_recommendation_provenance(self):
+        calls=[]
+        def rpc(raw):
+            calls.append(json.loads(raw));return json.dumps(dict(result=dict(files=[dict(file=engine.provider_route('movie',1),title='Found')])) )
+        found=catalog.fetch(rpc,query='Found')
+        self.assertNotIn('recommended_from',found[0])
+        self.assertIn('tmdb_movies_search',calls[0]['params']['directory'])
+        with self.assertRaises(ValueError):catalog.fetch(rpc,anchor=item(),query='Found')
 
     def test_provider_catalog_routes_are_distinct(self):
         for p,mode in [('pov','mode'),('umbrella','action')]:
