@@ -26,3 +26,25 @@ def read_watched(path):
         return dict(status='unknown',keys=[],reason='unreadable_schema_or_cache')
     finally:
         if db is not None:db.close()
+
+
+def umbrella_local_selected(settings):
+    value=settings.get('indicators.alt','0')
+    return value=='0' or value=='4' and settings.get('dev.enable.custom')!='true'
+
+
+def read_umbrella_local(path):
+    if not path or not Path(path).is_file():return dict(status='unknown',keys=[],reason='missing_cache')
+    db=None
+    try:
+        db=sqlite3.connect(Path(path).resolve().as_uri()+'?mode=ro',uri=True,timeout=.2)
+        db.execute('PRAGMA query_only=ON')
+        rows=db.execute("SELECT tmdb_id FROM watched WHERE media_type='movie' AND overlay=5 LIMIT 20000").fetchall()
+        keys=[]
+        for (tmdb,) in rows:
+            try:keys.append(identity('movie',tmdb))
+            except ValueError:pass
+        return dict(status='cached_movies_only',keys=sorted(set(keys)),reason='absence_is_unknown',mtime=Path(path).stat().st_mtime)
+    except (sqlite3.Error,OSError,ValueError):return dict(status='unknown',keys=[],reason='unreadable_schema_or_cache')
+    finally:
+        if db is not None:db.close()

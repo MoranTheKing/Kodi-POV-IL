@@ -8,7 +8,7 @@ import threading
 import time
 import uuid
 from contextlib import contextmanager
-from . import engine, storage, catalog, history
+from . import engine, storage, catalog, history, providers
 
 TITLE='הערב שלי — גרסת התנסות'
 
@@ -44,7 +44,7 @@ def exclusive(path):
         f.close()
 
 
-def _load_catalog(xbmc,xbmcgui,folder,anchors=()):
+def _load_catalog(xbmc,xbmcgui,folder,anchors=(),provider='pov'):
     replies=queue.Queue(maxsize=1)
     stopped=threading.Event()
     def work():
@@ -56,8 +56,8 @@ def _load_catalog(xbmc,xbmcgui,folder,anchors=()):
                 items=[]
                 requests=[('movie',None),('tvshow',None)]+[(a['kind'],a) for a in anchors[:2]]
                 for kind,anchor in requests:
-                    if stopped.is_set():break
-                    try:items+=catalog.fetch(xbmc.executeJSONRPC,kind,anchor)
+                    if stopped.is_set() or providers.current()!=provider:break
+                    try:items+=catalog.fetch(xbmc.executeJSONRPC,kind,anchor,provider)
                     except (ValueError,TypeError):pass
                 replies.put((catalog.merge(items),None))
         except Exception:replies.put((None,'catalog_unavailable'))
@@ -69,15 +69,20 @@ def _load_catalog(xbmc,xbmcgui,folder,anchors=()):
             if progress.iscanceled() or monitor.abortRequested():return None
             try:
                 items,error=replies.get(timeout=.1)
-                return items if not error else None
+                return items if not error and providers.current()==provider else None
             except queue.Empty:pass
         return None
     finally:
         stopped.set();progress.close()
 
 
-def _history(xbmcaddon,xbmcvfs):
+def _history(xbmcaddon,xbmcvfs,provider='pov'):
     try:
+        if provider=='umbrella':
+            addon=xbmcaddon.Addon('plugin.video.umbrella')
+            config={k:addon.getSetting(k) for k in ('indicators.alt','dev.enable.custom')}
+            if not history.umbrella_local_selected(config):return dict(status='native_catalog_only',keys=[])
+            return history.read_umbrella_local(os.path.join(xbmcvfs.translatePath(addon.getAddonInfo('profile')),'watched.db'))
         pov=xbmcaddon.Addon('plugin.video.pov')
         config={k:pov.getSetting(k) for k in ('watched_indicators','trakt_user','mdblist_user')}
         name=history.selected_database(config)
@@ -101,20 +106,58 @@ def _viewer(dialog,state):
     return keys[i] if i>=0 else None
 
 
+def _refresh(state,xbmc,xbmcgui,folder,provider,dialog):
+    profiles=[state['profiles'][k] for k in state['viewers']]
+    liked={k for p in profiles for k,f in p['feedback'].items() if f['value']>0}
+    anchor_key=state['session'].get('anchor')
+    anchors=[x for x in state['catalog'] if x['key']==anchor_key][:1]
+    for p in profiles:
+        match=next((x for x in state['catalog'] if x['key'] not in {a['key'] for a in anchors} and p['feedback'].get(x['key'],{}).get('value')==1),None)
+        if match:anchors.append(match)
+        if len(anchors)>=2:break
+    items=_load_catalog(xbmc,xbmcgui,folder,anchors,provider)
+    if items:
+        saved={k for p in state['profiles'].values() for k in p['saved']} | liked | ({anchor_key} if anchor_key else set())
+        present={x['key'] for x in items}
+        state['catalog']=items+[x for x in state['catalog'] if x['key'] in saved and x['key'] not in present]
+        state['catalog_fetched']=time.time()
+    else:dialog.ok(TITLE,'הקטלוג לא נטען או בוטל. ההצעות הקודמות נשמרו. אפשר לנסות שוב.')
+    return state
+
+
+def _act_and_refresh(dialog,xbmc,xbmcgui,item,reasons,state,folder):
+    old_anchor=state['session'].get('anchor')
+    state,playing=_actions(dialog,xbmc,xbmcgui,item,reasons,state)
+    if not playing and state['session'].get('anchor')!=old_anchor and state['session'].get('anchor'):
+        state=_refresh(state,xbmc,xbmcgui,folder,providers.current(),dialog)
+    return state,playing
+
+
 def _actions(dialog,xbmc,xbmcgui,item,reasons,state):
     while True:
-        labels=['צפייה' if item['kind']=='movie' else 'בחירת פרק', 'פרטים ולמה בחרנו', 'לא הערב — הצעה אחרת', 'אהבתי את הכותר הזה', 'לא מתאים לטעם שלי', 'כבר ראיתי', 'שמור לערב אחר']
+        active=providers.current()
+        labels=['צפייה' if item['kind']=='movie' else 'בחירת פרק', 'פרטים ולמה בחרנו', 'לא הערב — הצעה אחרת', 'אהבתי את הכותר הזה', 'לא מתאים לטעם שלי', 'כבר ראיתי', 'שמור לערב אחר','כמעט, אבל…','בחר טריילר' if active=='umbrella' else 'טריילר ותוספות ב־POV']
         choice=dialog.select(item['title'],labels)
         if choice<0:return state,False
         if choice==0:
             # Construct only allowlisted POV routes from validated numeric identity.
-            route=engine.provider_route(item['kind'],item['tmdb'])
+            route=providers.playback_route(providers.current(),item)
             if item['kind']=='movie':xbmc.executebuiltin('RunPlugin("%s")'%route)
             else:xbmc.executebuiltin('ActivateWindow(Videos,"%s",return)'%route)
             return state,True
         if choice==1:
             dialog.textviewer(item['title'],item['plot']+'\n\n'+'\n'.join(reasons)+'\n\nזמינות מקורות וכתוביות עדיין לא נבדקה. מצב צפייה חסר אינו הוכחה שהכותר לא נצפה.')
             continue
+        if choice==7:
+            choices=[('similar','משהו דומה לזה'),('different','כיוון אחר להערב')]
+            if item['kind']=='movie' and item['runtime']:choices.insert(0,('shorter','משהו קצר יותר'))
+            selected=dialog.select('מה נשנה?', [c[1] for c in choices])
+            if selected<0:continue
+            return engine.refine(state,item,choices[selected][0]),False
+        if choice==8:
+            route=providers.trailer_route(providers.current(),item)
+            xbmc.executebuiltin('RunPlugin("%s")'%route)
+            return state,True
         action={2:'not_tonight',3:'like',4:'dislike',5:'seen',6:'save'}[choice]
         viewer=state['viewers'][0] if action=='not_tonight' else _viewer(dialog,state)
         if viewer is None:continue
@@ -134,34 +177,32 @@ def run():
             dialog.ok(TITLE,'לא ניתן לקרוא את ההעדפות. הקובץ המקורי נשמר ולא אופס.');return
         if time.time()-state['session'].get('started',0)>8*3600:
             state['session']=dict(minutes=0,excluded=[],started=time.time())
-        watched=_history(xbmcaddon,xbmcvfs)
+        provider=None;watched=dict(status='unknown',keys=[])
+        notice=providers.fallback_notice()
+        if notice:dialog.ok(TITLE,notice)
         while not xbmc.Monitor().abortRequested():
+            active=providers.current()
+            if provider!=active:
+                provider=active;watched=_history(xbmcaddon,xbmcvfs,provider)
             profiles=[state['profiles'][k] for k in state['viewers']]
+            current_catalog=[x for x in state['catalog'] if x.get('provider','pov')==provider]
             # Imported shared cache is not assigned to a named person's history.
-            seen=watched['keys'] if 'household' in state['viewers'] else []
-            picks=engine.choose_three(engine.rank(state['catalog'],profiles,state['session'],seen))
+            seen=(watched['keys']+[x['key'] for x in current_catalog if x.get('watched')]) if 'household' in state['viewers'] else []
+            picks=engine.choose_three(engine.rank(current_catalog,profiles,state['session'],seen))
             names=' + '.join(p['name'] for p in profiles)
             rows=[_item(xbmcgui,r['item'],r['reasons'][0]) for r in picks]
-            options=['טען הצעות מ־POV', 'מי צופה: '+names, 'כמה זמן יש הערב?', 'היכרות — סמנו כותרים שאהבתם', 'השמורים שלי', 'התחל ערב חדש', 'על ההמלצות והפרטיות']
+            options=['טען הצעות מ־'+providers.NAMES[provider], 'מי צופה: '+names, 'כמה זמן יש הערב?', 'היכרות — סמנו כותרים שאהבתם', 'השמורים שלי', 'התחל ערב חדש', 'על ההמלצות והפרטיות']
             rows += [xbmcgui.ListItem(label=s) for s in options]
             chosen=dialog.select(TITLE,rows,useDetails=True)
             if chosen<0:return
             if chosen<len(picks):
-                r=picks[chosen];state,playing=_actions(dialog,xbmc,xbmcgui,r['item'],r['reasons'],state)
+                r=picks[chosen];state,playing=_act_and_refresh(dialog,xbmc,xbmcgui,r['item'],r['reasons'],state,folder)
                 storage.save(state_path,state)
                 if playing:return
                 continue
             action=chosen-len(picks)
             if action==0:
-                liked={k for p in profiles for k,f in p['feedback'].items() if f['value']>0}
-                anchors=[x for x in state['catalog'] if x['key'] in liked][:2]
-                items=_load_catalog(xbmc,xbmcgui,folder,anchors)
-                if items:
-                    saved={k for p in state['profiles'].values() for k in p['saved']} | liked
-                    present={x['key'] for x in items}
-                    state['catalog']=items+[x for x in state['catalog'] if x['key'] in saved and x['key'] not in present]
-                    state['catalog_fetched']=time.time()
-                else:dialog.ok(TITLE,'הקטלוג לא נטען או בוטל. ההצעות הקודמות נשמרו. אפשר לנסות שוב.')
+                state=_refresh(state,xbmc,xbmcgui,folder,providers.current(),dialog)
             elif action==1:
                 keys=list(state['profiles'])
                 selected=dialog.multiselect('מי צופה? אפשר לבחור יחד', [state['profiles'][k]['name'] for k in keys]+['הוסף צופה'],preselect=[keys.index(k) for k in state['viewers']])
@@ -184,11 +225,11 @@ def run():
                     dialog.ok(TITLE,'אין כותרים להצגה כרגע. טענו הצעות, ואז אפשר להכיר או לשמור.');continue
                 i=dialog.select('בחרו כותר',[_item(xbmcgui,x) for x in items],useDetails=True)
                 if i>=0:
-                    state,playing=_actions(dialog,xbmc,xbmcgui,items[i],['כותר שנבחר מהקטלוג'],state)
+                    state,playing=_act_and_refresh(dialog,xbmc,xbmcgui,items[i],['כותר שנבחר מהקטלוג'],state,folder)
                     storage.save(state_path,state)
                     if playing:return
             elif action==5:
                 state['session']=dict(minutes=0,excluded=[],started=time.time())
             else:
-                dialog.textviewer(TITLE,'גרסת התנסות בתוך הבילד. כרגע ההתאמה משתמשת במשוב מפורש, קשרי ז׳אנר, זמן וגיוון. זו עדיין לא הבנת טעם עמוקה.\n\nההעדפות נשמרות רק בפרופיל Kodi הזה; לא נשלחות למודל. צפייה אינה נחשבת לאהבה. מטמון סרטים שנצפו ב־POV מסנן הצעות בפרופיל הבית בלבד; המטמון עלול להיות חלקי או ישן. אצל צופה אישי ההיסטוריה נבנית רק מסימון מפורש.\n\nהקטלוג נטען דרך POV לפי בקשה. טעינתו כפופה להתנהגות POV ולספקי הקטלוג שלו. אין כאן בדיקת זמינות מקור או סנכרון היסטוריית סדרות עדיין.')
+                dialog.textviewer(TITLE,'הפיצ׳ר משתמש בבחירת POV / Umbrella שבאריח הבית. ההעדפות והשמורים שייכים לצופה ונשמרים במעבר; הקטלוג והניגון מותאמים לספק הפעיל.\n\nההתאמה מבוססת משוב מפורש, המלצות קטלוג, קשרי ז׳אנר, זמן וגיוון; זו עדיין לא הבנת טעם עמוקה. ההעדפות נשמרות מקומית ולא נשלחות למודל.\n\nסינון נצפה של הבית נשען על המטמון המתאים ועל סימונים חיוביים מהקטלוג הפעיל. היסטוריה חסרה או ישנה אינה הוכחה שכותר לא נצפה. באמברלה עם ספק היסטוריה מרוחק קוראים כרגע רק סימוני נצפה שהקטלוג מחזיר, ולא מטמון מקומי לא קשור.\n\nצפייה אינה אהבה. אצל צופה אישי ההיסטוריה נבנית מסימון מפורש. אין עדיין בדיקת זמינות מקור או סנכרון מלא של היסטוריית פרקים.')
             storage.save(state_path,state)

@@ -34,6 +34,11 @@ def validate(value):
         for c in value['catalog']:
             require(key(c['key']) and c['key']==c['kind']+':'+c['tmdb'])
             require(keys(c.get('recommended_from',[])))
+            require(c.get('provider','pov') in ('pov','umbrella'))
+            require(type(c.get('watched',False)) is bool)
+            require(text(c.get('originaltitle',c['title'])))
+            require(isinstance(c.get('imdb',''),str) and (not c.get('imdb') or re.fullmatch(r'tt[0-9]{5,12}',c['imdb'])))
+            require(isinstance(c.get('tvdb',''),str) and (not c.get('tvdb') or re.fullmatch(r'[1-9][0-9]{0,11}',c['tvdb'])))
             require(text(c['title']) and genres(c['genres']) and isinstance(c['plot'],str))
             require(type(c['year']) is int and isinstance(c['art'],dict))
             require(all(isinstance(k,str) and isinstance(v,str) for k,v in c['art'].items()))
@@ -43,6 +48,9 @@ def validate(value):
         require(type(session['started']) in (int,float) and math.isfinite(session['started']) and session['started']>0)
         require(type(session['minutes']) is int and session['minutes'] in (0,45,60,90,120,150,180))
         require(keys(session['excluded']))
+        require(type(session.get('max_runtime',86400)) is int and 0<session.get('max_runtime',86400)<=86400)
+        require('anchor' not in session or key(session['anchor']))
+        require(genres(session.get('anchor_genres',[])) and genres(session.get('avoid_genres',[])))
     except (AssertionError,ValueError,TypeError,KeyError,OverflowError) as e:
         raise StateError('Preference schema invalid; original preserved') from e
     return value

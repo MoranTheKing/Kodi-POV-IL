@@ -534,8 +534,8 @@ class ReferencePlan(object):
 # clitic set is closed, so allowing it costs no precision against the noun
 # classes above: those are blocked by the six-letter floor whatever follows.
 # It DOES open one new class, a 6+ letter broken plural in \u064a\u0646 carrying a
-# possessive (\u062a\u0645\u0627\u0631\u064a\u0646\u0647\u0627, \u062a\u0646\u0627\u0646\u064a\u0646\u0647\u0627); those are pinned as controls in
-# tools/test_gender_verification.py so the trade is made with eyes open.
+# possessive (\u062a\u0645\u0627\u0631\u064a\u0646\u0647\u0627, \u062a\u0646\u0627\u0646\u064a\u0646\u0647\u0627). The two verified noun stems are
+# excluded below; the general morphological ambiguity remains a limitation.
 _AR_2FS_PRESENT = (u'(?<![\u0621-\u064a])\u062a[\u0621-\u064a]{2,5}[\u0621-\u0629\u062b-\u064a]\u064a\u0646'
                    u'(?:\u0646\u064a|\u0647\u0645\u0627|\u0647\u0627|\u0647\u0645|\u0647\u0646|\u0643\u0645|\u0647|\u0643)?(?![\u0621-\u064a])')
 
@@ -548,6 +548,12 @@ _AR_MASC = tuple(re.compile(p) for p in (
     u'\u0623\u0646\u062a\u064e', u'\u0644\u0643\u064e', u'\u0628\u0643\u064e', u'\u0639\u0644\u064a\u0643\u064e', u'\u0645\u0639\u0643\u064e', u'\u0625\u0644\u064a\u0643\u064e', u'\u0645\u0646\u0643\u064e',
     u'\u0643\u064e\\s', u'\u0643\u064e$', u'\u062a\u064e\\s', u'\u062a\u064e$',
 ))
+# Narrow lexical exceptions to the productive 2fs shape. These are nouns
+# (exercises / dragons), including possessives, not feminine-address verbs.
+# Keep other evidence in the same cue; this is not a general Arabic parser.
+_AR_NOUN_EXCEPTIONS = re.compile(
+    r'(?<![\u0621-\u064a])(?:تمارين|تنانين)'
+    r'(?:ها|هما|هم|هن|ه|كم|كن|ك|نا|ي)?(?![\u0621-\u064a])')
 # Hebrew reference: read the pronoun straight off it.
 # The SAME proclitic alternation _HE_MASC carries below. Without it we looked
 # for \u05d5\u05d0\u05ea\u05d4/\u05e9\u05d0\u05ea\u05d4 but never for \u05d5\u05d0\u05ea/\u05e9\u05d0\u05ea -- an asymmetry that made the
@@ -666,7 +672,8 @@ def reference_addressee_gender(ref_text, lang):
             f = _he_addresses_female(ref_text)
             m = bool(_HE_MASC.search(ref_text))
         elif lang == 'ar':
-            f = any(p.search(ref_text) for p in _AR_FEM)
+            signal_text = _AR_NOUN_EXCEPTIONS.sub(' ', ref_text)
+            f = any(p.search(signal_text) for p in _AR_FEM)
             m = any(p.search(ref_text) for p in _AR_MASC)
         elif lang in _ADDRESSEE_MARKERS:
             fem_pats, masc_pats = _ADDRESSEE_MARKERS[lang]
