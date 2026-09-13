@@ -474,6 +474,56 @@ def _looks_like_legacy_engine_text(text):
     return False
 
 
+def _rtl_inside_single_style_run(line):
+    """Use a single libass shaping run for a Hebrew line with HTML styles.
+
+    A style boundary can reset the bidi base, moving punctuation and even
+    reordering separately styled Hebrew phrases. Expand a single styled text
+    run over its surrounding dialogue/music ornaments. For mixed substantive
+    runs, drop inline emphasis rather than display phrases in the wrong order.
+    Visible text and its logical order are preserved; no words are reversed.
+    """
+    tag = r'(</?(?:i|b|u|font)(?:\s+[^<>]*)?>)'
+    parts = re.split(tag, line, flags=re.I)
+    if len(parts) == 1:
+        return line
+    texts = []
+    for index in range(0, len(parts), 2):
+        value = parts[index]
+        if '<' in value or '>' in value:
+            return line
+        if re.search(r'[A-Za-z0-9\u0590-\u05ff]', value):
+            texts.append(index)
+    if not texts or not any(_HEB_LETTER_RE.search(parts[i]) for i in texts):
+        return line
+    # Previous cache repair may have put controls outside or inside styles.
+    # Remove only embedding controls here; retain other intentional bidi marks.
+    plain = ''.join(parts[::2]).replace(_RLE, '').replace(_PDF, '')
+    if len(texts) != 1:
+        return plain
+    # Preserve only one nested style chain. Collecting sibling openings
+    # and closings independently would manufacture crossed tags, e.g.
+    # <i></i><b>text</b> -> <i><b>text</i></b>.
+    stack = []
+    saw_close = False
+    for token in parts[1::2]:
+        name = re.match(r'</?([a-z]+)', token, re.I).group(1).lower()
+        if token.startswith('</'):
+            saw_close = True
+            if stack:
+                if stack.pop() != name:
+                    return plain
+            # An unmatched close may finish a style from the preceding line.
+        else:
+            if saw_close:
+                return plain
+            stack.append(name)
+    opens = ''.join(t for t in parts[1::2] if not t.startswith('</'))
+    closes = ''.join(t for t in parts[1::2] if t.startswith('</'))
+    return opens + _RLE + plain + _PDF + closes
+
+
+
 def _wrap_rtl_base_line(line, cue_hebrew=False, legacy_engine=False):
     """Wrap a Hebrew text line in an explicit RTL embedding (RLE .. PDF) so the
     subtitle renderer treats it with a right-to-left BASE direction. Used by the
@@ -545,7 +595,7 @@ def _wrap_rtl_base_line(line, cue_hebrew=False, legacy_engine=False):
     # displaced leading sentence-punct back to the logical end. On pristine
     # (fresh AI) text this is a no-op -- Hebrew never authors a leading . , ; : ! ?
     normalized = _fix_one_text_line(s, move_ellipsis=legacy_engine)
-    return _RLE + normalized + _PDF
+    return _RLE + _rtl_inside_single_style_run(normalized) + _PDF
 
 
 # --- entries the model welded together -------------------------------------
