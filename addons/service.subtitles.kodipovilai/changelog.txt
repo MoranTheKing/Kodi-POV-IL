@@ -1,3 +1,9 @@
+0.2.534
+- Replace Tonight's nested dialogs with a dedicated living-room hub and three explainable picks.
+- Add one-tap evening modes, direct playback, trailers, replacement, saving, liking and similar-title refinement.
+- Read connected MDBList and Trakt lists conservatively while preserving titles shared by more than one source.
+- Add dedicated Tonight artwork and migrate the exact generated home shortcut without changing user customisations.
+
 0.2.533
 - Broaden Tonight discovery across rotating history and liked titles with bounded incremental loading.
 - Match available creator, cast and catalog-topic metadata alongside explicit preferences.
@@ -7614,4 +7620,3 @@ v0.1.0 (initial)
 - Caches translations under userdata/addon_data with TTL + size cap
 - Skips translation when real Hebrew subs already exist
 - Settings UI for API key, model, source language priority, cache
-

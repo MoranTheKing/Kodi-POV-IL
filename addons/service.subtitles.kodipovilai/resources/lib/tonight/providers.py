@@ -48,6 +48,21 @@ def catalog_route(provider,kind,anchor=None):
     return 'plugin://plugin.video.'+provider+'/?'+urlencode(params)
 
 
+def personal_route(provider,kind,source):
+    """Read-only directory routes owned by the active provider."""
+    if provider not in NAMES or kind not in ('movie','tvshow') or source not in ('mdblist','trakt'):
+        raise ValueError('Unknown personal catalog')
+    if provider=='pov':
+        params=dict(mode='build_movie_list' if kind=='movie' else 'build_tvshow_list',
+                    action='mdblist_watchlist' if source=='mdblist' else 'trakt_watchlist',
+                    name=('MDBList Watchlist' if source=='mdblist' else 'Trakt Watchlist'))
+    elif source=='mdblist':
+        params=dict(action='mdbUserWatchListMovies' if kind=='movie' else 'mdbUserWatchListTVShows')
+    else:
+        params=dict(action='movies' if kind=='movie' else 'tvshows',url='traktwatchlist')
+    return 'plugin://plugin.video.'+provider+'/?'+urlencode(params)
+
+
 def playback_route(provider,item):
     from .engine import identity
     identity(item['kind'],item['tmdb'])

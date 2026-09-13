@@ -38,6 +38,12 @@ def validate(value):
             require(keys(c.get('recommended_from',[])))
             require(c.get('provider','pov') in ('pov','umbrella'))
             require(type(c.get('watched',False)) is bool and traits(c.get('traits',{})))
+            require(c.get('personal_source','') in ('','MDBList','Trakt','MDBList / Trakt'))
+            require(isinstance(c.get('personal_sources',[]),list) and
+                    len(c.get('personal_sources',[]))<=2 and
+                    all(source in ('MDBList','Trakt') for source in c.get('personal_sources',[])))
+            if c.get('personal_sources'):
+                require(c.get('personal_source')==' / '.join(c['personal_sources']))
             require(text(c.get('originaltitle',c['title'])))
             require(isinstance(c.get('imdb',''),str) and (not c.get('imdb') or re.fullmatch(r'tt[0-9]{5,12}',c['imdb'])))
             require(isinstance(c.get('tvdb',''),str) and (not c.get('tvdb') or re.fullmatch(r'[1-9][0-9]{0,11}',c['tvdb'])))
@@ -52,11 +58,15 @@ def validate(value):
             require(isinstance(step,dict) and keys(step.get('anchors',[])) and len(step.get('anchors',[]))<=8)
             require(type(step.get('cursor')) is int and 0<=step['cursor']<=8)
             require(isinstance(step.get('popular'),list) and len(step['popular'])<=2 and all(k in ('movie','tvshow') for k in step['popular']))
+            require(isinstance(step.get('sources',[]),list) and len(step.get('sources',[]))<=2 and all(k in ('mdblist','trakt') for k in step.get('sources',[])))
+            require(isinstance(step.get('personal',[]),list) and len(step.get('personal',[]))<=4 and all(re.fullmatch(r'(mdblist|trakt):(movie|tvshow)',k) for k in step.get('personal',[])))
+            require(type(step.get('personal_cursor',0)) is int and 0<=step.get('personal_cursor',0)<=1)
         session=value['session']
         require(type(session['started']) in (int,float) and math.isfinite(session['started']) and session['started']>0)
         require(type(session['minutes']) is int and session['minutes'] in (0,45,60,90,120,150,180))
         require(keys(session['excluded']))
         require(session.get('discovery_mode','') in ('','lighter','less_familiar'))
+        require(session.get('vibe','') in ('','light','tense','moving','surprise'))
         require(isinstance(session.get('avoid_creators',[]),list) and len(session.get('avoid_creators',[]))<=12 and all(text(t,120) for t in session.get('avoid_creators',[])))
         require(session.get('kind','all') in ('all','movie','tvshow'))
         require(type(session.get('max_runtime',86400)) is int and 0<session.get('max_runtime',86400)<=86400)

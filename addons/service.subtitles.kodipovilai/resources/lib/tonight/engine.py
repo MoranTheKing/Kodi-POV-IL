@@ -212,11 +212,22 @@ def rank(catalog, profiles, session, watched=(), history_seeds=()):
             score-=2
         mood_score,mood_reasons=taste.refinement(item,session)
         score+=mood_score;reasons.extend(mood_reasons)
+        if session.get('vibe')=='surprise':
+            novelty=[taste.surprise(item,p.get('feedback',{})) for p in profiles]
+            if novelty:
+                score+=sum(x[0] for x in novelty)/len(novelty)
+                reasons.extend(r for x in novelty for r in x[1])
         if not reasons:
             reasons.append('עדיין לומדים את הטעם; זו הצעה מהקטלוג, לא התאמה עמוקה')
         if cap<86400:
             reasons.append('משך הקטלוג מתאים לזמן שבחרת')
-        candidates.append(dict(item=item, score=score, reasons=list(dict.fromkeys(reasons)), saved=any(item['key'] in p.get('saved',[]) for p in profiles)))
+        personal_label=(item.get('personal_source') or
+                        ' / '.join(item.get('personal_sources',[])))
+        personal=bool(personal_label)
+        if personal:
+            score+=.75
+            reasons.append('ברשימת הצפייה האישית שלך ב־%s' % personal_label)
+        candidates.append(dict(item=item, score=score, reasons=list(dict.fromkeys(reasons)), saved=personal or any(item['key'] in p.get('saved',[]) for p in profiles)))
     return sorted(candidates, key=lambda r:(-r['score'],r['item']['key']))
 
 

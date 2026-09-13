@@ -584,10 +584,24 @@ class Tonight(unittest.TestCase):
     def test_home_preserves_and_honors_deletion(self):
         raw='<favourites>\r\n  <favourite name="mine">Custom()</favourite>\r\n</favourites>\r\n'
         added=entrypoints.insert(raw);self.assertIn('Custom()',added);self.assertEqual(added,entrypoints.insert(added))
-        deleted=added.replace('  <favourite name="הערב שלי — התנסות" thumb="special://home/addons/service.subtitles.kodipovilai/icon.png">'+entrypoints.ACTION+'</favourite>\n','')
+        self.assertIn('name="הערב שלי"',added);self.assertNotIn('התנסות',added)
+        self.assertIn('thumb="'+entrypoints.ICON+'"',added)
+        deleted=added.replace('  <favourite name="הערב שלי" thumb="'+entrypoints.ICON+'">'+entrypoints.ACTION+'</favourite>\n','')
         self.assertEqual(deleted,entrypoints.insert(deleted))
         self.assertEqual(entrypoints.insert('<broken'),'<broken')
         self.assertIn(entrypoints.ACTION,entrypoints.insert('<favourites />'))
+
+    def test_home_renames_only_our_exact_old_generated_entry(self):
+        old='<favourites>\n  <favourite name="הערב שלי — התנסות" thumb="special://home/addons/service.subtitles.kodipovilai/icon.png">'+entrypoints.ACTION+'</favourite>\n'+entrypoints.MARKER+'\n</favourites>'
+        changed=entrypoints.insert(old)
+        self.assertIn('name="הערב שלי"',changed);self.assertNotIn('— התנסות',changed)
+        self.assertIn('thumb="'+entrypoints.ICON+'"',changed)
+
+    def test_home_upgrades_generated_icon_but_keeps_custom_thumb(self):
+        current='<favourites>\n  <favourite name="הערב שלי" thumb="'+entrypoints.LEGACY_ICON+'">'+entrypoints.ACTION+'</favourite>\n'+entrypoints.MARKER+'\n</favourites>'
+        self.assertIn('thumb="'+entrypoints.ICON+'"',entrypoints.insert(current))
+        custom=current.replace(entrypoints.LEGACY_ICON,'special://profile/my-art.png')
+        self.assertEqual(custom,entrypoints.insert(custom))
 
     def test_standalone_excludes_feature(self):
         spec=importlib.util.spec_from_file_location('pack',ROOT/'tools/build_ai_subtitles_packages.py');pack=importlib.util.module_from_spec(spec);spec.loader.exec_module(pack)
