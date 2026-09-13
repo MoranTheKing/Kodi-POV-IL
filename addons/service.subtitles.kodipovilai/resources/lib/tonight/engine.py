@@ -171,7 +171,7 @@ def rank(catalog, profiles, session, watched=(), history_seeds=(), history_stren
     cap=min(minutes*60 if minutes else 86400,session.get('max_runtime',86400))
     history_seeds=list(dict.fromkeys(history_seeds))
     history_set=set(history_seeds);history_order={key:index for index,key in enumerate(history_seeds)}
-    history_strengths=history_strengths or {}
+    history_strengths=history_strengths if isinstance(history_strengths,dict) else {}
     automatic=taste.implicit_profile(
         [item for item in catalog if item.get('key') not in disliked_evidence],
         history_seeds,history_strengths)
@@ -222,7 +222,8 @@ def rank(catalog, profiles, session, watched=(), history_seeds=(), history_stren
             # every single view remains much weaker than an explicit like.
             ordered=sorted(set(history_origins),key=lambda key:history_order[key])
             recency=sum(1.0/(1.0+history_order[key]/8.0) for key in ordered)/len(ordered)
-            repeat_support=sum(min(5,max(1,history_strengths.get(key,1)))-1 for key in ordered)
+            repeat_support=sum(min(5,taste.repeat_strength(history_strengths.get(key)))-1
+                               for key in ordered)
             score+=min(1.25,.45+.18*(len(ordered)-1)+.15*recency+.04*repeat_support)
             reasons.append('כמה כותרים מהיסטוריית הצפייה הובילו לכיוון הזה' if len(ordered)>1
                            else 'בהשראת כותר מהיסטוריית הצפייה בבית')
