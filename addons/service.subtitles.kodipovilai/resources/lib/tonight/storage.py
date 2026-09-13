@@ -55,8 +55,10 @@ def validate(value):
         progress=value.get('discovery',{})
         require(isinstance(progress,dict) and set(progress)<=set(('pov','umbrella')))
         for step in progress.values():
-            require(isinstance(step,dict) and keys(step.get('anchors',[])) and len(step.get('anchors',[]))<=8)
-            require(type(step.get('cursor')) is int and 0<=step['cursor']<=8)
+            require(isinstance(step,dict) and keys(step.get('anchors',[])) and len(step.get('anchors',[]))<=64)
+            require(type(step.get('cursor')) is int and 0<=step['cursor']<=64)
+            require(type(step.get('version',1)) is int and step.get('version',1) in (1,2))
+            require(keys(step.get('seed_head',[])) and len(step.get('seed_head',[]))<=16)
             require(isinstance(step.get('popular'),list) and len(step['popular'])<=2 and all(k in ('movie','tvshow') for k in step['popular']))
             require(isinstance(step.get('sources',[]),list) and len(step.get('sources',[]))<=2 and all(k in ('mdblist','trakt') for k in step.get('sources',[])))
             require(isinstance(step.get('personal',[]),list) and len(step.get('personal',[]))<=4 and all(re.fullmatch(r'(mdblist|trakt):(movie|tvshow)',k) for k in step.get('personal',[])))
