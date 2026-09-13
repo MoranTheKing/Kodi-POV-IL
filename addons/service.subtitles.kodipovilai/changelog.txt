@@ -1,3 +1,8 @@
+0.2.535
+- Learn Tonight preferences automatically from repeated viewing and connected-list patterns without requiring ratings.
+- Expand each mode to a scrollable nine-title shelf and make light, tense, moving and surprise modes visibly distinct.
+- Rotate through up to 64 history, list and explicit anchors while preventing one like or a disliked title from dominating.
+
 0.2.534
 - Replace Tonight's nested dialogs with a dedicated living-room hub and three explainable picks.
 - Add one-tap evening modes, direct playback, trailers, replacement, saving, liking and similar-title refinement.

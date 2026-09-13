@@ -33,6 +33,7 @@ class HistorySchemas(unittest.TestCase):
                 self.assertEqual(result['keys'],['movie:3','movie:900'])
                 self.assertEqual(result['seed_keys'],['tvshow:12','movie:3','movie:900'])
                 self.assertEqual(result['observed_series'],['tvshow:12'])
+                self.assertEqual(result['seed_strengths'],{'movie:900':1,'tvshow:12':2,'movie:3':1})
                 self.assertEqual(result['reason'],'viewing_is_not_liking')
                 self.assertEqual(result['order'],'recent_first')
                 self.assertEqual(p.read_bytes(),before)
