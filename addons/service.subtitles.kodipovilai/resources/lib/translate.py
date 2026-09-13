@@ -4531,7 +4531,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             old_body = '\n'.join(old_lines)
             if SequenceMatcher(None, old_body, body, autojunk=False).ratio() < 0.60:
                 continue
-            invariant = r'(?<![א-ת])(?:לא|אין|אל)(?![א-ת])|[0-9]+'
+            # Attached conjunctions retain negation too: שלא / ושאין / כשלא.
+            # This pass changes gender only; changing these words is ineligible.
+            invariant = r'(?<![א-ת])(?:ו?(?:ש|כש)?(?:לא|אין|אל)|ו?ללא|ו?בלי)(?![א-ת])|[0-9]+'
             if _repair_re.findall(invariant, old_body) != _repair_re.findall(invariant, body):
                 continue
             # The index and timecode are taken from the SOURCE block, never

@@ -80,12 +80,15 @@ def _load_catalog(xbmc,xbmcgui,folder,anchors=(),provider='pov',query=None):
 
 def _history(xbmcaddon,xbmcvfs,provider='pov'):
     try:
+        from .. import addon_presence
         if provider=='umbrella':
-            addon=xbmcaddon.Addon('plugin.video.umbrella')
+            addon=addon_presence.addon('plugin.video.umbrella')
+            if addon is None:return dict(status='unknown',keys=[])
             config={k:addon.getSetting(k) for k in ('indicators.alt','dev.enable.custom')}
             if not history.umbrella_local_selected(config):return dict(status='native_catalog_only',keys=[])
             return history.read_umbrella_local(os.path.join(xbmcvfs.translatePath(addon.getAddonInfo('profile')),'watched.db'))
-        pov=xbmcaddon.Addon('plugin.video.pov')
+        pov=addon_presence.addon('plugin.video.pov')
+        if pov is None:return dict(status='unknown',keys=[])
         config={k:pov.getSetting(k) for k in ('watched_indicators','trakt_user','mdblist_user')}
         name=history.selected_database(config)
         path=xbmcvfs.translatePath('special://profile/addon_data/plugin.video.pov/'+name) if name else None
@@ -95,7 +98,9 @@ def _history(xbmcaddon,xbmcvfs,provider='pov'):
 
 def _item(xbmcgui,item,reason=''):
     duration=(' · %s דק׳' % ((item['runtime']+59)//60)) if item['runtime'] and item['kind']=='movie' else ''
-    li=xbmcgui.ListItem(label=item['title']+duration,label2=reason)
+    identity=(' · '+str(item['year'])) if item.get('year') else ''
+    identity+=' · '+('סרט' if item['kind']=='movie' else 'סדרה')
+    li=xbmcgui.ListItem(label=item['title']+identity+duration,label2=reason)
     li.setArt(item.get('art',{}))
     li.setInfo('video',dict(title=item['title'],plot=item['plot'],year=item['year'],mediatype=item['kind']))
     return li
@@ -108,10 +113,11 @@ def _viewer(dialog,state):
     return keys[i] if i>=0 else None
 
 
-def _refresh(state,xbmc,xbmcgui,folder,provider,dialog):
+def _refresh(state,xbmc,xbmcgui,folder,provider,dialog,preferred=None):
     profiles=[state['profiles'][k] for k in state['viewers']]
     liked={k for p in profiles for k,f in p['feedback'].items() if f['value']>0}
     anchor_key=state['session'].get('anchor')
+    anchor_key=preferred or anchor_key
     anchors=[x for x in state['catalog'] if x['key']==anchor_key][:1]
     for p in profiles:
         match=next((x for x in state['catalog'] if x['key'] not in {a['key'] for a in anchors} and p['feedback'].get(x['key'],{}).get('value')==1),None)
@@ -129,8 +135,12 @@ def _refresh(state,xbmc,xbmcgui,folder,provider,dialog):
 
 def _act_and_refresh(dialog,xbmc,xbmcgui,item,reasons,state,folder):
     old_anchor=state['session'].get('anchor')
+    old_likes={k for k in state['viewers'] if state['profiles'][k]['feedback'].get(item['key'],{}).get('value')==1}
     state,playing=_actions(dialog,xbmc,xbmcgui,item,reasons,state)
-    if not playing and state['session'].get('anchor')!=old_anchor and state['session'].get('anchor'):
+    new_like=any(k not in old_likes and state['profiles'][k]['feedback'].get(item['key'],{}).get('value')==1 for k in state['viewers'])
+    if not playing and new_like:
+        state=_refresh(state,xbmc,xbmcgui,folder,providers.current(),dialog,preferred=item['key'])
+    elif not playing and state['session'].get('anchor')!=old_anchor and state['session'].get('anchor'):
         state=_refresh(state,xbmc,xbmcgui,folder,providers.current(),dialog)
     return state,playing
 
