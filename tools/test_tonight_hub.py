@@ -55,6 +55,20 @@ class Window:
 
 
 class HubTests(unittest.TestCase):
+    def test_merged_liked_and_unrated_origins_open_without_inventing_likes(self):
+        for provider in ('pov','umbrella'):
+            state=engine.feedback(engine.initial_state(),'household',media(90,provider=provider),'like')
+            first=media(1,provider=provider);first['recommended_from']=['movie:90']
+            other=media(1,provider=provider);other['recommended_from']=['movie:91']
+            state['catalog']=catalog.merge([first,other])
+            storage.validate(state)
+            ranked=engine.rank(state['catalog'],[state['profiles']['household']],
+                               state['session'],history_seeds=['movie:91'])
+            self.assertEqual(ranked[0]['explicit_origins'],['movie:90'])
+            self.assertEqual(ranked[0]['history_origins'],['movie:91'])
+            self.assertEqual(len(engine.choose_shelf(ranked)),1)
+            self.assertEqual(set(state['profiles']['household']['feedback']),{'movie:90'})
+
     def test_one_tap_modes_are_complete_and_reversible(self):
         state=engine.initial_state();state['session'].update(anchor='movie:7',anchor_genres=['Drama'],
             avoid_genres=['Horror'],max_runtime=5000,discovery_mode='lighter',avoid_creators=['X'])
