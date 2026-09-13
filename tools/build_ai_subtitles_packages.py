@@ -32,6 +32,7 @@ STANDALONE_LIB_FILES = {
     "__init__.py",
     "all_subs_samefile_patcher.py",
     "arabic_gender.py",
+    "english_residual.py",
     "autosub_service.py",
     "cache.py",
     "dark_subs_integration.py",
