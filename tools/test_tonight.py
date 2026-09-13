@@ -13,12 +13,65 @@ def item(n=1,genres=('Mystery',),runtime=5400):
 
 
 class Tonight(unittest.TestCase):
+    def test_cancelled_load_closes_progress_and_preserves_catalog_silently(self):
+        import types
+        closed=[]
+        progress=types.SimpleNamespace(create=lambda *a:None,iscanceled=lambda:True,close=lambda:closed.append(True))
+        xbmc=types.SimpleNamespace(Monitor=lambda:types.SimpleNamespace(abortRequested=lambda:False))
+        gui=types.SimpleNamespace(DialogProgress=lambda:progress)
+        with patch.object(ui.threading,'Thread',return_value=types.SimpleNamespace(start=lambda:None)):
+            self.assertIs(ui._load_catalog(xbmc,gui,'unused'),ui._CANCELLED)
+        self.assertEqual(closed,[True])
+        state=engine.initial_state();state['catalog']=[item()]
+        notices=[];dialog=types.SimpleNamespace(ok=lambda *a:notices.append(a))
+        with patch.object(ui,'_load_catalog',return_value=ui._CANCELLED):
+            self.assertIs(ui._refresh(state,None,None,'unused','pov',dialog),state)
+        self.assertFalse(notices);self.assertEqual(state['catalog'],[item()])
+        with patch.object(ui,'_load_catalog',return_value=None):
+            self.assertIs(ui._refresh(state,None,None,'unused','pov',dialog),state)
+        self.assertEqual(len(notices),1);self.assertEqual(state['catalog'],[item()])
+
+    def test_visible_filter_summary_includes_shorter_cap_and_type(self):
+        self.assertIn('סדרות',ui._session_summary(dict(kind='tvshow',minutes=0)))
+        self.assertIn('ללא מגבלת זמן',ui._session_summary(dict(minutes=0)))
+        self.assertIn('90',ui._session_summary(dict(kind='movie',minutes=90)))
+        summary=ui._session_summary(dict(kind='movie',minutes=120,max_runtime=5399))
+        self.assertIn('סרטים',summary);self.assertIn('90',summary);self.assertNotIn('120',summary)
+
+    def test_first_load_explained_profile_limit_and_search_cancel_silent(self):
+        import types
+        state=engine.initial_state()
+        for i in range(7):state['profiles'][str(i)]=dict(name=str(i),feedback={},seen=[],saved=[])
+        notices=[];menus=[];profile_rows=[];steps=iter(['מי צופה','היכרות —',0,-1])
+        class ListItem:
+            def __init__(self,label='',label2='',**kw):self.label=label;self.label2=label2
+            def setArt(self,*a):pass
+            def setInfo(self,*a):pass
+        class Dialog:
+            def select(self,title,rows,**kw):
+                menus.append(rows);choice=next(steps)
+                if isinstance(choice,str):return next(i for i,row in enumerate(rows) if choice in (row if isinstance(row,str) else row.label))
+                return choice
+            def multiselect(self,title,rows,**kw):profile_rows.extend(rows);return None
+            def input(self,*a):return 'query'
+            def ok(self,*a):notices.append(a)
+        with tempfile.TemporaryDirectory() as folder:
+            fake=dict(xbmc=types.SimpleNamespace(Monitor=lambda:types.SimpleNamespace(abortRequested=lambda:False)),
+                      xbmcaddon=types.SimpleNamespace(Addon=lambda *a:types.SimpleNamespace(getAddonInfo=lambda *a:folder)),
+                      xbmcgui=types.SimpleNamespace(Dialog=Dialog,ListItem=ListItem),xbmcvfs=types.SimpleNamespace(translatePath=lambda p:p))
+            with patch.dict(sys.modules,fake),patch.object(storage,'load',return_value=state),patch.object(storage,'save'),patch.object(providers,'current',return_value='pov'),patch.object(providers,'fallback_notice',return_value=''),patch.object(ui,'_history',return_value=dict(keys=[])),patch.object(ui,'_load_catalog',return_value=ui._CANCELLED):
+                ui.run()
+        self.assertEqual(len(profile_rows),8);self.assertNotIn('הוסף צופה',profile_rows)
+        self.assertIn('שלוש הצעות',menus[0][0].label2)
+        self.assertIn('ללא מגבלת זמן',menus[0][2].label)
+        self.assertFalse(notices)
+
     def test_new_like_fetches_its_recommendations_before_old_likes(self):
         import types
         old,new,found=item(1),item(2),item(3)
         state=engine.initial_state();state['catalog']=[old,new]
         state=engine.feedback(state,'household',old,'like')
-        dialog=types.SimpleNamespace(select=lambda *a,**k:3,ok=lambda *a:None)
+        dialog=types.SimpleNamespace(select=lambda title,labels:labels.index('אהבתי את הכותר הזה'),ok=lambda *a:None,notification=lambda *a,**k:None)
         calls=[]
         def fetch(xbmc,gui,folder,anchors,provider):
             calls.append([a['key'] for a in anchors]);return [found]
@@ -120,6 +173,7 @@ class Tonight(unittest.TestCase):
             def setInfo(self,*args):pass
         class Dialog:
             def input(self,*args):return next(steps)
+            def notification(self,*args,**kwargs):notices.append(args)
             def select(self,title,rows,**kwargs):
                 choice=next(steps)
                 if isinstance(choice,str):return next(i for i,row in enumerate(rows) if choice in (row if isinstance(row,str) else row.label))
@@ -199,10 +253,64 @@ class Tonight(unittest.TestCase):
         class D:
             def __init__(self):self.choices=iter([9,0])
             def select(self,*a):return next(self.choices)
+            def notification(self,*a,**kw):pass
         class X:
             def executebuiltin(self,*a):raise AssertionError('Unexpected playback')
         changed,playing=ui._actions(D(),X(),None,item(),[],state)
         self.assertFalse(playing);self.assertEqual(changed['profiles']['household']['saved'],[])
+
+    def test_trailer_is_third_and_rechecks_current_provider(self):
+        import types
+        calls=[]
+        class D:
+            def select(self,title,labels):
+                self.asserted=labels
+                return 2
+        dialog=D()
+        with patch.object(providers,'current',side_effect=['pov','umbrella']):
+            changed,playing=ui._actions(dialog,types.SimpleNamespace(executebuiltin=calls.append),None,item(),[],engine.initial_state())
+        self.assertIn('טריילר',dialog.asserted[2])
+        self.assertTrue(playing)
+        self.assertEqual(len(calls),1)
+        self.assertIn('plugin.video.umbrella',calls[0])
+        self.assertIn('play_Trailer_Select',calls[0])
+        self.assertNotIn('play_Item',calls[0])
+
+    def test_reordered_feedback_changes_correct_state_and_confirms_viewer(self):
+        import types
+        for label,action in [('שמור לערב אחר','save'),('אהבתי את הכותר הזה','like'),('לא מתאים לטעם שלי','dislike'),('כבר ראיתי','seen'),('לא הערב — הצעה אחרת','not_tonight')]:
+            with self.subTest(action=action):
+                notices=[];state=engine.initial_state()
+                state['profiles']['household']['name']='נועה'
+                dialog=types.SimpleNamespace(select=lambda title,labels:labels.index(label),notification=lambda *a,**kw:notices.append((a,kw)))
+                def no_play(*a):raise AssertionError('Feedback triggered playback')
+                changed,playing=ui._actions(dialog,types.SimpleNamespace(executebuiltin=no_play),None,item(),[],state)
+                self.assertFalse(playing)
+                self.assertEqual(changed,engine.feedback(state,'household',item(),action))
+                self.assertEqual(len(notices),1)
+                self.assertEqual(notices[0][1],dict(time=2500,sound=False))
+                if action!='not_tonight':self.assertIn('נועה',notices[0][0][1])
+
+    def test_cancel_before_feedback_has_no_notice_or_mutation(self):
+        import types
+        state=engine.initial_state()
+        def unexpected(*a,**kw):raise AssertionError('Cancel caused side effect')
+        dialog=types.SimpleNamespace(select=lambda *a:-1,notification=unexpected)
+        changed,playing=ui._actions(dialog,types.SimpleNamespace(executebuiltin=unexpected),None,item(),[],state)
+        self.assertIs(changed,state);self.assertFalse(playing)
+
+    def test_group_save_acknowledges_only_selected_viewer(self):
+        import types
+        state=engine.initial_state();state['profiles']['other']=copy.deepcopy(state['profiles']['household'])
+        state['profiles']['other']['name']='דנה';state['viewers'].append('other')
+        notices=[]
+        def select(title,labels):return 1 if title=='למי לשמור את המשוב?' else labels.index('שמור לערב אחר')
+        dialog=types.SimpleNamespace(select=select,notification=lambda *a,**kw:notices.append(a))
+        changed,playing=ui._actions(dialog,None,None,item(),[],state)
+        self.assertFalse(playing)
+        self.assertEqual(changed['profiles']['household']['saved'],[])
+        self.assertEqual(changed['profiles']['other']['saved'],['movie:1'])
+        self.assertIn('דנה',notices[0][1]);self.assertNotIn('הבית',notices[0][1])
 
     def test_search_term_is_encoded_and_provider_native(self):
         query='שם & action=play_Item / "hello"'
@@ -256,6 +364,30 @@ class Tonight(unittest.TestCase):
         parsed=parse_qs(urlparse(providers.playback_route('umbrella',x)).query)
         self.assertEqual(parsed['action'],['seasons']);self.assertEqual(parsed['tvdb'],['99'])
         self.assertEqual(parse_qs(urlparse(providers.trailer_route('umbrella',x)).query)['type'],['show'])
+
+    def test_umbrella_season_consumer_keeps_rows_with_partial_catalog_art(self):
+        # Consumer-shaped excerpt of Umbrella 6.7.87 Seasons.tmdb_list:
+        # a missing mandatory artwork field raises inside the per-season try
+        # and causes that season to be discarded, rather than surfacing an error.
+        def consume(raw):
+            art=json.loads(raw);rows=[]
+            for season in (1,2):
+                try:
+                    values=dict(season=season)
+                    if art:
+                        for name in ('fanart','icon','thumb','banner','clearart','tvshow.poster'):
+                            values[name]=art[name]
+                    rows.append(values)
+                except KeyError:pass
+            return rows
+        self.assertEqual(consume(json.dumps(dict(poster='poster'))),[])
+        for supplied in ({},{'poster':'poster'},{'fanart':'fanart'},{'poster':'poster','fanart':'fanart','thumb':'thumb'}):
+            with self.subTest(art=supplied):
+                x=item();x.update(kind='tvshow',key='tvshow:1',art=supplied)
+                raw=parse_qs(urlparse(providers.playback_route('umbrella',x)).query)['art'][0]
+                rows=consume(raw)
+                self.assertEqual([r['season'] for r in rows],[1,2])
+                for key,value in supplied.items():self.assertEqual(json.loads(raw)[key],value)
 
     def test_provider_rechecked_at_play_click(self):
         class D:
