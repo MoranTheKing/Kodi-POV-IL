@@ -21,6 +21,23 @@ def repair(source,refs,reply):
     return ns['_regender_blocks'],calls
 
 class Bidirectional(unittest.TestCase):
+    def test_attached_negation_cannot_be_removed_or_added(self):
+        for negative,positive in [('שלא כדאי','שכדאי'),('שאין מספיק','שיש מספיק'),
+                                  ('ושלא כדאי','ושכדאי'),('כשלא כדאי','כשכדאי'),
+                                  ('בלי מים','עם מים'),('ללא מים','עם מים')]:
+            with self.subTest(negative=negative):
+                old='את יודעת '+negative+' ללכת לשם.'
+                correct='אתה יודע '+negative+' ללכת לשם.'
+                wrong='אתה יודע '+positive+' ללכת לשם.'
+                original=[block(1,old)]
+                fn,_=repair([block(1,'You know the situation.')],{1:correct},block(1,wrong))
+                self.assertEqual(fn(original,[1]),original)
+                fn,_=repair([block(1,'You know the situation.')],{1:correct},block(1,correct))
+                self.assertEqual(fn(original,[1]),[block(1,correct)])
+                fn,_=repair([block(1,'You know the situation.')],{1:correct},block(1,correct))
+                positive_original=[block(1,'את יודעת '+positive+' ללכת לשם.')]
+                self.assertEqual(fn(positive_original,[1]),positive_original)
+
     def test_reverse_candidate_and_ambiguous_controls(self):
         cases=[('את עייפה.','אתה עייף.',[1]),('בואי הנה.','אתה צריך לבוא.',[1]),
                ('ראיתי את דני.','אתה ראית את דני.',[]),('אני עייפה.','אתה עייף.',[]),

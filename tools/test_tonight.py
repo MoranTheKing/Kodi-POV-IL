@@ -13,6 +13,36 @@ def item(n=1,genres=('Mystery',),runtime=5400):
 
 
 class Tonight(unittest.TestCase):
+    def test_new_like_fetches_its_recommendations_before_old_likes(self):
+        import types
+        old,new,found=item(1),item(2),item(3)
+        state=engine.initial_state();state['catalog']=[old,new]
+        state=engine.feedback(state,'household',old,'like')
+        dialog=types.SimpleNamespace(select=lambda *a,**k:3,ok=lambda *a:None)
+        calls=[]
+        def fetch(xbmc,gui,folder,anchors,provider):
+            calls.append([a['key'] for a in anchors]);return [found]
+        with patch.object(ui,'_load_catalog',side_effect=fetch),patch.object(providers,'current',return_value='pov'):
+            changed,playing=ui._act_and_refresh(dialog,None,None,new,[],state,'unused')
+        self.assertFalse(playing)
+        self.assertEqual(calls,[[new['key'],old['key']]])
+        self.assertIn(found['key'],[x['key'] for x in changed['catalog']])
+        self.assertNotIn('anchor',changed['session'])
+        with patch.object(ui,'_load_catalog',side_effect=AssertionError('Repeated like fetched again')):
+            ui._act_and_refresh(dialog,None,None,new,[],changed,'unused')
+
+    def test_visible_label_disambiguates_year_and_media_type(self):
+        import types
+        class LI:
+            def __init__(self,**kwargs):self.label=kwargs['label']
+            def setArt(self,*a):pass
+            def setInfo(self,*a):pass
+        movie=item();movie['year']=1999
+        label=ui._item(types.SimpleNamespace(ListItem=LI),movie).label
+        self.assertIn('1999',label);self.assertIn('סרט',label)
+        movie['kind']='tvshow'
+        self.assertIn('סדרה',ui._item(types.SimpleNamespace(ListItem=LI),movie).label)
+
     def test_run_tv_then_time_switches_to_movies_and_clears_shorter_cap(self):
         import types
         state=engine.initial_state();state['catalog']=[item()]
