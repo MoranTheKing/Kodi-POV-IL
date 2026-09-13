@@ -278,11 +278,11 @@ def build_gender_block(entry_ref, lang='ar'):
         return _arabic_block_text(body)
     if lang == 'he':
         return (
-            'HEBREW GENDER REFERENCE -- HARD CONSTRAINT, NOT A HINT.\n'
+            'HEBREW GENDER REFERENCE -- GENDER EVIDENCE, SUBJECT TO SOURCE FIDELITY.\n'
             'For some entries below, the line from a PROFESSIONAL HUMAN Hebrew '
             'translation of the SAME scene is given (it comes from a different '
             'video cut, so its wording may be aligned imperfectly). Hebrew '
-            'marks gender everywhere; for each such entry you MUST make your '
+            'marks gender everywhere; for each such entry when consistent with explicit source evidence, make your '
             'Hebrew agree in SPEAKER / ADDRESSEE / REFERENT gender with the '
             'reference line (אתה/את, masculine/feminine verbs and adjectives). '
             'Do NOT default to masculine -- read the reference and match it.\n'
@@ -291,6 +291,7 @@ def build_gender_block(entry_ref, lang='ar'):
             + _FIDELITY_CLAUSE.format(ref='Hebrew') +
             'Per-entry Hebrew reference (entry_number: hebrew_line):\n'
             + body + '\n\n'
+            + 'SOURCE PRIORITY: If the source explicitly establishes gender or relationship (for example daughter versus son), it overrides a contradictory reference. Never change daughter into son or another source fact to match the reference. Use reference gender when the source does not settle it. Apply this separately to speaker, listener and referent; do not guess a new speaker from adjacency.\n\n'
         )
     name = LANG_NAME.get(lang, lang.upper())
     signals = _GENDER_SIGNALS.get(
