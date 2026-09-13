@@ -33,6 +33,7 @@ class Item:
     def setArt(self,value):self.art=value
     def setProperty(self,key,value):self.props[key]=value
     def getProperty(self,key):return self.props.get(key,'')
+    def setInfo(self,*args,**kwargs):pass
 
 
 class Dialog:
@@ -260,9 +261,38 @@ class HubTests(unittest.TestCase):
         state=engine.initial_state();changed=engine.feedback(state,'household',media(),'like')
         undo=[engine.checkpoint(state)]
         restored,playing,remember=ui._rich_more(
-            Dialog(4),None,None,'',changed,None,[],undo)
+            Dialog(6),None,None,'',changed,None,[],undo)
         self.assertFalse(playing);self.assertFalse(remember);self.assertEqual(undo,[])
         self.assertEqual(engine.checkpoint(restored),engine.checkpoint(state))
+
+    def test_liked_library_survives_provider_switch_and_plays_via_active_provider(self):
+        candidate=media(77,provider='pov')
+        state=engine.initial_state();state['catalog']=[candidate]
+        state=engine.feedback(state,'household',candidate,'like')
+        self.assertEqual(ui._collection_items(state,'liked','umbrella'),[candidate])
+        calls=[]
+        dialog=types.SimpleNamespace(select=lambda *args,**kwargs: 0,
+                                     ok=lambda *args:None,
+                                     textviewer=lambda *args:None,
+                                     notification=lambda *args,**kwargs:None)
+        xbmc=types.SimpleNamespace(executebuiltin=lambda command:calls.append(command))
+        changed,playing=ui._open_collection(dialog,xbmc,
+            types.SimpleNamespace(ListItem=Item),state,'liked','umbrella')
+        self.assertTrue(playing);self.assertEqual(changed,state)
+        self.assertTrue(calls[0].startswith('PlayMedia("plugin://plugin.video.umbrella/'))
+
+    def test_liked_library_remove_updates_persisted_feedback(self):
+        candidate=media(78);state=engine.initial_state();state['catalog']=[candidate]
+        state=engine.feedback(state,'household',candidate,'like')
+        choices=iter((0,2));notices=[];messages=[]
+        dialog=types.SimpleNamespace(select=lambda *args,**kwargs:next(choices),
+            ok=lambda *args:messages.append(args),textviewer=lambda *args:None,
+            notification=lambda *args,**kwargs:notices.append(args))
+        changed,playing=ui._open_collection(dialog,None,
+            types.SimpleNamespace(ListItem=Item),state,'liked','pov')
+        self.assertFalse(playing)
+        self.assertNotIn(candidate['key'],changed['profiles']['household']['feedback'])
+        self.assertTrue(notices);self.assertTrue(messages)
 
     def test_card_copy_is_short_personal_and_truthful(self):
         item=media();item['personal_source']='MDBList'

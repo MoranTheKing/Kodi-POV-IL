@@ -22,6 +22,7 @@ def validate(value):
         return isinstance(x,dict) and set(x)<=set(('directors','writers','cast','tags','studios')) and all(isinstance(v,list) and len(v)<=20 and all(text(t,120) for t in v) for v in x.values())
     try:
         require(isinstance(value,dict) and value['version']==1)
+        require(type(value.get('catalog_format',1)) is int and value.get('catalog_format',1) in (1,2))
         require(isinstance(value['profiles'],dict) and 1<=len(value['profiles'])<=8)
         require(isinstance(value['viewers'],list) and 1<=len(value['viewers'])<=8)
         require(len(set(value['viewers']))==len(value['viewers']))
@@ -38,6 +39,9 @@ def validate(value):
             require(keys(c.get('recommended_from',[])))
             require(c.get('provider','pov') in ('pov','umbrella'))
             require(type(c.get('watched',False)) is bool and traits(c.get('traits',{})))
+            require(type(c.get('availability_checked',True)) is bool)
+            require(c.get('premiered','')=='' or isinstance(c.get('premiered'),str) and
+                    re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}',c['premiered']))
             require(c.get('personal_source','') in ('','MDBList','Trakt','MDBList / Trakt'))
             require(isinstance(c.get('personal_sources',[]),list) and
                     len(c.get('personal_sources',[]))<=2 and
