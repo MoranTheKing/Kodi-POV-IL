@@ -92,6 +92,12 @@ def feedback(state, viewer, item, action):
         profile['seen'] = sorted(set(profile['seen']) | {key})
     elif action == 'save':
         profile['saved'] = sorted(set(profile['saved']) | {key})
+    elif action == 'unsave':
+        profile['saved'] = [k for k in profile['saved'] if k != key]
+    elif action == 'clear_feedback':
+        profile['feedback'].pop(key,None)
+    elif action == 'unseen':
+        profile['seen'] = [k for k in profile['seen'] if k != key]
     elif action == 'not_tonight':
         state['session']['excluded'] = sorted(set(state['session']['excluded']) | {key})
     else:
@@ -128,6 +134,8 @@ def rank(catalog, profiles, session, watched=()):
     candidates = []
     used = set()
     for item in catalog:
+        if session.get('kind','all') not in ('all',item['kind']):
+            continue
         if item['key'] in excluded or item['key'] in used:
             continue
         used.add(item['key'])
@@ -176,3 +184,14 @@ def choose_three(ranked):
             return r['score'] - .5*overlap
         best=max(remaining,key=value);remaining.remove(best);selected.append(best)
     return selected
+
+
+def checkpoint(state):
+    """Undo user decisions only; never roll back the provider catalog/cache."""
+    return copy.deepcopy({k:state[k] for k in ('profiles','viewers','session')})
+
+
+def restore_checkpoint(state,snapshot):
+    result=dict(state)
+    result.update(copy.deepcopy(snapshot))
+    return result

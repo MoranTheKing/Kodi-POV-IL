@@ -44,7 +44,7 @@ def exclusive(path):
         f.close()
 
 
-def _load_catalog(xbmc,xbmcgui,folder,anchors=(),provider='pov'):
+def _load_catalog(xbmc,xbmcgui,folder,anchors=(),provider='pov',query=None):
     replies=queue.Queue(maxsize=1)
     stopped=threading.Event()
     def work():
@@ -54,10 +54,12 @@ def _load_catalog(xbmc,xbmcgui,folder,anchors=(),provider='pov'):
             with exclusive(os.path.join(folder,'tonight','catalog.lock')) as acquired:
                 if not acquired:replies.put((None,'already_loading'));return
                 items=[]
-                requests=[('movie',None),('tvshow',None)]+[(a['kind'],a) for a in anchors[:2]]
+                requests=[('movie',None),('tvshow',None)]+([] if query is not None else [(a['kind'],a) for a in anchors[:2]])
                 for kind,anchor in requests:
                     if stopped.is_set() or providers.current()!=provider:break
-                    try:items+=catalog.fetch(xbmc.executeJSONRPC,kind,anchor,provider)
+                    try:
+                        if query is None:items+=catalog.fetch(xbmc.executeJSONRPC,kind,anchor,provider)
+                        else:items+=catalog.fetch(xbmc.executeJSONRPC,kind,provider=provider,query=query)
                     except (ValueError,TypeError):pass
                 replies.put((catalog.merge(items),None))
         except Exception:replies.put((None,'catalog_unavailable'))
@@ -136,7 +138,7 @@ def _act_and_refresh(dialog,xbmc,xbmcgui,item,reasons,state,folder):
 def _actions(dialog,xbmc,xbmcgui,item,reasons,state):
     while True:
         active=providers.current()
-        labels=['צפייה' if item['kind']=='movie' else 'בחירת פרק', 'פרטים ולמה בחרנו', 'לא הערב — הצעה אחרת', 'אהבתי את הכותר הזה', 'לא מתאים לטעם שלי', 'כבר ראיתי', 'שמור לערב אחר','כמעט, אבל…','בחר טריילר' if active=='umbrella' else 'טריילר ותוספות ב־POV']
+        labels=['צפייה' if item['kind']=='movie' else 'בחירת פרק', 'פרטים ולמה בחרנו', 'לא הערב — הצעה אחרת', 'אהבתי את הכותר הזה', 'לא מתאים לטעם שלי', 'כבר ראיתי', 'שמור לערב אחר','כמעט, אבל…','בחר טריילר' if active=='umbrella' else 'טריילר ותוספות ב־POV','שינוי הסימונים שלי']
         choice=dialog.select(item['title'],labels)
         if choice<0:return state,False
         if choice==0:
@@ -154,6 +156,18 @@ def _actions(dialog,xbmc,xbmcgui,item,reasons,state):
             selected=dialog.select('מה נשנה?', [c[1] for c in choices])
             if selected<0:continue
             return engine.refine(state,item,choices[selected][0]),False
+        if choice==9:
+            viewer=_viewer(dialog,state)
+            if viewer is None:continue
+            p=state['profiles'][viewer];key=item['key'];choices=[]
+            if key in p['saved']:choices.append(('unsave','הסר מהשמורים'))
+            if key in p['feedback']:choices.append(('clear_feedback','מחק את דירוג הטעם שלי'))
+            if key in p['seen']:choices.append(('unseen','בטל את הסימון שלי ככבר ראיתי'))
+            if not choices:
+                dialog.ok(TITLE,'אין סימון אישי לבטל עבור הצופה הזה.');continue
+            selected=dialog.select('שינוי הסימונים שלי',[c[1] for c in choices])
+            if selected<0:continue
+            return engine.feedback(state,viewer,item,choices[selected][0]),False
         if choice==8:
             route=providers.trailer_route(providers.current(),item)
             xbmc.executebuiltin('RunPlugin("%s")'%route)
@@ -178,6 +192,7 @@ def run():
         if time.time()-state['session'].get('started',0)>8*3600:
             state['session']=dict(minutes=0,excluded=[],started=time.time())
         provider=None;watched=dict(status='unknown',keys=[])
+        undo=[]
         notice=providers.fallback_notice()
         if notice:dialog.ok(TITLE,notice)
         while not xbmc.Monitor().abortRequested():
@@ -191,16 +206,25 @@ def run():
             picks=engine.choose_three(engine.rank(current_catalog,profiles,state['session'],seen))
             names=' + '.join(p['name'] for p in profiles)
             rows=[_item(xbmcgui,r['item'],r['reasons'][0]) for r in picks]
-            options=['טען הצעות מ־'+providers.NAMES[provider], 'מי צופה: '+names, 'כמה זמן יש הערב?', 'היכרות — סמנו כותרים שאהבתם', 'השמורים שלי', 'התחל ערב חדש', 'על ההמלצות והפרטיות']
+            options=['טען הצעות מ־'+providers.NAMES[provider], 'מי צופה: '+names, 'מה מתאים לערב — זמן וסוג צפייה', 'היכרות — מה אהבתם?', 'השמורים שלי', 'עוד אפשרויות']
             rows += [xbmcgui.ListItem(label=s) for s in options]
             chosen=dialog.select(TITLE,rows,useDetails=True)
             if chosen<0:return
+            before=engine.checkpoint(state)
             if chosen<len(picks):
                 r=picks[chosen];state,playing=_act_and_refresh(dialog,xbmc,xbmcgui,r['item'],r['reasons'],state,folder)
+                if engine.checkpoint(state)!=before:undo=(undo+[before])[-5:]
                 storage.save(state_path,state)
                 if playing:return
                 continue
             action=chosen-len(picks)
+            if action in (2,3,5):
+                menus={2:('מה מתאים לערב?', [('כמה זמן יש?',2),('סרט, סדרה או שניהם?',7)]),
+                       3:('איך נכיר את הטעם?', [('חיפוש כותר שאהבתם',10),('כמה אהובים בבת אחת',8),('עיון בכותרים שכבר נטענו',3)]),
+                       5:('עוד אפשרויות', [('בטל את השינוי האחרון',9),('התחל ערב חדש',5),('על ההמלצות והפרטיות',6)])}
+                title,choices=menus[action];selection=dialog.select(title,[x[0] for x in choices])
+                if selection<0:continue
+                action=choices[selection][1]
             if action==0:
                 state=_refresh(state,xbmc,xbmcgui,folder,providers.current(),dialog)
             elif action==1:
@@ -217,7 +241,11 @@ def run():
             elif action==2:
                 minutes=[0,45,60,90,120,150,180]
                 i=dialog.select('כמה זמן יש? סדרות דורשות בחירת פרק', ['ללא מגבלת זמן']+[str(n)+' דקות' for n in minutes[1:]])
-                if i>=0:state['session']['minutes']=minutes[i]
+                if i>=0:
+                    state['session']['minutes']=minutes[i];state['session'].pop('max_runtime',None)
+                    if minutes[i] and state['session'].get('kind')=='tvshow':
+                        dialog.ok(TITLE,'משך הפרק הבא אינו ידוע. עם מגבלת זמן יוצגו סרטים בלבד; אפשר לחזור לסדרות בבחירת סוג הצפייה.')
+                        state['session']['kind']='movie'
             elif action in (3,4):
                 saved=set(k for p in profiles for k in p['saved'])
                 items=[x for x in state['catalog'] if action==3 or x['key'] in saved]
@@ -226,10 +254,48 @@ def run():
                 i=dialog.select('בחרו כותר',[_item(xbmcgui,x) for x in items],useDetails=True)
                 if i>=0:
                     state,playing=_act_and_refresh(dialog,xbmc,xbmcgui,items[i],['כותר שנבחר מהקטלוג'],state,folder)
-                    storage.save(state_path,state)
-                    if playing:return
+                    if playing:
+                        storage.save(state_path,state);return
             elif action==5:
                 state['session']=dict(minutes=0,excluded=[],started=time.time())
+            elif action==7:
+                kinds=['all','movie','tvshow']
+                i=dialog.select('מה מחפשים הערב?', ['סרטים וסדרות','סרט','סדרה'])
+                if i>=0:
+                    state['session']['kind']=kinds[i]
+                    if kinds[i]=='tvshow' and (state['session']['minutes'] or state['session'].get('max_runtime')):
+                        dialog.ok(TITLE,'משך סדרה אינו משך הפרק הבא. כדי להציג סדרות, מגבלת הזמן תוסר.')
+                        state['session']['minutes']=0;state['session'].pop('max_runtime',None)
+            elif action==8:
+                viewer=_viewer(dialog,state)
+                if viewer is not None:
+                    items=current_catalog
+                    if not items:dialog.ok(TITLE,'טענו הצעות כדי לבחור כותרים מוכרים.')
+                    else:
+                        selected=dialog.multiselect('סמנו רק כותרים שאהבתם — אפשר לדלג', [x['title'] for x in items])
+                        if selected:
+                            for i in selected:state=engine.feedback(state,viewer,items[i],'like')
+                            state=_refresh(state,xbmc,xbmcgui,folder,providers.current(),dialog)
+            elif action==10:
+                query=dialog.input('שם סרט או סדרה שאהבתם').strip()[:200]
+                if query:
+                    items=_load_catalog(xbmc,xbmcgui,folder,provider=providers.current(),query=query)
+                    if not items:dialog.ok(TITLE,'החיפוש לא החזיר כותרים או בוטל. אפשר לנסות שם מקורי או לבדוק את הספק הפעיל.')
+                    else:
+                        i=dialog.select('בחרו את הכותר והפעולה',[_item(xbmcgui,x) for x in items],useDetails=True)
+                        if i>=0:
+                            chosen_item=items[i]
+                            changed,playing=_actions(dialog,xbmc,xbmcgui,chosen_item,['תוצאת חיפוש שבחרת'],state)
+                            if playing:return
+                            if engine.checkpoint(changed)!=engine.checkpoint(state):
+                                state=changed
+                                state['catalog']=catalog.merge([chosen_item]+state['catalog'])
+                                state=_refresh(state,xbmc,xbmcgui,folder,providers.current(),dialog)
+            elif action==9:
+                if undo:
+                    state=engine.restore_checkpoint(state,undo.pop());storage.save(state_path,state);continue
+                dialog.notification(TITLE,'אין שינוי לבטל בכניסה הנוכחית')
             else:
                 dialog.textviewer(TITLE,'הפיצ׳ר משתמש בבחירת POV / Umbrella שבאריח הבית. ההעדפות והשמורים שייכים לצופה ונשמרים במעבר; הקטלוג והניגון מותאמים לספק הפעיל.\n\nההתאמה מבוססת משוב מפורש, המלצות קטלוג, קשרי ז׳אנר, זמן וגיוון; זו עדיין לא הבנת טעם עמוקה. ההעדפות נשמרות מקומית ולא נשלחות למודל.\n\nסינון נצפה של הבית נשען על המטמון המתאים ועל סימונים חיוביים מהקטלוג הפעיל. היסטוריה חסרה או ישנה אינה הוכחה שכותר לא נצפה. באמברלה עם ספק היסטוריה מרוחק קוראים כרגע רק סימוני נצפה שהקטלוג מחזיר, ולא מטמון מקומי לא קשור.\n\nצפייה אינה אהבה. אצל צופה אישי ההיסטוריה נבנית מסימון מפורש. אין עדיין בדיקת זמינות מקור או סנכרון מלא של היסטוריית פרקים.')
+            if engine.checkpoint(state)!=before:undo=(undo+[before])[-5:]
             storage.save(state_path,state)

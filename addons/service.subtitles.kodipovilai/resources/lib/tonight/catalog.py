@@ -8,9 +8,10 @@ POPULAR_MOVIES='plugin://plugin.video.pov/?mode=build_movie_list&action=tmdb_mov
 POPULAR_TV='plugin://plugin.video.pov/?mode=build_tvshow_list&action=tmdb_tv_popular'
 
 
-def fetch(execute, kind='movie', anchor=None, provider='pov'):
+def fetch(execute, kind='movie', anchor=None, provider='pov', query=None):
     if anchor:kind=anchor['kind']
-    path=providers.catalog_route(provider,kind,anchor)
+    if query is not None and anchor:raise ValueError('Search cannot claim recommendation provenance')
+    path=providers.search_route(provider,kind,query) if query is not None else providers.catalog_route(provider,kind,anchor)
     if path is None:return []
     request=dict(jsonrpc='2.0',id=1,method='Files.GetDirectory',params=dict(
         directory=path,media='video',properties=['title','originaltitle','year','genre','plot','runtime','rating','art','uniqueid','imdbnumber','playcount']))

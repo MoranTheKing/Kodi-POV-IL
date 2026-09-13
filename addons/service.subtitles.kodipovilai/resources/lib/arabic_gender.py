@@ -690,6 +690,11 @@ def reference_addressee_gender(ref_text, lang):
         return None
 
 
+def addresses_female(text):
+    """Conservative feminine-address candidate; not speaker/referent identity."""
+    return _he_addresses_female(text or '')
+
+
 def addresses_male(text):
     """True when `text` contains the Hebrew masculine second-person pronoun.
 
@@ -704,10 +709,10 @@ def addresses_male(text):
         return False
 
 
-def wrong_gender_entries(blocks, ref_map, lang):
-    """Entry numbers whose Hebrew addresses a man where the reference says the
-    addressee is a woman. See the note above for why only this direction is
-    reported. Never raises."""
+def wrong_gender_entries(blocks, ref_map, lang, both_directions=False):
+    """Conservative addressee-conflict candidates. Legacy default is F-only.
+    The production repair opts into both directions and declines mixed M/F
+    output; source context must still be checked by the repair. Never raises."""
     out = []
     if not ref_map:
         return out
@@ -720,9 +725,12 @@ def wrong_gender_entries(blocks, ref_map, lang):
             ref = ref_map.get(num)
             if not ref:
                 continue
-            if reference_addressee_gender(ref, lang) != 'F':
-                continue
-            if _HE_MASC.search('\n'.join(lines[2:])):
+            target=reference_addressee_gender(ref, lang)
+            body='\n'.join(lines[2:])
+            male=addresses_male(body);female=_he_addresses_female(body)
+            if target=='F' and male and (not both_directions or not female):
+                out.append(num)
+            elif both_directions and target=='M' and female and not male:
                 out.append(num)
     except Exception as e:
         _log('gender verification crashed: {0}'.format(e), level='WARNING')
