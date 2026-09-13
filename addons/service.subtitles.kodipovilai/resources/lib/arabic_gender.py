@@ -400,7 +400,8 @@ def _download_candidate(c):
         payload = translate._decode_link(c.get('link') or '')
         if not payload:
             return None
-        path = subs_engine_bridge.download(payload)
+        # Reference analysis needs logical text, not the player-rendered RTL copy.
+        path = subs_engine_bridge.download(payload, for_delivery=False)
         if path and os.path.isfile(path):
             with open(path, 'r', encoding='utf-8', errors='replace') as f:
                 return f.read()
