@@ -1,5 +1,6 @@
 """Deterministic, explainable first-stage ranking; no model or network calls."""
 import copy
+import datetime
 import math
 import re
 import time
@@ -66,6 +67,8 @@ def normalize(row):
     imdb=str(imdb);tvdb=str(tvdb)
     original=query.get('title',query.get('tvshowtitle',['']))[0] or row.get('originaltitle') or title
     if not isinstance(original,str):original=title
+    premiered=row.get('premiered') or ''
+    if not isinstance(premiered,str) or not re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}',premiered):premiered=''
     return dict(key=key, kind=kind, tmdb=tmdb, title=title[:300], year=year,provider=provider,traits=taste.metadata(row),
                 originaltitle=original[:300],imdb=imdb if re.fullmatch(r'tt[0-9]{5,12}',imdb) else '',tvdb=tvdb if re.fullmatch(r'[1-9][0-9]{0,11}',tvdb) else '',
                 watched=type(row.get('playcount')) is int and row['playcount']>0,
@@ -74,12 +77,37 @@ def normalize(row):
                 genres=sorted(set(g.strip()[:80] for g in genres if isinstance(g, str) and g.strip()))[:100],
                 plot=str(row.get('plot') or '')[:6000],
                 art={k:v for k,v in art.items() if k in ('poster','fanart','thumb') and isinstance(v,str)},
-                availability='unknown')
+                availability='unknown',premiered=premiered,availability_checked=True)
+
+
+def available_now(item,today=None):
+    """Reject only a known future premiere or an old unchecked cache row."""
+    if item.get('availability_checked') is False:return False
+    premiered=item.get('premiered','')
+    if not premiered:return True
+    try:release=datetime.date.fromisoformat(premiered)
+    except (TypeError,ValueError):return True
+    return release <= (today or datetime.date.today())
 
 
 def initial_state():
-    return dict(version=1, profiles={'household':dict(name='הבית', feedback={}, seen=[], saved=[])},
+    return dict(version=1,catalog_format=2, profiles={'household':dict(name='הבית', feedback={}, seen=[], saved=[])},
                 viewers=['household'], session=dict(minutes=0, excluded=[], started=time.time()), catalog=[])
+
+
+def upgrade_catalog(state):
+    """One-time refresh of old rows while preserving explicit user collections."""
+    if state.get('catalog_format',1)>=2:return state
+    state=copy.deepcopy(state)
+    keep={k for profile in state['profiles'].values() for k in profile.get('saved',[])}
+    keep.update(k for profile in state['profiles'].values()
+                for k,value in profile.get('feedback',{}).items() if value.get('value')>0)
+    state['catalog']=[dict(item,availability_checked=False)
+                      for item in state.get('catalog',[]) if item.get('key') in keep]
+    state['catalog_format']=2
+    state['discovery']={}
+    state.pop('catalog_fetched',None)
+    return state
 
 
 def feedback(state, viewer, item, action):
@@ -179,6 +207,8 @@ def rank(catalog, profiles, session, watched=(), history_seeds=(), history_stren
     used = set()
     for item in catalog:
         if session.get('kind','all') not in ('all',item['kind']):
+            continue
+        if not available_now(item):
             continue
         if item['key'] in excluded or item['key'] in used:
             continue
