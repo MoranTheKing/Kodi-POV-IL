@@ -8,7 +8,7 @@ import threading
 import time
 import uuid
 from contextlib import contextmanager
-from . import engine, storage, catalog, history, providers
+from . import engine, storage, catalog, history, providers, discovery
 
 TITLE='הערב שלי — גרסת התנסות'
 _CANCELLED=object()
@@ -45,15 +45,22 @@ def exclusive(path):
         f.close()
 
 
-def _load_catalog(xbmc,xbmcgui,folder,anchors=(),provider='pov',query=None):
+def _load_catalog(xbmc,xbmcgui,folder,anchors=(),provider='pov',query=None,planned=None,existing=()):
     replies=queue.Queue(maxsize=1)
     stopped=threading.Event()
+    latest=[None]
     def work():
         try:
             # The worker owns this OS lock after the user closes the progress
             # dialog, so retrying cannot start overlapping POV requests.
             with exclusive(os.path.join(folder,'tonight','catalog.lock')) as acquired:
                 if not acquired:replies.put((None,'already_loading'));return
+                if planned is not None:
+                    def progress(value):
+                        latest[0]=value
+                    result=catalog.collect(xbmc.executeJSONRPC,planned,existing,
+                        cancelled=lambda:stopped.is_set() or providers.current()!=provider,progress=progress)
+                    replies.put((result,None));return
                 items=[]
                 requests=([] if query is not None else [(a['kind'],a) for a in anchors[:2]])+[('movie',None),('tvshow',None)]
                 for kind,anchor in requests:
@@ -74,7 +81,7 @@ def _load_catalog(xbmc,xbmcgui,folder,anchors=(),provider='pov',query=None):
                 items,error=replies.get(timeout=.1)
                 return items if not error and providers.current()==provider else None
             except queue.Empty:pass
-        return None
+        return dict(latest[0],timed_out=True) if planned is not None and latest[0] is not None and providers.current()==provider else None
     finally:
         stopped.set();progress.close()
 
@@ -149,17 +156,22 @@ def _refresh(state,xbmc,xbmcgui,folder,provider,dialog,preferred=None):
     except ImportError:
         snapshot = dict(status='unknown', keys=[])
     seeds = snapshot.get('seed_keys', snapshot.get('keys', []))
-    used = {a['key'] for a in anchors}
-    for anchor in engine.history_anchors(state, [k for k in seeds if k not in used]):
-        if len(anchors) >= 2:break
-        anchors.append(anchor)
-    items=_load_catalog(xbmc,xbmcgui,folder,anchors,provider)
-    if items is _CANCELLED:return state
+    planned=discovery.plan(state,seeds,provider,preferred=preferred)
+    anchors=[q['anchor'] for q in planned['queries'] if q['anchor']]
+    loaded=_load_catalog(xbmc,xbmcgui,folder,anchors,provider,planned=planned,existing=state['catalog'])
+    if loaded is _CANCELLED:return state
+    details=loaded if isinstance(loaded,dict) else None
+    items=details['items'] if details else loaded
     if items:
         saved={k for p in state['profiles'].values() for k in p['saved']} | liked | ({anchor_key} if anchor_key else set())
         present={x['key'] for x in items}
-        state['catalog']=items+[x for x in state['catalog'] if x['key'] in saved and x['key'] not in present]
+        retained=[x for x in state['catalog'] if x['key'] in saved and x['key'] not in present]
+        state['catalog']=items+retained[:max(0,20000-len(items))]
         state['catalog_fetched']=time.time()
+        if details:
+            state.setdefault('discovery',{})[provider]=details['discovery']
+            if details.get('timed_out') or details.get('errors'):
+                dialog.notification(TITLE,'נשמרו ההצעות שנטענו; רענון נוסף ימשיך לחפש')
     else:dialog.ok(TITLE,'הקטלוג לא נטען. ההצעות הקודמות נשמרו. אפשר לנסות שוב.')
     return state
 
@@ -196,7 +208,7 @@ def _actions(dialog,xbmc,xbmcgui,item,reasons,state):
             dialog.textviewer(item['title'],item['plot']+'\n\n'+'\n'.join(reasons)+'\n\nזמינות מקורות וכתוביות עדיין לא נבדקה. מצב צפייה חסר אינו הוכחה שהכותר לא נצפה.')
             continue
         if choice==7:
-            choices=[('similar','משהו דומה לזה'),('different','כיוון אחר להערב')]
+            choices=[('similar','אהבתי את הכיוון — עוד כאלה'),('different','כיוון אחר להערב'),('lighter','כיוון קליל וקומי יותר'),('less_familiar','לגלות יוצרים אחרים')]
             if item['kind']=='movie' and item['runtime']:choices.insert(0,('shorter','משהו קצר יותר'))
             selected=dialog.select('מה נשנה?', [c[1] for c in choices])
             if selected<0:continue
@@ -275,7 +287,7 @@ def run():
             seeds=watched.get('seed_keys',watched['keys']) if 'household' in state['viewers'] else []
             picks=engine.choose_three(engine.rank(current_catalog,profiles,state['session'],seen,seeds))
             names=' + '.join(p['name'] for p in profiles)
-            rows=[_item(xbmcgui,r['item'],r['reasons'][0]) for r in picks]
+            rows=[_item(xbmcgui,r['item'],' · '.join(r['reasons'][:2])) for r in picks]
             options=['רענן הצעות לפי הצפייה והטעם מ־'+providers.NAMES[provider], 'מי צופה: '+names, 'מה מתאים לערב — '+_session_summary(state['session']), 'היכרות — מה אהבתם?', 'השמורים שלי', 'עוד אפשרויות']
             rows += [xbmcgui.ListItem(label=s,label2=(('%s כותרים מהיסטוריית %s; סמנו אהבתי כדי לדייק' % (len(seeds),' / '.join(watched.get('signal_sources',[])) or 'הבית')) if seeds else ('היסטוריית הבית לא משויכת לפרופיל אישי' if 'household' not in state['viewers'] else 'שלוש הצעות להתחלה; לא זוהתה היסטוריה זמינה — סמנו אהובים כדי לדייק')) if i==0 else '') for i,s in enumerate(options)]
             heading=TITLE
@@ -297,7 +309,7 @@ def run():
                 undo=(undo+[before])[-5:];storage.save(state_path,state);continue
             if action in (2,3,5):
                 menus={2:('מה מתאים לערב?', [('כמה זמן יש?',2),('סרט, סדרה או שניהם?',7)]),
-                       3:('איך נכיר את הטעם?', [('חיפוש כותר שאהבתם',10),('כמה אהובים בבת אחת',8),('עיון בכותרים שכבר נטענו',3)]),
+                       3:('איך נכיר את הטעם?', [('חיפוש כותר שאהבתם',10),('כמה אהובים בבת אחת',8),('עיון בכותרים שכבר נטענו',3),('שתי בחירות להכיר את הטעם',11)]),
                        5:('עוד אפשרויות', [('בטל את השינוי האחרון',9),('התחל ערב חדש',5),('על ההמלצות והפרטיות',6)])}
                 title,choices=menus[action];selection=dialog.select(title,[x[0] for x in choices])
                 if selection<0:continue
@@ -355,6 +367,19 @@ def run():
                         if selected:
                             for i in selected:state=engine.feedback(state,viewer,items[i],'like')
                             state=_refresh(state,xbmc,xbmcgui,folder,providers.current(),dialog)
+            elif action==11:
+                viewer=_viewer(dialog,state)
+                if viewer is not None:
+                    pair=engine.quick_pair(state,viewer,seeds)
+                    if len(pair)<2:
+                        dialog.ok(TITLE,'אין עדיין שני כותרים מוכרים להשוואה. אפשר לחפש כותר שאהבת או לבחור כמה אהובים בבת אחת.')
+                    else:
+                        choice=dialog.select('מה אהבת יותר? אפשר לדלג',
+                            [pair[0]['title'],pair[1]['title'],'אהבתי את שניהם','אף אחד מהם לא לטעמי','דלג'])
+                        if choice in (0,1,2,3):
+                            for i,item in enumerate(pair):
+                                if choice in (i,2,3):state=engine.feedback(state,viewer,item,'dislike' if choice==3 else 'like')
+                            state=_refresh(state,xbmc,xbmcgui,folder,providers.current(),dialog)
             elif action==10:
                 query=dialog.input('שם סרט או סדרה שאהבתם').strip()[:200]
                 if query:
@@ -376,6 +401,6 @@ def run():
                     state=engine.restore_checkpoint(state,undo.pop());storage.save(state_path,state);continue
                 dialog.notification(TITLE,'אין שינוי לבטל בכניסה הנוכחית')
             else:
-                dialog.textviewer(TITLE,'הפיצ׳ר משתמש בבחירת POV / Umbrella שבאריח הבית. ההעדפות והשמורים שייכים לצופה ונשמרים במעבר; הקטלוג והניגון מותאמים לספק הפעיל.\n\nההתאמה מבוססת משוב מפורש, המלצות קטלוג, קשרי ז׳אנר, זמן וגיוון; זו עדיין לא הבנת טעם עמוקה. ההעדפות נשמרות מקומית ולא נשלחות למודל.\n\nסינון נצפה של הבית נשען על המטמון המתאים ועל סימונים חיוביים מהקטלוג הפעיל. היסטוריה חסרה או ישנה אינה הוכחה שכותר לא נצפה. באמברלה עם ספק היסטוריה מרוחק קוראים כרגע רק סימוני נצפה שהקטלוג מחזיר, ולא מטמון מקומי לא קשור.\n\nצפייה אינה אהבה. אצל צופה אישי ההיסטוריה נבנית מסימון מפורש. אין עדיין בדיקת זמינות מקור או סנכרון מלא של היסטוריית פרקים.')
+                dialog.textviewer(TITLE,'הפיצ׳ר משתמש בבחירת POV / Umbrella שבאריח הבית. ההעדפות והשמורים שייכים לצופה ונשמרים במעבר; הקטלוג והניגון מותאמים לספק הפעיל.\n\nההתאמה משלבת משוב מפורש, היסטוריית צפייה, המלצות קטלוג, ז׳אנרים ויוצרים או נושאים משותפים כשהמידע זמין. כל רענון מרחיב בהדרגה את ההצעות. אין הבטחה שקצב, אלימות או אווירה ידועים לכל כותר. ההעדפות נשמרות מקומית ולא נשלחות למודל.\n\nסינון נצפה של הבית נשען על המטמון המתאים ועל סימונים חיוביים מהקטלוג הפעיל. היסטוריה חסרה או ישנה אינה הוכחה שכותר לא נצפה. באמברלה עם ספק היסטוריה מרוחק קוראים כרגע רק סימוני נצפה שהקטלוג מחזיר, ולא מטמון מקומי לא קשור.\n\nצפייה אינה אהבה. אצל צופה אישי ההיסטוריה נבנית מסימון מפורש. אין עדיין בדיקת זמינות מקור או סנכרון מלא של היסטוריית פרקים.')
             if engine.checkpoint(state)!=before:undo=(undo+[before])[-5:]
             storage.save(state_path,state)

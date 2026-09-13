@@ -18,6 +18,8 @@ def validate(value):
     def key(x):return isinstance(x,str) and re.fullmatch(r'(movie|tvshow):[1-9][0-9]{0,11}',x)
     def keys(x):return isinstance(x,list) and len(x)<=20000 and all(key(k) for k in x)
     def genres(x):return isinstance(x,list) and len(x)<=100 and all(text(g,80) for g in x)
+    def traits(x):
+        return isinstance(x,dict) and set(x)<=set(('directors','writers','cast','tags','studios')) and all(isinstance(v,list) and len(v)<=20 and all(text(t,120) for t in v) for v in x.values())
     try:
         require(isinstance(value,dict) and value['version']==1)
         require(isinstance(value['profiles'],dict) and 1<=len(value['profiles'])<=8)
@@ -29,13 +31,13 @@ def validate(value):
             require(keys(p['seen']) and keys(p['saved']))
             for k,f in p['feedback'].items():
                 require(key(k) and type(f['value']) is int and f['value'] in (-1,1))
-                require(text(f['title']) and genres(f['genres']))
+                require(text(f['title']) and genres(f['genres']) and traits(f.get('traits',{})))
         require(isinstance(value['catalog'],list) and len(value['catalog'])<=20000)
         for c in value['catalog']:
             require(key(c['key']) and c['key']==c['kind']+':'+c['tmdb'])
             require(keys(c.get('recommended_from',[])))
             require(c.get('provider','pov') in ('pov','umbrella'))
-            require(type(c.get('watched',False)) is bool)
+            require(type(c.get('watched',False)) is bool and traits(c.get('traits',{})))
             require(text(c.get('originaltitle',c['title'])))
             require(isinstance(c.get('imdb',''),str) and (not c.get('imdb') or re.fullmatch(r'tt[0-9]{5,12}',c['imdb'])))
             require(isinstance(c.get('tvdb',''),str) and (not c.get('tvdb') or re.fullmatch(r'[1-9][0-9]{0,11}',c['tvdb'])))
@@ -44,10 +46,18 @@ def validate(value):
             require(all(isinstance(k,str) and isinstance(v,str) for k,v in c['art'].items()))
             require(c['runtime'] is None or type(c['runtime']) is int and 0<c['runtime']<86400)
             require(type(c['rating']) in (float,int) and math.isfinite(c['rating']) and 0<=c['rating']<=10)
+        progress=value.get('discovery',{})
+        require(isinstance(progress,dict) and set(progress)<=set(('pov','umbrella')))
+        for step in progress.values():
+            require(isinstance(step,dict) and keys(step.get('anchors',[])) and len(step.get('anchors',[]))<=8)
+            require(type(step.get('cursor')) is int and 0<=step['cursor']<=8)
+            require(isinstance(step.get('popular'),list) and len(step['popular'])<=2 and all(k in ('movie','tvshow') for k in step['popular']))
         session=value['session']
         require(type(session['started']) in (int,float) and math.isfinite(session['started']) and session['started']>0)
         require(type(session['minutes']) is int and session['minutes'] in (0,45,60,90,120,150,180))
         require(keys(session['excluded']))
+        require(session.get('discovery_mode','') in ('','lighter','less_familiar'))
+        require(isinstance(session.get('avoid_creators',[]),list) and len(session.get('avoid_creators',[]))<=12 and all(text(t,120) for t in session.get('avoid_creators',[])))
         require(session.get('kind','all') in ('all','movie','tvshow'))
         require(type(session.get('max_runtime',86400)) is int and 0<session.get('max_runtime',86400)<=86400)
         require('anchor' not in session or key(session['anchor']))
