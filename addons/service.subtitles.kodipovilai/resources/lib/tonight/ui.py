@@ -55,7 +55,7 @@ def _load_catalog(xbmc,xbmcgui,folder,anchors=(),provider='pov',query=None):
             with exclusive(os.path.join(folder,'tonight','catalog.lock')) as acquired:
                 if not acquired:replies.put((None,'already_loading'));return
                 items=[]
-                requests=[('movie',None),('tvshow',None)]+([] if query is not None else [(a['kind'],a) for a in anchors[:2]])
+                requests=([] if query is not None else [(a['kind'],a) for a in anchors[:2]])+[('movie',None),('tvshow',None)]
                 for kind,anchor in requests:
                     if stopped.is_set() or providers.current()!=provider:break
                     try:
@@ -92,8 +92,27 @@ def _history(xbmcaddon,xbmcvfs,provider='pov'):
         if pov is None:return dict(status='unknown',keys=[])
         config={k:pov.getSetting(k) for k in ('watched_indicators','trakt_user','mdblist_user')}
         name=history.selected_database(config)
-        path=xbmcvfs.translatePath('special://profile/addon_data/plugin.video.pov/'+name) if name else None
-        return history.read_watched(path)
+        base=xbmcvfs.translatePath(pov.getAddonInfo('profile'))
+        selected=history.read_watched(os.path.join(base,name) if name else None)
+        # Display/exclusion follows the selected indicator. Recommendation
+        # evidence may also use connected services' existing local snapshots.
+        # No account requests, provider writes, or inferred likes are made.
+        names=[name] if name else []
+        for enabled,cache_name in ((config.get('mdblist_user'),'mdblcache.db'),
+                                   (config.get('trakt_user'),'traktcache.db')):
+            if enabled and cache_name not in names:names.append(cache_name)
+        snapshots=[(name,selected)]
+        snapshots += [(n,history.read_watched(os.path.join(base,n))) for n in names if n!=name]
+        seeds=[];seen_seeds=set();sources=[]
+        labels={'watched.db':'POV','mdblcache.db':'MDBList','traktcache.db':'Trakt'}
+        for n,snapshot in snapshots:
+            evidence=snapshot.get('seed_keys',snapshot.get('keys',[]))
+            if evidence:sources.append(labels.get(n,'POV'))
+            for key in evidence:
+                if key not in seen_seeds:seeds.append(key);seen_seeds.add(key)
+        selected['seed_keys']=seeds
+        selected['signal_sources']=sources
+        return selected
     except Exception:return dict(status='unknown',keys=[])
 
 
@@ -124,6 +143,16 @@ def _refresh(state,xbmc,xbmcgui,folder,provider,dialog,preferred=None):
         match=next((x for x in state['catalog'] if x['key'] not in {a['key'] for a in anchors} and p['feedback'].get(x['key'],{}).get('value')==1),None)
         if match:anchors.append(match)
         if len(anchors)>=2:break
+    try:
+        import xbmcaddon, xbmcvfs
+        snapshot = _history(xbmcaddon, xbmcvfs, provider)
+    except ImportError:
+        snapshot = dict(status='unknown', keys=[])
+    seeds = snapshot.get('seed_keys', snapshot.get('keys', []))
+    used = {a['key'] for a in anchors}
+    for anchor in engine.history_anchors(state, [k for k in seeds if k not in used]):
+        if len(anchors) >= 2:break
+        anchors.append(anchor)
     items=_load_catalog(xbmc,xbmcgui,folder,anchors,provider)
     if items is _CANCELLED:return state
     if items:
@@ -243,11 +272,12 @@ def run():
             current_catalog=[x for x in state['catalog'] if x.get('provider','pov')==provider]
             # Imported shared cache is not assigned to a named person's history.
             seen=(watched['keys']+[x['key'] for x in current_catalog if x.get('watched')]) if 'household' in state['viewers'] else []
-            picks=engine.choose_three(engine.rank(current_catalog,profiles,state['session'],seen))
+            seeds=watched.get('seed_keys',watched['keys']) if 'household' in state['viewers'] else []
+            picks=engine.choose_three(engine.rank(current_catalog,profiles,state['session'],seen,seeds))
             names=' + '.join(p['name'] for p in profiles)
             rows=[_item(xbmcgui,r['item'],r['reasons'][0]) for r in picks]
-            options=['טען הצעות מ־'+providers.NAMES[provider], 'מי צופה: '+names, 'מה מתאים לערב — '+_session_summary(state['session']), 'היכרות — מה אהבתם?', 'השמורים שלי', 'עוד אפשרויות']
-            rows += [xbmcgui.ListItem(label=s,label2='שלוש הצעות להתחלה; סמנו מה אהבתם כדי לדייק' if i==0 and not current_catalog else '') for i,s in enumerate(options)]
+            options=['רענן הצעות לפי הצפייה והטעם מ־'+providers.NAMES[provider], 'מי צופה: '+names, 'מה מתאים לערב — '+_session_summary(state['session']), 'היכרות — מה אהבתם?', 'השמורים שלי', 'עוד אפשרויות']
+            rows += [xbmcgui.ListItem(label=s,label2=(('%s כותרים מהיסטוריית %s; סמנו אהבתי כדי לדייק' % (len(seeds),' / '.join(watched.get('signal_sources',[])) or 'הבית')) if seeds else ('היסטוריית הבית לא משויכת לפרופיל אישי' if 'household' not in state['viewers'] else 'שלוש הצעות להתחלה; לא זוהתה היסטוריה זמינה — סמנו אהובים כדי לדייק')) if i==0 else '') for i,s in enumerate(options)]
             heading=TITLE
             if not picks:
                 heading+=' — '+('צריך לטעון הצעות' if not current_catalog else 'אין התאמה לבחירות הנוכחיות')
@@ -274,6 +304,7 @@ def run():
                 action=choices[selection][1]
             if action==0:
                 state=_refresh(state,xbmc,xbmcgui,folder,providers.current(),dialog)
+                watched=_history(xbmcaddon,xbmcvfs,providers.current())
             elif action==1:
                 keys=list(state['profiles'])
                 can_add=len(keys)<8
