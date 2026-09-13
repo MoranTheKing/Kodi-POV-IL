@@ -3,12 +3,13 @@
 No service loop, credential reads, preference export or playback before explicit selection.
 """
 import os
+import math
 import queue
 import threading
 import time
 import uuid
 from contextlib import contextmanager
-from . import engine, storage, catalog, history, providers, discovery, experience
+from . import engine, storage, catalog, history, providers, discovery, experience, taste
 
 TITLE='הערב שלי'
 _CANCELLED=object()
@@ -122,7 +123,9 @@ def _history(xbmcaddon,xbmcvfs,provider='pov'):
             if evidence:sources.append(labels.get(n,'POV'))
             for key in evidence:
                 if key not in seen_seeds:seeds.append(key);seen_seeds.add(key)
-                strengths[key]=max(strengths.get(key,0),snapshot.get('seed_strengths',{}).get(key,1))
+                raw=snapshot.get('seed_strengths',{})
+                raw=raw.get(key) if isinstance(raw,dict) else None
+                strengths[key]=max(strengths.get(key,0),taste.repeat_strength(raw))
         selected['seed_keys']=seeds
         selected['seed_strengths']=strengths
         selected['signal_sources']=sources
@@ -279,6 +282,14 @@ def _personal_refresh_needed(state, provider, sources):
     completed=set(previous.get('personal',[])) if previous.get('sources',[])==sources else set()
     expected={source+':'+kind for source in sources for kind in ('movie','tvshow')}
     return not expected.issubset(completed)
+
+
+def _catalog_is_stale(state, has_personal_evidence, now=None):
+    """Invalid legacy timestamps require refresh; they must never block launch."""
+    if not has_personal_evidence:return False
+    fetched=state.get('catalog_fetched')
+    if type(fetched) not in (int,float) or not math.isfinite(fetched):return True
+    return (time.time() if now is None else now)-fetched>12*3600
 
 
 def _remember_undo(undo, before, state, allowed=True):
@@ -480,7 +491,7 @@ def _rich_run(xbmc,xbmcaddon,xbmcgui,xbmcvfs):
             learned=state.get('discovery',{}).get(provider,{})
             needs_learning=bool(seeds) and (learned.get('version',0)<2 or
                 learned.get('seed_head',[])!=discovery.seed_signature(seeds))
-            stale=bool(seeds or watched.get('personal_sources',[])) and time.time()-state.get('catalog_fetched',0)>12*3600
+            stale=_catalog_is_stale(state,bool(seeds or watched.get('personal_sources',[])))
             if provider not in autoloaded and (not current_catalog or len(picks)<6 or needs_personal or needs_learning or stale):
                 autoloaded.add(provider)
                 state=_refresh(state,xbmc,xbmcgui,folder,provider,dialog,
@@ -603,4 +614,8 @@ def run():
     if not hasattr(xbmcgui,'WindowXMLDialog'):
         return _legacy_run()
     try:return _rich_run(xbmc,xbmcaddon,xbmcgui,xbmcvfs)
-    except Exception:return _legacy_run()
+    except Exception as error:
+        # Keep a useful stage marker in user logs. The legacy fallback remains
+        # available, but a shared ranking failure must no longer be invisible.
+        xbmc.log('MoranSubs Tonight rich launch failed: %s' % error,xbmc.LOGWARNING)
+        return _legacy_run()
