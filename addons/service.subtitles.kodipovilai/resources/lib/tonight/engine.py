@@ -201,7 +201,7 @@ def rank(catalog, profiles, session, watched=(), history_seeds=(), history_stren
             if anchors:
                 score+=1.35
                 explicit_origins.extend(k for k in item.get('recommended_from',[])
-                                        if p.get('feedback',{}).get(k,{}).get('value')>0)
+                                        if p.get('feedback',{}).get(k,{}).get('value')==1)
                 reasons.append('מומלץ בקטלוג בעקבות %s שסימנת באהבתי' % anchors[0]['title'])
             metadata_score,metadata_reasons=taste.affinity(item,p.get('feedback',{}))
             score+=.65*metadata_score
