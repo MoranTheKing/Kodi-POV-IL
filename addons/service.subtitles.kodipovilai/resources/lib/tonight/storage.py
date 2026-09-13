@@ -48,6 +48,7 @@ def validate(value):
         require(type(session['started']) in (int,float) and math.isfinite(session['started']) and session['started']>0)
         require(type(session['minutes']) is int and session['minutes'] in (0,45,60,90,120,150,180))
         require(keys(session['excluded']))
+        require(session.get('kind','all') in ('all','movie','tvshow'))
         require(type(session.get('max_runtime',86400)) is int and 0<session.get('max_runtime',86400)<=86400)
         require('anchor' not in session or key(session['anchor']))
         require(genres(session.get('anchor_genres',[])) and genres(session.get('avoid_genres',[])))

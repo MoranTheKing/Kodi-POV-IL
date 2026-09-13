@@ -1,9 +1,19 @@
 """Follow the existing home-tile choice; never reuse another provider's URL."""
 import json
 import re
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote_plus
 
 NAMES={'pov':'POV','umbrella':'Umbrella'}
+
+
+def search_route(provider,kind,query):
+    from resources.lib import search_provider
+    if provider not in NAMES or kind not in ('movie','tvshow'):
+        raise ValueError('Invalid search target')
+    if not isinstance(query,str) or not query.strip() or len(query)>200:
+        raise ValueError('Invalid search query')
+    prefix=search_provider.AF3_PREFIXES[provider]['Movies' if kind=='movie' else 'Tv']
+    return prefix.replace('&amp;amp;','&')+quote_plus(query.strip())
 
 
 def current():
