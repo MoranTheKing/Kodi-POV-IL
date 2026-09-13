@@ -74,6 +74,75 @@ class HubTests(unittest.TestCase):
         self.assertEqual(light[0]['item']['key'],comedy['key'])
         self.assertEqual(tense[0]['item']['key'],thriller['key'])
 
+    def test_modes_build_distinct_shelves_and_one_like_cannot_own_them(self):
+        state=engine.feedback(engine.initial_state(),'household',media(900,('Horror',)),'like')
+        rows=[]
+        for start,genre in ((1,'Comedy'),(11,'Thriller'),(21,'Drama')):
+            rows.extend(media(start+i,(genre,)) for i in range(4))
+        for i in range(6):
+            candidate=media(31+i,('Horror',));candidate['recommended_from']=['movie:900'];rows.append(candidate)
+        shelves={}
+        for mode in ('all','light','tense','moving','surprise'):
+            session=experience.apply_mode(state,mode)['session']
+            shelves[mode]=engine.choose_shelf(engine.rank(rows,[state['profiles']['household']],session),9)
+            self.assertEqual(len(shelves[mode]),9)
+        self.assertTrue(all(row['item']['genres']==['Comedy'] for row in shelves['light'][:3]))
+        self.assertTrue(all(row['item']['genres']==['Thriller'] for row in shelves['tense'][:3]))
+        self.assertTrue(all(row['item']['genres']==['Drama'] for row in shelves['moving'][:3]))
+        first_pages={mode:tuple(row['item']['key'] for row in shelf[:3]) for mode,shelf in shelves.items()}
+        self.assertEqual(len(set(first_pages.values())),len(first_pages))
+        self.assertLessEqual(sum(bool(row['explicit_origins']) for row in shelves['all'][:3]),1)
+        self.assertLessEqual(sum(bool(row['explicit_origins']) for row in shelves['all']),2)
+
+    def test_one_like_genre_similarity_without_provenance_is_also_capped(self):
+        state=engine.feedback(engine.initial_state(),'household',media(900,('Action',)),'like')
+        rows=[media(i,('Action',)) for i in range(1,5)]+[media(i,('Comedy',)) for i in range(11,15)]
+        shelf=engine.choose_shelf(engine.rank(rows,[state['profiles']['household']],state['session']),8)
+        self.assertLessEqual(sum(row['item']['genres']==['Action'] for row in shelf[:3]),1)
+        self.assertLessEqual(sum(row['item']['genres']==['Action'] for row in shelf),2)
+        tense=experience.apply_mode(state,'tense')['session']
+        tense_shelf=engine.choose_shelf(engine.rank(rows,[state['profiles']['household']],tense),8)
+        self.assertEqual(len(tense_shelf),6)
+        self.assertEqual(sum(row['item']['genres']==['Action'] for row in tense_shelf),2)
+        self.assertEqual(sum(row['item']['genres']==['Comedy'] for row in tense_shelf),4)
+
+    def test_explicit_dislike_is_never_positive_automatic_evidence(self):
+        state=engine.initial_state();bad1=media(90,('Horror',));bad2=media(91,('Horror',))
+        state=engine.feedback(state,'household',bad1,'dislike')
+        horror=media(1,('Horror',));comedy=media(2,('Comedy',))
+        ranked=engine.rank([bad1,bad2,horror,comedy],[state['profiles']['household']],dict(minutes=0),
+                           watched=[bad1['key'],bad2['key']],history_seeds=[bad1['key'],bad2['key']])
+        self.assertFalse(any('דפוס שחוזר' in reason for row in ranked for reason in row['reasons']))
+
+    def test_repeated_history_metadata_personalizes_without_manual_feedback(self):
+        profile=engine.initial_state()['profiles']['household']
+        watched=[media(90,('Comedy',)),media(91,('Comedy','Adventure'))]
+        comedy=media(1,('Comedy',));horror=media(2,('Horror',))
+        ranked=engine.rank(watched+[horror,comedy],[profile],dict(minutes=0),
+                           watched=[x['key'] for x in watched],
+                           history_seeds=[x['key'] for x in watched])
+        self.assertEqual(ranked[0]['item']['key'],comedy['key'])
+        self.assertTrue(any('דפוס שחוזר' in reason for reason in ranked[0]['reasons']))
+        self.assertFalse(profile['feedback'])
+
+    def test_multiple_independent_history_anchors_outweigh_one(self):
+        profile=engine.initial_state()['profiles']['household'];seeds=['movie:90','movie:91','movie:92']
+        one=media(1);one['recommended_from']=[seeds[0]]
+        several=media(2);several['recommended_from']=seeds
+        ranked=engine.rank([one,several],[profile],dict(minutes=0),history_seeds=seeds)
+        self.assertEqual(ranked[0]['item']['key'],several['key'])
+        self.assertIn('כמה כותרים',' '.join(ranked[0]['reasons']))
+
+    def test_repeated_series_exposure_is_bounded_but_more_informative(self):
+        profile=engine.initial_state()['profiles']['household'];seeds=['movie:90','tvshow:91']
+        movie=media(1);movie['recommended_from']=[seeds[0]]
+        series=media(2);series['recommended_from']=[seeds[1]]
+        ranked=engine.rank([movie,series],[profile],dict(minutes=0),history_seeds=seeds,
+                           history_strengths={'movie:90':1,'tvshow:91':8})
+        scores={row['item']['key']:row['score'] for row in ranked}
+        self.assertGreater(scores[series['key']],scores[movie['key']])
+        self.assertLess(scores[series['key']]-scores[movie['key']],.3)
+
     def test_personal_routes_are_active_provider_allowlists(self):
         self.assertIn('action=mdblist_watchlist',providers.personal_route('pov','movie','mdblist'))
         self.assertIn('action=mdbUserWatchListTVShows',providers.personal_route('umbrella','tvshow','mdblist'))
@@ -162,6 +231,16 @@ class HubTests(unittest.TestCase):
         self.assertEqual(view['role'],'מהרשימה שלך');self.assertIn('MDBList',view['reason'])
         self.assertLess(len(view['reason']),80)
 
+    def test_card_explains_active_mode_then_automatic_taste_before_one_like(self):
+        item=media(1,('Comedy',))
+        row=dict(item=item,lane='קרוב לטעם שלך',reasons=[
+            'קרוב לטעם שלך','קשר ז׳אנרי ל־One שסימנת באהבתי — זו הערכה ראשונית',
+            'מתאים לדפוס שחוזר בצפייה','כיוון קומי או משפחתי יותר לפי סיווג הקטלוג'])
+        self.assertEqual(experience.card(row)['reason'],'מתאים לערב הקליל שבחרת')
+        row['reasons']=row['reasons'][:-1]
+        self.assertEqual(experience.card(row)['reason'],
+                         'מתאים לדפוסים שחוזרים בצפייה וברשימות שלך')
+
     def test_hub_ok_plays_selected_card_and_mode_click_returns_preset(self):
         gui=types.SimpleNamespace(WindowXMLDialog=Window,ListItem=Item)
         state=engine.initial_state();candidate=media();state['catalog']=[candidate]
@@ -185,7 +264,9 @@ class HubTests(unittest.TestCase):
         self.assertNotIn('skin.',text);self.assertNotIn('גרסת התנסות',text)
         self.assertIn('עוד בכיוון הזה',text)
         self.assertIn('resources/media/tonight.png',text)
-        self.assertIn('OK לצפייה',(ROOT/'addons/service.subtitles.kodipovilai/resources/lib/tonight/hub.py').read_text(encoding='utf-8'))
+        hub_text=(ROOT/'addons/service.subtitles.kodipovilai/resources/lib/tonight/hub.py').read_text(encoding='utf-8')
+        self.assertIn('OK לצפייה',hub_text);self.assertNotIn('✓',hub_text)
+        self.assertIn('CurrentItem',text);self.assertIn('NumItems',text)
 
     def test_dedicated_tile_icon_exists_and_all_entrypoints_use_it(self):
         icon=ROOT/'addons/service.subtitles.kodipovilai/resources/media/tonight.png'
