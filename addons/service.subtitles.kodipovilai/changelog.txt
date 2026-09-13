@@ -1,3 +1,8 @@
+0.2.539
+- Match Tonight movie playback to Umbrella's native player path and pass runtime in seconds so valid sources are not filtered out.
+- Add persistent, browsable liked and saved collections to Tonight that remain usable when switching playback providers.
+- Keep known future premieres out of Tonight recommendations and refresh older cached suggestions once.
+
 0.2.538
 - Read original subtitle text for AI reference analysis instead of the player-rendered RTL copy.
 

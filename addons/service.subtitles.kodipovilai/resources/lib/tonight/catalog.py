@@ -48,7 +48,7 @@ def fetch(execute, kind='movie', anchor=None, provider='pov', query=None, person
           providers.catalog_route(provider,kind,anchor))
     if path is None:return []
     request=dict(jsonrpc='2.0',id=1,method='Files.GetDirectory',params=dict(
-        directory=path,media='video',properties=['title','originaltitle','year','genre','plot','runtime','rating','art','uniqueid','imdbnumber','playcount','director','writer','cast','tag','studio']))
+        directory=path,media='video',properties=['title','originaltitle','year','premiered','genre','plot','runtime','rating','art','uniqueid','imdbnumber','playcount','director','writer','cast','tag','studio']))
     reply=json.loads(execute(json.dumps(request)))
     if not isinstance(reply,dict) or 'error' in reply:raise ValueError('Provider catalog unavailable')
     rows=reply.get('result',{}).get('files')
