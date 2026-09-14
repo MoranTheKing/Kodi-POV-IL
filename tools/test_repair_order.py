@@ -4,7 +4,12 @@
 are independent and the order is arbitrary. Three are not, and each one is
 here because getting it wrong cost something real:
 
-  * `_maybe_patch_pov_language_invoker` MUST BE FIRST. POV runs its own
+  * `_maybe_repair_addon_settings_integrity` MUST BE FIRST. A malformed POV
+    values file makes Kodi reject the guard's settings write, so recovery has
+    to precede every cross-add-on writer.
+
+  * `_maybe_patch_pov_language_invoker` MUST RUN IMMEDIATELY AFTER RECOVERY.
+    POV runs its own
     ReuseLanguageInvokerCheck a few seconds into its service start; if POV's
     addon.xml and its hidden reuse_language_invoker setting disagree it throws
     an English "SETTING/XML mismatch" dialog at the user. They disagree after
@@ -81,18 +86,26 @@ check('no step is registered twice',
 # the ordering this file exists for
 # --------------------------------------------------------------------------
 GUARD = '_maybe_patch_pov_language_invoker'
+RECOVERY = '_maybe_repair_addon_settings_integrity'
+check('settings integrity recovery is still registered', RECOVERY in STEPS)
+check('settings integrity recovery runs FIRST',
+      STEPS and STEPS[0] == RECOVERY,
+      'it must make a malformed settings.xml writable before any later '
+      'cross-add-on settings repair')
 check('the invoker guard is still registered', GUARD in STEPS)
-check('the invoker guard runs FIRST',
-      STEPS and STEPS[0] == GUARD,
+check('the invoker guard runs immediately after recovery',
+      len(STEPS) > 1 and STEPS[1] == GUARD,
       'it is at position %s; POV checks a few seconds into its own start and '
       'shows the user a SETTING/XML mismatch dialog if we have not written '
-      'yet. From 27th it lost that race by 9.4s on a real device.'
+      'yet. Recovery is the one allowed predecessor because without it Kodi '
+      'can reject the guard write. From 27th it lost the race by 9.4s on a '
+      'real device.'
       % (STEPS.index(GUARD) + 1 if GUARD in STEPS else 'ABSENT'))
 
 # the two schema repairs still precede every reader of those caches
 for name in ('_maybe_fix_pov_maincache_schema', '_maybe_repair_pov_cache_schema'):
     check('%s is still near the front' % name,
-          name in STEPS and STEPS.index(name) <= 3,
+          name in STEPS and STEPS.index(name) <= 4,
           'at position %s -- POV menus that read these caches are wrong until '
           'the tables are rebuilt'
           % (STEPS.index(name) + 1 if name in STEPS else 'ABSENT'))
@@ -186,10 +199,15 @@ check('it reads exactly one setting, and asks for it with default False',
 print()
 print('=== sabotage ===')
 
-moved = SRC.replace('        %s,\n' % GUARD, '', 1)
-check('SABOTAGE: removing the first entry changes the source', moved != SRC)
-check('SABOTAGE: the guard no longer running first is caught',
-      steps_of(moved)[0] != GUARD)
+no_recovery = SRC.replace('        %s,\n' % RECOVERY, '', 1)
+check('SABOTAGE: removing recovery changes the source', no_recovery != SRC)
+check('SABOTAGE: recovery no longer running first is caught',
+      steps_of(no_recovery)[0] != RECOVERY)
+
+no_guard = SRC.replace('        %s,\n' % GUARD, '', 1)
+check('SABOTAGE: removing the guard changes the source', no_guard != SRC)
+check('SABOTAGE: guard no longer immediately following recovery is caught',
+      len(steps_of(no_guard)) < 2 or steps_of(no_guard)[1] != GUARD)
 
 # Two ways to turn "OFF unless asked" into "ON unless asked", and the checks
 # above have to notice both.
