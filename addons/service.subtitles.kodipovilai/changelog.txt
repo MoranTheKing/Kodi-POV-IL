@@ -1,3 +1,7 @@
+0.2.542
+- Recover malformed POV, Umbrella and CocoScrapers settings while preserving user choices, then safely reload repaired services.
+- Restore missed AllDebrid sync from Account Manager and incomplete Umbrella external-provider wiring.
+
 0.2.541
 - Recover safely when Gemini reports a blocked or filtered response even if it also includes partial text.
 - Exclude internal thinking parts and malformed response fields from subtitle and SubSync output.
