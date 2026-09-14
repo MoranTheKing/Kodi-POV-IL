@@ -119,6 +119,110 @@ class FilteredResponse(GeminiError):
     """Gemini returned no candidates (a safety filter blocked the chunk, even
     with safety set to BLOCK_NONE). Caller should bisect; a single still-blocked
     entry can be left in the source language rather than aborting everything."""
+    def __init__(self, message, partial_text=''):
+        super().__init__(message)
+        self.partial_text = partial_text
+
+
+_FILTERED_FINISH_REASONS = frozenset((
+    'SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST',
+))
+_CONTENT_REJECTION_RE = re.compile(
+    r'PROHIBITED_CONTENT|'
+    r'(?:PROMPT|CONTENT)\s+(?:WAS\s+)?(?:BLOCKED|PROHIBITED)(?:\s+FOR\s+SAFETY)?|'
+    r'REQUEST\s+(?:WAS\s+)?BLOCKED\s*:\s*(?:SAFETY|BLOCKLIST)', re.I)
+_CONFIG_OR_ACCESS_REJECTION_RE = re.compile(
+    r'SAFETY_?SETTINGS?|INVALID\s+(?:ENUM|VALUE)|UNSUPPORTED|NOT\s+A\s+VALID|'
+    r'VPC\s+SERVICE\s+CONTROLS?', re.I)
+
+
+def _structured_block_reason(value):
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if (str(key).replace('_', '').lower() == 'blockreason'
+                    and str(item or '').upper() in _FILTERED_FINISH_REASONS):
+                return str(item).upper()
+            found = _structured_block_reason(item)
+            if found:
+                return found
+    elif isinstance(value, list):
+        for item in value:
+            found = _structured_block_reason(item)
+            if found:
+                return found
+    return ''
+
+
+def _raise_rejected_request(r):
+    """Classify 400/403 bodies without losing recoverable content blocks."""
+    body = r.text or ''
+    snippet = body[:600]
+    upper = snippet.upper()
+    if ('API KEY' in upper or 'API_KEY' in upper
+            or 'X-GOOG-API-KEY' in upper):
+        raise InvalidKey('Key rejected: {0}'.format(snippet[:300]))
+    structured_reason = ''
+    try:
+        structured_reason = _structured_block_reason(r.json())
+    except (ValueError, TypeError, AttributeError):
+        pass
+    if (structured_reason or (
+            not _CONFIG_OR_ACCESS_REJECTION_RE.search(snippet)
+            and _CONTENT_REJECTION_RE.search(snippet))):
+        raise FilteredResponse(
+            'Request content blocked (HTTP {0})'.format(r.status_code))
+    raise GeminiError('Request rejected: {0}'.format(snippet[:300]))
+
+
+def _generated_text(data):
+    """Return visible candidate text or the precise recoverable exception.
+
+    Gemini may attach a filtered finish reason to a candidate that still has
+    partial text.  Accepting that text silently creates missing subtitle cues,
+    so finish reason wins over presence of text.  Thinking parts are model
+    internals and must never become subtitle or SubSync output.
+    """
+    if not isinstance(data, dict):
+        raise GeminiError('Bad response shape: top level is not an object')
+    feedback = data.get('promptFeedback') or {}
+    if isinstance(feedback, dict) and feedback.get('blockReason'):
+        raise FilteredResponse(
+            'prompt blocked: {0}'.format(feedback.get('blockReason')))
+    candidates = data.get('candidates') or []
+    if not isinstance(candidates, list) or not candidates:
+        raise FilteredResponse(
+            'No candidates in response (possibly filtered)')
+    candidate = candidates[0] if isinstance(candidates[0], dict) else {}
+    content = candidate.get('content') or {}
+    content = content if isinstance(content, dict) else {}
+    parts = content.get('parts') or []
+    parts = parts if isinstance(parts, list) else []
+    chunks = []
+    for part in parts:
+        if not isinstance(part, dict) or part.get('thought'):
+            continue
+        chunk = part.get('text', '')
+        if isinstance(chunk, str):
+            chunks.append(chunk)
+    text = ''.join(chunks).strip()
+    finish_reason = str(candidate.get('finishReason') or '').upper()
+    if finish_reason in _FILTERED_FINISH_REASONS:
+        raise FilteredResponse(
+            'candidate blocked (finish={0})'.format(finish_reason),
+            partial_text=text,
+        )
+    if not text:
+        if finish_reason in ('OTHER', ''):
+            raise FilteredResponse(
+                'empty/blocked content (finish={0})'.format(finish_reason))
+        raise GeminiError('Empty text in response')
+    if finish_reason in ('MAX_TOKENS', 'LENGTH'):
+        raise TruncatedResponse(
+            'Gemini hit output-token cap (finishReason={0})'.format(
+                finish_reason),
+            partial_text=text,
+        )
+    return text
 
 
 def _classify_429(r):
@@ -261,18 +365,14 @@ def generate_media(api_key, model, prompt, media_bytes, mime,
         raise InvalidKey('Key rejected (HTTP {0} -- invalid/expired key): {1}'
                          .format(r.status_code, (r.text or '')[:180]))
     if r.status_code in (400, 403):
-        snippet = r.text[:300] if r.text else ''
-        if 'API key' in snippet or 'API_KEY' in snippet:
-            raise InvalidKey('Key rejected: {0}'.format(snippet))
-        raise GeminiError('Request rejected: {0}'.format(snippet))
+        _raise_rejected_request(r)
     if r.status_code != 200:
         raise GeminiError('HTTP {0}: {1}'.format(r.status_code, r.text[:200]))
     try:
         data = r.json()
-        parts = data['candidates'][0]['content']['parts']
-        return ''.join(p.get('text', '') for p in parts)
-    except (ValueError, KeyError, IndexError, TypeError) as e:
-        raise GeminiError('Bad response shape: {0}'.format(e))
+    except ValueError:
+        raise GeminiError('Unparseable response from API')
+    return _generated_text(data)
 
 
 def generate(api_key, model, prompt, temperature=0.2,
@@ -350,12 +450,7 @@ def generate(api_key, model, prompt, temperature=0.2,
         raise InvalidKey('Key rejected (HTTP {0} -- invalid/expired key): {1}'
                          .format(r.status_code, (r.text or '')[:180]))
     if r.status_code in (400, 403):
-        # Distinguish key-related vs content-related rejection by
-        # looking at the body when we can.
-        snippet = r.text[:300] if r.text else ''
-        if 'API key' in snippet or 'API_KEY' in snippet:
-            raise InvalidKey('Key rejected: {0}'.format(snippet))
-        raise GeminiError('Request rejected: {0}'.format(snippet))
+        _raise_rejected_request(r)
     if r.status_code != 200:
         raise GeminiError('HTTP {0}: {1}'.format(r.status_code, r.text[:200]))
 
@@ -364,47 +459,7 @@ def generate(api_key, model, prompt, temperature=0.2,
     except ValueError:
         raise GeminiError('Unparseable response from API')
 
-    # Prompt-level block (blockReason: PROHIBITED_CONTENT / SAFETY / ...). This
-    # rejects the whole PROMPT before any generation and is NOT overridable by
-    # safetySettings. Surface as FilteredResponse so the caller can retry the
-    # chunk WITHOUT the Arabic gender block (a common trigger) / bisect, rather
-    # than aborting the whole translation.
-    pf = data.get('promptFeedback') or {}
-    if pf.get('blockReason'):
-        raise FilteredResponse(
-            'prompt blocked: {0}'.format(pf.get('blockReason')))
-
-    cands = data.get('candidates') or []
-    if not cands:
-        # Often means the prompt triggered a safety filter.
-        raise FilteredResponse(
-            'No candidates in response (possibly filtered)')
-
-    parts = (cands[0].get('content') or {}).get('parts') or []
-    chunks = [p.get('text', '') for p in parts if isinstance(p, dict)]
-    text = ''.join(chunks).strip()
-    if not text:
-        # Empty content with a SAFETY/PROHIBITED finishReason -> treat as a
-        # block (retry without Arabic / bisect), not a hard error.
-        fr = (cands[0].get('finishReason') or '').upper()
-        if fr in ('SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'OTHER', ''):
-            raise FilteredResponse('empty/blocked content (finish={0})'.format(fr))
-        raise GeminiError('Empty text in response')
-
-    # If the model hit its output cap, the last entry in the
-    # returned SRT is almost always cut off and the chunk has a
-    # silent gap. Surface this so the caller can bisect and retry
-    # with a smaller request, rather than silently saving an
-    # incomplete translation. Flash Lite caps at 8192 output
-    # tokens, which Hebrew SRT can blow through around the
-    # 150-200 entry mark.
-    finish_reason = (cands[0].get('finishReason') or '').upper()
-    if finish_reason in ('MAX_TOKENS', 'LENGTH'):
-        raise TruncatedResponse(
-            'Gemini hit output-token cap (finishReason={0})'.format(
-                finish_reason),
-            partial_text=text,
-        )
+    text = _generated_text(data)
 
     # Bump the daily-quota counter. Lazy import + try/except so a
     # bug here can never break translation. We only count successful
