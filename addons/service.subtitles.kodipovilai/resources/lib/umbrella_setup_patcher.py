@@ -11,9 +11,11 @@
 #      external_provider.name    = cocoscrapers        (Umbrella imports this)
 #    Those are precisely the three values Umbrella's own picker writes (see
 #    its tools.external_providers), so nothing here is a private arrangement.
-#    Done ONCE, behind our own marker: a user who later turns it off or picks
-#    a different provider keeps their choice, and Umbrella's own checkModules()
-#    (which blanks the two names when the toggle is off) is never fought.
+#    The default is applied once. On later starts the marker is also a narrow
+#    integrity check: if the toggle is still on and only the Coco name/module
+#    pair went missing, put that pair back. A user who turns it off or picks a
+#    complete different provider keeps that choice, and Umbrella's own
+#    checkModules() (which blanks the names while off) is never fought.
 #
 # 2) PICKED-SOURCE RELEASE NAME (code patch).
 #    Our subtitle matcher scores a Hebrew subtitle against the release name of
@@ -186,17 +188,54 @@ def _addon():
 
 
 def ensure_external_provider():
-    """Point Umbrella at the CocoScrapers we ship with it, once. Returns a
-    short status string; never raises."""
+    """Point Umbrella at the CocoScrapers we ship with it, then self-heal.
+
+    The first run is still a one-time default.  On later starts the marker is
+    also an integrity witness: when External Providers is still enabled but
+    one or both Coco identifiers disappeared, restore only that incomplete
+    Coco wiring.  An explicit off switch and a complete custom provider are
+    both user choices and stay untouched.
+    """
     addon = _addon()
     if addon is None:
         return 'not_installed'
+    marker_done = False
     try:
         from resources.lib import kodi_utils as _ku
-        if (_ku.get_setting(PROVIDER_DONE_SETTING, '') or '') == 'done':
-            return 'unchanged'
+        marker_done = ((_ku.get_setting(PROVIDER_DONE_SETTING, '') or '')
+                       == 'done')
     except Exception:
         pass
+    try:
+        enabled = (addon.getSetting('provider.external.enabled') or '').strip()
+        module = (addon.getSetting('external_provider.module') or '').strip()
+        name = (addon.getSetting('external_provider.name') or '').strip()
+    except Exception:
+        return 'read_failed'
+
+    if marker_done:
+        # Turning External Providers off after our one-time setup is an
+        # explicit choice. Umbrella itself blanks the two identifiers in this
+        # state, so restoring them would immediately fight its own monitor.
+        if enabled != 'true':
+            return 'unchanged'
+        if module == COCO_MODULE and name == COCO_NAME:
+            return 'unchanged'
+        # Repair only a missing/partial Coco pair. A different complete pair
+        # is a provider the user picked and is none of our business.
+        if module not in ('', COCO_MODULE) or name not in ('', COCO_NAME):
+            return 'unchanged'
+    elif enabled == 'true' and module and name and (
+            module != COCO_MODULE or name != COCO_NAME):
+        # The user reached the provider picker before our one-time default.
+        # Record that the choice has been seen so a later start does not
+        # replace it with the provider bundled by this build.
+        try:
+            from resources.lib import kodi_utils as _ku
+            _ku.set_setting(PROVIDER_DONE_SETTING, 'done')
+        except Exception:
+            pass
+        return 'unchanged'
     # Only wire it if CocoScrapers is really on disk -- pointing Umbrella at a
     # missing module would make it warn on every source search.
     if xbmcvfs is not None:
@@ -233,6 +272,9 @@ def ensure_external_provider():
         pass
     if not changed:
         return 'unchanged'
+    if marker_done:
+        _log('repaired incomplete CocoScrapers provider wiring')
+        return 'repaired'
     _log('CocoScrapers wired as Umbrella\'s external provider')
     return 'patched'
 
