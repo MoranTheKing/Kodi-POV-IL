@@ -793,6 +793,23 @@ def _block_start(block):
     return None if t is None else t[0]
 
 
+def _block_declared_index(block):
+    """The numeric SRT index attached to a block, or None.
+
+    A generated block may begin directly with a timecode after dropping its
+    index. That is still parseable for by-start alignment, but it cannot provide
+    the second independent anchor needed to repair a corrupted start time.
+    """
+    try:
+        lines = block.split('\n')
+        ti = _block_timecode_index(lines)
+        if ti > 0 and lines[ti - 1].strip().isdigit():
+            return int(lines[ti - 1].strip())
+        return None
+    except Exception:
+        return None
+
+
 def _rebuild_block(src_block, out_block):
     """out_block's text under src_block's index + timecode. None if either
     block isn't SRT-shaped (caller keeps the original)."""
@@ -897,8 +914,8 @@ def _repair_pinned_starts(src_blocks, out_blocks, fixed, ambiguous):
     surprise returns `fixed` untouched.
 
     The safety argument, in full, because the strictness is the whole point:
-      * counts are equal, so index i in the reply corresponds to index i in the
-        source UNLESS something shifted;
+      * counts are equal and the declared SRT index still matches, so position i
+        in the reply corresponds to source i UNLESS something shifted;
       * a shift (dropped or inserted entry) misaligns every block from the shift
         point onward, so a shifted block can never have an agreeing successor;
       * an adjacent transposition makes both members disagree, so neither has an
@@ -924,6 +941,15 @@ def _repair_pinned_starts(src_blocks, out_blocks, fixed, ambiguous):
                 continue          # the by-start pass already identified it
             src_start = _block_start(src_blocks[i])
             if src_start is None or src_start in ambiguous:
+                continue
+            # One agreeing neighbour alone cannot distinguish a mistyped start
+            # from an invented final block that replaced a missing cue. The SRT
+            # index is an independent anchor the model was also asked to copy;
+            # without an exact match, keep the output unpaired and let the
+            # caller restore the missing source slot instead.
+            if (_block_declared_index(src_blocks[i]) is None
+                    or _block_declared_index(src_blocks[i])
+                    != _block_declared_index(out_blocks[i])):
                 continue
             # None means "no neighbour on that side", which happens only at the
             # ends -- and an end has no room on the far side for a block to have
@@ -1977,6 +2003,319 @@ _HEB_PRESENTATION_RE = re.compile('[\uFB1D-\uFB4F]')
 # only to ask whether a line carries any real text of its own.
 _MARKUP_RE = re.compile(r'<[^>]*>|\{[^}]*\}')
 _INVISIBLE_RE = re.compile('[' + re.escape(_INVISIBLE_BIDI + _ZERO_WIDTH) + ']')
+
+# Gemini occasionally prints its private self-edit after the subtitle line,
+# then prints a corrected line as well. This is not ordinary source echo: the
+# leak is mixed Hebrew/English inside one generated cue, so strip_source_echo
+# quite correctly leaves it alone. Match only an explicitly editorial fragment
+# inside brackets/parentheses. A bare "Wait", ordinary stage direction,
+# quotation or arrow is insufficient.
+_EDITORIAL_FRAGMENT_RE = re.compile(
+    r'\[[^\]\r\n]{1,1000}\]|\([^\)\r\n]{1,1000}\)')
+_EDITORIAL_ACTION_RE = re.compile(
+    r"(?:\blet['’]?s\s+(?:fix|correct|translate|rephrase)\b|"
+    r'\btypo\b\s*(?:->|→)|\btranslate\s+naturally\b|'
+    r'\bkeep\s+as\s+is\b|'
+    r'\bwait\b(?=[^\r\n]{0,300}(?:\bfix\b|\bcorrect\b|\btypo\b|'
+    r'\bidiom\b|\bliteral\b|\btranslate\b|->|→)))', re.I)
+_LATIN_ECHO_WORD_RE = re.compile(r"[A-Za-z]+(?:['’][A-Za-z]+)?")
+_LATIN_ECHO_FINITE_VERBS = frozenset((
+    'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+    'have', 'has', 'had', 'do', 'does', 'did', 'can', 'could',
+    'will', 'would', 'shall', 'should', 'may', 'might', 'must',
+))
+_SEMANTIC_CLAUSE_SPLIT_RE = re.compile(r'[.!?;,]+|\s+[-–—]\s+')
+_NEGATIVE_FUTURE_RE = re.compile(
+    r"\b(?:"
+    r"i(?:\s+am|['’]m)|"
+    r"we(?:\s+(?:are|were)|['’]re)|"
+    r"you(?:\s+(?:are|were)|['’]re)|"
+    r"he(?:\s+(?:is|was)|['’]s)|"
+    r"she(?:\s+(?:is|was)|['’]s)|"
+    r"they(?:\s+(?:are|were)|['’]re)"
+    r")\s+not\s+(?:going\s+to\s+|gonna\s+)", re.I)
+_NEGATIVE_FUTURE_TAIL_EXCEPTION_RE = re.compile(
+    r'^(?:not\b|never\b|fail\s+to\b|forget\s+to\b|neglect\s+to\b|'
+    r'refuse\s+to\b|be\s+un\w+\b)', re.I)
+_NEGATIVE_FUTURE_CONDITIONAL_RE = re.compile(
+    r'\b(?:if|unless|until|when|whenever|provided(?:\s+that)?|'
+    r'providing(?:\s+that)?|assuming(?:\s+that)?|in\s+case|'
+    r'as\s+long\s+as|only\s+if|except\s+(?:if|when))\b', re.I)
+# A positive-looking target is not proof by itself: "I'm not going to lie" can
+# correctly become "I intend to tell the truth". Require the same concrete
+# action on both sides. This intentionally small closed set covers the observed
+# high-harm inversion and a few unambiguous equivalents; unknown paraphrases
+# abstain rather than consume retries or replace good Hebrew with source text.
+_NEGATION_ACTION_EQUIVALENTS = (
+    (re.compile(r'^(?:kill|murder|slay)\b', re.I),
+     re.compile(r'(?<![א-ת])(?:להרוג|לרצוח|לחסל)(?![א-ת])')),
+    (re.compile(r'^(?:hurt|harm|injure)\b', re.I),
+     re.compile(r'(?<![א-ת])(?:לפגוע|להכאיב|לפצוע)(?![א-ת])')),
+)
+_HE_POSITIVE_INTENT_RE = re.compile(
+    r'(?<![א-ת])(?:(?:אני|אנחנו|אתה|את|הוא|היא|הם|הן)\s+)?'
+    r'(?:הולך|הולכת|הולכים|הולכות|מתכוון|מתכוונת|מתכוונים|מתכוונות|'
+    r'עומד|עומדת|עומדים|עומדות)\s+(?:ל|ש)[א-ת]')
+_HE_NEGATION_RE = re.compile(
+    r'(?<![א-ת])(?:'
+    r'ו?(?:ש|כש)?(?:לא|אל)|ו?(?:ללא|בלי)|לעולם\s+לא|'
+    r'אינ(?:ני|נו|ך|כם|כן|ו|ה|ם|ן)|אין'
+    r')(?![א-ת])')
+
+
+def generated_editorial_leak_indices(src_blocks, out_blocks):
+    """Indices of generated SRT blocks containing model self-edit prose.
+
+    This is a rejection detector, not a text eraser. The caller retries the
+    complete cue; cutting only the parenthesis could leave the known-wrong
+    draft before it (the observed negation failure did exactly that).
+
+    A candidate is rejected only when all of these hold:
+      * it contains Hebrew, so it is generated target output;
+      * an English editorial action sits inside [] or ();
+      * the aligned source cue did not itself contain such editorial text.
+
+    The last condition preserves literal dialogue about fixing translations,
+    source stage directions and examples. Fully fail-open: uncertainty returns
+    no indices and the existing translation path remains in control.
+    """
+    try:
+        if not src_blocks or not out_blocks:
+            return []
+        sources = {}
+        for block in src_blocks:
+            start = _block_start(block)
+            if start is not None:
+                sources.setdefault(start, []).append(block_text_only(block) or '')
+        seen = {}
+        bad = []
+        for index, block in enumerate(out_blocks):
+            body = block_text_only(block) or ''
+            if not _HEB_RE.search(body):
+                continue
+            start = _block_start(block)
+            occurrence = seen.get(start, 0)
+            seen[start] = occurrence + 1
+            candidates = sources.get(start, ())
+            source = candidates[occurrence] if occurrence < len(candidates) else ''
+            source_clean = re.sub(r'\s+', ' ', source).strip().lower()
+            source_is_editorial = bool(_EDITORIAL_ACTION_RE.search(source_clean))
+            for match in _EDITORIAL_FRAGMENT_RE.finditer(body):
+                fragment = ''.join(c for c in match.group(0)
+                                   if c not in _INVISIBLE_BIDI)
+                if not _EDITORIAL_ACTION_RE.search(fragment):
+                    continue
+                fragment_clean = re.sub(
+                    r'\s+', ' ', fragment[1:-1]).strip().lower()
+                if (source_is_editorial
+                        or (fragment_clean and fragment_clean in source_clean)):
+                    continue
+                bad.append(index)
+                break
+        return bad
+    except Exception:
+        return []
+
+
+def generated_source_echo_indices(src_blocks, out_blocks):
+    """Detect a full English source sentence echoed beside generated Hebrew.
+
+    AI output has appeared as a Hebrew draft followed by ``[and his victim is
+    in the wind,]``. The older cleanup only removes non-Hebrew lines *before*
+    Hebrew and therefore leaves this trailing form in caches and uploads.
+
+    The existing source-echo cleanup already removes leading English safely.
+    This detector targets the surviving shape only: an exact English sentence
+    appears *after* generated Hebrew, either on its own line or in brackets.
+    It requires the observed continuation shape (source ends in comma, semicolon
+    or colon), at least six words, an English finite/auxiliary verb, a
+    monolingual and unquoted source, and non-title-like casing. Ordinary complete
+    sentences, quoted literals, short codes and untranslated-only cues abstain.
+    """
+    try:
+        if not src_blocks or not out_blocks:
+            return []
+        sources = {}
+        for block in src_blocks:
+            start = _block_start(block)
+            if start is not None:
+                sources.setdefault(start, []).append(block_text_only(block) or '')
+        seen = {}
+        bad = []
+        for index, block in enumerate(out_blocks):
+            body = block_text_only(block) or ''
+            if not _HEB_RE.search(body):
+                continue
+            start = _block_start(block)
+            occurrence = seen.get(start, 0)
+            seen[start] = occurrence + 1
+            candidates = sources.get(start, ())
+            if occurrence >= len(candidates):
+                continue
+            source_text = candidates[occurrence]
+            source_stripped = source_text.strip()
+            if (_HEB_RE.search(source_text)
+                    or any(mark in source_text for mark in ('"', '“', '”', '«', '»'))
+                    or not source_stripped.endswith((',', ';', ':'))):
+                continue
+            source_tokens = _LATIN_ECHO_WORD_RE.findall(source_text)
+            source_words = tuple(
+                word.lower().replace('’', "'") for word in source_tokens)
+            if (len(source_words) < 6
+                    or not _LATIN_ECHO_FINITE_VERBS.intersection(source_words)):
+                continue
+            title_case_words = sum(
+                bool(word and word[0].isupper()) for word in source_tokens)
+            if title_case_words * 5 >= len(source_tokens) * 3:
+                continue
+            first_hebrew = _HEB_RE.search(body).start()
+            fragments = []
+            cursor = 0
+            for line in body.splitlines(True):
+                line_text = line.rstrip('\r\n')
+                if cursor > first_hebrew:
+                    fragments.append(line_text)
+                cursor += len(line)
+            fragments.extend(
+                match.group(0)[1:-1]
+                for match in _EDITORIAL_FRAGMENT_RE.finditer(body)
+                if match.start() > first_hebrew
+            )
+            for fragment in fragments:
+                if _HEB_RE.search(fragment):
+                    continue
+                fragment_words = tuple(
+                    word.lower().replace('’', "'")
+                    for word in _LATIN_ECHO_WORD_RE.findall(fragment))
+                if fragment_words == source_words:
+                    bad.append(index)
+                    break
+        return bad
+    except Exception:
+        return []
+
+
+def generated_negation_loss_indices(src_blocks, out_blocks):
+    """Detect one narrow, high-confidence polarity-loss suspicion.
+
+    The observed catastrophic result translated ``I'm not gonna kill`` as
+    ``אני הולכת להרוג``. General negation counting is unsafe in translation, so
+    this detector does much less: source and target must have the same number of
+    local clauses; one source clause must contain an explicit negative
+    ``not going to/gonna`` future; and the corresponding Hebrew clause must use
+    a positive intent construction (``הולך/מתכוון/עומד ל...``) with no Hebrew
+    negation. Double-negative/negative-raising tails and conditional source
+    cues abstain: Hebrew may preserve their meaning with a positive main verb
+    plus ``רק אם``/``עד ש``, so same-action wording is not proof of inversion.
+
+    It returns block indices for retry, never edits text. Anything ambiguous is
+    ignored and remains under the ordinary source-fidelity checks.
+    """
+    try:
+        if not src_blocks or not out_blocks:
+            return []
+        sources = {}
+        for block in src_blocks:
+            start = _block_start(block)
+            if start is not None:
+                sources.setdefault(start, []).append(block_text_only(block) or '')
+        seen = {}
+        bad = []
+        for index, block in enumerate(out_blocks):
+            target = block_text_only(block) or ''
+            if not _HEB_RE.search(target):
+                continue
+            start = _block_start(block)
+            occurrence = seen.get(start, 0)
+            seen[start] = occurrence + 1
+            candidates = sources.get(start, ())
+            if occurrence >= len(candidates):
+                continue
+            source = candidates[occurrence]
+            # Real SRT contractions have no spaces, but the OPUS tokenizer used
+            # by a prior audit produced "I 'm". Normalising here makes the
+            # invariant independent of that serialization defect.
+            source = re.sub(r"\s+(['’])\s*", r'\1', source)
+            # Final Kodi-ready subtitles may wrap a cue in RLE/PDF controls.
+            # They are presentation metadata, not semantic clauses; leaving the
+            # closing PDF after a full stop creates a spurious third clause and
+            # silently disables this gate on the exact delivered artifact.
+            source = ''.join(c for c in source if c not in _INVISIBLE_BIDI)
+            target = ''.join(c for c in target if c not in _INVISIBLE_BIDI)
+            if _NEGATIVE_FUTURE_CONDITIONAL_RE.search(source):
+                continue
+            source_clauses = [part.strip() for part in
+                              _SEMANTIC_CLAUSE_SPLIT_RE.split(source)
+                              if part.strip()]
+            target_clauses = [part.strip() for part in
+                              _SEMANTIC_CLAUSE_SPLIT_RE.split(target)
+                              if part.strip()]
+            if len(source_clauses) != len(target_clauses):
+                continue
+            for source_clause, target_clause in zip(source_clauses, target_clauses):
+                match = _NEGATIVE_FUTURE_RE.search(source_clause)
+                if not match:
+                    continue
+                tail = source_clause[match.end():].lstrip()
+                if _NEGATIVE_FUTURE_TAIL_EXCEPTION_RE.match(tail):
+                    continue
+                same_action = any(
+                    source_action.search(tail)
+                    and target_action.search(target_clause)
+                    for source_action, target_action
+                    in _NEGATION_ACTION_EQUIVALENTS)
+                if (same_action
+                        and _HE_POSITIVE_INTENT_RE.search(target_clause)
+                        and not _HE_NEGATION_RE.search(target_clause)):
+                    bad.append(index)
+                    break
+        return bad
+    except Exception:
+        return []
+
+
+def generated_output_blocks(src_blocks, response, fill_missing=False):
+    """Shape untrusted model output to the exact requested source slots.
+
+    Returns ``(blocks, missing_before_fallback, integrity_rejections)``. Only
+    source start-times and multiplicity are admitted, isolated timing typos are
+    repaired by restore_block_timings, and high-confidence generated-output
+    violations are rejected. With ``fill_missing=True`` every rejected/missing
+    slot receives its original source block so progressive display and final
+    assembly cannot lose a cue.
+    """
+    try:
+        parsed = parse_blocks(response)
+        # Establish source ownership before semantic rejection. The model may
+        # mistype one timestamp while retaining the declared SRT index and both
+        # neighbours; restore_block_timings can safely pin that cue. Running the
+        # detectors first would miss the cue because its wrong timestamp has no
+        # source owner, then accept it immediately after the repair.
+        restored = restore_block_timings(src_blocks, parsed)
+        rejected = sorted(set(
+            generated_editorial_leak_indices(src_blocks, restored)
+            + generated_source_echo_indices(src_blocks, restored)
+            + generated_negation_loss_indices(src_blocks, restored)))
+        if rejected:
+            rejected_set = set(rejected)
+            restored = [block for index, block in enumerate(restored)
+                        if index not in rejected_set]
+        aligned = align_blocks(src_blocks, restored)
+        missing = missing_blocks(src_blocks, aligned)
+        if fill_missing and missing:
+            aligned = align_blocks(src_blocks, aligned, missing)
+        return aligned, missing, len(rejected)
+    except Exception:
+        # This function is the final ownership gate before output reaches Kodi.
+        # An internal helper failure must not turn that gate into a pass-through.
+        # During final assembly retain the complete source; during an earlier
+        # rung report every source cue as missing so the normal retry ladder can
+        # still recover a Hebrew result.
+        try:
+            source = list(src_blocks or [])
+        except Exception:
+            source = []
+        return (source if fill_missing else []), source, 0
 
 
 def normalize_glyphs(text):
