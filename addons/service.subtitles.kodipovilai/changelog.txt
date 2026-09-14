@@ -1,3 +1,8 @@
+0.2.540
+- Give every AI-translation chunk the intended previous source context, including the second chunk, so continuity does not silently reset at chunk boundaries.
+- Validate generated subtitle slots before delivery and safely retry or preserve the source cue when a model omits, duplicates or invents entries.
+- Reject narrow high-risk output leaks while abstaining on conditional phrasing that can express the same meaning with a positive Hebrew verb.
+
 0.2.539
 - Match Tonight movie playback to Umbrella's native player path and pass runtime in seconds so valid sources are not filtered out.
 - Add persistent, browsable liked and saved collections to Tonight that remain usable when switching playback providers.

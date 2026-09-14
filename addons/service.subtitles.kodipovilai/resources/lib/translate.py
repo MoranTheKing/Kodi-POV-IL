@@ -2467,6 +2467,24 @@ def _extract_embedded_srt(info, src_lang, track_num=None, deadline_s=900.0,
         return None
 
 
+def _build_prev_context_by_idx(chunks, prev_context_lines):
+    """Map each 1-based worker index to the previous chunk's source lines."""
+    context = {}
+    if prev_context_lines <= 0:
+        return context
+    for chunk_offset in range(1, len(chunks)):
+        previous_lines = []
+        for block in chunks[chunk_offset - 1][-prev_context_lines:]:
+            text = srt.block_text_only(block)
+            if text:
+                previous_lines.append(text)
+        # _translate_one is dispatched with idx=chunk_offset+1.  Keep the map
+        # in that same 1-based coordinate system: chunk 1 has no predecessor,
+        # while chunk 2 receives the tail of chunk 1.
+        context[chunk_offset + 1] = previous_lines
+    return context
+
+
 def resolve(link, info, progress_cb=None, progressive_cb=None,
             extract_progress_cb=None):
     """Return a filesystem path to the SRT for the chosen link.
@@ -3708,7 +3726,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         is an improvement on the reply we already have, so any failure just
         returns that reply."""
         try:
-            blocks = srt.parse_blocks(response)
+            # Admit only entries the chunk actually requested. An untimed
+            # preface (or an invented timestamp) must not make a count look
+            # healthy or survive into progressive/final output.
+            blocks = srt.align_blocks(ch, srt.parse_blocks(response))
             for _round in range(_TOPUP_ROUNDS):
                 missing = srt.missing_blocks(ch, blocks)
                 if not missing:
@@ -3989,14 +4010,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     prev_context_lines = max(0, kodi_utils.get_int(
         'prev_context_lines', 5))
     prev_context_by_idx = {}
-    if prev_context_lines > 0 and not whole_subtitle_request:
-        for i in range(1, len(chunks)):
-            prev_block_texts = []
-            for block in chunks[i - 1][-prev_context_lines:]:
-                t = srt.block_text_only(block)
-                if t:
-                    prev_block_texts.append(t)
-            prev_context_by_idx[i] = prev_block_texts
+    if not whole_subtitle_request:
+        prev_context_by_idx = _build_prev_context_by_idx(
+            chunks, prev_context_lines)
 
     def _call_gemini(idx, ch, ref_level=0):
         body = '\n\n'.join(ch)
@@ -4045,7 +4061,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         while True:
             _gemini_rate_gate(_rpm_interval)   # pace to stay under the RPM cap
             try:
-                return gemini.generate(
+                response = gemini.generate(
                     api_key=api_key,
                     model=model,
                     prompt=full_prompt,
@@ -4056,6 +4072,30 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                     thinking_level=thinking_level,
                     timeout=gemini_timeout or gemini.REQUEST_TIMEOUT,
                 )
+                # A model can expose its private self-correction inside a cue:
+                # wrong Hebrew, "[Wait, let's fix ... -> ...]", then a second
+                # draft. Deleting the note alone would leave the known-wrong
+                # first draft, so reject the response and reuse the existing
+                # retry/bisection/fallback ladder. The detector is source-bound
+                # and requires an explicit editorial action, keeping literal
+                # dialogue, stage directions and ordinary parentheses intact.
+                parsed_response = srt.parse_blocks(response)
+                editorial = srt.generated_editorial_leak_indices(
+                    ch, parsed_response)
+                source_echo = srt.generated_source_echo_indices(
+                    ch, parsed_response)
+                negation_loss = srt.generated_negation_loss_indices(
+                    ch, parsed_response)
+                if editorial or source_echo or negation_loss:
+                    kodi_utils.log(
+                        'Chunk {0}/{1}: generated-output integrity rejection '
+                        '(self_edit={2}, source_echo={3}, negation_loss={4}) '
+                        '-- retrying safely'
+                        .format(idx, total, len(editorial), len(source_echo),
+                                len(negation_loss)), level='WARNING')
+                    raise gemini.FilteredResponse(
+                        'generated-output integrity violation')
+                return response
             except gemini.RateLimited as e:
                 # TEMPORARY per-minute limit (not the daily quota): back off and
                 # retry the SAME chunk so AI keeps going to the end of the movie.
@@ -4210,8 +4250,21 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 # cue), and the only check on the reply is its ENTRY COUNT. Give
                 # every block its SOURCE timecode back so timing can never be a
                 # translation artefact. No-op when the model copied correctly.
-                out_blocks_by_index[idx] = srt.restore_block_timings(
-                    chunks[idx - 1], srt.parse_blocks(response))
+                # Final per-chunk structural gate, shared by every return rung
+                # above (primary, alternate reference, English-only, Google
+                # rescue and single-entry fallback). It drops untimed prefaces
+                # and unrequested timestamps, repairs safe timing typos, and
+                # fills any remaining source slot so a cue cannot disappear.
+                (_shaped, _missing, _integrity_rejected) = (
+                    srt.generated_output_blocks(
+                        chunks[idx - 1], response, fill_missing=True))
+                out_blocks_by_index[idx] = _shaped
+                if _missing or _integrity_rejected:
+                    kodi_utils.log(
+                        'Chunk {0}: output integrity gate kept {1} missing '
+                        'source entr(ies); rejected={2}'.format(
+                            idx, len(_missing), _integrity_rejected),
+                        level='WARNING')
                 completed += 1
                 if completed == 1:
                     # First chunk back -> API path is alive. Its absence in a log
