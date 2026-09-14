@@ -1,3 +1,7 @@
+0.2.541
+- Recover safely when Gemini reports a blocked or filtered response even if it also includes partial text.
+- Exclude internal thinking parts and malformed response fields from subtitle and SubSync output.
+
 0.2.540
 - Give every AI-translation chunk the intended previous source context, including the second chunk, so continuity does not silently reset at chunk boundaries.
 - Validate generated subtitle slots before delivery and safely retry or preserve the source cue when a model omits, duplicates or invents entries.
