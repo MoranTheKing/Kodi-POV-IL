@@ -241,6 +241,86 @@ def _report_patcher_health():
             pass
 
 
+def _maybe_repair_addon_settings_integrity():
+    """Recover torn source-stack settings before another add-on writes them."""
+    try:
+        from resources.lib import (addon_settings_integrity, kodi_utils,
+                                   source_settings_reload)
+    except Exception:
+        return
+    try:
+        # If Kodi was killed inside our prior Umbrella/Coco reconstruction,
+        # restore only the add-ons recorded by that cycle before doing any new
+        # work. The record is written before the first disable.
+        source_settings_reload.heal_interrupted_cycle()
+        results = addon_settings_integrity.ensure_integrity()
+        repaired = [item for item in results
+                    if item.get('status', '').startswith('repaired_')]
+        for item in results:
+            status = item.get('status', '')
+            if status in ('backup_failed', 'write_failed', 'too_large',
+                          'healthy_snapshot_failed', 'error'):
+                kodi_utils.log(
+                    'settings recovery: {0}={1}; file left in place and the '
+                    'next start will retry'.format(item.get('addon'), status),
+                    level='WARNING')
+            elif status == 'changed_before_install':
+                kodi_utils.log(
+                    'settings recovery: {0} changed while recovery was '
+                    'preparing; the newer writer won and was left untouched'
+                    .format(item.get('addon')), level='INFO')
+        for item in repaired:
+            # Counts and booleans only.  A debrid token must never enter kodi.log.
+            kodi_utils.log(
+                'settings recovery: {0}={1}, recovered {2} setting(s), '
+                'account restored={3}'.format(
+                    item.get('addon'), item.get('status'),
+                    item.get('salvaged', 0),
+                    bool(item.get('account_restored'))),
+                level='WARNING')
+
+        pov_repaired = any(
+            item.get('addon') == 'plugin.video.pov'
+            and item.get('status', '').startswith('repaired_')
+            for item in results)
+        if pov_repaired:
+            # Kodi already tried to load the malformed file before this service
+            # began, so its CAddon object still holds defaults.  The existing
+            # idle-safe cycle makes it re-read the repaired values this session;
+            # if the box never becomes quiet, the owed-cycle record retries at
+            # the next start, where the file is already healthy.
+            try:
+                from resources.lib import pov_reload
+                pov_reload.note_patched()
+            except Exception:
+                pass
+
+        # Umbrella and Coco can also have been constructed before this service
+        # replaced their malformed file. Reconstruct only a target whose file
+        # was repaired, later and behind the same idle gate used by POV.
+        source_settings_reload.note_repaired(
+            item.get('addon') for item in repaired)
+
+        repaired_ids = set(item.get('addon') for item in repaired)
+        synced = addon_settings_integrity.sync_alldebrid_from_account_manager(
+            skip_addons=repaired_ids)
+        for item in synced:
+            if item.get('failed'):
+                kodi_utils.log(
+                    'Account Manager AllDebrid re-sync did not persist for {0}'
+                    .format(item.get('addon')), level='WARNING')
+            elif item.get('changed'):
+                kodi_utils.log(
+                    'Account Manager AllDebrid re-synced to {0}'
+                    .format(item.get('addon')), level='INFO')
+    except Exception as exc:
+        try:
+            kodi_utils.log('settings integrity recovery failed: {0}'.format(exc),
+                           level='WARNING')
+        except Exception:
+            pass
+
+
 def _run_build_startup_repairs():
     """Run build-only UI/POV repairs early in Kodi startup.
 
@@ -267,6 +347,12 @@ def _run_build_startup_repairs():
     _REPAIRS_STARTED = time.time()
 
     steps = (
+        # BEFORE ANY CROSS-ADDON SETTINGS WRITE.  A torn POV settings.xml makes
+        # Kodi return empty/default values and refuse every attempted repair;
+        # for source search that looks exactly like a disconnected debrid and
+        # ends in "No External Scrapers Enabled" / "No Results".  Recover the
+        # document (and Account Manager's canonical AllDebrid token) first.
+        _maybe_repair_addon_settings_integrity,
         # BEFORE EVERYTHING, because it is racing a clock we do not control.
         # POV runs its own ReuseLanguageInvokerCheck a few seconds into its
         # service start, and if the setting and addon.xml disagree it throws
@@ -2989,6 +3075,10 @@ def _maybe_patch_umbrella_language():
             kodi_utils.log(
                 'umbrella_setup_patcher: CocoScrapers wired as the external '
                 'provider', level='INFO')
+        elif prov == 'repaired':
+            kodi_utils.log(
+                'umbrella_setup_patcher: incomplete CocoScrapers wiring '
+                'repaired', level='WARNING')
         cps = umbrella_setup_patcher.ensure_coco_providers()
         if cps == 'patched':
             kodi_utils.log(
@@ -6161,6 +6251,15 @@ def main():
     try:
         from resources.lib import pov_reload
         pov_reload.reload_if_patched()
+    except Exception:
+        pass
+
+    # If malformed Umbrella/Coco settings were repaired on disk, reconstruct
+    # their CAddon objects this session after the POV cycle has settled. The
+    # worker touches enabled add-ons only and records every disable first.
+    try:
+        from resources.lib import source_settings_reload
+        source_settings_reload.reload_if_repaired()
     except Exception:
         pass
 
