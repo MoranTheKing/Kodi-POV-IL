@@ -8,16 +8,18 @@
             <param name="list_id" value="19011"/>
         </include>
         <include content="WidgetListBigPoster">
-            <param name="content_path" value="plugin://plugin.video.pov/?name=32461&amp;iconImage=dvd&amp;mode=build_movie_list&amp;action=tmdb_movies_latest_releases"/>
+            <param name="content_path" value="plugin://plugin.video.pov/?name=32461&amp;iconImage=dvd&amp;mode=build_movie_list&amp;action=tmdb_movies_latest_releases&amp;widget_limit=12"/>
             <param name="widget_header" value="[B][COLOR yellow]סרטים חדשים[/COLOR][/B]"/>
             <param name="widget_target" value="videos"/>
             <param name="list_id" value="19012"/>
+            <param name="limit" value="12"/>
         </include>
         <include content="WidgetListBigPoster">
-            <param name="content_path" value="plugin://plugin.video.pov/?name=32459&amp;iconImage=popular&amp;mode=build_movie_list&amp;action=tmdb_movies_popular"/>
+            <param name="content_path" value="plugin://plugin.video.pov/?name=32459&amp;iconImage=popular&amp;mode=build_movie_list&amp;action=tmdb_movies_popular&amp;widget_limit=12"/>
             <param name="widget_header" value="[B][COLOR yellow]סרטים פופולריים[/COLOR][/B]"/>
             <param name="widget_target" value="videos"/>
             <param name="list_id" value="19015"/>
+            <param name="limit" value="12"/>
         </include>
         <include content="WidgetListBigEpisodes">
             <param name="content_path" value="plugin://plugin.video.pov/?mode=navigator.build_shortcut_folder_list&amp;name=%D7%A1%D7%A8%D7%98%D7%99%D7%9D+-+%D7%9C%D7%A4%D7%99+%D7%A8%D7%A9%D7%AA%D7%95%D7%AA&amp;iconImage=networks&amp;shortcut_folder=True&amp;external_list_item=True"/>
