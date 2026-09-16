@@ -32,10 +32,11 @@ WIDGET_FILES = (
 )
 
 MOVIES_POPULAR_BLOCK = '''        <include content="WidgetListBigPoster">
-            <param name="content_path" value="plugin://plugin.video.pov/?name=32459&amp;iconImage=popular&amp;mode=build_movie_list&amp;action=tmdb_movies_popular"/>
+            <param name="content_path" value="plugin://plugin.video.pov/?name=32459&amp;iconImage=popular&amp;mode=build_movie_list&amp;action=tmdb_movies_popular&amp;widget_limit=12"/>
             <param name="widget_header" value="[B][COLOR yellow]סרטים פופולריים[/COLOR][/B]"/>
             <param name="widget_target" value="videos"/>
             <param name="list_id" value="19015"/>
+            <param name="limit" value="12"/>
         </include>
 '''
 
@@ -48,10 +49,11 @@ MOVIES_GENRES_BLOCK = '''        <include content="WidgetListBigEpisodes">
 '''
 
 TV_PREMIERES_BLOCK = '''        <include content="WidgetListBigPoster">
-            <param name="content_path" value="plugin://plugin.video.pov/?name=32460&amp;action=tmdb_tv_premieres&amp;iconImage=fresh&amp;mode=build_tvshow_list"/>
+            <param name="content_path" value="plugin://plugin.video.pov/?name=32460&amp;action=tmdb_tv_premieres&amp;iconImage=fresh&amp;mode=build_tvshow_list&amp;widget_limit=12"/>
             <param name="widget_header" value="[B][COLOR yellow]סדרות חדשות[/COLOR][/B]"/>
             <param name="widget_target" value="videos"/>
             <param name="list_id" value="22015"/>
+            <param name="limit" value="12"/>
         </include>
 '''
 
