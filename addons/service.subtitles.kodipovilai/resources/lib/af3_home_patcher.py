@@ -9,6 +9,7 @@
 
 import json
 import os
+import re
 import time
 from urllib.parse import quote
 
@@ -30,7 +31,7 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-09-13-pov-home-v22'
+PATCH_VERSION = '2026-09-16-pov-home-v23'
 # Must track wizard.py's AF3_CE_SKIN_VERSION, which is the version actually
 # shipped in the pack. It did not: the wizard went to 6.3.2.14 and this stayed
 # at 6.3.2.9, so every AF3 user already ON the correct pack was told to
@@ -133,6 +134,10 @@ def _pov(action='', mode='', name='', icon='', extra=''):
         params.append(('mode', mode))
     if name:
         params.append(('name', name))
+    # AF3's JSON-side limit controls only what the skin renders. Carry the
+    # same budget into POV so hidden items never enter its metadata workers.
+    if mode in ('build_movie_list', 'build_tvshow_list'):
+        params.append(('widget_limit', '7'))
     if extra:
         for part in extra.split('&'):
             if part:
@@ -782,7 +787,14 @@ def _item_key(item):
     'path' is unique per tile and present whether or not the user edited
     the node (the skinvariables editor preserves it)."""
     try:
-        return item.get('path', '') or item.get('label', '')
+        path = item.get('path', '') or ''
+        if path:
+            # A producer budget is an in-place delivery upgrade, not a new
+            # user-facing tile. Ignore it while matching old/current rows.
+            path = re.sub(r'([?&])widget_limit=\d+&?', r'\1', path)
+            path = path.replace('?&', '?').rstrip('?&')
+            return path
+        return item.get('label', '')
     except Exception:
         return ''
 

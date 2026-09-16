@@ -418,6 +418,9 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_resolve_diag,
         _maybe_restore_pov_torbox,
         _maybe_fix_pov_torbox_url,
+        # Bound only explicit home-widget requests before AF3 can rebuild its
+        # home. Normal catalogue navigation carries no widget_limit.
+        _maybe_patch_pov_widget_budget,
         _maybe_patch_af3_home,
         _maybe_cleanup_wizard,
         _maybe_quiet_update_nags,
@@ -1199,6 +1202,28 @@ def _maybe_patch_fentastic_widgets():
         try:
             kodi_utils.log(
                 'fentastic_widget_patcher failed: {0}'.format(e),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_widget_budget():
+    """Keep home widgets light while leaving ordinary POV lists complete."""
+    try:
+        from resources.lib import pov_widget_budget_patcher, kodi_utils
+        results = pov_widget_budget_patcher.ensure_patched()
+        bad = {key: value for key, value in results.items()
+               if value in ('read_failed', 'write_failed', 'compile_failed',
+                            'xml_failed', 'unmatched', 'failed')}
+        if bad:
+            kodi_utils.log(
+                'pov_widget_budget_patcher needs attention: {0}'.format(bad),
+                level='WARNING')
+    except Exception as exc:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'pov_widget_budget_patcher run failed: {0}'.format(exc),
                 level='WARNING')
         except Exception:
             pass
