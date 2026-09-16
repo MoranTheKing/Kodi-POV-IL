@@ -351,6 +351,8 @@ pin('pov_debrid_error_log_patcher', 'UPGRADES',
     'AI_SUBS_POV_DEBRID_ERRLOG_v1')
 pin('pov_directory_timing_patcher', 'UPGRADES',
     'AI_SUBS_POV_DIRTIMING_v3')
+pin('pov_widget_budget_patcher', 'UPGRADES',
+    'AI_SUBS_POV_WIDGET_BUDGET_v1')
 pin('pov_debrid_timeout_patcher', 'UPGRADES',
     'AI_SUBS_POV_DEBRID_TIMEOUT_v1')
 pin('addon_autoupdate_repair', 'UPGRADES',
@@ -534,7 +536,7 @@ pin('af3_discover_pov_patcher', 'UNPROVEN',
     'AI_SUBS_POV_DISCOVER_v6_unified')
 pin('af3_home_patcher', 'UNPROVEN',
     'AF3_CE_VERSION=6.3.2.14', 'JURIALMUNKEY_MIN_VERSION=0.2.35',
-    'PATCH_VERSION=2026-09-13-pov-home-v22',
+    'PATCH_VERSION=2026-09-16-pov-home-v23',
     'POV_AF3_PLOT_AUTOSCROLL_v2', 'POV_AF3_TOUCH_CLEANUP_v1')
 pin('af3_search_pov_patcher', 'UNPROVEN',
     'AI_SUBS_POV_SEARCH_v1', 'AI_SUBS_POV_SEARCH_v2',
@@ -1895,10 +1897,10 @@ def main():
     # A version constant can be a gate on its own, written into a marker FILE
     # whose whole content is the version.
     check('SABOTAGE: a bare version constant is a marker',
-          'PATCH_VERSION=2026-09-13-pov-home-v22'
+          'PATCH_VERSION=2026-09-16-pov-home-v23'
           in PINS.get('af3_home_patcher', ('', ()))[1]
-          and bump_marker('PATCH_VERSION=2026-09-13-pov-home-v22')
-          == 'PATCH_VERSION=2026-09-13-pov-home-v23',
+          and bump_marker('PATCH_VERSION=2026-09-16-pov-home-v23')
+          == 'PATCH_VERSION=2026-09-16-pov-home-v24',
           'af3_home_patcher writes PATCH_VERSION into _LAYOUT_MARKER and '
           '_SPOTLIGHT_MARKER; neither the string nor the settings-pair search '
           'can see it')

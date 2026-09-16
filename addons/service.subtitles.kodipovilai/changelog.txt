@@ -1,3 +1,7 @@
+0.2.543
+- Bound POV movie and TV home widgets to the items each skin can actually display on FENtastic, NOX and Arctic Fuse 3, reducing hidden metadata work on slower 32-bit devices.
+- Preserve full POV catalogue navigation and existing list freshness; Estuary and subtitle search, matching and playback paths remain unchanged.
+
 0.2.542
 - Recover malformed POV, Umbrella and CocoScrapers settings while preserving user choices, then safely reload repaired services.
 - Restore missed AllDebrid sync from Account Manager and incomplete Umbrella external-provider wiring.
