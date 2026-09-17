@@ -10,6 +10,7 @@
 import json
 import os
 import re
+import sys
 import time
 from urllib.parse import quote
 
@@ -31,7 +32,7 @@ except ImportError:
 
 
 AF3_SKIN_ID = 'skin.arctic.fuse.3'
-PATCH_VERSION = '2026-09-16-pov-home-v23'
+PATCH_VERSION = '2026-09-17-pov-home-v24'
 # Must track wizard.py's AF3_CE_SKIN_VERSION, which is the version actually
 # shipped in the pack. It did not: the wizard went to 6.3.2.14 and this stayed
 # at 6.3.2.9, so every AF3 user already ON the correct pack was told to
@@ -136,7 +137,8 @@ def _pov(action='', mode='', name='', icon='', extra=''):
         params.append(('name', name))
     # AF3's JSON-side limit controls only what the skin renders. Carry the
     # same budget into POV so hidden items never enter its metadata workers.
-    if mode in ('build_movie_list', 'build_tvshow_list'):
+    if mode in ('build_movie_list', 'build_tvshow_list',
+                'build_next_episode'):
         params.append(('widget_limit', '7'))
     if extra:
         for part in extra.split('&'):
@@ -374,6 +376,91 @@ HOME_WIDGETS = [
         'widget_limit': '7',
     },
 ]
+
+
+def _category_widget(label, folder_name, icon):
+    """A cheap home row whose items are navigation choices, not catalog
+    results.  POV reads the already-local navigator row and returns in a few
+    milliseconds; the selected catalogue is fetched only when the user opens
+    it.  This is the useful middle ground for 32-bit devices: the capability
+    remains on the AF3 home, without starting one Python/TMDb/Trakt job per
+    provider during Kodi startup."""
+    return {
+        'label': label,
+        'icon': icon,
+        'path': _shortcut_folder(folder_name, icon),
+        'target': 'videos',
+        'widget_style': 'Landscape',
+        'widget_limit': '7',
+    }
+
+
+_PERSONAL_MOVIES_WIDGET = _category_widget(
+    'האזור האישי – סרטים',
+    'FENtastic - סרטים - איזור אישי',
+    'special://home/media/build_icons/Twilight/Movies/My_Movies.png')
+_PERSONAL_SHOWS_WIDGET = _category_widget(
+    'האזור האישי – סדרות',
+    'FENtastic - סדרות - איזור אישי',
+    'special://home/media/build_icons/Twilight/Shows/My_Shows.png')
+_SERIES_NETWORKS_WIDGET = _category_widget(
+    'סדרות לפי שירות',
+    'סדרות - לפי רשתות',
+    'special://home/media/build_icons/Twilight/Shows/Networks/Shows_Netflix.png')
+
+# Two pre-merge AF3 defaults used POV's old tmdb_favorites action and were
+# never part of our later baseline. They are nevertheless build rows (their
+# exact paths came from the old canonical), and keeping them would silently
+# leave two provider requests in the supposedly compact profile.
+_LEGACY_DIRECT_TMDB_WIDGET_PATHS = (
+    _pov('tmdb_favorites', 'build_movie_list', 'Movie%20Favorites',
+         'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftmdb.png'),
+    _pov('tmdb_favorites', 'build_tvshow_list', 'TV%20Show%20Favorites',
+         'special%3a%2f%2fhome%2faddons%2fplugin.video.pov%2fresources%2fskins%2fDefault%2fmedia%2ftmdb.png'),
+)
+
+
+def _home_widgets_for_runtime(is_32bit=None):
+    """Return AF3's home plan and the build-owned rows it retires.
+
+    AF3 places all home widgets on one window, so a 32-bit device used to
+    launch every personal provider and all nine streaming networks together.
+    Keep the four immediately useful live rows (the latest-movie spotlight is
+    already a fifth live source) and turn the remaining groups into local
+    navigation rows.  64-bit keeps the full rich layout.
+
+    The second return value is deliberate: the generic three-way merge is
+    add-only, because an ordinary removed row might be a user customization.
+    Here we know exactly which old rows are ours and must be retired once on a
+    32-bit profile; user-added rows remain untouched.
+    """
+    if is_32bit is None:
+        is_32bit = sys.maxsize <= 2 ** 32
+    if not is_32bit:
+        return list(HOME_WIDGETS), ()
+
+    keep_labels = (
+        'סדרות פופולריות',
+        'פרקים להמשך צפייה',
+        'סרטים להמשך צפייה',
+        'סרטים לפי ז׳אנר',
+        'סדרות לפי ז׳אנר',
+        'עידן פלוס',
+    )
+    by_label = {row.get('label'): row for row in HOME_WIDGETS}
+    compact = [by_label[label] for label in keep_labels]
+    # Put personal choices and services beside the discovery rows.  Each one
+    # is a local 0-network directory whose entries open the real list on click.
+    compact[3:3] = [
+        _PERSONAL_MOVIES_WIDGET,
+        _PERSONAL_SHOWS_WIDGET,
+        _SERIES_NETWORKS_WIDGET,
+    ]
+    compact_keys = {_item_key(row) for row in compact}
+    retired = tuple(
+        _item_key(row) for row in HOME_WIDGETS
+        if _item_key(row) not in compact_keys)
+    return compact, retired
 
 
 HOME_SUBMENU = [
@@ -799,7 +886,8 @@ def _item_key(item):
         return ''
 
 
-def _merge_widget_nodes(filename, canonical):
+def _merge_widget_nodes(filename, canonical, retired_keys=(),
+                        forced_retired_keys=()):
     """3-way merge for a user-curated widget node, honoring the user's
     intent (keep removals + user-added tiles + their order) while still
     delivering our changes:
@@ -811,6 +899,11 @@ def _merge_widget_nodes(filename, canonical):
         its fields to ours (so e.g. limit/style updates propagate) while
         keeping the user's position; tiles the user added (not ours) stay.
       - removed by user (in baseline, not in current): do NOT re-add.
+      - explicitly retired build rows are removed only when they also occur in
+        the previous build baseline. A user-added row with the same historical
+        path after the migration therefore stays theirs.
+      - forced retired keys are exact legacy build defaults from before a
+        baseline existed; they are removed unconditionally.
       - brand-new (in canonical, not in baseline, not in current): append
         so everyone gets new tiles.
     On first run (no baseline) we seed canonical verbatim. Returns True if
@@ -857,12 +950,17 @@ def _merge_widget_nodes(filename, canonical):
             canon_order.append(k)
     base_keys = {_item_key(it) for it in baseline}
     cur_keys = {_item_key(it) for it in current}
+    retired_keys = set(retired_keys or ())
+    forced_retired_keys = set(forced_retired_keys or ())
 
     merged = []
     # 1) walk the user's current node in order: keep user-added tiles as-is;
     #    for tiles we still ship, refresh fields to ours (keep position).
     for it in current:
         k = _item_key(it)
+        if (k in forced_retired_keys
+                or (k in retired_keys and k in base_keys)):
+            continue
         if k in canon_by_key:
             merged.append(canon_by_key[k])
         else:
@@ -1288,16 +1386,46 @@ def _seed_af3_layout_once():
 
 
 _SPOTLIGHT_MARKER = AF3_NODES + '.pov_spotlight_seeded'
+_LEGACY_DEFAULT_SPOTLIGHT = (
+    'plugin://plugin.video.pov/?action=tmdb_movies_latest_releases'
+    '&iconImage=dvd.png&mode=build_movie_list&name=32461')
+_DEFAULT_SPOTLIGHT = _LEGACY_DEFAULT_SPOTLIGHT + '&widget_limit=7'
 _SPOTLIGHT_COMMANDS = [
-    'Skin.SetString(HomeSwitcher.Home.Spotlight.Path,plugin://plugin.video.pov/?action=tmdb_movies_latest_releases&iconImage=dvd.png&mode=build_movie_list&name=32461)',
+    'Skin.SetString(HomeSwitcher.Home.Spotlight.Path,{0})'.format(
+        _DEFAULT_SPOTLIGHT),
     'Skin.SetString(HomeSwitcher.Home.Spotlight.Target,videos)',
     'Skin.SetString(HomeSwitcher.Home.Spotlight.Label,סרטים חדשים)',
-    'Skin.SetString(HomeSwitcher.Home.Spotlight.Limit,10)',
+    'Skin.SetString(HomeSwitcher.Home.Spotlight.Limit,7)',
     # The main menu-hub shortcut path: seeded once here (was previously re-set
     # on every boot in _set_af3_runtime_defaults, which reverted a user's edit
     # of the hub path after each restart).
     'Skin.SetString(HomeSwitcher.Home.Shortcut.Path,ActivateWindow(1181))',
 ]
+
+
+def _migrate_32bit_default_spotlight():
+    """Budget only the exact build-owned legacy spotlight.
+
+    The 32-bit compact home intentionally leaves latest movies to AF3's
+    spotlight instead of loading the same catalogue twice. Existing users
+    already own their spotlight setting, so never touch a custom value; only
+    upgrade the byte-for-byte default that this build previously seeded.
+    """
+    if sys.maxsize > 2 ** 32 or xbmc is None or not _is_af3_active():
+        return False
+    try:
+        current = xbmc.getInfoLabel(
+            'Skin.String(HomeSwitcher.Home.Spotlight.Path)') or ''
+        if current != _LEGACY_DEFAULT_SPOTLIGHT:
+            return False
+        xbmc.executebuiltin(
+            'Skin.SetString(HomeSwitcher.Home.Spotlight.Path,{0})'.format(
+                _DEFAULT_SPOTLIGHT))
+        xbmc.executebuiltin(
+            'Skin.SetString(HomeSwitcher.Home.Spotlight.Limit,7)')
+        return True
+    except Exception:
+        return False
 
 
 def _seed_af3_spotlight_once():
@@ -1397,6 +1525,7 @@ def _rebuild_af3_shortcuts():
         return False
     _set_af3_runtime_defaults()
     _seed_af3_spotlight_once()
+    _migrate_32bit_default_spotlight()
     _seed_af3_layout_once()
     stamp = '{0}-{1}'.format(PATCH_VERSION, int(time.time()))
     xbmc.executebuiltin('Skin.SetString(Shortcuts.RebuildDateTime,{0})'.format(stamp))
@@ -1424,6 +1553,14 @@ def ensure_patched():
     mdblist_ok = _mdblist_connected()
     umbrella_ok = _umbrella_installed()
     for filename, data in FILES.items():
+        retired_keys = ()
+        forced_retired_keys = ()
+        if filename == 'skinvariables-shortcut-homewidgets.json':
+            data, retired_keys = _home_widgets_for_runtime()
+            if retired_keys:  # compact 32-bit plan
+                forced_retired_keys = tuple(
+                    _item_key({'path': path})
+                    for path in _LEGACY_DIRECT_TMDB_WIDGET_PATHS)
         # The Umbrella + search-engine rows are opt-in the same way: without
         # Umbrella the search switch has nothing to switch to and the Umbrella
         # row opens an add-on that is not there, so both are dropped from the
@@ -1443,7 +1580,9 @@ def ensure_patched():
         if filename == 'skinvariables-shortcut-homewidgets.json' and not mdblist_ok:
             data = [w for w in data if 'mdblist_watchlist' not in (w.get('path') or '')]
         if filename in _MERGE_FILES:
-            changed = _merge_widget_nodes(filename, data) or changed
+            changed = _merge_widget_nodes(
+                filename, data, retired_keys=retired_keys,
+                forced_retired_keys=forced_retired_keys) or changed
         else:
             changed = _write_if_changed(filename, data) or changed
     changed = _patch_font_xml() or changed
@@ -1476,6 +1615,7 @@ def ensure_patched():
     if _is_af3_active():
         _set_af3_runtime_defaults()
         _seed_af3_spotlight_once()
+        _migrate_32bit_default_spotlight()
         _seed_af3_layout_once()
         # Every AF3 boot, not only the ones that rebuild: the crash this
         # prevents is reached by opening a submenu, which has nothing to do
