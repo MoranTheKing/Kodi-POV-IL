@@ -192,12 +192,14 @@ def maybe_fix_personal_area_lists():
     instead of Trakt Collection. Each row is rewritten only if its
     current list_contents matches the shipped baseline byte-for-byte;
     if the user (or some other patcher) has touched the row, leave it
-    alone.
+    alone. A completely missing row is safely re-created: there is no user
+    content to preserve, and the build's 32-bit AF3 home now uses these two
+    local folders instead of starting each provider at boot.
 
     Returns a {row_name: status} dict, with status one of:
       'fixed'     -- row matched baseline, rewrite committed
+      'seeded'    -- missing row restored as a shortcut_folder
       'unchanged' -- row already migrated (or already different)
-      'no_row'    -- row missing from DB (POV schema changed?)
       'failed'    -- any error path
     Or {'_status': 'no_db'} if POV isn't installed yet.
     """
@@ -242,7 +244,19 @@ def maybe_fix_personal_area_lists():
                 out[row_name] = 'failed'
                 continue
             if not row:
-                out[row_name] = 'no_row'
+                try:
+                    cur.execute('BEGIN IMMEDIATE')
+                    cur.execute(
+                        "INSERT INTO navigator "
+                        "(list_name, list_type, list_contents) "
+                        "VALUES (?, 'shortcut_folder', ?)",
+                        (row_name, target))
+                    cur.execute('COMMIT')
+                    out[row_name] = 'seeded'
+                except Exception:
+                    try: cur.execute('ROLLBACK')
+                    except Exception: pass
+                    out[row_name] = 'failed'
                 continue
             current = row[0] or ''
             if current == target:
