@@ -34,6 +34,7 @@ _END_MARKER = '# AI_SUBS_POV_WIDGET_BUDGET_END'
 POV_TARGETS = (
     'resources/lib/menus/movies.py',
     'resources/lib/menus/tvshows.py',
+    'resources/lib/menus/episodes.py',
 )
 
 # Twelve is a full TV screen plus useful horizontal browsing while avoiding
@@ -44,10 +45,12 @@ SKIN_TARGETS = (
     ('skin.fentastic', 'xml/script-fentastic-widget_tvshows.xml', 12),
     ('skin.povil.nox', 'xml/script-nox-widget_movies.xml', 12),
     ('skin.povil.nox', 'xml/script-nox-widget_tvshows.xml', 12),
+    ('skin.povil.nox', 'xml/script-nox-widget_kids.xml', 12),
 )
 
 _ADD_ITEMS_RE = re.compile(
-    r'^(?P<indent>[ \t]*)kodi_utils\.add_items\('
+    r'^(?P<indent>[ \t]*)(?P<guard>if self\.list:[ \t]*)?'
+    r'kodi_utils\.add_items\('
     r'__handle__, (?P<worker>worker\(\)|self\.worker\(\))\)[ \t]*(?=\r?$)',
     re.MULTILINE,
 )
@@ -186,8 +189,14 @@ def _patch_pov_file(path):
         return 'unmatched'
     match = matches[0]
     eol = '\r\n' if original.count('\r\n') > (original.count('\n') // 2) else '\n'
-    replacement = _budget_block(
-        match.group('indent'), match.group('worker'), eol=eol)
+    indent = match.group('indent')
+    if match.group('guard'):
+        replacement = (indent + 'if self.list:' + eol
+                       + _budget_block(indent + '\t', match.group('worker'),
+                                       eol=eol))
+    else:
+        replacement = _budget_block(
+            indent, match.group('worker'), eol=eol)
     updated = clean[:match.start()] + replacement + clean[match.end():]
     try:
         compile(updated, path, 'exec')

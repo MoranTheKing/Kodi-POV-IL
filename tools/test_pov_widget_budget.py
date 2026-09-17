@@ -73,6 +73,27 @@ for filename in ('movies.py', 'tvshows.py'):
         check(filename + ' keeps its budget after the menu patcher',
               after_menu.count('AI_SUBS_POV_WIDGET_BUDGET_v1') == 1)
 
+with tempfile.TemporaryDirectory(prefix='pov-budget-episodes-') as folder:
+    filename = 'episodes.py'
+    target = os.path.join(folder, filename)
+    shutil.copy2(os.path.join(NATIVE, filename), target)
+    first = patcher._patch_pov_file(target)
+    once = open(target, 'rb').read()
+    second = patcher._patch_pov_file(target)
+    twice = open(target, 'rb').read()
+    text = once.decode('utf-8')
+    check('episodes.py patches its guarded add-items call',
+          first == 'patched', first)
+    check('episodes.py compiles', bool(compile(text, target, 'exec')))
+    check('episodes.py has one live block',
+          text.count('AI_SUBS_POV_WIDGET_BUDGET_v1') == 1)
+    check('episodes.py keeps the original empty-list guard',
+          '\t\t\tif self.list:\n'
+          '\t\t\t\t# AI_SUBS_POV_WIDGET_BUDGET_v1'
+          in text.replace('\r\n', '\n'))
+    check('episodes.py is byte-idempotent',
+          second == 'unchanged' and once == twice, second)
+
 
 PROBE = '''class Probe:
 \tdef __init__(self, is_widget, value, hide_watched=False, dropped=()):
@@ -94,7 +115,7 @@ PROBE = '''class Probe:
 
 
 def execute_probe(module, is_widget, value, hide_watched=False, dropped=(),
-                  self_worker=False, return_instance=False):
+                  self_worker=False, guarded=False, return_instance=False):
     with tempfile.TemporaryDirectory(prefix='pov-budget-probe-') as folder:
         path = os.path.join(folder, 'probe.py')
         probe = PROBE
@@ -103,6 +124,10 @@ def execute_probe(module, is_widget, value, hide_watched=False, dropped=(),
                 '\t\tworker = self.worker\n'
                 '\t\tkodi_utils.add_items(__handle__, worker())',
                 '\t\tkodi_utils.add_items(__handle__, self.worker())')
+        if guarded:
+            probe = probe.replace(
+                '\t\tkodi_utils.add_items(__handle__, worker())',
+                '\t\tif self.list: kodi_utils.add_items(__handle__, worker())')
         with io.open(path, 'w', encoding='utf-8') as handle:
             handle.write(probe)
         status = module._patch_pov_file(path)
@@ -128,6 +153,9 @@ print('\n=== behavioural gate ===')
 status, items = execute_probe(patcher, True, '7')
 check('an explicit widget request starts only seven workers',
       status == 'patched' and items == list(range(7)), str(items))
+_status, items = execute_probe(patcher, True, '7', guarded=True)
+check('the episode-style guarded call starts only seven workers',
+      items == list(range(7)), str(items))
 _status, items, instance = execute_probe(
     patcher, True, '7', self_worker=True, return_instance=True)
 check('the TV-style self.worker anchor also starts only seven workers',
@@ -184,6 +212,9 @@ with tempfile.TemporaryDirectory(prefix='pov-budget-crlf-') as folder:
 
 
 print('\n=== skin delivery ===')
+check('NOX children row is included in the producer budget',
+      ('skin.povil.nox', 'xml/script-nox-widget_kids.xml', 12)
+      in patcher.SKIN_TARGETS)
 old_xml = '''<?xml version="1.0" encoding="UTF-8"?>
 <includes>
   <include name="Rows">
@@ -240,6 +271,10 @@ check('every AF3 movie/TV row carries the seven-item producer budget',
       bool(media) and all('widget_limit=7' in row['path'] for row in media),
       '{0}/{1}'.format(sum('widget_limit=7' in row['path'] for row in media),
                        len(media)))
+next_episode = next(row for row in af3.HOME_WIDGETS
+                    if 'mode=build_next_episode' in (row.get('path') or ''))
+check('AF3 next-episode work carries the same seven-item budget',
+      'widget_limit=7' in next_episode['path'])
 old = 'plugin://plugin.video.pov/?action=x&mode=build_movie_list&name=y'
 new = old + '&widget_limit=7'
 check('AF3 treats the budget as an in-place upgrade, not a duplicate tile',
