@@ -493,6 +493,11 @@ def _run_build_startup_repairs():
         _maybe_patch_pov_resolve_diag,
         _maybe_restore_pov_torbox,
         _maybe_fix_pov_torbox_url,
+        # TMDb/Trakt catalogue modules are needed to read POV's own SQLite
+        # cache, but their HTTP stack is needed only after that cache misses.
+        # Defer requests/session construction without changing cache expiry or
+        # the live fallback, so first-home rendering stays current and light.
+        _maybe_patch_pov_http_lazy_imports,
         # Ordinary catalogue reads need only POV's synced watched SQLite data.
         # Keep the remote Trakt/MDBList account stacks out of a fresh Python
         # interpreter until a watched/progress operation actually calls them.
@@ -1328,6 +1333,28 @@ def _maybe_patch_pov_watched_lazy_imports():
             from resources.lib import kodi_utils
             kodi_utils.log(
                 'pov_watched_lazy_import_patcher run failed: {0}'.format(exc),
+                level='WARNING')
+        except Exception:
+            pass
+
+
+def _maybe_patch_pov_http_lazy_imports():
+    """Defer POV's catalogue HTTP stack until a cache miss needs it."""
+    try:
+        from resources.lib import pov_http_lazy_import_patcher, kodi_utils
+        results = pov_http_lazy_import_patcher.ensure_patched()
+        bad = {key: value for key, value in results.items()
+               if value in ('read_failed', 'write_failed', 'compile_failed',
+                            'unmatched', 'failed')}
+        if bad:
+            kodi_utils.log(
+                'pov_http_lazy_import_patcher needs attention: {0}'.format(
+                    bad), level='WARNING')
+    except Exception as exc:
+        try:
+            from resources.lib import kodi_utils
+            kodi_utils.log(
+                'pov_http_lazy_import_patcher run failed: {0}'.format(exc),
                 level='WARNING')
         except Exception:
             pass
