@@ -353,6 +353,8 @@ pin('pov_directory_timing_patcher', 'UPGRADES',
     'AI_SUBS_POV_DIRTIMING_v3')
 pin('pov_widget_budget_patcher', 'UPGRADES',
     'AI_SUBS_POV_WIDGET_BUDGET_v1')
+pin('pov_http_lazy_import_patcher', 'UPGRADES',
+    'AI_SUBS_POV_LAZY_HTTP_IMPORTS_v1')
 pin('pov_watched_lazy_import_patcher', 'UPGRADES',
     'AI_SUBS_POV_LAZY_WATCHED_IMPORTS_v1')
 pin('pov_debrid_timeout_patcher', 'UPGRADES',

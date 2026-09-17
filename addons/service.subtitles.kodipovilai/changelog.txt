@@ -1,3 +1,6 @@
+0.2.545
+- Defer POV's TMDb and Trakt HTTP stack until an expired or missing catalogue cache needs it, reducing 32-bit home and cache-hit navigation time without changing cache freshness or live fallback.
+
 0.2.544
 - Reduce initial home-screen work on 32-bit devices with a compact Arctic Fuse 3 layout and bounded POV movie, TV, episode and NOX children widgets, while preserving full catalogue navigation.
 - Defer speculative subtitle-engine and patch-health work until startup settles; a real subtitle request still starts immediately.
