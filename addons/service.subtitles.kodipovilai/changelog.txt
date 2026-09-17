@@ -1,3 +1,9 @@
+0.2.544
+- Reduce initial home-screen work on 32-bit devices with a compact Arctic Fuse 3 layout and bounded POV movie, TV, episode and NOX children widgets, while preserving full catalogue navigation.
+- Defer speculative subtitle-engine and patch-health work until startup settles; a real subtitle request still starts immediately.
+- Load POV's Trakt and MDBList watched backends only when an operation actually needs them, reducing cold navigation imports.
+- Bound future artwork decoding on exact build-owned 32-bit profiles without deleting cached images or changing custom settings.
+
 0.2.543
 - Bound POV movie and TV home widgets to the items each skin can actually display on FENtastic, NOX and Arctic Fuse 3, reducing hidden metadata work on slower 32-bit devices.
 - Preserve full POV catalogue navigation and existing list freshness; Estuary and subtitle search, matching and playback paths remain unchanged.
