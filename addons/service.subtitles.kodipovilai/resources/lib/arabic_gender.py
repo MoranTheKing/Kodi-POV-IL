@@ -168,7 +168,7 @@ def _overlap_rate(en, ar, a, b):
 
 # ---------------- public: build the per-entry gender map --------------------
 
-def _arabic_for_blocks(src_blocks, ar_cues, a, b):
+def _arabic_for_blocks(src_blocks, ar_cues, a, b, segments=None):
     """Return {srt_entry_number: aligned Arabic dialogue text} for the dialogue
     blocks with a confident time-overlap. Keyed by the block's own SRT number
     (robust to how translate.py later chunks them). SFX/music blocks omitted."""
@@ -177,6 +177,9 @@ def _arabic_for_blocks(src_blocks, ar_cues, a, b):
     ar_starts = [c['start'] for c in ar_cues]
     ar_ends = [c['end'] for c in ar_cues]
     out = {}
+    segments = list(segments or [])
+    ref_boundaries = [float(seg.get('ref_from_ms')) for seg in segments[1:]
+                      if seg.get('ref_from_ms') is not None]
     for blk in src_blocks:
         lines = [ln for ln in blk.split('\n') if ln.strip() != '']
         if len(lines) < 2 or not lines[0].strip().isdigit():
@@ -190,7 +193,12 @@ def _arabic_for_blocks(src_blocks, ar_cues, a, b):
         body = ' '.join(lines[2:]).strip()
         if not _is_dialogue(body):
             continue
-        es, ee = a * s + b, a * e + b
+        applied_b = b
+        if segments:
+            si = bisect.bisect_right(ref_boundaries, (s + e) / 2.0)
+            si = min(si, len(segments) - 1)
+            applied_b = float(segments[si].get('offset_ms') or 0.0)
+        es, ee = a * s + applied_b, a * e + applied_b
         lo = bisect.bisect_left(ar_ends, es)
         cand = []
         k = lo
@@ -202,7 +210,7 @@ def _arabic_for_blocks(src_blocks, ar_cues, a, b):
         if cand:
             out[num] = ar_cues[max(cand)[1]]['text']
             continue
-        pred = a * ((s + e) / 2.0) + b
+        pred = a * ((s + e) / 2.0) + applied_b
         j = bisect.bisect_left(ar_centers, pred)
         bd, bk = 1e9, None
         for kk in (j - 1, j, j + 1):
@@ -220,6 +228,35 @@ def align_one(src_text, src_blocks, ar_text):
     ar = [c for c in _parse(ar_text) if _is_dialogue(c['text'])]
     if len(en) < 8 or len(ar) < 8:
         return None, 'too few dialogue cues (en=%d ar=%d)' % (len(en), len(ar))
+    # Share the hardened SubSync timing engine: deduped/refined global mapping,
+    # local-window consistency, and a strictly validated piecewise map for
+    # obvious recap/ad/different-cut steps.  Gender-oracle alignment intentionally
+    # keeps its historical 65% overlap contract and does not impose SubSync's
+    # display-subtitle tight-onset floor: cross-language line segmentation is
+    # different, and an oracle miss is fail-soft (it never changes cue timing).
+    try:
+        from resources.lib import sync_align as _sync_align
+        verdict = _sync_align.verify_cue_lists(
+            en, ar, min_vote=0.65, min_overlap=0.65,
+            allow_piecewise=True, require_tight=False)
+        if verdict.get('status') == _sync_align.STATUS_UNKNOWN:
+            return None, verdict.get('diag') or 'gate FAILED'
+        a = float(verdict.get('scale') or 1.0)
+        b = float(verdict.get('offset_ms') or 0.0)
+        mapping = _arabic_for_blocks(
+            src_blocks, ar, a, b, segments=verdict.get('segments'))
+        return mapping, 'gate OK (' + (verdict.get('diag') or '') + ')'
+    except Exception as e:
+        # sync_align ships in the same add-on.  Falling back to the historical
+        # global-only vote here is unsafe: a dominant first half can hide a
+        # differently cut second half and attach gender evidence to the wrong
+        # dialogue.  Gender hints are optional, so fail closed for this helper.
+        _log('hardened aligner failed; declining gender reference: {0}'.format(e),
+             level='WARNING')
+        return None, 'hardened aligner failed; reference declined'
+
+    # Kept as dead-compatible reference code for old external imports; the
+    # production path above always returns and never reaches this weaker gate.
     a, b, vote = _estimate_map(en, ar)
     ov = _overlap_rate(en, ar, a, b)
     diag = 'scale=%.4f offset=%+dms vote=%.0f%% overlap=%.0f%%' % (
