@@ -42,12 +42,19 @@ class RemotePlaybackSafety(unittest.TestCase):
             getTime=lambda: 12.0)
         xbmc.getCondVisibility = lambda _name: False
         xbmc.sleep = lambda _ms: None
+        self.window_props = {}
+        xbmcgui = types.ModuleType('xbmcgui')
+        props = self.window_props
+        xbmcgui.Window = lambda _wid: types.SimpleNamespace(
+            getProperty=lambda key: props.get(key, ''),
+            setProperty=lambda key, value: props.__setitem__(key, value),
+            clearProperty=lambda key: props.pop(key, None))
         ee = types.ModuleType('resources.lib.embedded_extract')
         self.cue_reader = Mock(return_value=[])
         ee.cue_reference_times = self.cue_reader
         self.mods = patch.dict(sys.modules, {'resources': pkg, 'resources.lib': lib,
                      'resources.lib.kodi_utils': ku, 'resources.lib.embedded_extract': ee,
-                     'xbmc': xbmc})
+                     'xbmc': xbmc, 'xbmcgui': xbmcgui})
         self.mods.start()
         self.addCleanup(self.mods.stop)
         spec = importlib.util.spec_from_file_location('subsync_remote_test', LIB / 'subsync.py')
@@ -221,6 +228,62 @@ class RemotePlaybackSafety(unittest.TestCase):
         self.assertEqual(len(jobs), 1)
         job = json.loads(jobs[0].read_text(encoding='utf-8'))
         self.assertEqual(job['stream_url'], self.url)
+
+    def test_fixed_delivery_names_cannot_collide_on_reused_temp_basename(self):
+        first = self.sub._write_fixed(str(self.subtitle), 'first fixed text')
+        second = self.sub._write_fixed(str(self.subtitle), 'second fixed text')
+        self.assertNotEqual(first, second)
+        self.assertEqual(Path(first).read_text(encoding='utf-8'),
+                         'first fixed text')
+        self.assertEqual(Path(second).read_text(encoding='utf-8'),
+                         'second fixed text')
+        self.assertEqual(self.subtitle.read_text(encoding='utf-8'),
+                         '1\n00:00:01,000 --> 00:00:02,000\nHello\n')
+
+    def test_soft_file_probe_nudge_is_refused_but_real_shift_survives(self):
+        base = {'status': self.sub.sync_align.STATUS_FIXABLE,
+                'mode': 'global', 'scale': 1.0, 'offset_ms': -699.0,
+                'diag': 'three-track union synthetic majority'}
+        guarded = self.sub._guard_soft_probe_shift(base, 'FILE PROBE')
+        self.assertEqual(guarded['status'], self.sub.sync_align.STATUS_UNKNOWN)
+        self.assertEqual(guarded['reason'], 'soft_probe_shift')
+        # A release-matched oracle still corrects the measured ~1s field case.
+        self.assertIs(self.sub._guard_soft_probe_shift(base, 'ORACLE'), base)
+        large = dict(base, offset_ms=1800.0)
+        self.assertIs(self.sub._guard_soft_probe_shift(
+            large, 'FILE PROBE'), large)
+        drift = dict(base, scale=1.0173, offset_ms=500.0)
+        self.assertIs(self.sub._guard_soft_probe_shift(
+            drift, 'FILE PROBE'), drift)
+
+    def test_new_trusted_delivery_invalidates_old_background_swap(self):
+        old_key = 'old-subtitle-key'
+        self.window_props[self.sub._PENDING_PROP] = json.dumps(
+            {'key': old_key, 'ts': 1})
+        playing = 'Movie.2026.1080p.WEB-DL'
+        tier = next(iter(self.sub.release_match.AUTO_OK_TIERS))
+        with patch.object(self.sub, 'enabled', return_value=True), \
+             patch.object(self.sub, 'playing_release', return_value=playing), \
+             patch.object(self.sub.release_match, 'score',
+                          return_value=(100, tier, {})), \
+             patch.object(self.sub, '_record_delivery'):
+            out, verdict = self.sub.process(
+                {}, str(self.subtitle), playing)
+        self.assertEqual(out, str(self.subtitle))
+        self.assertEqual(verdict['status'], self.sub._STATUS_TRUSTED)
+        self.assertEqual(self.sub._pending_key(), '')
+
+        xbmc = sys.modules['xbmc']
+        setter = Mock()
+        player = types.SimpleNamespace(
+            isPlaying=lambda: True,
+            getPlayingFile=lambda: self.url,
+            setSubtitles=setter)
+        with patch.object(xbmc, 'Player', return_value=player):
+            self.assertFalse(self.real_swap_if_current(
+                {'key': old_key, 'stream_url': self.url},
+                'old-fixed.srt', {}))
+        setter.assert_not_called()
 
     def test_background_swap_requires_same_proven_stream(self):
         xbmc = sys.modules['xbmc']

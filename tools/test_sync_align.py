@@ -113,6 +113,96 @@ check('arbitrary scale recovered within 0.001',
 check('arbitrary drift round-trips to CONFIRMED',
       sa.verify(REF, fixed)['status'] == sa.STATUS_CONFIRMED, v['diag'])
 
+print('== arbitrary drift survives irregular missing and extra cues ==')
+# The two cheap quantile proposals are deliberately defeated here: irregular
+# deletions and insertions shift cue indices even though the underlying clock is
+# one clean 1.025004 line. The bounded adaptive sweep must propose that line;
+# all ordinary acceptance gates still decide whether it is safe to apply.
+_rng = random.Random(10005)
+_ref_irregular = dialogue_times(n=120, seed=5, span_ms=20 * 60 * 1000)
+_scale_irregular, _offset_irregular = 1.0250044611, 1168.5115
+_cand_irregular = []
+for _i, (_s, _d) in enumerate(_ref_irregular):
+    if _rng.random() < 0.08:
+        continue
+    _j = _rng.uniform(-100, 100)
+    _cand_irregular.append((_scale_irregular * _s + _offset_irregular + _j,
+                            _scale_irregular * _d))
+for _ in range(int(len(_ref_irregular) * 0.05)):
+    _t = _rng.uniform(_cand_irregular[0][0], _cand_irregular[-1][0])
+    _cand_irregular.append((_t, _rng.randint(600, 2200)))
+_cand_irregular.sort()
+v = sa.verify(make_srt(_ref_irregular, 'en'),
+              make_srt(_cand_irregular, 'he'))
+check('irregular arbitrary drift is FIXABLE/global',
+      v['status'] == sa.STATUS_FIXABLE and v.get('mode') == 'global', v['diag'])
+check('irregular scale recovered within 0.001',
+      abs(v['scale'] - _scale_irregular) <= 0.001, v['diag'])
+check('irregular offset recovered within 0.6s',
+      abs(v['offset_ms'] - _offset_irregular) <= 600, v['diag'])
+_adaptive_real = sa._adaptive_scale_candidates
+try:
+    sa._adaptive_scale_candidates = lambda *args, **kwargs: []
+    _sabotaged = sa.verify(make_srt(_ref_irregular, 'en'),
+                           make_srt(_cand_irregular, 'he'))
+finally:
+    sa._adaptive_scale_candidates = _adaptive_real
+check('SABOTAGE: removing the NG-derived search loses this valid fix',
+      _sabotaged['status'] == sa.STATUS_UNKNOWN, _sabotaged['diag'])
+
+print('== a small hard cut cannot masquerade as arbitrary smooth drift ==')
+# This exact fixture used to be accepted as scale~1.0045/offset~1.5s: the
+# global line improved the average score by smearing a 2.5s step across both
+# halves, although neither half then had its real timing. Non-standard clocks
+# now have to prove a flat local residual after the fit.
+_step_clock = random.Random(5005)
+_step_ref = []
+_step_t = 30000
+for _ in range(150):
+    _step_d = _step_clock.randint(700, 3500)
+    _step_ref.append((_step_t, _step_d))
+    _step_t += _step_d + _step_clock.randint(300, 7000)
+_step_rng = random.Random(6005)
+_step_at = _step_rng.randrange(40, 110)
+_step_ms = _step_rng.uniform(1800, 4200)
+_step_cand = [
+    (_s + 2200 + (_step_ms if _i >= _step_at else 0)
+     + _step_rng.uniform(-70, 70), _d)
+    for _i, (_s, _d) in enumerate(_step_ref)]
+v = sa.verify(make_srt(_step_ref, 'en'), make_srt(_step_cand, 'he'))
+check('2.5s step is UNKNOWN, never flattened into one scale',
+      v['status'] == sa.STATUS_UNKNOWN,
+      v['diag'])
+_range_real = sa._SCALED_LOCAL_RANGE_MS
+try:
+    sa._SCALED_LOCAL_RANGE_MS = 10 ** 9
+    _step_sabotaged = sa.verify(
+        make_srt(_step_ref, 'en'), make_srt(_step_cand, 'he'))
+finally:
+    sa._SCALED_LOCAL_RANGE_MS = _range_real
+check('SABOTAGE: removing scaled-clock continuity revives the false fix',
+      _step_sabotaged['status'] == sa.STATUS_FIXABLE
+      and _step_sabotaged.get('mode') == 'global',
+      _step_sabotaged['diag'])
+
+print('== hard cuts cannot masquerade as standard or near-identity scales ==')
+def _hard_step_fixture(seed):
+    _r = random.Random(8000 + seed)
+    _xs = sorted(_r.uniform(0, 5000000) for _ in range(160))
+    _ref = [(_x, _r.uniform(800, 3200)) for _x in _xs]
+    _step = random.Random(9000 + seed).uniform(2000, 3000)
+    _cand = [(_x + 1000 + (_step if _x > 2500000 else 0), _d)
+             for _x, _d in _ref]
+    return _ref, _cand
+
+
+for _seed in (26, 68):
+    _boundary_ref, _boundary_cand = _hard_step_fixture(_seed)
+    v = sa.verify(make_srt(_boundary_ref, 'en'),
+                  make_srt(_boundary_cand, 'he'), allow_piecewise=False)
+    check('hard-step seed %d is safely UNKNOWN' % _seed,
+          v['status'] == sa.STATUS_UNKNOWN, v['diag'])
+
 print('== HI-style cue-count mismatch (drop every 6th) still aligns ==')
 v = sa.verify(REF, transformed(offset=5000, drop_every=6))
 check('status FIXABLE', v['status'] == sa.STATUS_FIXABLE, v['diag'])

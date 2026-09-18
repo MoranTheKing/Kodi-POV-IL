@@ -88,7 +88,13 @@ _MAX_VERDICTS = 400
 # v15: local-consistency guard + conservatively validated piecewise maps.  Old
 # global FIXABLE verdicts must recompute because a dominant region could have
 # hidden a differently-cut second half.
-_VERDICT_VERSION = 15
+# v16: bounded adaptive scale proposals recover continuous drift when irregular
+# inserted/deleted cues defeat index quantiles. Every normal acceptance gate is
+# still required, so older UNKNOWNs must recompute while older fixes are rechecked.
+# v17: every proposed non-identity clock must remain locally continuous; soft
+# multi-track probes cannot make sub-second editorial nudges, and a newer
+# subtitle selection invalidates any older background hot-swap.
+_VERDICT_VERSION = 17
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
@@ -283,7 +289,9 @@ _MAX_PROBE_ENTRIES = 60
 # union all non-forced tracks -- v1 entries may carry an un-rebased origin.
 # v3: remote Matroska uses the debrid-safe per-subtitle Cues index reader
 # (head + Cues + origin, a handful of ranged reads) instead of being skipped.
-_PROBE_CACHE_VERSION = 3
+# v4: the remote reader unions every non-forced subtitle track, including
+# bitmap tracks, matching the local-file probe and covering PGS-only releases.
+_PROBE_CACHE_VERSION = 4
 _NEGATIVE_PROBE_TTL_S = 6 * 60 * 60
 
 
@@ -653,6 +661,9 @@ def process(info, path, delivered_release):
     a retimed copy was written and returned, or (path, None) when SubSync did
     not run (disabled / no anchor / unreadable file). Fail-open, never raises."""
     try:
+        # Every new file delivery supersedes an older background candidate.
+        # Re-mark below only if THIS selection actually queues deep work.
+        cancel_pending()
         if sync_align is None or release_match is None or not enabled():
             return path, None
         if not path or not os.path.isfile(path):
@@ -873,6 +884,37 @@ def finalize_delay_session(record, delay_s, watched_s):
         return None
 
 
+def _guard_soft_probe_shift(verdict, ref_kind):
+    """Refuse a sub-second nudge supported only by soft media-probe timing.
+
+    Subtitle tracks share the container clock, but each language/subber may
+    intentionally lead or trail speech by several hundred milliseconds. A
+    multi-track union can therefore outvote a candidate that is byte-for-byte
+    aligned with one real track. Keep those small editorial differences as-is;
+    large offsets, standard/non-standard clock drift and piecewise fixes still
+    go through the normal gates.
+    """
+    if (not verdict or ref_kind not in ('FILE PROBE', 'AUDIO PROBE')
+            or verdict.get('status') != sync_align.STATUS_FIXABLE
+            or verdict.get('mode', 'global') != 'global'):
+        return verdict
+    try:
+        scale = float(verdict.get('scale') or 1.0)
+        offset = float(verdict.get('offset_ms') or 0.0)
+    except (TypeError, ValueError):
+        return verdict
+    if abs(scale - 1.0) > 0.0002 or abs(offset) >= _SOFT_PROBE_SHIFT_MS:
+        return verdict
+    guarded = dict(verdict)
+    guarded.update({
+        'status': sync_align.STATUS_UNKNOWN,
+        'reason': 'soft_probe_shift',
+        'diag': ('soft probe shift preserved unchanged (%s %+dms; %s)'
+                 % (ref_kind, int(offset), verdict.get('diag', ''))),
+    })
+    return guarded
+
+
 def _deep_verify(info, path, text, rel, playing, key):
     """The slow anchors: oracle sub -> file probe -> audio. Stores the verdict
     and returns (final_path, verdict). Runs in the SERVICE worker (or the rare
@@ -985,6 +1027,7 @@ def _deep_verify(info, path, text, rel, playing, key):
                     verdict = sync_align.verify_cues(more, text, **gate_kw)
                     _log('verdict (pass 2, %d ref cues): %s'
                          % (len(more), verdict['diag']))
+            verdict = _guard_soft_probe_shift(verdict, ref_kind)
             fixed_text = None
             if verdict['status'] == sync_align.STATUS_FIXABLE:
                 try:
@@ -1028,6 +1071,12 @@ _QUEUE_DIR = ('special://profile/addon_data/service.subtitles.kodipovilai/'
               'subsync_queue')
 _PENDING_PROP = 'subsync.pending'
 _JOB_FRESH_S = 120
+# Embedded subtitle tracks are an excellent video-timeline anchor for large
+# offsets and clock drift, but different language/subber tracks routinely lead
+# or trail the same spoken line by several hundred milliseconds. Never let that
+# editorial variation nudge a subtitle that may already be correct. Release-
+# matched subtitle oracles retain their existing small-offset behaviour.
+_SOFT_PROBE_SHIFT_MS = 1000
 
 # Keys that must survive the JSON round-trip for bridge.search /
 # playing_release to work in the service process.
@@ -1051,6 +1100,19 @@ def _mark_pending(key):
         import xbmcgui
         xbmcgui.Window(10000).setProperty(
             _PENDING_PROP, json.dumps({'key': key, 'ts': time.time()}))
+    except Exception:
+        pass
+
+
+def cancel_pending():
+    """Invalidate an older background job after a new subtitle selection.
+
+    The old job may still finish and cache its verdict, but it must not hot-swap
+    over a newer TRUSTED, cached or embedded subtitle on the same stream.
+    """
+    try:
+        import xbmcgui
+        xbmcgui.Window(10000).clearProperty(_PENDING_PROP)
     except Exception:
         pass
 
@@ -1251,7 +1313,16 @@ def _write_fixed(orig_path, fixed_text):
             if base.lower().endswith(ext):
                 base = base[:-len(ext)]
                 break
-        out = os.path.join(kodi_utils.cache_dir(), base + '.synced.he.srt')
+        # Kodi and subtitle add-ons reuse generic names such as
+        # TempSubtitle.he.srt across titles. A basename-only output let a later
+        # job overwrite the fixed file cached for another film. Content-address
+        # the delivery copy so concurrent/history entries cannot collide.
+        import hashlib
+        digest = hashlib.sha1(
+            fixed_text.encode('utf-8', 'replace')).hexdigest()[:12]
+        out = os.path.join(
+            kodi_utils.cache_dir(),
+            '{0}.{1}.synced.he.srt'.format(base, digest))
         tmp = out + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
             f.write(fixed_text)
