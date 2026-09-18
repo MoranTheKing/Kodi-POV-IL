@@ -1944,22 +1944,43 @@ def cue_reference_times(url_or_path, track_num=None, lang=None,
         subs = _sub_tracks(tracks)
         if not subs:
             return []
-        track = _pick_track(subs, track_num, lang)
-        if track is None:
-            _log('cue-times: no matching track (num=%s lang=%s)'
-                 % (track_num, lang))
-            return []
-        raw_times = _read_cue_times(src, seeks, seg_start, track['num'], _log)
+        # A caller asking for a particular language/track needs that exact text
+        # track's skeleton.  The no-selector caller (SubSync's playing-file
+        # probe) has a different job: establish the VIDEO timeline.  Every
+        # non-forced subtitle track, including bitmap PGS/VobSub, lives on that
+        # same timeline.  Read the Cues element once and merge all of them, as
+        # the local-file mkv_probe already does.  This both covers PGS-only
+        # releases and prevents a sparse first text track from being mistaken
+        # for the only available anchor. Forced/signs-only tracks stay out.
+        if track_num is None and not lang:
+            anchors = [t for t in subs if not t.get('forced')]
+            if not anchors:
+                _log('cue-times: only forced track(s) present -- skipping')
+                return []
+            by_track = _read_cue_times_multi(
+                src, seeks, seg_start,
+                {t['num'] for t in anchors}, _log)
+            raw_times = sorted({value for values in by_track.values()
+                                for value in values})
+            picked = '%d non-forced track(s)' % len(by_track)
+        else:
+            track = _pick_track(subs, track_num, lang)
+            if track is None:
+                _log('cue-times: no matching track (num=%s lang=%s)'
+                     % (track_num, lang))
+                return []
+            raw_times = _read_cue_times(
+                src, seeks, seg_start, track['num'], _log)
+            picked = 'track #%s' % track['num']
         if not raw_times:
-            _log('cue-times: no per-subtitle Cues index for track #%s'
-                 % track['num'])
+            _log('cue-times: no per-subtitle Cues index for %s' % picked)
             return []
         scale_ms = ts_scale / 1e6
         origin_ms = _timeline_origin(src, seg_start, scale_ms, _log)
         out = sorted({int(round(t * scale_ms - origin_ms)) for t in raw_times
                       if (t * scale_ms - origin_ms) >= 0})
-        _log('cue-times: %d dense reference time(s) in %d req / %.0fKB'
-             % (len(out), src.reqs, src.fetched / 1024.0))
+        _log('cue-times: %d dense reference time(s) from %s in %d req / %.0fKB'
+             % (len(out), picked, src.reqs, src.fetched / 1024.0))
         return out
     except Exception as e:
         (log or _noop)('cue_reference_times failed: %s' % e)
