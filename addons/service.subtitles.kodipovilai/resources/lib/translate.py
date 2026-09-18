@@ -535,6 +535,34 @@ def _rtl_delivery_copy(path, legacy_engine=False):
         return path
 
 
+def _sync_hebrew_delivery(info, path, source_release='', embedded_timing=False):
+    """Run any file-based Hebrew subtitle through the ordinary timing gate.
+
+    Local, engine, pool and AI files can all carry the timing of a different
+    WEB/BluRay/cut. SubSync receives the real subtitle release (when supplied)
+    and writes any release-specific correction to its own delivery copy; source
+    files and canonical AI cache files are never retimed in place.
+
+    ``embedded_timing`` is the one deliberate bypass. That pipeline has already
+    rebuilt/extracted the source on the playing file's own cue skeleton, so a
+    second independent retime could undo the stronger anchor. This helper is
+    intentionally fail-open: an unavailable synchronizer preserves the old
+    path.
+    """
+    if not path or embedded_timing:
+        return path
+    try:
+        from . import subsync
+        delivered, _verdict = subsync.process(
+            info, path, (source_release or '').strip())
+        return delivered or path
+    except Exception as exc:
+        kodi_utils.log(
+            'subsync Hebrew delivery hook failed: {0}'.format(exc),
+            level='WARNING')
+        return path
+
+
 def _pool_source_text(info, source_hash):
     """Read a pool SRT from the local immutable cache, fetching it only once.
 
@@ -839,6 +867,7 @@ def list_candidates(info, modal_progress=True):
             'language': 'he',
             'link': _encode_link({
                 'type': 'passthrough', 'path': alongside['he'],
+                'release': os.path.basename(alongside['he']),
             }),
             'sync': 'true',
             'rating': '5',
@@ -2507,6 +2536,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     via cache.save_text() are byte-identical to today's output for
     the same source SRT; only the timing of delivery differs.
     A callback exception NEVER aborts the translation."""
+    # A click/automatic selection here supersedes any older SubSync worker on
+    # the same stream, including branches that select an embedded track and
+    # return no file. The current file path re-marks itself later if needed.
+    try:
+        from . import subsync as _subsync
+        _subsync.cancel_pending()
+    except Exception:
+        pass
     payload = _decode_link(link)
     if not payload:
         kodi_utils.log('resolve: bad link', level='ERROR')
@@ -2526,7 +2563,9 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 os.path.basename(path) if path else '?'),
             time_ms=4000)
         if path and os.path.isfile(path):
-            return _rtl_delivery_copy(path)
+            return _sync_hebrew_delivery(
+                info, _rtl_delivery_copy(path),
+                source_release=payload.get('release') or '')
         return None
 
     if kind == 'pool':
@@ -2557,15 +2596,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # SubSync S2: pool variants carry the release of their SOURCE sub;
             # if that doesn't match the playing release, verify/fix timing
             # against a release-matched oracle. Fail-open.
-            try:
-                from . import subsync
-                _newp, _sv = subsync.process(
-                    info, out, payload.get('release') or '')
-                if _newp:
-                    out = _newp
-            except Exception as _se:
-                kodi_utils.log('subsync pool hook failed: {0}'.format(_se),
-                               level='WARNING')
+            out = _sync_hebrew_delivery(
+                info, out, source_release=payload.get('release') or '')
             _status('כתוביות מהמאגר הקהילתי', time_ms=4000)
             return out
         except OSError:
@@ -2716,16 +2748,10 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # release, verify -- and if a confident linear map exists, FIX --
             # its timing against a release-matched oracle sub (any language).
             # Fail-open: any problem delivers the file exactly as before.
-            try:
-                if 'Hebrew' in (payload.get('language') or ''):
-                    from . import subsync
-                    _newp, _sv = subsync.process(
-                        info, path, payload.get('filename') or '')
-                    if _newp:
-                        path = _newp
-            except Exception as _se:
-                kodi_utils.log('subsync engine hook failed: {0}'.format(_se),
-                               level='WARNING')
+            if 'Hebrew' in (payload.get('language') or ''):
+                path = _sync_hebrew_delivery(
+                    info, path,
+                    source_release=payload.get('filename') or '')
             _status('כתוביות עברית מ-{0}'.format(
                 payload.get('source') or 'מקור'), time_ms=4000)
             return path
@@ -2849,7 +2875,15 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # with a real release so match-% works for everyone who downloads it -- a
     # generic "Title.Year" matches almost nothing. Falls back to the video's own
     # release name from info; token-like (debrid URL/uuid) values are dropped.
-    _src_release = (payload.get('release') or '').strip()
+    # Keep timing provenance separate from the display/pool fallback below.
+    # ``info.release`` describes the PLAYING file; substituting it for a source
+    # subtitle whose release is unknown would manufacture an exact match and
+    # make SubSync trust timing it never verified.
+    _timing_release = (payload.get('release') or '').strip()
+    if _looks_like_token(_timing_release):
+        _timing_release = ''
+    _embedded_timing = bool(payload.get('embedded'))
+    _src_release = _timing_release
     if not _src_release:
         for _k in ('release', 'picked_release', 'filename', 'tagline', 'label'):
             _cand = (info.get(_k) or '').strip()
@@ -2860,9 +2894,16 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         try:
             if pool._is_token_like(_src_release):
                 _src_release = ''
+            if pool._is_token_like(_timing_release):
+                _timing_release = ''
         except Exception:
             pass
     _release_override = _src_release or None
+
+    def _deliver(path):
+        return _sync_hebrew_delivery(
+            info, path, source_release=_timing_release,
+            embedded_timing=_embedded_timing)
 
     # Arabic-gender-reference (opt-in, default OFF). When ON we operate in a
     # separate 'ar' quality tier: cache + pool live under their own key, so an
@@ -3027,7 +3068,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 _backfill_pool_async(info, translated, local_source,
                                      source_lang, ar_tier=_ar_on,
                                      embedded=(_pool_kind == 'ai_emb'))
-            return translated
+            return _deliver(translated)
 
     # Read the source SRT recorded at list time (alongside the video
     # or a temp-dir file loaded by another addon, e.g. DarkSubs).
@@ -3124,7 +3165,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                         kodi_utils.log(
                             'pool backfill (content) failed: {0}'.format(e),
                             level='DEBUG')
-            return translated_by_content
+            return _deliver(translated_by_content)
 
     # No hit: settle on the early-source-id slot as the canonical
     # cache path for this translation; falls back to content_id
@@ -3163,7 +3204,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 _reapply_rtl_fix_in_place(translated)
                 kodi_utils.notify(
                     'AI: כתוביות מהמאגר הקהילתי (לא נדרש תרגום)', time_ms=4000)
-                return translated
+                return _deliver(translated)
             except Exception as e:
                 kodi_utils.log('pool reuse save failed: {0}'.format(e),
                                level='WARNING')
@@ -3240,7 +3281,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             'translate step: source is already predominantly Hebrew -- '
             'passing through without translation', level='INFO')
         cache.save_text(translated, src_text)
-        return translated
+        return _deliver(translated)
 
     # Translator selection. 'google' (the user picked it in settings) ->
     # translate with Google Translate now and skip Gemini entirely. Google
@@ -3256,8 +3297,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     kodi_utils.log('translate step: language ok, mode={0}'.format(
         _translation_mode), level='INFO')
     if _translation_mode == 'google':
-        return _google_translate_and_save(src_text, source_lang, translated,
-                                          info)
+        return _deliver(_google_translate_and_save(
+            src_text, source_lang, translated, info))
 
     # Bisection markers (temporary, cheap): a report showed the translation thread
     # going silent between 'Starting translation' and the dispatch summary, never
@@ -4358,6 +4399,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                                                translated, info,
                                                reason=abort_reason)
             if gpath:
+                delivered_path = _deliver(gpath)
                 if progressive_cb is not None:
                     try:
                         progressive_cb('done', {
@@ -4369,12 +4411,12 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                             # so it looked in the wrong slot on every job that
                             # found a gender reference -- see the note on the
                             # main success emission below.
-                            'path': gpath,
+                            'path': delivered_path,
                         })
                     except Exception:
                         pass
                 _emit(True, 'google')
-                return gpath
+                return delivered_path
         kodi_utils.notify(abort_msg, time_ms=5000)
         if progressive_cb is not None:
             try:
@@ -4796,6 +4838,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             gpath = _google_translate_and_save(
                 src_text, source_lang, translated, info)
             if gpath:
+                delivered_path = _deliver(gpath)
                 # This path returned WITHOUT a 'done', so the canonical swap
                 # never ran and the viewer was left on the last progressive
                 # slot -- which holds the non-Hebrew output we just rejected.
@@ -4807,14 +4850,14 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                             'success': True,
                             'source_id': _progressive_source_id,
                             'release': _src_release,
-                            'path': gpath,
+                            'path': delivered_path,
                         })
                     except Exception as e:
                         kodi_utils.log(
                             'progressive_cb done(google-rescue) raised: '
                             + str(e), level='WARNING')
                 _emit(True, 'google')
-                return gpath
+                return delivered_path
         kodi_utils.notify(
             'AI: התרגום לא הוחזר בעברית (ריק/לא תורגם). נסה שוב.', time_ms=5000)
         if progressive_cb is not None:
@@ -4891,6 +4934,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         quota_suffix = ''
     kodi_utils.notify('AI: תרגום הסתיים בהצלחה ({0} chunks){1}'
                       .format(total, quota_suffix), time_ms=4000)
+    delivered_path = _deliver(translated)
     if progressive_cb is not None:
         try:
             progressive_cb('done', {
@@ -4908,7 +4952,7 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 # finished translation. If that translation had been
                 # interrupted, the slot is partly source text -- which is
                 # exactly the "it plays the original language" report.
-                'path': translated,
+                'path': delivered_path,
             })
         except Exception as e:
             kodi_utils.log(
@@ -4917,4 +4961,4 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     # (telemetry already emitted above, before the pool contribute, so it rides
     # this translation's own upload; _emit's _telemetry_done guard makes a second
     # call a no-op anyway.)
-    return translated
+    return delivered_path

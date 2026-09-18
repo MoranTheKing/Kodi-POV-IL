@@ -1,3 +1,9 @@
+0.2.547
+- Apply automatic timing verification to local, engine, community and AI Hebrew subtitle deliveries while preserving their source and canonical cache files.
+- Recover irregular continuous clock drift despite missing or extra cues with a bounded adaptive search that remains subject to every existing safety gate.
+- Use all non-forced Matroska subtitle cue tracks, including bitmap tracks, as a compact playing-file timing reference and keep corrected delivery files content-addressed.
+- Preserve uncertain small timing differences, reject discontinuities that only resemble clock drift, and prevent an older background job from replacing a newer subtitle selection.
+
 0.2.546
 - Correct constant offsets, gradual clock drift and clear timing changes between differently cut releases with conservative local validation, while leaving uncertain subtitles untouched.
 - Use the playing Matroska file's compact cue index as a bounded background timing reference when available, without heavy remote media scans.
