@@ -62,6 +62,13 @@ _LOCAL_MIN_OVERLAP = 0.65
 _PIECEWISE_MAX_SEGMENTS = 4
 _LOCAL_RADIUS_MS = 150000
 _LOCAL_SAME_PLATEAU_MS = 1500
+# Any non-identity scale is only a proposal, including a familiar FPS ratio.
+# A small hard cut can accidentally land close to 24/23.976 or another common
+# ratio and smear the discontinuity over the whole film.  At a genuinely
+# continuous clock ratio, independently estimated local offsets remain flat.
+# Wider disagreement is evidence of different regions rather than one clock:
+# refuse the approximation and preserve the delivered subtitle unchanged.
+_SCALED_LOCAL_RANGE_MS = 1000
 
 
 # ---- SRT parsing -----------------------------------------------------------
@@ -306,6 +313,67 @@ def _data_scale_candidates(ref_cues, cand_cues):
     return list(dict.fromkeys(proposals))
 
 
+def _adaptive_scale_candidates(ref_cues, cand_cues, max_offset_ms=None):
+    """Recover a non-standard continuous clock ratio after the cheap grid fails.
+
+    Quantile ratios are fast, but inserted/deleted cues move the quantile
+    indices and can make both proposals miss a perfectly linear 1.01/1.03
+    clock.  NG's research detector demonstrated that a broad scale sweep closes
+    that hole.  Its exhaustive full-density sweep is too costly for 32-bit Kodi,
+    so this production version searches a bounded, span-derived band on a
+    deterministic sample, then returns only the strongest scales for the normal
+    FULL gate. It is proposal-only: it cannot accept anything by itself.
+    """
+    if len(ref_cues) < _LOCAL_MIN_REF_CUES or len(cand_cues) < _LOCAL_MIN_REF_CUES:
+        return []
+
+    def sample(values, cap):
+        if len(values) <= cap:
+            return values
+        if cap <= 1:
+            return values[:1]
+        last = len(values) - 1
+        return [values[int(round(i * last / (cap - 1)))] for i in range(cap)]
+
+    # Keep candidate onsets dense: every sampled reference cue then retains its
+    # actual counterpart unless that cue was genuinely deleted. Sampling the
+    # candidate down to a small independent index grid would create an
+    # artificial clock ratio; pairing matching indices also fails as soon as
+    # real subtitles insert/drop cues. 2,400 covers even dialogue-heavy films
+    # while bounding a pathological file.
+    ref_on = sample([float(c['start']) for c in ref_cues], 120)
+    cand_on = sample([float(c['start']) for c in cand_cues], 2400)
+    max_off = _MAXOFF if max_offset_ms is None else max_offset_ms
+    scored = {}
+
+    def scan(scales):
+        for value in scales:
+            scale = round(float(value), 6)
+            if scale in scored or not (SCALE_MIN <= scale <= SCALE_MAX):
+                continue
+            offset, votes = _best_offset(ref_on, cand_on, scale, max_off)
+            scored[scale] = (votes, offset)
+
+    def leaders(limit=4):
+        return sorted(scored, key=lambda value: (
+            -scored[value][0], abs(value - 1.0)))[:limit]
+
+    # The whole dialogue span is stable under irregular insertions/deletions in
+    # the middle, exactly where index-quantile ratios fail. Search a generous
+    # +/-1.2% band around that evidence at 0.001 resolution. A full 0.90..1.11
+    # sweep also finds cadence aliases and is several seconds slower on x86;
+    # when the edge span is wrong by more than this (different opening/ending),
+    # refusing automatic surgery is the safer outcome. The existing local
+    # smooth-drift refit removes the remaining <=0.0005 quantisation error.
+    ref_span = ref_on[-1] - ref_on[0]
+    cand_span = cand_on[-1] - cand_on[0]
+    if ref_span <= 0 or cand_span <= 0:
+        return []
+    center = cand_span / ref_span
+    scan(center + i * 0.001 for i in range(-12, 13))
+    return leaders(6)
+
+
 def estimate(ref_cues, cand_cues, scales=None, max_offset_ms=None):
     """Best linear map cand_time ~= a*ref_time + b over the scale candidates.
     Returns (a, b_ms, vote_ratio). `scales` restricts the candidate scale set
@@ -345,6 +413,16 @@ def estimate(ref_cues, cand_cues, scales=None, max_offset_ms=None):
         extras = [value for value in _data_scale_candidates(ref_cues, cand_cues)
                   if value not in candidates]
         best = consider(extras, best)
+        # If the cheap standard + quantile proposals still cannot establish a
+        # strong majority, use NG's broad-search insight in a bounded form.
+        # Only six sampled winners reach the full-density evaluator, keeping
+        # the slow path practical on 32-bit devices. Every downstream unique,
+        # overlap, tight, local, identity and invariant gate remains mandatory.
+        if (best[2] / sampled if sampled else 0.0) < 0.80:
+            broad = [value for value in _adaptive_scale_candidates(
+                ref_cues, cand_cues, max_offset_ms=max_offset_ms)
+                     if value not in candidates and value not in extras]
+            best = consider(broad, best)
     a, b, v = best
     return a, b, (v / sampled if sampled else 0.0)
 
@@ -1015,6 +1093,27 @@ def _gate(ref, cand, min_vote=None, min_overlap=None, scales=None,
                 'diag': ('local consistency FAILED (spread=%dms, trusted=%d/%d; %s)'
                          % (int(local_spread), len(trusted_local),
                             len(local_windows), diag))}
+    # Every non-identity scale must additionally show that it flattened the
+    # timeline in every local region. Even an apparent standard FPS proposal
+    # can be an accidental fit to a hard cut (e.g. 1.00095 ~= 24/23.976).
+    # Without this check the average score improves while neither side of the
+    # cut is actually right.
+    if abs(a - 1.0) > 0.00005 and local_windows:
+        needed_local = max(3, int(math.ceil(0.60 * len(local_windows))))
+        local_range = None
+        if trusted_local:
+            local_offsets = [w['offset_ms'] for w in trusted_local]
+            local_range = max(local_offsets) - min(local_offsets)
+        if (len(trusted_local) < needed_local or local_range is None
+                or local_range > _SCALED_LOCAL_RANGE_MS):
+            return {
+                'status': STATUS_UNKNOWN, 'scale': a, 'offset_ms': b,
+                'vote': vote, 'overlap': ov,
+                'scaled_local_range_ms': local_range,
+                'diag': ('scaled-clock continuity FAILED '
+                         '(range=%s trusted=%d/%d; %s)'
+                         % ('?' if local_range is None else int(local_range),
+                            len(trusted_local), len(local_windows), diag))}
     if (not (SCALE_MIN <= a <= SCALE_MAX) or vote < _mv or ov < _mo
             or unique < _UNIQUE_MIN):
         return {'status': STATUS_UNKNOWN, 'scale': a, 'offset_ms': b,
