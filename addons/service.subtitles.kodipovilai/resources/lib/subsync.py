@@ -85,7 +85,10 @@ _MAX_VERDICTS = 400
 # FIXABLE (field case:
 # offset=-350s) -- those cached verdicts must never be re-applied.
 # v14: validate HTTP ranges and resume interrupted probes within their budgets.
-_VERDICT_VERSION = 14
+# v15: local-consistency guard + conservatively validated piecewise maps.  Old
+# global FIXABLE verdicts must recompute because a dominant region could have
+# hidden a differently-cut second half.
+_VERDICT_VERSION = 15
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
@@ -182,6 +185,8 @@ def _store_verdict(key, verdict):
                      'status': verdict.get('status'),
                      'scale': verdict.get('scale', 1.0),
                      'offset_ms': verdict.get('offset_ms', 0.0),
+                     'mode': verdict.get('mode', 'global'),
+                     'segments': verdict.get('segments') or [],
                      'diag': verdict.get('diag', '')}
         if len(data) > _MAX_VERDICTS:
             data = dict(sorted(data.items(),
@@ -276,7 +281,10 @@ _MAX_PROBE_ENTRIES = 60
 # Bump when the probe's cue semantics change; older entries re-probe.
 # v2: cues are rebased to the playback timeline (first-cluster origin) and
 # union all non-forced tracks -- v1 entries may carry an un-rebased origin.
-_PROBE_CACHE_VERSION = 2
+# v3: remote Matroska uses the debrid-safe per-subtitle Cues index reader
+# (head + Cues + origin, a handful of ranged reads) instead of being skipped.
+_PROBE_CACHE_VERSION = 3
+_NEGATIVE_PROBE_TTL_S = 6 * 60 * 60
 
 
 def _probe_enabled():
@@ -312,6 +320,104 @@ def _playing_url(info):
     if os.path.isfile(url):
         return url
     return ''
+
+
+def _remote_playing_url(info):
+    """Direct HTTP(S) Matroska URL, stripped of Kodi's `|Header=...` suffix.
+
+    HLS/manifests are not byte-addressable Matroska files and never enter the
+    cue-index probe.  This is intentionally separate from _playing_url(), whose
+    contract remains local-only for the heavier mkv_probe/audio paths.
+    """
+    url = ''
+    try:
+        import xbmc
+        url = xbmc.Player().getPlayingFile() or ''
+    except Exception:
+        url = ''
+    if not url:
+        url = (info.get('filepath') or '').strip()
+    clean = (url or '').split('|')[0]
+    low = clean.lower()
+    if (low.startswith(('http://', 'https://'))
+            and '.m3u8' not in low and 'manifest' not in low):
+        return clean
+    return ''
+
+
+def _current_stream_url():
+    """The stream Kodi is playing now, without Kodi's header suffix."""
+    try:
+        import xbmc
+        return ((xbmc.Player().getPlayingFile() or '').split('|')[0].strip())
+    except Exception:
+        return ''
+
+
+def _remote_probe_ready(max_wait_s=8.0):
+    """Wait in the background until playback is stable enough for tiny reads."""
+    try:
+        import xbmc
+        player = xbmc.Player()
+        deadline = time.monotonic() + max(0.0, float(max_wait_s))
+        while time.monotonic() < deadline:
+            if not player.isPlayingVideo():
+                return False
+            try:
+                played = float(player.getTime() or 0.0)
+            except Exception:
+                played = 0.0
+            busy = (xbmc.getCondVisibility('Player.Caching')
+                    or xbmc.getCondVisibility('Player.Paused'))
+            if played >= 6.0 and not busy:
+                return True
+            xbmc.sleep(400)
+        return False
+    except Exception:
+        return False
+
+
+def _remote_cue_reference(url):
+    """Dense video-anchored subtitle cue skeleton via Matroska Cues only.
+
+    This deliberately does not extract subtitle text or scan media clusters.
+    The underlying reader reuses one keep-alive connection, paces requests,
+    validates byte ranges and trips on provider pressure.  Failure is a silent
+    miss; the selected subtitle remains untouched.
+    """
+    if not url or not _remote_probe_ready():
+        return None
+    started = time.monotonic()
+
+    def abort():
+        if time.monotonic() - started > 35.0:
+            return True
+        try:
+            import xbmc
+            return not xbmc.Player().isPlayingVideo()
+        except Exception:
+            return False
+
+    try:
+        from resources.lib import embedded_extract
+        starts = embedded_extract.cue_reference_times(
+            url, allow_http=True, abort_cb=abort,
+            log=lambda m: _log('remote-cues: ' + m))
+    except Exception as e:
+        _log('remote cue-index probe failed: %r' % e, level='WARNING')
+        return None
+    if not starts or len(starts) < MIN_REMOTE_CUES:
+        return None
+    cues = []
+    for i, start in enumerate(starts):
+        nxt = starts[i + 1] if i + 1 < len(starts) else start + 3000
+        cues.append({'start': int(start),
+                     'end': int(start + max(600, min(3000, nxt - start - 100)))})
+    _log('remote-cues: %d dense video-anchored cues ready' % len(cues))
+    return cues
+
+
+MIN_REMOTE_CUES = 8
 
 
 def _probe_cache_path():
@@ -495,17 +601,30 @@ def _probe_reference_cues(info, playing):
                  % (rel_key, len(ent['cues'])))
             return ent['cues']
         if ent is not None and not ent.get('cues'):
-            return None   # remembered "nothing there" -- don't re-probe
+            # A negative can be transport/provider pressure rather than a file
+            # with no subtitle index.  Back off for six hours, then permit one
+            # fresh attempt instead of poisoning this release forever.
+            if time.time() - float(ent.get('ts') or 0) < _NEGATIVE_PROBE_TTL_S:
+                return None
     url = _playing_url(info)
-    if not url:
-        _log('probe: no probeable playing url')
-        return None
-    try:
-        from resources.lib import mkv_probe
-    except Exception:
-        return None
-    res = mkv_probe.subtitle_reference(url, log=lambda m: _log('probe: ' + m))
-    cues = (res or {}).get('cues') or None
+    remote_url = ''
+    res = None
+    if url:
+        try:
+            from resources.lib import mkv_probe
+        except Exception:
+            return None
+        res = mkv_probe.subtitle_reference(
+            url, log=lambda m: _log('probe: ' + m))
+        cues = (res or {}).get('cues') or None
+    else:
+        remote_url = _remote_playing_url(info)
+        if remote_url:
+            cues = _remote_cue_reference(remote_url)
+            res = {'track': {'source': 'matroska-cues-index'}} if cues else None
+        else:
+            _log('probe: no probeable playing url')
+            return None
     try:
         if cpath:
             data[rel_key] = {'ts': time.time(), 'cues': cues or [],
@@ -566,19 +685,26 @@ def process(info, path, delivered_release):
         if cached:
             status = cached.get('status')
             if status == sync_align.STATUS_FIXABLE:
-                fixed = sync_align.retime(text, cached.get('scale', 1.0),
-                                          cached.get('offset_ms', 0.0))
+                try:
+                    fixed = sync_align.apply_verdict(text, cached)
+                except Exception as e:
+                    _log('cached FIXABLE failed structural recheck: %r' % e,
+                         level='WARNING')
+                    fixed = ''
                 out = _write_fixed(path, fixed)
                 if out:
                     # Quiet on repeat plays: the fix was announced ONCE when it
                     # was first computed; from then on it just works silently.
                     _log('cached FIXABLE applied: ' + cached.get('diag', ''))
-                    _record_delivery(info, playing, key,
-                                     cached.get('scale', 1.0),
-                                     cached.get('offset_ms', 0.0))
+                    if cached.get('mode') != 'piecewise':
+                        _record_delivery(info, playing, key,
+                                         cached.get('scale', 1.0),
+                                         cached.get('offset_ms', 0.0))
                     return out, {'status': status, 'applied': True,
                                  'offset_ms': cached.get('offset_ms', 0.0),
                                  'scale': cached.get('scale', 1.0),
+                                 'mode': cached.get('mode', 'global'),
+                                 'segments': cached.get('segments') or [],
                                  'diag': cached.get('diag', ''), 'cached': True}
             if status in (sync_align.STATUS_CONFIRMED,
                           sync_align.STATUS_UNKNOWN):
@@ -595,16 +721,19 @@ def process(info, path, delivered_release):
         if cv is not None:
             status = cv.get('status')
             if status == sync_align.STATUS_FIXABLE:
-                fixed = sync_align.retime(text, cv.get('scale', 1.0),
-                                          cv.get('offset_ms', 0.0))
+                try:
+                    fixed = sync_align.apply_verdict(text, cv)
+                except Exception:
+                    fixed = ''
                 out = _write_fixed(path, fixed)
                 if out:
                     _store_verdict(key, cv)
                     _log('community FIXABLE applied: ' + cv.get('diag', ''))
                     verdict = dict(cv, applied=True, community=True)
-                    _record_delivery(info, playing, key,
-                                     cv.get('scale', 1.0),
-                                     cv.get('offset_ms', 0.0))
+                    if cv.get('mode') != 'piecewise':
+                        _record_delivery(info, playing, key,
+                                         cv.get('scale', 1.0),
+                                         cv.get('offset_ms', 0.0))
                     _announce(verdict, fresh=True)
                     return out, verdict
             elif status == sync_align.STATUS_CONFIRMED:
@@ -777,6 +906,8 @@ def _deep_verify(info, path, text, rel, playing, key):
         else:
             oracle_text = _download_oracle(oracle['payload'])
 
+        fixed_text = None
+        verdict = None
         if oracle_text.strip():
             # A same-source (BluRay/DVD) oracle is the same disc master: pin the
             # alignment to identity scale and relax the coarse vote floor (see
@@ -791,11 +922,21 @@ def _deep_verify(info, path, text, rel, playing, key):
                 oracle_text, text, **okw)
             _log('verdict for %r vs oracle %r [%s]: %s'
                  % (rel or '?', oracle['release'], tier, verdict['diag']))
-        else:
-            # S4 fallback: no release-matched sub anywhere (or its download
-            # failed) -> the playing FILE's own embedded track as the timing
-            # reference. Covers releases no subtitle DB knows (ColdFilm-style
-            # re-encodes); anchored to the actual file = strongest anchor.
+            if verdict['status'] not in (sync_align.STATUS_CONFIRMED,
+                                         sync_align.STATUS_FIXABLE):
+                # A release name is evidence, not proof that two subtitle
+                # timelines share the same cut.  Previously an UNKNOWN oracle
+                # stopped the chain here and the strongest reference -- the
+                # file that is actually playing -- was never consulted.
+                _log('oracle was inconclusive; trying the playing file')
+
+        if verdict is None or verdict['status'] not in (
+                sync_align.STATUS_CONFIRMED, sync_align.STATUS_FIXABLE):
+            # S4 fallback: no usable release-matched sub (missing, failed or
+            # inconclusive) -> the playing FILE's own embedded track as the
+            # timing reference. Covers releases no subtitle DB knows and
+            # different cuts hidden behind similar release names; anchored to
+            # the actual file = strongest anchor.
             ref_kind = 'FILE PROBE'
             ref_cues = _probe_reference_cues(info, playing)
             # A SPARSE container-probe reference (high-bitrate 2160p files
@@ -822,6 +963,11 @@ def _deep_verify(info, path, text, rel, playing, key):
                            'scales': _AUDIO_SCALES,
                            'max_offset_ms': _AUDIO_MAX_OFFSET_MS}
             if not ref_cues:
+                # Do not persist an oracle UNKNOWN here.  A remote Matroska
+                # cue read may be temporarily unavailable while playback is
+                # starting or a provider is under pressure; caching UNKNOWN
+                # would prevent the actual-file reference from getting a
+                # fresh chance later.
                 return path, {'status': _STATUS_NO_ORACLE}
             verdict = sync_align.verify_cues(ref_cues, text, **gate_kw)
             _log('verdict for %r vs %s (%d ref cues): %s'
@@ -842,8 +988,7 @@ def _deep_verify(info, path, text, rel, playing, key):
             fixed_text = None
             if verdict['status'] == sync_align.STATUS_FIXABLE:
                 try:
-                    fixed_text = sync_align.retime(
-                        text, verdict['scale'], verdict['offset_ms'])
+                    fixed_text = sync_align.apply_verdict(text, verdict)
                 except Exception:
                     fixed_text = None
                 if not (fixed_text and fixed_text.strip()):
@@ -856,8 +1001,9 @@ def _deep_verify(info, path, text, rel, playing, key):
         # (fire-and-forget, share-gated, once -- the verdict cache guarantees
         # this pair never recomputes, so it never re-reports either).
         try:
-            if verdict['status'] in (sync_align.STATUS_CONFIRMED,
-                                     sync_align.STATUS_FIXABLE):
+            if (verdict['status'] in (sync_align.STATUS_CONFIRMED,
+                                      sync_align.STATUS_FIXABLE)
+                    and verdict.get('mode') != 'piecewise'):
                 from resources.lib import pool as _pool
                 _pool.report_sync(info, key.split('|', 1)[0], playing,
                                   verdict.get('scale', 1.0),
@@ -936,6 +1082,10 @@ def _enqueue_deep(info, path, rel, playing, key):
         job = {
             'key': key, 'path': path, 'release': rel, 'playing': playing,
             'ts': time.time(),
+            # Capture the actual stream identity at delivery time.  Metadata's
+            # filepath is optional and may be absent; without this value a
+            # later background result must never hot-swap into another video.
+            'stream_url': _current_stream_url(),
             'info': {k: info.get(k) for k in _INFO_KEYS
                      if isinstance(info.get(k), (str, int, float, bool))},
         }
@@ -968,7 +1118,7 @@ def _announce(verdict, fresh, offset_hint=None):
             off = float(offset_hint if offset_hint is not None
                         else verdict.get('offset_ms') or 0.0)
             scale = float(verdict.get('scale') or 1.0)
-            if scale == 1.0 and off:
+            if verdict.get('mode') != 'piecewise' and scale == 1.0 and off:
                 msg = 'הכתובית סונכרנה אוטומטית ({0:+.1f} שנ׳)'.format(
                     -off / 1000.0)
             else:
@@ -990,14 +1140,19 @@ def _swap_if_current(job, fixed_path, verdict):
         player = xbmc.Player()
         if not player.isPlaying():
             return False
-        try:
-            cur_url = (player.getPlayingFile() or '').split('|')[0]
-        except Exception:
-            cur_url = ''
-        job_url = (job.get('info', {}).get('filepath') or '')
-        # Same stream check is best-effort: tokens rotate between plays, so
-        # compare only when both sides exist.
-        if cur_url and job_url and cur_url.split('?')[0] != job_url.split('|')[0].split('?')[0]:
+        cur_url = _current_stream_url()
+        job_url = (job.get('stream_url') or '').split('|')[0].strip()
+        # A hot swap is allowed only when stream identity is proven.  The
+        # verdict remains cached when identity is unavailable, so the next
+        # selection still benefits without risking the currently playing film.
+        if not cur_url or not job_url:
+            _log('swap skipped: stream identity unavailable')
+            return False
+        # Require the exact captured stream URL.  Some providers use one path
+        # for every title and put the content identity in `?file=`/`?id=`;
+        # dropping the whole query could therefore cross films.  A false
+        # negative is safe because the verdict is cached for the next pick.
+        if cur_url != job_url:
             _log('swap skipped: different stream playing')
             return False
         player.setSubtitles(fixed_path)
@@ -1046,9 +1201,10 @@ def run_deep_job(job):
             if swapped:
                 # Refresh the delivery record with the APPLIED fix, so a later
                 # manual delay on top of it folds into the human report right.
-                _record_delivery(info, playing, key,
-                                 verdict.get('scale', 1.0),
-                                 verdict.get('offset_ms', 0.0))
+                if verdict.get('mode') != 'piecewise':
+                    _record_delivery(info, playing, key,
+                                     verdict.get('scale', 1.0),
+                                     verdict.get('offset_ms', 0.0))
         # Announce ONLY an actual in-place swap the user can see. A verdict
         # that couldn't be verified changes nothing on screen -> stay silent.
         if swapped:
@@ -1115,7 +1271,7 @@ def status_line(verdict):
     if st == sync_align.STATUS_FIXABLE and verdict.get('applied'):
         off = float(verdict.get('offset_ms') or 0.0)
         scale = float(verdict.get('scale') or 1.0)
-        if scale == 1.0 and off:
+        if verdict.get('mode') != 'piecewise' and scale == 1.0 and off:
             return 'הכתובית סונכרנה אוטומטית ({0:+.1f} שנ׳)'.format(-off / 1000.0)
         return 'הכתובית סונכרנה אוטומטית'
     return ''

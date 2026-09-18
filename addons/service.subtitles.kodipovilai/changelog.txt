@@ -1,3 +1,8 @@
+0.2.546
+- Correct constant offsets, gradual clock drift and clear timing changes between differently cut releases with conservative local validation, while leaving uncertain subtitles untouched.
+- Use the playing Matroska file's compact cue index as a bounded background timing reference when available, without heavy remote media scans.
+- Keep contextual AI gender-reference subtitles aligned across clear mid-video timing changes.
+
 0.2.545
 - Defer POV's TMDb and Trakt HTTP stack until an expired or missing catalogue cache needs it, reducing 32-bit home and cache-hit navigation time without changing cache freshness or live fallback.
 

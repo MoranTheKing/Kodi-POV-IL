@@ -103,6 +103,16 @@ check('status FIXABLE', v['status'] == sa.STATUS_FIXABLE, v['diag'])
 check('scale ~ %.4f' % true_scale, abs(v['scale'] - true_scale) < 0.002,
       v['diag'])
 
+print('== arbitrary smooth 1.03 clock drift is measured, not segmented ==')
+fixed, v = sa.verify_and_fix(REF, transformed(scale=1.03, offset=1500))
+check('arbitrary drift is FIXABLE/global',
+      v['status'] == sa.STATUS_FIXABLE and v.get('mode') == 'global',
+      v['diag'])
+check('arbitrary scale recovered within 0.001',
+      abs(v['scale'] - 1.03) <= 0.001, v['diag'])
+check('arbitrary drift round-trips to CONFIRMED',
+      sa.verify(REF, fixed)['status'] == sa.STATUS_CONFIRMED, v['diag'])
+
 print('== HI-style cue-count mismatch (drop every 6th) still aligns ==')
 v = sa.verify(REF, transformed(offset=5000, drop_every=6))
 check('status FIXABLE', v['status'] == sa.STATUS_FIXABLE, v['diag'])
@@ -121,6 +131,28 @@ check('status UNKNOWN', v['status'] == sa.STATUS_UNKNOWN, v['diag'])
 print('== too few cues -> UNKNOWN ==')
 v = sa.verify(REF, make_srt(BASE[:5], 'he'))
 check('status UNKNOWN', v['status'] == sa.STATUS_UNKNOWN, v['diag'])
+
+print('== exact 7/8 cue boundary ==')
+v7 = sa.verify(make_srt(BASE[:7], 'en'),
+               make_srt([(s + 5000, d) for s, d in BASE[:7]], 'he'))
+v8 = sa.verify(make_srt(BASE[:8], 'en'),
+               make_srt([(s + 5000, d) for s, d in BASE[:8]], 'he'))
+check('7 cues safely refused', v7['status'] == sa.STATUS_UNKNOWN, v7['diag'])
+check('8 cues can prove a global fix', v8['status'] == sa.STATUS_FIXABLE,
+      v8['diag'])
+
+print('== malformed/non-chronological inputs fail before filtering ==')
+zero = REF.replace('--> 00:00:17,526', '--> 00:00:15,000', 1)
+v = sa.verify(zero, transformed())
+check('zero-duration cue refuses',
+      v['status'] == sa.STATUS_UNKNOWN and v.get('reason') == 'malformed',
+      v['diag'])
+blocks = transformed(offset=5000).strip().split('\n\n')
+blocks[0], blocks[1] = blocks[1], blocks[0]
+v = sa.verify(REF, '\n\n'.join(blocks) + '\n')
+check('non-chronological input refuses before parser sort',
+      v['status'] == sa.STATUS_UNKNOWN and v.get('reason') == 'malformed',
+      v['diag'])
 
 print('== credit lines are ignored ==')
 cred = ('0\n00:00:01,000 --> 00:00:05,000\nתורגם על ידי צוות האתר www.example.com\n\n'
@@ -202,6 +234,123 @@ print('== implausible-offset cap ==')
 v = sa.verify(REF, transformed(offset=300000))
 check('offset 300s refused as implausible',
       v['status'] == sa.STATUS_UNKNOWN, v['diag'])
+
+
+def stepped_candidate(scale, boundaries):
+    """Apply [(reference_ms, offset_ms)] as piecewise timing ground truth."""
+    out = []
+    for s, d in BASE:
+        off = boundaries[0][1]
+        for boundary, value in boundaries:
+            if s >= boundary:
+                off = value
+        out.append((scale * s + off, scale * d))
+    return make_srt(out, 'he')
+
+
+print('== local consistency catches old half-file false pass ==')
+mid = BASE[len(BASE) // 2][0]
+piece = stepped_candidate(1.0, [(0, 0), (mid, 60000)])
+v = sa.verify(REF, piece, allow_piecewise=False)
+check('global-only path REFUSES the deceptive map',
+      v['status'] == sa.STATUS_UNKNOWN and 'local consistency FAILED' in v['diag'],
+      v['diag'])
+
+print('== conservative piecewise: one cut is recovered and round-trips ==')
+fixed, v = sa.verify_and_fix(REF, piece)
+check('one-cut verdict is FIXABLE/piecewise',
+      v['status'] == sa.STATUS_FIXABLE and v.get('mode') == 'piecewise',
+      v['diag'])
+after = sa.parse_srt(fixed)
+check('one-cut result keeps every cue', len(after) == len(BASE), v['diag'])
+check('one-cut start error <= 50ms',
+      max(abs(c['start'] - BASE[i][0]) for i, c in enumerate(after)) <= 50,
+      v['diag'])
+check('one-cut fixed file re-verifies CONFIRMED',
+      sa.verify(REF, fixed)['status'] == sa.STATUS_CONFIRMED, v['diag'])
+
+print('== conservative piecewise: FPS drift + cut ==')
+fps_piece = stepped_candidate(25.0 / (24000 / 1001),
+                              [(0, 0), (mid, 60000)])
+fixed, v = sa.verify_and_fix(REF, fps_piece)
+check('FPS+cut is FIXABLE/piecewise',
+      v['status'] == sa.STATUS_FIXABLE and v.get('mode') == 'piecewise',
+      v['diag'])
+after = sa.parse_srt(fixed)
+check('FPS+cut p95 start error <= 50ms',
+      sorted(abs(c['start'] - BASE[i][0]) for i, c in enumerate(after))[
+          int(0.95 * (len(after) - 1))] <= 50, v['diag'])
+
+print('== conservative piecewise: two cuts ==')
+one_third = BASE[len(BASE) // 3][0]
+two_thirds = BASE[2 * len(BASE) // 3][0]
+two_cuts = stepped_candidate(
+    1.0, [(0, 0), (one_third, 30000), (two_thirds, 90000)])
+fixed, v = sa.verify_and_fix(REF, two_cuts)
+check('two-cut verdict is FIXABLE/piecewise',
+      v['status'] == sa.STATUS_FIXABLE and len(v.get('segments') or []) == 3,
+      v['diag'])
+after = sa.parse_srt(fixed)
+check('two-cut result exact to <=50ms',
+      max(abs(c['start'] - BASE[i][0]) for i, c in enumerate(after)) <= 50,
+      v['diag'])
+
+print('== ambiguous small multi-step pattern is refused, never guessed ==')
+ambiguous = stepped_candidate(
+    1.0, [(0, 0), (one_third, 3000), (mid, 8000),
+          (two_thirds, 12000)])
+v = sa.verify(REF, ambiguous)
+check('sub-5s adjacent steps stay UNKNOWN', v['status'] == sa.STATUS_UNKNOWN,
+      v['diag'])
+
+print('== dominant region cannot hide a sustained 2.5s tail cut ==')
+tail_cut = stepped_candidate(
+    1.0, [(0, 0), (BASE[int(len(BASE) * 0.80)][0], 2500)])
+v = sa.verify(REF, tail_cut)
+check('small unsupported tail cut is refused, not globally accepted',
+      v['status'] == sa.STATUS_UNKNOWN
+      and 'local consistency FAILED' in v['diag'], v['diag'])
+
+print('== post-transform invariants reject cue loss/clamping ==')
+early = make_srt([(500, 1200)] + [(s + 10000, d) for s, d in BASE], 'he')
+try:
+    sa.apply_verdict(early, {'status': sa.STATUS_FIXABLE, 'scale': 1.0,
+                             'offset_ms': 5000})
+    invariant_refused = False
+except ValueError:
+    invariant_refused = True
+check('negative first cue refuses whole transform', invariant_refused)
+
+# Counting overlaps is insufficient: a piecewise map can remove one old
+# overlap and create a different one, leaving the count unchanged.  The exact
+# cue-pair set must be preserved or reduced.
+overlap_move = make_srt([(10000, 3000), (12000, 2000), (16000, 2000)], 'he')
+overlap_move_verdict = {
+    'status': sa.STATUS_FIXABLE, 'scale': 1.0, 'offset_ms': 0.0,
+    'mode': 'piecewise',
+    'segments': [
+        {'cand_from_ms': None, 'offset_ms': 0.0},
+        {'cand_from_ms': 11000.0, 'offset_ms': -2000.0},
+        {'cand_from_ms': 15000.0, 'offset_ms': 500.0},
+    ],
+}
+try:
+    sa.apply_verdict(overlap_move, overlap_move_verdict)
+    moved_overlap_refused = False
+except ValueError:
+    moved_overlap_refused = True
+check('an overlap cannot migrate to a different cue pair',
+      moved_overlap_refused)
+
+print('== dialogue detection is Unicode-complete ==')
+for label, sample in (
+        ('Hindi', 'तुम यहाँ क्यों आई हो?'),
+        ('Greek', 'Γιατί ήρθες εδώ;'),
+        ('Arabic', 'لماذا أتيت إلى هنا؟'),
+        ('Hebrew', 'למה באת לכאן?')):
+    check(label + ' dialogue survives',
+          bool(sa.dialogue_cues([{'start': 1000, 'end': 2000,
+                                  'text': sample}])))
 
 print()
 if FAILS:
