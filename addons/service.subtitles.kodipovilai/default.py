@@ -179,6 +179,15 @@ def _handle_download(handle, params):
     """User picked one of our entries -- deliver the SRT path."""
     from resources.lib import kodi_utils, translate
 
+    # Invalidate any older background timing job immediately, before handling
+    # file-less embedded branches. Otherwise an old worker on this same movie
+    # could finish after the click and replace the user's newer choice.
+    try:
+        from resources.lib import subsync as _subsync
+        _subsync.cancel_pending()
+    except Exception:
+        pass
+
     link = params.get('link', '')
     info = kodi_utils.current_video_info()
 
@@ -800,9 +809,16 @@ def _try_fast_download(handle, link, info):
                 imdb_id, season, episode, source_lang,
                 source_id=source_id)
             if os.path.isfile(cached):
-                listitem = xbmcgui.ListItem(label=cached)
+                # A cached translation keeps its SOURCE subtitle's timing. Run
+                # the delivery through the same release-aware gate as resolve;
+                # any correction is a copy, never a rewrite of the AI cache.
+                cached_delivery = translate._sync_hebrew_delivery(
+                    info, cached,
+                    source_release=(payload.get('release') or ''),
+                    embedded_timing=bool(payload.get('embedded')))
+                listitem = xbmcgui.ListItem(label=cached_delivery)
                 xbmcplugin.addDirectoryItem(
-                    handle=handle, url=cached,
+                    handle=handle, url=cached_delivery,
                     listitem=listitem, isFolder=False)
                 xbmcplugin.endOfDirectory(handle)
                 try:
