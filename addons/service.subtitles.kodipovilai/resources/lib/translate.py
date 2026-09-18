@@ -2031,8 +2031,7 @@ def _embedded_aligned_source_srt(
                                       verdict.get('diag')), level='INFO')
                 elif st == sync_align.STATUS_FIXABLE:
                     try:
-                        aligned = sync_align.retime(
-                            src_text, verdict['scale'], verdict['offset_ms'])
+                        aligned = sync_align.apply_verdict(src_text, verdict)
                     except Exception:
                         aligned = None
                     if aligned and aligned.count('-->') >= 8:
