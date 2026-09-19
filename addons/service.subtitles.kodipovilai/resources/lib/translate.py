@@ -632,21 +632,30 @@ def _pool_source_text(info, source_hash, cache_only=False):
 
 def _mark_current(results):
     """Mark the currently-applied subtitle with '» נוכחית' and float it to the
-    top (mirrors DarkSubs's 'כתובית נוכחית'). Matched by candidate link."""
+    top (mirrors DarkSubs's 'כתובית נוכחית'). Prefer the exact candidate link,
+    then its private stable identity when a provider refreshed transport data."""
     try:
         cur = kodi_utils.get_current_subtitle()
         if not cur:
             return results
-        for i, c in enumerate(results):
-            if c.get('link') == cur:
-                status = kodi_utils.get_subtitle_sync_status(cur)
-                if status:
-                    c['_subsync_state'] = status.get('state') or ''
-                    c['_subsync_label'] = status.get('label') or ''
-                c['filename'] = '» נוכחית · ' + (c.get('filename') or '')
-                c['rating'] = '5'
-                results.insert(0, results.pop(i))
-                break
+        match = next((i for i, c in enumerate(results)
+                      if c.get('link') == cur), None)
+        if match is None:
+            cur_id = kodi_utils.get_current_subtitle_identity()
+            if cur_id:
+                match = next((
+                    i for i, c in enumerate(results)
+                    if kodi_utils.subtitle_candidate_identity(
+                        c.get('link') or '') == cur_id), None)
+        if match is not None:
+            c = results[match]
+            status = kodi_utils.get_subtitle_sync_status(cur)
+            if status:
+                c['_subsync_state'] = status.get('state') or ''
+                c['_subsync_label'] = status.get('label') or ''
+            c['filename'] = '» נוכחית · ' + (c.get('filename') or '')
+            c['rating'] = '5'
+            results.insert(0, results.pop(match))
     except Exception:
         pass
     return results
