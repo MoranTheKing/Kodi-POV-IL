@@ -62,6 +62,7 @@ FOREIGN_TREES = ("pov_overrides", "pov_repair", "pov_native_menus")
 READ_ONLY_DEFAULTS = {
     "he_match_ktuvit", "he_embedded_report",
     "subsync_verify", "subsync_probe", "subsync_audio",
+    "subsync_autorank",
     "gemini_rpm", "prev_context_lines",
 }
 

@@ -61,6 +61,15 @@ def slim_service():
 slim = slim_service()
 check('the SLIM_SERVICE template can be extracted', len(slim) > 2000,
       '%d chars' % len(slim))
+try:
+    compile(slim, '<standalone service.py>', 'exec')
+    slim_compiles = True
+except (SyntaxError, ValueError):
+    slim_compiles = False
+check('the generated standalone service compiles', slim_compiles)
+check('the standalone imports the worker dependencies it uses',
+      '\nimport json\n' in slim and '\nimport threading\n' in slim,
+      'the template is a separate module; imports in the builder do not count')
 
 # --- the Gemini model-bump promise, the one that shipped broken ------------
 # The regular-Flash target moves with Google: 3.7 in 0.2.494, 3.8 from 0.2.517.
@@ -102,6 +111,34 @@ if promised:
               '_gemini_model_bump_v3' in src,
               'reusing v2 makes it a no-op for exactly the 3.7 users')
 
+# --- SubSync background execution and exact-cut human learning --------------
+# Both packages ship subsync.py. Since process() intentionally refuses to run
+# deep verification in the picker thread, carrying the module without these
+# workers leaves every first-play job parked on disk and never learns a manual
+# correction. This is a channel-parity promise, not build-only behaviour.
+def has_call(src, name):
+    return re.search(r'^\s*%s\(xbmc\.Monitor\(\)\)\s*$' % re.escape(name),
+                     src, re.M) is not None
+
+
+for name, src in (('build service.py', service),
+                  ('standalone SLIM_SERVICE', slim)):
+    check('%s defines the SubSync deep-job worker' % name,
+          'def _start_subsync_drainer(' in src)
+    check('%s starts the SubSync deep-job worker' % name,
+          has_call(src, '_start_subsync_drainer'),
+          'shipping subsync.py without draining its queue makes first-play '
+          'verification a permanent no-op')
+    check('%s defines exact-cut delay learning' % name,
+          'def _start_subsync_delay_watch(' in src)
+    check('%s starts exact-cut delay learning' % name,
+          has_call(src, '_start_subsync_delay_watch'))
+    check('%s stores the human fix locally before sharing it' % name,
+          '_ss.store_human_verdict(rep)' in src)
+    check('%s namespaces the shared report by media cut' % name,
+          '_ss._sync_registry_release(' in src
+          and "rep.get('cut_signature') or ''" in src)
+
 # --- SABOTAGE: the check must be able to fail ------------------------------
 # Without this, "standalone has it" passes just as happily on a test that is
 # reading the wrong string, which is how the original defect survived review.
@@ -116,6 +153,14 @@ check('SABOTAGE: defined-but-never-called is detected',
       re.search(r'^\s*_maybe_bump_gemini_model\(\)\s*$', uncalled, re.M) is None
       and '_maybe_bump_gemini_model' in uncalled,
       'removing the call did not change what the check sees')
+
+worker_uncalled = re.sub(
+    r'^\s*_start_subsync_drainer\(xbmc\.Monitor\(\)\)\s*$', '', slim,
+    count=1, flags=re.M)
+check('SABOTAGE: a defined but unstarted SubSync worker is detected',
+      has_call(slim, '_start_subsync_drainer')
+      and not has_call(worker_uncalled, '_start_subsync_drainer'),
+      'the worker assertion does not exercise the call site')
 
 print()
 print('FAILED: %d -> %s' % (len(FAIL), FAIL) if FAIL else 'ALL PASS')

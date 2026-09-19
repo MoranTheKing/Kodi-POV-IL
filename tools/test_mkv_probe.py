@@ -151,6 +151,10 @@ if res:
     check('>= 25 cues recovered', len(got) >= 25, str(len(got)))
     check('every recovered cue is a REAL cue time (no garbage)',
           got.issubset(real), str(sorted(got - real)[:5]))
+    profiles = res.get('track_cues') or []
+    check('forced track is excluded from independent profiles',
+          len(profiles) == 1 and profiles[0]['track'].get('num') == 3,
+          str([p.get('track') for p in profiles]))
 
 print('== result is JSON-serializable (field bug: CodecPrivate bytes) ==')
 import json as _json
@@ -208,6 +212,15 @@ if res2u:
                                   len(got_u & set(SIGNS))))
     check('union result JSON-serializable',
           (lambda: (_json.dumps(res2u), True)[1])())
+    by_num = {p['track'].get('num'): {c['start'] for c in p['cues']}
+              for p in (res2u.get('track_cues') or [])}
+    check('independent profiles preserve both real tracks',
+          set(by_num) == {3, 7}, str(sorted(by_num)))
+    check('independent profiles do not contaminate one another',
+          by_num.get(3, set()).issubset(set(DENSE))
+          and by_num.get(7, set()).issubset(set(SIGNS))
+          and not (by_num.get(3, set()) & set(SIGNS))
+          and not (by_num.get(7, set()) & set(DENSE)))
 
 print('== HTTP Range probe (real socket) ==')
 import http.server

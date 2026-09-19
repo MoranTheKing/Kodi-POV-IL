@@ -28,6 +28,7 @@
 import os
 import re
 import struct
+import hashlib
 import threading as _threading
 import time
 
@@ -37,6 +38,15 @@ except Exception:  # pragma: no cover - urllib always present on CPython 3
     _urlreq = None
 
 import json as _json
+
+
+# A cut id must describe the media bytes, never a tokenised URL or a release
+# label.  Three tiny samples catch same-name/same-length replacements without
+# scanning the movie: beginning, middle and end, plus the authoritative file
+# length.  The first sample is normally already present in the Matroska head
+# read, so a remote cue probe pays only two additional 64 KiB ranges.
+_CUT_SIGNATURE_VERSION = b'povil-cut-v1\0'
+_CUT_SAMPLE_BYTES = 64 * 1024
 
 
 def _pace_memory_path():
@@ -1008,6 +1018,16 @@ class _Source(object):
                 pass
         self._spare = []
 
+    def close(self):
+        """Release every HTTP session owned by this byte source."""
+        self.close_pool()
+        sess, self._sess = self._sess, None
+        if sess is not None:
+            try:
+                sess.close()
+            except Exception:
+                pass
+
     def _read_session(self, offset, size):
         """One Range GET over the SHARED keep-alive connection. Single-range,
         never multipart (a fat multi-range body starves the hardware decoder). On
@@ -1265,6 +1285,76 @@ class _Source(object):
             return b''
 
 
+def _cut_signature_from_source(src, head_hint=b'', log=None):
+    """Content-derived, privacy-safe id for the exact playing media file.
+
+    It deliberately excludes the path/URL, release label, ETag and provider
+    token.  Every requested sample must be complete; a short range or provider
+    pressure yields ``''`` rather than a weak/colliding identity.  ``head_hint``
+    lets a Matroska caller reuse bytes it already fetched.
+    """
+    _log = log or _noop
+    try:
+        total = int(getattr(src, 'total', 0) or 0)
+        if total <= 0:
+            return ''
+        width = min(_CUT_SAMPLE_BYTES, total)
+        offsets = [0, max(0, (total - width) // 2), max(0, total - width)]
+        # Very small files make the three ranges overlap.  Read each distinct
+        # offset once while preserving their positional meaning in the digest.
+        offsets = list(dict.fromkeys(offsets))
+        digest = hashlib.sha256()
+        digest.update(_CUT_SIGNATURE_VERSION)
+        digest.update(struct.pack('>Q', total))
+        for offset in offsets:
+            want = min(width, total - offset)
+            if offset == 0 and len(head_hint or b'') >= want:
+                data = bytes(head_hint[:want])
+            else:
+                data = src.read(offset, want)
+            if len(data) != want:
+                _log('cut-signature: short sample at %d (%d/%d) -- skipped'
+                     % (offset, len(data), want))
+                return ''
+            digest.update(struct.pack('>QQ', offset, want))
+            digest.update(data)
+        return 'cut1:' + digest.hexdigest()[:32]
+    except Exception as e:
+        _log('cut-signature failed: %s' % e)
+        return ''
+
+
+def media_cut_signature(url_or_path, allow_http=False, abort_cb=None, log=None):
+    """Return a content-derived cut signature from three 64 KiB samples.
+
+    HTTP is opt-in.  The shared ``_Source`` supplies keep-alive, pacing,
+    range validation, abort polling and provider-pressure handling.  This is
+    intentionally much smaller than an audio/cluster probe and never exposes
+    the source URL in the returned value.  Never raises.
+    """
+    _log = log or _noop
+    src = None
+    try:
+        src = _Source(url_or_path)
+        src._abort_cb = abort_cb
+        src._log = _log
+        if not src.total:
+            return ''
+        if src.is_http and not allow_http:
+            _log('cut-signature: HTTP not allowed -- skipped')
+            return ''
+        return _cut_signature_from_source(src, log=_log)
+    except Exception as e:
+        _log('media_cut_signature failed: %s' % e)
+        return ''
+    finally:
+        if src is not None:
+            try:
+                src.close()
+            except Exception:
+                pass
+
+
 def _parse_track_entry(data):
     t = {'num': None, 'type': None, 'codec': '', 'lang': '', 'forced': False,
          'private': b'', 'name': '', 'hearing_impaired': False}
@@ -1310,6 +1400,12 @@ def _parse_head(src, head_bytes, log):
     """(seg_start, ts_scale_ns, tracks, seeks) or raises.
     `seeks` maps element-id -> absolute file offset (from the SeekHead)."""
     head = src.read(0, head_bytes)
+    # Reused by the content signature so a remote cue-profile probe does not
+    # issue another request for bytes it already owns.
+    try:
+        src._cut_head = head[:_CUT_SAMPLE_BYTES]
+    except Exception:
+        pass
     buf = _Buf(head, 0)
     eid, _l = _read_vint(buf, True)
     if eid != _EBML:
@@ -1916,9 +2012,96 @@ def probe_tracks(url_or_path, head_bytes=DEFAULT_HEAD_BYTES, log=None):
         return []
 
 
+def cue_reference_profile(url_or_path, head_bytes=DEFAULT_HEAD_BYTES,
+                          allow_http=False, abort_cb=None, log=None):
+    """Read every useful embedded subtitle timeline independently.
+
+    Returns ``{'starts', 'track_starts', 'tracks', 'cut_signature', ...}``.
+    ``starts`` is the legacy all-track union; ``track_starts`` preserves the
+    individual timelines so SubSync can prefer a real matching track and avoid
+    a union-majority false shift.  The Cues element is still read exactly once.
+    A content-derived cut signature is produced from three tiny byte samples;
+    it remains available even when the file has no subtitle Cues.  Never raises.
+    """
+    _log = log or _noop
+    src = None
+    try:
+        src = _Source(url_or_path)
+        src._abort_cb = abort_cb
+        src._log = _log
+        if not src.total:
+            return {}
+        if src.is_http and not allow_http:
+            _log('cue-profile: HTTP not allowed (setting off) -- skipping')
+            return {}
+        try:
+            seg_start, ts_scale, tracks, seeks = _parse_head(
+                src, head_bytes, _log)
+        except Exception as e:
+            # MP4 and other byte-addressable sources have no Matroska Cues, but
+            # their content identity is still valuable: manual-delay learning
+            # can remain scoped to this cut without any audio/cluster scan.
+            cut_sig = _cut_signature_from_source(
+                src, head_hint=getattr(src, '_cut_head', b''), log=_log)
+            _log('cue-profile: no Matroska index (%s), cut=%s'
+                 % (e, 'yes' if cut_sig else 'no'))
+            return {'starts': [], 'track_starts': [], 'tracks': [],
+                    'cut_signature': cut_sig, 'bytes': src.fetched,
+                    'requests': src.reqs}
+        subs = _sub_tracks(tracks)
+        anchors = [t for t in subs if not t.get('forced')]
+        if not anchors:
+            cut_sig = _cut_signature_from_source(
+                src, head_hint=getattr(src, '_cut_head', b''), log=_log)
+            return {'starts': [], 'track_starts': [],
+                    'tracks': [], 'cut_signature': cut_sig,
+                    'bytes': src.fetched, 'requests': src.reqs}
+        by_track = _read_cue_times_multi(
+            src, seeks, seg_start, {t['num'] for t in anchors}, _log)
+        scale_ms = ts_scale / 1e6
+        origin_ms = (_timeline_origin(src, seg_start, scale_ms, _log)
+                     if by_track else 0.0)
+        # Timing is the primary feature.  Take the two extra signature samples
+        # only after Cues+origin are safely in hand, so provider pushback during
+        # this optional identity refinement cannot erase a usable reference.
+        cut_sig = _cut_signature_from_source(
+            src, head_hint=getattr(src, '_cut_head', b''), log=_log)
+
+        def _clean_track(t):
+            return {k: v for k, v in t.items()
+                    if k != 'private' and not isinstance(v, bytes)}
+
+        profiles = []
+        for track in anchors:
+            raw = by_track.get(track['num']) or []
+            starts = sorted({int(round(t * scale_ms - origin_ms)) for t in raw
+                             if (t * scale_ms - origin_ms) >= 0})
+            if starts:
+                profiles.append({'track': _clean_track(track),
+                                 'starts': starts})
+        union = sorted({t for p in profiles for t in p['starts']})
+        _log('cue-profile: %d union time(s), %d/%d track(s), cut=%s, '
+             '%d req / %.0fKB' % (
+                 len(union), len(profiles), len(anchors),
+                 'yes' if cut_sig else 'no', src.reqs, src.fetched / 1024.0))
+        return {'starts': union, 'track_starts': profiles,
+                'tracks': [_clean_track(t) for t in subs],
+                'cut_signature': cut_sig, 'bytes': src.fetched,
+                'requests': src.reqs}
+    except Exception as e:
+        (log or _noop)('cue_reference_profile failed: %s' % e)
+        return {}
+    finally:
+        if src is not None:
+            try:
+                src.close()
+            except Exception:
+                pass
+
+
 def cue_reference_times(url_or_path, track_num=None, lang=None,
-                        head_bytes=DEFAULT_HEAD_BYTES, allow_http=False,
-                        abort_cb=None, log=None):
+                         head_bytes=DEFAULT_HEAD_BYTES, allow_http=False,
+                         abort_cb=None, log=None):
     """Return the embedded subtitle track's dense cue START times as a SORTED
     list of ints (milliseconds, rebased to the playback timeline), or [] when
     the file has no per-subtitle Cues index / no matching track / can't be read.
