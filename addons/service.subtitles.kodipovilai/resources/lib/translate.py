@@ -535,7 +535,8 @@ def _rtl_delivery_copy(path, legacy_engine=False):
         return path
 
 
-def _sync_hebrew_delivery(info, path, source_release='', embedded_timing=False):
+def _sync_hebrew_delivery(info, path, source_release='', embedded_timing=False,
+                          selection=None):
     """Run any file-based Hebrew subtitle through the ordinary timing gate.
 
     Local, engine, pool and AI files can all carry the timing of a different
@@ -549,12 +550,28 @@ def _sync_hebrew_delivery(info, path, source_release='', embedded_timing=False):
     intentionally fail-open: an unavailable synchronizer preserves the old
     path.
     """
-    if not path or embedded_timing:
+    if not path:
+        return path
+    if embedded_timing:
+        # Built/extracted on this video's own cue skeleton: there is no timing
+        # guess to make.  Still do not publish a final verdict until Kodi has
+        # visibly registered this exact file: the caller may fail, be killed,
+        # or lose the selection race before setSubtitles completes.
+        try:
+            expected = (selection if selection is not None else
+                        kodi_utils.current_subtitle_selection()) or {}
+            if all(expected.get(k) for k in (
+                    'token', 'link_hash', 'stream_hash')):
+                kodi_utils.stage_subtitle_delivery(
+                    path, selection=expected,
+                    status='confirmed', source='embedded')
+        except Exception:
+            pass
         return path
     try:
         from . import subsync
         delivered, _verdict = subsync.process(
-            info, path, (source_release or '').strip())
+            info, path, (source_release or '').strip(), selection=selection)
         return delivered or path
     except Exception as exc:
         kodi_utils.log(
@@ -622,6 +639,10 @@ def _mark_current(results):
             return results
         for i, c in enumerate(results):
             if c.get('link') == cur:
+                status = kodi_utils.get_subtitle_sync_status(cur)
+                if status:
+                    c['_subsync_state'] = status.get('state') or ''
+                    c['_subsync_label'] = status.get('label') or ''
                 c['filename'] = '» נוכחית · ' + (c.get('filename') or '')
                 c['rating'] = '5'
                 results.insert(0, results.pop(i))
@@ -2516,7 +2537,7 @@ def _build_prev_context_by_idx(chunks, prev_context_lines):
 
 
 def resolve(link, info, progress_cb=None, progressive_cb=None,
-            extract_progress_cb=None):
+            extract_progress_cb=None, selection=None):
     """Return a filesystem path to the SRT for the chosen link.
 
     For passthrough, hand back the existing file path. For ai
@@ -2538,14 +2559,78 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     via cache.save_text() are byte-identical to today's output for
     the same source SRT; only the timing of delivery differs.
     A callback exception NEVER aborts the translation."""
-    # A click/automatic selection here supersedes any older SubSync worker on
-    # the same stream, including branches that select an embedded track and
-    # return no file. The current file path re-marks itself later if needed.
+    # Bind every later timing result to the selection that STARTED this
+    # resolve. Downloads and AI translation can take minutes; taking this
+    # snapshot only inside SubSync would let an older result label, queue or
+    # replace a subtitle selected in the meantime.
     try:
-        from . import subsync as _subsync
-        _subsync.cancel_pending()
+        _timing_selection = (dict(selection) if selection is not None else
+                             kodi_utils.current_subtitle_selection(
+                                 expected_link=link)) or {}
     except Exception:
-        pass
+        _timing_selection = {}
+
+    def _selection_current():
+        """True only while the selection that started this resolve is active."""
+        try:
+            return bool(
+                all(_timing_selection.get(k) for k in (
+                    'token', 'link_hash', 'stream_hash'))
+                and kodi_utils.subtitle_selection_matches(
+                    _timing_selection.get('token') or '',
+                    _timing_selection.get('link_hash') or '',
+                    _timing_selection.get('stream_hash') or ''))
+        except Exception:
+            return False
+
+    # Progressive AI callbacks can replace the subtitle in the player. Guard
+    # those too, not only the final SubSync result: a stale background process
+    # may finish after the viewer chose a human/embedded subtitle.
+    if progressive_cb is not None:
+        _progressive_cb = progressive_cb
+
+        def _selection_bound_progressive(phase, payload):
+            try:
+                if not kodi_utils.subtitle_selection_matches(
+                        _timing_selection.get('token') or '',
+                        _timing_selection.get('link_hash') or '',
+                        _timing_selection.get('stream_hash') or ''):
+                    return
+            except Exception:
+                return
+            return _progressive_cb(phase, payload)
+
+        progressive_cb = _selection_bound_progressive
+
+    if extract_progress_cb is not None:
+        _extract_progress_cb = extract_progress_cb
+
+        def _selection_bound_extract_progress(*args, **kwargs):
+            try:
+                if not kodi_utils.subtitle_selection_matches(
+                        _timing_selection.get('token') or '',
+                        _timing_selection.get('link_hash') or '',
+                        _timing_selection.get('stream_hash') or ''):
+                    return
+            except Exception:
+                return
+            return _extract_progress_cb(*args, **kwargs)
+
+        extract_progress_cb = _selection_bound_extract_progress
+
+    def _publish_timing_status(state, source):
+        try:
+            if not all(_timing_selection.get(k) for k in (
+                    'token', 'link_hash', 'stream_hash')):
+                return False
+            return bool(kodi_utils.set_subtitle_sync_status(
+                state, source=source,
+                selection_token=_timing_selection.get('token') or '',
+                link_hash=_timing_selection.get('link_hash') or '',
+                stream_hash=_timing_selection.get('stream_hash') or ''))
+        except Exception:
+            return False
+
     payload = _decode_link(link)
     if not payload:
         kodi_utils.log('resolve: bad link', level='ERROR')
@@ -2567,7 +2652,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         if path and os.path.isfile(path):
             return _sync_hebrew_delivery(
                 info, _rtl_delivery_copy(path),
-                source_release=payload.get('release') or '')
+                source_release=payload.get('release') or '',
+                selection=_timing_selection)
         return None
 
     if kind == 'pool':
@@ -2599,7 +2685,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             # if that doesn't match the playing release, verify/fix timing
             # against a release-matched oracle. Fail-open.
             out = _sync_hebrew_delivery(
-                info, out, source_release=payload.get('release') or '')
+                info, out, source_release=payload.get('release') or '',
+                selection=_timing_selection)
             _status('כתוביות מהמאגר הקהילתי', time_ms=4000)
             return out
         except OSError:
@@ -2654,6 +2741,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
                 with open(_tmp, 'w', encoding='utf-8', newline='') as f:
                     f.write(_fixed)
                 os.replace(_tmp, _out)
+                # The resolver only prepares a file.  Commit CONFIRMED after
+                # the picker caller proves Kodi registered and selected it.
+                kodi_utils.stage_subtitle_delivery(
+                    _out, selection=_timing_selection,
+                    status='confirmed', source='embedded')
                 _status('כתובית עברית מסונכרנת לתזמון המובנה מוכנה',
                         time_ms=3500)
                 return _out
@@ -2665,7 +2757,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
         # subtitle at all because an optional improvement did not land.
         try:
             from . import subs_engine_bridge as _seb
-            if _seb.select_embedded(payload.get('stream_index'), 'he'):
+            if (_selection_current()
+                    and _seb.select_embedded(
+                        payload.get('stream_index'), 'he')
+                    and _selection_current()):
+                _publish_timing_status('confirmed', 'embedded')
                 _status('לא נמצאה כתובית עברית שמסתנכרנת — הופעל התרגום המובנה',
                         time_ms=5000)
         except Exception as e:
@@ -2680,8 +2776,11 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             try:
                 from . import subs_engine_bridge
                 _elang = payload.get('lang') or 'he'
-                if subs_engine_bridge.select_embedded(
-                        payload.get('stream_index'), _elang):
+                if (_selection_current()
+                        and subs_engine_bridge.select_embedded(
+                            payload.get('stream_index'), _elang)
+                        and _selection_current()):
+                    _publish_timing_status('confirmed', 'embedded')
                     _status('הופעל תרגום מובנה' + (
                         ' בעברית' if _elang == 'he' else ''), time_ms=4000)
             except Exception as e:
@@ -2753,7 +2852,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
             if 'Hebrew' in (payload.get('language') or ''):
                 path = _sync_hebrew_delivery(
                     info, path,
-                    source_release=payload.get('filename') or '')
+                    source_release=payload.get('filename') or '',
+                    selection=_timing_selection)
             _status('כתוביות עברית מ-{0}'.format(
                 payload.get('source') or 'מקור'), time_ms=4000)
             return path
@@ -2905,7 +3005,8 @@ def resolve(link, info, progress_cb=None, progressive_cb=None,
     def _deliver(path):
         return _sync_hebrew_delivery(
             info, path, source_release=_timing_release,
-            embedded_timing=_embedded_timing)
+            embedded_timing=_embedded_timing,
+            selection=_timing_selection)
 
     # Arabic-gender-reference (opt-in, default OFF). When ON we operate in a
     # separate 'ar' quality tier: cache + pool live under their own key, so an

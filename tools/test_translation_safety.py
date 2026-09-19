@@ -110,6 +110,8 @@ for callback in callbacks:
             clearProperty=lambda k: props.pop(k, None))
         ns = dict(xbmcgui=types.SimpleNamespace(Window=lambda _: window),
                   _job_token='old-token', _completion={'seen': False},
+                  _selection_is_current=lambda: False,
+                  _timing_selection_current=lambda: False,
                   _safe_log=lambda *a, **k: None)
         selected(ADDON / 'default.py',
                  {'_owns_translation_job', '_clear_translation_job'}, ns)
@@ -146,6 +148,7 @@ with tempfile.TemporaryDirectory() as tmp:
     ns = dict(os=os, xbmc=types.SimpleNamespace(Player=lambda: player, sleep=next_job),
               xbmcgui=types.SimpleNamespace(Window=lambda _: window),
               _job_token='OLD', out_path=str(Path(tmp) / 'old.he.srt'),
+              _timing_selection_current=lambda: True,
               _safe_log=lambda *a, **k: None)
     selected(ADDON / 'default.py', {'_owns_translation_job'}, ns)
     exec(compile(ast.Module(body=[callback], type_ignores=[]), 'first-ready', 'exec'), ns)
