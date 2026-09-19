@@ -108,7 +108,10 @@ _MAX_VERDICTS = 400
 # no longer exhaust the usable-evidence budget before a later independent row.
 # Recompute v20 UNKNOWNs so subtitles already tried on the affected source get
 # the corrected bounded search instead of inheriting the old refusal forever.
-_VERDICT_VERSION = 21
+# v22: when the user's ordinary language set contains no independent provider
+# family, perform one separately cached all-language timing search in the deep
+# worker. v21 UNKNOWNs may therefore have new evidence and must be recomputed.
+_VERDICT_VERSION = 22
 # Trusted tiers need no verification at delivery time (same release / same
 # group+source are de-facto synced; S3+ may still cross-check them cheaply).
 _STATUS_TRUSTED = 'TRUSTED'
@@ -268,7 +271,8 @@ def _decode_link(link):
         return None
 
 
-def _oracle_candidates(info, include_he=False):
+def _oracle_candidates(info, include_he=False, all_languages=False,
+                       search_state=None):
     """Foreign-language engine candidates as [{'release', 'payload'}] -- the
     bridge's 24h result cache makes this cheap right after the picker/autosub
     built the list. Never raises.
@@ -288,7 +292,18 @@ def _oracle_candidates(info, include_he=False):
         from resources.lib import subs_engine_bridge as bridge
         if not bridge.enabled():
             return out
-        for c in bridge.search(info, modal_progress=False):
+        if (all_languages
+                and hasattr(bridge, 'search_all_languages_for_timing')):
+            rows = bridge.search_all_languages_for_timing(info)
+            if rows is None:
+                if isinstance(search_state, dict):
+                    search_state['transient'] = True
+                return out
+        else:
+            # Compatibility with an older bridge must remain background-only;
+            # never reopen the manual provider dialog from SubSync's worker.
+            rows = bridge.search(info, modal_progress=False)
+        for c in rows:
             if (c.get('language') or '') == 'he' and not include_he:
                 continue
             # The kind filter has to widen with the language filter: Hebrew
@@ -315,6 +330,28 @@ def _oracle_candidates(info, include_he=False):
                             'language': (c.get('language') or '').strip().lower()})
     except Exception as e:
         _log('oracle candidate scan failed: %r' % e, level='WARNING')
+    return out
+
+
+def _merge_oracle_candidates(*groups):
+    """Stable de-duplication for ordinary plus all-language oracle rows."""
+    out = []
+    seen = set()
+    for group in groups:
+        for candidate in group or []:
+            try:
+                key = (
+                    (candidate.get('release') or '').strip().lower(),
+                    (candidate.get('language') or '').strip().lower(),
+                    json.dumps(candidate.get('payload') or {}, sort_keys=True,
+                               ensure_ascii=False, default=str),
+                )
+            except Exception:
+                continue
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(candidate)
     return out
 
 
@@ -1940,7 +1977,7 @@ def _diversify_oracle_matches(ranked):
 
 
 def _validated_oracle_piecewise(candidates, playing, text,
-                                primary, primary_text):
+                                primary, primary_text, audit=None):
     """Prove a repeated-short-edit map with two provider timing families.
 
     This is the remote/no-embedded-track counterpart of
@@ -1954,6 +1991,8 @@ def _validated_oracle_piecewise(candidates, playing, text,
     validator = getattr(sync_align, 'validate_micro_piecewise', None)
     family_judge = getattr(sync_align, 'evaluate_piecewise_family', None)
     maps_agree = getattr(sync_align, 'piecewise_maps_agree', None)
+    if isinstance(audit, dict):
+        audit.setdefault('veto', False)
     if not all((planner, validator, family_judge, maps_agree)):
         return None
     if not primary or not primary_text or not text:
@@ -2052,9 +2091,13 @@ def _validated_oracle_piecewise(candidates, playing, text,
         # must abstain instead of silently skipping onward to a friendlier row.
         try:
             if not maps_agree(validated, secondary_validated):
+                if isinstance(audit, dict):
+                    audit.update(veto=True, reason='maps_disagree')
                 return None
             family = family_judge(secondary_cues, text, validated)
         except Exception:
+            if isinstance(audit, dict):
+                audit.update(veto=True, reason='family_evaluation_failed')
             return None
         # Mirror the embedded-family veto: if this independent subtitle was
         # already a strong match and the frozen primary map damages it, later
@@ -2062,6 +2105,8 @@ def _validated_oracle_piecewise(candidates, playing, text,
         if (family and family.get('before_score', 0.0) >= 0.78
                 and family.get('after_score', 0.0)
                 < family.get('before_score', 0.0) - 0.03):
+            if isinstance(audit, dict):
+                audit.update(veto=True, reason='strong_family_regression')
             return None
         if not family or not family.get('accepted'):
             continue
@@ -2091,6 +2136,40 @@ def _validated_oracle_piecewise(candidates, playing, text,
          'independent-candidate download(s)' % (attempts, downloads),
          level='DEBUG')
     return None
+
+
+def _provider_piecewise_rescue(info, candidates, playing, text,
+                               primary, primary_text, search_state=None):
+    """Try visible-language evidence, then one cached all-language expansion."""
+    audit = {}
+    rescue = _validated_oracle_piecewise(
+        candidates, playing, text, primary, primary_text, audit=audit)
+    if rescue:
+        return rescue
+    if audit.get('veto'):
+        _log('provider-consensus: ordinary timing evidence vetoed expansion '
+             '(%s)' % (audit.get('reason') or 'conflict'), level='DEBUG')
+        return None
+    expansion_state = {}
+    expanded = _oracle_candidates(
+        info, all_languages=True, search_state=expansion_state)
+    if expansion_state.get('transient'):
+        if isinstance(search_state, dict):
+            search_state['transient'] = True
+        return None
+    ordinary = _merge_oracle_candidates(candidates)
+    merged = _merge_oracle_candidates(ordinary, expanded)
+    newly_discovered = merged[len(ordinary):]
+    if not newly_discovered:
+        return None
+    _log('provider-consensus: expanded timing evidence from %d to %d '
+         'candidate row(s) using the cached all-language search'
+         % (len(ordinary), len(merged)))
+    # Ordinary rows were already exhausted above. Only genuinely new rows are
+    # eligible here; re-ranking the merged set could otherwise place a strong
+    # expanded agreement ahead of a weaker ordinary conflict.
+    return _validated_oracle_piecewise(
+        newly_discovered, playing, text, primary, primary_text)
 
 
 def _verify_file_bundle(bundle, text):
@@ -2290,6 +2369,7 @@ def _deep_verify(info, path, text, rel, playing, key):
                     file_verdict.get('diag', '?')))
 
         fixed_text = None
+        transient_oracle_search = False
         if file_verdict and file_verdict.get('status') in accepted:
             verdict = file_verdict
         else:
@@ -2313,8 +2393,12 @@ def _deep_verify(info, path, text, rel, playing, key):
                             oracle_verdict['diag']))
                     if (oracle_verdict.get('status')
                             == sync_align.STATUS_UNKNOWN):
-                        rescue = _validated_oracle_piecewise(
-                            cands, playing, text, oracle, oracle_text)
+                        rescue_state = {}
+                        rescue = _provider_piecewise_rescue(
+                            info, cands, playing, text, oracle, oracle_text,
+                            search_state=rescue_state)
+                        transient_oracle_search = bool(
+                            rescue_state.get('transient'))
                         if rescue:
                             oracle_verdict = rescue['verdict']
                             try:
@@ -2394,7 +2478,10 @@ def _deep_verify(info, path, text, rel, playing, key):
             return path, None
         verdict = dict(verdict, cut_signature=cut_signature,
                        cache_key=final_key)
-        if cut_signature:
+        if (cut_signature
+                and not (transient_oracle_search
+                         and verdict.get('status')
+                         == sync_align.STATUS_UNKNOWN)):
             _store_verdict(final_key, verdict)
 
         # Reuse the existing Worker protocol by namespacing its release key with

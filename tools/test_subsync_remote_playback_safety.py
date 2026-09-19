@@ -823,6 +823,174 @@ class RemotePlaybackSafety(unittest.TestCase):
             ['ROVERS-nl', 'RSG-de', 'TRIM-id',
              'ROVERS-sv', 'ROVERS-ro'])
 
+    def test_provider_piecewise_expands_beyond_visible_languages_once(self):
+        """The picker language filter must not hide the only safe second family."""
+        primary = {'release': 'Show.S01E01.BluRay-DEMAND',
+                   'language': 'en', 'payload': {'id': 'primary'}}
+        visible_clone = {'release': 'Show.S01E01.BluRay-ROVERS',
+                         'language': 'nl', 'payload': {'id': 'nl'}}
+        independent = {'release': 'Show.S01E01.BluRay-ROVERS',
+                       'language': 'ro', 'payload': {'id': 'ro'}}
+        visible = [primary, visible_clone]
+        expanded = [primary, visible_clone, independent]
+        accepted = {'verdict': {'status': 'FIXABLE'},
+                    'secondary': independent, 'downloads': 1}
+
+        with patch.object(self.sub, '_validated_oracle_piecewise',
+                          side_effect=[None, accepted]) as validate, \
+             patch.object(self.sub, '_oracle_candidates',
+                          return_value=expanded) as scan:
+            result = self.sub._provider_piecewise_rescue(
+                {}, visible, 'Show.S01E01.BluRay-RARBG',
+                'candidate-text', primary, 'primary-text')
+
+        self.assertEqual(result, accepted)
+        self.assertEqual(scan.call_count, 1)
+        self.assertEqual(scan.call_args.args, ({},))
+        self.assertTrue(scan.call_args.kwargs['all_languages'])
+        self.assertIsInstance(scan.call_args.kwargs['search_state'], dict)
+        self.assertEqual(validate.call_count, 2)
+        self.assertEqual(list(validate.call_args_list[0].args[0]), visible)
+        self.assertEqual(list(validate.call_args_list[1].args[0]),
+                         [independent])
+
+    def test_provider_piecewise_does_not_repeat_when_expansion_adds_nothing(self):
+        primary = {'release': 'Show.S01E01.BluRay-DEMAND',
+                   'language': 'en', 'payload': {'id': 'primary'}}
+        visible = [primary]
+        with patch.object(self.sub, '_validated_oracle_piecewise',
+                          return_value=None) as validate, \
+             patch.object(self.sub, '_oracle_candidates',
+                          return_value=list(visible)):
+            result = self.sub._provider_piecewise_rescue(
+                {}, visible, 'Show.S01E01.BluRay-RARBG',
+                'candidate-text', primary, 'primary-text')
+        self.assertIsNone(result)
+        validate.assert_called_once()
+
+    def test_transient_all_language_search_is_propagated(self):
+        primary = {'release': 'Show.S01E01.BluRay-DEMAND',
+                   'language': 'en', 'payload': {'id': 'primary'}}
+
+        def transient(_info, **kwargs):
+            kwargs['search_state']['transient'] = True
+            return []
+
+        state = {}
+        with patch.object(self.sub, '_validated_oracle_piecewise',
+                          return_value=None), \
+             patch.object(self.sub, '_oracle_candidates',
+                          side_effect=transient):
+            result = self.sub._provider_piecewise_rescue(
+                {}, [primary], 'Show.S01E01.BluRay-RARBG',
+                'candidate-text', primary, 'primary-text',
+                search_state=state)
+        self.assertIsNone(result)
+        self.assertTrue(state.get('transient'))
+
+    def test_transient_expansion_unknown_is_not_cached(self):
+        sig = 'cut1:' + '9' * 32
+        unknown = {'status': self.sub.sync_align.STATUS_UNKNOWN,
+                   'diag': 'ordinary oracle could not prove timing'}
+        primary = {'release': 'Movie.2026.BluRay-DEMAND',
+                   'payload': {'id': 'primary'}, 'language': 'en'}
+
+        def transient_rescue(*_args, **kwargs):
+            kwargs['search_state']['transient'] = True
+            return None
+
+        with patch.object(self.sub, '_probe_reference_bundle', return_value={
+                'cut_signature': sig, 'cues': [], 'track_cues': []}), \
+             patch.object(self.sub, '_community_verdict', return_value=None), \
+             patch.object(self.sub, '_verify_file_bundle',
+                          return_value=(None, 'NONE', 0)), \
+             patch.object(self.sub, '_oracle_candidates',
+                          return_value=[primary]), \
+             patch.object(self.sub.sync_align, 'pick_oracle',
+                          return_value=(primary,
+                              self.sub.release_match.TIER_GROUP)), \
+             patch.object(self.sub, '_download_oracle',
+                          return_value='primary-text'), \
+             patch.object(self.sub.sync_align, 'verify_and_fix',
+                          return_value=(self.subtitle.read_text(), unknown)), \
+             patch.object(self.sub, '_provider_piecewise_rescue',
+                          side_effect=transient_rescue), \
+             patch.object(self.sub, '_audio_probe_reference',
+                          return_value=None), \
+             patch.object(self.sub, '_store_verdict') as store:
+            out, verdict = self.sub._deep_verify(
+                {}, str(self.subtitle), self.subtitle.read_text(),
+                'sub-release', 'Movie.2026.BluRay.mkv', 'legacy-key')
+        self.assertEqual(out, str(self.subtitle))
+        self.assertEqual(verdict['status'], self.sub.sync_align.STATUS_UNKNOWN)
+        store.assert_not_called()
+
+    def test_provider_piecewise_visible_conflict_vetoes_expanded_agreement(self):
+        def cues(stride):
+            return [{'start': 10000 + i * stride,
+                     'end': 11200 + i * stride} for i in range(60)]
+
+        primary = {'release': 'Primary-DEMAND', 'language': 'en',
+                   'payload': {'id': 'primary'}}
+        conflict = {'release': 'Visible-ROVERS', 'language': 'nl',
+                    'payload': {'id': 'conflict'}}
+        agreeable = {'release': 'Expanded-SPARKS', 'language': 'ro',
+                     'payload': {'id': 'agree'}}
+        map_a = {
+            'status': self.sub.sync_align.STATUS_FIXABLE,
+            'mode': 'piecewise', 'scale': 1.0, 'offset_ms': -700.0,
+            'segments': [{'cand_from_ms': None, 'offset_ms': -700.0}],
+            'validation_required': True, 'validation_folds': 5,
+            'timing_family_count': 0, 'diag': 'map A'}
+        map_b = dict(map_a, offset_ms=1700.0,
+                     segments=[{'cand_from_ms': None,
+                                'offset_ms': 1700.0}], diag='map B')
+        parsed = {'primary-text': cues(10000),
+                  'conflict-text': cues(11300),
+                  'agree-text': cues(12700)}
+        downloads = []
+
+        def ranked(rows, _playing):
+            out = []
+            for row in rows:
+                if row is conflict:
+                    out.append((row, self.sub.release_match.TIER_GROUP,
+                                50, 'rovers', 2))
+                elif row is agreeable:
+                    out.append((row, self.sub.release_match.TIER_GROUP,
+                                99, 'sparks', 2))
+            return out
+
+        def download(payload):
+            downloads.append(payload.get('id'))
+            return {'conflict': 'conflict-text',
+                    'agree': 'agree-text'}.get(payload.get('id'), '')
+
+        with patch.object(self.sub, '_oracle_match', side_effect=ranked), \
+             patch.object(self.sub, '_download_oracle',
+                          side_effect=download), \
+             patch.object(self.sub.sync_align, 'parse_srt',
+                          side_effect=lambda value: parsed[value]), \
+             patch.object(self.sub.sync_align, 'dialogue_cues',
+                          side_effect=lambda value: value), \
+             patch.object(self.sub.sync_align, 'micro_piecewise_proposal',
+                          side_effect=[map_a, map_b]), \
+             patch.object(self.sub.sync_align, 'validate_micro_piecewise',
+                          side_effect=[map_a, map_b]), \
+             patch.object(self.sub.sync_align, 'piecewise_maps_agree',
+                          return_value=False), \
+             patch.object(self.sub.sync_align, 'evaluate_piecewise_family') \
+                     as family, \
+             patch.object(self.sub, '_oracle_candidates',
+                          return_value=[agreeable]) as expansion:
+            result = self.sub._provider_piecewise_rescue(
+                {}, [primary, conflict], 'Playing.BluRay.mkv',
+                'candidate-text', primary, 'primary-text')
+        self.assertIsNone(result)
+        self.assertEqual(downloads, ['conflict'])
+        expansion.assert_not_called()
+        family.assert_not_called()
+
     def test_provider_piecewise_failed_downloads_do_not_consume_evidence_slots(self):
         """A dead provider row is no evidence and may not hide a later family.
 
