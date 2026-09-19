@@ -1,3 +1,11 @@
+0.2.548
+- Correct repeated short edit pads such as the reported Flash BluRay/Web timing pattern only after five disjoint holdouts and a distinct full-length text/PGS timing family agree; scalar delay learning is disabled for these multi-region fixes.
+- Compare each usable embedded subtitle track independently and abstain when sparse or conflicting tracks cannot prove one timing correction.
+- Scope automatic and viewer-confirmed timing memory to a content-derived media-cut signature, including sources without a Matroska cue index.
+- Prefer an already-cached human Hebrew candidate when its timing is proven against the playing file, without adding provider requests or changing the manual picker.
+- Cancel stale background work when playback changes, keep foreground delivery responsive if the worker queue is unavailable, and avoid heavy remote audio scans.
+- Run SubSync background verification and exact-cut delay learning in the standalone add-on as well as the build edition.
+
 0.2.547
 - Apply automatic timing verification to local, engine, community and AI Hebrew subtitle deliveries while preserving their source and canonical cache files.
 - Recover irregular continuous clock drift despite missing or extra cues with a bounded adaptive search that remains subject to every existing safety gate.

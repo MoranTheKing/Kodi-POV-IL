@@ -4149,9 +4149,18 @@ def _start_subsync_delay_watch(monitor):
                             rep = _ss.finalize_delay_session(
                                 active, last_delay, watched)
                             if rep:
+                                # Remember the viewer's correction locally only
+                                # for the exact content-derived media cut.  The
+                                # existing community report below stays backward
+                                # compatible by namespacing the Worker's existing
+                                # release field with that same signature.
+                                _ss.store_human_verdict(rep)
                                 _pool.report_sync(
                                     rep.get('info') or {}, rep['sub_hash'],
-                                    rep['release'], rep['scale'],
+                                    _ss._sync_registry_release(
+                                        rep['release'],
+                                        rep.get('cut_signature') or ''),
+                                    rep['scale'],
                                     rep['offset_ms'], rep['status'],
                                     origin='human')
                                 reported.add(akey)
