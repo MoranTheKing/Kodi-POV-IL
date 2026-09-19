@@ -1,3 +1,6 @@
+0.2.552
+- Expand background timing evidence beyond the picker languages only after the normal proof abstains, so a verified cross-cut correction can use an independent provider family without changing visible results or bypassing conflicts.
+
 0.2.551
 - Retry safe cross-cut synchronization past failed, malformed and timing-clone provider rows, while still requiring two independently validated timing families before changing cues.
 - Keep sequential subtitle picks and verified background corrections active when Kodi for Android replaces its single external-subtitle slot instead of growing the stream list.

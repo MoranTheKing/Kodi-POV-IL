@@ -28,6 +28,11 @@ trans_result=[]
 iconx=xbmcaddon.Addon().getAddonInfo('icon')
 MyScriptID = xbmcaddon.Addon().getAddonInfo('id')
 break_all=False
+_lingering_provider_threads=[]
+
+
+class ProviderSearchBusy(RuntimeError):
+    """A previous timed-out provider still owns the shared result buffers."""
 
 
 from resources.lib.subs_engine.sources import ktuvit
@@ -70,13 +75,13 @@ class Bing(object):
         translate_data = str_data[1:str_data.find('"', 1)]
         return translate_data
 
-def sort_subtitles(f_result,video_data):
+def sort_subtitles(f_result,video_data,silent=False):
 
     # For settings changes to take effect.
     Addon=xbmcaddon.Addon()
     
     from resources.lib.subs_engine import general
-    if Addon.getSetting("enable_autosub_notifications")=='true' or not xbmc.Player().isPlaying():
+    if not silent and (Addon.getSetting("enable_autosub_notifications")=='true' or not xbmc.Player().isPlaying()):
         # If searching subtitles from context menu - will show the message.
         general.show_msg = f"מסדר כתוביות 0/{len(f_result)}"
                      
@@ -193,7 +198,7 @@ def sort_subtitles(f_result,video_data):
 
     for result_value in f_result:
     
-        if Addon.getSetting("enable_autosub_notifications")=='true' or not xbmc.Player().isPlaying():
+        if not silent and (Addon.getSetting("enable_autosub_notifications")=='true' or not xbmc.Player().isPlaying()):
             # If searching subtitles from context menu - will show the message.
             general.show_msg = f"מסדר כתוביות {count}/{len(f_result)}"
             count += 1
@@ -278,10 +283,54 @@ def format_website_source_name(source):
     if source == "bsplayer":
         return "BSPlayer"
     return source
+
+
+def _join_provider_threads(threads, timeout_s):
+    """Join provider workers within one shared deadline; return survivors."""
+    deadline = time.monotonic() + max(0.0, float(timeout_s or 0.0))
+    for worker in list(threads or []):
+        if not worker.is_alive():
+            continue
+        remaining = max(0.0, deadline - time.monotonic())
+        if remaining:
+            worker.join(remaining)
+    return [worker for worker in (threads or []) if worker.is_alive()]
+
+
+def _provider_workers_ready(timeout_s=0.25):
+    """Fail closed while a timed-out provider from an older search is alive."""
+    global _lingering_provider_threads
+    _lingering_provider_threads = _join_provider_threads(
+        _lingering_provider_threads, timeout_s)
+    return not _lingering_provider_threads
+
+
+def _quarantine_provider_threads(threads, timeout_s=0.5):
+    """Remember workers that ignored the search timeout until they really end."""
+    global _lingering_provider_threads
+    _lingering_provider_threads = _join_provider_threads(threads, timeout_s)
+    return not _lingering_provider_threads
+
+
+def _finish_timing_timeout(threads, all_sources, timeout_s=0.5):
+    """Return only a complete timing result after the timeout grace period.
+
+    A partial all-language result is unsafe for SubSync: the missing worker may
+    be the one that carries the independent release family needed to prove the
+    correction.  If every worker finishes during the bounded grace period,
+    rebuild the result after the joins; otherwise make the whole timing search
+    retryable instead of caching a misleading partial snapshot.
+    """
+    if not _quarantine_provider_threads(threads, timeout_s):
+        raise ProviderSearchBusy('timing provider search remained incomplete')
+    result = []
+    for _scraper, source in all_sources:
+        result += source.global_var
+    return result
         
-def c_get_subtitles(video_data, all_lang_override=False):
+def c_get_subtitles(video_data, all_lang_override=False, timing_only=False):
         
-    log.warning(f"DEBUG | c_get_subtitles | START | all_lang_override={all_lang_override}")
+    log.warning(f"DEBUG | c_get_subtitles | START | all_lang_override={all_lang_override} | timing_only={timing_only}")
     
     # For settings changes to take effect.
     Addon=xbmcaddon.Addon()
@@ -294,6 +343,17 @@ def c_get_subtitles(video_data, all_lang_override=False):
     thread=[]
     all_sources=[]
 
+    # Provider modules publish into shared ``global_var`` lists. The legacy
+    # Thread.exit() method does not terminate a Python worker; after a timeout
+    # that worker can wake up and overwrite a later search. Never reset or
+    # launch providers until every quarantined worker has actually ended.
+    if not _provider_workers_ready():
+        log.warning('DEBUG | c_get_subtitles | Refusing overlapping search; '
+                    'a timed-out provider worker is still alive')
+        if timing_only:
+            raise ProviderSearchBusy('timed-out provider worker still alive')
+        return []
+
     for source in [ktuvit, wizdom, telegram, opensubtitles, yify, subsource, subscene, bsplayer]:
         source.global_var = []
     
@@ -302,15 +362,15 @@ def c_get_subtitles(video_data, all_lang_override=False):
     
     # Israeli subtitles sources
     
-    if Addon.getSetting('ktuvit')=='true' and search_language_hebrew_bool:
+    if not timing_only and Addon.getSetting('ktuvit')=='true' and search_language_hebrew_bool:
         thread.append(Thread(ktuvit.get_subs,video_data))
         all_sources.append(('ktuvit',ktuvit))
         
-    if Addon.getSetting('wizdom')=='true' and search_language_hebrew_bool:
+    if not timing_only and Addon.getSetting('wizdom')=='true' and search_language_hebrew_bool:
         thread.append(Thread(wizdom.get_subs,video_data))
         all_sources.append(('wizdom',wizdom))
         
-    if Addon.getSetting('telegram')=='true' and search_language_hebrew_bool:
+    if not timing_only and Addon.getSetting('telegram')=='true' and search_language_hebrew_bool:
         thread.append(Thread(telegram.get_subs,video_data))
         all_sources.append(('telegram',telegram))
         
@@ -332,7 +392,7 @@ def c_get_subtitles(video_data, all_lang_override=False):
         thread.append(Thread(subscene.get_subs,video_data, all_lang_override))
         all_sources.append(('subscene',subscene))
     
-    if Addon.getSetting('bsplayer')=='true' and search_language_hebrew_bool:
+    if not timing_only and Addon.getSetting('bsplayer')=='true' and search_language_hebrew_bool:
         thread.append(Thread(bsplayer.get_subs,video_data))
         all_sources.append(('bsplayer',bsplayer))
         
@@ -349,7 +409,10 @@ def c_get_subtitles(video_data, all_lang_override=False):
     num_live=0
     break_all=False
     ExcludeTime = int(Addon.getSetting('max_search_time') or 10)
-    
+    # A timing-only pass can legitimately have no eligible global provider
+    # enabled. Keep that a clean empty result instead of referencing the loop's
+    # accumulator before it has ever been assigned.
+    f_result=[]
 
     while 1:
         elapsed_time = time.time() - start_time
@@ -380,7 +443,7 @@ def c_get_subtitles(video_data, all_lang_override=False):
                  f_result=f_result+items.global_var
                  string_dp=string_dp+(' %s:[COLOR %s]%s[/COLOR] '%(format_website_source_name(scraper),tt[zz],len( items.global_var)))
                  zz=zz+1
-              if Addon.getSetting("enable_autosub_notifications")=='true' or not xbmc.Player().isPlaying():
+              if not timing_only and (Addon.getSetting("enable_autosub_notifications")=='true' or not xbmc.Player().isPlaying()):
                 # If searching subtitles from context menu - will show the message.
                 general.show_msg=' אנא המתן '+ time.strftime("%H:%M:%S", time.gmtime(elapsed_time))+'\n'+ string_dp
               
@@ -388,10 +451,18 @@ def c_get_subtitles(video_data, all_lang_override=False):
             break
         
         if  elapsed_time>ExcludeTime: 
-            for threads in thread:
-                 if threads.is_alive():
-                     break_all=True
-                     threads.exit()
+            break_all=True
+            if timing_only:
+                try:
+                    f_result = _finish_timing_timeout(thread, all_sources)
+                except ProviderSearchBusy:
+                    log.warning('DEBUG | c_get_subtitles | Incomplete timing '
+                                'search discarded; provider worker quarantined')
+                    raise
+            elif not _quarantine_provider_threads(thread):
+                log.warning('DEBUG | c_get_subtitles | Timed-out provider '
+                            'worker quarantined; later searches will abstain '
+                            'until it exits')
             break
         xbmc.sleep(10)
         
@@ -408,7 +479,7 @@ def c_get_subtitles(video_data, all_lang_override=False):
         f_result = c_get_subtitles(video_data, all_lang_override=True)
     #################################################### Retry all languages END ####################################################
     
-    if Addon.getSetting("enable_autosub_notifications")=='true' or not xbmc.Player().isPlaying():
+    if not timing_only and (Addon.getSetting("enable_autosub_notifications")=='true' or not xbmc.Player().isPlaying()):
         # If searching subtitles from context menu - will show the message.
         general.show_msg="מסדר כתוביות"
     
