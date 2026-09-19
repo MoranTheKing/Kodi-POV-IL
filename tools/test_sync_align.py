@@ -393,6 +393,79 @@ v = sa.verify(REF, ambiguous)
 check('sub-5s adjacent steps stay UNKNOWN', v['status'] == sa.STATUS_UNKNOWN,
       v['diag'])
 
+print('== field shape: repeated short edit pads require independent proof ==')
+# Distilled timing-only shape from a real BluRay-vs-WEB episode: roughly 1.7s
+# is inserted at five act boundaries.  No copyrighted dialogue/timestamps are
+# stored here.  The ordinary one-track verifier must still abstain; the narrow
+# planner may propose the six-region map, but apply_verdict must reject it until
+# the media layer proves the same map independently.
+# Use 420 timing-only cues and deliberately uneven regions.  Each of the five
+# disjoint holdouts therefore exercises all six plateaus; a tiny synthetic
+# fixture could pass the proposal yet be incapable of proving the middle act.
+FIELD_BASE = dialogue_times(n=420, seed=648, span_ms=60 * 60 * 1000)
+field_span = FIELD_BASE[-1][0] - FIELD_BASE[0][0]
+field_boundaries = [FIELD_BASE[0][0] + field_span * fraction
+                    for fraction in (4 / 15, 7 / 15, 8 / 15,
+                                     11 / 15, 13 / 15)]
+short_pad_offsets = [-700, 1000, 2700, 4400, 6100, 7800]
+field_candidate = []
+for start, duration in FIELD_BASE:
+    region = sum(start >= boundary for boundary in field_boundaries)
+    field_candidate.append((start + short_pad_offsets[region], duration))
+FIELD_REF = make_srt(FIELD_BASE, 'en')
+short_pad = make_srt(field_candidate, 'he')
+v = sa.verify(FIELD_REF, short_pad)
+check('one-track ordinary verifier still abstains from subtle edits',
+      v['status'] == sa.STATUS_UNKNOWN, v['diag'])
+proposal = sa.micro_piecewise_proposal(sa.parse_srt(FIELD_REF), short_pad)
+check('short-edit planner recovers six-region proposal',
+      proposal is not None and len(proposal.get('segments') or []) == 6,
+      '' if proposal is None else proposal['diag'])
+try:
+    sa.apply_verdict(short_pad, proposal)
+    uncorroborated_refused = False
+except ValueError:
+    uncorroborated_refused = True
+check('uncorroborated proposal cannot be applied', uncorroborated_refused)
+holdout_validated = sa.validate_micro_piecewise(
+    sa.parse_srt(FIELD_REF), short_pad, proposal)
+check('five disjoint holdouts reproduce the proposed map',
+      holdout_validated is not None
+      and holdout_validated.get('validation_folds', 0) >= 4,
+      '' if holdout_validated is None else holdout_validated['diag'])
+try:
+    sa.apply_verdict(short_pad, holdout_validated)
+    one_family_refused = False
+except ValueError:
+    one_family_refused = True
+check('holdouts alone cannot impersonate a second codec family',
+      one_family_refused)
+corroborated = dict(holdout_validated or {}, timing_family_count=2)
+try:
+    short_fixed = sa.apply_verdict(short_pad, corroborated)
+    short_after = sa.parse_srt(short_fixed)
+except Exception:
+    short_fixed, short_after = '', []
+check('corroborated short edits preserve every cue',
+      len(short_after) == len(FIELD_BASE),
+      '' if proposal is None else proposal['diag'])
+check('corroborated short edits round-trip to CONFIRMED',
+      bool(short_fixed)
+      and sa.verify(FIELD_REF, short_fixed)['status'] == sa.STATUS_CONFIRMED,
+      '' if proposal is None else proposal['diag'])
+
+wrong_short = make_srt(dialogue_times(n=220, seed=991), 'he')
+check('wrong-title rhythm cannot produce a short-edit proposal',
+      sa.micro_piecewise_proposal(sa.parse_srt(FIELD_REF), wrong_short) is None)
+zigzag_offsets = [-700, 1200, -900, 2800, 900, 4700]
+zigzag_times = []
+for start, duration in FIELD_BASE:
+    region = sum(start >= boundary for boundary in field_boundaries)
+    zigzag_times.append((start + zigzag_offsets[region], duration))
+zigzag = make_srt(zigzag_times, 'he')
+check('non-monotonic micro-edit pattern is refused',
+      sa.micro_piecewise_proposal(sa.parse_srt(FIELD_REF), zigzag) is None)
+
 print('== dominant region cannot hide a sustained 2.5s tail cut ==')
 tail_cut = stepped_candidate(
     1.0, [(0, 0), (BASE[int(len(BASE) * 0.80)][0], 2500)])
@@ -431,6 +504,24 @@ except ValueError:
     moved_overlap_refused = True
 check('an overlap cannot migrate to a different cue pair',
       moved_overlap_refused)
+
+# Pair identity can stay the same while its duration becomes destructive.
+overlap_grow = make_srt([(10000, 3000), (12000, 2000),
+                         (18000, 1000)], 'he')
+overlap_grow_verdict = {
+    'status': sa.STATUS_FIXABLE, 'scale': 1.0, 'offset_ms': 0.0,
+    'mode': 'piecewise',
+    'segments': [
+        {'cand_from_ms': None, 'offset_ms': 0.0},
+        {'cand_from_ms': 11500.0, 'offset_ms': 1000.0},
+    ],
+}
+try:
+    sa.apply_verdict(overlap_grow, overlap_grow_verdict)
+    grown_overlap_refused = False
+except ValueError:
+    grown_overlap_refused = True
+check('an existing overlap cannot materially grow', grown_overlap_refused)
 
 print('== dialogue detection is Unicode-complete ==')
 for label, sample in (

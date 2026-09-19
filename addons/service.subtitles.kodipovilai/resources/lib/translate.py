@@ -563,7 +563,7 @@ def _sync_hebrew_delivery(info, path, source_release='', embedded_timing=False):
         return path
 
 
-def _pool_source_text(info, source_hash):
+def _pool_source_text(info, source_hash, cache_only=False):
     """Read a pool SRT from the local immutable cache, fetching it only once.
 
     The hash-named source is never passed through RTL rendering in place. A
@@ -588,6 +588,8 @@ def _pool_source_text(info, source_hash):
         except Exception:
             pass
 
+    if cache_only:
+        return '', ''
     text = pool.fetch(info, raw_hash or None) if pool is not None else None
     if not text:
         return '', ''
