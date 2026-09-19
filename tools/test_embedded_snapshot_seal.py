@@ -8,10 +8,13 @@ rejects ``final=True`` or overwrites the baseline, so this cannot pass without
 the production fix.
 """
 
+import ast
 import importlib.util
 import json
 from pathlib import Path
 import sys
+import threading
+import time
 import types
 import unittest
 from unittest.mock import patch
@@ -156,6 +159,259 @@ class EmbeddedSnapshotSeal(unittest.TestCase):
         self.assertFalse(self.bridge.have_playback_snapshot(next_early))
         self.assertEqual(self.bridge.embedded_candidates(next_early), [])
         self.assertFalse(self.bridge.have_playback_snapshot(next_settled))
+
+    def test_timing_all_language_search_has_its_own_cache_and_override(self):
+        rows = [{'language': 'ro', 'link': 'fixture'}]
+        with patch.object(self.bridge, 'enabled', return_value=True), \
+             patch.object(self.bridge, '_release_ready', return_value=True), \
+             patch.object(self.bridge, '_cache_get', return_value=None) as get, \
+             patch.object(self.bridge, '_cache_put') as put, \
+             patch.object(self.bridge, '_search_inner',
+                          return_value=rows) as search:
+            result = self.bridge.search_all_languages_for_timing({})
+        self.assertEqual(result, rows)
+        get.assert_called_once_with({}, variant='timing_all')
+        search.assert_called_once_with(
+            {}, modal_progress=False, all_lang_override=True)
+        put.assert_called_once_with({}, rows, variant='timing_all')
+
+    def test_timing_all_language_cache_hit_avoids_provider_search(self):
+        cached = [{'language': 'ro', 'link': 'cached'}]
+        with patch.object(self.bridge, 'enabled', return_value=True), \
+             patch.object(self.bridge, '_release_ready', return_value=True), \
+             patch.object(self.bridge, '_cache_get', return_value=cached), \
+             patch.object(self.bridge, '_search_inner') as search:
+            result = self.bridge.search_all_languages_for_timing({})
+        self.assertEqual(result, cached)
+        search.assert_not_called()
+
+    def test_timing_all_language_failure_is_transient_not_empty(self):
+        with patch.object(self.bridge, 'enabled', return_value=True), \
+             patch.object(self.bridge, '_release_ready', return_value=True), \
+             patch.object(self.bridge, '_cache_get', return_value=None), \
+             patch.object(self.bridge, '_cache_put') as put, \
+             patch.object(self.bridge, '_search_inner',
+                          side_effect=RuntimeError('provider busy')):
+            result = self.bridge.search_all_languages_for_timing({})
+        self.assertIsNone(result)
+        put.assert_not_called()
+
+    def test_timing_all_language_swallowed_provider_failure_is_retryable(self):
+        with patch.object(self.bridge, 'enabled', return_value=True), \
+             patch.object(self.bridge, '_release_ready', return_value=True), \
+             patch.object(self.bridge, '_cache_get', return_value=None), \
+             patch.object(self.bridge, '_cache_put') as put, \
+             patch.object(self.bridge, '_search_inner', return_value=[]):
+            result = self.bridge.search_all_languages_for_timing({})
+        self.assertIsNone(result)
+        put.assert_not_called()
+
+    def test_timing_search_limits_engine_to_global_timing_sources(self):
+        engine = types.ModuleType('resources.lib.subs_engine.engine')
+        engine.c_get_subtitles = unittest.mock.Mock(return_value=[])
+        engine.get_subtitles = unittest.mock.Mock(
+            side_effect=AssertionError('visible-language search used'))
+        engine.sort_subtitles = unittest.mock.Mock(return_value=[])
+        general = types.ModuleType('resources.lib.subs_engine.general')
+        general.break_all = False
+        general.with_dp = False
+        general.show_msg = ''
+        package = types.ModuleType('resources.lib.subs_engine')
+        package.engine = engine
+        package.general = general
+        package.__path__ = []
+        with patch.dict(sys.modules, {
+                'resources.lib.subs_engine': package,
+                'resources.lib.subs_engine.engine': engine,
+                'resources.lib.subs_engine.general': general}), \
+             patch.object(self.bridge, 'ensure_engine_settings'), \
+             patch.object(self.bridge, 'build_video_data', return_value={
+                 'imdb': '123', 'title': 'Show', 'season': '1',
+                 'episode': '6', 'media_type': 'tv'}):
+            result = self.bridge._search_inner(
+                {}, modal_progress=False, all_lang_override=True)
+        self.assertEqual(result, [])
+        engine.c_get_subtitles.assert_called_once_with(
+            unittest.mock.ANY, all_lang_override=True, timing_only=True)
+        engine.get_subtitles.assert_not_called()
+
+    def test_engine_provider_globals_are_serialized_between_searches(self):
+        entered = []
+        first_entered = threading.Event()
+        release_first = threading.Event()
+
+        def provider_search(*_args, **_kwargs):
+            entered.append(threading.current_thread().name)
+            if len(entered) == 1:
+                first_entered.set()
+                release_first.wait(2.0)
+            return []
+
+        engine = types.ModuleType('resources.lib.subs_engine.engine')
+        engine.c_get_subtitles = provider_search
+        engine.get_subtitles = unittest.mock.Mock(
+            side_effect=AssertionError('visible-language search used'))
+        engine.sort_subtitles = unittest.mock.Mock(return_value=[])
+        general = types.ModuleType('resources.lib.subs_engine.general')
+        general.break_all = False
+        general.with_dp = False
+        general.show_msg = ''
+        package = types.ModuleType('resources.lib.subs_engine')
+        package.engine = engine
+        package.general = general
+        package.__path__ = []
+
+        def run_search():
+            self.bridge._search_inner(
+                {}, modal_progress=False, all_lang_override=True)
+
+        with patch.dict(sys.modules, {
+                'resources.lib.subs_engine': package,
+                'resources.lib.subs_engine.engine': engine,
+                'resources.lib.subs_engine.general': general}), \
+             patch.object(self.bridge, 'ensure_engine_settings'), \
+             patch.object(self.bridge, 'build_video_data', return_value={
+                 'imdb': '123', 'title': 'Show', 'season': '1',
+                 'episode': '6', 'media_type': 'tv'}):
+            first = threading.Thread(target=run_search, name='first')
+            second = threading.Thread(target=run_search, name='second')
+            first.start()
+            self.assertTrue(first_entered.wait(1.0))
+            second.start()
+            time.sleep(0.05)
+            self.assertEqual(entered, ['first'])
+            release_first.set()
+            first.join(2.0)
+            second.join(2.0)
+        self.assertFalse(first.is_alive())
+        self.assertFalse(second.is_alive())
+        self.assertEqual(entered, ['first', 'second'])
+
+    def test_manual_progress_consumes_end_before_background_search_starts(self):
+        modal_started = threading.Event()
+        modal_observed = []
+        general = types.ModuleType('resources.lib.subs_engine.general')
+        general.break_all = False
+        general.with_dp = False
+        general.show_msg = ''
+
+        def delayed_modal(_show):
+            modal_started.set()
+            time.sleep(0.12)
+            modal_observed.append(general.show_msg)
+
+        general.show_results = delayed_modal
+        engine = types.ModuleType('resources.lib.subs_engine.engine')
+        engine.get_subtitles = unittest.mock.Mock(return_value=[])
+
+        def timing_search(*_args, **_kwargs):
+            # Simulate the old engine behavior that reused the shared status.
+            # A joined manual dialog must already be gone before this can run.
+            general.show_msg = 'BACKGROUND_SEARCH'
+            return []
+
+        engine.c_get_subtitles = timing_search
+        engine.sort_subtitles = unittest.mock.Mock(return_value=[])
+        package = types.ModuleType('resources.lib.subs_engine')
+        package.engine = engine
+        package.general = general
+        package.__path__ = []
+
+        with patch.dict(sys.modules, {
+                'resources.lib.subs_engine': package,
+                'resources.lib.subs_engine.engine': engine,
+                'resources.lib.subs_engine.general': general}), \
+             patch.object(self.bridge, 'ensure_engine_settings'), \
+             patch.object(self.bridge, 'build_video_data', return_value={
+                 'imdb': '123', 'title': 'Show', 'season': '1',
+                 'episode': '6', 'media_type': 'tv'}):
+            self.bridge._search_inner(
+                {}, modal_progress=True, all_lang_override=False)
+            self.assertTrue(modal_started.is_set())
+            self.bridge._search_inner(
+                {}, modal_progress=False, all_lang_override=True)
+        self.assertEqual(modal_observed, ['END'])
+
+    def test_timed_out_provider_workers_quarantine_the_next_search(self):
+        source = (LIB / 'subs_engine/engine.py').read_text(encoding='utf-8')
+        tree = ast.parse(source)
+        wanted = {'_join_provider_threads', '_provider_workers_ready',
+                  '_quarantine_provider_threads', '_finish_timing_timeout'}
+        nodes = [node for node in tree.body
+                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                 and node.name in wanted]
+        self.assertEqual({node.name for node in nodes}, wanted)
+        class ProviderSearchBusy(RuntimeError):
+            pass
+
+        namespace = {'time': time, '_lingering_provider_threads': [],
+                     'ProviderSearchBusy': ProviderSearchBusy}
+        exec(compile(ast.Module(body=nodes, type_ignores=[]),
+                     '<engine-worker-gate>', 'exec'), namespace)
+
+        class Worker:
+            def __init__(self, finish_on_join=False):
+                self.alive = True
+                self.finish_on_join = finish_on_join
+                self.joins = 0
+
+            def is_alive(self):
+                return self.alive
+
+            def join(self, _timeout):
+                self.joins += 1
+                if self.finish_on_join:
+                    self.alive = False
+
+        stuck = Worker()
+        self.assertFalse(namespace['_quarantine_provider_threads'](
+            [stuck], timeout_s=0.001))
+        self.assertFalse(namespace['_provider_workers_ready'](
+            timeout_s=0.001))
+        self.assertEqual(namespace['_lingering_provider_threads'], [stuck])
+
+        stuck.alive = False
+        self.assertTrue(namespace['_provider_workers_ready'](
+            timeout_s=0.001))
+        self.assertEqual(namespace['_lingering_provider_threads'], [])
+
+        finishing = Worker(finish_on_join=True)
+        self.assertTrue(namespace['_quarantine_provider_threads'](
+            [finishing], timeout_s=0.01))
+        self.assertGreaterEqual(finishing.joins, 1)
+
+        class Source:
+            def __init__(self, rows):
+                self.global_var = rows
+
+        partial = Source(['FAST_EN'])
+        late = Source([])
+        stuck = Worker()
+        with self.assertRaises(ProviderSearchBusy):
+            namespace['_finish_timing_timeout'](
+                [stuck], [('fast', partial), ('late', late)],
+                timeout_s=0.001)
+
+        class CompletingWorker(Worker):
+            def join(self, _timeout):
+                self.joins += 1
+                late.global_var = ['LATE_RO']
+                self.alive = False
+
+        completed = namespace['_finish_timing_timeout'](
+            [CompletingWorker()], [('fast', partial), ('late', late)],
+            timeout_s=0.01)
+        self.assertEqual(completed, ['FAST_EN', 'LATE_RO'])
+
+        c_get = next(node for node in tree.body
+                     if isinstance(node, ast.FunctionDef)
+                     and node.name == 'c_get_subtitles')
+        calls = {node.func.id for node in ast.walk(c_get)
+                 if isinstance(node, ast.Call)
+                 and isinstance(node.func, ast.Name)}
+        self.assertIn('_provider_workers_ready', calls)
+        self.assertIn('_quarantine_provider_threads', calls)
+        self.assertIn('_finish_timing_timeout', calls)
 
 
 if __name__ == '__main__':
