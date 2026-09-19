@@ -804,7 +804,10 @@ TEMP_PURGE_VERSION = '2'
 #       line -- see srt.strip_leaked_arabic. NOT every file here is ours: the
 #       Google Translate fallback saves into this directory too, so the repair
 #       is gated per file by srt.may_carry_arabic_leak.
-CACHE_RTL_FIX_VERSION = '7'
+#   v7: explicit RTL-base controls and style-run normalization.
+#   v8: restore archived physical-order ellipses, dialogue marks and paired
+#       closing quote/bracket punctuation before wrapping for Kodi.
+CACHE_RTL_FIX_VERSION = '8'
 
 
 def _maybe_repair_rtl_cache():
@@ -844,7 +847,8 @@ def _maybe_repair_rtl_cache():
                 body = (srt.strip_leaked_arabic(content)
                         if srt.may_carry_arabic_leak(p) else content)
                 fixed = srt.clamp_cue_durations(
-                    srt.fix_rtl_punctuation(body))
+                    srt.fix_rtl_punctuation(
+                        body, legacy_engine='auto'))
                 if fixed == content:
                     continue
                 tmp = p + '.aitmp'

@@ -92,6 +92,49 @@ def test_auto_detection_and_idempotence() -> None:
     assert _wrapped(f"- {HE}?") in mixed_fixed
     assert _wrapped(f"{MORE}...") in mixed_fixed
 
+    # Exact punctuation families from the Flash field report.  This source was
+    # marked as a fresh/logical provider download even though its archive bytes
+    # were already stored in physical RTL order.  One unambiguous leading full
+    # stop must make auto mode restore the ellipsis, dialogue dash and the
+    # comma+closing-quote pair across the whole file.
+    field_legacy = (
+        "1\n00:00:01,000 --> 00:00:02,000\n"
+        ".נרצחת על ידי הבלתי אפשרי\n\n"
+        "2\n00:00:03,000 --> 00:00:04,000\n"
+        ".ואשיג צדק עבור אבי-\n\n"
+        "3\n00:00:05,000 --> 00:00:06,000\n"
+        "...בפרקים הקודמים של הפלאש\n\n"
+        "4\n00:00:07,000 --> 00:00:08,000\n"
+        ',"לפתור את הרצח של נורה אלן\n'
+    )
+    field_fixed = srt.fix_rtl_punctuation(
+        field_legacy, mode="rtl_base", legacy_engine="auto")
+    assert _wrapped("נרצחת על ידי הבלתי אפשרי.") in field_fixed
+    assert _wrapped("- ואשיג צדק עבור אבי.") in field_fixed
+    assert _wrapped("בפרקים הקודמים של הפלאש...") in field_fixed
+    assert _wrapped('לפתור את הרצח של נורה אלן",') in field_fixed
+    assert srt.fix_rtl_punctuation(
+        field_fixed, mode="rtl_base", legacy_engine="auto") == field_fixed
+
+    # A normal opening quote starts with the quote itself, not sentence
+    # punctuation, and must remain an opening quote.
+    logical_quote = '"שלום, עולם!"'
+    assert srt.fix_rtl_punctuation(
+        logical_quote, mode="rtl_base", legacy_engine="auto"
+    ) == _wrapped(logical_quote)
+
+    # A logical leading continuation followed by an opening quote is
+    # ambiguous, even though the same byte prefix could be old physical RTL.
+    # It must not self-classify the whole file as legacy or duplicate a quote.
+    quoted_continuation = '..."שלום"'
+    assert srt.fix_rtl_punctuation(
+        quoted_continuation, mode="rtl_base", legacy_engine="auto"
+    ) == _wrapped(quoted_continuation)
+    open_quoted_continuation = '..."שלום'
+    assert srt.fix_rtl_punctuation(
+        open_quoted_continuation, mode="rtl_base", legacy_engine="auto"
+    ) == _wrapped(open_quoted_continuation)
+
 
 def test_display_copy_keeps_source_and_share_marker() -> None:
     content = (
@@ -236,13 +279,28 @@ def test_visual_positions_with_python_bidi() -> None:
         f"? {HE}-", mode="rtl_base", legacy_engine=True)
     ellipsis = srt.fix_rtl_punctuation(
         f"...{MORE}", mode="rtl_base", legacy_engine=True)
+    quoted = srt.fix_rtl_punctuation(
+        ',"לפתור את הרצח של נורה אלן', mode="rtl_base",
+        legacy_engine="auto")
     dash_visual = get_display(dash)
     ellipsis_visual = get_display(ellipsis)
+    quoted_visual = get_display(quoted)
     # get_display returns the left-to-right screen order: end punctuation is at
     # index 0 (left), while the leading dialogue dash is at the right edge.
     assert dash_visual.startswith("?")
     assert dash_visual.endswith("-")
     assert ellipsis_visual.startswith("...")
+    assert quoted_visual.startswith(',"')
+
+
+def test_existing_cache_migration_uses_archive_detection() -> None:
+    """The v8 startup walk must repair old cache, not only new downloads."""
+    expected = "body, legacy_engine='auto'"
+    service = (ADDON / 'service.py').read_text(encoding='utf-8')
+    builder = (ROOT / 'tools' / 'build_ai_subtitles_packages.py').read_text(
+        encoding='utf-8')
+    assert expected in service
+    assert expected in builder
 
 
 def main() -> None:
@@ -252,6 +310,7 @@ def main() -> None:
     test_release_dedup_and_format_tag()
     test_pool_source_is_fetched_once()
     test_visual_positions_with_python_bidi()
+    test_existing_cache_migration_uses_archive_detection()
     print("PASS RTL delivery, immutable source, and request-safe Ktuvit dedup")
 
 
