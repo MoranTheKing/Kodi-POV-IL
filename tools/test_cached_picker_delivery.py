@@ -1,6 +1,7 @@
 """Exercise the real background handler's early-return subtitle delivery."""
 import ast
 import base64
+import json
 import os
 from pathlib import Path
 import sys
@@ -34,8 +35,18 @@ class CachedPickerDelivery(unittest.TestCase):
             ku.cache_dir=lambda: root
             ku.safe_release_filename=lambda value: value
             ku.notify=Mock()
+            ku.confirm_subtitle_sync_fix = Mock(return_value=True)
+            selection = {'token': 'token-a', 'link_hash': 'link-a',
+                         'stream_hash': 'stream-a'}
+            ku.subtitle_selection_matches = lambda token, link_hash, stream_hash: (
+                token == selection['token']
+                and link_hash == selection['link_hash']
+                and stream_hash == selection['stream_hash'])
+            ku.apply_subtitle_file = lambda path, selection=None, **_kw: (
+                deliver(path) or True)
             tr = types.ModuleType('resources.lib.translate')
-            def resolve(link, info, progressive_cb, extract_progress_cb):
+            def resolve(link, info, progressive_cb, extract_progress_cb,
+                        selection=None):
                 if mode == 'new-job': state['owner'] = False
                 if mode == 'new-pick': props['ai_subs.live_translate_active'] = '0'
                 if mode == 'new-source': props['ai_subs.live_translate_source'] = 'different'
@@ -55,17 +66,23 @@ class CachedPickerDelivery(unittest.TestCase):
                 '_safe_log': Mock(), '_new_translation_job': lambda: 'job',
                 '_owns_translation_job': lambda token: state['owner'],
                 '_clear_translation_job': Mock(), '_playing_now': lambda: bool(state['media']),
-                '_progressive_cleanup_patterns': lambda *a: []}
+                '_progressive_cleanup_patterns': lambda *a: [],
+                '_decode_selection_b64': lambda value: json.loads(
+                    base64.b64decode(value.encode()).decode())}
             real_replace = os.replace
             def replace_and_change_player(src, dst):
                 real_replace(src, dst)
                 if mode == 'change-during-copy':
                     state['media'] = 'movie-b'
+                if mode == 'selection-during-copy':
+                    selection['token'] = 'token-b'
             with patch.object(os, 'replace', replace_and_change_player), patch.dict(sys.modules, {'resources': pkg, 'resources.lib': lib,
                     'resources.lib.kodi_utils': ku, 'resources.lib.translate': tr}):
                 exec(compile(ast.Module(body=[fn], type_ignores=[]), str(DEFAULT), 'exec'), env)
                 env['_handle_bg_translate_picker']({'link_b64': base64.b64encode(b'link').decode(),
-                    'source_id_b64': base64.b64encode(source.encode()).decode()})
+                    'source_id_b64': base64.b64encode(source.encode()).decode(),
+                    'selection_b64': base64.b64encode(json.dumps(
+                        selection).encode()).decode()})
             return deliveries
 
     def test_cache_hit_delivers_hebrew(self):
@@ -79,7 +96,9 @@ class CachedPickerDelivery(unittest.TestCase):
         self.assertEqual(len(self.run_handler('done')), 1)
 
     def test_new_selection_and_player_changes_prevent_delivery(self):
-        for mode in ('new-job', 'new-pick', 'new-source', 'new-player', 'stopped', 'change-during-copy'):
+        for mode in ('new-job', 'new-pick', 'new-source', 'new-player',
+                     'stopped', 'change-during-copy',
+                     'selection-during-copy'):
             with self.subTest(mode=mode):
                 self.assertEqual(self.run_handler(mode), [])
 
