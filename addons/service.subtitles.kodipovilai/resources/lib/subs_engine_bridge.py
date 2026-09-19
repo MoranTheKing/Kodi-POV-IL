@@ -25,10 +25,17 @@ import json
 import hashlib
 import os
 import re
+import threading
 import time
 import urllib.parse
 
 from . import kodi_utils
+
+
+# The vendored engine exposes provider results through module-level lists.
+# A manual picker and SubSync's later timing pass must never reset those lists
+# underneath each other. Cache hits bypass this lock entirely.
+_ENGINE_SEARCH_LOCK = threading.Lock()
 
 
 # Tokens that mark a string as a real release name (vs a clean title or a
@@ -399,12 +406,13 @@ def _cache_dir():
         return None
 
 
-def _cache_get(info):
+def _cache_get(info, variant=''):
     key = _cache_key(info)
     d = _cache_dir()
     if not key or not d:
         return None
-    p = os.path.join(d, key + '.json')
+    suffix = ('.' + variant) if variant else ''
+    p = os.path.join(d, key + suffix + '.json')
     try:
         if not os.path.isfile(p):
             return None
@@ -416,12 +424,13 @@ def _cache_get(info):
         return None
 
 
-def _cache_put(info, candidates):
+def _cache_put(info, candidates, variant=''):
     key = _cache_key(info)
     d = _cache_dir()
     if not key or not d:
         return
-    p = os.path.join(d, key + '.json')
+    suffix = ('.' + variant) if variant else ''
+    p = os.path.join(d, key + suffix + '.json')
     try:
         tmp = p + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
@@ -431,7 +440,45 @@ def _cache_put(info, candidates):
         pass
 
 
-def _search_inner(info, modal_progress=True):
+def search_all_languages_for_timing(info):
+    """Return a background-only all-language oracle set for SubSync.
+
+    The picker continues to respect the user's language settings. This path
+    runs only after the ordinary set could not prove a correction, and its
+    separate cache prevents later selections in the same episode from repeating
+    the provider search. Empty or failed results are never cached.
+    """
+    if not enabled():
+        return []
+    cacheable = _release_ready(info)
+    if cacheable:
+        cached = _cache_get(info, variant='timing_all')
+        if cached:
+            return cached
+    try:
+        out = _search_inner(info, modal_progress=False,
+                            all_lang_override=True)
+        # Legacy providers commonly swallow connection/HTTP/parse failures
+        # and expose the same [] value as a genuine zero-result search.  The
+        # bridge therefore cannot safely turn an empty timing search into a
+        # permanent exact-cut UNKNOWN verdict.  Treat it as retryable; the
+        # ordinary picker remains unchanged and a later attempt can reuse a
+        # successful non-empty timing cache.
+        if not out:
+            return None
+        if cacheable and out:
+            _cache_put(info, out, variant='timing_all')
+        return out
+    except Exception as e:
+        kodi_utils.log(
+            'subs_engine_bridge.search_all_languages_for_timing failed: {0}'.format(e),
+            level='WARNING')
+        # None means the search did not prove a completed result and must not
+        # turn into a persistent UNKNOWN verdict.
+        return None
+
+
+def _search_inner(info, modal_progress=True, all_lang_override=False):
     # Make sure the engine's internal settings have real values before the
     # engine module (and general.py) is imported -- otherwise int('') / empty
     # language flags break it. Safe to call every time.
@@ -445,34 +492,51 @@ def _search_inner(info, modal_progress=True):
                             'media_type')}),
                    level='INFO')
 
-    # Show the same live per-provider progress dialog DarkSubs shows while
-    # the providers run (manual flow only). general.show_results reads
-    # general.show_msg (which c_get_subtitles updates with per-source counts)
-    # until we set 'END'. Heavily guarded: any failure must not affect search.
-    import threading
-    progress_thread = None
-    if modal_progress:
-        try:
-            general.break_all = False
-            general.with_dp = True
-            general.show_msg = 'MoranSubs — מחפש כתוביות'
-            progress_thread = threading.Thread(
-                target=general.show_results, args=(True,))
-            progress_thread.daemon = True
-            progress_thread.start()
-        except Exception:
-            progress_thread = None
+    with _ENGINE_SEARCH_LOCK:
+        # Show the same live per-provider progress dialog DarkSubs shows while
+        # the providers run (manual flow only). general.show_results reads
+        # general.show_msg (which c_get_subtitles updates with per-source
+        # counts) until we set 'END'. The lock also protects this shared state.
+        progress_thread = None
+        if modal_progress:
+            try:
+                general.break_all = False
+                general.with_dp = True
+                general.show_msg = 'MoranSubs — מחפש כתוביות'
+                progress_thread = threading.Thread(
+                    target=general.show_results, args=(True,))
+                progress_thread.daemon = True
+                progress_thread.start()
+            except Exception:
+                progress_thread = None
 
-    try:
-        f_result = engine.get_subtitles(video_data)
-        sorted_subs = engine.sort_subtitles(f_result, video_data) \
-            if f_result else []
-    finally:
-        # Close the progress dialog (show_results exits on 'END').
         try:
-            general.show_msg = 'END'
-        except Exception:
-            pass
+            # The ordinary picker obeys the user's language selection. SubSync
+            # has one later, background-only use for every language: when the
+            # visible result set cannot provide an independent timing family.
+            # Do not mutate the setting or visible list; use the engine's
+            # explicit override and keep these results in a separate cache.
+            f_result = (engine.c_get_subtitles(
+                            video_data, all_lang_override=True,
+                            timing_only=True)
+                        if all_lang_override
+                        else engine.get_subtitles(video_data))
+            sorted_subs = engine.sort_subtitles(
+                f_result, video_data, silent=all_lang_override) \
+                if f_result else []
+        finally:
+            # Close the progress dialog (show_results exits on 'END') before a
+            # waiting search can acquire the lock and publish its own state.
+            try:
+                general.show_msg = 'END'
+            except Exception:
+                pass
+            if progress_thread is not None and progress_thread.is_alive():
+                progress_thread.join(0.5)
+                if progress_thread.is_alive():
+                    kodi_utils.log(
+                        'subs_engine_bridge: progress dialog did not close '
+                        'within 500ms', level='WARNING')
 
     if not sorted_subs:
         return []
